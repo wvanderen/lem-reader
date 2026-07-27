@@ -78,11 +78,11 @@ All spacing MUST round to a token in this table. Multiples of 4.
 | xl | 32px | Layout gaps, gap between article body and footnotes region |
 | 2xl | 48px | Major section breaks, between title block and body |
 | 3xl | 64px | Page-level top/bottom padding of reading view |
+| touch | 44px | Minimum interactive hit area (fixture-list rows, source-URL link, disclosure toggle, skip link). Satisfies the operability baseline that A11Y-01 / A11Y-07 will formalize in Phase 2. |
 
 **Exceptions (override the scale where stated):**
-- **Touch target minimum: 44 × 44 px** for every interactive control (fixture-list
-  rows, source-URL link, disclosure toggle, skip link). Satisfies the operability
-  baseline that A11Y-01 / A11Y-07 will formalize in Phase 2.
+- **Touch target minimum: 44 × 44 px** (`touch` token above) for every interactive
+  control (fixture-list rows, source-URL link, disclosure toggle, skip link).
 - **Focus ring: 2px solid outline + 2px offset** (visible-focus baseline).
 - **Reading measure: 64ch** (typographic, not pixel) for the article body column —
   renders roughly 640–720px depending on the resolved font. Not a spacing token.
@@ -119,9 +119,11 @@ spacing user-adjustable; these are the **defaults** the reader starts from.
 - List item spacing: `0.25em`.
 - Blockquote: body size, italic, `margin-inline: 1em`, `padding-inline-start: 1em`,
   left rule `2px solid var(--hairline)`.
-- Code block (`<pre><code>`): 16px, weight 400, line-height 1.5,
+- Code block (`<pre><code>`): 14px (Meta/Label role), weight 400, line-height 1.5,
   `padding: md`, `background: var(--surface-raised)`, `border: 1px solid var(--hairline)`,
-  `border-radius: 4px`, `overflow-x: auto`.
+  `border-radius: 4px`, `overflow-x: auto`. Monospace is set to the Meta/Label size so
+  code blocks stay dense-readable and visually recede behind body prose, preserving the
+  calm/booklike surface without introducing a fifth font size.
 - Inline `<code>`: same family, `0.5em` horizontal padding, `background: var(--surface-raised)`.
 - `<figcaption>`: Meta/Label role, italic, `margin-top: sm`.
 
@@ -285,6 +287,13 @@ elements above; CSS targets element selectors and a small set of class hooks
 ---
 
 ## Layout
+
+**Visual hierarchy:** The article body column is the primary visual anchor and the
+only place the reader's eye should rest. All chrome (fixture-list cards, metadata
+block, status region, disclosure markers) recedes by sitting on the 30% secondary
+surface token (`--surface-raised`) and using the smaller, lower-contrast Meta/Label
+typography role. The accent token is reserved exclusively for hyperlinks, the
+primary CTA, the disclosure marker, and the focus ring — it never decorates chrome.
 
 | Breakpoint | Behavior |
 |-----------|----------|
