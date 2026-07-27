@@ -107,16 +107,58 @@
 
 ## Traceability
 
-Roadmap phase mappings will be populated during roadmap creation.
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
+| DOC-01 | Phase 1 | Pending |
+| DOC-02 | Phase 1 | Pending |
+| DOC-03 | Phase 1 | Pending |
+| DOC-04 | Phase 1 | Pending |
+| DOC-05 | Phase 1 | Pending |
+| DOC-06 | Phase 1 | Pending |
+| READ-01 | Phase 2 | Pending |
+| READ-02 | Phase 2 | Pending |
+| READ-03 | Phase 2 | Pending |
+| READ-04 | Phase 2 | Pending |
+| READ-05 | Phase 2 | Pending |
+| A11Y-01 | Phase 2 | Pending |
+| A11Y-02 | Phase 2 | Pending |
+| A11Y-03 | Phase 2 | Pending |
+| A11Y-04 | Phase 2 | Pending |
+| A11Y-05 | Phase 2 | Pending |
+| A11Y-06 | Phase 2 | Pending |
+| A11Y-07 | Phase 2 | Pending |
+| A11Y-08 | Phase 2 | Pending |
+| PAGE-01 | Phase 4 | Pending |
+| PAGE-02 | Phase 4 | Pending |
+| PAGE-03 | Phase 4 | Pending |
+| PAGE-04 | Phase 4 | Pending |
+| PAGE-05 | Phase 4 | Pending |
+| PAGE-06 | Phase 3 | Pending |
+| PAGE-07 | Phase 3 | Pending |
+| PAGE-08 | Phase 3 | Pending |
+| PAGE-09 | Phase 4 | Pending |
+| ANNO-01 | Phase 5 | Pending |
+| ANNO-02 | Phase 5 | Pending |
+| ANNO-03 | Phase 5 | Pending |
+| ANNO-04 | Phase 5 | Pending |
+| ANNO-05 | Phase 5 | Pending |
+| ANNO-06 | Phase 5 | Pending |
+| ANNO-07 | Phase 5 | Pending |
+| STATE-01 | Phase 2 | Pending |
+| STATE-02 | Phase 2 | Pending |
+| STATE-03 | Phase 5 | Pending |
+| STATE-04 | Phase 2 | Pending |
+| STATE-05 | Phase 2 | Pending |
+| ACPT-01 | Phase 6 | Pending |
+| ACPT-02 | Phase 6 | Pending |
+| ACPT-03 | Phase 6 | Pending |
+| ACPT-04 | Phase 6 | Pending |
 
 **Coverage:**
 - v1 requirements: 44 total
-- Mapped to phases: 0
-- Unmapped: 44 ⚠️
+- Mapped to phases: 44
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-07-26*
-*Last updated: 2026-07-26 after initial definition*
+*Last updated: 2026-07-27 after roadmap creation*
