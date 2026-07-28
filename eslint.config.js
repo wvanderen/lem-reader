@@ -72,8 +72,20 @@ export default [
       "jsx-a11y/no-autofocus": "error",
       "jsx-a11y/scope": "error",
       "jsx-a11y/tabindex-no-positive": "error",
-      // Allow unused vars prefixed with _ (common in handlers); react/jsx-uses-react.
-      "no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
+      // DISABLED: ESLint core `no-unused-vars` cannot see type-position usage
+      // when parsing TS via Babel (it false-positives on every `import type`
+      // binding used only in annotations). tsc is the authority — tsconfig.json
+      // sets `noUnusedLocals` + `noUnusedParameters`, which correctly handles
+      // type-only imports. (The @typescript-eslint/no-unused-vars rule would
+      // also handle this, but it throws on TS 7 — see parser note above.)
+      "no-unused-vars": "off",
+      // DISABLED for TS: ESLint core `no-undef` does not understand TypeScript
+      // type aliases, z.infer, `as const`, or namespace qualifiers — it flags
+      // every type-level identifier as undefined. tsc is the authority for
+      // undefined-reference checking in TS files (the @typescript-eslint
+      // recommended config disables no-undef for the same reason). We keep it
+      // off project-wide since all source is .ts/.tsx and tsc covers it.
+      "no-undef": "off",
     },
   },
 ];
