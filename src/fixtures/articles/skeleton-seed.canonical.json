@@ -1,0 +1,80 @@
+{
+  "id": "skeleton-seed",
+  "revision": 1,
+  "lang": "en",
+  "provenance": {
+    "sourceUrl": "https://github.com/lem-reader/lem-reader",
+    "title": "Skeleton Seed Article",
+    "author": "Lem Reader",
+    "retrievedAt": "2026-07-28T00:00:00Z",
+    "originalHtmlHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "blocks": [
+    {
+      "kind": "heading",
+      "level": 1,
+      "content": [{ "text": "Skeleton Seed Article", "marks": [] }]
+    },
+    {
+      "kind": "paragraph",
+      "content": [
+        {
+          "text": "This seed article exercises the canonical renderer end to end.",
+          "marks": [
+            { "type": "link", "href": "https://github.com/lem-reader/lem-reader" }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "paragraph",
+      "content": [
+        {
+          "text": "Plan 03 replaces this fixture with the curated corpus.",
+          "marks": [{ "type": "strong" }]
+        }
+      ]
+    },
+    {
+      "kind": "blockquote",
+      "children": [
+        {
+          "kind": "paragraph",
+          "content": [{ "text": "A short quotation inside the seed.", "marks": [] }]
+        }
+      ]
+    },
+    {
+      "kind": "bulleted-list",
+      "items": [
+        {
+          "content": [
+            {
+              "kind": "paragraph",
+              "content": [{ "text": "First list item.", "marks": [] }]
+            }
+          ]
+        },
+        {
+          "content": [
+            {
+              "kind": "paragraph",
+              "content": [{ "text": "Second list item.", "marks": [] }]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "code-block",
+      "language": "ts",
+      "source": "const greeting = \"hello\";\nconsole.log(greeting);"
+    },
+    {
+      "kind": "unsupported",
+      "originalKind": "embedded-video",
+      "plainDescription": "An embedded video near the end of the seed article."
+    }
+  ],
+  "footnotes": []
+}
