@@ -25,7 +25,11 @@ Lem Reader reaches its MVP through six vertical slices that keep a usable semant
   2. Reader encounters headings, prose, links, quotations, lists, figures, captions, footnotes, and code in canonical semantic order.
   3. Reader can follow preserved links, while unsupported fixture content is disclosed instead of silently disappearing.
   4. The same article revision exposes one stable logical text coordinate system for all later reading locations and annotations.
-**Plans:** TBD
+**Plans:** 3 plans
+Plans:
+- [ ] 01-01-PLAN.md — Wave 0: scaffold + frozen document model (Zod + D-04/D-06) + grapheme-offset substrate (D-05) + reserved Dexie + test infrastructure
+- [ ] 01-02-PLAN.md — Wave 1: in-memory repository + recursive semantic renderer + Walking Skeleton UI vertical (hash routing + D-07 warm-paper tokens + FixtureList + ArticleView)
+- [ ] 01-03-PLAN.md — Wave 2: D-03 fixture-approval checkpoint + throwaway normalization script (D-09) + curated 5–7 article corpus + e2e/axe-core validation across Chromium/Firefox/WebKit
 **UI hint:** yes
 
 ### Phase 2: Accessible Scrolling Reader
@@ -98,7 +102,7 @@ Lem Reader reaches its MVP through six vertical slices that keep a usable semant
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Canonical Article Foundation | 0/TBD | Not started | - |
+| 1. Canonical Article Foundation | 0/3 | Planning complete | - |
 | 2. Accessible Scrolling Reader | 0/TBD | Not started | - |
 | 3. Trustworthy Layout Measurement | 0/TBD | Not started | - |
 | 4. Responsive Pagination and Dual-Mode Navigation | 0/TBD | Not started | - |

@@ -5,10 +5,10 @@ milestone_name: milestone
 current_phase: 1
 current_phase_name: Canonical Article Foundation
 status: planning
-stopped_at: Phase 1 context gathered
-last_updated: "2026-07-28T15:25:53.074Z"
-last_activity: 2026-07-27
-last_activity_desc: Roadmap created with all 44 v1 requirements mapped
+stopped_at: Phase 1 planned — 3 plans across 3 waves (scaffold+frozen contracts → UI vertical → curated corpus+validation)
+last_updated: "2026-07-28T16:00:00.000Z"
+last_activity: 2026-07-28
+last_activity_desc: Phase 1 planned — 3 plans, Walking Skeleton scaffolded (SKELETON.md), VALIDATION.md body filled
 progress:
   total_phases: 6
   completed_phases: 0
@@ -29,9 +29,9 @@ See: .planning/PROJECT.md (updated 2026-07-26)
 ## Current Position
 
 Phase: 1 of 6 (Canonical Article Foundation)
-Plan: 0 of TBD in current phase
-Status: Ready to plan
-Last activity: 2026-07-27 — Roadmap created with all 44 v1 requirements mapped
+Plan: 0 of 3 in current phase
+Status: Ready to execute (3 plans across 3 waves)
+Last activity: 2026-07-28 — Phase 1 planned — 3 plans, Walking Skeleton scaffolded (SKELETON.md), VALIDATION.md body filled
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -85,4 +85,4 @@ None yet.
 
 Last session: 2026-07-28T15:25:53.063Z
 Stopped at: Phase 1 context gathered
-Resume file: .planning/phases/01-canonical-article-foundation/01-CONTEXT.md
+Resume file: .planning/phases/01-canonical-article-foundation/01-01-PLAN.md
