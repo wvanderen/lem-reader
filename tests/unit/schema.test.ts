@@ -1,11 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  ArticleSchema,
-  BlockSchema,
-  LinkMark,
-  Mark,
-  type CanonicalArticle,
-} from "../../src/content/schema";
+import { ArticleSchema, BlockSchema, LinkMark, Mark } from "../../src/content/schema";
 
 /**
  * Boundary validation for the frozen Zod document model (D-04, D-06).
@@ -15,7 +9,10 @@ import {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function validArticle(overrides: Partial<CanonicalArticle> = {}): unknown {
+// Test payload builder — returns `unknown` so callers exercise Zod at runtime.
+// Overrides are loosely typed (Record) because the point is to feed parse()
+// shapes that may or may not validate; Zod is the authority, not TS here.
+function validArticle(overrides: Record<string, unknown> = {}): unknown {
   return {
     id: "test-article",
     revision: 1,
