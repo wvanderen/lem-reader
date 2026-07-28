@@ -1,0 +1,66 @@
+/*
+ * Lem Reader — authored CSS layers + custom properties.
+ * No Tailwind, no component suite, no shadcn (STACK.md "What NOT to Use").
+ */
+
+:root {
+  /* D-07 warm-paper defaults (UI-SPEC §Color) */
+  --surface: #fbf8f3;
+  --surface-raised: #f2ede3;
+  --ink: #1f1b16;
+  --ink-soft: #5c544a;
+  --accent: #6b4423;
+  --accent-hover: #4e2f18;
+  --focus-ring: #6b4423;
+  --destructive: #9b2c2c; /* border/icon only — no destructive actions in Phase 1 */
+  --hairline: #d9d1c2;
+
+  /* UI-SPEC §Spacing Scale (multiples of 4) */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+  --space-3xl: 64px;
+  --touch: 44px; /* min interactive hit area */
+
+  /* UI-SPEC §Typography font stacks */
+  --font-body: "Iowan Old Style", "Source Serif Pro", "Source Serif 4", Georgia, Charter,
+    "Times New Roman", serif;
+  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-code: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono",
+    monospace;
+}
+
+body {
+  margin: 0;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-body);
+}
+
+/* Defensive motion gate (UI-SPEC §Interaction 5) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Forced colors safety (UI-SPEC §Interaction 7) */
+@media (forced-colors: active) {
+  a {
+    text-decoration: underline; /* never let links lose underline */
+  }
+}
+
+/* Visible focus baseline (UI-SPEC §Interaction 4) */
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+/* outline: 0/none FORBIDDEN unless an equivalent replacement is supplied */
