@@ -7,12 +7,12 @@
 // HMR, tree-shaking, and build-time validation).
 import { ArticleSchema } from "../content/schema";
 import type { CanonicalArticle } from "../content/types";
-import essayLongForm from "./articles/essay-long-form.canonical.json";
-import technicalPost from "./articles/technical-post.canonical.json";
-import figureHeavy from "./articles/figure-heavy.canonical.json";
-import footnoteAcademic from "./articles/footnote-academic.canonical.json";
-import listReference from "./articles/list-reference.canonical.json";
-import unsupportedCase from "./articles/unsupported-case.canonical.json";
+import essayLongForm from "./articles/essay-long-form.canonical.json" with { type: "json" };
+import technicalPost from "./articles/technical-post.canonical.json" with { type: "json" };
+import figureHeavy from "./articles/figure-heavy.canonical.json" with { type: "json" };
+import footnoteAcademic from "./articles/footnote-academic.canonical.json" with { type: "json" };
+import listReference from "./articles/list-reference.canonical.json" with { type: "json" };
+import unsupportedCase from "./articles/unsupported-case.canonical.json" with { type: "json" };
 
 // Plan 03 curated corpus (D-01, D-02, D-03). Six real published articles
 // spanning the D-01 genre matrix, each carrying real provenance. Collectively
