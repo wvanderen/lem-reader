@@ -6,7 +6,7 @@ Lem Reader reaches its MVP through six vertical slices that keep a usable semant
 
 ## Phases
 
-- [ ] **Phase 1: Canonical Article Foundation** - Readers can open a representative saved corpus whose rich structure and stable logical coordinates are explicit and verifiable.
+- [x] **Phase 1: Canonical Article Foundation** - Readers can open a representative saved corpus whose rich structure and stable logical coordinates are explicit and verifiable. (completed 2026-07-28)
 - [ ] **Phase 2: Accessible Scrolling Reader** - Readers have a calm, adaptable scrolling experience with predictable interaction and recoverable local preferences and location.
 - [ ] **Phase 3: Trustworthy Layout Measurement** - Readers retain a usable view while responsive layout work is calibrated, current, and safe against font and asset changes.
 - [ ] **Phase 4: Responsive Pagination and Dual-Mode Navigation** - Readers can navigate complete, stable pages or return to scrolling without losing their passage.
@@ -28,7 +28,7 @@ Lem Reader reaches its MVP through six vertical slices that keep a usable semant
   3. Reader can follow preserved links, while unsupported fixture content is disclosed instead of silently disappearing.
   4. The same article revision exposes one stable logical text coordinate system for all later reading locations and annotations.
 
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 Plans:
 **Wave 1**
 
@@ -37,7 +37,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 01-03-PLAN.md — Wave 2: D-03 fixture-approval checkpoint + throwaway normalization script (D-09) + curated 5–7 article corpus + e2e/axe-core validation across Chromium/Firefox/WebKit
+- [x] 01-03-PLAN.md — Wave 2: D-03 fixture-approval checkpoint + throwaway normalization script (D-09) + curated 5–7 article corpus + e2e/axe-core validation across Chromium/Firefox/WebKit
 
 **UI hint:** yes
 
@@ -126,7 +126,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Canonical Article Foundation | 2/3 | In Progress|  |
+| 1. Canonical Article Foundation | 3/3 | Complete   | 2026-07-28 |
 | 2. Accessible Scrolling Reader | 0/TBD | Not started | - |
 | 3. Trustworthy Layout Measurement | 0/TBD | Not started | - |
 | 4. Responsive Pagination and Dual-Mode Navigation | 0/TBD | Not started | - |
