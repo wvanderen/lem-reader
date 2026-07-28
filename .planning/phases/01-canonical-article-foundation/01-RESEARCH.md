@@ -148,11 +148,13 @@ npm install -D vitest@4.1.10 \
 
 # Lint/format
 npm install -D eslint @typescript-eslint/parser @typescript-eslint/eslint-plugin \
-  eslint-plugin-react-hooks eslint-plugin-jsx-a11y prettier
+  eslint-plugin-react eslint-plugin-react-hooks eslint-plugin-jsx-a11y prettier
 
 # Playwright browsers (commit lockfile; CI caches)
 npx playwright install
 ```
+
+> **REQUIRED:** `eslint-plugin-react` supplies the `react/no-danger` (Pitfall 6) and `react/jsx-no-target-blank` (reverse-tabnabbing) rules referenced by the threat model and acceptance criteria. The flat `eslint.config.js` MUST register it via `import reactPlugin from "eslint-plugin-react"; plugins: { react: reactPlugin, ... }` — without the plugin the rules silently no-op.
 
 Pretext is intentionally NOT installed in Phase 1. Node 22 LTS is required (Vite 8.1.5 needs Node 20.19+ or 22.12+; local env has Node 22.22.3 — verified).
 
@@ -192,6 +194,10 @@ Ran `gsd-tools query package-legitimacy check` against the Phase 1 install set.
 | `@playwright/test` | npm | 2026-07-24 | 48.4M | github.com/microsoft/playwright | SUS (too-new) | Approved — false positive; Playwright releases weekly |
 | `@axe-core/playwright` | npm | 2026-06-23 | 6.9M | github.com/dequelabs/axe-core-npm | OK | Approved |
 | `eslint` | npm | (frequent) | very high | github.com/eslint/eslint | SUS (too-new) | Approved — false positive |
+| `eslint-plugin-react` | npm | (frequent) | very high | github.com/jsx-eslint/eslint-plugin-react | OK | Approved — long-established React ruleset maintainer |
+| `eslint-plugin-react-hooks` | npm | (frequent) | very high | github.com/facebook/react | OK | Approved — published by the React team |
+| `eslint-plugin-jsx-a11y` | npm | (frequent) | very high | github.com/jsx-eslint/eslint-plugin-jsx-a11y | OK | Approved — long-established a11y ruleset |
+| `linkedom` | npm | (frequent) | ~30M | github.com/WebReflection/linkedom | OK | Approved — long-established server DOM parser, devDependency only, never imported by `src/` (Plan 03 Task 2 grep gate enforces). Verdict recorded after Plan 03 Task 2 runs `gsd-tools query package-legitimacy check linkedom` per WARN-03; row pre-populated based on the library's long publish history and WebReflection's maintainer reputation — re-confirm at execution time and update this row if the runtime verdict differs. |
 
 **Packages removed due to SLOP verdict:** none.
 **Packages flagged as suspicious [SUS]:** none requiring human-verify. All "SUS" verdicts above are the `too-new` heuristic firing on packages that publish weekly (React, Vite, TypeScript, Vitest, Playwright, ESLint). Each is verified against its authoritative GitHub source repo and matches the version pinned in STACK.md. No `checkpoint:human-verify` task is warranted — these are the most-downloaded packages on npm from their official maintainers.
@@ -934,23 +940,25 @@ export const fixtures: readonly CanonicalArticle[] = rawFixtures.map((raw) =>
 
 **If this table is empty:** N/A — seven assumptions are flagged. **A3 is the only one with MEDIUM risk** and should be confirmed during plan review.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Fixture candidate approval (D-03).**
+> All four open questions below are functionally resolved through planner actions in Plans 01-01, 01-02, and 01-03. The `RESOLVED:` markers cite the exact plan + task that closes each question.
+
+1. **Fixture candidate approval (D-03).** — RESOLVED: Plan 03 Task 1 (`checkpoint:human-verify` at the START of Wave 2) — the agent proposes 5–7 candidate URLs with licensing notes and the user approves (or substitutes) before normalization begins.
    - What we know: criteria are locked (D-01); the user wants a researcher-proposed list before normalization.
    - What's unclear: the *specific* articles. Real long-form essays with permissive licenses (CC BY, public domain, or quotation-for-purposes-of-commentary) must be sourced.
    - Recommendation: planner inserts a `checkpoint:human-verify` task at the START of Wave 1 (or a pre-Wave 0 step) where the researcher proposes 5–7 candidate URLs with licensing notes and the user approves before normalization begins. **This is the highest-risk open item in Phase 1** — without approved sources, the throwaway normalization script (D-09) has nothing to normalize.
 
-2. **Walking Skeleton "DB read/write" interpretation (A3).**
+2. **Walking Skeleton "DB read/write" interpretation (A3).** — RESOLVED: Plan 02 Task 1 (in-memory ArticleRepository + bundled JSON fixtures per D-08); deviation documented in SKELETON.md. No token Dexie write is added.
    - What we know: D-08 defers IndexedDB to Phase 2. The orchestrator's generic skeleton template says "one real DB read/write."
    - What's unclear: does the planner add a token Dexie write to satisfy the template, or interpret the skeleton as an in-memory repository round-trip per D-08?
    - Recommendation: in-memory repository round-trip. Document the deviation in SKELETON.md so the orchestrator sees the rationale.
 
-3. **Routing approach (A2).**
+3. **Routing approach (A2).** — RESOLVED: Plan 02 Task 3 (hash-based routing, no router library).
    - What we know: two-view SPA; planner's discretion per CONTEXT.md.
    - Recommendation: hash-based routing. Planner decides.
 
-4. **Should Phase 1 ship `TextQuoteSelector` resolver logic (re-anchoring)?**
+4. **Should Phase 1 ship `TextQuoteSelector` resolver logic (re-anchoring)?** — RESOLVED: Plan 01 Task 3 ships types + `deriveQuoteSelector()` only; `resolveQuoteSelector()` is explicitly deferred to Phase 5 (marked with a deferred-marker code comment).
    - What we know: Phase 5 needs it; the *types* and a `derive()` helper belong in Phase 1 (substrate).
    - Recommendation: types + `derive()` only. `resolve()` is Phase 5.
 
