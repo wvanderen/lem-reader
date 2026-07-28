@@ -7,12 +7,12 @@
 
 ### Document Foundation
 
-- [ ] **DOC-01**: Reader can open each curated saved article from the prototype's representative fixture set.
-- [ ] **DOC-02**: Reader receives the article's headings, paragraphs, links, quotations, lists, figures, captions, footnotes, and code blocks in their original semantic order.
-- [ ] **DOC-03**: Reader can follow preserved article links and access the original source URL and article metadata.
+- [x] **DOC-01**: Reader can open each curated saved article from the prototype's representative fixture set.
+- [x] **DOC-02**: Reader receives the article's headings, paragraphs, links, quotations, lists, figures, captions, footnotes, and code blocks in their original semantic order.
+- [x] **DOC-03**: Reader can follow preserved article links and access the original source URL and article metadata.
 - [x] **DOC-04**: Each normalized article has a stable identity and revision so saved locations and annotations resolve against the intended content.
 - [x] **DOC-05**: Supported article content maps to one canonical text-coordinate system shared by every reading mode.
-- [ ] **DOC-06**: Reader is informed when a fixture contains unsupported content rather than having that content silently omitted.
+- [x] **DOC-06**: Reader is informed when a fixture contains unsupported content rather than having that content silently omitted.
 
 ### Reading Surface
 
@@ -109,12 +109,12 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DOC-01 | Phase 1 | Pending |
-| DOC-02 | Phase 1 | Pending |
-| DOC-03 | Phase 1 | Pending |
+| DOC-01 | Phase 1 | Complete |
+| DOC-02 | Phase 1 | Complete |
+| DOC-03 | Phase 1 | Complete |
 | DOC-04 | Phase 1 | Complete |
 | DOC-05 | Phase 1 | Complete |
-| DOC-06 | Phase 1 | Pending |
+| DOC-06 | Phase 1 | Complete |
 | READ-01 | Phase 2 | Pending |
 | READ-02 | Phase 2 | Pending |
 | READ-03 | Phase 2 | Pending |
