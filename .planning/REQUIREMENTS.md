@@ -10,8 +10,8 @@
 - [ ] **DOC-01**: Reader can open each curated saved article from the prototype's representative fixture set.
 - [ ] **DOC-02**: Reader receives the article's headings, paragraphs, links, quotations, lists, figures, captions, footnotes, and code blocks in their original semantic order.
 - [ ] **DOC-03**: Reader can follow preserved article links and access the original source URL and article metadata.
-- [ ] **DOC-04**: Each normalized article has a stable identity and revision so saved locations and annotations resolve against the intended content.
-- [ ] **DOC-05**: Supported article content maps to one canonical text-coordinate system shared by every reading mode.
+- [x] **DOC-04**: Each normalized article has a stable identity and revision so saved locations and annotations resolve against the intended content.
+- [x] **DOC-05**: Supported article content maps to one canonical text-coordinate system shared by every reading mode.
 - [ ] **DOC-06**: Reader is informed when a fixture contains unsupported content rather than having that content silently omitted.
 
 ### Reading Surface
@@ -112,8 +112,8 @@
 | DOC-01 | Phase 1 | Pending |
 | DOC-02 | Phase 1 | Pending |
 | DOC-03 | Phase 1 | Pending |
-| DOC-04 | Phase 1 | Pending |
-| DOC-05 | Phase 1 | Pending |
+| DOC-04 | Phase 1 | Complete |
+| DOC-05 | Phase 1 | Complete |
 | DOC-06 | Phase 1 | Pending |
 | READ-01 | Phase 2 | Pending |
 | READ-02 | Phase 2 | Pending |
@@ -155,6 +155,7 @@
 | ACPT-04 | Phase 6 | Pending |
 
 **Coverage:**
+
 - v1 requirements: 44 total
 - Mapped to phases: 44
 - Unmapped: 0 ✓

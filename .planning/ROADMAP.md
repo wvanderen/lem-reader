@@ -28,11 +28,11 @@ Lem Reader reaches its MVP through six vertical slices that keep a usable semant
   3. Reader can follow preserved links, while unsupported fixture content is disclosed instead of silently disappearing.
   4. The same article revision exposes one stable logical text coordinate system for all later reading locations and annotations.
 
-**Plans:** 3 plans
+**Plans:** 1/3 plans executed
 Plans:
 **Wave 1**
 
-- [ ] 01-01-PLAN.md — Wave 0: scaffold + frozen document model (Zod + D-04/D-06) + grapheme-offset substrate (D-05) + reserved Dexie + test infrastructure
+- [x] 01-01-PLAN.md — Wave 0: scaffold + frozen document model (Zod + D-04/D-06) + grapheme-offset substrate (D-05) + reserved Dexie + test infrastructure
 - [ ] 01-02-PLAN.md — Wave 1: in-memory repository + recursive semantic renderer + Walking Skeleton UI vertical (hash routing + D-07 warm-paper tokens + FixtureList + ArticleView)
 
 **Wave 2** *(blocked on Wave 1 completion)*
@@ -126,7 +126,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Canonical Article Foundation | 0/3 | Planning complete | - |
+| 1. Canonical Article Foundation | 1/3 | In Progress|  |
 | 2. Accessible Scrolling Reader | 0/TBD | Not started | - |
 | 3. Trustworthy Layout Measurement | 0/TBD | Not started | - |
 | 4. Responsive Pagination and Dual-Mode Navigation | 0/TBD | Not started | - |
