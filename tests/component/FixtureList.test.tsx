@@ -5,14 +5,18 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 
-const listArticlesMock = vi.fn();
+// vi.mock is hoisted above imports — the factory must not reference outer
+// variables. We mock the module, then drive it via vi.mocked(listArticles).
 vi.mock("../../src/content/repository", () => ({
-  listArticles: listArticlesMock,
+  listArticles: vi.fn(),
   openArticle: vi.fn(),
 }));
 
 import { FixtureList } from "../../src/routes/FixtureList";
+import { listArticles } from "../../src/content/repository";
 import type { CanonicalArticle } from "../../src/content/types";
+
+const listArticlesMock = vi.mocked(listArticles);
 
 const stubArticle = (id: string, title: string): CanonicalArticle => ({
   id,
@@ -48,14 +52,21 @@ describe("FixtureList (DOC-01)", () => {
       stubArticle("a-one", "Article One"),
       stubArticle("a-two", "Article Two"),
     ]);
-    render(<FixtureList />);
-    const links = await screen.findAllByRole("link", { name: "Open article" });
+    const { container } = render(<FixtureList />);
+    // Wait for the ready state (rows appear after the promise resolves).
+    await screen.findByText("Article One");
+    // Each article link targets #/article/<id>; count matches the fixture count.
+    const links = container.querySelectorAll<HTMLAnchorElement>('a[href^="#/article/"]');
     expect(links.length).toBe(2);
-    // Each link's aria-labelledby points at a real id present in the document.
     for (const link of links) {
+      // The link's visible text is the "Open article" CTA.
+      expect(link.textContent).toContain("Open article");
+      // aria-labelledby points at a real id present in the document (the row's
+      // title h2). This gives each link a distinct accessible name (the article
+      // title) instead of a generic "Open article" repeated N times.
       const labelledBy = link.getAttribute("aria-labelledby");
       expect(labelledBy).toBeTruthy();
-      expect(document.getElementById(labelledBy!)).not.toBeNull();
+      expect(document.getElementById(labelledBy as string)).not.toBeNull();
     }
   });
 

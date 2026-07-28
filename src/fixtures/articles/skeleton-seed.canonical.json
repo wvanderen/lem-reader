@@ -12,8 +12,8 @@
   "blocks": [
     {
       "kind": "heading",
-      "level": 1,
-      "content": [{ "text": "Skeleton Seed Article", "marks": [] }]
+      "level": 2,
+      "content": [{ "text": "About this seed", "marks": [] }]
     },
     {
       "kind": "paragraph",

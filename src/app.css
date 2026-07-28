@@ -64,3 +64,169 @@ body {
   outline-offset: 2px;
 }
 /* outline: 0/none FORBIDDEN unless an equivalent replacement is supplied */
+
+/* ── Skip link (UI-SPEC §Component Inventory + §Interaction 1) ─────────── */
+/* Visually hidden until focused, then visible on the top-left. */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--surface);
+  color: var(--accent);
+  z-index: 100;
+}
+.skip-link:focus,
+.skip-link:focus-within {
+  left: var(--space-sm);
+}
+
+/* ── Visually-hidden helper (for the new-tab announcement span) ───────── */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ── Base typography (UI-SPEC §Typography; system serif stacks only — no
+   web fonts, so document.fonts.ready resolves immediately in Phase 1) ──── */
+body {
+  font-size: 18px;
+  line-height: 1.6;
+  font-weight: 400;
+}
+h1 {
+  font-size: 32px;
+  line-height: 1.2;
+  font-weight: 600;
+}
+h2,
+h3,
+h4 {
+  font-size: 22px;
+  line-height: 1.3;
+  font-weight: 600;
+}
+.meta {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+/* ── Article body measure + rhythm (UI-SPEC §Layout + §Typography) ────── */
+/* Calm measure is invariant across breakpoints (Phase 2 may let the reader
+   widen it; Phase 1 fixes it). Block rhythm uses em so Phase 2 size changes
+   preserve vertical calm. */
+.article-body {
+  max-width: 64ch;
+  margin-inline: auto;
+  padding-inline: var(--space-md);
+  padding-block: var(--space-3xl);
+}
+.article-body p {
+  margin-block: 1em 1em;
+}
+.article-body h2 {
+  margin: 1.5em 0.5em;
+}
+.article-body h3,
+.article-body h4 {
+  margin: 1.25em 0.5em;
+}
+.article-body blockquote {
+  font-style: italic;
+  margin-inline: 1em;
+  padding-inline-start: 1em;
+  border-left: 2px solid var(--hairline);
+}
+.article-body figure {
+  margin-block: var(--space-lg);
+}
+.article-body figcaption {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-style: italic;
+  color: var(--ink-soft);
+  margin-top: var(--space-sm);
+}
+/* Code block: Meta/Label role so it stays dense-readable and recedes behind
+   body prose (UI-SPEC §Typography). Source renders as auto-escaped text. */
+.article-body pre {
+  font-family: var(--font-code);
+  font-size: 14px;
+  line-height: 1.5;
+  padding: var(--space-md);
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  overflow-x: auto;
+}
+.article-body pre code {
+  font-family: inherit;
+}
+/* Inline code */
+.article-body code {
+  font-family: var(--font-code);
+  padding-inline: 0.5em;
+  background: var(--surface-raised);
+}
+
+/* ── Links (UI-SPEC §Interaction 2 — always underlined, never hover-only) */
+a {
+  color: var(--accent);
+  text-decoration: underline;
+}
+a:hover {
+  color: var(--accent-hover);
+}
+
+/* ── Unsupported-content disclosure (DOC-06, UI-SPEC §Interaction 3) ───── */
+.disclosure {
+  margin-block: var(--space-lg);
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  padding: var(--space-md);
+}
+.disclosure > summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* ── Fixture list (UI-SPEC §Component Inventory + §Layout) ─────────────── */
+.fixture-list {
+  list-style: none;
+  margin: var(--space-xl) auto;
+  padding: 0;
+  max-width: 1100px;
+  display: grid;
+  gap: var(--space-lg);
+}
+.fixture-list li {
+  padding: var(--space-lg);
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+}
+.fixture-list li a {
+  display: inline-block;
+  min-height: var(--touch);
+  min-width: var(--touch);
+  line-height: var(--touch);
+}
+/* Responsive columns: single column <640px; 2 columns 640–1024px; 3 ≥1024px. */
+@media (min-width: 640px) {
+  .fixture-list {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (min-width: 1024px) {
+  .fixture-list {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}

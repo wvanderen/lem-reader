@@ -6,14 +6,18 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 
-const openArticleMock = vi.fn();
+// vi.mock is hoisted above imports — the factory must not reference outer
+// variables. We mock the module, then drive it via vi.mocked(openArticle).
 vi.mock("../../src/content/repository", () => ({
   listArticles: vi.fn(),
-  openArticle: openArticleMock,
+  openArticle: vi.fn(),
 }));
 
 import { ArticleView } from "../../src/routes/ArticleView";
+import { openArticle } from "../../src/content/repository";
 import type { CanonicalArticle } from "../../src/content/types";
+
+const openArticleMock = vi.mocked(openArticle);
 
 const fullArticle = (): CanonicalArticle => ({
   id: "stub-article",
@@ -28,7 +32,9 @@ const fullArticle = (): CanonicalArticle => ({
     originalHtmlHash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
   },
   blocks: [
-    { kind: "heading", level: 1, content: [{ text: "Stub Article", marks: [] }] },
+    // The body starts at h2 — the article title h1 is rendered once by
+    // ArticleView from provenance (one h1 per page, a11y best practice).
+    { kind: "heading", level: 2, content: [{ text: "A section", marks: [] }] },
     { kind: "paragraph", content: [{ text: "A body paragraph.", marks: [] }] },
   ],
   footnotes: [],
