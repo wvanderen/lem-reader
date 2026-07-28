@@ -151,7 +151,9 @@ describe("BlockView — per-kind native element (DOC-02)", () => {
     const { container } = render(<BlockView block={codeBlock(source, "ts")} />);
     const code = container.querySelector("pre > code");
     expect(code).not.toBeNull();
-    expect(code).toHaveTextContent(source);
+    // Read raw textContent — toHaveTextContent normalizes whitespace and would
+    // hide verbatim-preservation regressions (Pitfall 2 / D-05 code-block rule).
+    expect(code?.textContent).toBe(source);
   });
 
   it("renders a footnote-reference as <sup><a id=fn-ref-N href=#fn-N> (Pitfall 4 fix)", () => {
