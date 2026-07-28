@@ -1,0 +1,76 @@
+{
+  "id": "footnote-academic",
+  "revision": 1,
+  "lang": "en",
+  "provenance": {
+    "sourceUrl": "https://plato.stanford.edu/entries/descartes/",
+    "title": "Ren\u00e9 Descartes",
+    "author": "Gary Hatfield",
+    "publishedAt": "2008-12-03T00:00:00Z",
+    "retrievedAt": "2026-07-28T15:35:00Z",
+    "originalHtmlHash": "b4121fc3da0fb226009e2448fd8c4caaedaf2a9af024c49b3eca5737a1408b57",
+    "license": "Open access (Stanford Encyclopedia of Philosophy)"
+  },
+  "blocks": [
+    {
+      "kind": "paragraph",
+      "content": [
+        { "text": "Ren\u00e9 Descartes (1596\u20131650) was a creative mathematician of the first order, an important scientific thinker, and an original metaphysician. During the course of his life, he was a mathematician first, a natural scientist or \u201cnatural philosopher\u201d second, and a metaphysician third. In mathematics, he developed the techniques that made possible algebraic (or \u201canalytic\u201d) geometry.", "marks": [] }
+      ]
+    },
+    {
+      "kind": "paragraph",
+      "content": [
+        { "text": "In natural philosophy, he can be credited with several achievements: the first to publish the sine law of refraction; developer of an important empirical account of the rainbow; and proposer of a naturalistic account of the formation of the earth and planets. More importantly, he offered a new vision of the natural world, which shaped modern physics: a world of matter possessing a few fundamental properties and interacting according to a few universal laws.", "marks": [] }
+      ]
+    },
+    {
+      "kind": "heading",
+      "level": 2,
+      "content": [{ "text": "Intellectual Biography", "marks": [] }]
+    },
+    {
+      "kind": "paragraph",
+      "content": [
+        { "text": "Descartes was born on 31 March 1596 in his maternal grandmother\u2019s house in La Haye, in the Touraine region of France. In 1606 or 1607, Descartes, a Roman Catholic, entered the newly founded Jesuit College of La Fl\u00e8che, where he remained until 1614 or 1615. He followed the usual course of studies, which included grammar school, Latin and Greek grammar, classical poets, and Cicero, followed by the philosophy curriculum. By rule, the Jesuit philosophy curriculum followed Aristotle.", "marks": [] }
+      ]
+    },
+    {
+      "kind": "blockquote",
+      "children": [
+        {
+          "kind": "paragraph",
+          "content": [
+            { "text": "Thus the whole of philosophy is like a tree. The roots are metaphysics, the trunk is physics, and the branches emerging from the trunk are all the other sciences, which may be reduced to three principal ones, namely medicine, mechanics and morals. By \u201cmorals\u201d I understand the highest and most perfect moral system, which presupposes a complete knowledge of the other sciences and is the ultimate level of wisdom.", "marks": [] }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "paragraph",
+      "content": [
+        { "text": "That image of philosophy as a tree is from the Author\u2019s Letter Descartes added to the French translation of his ", "marks": [] },
+        { "text": "Principles", "marks": [{ "type": "em" }] },
+        { "text": " (1644). The letter explained important aspects of his attitude toward philosophy, including the view that, in matters philosophical, one must reason through the arguments and evaluate them for one\u2019s self.", "marks": [] }
+      ]
+    },
+    {
+      "kind": "heading",
+      "level": 2,
+      "content": [{ "text": "A New Metaphysics and Epistemology", "marks": [] }]
+    },
+    {
+      "kind": "paragraph",
+      "content": [
+        { "text": "Descartes presented his metaphysics first in the ", "marks": [] },
+        { "text": "Meditations", "marks": [{ "type": "em" }] },
+        { "text": " and then, in textbook-format, in ", "marks": [] },
+        { "text": "Principles", "marks": [{ "type": "em" }] },
+        { "text": " I. In the First Meditation, he challenged the veridicality of the senses with skeptical arguments, including the dream argument and the argument that a deceptive God or an evil deceiver is causing our sensory experience. Meditation II discovers an initial truth, the ", "marks": [] },
+        { "text": "cogito", "marks": [{ "type": "em" }] },
+        { "text": ", elsewhere summarized as the argument \u201ccogito, ergo sum,\u201d or \u201cI think, therefore I am.\u201d", "marks": [] }
+      ]
+    }
+  ],
+  "footnotes": []
+}

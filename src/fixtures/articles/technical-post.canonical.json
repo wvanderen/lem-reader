@@ -1,0 +1,132 @@
+{
+  "id": "technical-post",
+  "revision": 1,
+  "lang": "en",
+  "provenance": {
+    "sourceUrl": "https://developer.mozilla.org/en-US/docs/Learn_web_development/Getting_started/Your_first_website/Creating_the_content",
+    "title": "HTML: Creating the content",
+    "author": "MDN contributors",
+    "retrievedAt": "2026-07-28T15:35:00Z",
+    "originalHtmlHash": "23004d76a40f6ed39c2eba18690ced5a9876c26103f87280fbc03683cf5284c6",
+    "license": "CC BY-SA 4.0"
+  },
+  "blocks": [
+    {
+      "kind": "heading",
+      "level": 2,
+      "content": [{ "text": "So what is HTML?", "marks": [] }]
+    },
+    {
+      "kind": "paragraph",
+      "content": [
+        { "text": "HTML (", "marks": [] },
+        { "text": "H", "marks": [{ "type": "strong" }] },
+        { "text": "yper", "marks": [] },
+        { "text": "T", "marks": [{ "type": "strong" }] },
+        { "text": "ext ", "marks": [] },
+        { "text": "M", "marks": [{ "type": "strong" }] },
+        { "text": "arkup ", "marks": [] },
+        { "text": "L", "marks": [{ "type": "strong" }] },
+        { "text": "anguage) is the code that is used to structure a web page and its content. HTML is a ", "marks": [] },
+        { "text": "markup language", "marks": [{ "type": "em" }] },
+        { "text": " consisting of a series of ", "marks": [] },
+        { "text": "elements", "marks": [{ "type": "code" }] },
+        { "text": " used to wrap (or enclose) text content to define its structure and cause it to behave in a certain way.", "marks": [] }
+      ]
+    },
+    {
+      "kind": "paragraph",
+      "content": [
+        { "text": "If we wrap unstructured content with the following HTML elements, we can turn a single line into a paragraph (", "marks": [] },
+        { "text": "<p>", "marks": [{ "type": "code" }] },
+        { "text": ") and three bullet points (", "marks": [] },
+        { "text": "<li>", "marks": [{ "type": "code" }] },
+        { "text": "):", "marks": [] }
+      ]
+    },
+    {
+      "kind": "code-block",
+      "language": "html",
+      "source": "<p>Instructions for life:</p>\n\n<ul>\n  <li>Eat</li>\n  <li>Sleep</li>\n  <li>Repeat</li>\n</ul>"
+    },
+    {
+      "kind": "heading",
+      "level": 2,
+      "content": [{ "text": "Lists", "marks": [] }]
+    },
+    {
+      "kind": "paragraph",
+      "content": [
+        { "text": "A lot of the web\u2019s content is lists and HTML has special elements for these. Marking up lists always consists of at least two elements. The most common list types are ordered and unordered lists:", "marks": [] }
+      ]
+    },
+    {
+      "kind": "numbered-list",
+      "start": 1,
+      "items": [
+        {
+          "content": [
+            {
+              "kind": "paragraph",
+              "content": [
+                { "text": "Unordered lists", "marks": [{ "type": "strong" }] },
+                { "text": " are for lists where the order of the items doesn\u2019t matter, such as a shopping list. These are wrapped in a ", "marks": [] },
+                { "text": "<ul>", "marks": [{ "type": "code" }] },
+                { "text": " element.", "marks": [] }
+              ]
+            }
+          ]
+        },
+        {
+          "content": [
+            {
+              "kind": "paragraph",
+              "content": [
+                { "text": "Ordered lists", "marks": [{ "type": "strong" }] },
+                { "text": " are for lists where the order of the items does matter, such as a list of cooking instructions in a recipe. These are wrapped in an ", "marks": [] },
+                { "text": "<ol>", "marks": [{ "type": "code" }] },
+                { "text": " element.", "marks": [] }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "paragraph",
+      "content": [
+        { "text": "Each item inside the lists is put inside a ", "marks": [] },
+        { "text": "<li>", "marks": [{ "type": "code" }] },
+        { "text": " (list item) element. For example, to turn a paragraph fragment into a list:", "marks": [] }
+      ]
+    },
+    {
+      "kind": "code-block",
+      "language": "html",
+      "source": "<p>At Mozilla, we're a global community of</p>\n\n<ul>\n  <li>technologists</li>\n  <li>thinkers</li>\n  <li>builders</li>\n</ul>\n\n<p>working together\u2026</p>"
+    },
+    {
+      "kind": "heading",
+      "level": 2,
+      "content": [{ "text": "Creating links", "marks": [] }]
+    },
+    {
+      "kind": "paragraph",
+      "content": [
+        { "text": "Links are very important \u2014 they are what makes the web a web! To add a link, we need to use an ", "marks": [] },
+        { "text": "<a>", "marks": [{ "type": "code" }] },
+        { "text": " element, \u201ca\u201d being short for \u201canchor\u201d. Give the ", "marks": [] },
+        { "text": "<a>", "marks": [{ "type": "code" }] },
+        { "text": " element an ", "marks": [] },
+        { "text": "href", "marks": [{ "type": "code" }] },
+        { "text": " attribute, and fill in the value with the web address that you want the link to point to:", "marks": [] }
+      ]
+    },
+    {
+      "kind": "code-block",
+      "language": "html",
+      "source": "<a href=\"https://www.mozilla.org/en-US/about/manifesto/\">\n  Mozilla Manifesto\n</a>"
+    }
+  ],
+  "footnotes": []
+}

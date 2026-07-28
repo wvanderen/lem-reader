@@ -1,0 +1,201 @@
+{
+  "id": "list-reference",
+  "revision": 1,
+  "lang": "en",
+  "provenance": {
+    "sourceUrl": "https://en.wikipedia.org/wiki/List_of_cognitive_biases",
+    "title": "List of cognitive biases",
+    "author": "Wikimedia contributors",
+    "retrievedAt": "2026-07-28T15:35:00Z",
+    "originalHtmlHash": "b6a1c5d0c159e9b81f2fdb3c27802b3189a2612042cc0dd96aaf8a450b116aeb",
+    "license": "CC BY-SA 3.0"
+  },
+  "blocks": [
+    {
+      "kind": "paragraph",
+      "content": [
+        { "text": "In psychology and cognitive science, ", "marks": [] },
+        { "text": "cognitive biases", "marks": [{ "type": "link", "href": "https://en.wikipedia.org/wiki/Cognitive_bias" }] },
+        { "text": " are systematic patterns of deviation from norm and/or rationality in judgment. They are often studied in psychology, sociology and behavioral economics. Explanations include information-processing rules (i.e., mental shortcuts), called ", "marks": [] },
+        { "text": "heuristics", "marks": [{ "type": "em" }] },
+        { "text": ", that the brain uses to produce decisions or judgments.", "marks": [] }
+      ]
+    },
+    {
+      "kind": "heading",
+      "level": 2,
+      "content": [{ "text": "Organization of cognitive biases", "marks": [] }]
+    },
+    {
+      "kind": "paragraph",
+      "content": [
+        { "text": "This list is organized based on the task-based classification proposed by Dimara et al. (2020). This classification defines six tasks, namely estimation, decision, hypothesis assessment, causal attribution, recall, and opinion reporting. The biases are further loosely classified into five sub-categories or \u201cflavors\u201d:", "marks": [] }
+      ]
+    },
+    {
+      "kind": "numbered-list",
+      "start": 1,
+      "items": [
+        {
+          "content": [
+            {
+              "kind": "paragraph",
+              "content": [
+                { "text": "Association", "marks": [{ "type": "strong" }] },
+                { "text": ": a connection between different pieces of information.", "marks": [] }
+              ]
+            }
+          ]
+        },
+        {
+          "content": [
+            {
+              "kind": "paragraph",
+              "content": [
+                { "text": "Baseline", "marks": [{ "type": "strong" }] },
+                { "text": ": comparing something to a perceived standard or starting point.", "marks": [] }
+              ]
+            }
+          ]
+        },
+        {
+          "content": [
+            {
+              "kind": "paragraph",
+              "content": [
+                { "text": "Inertia", "marks": [{ "type": "strong" }] },
+                { "text": ": the reluctance to change something that is already in place.", "marks": [] }
+              ]
+            }
+          ]
+        },
+        {
+          "content": [
+            {
+              "kind": "paragraph",
+              "content": [
+                { "text": "Outcome", "marks": [{ "type": "strong" }] },
+                { "text": ": how well something aligns with an expected or hoped-for result.", "marks": [] }
+              ]
+            }
+          ]
+        },
+        {
+          "content": [
+            {
+              "kind": "paragraph",
+              "content": [
+                { "text": "Self-perspective", "marks": [{ "type": "strong" }] },
+                { "text": ": influenced by one\u2019s own personal point of view.", "marks": [] }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "heading",
+      "level": 2,
+      "content": [{ "text": "Estimation", "marks": [] }]
+    },
+    {
+      "kind": "paragraph",
+      "content": [
+        { "text": "In estimation or judgement tasks, people are asked to assess the value of a quantity. The Association sub-category includes the following biases:", "marks": [] }
+      ]
+    },
+    {
+      "kind": "bulleted-list",
+      "items": [
+        {
+          "content": [
+            {
+              "kind": "paragraph",
+              "content": [
+                { "text": "Aesthetic\u2013usability effect", "marks": [{ "type": "link", "href": "https://en.wikipedia.org/wiki/Aesthetic%E2%80%93usability_effect" }] },
+                { "text": ": a tendency for people to perceive attractive things as more usable.", "marks": [] }
+              ]
+            }
+          ]
+        },
+        {
+          "content": [
+            {
+              "kind": "paragraph",
+              "content": [
+                { "text": "Attribute substitution", "marks": [{ "type": "link", "href": "https://en.wikipedia.org/wiki/Attribute_substitution" }] },
+                { "text": ": occurs when a judgment has to be made (of a target attribute) that is computationally complex, and instead a more easily calculated heuristic attribute is substituted.", "marks": [] }
+              ]
+            }
+          ]
+        },
+        {
+          "content": [
+            {
+              "kind": "paragraph",
+              "content": [
+                { "text": "Availability heuristic", "marks": [{ "type": "link", "href": "https://en.wikipedia.org/wiki/Availability_heuristic" }] },
+                { "text": ": the tendency to overestimate the likelihood of events with greater \u201cavailability\u201d in memory, which can be influenced by how recent the memories are or how unusual or emotionally charged they may be.", "marks": [] }
+              ]
+            }
+          ]
+        },
+        {
+          "content": [
+            {
+              "kind": "paragraph",
+              "content": [
+                { "text": "Conjunction fallacy", "marks": [{ "type": "link", "href": "https://en.wikipedia.org/wiki/Conjunction_fallacy" }] },
+                { "text": ", the tendency to assume that specific conditions are more probable than a more general version of those same conditions.", "marks": [] }
+              ]
+            }
+          ]
+        },
+        {
+          "content": [
+            {
+              "kind": "paragraph",
+              "content": [
+                { "text": "Time-saving bias", "marks": [{ "type": "link", "href": "https://en.wikipedia.org/wiki/Time-saving_bias" }] },
+                { "text": ", a tendency to underestimate the time that could be saved when increasing from a relatively low speed, and to overestimate the time that could be saved when increasing from a relatively high speed.", "marks": [] }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "heading",
+      "level": 3,
+      "content": [{ "text": "Baseline", "marks": [] }]
+    },
+    {
+      "kind": "bulleted-list",
+      "items": [
+        {
+          "content": [
+            {
+              "kind": "paragraph",
+              "content": [
+                { "text": "Anchoring bias", "marks": [{ "type": "link", "href": "https://en.wikipedia.org/wiki/Anchoring_(cognitive_bias)" }] },
+                { "text": ", the tendency to rely too heavily\u2014to \u201canchor\u201d\u2014on one trait or piece of information when making decisions (usually the first piece of information acquired on that subject).", "marks": [] }
+              ]
+            }
+          ]
+        },
+        {
+          "content": [
+            {
+              "kind": "paragraph",
+              "content": [
+                { "text": "Dunning\u2013Kruger effect", "marks": [{ "type": "link", "href": "https://en.wikipedia.org/wiki/Dunning%E2%80%93Kruger_effect" }] },
+                { "text": ", the tendency for unskilled individuals to overestimate their own ability and the tendency for experts to underestimate their own ability.", "marks": [] }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "footnotes": []
+}

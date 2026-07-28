@@ -1,0 +1,99 @@
+{
+  "id": "unsupported-case",
+  "revision": 1,
+  "lang": "en",
+  "provenance": {
+    "sourceUrl": "https://developer.mozilla.org/en-US/docs/Learn_web_development/Core/Structuring_content/HTML_table_basics",
+    "title": "HTML table basics",
+    "author": "MDN contributors",
+    "retrievedAt": "2026-07-28T15:35:00Z",
+    "originalHtmlHash": "06d2d1a796ec0eac0cde2b15d7e9d26f70b7ccd05b6896b8e9a39b1ad057b961",
+    "license": "CC BY-SA 4.0"
+  },
+  "blocks": [
+    {
+      "kind": "paragraph",
+      "content": [
+        { "text": "This article gets you started with HTML tables, covering the very basics such as rows, cells, headings, making cells span multiple columns and rows, and how to group together all the cells in a column for styling purposes.", "marks": [] }
+      ]
+    },
+    {
+      "kind": "heading",
+      "level": 2,
+      "content": [{ "text": "What is a table?", "marks": [] }]
+    },
+    {
+      "kind": "paragraph",
+      "content": [
+        { "text": "A table is a structured set of data made up of rows and columns (", "marks": [] },
+        { "text": "tabular data", "marks": [{ "type": "em" }] },
+        { "text": "). A table allows you to quickly and easily look up values that indicate some kind of connection between different types of data, for example a person and their age, or a day of the week, or the timetable for a local swimming pool.", "marks": [] }
+      ]
+    },
+    {
+      "kind": "paragraph",
+      "content": [
+        { "text": "The point of a table is that it is rigid. Information is easily interpreted by making visual associations between row and column headers. The article presents a worked example:", "marks": [] }
+      ]
+    },
+    {
+      "kind": "unsupported",
+      "originalKind": "table",
+      "plainDescription": "A data table comparing the planets of our solar system. It lists each planet\u2019s mass, diameter, density, gravity, length of day, distance from the Sun, mean temperature, and number of moons, with a note for each. The facts come from NASA\u2019s Planetary Fact Sheet."
+    },
+    {
+      "kind": "code-block",
+      "language": "html",
+      "source": "<table>\n  <tr>\n    <td>Hi, I'm your first cell.</td>\n    <td>I'm your second cell.</td>\n    <td>I'm your third cell.</td>\n    <td>I'm your fourth cell.</td>\n  </tr>\n</table>"
+    },
+    {
+      "kind": "heading",
+      "level": 2,
+      "content": [{ "text": "Adding headers with <th> elements", "marks": [] }]
+    },
+    {
+      "kind": "numbered-list",
+      "start": 1,
+      "items": [
+        {
+          "content": [
+            {
+              "kind": "paragraph",
+              "content": [
+                { "text": "First, recognize that table headers deserve their own element: ", "marks": [] },
+                { "text": "<th>", "marks": [{ "type": "code" }] },
+                { "text": " (\u201ctable header\u201d). It works like ", "marks": [] },
+                { "text": "<td>", "marks": [{ "type": "code" }] },
+                { "text": ", except it denotes a header, not a normal cell.", "marks": [] }
+              ]
+            }
+          ]
+        },
+        {
+          "content": [
+            {
+              "kind": "paragraph",
+              "content": [
+                { "text": "Table headings come with default styling \u2014 they are bold and centered even without your own CSS \u2014 to help them stand out. With the ", "marks": [] },
+                { "text": "scope", "marks": [{ "type": "code" }] },
+                { "text": " attribute, they also make tables more accessible by associating each header with its row or column.", "marks": [] }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "paragraph",
+      "content": [
+        { "text": "At the end of the article, an embedded interactive lesson recaps the key ideas and offers extra practice.", "marks": [] }
+      ]
+    },
+    {
+      "kind": "unsupported",
+      "originalKind": "iframe",
+      "plainDescription": "An embedded interactive lesson that recaps HTML table concepts with hands-on exercises. You can\u2019t interact with it inside this reader, but the main points are summarized in the sections above."
+    }
+  ],
+  "footnotes": []
+}

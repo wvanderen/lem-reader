@@ -1,0 +1,101 @@
+{
+  "id": "essay-long-form",
+  "revision": 1,
+  "lang": "en",
+  "provenance": {
+    "sourceUrl": "https://aeon.co/essays/silicon-valley-has-a-science-fiction-problem",
+    "title": "The looting of science fiction",
+    "author": "Ali Rıza Taşkale",
+    "publishedAt": "2026-07-14T00:00:00Z",
+    "retrievedAt": "2026-07-28T15:35:00Z",
+    "originalHtmlHash": "98e4ccf8b56ff411ee1b1e47cf866d491e3da25fc25a6e75bb99477afa994ffd",
+    "license": "CC BY-ND 4.0"
+  },
+  "blocks": [
+    {
+      "kind": "paragraph",
+      "content": [
+        {
+          "text": "In January 2026, Elon Musk stood before the US Secretary of Defense and senior Pentagon leaders at the SpaceX Starbase in Texas. \u2018We want to make ",
+          "marks": []
+        },
+        { "text": "Star Trek", "marks": [{ "type": "em" }] },
+        {
+          "text": " real, OK?\u2019 he declared. \u2018We want to make Starfleet Academy real. So that it\u2019s not always science fiction, but one day the science fiction turns to science fact, and we have spaceships going through space. Big spaceships!\u2019 He painted a vivid picture: exploring alien civilisations, humanity spreading across the stars.",
+          "marks": []
+        }
+      ]
+    },
+    {
+      "kind": "paragraph",
+      "content": [
+        { "text": "It was a remarkable pitch selling the Pentagon a science-fiction vision. Of course, the fit is partial, incomplete. ", "marks": [] },
+        { "text": "Star Trek", "marks": [{ "type": "em" }] },
+        { "text": " depicts a post-scarcity, post-capitalist society where money has been abolished and humanity works toward collective betterment. Gene Roddenberry\u2019s Federation was built on principles of equality and exploration for the sake of knowledge, not profit or military dominance. Musk took the aesthetic \u2013 big spaceships, alien encounters, epic adventures \u2013 and left its political foundation.", "marks": [] }
+      ]
+    },
+    {
+      "kind": "paragraph",
+      "content": [
+        { "text": "In 2021, when Mark Zuckerberg announced Facebook\u2019s rebrand to \u2018Meta\u2019, he took the name from Neal Stephenson\u2019s novel ", "marks": [] },
+        { "text": "Snow Crash", "marks": [{ "type": "em" }] },
+        { "text": " (1992), which imagines the \u2018Metaverse\u2019: a virtual reality where people\u2019s avatars navigate digital space. But ", "marks": [] },
+        { "text": "Snow Crash", "marks": [{ "type": "em" }] },
+        { "text": " is one of the sharpest satirical novels of the past half-century. Stephenson wrote it as a warning: his Metaverse is a consolation prize for a society that has collapsed.", "marks": [] }
+      ]
+    },
+    {
+      "kind": "blockquote",
+      "children": [
+        {
+          "kind": "paragraph",
+          "content": [
+            { "text": "I no longer believe that freedom and democracy are compatible \u2026 Since 1920, the vast increase in welfare beneficiaries and the extension of the franchise to women \u2013 two constituencies that are notoriously tough for libertarians \u2013 have rendered the notion of \u2018capitalist democracy\u2019 into an oxymoron.", "marks": [] }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "paragraph",
+      "content": [
+        { "text": "That is from Peter Thiel\u2019s 2009 essay ", "marks": [] },
+        { "text": "\u2018The Education of a Libertarian\u2019", "marks": [{ "type": "em" }] },
+        { "text": " for the Cato Institute. Thiel reads none of the complexity in Robert Heinlein\u2019s ", "marks": [] },
+        { "text": "The Moon Is a Harsh Mistress", "marks": [{ "type": "em" }] },
+        { "text": "; he takes the anti-government aesthetics and discards the economic foundation of exploitation. As the poet Gil Scott-Heron put it in 1970, some people have rats biting their sisters while \u2018Whitey\u2019s on the Moon\u2019.", "marks": [] }
+      ]
+    },
+    {
+      "kind": "paragraph",
+      "content": [
+        { "text": "Perhaps nowhere is the selective reading more legible than in the naming of Palantir Technologies. In Tolkien\u2019s novels, the palant\u00edri are seeing-stones. They sound like neutral tools, like surveillance technology. But they are ", "marks": [] },
+        { "text": "devices of corruption", "marks": [{ "type": "strong" }] },
+        { "text": ": Saruman\u2019s palant\u00edr connects him to Sauron and leads to his downfall; Denethor\u2019s drives him to madness and suicide.", "marks": [] }
+      ]
+    },
+    {
+      "kind": "paragraph",
+      "content": [
+        { "text": "Other futures are possible, and other science fictions exist. Ursula K Le Guin\u2019s ", "marks": [] },
+        { "text": "The Dispossessed", "marks": [{ "type": "em" }] },
+        { "text": " imagines an anarchist Moon colony built on mutual aid rather than extraction. Octavia Butler\u2019s ", "marks": [] },
+        { "text": "Parable", "marks": [{ "type": "em" }] },
+        { "text": " series depicts communities surviving collapse through adaptation and care rather than escape to Mars. The central question isn\u2019t whether science fiction will shape reality \u2013 that process is already underway. The question is: whose version will prevail?", "marks": [] }
+      ]
+    },
+    {
+      "kind": "paragraph",
+      "content": [
+        { "text": "This essay was originally published at ", "marks": [] },
+        {
+          "text": "Aeon",
+          "marks": [
+            { "type": "link", "href": "https://aeon.co/essays/silicon-valley-has-a-science-fiction-problem" }
+          ]
+        },
+        { "text": " on 14 July 2026.", "marks": [] }
+      ]
+    }
+  ],
+  "footnotes": []
+}
