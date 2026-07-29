@@ -192,6 +192,24 @@ describe("ArticleBody — footnotes region + reading order (DOC-02)", () => {
     expect(li).toHaveTextContent("A footnote body.");
   });
 
+  it("renders a back-link anchor to the reference inside each footnote <li> (Gap 3)", () => {
+    const { container } = render(
+      <ArticleBody
+        article={article([paragraph("Body.")], [
+          { id: "fn-1", content: [{ text: "A footnote body.", marks: [] }] },
+        ])}
+      />,
+    );
+    // The new back-link lives inside the footnote <li> and targets the
+    // reference anchor's id (rendered by the footnote-reference BlockView),
+    // with an accessible name describing its purpose.
+    const back = container.querySelector('li#fn-1 a[href="#fn-ref-1"]');
+    expect(back).not.toBeNull();
+    expect(back?.getAttribute("aria-label")).toContain("Return to reference");
+    // Visible glyph is the Unicode return arrow (single-char text node).
+    expect(back?.textContent).toBe("\u21A9");
+  });
+
   it("does NOT render a Footnotes region when the article has no footnotes", () => {
     render(<ArticleBody article={article([paragraph("Body.")])} />);
     expect(screen.queryByRole("region", { name: "Footnotes" })).toBeNull();

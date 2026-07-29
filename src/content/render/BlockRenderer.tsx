@@ -121,11 +121,23 @@ export function ArticleBody({ article }: { article: CanonicalArticle }) {
       {article.footnotes.length > 0 && (
         <section aria-label="Footnotes">
           <ol>
-            {article.footnotes.map((fn) => (
-              <li key={fn.id} id={fn.id}>
-                <InlineList runs={fn.content} />
-              </li>
-            ))}
+            {article.footnotes.map((fn) => {
+              // fn.id is schema-locked to /^fn-\d+$/ (Plan 01 Task 2,
+              // Pitfall 4 — DOM-clobbering guard), so the derived suffix `n`
+              // is digits-only and safe in both the href fragment and the
+              // aria-label. React escapes text/attribute children; the
+              // react/no-danger rule forbids raw-HTML injection here.
+              const n = fn.id.replace(/^fn-/, "");
+              return (
+                <li key={fn.id} id={fn.id}>
+                  <InlineList runs={fn.content} />
+                  {" "}
+                  <a href={`#fn-ref-${n}`} aria-label={`Return to reference ${n}`}>
+                    {"\u21A9"}
+                  </a>
+                </li>
+              );
+            })}
           </ol>
         </section>
       )}

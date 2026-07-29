@@ -67,3 +67,36 @@ test("fixture list exposes one row per curated fixture (DOC-01)", async ({ page 
   const articleLinks = page.locator('a[href^="#/article/"]');
   await expect(articleLinks).toHaveCount(fixtures.length);
 });
+
+// Gap 3 / UAT test 10: the footnote round-trip stays in-article. Clicking a
+// forward footnote-reference marker must scroll to the footnote body WITHOUT
+// unmounting the article (the Task 1 router guard ignores the bare #fn-N
+// fragment), and the new back-link (Task 2) scrolls back to the reference
+// the same way. figure-heavy carries three footnote-reference blocks and
+// three matching footnote bodies (per 01-03 SUMMARY). Scoped to figure-heavy
+// (outside the per-fixture loop). Image stubbing from the top-level
+// beforeEach still applies (figure-heavy loads remote Wikimedia images).
+test("footnote round-trip stays in-article (figure-heavy, Gap 3)", async ({ page }) => {
+  await page.goto(`${BASE}/#/article/figure-heavy`);
+  const articleH1 = page.getByRole("heading", { level: 1, name: "Hummingbird" });
+  await expect(articleH1).toBeVisible();
+
+  // Forward: click the first footnote-reference marker.
+  const forwardMarker = page.locator('sup > a[href^="#fn-"]').first();
+  await forwardMarker.click();
+
+  // The hash is now an in-page fragment (NOT a #/article/... route), the
+  // article is still mounted, and the target footnote body is present.
+  await expect(page).toHaveURL(/\/#fn-\d+$/);
+  await expect(articleH1).toBeVisible();
+  await expect(page.locator("li#fn-1")).toBeVisible();
+
+  // Back: click the first back-link inside the Footnotes region.
+  const backLink = page.locator('section[aria-label="Footnotes"] a[href^="#fn-ref-"]').first();
+  await backLink.click();
+
+  // The hash is now an in-page reference fragment, and the article is still
+  // mounted (no route swap back to the fixture list).
+  await expect(page).toHaveURL(/\/#fn-ref-\d+$/);
+  await expect(articleH1).toBeVisible();
+});
