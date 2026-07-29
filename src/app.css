@@ -117,15 +117,24 @@ h4 {
   color: var(--ink-soft);
 }
 
+/* ── Shared reading-surface inset (UI-SPEC §Layout) ───────────────────── */
+/* Every view (fixture list, article error/loading, article body) gets the
+   same calm inset at narrow viewports — padding-inline md per UI-SPEC
+   §Layout for <640px. Moved up to main#main so all routes inherit it
+   instead of only the article body (fixes fixture-list flush-edge gap). */
+main#main {
+  padding-inline: var(--space-md);
+  padding-block: var(--space-3xl);
+}
+
 /* ── Article body measure + rhythm (UI-SPEC §Layout + §Typography) ────── */
 /* Calm measure is invariant across breakpoints (Phase 2 may let the reader
    widen it; Phase 1 fixes it). Block rhythm uses em so Phase 2 size changes
-   preserve vertical calm. */
+   preserve vertical calm. Inset now lives on main#main (above); this rule
+   keeps only the centered 64ch measure to avoid a double inset. */
 .article-body {
   max-width: 64ch;
   margin-inline: auto;
-  padding-inline: var(--space-md);
-  padding-block: var(--space-3xl);
 }
 .article-body p {
   margin-block: 1em 1em;
@@ -196,6 +205,26 @@ a:hover {
   cursor: pointer;
   color: var(--accent);
   font-weight: 600;
+}
+
+/* ── Status region (loading/error card — UI-SPEC §Layout "Visual hierarchy")
+   Chrome recedes on the 30% secondary surface token. The card stays calm:
+   --destructive is reserved for icon/border only and Phase 1 has no
+   destructive actions, so text/background use surface-raised + hairline. */
+.status {
+  margin-block: var(--space-lg);
+  padding: var(--space-lg);
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+}
+.status p {
+  margin-block: var(--space-sm);
+  color: var(--ink-soft);
+}
+.status h1,
+.status h2 {
+  margin-block: 0 var(--space-sm);
 }
 
 /* ── Fixture list (UI-SPEC §Component Inventory + §Layout) ─────────────── */
