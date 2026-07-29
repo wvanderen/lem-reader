@@ -28,7 +28,7 @@ Lem Reader reaches its MVP through six vertical slices that keep a usable semant
   3. Reader can follow preserved links, while unsupported fixture content is disclosed instead of silently disappearing.
   4. The same article revision exposes one stable logical text coordinate system for all later reading locations and annotations.
 
-**Plans:** 4/5 plans executed
+**Plans:** 5/5 plans complete
 Plans:
 **Wave 1**
 
@@ -42,7 +42,7 @@ Plans:
 **Gap Closure (Wave 1, parallel — UAT diagnosed gaps)**
 
 - [x] 01-04-PLAN.md — Gap 1 (fixture-list inset) + Gap 2 (error-state two-line copy + `.status` styling): unify view inset on `main#main`, add `.status` card, render full UI-SPEC Copywriting contract in FixtureList + ArticleView
-- [ ] 01-05-PLAN.md — Gap 3 (footnote/router collision): router ignores non-`#/` fragment-only hashes so native in-page scroll works; renderer adds the footnote-body → reference back-link; jsdom component test + 3-engine e2e round-trip
+- [x] 01-05-PLAN.md — Gap 3 (footnote/router collision): router ignores non-`#/` fragment-only hashes so native in-page scroll works; renderer adds the footnote-body → reference back-link; jsdom component test + 3-engine e2e round-trip
 
 **UI hint:** yes
 
@@ -131,7 +131,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Canonical Article Foundation | 4/5 | In Progress|  |
+| 1. Canonical Article Foundation | 5/5 | Complete   | 2026-07-29 |
 | 2. Accessible Scrolling Reader | 0/TBD | Not started | - |
 | 3. Trustworthy Layout Measurement | 0/TBD | Not started | - |
 | 4. Responsive Pagination and Dual-Mode Navigation | 0/TBD | Not started | - |

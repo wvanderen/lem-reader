@@ -6,15 +6,15 @@ current_phase: 01
 current_phase_name: canonical-article-foundation
 status: executing
 stopped_at: "Completed 01-04-PLAN.md (UAT gap closure: fixture-list inset + error-state copy)"
-last_updated: "2026-07-29T14:59:30.734Z"
+last_updated: "2026-07-29T15:05:09.553Z"
 last_activity: 2026-07-29
 last_activity_desc: Phase 01 execution started
 progress:
   total_phases: 6
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 5
-  completed_plans: 4
-  percent: 0
+  completed_plans: 5
+  percent: 17
 ---
 
 # Project State
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-07-26)
 ## Current Position
 
 Phase: 01 (canonical-article-foundation) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 Status: Ready to execute
 Last activity: 2026-07-29 — Phase 01 execution started
 
@@ -57,6 +57,7 @@ Progress: [██████████] 100% (Phase 01)
 | Phase 01 P01 | 14 min | 3 tasks | 25 files |
 | Phase 01 P02 | 120 | 3 tasks | 13 files |
 | Phase 01 P04 | 11 min | 2 tasks | 5 files |
+| Phase 01 P05 | 3 min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -74,6 +75,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: [Phase 01-02]: Hash-based routing confirmed (A2) — window.location.hash + hashchange, no router library
 - [Phase 01]: [Phase 01-04]: Inset unification lives on main#main (not per-view wrappers) — closes fixture-list flush-edge gap with one rule, no double inset
 - [Phase 01]: [Phase 01-04]: Error heading level split by page context — ArticleView uses <h1> (standalone error page), FixtureList uses <h2> (page already has <h1>Saved articles</h1>); preserves one-h1-per-page
+- [Phase ?]: [Phase 01-05]: Route/fragment distinction lives in the hashchange handler (not parseHash) — parseHash must still map bad #/ deep links to the list; the guard prevents fragment-only hashes from reaching setView so native scroll targets stay mounted
+- [Phase ?]: [Phase 01-05]: Footnote back-link visible glyph is U+21A9 as a React text child + aria-label 'Return to reference N'; fn.id schema-locked to digits-only so suffix is injection-safe; no new CSS (app.css owned by sibling 01-04)
 
 ### Pending Todos
 
@@ -94,6 +97,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-29T14:59:22.688Z
+Last session: 2026-07-29T15:04:58.363Z
 Stopped at: Completed 01-04-PLAN.md (UAT gap closure: fixture-list inset + error-state copy)
 Resume file: None
