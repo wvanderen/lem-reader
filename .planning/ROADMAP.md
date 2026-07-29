@@ -17,7 +17,7 @@ Lem Reader reaches its MVP through six vertical slices that keep a usable semant
 
 ### Phase 1: Canonical Article Foundation
 
-**Goal:** Readers can open representative saved articles with faithful semantic structure, provenance, and stable content identity.
+**Goal:** As a reader, I want to open representative saved articles rendered with faithful semantic structure, provenance, and stable content identity, so that I can read normalized long-form content in canonical order with a coordinate system that supports later navigation and annotation.
 **Mode:** mvp
 **Depends on:** Nothing (first phase)
 **Requirements:** DOC-01, DOC-02, DOC-03, DOC-04, DOC-05, DOC-06
