@@ -1,5 +1,5 @@
 ---
-status: complete
+status: diagnosed
 phase: 01-canonical-article-foundation
 source: 01-01-SUMMARY.md, 01-02-SUMMARY.md, 01-03-SUMMARY.md
 started: 2026-07-29T02:10:51Z
@@ -91,21 +91,47 @@ skipped: 0
   reason: "User reported: visual issue with 'Saved Articles' header positioning (no space from left side of screen)"
   severity: cosmetic
   test: 2
-  artifacts: []
-  missing: []
+  root_cause: "FixtureList's <main id=main> has no horizontal padding. The .article-body rule provides padding-inline: var(--space-md) for ArticleView, but no equivalent rule exists for the fixture-list view, so the heading (and the list at narrow widths) render flush against the viewport edge. The .fixture-list ul only centers via max-width + auto-margin and sets padding: 0."
+  artifacts:
+    - path: "src/app.css"
+      issue: "no rule insets the fixture-list <main>/<h1>; .fixture-list sets padding: 0"
+    - path: "src/routes/FixtureList.tsx"
+      issue: "<main id=main> has no class hook to receive inset styling"
+  missing:
+    - "Add a horizontal inset (padding-inline: var(--space-md)) to the fixture-list view matching the article view"
+  debug_session: ".planning/debug/fixture-list-header-spacing.md"
 
 - truth: "Invalid-article error state renders the full UI-SPEC Copywriting Contract — the 'Couldn't open this article.' heading plus the guidance body 'The article could not be loaded. Select it again from the list, or try a different article.' — with proper spacing/styling in the status region."
   status: failed
   reason: "User reported: Just says 'Couldn't open this article.' without spacing styling"
   severity: minor
   test: 9
-  artifacts: []
-  missing: []
+  root_cause: "Two compounding causes: (1) the error branch renders only the heading string — the required guidance body sentence from the UI-SPEC Copywriting Contract was never implemented; (2) the status region <div> has no CSS class and app.css defines no .status rule, and the wrapping <main> has no inset, so it renders as unstyled flush bare text."
+  artifacts:
+    - path: "src/routes/ArticleView.tsx"
+      issue: "error branch renders one string, omits guidance body; status div has no class"
+    - path: "src/routes/FixtureList.tsx"
+      issue: "same single-string error pattern in its status region"
+    - path: "src/app.css"
+      issue: "no .status styling rule exists"
+  missing:
+    - "Render the two-line error contract (heading + guidance body)"
+    - "Add a .status class + styling rule (surface-raised bg, hairline, spacing-scale padding, layout inset)"
+    - "Mirror the treatment in FixtureList"
+  debug_session: ".planning/debug/error-state-guidance-copy.md"
 
 - truth: "Clicking a footnote reference marker jumps to the matching footnote body in the footnotes region (and the footnote body links back to its reference) — in-page anchor navigation that does NOT exit the article or change the route."
   status: failed
   reason: "User reported: fail - goes to home 'http://localhost:5173/#fn-1' (the in-page anchor href='#fn-1' collides with the hash-based router, which treats it as a route and falls back to the fixture list)"
   severity: major
   test: 10
-  artifacts: []
-  missing: []
+  root_cause: "The hash router treats every hashchange as a route change and does not distinguish app routes (#/article/<id>) from in-page fragment anchors (#fn-N, #fn-ref-N). Footnote references are native <a href='#fn-N'> anchors; activating one changes the hash, parseHash falls through to {name:'list'}, and React unmounts ArticleView (destroying the fn-N target). Separately, the footnote-body -> reference back-link is not implemented in the renderer at all."
+  artifacts:
+    - path: "src/App.tsx"
+      issue: "parseHash + hashchange listener — no guard ignoring non-#/ fragments"
+    - path: "src/content/render/BlockRenderer.tsx"
+      issue: "footnote-reference emits <a href='#fn-N'> (collides); footnotes region omits the back-link"
+  missing:
+    - "Router: ignore fragment-only hashes (only treat #/ as routes) so native in-page scroll works"
+    - "Renderer: add a return <a href='#fn-ref-N'> inside each footnote <li>"
+  debug_session: ".planning/debug/footnote-router-collision.md"
