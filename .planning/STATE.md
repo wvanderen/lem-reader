@@ -4,17 +4,17 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 01
 current_phase_name: canonical-article-foundation
-status: verifying
-stopped_at: Completed 01-03-PLAN.md (curated corpus + Playwright/axe-core validation)
-last_updated: "2026-07-28T20:57:10.386Z"
-last_activity: 2026-07-28
-last_activity_desc: Completed 01-03-PLAN.md (curated corpus + validation)
+status: executing
+stopped_at: "Completed 01-04-PLAN.md (UAT gap closure: fixture-list inset + error-state copy)"
+last_updated: "2026-07-29T14:59:30.734Z"
+last_activity: 2026-07-29
+last_activity_desc: Phase 01 execution started
 progress:
   total_phases: 6
-  completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
-  percent: 17
+  completed_phases: 0
+  total_plans: 5
+  completed_plans: 4
+  percent: 0
 ---
 
 # Project State
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-07-26)
 
 ## Current Position
 
-Phase: 01 (canonical-article-foundation) — COMPLETE
-Plan: 3 of 3
-Status: Phase complete — ready for verification (`/gsd-verify-work`)
-Last activity: 2026-07-28 — Completed 01-03-PLAN.md (curated corpus + Playwright/axe-core validation)
+Phase: 01 (canonical-article-foundation) — EXECUTING
+Plan: 2 of 5
+Status: Ready to execute
+Last activity: 2026-07-29 — Phase 01 execution started
 
 Progress: [██████████] 100% (Phase 01)
 
@@ -56,6 +56,7 @@ Progress: [██████████] 100% (Phase 01)
 
 | Phase 01 P01 | 14 min | 3 tasks | 25 files |
 | Phase 01 P02 | 120 | 3 tasks | 13 files |
+| Phase 01 P04 | 11 min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -71,6 +72,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: Rule 3 deviation: @typescript-eslint hard-throws on TS 7.0; eslint.config.js uses @babel/eslint-parser instead, all security rules (react/no-danger etc.) preserved and verified firing
 - [Phase ?]: [Phase 01-02]: One h1 per page — ArticleView renders title from provenance; article bodies start at h2 (a11y)
 - [Phase ?]: [Phase 01-02]: Hash-based routing confirmed (A2) — window.location.hash + hashchange, no router library
+- [Phase 01]: [Phase 01-04]: Inset unification lives on main#main (not per-view wrappers) — closes fixture-list flush-edge gap with one rule, no double inset
+- [Phase 01]: [Phase 01-04]: Error heading level split by page context — ArticleView uses <h1> (standalone error page), FixtureList uses <h2> (page already has <h1>Saved articles</h1>); preserves one-h1-per-page
 
 ### Pending Todos
 
@@ -91,6 +94,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-28T20:57:10.381Z
-Stopped at: Completed 01-02-PLAN.md (Walking Skeleton UI)
+Last session: 2026-07-29T14:59:22.688Z
+Stopped at: Completed 01-04-PLAN.md (UAT gap closure: fixture-list inset + error-state copy)
 Resume file: None
