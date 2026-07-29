@@ -18,7 +18,20 @@ function parseHash(): View {
 export function App() {
   const [view, setView] = useState<View>(() => parseHash());
   useEffect(() => {
-    const onHash = () => setView(parseHash());
+    // Gap 3 / UAT test 10: only hashes prefixed with "#/" are app routes.
+    // Bare fragment anchors are native in-page scroll targets and must NOT
+    // swap the view — otherwise the scroll target element (e.g. the footnote
+    // body) is unmounted before the browser can scroll to it, dumping the
+    // reader back to the fixture list. Fragment namespaces relying on native
+    // scrolling: #fn-N (footnote body), #fn-ref-N (reference back-link
+    // target), and #main (the SkipLink target). parseHash still maps an
+    // unrecognized "#/" deep link to the list; this guard only short-circuits
+    // fragment-only hashes before they reach setView.
+    const onHash = () => {
+      const hash = window.location.hash;
+      if (hash !== "" && !hash.startsWith("#/")) return;
+      setView(parseHash());
+    };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
