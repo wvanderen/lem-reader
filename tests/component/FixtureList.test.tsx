@@ -83,6 +83,8 @@ describe("FixtureList (DOC-01)", () => {
     await waitFor(() => {
       expect(screen.getByText("Couldn't open this article.")).not.toBeNull();
     });
+    expect(screen.getByText(/The article could not be loaded/)).not.toBeNull();
+    expect(screen.getByRole("status")).not.toBeNull();
   });
 
   it("shows the empty state when the list resolves with no articles", async () => {

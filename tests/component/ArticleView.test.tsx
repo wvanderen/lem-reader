@@ -88,6 +88,8 @@ describe("ArticleView (DOC-03)", () => {
     await waitFor(() => {
       expect(screen.getByText("Couldn't open this article.")).not.toBeNull();
     });
+    expect(screen.getByText(/The article could not be loaded/)).not.toBeNull();
+    expect(screen.getByRole("status")).not.toBeNull();
   });
 
   it("shows the error copy when openArticle resolves null (article not found)", async () => {
@@ -96,5 +98,7 @@ describe("ArticleView (DOC-03)", () => {
     await waitFor(() => {
       expect(screen.getByText("Couldn't open this article.")).not.toBeNull();
     });
+    expect(screen.getByText(/The article could not be loaded/)).not.toBeNull();
+    expect(screen.getByRole("status")).not.toBeNull();
   });
 });

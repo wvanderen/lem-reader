@@ -33,9 +33,14 @@ export function FixtureList() {
   return (
     <main id="main">
       <h1>Saved articles</h1>
-      <div role="status" aria-live="polite" aria-atomic="true">
-        {status === "loading" && "Opening article…"}
-        {status === "error" && "Couldn't open this article."}
+      <div className="status" role="status" aria-live="polite" aria-atomic="true">
+        {status === "loading" && <p>Opening article…</p>}
+        {status === "error" && (
+          <>
+            <h2>Couldn't open this article.</h2>
+            <p>The article could not be loaded. Select it again from the list, or try a different article.</p>
+          </>
+        )}
       </div>
       {items.length === 0 && status === "ready" ? (
         <>

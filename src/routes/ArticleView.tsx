@@ -50,8 +50,15 @@ export function ArticleView({ articleId }: { articleId: string }) {
   if (status !== "ready" || !article) {
     return (
       <main id="main">
-        <div role="status" aria-live="polite" aria-atomic="true">
-          {status === "loading" ? "Opening article…" : "Couldn't open this article."}
+        <div className="status" role="status" aria-live="polite" aria-atomic="true">
+          {status === "loading" ? (
+            <p>Opening article…</p>
+          ) : (
+            <>
+              <h1>Couldn't open this article.</h1>
+              <p>The article could not be loaded. Select it again from the list, or try a different article.</p>
+            </>
+          )}
         </div>
       </main>
     );
