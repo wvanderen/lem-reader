@@ -28,7 +28,7 @@ Lem Reader reaches its MVP through six vertical slices that keep a usable semant
   3. Reader can follow preserved links, while unsupported fixture content is disclosed instead of silently disappearing.
   4. The same article revision exposes one stable logical text coordinate system for all later reading locations and annotations.
 
-**Plans:** 3/3 plans complete
+**Plans:** 5 plans (3 complete + 2 gap-closure)
 Plans:
 **Wave 1**
 
@@ -38,6 +38,11 @@ Plans:
 **Wave 2** *(blocked on Wave 1 completion)*
 
 - [x] 01-03-PLAN.md — Wave 2: D-03 fixture-approval checkpoint + throwaway normalization script (D-09) + curated 5–7 article corpus + e2e/axe-core validation across Chromium/Firefox/WebKit
+
+**Gap Closure (Wave 1, parallel — UAT diagnosed gaps)**
+
+- [ ] 01-04-PLAN.md — Gap 1 (fixture-list inset) + Gap 2 (error-state two-line copy + `.status` styling): unify view inset on `main#main`, add `.status` card, render full UI-SPEC Copywriting contract in FixtureList + ArticleView
+- [ ] 01-05-PLAN.md — Gap 3 (footnote/router collision): router ignores non-`#/` fragment-only hashes so native in-page scroll works; renderer adds the footnote-body → reference back-link; jsdom component test + 3-engine e2e round-trip
 
 **UI hint:** yes
 
