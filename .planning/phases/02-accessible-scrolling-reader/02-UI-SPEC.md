@@ -160,6 +160,17 @@ new role.
 | Subheading (h2, h3, h4) | 22px | 600 (semibold) | 1.3 | selected body stack |
 | Display (article title h1) | 32px | 600 (semibold) | 1.2 | selected body stack |
 
+**Relative-unit rule (hierarchy invariant — Dimension 4):** the px values above
+are the **defaults at the default body step (18px)**. Subheading and Display
+sizes MUST be expressed as **relative `em` units derived from the resolved body
+size** (Subheading ≈ `1.22em`, Display ≈ `1.78em`), NOT as fixed px. This keeps
+the type hierarchy from inverting when a user picks a large body step (22 or
+24px): headings always stay proportionally larger than body. Only Body and
+Meta/Label are sized in px (Body is the user-controlled knob; Meta/Label is the
+fixed chrome size). The locked type-scale *relationships* above are preserved;
+this rule only clarifies that headings move in `em`, matching Phase 1's existing
+`em`-based block rhythm.
+
 **Typography control model (D2-05, D2-07, D2-08) — hybrid:**
 
 *Spacing presets* own line-height + letter/word-spacing (set together); *size*
@@ -305,7 +316,7 @@ Phase 2 surfaces:
 | Reset to defaults | **Reset to defaults** |
 | Resume banner — heading | **You left off here** |
 | Resume banner — body | Resume reading where you stopped, or start from the top. |
-| Resume banner — Resume (primary) | **Resume** |
+| Resume banner — Resume reading (primary) | **Resume reading** |
 | Resume banner — Start from top (secondary) | **Start from top** |
 | Resume banner — dismiss | `aria-label="Dismiss"`; visible × glyph |
 | Resume banner — polite announce on open | Returned to where you left off. |
@@ -316,7 +327,7 @@ Phase 2 surfaces:
 | Wipe confirmation — title | **Reset local data?** |
 | Wipe confirmation — body | Reading history and saved settings are damaged and can't be used. Resetting clears them so you can start fresh. This can't be undone. |
 | Wipe confirmation — Reset (destructive) | **Reset local data** |
-| Wipe confirmation — Cancel | **Cancel** |
+| Wipe confirmation — Cancel | **Keep reading** (verb + noun — names the actual outcome: the reader stays reading with in-memory defaults and the banner still shown) |
 | Article view — "back to list" affordance | Reuses Phase 1 flow (hash routing to `#/`); no new chrome copy required. The header wordmark is not a link. |
 
 **Microcopy notes specific to Phase 2:**
@@ -384,9 +395,9 @@ forward unchanged and apply to every new control. Phase 2 adds:
 - Immediately after, the **resume banner** appears (non-modal, polite) and a
   polite live region announces *"Returned to where you left off."*
 - **Banner lifecycle:** it auto-dismisses on the reader's first scroll or
-  pointer activity, OR on an explicit action (**Resume** / **Start from top** /
+  pointer activity, OR on an explicit action (**Resume reading** / **Start from top** /
   ×). It does NOT block reading.
-- **Resume** (primary) scrolls to the offset and dismisses; **Start from top**
+- **Resume reading** (primary) scrolls to the offset and dismisses; **Start from top**
   (secondary) scrolls to the article `<h1>` and dismisses.
 - **No page numbers** are shown; this honors READ-05 ("does not treat responsive
   page number as permanent identity").
@@ -419,7 +430,7 @@ forward unchanged and apply to every new control. Phase 2 adds:
 - **Corrupt or unupgradeable DB:** the reader is NOT silently wiped. A
   **focus-trapped confirmation dialog** ("Reset local data?") asks for explicit
   consent. Only on **Reset local data** (destructive) is local data cleared and
-  the DB re-initialized; **Cancel** keeps the reader reading with in-memory
+  the DB re-initialized; **Keep reading** keeps the reader reading with in-memory
   defaults and the banner still shown.
 - Fixtures are static; article reading NEVER depends on Dexie, so a total
   storage failure cannot block opening or reading an article.
