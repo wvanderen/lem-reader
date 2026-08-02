@@ -525,3 +525,145 @@ dialog.settings-panel::backdrop {
   color: var(--accent);
   border-color: var(--accent);
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+ * Phase 2 Plan 02-02 — STATE-05 recovery surfaces
+ *
+ * StorageBanner (D2-13, UI-SPEC §Interaction 13) reuses the .status card
+ * pattern above (lines 247–261) — surface-raised + hairline border + 4px
+ * radius + --space-lg padding. NON-sticky (READ-04: sticky chrome competes
+ * with content). Dismissible, non-modal, does NOT trap focus.
+ *
+ * WipeConfirm (UI-SPEC §Copywriting lines 328–331) is a <dialog>/alertdialog
+ * sibling of .settings-panel — same geometry discipline (surface-raised,
+ * hairline border, centered), but the destructive button uses --destructive
+ * for its border so the consequence is conveyed beyond copy (forced-colors
+ * safety — UI-SPEC §Color contrast contract line 290).
+ * ════════════════════════════════════════════════════════════════════════ */
+
+/* ── Storage-failure banner (non-modal, dismissible) ────────────────────── */
+/* Extends .status (lines 247–261) — only adds the dismiss row layout. The
+   banner sits inline at the top of the view (NOT sticky — READ-04 quiet-
+   chrome rule). Sits below the header in DOM order. */
+.storage-banner {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-md);
+  /* Inset matches main#main so the banner aligns with the article edge. */
+  margin-inline: var(--space-md);
+  margin-block: var(--space-md);
+}
+.storage-banner-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.storage-banner-main h2 {
+  /* Reuses .status h2 baseline (lines 258–261). */
+  margin-block: 0 var(--space-sm);
+  font-family: var(--font-ui);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.storage-banner-main p {
+  margin-block: 0;
+  color: var(--ink-soft);
+}
+.storage-banner-dismiss {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--touch);
+  min-width: var(--touch);
+  padding: var(--space-sm);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.storage-banner-dismiss:hover {
+  color: var(--accent);
+}
+
+/* ── Wipe-confirm alertdialog (focus-trapped, destructive) ──────────────── */
+/* Sibling geometry of .settings-panel — centered modal with ::backdrop. The
+   destructive button border uses --destructive (UI-SPEC §Copywriting line
+   330 + forced-colors contrast contract). */
+dialog.wipe-confirm {
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: var(--surface-raised);
+  color: var(--ink);
+  width: calc(100vw - var(--space-xl));
+  max-width: 480px;
+  /* Centered alertdialog (not a sheet) — vertically centered via auto margin
+     under the top-layer positioning the user agent provides for <dialog>. */
+  overflow: auto;
+}
+dialog.wipe-confirm::backdrop {
+  background: rgba(31, 27, 22, 0.5);
+}
+.wipe-confirm-inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+}
+.wipe-confirm-inner h2 {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 22px;
+  line-height: 1.3;
+  font-weight: 600;
+}
+.wipe-confirm-inner p {
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+.wipe-confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  justify-content: flex-end;
+  margin-top: var(--space-sm);
+}
+.wipe-confirm-destructive,
+.wipe-confirm-cancel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--touch);
+  padding-inline: var(--space-md);
+  border-radius: 4px;
+  font-family: var(--font-ui);
+  font-size: 16px;
+  cursor: pointer;
+}
+/* Destructive button: --destructive border conveys consequence beyond copy
+   (forced-colors safety — UI-SPEC §Color contrast contract line 290). The
+   label "Reset local data" itself is unambiguous (UI-SPEC line 330). */
+.wipe-confirm-destructive {
+  background: transparent;
+  border: 1px solid var(--destructive);
+  color: var(--destructive);
+}
+.wipe-confirm-destructive:hover {
+  background: var(--destructive);
+  color: var(--surface);
+}
+/* Cancel button: neutral border, names the actual outcome (UI-SPEC line 331). */
+.wipe-confirm-cancel {
+  background: transparent;
+  border: 1px solid var(--hairline);
+  color: var(--ink);
+}
+.wipe-confirm-cancel:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
