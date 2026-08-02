@@ -198,3 +198,44 @@ export const ArticleSchema = z.object({
 // infer a self-referential const without a type annotation (Pitfall 7).
 export type CanonicalArticle = z.infer<typeof ArticleSchema>;
 export type InlineRun = z.infer<typeof InlineRun>;
+
+// ── Reader settings (Phase 2 — READ-02/03, STATE-02/04) ──────────────────────
+// Single composite record under Dexie key "reader-prefs" (D2 discretion /
+// 02-RESEARCH.md Pattern 3). Closed-set enums + literal schemaVersion so any
+// persisted value outside the contract is rejected at the read boundary
+// (T-02-01 — Tampering V5). applyTheme consumes the inferred type directly.
+// No recursion here — Pitfall 7 (the two-pass recursive Block pattern above)
+// does NOT apply.
+export const ReaderSettingsSchema = z.object({
+  schemaVersion: z.literal(1), // STATE-04 migration hook
+  font: z.enum(["serif", "sans", "dyslexic"]),
+  size: z.union([
+    z.literal(16),
+    z.literal(18),
+    z.literal(20),
+    z.literal(22),
+    z.literal(24),
+  ]),
+  measure: z.union([
+    z.literal(52),
+    z.literal(58),
+    z.literal(64),
+    z.literal(72),
+  ]),
+  spacing: z.enum(["compact", "comfortable", "spacious"]),
+  theme: z.enum(["sepia", "light", "dark"]),
+});
+export type ReaderSettings = z.infer<typeof ReaderSettingsSchema>;
+
+// ── Reading location (Phase 2 — STATE-01, D-05 substrate, D-06 key) ──────────
+// Persisted at the compound [articleId+revision] key. graphemeOffset is into
+// normalizeText(article) (D-05). articleId + revision reuse the exact patterns
+// from ArticleSchema above (D-06 stability contract — single source of truth).
+export const LocationRecordSchema = z.object({
+  schemaVersion: z.literal(1), // STATE-04 migration hook
+  articleId: z.string().regex(/^[a-z0-9-]+$/), // matches ArticleSchema.id (D-06)
+  revision: z.number().int().min(1), // D-06 monotonic
+  graphemeOffset: z.number().int().min(0), // D-05 offset into normalizeText
+  savedAt: z.string().datetime(), // ISO-8601 — used for last-write-wins tiebreak
+});
+export type LocationRecord = z.infer<typeof LocationRecordSchema>;

@@ -26,6 +26,19 @@ export class LemReaderDB extends Dexie {
       // Phase 5: ANNO notes attached to highlights
       notes: "id, highlightId",
     });
+    // ── Phase 2 (STATE-04 anchor + Pitfall 9): version(2) is an APPEND ──
+    // The version(1) declaration above is byte-unchanged (Pitfall 9 — never
+    // edit a shipped version block; that breaks the upgrade chain for any
+    // client that already opened v1). Re-declaring the same reserved stores
+    // at v2 is a schema no-op in Dexie ≥3 (the slots were already declared in
+    // v1); the new version anchors the STATE-04 migration hook and gives a
+    // clean place to evolve the stores in later phases. v1 wrote ZERO records
+    // (Phase 1 reads bundled JSON only), so no data migration is needed.
+    this.version(2).stores({
+      articles: "id, revision",
+      settings: "key",
+      location: "[articleId+revision]",
+    });
   }
 }
 
