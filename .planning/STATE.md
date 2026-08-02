@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 01
+current_phase: 02
+current_phase_name: accessible-scrolling-reader
 status: executing
-stopped_at: Phase 2 UI-SPEC approved
-last_updated: "2026-08-02T03:05:29.522Z"
-last_activity: 2026-07-29
-last_activity_desc: Phase 01 marked complete
+stopped_at: Completed 02-01-PLAN.md (adaptable reading surface)
+last_updated: "2026-08-02T16:53:22.517Z"
+last_activity: 2026-08-02
+last_activity_desc: Phase 02 execution started
 progress:
   total_phases: 6
   completed_phases: 1
-  total_plans: 5
-  completed_plans: 5
+  total_plans: 8
+  completed_plans: 6
   percent: 17
-current_phase_name: canonical-article-foundation
 ---
 
 # Project State
@@ -24,14 +24,14 @@ current_phase_name: canonical-article-foundation
 See: .planning/PROJECT.md (updated 2026-07-26)
 
 **Core value:** Readers can move through long-form web content with calm, stable orientation and predictable navigation.
-**Current focus:** Phase 01 — canonical-article-foundation
+**Current focus:** Phase 02 — accessible-scrolling-reader
 
 ## Current Position
 
-Phase: 01 — COMPLETE
-Plan: 3 of 5
+Phase: 02 (accessible-scrolling-reader) — EXECUTING
+Plan: 2 of 3
 Status: Ready to execute
-Last activity: 2026-07-29 — Phase 01 marked complete
+Last activity: 2026-08-02 — Phase 02 execution started
 
 Progress: [██████████] 100% (Phase 01)
 
@@ -58,6 +58,7 @@ Progress: [██████████] 100% (Phase 01)
 | Phase 01 P02 | 120 | 3 tasks | 13 files |
 | Phase 01 P04 | 11 min | 2 tasks | 5 files |
 | Phase 01 P05 | 3 min | 2 tasks | 5 files |
+| Phase 02 P01 | 50min | 3 tasks | 19 files |
 
 ## Accumulated Context
 
@@ -77,6 +78,10 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 01]: [Phase 01-04]: Error heading level split by page context — ArticleView uses <h1> (standalone error page), FixtureList uses <h2> (page already has <h1>Saved articles</h1>); preserves one-h1-per-page
 - [Phase ?]: [Phase 01-05]: Route/fragment distinction lives in the hashchange handler (not parseHash) — parseHash must still map bad #/ deep links to the list; the guard prevents fragment-only hashes from reaching setView so native scroll targets stay mounted
 - [Phase ?]: [Phase 01-05]: Footnote back-link visible glyph is U+21A9 as a React text child + aria-label 'Return to reference N'; fn.id schema-locked to digits-only so suffix is injection-safe; no new CSS (app.css owned by sibling 01-04)
+- [Phase ?]: Phase 02-01: Native <dialog>/showModal chosen for settings panel; manual triggerRef.current?.focus() restore in close listener (Pitfall 1) — Free focus trap/Esc/inert/backdrop; canonical per 02-RESEARCH anti-pattern #1
+- [Phase ?]: Phase 02-01: applyTheme writes data-theme + 6 CSS custom properties on documentElement (D2-03 live-apply) — Single token swap honors authored-CSS/no-Tailwind constraint; values derive from Zod-validated enums/numbers (no XSS surface, T-02-02)
+- [Phase ?]: Phase 02-01: Dexie version(2) re-declares same stores — schema no-op in Dexie >=3; anchors STATE-04 migration hook (Pitfall 9 honored) — v1 wrote zero records; no data migration needed; gives Plan 02 clean place to evolve
+- [Phase ?]: Phase 02-01: Explicit focus on first control after showModal + removed <form method=dialog> wrapper — WebKit does not auto-focus modal-dialog controls; form wrapper interfered with Chromium focus-trap wrap-around (focus escaped to body)
 
 ### Pending Todos
 
@@ -97,6 +102,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-07-30T17:18:27.517Z
-Stopped at: Phase 2 UI-SPEC approved
-Resume file: .planning/phases/02-accessible-scrolling-reader/02-UI-SPEC.md
+Last session: 2026-08-02T16:53:22.511Z
+Stopped at: Completed 02-01-PLAN.md (adaptable reading surface)
+Resume file: None

@@ -16,21 +16,21 @@
 
 ### Reading Surface
 
-- [ ] **READ-01**: Reader can read every supported article in a clean semantic scrolling view.
-- [ ] **READ-02**: Reader can change font family, font size, line height, text spacing, and reading measure.
-- [ ] **READ-03**: Reader can choose from a limited set of accessible light and dark themes.
-- [ ] **READ-04**: Reader sees a calm interface whose secondary controls do not permanently compete with article content.
+- [x] **READ-01**: Reader can read every supported article in a clean semantic scrolling view.
+- [x] **READ-02**: Reader can change font family, font size, line height, text spacing, and reading measure.
+- [x] **READ-03**: Reader can choose from a limited set of accessible light and dark themes.
+- [x] **READ-04**: Reader sees a calm interface whose secondary controls do not permanently compete with article content.
 - [ ] **READ-05**: Reader can see quiet structural location or progress information that does not treat responsive page number as permanent identity.
 
 ### Accessibility
 
-- [ ] **A11Y-01**: Reader can operate every reading, navigation, settings, highlighting, and note function using the keyboard alone without a keyboard trap.
-- [ ] **A11Y-02**: Reader encounters visible focus in a logical order, and focus remains predictable across navigation, mode changes, and repagination.
-- [ ] **A11Y-03**: Screen-reader users receive the article's correct semantic reading order in both scrolling and paginated modes without duplicate active content trees.
-- [ ] **A11Y-04**: Reader can zoom and reflow the interface at narrow viewport equivalents without losing article content or required functions.
-- [ ] **A11Y-05**: Reader can use the interface with forced-colors or high-contrast preferences without losing meaning, focus visibility, or controls.
-- [ ] **A11Y-06**: Reader with reduced-motion preferences receives immediate, motion-safe navigation and no required animation.
-- [ ] **A11Y-07**: Reader can perform primary reading and annotation interactions with pointer and touch input as well as keyboard input.
+- [x] **A11Y-01**: Reader can operate every reading, navigation, settings, highlighting, and note function using the keyboard alone without a keyboard trap.
+- [x] **A11Y-02**: Reader encounters visible focus in a logical order, and focus remains predictable across navigation, mode changes, and repagination.
+- [x] **A11Y-03**: Screen-reader users receive the article's correct semantic reading order in both scrolling and paginated modes without duplicate active content trees.
+- [x] **A11Y-04**: Reader can zoom and reflow the interface at narrow viewport equivalents without losing article content or required functions.
+- [x] **A11Y-05**: Reader can use the interface with forced-colors or high-contrast preferences without losing meaning, focus visibility, or controls.
+- [x] **A11Y-06**: Reader with reduced-motion preferences receives immediate, motion-safe navigation and no required animation.
+- [x] **A11Y-07**: Reader can perform primary reading and annotation interactions with pointer and touch input as well as keyboard input.
 - [ ] **A11Y-08**: Reader receives concise programmatic status for consequential events such as restored position, saved annotation, or pagination fallback without repetitive page-turn announcements.
 
 ### Pagination
@@ -60,7 +60,7 @@
 - [ ] **STATE-01**: Reader's current logical location is restored when the same article revision is reopened.
 - [ ] **STATE-02**: Reader's typography, theme, and preferred reading mode persist locally across sessions.
 - [ ] **STATE-03**: Reader's highlights and notes persist locally across sessions.
-- [ ] **STATE-04**: Local records are versioned and validated so schema migrations do not silently corrupt documents, preferences, locations, or annotations.
+- [x] **STATE-04**: Local records are versioned and validated so schema migrations do not silently corrupt documents, preferences, locations, or annotations.
 - [ ] **STATE-05**: Reader receives a recoverable error state when local storage is unavailable, full, corrupt, or cannot be upgraded.
 
 ### Acceptance
@@ -115,18 +115,18 @@
 | DOC-04 | Phase 1 | Complete |
 | DOC-05 | Phase 1 | Complete |
 | DOC-06 | Phase 1 | Complete |
-| READ-01 | Phase 2 | Pending |
-| READ-02 | Phase 2 | Pending |
-| READ-03 | Phase 2 | Pending |
-| READ-04 | Phase 2 | Pending |
+| READ-01 | Phase 2 | Complete |
+| READ-02 | Phase 2 | Complete |
+| READ-03 | Phase 2 | Complete |
+| READ-04 | Phase 2 | Complete |
 | READ-05 | Phase 2 | Pending |
-| A11Y-01 | Phase 2 | Pending |
-| A11Y-02 | Phase 2 | Pending |
-| A11Y-03 | Phase 2 | Pending |
-| A11Y-04 | Phase 2 | Pending |
-| A11Y-05 | Phase 2 | Pending |
-| A11Y-06 | Phase 2 | Pending |
-| A11Y-07 | Phase 2 | Pending |
+| A11Y-01 | Phase 2 | Complete |
+| A11Y-02 | Phase 2 | Complete |
+| A11Y-03 | Phase 2 | Complete |
+| A11Y-04 | Phase 2 | Complete |
+| A11Y-05 | Phase 2 | Complete |
+| A11Y-06 | Phase 2 | Complete |
+| A11Y-07 | Phase 2 | Complete |
 | A11Y-08 | Phase 2 | Pending |
 | PAGE-01 | Phase 4 | Pending |
 | PAGE-02 | Phase 4 | Pending |
@@ -147,7 +147,7 @@
 | STATE-01 | Phase 2 | Pending |
 | STATE-02 | Phase 2 | Pending |
 | STATE-03 | Phase 5 | Pending |
-| STATE-04 | Phase 2 | Pending |
+| STATE-04 | Phase 2 | Complete |
 | STATE-05 | Phase 2 | Pending |
 | ACPT-01 | Phase 6 | Pending |
 | ACPT-02 | Phase 6 | Pending |

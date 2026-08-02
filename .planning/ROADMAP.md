@@ -60,11 +60,11 @@ Plans:
   4. Screen-reader, zoom/reflow, and forced-color users retain the article's semantic order, visible controls, and required functions without a duplicate active content tree.
   5. Reader returns to the same logical location on reopening and receives a recoverable error when versioned local data cannot be read, migrated, or saved.
 
-**Plans:** 3 plans
+**Plans:** 1/3 plans executed
 Plans:
 **Wave 1**
 
-- [ ] 02-01-PLAN.md — Wave 1: live typography/theme settings panel + quiet persistent header (native `<dialog>`/showModal, focus-restore) on the Zod settings/location schemas + Dexie version(2) substrate + SettingsContext live-apply
+- [x] 02-01-PLAN.md — Wave 1: live typography/theme settings panel + quiet persistent header (native `<dialog>`/showModal, focus-restore) on the Zod settings/location schemas + Dexie version(2) substrate + SettingsContext live-apply
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -73,6 +73,7 @@ Plans:
 **Wave 3** *(blocked on Wave 2 completion)*
 
 - [ ] 02-03-PLAN.md — Wave 3: location restore (grapheme offset → DOM) + quiet progress hairline + debounced section-change announce + resume banner
+
 **UI hint:** yes
 
 ### Phase 3: Trustworthy Layout Measurement
@@ -144,7 +145,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Canonical Article Foundation | 5/5 | Complete   | 2026-07-29 |
-| 2. Accessible Scrolling Reader | 0/TBD | Not started | - |
+| 2. Accessible Scrolling Reader | 1/3 | In Progress|  |
 | 3. Trustworthy Layout Measurement | 0/TBD | Not started | - |
 | 4. Responsive Pagination and Dual-Mode Navigation | 0/TBD | Not started | - |
 | 5. Durable Highlights and Notes | 0/TBD | Not started | - |

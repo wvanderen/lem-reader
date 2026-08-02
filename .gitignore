@@ -15,3 +15,11 @@ dist-ssr
 playwright-report
 test-results
 coverage
+.todos/
+.sidecar/
+.sidecar-agent
+.sidecar-task
+.sidecar-pr
+.sidecar-start.sh
+.sidecar-base
+.td-root
