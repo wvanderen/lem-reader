@@ -31,6 +31,37 @@
   --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-code: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono",
     monospace;
+
+  /* Reading measure (Phase 2 D-07 default; applyTheme writes here live) */
+  --measure: 64ch;
+}
+
+/* ── Theme overrides via [data-theme] on <html> (Phase 2 D2-09) ────────── */
+/* The :root block above IS the Sepia default — it is NOT repeated here. The
+   data-theme attribute is written by applyTheme() and overrides only the
+   color tokens. Token values verbatim from 02-UI-SPEC §Color. */
+[data-theme="light"] {
+  --surface: #fcfcfa;
+  --surface-raised: #f4f4f0;
+  --ink: #1a1a1a;
+  --ink-soft: #555555;
+  --accent: #6b4423; /* same warm brown — meets contrast on near-white */
+  --accent-hover: #4e2f18;
+  --focus-ring: #6b4423;
+  --destructive: #9b2c2c;
+  --hairline: #ddd9d0;
+}
+
+[data-theme="dark"] {
+  --surface: #1b1814;
+  --surface-raised: #26221c;
+  --ink: #ede6d9;
+  --ink-soft: #b8ae9c;
+  --accent: #c49a6c; /* lightened warm for dark-surface contrast */
+  --accent-hover: #dab489;
+  --focus-ring: #c49a6c;
+  --destructive: #e07a7a; /* lightened for dark-surface contrast */
+  --hairline: #3a3328;
 }
 
 body {
@@ -128,12 +159,14 @@ main#main {
 }
 
 /* ── Article body measure + rhythm (UI-SPEC §Layout + §Typography) ────── */
-/* Calm measure is invariant across breakpoints (Phase 2 may let the reader
-   widen it; Phase 1 fixes it). Block rhythm uses em so Phase 2 size changes
+/* Calm measure is invariant across breakpoints (Phase 2 lets the reader
+   widen it via --measure). Block rhythm uses em so Phase 2 size changes
    preserve vertical calm. Inset now lives on main#main (above); this rule
-   keeps only the centered 64ch measure to avoid a double inset. */
+   keeps only the centered measure to avoid a double inset. The measure is
+   driven by the --measure custom property so applyTheme() can swap it live
+   (Phase 2 D2-03) — default is 64ch (D-07 warm-paper). */
 .article-body {
-  max-width: 64ch;
+  max-width: var(--measure);
   margin-inline: auto;
 }
 .article-body p {
@@ -258,4 +291,237 @@ a:hover {
   .fixture-list {
     grid-template-columns: repeat(3, 1fr);
   }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+ * Phase 2 — Adaptable reading surface (02-01)
+ *
+ * The new persistent header (D2-02) and the SettingsPanel slide-over (D2-01)
+ * are the app's first chrome. They MUST stay quiet/neutral (READ-04): no
+ * accent fill, no toolbar styling, no shadow. The gear uses --ink-soft when
+ * closed and --accent ONLY when [aria-expanded="true"] (UI-SPEC §Color
+ * accent-reserved list). Every interactive control satisfies the 44px
+ * --touch minimum (A11Y-07).
+ *
+ * The global reduced-motion + forced-colors + :focus-visible gates above
+ * (lines 43–66) are inherited — they are NOT re-declared here. The panel
+ * slide and the radio selected-state marker both survive forced-colors
+ * because state is also conveyed by aria/checked (UI-SPEC §Color contrast
+ * contract line 290).
+ * ════════════════════════════════════════════════════════════════════════ */
+
+/* ── Persistent app header (D2-02, READ-04) ─────────────────────────────── */
+/* ~48px tall, full-width, sticky to the top of the viewport so focus has a
+   stable home across both views. --surface background, 1px --hairline bottom
+   rule (no shadow). Wordmark inline-start, gear inline-end. */
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  min-height: 48px;
+  padding-inline: var(--space-lg);
+  background: var(--surface);
+  border-bottom: 1px solid var(--hairline);
+}
+.app-wordmark {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink-soft);
+  /* Wordmark is a <span>, NOT a link — UI-SPEC line 306 (no global Home route). */
+}
+
+/* ── Gear button (D2-01, READ-04 quiet rule) ────────────────────────────── */
+/* Quiet when closed (--ink-soft); --accent only when open so the active
+   affordance is conveyed beyond aria-expanded (forced-colors safety). 44px
+   minimum hit area. */
+.gear-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--touch);
+  min-width: var(--touch);
+  padding: var(--space-sm);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.gear-button:hover {
+  color: var(--accent);
+}
+.gear-button[aria-expanded="true"] {
+  color: var(--accent);
+}
+
+/* ── Settings panel (D2-01 — native <dialog>/showModal) ─────────────────── */
+/* Slides over from the inline end (right in LTR). On viewports ≥ 640px the
+   panel occupies a calm ~360–420px column; the ::backdrop covers the rest.
+   On < 640px the panel is a near-full-width sheet (small inline margin so
+   the scrim is visible and dismiss-by-click is discoverable). */
+dialog.settings-panel {
+  /* Reset the user-agent dialog defaults (border / padding / background). */
+  margin: 0;
+  margin-inline-end: 0;
+  padding: 0;
+  border: 1px solid var(--hairline);
+  border-radius: 8px 0 0 8px;
+  background: var(--surface-raised);
+  color: var(--ink);
+  /* Sheet geometry: near-full-width on narrow viewports, ~400px on ≥ 640px. */
+  width: calc(100vw - var(--space-md));
+  max-width: 420px;
+  height: 100vh;
+  max-height: 100vh;
+  overflow-y: auto;
+  /* Reduced-motion safety: the panel does not need an entrance animation.
+     The global prefers-reduced-motion gate already disables transitions and
+     animations (lines 43–52), so there is NO transition here even outside
+     reduced-motion. */
+}
+dialog.settings-panel::backdrop {
+  /* Native backdrop — covers the article (which is auto-inert under
+     showModal). Sufficient alpha for legibility without competing. */
+  background: rgba(31, 27, 22, 0.4);
+}
+@media (min-width: 640px) {
+  dialog.settings-panel {
+    /* Anchored to the inline end with a small inset so the scrim is visible. */
+    margin-inline-end: var(--space-sm);
+    width: 400px;
+    height: calc(100vh - var(--space-md));
+    max-height: calc(100vh - var(--space-md));
+    margin-block: var(--space-sm);
+    border-radius: 8px;
+  }
+}
+
+/* Panel header (title + close) — sticky so it stays visible while the body
+   scrolls inside the sheet. */
+.settings-panel form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  padding: var(--space-lg);
+}
+.settings-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  margin-block: 0 calc(var(--space-lg) - var(--space-md));
+}
+.settings-panel-header h2 {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 22px;
+  line-height: 1.3;
+  font-weight: 600;
+}
+.settings-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--touch);
+  min-width: var(--touch);
+  padding: var(--space-sm);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.settings-close:hover {
+  color: var(--accent);
+}
+
+/* ── Panel form controls (UI-SPEC §Interaction 9) ───────────────────────── */
+/* Every fieldset is a section; legends are the verbatim section headings
+   (Typeface / Text size / Reading width / Spacing / Theme). */
+.settings-section {
+  margin: 0;
+  padding: 0;
+  border: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+.settings-section legend {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: var(--space-sm);
+  /* Visible numeric readout (size/measure) is conveyed inline so it survives
+     forced-colors without relying on color alone. */
+}
+.settings-value {
+  font-weight: 400;
+  color: var(--ink-soft);
+  margin-inline-start: var(--space-sm);
+}
+/* Radio rows: the WHOLE label row is the 44px hit target (not the 13px glyph —
+   UI-SPEC §Spacing exceptions). The selected option's marker is conveyed by
+   the native checked state AND visually; do NOT rely on the marker alone. */
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  min-height: var(--touch);
+  padding-inline: var(--space-sm);
+  font-family: var(--font-ui);
+  font-size: 16px;
+  color: var(--ink);
+  cursor: pointer;
+  border-radius: 4px;
+}
+.settings-row:hover {
+  background: var(--surface);
+}
+.settings-row input[type="radio"] {
+  /* Native radio sizing; the row is the hit area. Native glyph conveys
+     checked state in forced-colors (UI-SPEC §Color contract line 290). */
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+/* Range inputs share the 44px min touch target vertically so the pointer
+   hit area meets A11Y-07 (label row carries the marker; the track fills). */
+.settings-section input[type="range"] {
+  width: 100%;
+  min-height: var(--touch);
+  accent-color: var(--accent);
+}
+
+/* Panel footer (Reset) — names the consequence (UI-SPEC §Copywriting line 317). */
+.settings-footer {
+  display: flex;
+  justify-content: flex-start;
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--hairline);
+}
+.settings-reset {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--touch);
+  padding-inline: var(--space-md);
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  font-family: var(--font-ui);
+  font-size: 16px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.settings-reset:hover {
+  color: var(--accent);
+  border-color: var(--accent);
 }
