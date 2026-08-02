@@ -17,9 +17,12 @@ export interface SettingsRecord {
   value: unknown; // validated via ReaderSettingsSchema on read (settingsStore)
 }
 
-/** Shape of a row in the `location` store (STATE-01, key [articleId+revision]). */
+/** Shape of a row in the `location` store (STATE-01, compound key [articleId+revision]).
+ * Dexie's `[articleId+revision]` store declaration creates a COMPOUND primary
+ * key constructed from the row's `articleId` and `revision` properties — NOT
+ * a field literally named "[articleId+revision]". The key is queried as the
+ * array `[articleId, revision]` via db.location.get([id, rev]). */
 export interface LocationRecordRow {
-  "[articleId+revision]": string;
   schemaVersion: 1;
   articleId: string;
   revision: number;
@@ -35,7 +38,7 @@ export class LemReaderDB extends Dexie {
   // risk — runtime behavior is unaffected; Dexie already resolves the stores
   // by name from the version declarations).
   settings!: Table<SettingsRecord, string>;
-  location!: Table<LocationRecordRow, string>;
+  location!: Table<LocationRecordRow, [string, number]>;
   articles!: Table<{ id: string; revision: number }, string>;
   highlights!: Table<
     { id: string; "[articleId+revision]": string },

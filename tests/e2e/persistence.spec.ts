@@ -194,3 +194,120 @@ test.describe("STATE-02 + Pitfall 4 persistence", () => {
     ).toHaveText("Keep reading");
   });
 });
+
+// ── STATE-01 location restore (02-03 Task 3) ────────────────────────────────
+// Proves in a REAL browser that:
+//   1. Scrolling an article persists the grapheme offset (debounced ~1200ms
+//      or flushed via visibilitychange-hidden / pagehide).
+//   2. Reloading the article scrolls silently back to near the saved block.
+//   3. Locations are ISOLATED per [articleId+revision] (D-06) — opening a
+//      DIFFERENT article does NOT restore the first article's location.
+test.describe("STATE-01 location restore", () => {
+  test("scrolling an article persists the location; reload restores the scroll position", async ({
+    page,
+  }) => {
+    await page.goto(`${BASE}/#/article/${FIRST_FIXTURE}`);
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+
+    // Scroll to a specific position (the article body is tall enough on
+    // essay-long-form — 8 paragraphs of long-form prose — to support
+    // meaningful scrolling). Use a fixed pixel offset rather than targeting
+    // a heading because essay-long-form has no h2 headings.
+    await page.evaluate(() => window.scrollTo(0, 500));
+    await page.waitForTimeout(100);
+
+    // Wait for the ~1200ms debounce to fire the save.
+    await page.waitForTimeout(1400);
+
+    // Record the scroll position before reload.
+    const scrollYBefore = await page.evaluate(() => window.scrollY);
+    expect(scrollYBefore, "expected to have scrolled down").toBeGreaterThan(200);
+
+    // Reload the page.
+    await page.reload();
+
+    // After reload + async loadLocation + rAF + scrollIntoView, the page is
+    // scrolled back to near the saved position. We assert the scrollY is
+    // within a tolerance band of the pre-reload value (restore is block-
+    // level, not pixel-exact — findScrollTarget lands at the block top).
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    // Wait for the restore effect to run (rAF + async loadLocation).
+    await page.waitForTimeout(1000);
+
+    const scrollYAfter = await page.evaluate(() => window.scrollY);
+    // The restore should land somewhere near (within ~600px) the saved
+    // position. Block-level restore may land slightly above (block top),
+    // but never at 0 (top-of-article) for a mid-article saved location.
+    expect(
+      scrollYAfter,
+      `expected restored scrollY near ${scrollYBefore}, got ${scrollYAfter}`,
+    ).toBeGreaterThan(100);
+    expect(
+      Math.abs(scrollYAfter - scrollYBefore),
+      `expected |delta| within 600px, got ${Math.abs(scrollYAfter - scrollYBefore)}`,
+    ).toBeLessThan(600);
+  });
+
+  test("a pending debounced location write flushes on visibilitychange-hidden (Pitfall 4)", async ({
+    page,
+  }) => {
+    await page.goto(`${BASE}/#/article/${FIRST_FIXTURE}`);
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+
+    // Scroll partway down WITHOUT waiting for the 1200ms debounce.
+    await page.evaluate(() => window.scrollTo(0, 800));
+    await page.waitForTimeout(100); // let the scroll listener fire
+
+    // Dispatch visibilitychange-hidden to flush the pending write (Pitfall 4).
+    await page.evaluate(() => {
+      Object.defineProperty(document, "visibilityState", {
+        configurable: true,
+        get: () => "hidden",
+      });
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await page.waitForTimeout(200); // let the flush land
+
+    // Reload — the location MUST persist even though the debounce never fired.
+    await page.reload();
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await page.waitForTimeout(800);
+
+    const scrollYAfter = await page.evaluate(() => window.scrollY);
+    expect(
+      scrollYAfter,
+      `expected restored scrollY > 100 after visibilitychange flush, got ${scrollYAfter}`,
+    ).toBeGreaterThan(100);
+  });
+
+  test("locations are isolated per article (D-06 — [articleId+revision] key)", async ({
+    page,
+  }) => {
+    // Save a location on the FIRST fixture.
+    await page.goto(`${BASE}/#/article/${FIRST_FIXTURE}`);
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await page.evaluate(() => window.scrollTo(0, 800));
+    await page.waitForTimeout(1400); // debounce
+
+    // Navigate to the fixture list first so the scroll position resets to 0.
+    // (Hash navigation in an SPA preserves scroll position; going via the
+    // fixture list — which is shorter than the viewport — resets it.)
+    await page.goto(`${BASE}/`);
+    await page.waitForTimeout(300);
+
+    // Open a DIFFERENT fixture (no saved location yet for it).
+    const otherFixture = "technical-post";
+    await page.goto(`${BASE}/#/article/${otherFixture}`);
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await page.waitForTimeout(800); // restore effect runs
+
+    // The other fixture should NOT be scrolled to the FIRST fixture's saved
+    // location — it should be near the top (top-of-article silent fall-
+    // through, since the [articleId+revision] key isolates them).
+    const scrollY = await page.evaluate(() => window.scrollY);
+    expect(
+      scrollY,
+      `expected scrollY near 0 (no cross-article restore), got ${scrollY}`,
+    ).toBeLessThan(100);
+  });
+});

@@ -28,17 +28,6 @@ import type { LocationRecord } from "../content/schema";
 import { classifyStorageError } from "./errors";
 
 /**
- * Build the Dexie compound-key string for a [articleId+revision] pair.
- * The key shape is `articleId:revision` — must round-trip with the location
- * store's `[articleId+revision]` index (db.ts line 54). ArticleSchema locks
- * articleId to `/^[a-z0-9-]+$/` and revision to a positive int, so the colon
- * is an unambiguous separator (no escape concern).
- */
-function locationKey(articleId: string, revision: number): string {
-  return `${articleId}:${revision}`;
-}
-
-/**
  * Discriminated result of loading a reading location from Dexie.
  * - `ok: true`     → the load succeeded; `location` is null for first-run /
  *                   mismatched-revision (the saved offset is invalid against
@@ -56,6 +45,9 @@ export type LocationLoadResult =
  * Load a reading location from Dexie by [articleId+revision] (D-06). Never
  * throws (STATE-05).
  *
+ * The Dexie `location` store uses a COMPOUND primary key declared as
+ * `[articleId+revision]` — queried as the array `[articleId, revision]`.
+ *
  * Read path validates with `LocationRecordSchema.safeParse()`:
  * - absent record      → first run or no saved location → returns null
  * - valid record       → returns the parsed LocationRecord
@@ -64,8 +56,8 @@ export type LocationLoadResult =
  *
  * Note: the caller (ArticleView) is responsible for cross-checking the
  * returned record's `revision` against the live article's `revision` before
- * trusting the offset. The Dexie key already encodes revision, so a normal
- * load by (articleId, revision) only ever returns the matching record —
+ * trusting the offset. The Dexie compound key already encodes revision, so a
+ * normal load by (articleId, revision) only ever returns the matching record —
  * mismatched revisions simply return null (first-load for that revision).
  */
 export async function loadLocation(
@@ -73,19 +65,16 @@ export async function loadLocation(
   revision: number,
 ): Promise<LocationLoadResult> {
   try {
-    const key = locationKey(articleId, revision);
-    const raw = await db.location.get(key);
+    // Compound primary key: Dexie expects the array [articleId, revision].
+    const raw = await db.location.get([articleId, revision]);
     if (!raw) {
       // First open of this [articleId+revision] pair, or the article's
       // revision changed since the save (no row under the new key). Silent
       // fall-through to top-of-article — NOT an error state (D-06).
       return { ok: true, location: null };
     }
-    // The row carries the compound key plus the LocationRecord fields.
-    // Strip the Dexie key before validating so safeParse sees the canonical
-    // LocationRecord shape (no extra compound-key field).
-    const { ["[articleId+revision]"]: _key, ...record } = raw;
-    const parsed = LocationRecordSchema.safeParse(record);
+    // The row carries LocationRecord fields. Validate the canonical shape.
+    const parsed = LocationRecordSchema.safeParse(raw);
     if (parsed.success) {
       return { ok: true, location: parsed.data };
     }
@@ -99,18 +88,20 @@ export async function loadLocation(
 }
 
 /**
- * Save a reading location to Dexie keyed [articleId+revision]. `loc` is
- * validated by construction (the only producer is useScrollSave, which builds
- * the record from typed article fields); we do not re-parse on write.
+ * Save a reading location to Dexie keyed [articleId+revision] (compound key).
+ * `loc` is validated by construction (the only producer is useScrollSave,
+ * which builds the record from typed article fields); we do not re-parse on
+ * write.
  *
  * Returns silently on success. A throw propagates to the caller (useScrollSave),
- * which catches it and routes via the SettingsContext storage-failure path so
- * the StorageBanner surfaces location-save failures too (D2-13/STATE-05) —
+ * which catches it and routes via the onStorageError callback so the
+ * StorageBanner surfaces location-save failures too (D2-13/STATE-05) —
  * never throws to the reader.
  */
 export async function saveLocation(loc: LocationRecord): Promise<void> {
+  // Dexie constructs the compound primary key from articleId + revision
+  // automatically — the row does NOT carry a "[articleId+revision]" field.
   const row: LocationRecordRow = {
-    "[articleId+revision]": locationKey(loc.articleId, loc.revision),
     schemaVersion: loc.schemaVersion,
     articleId: loc.articleId,
     revision: loc.revision,

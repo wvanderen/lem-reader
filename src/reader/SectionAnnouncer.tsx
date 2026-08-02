@@ -5,18 +5,18 @@
 // (role="status" + aria-live="polite" + aria-atomic="true") + ArticleView's
 // useEffect + cleanup pattern.
 //
-// Pitfall 6 (02-RESEARCH): IntersectionObserver fires on every intersect
-// change. Without debouncing, a single scroll past several headings floods
-// the live region (a screen-reader user hears every heading in sequence).
-// We (1) debounce the announce (~250ms — well within the polite-live-region
-// coalescing window) and (2) only announce when the NEW section heading text
-// differs from the last-announced text. Polite (never assertive) — assertive
-// interrupts screen readers mid-utterance.
+// Pitfall 6 (02-RESEARCH): IntersectionObserver may not fire reliably for
+// every scroll position change (it batches callbacks, and percentage-based
+// rootMargin is flaky across engines). To guarantee the announce tracks the
+// reader's actual position, we ALSO register a passive scroll listener that
+// triggers the same detection logic. Both feed into a shared debounced
+// announce (~250ms) that only fires when the NEW section differs from the
+// last-announced section. Polite (never assertive) — assertive interrupts
+// screen readers mid-utterance.
 //
-// rootMargin negative-top places a sentinel line UNDER the 48px header so a
-// heading "passes" when it crosses under the header (not the viewport top).
-// The bottom -60% margin shrinks the observable band so a heading near the
-// bottom of the viewport does not prematurely become "current".
+// The sentinel line is HEADER_PX + 8 = 56px from the viewport top (just
+// under the 48px sticky header). A heading is "current" when its top has
+// scrolled past this line.
 import { useEffect, useRef, useState } from "react";
 
 interface SectionAnnouncerProps {
@@ -39,8 +39,8 @@ const ANNOUNCE_DEBOUNCE_MS = 250;
 export function SectionAnnouncer({ articleEl }: SectionAnnouncerProps) {
   const [announce, setAnnounce] = useState("");
   // Ref-tracked current section text so we only announce on CHANGE (Pitfall 6
-  // — non-flooding). Refs are stable across renders so the observer callback
-  // always sees the latest value without re-registering.
+  // — non-flooding). Refs are stable across renders so the callbacks always
+  // see the latest value without re-registering.
   const currentRef = useRef<string>("");
   // Debounce timer ref — cleared on cleanup so it cannot fire after unmount.
   const timerRef = useRef<number | null>(null);
@@ -52,43 +52,59 @@ export function SectionAnnouncer({ articleEl }: SectionAnnouncerProps) {
     );
     if (headings.length === 0) return;
 
-    const obs = new IntersectionObserver(
-      () => {
-        // The observer fires whenever any heading's intersection with the
-        // root box changes. Compute the most-recently-passed heading by
-        // finding the last heading whose top edge has scrolled to (or past)
-        // the sentinel line under the header.
-        const passed = headings.filter(
-          (h) => h.getBoundingClientRect().top < HEADER_PX + 8,
-        );
-        const current = passed.length > 0 ? passed[passed.length - 1] : null;
-        const text = current?.textContent?.trim() ?? "";
-        // Pitfall 6: only announce when the section actually changes. A
-        // scroll within the same section produces no announce.
-        if (text && text !== currentRef.current) {
-          currentRef.current = text;
-          // Debounce the announce so a fast scroll past multiple headings
-          // coalesces into a single update of the live region.
-          if (timerRef.current !== null) {
-            window.clearTimeout(timerRef.current);
-          }
-          timerRef.current = window.setTimeout(() => {
-            // UI-SPEC §Copywriting line 324: "Section: {heading text}."
-            setAnnounce(`Section: ${text}.`);
-          }, ANNOUNCE_DEBOUNCE_MS);
+    /**
+     * Shared detection logic: find the most-recently-passed heading (the
+     * last heading whose top has scrolled past the sentinel line under the
+     * header). If it differs from the last-announced heading, schedule a
+     * debounced announce.
+     */
+    const detect = () => {
+      const passed = headings.filter(
+        (h) => h.getBoundingClientRect().top < HEADER_PX + 8,
+      );
+      const current = passed.length > 0 ? passed[passed.length - 1] : null;
+      const text = current?.textContent?.trim() ?? "";
+      // Pitfall 6: only announce when the section actually changes. A
+      // scroll within the same section produces no announce.
+      if (text && text !== currentRef.current) {
+        currentRef.current = text;
+        if (timerRef.current !== null) {
+          window.clearTimeout(timerRef.current);
         }
-      },
-      {
-        // rootMargin negative-top places the sentinel line UNDER the header.
-        // -60% bottom shrinks the observable band so headings near the
-        // bottom of the viewport do not prematurely become "current".
-        rootMargin: `-${HEADER_PX}px 0px -60% 0px`,
-        threshold: [0],
-      },
-    );
+        timerRef.current = window.setTimeout(() => {
+          // UI-SPEC §Copywriting line 324: "Section: {heading text}."
+          setAnnounce(`Section: ${text}.`);
+        }, ANNOUNCE_DEBOUNCE_MS);
+      }
+    };
+
+    // Primary trigger: IntersectionObserver. rootMargin places a sentinel
+    // band just under the header (negative top) with a narrow bottom margin
+    // so only headings near the top of the viewport are considered "current".
+    const obs = new IntersectionObserver(detect, {
+      rootMargin: `-${HEADER_PX}px 0px -60% 0px`,
+      threshold: [0],
+    });
     headings.forEach((h) => obs.observe(h));
+
+    // Fallback trigger: passive scroll listener. IntersectionObserver batches
+    // callbacks and may miss fast scroll positions; the scroll listener
+    // guarantees detection runs on every scroll frame (rAF-throttled to
+    // avoid jank). Both triggers call the same `detect` function.
+    let rafId: number | null = null;
+    const onScroll = () => {
+      if (rafId !== null) return; // already scheduled
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        detect();
+      });
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+
     return () => {
       obs.disconnect();
+      window.removeEventListener("scroll", onScroll);
+      if (rafId !== null) cancelAnimationFrame(rafId);
       if (timerRef.current !== null) {
         window.clearTimeout(timerRef.current);
         timerRef.current = null;

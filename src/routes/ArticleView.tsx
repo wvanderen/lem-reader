@@ -19,7 +19,7 @@
 //   4. SectionAnnouncer (IntersectionObserver scroll-spy, debounced) +
 //      ResumeBanner (dismissible, non-modal — auto-dismisses on first scroll
 //      or pointer activity OR explicit Resume/Start-from-top/×).
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { openArticle } from "../content/repository";
 import type { CanonicalArticle } from "../content/types";
 import type { LocationRecord } from "../content/schema";
@@ -65,11 +65,24 @@ export function ArticleView({ articleId }: { articleId: string }) {
   const [showResumeBanner, setShowResumeBanner] = useState(false);
   const [progress, setProgress] = useState(0);
 
-  // Ref to the rendered <article> element. Used by restoreLocation's
-  // block query, useScrollSave's offset computation, and SectionAnnouncer's
-  // heading query. articleRef.current is null during loading/error and after
-  // the ready article mounts.
+  // Ref + state for the rendered <article> element. The ref lets
+  // useScrollSave/restoreLocation read the DOM imperatively; the state
+  // (articleEl) triggers a re-render when the element mounts so
+  // SectionAnnouncer receives the actual DOM node (refs alone don't trigger
+  // re-renders — React's callback-ref pattern bridges the gap).
   const articleRef = useRef<HTMLElement>(null);
+  const [articleEl, setArticleEl] = useState<HTMLElement | null>(null);
+
+  /**
+   * Callback ref: React calls this with the DOM node when the <article>
+   * mounts/unmounts. We sync both the ref (for imperative useScrollSave /
+   * restoreLocation reads) AND the state (so SectionAnnouncer re-renders
+   * with the actual element).
+   */
+  const articleCallbackRef = useCallback((el: HTMLElement | null) => {
+    articleRef.current = el;
+    setArticleEl(el);
+  }, []);
 
   // useScrollSave must be called unconditionally (rules of hooks). It no-ops
   // while article is null (the hook early-returns its scroll listener when
@@ -238,9 +251,10 @@ export function ArticleView({ articleId }: { articleId: string }) {
           progress is conveyed to AT via the SectionAnnouncer live region. */}
       <ProgressHairline progress={progress} />
       {/* A11Y-08: polite live region announcing section changes during scroll.
-          articleRef.current is null during loading but the article is ready
-          here, so the ref is populated by the time this renders. */}
-      <SectionAnnouncer articleEl={articleRef.current} />
+          articleEl is null during loading; the callback ref sets it once the
+          <article> mounts, triggering a re-render so this component receives
+          the actual DOM node. */}
+      <SectionAnnouncer articleEl={articleEl} />
       <main id="main">
         {showResumeBanner && (
           <ResumeBanner
@@ -249,7 +263,7 @@ export function ArticleView({ articleId }: { articleId: string }) {
             onDismiss={() => setShowResumeBanner(false)}
           />
         )}
-        <article ref={articleRef} className="article-body">
+        <article ref={articleCallbackRef} className="article-body">
           <header>
             <h1>{article.provenance.title}</h1>
             {(article.provenance.author || article.provenance.publishedAt) && (
