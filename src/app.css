@@ -667,3 +667,135 @@ dialog.wipe-confirm::backdrop {
   color: var(--accent);
   border-color: var(--accent);
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+ * Phase 2 Plan 02-03 — Location restore + quiet progress + section announce
+ *
+ * ProgressHairline (D2-12, UI-SPEC §Interaction 12 + §Component Inventory
+ * line 462): a 2px-tall, full-width hairline fixed immediately under the
+ * ~48px header. aria-hidden — progress is conveyed to AT via the
+ * SectionAnnouncer's polite live region, NOT this element (READ-05).
+ *
+ * CRITICAL (UI-SPEC §Interaction 12 + RESEARCH anti-pattern #6): the
+ * .progress-hairline-fill rule applies NO animation CSS property of any kind
+ * to the transform. The scaleX(...) value is driven purely by an inline-style
+ * write from JS on every scroll, so the hairline tracks like a native
+ * scrollbar and the global prefers-reduced-motion gate is trivially
+ * satisfied. (The reduced-motion gate at lines 75-83 elsewhere in this file
+ * legitimately declares `transition: none !important` and is unrelated to
+ * this rule — the hairline has NO transition property to suppress.)
+ *
+ * ResumeBanner (UI-SPEC §Interaction 10 + §Copywriting lines 318–323):
+ * extends the .status card pattern (lines 247–261) — non-modal, dismissible,
+ * does NOT trap focus. Inline at the top of <main>, near the article header.
+ * NOT sticky (READ-04: sticky chrome competes with content).
+ * ════════════════════════════════════════════════════════════════════════ */
+
+/* ── Progress hairline (decorative, aria-hidden) ─────────────────────────── */
+/* Fixed immediately under the 48px header. Track = --ink-soft at low alpha;
+   fill = --accent (UI-SPEC §Color accent-reserved line 269). Mounted only on
+   ArticleView (hidden on FixtureList per UI-SPEC §Layout line 491). */
+.progress-hairline {
+  position: fixed;
+  top: 48px; /* immediately under the .app-header (min-height: 48px) */
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: color-mix(in srgb, var(--ink-soft) 20%, transparent);
+  z-index: 5; /* above article content, below .app-header (z-index: 10) and
+                 below dialogs (top-layer, unaffected by z-index) */
+  pointer-events: none; /* the hairline is decorative — never intercepts clicks */
+}
+/* The fill is a 100%-width inner div whose scaleX transform is driven by an
+   inline style. NO transition, NO animation declared here — the inline style
+   write on every scroll is the only thing that moves it. */
+.progress-hairline-fill {
+  height: 100%;
+  width: 100%;
+  background: var(--accent);
+  transform-origin: inline-start;
+  /* Intentionally NO transition/animation property. The inline scaleX value
+     tracks scroll position immediately (UI-SPEC §Interaction 12 + RESEARCH
+     anti-pattern #6). */
+}
+
+/* ── Resume banner (non-modal, dismissible status card) ──────────────────── */
+/* Extends .status (lines 247–261) — adds the actions row layout. Sits inline
+   at the top of <main>, NOT sticky (READ-04 quiet-chrome rule). Sits above
+   the article header in DOM order so it's the first thing the reader sees
+   after restore. Copy verbatim from UI-SPEC §Copywriting lines 318–323. */
+.resume-banner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  /* Inset matches main#main so the banner aligns with the article edge. */
+  margin-block-end: var(--space-lg);
+}
+.resume-banner-main h2 {
+  /* Reuses .status h2 baseline (lines 258–261). */
+  margin-block: 0 var(--space-sm);
+  font-family: var(--font-ui);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.resume-banner-main p {
+  margin-block: 0;
+  color: var(--ink-soft);
+}
+.resume-banner-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+}
+/* Primary button — accent border conveys the primary affordance. */
+.resume-banner-primary,
+.resume-banner-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--touch);
+  padding-inline: var(--space-md);
+  border-radius: 4px;
+  font-family: var(--font-ui);
+  font-size: 16px;
+  cursor: pointer;
+}
+.resume-banner-primary {
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  color: var(--surface);
+}
+.resume-banner-primary:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+/* Secondary button — neutral border (UI-SPEC §Copywriting line 321). */
+.resume-banner-secondary {
+  background: transparent;
+  border: 1px solid var(--hairline);
+  color: var(--ink);
+}
+.resume-banner-secondary:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+/* Dismiss × button — reuses the StorageBanner dismiss geometry. */
+.resume-banner-dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--touch);
+  min-width: var(--touch);
+  padding: var(--space-sm);
+  margin-inline-start: auto; /* push to the inline-end of the actions row */
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.resume-banner-dismiss:hover {
+  color: var(--accent);
+}

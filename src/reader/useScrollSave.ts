@@ -58,21 +58,26 @@ interface UseScrollSaveOptions {
  *
  * @param article The canonical article (id + revision + lang Drive the key
  *   and the Intl.Segmenter locale; the saved offset is into
- *   normalizeText(article)).
+ *   normalizeText(article)). Pass `null` during loading — the hook no-ops
+ *   (ArticleView must call hooks unconditionally, so the nullable type lets
+ *   it call useScrollSave even before the article is ready).
  * @param articleElRef Ref to the rendered <article> element. Used to query
  *   the block elements for offset computation on each scroll.
  * @param options Optional overrides (onStorageError for STATE-05 surfacing).
  */
 export function useScrollSave(
-  article: CanonicalArticle,
+  article: CanonicalArticle | null,
   articleElRef: React.RefObject<HTMLElement | null>,
   options?: UseScrollSaveOptions,
 ): void {
-  // Stash the latest options in a ref so the listener closures stay stable
-  // across re-renders without re-registering (mirrors the pendingRef pattern
-  // in SettingsContext).
+  // Stash the latest options + article in refs so the listener closures stay
+  // stable across re-renders without re-registering (mirrors the pendingRef
+  // pattern in SettingsContext). The article ref lets computeOffset read the
+  // current article without capturing it in a closure that would go stale.
   const optionsRef = useRef(options);
   optionsRef.current = options;
+  const articleRef = useRef(article);
+  articleRef.current = article;
 
   const saveTimer = useRef<number | null>(null);
   const pendingRef = useRef<LocationRecord | null>(null);
@@ -81,9 +86,12 @@ export function useScrollSave(
    * Compute the grapheme offset of the topmost visible block, mirroring
    * findScrollTarget's accumulation in the forward direction. Reuses
    * normalizeElText + graphemeClusters so the offset round-trips exactly
-   * with the restored target on reopen.
+   * with the restored target on reopen. Reads the current article from
+   * articleRef so the closure stays stable across article swaps.
    */
   function computeOffset(): number {
+    const article = articleRef.current;
+    if (!article) return 0;
     const articleEl = articleElRef.current;
     if (!articleEl) return 0;
     const blocks = Array.from(
@@ -143,14 +151,18 @@ export function useScrollSave(
   }
 
   // Scroll listener — register on mount, cleanup on unmount. Re-registers
-  // only if the article identity changes (article swap).
+  // only if the article identity changes (article swap). No-ops while article
+  // is null (loading state) — the hook is safe to call unconditionally.
   useEffect(() => {
+    if (!article) return; // loading state — no scroll listener
     const onScroll = () => {
+      const currentArticle = articleRef.current;
+      if (!currentArticle) return;
       const offset = computeOffset();
       scheduleSave({
         schemaVersion: 1,
-        articleId: article.id,
-        revision: article.revision,
+        articleId: currentArticle.id,
+        revision: currentArticle.revision,
         graphemeOffset: offset,
         savedAt: new Date().toISOString(),
       });
