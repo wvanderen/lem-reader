@@ -4,17 +4,17 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 02
 current_phase_name: accessible-scrolling-reader
-status: executing
-stopped_at: Completed 02-02-PLAN.md (settings persistence + STATE-05 recovery)
-last_updated: "2026-08-02T17:08:00.000Z"
+status: phase-complete
+stopped_at: Completed 02-03-PLAN.md (location restore + progress hairline + section announcer) — Phase 02 complete (3/3 plans)
+last_updated: "2026-08-02T21:35:48.000Z"
 last_activity: 2026-08-02
-last_activity_desc: Phase 02 Plan 02 executed — persistence + STATE-05 recovery
+last_activity_desc: Phase 02 Plan 03 executed — location restore + progress hairline + section announcer; Phase 02 complete
 progress:
   total_phases: 6
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 8
-  completed_plans: 7
-  percent: 19
+  completed_plans: 8
+  percent: 25
 ---
 
 # Project State
@@ -28,31 +28,31 @@ See: .planning/PROJECT.md (updated 2026-07-26)
 
 ## Current Position
 
-Phase: 02 (accessible-scrolling-reader) — EXECUTING
-Plan: 3 of 3
-Status: Ready to execute Plan 02-03 (location restore + hairline + announcer)
-Last activity: 2026-08-02 — Plan 02-02 complete (persistence + STATE-05)
+Phase: 02 (accessible-scrolling-reader) — COMPLETE (3/3 plans)
+Plan: 3 of 3 complete
+Status: Ready for phase verification (/gsd-verify-work 02) before advancing to Phase 03
+Last activity: 2026-08-02 — Plan 02-03 complete (location restore + hairline + announcer)
 
-Progress: [██████████░░░░] 88% (Phase 02: 2 of 3 plans done)
+Progress: [████████████] 100% (Phase 02: 3 of 3 plans done)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 2
-- Average duration: 30 min
-- Total execution time: 1.0 hours
+- Total plans completed: 3 (this phase)
+- Average duration: 27 min
+- Total execution time: 1.4 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01 | 5 | 14 min | 14 min |
-| 02 | 2 (in progress) | 60 min | 30 min |
+| 02 | 3 (complete) | 82 min | 27 min |
 
 **Recent Trend:**
 
-- Last 5 plans: 02-01 (50min), 01-05 (3 min), 01-04 (11 min), 01-02 (120 min), 01-01 (14 min)
+- Last 5 plans: 02-03 (22min), 02-02 (10 min), 02-01 (50min), 01-05 (3 min), 01-04 (11 min)
 - Trend: stable
 
 | Phase 01 P01 | 14 min | 3 tasks | 25 files |
@@ -61,6 +61,7 @@ Progress: [██████████░░░░] 88% (Phase 02: 2 of 3 pla
 | Phase 01 P05 | 3 min | 2 tasks | 5 files |
 | Phase 02 P01 | 50min | 3 tasks | 19 files |
 | Phase 02 P02 | 10 min | 2 tasks | 11 files |
+| Phase 02 P03 | 22 min | 3 tasks | 17 files |
 
 ## Accumulated Context
 
@@ -89,6 +90,11 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: Phase 02-02: Dexie LemReaderDB Table<> property annotations added with definite-assignment `!` — PATTERNS.md line 106 LOW-risk authorization; version(1) block byte-unchanged (Pitfall 9); runtime behavior unaffected
 - [Phase ?]: Phase 02-02: UnknownError routes to unupgradeable FIRST (conservative) — appears in both unupgradeable + unavailable Dexie error sets; conservative routing surfaces WipeConfirm rather than the banner but never auto-wipes (Pitfall 8 holds in ambiguous classification)
 - [Phase ?]: Phase 02-02: StorageBanner dismiss is session-scoped (resets on reload per D2-13) — if storageState returns to "ok", the dismiss flag clears so a future unavailable state re-surfaces the banner
+- [Phase ?]: Phase 02-03: Dexie [field+field] store syntax declares a COMPOUND PRIMARY KEY queried as array [val1, val2] — NOT a field named '[field+field]'; the 02-01 LocationRecordRow had a bogus bracketed string field; fixed to use array key db.location.get([id,rev])
+- [Phase ?]: Phase 02-03: IntersectionObserver alone is insufficient for scroll-spy (batches callbacks + flaky percentage rootMargin) — added passive rAF-throttled scroll listener as fallback trigger; both feed same debounced detect() function
+- [Phase ?]: Phase 02-03: Callback-ref + state pattern for DOM elements needed by child components — React refs don't trigger re-renders; useState + callback ref bridges the gap so SectionAnnouncer receives the article element when it mounts
+- [Phase ?]: Phase 02-03: findScrollTarget reuses normalizeRunText + graphemeClusters from src/content/normalizeText EXACTLY (D-05 contract — no parallel implementation); saved grapheme offset round-trips precisely with restored DOM block target
+- [Phase ?]: Phase 02-03: ProgressHairline fill has NO CSS transition/animation property — inline scaleX write tracks scroll like a native scrollbar; global prefers-reduced-motion gate trivially satisfied (UI-SPEC §Interaction 12)
 
 ### Pending Todos
 
@@ -109,6 +115,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-08-02T17:08:00.000Z
-Stopped at: Completed 02-02-PLAN.md (settings persistence + STATE-05 recovery)
+Last session: 2026-08-02T21:35:48.000Z
+Stopped at: Completed 02-03-PLAN.md — Phase 02 complete (3/3 plans)
 Resume file: None

@@ -20,7 +20,7 @@
 - [x] **READ-02**: Reader can change font family, font size, line height, text spacing, and reading measure.
 - [x] **READ-03**: Reader can choose from a limited set of accessible light and dark themes.
 - [x] **READ-04**: Reader sees a calm interface whose secondary controls do not permanently compete with article content.
-- [ ] **READ-05**: Reader can see quiet structural location or progress information that does not treat responsive page number as permanent identity.
+- [x] **READ-05**: Reader can see quiet structural location or progress information that does not treat responsive page number as permanent identity.
 
 ### Accessibility
 
@@ -31,7 +31,7 @@
 - [x] **A11Y-05**: Reader can use the interface with forced-colors or high-contrast preferences without losing meaning, focus visibility, or controls.
 - [x] **A11Y-06**: Reader with reduced-motion preferences receives immediate, motion-safe navigation and no required animation.
 - [x] **A11Y-07**: Reader can perform primary reading and annotation interactions with pointer and touch input as well as keyboard input.
-- [ ] **A11Y-08**: Reader receives concise programmatic status for consequential events such as restored position, saved annotation, or pagination fallback without repetitive page-turn announcements.
+- [x] **A11Y-08**: Reader receives concise programmatic status for consequential events such as restored position, saved annotation, or pagination fallback without repetitive page-turn announcements.
 
 ### Pagination
 
@@ -57,7 +57,7 @@
 
 ### Local State
 
-- [ ] **STATE-01**: Reader's current logical location is restored when the same article revision is reopened.
+- [x] **STATE-01**: Reader's current logical location is restored when the same article revision is reopened.
 - [x] **STATE-02**: Reader's typography, theme, and preferred reading mode persist locally across sessions.
 - [ ] **STATE-03**: Reader's highlights and notes persist locally across sessions.
 - [x] **STATE-04**: Local records are versioned and validated so schema migrations do not silently corrupt documents, preferences, locations, or annotations.
@@ -119,7 +119,7 @@
 | READ-02 | Phase 2 | Complete |
 | READ-03 | Phase 2 | Complete |
 | READ-04 | Phase 2 | Complete |
-| READ-05 | Phase 2 | Pending |
+| READ-05 | Phase 2 | Complete |
 | A11Y-01 | Phase 2 | Complete |
 | A11Y-02 | Phase 2 | Complete |
 | A11Y-03 | Phase 2 | Complete |
@@ -127,7 +127,7 @@
 | A11Y-05 | Phase 2 | Complete |
 | A11Y-06 | Phase 2 | Complete |
 | A11Y-07 | Phase 2 | Complete |
-| A11Y-08 | Phase 2 | Pending |
+| A11Y-08 | Phase 2 | Complete |
 | PAGE-01 | Phase 4 | Pending |
 | PAGE-02 | Phase 4 | Pending |
 | PAGE-03 | Phase 4 | Pending |
@@ -144,7 +144,7 @@
 | ANNO-05 | Phase 5 | Pending |
 | ANNO-06 | Phase 5 | Pending |
 | ANNO-07 | Phase 5 | Pending |
-| STATE-01 | Phase 2 | Pending |
+| STATE-01 | Phase 2 | Complete |
 | STATE-02 | Phase 2 | Complete |
 | STATE-03 | Phase 5 | Pending |
 | STATE-04 | Phase 2 | Complete |
