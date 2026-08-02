@@ -61,3 +61,36 @@ for (const article of fixtures) {
     });
   });
 }
+
+// ── A11Y-03 single-content-tree: settings panel open ─────────────────────────
+// Phase 2 (02-01): with the settings panel open via showModal, the article
+// must NOT be duplicated (single content tree). The browser auto-inerts the
+// rest of the document under showModal, so screen-reader reading order stays
+// equal to document order. Asserted on one fixture article (representative)
+// because the panel mechanism is identical across fixtures.
+test("a11y 02-01 single-content-tree: article is rendered exactly once while panel is open (A11Y-03)", async ({
+  page,
+}) => {
+  await page.goto(`${BASE}/#/article/essay-long-form`);
+
+  // Open the settings panel via the gear.
+  await page.getByRole("button", { name: "Reading settings" }).click();
+  await expect(page.locator("dialog.settings-panel")).toBeVisible();
+
+  // Run axe on the panel-open state — zero serious/critical violations.
+  const results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
+  const serious = seriousViolations(results);
+  expect(serious, JSON.stringify(serious, null, 2)).toEqual([]);
+
+  // A11Y-03 invariant: exactly ONE .article-body in the DOM (not duplicated).
+  const articleCount = await page.locator("article.article-body").count();
+  expect(articleCount, "article-body must appear exactly once").toBe(1);
+
+  // The dialog is open — the browser has made the rest of the document inert
+  // (showModal's top-layer behavior). Confirm the dialog is in the open state
+  // so the inert backdrop is in effect.
+  const dlgOpen = await page.locator("dialog.settings-panel").evaluate(
+    (el) => (el as HTMLDialogElement).open,
+  );
+  expect(dlgOpen, "dialog must be open (modal inert backdrop active)").toBe(true);
+});

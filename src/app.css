@@ -404,7 +404,7 @@ dialog.settings-panel::backdrop {
 
 /* Panel header (title + close) — sticky so it stays visible while the body
    scrolls inside the sheet. */
-.settings-panel form {
+.settings-panel-inner {
   display: flex;
   flex-direction: column;
   gap: var(--space-lg);

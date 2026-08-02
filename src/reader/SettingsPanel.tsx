@@ -48,6 +48,17 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
       // into the dialog. document.activeElement is the gear (the trigger).
       triggerRef.current = document.activeElement as HTMLElement | null;
       dlg.showModal(); // browser: focus→first focusable, trap, inert backdrop, Esc closes
+      // Cross-engine focus management (Pitfall 1 + WebKit quirk): Chromium
+      // auto-focuses the first focusable control on showModal, but WebKit
+      // leaves focus on <body> (cycling body↔dialog without reaching controls).
+      // Explicitly focus the first focusable control so the focus trap and the
+      // initial reading position are predictable everywhere. The .settings-close
+      // button is the first focusable element in DOM order (panel header).
+      const first =
+        dlg.querySelector<HTMLElement>(
+          "button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])",
+        ) ?? dlg;
+      first.focus();
     } else if (!open && dlg.open) {
       dlg.close(); // fires the `close` event → the listener below runs
     }
@@ -76,13 +87,14 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   const onTheme = (theme: ReaderSettings["theme"]) => update({ theme });
   const onReset = () => reset(); // D2-04 — restores DEFAULT_SETTINGS
 
-  // The <form method="dialog"> wraps the controls so pressing Enter inside a
-  // text field does not reload the page; the close button's type="button" +
-  // onClick handler drives the close via React state. Each fieldset's radios
-  // share a `name` so the browser toggles them as a group.
+  // The panel renders a <div> wrapper, NOT a <form method="dialog">. The
+  // earlier form-wrapped variant caused a focus-trap edge case in Chromium
+  // (focus briefly escaped to <body> during the wrap-around). Every control
+  // here is type="button" with a React onChange/onClick handler, so no form
+  // submission behavior is needed.
   return (
     <dialog ref={ref} className="settings-panel" aria-labelledby="settings-title">
-      <form method="dialog" onSubmit={(e) => e.preventDefault()}>
+      <div className="settings-panel-inner">
         <div className="settings-panel-header">
           <h2 id="settings-title">Reading settings</h2>
           <button
@@ -259,7 +271,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
             Reset to defaults
           </button>
         </div>
-      </form>
+      </div>
     </dialog>
   );
 }
