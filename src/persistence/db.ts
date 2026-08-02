@@ -9,9 +9,40 @@
 // are reserved now to minimize future version bumps.
 //
 // Index syntax: "primaryKey, index1, index2, &uniqueIndex, [compound+index]"
-import { Dexie } from "dexie";
+import { Dexie, type Table } from "dexie";
+
+/** Shape of a row in the `settings` store (composite reader-prefs record). */
+export interface SettingsRecord {
+  key: string; // "reader-prefs"
+  value: unknown; // validated via ReaderSettingsSchema on read (settingsStore)
+}
+
+/** Shape of a row in the `location` store (STATE-01, key [articleId+revision]). */
+export interface LocationRecordRow {
+  "[articleId+revision]": string;
+  schemaVersion: 1;
+  articleId: string;
+  revision: number;
+  graphemeOffset: number;
+  savedAt: string;
+}
 
 export class LemReaderDB extends Dexie {
+  // Declared table properties give TypeScript a handle on the stores reserved
+  // by the version blocks below. Without these, `db.settings.get(...)` would
+  // fail tsc (Phase 2 Plan 02 settingsStore + Plan 03 locationStore need the
+  // typed access). 02-PATTERNS.md line 106 notes Phase 2 may add these (LOW
+  // risk — runtime behavior is unaffected; Dexie already resolves the stores
+  // by name from the version declarations).
+  settings!: Table<SettingsRecord, string>;
+  location!: Table<LocationRecordRow, string>;
+  articles!: Table<{ id: string; revision: number }, string>;
+  highlights!: Table<
+    { id: string; "[articleId+revision]": string },
+    string
+  >;
+  notes!: Table<{ id: string; highlightId: string }, string>;
+
   constructor() {
     super("lem-reader");
     this.version(1).stores({
