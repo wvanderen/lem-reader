@@ -5,16 +5,16 @@ milestone_name: milestone
 current_phase: 02
 current_phase_name: accessible-scrolling-reader
 status: executing
-stopped_at: Completed 02-01-PLAN.md (adaptable reading surface)
-last_updated: "2026-08-02T16:53:22.517Z"
+stopped_at: Completed 02-02-PLAN.md (settings persistence + STATE-05 recovery)
+last_updated: "2026-08-02T17:08:00.000Z"
 last_activity: 2026-08-02
-last_activity_desc: Phase 02 execution started
+last_activity_desc: Phase 02 Plan 02 executed — persistence + STATE-05 recovery
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 8
-  completed_plans: 6
-  percent: 17
+  completed_plans: 7
+  percent: 19
 ---
 
 # Project State
@@ -29,36 +29,38 @@ See: .planning/PROJECT.md (updated 2026-07-26)
 ## Current Position
 
 Phase: 02 (accessible-scrolling-reader) — EXECUTING
-Plan: 2 of 3
-Status: Ready to execute
-Last activity: 2026-08-02 — Phase 02 execution started
+Plan: 3 of 3
+Status: Ready to execute Plan 02-03 (location restore + hairline + announcer)
+Last activity: 2026-08-02 — Plan 02-02 complete (persistence + STATE-05)
 
-Progress: [██████████] 100% (Phase 01)
+Progress: [██████████░░░░] 88% (Phase 02: 2 of 3 plans done)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 1
-- Average duration: 14 min
-- Total execution time: 0.2 hours
+- Total plans completed: 2
+- Average duration: 30 min
+- Total execution time: 1.0 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01 | 1 | 14 min | 14 min |
+| 01 | 5 | 14 min | 14 min |
+| 02 | 2 (in progress) | 60 min | 30 min |
 
 **Recent Trend:**
 
-- Last 5 plans: 01-01 (14 min)
-- Trend: -
+- Last 5 plans: 02-01 (50min), 01-05 (3 min), 01-04 (11 min), 01-02 (120 min), 01-01 (14 min)
+- Trend: stable
 
 | Phase 01 P01 | 14 min | 3 tasks | 25 files |
 | Phase 01 P02 | 120 | 3 tasks | 13 files |
 | Phase 01 P04 | 11 min | 2 tasks | 5 files |
 | Phase 01 P05 | 3 min | 2 tasks | 5 files |
 | Phase 02 P01 | 50min | 3 tasks | 19 files |
+| Phase 02 P02 | 10 min | 2 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -82,6 +84,11 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: Phase 02-01: applyTheme writes data-theme + 6 CSS custom properties on documentElement (D2-03 live-apply) — Single token swap honors authored-CSS/no-Tailwind constraint; values derive from Zod-validated enums/numbers (no XSS surface, T-02-02)
 - [Phase ?]: Phase 02-01: Dexie version(2) re-declares same stores — schema no-op in Dexie >=3; anchors STATE-04 migration hook (Pitfall 9 honored) — v1 wrote zero records; no data migration needed; gives Plan 02 clean place to evolve
 - [Phase ?]: Phase 02-01: Explicit focus on first control after showModal + removed <form method=dialog> wrapper — WebKit does not auto-focus modal-dialog controls; form wrapper interfered with Chromium focus-trap wrap-around (focus escaped to body)
+- [Phase ?]: Phase 02-02: db.delete() lives ONLY in WipeConfirm.tsx onDestructiveClick (stricter-than-plan Pitfall 8 reading per critical_constraints) — SettingsContext.resetLocalData only clears in-memory state; the sole executable db.delete call site is the destructive button onClick (verified via repo-wide grep)
+- [Phase ?]: Phase 02-02: WipeConfirm cancel button carries [data-initial-focus] (NOT autoFocus prop) — safer default focus on the non-destructive action; an accidental Enter cannot wipe data
+- [Phase ?]: Phase 02-02: Dexie LemReaderDB Table<> property annotations added with definite-assignment `!` — PATTERNS.md line 106 LOW-risk authorization; version(1) block byte-unchanged (Pitfall 9); runtime behavior unaffected
+- [Phase ?]: Phase 02-02: UnknownError routes to unupgradeable FIRST (conservative) — appears in both unupgradeable + unavailable Dexie error sets; conservative routing surfaces WipeConfirm rather than the banner but never auto-wipes (Pitfall 8 holds in ambiguous classification)
+- [Phase ?]: Phase 02-02: StorageBanner dismiss is session-scoped (resets on reload per D2-13) — if storageState returns to "ok", the dismiss flag clears so a future unavailable state re-surfaces the banner
 
 ### Pending Todos
 
@@ -102,6 +109,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-08-02T16:53:22.511Z
-Stopped at: Completed 02-01-PLAN.md (adaptable reading surface)
+Last session: 2026-08-02T17:08:00.000Z
+Stopped at: Completed 02-02-PLAN.md (settings persistence + STATE-05 recovery)
 Resume file: None

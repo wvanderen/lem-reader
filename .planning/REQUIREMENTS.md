@@ -58,10 +58,10 @@
 ### Local State
 
 - [ ] **STATE-01**: Reader's current logical location is restored when the same article revision is reopened.
-- [ ] **STATE-02**: Reader's typography, theme, and preferred reading mode persist locally across sessions.
+- [x] **STATE-02**: Reader's typography, theme, and preferred reading mode persist locally across sessions.
 - [ ] **STATE-03**: Reader's highlights and notes persist locally across sessions.
 - [x] **STATE-04**: Local records are versioned and validated so schema migrations do not silently corrupt documents, preferences, locations, or annotations.
-- [ ] **STATE-05**: Reader receives a recoverable error state when local storage is unavailable, full, corrupt, or cannot be upgraded.
+- [x] **STATE-05**: Reader receives a recoverable error state when local storage is unavailable, full, corrupt, or cannot be upgraded.
 
 ### Acceptance
 
@@ -145,10 +145,10 @@
 | ANNO-06 | Phase 5 | Pending |
 | ANNO-07 | Phase 5 | Pending |
 | STATE-01 | Phase 2 | Pending |
-| STATE-02 | Phase 2 | Pending |
+| STATE-02 | Phase 2 | Complete |
 | STATE-03 | Phase 5 | Pending |
 | STATE-04 | Phase 2 | Complete |
-| STATE-05 | Phase 2 | Pending |
+| STATE-05 | Phase 2 | Complete |
 | ACPT-01 | Phase 6 | Pending |
 | ACPT-02 | Phase 6 | Pending |
 | ACPT-03 | Phase 6 | Pending |

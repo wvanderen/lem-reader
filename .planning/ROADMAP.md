@@ -60,7 +60,7 @@ Plans:
   4. Screen-reader, zoom/reflow, and forced-color users retain the article's semantic order, visible controls, and required functions without a duplicate active content tree.
   5. Reader returns to the same logical location on reopening and receives a recoverable error when versioned local data cannot be read, migrated, or saved.
 
-**Plans:** 1/3 plans executed
+**Plans:** 2/3 plans executed
 Plans:
 **Wave 1**
 
@@ -68,7 +68,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 02-02-PLAN.md — Wave 2: settings persistence (Dexie, debounced + dual-event flush) + STATE-05 graceful recovery (storage banner + focus-trapped wipe confirmation)
+- [x] 02-02-PLAN.md — Wave 2: settings persistence (Dexie, debounced + dual-event flush) + STATE-05 graceful recovery (storage banner + focus-trapped wipe confirmation)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -145,7 +145,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Canonical Article Foundation | 5/5 | Complete   | 2026-07-29 |
-| 2. Accessible Scrolling Reader | 1/3 | In Progress|  |
+| 2. Accessible Scrolling Reader | 2/3 | In Progress|  |
 | 3. Trustworthy Layout Measurement | 0/TBD | Not started | - |
 | 4. Responsive Pagination and Dual-Mode Navigation | 0/TBD | Not started | - |
 | 5. Durable Highlights and Notes | 0/TBD | Not started | - |
