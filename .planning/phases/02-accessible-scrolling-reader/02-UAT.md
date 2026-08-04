@@ -1,11 +1,13 @@
 ---
-status: resolved
+status: complete
 phase: 02-accessible-scrolling-reader
 source: [02-01-SUMMARY.md, 02-02-SUMMARY.md, 02-03-SUMMARY.md]
 started: 2026-08-03T15:26:52Z
-updated: 2026-08-04T17:05:00Z
+updated: 2026-08-04T17:22:15Z
 resolved_by: [02-04-PLAN.md]
-reverified: 2026-08-04T17:05:00Z
+reverified: 2026-08-04T17:22:15Z
+reverify_round: 2
+note: "Tests 3 and 4 re-verified conversationally; both 02-04 fixes confirmed by user."
 ---
 
 ## Current Test
@@ -23,16 +25,14 @@ expected: Navigate to an article. You see a calm scrolling surface: article titl
 result: pass
 
 ### 3. Progress hairline tracks reading
-expected: Scroll down the article. A thin 2px progress hairline under the header fills as you read, moving like a native scrollbar with no visible animated transition.
-result: issue
-reported: "Fills from center out, is this expected?"
-severity: minor
+expected: Scroll down the article. A thin 2px progress hairline under the header fills as you read, moving like a native scrollbar (left-to-right) with no visible animated transition.
+result: pass
+reverify: "02-04 fix — transform-origin corrected to `left`. User confirmed 2026-08-04."
 
 ### 4. Open settings & change typography live
 expected: Click the gear. A modal settings panel opens over a dimmed backdrop with controls for font, text size, reading width, and line spacing. Change one (e.g. drag Text size or pick another font) — the article updates immediately, with no Save step.
-result: issue
-reported: "All settings work besides spacing and text-size (reading width works)"
-severity: major
+result: pass
+reverify: "02-04 fix — typography knobs routed through var() custom properties. User confirmed 2026-08-04."
 
 ### 5. Switch theme live
 expected: In settings, change the theme to Dark (or Light/Sepia). The reading surface colors change immediately behind the panel.
