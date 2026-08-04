@@ -92,7 +92,16 @@ Plans:
   2. A late result computed for older constraints never replaces the newer valid layout the reader is using.
   3. Across the supported engines, any enabled fast text-measurement path stays within documented tolerances of browser-rendered calibration fixtures.
 
-**Plans:** TBD
+**Plans:** 0/2 plans complete
+Plans:
+**Wave 1**
+
+- [ ] 03-01-PLAN.md — Wave 1: staleness-safe measurement core (epoch + AbortController + font gate + diagnostics + DOM measurer + trigger coalescer + engine + useMeasurement hook) wired into ArticleView, proving PAGE-06 (last-valid-view retention) + PAGE-07 (stale-epoch drop) end-to-end with DOM measurement as the strategy
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 03-02-PLAN.md — Wave 2: calibrated Pretext fast path (TextMeasurer adapter as sole `@chenglou/pretext` import + per-kind dispatch + runtime drift guard) + Playwright calibration harness across 6 fixtures × typography matrix × 3 engines + committed `calibration/fingerprint.json` + CI compare gate, proving PAGE-08
+
 **UI hint:** yes
 
 ### Phase 4: Responsive Pagination and Dual-Mode Navigation
