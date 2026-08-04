@@ -713,7 +713,7 @@ dialog.wipe-confirm::backdrop {
   height: 100%;
   width: 100%;
   background: var(--accent);
-  transform-origin: inline-start;
+  transform-origin: left;
   /* Intentionally NO transition/animation property. The inline scaleX value
      tracks scroll position immediately (UI-SPEC §Interaction 12 + RESEARCH
      anti-pattern #6). */

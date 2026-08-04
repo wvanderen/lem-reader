@@ -124,4 +124,27 @@ test.describe("READ-05 progress hairline", () => {
       `expected scaleX close to 1 at bottom, got transform=${transform}`,
     ).toBeGreaterThanOrEqual(0.9);
   });
+
+  test("the fill's computed transform-origin resolves to the left edge (not center) — fills left-to-right", async ({
+    page,
+  }) => {
+    await page.goto(`${BASE}/#/article/${FIXTURE}`);
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+
+    // The `left` keyword computes to `0px 50%` (a 2-value origin: x=0px,
+    // y=50% of the element's height). When the origin was the invalid
+    // `inline-start`, the browser fell back to the initial `50% 50%`, whose
+    // first token is a nonzero percentage of the element's WIDTH — and the
+    // scaleX transform expanded from the horizontal center. Asserting the
+    // first computed token is `0px` proves the origin sits on the left edge
+    // so scaleX grows left-to-right.
+    const origin = await page
+      .locator(".progress-hairline-fill")
+      .evaluate((el) => getComputedStyle(el).transformOrigin);
+    const firstToken = String(origin).split(/\s+/)[0];
+    expect(
+      firstToken,
+      `expected transform-origin x-axis to resolve to 0px (left edge), got "${origin}"`,
+    ).toBe("0px");
+  });
 });

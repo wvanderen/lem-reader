@@ -5,7 +5,13 @@
 // SectionAnnouncer's polite live region (NOT this element).
 //
 // The fill width is driven by `transform: scaleX({progress})` with
-// `transform-origin: inline-start`. CRITICAL (UI-SPEC §Interaction 12,
+// `transform-origin: left`. The earlier `inline-start` value is NOT in the
+// transform-origin grammar (its keywords are left|center|right|top|bottom —
+// no logical-keyword variants), so browsers ignored it and fell back to the
+// initial `50% 50%` (center), making the fill expand from the middle. LTR
+// English content uses the physical `left` keyword so scaleX grows from the
+// inline-start edge; a `[dir="rtl"]` override to `right` is deferred
+// (UI-SPEC content is LTR English). CRITICAL (UI-SPEC §Interaction 12,
 // 02-RESEARCH anti-pattern #6): the .progress-hairline-fill CSS rule applies
 // NO transition/animation of any kind to the transform. The global
 // prefers-reduced-motion gate is trivially satisfied and the hairline never
@@ -36,7 +42,7 @@ export function ProgressHairline({ progress }: ProgressHairlineProps) {
         className="progress-hairline-fill"
         style={{
           transform: `scaleX(${clamped})`,
-          transformOrigin: "inline-start",
+          transformOrigin: "left",
         }}
       />
     </div>
