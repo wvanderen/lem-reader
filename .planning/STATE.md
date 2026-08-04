@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 02
-current_phase_name: accessible-scrolling-reader
-status: phase-complete
-stopped_at: Completed 02-04-PLAN.md (gap closure — hairline transform-origin + typography custom-property routing) — Phase 02 fully closed (4/4 plans incl. gap closure)
-last_updated: "2026-08-04T17:03:40.587Z"
+current_phase: 3
+current_phase_name: Trustworthy Layout Measurement
+status: planning
+stopped_at: Completed 02-04-PLAN.md (gap closure) — Phase 02 fully closed (4/4 plans incl. gap closure)
+last_updated: "2026-08-04T17:27:54.923Z"
 last_activity: 2026-08-04
-last_activity_desc: Phase 02 gap closure (02-04) complete; ready for Phase 3
+last_activity_desc: Phase 02 complete, transitioned to Phase 3
 progress:
   total_phases: 6
   completed_phases: 2
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-07-26)
 
 ## Current Position
 
-Phase: 02 (accessible-scrolling-reader) — COMPLETE (4/4 plans incl. gap closure)
-Plan: 4 of 4 done (02-04 gap closure shipped)
+Phase: 3 — Trustworthy Layout Measurement
+Plan: Not started
 Status: Phase 02 closed; ready for Phase 3 planning
-Last activity: 2026-08-04 — Phase 02 gap closure (02-04) complete
+Last activity: 2026-08-04 — Phase 02 complete, transitioned to Phase 3
 
 Progress: [████████████] 100% (Phase 02: 4/4 plans done incl. gap closure)
 
@@ -39,7 +39,7 @@ Progress: [████████████] 100% (Phase 02: 4/4 plans done 
 
 **Velocity:**
 
-- Total plans completed: 4 (this phase, incl. gap closure)
+- Total plans completed: 8 (this phase, incl. gap closure)
 - Average duration: 25 min
 - Total execution time: 1.5 hours
 
@@ -48,7 +48,7 @@ Progress: [████████████] 100% (Phase 02: 4/4 plans done 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01 | 5 | 14 min | 14 min |
-| 02 | 4 (complete, incl. gap closure) | 87 min | 22 min |
+| 02 | 4 | - | - |
 
 **Recent Trend:**
 

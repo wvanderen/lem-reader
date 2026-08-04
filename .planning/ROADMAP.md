@@ -7,7 +7,7 @@ Lem Reader reaches its MVP through six vertical slices that keep a usable semant
 ## Phases
 
 - [x] **Phase 1: Canonical Article Foundation** - Readers can open a representative saved corpus whose rich structure and stable logical coordinates are explicit and verifiable. (completed 2026-07-28)
-- [ ] **Phase 2: Accessible Scrolling Reader** - Readers have a calm, adaptable scrolling experience with predictable interaction and recoverable local preferences and location.
+- [x] **Phase 2: Accessible Scrolling Reader** - Readers have a calm, adaptable scrolling experience with predictable interaction and recoverable local preferences and location. (completed 2026-08-04)
 - [ ] **Phase 3: Trustworthy Layout Measurement** - Readers retain a usable view while responsive layout work is calibrated, current, and safe against font and asset changes.
 - [ ] **Phase 4: Responsive Pagination and Dual-Mode Navigation** - Readers can navigate complete, stable pages or return to scrolling without losing their passage.
 - [ ] **Phase 5: Durable Highlights and Notes** - Readers can create and manage local annotations that remain attached to canonical passages across every view change.
@@ -60,7 +60,7 @@ Plans:
   4. Screen-reader, zoom/reflow, and forced-color users retain the article's semantic order, visible controls, and required functions without a duplicate active content tree.
   5. Reader returns to the same logical location on reopening and receives a recoverable error when versioned local data cannot be read, migrated, or saved.
 
-**Plans:** 4/4 plans complete (3 plans + 1 gap closure)
+**Plans:** 4/4 plans complete
 Plans:
 **Wave 1**
 
@@ -149,7 +149,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Canonical Article Foundation | 5/5 | Complete   | 2026-07-29 |
-| 2. Accessible Scrolling Reader | 4/4 | Complete   | 2026-08-04 |
+| 2. Accessible Scrolling Reader | 4/4 | Complete    | 2026-08-04 |
 | 3. Trustworthy Layout Measurement | 0/TBD | Not started | - |
 | 4. Responsive Pagination and Dual-Mode Navigation | 0/TBD | Not started | - |
 | 5. Durable Highlights and Notes | 0/TBD | Not started | - |
