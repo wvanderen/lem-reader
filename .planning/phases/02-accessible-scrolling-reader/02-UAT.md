@@ -1,9 +1,11 @@
 ---
-status: diagnosed
+status: resolved
 phase: 02-accessible-scrolling-reader
 source: [02-01-SUMMARY.md, 02-02-SUMMARY.md, 02-03-SUMMARY.md]
 started: 2026-08-03T15:26:52Z
-updated: 2026-08-03T15:42:00Z
+updated: 2026-08-04T17:05:00Z
+resolved_by: [02-04-PLAN.md]
+reverified: 2026-08-04T17:05:00Z
 ---
 
 ## Current Test
@@ -76,18 +78,26 @@ reason: Hard to trigger a corrupt/unavailable store manually in the browser; fai
 ## Summary
 
 total: 14
-passed: 11
-issues: 2
+passed: 13
+issues: 0
 pending: 0
 skipped: 1
 
 ## Gaps
 
 - truth: "Progress hairline fills left-to-right like a scrollbar as you read"
-  status: failed
+  status: resolved
   reason: "User reported: Fills from center out, is this expected?"
   severity: minor
   test: 3
+  resolved_at: 2026-08-04
+  resolved_by: "02-04-PLAN.md Task 1 (commit 1b39bb8)"
+  resolution: >
+    Fixed in both locations: ProgressHairline.tsx inline `transformOrigin` and
+    app.css `.progress-hairline-fill` rule swapped from the invalid
+    `inline-start` keyword to the physical `left` keyword. Verified by new
+    progress.spec.ts assertion (computed transform-origin first token = `0px`).
+    Re-verified by gsd-verifier 2026-08-04 (commit 512904e).
   root_cause: >
     `transform-origin: inline-start` is not a supported value for the
     `transform-origin` property (its grammar is left|center|right|top|bottom
@@ -104,10 +114,20 @@ skipped: 1
   missing:
     - "Change transform-origin to `left` (LTR) in both ProgressHairline.tsx inline style and app.css .progress-hairline-fill rule. If RTL support is required later, add a [dir=\"rtl\"] override to `right`; do not rely on the unsupported `inline-start` keyword."
 - truth: "Changing text size and spacing updates the article immediately"
-  status: failed
+  status: resolved
   reason: "User reported: All settings work besides spacing and text-size (reading width works)"
   severity: major
   test: 4
+  resolved_at: 2026-08-04
+  resolved_by: "02-04-PLAN.md Task 2 (commit 9927a06)"
+  resolution: >
+    Fixed by routing all four typography knobs through custom properties the
+    body rule consumes: applyTheme now writes `--font-size` / `--line-height`
+    (replacing the bare property writes the body rule overrode); app.css
+    second body rule consumes all four via var() with literal first-paint
+    fallbacks. --font-body and --measure untouched. Verified by new
+    typography-live-apply.spec.ts (body fontSize + wordSpacing respond live).
+    Re-verified by gsd-verifier 2026-08-04 (commit 512904e).
   root_cause: >
     applyTheme writes `font-size` and `line-height` as bare properties on
     <html>, but app.css hardcodes `body { font-size: 18px; line-height: 1.6 }`
