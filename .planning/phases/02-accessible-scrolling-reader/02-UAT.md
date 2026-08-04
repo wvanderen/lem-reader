@@ -1,9 +1,9 @@
 ---
-status: complete
+status: diagnosed
 phase: 02-accessible-scrolling-reader
 source: [02-01-SUMMARY.md, 02-02-SUMMARY.md, 02-03-SUMMARY.md]
 started: 2026-08-03T15:26:52Z
-updated: 2026-08-03T15:40:00Z
+updated: 2026-08-03T15:42:00Z
 ---
 
 ## Current Test
@@ -29,7 +29,7 @@ severity: minor
 ### 4. Open settings & change typography live
 expected: Click the gear. A modal settings panel opens over a dimmed backdrop with controls for font, text size, reading width, and line spacing. Change one (e.g. drag Text size or pick another font) — the article updates immediately, with no Save step.
 result: issue
-reported: "All settings work besides text-width and text-size"
+reported: "All settings work besides spacing and text-size (reading width works)"
 severity: major
 
 ### 5. Switch theme live
@@ -88,12 +88,41 @@ skipped: 1
   reason: "User reported: Fills from center out, is this expected?"
   severity: minor
   test: 3
-  artifacts: []  # Filled by diagnosis
-  missing: []    # Filled by diagnosis
-- truth: "Changing text size and reading width updates the article immediately"
+  root_cause: >
+    `transform-origin: inline-start` is not a supported value for the
+    `transform-origin` property (its grammar is left|center|right|top|bottom
+    plus lengths/percentages — no logical keywords). The browser ignores the
+    declared value and falls back to the initial value `50% 50%` (center), so
+    the inline `scaleX()` expands from the middle. Both the inline style in
+    ProgressHairline.tsx AND the `.progress-hairline-fill` CSS rule
+    (app.css line 716) use this invalid value, so both are ignored.
+  artifacts:
+    - path: "src/reader/ProgressHairline.tsx"
+      issue: "transformOrigin: \"inline-start\" is not a valid transform-origin value; ignored → falls back to center"
+    - path: "src/app.css"
+      issue: ".progress-hairline-fill { transform-origin: inline-start } (line ~716) — same invalid value"
+  missing:
+    - "Change transform-origin to `left` (LTR) in both ProgressHairline.tsx inline style and app.css .progress-hairline-fill rule. If RTL support is required later, add a [dir=\"rtl\"] override to `right`; do not rely on the unsupported `inline-start` keyword."
+- truth: "Changing text size and spacing updates the article immediately"
   status: failed
-  reason: "User reported: All settings work besides text-width and text-size"
+  reason: "User reported: All settings work besides spacing and text-size (reading width works)"
   severity: major
   test: 4
-  artifacts: []  # Filled by diagnosis
-  missing: []    # Filled by diagnosis
+  root_cause: >
+    applyTheme writes `font-size` and `line-height` as bare properties on
+    <html>, but app.css hardcodes `body { font-size: 18px; line-height: 1.6 }`
+    (lines 128–129) which override the inherited <html> values — so size and
+    the line-height half of spacing never reach the text. Additionally,
+    `--letter-spacing` and `--word-spacing` custom properties ARE written to
+    <html> but are never consumed by any CSS rule (no var() reference exists
+    anywhere), so the spacing preset's letter/word-spacing are dead writes.
+    By contrast `--font-body` (body { font-family: var(--font-body) }) and
+    `--measure` (.article-body { max-width: var(--measure) }) work because
+    they are consumed via var() with no hardcoded override.
+  artifacts:
+    - path: "src/settings/applyTheme.ts"
+      issue: "Writes bare `font-size` and `line-height` on documentElement (overridden by body's hardcoded values); writes --letter-spacing/--word-spacing that nothing consumes"
+    - path: "src/app.css"
+      issue: "body rule (lines 127–131) hardcodes font-size:18px and line-height:1.6; no letter-spacing/word-spacing: var(...) consumers anywhere"
+  missing:
+    - "Route the four typography knobs through custom properties consumed by body: in applyTheme write `--font-size` and `--line-height` (custom props) instead of the bare `font-size`/`line-height` properties; in app.css set `font-size: var(--font-size, 18px); line-height: var(--line-height, 1.6); letter-spacing: var(--letter-spacing, 0); word-spacing: var(--word-spacing, 0);` on body (keeping 18px/1.6/0 as first-paint fallbacks). Keep --font-body and --measure as-is."
