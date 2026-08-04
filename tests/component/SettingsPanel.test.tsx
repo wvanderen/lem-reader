@@ -178,8 +178,11 @@ describe("SettingsPanel — live-apply wiring (D2-03)", () => {
       fireEvent.click(screen.getByRole("button", { name: "Reset to defaults" }));
     });
     expect(document.documentElement.dataset.theme).toBe("sepia");
-    expect(document.documentElement.style.getPropertyValue("font-size")).toBe(
-      "18px",
-    );
+    // Per 02-04 gap 2, applyTheme now writes the --font-size custom property
+    // (consumed by the body rule via var()) instead of the bare font-size
+    // property the body rule overrode.
+    expect(
+      document.documentElement.style.getPropertyValue("--font-size"),
+    ).toBe("18px");
   });
 });

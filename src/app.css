@@ -123,10 +123,20 @@ body {
 }
 
 /* ── Base typography (UI-SPEC §Typography; system serif stacks only — no
-   web fonts, so document.fonts.ready resolves immediately in Phase 1) ──── */
+   web fonts, so document.fonts.ready resolves immediately in Phase 1) ────
+   The four typography knobs are custom properties written by applyTheme on
+   documentElement (02-04 gap 2 fix). The literal 18px / 1.6 / 0 are
+   first-paint fallbacks: before applyTheme runs on SettingsProvider mount,
+   the custom properties are unset and the body renders the D-07 defaults.
+   Once applyTheme runs, var() substitution routes the live values through.
+   --font-body and --measure are consumed by the FIRST body rule above and
+   by .article-body respectively; this rule owns size + line-height +
+   letter/word-spacing only. */
 body {
-  font-size: 18px;
-  line-height: 1.6;
+  font-size: var(--font-size, 18px);
+  line-height: var(--line-height, 1.6);
+  letter-spacing: var(--letter-spacing, 0);
+  word-spacing: var(--word-spacing, 0);
   font-weight: 400;
 }
 h1 {

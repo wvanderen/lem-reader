@@ -53,12 +53,17 @@ function Probe() {
 }
 
 // Helper: read the live token value the provider wrote to documentElement.
+// Per 02-04 gap 2, applyTheme now writes the `--font-size` and `--line-height`
+// custom properties (consumed by the body rule via var()) instead of the
+// bare `font-size` / `line-height` properties on documentElement (which the
+// body rule's hardcoded values overrode — that was the regression). The
+// assertions below check the corrected custom-property token names.
 function readTokens() {
   const root = document.documentElement;
   return {
     theme: root.dataset.theme,
     fontBody: root.style.getPropertyValue("--font-body"),
-    fontSize: root.style.getPropertyValue("font-size"),
+    fontSizeToken: root.style.getPropertyValue("--font-size"),
     measure: root.style.getPropertyValue("--measure"),
   };
 }
@@ -89,7 +94,7 @@ describe("SettingsContext (D2-03 live-apply)", () => {
     const tokens = readTokens();
     expect(tokens.theme).toBe(DEFAULT_SETTINGS.theme);
     expect(tokens.fontBody).toContain("Iowan Old Style"); // serif stack
-    expect(tokens.fontSize).toBe(`${DEFAULT_SETTINGS.size}px`);
+    expect(tokens.fontSizeToken).toBe(`${DEFAULT_SETTINGS.size}px`);
     expect(tokens.measure).toBe(`${DEFAULT_SETTINGS.measure}ch`);
     expect(latest?.storageState).toBe("ok");
   });
@@ -133,9 +138,9 @@ describe("SettingsContext (D2-03 live-apply)", () => {
       latest?.update({ size: 24, measure: 72, spacing: "spacious" }),
     );
     const tokens = readTokens();
-    expect(tokens.fontSize).toBe("24px");
+    expect(tokens.fontSizeToken).toBe("24px");
     expect(tokens.measure).toBe("72ch");
-    expect(document.documentElement.style.getPropertyValue("line-height")).toBe(
+    expect(document.documentElement.style.getPropertyValue("--line-height")).toBe(
       "1.8",
     );
     expect(
@@ -154,7 +159,7 @@ describe("SettingsContext (D2-03 live-apply)", () => {
     expect(latest?.settings).toEqual(DEFAULT_SETTINGS);
     const tokens = readTokens();
     expect(tokens.theme).toBe("sepia");
-    expect(tokens.fontSize).toBe("18px");
+    expect(tokens.fontSizeToken).toBe("18px");
     expect(tokens.measure).toBe("64ch");
     expect(tokens.fontBody).toContain("Iowan Old Style");
   });

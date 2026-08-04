@@ -164,10 +164,17 @@ describe("LocationRecordSchema.parse rejects malformed records", () => {
   });
 });
 
-// ── applyTheme writes the six custom properties + data-theme on documentElement ──
+// ── applyTheme writes the typography custom properties + data-theme on documentElement ──
 // (Pitfall 9 / T-02-02 — values derive from Zod-validated enums/numbers;
 // style.setProperty does not parse selectors; dataset.theme is a data attr.)
 // This is the schema test's sibling assertion — jsdom-safe (DOM writes, not layout).
+//
+// 02-04 gap 2: applyTheme now writes the --font-size / --line-height custom
+// properties (consumed by the SECOND body rule in app.css via var()) instead
+// of the bare font-size / line-height properties, which body's hardcoded
+// values overrode. --letter-spacing / --word-spacing are now also consumed
+// (previously dead writes). The assertions below check the corrected token
+// names.
 
 describe("applyTheme writes :root tokens from validated settings", () => {
   it("applies the D-07 default baseline to documentElement", () => {
@@ -175,8 +182,8 @@ describe("applyTheme writes :root tokens from validated settings", () => {
     const root = document.documentElement;
     expect(root.dataset.theme).toBe("sepia");
     expect(root.style.getPropertyValue("--font-body")).toContain("Iowan Old Style");
-    expect(root.style.getPropertyValue("font-size")).toBe("18px");
-    expect(root.style.getPropertyValue("line-height")).toBe("1.6");
+    expect(root.style.getPropertyValue("--font-size")).toBe("18px");
+    expect(root.style.getPropertyValue("--line-height")).toBe("1.6");
     expect(root.style.getPropertyValue("--letter-spacing")).toBe("0");
     expect(root.style.getPropertyValue("--word-spacing")).toBe("0");
     expect(root.style.getPropertyValue("--measure")).toBe("64ch");
@@ -194,8 +201,8 @@ describe("applyTheme writes :root tokens from validated settings", () => {
     const root = document.documentElement;
     expect(root.dataset.theme).toBe("dark");
     expect(root.style.getPropertyValue("--font-body")).toContain("system-ui");
-    expect(root.style.getPropertyValue("font-size")).toBe("22px");
-    expect(root.style.getPropertyValue("line-height")).toBe("1.8");
+    expect(root.style.getPropertyValue("--font-size")).toBe("22px");
+    expect(root.style.getPropertyValue("--line-height")).toBe("1.8");
     expect(root.style.getPropertyValue("--letter-spacing")).toBe("0.01em");
     expect(root.style.getPropertyValue("--word-spacing")).toBe("0.05em");
     expect(root.style.getPropertyValue("--measure")).toBe("72ch");
