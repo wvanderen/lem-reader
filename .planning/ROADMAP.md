@@ -60,7 +60,7 @@ Plans:
   4. Screen-reader, zoom/reflow, and forced-color users retain the article's semantic order, visible controls, and required functions without a duplicate active content tree.
   5. Reader returns to the same logical location on reopening and receives a recoverable error when versioned local data cannot be read, migrated, or saved.
 
-**Plans:** 3/3 plans complete
+**Plans:** 4/4 plans complete (3 plans + 1 gap closure)
 Plans:
 **Wave 1**
 
@@ -73,6 +73,10 @@ Plans:
 **Wave 3** *(blocked on Wave 2 completion)*
 
 - [x] 02-03-PLAN.md — Wave 3: location restore (grapheme offset → DOM) + quiet progress hairline + debounced section-change announce + resume banner
+
+**Gap Closure (UAT-diagnosed gaps)**
+
+- [x] 02-04-PLAN.md — Gap 1 (progress hairline transform-origin: invalid `inline-start` keyword → physical `left` in ProgressHairline.tsx + app.css) + Gap 2 (text-size + spacing dead writes: route `font-size`/`line-height` through `--font-size`/`--line-height` custom properties consumed by the body rule; `--font-body`/`--measure` untouched)
 
 **UI hint:** yes
 
@@ -145,7 +149,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Canonical Article Foundation | 5/5 | Complete   | 2026-07-29 |
-| 2. Accessible Scrolling Reader | 3/3 | Complete   | 2026-08-02 |
+| 2. Accessible Scrolling Reader | 4/4 | Complete   | 2026-08-04 |
 | 3. Trustworthy Layout Measurement | 0/TBD | Not started | - |
 | 4. Responsive Pagination and Dual-Mode Navigation | 0/TBD | Not started | - |
 | 5. Durable Highlights and Notes | 0/TBD | Not started | - |

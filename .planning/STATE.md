@@ -5,16 +5,16 @@ milestone_name: milestone
 current_phase: 02
 current_phase_name: accessible-scrolling-reader
 status: phase-complete
-stopped_at: Completed 02-03-PLAN.md (location restore + progress hairline + section announcer) — Phase 02 complete (3/3 plans)
-last_updated: "2026-08-02T21:35:48.000Z"
-last_activity: 2026-08-02
-last_activity_desc: Phase 02 Plan 03 executed — location restore + progress hairline + section announcer; Phase 02 complete
+stopped_at: Completed 02-04-PLAN.md (gap closure — hairline transform-origin + typography custom-property routing) — Phase 02 fully closed (4/4 plans incl. gap closure)
+last_updated: "2026-08-04T17:03:40.587Z"
+last_activity: 2026-08-04
+last_activity_desc: Phase 02 gap closure (02-04) complete; ready for Phase 3
 progress:
   total_phases: 6
   completed_phases: 2
-  total_plans: 8
-  completed_plans: 8
-  percent: 25
+  total_plans: 9
+  completed_plans: 9
+  percent: 33
 ---
 
 # Project State
@@ -24,35 +24,35 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-26)
 
 **Core value:** Readers can move through long-form web content with calm, stable orientation and predictable navigation.
-**Current focus:** Phase 02 — accessible-scrolling-reader
+**Current focus:** Phase 02 — accessible-scrolling-reader (complete; ready for Phase 3)
 
 ## Current Position
 
-Phase: 02 (accessible-scrolling-reader) — COMPLETE (3/3 plans)
-Plan: 3 of 3 complete
-Status: Ready for phase verification (/gsd-verify-work 02) before advancing to Phase 03
-Last activity: 2026-08-02 — Plan 02-03 complete (location restore + hairline + announcer)
+Phase: 02 (accessible-scrolling-reader) — COMPLETE (4/4 plans incl. gap closure)
+Plan: 4 of 4 done (02-04 gap closure shipped)
+Status: Phase 02 closed; ready for Phase 3 planning
+Last activity: 2026-08-04 — Phase 02 gap closure (02-04) complete
 
-Progress: [████████████] 100% (Phase 02: 3 of 3 plans done)
+Progress: [████████████] 100% (Phase 02: 4/4 plans done incl. gap closure)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 3 (this phase)
-- Average duration: 27 min
-- Total execution time: 1.4 hours
+- Total plans completed: 4 (this phase, incl. gap closure)
+- Average duration: 25 min
+- Total execution time: 1.5 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01 | 5 | 14 min | 14 min |
-| 02 | 3 (complete) | 82 min | 27 min |
+| 02 | 4 (complete, incl. gap closure) | 87 min | 22 min |
 
 **Recent Trend:**
 
-- Last 5 plans: 02-03 (22min), 02-02 (10 min), 02-01 (50min), 01-05 (3 min), 01-04 (11 min)
+- Last 5 plans: 02-04 (5min gap closure), 02-03 (22min), 02-02 (10 min), 02-01 (50min), 01-05 (3 min)
 - Trend: stable
 
 | Phase 01 P01 | 14 min | 3 tasks | 25 files |
@@ -62,6 +62,7 @@ Progress: [████████████] 100% (Phase 02: 3 of 3 plans do
 | Phase 02 P01 | 50min | 3 tasks | 19 files |
 | Phase 02 P02 | 10 min | 2 tasks | 11 files |
 | Phase 02 P03 | 22 min | 3 tasks | 17 files |
+| Phase 02 P04 | 5 min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -95,6 +96,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: Phase 02-03: Callback-ref + state pattern for DOM elements needed by child components — React refs don't trigger re-renders; useState + callback ref bridges the gap so SectionAnnouncer receives the article element when it mounts
 - [Phase ?]: Phase 02-03: findScrollTarget reuses normalizeRunText + graphemeClusters from src/content/normalizeText EXACTLY (D-05 contract — no parallel implementation); saved grapheme offset round-trips precisely with restored DOM block target
 - [Phase ?]: Phase 02-03: ProgressHairline fill has NO CSS transition/animation property — inline scaleX write tracks scroll like a native scrollbar; global prefers-reduced-motion gate trivially satisfied (UI-SPEC §Interaction 12)
+- [Phase 02]: Phase 02-04 (gap closure): transform-origin grammar is PHYSICAL-ONLY (left|center|right|top|bottom — NO logical-keyword variants); inline-start/inline-end are valid for inset/margin/padding logical properties but NOT for transform-origin; browsers silently ignore the unknown value and fall back to initial 50% 50% (center). LTR English uses the physical `left` keyword; a [dir="rtl"] override to `right` is deferred to a future RTL milestone.
+- [Phase 02]: Phase 02-04 (gap closure): Typography cascade contract — applyTheme writes custom properties (--font-size / --line-height / --letter-spacing / --word-spacing) on <html>; the SECOND body rule consumes them via var() with literal first-paint fallbacks (18px / 1.6 / 0). Mirrors the working --font-body + --measure pattern. NEVER write a bare property the body rule will override via CSS specificity.
 
 ### Pending Todos
 
@@ -115,6 +118,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-08-02T21:35:48.000Z
-Stopped at: Completed 02-03-PLAN.md — Phase 02 complete (3/3 plans)
+Last session: 2026-08-04T17:03:00.000Z
+Stopped at: Completed 02-04-PLAN.md (gap closure) — Phase 02 fully closed (4/4 plans incl. gap closure)
 Resume file: None
