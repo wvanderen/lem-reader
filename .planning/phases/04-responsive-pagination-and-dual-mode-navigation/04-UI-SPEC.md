@@ -234,7 +234,7 @@ indicator (D4-08) and the mode-toggle's `aria-label` reuse existing roles.
 | Mode-toggle glyph (header) | n/a — SVG only | No visible text label; `aria-label` carries the name. The visible state is conveyed by glyph + `aria-pressed` (forced-colors safety). |
 | "Page N of M" indicator (hairline region) | Meta / Label (14px UI sans, `--ink-soft`) | Quiet glanceable signal. NEVER accent-colored. Reads like the meta line under an article title. |
 | Page-turn chevron glyphs (page sides) | n/a — SVG only | `aria-label` per control. `--ink-soft` default; `--accent` only on hover/focus (matches the gear-button discipline). |
-| Fallback-banner heading | Meta / Label (16px UI sans, 600 weight, `--ink`) | Mirrors StorageBanner / ResumeBanner heading role. |
+| Fallback-banner heading | Meta / Label (14px UI sans, 600 weight, `--ink`) | Mirrors StorageBanner / ResumeBanner heading role. The 600 weight (vs the 14px/400 banner body) preserves heading/body hierarchy within the single declared Meta/Label size. |
 | Fallback-banner body | Meta / Label (14px UI sans, 400 weight, `--ink-soft`) | Mirrors StorageBanner / ResumeBanner body role. |
 | "Page N of M" SR announce (on turn) | n/a — live-region text only | Concise: "Page N of M." Mirrors the SectionAnnouncer pattern. |
 
@@ -662,7 +662,7 @@ scrolling at the same passage.**
 **Banner LIFECYCLE (researcher call):**
 - The banner is a non-modal, dismissible `.status` card (reuses the
   Phase 2 banner geometry — `--surface-raised` + `--hairline` border +
-  4px radius + `--space-lg` padding + 16px Meta/Label heading +
+  4px radius + `--space-lg` padding + 14px Meta/Label heading +
   14px Meta/Label body). It sits inline at the top of `<main>`, near the
   article header. NOT sticky (READ-04 — sticky chrome competes with
   content).
