@@ -16,8 +16,20 @@ vi.mock("../../src/content/repository", () => ({
 import { ArticleView } from "../../src/routes/ArticleView";
 import { openArticle } from "../../src/content/repository";
 import type { CanonicalArticle } from "../../src/content/types";
+import { SettingsProvider } from "../../src/settings/SettingsContext";
 
 const openArticleMock = vi.mocked(openArticle);
+
+/**
+ * ArticleView now mounts useMeasurement (Phase 3), which calls useSettings —
+ * so component tests must render inside <SettingsProvider> or the hook
+ * throws. DEFAULT_SETTINGS + an in-memory provider are sufficient: the
+ * measurement engine runs but its commit lands in DEV-only debug state,
+ * not in any element this test asserts on.
+ */
+function renderWithProvider(ui: React.ReactElement) {
+  return render(<SettingsProvider>{ui}</SettingsProvider>);
+}
 
 const fullArticle = (): CanonicalArticle => ({
   id: "stub-article",
@@ -47,13 +59,13 @@ beforeEach(() => {
 describe("ArticleView (DOC-03)", () => {
   it("renders the article title in an <h1>", async () => {
     openArticleMock.mockResolvedValue(fullArticle());
-    render(<ArticleView articleId="stub-article" />);
+    renderWithProvider(<ArticleView articleId="stub-article" />);
     expect(await screen.findByRole("heading", { level: 1, name: "Stub Article" })).not.toBeNull();
   });
 
   it("renders a safe source-URL link (target=_blank, rel=noopener noreferrer)", async () => {
     openArticleMock.mockResolvedValue(fullArticle());
-    render(<ArticleView articleId="stub-article" />);
+    renderWithProvider(<ArticleView articleId="stub-article" />);
     const link = await screen.findByRole("link", { name: /Originally published at/ });
     expect(link).not.toBeNull();
     expect(link.getAttribute("target")).toBe("_blank");
@@ -65,26 +77,26 @@ describe("ArticleView (DOC-03)", () => {
 
   it("includes a visually-hidden 'opens in a new tab' announcement", async () => {
     openArticleMock.mockResolvedValue(fullArticle());
-    render(<ArticleView articleId="stub-article" />);
+    renderWithProvider(<ArticleView articleId="stub-article" />);
     expect(await screen.findByText(/opens in a new tab/i)).not.toBeNull();
   });
 
   it("does NOT render a Footnotes region when the article has no footnotes", async () => {
     openArticleMock.mockResolvedValue(fullArticle());
-    render(<ArticleView articleId="stub-article" />);
+    renderWithProvider(<ArticleView articleId="stub-article" />);
     await screen.findByRole("heading", { level: 1, name: "Stub Article" });
     expect(screen.queryByRole("region", { name: "Footnotes" })).toBeNull();
   });
 
   it("shows 'Opening article…' while loading", () => {
     openArticleMock.mockReturnValue(new Promise<CanonicalArticle | null>(() => {}));
-    render(<ArticleView articleId="stub-article" />);
+    renderWithProvider(<ArticleView articleId="stub-article" />);
     expect(screen.getByText("Opening article…")).not.toBeNull();
   });
 
   it("shows the error copy when openArticle rejects", async () => {
     openArticleMock.mockRejectedValue(new Error("boom"));
-    render(<ArticleView articleId="stub-article" />);
+    renderWithProvider(<ArticleView articleId="stub-article" />);
     await waitFor(() => {
       expect(screen.getByText("Couldn't open this article.")).not.toBeNull();
     });
@@ -94,7 +106,7 @@ describe("ArticleView (DOC-03)", () => {
 
   it("shows the error copy when openArticle resolves null (article not found)", async () => {
     openArticleMock.mockResolvedValue(null);
-    render(<ArticleView articleId="does-not-exist" />);
+    renderWithProvider(<ArticleView articleId="does-not-exist" />);
     await waitFor(() => {
       expect(screen.getByText("Couldn't open this article.")).not.toBeNull();
     });

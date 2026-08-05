@@ -27,6 +27,7 @@ import { ArticleBody } from "../content/render/BlockRenderer";
 import { loadLocation } from "../persistence/locationStore";
 import { findScrollTarget } from "../reader/restoreLocation";
 import { useScrollSave } from "../reader/useScrollSave";
+import { useMeasurement } from "../measurement/useMeasurement";
 import { ProgressHairline } from "../reader/ProgressHairline";
 import { SectionAnnouncer } from "../reader/SectionAnnouncer";
 import { ResumeBanner } from "../reader/ResumeBanner";
@@ -89,6 +90,17 @@ export function ArticleView({ articleId }: { articleId: string }) {
   // article is null). The dual-flush listeners stay registered across the
   // loading → ready transition.
   useScrollSave(article, articleRef);
+
+  // Phase 3 (PAGE-06 + PAGE-07): mount the staleness-safe measurement
+  // pipeline. The hook no-ops during article loading (rules of hooks). The
+  // returned trustedView is the "last valid view" — replaced only by a
+  // result that survived the font gate (D3-06) + the epoch commit guard
+  // (PAGE-07). In scrolling mode the engine runs but its visible effect is
+  // the reflow applyTheme already produces; the paginated payoff lands in
+  // Phase 4. D3-04: measurement is invisible by default — the hook writes
+  // NOTHING to the `.status` live region (reserved for consequential
+  // fallback, a Phase 4 concern).
+  useMeasurement(article, articleRef);
 
   // Load article on articleId change (cancelled-flag pattern preserved from
   // Phase 1 — a slow load cannot overwrite a fast in-flight update).

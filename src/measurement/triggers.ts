@@ -76,11 +76,26 @@ export class TriggerCoalescer {
     // (4) Figure <img> load (capture so it catches the bubbling img load).
     opts.articleEl.addEventListener("load", this.boundSchedule, true);
 
-    // (3) document.fonts — observe a font-set change by re-awaiting `.ready`
-    // in a loop. D3-06 anti-pattern: do NOT rely on `onloadingdone` (NOT
-    // Baseline). Re-awaiting `.ready` is the portable primitive.
-    this.startFontsWatcher();
+    // (3) document.fonts — observe a font-set change via the `loadingdone`
+    // event (Baseline per MDN; the `onloadingdone` PROPERTY form has
+    // limited availability per RESEARCH §Anti-Patterns, hence we use
+    // addEventListener — the EVENT form is the spec primitive). D3-06
+    // anti-pattern honored: we do NOT rely on `onloadingdone` as the sole
+    // signal — the engine's awaitFontsReady re-awaits `.ready` inside
+    // every run() pass; this watcher only schedules an additional trigger
+    // when a font actually loads/swaps. The engine's font gate is the
+    // authoritative readiness check.
+    //
+    // Guard: in jsdom (component tests) document.fonts is undefined; the
+    // real-browser e2e suite exercises this listener. Without the guard,
+    // mounting ArticleView in a component test would crash.
+    if (typeof document.fonts?.addEventListener === "function") {
+      document.fonts.addEventListener("loadingdone", this.boundSchedule);
+      this.fontsListenerAttached = true;
+    }
   }
+
+  private fontsListenerAttached = false;
 
   /** External hook for the React layer to signal a settings change. */
   notifySettingsChange(): void {
@@ -127,21 +142,10 @@ export class TriggerCoalescer {
   }
 
   /**
-   * Observe document.fonts by re-awaiting `.ready` in a loop until
-   * disconnect. Each resolution is a potential font-set change → schedule.
-   * The loop exits via the `disconnected` flag.
+   * Observe document.fonts — handled in the constructor via addEventListener
+   * for the `loadingdone` event. No polling: the engine's awaitFontsReady
+   * inside run() is the authoritative readiness check (D3-06).
    */
-  private async startFontsWatcher(): Promise<void> {
-    try {
-      while (!this.disconnected) {
-        await document.fonts.ready;
-        if (this.disconnected) return;
-        this.scheduleTrigger();
-      }
-    } catch {
-      // document.fonts.ready does not reject in practice; defend silently.
-    }
-  }
 
   private readonly boundSchedule = (): void => this.scheduleTrigger();
 
@@ -155,6 +159,9 @@ export class TriggerCoalescer {
     this.disconnected = true;
     this.resizeObserver.disconnect();
     this.opts.articleEl.removeEventListener("load", this.boundSchedule, true);
+    if (this.fontsListenerAttached && typeof document.fonts?.removeEventListener === "function") {
+      document.fonts.removeEventListener("loadingdone", this.boundSchedule);
+    }
     if (this.timer !== null) {
       window.clearTimeout(this.timer);
       this.timer = null;
