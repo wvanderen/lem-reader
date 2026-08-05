@@ -159,7 +159,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. Canonical Article Foundation | 5/5 | Complete   | 2026-07-29 |
 | 2. Accessible Scrolling Reader | 4/4 | Complete    | 2026-08-04 |
-| 3. Trustworthy Layout Measurement | 2/2 | Complete   | 2026-08-05 |
+| 3. Trustworthy Layout Measurement | 2/2 | Complete    | 2026-08-05 |
 | 4. Responsive Pagination and Dual-Mode Navigation | 0/TBD | Not started | - |
 | 5. Durable Highlights and Notes | 0/TBD | Not started | - |
 | 6. Prototype Acceptance | 0/TBD | Not started | - |

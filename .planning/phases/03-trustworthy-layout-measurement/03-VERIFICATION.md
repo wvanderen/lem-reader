@@ -1,22 +1,24 @@
 ---
 phase: 03-trustworthy-layout-measurement
 verified: 2026-08-05T17:30:00Z
-status: human_needed
-score: 8/8 truths verified (1 manual-only UAT item per VALIDATION.md — visual continuity across a forced font swap)
+reverified: 2026-08-05T14:44:00Z
+status: verified
+score: 8/8 truths verified; manual-only font-swap scenario satisfied by 03-UAT.md Test 5 (user-confirmed pass 2026-08-05T14:43Z)
 behavior_unverified: 0
 overrides_applied: 0
 human_verification:
   - test: "Force a late @font-face load and observe visual continuity across the font swap"
     expected: "Scrolling article body stays painted and reflows calmly while the engine's font gate (D3-06) waits for the new font to settle and recomputes; no blank frame, no jarring churn. Trusted view is retained (PAGE-06 contract); a late-epoch result is dropped, not painted over the old one (PAGE-07 contract)."
     why_human: "The e2e suite proves article content stays mounted + h1/first-paragraph remain visible across a resize cycle (last-valid-view.spec.ts) and that no pageerrors leak (stale-drop.spec.ts), but forcing a real late web-font load and judging the aesthetic 'calmness' of the swap moment is a visual/AT judgment that requires human eyes on a real browser. The current Phase 2 font stack is system-only so document.fonts.ready resolves near-instantly; the contract is exercised but its visible payoff under a genuine font-swap moment is human-only (03-VALIDATION.md §Manual-Only)."
+    resolved_by: "03-UAT.md Test 5 — user-confirmed pass on 2026-08-05 ('Late-loading web font does not cause a jarring relayout (D3-06 / PAGE-06)'). UAT session: 7/7 passed, 0 issues."
 ---
 
 # Phase 03: Trustworthy Layout Measurement — Verification Report
 
 **Phase Goal:** Readers keep a valid, usable article view while responsive layout measurement settles and only the newest trustworthy result can take effect.
-**Verified:** 2026-08-05T17:30:00Z
-**Status:** human_needed
-**Re-verification:** No — initial verification
+**Verified:** 2026-08-05T17:30:00Z (reverified 2026-08-05T14:44:00Z after UAT)
+**Status:** verified
+**Re-verification:** Yes — 2026-08-05; manual-only font-swap scenario satisfied by `03-UAT.md` Test 5 (7/7 UAT passed, 0 issues)
 
 ## Goal Achievement
 

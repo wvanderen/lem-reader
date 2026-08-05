@@ -69,6 +69,7 @@ Annotations must attach to stable normalized-text positions or selectors rather 
 | Include highlights and notes in the prototype | Durable annotations are part of the complete local reading loop even though reading remains the core wedge | — Pending |
 | Target rich long-form articles, not arbitrary web layouts | Captures realistic publishing structures while keeping tables, embeds, math, and application UI out of the first validation boundary | — Pending |
 | Define prototype success technically | Stable, responsive pagination and accessible navigation must work before comparative user-preference studies | — Pending |
+| Build a staleness-safe, calibrated measurement substrate before pagination | Pagination correctness depends on a measurement pipeline that retains the last valid reader view (PAGE-06), drops stale-epoch results at a commit guard (PAGE-07), and only enables any fast text-measurement path after per-kind calibration against rendered DOM (PAGE-08). Last-valid-view retention + epoch-guarded commits + runtime drift downgrade + committed calibration fingerprint are the substrate Phase 4 pagination builds on. | ✓ Validated — Phase 3 (2/2 plans; 8/8 truths verified; 7/7 UAT passed) |
 
 ## Evolution
 
@@ -88,4 +89,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-26 after initialization*
+*Last updated: 2026-08-05 after Phase 3*
