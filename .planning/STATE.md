@@ -6,14 +6,14 @@ current_phase: 03
 current_phase_name: trustworthy-layout-measurement
 status: executing
 stopped_at: Phase 3 context gathered
-last_updated: "2026-08-05T13:29:18.481Z"
+last_updated: "2026-08-05T13:59:47.015Z"
 last_activity: 2026-08-05
 last_activity_desc: Phase 03 execution started
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 11
-  completed_plans: 9
+  completed_plans: 10
   percent: 33
 ---
 
@@ -29,8 +29,8 @@ See: .planning/PROJECT.md (updated 2026-07-26)
 ## Current Position
 
 Phase: 03 (trustworthy-layout-measurement) — EXECUTING
-Plan: 1 of 2
-Status: Executing Phase 03
+Plan: 2 of 2
+Status: Ready to execute
 Last activity: 2026-08-05 — Phase 03 execution started
 
 Progress: [████████████] 100% (Phase 02: 4/4 plans done incl. gap closure)
@@ -63,6 +63,7 @@ Progress: [████████████] 100% (Phase 02: 4/4 plans done 
 | Phase 02 P02 | 10 min | 2 tasks | 11 files |
 | Phase 02 P03 | 22 min | 3 tasks | 17 files |
 | Phase 02 P04 | 5 min | 2 tasks | 7 files |
+| Phase 03 P01 | 22 min | 3 tasks | 16 files |
 
 ## Accumulated Context
 
@@ -98,6 +99,10 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: Phase 02-03: ProgressHairline fill has NO CSS transition/animation property — inline scaleX write tracks scroll like a native scrollbar; global prefers-reduced-motion gate trivially satisfied (UI-SPEC §Interaction 12)
 - [Phase 02]: Phase 02-04 (gap closure): transform-origin grammar is PHYSICAL-ONLY (left|center|right|top|bottom — NO logical-keyword variants); inline-start/inline-end are valid for inset/margin/padding logical properties but NOT for transform-origin; browsers silently ignore the unknown value and fall back to initial 50% 50% (center). LTR English uses the physical `left` keyword; a [dir="rtl"] override to `right` is deferred to a future RTL milestone.
 - [Phase 02]: Phase 02-04 (gap closure): Typography cascade contract — applyTheme writes custom properties (--font-size / --line-height / --letter-spacing / --word-spacing) on <html>; the SECOND body rule consumes them via var() with literal first-paint fallbacks (18px / 1.6 / 0). Mirrors the working --font-body + --measure pattern. NEVER write a bare property the body rule will override via CSS specificity.
+- [Phase ?]: Phase 03-01: Font trigger via addEventListener('loadingdone'), not a polling re-await loop — polling hot-looped on already-resolved font promises and starved the event loop; EVENT form is Baseline per MDN
+- [Phase ?]: Phase 03-01: awaitFontsReady uses Promise.race(document.fonts.ready, abortPromise) so a never-resolving font promise still surfaces a mid-flight abort as AbortError (D3-06)
+- [Phase ?]: Phase 03-01: DiagnosticEvent defined as 6-kind discriminated union now (late-epoch-drop + measurement-error emitted in Plan 01; the other 4 reserved for Plan 02) so Phase 4 PAGE-09 extends emission not the shape (D3-05)
+- [Phase ?]: Phase 03-01: DEV-only window.__lemLastTrustedConstraints debug hook under import.meta.env.DEV lets the PAGE-07 e2e observe the latest committed Constraints without exposing internal state to production
 
 ### Pending Todos
 
@@ -118,6 +123,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-08-04T17:54:13.689Z
+Last session: 2026-08-05T13:59:19.309Z
 Stopped at: Phase 3 context gathered
 Resume file: .planning/phases/03-trustworthy-layout-measurement/03-CONTEXT.md

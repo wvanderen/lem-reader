@@ -92,11 +92,11 @@ Plans:
   2. A late result computed for older constraints never replaces the newer valid layout the reader is using.
   3. Across the supported engines, any enabled fast text-measurement path stays within documented tolerances of browser-rendered calibration fixtures.
 
-**Plans:** 0/2 plans complete
+**Plans:** 1/2 plans executed
 Plans:
 **Wave 1**
 
-- [ ] 03-01-PLAN.md — Wave 1: staleness-safe measurement core (epoch + AbortController + font gate + diagnostics + DOM measurer + trigger coalescer + engine + useMeasurement hook) wired into ArticleView, proving PAGE-06 (last-valid-view retention) + PAGE-07 (stale-epoch drop) end-to-end with DOM measurement as the strategy
+- [x] 03-01-PLAN.md — Wave 1: staleness-safe measurement core (epoch + AbortController + font gate + diagnostics + DOM measurer + trigger coalescer + engine + useMeasurement hook) wired into ArticleView, proving PAGE-06 (last-valid-view retention) + PAGE-07 (stale-epoch drop) end-to-end with DOM measurement as the strategy
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -159,7 +159,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. Canonical Article Foundation | 5/5 | Complete   | 2026-07-29 |
 | 2. Accessible Scrolling Reader | 4/4 | Complete    | 2026-08-04 |
-| 3. Trustworthy Layout Measurement | 0/TBD | Not started | - |
+| 3. Trustworthy Layout Measurement | 1/2 | In Progress|  |
 | 4. Responsive Pagination and Dual-Mode Navigation | 0/TBD | Not started | - |
 | 5. Durable Highlights and Notes | 0/TBD | Not started | - |
 | 6. Prototype Acceptance | 0/TBD | Not started | - |
