@@ -608,27 +608,29 @@ const rects = range.getClientRects(); // DOMRect[] — one per line
 
 **Note:** Every other claim in this research is `[VERIFIED]` (confirmed via tool against the codebase, the calibration fingerprint, package.json, or `npm view`) or `[CITED]` (referenced from MDN official documentation). The fingerprint-driven conclusion that Pretext is ineligible for paragraphs is `[VERIFIED: calibration/fingerprint.json]` — the single highest-leverage finding in this document.
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> All four open questions below are settled. Each `Recommendation:` line is the resolution the planner followed. The architecture decisions they informed are reflected in `04-CONTEXT.md` (locked decisions D4-*) and the PLAN.md files.
 
 1. **Exact `LineBox[]` read strategy — linear vs. word-boundary binary search.**
    - What we know: the linear char-by-char walk is O(textLen) DOM reads per block; correct; matches MDN's described behavior.
    - What's unclear: whether it meets the Phase 6 "feel responsive" bar on the longest fixture at the largest font/spacing. Phase 4 has no formal budget (that's Phase 6 / ACPT-04).
-   - Recommendation: ship linear for Phase 4 (correctness first); the `LineBox[]` contract is stable so a word-boundary binary search is a non-breaking Phase 6 optimization if budgets demand it. Add a DEV-only timing probe.
+   - RESOLVED Recommendation: ship linear for Phase 4 (correctness first); the `LineBox[]` contract is stable so a word-boundary binary search is a non-breaking Phase 6 optimization if budgets demand it. Add a DEV-only timing probe.
 
 2. **The `MeasurementResult` extension shape — extend `BlockMeasurement` vs. add a parallel `SplitPointData[]`.**
    - What we know: Phase 3's `BlockMeasurement` is `{kind, heightPx, lineCount}` with `schemaVersion: 1` and a locked Zod schema. Adding optional fields risks breaking Phase 3's parse.
    - What's unclear: whether the planner prefers additive optional fields (safe under Zod) or a parallel structure keyed by blockIndex.
-   - Recommendation: additive optional fields on `BlockMeasurement` (e.g. `lineBoxes?: LineBox[]`) gated behind a `MeasurementResult.schemaVersion` bump to 2, OR a parallel `pagination` module that reads line boxes independently of `MeasurementResult`. The latter keeps Phase 3's contract byte-unchanged (cleaner separation). Planner's architecture call — both work.
+   - RESOLVED Recommendation: additive optional fields on `BlockMeasurement` (e.g. `lineBoxes?: LineBox[]`) gated behind a `MeasurementResult.schemaVersion` bump to 2, OR a parallel `pagination` module that reads line boxes independently of `MeasurementResult`. The latter keeps Phase 3's contract byte-unchanged (cleaner separation). Planner's architecture call — both work.
 
 3. **Zero-progress stall threshold N (UI-SPEC §23 names it "N" without a number).**
    - What we know: the engine must abort on consecutive zero-content pages.
    - What's unclear: N=1 (abort on the first empty page) vs. N=2–3 (tolerate a transient).
-   - Recommendation: N=1 is the safe choice — a single zero-content page is already a bug per D4-01/D4-02; there is no legitimate reason for an empty page. The 300-page ceiling is the backstop if N=1 somehow misfires.
+   - RESOLVED Recommendation: N=1 is the safe choice — a single zero-content page is already a bug per D4-01/D4-02; there is no legitimate reason for an empty page. The 300-page ceiling is the backstop if N=1 somehow misfires.
 
 4. **Fallback banner re-trigger semantics under rapid repagination.**
    - What we know: UI-SPEC §23 says the banner reappears if fallback re-triggers after dismissal.
    - What's unclear: if the reader enlarges the font rapidly (3 steps in 400ms), the banner could flash on/off.
-   - Recommendation: the banner appearance is gated by the SAME Phase 3 coalescer/debounce that gates repagination — a rapid font-change burst produces ONE committed pagination result, hence at most ONE banner transition. No extra debouncing needed.
+   - RESOLVED Recommendation: the banner appearance is gated by the SAME Phase 3 coalescer/debounce that gates repagination — a rapid font-change burst produces ONE committed pagination result, hence at most ONE banner transition. No extra debouncing needed.
 
 ## Environment Availability
 
