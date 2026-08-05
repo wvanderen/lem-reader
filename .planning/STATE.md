@@ -4,17 +4,17 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 03
 current_phase_name: trustworthy-layout-measurement
-status: executing
-stopped_at: Phase 3 context gathered
-last_updated: "2026-08-05T13:59:47.015Z"
+status: verifying
+stopped_at: Completed 03-02-PLAN.md
+last_updated: "2026-08-05T14:23:26.031Z"
 last_activity: 2026-08-05
 last_activity_desc: Phase 03 execution started
 progress:
   total_phases: 6
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 11
-  completed_plans: 10
-  percent: 33
+  completed_plans: 11
+  percent: 50
 ---
 
 # Project State
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-07-26)
 
 Phase: 03 (trustworthy-layout-measurement) — EXECUTING
 Plan: 2 of 2
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-08-05 — Phase 03 execution started
 
 Progress: [████████████] 100% (Phase 02: 4/4 plans done incl. gap closure)
@@ -64,6 +64,7 @@ Progress: [████████████] 100% (Phase 02: 4/4 plans done 
 | Phase 02 P03 | 22 min | 3 tasks | 17 files |
 | Phase 02 P04 | 5 min | 2 tasks | 7 files |
 | Phase 03 P01 | 22 min | 3 tasks | 16 files |
+| Phase 03 P02 | 19 min | 2 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -103,6 +104,11 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: Phase 03-01: awaitFontsReady uses Promise.race(document.fonts.ready, abortPromise) so a never-resolving font promise still surfaces a mid-flight abort as AbortError (D3-06)
 - [Phase ?]: Phase 03-01: DiagnosticEvent defined as 6-kind discriminated union now (late-epoch-drop + measurement-error emitted in Plan 01; the other 4 reserved for Plan 02) so Phase 4 PAGE-09 extends emission not the shape (D3-05)
 - [Phase ?]: Phase 03-01: DEV-only window.__lemLastTrustedConstraints debug hook under import.meta.env.DEV lets the PAGE-07 e2e observe the latest committed Constraints without exposing internal state to production
+- [Phase ?]: Phase 03-02: 'kind-downgraded' (kebab-case) is the canonical diagnostic event field — committed Zod schema in types.ts is source of truth; plan's kindDowngraded would fail V5 boundary parse
+- [Phase ?]: Phase 03-02: Engine measures DOM for ALL blocks (correct reference + safe fallback); Pretext predictions computed only for sampled eligible blocks to feed drift guard
+- [Phase ?]: Phase 03-02: Calibration harness split — Playwright per-engine parallel + Node compare merge avoids cross-worker coordination for single fingerprint write
+- [Phase ?]: Phase 03-02: Calibration evidence — headings eligible (216/216 chromium+firefox, 156/216 webkit); paragraphs 0/216 (rich-inline marks + wordSpacing Pitfall 6 + system-ui sans Pitfall 5) — D3-01 per-kind gate's purpose realized
+- [Phase ?]: Phase 03-02: fingerprint.compare.ts refuses empty input (exit 2) — never overwrite committed fingerprint with placeholder
 
 ### Pending Todos
 
@@ -123,6 +129,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-08-05T13:59:19.309Z
-Stopped at: Phase 3 context gathered
-Resume file: .planning/phases/03-trustworthy-layout-measurement/03-CONTEXT.md
+Last session: 2026-08-05T14:23:26.026Z
+Stopped at: Completed 03-02-PLAN.md
+Resume file: None

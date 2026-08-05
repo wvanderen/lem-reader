@@ -42,7 +42,7 @@
 - [ ] **PAGE-05**: Reader remains at the same logical passage when switching modes or when viewport, typography, font state, or supported asset dimensions trigger repagination.
 - [x] **PAGE-06**: Reader can continue using the last valid view while a newer pagination result is being computed.
 - [x] **PAGE-07**: Stale pagination work cannot replace a result produced for newer content, viewport, typography, font, or asset constraints.
-- [ ] **PAGE-08**: The measurement layer is calibrated against browser-rendered fixtures across supported engines before any Pretext.js fast path is enabled.
+- [x] **PAGE-08**: The measurement layer is calibrated against browser-rendered fixtures across supported engines before any Pretext.js fast path is enabled.
 - [ ] **PAGE-09**: Pagination records actionable diagnostics and presents an understandable reason when it falls back to scrolling.
 
 ### Annotations
@@ -135,7 +135,7 @@
 | PAGE-05 | Phase 4 | Pending |
 | PAGE-06 | Phase 3 | Complete |
 | PAGE-07 | Phase 3 | Complete |
-| PAGE-08 | Phase 3 | Pending |
+| PAGE-08 | Phase 3 | Complete |
 | PAGE-09 | Phase 4 | Pending |
 | ANNO-01 | Phase 5 | Pending |
 | ANNO-02 | Phase 5 | Pending |

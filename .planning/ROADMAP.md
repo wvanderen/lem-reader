@@ -8,7 +8,7 @@ Lem Reader reaches its MVP through six vertical slices that keep a usable semant
 
 - [x] **Phase 1: Canonical Article Foundation** - Readers can open a representative saved corpus whose rich structure and stable logical coordinates are explicit and verifiable. (completed 2026-07-28)
 - [x] **Phase 2: Accessible Scrolling Reader** - Readers have a calm, adaptable scrolling experience with predictable interaction and recoverable local preferences and location. (completed 2026-08-04)
-- [ ] **Phase 3: Trustworthy Layout Measurement** - Readers retain a usable view while responsive layout work is calibrated, current, and safe against font and asset changes.
+- [x] **Phase 3: Trustworthy Layout Measurement** - Readers retain a usable view while responsive layout work is calibrated, current, and safe against font and asset changes. (completed 2026-08-05)
 - [ ] **Phase 4: Responsive Pagination and Dual-Mode Navigation** - Readers can navigate complete, stable pages or return to scrolling without losing their passage.
 - [ ] **Phase 5: Durable Highlights and Notes** - Readers can create and manage local annotations that remain attached to canonical passages across every view change.
 - [ ] **Phase 6: Prototype Acceptance** - Readers can complete the full reading and annotation flow across the supported browser and accessibility conditions within explicit performance budgets.
@@ -92,7 +92,7 @@ Plans:
   2. A late result computed for older constraints never replaces the newer valid layout the reader is using.
   3. Across the supported engines, any enabled fast text-measurement path stays within documented tolerances of browser-rendered calibration fixtures.
 
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 Plans:
 **Wave 1**
 
@@ -100,7 +100,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 03-02-PLAN.md — Wave 2: calibrated Pretext fast path (TextMeasurer adapter as sole `@chenglou/pretext` import + per-kind dispatch + runtime drift guard) + Playwright calibration harness across 6 fixtures × typography matrix × 3 engines + committed `calibration/fingerprint.json` + CI compare gate, proving PAGE-08
+- [x] 03-02-PLAN.md — Wave 2: calibrated Pretext fast path (TextMeasurer adapter as sole `@chenglou/pretext` import + per-kind dispatch + runtime drift guard) + Playwright calibration harness across 6 fixtures × typography matrix × 3 engines + committed `calibration/fingerprint.json` + CI compare gate, proving PAGE-08
 
 **UI hint:** yes
 
@@ -159,7 +159,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. Canonical Article Foundation | 5/5 | Complete   | 2026-07-29 |
 | 2. Accessible Scrolling Reader | 4/4 | Complete    | 2026-08-04 |
-| 3. Trustworthy Layout Measurement | 1/2 | In Progress|  |
+| 3. Trustworthy Layout Measurement | 2/2 | Complete   | 2026-08-05 |
 | 4. Responsive Pagination and Dual-Mode Navigation | 0/TBD | Not started | - |
 | 5. Durable Highlights and Notes | 0/TBD | Not started | - |
 | 6. Prototype Acceptance | 0/TBD | Not started | - |
