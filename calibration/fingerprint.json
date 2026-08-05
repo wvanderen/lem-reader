@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-05T14:00:00.000Z",
+  "toleranceBound": {
+    "heightDriftPx": 1.0,
+    "breaksExact": true
+  },
+  "rationale": "Placeholder fingerprint seeded DOM-only (all kinds ineligible). The Plan 02 Task 2 calibration harness (tests/e2e/calibration/calibration.harness.ts) regenerates this file with per-engine per-(fixture,variant,kind) eligibility, observed heightDriftP95, and breaksMatchRatio derived from the first full calibration run across Chromium/Firefox/WebKit. Until that run completes and commits a calibrated fingerprint, useMeasurement defaults to the safe DOM-only path (D3-03 fallback) — the engine measures via domMeasurer; no Pretext fast path is enabled.",
+  "engines": {
+    "chromium": {},
+    "firefox": {},
+    "webkit": {}
+  }
+}

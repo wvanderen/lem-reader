@@ -11,10 +11,12 @@
     "test:unit": "vitest",
     "test:e2e": "playwright test",
     "test": "npm run test:unit -- --run && npm run test:e2e",
+    "calibrate": "playwright test tests/e2e/calibration/",
     "lint": "eslint .",
     "format": "prettier --write ."
   },
   "dependencies": {
+    "@chenglou/pretext": "0.0.8",
     "dexie": "4.4.4",
     "react": "19.2.8",
     "react-dom": "19.2.8",

@@ -29,7 +29,20 @@ import { useSettings } from "../settings/SettingsContext";
 import { DiagnosticBus } from "./diagnostics";
 import { MeasurementEngine } from "./engine";
 import { TriggerCoalescer } from "./triggers";
+import { deriveEligibilityFromFingerprint } from "./fingerprint";
+import { RuntimeDriftGuard } from "./driftGuard";
 import type { MeasurementResult } from "./types";
+
+/**
+ * The runtime drift tolerance bound (D3-08 discretion). Mirrors the
+ * committed fingerprint's toleranceBound.heightDriftPx when present, else
+ * the conservative 1.0px starting heuristic from RESEARCH §Open Question 2.
+ * A defensible bound: a 1px font-size perturbation must cross it; the
+ * corpus's clean cells must sit well inside it.
+ */
+const RUNTIME_DRIFT_TOLERANCE_PX = 1.0;
+/** Sample size for the runtime drift guard (RESEARCH Assumption A3). */
+const RUNTIME_DRIFT_SAMPLE_SIZE = 5;
 
 /**
  * useMeasurement(article, articleElRef) — mount the trust pipeline.
@@ -72,10 +85,36 @@ export function useMeasurement(
     const articleEl = articleElRef.current;
     if (!articleEl) return; // article element not mounted yet
     const diagnostics = diagnosticsRef.current!;
+    // Seed eligibility from the committed calibration fingerprint
+    // (D3-08). When the fingerprint is empty/malformed (initial placeholder
+    // before the calibration harness runs), this returns all-false → DOM-
+    // only measurement, the safe D3-03 fallback. The runtime drift guard
+    // below further corrects at runtime.
+    const eligibility = deriveEligibilityFromFingerprint();
+    // The drift guard is constructed once per mount and shared with the
+    // engine. The guard samples Pretext predictions vs DOM references each
+    // pass; on drift it mutates the eligibility object in place (flips
+    // pretextEligible → false) and emits a runtime-guard-downgrade
+    // diagnostic (D3-05). Only construct when at least one kind is seeded
+    // eligible — otherwise no Pretext work happens and the guard is dead
+    // weight (saves the per-block text walk on every measurement pass).
+    const anyEligible =
+      eligibility.paragraph.pretextEligible ||
+      eligibility.heading.pretextEligible;
+    const driftGuard = anyEligible
+      ? new RuntimeDriftGuard({
+          tolerancePx: RUNTIME_DRIFT_TOLERANCE_PX,
+          diagnostics,
+          sampleSize: RUNTIME_DRIFT_SAMPLE_SIZE,
+        })
+      : undefined;
     const engine = new MeasurementEngine({
       article,
       articleEl,
       diagnostics,
+      eligibility,
+      driftGuard,
+      getReaderSettings: () => settingsRef.current,
     });
     const unsubTrusted = engine.onTrusted((result) => {
       setTrustedView(result);
