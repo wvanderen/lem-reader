@@ -118,7 +118,25 @@ Plans:
   4. Reader remains anchored through viewport, typography, font, and supported asset changes while a previous valid view remains available during repagination.
   5. Oversized or unsupported content produces an understandable diagnostic and a usable scrolling fallback at the same passage.
 
-**Plans:** TBD
+**Plans:** 5 plans
+Plans:
+**Wave 1**
+
+- [ ] 04-01-PLAN.md — Wave 1: project-owned pagination engine (src/pagination/* — types, lineBoxes, splitBlock, widowRules, fragment) + unit tests proving PAGE-03 exactly-once/canonical-order/termination + PAGE-04 oversize/threshold guards
+- [ ] 04-02-PLAN.md — Wave 1: readingMode Zod value-shape evolution (schemaVersion 1→2, default paginated, NO Dexie change per Pitfall 9) + Wave 0 test infrastructure (corpus × viewport × typography matrix + 8 pagination e2e scaffolds)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 04-03-PLAN.md — Wave 2: thin end-to-end paginated vertical slice (PageFragmentView reusing BlockView + PaginatedSurface deriving pages from trustedView + ArticleView mode-aware branch + page geometry CSS + quiet chevrons + PageIndicator + ProgressHairline N/M)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 04-04-PLAN.md — Wave 3: full dual-mode navigation (ModeToggle + Header + M shortcut + PageTurnControls keyboard/swipe/chevrons + D4-07 focus + announce + D4-10 mode-switch anchor + D4-11 repagination anchor)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 04-05-PLAN.md — Wave 4: PaginationFallbackBanner + DiagnosticBus subscription + session-mode flip + the 8 pagination e2e specs across the corpus matrix in Chromium/Firefox/WebKit proving PAGE-03/04/09 + phase-gate human verify
+
 **UI hint:** yes
 
 ### Phase 5: Durable Highlights and Notes
@@ -160,6 +178,6 @@ Plans:
 | 1. Canonical Article Foundation | 5/5 | Complete   | 2026-07-29 |
 | 2. Accessible Scrolling Reader | 4/4 | Complete    | 2026-08-04 |
 | 3. Trustworthy Layout Measurement | 2/2 | Complete    | 2026-08-05 |
-| 4. Responsive Pagination and Dual-Mode Navigation | 0/TBD | Not started | - |
+| 4. Responsive Pagination and Dual-Mode Navigation | 0/5 | Not started | - |
 | 5. Durable Highlights and Notes | 0/TBD | Not started | - |
 | 6. Prototype Acceptance | 0/TBD | Not started | - |
