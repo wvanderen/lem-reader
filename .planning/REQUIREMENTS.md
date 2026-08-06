@@ -35,15 +35,15 @@
 
 ### Pagination
 
-- [x] **PAGE-01**: Reader can switch explicitly between paginated and scrolling modes for the same normalized article. *(⚠️ REGRESSION — gsd-verifier found M-toggle round-trip broken: second M does not flip persisted mode back to paginated within timeout. 6 corpus failures.)*
-- [x] **PAGE-02**: Reader can move forward and backward through responsive pages using keyboard, pointer, and touch controls. *(⚠️ REGRESSION — keyboard bundle Space-after-ArrowRight drops events + chevron aria-disabled not reflected at last page. 6 failures.)*
-- [x] **PAGE-03**: Pagination preserves every supported content unit exactly once and in canonical order, without silent clipping, duplication, or omission. *(✅ Plan 04-07 closed PAGE-03b silent-clipping BLOCKER — post-render overflow guard corrects overflowing pages against live DOM truth. 54/54 no-overflow cells × 3 engines GREEN. PAGE-03a coverage + PAGE-03c termination also green. PageFragment.blocks never empty — defensive empty-slice guard. 2026-08-06.)*
-- [x] **PAGE-04**: Pagination terminates with a usable result or an explicit scrolling fallback for oversized or unsupported content. *(Proven by fallback-oversize + fallback-banner e2e across chromium/firefox/webkit — Plan 04-05.)*
-- [x] **PAGE-05**: Reader remains at the same logical passage when switching modes or when viewport, typography, font state, or supported asset dimensions trigger repagination.
-- [ ] **PAGE-06**: Reader can continue using the last valid view while a newer pagination result is being computed. *(⚠️ REGRESSED in Phase 4 — gsd-verifier found article loses content (9→7 children) after re-measure. 3 e2e failures across chromium/firefox/webkit.)*
-- [ ] **PAGE-07**: Stale pagination work cannot replace a result produced for newer content, viewport, typography, font, or asset constraints. *(⚠️ REGRESSED in Phase 4 — rapid-trigger race commits wrong constraints' view. 3 e2e failures.)*
+- [x] **PAGE-01**: Reader can switch explicitly between paginated and scrolling modes for the same normalized article. *(✅ RE-VERIFIED 2026-08-06T22:24:05Z — Plan 04-09 closed the M-toggle round-trip: global M listener in both modes + synchronous commitTurn ref + [data-block-index] queryBlocks. mode-switch-anchor.spec.ts 6/6 green × 3 engines. Full npm run test exit 0.)*
+- [x] **PAGE-02**: Reader can move forward and backward through responsive pages using keyboard, pointer, and touch controls. *(✅ RE-VERIFIED 2026-08-06T22:24:05Z — Plan 04-09 closed the keyboard/chevron race: synchronous currentPageIdxRef update eliminates the Space-after-ArrowRight race; force:true + correct aria-disabled reflection at boundaries. page-turn-controls.spec.ts 9/9 green × 3 engines.)*
+- [x] **PAGE-03**: Pagination preserves every supported content unit exactly once and in canonical order, without silent clipping, duplication, or omission. *(✅ Plan 04-07 closed PAGE-03b silent-clipping BLOCKER — post-render overflow guard corrects overflowing pages against live DOM truth. 54/54 no-overflow cells × 3 engines GREEN. PAGE-03a coverage + PAGE-03c termination also green. PageFragment.blocks never empty — defensive empty-slice guard. RE-VERIFIED 2026-08-06T22:24:05Z in the full npm run test suite, exit 0.)*
+- [x] **PAGE-04**: Pagination terminates with a usable result or an explicit scrolling fallback for oversized or unsupported content. *(Proven by fallback-oversize + fallback-banner e2e across chromium/firefox/webkit — Plan 04-05. RE-VERIFIED 2026-08-06T22:24:05Z in the full npm run test suite, exit 0.)*
+- [x] **PAGE-05**: Reader remains at the same logical passage when switching modes or when viewport, typography, font state, or supported asset dimensions trigger repagination. *(RE-VERIFIED 2026-08-06T22:24:05Z in the full npm run test suite, exit 0 — repagination-anchor.spec.ts 6/6 green × 3 engines.)*
+- [x] **PAGE-06**: Reader can continue using the last valid view while a newer pagination result is being computed. *(✅ RESTORED 2026-08-06T22:24:05Z — Plan 04-08 closed the Phase 4 regression: always-mounted hidden ArticleBody alongside PaginatedSurface + scrolling-mode seed. last-valid-view.spec.ts 3/3 green × 3 engines. Full npm run test exit 0.)*
+- [x] **PAGE-07**: Stale pagination work cannot replace a result produced for newer content, viewport, typography, font, or asset constraints. *(✅ RESTORED 2026-08-06T22:24:05Z — Plan 04-08 closed the Phase 4 regression: always-mounted ArticleBody makes the partial-DOM defense unreachable; the final viewport's constraints commit (size 24). stale-drop.spec.ts 3/3 green × 3 engines.)*
 - [x] **PAGE-08**: The measurement layer is calibrated against browser-rendered fixtures across supported engines before any Pretext.js fast path is enabled.
-- [x] **PAGE-09**: Pagination records actionable diagnostics and presents an understandable reason when it falls back to scrolling. *(⚠️ PARTIAL — banner copy + announce correct; auto-dismiss races the reader's click on firefox/webkit. 4 failures.)*
+- [x] **PAGE-09**: Pagination records actionable diagnostics and presents an understandable reason when it falls back to scrolling. *(✅ RE-VERIFIED 2026-08-06T22:24:05Z — Plan 04-10 closed the banner auto-dismiss race: pointerdown inside-banner guard + 300ms scroll-dismiss debounce + DEV-only __lemDiagnosticBus injection hook. fallback-banner.spec.ts 9/9 green × 3 engines. Full npm run test exit 0.)*
 
 ### Annotations
 
@@ -128,15 +128,15 @@
 | A11Y-06 | Phase 2 | Complete |
 | A11Y-07 | Phase 2 | Complete |
 | A11Y-08 | Phase 2 | Complete |
-| PAGE-01 | Phase 4 | ⚠️ Regression (M-toggle round-trip) |
-| PAGE-02 | Phase 4 | ⚠️ Regression (keyboard + chevron) |
-| PAGE-03 | Phase 4 | ✅ Complete (Plan 04-07 closed PAGE-03b) |
-| PAGE-04 | Phase 4 | Complete |
-| PAGE-05 | Phase 4 | Complete |
-| PAGE-06 | Phase 3 | ⚠️ Regressed in Phase 4 |
-| PAGE-07 | Phase 3 | ⚠️ Regressed in Phase 4 |
+| PAGE-01 | Phase 4 | ✅ Complete (Plan 04-09 closed; re-verified 04-11) |
+| PAGE-02 | Phase 4 | ✅ Complete (Plan 04-09 closed; re-verified 04-11) |
+| PAGE-03 | Phase 4 | ✅ Complete (Plan 04-07 closed PAGE-03b; re-verified 04-11) |
+| PAGE-04 | Phase 4 | Complete (re-verified 04-11) |
+| PAGE-05 | Phase 4 | Complete (re-verified 04-11) |
+| PAGE-06 | Phase 3 | ✅ Restored (Plan 04-08 closed Phase 4 regression; re-verified 04-11) |
+| PAGE-07 | Phase 3 | ✅ Restored (Plan 04-08 closed Phase 4 regression; re-verified 04-11) |
 | PAGE-08 | Phase 3 | Complete |
-| PAGE-09 | Phase 4 | ⚠️ Partial (banner race) |
+| PAGE-09 | Phase 4 | ✅ Complete (Plan 04-10 closed; re-verified 04-11) |
 | ANNO-01 | Phase 5 | Pending |
 | ANNO-02 | Phase 5 | Pending |
 | ANNO-03 | Phase 5 | Pending |

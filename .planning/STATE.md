@@ -4,17 +4,17 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 04
 current_phase_name: responsive-pagination-and-dual-mode-navigation
-status: executing
-stopped_at: Completed 04-09-PLAN.md (PAGE-01 M-toggle round-trip + PAGE-02 keyboard/chevron)
-last_updated: "2026-08-06T22:17:49.558Z"
+status: phase_verified
+stopped_at: "Completed 04-11-PLAN.md — PROCESS BLOCKER closed: full npm run test exit 0 (753 passed / 0 failed / 0 skipped); 04-VERIFICATION.md upgraded gaps_found (3/7) → verified (7/7)"
+last_updated: "2026-08-06T22:24:05Z"
 last_activity: 2026-08-06
-last_activity_desc: Plan 04-07 (31 min, 4 files)
+last_activity_desc: Plan 04-11 process-blocker closure (~18 min, 2 planning artifacts)
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 22
-  completed_plans: 21
-  percent: 50
+  completed_plans: 22
+  percent: 55
 ---
 
 # Project State
@@ -28,18 +28,19 @@ See: .planning/PROJECT.md (updated 2026-08-05)
 
 ## Current Position
 
-Phase: 04 (responsive-pagination-and-dual-mode-navigation) — EXECUTING (gap-closure)
-Plan: 10 of 11 complete (04-07 closed PAGE-03b)
-Status: Plan 04-07 executed — post-render overflow guard closes PAGE-03b
-Last activity: 2026-08-06 — Plan 04-07 (31 min, 4 files)
+Phase: 04 (responsive-pagination-and-dual-mode-navigation) — **PHASE VERIFIED** (all 11 plans executed; gap-closure complete)
+Plan: 11 of 11 complete (04-11 closed the process blocker)
+Status: Plan 04-11 executed — full `npm run test` end-to-end exits 0 (753 passed / 0 failed / 0 skipped); 04-VERIFICATION.md upgraded gaps_found (3/7) → verified (7/7)
+Last activity: 2026-08-06 — Plan 04-11 process-blocker closure (~18 min, 2 planning artifacts)
 
-Progress: [██████████] 4/6 phases code-complete — 18/22 plans executed (gap-closure wave 6 of 9)
+Progress: [██████████] 4/6 phases code-complete — 22/22 plans executed (gap-closure wave 9 of 9 complete)
 
-## Recent Decisions (Plan 04-07)
+## Recent Decisions (Plan 04-11)
 
-- **Guard is additive, not a rewrite.** Plan 04-06's pre-capture pipeline stays as the FIRST pass; the guard runs as the SECOND pass against live DOM truth (STACK.md "per-kind measurement + post-render overflow guard" pattern).
-- **Defensive empty-slice guard.** When live DOM textContent disagrees with the entry's `[startGrapheme, endGrapheme)` range (React re-render race or UTF-16/grapheme divergence), the guard rejects the split and falls back to move-whole or dom-fallback. Never produces an empty PageFragment.blocks entry.
-- **Live DOM truth over pre-capture.** The guard reads getBoundingClientRect + scrollHeight on the actual rendered .page-fragment. Pre-capture's scrolling-geometry heights don't predict paginated-geometry heights (the root cause of the 4–82px overflows).
+- **PROCESS BLOCKER closed by re-running the suite, not by re-asserting SUMMARYs.** The executor ran the FULL `npm run test` in ONE invocation (no subset, no `--grep`, no engine skip) and recorded both pass AND fail counts honestly. Result: 753 passed (408 unit + 345 e2e × chromium/firefox/webkit, 115 each) / 0 failed / 0 skipped, exit 0. The prior "269 passed / 0 failed" misreport pattern (reality was 76 failed / 269 passed) is overturned; the 76 previously-failing cells now all pass.
+- **04-VERIFICATION.md upgraded gaps_found (3/7) → verified (7/7).** re_verification block records gaps_closed [PAGE-03b, PAGE-01, PAGE-02, PAGE-09, PAGE-06, PAGE-07], gaps_remaining [], regressions []. The historical narrative is retained verbatim for audit traceability; every prior `✗ FAILED` row is flipped to `✓ VERIFIED` with the closing plan cited.
+- **Closing-plan attribution:** 04-07 (PAGE-03b, 54 cells), 04-08 (PAGE-06/07, 6 cells), 04-09 (PAGE-01/02, 15 cells), 04-10 (PAGE-09, 9 cells). The Plan 04-05 Task 3 human-verify gate now has a genuinely-green automated prerequisite underneath it.
+- **New artifact 04-11-OUTPUT.md** is the permanent record: the literal command, per-suite + per-engine counts, and the literal exit code. Anti-pattern guard attestation included (executor ran the suite itself; did not trust any prior SUMMARY; recorded fail=0 honestly rather than omitting it).
 
 ## Performance Metrics
 
@@ -81,6 +82,7 @@ Progress: [██████████] 4/6 phases code-complete — 18/22 pl
 | Phase 04 P08 | 13min | 1 tasks | 4 files |
 | Phase 04 P09 | 40min | 2 tasks | 6 files |
 | Phase 04 P10 | 18min | 1 tasks | 3 files |
+| Phase 04 P11 | 18min | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -149,6 +151,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 04]: Plan 04-09: queryBlocks switched to [data-block-index] to fix double-counting; M shortcut moved to ArticleView global listener; commitTurn synchronous ref update — Plan 04-09: queryBlocks switched to [data-block-index] to fix double-counting; M shortcut moved to ArticleView global listener; commitTurn synchronous ref update
 - [Phase ?]: Phase 04-10: Banner auto-dismiss race fixed via pointerdown inside-banner guard + scroll-dismiss debounce (300ms)
 - [Phase ?]: Phase 04-10: DEV-only __lemDiagnosticBus hook — firefox never detects oversize; decouples PAGE-09 banner test from measurement cross-engine consistency
+- [Phase 04]: Plan 04-11: PROCESS BLOCKER closed by re-running the suite — full `npm run test` exit 0 (753 passed / 0 failed / 0 skipped); the "269/0" misreport pattern (reality 76 failed / 269 passed) is overturned. 04-VERIFICATION.md upgraded gaps_found (3/7) → verified (7/7); all 6 gaps closed by 04-07/08/09/10. Anti-pattern guard: executor ran the suite itself, recorded fail=0 honestly rather than omitting it (04-11-OUTPUT.md is the permanent record).
 
 ### Pending Todos
 
@@ -161,7 +164,7 @@ None yet.
 - [Phase 4 → deferred → folded into 04-06]: persistence.spec.ts STATE-01 location-restore tests fail pre-existing since 04-02/04-03 (paginated default + paginated-surface geometry prevents window scroll). Now tracked under Plan 04-06 Task 5 (test-only fix: seed readingMode "scrolling").
 - [Phase 5]: Offset units, grapheme handling, overlap semantics, and anchor confidence thresholds need explicit decisions.
 - [Phase 6]: Concrete browser/OS/screen-reader support combinations and manual protocol remain to be selected.
-- [Phase 4 → resolved by 04-06]: Plan 04-05 corpus matrix blocker RESOLVED. PAGE-03 closed. Plan 04-05 Task 3 manual human-verify gate unblocked.
+- [Phase 4 → RESOLVED by 04-07/04-08/04-09/04-10/04-11]: gsd-verifier caught 76 hidden e2e failures misreported as "269 passed / 0 failed" across every Phase 4 SUMMARY + STATE + ROADMAP + REQUIREMENTS + the Plan 04-05 Task 3 gate-approval commit. Reality was 76 failed / 269 passed. Gap-closure plans 04-07 (PAGE-03b overflow guard), 04-08 (PAGE-06/07 always-mounted ArticleBody), 04-09 (PAGE-01/02 M-toggle + keyboard/chevron), 04-10 (PAGE-09 banner race) closed all 6 structural gaps. Plan 04-11 re-ran the FULL `npm run test` suite end-to-end: 753 passed / 0 failed / 0 skipped, exit 0. 04-VERIFICATION.md upgraded gaps_found (3/7) → verified (7/7). The Plan 04-05 Task 3 human-verify gate now has a genuinely-green automated prerequisite.
 
 ## Deferred Items
 
@@ -171,6 +174,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-08-06T22:17:32.654Z
-Stopped at: Completed 04-09-PLAN.md (PAGE-01 M-toggle round-trip + PAGE-02 keyboard/chevron)
+Last session: 2026-08-06T22:24:05Z
+Stopped at: Completed 04-11-PLAN.md — PROCESS BLOCKER closed (full npm run test exit 0, 753 passed / 0 failed / 0 skipped; 04-VERIFICATION.md → verified 7/7)
 Resume file: None

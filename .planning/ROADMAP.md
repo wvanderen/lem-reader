@@ -9,7 +9,7 @@ Lem Reader reaches its MVP through six vertical slices that keep a usable semant
 - [x] **Phase 1: Canonical Article Foundation** - Readers can open a representative saved corpus whose rich structure and stable logical coordinates are explicit and verifiable. (completed 2026-07-28)
 - [x] **Phase 2: Accessible Scrolling Reader** - Readers have a calm, adaptable scrolling experience with predictable interaction and recoverable local preferences and location. (completed 2026-08-04)
 - [x] **Phase 3: Trustworthy Layout Measurement** - Readers retain a usable view while responsive layout work is calibrated, current, and safe against font and asset changes. (completed 2026-08-05)
-- [ ] **Phase 4: Responsive Pagination and Dual-Mode Navigation** - Readers can navigate complete, stable pages or return to scrolling without losing their passage. *(PHASE_NEEDS_WORK — gsd-verifier caught 76 hidden e2e failures: PAGE-03 silent clipping (BLOCKER), PAGE-01/02/09 broken, Phase 3 PAGE-06/07 regressed. All 6 plans executed but the phase goal is NOT met. Routing to /gsd-plan-phase --gaps.)* (in progress 2026-08-06)
+- [ ] **Phase 4: Responsive Pagination and Dual-Mode Navigation** - Readers can navigate complete, stable pages or return to scrolling without losing their passage. *(VERIFIED 2026-08-06T22:24:05Z — Plan 04-11 ran the full `npm run test` suite end-to-end: 753 passed / 0 failed / 0 skipped, exit 0. The prior "269/0" misreport is overturned; all 6 verifier-found gaps closed by 04-07/08/09/10. 04-VERIFICATION.md upgraded gaps_found (3/7) → verified (7/7).)* (in progress 2026-08-06)
 - [ ] **Phase 5: Durable Highlights and Notes** - Readers can create and manage local annotations that remain attached to canonical passages across every view change.
 - [ ] **Phase 6: Prototype Acceptance** - Readers can complete the full reading and annotation flow across the supported browser and accessibility conditions within explicit performance budgets.
 
@@ -118,7 +118,7 @@ Plans:
   4. Reader remains anchored through viewport, typography, font, and supported asset changes while a previous valid view remains available during repagination.
   5. Oversized or unsupported content produces an understandable diagnostic and a usable scrolling fallback at the same passage.
 
-**Plans:** 10/11 plans executed
+**Plans:** 11/11 plans executed
 Plans:
 **Wave 1**
 
@@ -147,7 +147,7 @@ Plans:
 - [x] 04-08-PLAN.md — Wave 6 (parallel): Phase 3 PAGE-06 + PAGE-07 cross-phase regression fix — partial-DOM defense + epoch guard interaction in src/measurement/engine.ts corrected so re-measurement preserves article DOM content AND commits the final valid constraints. 6 cells green.
 - [x] 04-09-PLAN.md — Wave 7: PAGE-01 M-toggle round-trip + PAGE-02 keyboard bundle + chevron boundary — M shortcut registered globally in both modes; synchronous ref update in commitTurn; aria-disabled reflection at boundaries. 9 cells green.
 - [x] 04-10-PLAN.md — Wave 8: PAGE-09 banner auto-dismiss race — banner stays mounted through reader's click; UI-SPEC verbatim copy + T-04-15 + re-trigger semantics preserved. 9 cells green.
-- [ ] 04-11-PLAN.md — Wave 9: PROCESS BLOCKER — full `npm run test` end-to-end with honest pass + fail counts; overturns the "269/0" misreporting pattern; refuses to mark green until exit 0.
+- [x] 04-11-PLAN.md — Wave 9: PROCESS BLOCKER closed — full `npm run test` run end-to-end by the executor (no subset, no --grep, no engine skip): **753 passed (408 unit + 345 e2e × chromium/firefox/webkit) / 0 failed / 0 skipped, exit 0**. Overturns the "269/0" misreporting pattern. 04-VERIFICATION.md upgraded gaps_found (3/7) → verified (7/7); all 6 prior gaps marked closed (04-11-OUTPUT.md is the permanent record).
 
 **UI hint:** yes
 
