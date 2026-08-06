@@ -18,25 +18,39 @@
 import type { Block, CanonicalArticle } from "../types";
 import { InlineList } from "./InlineRenderer";
 
-export function BlockView({ block }: { block: Block }) {
+/**
+ * Optional data-* attributes forwarded to the rendered element. ArticleBody
+ * passes `data-block-index` per top-level block (Plan 04-06) so the measurement
+ * phase + pagination engine share a 1:1 block↔element mapping. Recursive
+ * BlockView calls inside containers omit these props — only the top-level map
+ * emits them. React does NOT auto-forward arbitrary props from a function
+ * component to the underlying DOM intrinsic, so we destructure + spread.
+ */
+type BlockViewProps = {
+  block: Block;
+} & {
+  [K in `data-${string}`]?: string | number | undefined;
+};
+
+export function BlockView({ block, ...rest }: BlockViewProps) {
   switch (block.kind) {
     case "heading": {
       const Tag = `h${block.level}` as "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
       return (
-        <Tag>
+        <Tag {...rest}>
           <InlineList runs={block.content} />
         </Tag>
       );
     }
     case "paragraph":
       return (
-        <p>
+        <p {...rest}>
           <InlineList runs={block.content} />
         </p>
       );
     case "blockquote":
       return (
-        <blockquote>
+        <blockquote {...rest}>
           {block.children.map((child, i) => (
             <BlockView key={i} block={child} />
           ))}
@@ -44,7 +58,7 @@ export function BlockView({ block }: { block: Block }) {
       );
     case "bulleted-list":
       return (
-        <ul>
+        <ul {...rest}>
           {block.items.map((item, i) => (
             <li key={i}>
               {item.content.map((c, j) => (
@@ -56,7 +70,7 @@ export function BlockView({ block }: { block: Block }) {
       );
     case "numbered-list":
       return (
-        <ol start={block.start}>
+        <ol {...rest} start={block.start}>
           {block.items.map((item, i) => (
             <li key={i}>
               {item.content.map((c, j) => (
@@ -68,7 +82,7 @@ export function BlockView({ block }: { block: Block }) {
       );
     case "figure":
       return (
-        <figure>
+        <figure {...rest}>
           <img src={block.src} alt={block.alt} />
           {block.caption.length > 0 && (
             <figcaption>
@@ -80,7 +94,7 @@ export function BlockView({ block }: { block: Block }) {
     case "code-block":
       // NEVER inject raw HTML (Pitfall 6); React escapes source text.
       return (
-        <pre>
+        <pre {...rest}>
           <code>{block.source}</code>
         </pre>
       );
@@ -90,7 +104,7 @@ export function BlockView({ block }: { block: Block }) {
       // (Pitfall 4 fix — DO NOT set the anchor id to block.footnoteId).
       const n = block.footnoteId.replace(/^fn-/, "");
       return (
-        <sup>
+        <sup {...rest}>
           <a id={`fn-ref-${n}`} href={`#fn-${n}`}>
             {block.marker}
           </a>
@@ -102,7 +116,7 @@ export function BlockView({ block }: { block: Block }) {
       // Native <details> is keyboard-accessible + screen-reader-compatible by
       // default. Summary microcopy is verbatim from UI-SPEC §Copywriting.
       return (
-        <details className="disclosure">
+        <details {...rest} className="disclosure">
           <summary>Some content from the original article isn't supported yet.</summary>
           <ul>
             <li>{block.plainDescription}</li>
@@ -116,7 +130,14 @@ export function ArticleBody({ article }: { article: CanonicalArticle }) {
   return (
     <>
       {article.blocks.map((block, i) => (
-        <BlockView key={i} block={block} />
+        // data-block-index establishes the 1:1 top-level block↔element mapping
+        // the measurement phase + pagination engine share (Plan 04-06). It is
+        // emitted ONLY here at the top-level ArticleBody map — recursive
+        // <BlockView> calls inside the blockquote/list renderers do NOT carry
+        // it (container interiors are not article.blocks entries). The
+        // attribute is presentation-only (a numeric array index); React
+        // serializes the number to a string attribute value.
+        <BlockView key={i} block={block} data-block-index={i} />
       ))}
       {article.footnotes.length > 0 && (
         <section aria-label="Footnotes">
