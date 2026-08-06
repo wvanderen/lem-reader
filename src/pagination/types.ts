@@ -97,9 +97,15 @@ export interface LineBox {
 // ── SplitDecision: per-kind fragmentation classification (D4-02) ────────────
 // splitBlock.ts classifies each BlockKind via an exhaustive switch (Pattern F,
 // no default — TS flags missing cases). Atomic kinds NEVER split (move whole
-// to the next page if they do not fit); splitting kinds carry the resolved
-// split offset when the page boundary falls inside them.
+// to the next page if they do not fit); splitting kinds MAY split when the
+// page boundary falls inside them.
+//
+// This is the CLASSIFICATION only — kind → atomic-vs-split. The resolved
+// split offset (the actual grapheme boundary) is computed by the orchestrator
+// (src/pagination/fragment.ts) using line boxes + widow rules, NOT by the
+// classifier. Keeping the offset out of this type lets classifyBlock stay a
+// pure function of block.kind (no page geometry or DOM dependency).
 
 export type SplitDecision =
   | { kind: "atomic" }
-  | { kind: "split"; splitAtGrapheme: number };
+  | { kind: "split" };
