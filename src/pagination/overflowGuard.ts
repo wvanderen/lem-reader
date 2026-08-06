@@ -212,6 +212,24 @@ export function refragmentOverflowingPage(
   const clampedSplit = Math.max(0, Math.min(sliceSplitGrapheme, sliceLen));
   const blockLevelSplit = offendingEntry.startGrapheme + clampedSplit;
 
+  // Defensive (Rule 1 — empty-slice guard): if the chosen split lands at the
+  // slice boundary (clampedSplit === 0 or === sliceLen), the resulting before-
+  // or after-slice would be empty — violating PAGE-03a exactly-once coverage.
+  // This can happen when the live DOM textContent disagrees with the entry's
+  // startGrapheme/endGrapheme range (e.g., when the slice was JUST emitted by
+  // a prior refragmentation pass and React hasn't re-rendered the sliced
+  // block yet, OR when the block has multi-byte UTF-16 chars whose grapheme
+  // vs UTF-16 lengths diverge from the line-box walk's coordinate). Treat as
+  // "cannot find a widow-legal split" and fall back to moving the whole block
+  // to the next page (or emit dom-fallback if it can't fit alone).
+  if (clampedSplit === 0 || clampedSplit === sliceLen) {
+    if (entriesBefore.length === 0 || offendingHeight > pageBox + tolerance) {
+      emitFallback(opts.diagnostics);
+      return [];
+    }
+    return splitPageAtChild(opts.pages, opts.overflowingPageIndex, entriesBefore, entriesFromOffending);
+  }
+
   const newCurrentBlocks = [
     ...entriesBefore,
     {

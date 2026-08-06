@@ -50,6 +50,7 @@ import type { MeasurementResult } from "../measurement/types";
 import type { DiagnosticBus } from "../measurement/diagnostics";
 import type { PageFragment } from "../pagination/types";
 import { paginateDocument } from "../pagination/fragment";
+import { refragmentOverflowingPage } from "../pagination/overflowGuard";
 import { fragmentContainingOffset, pageStartGlobalOffset } from "../pagination/anchor";
 import { splittingGraphemeLength } from "../pagination/splitBlock";
 import { PageFragmentView } from "../pagination/fragmentRenderer";
@@ -88,6 +89,14 @@ export interface PaginatedSurfaceProps {
    */
   onAnchorChange?: (offset: number) => void;
 }
+
+/**
+ * TOLERANCE_PX for the post-render overflow guard (Plan 04-07). Mirrors the
+ * no-overflow e2e's 2px slack (sub-pixel rounding between engine measurement
+ * and scrollHeight). A real fragmentation overflow is tens of pixels; this
+ * tolerance keeps the guard from thrashing on sub-pixel drift.
+ */
+const TOLERANCE_PX = 2;
 
 /**
  * Imperative handle exposed via forwardRef. PageTurnControls (keyboard + swipe
@@ -254,6 +263,127 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
         controller.abort();
       };
     }, [article, trustedView, articleEl, pageContentBoxHeightPx, diagnostics]);
+
+    // Post-render overflow guard (Plan 04-07 — PAGE-03b fix). After every page
+    // commit AND every turn, measure the mounted .page-fragment's scrollHeight
+    // against the article's clientHeight. If it overflows by more than
+    // TOLERANCE_PX, call refragmentOverflowingPage (the pure module from Task 1)
+    // to produce a corrected PageFragment[] and setPages(corrected). The
+    // pre-capture pagination effect above stays as the FIRST pass; this is the
+    // SECOND (post-render correction) pass that STACK.md mandates ("per-kind
+    // measurement + a post-render overflow guard" per AGENTS.md §Stack Patterns
+    // by Variant).
+    //
+    // Why this guard exists: Plan 04-06's pre-captured LineBox[][] approach
+    // measures line boxes against the full ArticleBody in SCROLLING geometry.
+    // Those heights do not predict rendered page-fragment heights inside
+    // .paginated-surface (paginated geometry, overflow:hidden). Pages overflow
+    // their content-box by 4–82px → silent clipping. The guard reads LIVE DOM
+    // truth and corrects overflows against the actual rendered heights.
+    //
+    // Iteration: each setPages triggers a re-fire (deps include `pages`); on
+    // the next pass the corrected page is measured again. If it still
+    // overflows (the new next page also overflowed, or a sibling block needs
+    // to move further down), the guard refragments again. Each iteration adds
+    // exactly one page and strictly reduces the overflowing page's source
+    // range, so termination is provable; PAGE_CEILING (300) bounds the loop.
+    //
+    // Anchor discipline (Pitfall 7 — capture-before-swap): capture the current
+    // page's article-global offset BEFORE setPages; re-anchor via
+    // fragmentContainingOffset on the corrected pages. The reader stays at
+    // the same passage through the refragmentation.
+    useEffect(() => {
+      // Geometry not ready or no pages mounted — nothing to guard.
+      if (pageContentBoxHeightPx <= 0) return;
+      const currentPages = pagesRef.current;
+      const currentIdx = currentPageIdxRef.current;
+      if (!currentPages || currentPages.length === 0) return;
+      if (currentIdx < 0 || currentIdx >= currentPages.length) return;
+      const currentPage = currentPages[currentIdx];
+      if (!currentPage) return;
+
+      const currentArticle = articleRef.current;
+      let cancelled = false;
+      const controller = new AbortController();
+
+      // rAF-deferred: the browser must finish layout for the just-committed
+      // page fragment before we can trust fragment.scrollHeight. React commits
+      // synchronously; layout happens in the next animation frame.
+      const rafId = requestAnimationFrame(() => {
+        if (cancelled || controller.signal.aborted) return;
+
+        const fragmentEl = articleEl.querySelector(
+          ".page-fragment",
+        ) as HTMLElement | null;
+        if (!fragmentEl) return;
+
+        const fragmentScrollHeight = fragmentEl.scrollHeight;
+        const articleClientHeight = articleEl.clientHeight;
+        // No overflow — pass-through.
+        if (fragmentScrollHeight <= articleClientHeight + TOLERANCE_PX) return;
+
+        // Capture the anchor BEFORE setPages (Pitfall 7).
+        const anchorOffset = pageStartGlobalOffset(currentArticle, currentPage);
+
+        const result = refragmentOverflowingPage({
+          article: currentArticle,
+          pages: currentPages,
+          overflowingPageIndex: currentIdx,
+          fragmentEl,
+          pageContentBoxHeightPx: articleClientHeight,
+          tolerance: TOLERANCE_PX,
+          diagnostics,
+          signal: controller.signal,
+        });
+
+        if (cancelled || controller.signal.aborted) return;
+        if (result === null) return; // guard detected no overflow (race)
+        if (result.length === 0) {
+          // dom-fallback emitted by the guard. ArticleView's DiagnosticBus
+          // subscription flips the session-mode override to scrolling + shows
+          // the banner (the existing PAGE-04/PAGE-09 fallback path). Leave
+          // pages state as-is; PaginatedSurface stays mounted briefly until
+          // ArticleView unmounts it on the mode flip.
+          return;
+        }
+
+        // Corrected pages: commit + re-anchor to the same passage.
+        const nextIdx = fragmentContainingOffset(
+          result,
+          anchorOffset,
+          currentArticle,
+        );
+        setPages(result);
+        setCurrentPageIdx(nextIdx);
+
+        // Update the DEV-only window.__lemPagination helper so the no-overflow
+        // e2e sees the corrected pagesLength + currentPageIdx between turns
+        // (T-04-16: gated behind import.meta.env.DEV; production unaffected).
+        if (import.meta.env.DEV) {
+          const dev = (
+            window as unknown as Record<string, unknown>
+          ).__lemPagination as
+            | {
+                pages: PageFragment[] | null;
+                currentPageIdx: number;
+                status: string;
+                pagesLength: number;
+              }
+            | undefined;
+          if (dev) {
+            dev.pages = result;
+            dev.currentPageIdx = nextIdx;
+            dev.pagesLength = result.length;
+          }
+        }
+      });
+
+      return () => {
+        cancelled = true;
+        controller.abort();
+        cancelAnimationFrame(rafId);
+      };
+    }, [pages, currentPageIdx, pageContentBoxHeightPx, article, articleEl, diagnostics]);
 
     // Report the current anchor offset whenever the page changes so the
     // parent can capture it synchronously before a future mode swap.

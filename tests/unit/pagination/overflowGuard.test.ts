@@ -673,6 +673,124 @@ describe("refragmentOverflowingPage — PAGE-03 invariants preserved", () => {
       .map((b) => `${b.blockIndex}:${b.startGrapheme}-${b.endGrapheme}`);
     expect(resultEntries).toEqual(originalEntries);
   });
+
+  it("never produces an empty slice when the chosen split lands at the slice boundary (defensive guard)", () => {
+    // Simulate a coordinate mismatch: entry says endGrapheme=10 but the live
+    // DOM reports the full 50 chars (e.g. React hasn't re-rendered the sliced
+    // block yet, OR the block has multi-byte UTF-16 chars whose grapheme vs
+    // UTF-16 lengths diverge from the line-box walk's coordinate).
+    //
+    // chooseLargestWidowLegalSplit walks k from 4 down. For k=3 (adjusted=3),
+    // charOffset=30 → sliceSplitGrapheme=30. sliceLen=10. clampedSplit=10
+    // =sliceLen → defensive guard triggers. entriesBefore.length===0 AND
+    // offendingHeight(250) > pageBox(60)+tolerance(2)=62 → emit fallback.
+    // This is the correct behavior: the block alone is too tall to fit on a
+    // fresh page, so refragmentation cannot resolve → dom-fallback.
+    const article = articleWithParagraphs([
+      "01234567890123456789012345678901234567890123456789",
+      "next",
+    ]);
+    const pages: PageFragment[] = [
+      {
+        schemaVersion: 1,
+        pageIndex: 0,
+        blocks: [
+          { blockIndex: 0, startGrapheme: 0, endGrapheme: 10 },
+          { blockIndex: 1, startGrapheme: 0, endGrapheme: 4 },
+        ],
+      },
+    ];
+    const fragmentEl = makeFragmentEl([
+      {
+        blockIndex: 0,
+        top: 0,
+        bottom: 250,
+        text: "01234567890123456789012345678901234567890123456789",
+      },
+      { blockIndex: 1, top: 250, bottom: 270, text: "next" },
+    ]);
+    readLineBoxesMock.mockReturnValue(uniformLineBoxes(50, 10, 20));
+
+    const { bus, events } = trackingBus();
+    const result = refragmentOverflowingPage({
+      article,
+      pages,
+      overflowingPageIndex: 0,
+      fragmentEl,
+      pageContentBoxHeightPx: 60,
+      tolerance: 2,
+      diagnostics: bus,
+      signal: freshSignal(),
+    });
+
+    // Defensive guard triggered: no correction possible (block alone too
+    // tall). Emit fallback so PAGE-03a coverage invariant is NOT violated
+    // by an empty slice.
+    expect(result).toEqual([]);
+    expect(events.filter((e) => e.kind === "dom-fallback")).toHaveLength(1);
+  });
+
+  it("defensive guard moves block whole to next page when entriesBefore is non-empty", () => {
+    // Same coordinate mismatch as above, but with a leading block that fits.
+    // entriesBefore.length > 0 → defensive guard moves the offending block
+    // whole to the next page (no fallback emission).
+    const article = articleWithParagraphs([
+      "lead",
+      "01234567890123456789012345678901234567890123456789",
+    ]);
+    const pages: PageFragment[] = [
+      {
+        schemaVersion: 1,
+        pageIndex: 0,
+        blocks: [
+          { blockIndex: 0, startGrapheme: 0, endGrapheme: 4 },
+          { blockIndex: 1, startGrapheme: 0, endGrapheme: 10 },
+        ],
+      },
+    ];
+    const fragmentEl = makeFragmentEl([
+      { blockIndex: 0, top: 0, bottom: 30, text: "lead" },
+      {
+        blockIndex: 1,
+        top: 30,
+        bottom: 80,
+        height: 50,
+        text: "01234567890123456789012345678901234567890123456789",
+      },
+    ]);
+    readLineBoxesMock.mockReturnValue(uniformLineBoxes(50, 10, 20));
+
+    const { bus, events } = trackingBus();
+    const result = refragmentOverflowingPage({
+      article,
+      pages,
+      overflowingPageIndex: 0,
+      fragmentEl,
+      pageContentBoxHeightPx: 60,
+      tolerance: 2,
+      diagnostics: bus,
+      signal: freshSignal(),
+    });
+
+    expect(result).not.toBeNull();
+    expect(events).toEqual([]); // no fallback — moved whole
+    // Verify NO empty slices.
+    for (const page of result!) {
+      for (const entry of page.blocks) {
+        expect(entry.endGrapheme, "no empty slices").toBeGreaterThan(
+          entry.startGrapheme,
+        );
+      }
+    }
+    // 2 pages: lead block on P0, offending block whole on P1.
+    expect(result!).toHaveLength(2);
+    expect(result![0]!.blocks).toEqual([
+      { blockIndex: 0, startGrapheme: 0, endGrapheme: 4 },
+    ]);
+    expect(result![1]!.blocks).toEqual([
+      { blockIndex: 1, startGrapheme: 0, endGrapheme: 10 },
+    ]);
+  });
 });
 
 // Helper to set mock return value with reset safety.
