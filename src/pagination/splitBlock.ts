@@ -30,7 +30,10 @@
 import type { BlockKind } from "../measurement/engine";
 import type { Block, InlineRun } from "../content/types";
 import type { SplitDecision } from "./types";
-import { graphemeClusters } from "../content/normalizeText";
+import {
+  BLOCK_SEPARATOR,
+  graphemeClusters,
+} from "../content/normalizeText";
 
 // Compile-time guarantee: Block.kind literals match BlockKind exactly. If
 // either union drifts (a kind added to one but not the other), this line
@@ -43,6 +46,65 @@ type _AssertBlockKindMatchesCanonical = Block["kind"] extends BlockKind
   : never;
 const _blockKindAssertion: _AssertBlockKindMatchesCanonical = true;
 void _blockKindAssertion;
+
+/**
+ * Compute a splitting-kind block's intra-block text in the renderer's
+ * coordinate system (Plan 04-06 Task 3).
+ *
+ * This is the source-of-truth text the pagination engine + the fragment
+ * renderer share:
+ *   - paragraphs/headings → concatenated run texts WITHOUT separators
+ *     (matches DOM textContent for clean ASCII where adjacent runs are
+ *     whitespace-separated in source HTML)
+ *   - blockquote → recursive child texts joined by BLOCK_SEPARATOR
+ *   - bulleted-list / numbered-list → per-item content texts joined by
+ *     BLOCK_SEPARATOR, items joined by BLOCK_SEPARATOR
+ *   - figure → alt + caption text joined by BLOCK_SEPARATOR (no separators
+ *     inside an inline-run caption)
+ *   - code-block → block.source (verbatim)
+ *   - footnote-reference → block.marker
+ *   - unsupported → block.plainDescription
+ *
+ * The grapheme length of this text equals what the renderer's (private)
+ * `splittingBlockGraphemeLength` computes for whole-vs-subrange detection.
+ * Keeping the engine + renderer on the SAME text coordinate prevents
+ * Pitfall 3 normalization drift between split math (engine) and slicing
+ * math (renderer).
+ *
+ * NOTE: this is NOT the D-05 substrate text (normalizeText uses
+ * `inlineText` which joins runs with " "). The D-05 substrate is for
+ * persisted locations/annotations; the pagination-engine coordinate is a
+ * SEPARATE, internal-only coordinate that must round-trip through the
+ * renderer's slicing helpers. Persisting engine offsets directly would
+ * corrupt saved locations — PAGE-03 offsets are ephemeral.
+ */
+export function splittingBlockText(block: Block): string {
+  switch (block.kind) {
+    case "heading":
+    case "paragraph":
+      // Concatenated run texts WITHOUT separators — matches the renderer's
+      // per-run grapheme summing (splitParagraphRuns walks runs without
+      // inserting separators) AND aligns with DOM textContent for ASCII.
+      return block.content.map((r) => r.text).join("");
+    case "blockquote":
+      return block.children.map(splittingBlockText).join(BLOCK_SEPARATOR);
+    case "bulleted-list":
+    case "numbered-list":
+      return block.items
+        .map((item) => item.content.map(splittingBlockText).join(BLOCK_SEPARATOR))
+        .join(BLOCK_SEPARATOR);
+    case "figure": {
+      const captionText = block.caption.map((r) => r.text).join("");
+      return [block.alt, captionText].filter(Boolean).join(BLOCK_SEPARATOR);
+    }
+    case "code-block":
+      return block.source;
+    case "footnote-reference":
+      return block.marker;
+    case "unsupported":
+      return block.plainDescription;
+  }
+}
 
 /**
  * Classify a block as atomic or splitting per D4-02.

@@ -31,9 +31,11 @@
 // result.
 //
 // Pitfall 2 (layout thrash): every Range.getClientRects() read happens in
-// ONE batched pass over querySelectorAll's result, BEFORE any page-fragment
-// construction. The returned FragmentationResult is a pure value; the
-// caller decides the React state commit.
+// the MEASUREMENT phase (single batched pass over [data-block-index]
+// elements, before any page construction). The engine consumes the
+// resulting LineBox[][] via opts.measurement; it performs no DOM reads of
+// its own. The returned FragmentationResult is a pure value; the caller
+// decides the React state commit.
 //
 // Pitfall 6 (no Pretext): split points come ONLY from DOM
 // Range.getClientRects() line boxes mapped to D-05 grapheme offsets. The
@@ -52,25 +54,9 @@ import type { DiagnosticBus } from "../measurement/diagnostics";
 import type { LineBox, PageFragment, FragmentationResult } from "./types";
 import { AbortError } from "../measurement/fontGate";
 import { graphemeClusters } from "../content/normalizeText";
-import {
-  readLineBoxes,
-  blockNormalizedText,
-  charOffsetToGrapheme,
-} from "./lineBoxes";
-import { classifyBlock } from "./splitBlock";
+import { charOffsetToGrapheme } from "./lineBoxes";
+import { classifyBlock, splittingBlockText } from "./splitBlock";
 import { applyLineWidowOrphan, SPLIT_WIDOW_LINES } from "./widowRules";
-
-/**
- * The canonical block selector reused verbatim from 5 prior sites — DO NOT
- * fork a 6th variant. Selector drift between measurement/restore/pagination
- * would read different elements and shift every split point.
- *   - src/measurement/domMeasurer.ts:34
- *   - src/measurement/engine.ts:304
- *   - src/reader/useScrollSave.ts:99
- *   - src/routes/ArticleView.tsx:54
- *   - src/pagination/lineBoxes.ts (comment-only)
- */
-const BLOCK_SELECTOR = "h2, h3, h4, p, blockquote, li, pre, figure, sup, details";
 
 /**
  * PAGE-04 termination guard 1: an atomic block whose measured height
@@ -105,10 +91,14 @@ class PaginateFallback extends Error {
 export interface PaginateOptions {
   /** The article being paginated (article.blocks is walked in canonical order). */
   article: CanonicalArticle;
-  /** Phase 3's trusted per-element measurement (heightPx + lineCount per block). */
+  /**
+   * Phase 3's trusted per-block measurement (heightPx + lineCount + lineBoxes
+   * per top-level block). Plan 04-06: lineBoxes is pre-captured during the
+   * measurement DOM walk — the engine consumes them directly and does NOT
+   * re-read live DOM (PaginatedSurface replaces the full ArticleBody before
+   * the engine runs — pre-capture is the only source).
+   */
   measurement: MeasurementResult;
-  /** The rendered <article> element; queried via BLOCK_SELECTOR for line boxes. */
-  articleEl: HTMLElement;
   /** The current page content-box height in CSS pixels (from getBoundingClientRect). */
   pageContentBoxHeightPx: number;
   /** Diagnostic bus for dom-fallback emissions (Phase 4 PAGE-09 surfaces them). */
@@ -141,9 +131,10 @@ interface SplitPlan {
  * split slice. The result's pages[] cover [0, graphemeLength(article))
  * exactly once in canonical order on success.
  *
- * The function is pure: it reads DOM geometry via articleEl but produces
- * only a value (FragmentationResult). The caller commits the result to
- * React state — never persist derived page boundaries (STACK.md).
+ * The function is pure: it consumes pre-captured line boxes from
+ * `opts.measurement.blocks[i].lineBoxes` (Plan 04-06) — it reads no live
+ * DOM. The caller commits the result to React state — never persist derived
+ * page boundaries (STACK.md).
  *
  * @throws AbortError if `signal` is or becomes aborted (silent cancel; the
  *   caller's catch path treats AbortError as "newer pass supersedes me").
@@ -158,52 +149,24 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
   const diagnostics = opts.diagnostics;
   const signal = opts.signal;
 
-  // Single DOM read-phase (Pitfall 2): querySelectorAll up front + every
-  // Range.getClientRects() walk before any page construction. The result
-  // is a parallel array of per-element LineBox[] the walk below consumes.
-  const elements = Array.from(
-    opts.articleEl.querySelectorAll<HTMLElement>(BLOCK_SELECTOR),
+  // Plan 04-06: line boxes come PRE-CAPTURED in measurement.blocks[i].lineBoxes.
+  // The engine no longer queries articleEl — PaginatedSurface replaces the
+  // full ArticleBody with a single page fragment BEFORE the engine runs, so
+  // articleEl has no full body to walk. The measurement phase (which runs
+  // earlier, against the full ArticleBody) is the sole source of truth.
+  //
+  // Per-block normalized text + grapheme lengths derive from article.blocks
+  // via splittingBlockText (renderer-aligned coordinate — Pitfall 3, no
+  // normalization fork). For paragraphs/headings this matches DOM textContent
+  // for clean ASCII; for containers it inserts BLOCK_SEPARATORs between
+  // children (matching the renderer's recursive slicing coordinate).
+  const blockLineBoxes: LineBox[][] = opts.measurement.blocks.map(
+    (b) => b.lineBoxes,
   );
-
-  // MVP scope: the engine assumes a 1:1 mapping between article.blocks
-  // and the rendered BLOCK_SELECTOR elements. This holds for top-level
-  // paragraph/heading/figure/code/footnote/unsupported blocks. Container
-  // blocks (blockquote + bulleted/numbered lists) render their inner
-  // children as additional selector matches, breaking the 1:1 mapping;
-  // until Plan 03's recursive fragment renderer lands, we fall back
-  // rather than emit wrong ranges. Plan 05's e2e matrix will exercise
-  // containers and confirm the recursive path.
-  if (elements.length !== articleBlocks.length) {
-    diagnostics.emit({ kind: "dom-fallback", ts: new Date().toISOString() });
-    return {
-      schemaVersion: 1,
-      status: "fallback",
-      pages: [],
-      reason: "block-element-mismatch",
-    };
-  }
-
-  // Per-element normalized text + grapheme length (reuses the D-05
-  // substrate — no parallel normalization, Pitfall 3). The per-element
-  // text is produced by blockNormalizedText, which delegates to
-  // normalizeElText (the exact per-block rule normalizeText applies).
-  const blockTexts: string[] = [];
-  const blockGraphemeLengths: number[] = [];
-  for (let i = 0; i < elements.length; i++) {
-    if (signal.aborted) throw new AbortError();
-    const text = blockNormalizedText(elements[i]!);
-    blockTexts.push(text);
-    blockGraphemeLengths.push(graphemeClusters(text, lang).length);
-  }
-
-  // Batched line-box read-phase: ONE readLineBoxes call per element, all
-  // before any page construction. Per-element AbortSignal check happens
-  // inside readLineBoxes.
-  const blockLineBoxes: LineBox[][] = [];
-  for (let i = 0; i < elements.length; i++) {
-    if (signal.aborted) throw new AbortError();
-    blockLineBoxes.push(readLineBoxes(elements[i]!, blockTexts[i]!, signal));
-  }
+  const blockTexts: string[] = articleBlocks.map((b) => splittingBlockText(b));
+  const blockGraphemeLengths: number[] = blockTexts.map((t) =>
+    graphemeClusters(t, lang).length,
+  );
 
   // Walk state.
   const pages: PageFragment[] = [];

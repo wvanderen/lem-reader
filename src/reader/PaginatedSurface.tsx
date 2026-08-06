@@ -175,10 +175,14 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
       const controller = new AbortController();
       let cancelled = false;
       try {
+        // Plan 04-06: paginateDocument consumes pre-captured line boxes via
+        // measurement.blocks[i].lineBoxes — no articleEl argument. The
+        // engine no longer queries live DOM (PaginatedSurface's articleEl
+        // contains the single mounted page fragment at this point, not the
+        // full ArticleBody the engine would need).
         const result = paginateDocument({
           article: currentArticle,
           measurement: trustedView,
-          articleEl,
           pageContentBoxHeightPx,
           diagnostics,
           signal: controller.signal,
