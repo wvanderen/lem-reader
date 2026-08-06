@@ -128,8 +128,13 @@ test.describe("PAGE-02 page-turn controls (04-05)", () => {
     expect(await currentPage(page), "Previous chevron retreats").toBe(0);
 
     // Next chevron is aria-disabled at last page.
+    // Plan 04-09: Playwright treats aria-disabled="true" as non-actionable
+    // (it won't click the button once the attribute is set). { force: true }
+    // bypasses the actionability check so the loop can run the full
+    // total + 5 iterations; commitTurn returns moved:false at the boundary
+    // so the extra clicks are harmless no-ops.
     for (let i = 0; i < total + 5; i++) {
-      await next.click().catch(() => {});
+      await next.click({ force: true }).catch(() => {});
     }
     await expect(next).toHaveAttribute("aria-disabled", "true");
 
