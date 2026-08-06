@@ -22,6 +22,7 @@ import {
   readLineBoxes,
 } from "../../../src/pagination/lineBoxes";
 import { graphemeClusters } from "../../../src/content/normalizeText";
+import { MeasurementResultSchema } from "../../../src/measurement/types";
 
 /**
  * Install a document.createRange stub that simulates `lineCharOffsets`:
@@ -242,5 +243,154 @@ describe("blockNormalizedText — D-05 per-block rule (no fork)", () => {
     el.textContent = "  a\n  b";
     el.dataset.kind = "code-block";
     expect(blockNormalizedText(el)).toBe("  a\n  b");
+  });
+});
+
+// ─── Plan 04-06 Task 2 additions ───────────────────────────────────────────
+// Container-element readLineBoxes (generalized to walk descendant text nodes)
+// + MeasurementResultSchema round-trip with lineBoxes (schemaVersion 2).
+
+describe("readLineBoxes — container blocks (Plan 04-06 generalization)", () => {
+  /**
+   * Build a stub container mirroring what BlockRenderer emits for a blockquote
+   * with two child paragraphs. The element has TWO descendant text nodes (one
+   * per <p>); the generalized readLineBoxes walks both in document order,
+   * accumulating a GLOBAL char offset into the block's normalized text.
+   */
+  function makeBlockquoteEl(first: string, second: string): HTMLElement {
+    const bq = document.createElement("blockquote");
+    const p1 = document.createElement("p");
+    p1.textContent = first;
+    const p2 = document.createElement("p");
+    p2.textContent = second;
+    bq.appendChild(p1);
+    bq.appendChild(p2);
+    return bq;
+  }
+
+  it("container with two child paragraphs yields LineBox[] with global offsets + monotonic topPx", () => {
+    // Two child paragraphs: "aaaa bbb" (8 chars) and "cccc dddd" (9 chars).
+    // blockNormalizedText(<blockquote>) flattens to "aaaa bbbcccc dddd"
+    // (textContent concatenation has no separator between adjacent <p>'s).
+    const first = "aaaa bbb";
+    const second = "cccc dddd";
+    const el = makeBlockquoteEl(first, second);
+    const fullText = blockNormalizedText(el);
+    // Simulate 4 line breaks across the concatenated text: lines start at
+    // global offsets 0, 5 (within first child), 9 (start of second child),
+    // 14 (within second child). The mock reports each line as 20px tall.
+    // offsets are into the GLOBAL concatenated text.
+    const restore = installRangeMock([0, 5, 9, 14]);
+    try {
+      const boxes = readLineBoxes(el, fullText, new AbortController().signal);
+      expect(boxes.length).toBe(4);
+      // Line 1 at offset 0.
+      expect(boxes[0]!.charOffset).toBe(0);
+      expect(boxes[0]!.topPx).toBe(0);
+      // Global offsets are monotonically non-decreasing across descendant
+      // text nodes (the second child's first line starts at offset 8 in
+      // the global text — the mock schedule places it at 9 to verify the
+      // accumulator advanced past the first child).
+      for (let i = 1; i < boxes.length; i++) {
+        expect(boxes[i]!.charOffset).toBeGreaterThan(boxes[i - 1]!.charOffset);
+        expect(boxes[i]!.topPx).toBeGreaterThan(boxes[i - 1]!.topPx);
+      }
+      // The last line's charOffset (14) is reachable as a grapheme ordinal
+      // over the concatenated text — this is the D-05 round-trip seam.
+      const lastGrapheme = charOffsetToGrapheme(
+        fullText,
+        boxes[boxes.length - 1]!.charOffset,
+        "en",
+      );
+      expect(lastGrapheme).toBeGreaterThan(0);
+      expect(lastGrapheme).toBeLessThanOrEqual(
+        graphemeClusters(fullText, "en").length,
+      );
+    } finally {
+      restore();
+    }
+  });
+
+  it("flat paragraph output is byte-identical to the pre-generalization shape (no regression)", () => {
+    // The 13 specs above already cover the flat-paragraph case; this spec
+    // pins the contract that generalizing readLineBoxes for containers does
+    // NOT change the flat-block output. Same input → same LineBox[].
+    const text = "aaaaaa bbbbbb ccccc";
+    const restore = installRangeMock([0, 7, 14]);
+    try {
+      const el = makeParagraphEl(text);
+      const boxes = readLineBoxes(el, text, new AbortController().signal);
+      expect(boxes).toHaveLength(3);
+      expect(boxes[0]!.charOffset).toBe(0);
+      expect(boxes[0]!.topPx).toBe(0);
+      expect(boxes[1]!.charOffset).toBe(7);
+      expect(boxes[1]!.topPx).toBe(20);
+      expect(boxes[2]!.charOffset).toBe(14);
+      expect(boxes[2]!.topPx).toBe(40);
+    } finally {
+      restore();
+    }
+  });
+});
+
+describe("MeasurementResultSchema — lineBoxes round-trip (Plan 04-06 schemaVersion 2)", () => {
+  it("parses a MeasurementResult with per-block lineBoxes (schemaVersion 2)", () => {
+    const result = {
+      schemaVersion: 2,
+      constraints: {
+        font: "serif",
+        size: 18,
+        measure: 64,
+        spacing: "comfortable",
+        viewportWidthPx: 800,
+        lang: "en",
+      },
+      blocks: [
+        {
+          kind: "paragraph",
+          heightPx: 60,
+          lineCount: 3,
+          lineBoxes: [
+            { charOffset: 0, topPx: 0, bottomPx: 20 },
+            { charOffset: 7, topPx: 20, bottomPx: 40 },
+            { charOffset: 14, topPx: 40, bottomPx: 60 },
+          ],
+        },
+        {
+          kind: "figure",
+          heightPx: 200,
+          lineCount: 1,
+          // Figure has no text — lineBoxes defaults to [] when absent.
+        },
+      ],
+      computedAt: "2026-08-06T17:00:00.000Z",
+    };
+    const parsed = MeasurementResultSchema.safeParse(result);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.schemaVersion).toBe(2);
+      expect(parsed.data.blocks).toHaveLength(2);
+      expect(parsed.data.blocks[0]!.lineBoxes).toHaveLength(3);
+      expect(parsed.data.blocks[0]!.lineBoxes[0]!.charOffset).toBe(0);
+      expect(parsed.data.blocks[1]!.lineBoxes).toEqual([]);
+    }
+  });
+
+  it("forward-rejects schemaVersion 3 (V5 boundary discipline preserved)", () => {
+    const result = {
+      schemaVersion: 3,
+      constraints: {
+        font: "serif",
+        size: 18,
+        measure: 64,
+        spacing: "comfortable",
+        viewportWidthPx: 800,
+        lang: "en",
+      },
+      blocks: [],
+      computedAt: "2026-08-06T17:00:00.000Z",
+    };
+    const parsed = MeasurementResultSchema.safeParse(result);
+    expect(parsed.success).toBe(false);
   });
 });
