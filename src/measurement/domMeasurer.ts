@@ -1,8 +1,16 @@
 // src/measurement/domMeasurer.ts
 // DOM-measurement strategy shared by every block kind in Plan 01 (Plan 02
 // adds the calibrated Pretext fast path for paragraph + heading kinds).
-// Reuses the EXACT block selector from src/reader/useScrollSave.ts L98–100
-// so domMeasurer reads what BlockRenderer emitted — no forked selector.
+//
+// Plan 04-06: measureAllBlocks now queries `[data-block-index]` (emitted by
+// BlockRenderer's ArticleBody top-level map) instead of the legacy flat
+// BLOCK_SELECTOR. This guarantees a 1:1 mapping between the returned elements
+// and article.blocks — container blocks (blockquote / lists) no longer
+// double-count their nested children. The same single pass captures both
+// height/lineCount AND per-block LineBox[] (Pitfall 2 — no second DOM walk),
+// so the pagination engine can consume pre-captured line boxes instead of
+// re-reading live DOM (PaginatedSurface replaces the full ArticleBody before
+// the engine runs — the pre-captured boxes are the only source).
 //
 // RESEARCH §State of the Art + §Common Pitfalls 2 (layout thrash):
 //   - Read FRACTIONAL pixels via getBoundingClientRect().height — integer
@@ -25,13 +33,7 @@
 
 import type { BlockMeasurement } from "./types";
 import { AbortError } from "./fontGate";
-
-/**
- * The exact block selector reused verbatim from useScrollSave L99 +
- * ArticleView L53. If this list ever drifts from those sites, save/restore/
- * measurement would read different elements — keep it byte-identical.
- */
-const BLOCK_SELECTOR = "h2, h3, h4, p, blockquote, li, pre, figure, sup, details";
+import { readLineBoxes, blockNormalizedText } from "../pagination/lineBoxes";
 
 /**
  * Map a rendered element's tag name to its measurement kind string. Mirrors
@@ -71,34 +73,50 @@ function kindForElement(el: HTMLElement): string {
 }
 
 /**
- * Measure every rendered block in a single read-phase. Returns fractional
- * heights + per-line counts. Aborts mid-pass (via AbortError) if `signal`
- * fires — the engine treats AbortError as a silent cancel.
+ * Measure every top-level rendered block in a single read-phase. Returns
+ * fractional heights + per-line counts + per-block LineBox[] (Plan 04-06).
+ * Aborts mid-pass (via AbortError) if `signal` fires — the engine treats
+ * AbortError as a silent cancel.
+ *
+ * Plan 04-06: queries `[data-block-index]` (1:1 with article.blocks by
+ * BlockRenderer construction) instead of the legacy flat BLOCK_SELECTOR.
+ * Container blocks (blockquote / lists) used to double-count their nested
+ * children under BLOCK_SELECTOR, breaking the engine's 1:1 contract — the
+ * attribute selector eliminates that mismatch by construction.
  *
  * @param articleEl The rendered <article> element (from ArticleView's
- *   callback-ref seam).
- * @param signal The current epoch's AbortSignal; checked between blocks so
- *   a newer trigger cancels a long measurement.
+ *   callback-ref seam). Must contain top-level blocks emitted by ArticleBody
+ *   (each carrying data-block-index).
+ * @param signal The current epoch's AbortSignal; checked between blocks AND
+ *   between text-node iterations inside readLineBoxes so a newer trigger
+ *   cancels a long measurement.
  */
 export function measureAllBlocks(
   articleEl: HTMLElement,
   signal: AbortSignal,
 ): BlockMeasurement[] {
   // queryBlocks — single DOM read at pass start (Pitfall 2: batch reads).
+  // [data-block-index] is 1:1 with article.blocks by BlockRenderer contract.
   const elements = Array.from(
-    articleEl.querySelectorAll<HTMLElement>(BLOCK_SELECTOR),
+    articleEl.querySelectorAll<HTMLElement>("[data-block-index]"),
   );
   const out: BlockMeasurement[] = [];
   for (const el of elements) {
     if (signal.aborted) throw new AbortError();
     // Per-block: read rect (fractional height) + line boxes (DOMRect count)
-    // in tight succession, no interleaved writes (Pitfall 2 read-phase).
+    // AND capture LineBox[] in ONE tight read-phase loop (Pitfall 2 — no
+    // second walk). readLineBoxes itself walks descendant text nodes for
+    // container blocks; the line-box capture is complete before the next
+    // element's reads begin.
     const rect = el.getBoundingClientRect();
     const lineCount = el.getClientRects().length;
+    const fullText = blockNormalizedText(el);
+    const lineBoxes = readLineBoxes(el, fullText, signal);
     out.push({
       kind: kindForElement(el),
       heightPx: rect.height,
       lineCount,
+      lineBoxes,
     });
   }
   return out;

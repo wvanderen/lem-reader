@@ -171,7 +171,7 @@ export class MeasurementEngine {
         return; // stale → DROP (the trusted view is retained by the hook)
       }
       const result: MeasurementResult = {
-        schemaVersion: 1,
+        schemaVersion: 2,
         constraints,
         blocks,
         computedAt: new Date().toISOString(),
@@ -224,7 +224,7 @@ export class MeasurementEngine {
     const letterSpacingPx = letterSpacingPxForPreset(settings);
 
     const elements = Array.from(
-      this.opts.articleEl.querySelectorAll<HTMLElement>(BLOCK_SELECTOR),
+      this.opts.articleEl.querySelectorAll<HTMLElement>("[data-block-index]"),
     );
     // Build parallel arrays of (prediction, domReference) for the kinds
     // currently eligible. The guard's sample() caps how many it actually
@@ -257,6 +257,11 @@ export class MeasurementEngine {
           kind,
           heightPx: prediction.height,
           lineCount: prediction.lineCount,
+          // Predictions are height/lineCount comparisons only — lineBoxes is
+          // not part of the drift comparison; default to [] (the guard never
+          // reads it). Required because BlockMeasurementSchema made the field
+          // non-optional in the inferred type (Plan 04-06 schema evolution).
+          lineBoxes: [],
         });
         domReference.push(dom);
       } catch (e) {
@@ -297,13 +302,8 @@ export class MeasurementEngine {
 }
 
 /**
- * The exact block selector reused verbatim from domMeasurer / useScrollSave
- * so the engine's Pretext-sampling walk reads the same elements domMeasurer
- * measured (no selector drift).
+ * Map a heading element to its level (h1→1, h2→2, … ; default 2 if unknown).
  */
-const BLOCK_SELECTOR = "h2, h3, h4, p, blockquote, li, pre, figure, sup, details";
-
-/** Map a heading element to its level (h1→1, h2→2, … ; default 2 if unknown). */
 function headingLevelFor(el: HTMLElement): 1 | 2 | 3 | 4 | 5 | 6 {
   const tag = el.tagName.toLowerCase();
   if (tag === "h1") return 1;

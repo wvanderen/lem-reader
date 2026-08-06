@@ -268,35 +268,106 @@ describe("readLineBoxes — container blocks (Plan 04-06 generalization)", () =>
     return bq;
   }
 
+  /**
+   * Install a NODE-AWARE Range mock for the container case. The mock tracks
+   * which text node setStart was called on and uses a per-text-node line
+   * schedule PLUS a per-text-node base top (so absolute tops increase across
+   * children, mirroring real DOM line boxes that stack vertically). The
+   * original installRangeMock is node-agnostic — it would replay the same
+   * line schedule for every text node and produce wrong output once the impl
+   * switches nodes.
+   *
+   * `perNode` maps text-node .data → { baseTop, lineLocalOffsets }. Each
+   * entry's rects are at top = baseTop + li*20, height 18.
+   */
+  function installNodeAwareRangeMock(
+    perNode: Map<string, { baseTop: number; lineLocalOffsets: number[] }>,
+  ): () => void {
+    const realCreateRange = document.createRange.bind(document);
+    const state = {
+      node: null as Text | null,
+      start: 0,
+      end: 0,
+    };
+    const stub: Range = {
+      setStart: (node: Node, offset: number) => {
+        state.node = node as Text;
+        state.start = offset;
+      },
+      setEnd: (_node: Node, offset: number) => {
+        state.end = offset;
+      },
+      getClientRects: (() => {
+        if (!state.node) return [] as unknown as DOMRectList;
+        const data = state.node.data;
+        const cfg = perNode.get(data);
+        if (!cfg) return [] as unknown as DOMRectList;
+        const rects: DOMRect[] = [];
+        const schedule = cfg.lineLocalOffsets;
+        for (let li = 0; li < schedule.length; li++) {
+          const lineStart = schedule[li]!;
+          const lineEnd =
+            li + 1 < schedule.length ? schedule[li + 1]! : data.length;
+          if (
+            state.end > lineStart &&
+            state.start < lineEnd &&
+            state.end > state.start
+          ) {
+            rects.push(
+              new DOMRect(0, cfg.baseTop + li * 20, 100, 18) as DOMRect,
+            );
+          }
+        }
+        return rects as unknown as DOMRectList;
+      }) as Range["getClientRects"],
+    } as unknown as Range;
+    document.createRange = () => stub;
+    return () => {
+      document.createRange = realCreateRange;
+    };
+  }
+
   it("container with two child paragraphs yields LineBox[] with global offsets + monotonic topPx", () => {
     // Two child paragraphs: "aaaa bbb" (8 chars) and "cccc dddd" (9 chars).
-    // blockNormalizedText(<blockquote>) flattens to "aaaa bbbcccc dddd"
-    // (textContent concatenation has no separator between adjacent <p>'s).
+    // blockNormalizedText(<blockquote>) flattens textContent → "aaaa bbbcccc dddd"
+    // (no separator between adjacent <p>'s in textContent concatenation).
+    // Schedule 2 lines per child; the second child's base top is 40 (2 lines
+    // × 20px after the first child). GLOBAL offsets (the contract surface):
+    //   line 1 → global 0   (top   0)
+    //   line 2 → global 5   (top  20) — within first child
+    //   line 3 → global 8   (top  40) — first line of second child
+    //   line 4 → global 13  (top  60) — within second child
     const first = "aaaa bbb";
     const second = "cccc dddd";
     const el = makeBlockquoteEl(first, second);
     const fullText = blockNormalizedText(el);
-    // Simulate 4 line breaks across the concatenated text: lines start at
-    // global offsets 0, 5 (within first child), 9 (start of second child),
-    // 14 (within second child). The mock reports each line as 20px tall.
-    // offsets are into the GLOBAL concatenated text.
-    const restore = installRangeMock([0, 5, 9, 14]);
+    const restore = installNodeAwareRangeMock(
+      new Map([
+        [first, { baseTop: 0, lineLocalOffsets: [0, 5] }],
+        [second, { baseTop: 40, lineLocalOffsets: [0, 5] }],
+      ]),
+    );
     try {
       const boxes = readLineBoxes(el, fullText, new AbortController().signal);
-      expect(boxes.length).toBe(4);
-      // Line 1 at offset 0.
+      // 2 lines × 2 children = 4 LineBox entries.
+      expect(boxes).toHaveLength(4);
+      // Line 1 starts at global offset 0.
       expect(boxes[0]!.charOffset).toBe(0);
       expect(boxes[0]!.topPx).toBe(0);
-      // Global offsets are monotonically non-decreasing across descendant
-      // text nodes (the second child's first line starts at offset 8 in
-      // the global text — the mock schedule places it at 9 to verify the
-      // accumulator advanced past the first child).
+      // Line 2 within first child — global offset 5.
+      expect(boxes[1]!.charOffset).toBe(5);
+      // Line 3 = first line of second child — global offset 8 (first child length).
+      expect(boxes[2]!.charOffset).toBe(8);
+      // Line 4 within second child — global offset 13.
+      expect(boxes[3]!.charOffset).toBe(13);
+      // Global offsets + tops are strictly monotonically increasing across
+      // text nodes (the generalization's load-bearing contract).
       for (let i = 1; i < boxes.length; i++) {
         expect(boxes[i]!.charOffset).toBeGreaterThan(boxes[i - 1]!.charOffset);
         expect(boxes[i]!.topPx).toBeGreaterThan(boxes[i - 1]!.topPx);
       }
-      // The last line's charOffset (14) is reachable as a grapheme ordinal
-      // over the concatenated text — this is the D-05 round-trip seam.
+      // The D-05 round-trip seam: every charOffset maps to a grapheme ordinal
+      // over the concatenated normalized text.
       const lastGrapheme = charOffsetToGrapheme(
         fullText,
         boxes[boxes.length - 1]!.charOffset,

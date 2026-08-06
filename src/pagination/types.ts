@@ -75,24 +75,22 @@ export const FragmentationResultSchema = z.object({
 export type FragmentationResult = z.infer<typeof FragmentationResultSchema>;
 
 // ── LineBox: one CSS line box inside a block's text node ────────────────────
+// Plan 04-06: the Zod source of truth lives in src/measurement/types.ts
+// (LineBoxSchema). This re-export keeps every existing
+// `import type { LineBox } from "./types"` in src/pagination/* resolving
+// against the SAME single definition — no parallel hand-written interface.
 // The DOM read-phase (lineBoxes.ts) walks character offsets over the block's
-// first text node and records one LineBox per CSS line box that Range
-// .getClientRects() reports. charOffset is a UTF-16 code-unit offset into
-// the block's text node (the coordinate Range.setStart/setEnd natively
-// accepts); map it to a D-05 grapheme ordinal via charOffsetToGrapheme.
+// text and records one LineBox per CSS line box that Range.getClientRects()
+// reports. charOffset is a UTF-16 code-unit offset into the block's
+// normalized text (the coordinate charOffsetToGrapheme converts to a D-05
+// grapheme ordinal).
 //
 // topPx/bottomPx are FRACTIONAL (DOMRect values — never rounded; RESEARCH
 // §State of the Art). The widow rules compare rounded tops to detect a new
 // line, but preserve fractional values for height arithmetic.
 
-export interface LineBox {
-  /** UTF-16 code-unit offset into the block's text node where this line begins. */
-  charOffset: number;
-  /** Fractional top (px) of this line box from Range.getClientRects(). */
-  topPx: number;
-  /** Fractional bottom (px) of this line box from Range.getClientRects(). */
-  bottomPx: number;
-}
+import type { LineBox } from "../measurement/types";
+export type { LineBox };
 
 // ── SplitDecision: per-kind fragmentation classification (D4-02) ────────────
 // splitBlock.ts classifies each BlockKind via an exhaustive switch (Pattern F,

@@ -130,12 +130,15 @@ function installQuerySelectorAll(
   };
 }
 
-/** Build a MeasurementResult stub with per-element kind + height + lineCount. */
+/** Build a MeasurementResult stub with per-element kind + height + lineCount.
+ *  Plan 04-06: lineBoxes defaults to [] (schema-evolved field). The engine
+ *  consumes per-block lineBoxes from measurement; Task 3 will rewrite these
+ *  stubs to drive the engine via measurement instead of mocked querySelectorAll. */
 function measurementStub(
   rows: Array<{ kind: string; heightPx: number; lineCount: number }>,
 ): MeasurementResult {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     constraints: {
       font: "serif",
       size: 18,
@@ -144,7 +147,7 @@ function measurementStub(
       viewportWidthPx: 800,
       lang: "en",
     },
-    blocks: rows,
+    blocks: rows.map((r) => ({ ...r, lineBoxes: [] })),
     computedAt: "2026-08-06T00:00:00.000Z",
   };
 }

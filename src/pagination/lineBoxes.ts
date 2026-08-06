@@ -79,26 +79,39 @@ export function charOffsetToGrapheme(
 }
 
 /**
- * Read every CSS line box of a block's first text node as a LineBox[].
+ * Read every CSS line box of a block's text as a LineBox[].
  *
- * Implementation (RESEARCH §Architecture Pattern 2): create one Range via
- * document.createRange, walk character offsets over the block's first text
- * node, and record a LineBox each time the last rect's rounded top changes.
- * The first non-empty rect establishes line 1 (charOffset 0); subsequent
- * distinct tops mark where later lines begin.
+ * Plan 04-06 generalization: walks ALL descendant text nodes in document
+ * order (TreeWalker), maintaining a running UTF-16 char-offset accumulator
+ * that maps each text node's local offset into the block's full normalized
+ * text. For each text node, walks character offsets building a Range per
+ * candidate boundary (reusing the rect-comparison logic from the prior
+ * single-text-node implementation), and records a LineBox each time the
+ * rounded top changes — the LineBox.charOffset is the GLOBAL offset into
+ * the concatenated text (the coordinate charOffsetToGrapheme expects).
  *
- * LineBox.charOffset is a UTF-16 code-unit offset into the text node. Map
- * it to a D-05 grapheme ordinal via charOffsetToGrapheme before placing a
- * page boundary.
+ * For flat blocks (paragraph/heading with a single text node) the output is
+ * byte-identical to the prior implementation. For container blocks
+ * (blockquote / list), the walk covers every descendant paragraph/list-item
+ * text node in document order so a single LineBox[] spans the entire
+ * container — exactly what the engine needs to split containers at line
+ * boundaries.
  *
- * @param el        The block's rendered HTMLElement (must contain a text node).
+ * The char-offset accumulator MUST sum text-node lengths in the SAME order
+ * `normalizeElText(el)` traverses them (it calls `el.textContent` which is
+ * the document-order concatenation of descendant text nodes). TreeWalker
+ * with NodeFilter.SHOW_TEXT walks in document order; the accumulator stays
+ * aligned with textContent. (Pitfall 3 — no normalization fork.)
+ *
+ * @param el        The block's rendered HTMLElement (must contain ≥1 text node
+ *                    descendant, or [] is returned).
  * @param fullText  The block's normalized text (use blockNormalizedText(el)).
  * @param signal    Cancel signal; throws AbortError if aborted mid-walk.
  *
  * Aborts (via AbortError) if `signal` is or becomes aborted. Returns [] if
- * the element has no text node or Range.getClientRects yields no rects
- * (e.g. the block is display:none or empty — the caller treats this as a
- * zero-line block and moves it whole per D4-02 atomic fallback).
+ * the element has no text node descendant or Range.getClientRects yields no
+ * rects (e.g. the block is display:none or empty — the caller treats this as
+ * a zero-line block and moves it whole per D4-02 atomic fallback).
  */
 export function readLineBoxes(
   el: HTMLElement,
@@ -106,30 +119,60 @@ export function readLineBoxes(
   signal: AbortSignal,
 ): LineBox[] {
   if (signal.aborted) throw new AbortError();
-  const textNode = el.firstChild;
-  if (!textNode) return [];
+  // Early-return on empty normalized text — no text means no line boxes.
+  // fullText is the canonical normalized text for this block; the offsets
+  // the walk produces index into this string (the coordinate
+  // charOffsetToGrapheme expects). The walk itself uses textContent via
+  // TreeWalker (the source of truth) — fullText is the contract surface.
+  if (fullText.length === 0) return [];
+
+  // Collect descendant text nodes in document order. TreeWalker.SHOW_TEXT
+  // walks the DOM tree pre-order, matching the order `el.textContent`
+  // concatenates them — so the char-offset accumulator stays aligned with
+  // `fullText` (which is derived from textContent via normalizeElText).
+  const textNodes: Text[] = [];
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  let current: Node | null;
+  while ((current = walker.nextNode()) !== null) {
+    textNodes.push(current as Text);
+  }
+  if (textNodes.length === 0) return [];
+
   const range = document.createRange();
   const boxes: LineBox[] = [];
   let lastTop = Number.NaN;
+  // Global char offset accumulator: the position of the current text node's
+  // first char within the concatenated block text. Updated as we advance to
+  // each subsequent text node. For a flat block (1 text node) this stays 0
+  // for the whole walk — preserving byte-identical output to the prior
+  // single-text-node implementation.
+  let globalBase = 0;
 
-  for (let i = 0; i <= fullText.length; i++) {
-    // Check cancel between iterations — a long paragraph is O(textLen) DOM
-    // reads, so a newer trigger must be able to cancel mid-walk.
-    if (i > 0 && signal.aborted) throw new AbortError();
-    range.setStart(textNode, 0);
-    range.setEnd(textNode, i);
-    const rects = range.getClientRects();
-    if (rects.length === 0) continue;
-    const lastRect = rects[rects.length - 1]!;
-    const top = lastRect.top;
-    if (Number.isNaN(lastTop) || Math.round(top) !== Math.round(lastTop)) {
-      // New line detected. Line 1 always starts at charOffset 0; later
-      // lines began at the char that triggered the wrap (i-1), since the
-      // range [0, i-1] was on the previous line and [0, i] now spans both.
-      const charOffset = boxes.length === 0 ? 0 : i - 1;
-      boxes.push({ charOffset, topPx: top, bottomPx: lastRect.bottom });
-      lastTop = top;
+  for (const textNode of textNodes) {
+    const localLen = textNode.data.length;
+    for (let i = 0; i <= localLen; i++) {
+      // Check cancel between iterations — a long block is O(totalLen) DOM
+      // reads, so a newer trigger must be able to cancel mid-walk.
+      if ((globalBase + i) > 0 && signal.aborted) throw new AbortError();
+      range.setStart(textNode, 0);
+      range.setEnd(textNode, i);
+      const rects = range.getClientRects();
+      if (rects.length === 0) continue;
+      const lastRect = rects[rects.length - 1]!;
+      const top = lastRect.top;
+      if (Number.isNaN(lastTop) || Math.round(top) !== Math.round(lastTop)) {
+        // New line detected. Line 1 always starts at charOffset 0; later
+        // lines began at the char that triggered the wrap (globalBase + i - 1),
+        // since the range [0, i-1) within this text node was on the previous
+        // line and [0, i) now spans both. globalBase advances the offset
+        // across text node boundaries so containers report GLOBAL offsets.
+        const isFirst = boxes.length === 0;
+        const charOffset = isFirst ? 0 : globalBase + i - 1;
+        boxes.push({ charOffset, topPx: top, bottomPx: lastRect.bottom });
+        lastTop = top;
+      }
     }
+    globalBase += localLen;
   }
   return boxes;
 }

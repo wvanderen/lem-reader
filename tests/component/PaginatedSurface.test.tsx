@@ -41,7 +41,7 @@ const article: CanonicalArticle = {
 };
 
 const trustedView: MeasurementResult = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   constraints: {
     font: "serif",
     size: 18,
@@ -51,9 +51,9 @@ const trustedView: MeasurementResult = {
     lang: "en",
   },
   blocks: [
-    { kind: "paragraph", heightPx: 600, lineCount: 10 },
-    { kind: "paragraph", heightPx: 600, lineCount: 10 },
-    { kind: "paragraph", heightPx: 600, lineCount: 10 },
+    { kind: "paragraph", heightPx: 600, lineCount: 10, lineBoxes: [] },
+    { kind: "paragraph", heightPx: 600, lineCount: 10, lineBoxes: [] },
+    { kind: "paragraph", heightPx: 600, lineCount: 10, lineBoxes: [] },
   ],
   computedAt: "2026-08-06T00:00:00.000Z",
 };

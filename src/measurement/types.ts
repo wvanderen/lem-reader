@@ -47,21 +47,50 @@ export type Constraints = z.infer<typeof ConstraintsSchema>;
 // kind is a free-form string here (the renderer-emitted element tag mapped
 // to the Block kind name); the engine's chooseStrategy switch narrows the
 // real strategy.
+//
+// Plan 04-06: lineBoxes captures every CSS line box of the block's text
+// during the measurement DOM walk (single batched pass — Pitfall 2). The
+// pagination engine consumes these pre-captured boxes instead of re-reading
+// live DOM (PaginatedSurface replaces the full ArticleBody before the engine
+// runs — pre-capture is the only source). The LineBoxSchema is the Zod
+// source of truth; src/pagination/types.ts re-exports the inferred type.
+
+export const LineBoxSchema = z.object({
+  /** UTF-16 code-unit offset into the block's normalized text where this line begins. */
+  charOffset: z.number(),
+  /** Fractional top (px) of this line box from Range.getClientRects(). */
+  topPx: z.number(),
+  /** Fractional bottom (px) of this line box from Range.getClientRects(). */
+  bottomPx: z.number(),
+});
+export type LineBox = z.infer<typeof LineBoxSchema>;
 
 export const BlockMeasurementSchema = z.object({
   kind: z.string(),
   heightPx: z.number(),
   lineCount: z.number().int(),
+  /**
+   * Per-block CSS line boxes captured during the measurement DOM walk
+   * (Plan 04-06). One LineBox per wrapped line of the block's text. Empty
+   * for blocks with no text (figure/code/footnote). The pagination engine
+   * consumes this as the pre-captured line-box source — it no longer re-reads
+   * live DOM. Default [] keeps the schema permissive for any block kind that
+   * legitimately has no text.
+   */
+  lineBoxes: z.array(LineBoxSchema).default([]),
 });
 export type BlockMeasurement = z.infer<typeof BlockMeasurementSchema>;
 
 // ── MeasurementResult: the trusted view payload (PAGE-06) ───────────────────
-// schemaVersion: z.literal(1) — Phase 4's PAGE-09 contract can evolve this
-// without retrofitting Phase 3 emit sites. computedAt is the ISO datetime
-// the engine committed (post font-gate + post epoch-commit-guard).
+// schemaVersion: z.literal(2) as of Plan 04-06 (lineBoxes added to
+// BlockMeasurementSchema). v3+ forward-rejects (V5 preserved). MeasurementResult
+// is an EPHEMERAL trusted view (never persisted to Dexie — STACK.md forbids
+// persisting derived data), so the bump is a runtime contract marker only —
+// NO Dexie migration. Existing v1 in-memory cached values are re-measured on
+// the next read (the hook drops the trusted view on article swap).
 
 export const MeasurementResultSchema = z.object({
-  schemaVersion: z.literal(1),
+  schemaVersion: z.literal(2),
   constraints: ConstraintsSchema,
   blocks: z.array(BlockMeasurementSchema),
   computedAt: z.string().datetime(),

@@ -29,7 +29,7 @@ import type {
 } from "../../../src/measurement/types";
 
 function block(kind: string, heightPx: number): BlockMeasurement {
-  return { kind, heightPx, lineCount: Math.round(heightPx / 20) };
+  return { kind, heightPx, lineCount: Math.round(heightPx / 20), lineBoxes: [] };
 }
 
 function bothEligible(): EligibilityState {
