@@ -118,7 +118,7 @@ Plans:
   4. Reader remains anchored through viewport, typography, font, and supported asset changes while a previous valid view remains available during repagination.
   5. Oversized or unsupported content produces an understandable diagnostic and a usable scrolling fallback at the same passage.
 
-**Plans:** 2/5 plans executed
+**Plans:** 3/5 plans executed
 Plans:
 **Wave 1**
 
@@ -127,7 +127,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 04-03-PLAN.md — Wave 2: thin end-to-end paginated vertical slice (PageFragmentView reusing BlockView + PaginatedSurface deriving pages from trustedView + ArticleView mode-aware branch + page geometry CSS + quiet chevrons + PageIndicator + ProgressHairline N/M)
+- [x] 04-03-PLAN.md — Wave 2: thin end-to-end paginated vertical slice (PageFragmentView reusing BlockView + PaginatedSurface deriving pages from trustedView + ArticleView mode-aware branch + page geometry CSS + quiet chevrons + PageIndicator + ProgressHairline N/M)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -178,6 +178,6 @@ Plans:
 | 1. Canonical Article Foundation | 5/5 | Complete   | 2026-07-29 |
 | 2. Accessible Scrolling Reader | 4/4 | Complete    | 2026-08-04 |
 | 3. Trustworthy Layout Measurement | 2/2 | Complete    | 2026-08-05 |
-| 4. Responsive Pagination and Dual-Mode Navigation | 2/5 | In Progress|  |
+| 4. Responsive Pagination and Dual-Mode Navigation | 3/5 | In Progress|  |
 | 5. Durable Highlights and Notes | 0/TBD | Not started | - |
 | 6. Prototype Acceptance | 0/TBD | Not started | - |

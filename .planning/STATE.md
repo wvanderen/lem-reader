@@ -5,16 +5,16 @@ milestone_name: milestone
 current_phase: 04
 current_phase_name: responsive-pagination-and-dual-mode-navigation
 status: executing
-stopped_at: Completed 04-02-PLAN.md
-last_updated: "2026-08-06T14:45:53.214Z"
+stopped_at: Completed 04-03-PLAN.md
+last_updated: "2026-08-06T15:15:00.000Z"
 last_activity: 2026-08-06
-last_activity_desc: Phase 04 plan 02 complete
+last_activity_desc: Phase 04 plan 03 complete
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 16
-  completed_plans: 13
-  percent: 50
+  completed_plans: 14
+  percent: 88
 ---
 
 # Project State
@@ -29,11 +29,11 @@ See: .planning/PROJECT.md (updated 2026-08-05)
 ## Current Position
 
 Phase: 04 (responsive-pagination-and-dual-mode-navigation) — EXECUTING
-Plan: 3 of 5 (Plan 04-01 + 04-02 complete; Plan 04-03 next)
-Status: Plan 04-02 complete (readingMode Zod value-shape evolution + Wave 0 corpus matrix + 8 pagination e2e scaffolds)
-Last activity: 2026-08-06 — Phase 04 plan 02 complete
+Plan: 4 of 5 (Plan 04-01 + 04-02 + 04-03 complete; Plan 04-04 next)
+Status: Plan 04-03 complete (PageFragmentView reusing BlockView + PaginatedSurface + D4-01 intra-block paragraph slicing + DiagnosticBus single-instance threading + page geometry CSS)
+Last activity: 2026-08-06 — Phase 04 plan 03 complete
 
-Progress: [████████░░░░░░░░░░░░] 3/6 phases complete (50%) — 13/16 plans executed (81%)
+Progress: [█████████░] 3/6 phases complete (88%) — 14/16 plans executed (88%)
 
 ## Performance Metrics
 
@@ -68,6 +68,7 @@ Progress: [████████░░░░░░░░░░░░] 3/6 pha
 | Phase 03 P02 | 19 min | 2 tasks | 14 files |
 | Phase 04 P01 | 13 min (Task 2) + prior (Task 1) | 2 tasks | 9 files |
 | Phase 04 P02 | 5min | 2 tasks | 16 files |
+| Phase 04 P03 | 18min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -121,6 +122,10 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 04]: Phase 04-02: PAGE-01 split — this plan ships the schema field + e2e scaffold (foundation); Plan 04-04 ships the reader-facing ModeToggle + M shortcut + D4-10 anchor (behavior). PAGE-01 stays unchecked in REQUIREMENTS.md until Plan 04-04.
 - [Phase 04]: Phase 04-02: Wave 0 scaffolds use h1-visible sentinel (not test.todo) — proves the harness wires up at runtime in chromium + firefox + webkit (24/24 green, 12.4s); test.todo would only prove compilation.
 - [Phase 04]: Phase 04-02: fixtures-matrix.ts FIXTURES verified against src/fixtures/index.ts (6 corpus ids); TypographyVariant type shared (imported) from tests/e2e/calibration/fixtures-matrix.ts — not forked.
+- [Phase ?]: Phase 04-03: PageFragmentView uses per-kind if branches (not switch) so the rendering decision stays owned by BlockView; slicing decision is orthogonal to rendering.
+- [Phase ?]: Phase 04-03: DiagnosticBus threading contract (T-04) — useMeasurement owns ONE bus and exposes it via return value; constructing new DiagnosticBus() downstream is forbidden (would split emissions from subscribers).
+- [Phase ?]: Phase 04-03: Container-kind slicing implemented but MVP engine trips block-element-mismatch fallback for containers; recursive path ready for Plan 04-05 corpus matrix.
+- [Phase ?]: Phase 04-03: PAGE-02/03/05 split across plans — this plan ships the vertical slice + D4-01 renderer; Plan 04-04 closes PAGE-01/02/05; Plan 04-05 closes PAGE-03/04/09. requirements-completed: [] mirroring 04-02's PAGE-01 precedent.
 
 ### Pending Todos
 
@@ -141,6 +146,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-08-06T14:45:27.569Z
-Stopped at: Completed 04-02-PLAN.md
+Last session: 2026-08-06T15:15:00.000Z
+Stopped at: Completed 04-03-PLAN.md
 Resume file: None
