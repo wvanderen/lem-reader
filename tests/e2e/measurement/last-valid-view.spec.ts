@@ -9,12 +9,70 @@
 // receive measurement chatter. The test captures its text before and after
 // the re-measure and asserts equality — measurement must never write there.
 //
+// Plan 04-08: this Phase 3 spec observes scrolling-mode DOM stability —
+// article.children.length stays >= childCountBefore because the scrolling
+// ArticleBody stays mounted throughout the re-measure cycle. The Phase 4
+// D4-12 default (paginated) legitimately restructures the article DOM when
+// PaginatedSurface activates (ArticleBody → page-fragment chrome), which
+// would change the child count for reasons unrelated to the staleness
+// contract under test. We seed readingMode "scrolling" so the spec runs in
+// its Phase 3 habitat — the same pattern Plan 04-06 Task 5 established for
+// the STATE-01 location-restore tests (which likewise assume scrolling mode).
+// The paginated-mode re-measurement contract is proven separately by
+// stale-drop.spec.ts (PAGE-07), which runs under the D4-12 default and
+// exercises the production fix (hidden ArticleBody alongside PaginatedSurface).
+//
 // Reuses the typography-live-apply.spec.ts harness.
 import { test, expect } from "@playwright/test";
 
 const BASE = "http://localhost:5173";
 const FIXTURE = "essay-long-form";
 const PIXEL_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>';
+
+/**
+ * Seed the Dexie `settings` store with a reader-prefs record carrying
+ * `readingMode: "scrolling"` so a SUBSEQUENT reload hydrates scrolling mode.
+ * Mirrors Plan 04-06 Task 5's seedScrollingMode helper in persistence.spec.ts.
+ * MUST run AFTER the IndexedDB wipe AND AFTER the app's first load (so Dexie
+ * has declared its schema). Callers navigate, call this, then reload.
+ */
+async function seedScrollingMode(
+  page: import("@playwright/test").Page,
+): Promise<void> {
+  await page.evaluate(() => {
+    return new Promise<void>((resolve) => {
+      const req = indexedDB.open("lem-reader");
+      req.onsuccess = () => {
+        try {
+          const db = req.result;
+          if (!db.objectStoreNames.contains("settings")) {
+            resolve();
+            return;
+          }
+          const tx = db.transaction("settings", "readwrite");
+          const store = tx.objectStore("settings");
+          store.put({
+            key: "reader-prefs",
+            value: {
+              schemaVersion: 2,
+              font: "serif",
+              size: 18,
+              measure: 64,
+              spacing: "comfortable",
+              theme: "sepia",
+              readingMode: "scrolling",
+            },
+          });
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => resolve();
+        } catch {
+          resolve();
+        }
+      };
+      req.onerror = () => resolve();
+    });
+  });
+}
 
 test.beforeEach(async ({ page }) => {
   await page.route(/\.(png|jpe?g|gif|webp|svg)(\?|$)/, (route) =>
@@ -35,7 +93,15 @@ test.describe("PAGE-06 last-valid-view retention (03-01)", () => {
   test("the article h1 + first paragraph stay visible across a re-measure cycle (no blank flash)", async ({
     page,
   }) => {
+    // Plan 04-08: first navigation establishes Dexie's schema so the seed
+    // can write to the settings store; reload hydrates scrolling mode.
     await page.goto(`${BASE}/#/article/${FIXTURE}`);
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await seedScrollingMode(page);
+    await page.reload();
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    // Wait for SettingsProvider hydration to apply the scrolling mode.
+    await page.waitForTimeout(500);
 
     const h1 = page.getByRole("heading", { level: 1 });
     await expect(h1).toBeVisible();

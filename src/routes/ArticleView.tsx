@@ -584,6 +584,30 @@ export function ArticleView({ articleId, modeToggleHandlerRef }: ArticleViewProp
           {paginatedActive && trustedView && articleEl ? (
             <>
               {/*
+                Plan 04-08 (PAGE-06 + PAGE-07 cross-phase regression fix):
+                a hidden ArticleBody is kept mounted alongside PaginatedSurface
+                so the measurement engine's measureAllBlocks always finds the
+                full set of [data-block-index] elements with valid geometry.
+                Without this, PaginatedSurface replaces ArticleBody → the
+                ResizeObserver-triggered re-measure (and every typography
+                re-measure) reads 0 [data-block-index] elements → the engine's
+                partial-DOM defense silently skips the commit → trustedView
+                freezes at the initial value (PAGE-07) and the article DOM
+                loses its block children when paginated activates (PAGE-06).
+
+                The wrapper is aria-hidden + visually-hidden-but-layout-
+                preserved (CSS class .article-body-measurement): visibility:
+                hidden keeps boxes for getBoundingClientRect; position:absolute
+                removes it from flow so PaginatedSurface owns the visible
+                article height. aria-hidden keeps screen readers on the visible
+                page fragment (the accessible content tree). pointer-events:
+                none prevents any interaction. See app.css for the geometry
+                contract.
+              */}
+              <div className="article-body-measurement" aria-hidden="true">
+                <ArticleBody article={article} />
+              </div>
+              {/*
                 PaginatedSurface owns pages + currentPageIdx + the turn handler.
                 The ref lets PageTurnControls (keyboard + swipe) drive the same
                 state. initialAnchorOffset is the D4-10 scrolling→paginated

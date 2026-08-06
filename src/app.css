@@ -844,6 +844,39 @@ dialog.wipe-confirm::backdrop {
   margin-inline: auto;
   overflow: hidden;
   touch-action: pan-y pinch-zoom;
+  /* Plan 04-08: contain the absolute-positioned measurement ArticleBody
+     (.article-body-measurement below). Without position:relative, the
+     absolute child would be positioned relative to a distant ancestor
+     instead of the paginated-surface content box, breaking width/geometry
+     alignment between measurement and the visible page fragments. */
+  position: relative;
+}
+
+/* ── Plan 04-08: measurement-only ArticleBody (PAGE-06 + PAGE-07 fix) ────── */
+/* When paginated mode is active, a hidden ArticleBody is kept mounted inside
+   the article element so MeasurementEngine.measureAllBlocks can always read
+   the full set of [data-block-index] elements + valid geometry. Without this,
+   PaginatedSurface replaces ArticleBody and subsequent re-measures silently
+   fail (partial-DOM defense drops their commits), freezing trustedView at
+   the initial value (regressing PAGE-07) and changing article DOM structure
+   (regressing PAGE-06).
+
+   Geometry contract: position:absolute removes from flow so PaginatedSurface
+   owns the visible article height (the viewport-bounded .paginated-surface
+   box). width:100% matches the article's content-box width so measurement
+   widths agree with page-fragment widths. visibility:hidden keeps boxes for
+   getBoundingClientRect/getClientRects (display:none would zero geometry,
+   defeating the purpose). pointer-events:none + aria-hidden in the markup
+   keep this duplicate of the readable content invisible to sighted readers
+   and screen readers alike — the visible .page-fragment is the accessible
+   content tree (A11Y-03 single content tree honors the visible render). */
+.article-body-measurement {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 /* The page-fragment section fills the content box height so the engine's
