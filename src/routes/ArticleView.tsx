@@ -581,17 +581,79 @@ export function ArticleView({ articleId, modeToggleHandlerRef }: ArticleViewProp
   // Auto-dismiss hides the banner only; the session-mode override stays so
   // the reader remains in scrolling until they explicitly Switch to pages /
   // toggle (the banner is non-blocking chrome, not the fallback itself).
+  //
+  // Plan 04-10 (PAGE-09 banner-race fix): the ORIGINAL ResumeBanner-style
+  // pattern ({ passive: true, once: true } on BOTH scroll + pointerdown)
+  // tears the banner down BEFORE the reader's "Switch to pages" / × click
+  // lands on firefox + webkit. Two races compound:
+  //   (a) Playwright's click actionability check fires a "scroll into view"
+  //       which generates a scroll event → the scroll listener dismisses →
+  //       React unmounts the banner → the subsequent click event finds the
+  //       element detached → 30s timeout ("element was detached from the
+  //       DOM, retrying").
+  //   (b) The pointerdown that precedes the click fires on the banner (the
+  //       pointer IS on the banner to click it) → the pointerdown listener
+  //       dismisses → same detach.
+  // Chromium passed both by timing luck; firefox + webkit expose the race.
+  //
+  // Fix (combines the plan's Fix A + a scroll debounce): the pointerdown
+  // listener IGNORES events originating INSIDE the banner (pointer activity
+  // ON the banner is the reader acting on it — the explicit onClick handlers
+  // on the buttons handle their own dismissal). The scroll listener does NOT
+  // use { once: true } — instead it SCHEDULES a dismiss after a short delay
+  // (DISMISS_DELAY_MS). If a pointerdown inside the banner follows within
+  // that window (the actual click on Switch to pages / ×), the pending
+  // scroll-dismiss is CANCELLED so the click-action sequence completes
+  // without the banner being torn down. A real user scrolling still dismisses
+  // — the 300ms delay is imperceptible. A real user clicking outside the
+  // banner dismisses immediately (the pointerdown-outside path). The
+  // bannerEl.contains check reads only DOM geometry (EventTarget →
+  // Node.contains) — pure layout check, no reader data (T-04-10-02 accept).
   useEffect(() => {
     if (!showFallbackBanner) return;
-    const dismiss = () => setShowFallbackBanner(false);
-    window.addEventListener("scroll", dismiss, { passive: true, once: true });
-    window.addEventListener("pointerdown", dismiss, {
-      passive: true,
-      once: true,
-    });
+    const DISMISS_DELAY_MS = 300;
+    let dismissTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleDismiss = () => {
+      if (dismissTimer) return; // already scheduled — coalesce
+      dismissTimer = setTimeout(() => {
+        setShowFallbackBanner(false);
+      }, DISMISS_DELAY_MS);
+    };
+    const cancelDismiss = () => {
+      if (dismissTimer) {
+        clearTimeout(dismissTimer);
+        dismissTimer = null;
+      }
+    };
+    const onScroll = () => {
+      // Schedule rather than dismiss immediately so Playwright's scroll-into-
+      // view (part of click actionability) doesn't tear the banner down
+      // before the pointerdown/click that follows. If a pointerdown inside
+      // the banner follows within DISMISS_DELAY_MS, cancelDismiss aborts it.
+      scheduleDismiss();
+    };
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      const bannerEl = document.querySelector(".pagination-fallback-banner");
+      if (target instanceof Node && bannerEl && bannerEl.contains(target)) {
+        // Pointer inside the banner — the reader is interacting with the
+        // banner's own controls (Switch to pages / ×). Cancel any pending
+        // scroll-dismiss so the click-action sequence completes without the
+        // banner being torn down (the PAGE-09 race). The explicit onClick
+        // handlers on the buttons handle their own dismissal.
+        cancelDismiss();
+        return;
+      }
+      // Pointer outside the banner — the reader is interacting elsewhere.
+      // Dismiss immediately (no delay — this is unambiguous intent).
+      setShowFallbackBanner(false);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("pointerdown", onPointerDown, { passive: true });
     return () => {
-      window.removeEventListener("scroll", dismiss);
-      window.removeEventListener("pointerdown", dismiss);
+      cancelDismiss();
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("pointerdown", onPointerDown);
     };
   }, [showFallbackBanner]);
 

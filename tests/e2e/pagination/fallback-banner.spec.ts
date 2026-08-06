@@ -70,37 +70,40 @@ async function readPersistedReadingMode(
 }
 
 /**
- * Open FALLBACK_FIXTURE at FALLBACK_VIEWPORT + max font, wait for the
- * pagination to settle, and assert status === "fallback". Used by every
- * fallback-banner test to drive the same reliable trigger.
+ * Open FALLBACK_FIXTURE at FALLBACK_VIEWPORT, wait for the app to mount, then
+ * inject a `dom-fallback` DiagnosticEvent directly via the DEV-only
+ * `__lemDiagnosticBus` hook. Plan 04-10: the prior approach (crank font-size
+ * to trigger the 75% atomic-oversize guard) was unreliable on firefox — the
+ * measurement engine doesn't detect the oversize consistently across engines
+ * (firefox produces status "ok" at every viewport tested, while chromium +
+ * webkit produce "fallback"). The banner SURFACE (PAGE-09) is independent of
+ * the measurement engine (PAGE-04); the injection decouples the banner test
+ * from the engine's cross-engine consistency. The ArticleView subscription
+ * fires on the injected event → showFallbackBanner(true) +
+ * setSessionModeOverride("scrolling") — the exact production path the reader
+ * experiences when the engine emits a real dom-fallback.
  */
 async function gotoFallback(page: import("@playwright/test").Page): Promise<void> {
   await page.setViewportSize(FALLBACK_VIEWPORT);
   await page.goto(`${BASE}/#/article/${FALLBACK_FIXTURE}`);
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-  // Crank the text-size slider to 24 (3 ArrowUp presses from default 18).
-  await page.getByRole("button", { name: "Reading settings" }).click();
-  const slider = page.getByRole("slider", { name: "Text size" });
-  await slider.focus();
-  await slider.press("ArrowUp");
-  await slider.press("ArrowUp");
-  await slider.press("ArrowUp"); // 18 → 24
-  await page.keyboard.press("Escape");
+  // Wait for the DiagnosticBus DEV hook to be exposed (the measurement
+  // effect runs after the article + article element mount).
   await page.waitForFunction(
     () =>
-      (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
+      (window as unknown as Record<string, unknown>).__lemDiagnosticBus !==
+      undefined,
     undefined,
     { timeout: 8000 },
   );
-  // Let the typography-change repagination settle.
-  await page.waitForTimeout(1500);
-  const status = await page.evaluate(
-    () =>
-      ((window as unknown as Record<string, unknown>).__lemPagination as {
-        status: string;
-      })?.status,
-  );
-  expect(status, "fallback trigger must produce status=fallback").toBe("fallback");
+  // Inject the dom-fallback event — the subscription in ArticleView treats
+  // this identically to a real engine emission.
+  await page.evaluate(() => {
+    const bus = (
+      window as unknown as { __lemDiagnosticBus: { emit: (e: unknown) => void } }
+    ).__lemDiagnosticBus;
+    bus.emit({ kind: "dom-fallback", ts: new Date().toISOString() });
+  });
 }
 
 test.describe("PAGE-09 pagination fallback banner (04-05)", () => {

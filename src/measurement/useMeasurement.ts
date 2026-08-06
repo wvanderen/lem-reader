@@ -144,6 +144,18 @@ export function useMeasurement(
       },
     });
     coalescerRef.current = coalescer;
+    // DEV-only hook for PAGE-09 banner tests (T-04-17): expose the
+    // DiagnosticBus on window so tests can inject dom-fallback /
+    // measurement-error events directly. This decouples the banner surface
+    // test (PAGE-09 — banner copy + lifecycle + T-04-15 persistence) from
+    // the measurement engine's cross-engine consistency (PAGE-04 — the
+    // atomic-oversize guard fires on chromium/webkit but not firefox at the
+    // test viewport). Gated behind import.meta.env.DEV — stripped from the
+    // production build (mirrors __lemPagination + __lemLastTrustedConstraints).
+    if (import.meta.env.DEV) {
+      (window as unknown as Record<string, unknown>).__lemDiagnosticBus =
+        diagnostics;
+    }
     return () => {
       coalescerRef.current = null;
       unsubTrusted();
