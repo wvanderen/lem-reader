@@ -50,10 +50,11 @@ import type { MeasurementResult } from "../measurement/types";
 import type { DiagnosticBus } from "../measurement/diagnostics";
 import type { PageFragment } from "../pagination/types";
 import { paginateDocument } from "../pagination/fragment";
-import { fragmentContainingOffset, pageStartGlobalOffset } from "../pagination/anchor";
+import { fragmentContainingOffset, pageStartGlobalOffset, blockGraphemeLength } from "../pagination/anchor";
 import { PageFragmentView } from "../pagination/fragmentRenderer";
 import { ProgressHairline } from "./ProgressHairline";
 import { PageIndicator } from "./PageIndicator";
+import { BLOCK_SEPARATOR } from "../content/normalizeText";
 
 export interface PaginatedSurfaceProps {
   /** The canonical article being paginated. */
@@ -196,11 +197,22 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
           idx: number,
         ) => {
           if (!import.meta.env.DEV) return;
+          // Per-block grapheme lengths reuse blockGraphemeLength (the SAME
+          // helper the engine + anchor math use — no fork). The coverage e2e
+          // asserts each block's slices tile [0, blockLen) exactly once.
+          const blockLens = currentArticle.blocks.map((b) =>
+            blockGraphemeLength(b, currentArticle.lang),
+          );
+          const articleGraphemeLength =
+            blockLens.reduce((acc, n) => acc + n, 0) +
+            Math.max(0, blockLens.length - 1) * BLOCK_SEPARATOR.length;
           (window as unknown as Record<string, unknown>).__lemPagination = {
             pages: pgs,
             currentPageIdx: idx,
             status,
             pagesLength: pgs?.length ?? 0,
+            blockGraphemeLengths: blockLens,
+            articleGraphemeLength,
           };
         };
         if (result.status === "ok" && result.pages.length > 0) {

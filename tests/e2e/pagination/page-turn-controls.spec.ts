@@ -1,15 +1,15 @@
 // tests/e2e/pagination/page-turn-controls.spec.ts
 // PAGE-02 — Reader can move forward and backward through responsive pages
-// using keyboard, pointer, and touch controls with predictable focus.
+// using keyboard, pointer, and touch controls with predictable focus (D4-05
+// keyboard bundle + D4-06 pointer chevrons + D4-07 context-aware focus).
 //
-// SCENARIO: Reader presses ArrowRight/ArrowLeft (keyboard), clicks the
-// quiet chevrons (pointer), and swipes left/right (touch). Each turn focuses
-// the new page's first heading or focusable per D4-07 (content-triggered) or
-// retains focus on the control (control-triggered).
+// SCENARIO: In paginated mode, PageDown/ArrowRight/Space advance;
+// PageUp/ArrowLeft/Shift+Space retreat. At page 1 backward keys no-op; at
+// last page forward keys no-op. Clicking the chevrons turns. The bail rule
+// (form fields, A11Y-01) keeps Space from hijacking an input outside the
+// article.
 //
-// SCAFFOLD — sentinel assertion only (harness wires up + h1 visible). Real
-// assertions (PageTurnControls + D4-07 focus + announce + turn directions)
-// are filled by Plan 04-04 (dual-mode navigation).
+// Uses essay-long-form (paginates cleanly at default settings).
 //
 // Harness copied verbatim from tests/e2e/measurement/stale-drop.spec.ts.
 import { test, expect } from "@playwright/test";
@@ -33,12 +33,133 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-test.describe("PAGE-02 page-turn controls (04-04)", () => {
-  test("scaffold: harness wires up + article h1 renders", async ({ page }) => {
-    // Plan 04-04 fills: keyboard/pointer/swipe turn + D4-07 focus restoration
-    // (content-triggered focuses new first heading; control-triggered keeps
-    // control focus).
-    await page.goto(`${BASE}/#/article/${FIXTURE}`);
-    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+interface PaginationDev {
+  currentPageIdx: number;
+  pagesLength: number;
+  status: string;
+}
+
+async function gotoPaginated(page: import("@playwright/test").Page): Promise<PaginationDev> {
+  await page.goto(`${BASE}/#/article/${FIXTURE}`);
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  await page.waitForFunction(
+    () =>
+      (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
+    undefined,
+    { timeout: 8000 },
+  );
+  await page.waitForTimeout(600);
+  const dev = await page.evaluate(
+    () => (window as unknown as Record<string, unknown>).__lemPagination as PaginationDev,
+  );
+  // This fixture paginates cleanly at default settings; if a browser-engine
+  // combo trips fallback, skip (covered by fallback-oversize).
+  if (dev.status !== "ok" || dev.pagesLength < 2) {
+    test.skip(true, `fixture did not produce ≥2 pages (status=${dev.status}, len=${dev.pagesLength})`);
+  }
+  return dev;
+}
+
+async function currentPage(page: import("@playwright/test").Page): Promise<number> {
+  return page.evaluate(
+    () =>
+      ((window as unknown as Record<string, unknown>).__lemPagination as PaginationDev)
+        .currentPageIdx,
+  );
+}
+
+test.describe("PAGE-02 page-turn controls (04-05)", () => {
+  test("keyboard bundle: PageDown/ArrowRight/Space advance; PageUp/ArrowLeft/Shift+Space retreats", async ({
+    page,
+  }) => {
+    const pageErrors: string[] = [];
+    page.on("pageerror", (err) => pageErrors.push(String(err)));
+
+    const dev = await gotoPaginated(page);
+    const total = dev.pagesLength;
+    expect(total).toBeGreaterThan(1);
+
+    // Forward keys advance one page each.
+    expect(await currentPage(page)).toBe(0);
+    await page.keyboard.press("PageDown");
+    expect(await currentPage(page), "PageDown advances to page 2").toBe(1);
+    await page.keyboard.press("ArrowRight");
+    expect(await currentPage(page), "ArrowRight advances to page 3").toBe(2);
+    await page.keyboard.press("Space");
+    expect(await currentPage(page), "Space advances to page 4").toBe(3);
+
+    // Backward keys retreat one page each.
+    await page.keyboard.press("PageUp");
+    expect(await currentPage(page), "PageUp retreats to page 3").toBe(2);
+    await page.keyboard.press("ArrowLeft");
+    expect(await currentPage(page), "ArrowLeft retreats to page 2").toBe(1);
+    await page.keyboard.press("Shift+Space");
+    expect(await currentPage(page), "Shift+Space retreats to page 1").toBe(0);
+
+    // Boundary: at page 1, backward keys are a no-op (no wrap).
+    await page.keyboard.press("PageUp");
+    expect(await currentPage(page), "PageUp at page 1 is a no-op").toBe(0);
+
+    // Boundary: at last page, forward keys are a no-op.
+    for (let i = 0; i < total + 5; i++) {
+      await page.keyboard.press("PageDown");
+    }
+    expect(await currentPage(page), "forward keys clamp at last page").toBe(total - 1);
+
+    expect(pageErrors, "no uncaught errors during turns").toEqual([]);
+  });
+
+  test("chevron click turns the page (shared turn path)", async ({ page }) => {
+    const pageErrors: string[] = [];
+    page.on("pageerror", (err) => pageErrors.push(String(err)));
+
+    const dev = await gotoPaginated(page);
+    const total = dev.pagesLength;
+
+    // Previous chevron is aria-disabled at page 1.
+    const prev = page.getByRole("button", { name: "Previous page" });
+    const next = page.getByRole("button", { name: "Next page" });
+    await expect(prev).toHaveAttribute("aria-disabled", "true");
+
+    await next.click();
+    expect(await currentPage(page), "Next chevron advances").toBe(1);
+    await expect(prev).not.toHaveAttribute("aria-disabled", "true");
+
+    await prev.click();
+    expect(await currentPage(page), "Previous chevron retreats").toBe(0);
+
+    // Next chevron is aria-disabled at last page.
+    for (let i = 0; i < total + 5; i++) {
+      await next.click().catch(() => {});
+    }
+    await expect(next).toHaveAttribute("aria-disabled", "true");
+
+    expect(pageErrors, "no uncaught errors during chevron turns").toEqual([]);
+  });
+
+  test("Space does NOT hijack a form field outside the article (A11Y-01 bail)", async ({
+    page,
+  }) => {
+    const pageErrors: string[] = [];
+    page.on("pageerror", (err) => pageErrors.push(String(err)));
+
+    await gotoPaginated(page);
+    const beforeIdx = await currentPage(page);
+
+    // Open the settings panel (native <dialog>) and focus its slider; Space
+    // inside a form control must NOT turn the page (isFormField bail).
+    await page.getByRole("button", { name: "Reading settings" }).click();
+    const slider = page.getByRole("slider", { name: "Text size" });
+    await slider.focus();
+    await page.keyboard.press("Space");
+    await page.waitForTimeout(150);
+
+    expect(
+      await currentPage(page),
+      "Space inside a settings control must not turn the page",
+    ).toBe(beforeIdx);
+
+    await page.keyboard.press("Escape");
+    expect(pageErrors, "no uncaught errors").toEqual([]);
   });
 });
