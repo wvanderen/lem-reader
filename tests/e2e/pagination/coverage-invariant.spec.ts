@@ -13,11 +13,10 @@
 // The DEV-only window.__lemPagination hook (set by PaginatedSurface under
 // import.meta.env.DEV) exposes {pages, status, blockGraphemeLengths,
 // articleGraphemeLength} so this spec can reconstruct the coverage without
-// probing private React state. Fixtures that legitimately trip the MVP
-// block-element-mismatch fallback (containers: blockquote/list fixtures) are
-// SKIPPED here — their fallback is proven by fallback-oversize.spec.ts
-// (PAGE-04); exactly-once is asserted only on fixtures the engine paginates
-// (status === "ok"), which is the honest scope of PAGE-03 for the MVP engine.
+// probing private React state. Plan 04-06 unblocked container pagination
+// (every fixture now paginates via pre-captured line boxes + the
+// [data-block-index] 1:1 block↔element mapping); the ok-path runs
+// unconditionally across the full corpus matrix.
 //
 // Matrix note: iterates FIXTURES × VIEWPORTS at the default typography. The
 // typography axis (drift drivers) is exercised by repagination-anchor.spec.ts
@@ -98,17 +97,15 @@ test.describe("PAGE-03a exactly-once coverage (04-05)", () => {
 
         const dev = await waitForPagination(page, fixture, viewport);
 
-        if (dev.status !== "ok" || !dev.pages) {
-          // MVP scope: fixtures with container blocks (blockquote/lists) trip
-          // the block-element-mismatch fallback under the 1:1 blocks↔elements
-          // assumption. The fallback itself is proven by fallback-oversize;
-          // exactly-once only applies to status === "ok" cells. Mark as a
-          // known-skip rather than a failure so the matrix is honest.
-          test.skip(true, `fixture tripped dom-fallback (status=${dev.status}) — PAGE-04 scope`);
-          return;
-        }
+        // Plan 04-06: the engine paginates every corpus fixture (containers
+        // included) via pre-captured line boxes + the 1:1 [data-block-index]
+        // block↔element mapping. status "ok" with non-empty pages is the
+        // contract; a fallback here is a real engine regression.
+        expect(dev.status, `engine status for ${cell}`).toBe("ok");
+        expect(dev.pages, `pages must be present for ${cell}`).not.toBeNull();
+        const pages = dev.pages!;
+        expect(pages.length, `pages must be non-empty for ${cell}`).toBeGreaterThan(0);
 
-        const pages = dev.pages;
         const blockLens = dev.blockGraphemeLengths;
         expect(blockLens.length, "blockGraphemeLengths must be non-empty").toBeGreaterThan(0);
 

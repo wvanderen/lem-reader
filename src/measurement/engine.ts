@@ -147,6 +147,23 @@ export class MeasurementEngine {
       // the calibration reference (D3-03) AND the runtime fallback when a
       // kind is not Pretext-eligible.
       const blocks = measureAllBlocks(this.opts.articleEl, signal);
+      // Plan 04-06 contract defense: MeasurementResult.blocks MUST be 1:1
+      // with article.blocks. PaginatedSurface replaces ArticleBody with a
+      // single page fragment in paginated mode — when the ResizeObserver
+      // fires after that swap, this measurement would capture only the
+      // page's [data-block-index] elements (or none, since PageFragmentView
+      // doesn't emit the attribute). Rather than overwrite the GOOD
+      // trustedView (captured earlier against the full ArticleBody) with
+      // bad data, SILENTLY SKIP this commit. The previous trustedView stays;
+      // PaginatedSurface keeps rendering correct pages. Repagination still
+      // works on viewport changes (pageContentBoxHeightPx re-derives);
+      // typography-change re-measure is a known MVP scope limit under this
+      // defense. No diagnostic emitted — this is expected behavior in
+      // paginated mode, not an error condition (emitting measurement-error
+      // would trigger ArticleView's fallback subscription → unwanted flip).
+      if (blocks.length !== this.opts.article.blocks.length) {
+        return;
+      }
       // Plan 02: runtime drift sampling. Only when a guard is configured
       // AND at least one kind is currently Pretext-eligible (otherwise no
       // work to do — guard.sample would short-circuit anyway, but checking

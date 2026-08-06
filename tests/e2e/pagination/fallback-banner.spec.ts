@@ -4,16 +4,28 @@
 // the same passage in scrolling mode. The persisted readingMode preference
 // is NOT overwritten (D4-12 — session-only flip).
 //
-// SCENARIO: Trigger dom-fallback (container fixture), assert the banner copy
-// matches UI-SPEC verbatim, the polite announce fires, × dismiss hides the
-// banner, and the persisted readingMode in IndexedDB is unchanged after the
-// fallback.
+// SCENARIO: Trigger dom-fallback via an oversized atomic block (tiny viewport
+// + max font on technical-post, whose tall code blocks exceed 75% of the
+// page-height ceiling). Assert the banner copy matches UI-SPEC verbatim, the
+// polite announce fires, × dismiss hides the banner, and the persisted
+// readingMode in IndexedDB is unchanged after the fallback.
+//
+// Plan 04-06: prior versions triggered fallback via container-mismatch on
+// list-reference. Plan 04-06 made the engine paginate containers cleanly
+// (pre-captured line boxes + [data-block-index] 1:1 mapping); the
+// container-mismatch path no longer exists. The oversize path is now the
+// sole reliable fallback trigger.
 //
 // Harness copied verbatim from tests/e2e/measurement/stale-drop.spec.ts.
 import { test, expect } from "@playwright/test";
 
 const BASE = "http://localhost:5173";
 const PIXEL_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>';
+/** Tiny viewport + max font on technical-post reliably trips the 75% atomic
+ *  oversize fallback (Plan 04-06 — the sole reliable fallback trigger after
+ *  container-mismatch was eliminated). */
+const FALLBACK_VIEWPORT = { width: 200, height: 200 };
+const FALLBACK_FIXTURE = "technical-post";
 
 test.beforeEach(async ({ page }) => {
   await page.route(/\.(png|jpe?g|gif|webp|svg)(\?|$)/, (route) =>
@@ -57,6 +69,40 @@ async function readPersistedReadingMode(
   });
 }
 
+/**
+ * Open FALLBACK_FIXTURE at FALLBACK_VIEWPORT + max font, wait for the
+ * pagination to settle, and assert status === "fallback". Used by every
+ * fallback-banner test to drive the same reliable trigger.
+ */
+async function gotoFallback(page: import("@playwright/test").Page): Promise<void> {
+  await page.setViewportSize(FALLBACK_VIEWPORT);
+  await page.goto(`${BASE}/#/article/${FALLBACK_FIXTURE}`);
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  // Crank the text-size slider to 24 (3 ArrowUp presses from default 18).
+  await page.getByRole("button", { name: "Reading settings" }).click();
+  const slider = page.getByRole("slider", { name: "Text size" });
+  await slider.focus();
+  await slider.press("ArrowUp");
+  await slider.press("ArrowUp");
+  await slider.press("ArrowUp"); // 18 → 24
+  await page.keyboard.press("Escape");
+  await page.waitForFunction(
+    () =>
+      (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
+    undefined,
+    { timeout: 8000 },
+  );
+  // Let the typography-change repagination settle.
+  await page.waitForTimeout(1500);
+  const status = await page.evaluate(
+    () =>
+      ((window as unknown as Record<string, unknown>).__lemPagination as {
+        status: string;
+      })?.status,
+  );
+  expect(status, "fallback trigger must produce status=fallback").toBe("fallback");
+}
+
 test.describe("PAGE-09 pagination fallback banner (04-05)", () => {
   test("fallback renders the UI-SPEC banner copy + polite announce; dismiss × hides it", async ({
     page,
@@ -64,16 +110,7 @@ test.describe("PAGE-09 pagination fallback banner (04-05)", () => {
     const pageErrors: string[] = [];
     page.on("pageerror", (err) => pageErrors.push(String(err)));
 
-    // list-reference trips dom-fallback reliably (container blocks).
-    await page.goto(`${BASE}/#/article/list-reference`);
-    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-    await page.waitForFunction(
-      () =>
-        (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
-      undefined,
-      { timeout: 8000 },
-    );
-    await page.waitForTimeout(600);
+    await gotoFallback(page);
 
     // The banner is a role=status region (aria-live=polite). Assert the
     // UI-SPEC §Copywriting verbatim copy is present.
@@ -103,15 +140,7 @@ test.describe("PAGE-09 pagination fallback banner (04-05)", () => {
     const pageErrors: string[] = [];
     page.on("pageerror", (err) => pageErrors.push(String(err)));
 
-    await page.goto(`${BASE}/#/article/list-reference`);
-    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-    await page.waitForFunction(
-      () =>
-        (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
-      undefined,
-      { timeout: 8000 },
-    );
-    await page.waitForTimeout(600);
+    await gotoFallback(page);
 
     // The fallback fired + session flipped to scrolling. The fallback banner
     // is visible (the subscription set showFallbackBanner=true on
@@ -145,24 +174,15 @@ test.describe("PAGE-09 pagination fallback banner (04-05)", () => {
     const pageErrors: string[] = [];
     page.on("pageerror", (err) => pageErrors.push(String(err)));
 
-    await page.goto(`${BASE}/#/article/list-reference`);
-    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-    await page.waitForFunction(
-      () =>
-        (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
-      undefined,
-      { timeout: 8000 },
-    );
-    await page.waitForTimeout(600);
+    await gotoFallback(page);
 
     const banner = page.locator(".pagination-fallback-banner").first();
     await expect(banner).toBeVisible();
 
     // Click Switch to pages — clears the session override. The engine
-    // re-attempts pagination; for a container fixture it will re-emit
-    // dom-fallback (the oversize/mismatch persists), so the banner
-    // reappears. For a clean fixture it would return to paginated. Either
-    // way, the action must NOT throw.
+    // re-attempts pagination; for the oversize trigger it will re-emit
+    // dom-fallback (the geometry hasn't changed), so the banner
+    // reappears. The action must NOT throw.
     await banner.getByRole("button", { name: "Switch to pages" }).click();
     await page.waitForTimeout(800);
 

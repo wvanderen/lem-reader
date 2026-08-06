@@ -273,6 +273,15 @@ export function ArticleView({ articleId, modeToggleHandlerRef }: ArticleViewProp
   // (mirror L172-188) so the browser has completed layout before we read.
   // Recomputed on articleEl change (article swap or first mount).
   const [pageContentBoxHeightPx, setPageContentBoxHeightPx] = useState(0);
+  // Plan 04-06: recompute the page-content-box height on article mount AND
+  // when the active render mode changes (trustedView commits → paginatedActive
+  // flips → PaginatedSurface mounts with the .paginated-surface geometry).
+  // The .paginated-surface CSS pins the height to calc(100vh - 48px - 2px -
+  // 2*var(--space-2xl)) — a much smaller value than the natural scrolling
+  // ArticleBody height. Without recomputing on mode swap, the engine would
+  // receive the OLD scrolling height (~1148px for a long-form essay) and
+  // produce 1 giant overflowing page. Deps are primitives so this hook runs
+  // unconditionally (no hooks-after-conditional-return violation).
   useEffect(() => {
     if (!articleEl) return;
     let cancelled = false;
@@ -285,7 +294,7 @@ export function ArticleView({ articleId, modeToggleHandlerRef }: ArticleViewProp
       cancelled = true;
       cancelAnimationFrame(rafId);
     };
-  }, [articleEl]);
+  }, [articleEl, isPaginated, trustedView]);
 
   // Phase 4 Plan 04-05 (PAGE-04 + PAGE-09 — DiagnosticBus subscription):
   // subscribe to the SAME DiagnosticBus instance threaded from useMeasurement

@@ -62,11 +62,11 @@ test.describe("PAGE-05 repagination anchor (04-05)", () => {
       { timeout: 8000 },
     );
     await page.waitForTimeout(600);
-    let dev = await readPagination(page);
-    if (dev.status !== "ok" || dev.pagesLength < 2) {
-      test.skip(true, `fixture did not paginate cleanly (status=${dev.status})`);
-      return;
-    }
+    const dev0 = await readPagination(page);
+    // Plan 04-06: essay-long-form paginates cleanly; status "ok" with ≥2
+    // pages is the contract. A fallback here is a real engine regression.
+    expect(dev0.status, "engine status before resize").toBe("ok");
+    expect(dev0.pagesLength, "essay-long-form must produce ≥2 pages").toBeGreaterThanOrEqual(2);
 
     // Turn to page 3 (index 2) and capture its first passage's text — the
     // passage to preserve across the resize.
@@ -87,8 +87,8 @@ test.describe("PAGE-05 repagination anchor (04-05)", () => {
     // Let the coalescer + font gate + measure pass settle.
     await page.waitForTimeout(1500);
 
-    dev = await readPagination(page);
-    expect(dev.status, "repagination must produce ok status").toBe("ok");
+    const dev1 = await readPagination(page);
+    expect(dev1.status, "repagination must produce ok status").toBe("ok");
 
     // The captured passage should still be on the current (or immediately
     // adjacent) page after repagination.
@@ -120,11 +120,11 @@ test.describe("PAGE-05 repagination anchor (04-05)", () => {
       { timeout: 8000 },
     );
     await page.waitForTimeout(600);
-    let dev = await readPagination(page);
-    if (dev.status !== "ok" || dev.pagesLength < 2) {
-      test.skip(true, `fixture did not paginate cleanly (status=${dev.status})`);
-      return;
-    }
+    const dev0 = await readPagination(page);
+    // Plan 04-06: essay-long-form paginates cleanly. A fallback here is a
+    // real engine regression (no skip).
+    expect(dev0.status, "engine status before typography change").toBe("ok");
+    expect(dev0.pagesLength, "essay-long-form must produce ≥2 pages").toBeGreaterThanOrEqual(2);
 
     // Capture the current passage before the typography change.
     const passageHeading = await page.evaluate(() => {
@@ -143,21 +143,20 @@ test.describe("PAGE-05 repagination anchor (04-05)", () => {
     await page.keyboard.press("Escape");
     await page.waitForTimeout(1500);
 
-    dev = await readPagination(page);
-    // At 24px the page count changes (more pages); status should stay ok
-    // unless the larger font trips an oversize fallback (also acceptable —
-    // the anchor still applies, then the fallback surfaces).
-    if (dev.status === "ok") {
-      const stillOnPassage = await page.evaluate((needle) => {
-        if (!needle) return false;
-        const fragment = document.querySelector(".page-fragment");
-        return !!fragment && fragment.textContent?.includes(needle);
-      }, passageHeading);
-      expect(
-        stillOnPassage,
-        "D4-11 anchor must keep the reader on the passage after typography change",
-      ).toBeTruthy();
-    }
+    const dev1 = await readPagination(page);
+    // Plan 04-06: essay-long-form paginates cleanly even at 24px. Assert
+    // status "ok" + the D4-11 anchor round-trip unconditionally — a fallback
+    // here is a real engine regression (no skip).
+    expect(dev1.status, "repagination at size 24 must produce ok status").toBe("ok");
+    const stillOnPassage = await page.evaluate((needle) => {
+      if (!needle) return false;
+      const fragment = document.querySelector(".page-fragment");
+      return !!fragment && fragment.textContent?.includes(needle);
+    }, passageHeading);
+    expect(
+      stillOnPassage,
+      "D4-11 anchor must keep the reader on the passage after typography change",
+    ).toBeTruthy();
 
     expect(pageErrors, "no uncaught errors during typography repagination").toEqual([]);
   });

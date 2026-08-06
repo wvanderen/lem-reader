@@ -52,11 +52,10 @@ async function gotoPaginated(page: import("@playwright/test").Page): Promise<Pag
   const dev = await page.evaluate(
     () => (window as unknown as Record<string, unknown>).__lemPagination as PaginationDev,
   );
-  // This fixture paginates cleanly at default settings; if a browser-engine
-  // combo trips fallback, skip (covered by fallback-oversize).
-  if (dev.status !== "ok" || dev.pagesLength < 2) {
-    test.skip(true, `fixture did not produce ≥2 pages (status=${dev.status}, len=${dev.pagesLength})`);
-  }
+  // Plan 04-06: the engine paginates essay-long-form cleanly. Assert ≥2
+  // pages explicitly — a fallback or single-page result is a regression.
+  expect(dev.status, "engine status for essay-long-form").toBe("ok");
+  expect(dev.pagesLength, "essay-long-form must produce ≥2 pages").toBeGreaterThanOrEqual(2);
   return dev;
 }
 

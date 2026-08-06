@@ -90,35 +90,12 @@ test.describe("PAGE-04 fallback on oversize (04-05)", () => {
     expect(pageErrors, "no uncaught errors during fallback").toEqual([]);
   });
 
-  test("container fixture (blockquote/lists) trips the MVP block-element-mismatch fallback → scrolling", async ({
-    page,
-  }) => {
-    const pageErrors: string[] = [];
-    page.on("pageerror", (err) => pageErrors.push(String(err)));
-
-    // footnote-academic + list-reference contain container blocks the MVP
-    // engine cannot map 1:1; they trip dom-fallback. list-reference is the
-    // cleanest positive proof (lists are its primary structure).
-    await page.goto(`${BASE}/#/article/list-reference`);
-    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-    await page.waitForFunction(
-      () =>
-        (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
-      undefined,
-      { timeout: 8000 },
-    );
-    await page.waitForTimeout(600);
-
-    const dev = await readPagination(page);
-    expect(dev.status, "container fixture must trip dom-fallback").toBe("fallback");
-    // Fallback → scrolling mode at the same passage + banner.
-    await expect(
-      page.getByText("This part of the article is too large to fit on one page."),
-    ).toBeVisible();
-    const hasPaginatedSurface = await page.evaluate(
-      () => !!document.querySelector(".article-body.paginated-surface"),
-    );
-    expect(hasPaginatedSurface, "fallback must NOT mount the paginated surface").toBe(false);
-    expect(pageErrors, "no uncaught errors").toEqual([]);
-  });
+  // Plan 04-06: the prior "container fixture trips block-element-mismatch
+  // fallback" test was rendered obsolete by Plan 04-06. Containers now
+  // paginate cleanly (pre-captured line boxes + [data-block-index] 1:1
+  // mapping + splittingBlockText coordinate alignment); list-reference and
+  // every other container-bearing fixture produce status "ok". The
+  // fallback path is still proven by the "oversized atomic block" test
+  // above (huge font + tiny viewport) and by fallback-banner.spec.ts.
+  // Kept as a comment so the next maintainer sees the history.
 });

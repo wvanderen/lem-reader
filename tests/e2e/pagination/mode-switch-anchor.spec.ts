@@ -65,18 +65,10 @@ test.describe("PAGE-01 mode-switch anchor (04-05)", () => {
       page.on("pageerror", (err) => pageErrors.push(String(err)));
 
       const dev = await waitForPagination(page, fixture);
-      // The MVP engine's 1:1 article.blocks↔querySelectorAll assumption trips
-      // dom-fallback for fixtures containing container blocks (blockquote/
-      // lists) — currently every corpus fixture. PAGE-01's anchor round-trip
-      // requires the engine to produce ≥1 page (status "ok"); when it falls
-      // back the article opens in scrolling and there is no paginated↔
-      // scrolling swap to anchor. Skip cleanly pending the engine's container
-      // handling (documented in 04-05-SUMMARY.md §Blocking Finding).
-      const startedPaginated = dev.status === "ok" && dev.pagesLength > 0;
-      if (!startedPaginated) {
-        test.skip(true, `fixture tripped dom-fallback (status=${dev.status}) — engine container-handling gap`);
-        return;
-      }
+      // Plan 04-06: every fixture paginates; the M-toggle round-trip runs
+      // unconditionally. A non-ok status here is a real engine regression.
+      expect(dev.status, `engine status for ${fixture}`).toBe("ok");
+      expect(dev.pagesLength, `pages count for ${fixture}`).toBeGreaterThan(0);
 
       const toggle = page.getByRole("button", { name: /^Reading mode:/ });
 

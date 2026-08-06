@@ -9,9 +9,10 @@
 // scrollHeight stays within its content-box height (small tolerance for
 // sub-pixel rounding). Capture pageerror and assert none (V7).
 //
-// Fixtures that trip the MVP dom-fallback (containers) are skipped — they
-// render in scrolling mode where overflow is the native scroll behavior, not a
-// pagination bug. No-overflow is asserted only on status === "ok" cells.
+// Plan 04-06: every corpus fixture paginates (containers included) — the
+// no-overflow assertion runs unconditionally. (Earlier MVP skipped fixtures
+// that tripped dom-fallback; that fallback path is now exercised only by
+// the intentional fallback-oversize spec.)
 //
 // Matrix note: iterates FIXTURES × VIEWPORTS at the default typography (the
 // no-overflow property is viewport-sensitive — narrower viewports produce
@@ -78,10 +79,10 @@ test.describe("PAGE-03b no-overflow invariant (04-05)", () => {
 
         const dev = await waitForPaginationReady(page, fixture, viewport);
 
-        if (dev.status !== "ok" || dev.pagesLength === 0) {
-          test.skip(true, `fixture tripped dom-fallback (status=${dev.status}) — PAGE-04 scope`);
-          return;
-        }
+        // Plan 04-06: every corpus fixture paginates. A non-ok status here
+        // is a real engine regression — surface it instead of skipping.
+        expect(dev.status, `engine status for ${cell}`).toBe("ok");
+        expect(dev.pagesLength, `pages count for ${cell}`).toBeGreaterThan(0);
 
         const totalPages = dev.pagesLength;
         // Tolerance for sub-pixel rounding between engine measurement
@@ -90,25 +91,38 @@ test.describe("PAGE-03b no-overflow invariant (04-05)", () => {
         // of pixels.
         const TOLERANCE_PX = 2;
 
-        // Turn through every page; after each turn settles, read the article
-        // element's scrollHeight vs its clientHeight (content-box). The
-        // .paginated-surface is overflow:hidden so clientHeight is the box;
-        // scrollHeight > clientHeight + tolerance means content clipped.
+        // Turn through every page; after each turn settles, read the page
+        // fragment's scrollHeight vs the article's clientHeight (content-box).
+        // The .paginated-surface article is overflow:hidden with viewport-
+        // bounded height; the .page-fragment inside it is the actual page
+        // content. We measure the FRAGMENT's scrollHeight (its rendered
+        // content) vs the ARTICLE's clientHeight (the available page box) —
+        // a real fragmentation overflow is the fragment being taller than
+        // the box. (Checking the article's scrollHeight directly is unreliable
+        // because the article also contains a11y live regions positioned
+        // absolutely beyond the viewport; those would inflate scrollHeight
+        // without being reader-visible fragmentation bugs.)
         for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
           // Read geometry for the current page.
           const geom = await page.evaluate(() => {
-            const el = document.querySelector(".article-body.paginated-surface") as HTMLElement | null;
-            if (!el) return null;
+            const article = document.querySelector(".article-body.paginated-surface") as HTMLElement | null;
+            const fragment = document.querySelector(".page-fragment") as HTMLElement | null;
+            if (!article || !fragment) return null;
             return {
-              scrollHeight: el.scrollHeight,
-              clientHeight: el.clientHeight,
+              // The fragment's scrollHeight is its actual rendered content
+              // height (the engine's placement + the renderer's slicing).
+              fragmentScrollHeight: fragment.scrollHeight,
+              // The article's clientHeight is the available page box
+              // (.paginated-surface CSS: calc(100vh - 48px - 2px - ...) with
+              // overflow:hidden — content beyond this is clipped).
+              articleClientHeight: article.clientHeight,
             };
           });
-          expect(geom, `page ${pageNum}: paginated-surface must be mounted`).not.toBeNull();
-          const overflow = geom!.scrollHeight - geom!.clientHeight;
+          expect(geom, `page ${pageNum}: paginated-surface + page-fragment must be mounted`).not.toBeNull();
+          const overflow = geom!.fragmentScrollHeight - geom!.articleClientHeight;
           expect(
             overflow,
-            `page ${pageNum}/${totalPages}: scrollHeight (${geom!.scrollHeight}) must not exceed clientHeight (${geom!.clientHeight}) + ${TOLERANCE_PX}px tolerance`,
+            `page ${pageNum}/${totalPages}: fragment scrollHeight (${geom!.fragmentScrollHeight}) must not exceed article clientHeight (${geom!.articleClientHeight}) + ${TOLERANCE_PX}px tolerance`,
           ).toBeLessThanOrEqual(TOLERANCE_PX);
 
           // Turn to the next page (chevron click — the shared turn path).
