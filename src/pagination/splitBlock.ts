@@ -48,6 +48,23 @@ const _blockKindAssertion: _AssertBlockKindMatchesCanonical = true;
 void _blockKindAssertion;
 
 /**
+ * Per-block grapheme length in the renderer's coordinate system.
+ *
+ * Equivalent to `graphemeClusters(splittingBlockText(block), lang).length`
+ * but slightly cheaper (no intermediate string allocation). Mirrors the
+ * private `splittingBlockGraphemeLength` in fragmentRenderer.tsx so the
+ * engine, the renderer, and the DEV debug hook all agree on per-block
+ * length for whole-vs-subrange detection.
+ *
+ * Plan 04-06: used by PaginatedSurface's publishDev hook so the e2e
+ * coverage-invariant spec sees the SAME blockLen the engine emits
+ * endGrapheme against.
+ */
+export function splittingGraphemeLength(block: Block, lang: string): number {
+  return graphemeClusters(splittingBlockText(block), lang).length;
+}
+
+/**
  * Compute a splitting-kind block's intra-block text in the renderer's
  * coordinate system (Plan 04-06 Task 3).
  *
