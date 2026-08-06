@@ -31,6 +31,7 @@ import { useMeasurement } from "../measurement/useMeasurement";
 import { useSettings } from "../settings/SettingsContext";
 import { PaginatedSurface } from "../reader/PaginatedSurface";
 import type { PaginatedSurfaceHandle } from "../reader/PaginatedSurface";
+import { PageTurnControls } from "../reader/PageTurnControls";
 import { ProgressHairline } from "../reader/ProgressHairline";
 import { SectionAnnouncer } from "../reader/SectionAnnouncer";
 import { ResumeBanner } from "../reader/ResumeBanner";
@@ -424,6 +425,17 @@ export function ArticleView({ articleId, modeToggleHandlerRef }: ArticleViewProp
           the actual DOM node. */}
       <SectionAnnouncer articleEl={articleEl} />
       <main id="main">
+        {/*
+          A11Y-08 (UI-SPEC §Copywriting "keyboard-help affordance"): a single
+          concise visually-hidden paragraph at the top of <main>, preceding the
+          article header in DOM order so it is announced once to AT on article
+          open. Never visible — progressive enhancement for keyboard-first
+          readers. Mirrors the skip-link pattern.
+        */}
+        <p className="visually-hidden">
+          Keyboard shortcuts: M switches reading mode. PageUp and PageDown,
+          ArrowLeft and ArrowRight, and Space and Shift+Space turn pages.
+        </p>
         {showResumeBanner && (
           <ResumeBanner
             onResume={handleResume}
@@ -468,6 +480,18 @@ export function ArticleView({ articleId, modeToggleHandlerRef }: ArticleViewProp
                 pageContentBoxHeightPx={pageContentBoxHeightPx}
                 initialAnchorOffset={currentAnchorOffsetRef.current}
                 onAnchorChange={handleAnchorChange}
+              />
+              {/*
+                PageTurnControls registers the keyboard bundle + swipe + the
+                "Page N of M" announce. Enabled only while paginated mode is
+                active. The M shortcut routes through the SAME handleToggleMode
+                as the header button so the D4-10 anchor applies either way.
+              */}
+              <PageTurnControls
+                enabled={paginatedActive}
+                surfaceRef={surfaceRef}
+                articleEl={articleEl}
+                onToggleMode={handleToggleMode}
               />
             </>
           ) : (
