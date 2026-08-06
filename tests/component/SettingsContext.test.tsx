@@ -206,6 +206,7 @@ describe("SettingsContext (02-02 persistence + STATE-05)", () => {
       measure: 58,
       spacing: "compact",
       theme: "dark",
+      readingMode: "paginated",
     };
     loadMock.mockResolvedValue({ ok: true, settings: persisted });
 

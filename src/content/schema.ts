@@ -207,7 +207,13 @@ export type InlineRun = z.infer<typeof InlineRun>;
 // No recursion here — Pitfall 7 (the two-pass recursive Block pattern above)
 // does NOT apply.
 export const ReaderSettingsSchema = z.object({
-  schemaVersion: z.literal(1), // STATE-04 migration hook
+  // STATE-04 migration hook: Phase 4 (Plan 04-02, D4-12) bumped the canonical
+  // write version from 1 → 2 when readingMode was added. The union accepts
+  // BOTH literals so that an existing v1 row (no readingMode field) hydrates
+  // readingMode via the .default() below on read — Pitfall 9 (NO Dexie store
+  // change; the settings store is key-value, Dexie is opaque to the value
+  // shape). v3 and above forward-reject (V5 boundary discipline preserved).
+  schemaVersion: z.union([z.literal(1), z.literal(2)]),
   font: z.enum(["serif", "sans", "dyslexic"]),
   size: z.union([
     z.literal(16),
@@ -224,6 +230,11 @@ export const ReaderSettingsSchema = z.object({
   ]),
   spacing: z.enum(["compact", "comfortable", "spacious"]),
   theme: z.enum(["sepia", "light", "dark"]),
+  // D4-12 — readingMode preference. PROJECT.md: "Pagination is the distinctive
+  // default experience, but it is not mandatory." .default("paginated") is the
+  // value-shape migration mechanism: a v1 row lacking this field parses with
+  // the default on read (Pitfall 9 — no data wipe, no migration script).
+  readingMode: z.enum(["paginated", "scrolling"]).default("paginated"),
 });
 export type ReaderSettings = z.infer<typeof ReaderSettingsSchema>;
 

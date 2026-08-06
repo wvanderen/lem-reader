@@ -6,10 +6,11 @@
 import type { ReaderSettings } from "../content/schema";
 
 export const DEFAULT_SETTINGS: ReaderSettings = {
-  schemaVersion: 1,
+  schemaVersion: 2, // STATE-04 — bumped from 1 → 2 in Plan 04-02 (D4-12)
   font: "serif", // D-07 warm-paper serif
   size: 18, // D-07 default body size
   measure: 64, // D-07 calm measure
   spacing: "comfortable", // D-07 line-height 1.6
   theme: "sepia", // D-07 warm-paper == D2-09 default theme
+  readingMode: "paginated", // D4-12 — paginated default per PROJECT.md
 };

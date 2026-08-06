@@ -19,12 +19,13 @@ import { DEFAULT_SETTINGS } from "../../src/settings/defaults";
 // may or may not validate; Zod is the authority, not TS here).
 function validSettings(overrides: Record<string, unknown> = {}): unknown {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     font: "serif",
     size: 18,
     measure: 64,
     spacing: "comfortable",
     theme: "sepia",
+    readingMode: "paginated",
     ...overrides,
   };
 }
@@ -48,7 +49,8 @@ describe("ReaderSettingsSchema accepts valid combinations", () => {
   it("parses the D-07 default baseline and round-trips every field", () => {
     const parsed = ReaderSettingsSchema.parse(validSettings());
     expect(parsed).toEqual(DEFAULT_SETTINGS);
-    expect(parsed.schemaVersion).toBe(1);
+    expect(parsed.schemaVersion).toBe(2);
+    expect(parsed.readingMode).toBe("paginated");
   });
 
   it.each([
@@ -107,7 +109,10 @@ describe("ReaderSettingsSchema accepts valid combinations", () => {
 
 describe("ReaderSettingsSchema.parse rejects out-of-contract records", () => {
   it.each([
-    ["non-literal schemaVersion (STATE-04 hook)", { schemaVersion: 2 }],
+    // schemaVersion — STATE-04 hook. After the 04-02 bump, the schema accepts
+    // both v1 (legacy rows hydrated via readingMode .default) and v2
+    // (canonical write). v3+ forward-rejects (V5 boundary discipline).
+    ["non-literal schemaVersion (STATE-04 hook — v3 forward-rejects)", { schemaVersion: 3 }],
     ["schemaVersion as string", { schemaVersion: "1" }],
     ["missing schemaVersion", { schemaVersion: undefined }],
     ["unknown font value", { font: "comic-sans" }],
@@ -119,8 +124,55 @@ describe("ReaderSettingsSchema.parse rejects out-of-contract records", () => {
     ["unknown spacing value", { spacing: "snug" }],
     ["unknown theme value", { theme: "solarized" }],
     ["missing font field", { font: undefined }],
+    // readingMode — D4-12 closed enum (T-04-04 tampering reject). The .default
+    // hydrates "paginated" only when the field is ABSENT; an explicit bad
+    // value must fail parse → STATE-05 routing (StorageBanner/WipeConfirm),
+    // never reaching the renderer.
+    ["unknown readingMode value (T-04-04)", { readingMode: "evil" }],
+    ["readingMode as number", { readingMode: 0 }],
   ])("throws when %s", (_label, override) => {
     expect(() => ReaderSettingsSchema.parse(validSettings(override))).toThrow();
+  });
+});
+
+// ── ReaderSettingsSchema — D4-12 readingMode + v1→v2 value-shape evolution ────
+// Pitfall 9: the settings store is key-value; Dexie is opaque to the value
+// shape. The readingMode addition is a Zod value-shape evolution — NO Dexie
+// store version bump. Existing v1 rows (no readingMode field) hydrate via
+// .default("paginated") on read; new saves write schemaVersion: 2.
+
+describe("ReaderSettingsSchema hydrates readingMode for legacy v1 rows (D4-12, Pitfall 9)", () => {
+  it("a v1 row missing readingMode hydrates readingMode to 'paginated' via .default", () => {
+    // A real legacy v1 row written by Phase 2: schemaVersion: 1, no readingMode.
+    const legacyRow = {
+      schemaVersion: 1,
+      font: "serif",
+      size: 18,
+      measure: 64,
+      spacing: "comfortable",
+      theme: "sepia",
+    };
+    const parsed = ReaderSettingsSchema.parse(legacyRow);
+    expect(parsed.schemaVersion).toBe(1); // schemaVersion is NOT mutated by parse
+    expect(parsed.readingMode).toBe("paginated"); // .default fires
+    expect(parsed.font).toBe("serif");
+    expect(parsed.theme).toBe("sepia");
+  });
+
+  it("a v2 row may explicitly carry readingMode: 'scrolling'", () => {
+    const parsed = ReaderSettingsSchema.parse(
+      validSettings({ readingMode: "scrolling" }),
+    );
+    expect(parsed.readingMode).toBe("scrolling");
+    expect(parsed.schemaVersion).toBe(2);
+  });
+
+  it("DEFAULT_SETTINGS mirrors the v2 canonical shape (schemaVersion 2 + readingMode paginated)", () => {
+    expect(DEFAULT_SETTINGS.schemaVersion).toBe(2);
+    expect(DEFAULT_SETTINGS.readingMode).toBe("paginated");
+    // Round-trip DEFAULT_SETTINGS through parse — proves the literal satisfies
+    // the schema exactly (no missing/extra fields).
+    expect(ReaderSettingsSchema.parse(DEFAULT_SETTINGS)).toEqual(DEFAULT_SETTINGS);
   });
 });
 
@@ -191,12 +243,13 @@ describe("applyTheme writes :root tokens from validated settings", () => {
 
   it("swaps every token when given a non-default validated record", () => {
     applyTheme({
-      schemaVersion: 1,
+      schemaVersion: 2,
       font: "sans",
       size: 22,
       measure: 72,
       spacing: "spacious",
       theme: "dark",
+      readingMode: "paginated",
     });
     const root = document.documentElement;
     expect(root.dataset.theme).toBe("dark");

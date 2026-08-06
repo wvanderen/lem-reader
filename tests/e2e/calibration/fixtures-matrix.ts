@@ -108,6 +108,7 @@ export const DEFAULT_CALIBRATION_SETTINGS: ReaderSettings = {
   measure: 64,
   spacing: "comfortable",
   theme: "sepia",
+  readingMode: "paginated",
 };
 
 /** Merge a variant patch into the default settings. */

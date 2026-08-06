@@ -95,6 +95,7 @@ const baseSettings: ReaderSettings = {
   measure: 64,
   spacing: "comfortable",
   theme: "sepia",
+  readingMode: "paginated",
 };
 
 beforeEach(() => {
