@@ -16,8 +16,27 @@
 //
 // D4-06 quiet chevrons: 44x44 hit-area buttons at the viewport edges with
 // --ink-soft default / --accent on hover/focus-visible / 40% opacity at
-// aria-disabled (Plan 04 adds the keyboard bundle + swipe — this plan ships
-// the pointer path only).
+// aria-disabled. Plan 04-04 adds the keyboard bundle + swipe via
+// PageTurnControls — the chevrons share the SAME turn path (commitTurn) as
+// the imperative handle so pointer + keyboard + swipe stay in sync.
+//
+// D4-11 repagination anchor: the pagination effect captures the current
+// page's article-global offset (via pageStartGlobalOffset on the OLD pages)
+// BEFORE setPages, then re-anchors currentPageIdx via fragmentContainingOffset
+// on the NEW pages. The old page stays mounted until the new one commits
+// (Phase 3 trustedView retention — PAGE-06). Capture reads from refs (not
+// closure) so the effect deps do not include currentPageIdx (which would
+// re-trigger pagination on every turn).
+//
+// D4-10 mode-switch anchor (scrolling→paginated): the parent passes the
+// captured scrolling offset as `initialAnchorOffset`; the first pagination
+// pass uses it (pages is null → no current-page offset to preserve).
+//
+// The surface exposes an imperative handle ({ turn, getCurrentAnchorOffset,
+// getState }) via forwardRef so PageTurnControls (keyboard + swipe) and
+// ArticleView (D4-10 paginated→scrolling capture) can drive the same state
+// without lifting it up. The handle is ADDITIVE — existing callers that pass
+// no ref (e.g. Plan 04-03's component tests) keep working unchanged.
 //
 // The surface does NOT re-mount a second <article> — ArticleView owns the
 // shared <article class="article-body paginated-surface"> and decides via the
@@ -25,12 +44,13 @@
 // its fragment + chevrons + indicator + hairline as children of that shared
 // article element.
 
-import { useEffect, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import type { CanonicalArticle } from "../content/types";
 import type { MeasurementResult } from "../measurement/types";
 import type { DiagnosticBus } from "../measurement/diagnostics";
 import type { PageFragment } from "../pagination/types";
 import { paginateDocument } from "../pagination/fragment";
+import { fragmentContainingOffset, pageStartGlobalOffset } from "../pagination/anchor";
 import { PageFragmentView } from "../pagination/fragmentRenderer";
 import { ProgressHairline } from "./ProgressHairline";
 import { PageIndicator } from "./PageIndicator";
@@ -49,119 +69,245 @@ export interface PaginatedSurfaceProps {
   diagnostics: DiagnosticBus;
   /** The current page content-box height in CSS pixels (from articleEl.getBoundingClientRect). */
   pageContentBoxHeightPx: number;
+  /**
+   * D4-10 scrolling→paginated anchor: the article-global grapheme offset
+   * captured by ArticleView BEFORE the mode swap (from computeTopVisibleOffset).
+   * The first successful pagination pass sets currentPageIdx to the page
+   * containing this offset. Defaults to 0 (top of article). Ignored on
+   * subsequent (repagination) passes — those use the D4-11 current-page
+   * anchor captured from the OLD pages.
+   */
+  initialAnchorOffset?: number;
+  /**
+   * D4-10/D4-11 anchor reporting: fired whenever currentPageIdx or pages
+   * change, with the article-global offset of the current page's first
+   * block. ArticleView stores this in a ref so the NEXT mode swap (paginated
+   * →scrolling) can capture it synchronously before the render swap. Optional.
+   */
+  onAnchorChange?: (offset: number) => void;
 }
 
-export function PaginatedSurface({
-  article,
-  trustedView,
-  articleEl,
-  diagnostics,
-  pageContentBoxHeightPx,
-}: PaginatedSurfaceProps): React.ReactElement | null {
-  const [pages, setPages] = useState<PageFragment[] | null>(null);
-  const [currentPageIdx, setCurrentPageIdx] = useState(0);
+/**
+ * Imperative handle exposed via forwardRef. PageTurnControls (keyboard + swipe
+ * + announce + focus) and ArticleView (D4-10 capture) consume these without
+ * the parent owning currentPageIdx/pages state. The handle reads from refs so
+ * it always reflects the latest committed state.
+ */
+export interface PaginatedSurfaceHandle {
+  /**
+   * Turn the page. Bounds-checked (no wrap at first/last page). Returns the
+   * new {page (1-based), total, moved} so the caller can announce + apply
+   * D4-07 focus restoration, or null when no pages are mounted.
+   */
+  turn: (
+    direction: "next" | "previous",
+  ) => { page: number; total: number; moved: boolean } | null;
+  /**
+   * The article-global D-05 grapheme offset of the current page's first block.
+   * Used by ArticleView to capture the paginated→scrolling anchor BEFORE the
+   * mode-swap re-render (Pitfall 7). Returns 0 when no pages are mounted.
+   */
+  getCurrentAnchorOffset: () => number;
+  /** Current {page (1-based), total}, or null when no pages are mounted. */
+  getState: () => { page: number; total: number } | null;
+}
 
-  // Cancelled-flag pagination effect (mirrors ArticleView L107-129 pattern):
-  // a stale pagination pass (e.g. after a rapid article swap or viewport
-  // change) cannot overwrite a newer one. AbortController + the engine's
-  // internal AbortError handling guarantee silent cancel.
-  useEffect(() => {
-    // Wait for geometry — the engine needs a non-zero page height to produce
-    // pages. ArticleView's rAF-deferred getBoundingClientRect effect sets
-    // this; on the very first render it's 0.
-    if (pageContentBoxHeightPx <= 0) return;
-    const controller = new AbortController();
-    let cancelled = false;
-    try {
-      const result = paginateDocument({
-        article,
-        measurement: trustedView,
-        articleEl,
-        pageContentBoxHeightPx,
-        diagnostics,
-        signal: controller.signal,
-      });
-      if (cancelled) return;
-      if (result.status === "ok" && result.pages.length > 0) {
-        setPages(result.pages);
-        setCurrentPageIdx(0);
+export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurfaceProps>(
+  function PaginatedSurface(
+    {
+      article,
+      trustedView,
+      articleEl,
+      diagnostics,
+      pageContentBoxHeightPx,
+      initialAnchorOffset = 0,
+      onAnchorChange,
+    },
+    ref,
+  ): React.ReactElement | null {
+    const [pages, setPages] = useState<PageFragment[] | null>(null);
+    const [currentPageIdx, setCurrentPageIdx] = useState(0);
+
+    // Refs mirror the latest committed state so the imperative handle and the
+    // pagination effect read fresh values without re-registering closures.
+    // Critically, the pagination effect reads pages/currentPageIdx via these
+    // refs (NOT closure capture) so its dependency array excludes them —
+    // otherwise every turn (currentPageIdx change) would re-trigger pagination.
+    const pagesRef = useRef<PageFragment[] | null>(pages);
+    pagesRef.current = pages;
+    const currentPageIdxRef = useRef<number>(currentPageIdx);
+    currentPageIdxRef.current = currentPageIdx;
+    const articleRef = useRef<CanonicalArticle>(article);
+    articleRef.current = article;
+    const initialAnchorOffsetRef = useRef<number>(initialAnchorOffset);
+    initialAnchorOffsetRef.current = initialAnchorOffset;
+
+    // Cancelled-flag pagination effect (mirrors ArticleView L107-129 pattern):
+    // a stale pagination pass (e.g. after a rapid article swap or viewport
+    // change) cannot overwrite a newer one. AbortController + the engine's
+    // internal AbortError handling guarantee silent cancel.
+    //
+    // D4-11 repagination anchor (PAGE-05): capture the current view's
+    // article-global offset (pageStartGlobalOffset on the OLD pages) BEFORE
+    // setPages, then re-anchor currentPageIdx via fragmentContainingOffset
+    // on the NEW pages. On the FIRST pass (pages null), the anchor is the
+    // D4-10 initialAnchorOffset prop (scrolling→paginated mode switch).
+    useEffect(() => {
+      // Wait for geometry — the engine needs a non-zero page height to produce
+      // pages. ArticleView's rAF-deferred getBoundingClientRect effect sets
+      // this; on the very first render it's 0.
+      if (pageContentBoxHeightPx <= 0) return;
+      const currentArticle = articleRef.current;
+      const currentPages = pagesRef.current;
+      const currentIdx = currentPageIdxRef.current;
+
+      // Capture the anchor BEFORE setPages (Pitfall 7 — capture-before-swap).
+      // On repagination (pages exists) preserve the current page's passage;
+      // on first mount use the D4-10 initialAnchorOffset.
+      let anchorOffset: number;
+      if (currentPages && currentPages[currentIdx]) {
+        anchorOffset = pageStartGlobalOffset(currentArticle, currentPages[currentIdx]!);
       } else {
-        // PAGE-04 fallback — Plan 04-05 wires the banner + session-mode flip.
-        // For this plan, render nothing (ArticleView's article-body still
-        // shows the provenance header so the surface isn't blank chrome).
+        anchorOffset = initialAnchorOffsetRef.current;
+      }
+
+      const controller = new AbortController();
+      let cancelled = false;
+      try {
+        const result = paginateDocument({
+          article: currentArticle,
+          measurement: trustedView,
+          articleEl,
+          pageContentBoxHeightPx,
+          diagnostics,
+          signal: controller.signal,
+        });
+        if (cancelled) return;
+        if (result.status === "ok" && result.pages.length > 0) {
+          setPages(result.pages);
+          setCurrentPageIdx(
+            fragmentContainingOffset(result.pages, anchorOffset, currentArticle),
+          );
+        } else {
+          // PAGE-04 fallback — Plan 04-05 wires the banner + session-mode flip.
+          // For this plan, render nothing (ArticleView's article-body still
+          // shows the provenance header so the surface isn't blank chrome).
+          setPages(null);
+        }
+      } catch (e) {
+        // AbortError is the silent-cancel path (rapid article swap or viewport
+        // change). Any other error is unexpected — leave pages null so the
+        // parent's scrolling branch is the natural fallback (Plan 04-05).
+        if (e instanceof Error && e.name === "AbortError") return;
         setPages(null);
       }
-    } catch (e) {
-      // AbortError is the silent-cancel path (rapid article swap or viewport
-      // change). Any other error is unexpected — leave pages null so the
-      // parent's scrolling branch is the natural fallback (Plan 04-05).
-      if (e instanceof Error && e.name === "AbortError") return;
-      setPages(null);
+      return () => {
+        cancelled = true;
+        controller.abort();
+      };
+    }, [article, trustedView, articleEl, pageContentBoxHeightPx, diagnostics]);
+
+    // Report the current anchor offset whenever the page changes so the
+    // parent can capture it synchronously before a future mode swap.
+    useEffect(() => {
+      const p = pagesRef.current;
+      if (!p || !p[currentPageIdx]) {
+        onAnchorChange?.(0);
+        return;
+      }
+      onAnchorChange?.(pageStartGlobalOffset(articleRef.current, p[currentPageIdx]!));
+    }, [currentPageIdx, pages, onAnchorChange]);
+
+    /**
+     * The shared turn path — chevrons + imperative handle + (via the handle)
+     * keyboard + swipe all route through here so aria-disabled bounds, the
+     * "Page N of M" announce, and D4-07 focus stay in lockstep. Bounds-checked:
+     * at page 1 / last page the corresponding direction is a no-op (returns
+     * moved:false so the caller skips the announce + focus step).
+     */
+    function commitTurn(
+      direction: "next" | "previous",
+    ): { page: number; total: number; moved: boolean } | null {
+      const p = pagesRef.current;
+      if (!p || p.length === 0) return null;
+      const cur = currentPageIdxRef.current;
+      const next =
+        direction === "next" ? Math.min(cur + 1, p.length - 1) : Math.max(0, cur - 1);
+      const moved = next !== cur;
+      if (moved) setCurrentPageIdx(next);
+      return { page: next + 1, total: p.length, moved };
     }
-    return () => {
-      cancelled = true;
-      controller.abort();
-    };
-  }, [article, trustedView, articleEl, pageContentBoxHeightPx, diagnostics]);
 
-  const goPrevious = () => {
-    setCurrentPageIdx((i) => Math.max(0, i - 1));
-  };
-  const goNext = () => {
-    setCurrentPageIdx((i) =>
-      pages ? Math.min(i + 1, pages.length - 1) : i,
+    // Imperative handle — ADDITIVE (existing no-ref callers are unaffected).
+    useImperativeHandle(
+      ref,
+      (): PaginatedSurfaceHandle => ({
+        turn: (direction) => commitTurn(direction),
+        getCurrentAnchorOffset: () => {
+          const p = pagesRef.current;
+          const idx = currentPageIdxRef.current;
+          if (!p || !p[idx]) return 0;
+          return pageStartGlobalOffset(articleRef.current, p[idx]!);
+        },
+        getState: () => {
+          const p = pagesRef.current;
+          if (!p || p.length === 0) return null;
+          return { page: currentPageIdxRef.current + 1, total: p.length };
+        },
+      }),
+      [],
     );
-  };
 
-  // Until the first pagination pass commits (or when status is "fallback"),
-  // render nothing inside the article body. The shared <article> header stays
-  // visible above this surface.
-  if (!pages || pages.length === 0) {
-    return null;
-  }
+    // Until the first pagination pass commits (or when status is "fallback"),
+    // render nothing inside the article body. The shared <article> header stays
+    // visible above this surface.
+    if (!pages || pages.length === 0) {
+      return null;
+    }
 
-  const isFirst = currentPageIdx === 0;
-  const isLast = currentPageIdx === pages.length - 1;
+    const isFirst = currentPageIdx === 0;
+    const isLast = currentPageIdx === pages.length - 1;
 
-  return (
-    <>
-      {/*
-        ProgressHairline accepts a `page` prop in paginated mode; the fill
-        derives from N/M. PageIndicator is a sibling decorative span. The
-        SectionAnnouncer live region in ArticleView conveys structural
-        progress to AT; both elements here are aria-hidden.
-      */}
-      <ProgressHairline page={{ current: currentPageIdx + 1, total: pages.length }} />
-      <PageIndicator current={currentPageIdx + 1} total={pages.length} />
+    return (
+      <>
+        {/*
+          ProgressHairline accepts a `page` prop in paginated mode; the fill
+          derives from N/M. PageIndicator is a sibling decorative span. The
+          SectionAnnouncer live region in ArticleView conveys structural
+          progress to AT; both elements here are aria-hidden.
+        */}
+        <ProgressHairline page={{ current: currentPageIdx + 1, total: pages.length }} />
+        <PageIndicator current={currentPageIdx + 1} total={pages.length} />
 
-      <PageFragmentView
-        fragment={pages[currentPageIdx]!}
-        pageIndex={currentPageIdx}
-        article={article}
-        lang={article.lang}
-      />
+        <PageFragmentView
+          fragment={pages[currentPageIdx]!}
+          pageIndex={currentPageIdx}
+          article={article}
+          lang={article.lang}
+        />
 
-      <button
-        type="button"
-        className="page-turn page-turn-previous"
-        aria-label="Previous page"
-        aria-disabled={isFirst}
-        onClick={goPrevious}
-      >
-        <ChevronLeftIcon aria-hidden="true" />
-      </button>
-      <button
-        type="button"
-        className="page-turn page-turn-next"
-        aria-label="Next page"
-        aria-disabled={isLast}
-        onClick={goNext}
-      >
-        <ChevronRightIcon aria-hidden="true" />
-      </button>
-    </>
-  );
-}
+        <button
+          type="button"
+          className="page-turn page-turn-previous"
+          aria-label="Previous page"
+          aria-disabled={isFirst}
+          onClick={() => commitTurn("previous")}
+        >
+          <ChevronLeftIcon aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className="page-turn page-turn-next"
+          aria-label="Next page"
+          aria-disabled={isLast}
+          onClick={() => commitTurn("next")}
+        >
+          <ChevronRightIcon aria-hidden="true" />
+        </button>
+      </>
+    );
+  },
+);
 
 // ── Inline chevron glyphs ────────────────────────────────────────────────────
 // Mirrors Header.tsx GearIcon discipline (L42-59): inline SVG, viewBox

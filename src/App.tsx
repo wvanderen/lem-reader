@@ -18,7 +18,7 @@
 //                       in its destructive onClick — Pitfall 8; never auto)
 // Both mount inside the provider so they read the live storageState. Neither
 // blocks reading (article rendering is independent of Dexie — D2-13).
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FixtureList } from "./routes/FixtureList";
 import { ArticleView } from "./routes/ArticleView";
 import { SkipLink } from "./a11y/SkipLink";
@@ -34,6 +34,17 @@ function parseHash(): View {
   const m = /^#\/article\/([a-z0-9-]+)$/.exec(window.location.hash);
   return m ? { name: "article", id: m[1] as string } : { name: "list" };
 }
+
+/**
+ * The D4-10 mode-toggle bridge. ArticleView registers its anchor-capturing
+ * handler here on mount (so the passage is preserved across the mode swap);
+ * on unmount the ref clears and the toggle falls back to a plain preference
+ * flip (no article = no anchor to preserve). Held by AppInner (inside the
+ * SettingsProvider) and threaded to BOTH Header (reader) and ArticleView
+ * (writer). App itself lives outside the provider, so the bridge is created
+ * in AppInner where useSettings() is reachable for the fallback path.
+ */
+type ModeToggleHandler = () => void;
 
 /**
  * Reads `storageState` from the provider and renders the STATE-05 recovery
@@ -97,12 +108,22 @@ function StorageRecoverySurfaces() {
   );
 }
 
-export function App() {
+/**
+ * AppInner lives inside <SettingsProvider> so it can read useSettings() for
+ * the mode-toggle fallback (when no article is mounted, the toggle flips the
+ * preference directly). When ArticleView IS mounted it registers its anchor-
+ * capturing handler on modeToggleHandlerRef, and the fallback is bypassed.
+ */
+function AppInner() {
   const [view, setView] = useState<View>(() => parseHash());
   // Settings panel open state is app-shell concern (D2-01) — the gear's
   // aria-expanded and the dialog's open prop both read from this. Lifted here
   // so Header (the trigger) and SettingsPanel (the dialog) share one source.
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const { settings, update } = useSettings();
+  // D4-10 bridge — ArticleView registers its handler here; null on the list.
+  const modeToggleHandlerRef = useRef<ModeToggleHandler | null>(null);
+
   useEffect(() => {
     // Gap 3 / UAT test 10: only hashes prefixed with "#/" are app routes.
     // Bare fragment anchors are native in-page scroll targets and must NOT
@@ -121,19 +142,49 @@ export function App() {
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
+
+  // D4-09/D4-10: when ArticleView has registered an anchor-capturing handler,
+  // route the toggle through it (passage preserved across the mode swap). On
+  // the fixture list (no article) fall back to a plain preference flip.
+  const handleToggleMode = () => {
+    if (modeToggleHandlerRef.current) {
+      modeToggleHandlerRef.current();
+    } else {
+      update({
+        readingMode: settings.readingMode === "paginated" ? "scrolling" : "paginated",
+      });
+    }
+  };
+
   return (
-    <SettingsProvider>
+    <>
       <SkipLink />
       <Header
         onOpenSettings={() => setSettingsOpen(true)}
         settingsOpen={settingsOpen}
+        onToggleMode={handleToggleMode}
       />
       <SettingsPanel
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
       />
       <StorageRecoverySurfaces />
-      {view.name === "list" ? <FixtureList /> : <ArticleView articleId={view.id} />}
+      {view.name === "list" ? (
+        <FixtureList />
+      ) : (
+        <ArticleView
+          articleId={view.id}
+          modeToggleHandlerRef={modeToggleHandlerRef}
+        />
+      )}
+    </>
+  );
+}
+
+export function App() {
+  return (
+    <SettingsProvider>
+      <AppInner />
     </SettingsProvider>
   );
 }

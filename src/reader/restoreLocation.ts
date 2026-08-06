@@ -103,3 +103,45 @@ export function findScrollTarget(
   // keeps restore calm under any drift).
   return last;
 }
+
+/**
+ * Compute the article-global grapheme offset of the topmost visible block,
+ * mirroring findScrollTarget's accumulation in the forward direction. Reuses
+ * normalizeElText + graphemeClusters so the offset round-trips exactly with
+ * the restored target on reopen.
+ *
+ * Phase 4 Plan 04-04 (D4-10 anchor): ArticleView calls this to capture the
+ * reader's current scrolling position before switching to paginated mode, so
+ * the paginated surface can render the page containing the same passage.
+ * useScrollSave (scroll-position persistence) also calls this — both consumers
+ * share ONE implementation (no fork — Pattern 5).
+ *
+ * @param article   The canonical article (lang drives grapheme segmentation).
+ * @param blocks    The rendered block elements in document order (from
+ *                  ArticleView.queryBlocks — same selector useScrollSave uses).
+ * @param headerPx  Approximate header height in CSS px. A block whose top has
+ *                  scrolled to (or past) this line marks the reader's current
+ *                  section. Defaults to 48 (the .app-header min-height).
+ */
+export function computeTopVisibleOffset(
+  article: CanonicalArticle,
+  blocks: HTMLElement[],
+  headerPx = 48,
+): number {
+  if (blocks.length === 0) return 0;
+  let consumed = 0;
+  let offset = 0;
+  for (const el of blocks) {
+    const text = normalizeElText(el);
+    const len = graphemeClusters(text, article.lang).length;
+    // A block whose top has scrolled to (or past) the header line marks the
+    // reader's current section. Capture its STARTING offset (not mid-block)
+    // so the anchor lands at the block top — calm and predictable (Pattern 5:
+    // best-effort block-level target).
+    if (el.getBoundingClientRect().top <= headerPx + 8) {
+      offset = consumed;
+    }
+    consumed += len + BLOCK_SEPARATOR.length;
+  }
+  return offset;
+}

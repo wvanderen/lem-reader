@@ -63,6 +63,18 @@ function blockText(block: Block): string {
 }
 
 /**
+ * Exported alias for `blockText` — Phase 4 Plan 04-04 anchor helpers
+ * (src/pagination/anchor.ts) need per-block normalized text to compute
+ * article-global grapheme offsets for the D4-10 mode-switch + D4-11
+ * repagination anchors. Exporting the SAME function (rather than a parallel
+ * implementation) honors Pattern 5 / Pitfall: never fork normalization —
+ * any divergence would shift every passage anchor.
+ */
+export function blockNormalizedText(block: Block): string {
+  return blockText(block);
+}
+
+/**
  * D-05 contract: ONE deterministic normalized-text string per article revision.
  *
  * Pitfall 3 rule: footnote BODY text participates AFTER the body blocks, in

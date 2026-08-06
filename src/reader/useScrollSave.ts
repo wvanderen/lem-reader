@@ -26,8 +26,7 @@
 import { useEffect, useRef } from "react";
 import type { CanonicalArticle } from "../content/types";
 import type { LocationRecord } from "../content/schema";
-import { BLOCK_SEPARATOR, graphemeClusters } from "../content/normalizeText";
-import { normalizeElText } from "./restoreLocation";
+import { computeTopVisibleOffset } from "./restoreLocation";
 import { saveLocation } from "../persistence/locationStore";
 import { classifyStorageError } from "../persistence/errors";
 
@@ -83,11 +82,10 @@ export function useScrollSave(
   const pendingRef = useRef<LocationRecord | null>(null);
 
   /**
-   * Compute the grapheme offset of the topmost visible block, mirroring
-   * findScrollTarget's accumulation in the forward direction. Reuses
-   * normalizeElText + graphemeClusters so the offset round-trips exactly
-   * with the restored target on reopen. Reads the current article from
-   * articleRef so the closure stays stable across article swaps.
+   * Compute the grapheme offset of the topmost visible block. Delegates to the
+   * shared `computeTopVisibleOffset` helper (exported from restoreLocation.ts)
+   * so save/restore + the Phase 4 Plan 04-04 D4-10 mode-switch anchor all share
+   * ONE implementation — never fork the block-walk accumulation.
    */
   function computeOffset(): number {
     const article = articleRef.current;
@@ -99,23 +97,7 @@ export function useScrollSave(
         "h2, h3, h4, p, blockquote, li, pre, figure, sup, details",
       ),
     );
-    if (blocks.length === 0) return 0;
-    let consumed = 0;
-    let offset = 0;
-    for (const el of blocks) {
-      const text = normalizeElText(el);
-      const len = graphemeClusters(text, article.lang).length;
-      // A block whose top has scrolled to (or past) the header line marks the
-      // reader's current section. We capture its STARTING offset (not mid-
-      // block) so restore lands at the block top — calm and predictable
-      // (Pattern 5: best-effort block-level target).
-      const topRelativeToViewport = el.getBoundingClientRect().top;
-      if (topRelativeToViewport <= HEADER_PX + 8) {
-        offset = consumed;
-      }
-      consumed += len + BLOCK_SEPARATOR.length;
-    }
-    return offset;
+    return computeTopVisibleOffset(article, blocks, HEADER_PX);
   }
 
   /**

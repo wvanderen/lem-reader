@@ -917,3 +917,67 @@ dialog.wipe-confirm::backdrop {
   height: 24px;
   pointer-events: none;
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+ * Phase 4 Plan 04-04 — Dual-mode navigation chrome
+ *
+ * ModeToggle (D4-09, UI-SPEC §Interaction 15): the quiet reading-mode toggle
+ * in the header, inline-start of the gear. Mirrors the gear-button geometry +
+ * quiet-chrome rule (--ink-soft default; --accent ONLY when
+ * aria-pressed="true"). The header-controls group keeps the toggle + gear
+ * adjacent on the inline-end so the header does NOT grow (READ-04) — the row
+ * stays 48px and the wordmark stays inline-start.
+ *
+ * No motion-related property is declared on any selector here (UI-SPEC
+ * §Interaction 12 + RESEARCH anti-pattern #6 — the global prefers-reduced-
+ * motion gate is trivially satisfied). The glyph swap on toggle is an instant
+ * content change, not a transition.
+ * ════════════════════════════════════════════════════════════════════════ */
+
+/* The two inline-end controls (mode-toggle + gear) share an inline-flex group
+   so they sit adjacent and the wordmark stays inline-start. The gap is calm
+   (--space-sm) so the controls read as one cluster without touching. */
+.header-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+/* ── Mode-toggle button (D4-09, READ-04 quiet rule) ────────────────────────── */
+/* Mirrors .gear-button geometry (L350-371): 44x44 hit area, transparent
+   background, transparent border, --ink-soft default. --accent ONLY when
+   aria-pressed="true" (paginated active) — mirrors the gear's open/closed
+   discipline (forced-colors safety — state is ALSO conveyed by aria-pressed +
+   the glyph swap, never by color alone). */
+.mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--touch);
+  min-width: var(--touch);
+  padding: var(--space-sm);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.mode-toggle:hover {
+  color: var(--accent);
+}
+.mode-toggle:focus-visible {
+  color: var(--accent);
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+/* Active (paginated) state — accent conveys the active mode, ALSO conveyed by
+   aria-pressed="true" + the single-page glyph (forced-colors safety). */
+.mode-toggle[aria-pressed="true"] {
+  color: var(--accent);
+}
+/* The inline-SVG glyph fills the hit area (mirrors .gear-button svg sizing). */
+.mode-toggle svg {
+  width: 20px;
+  height: 20px;
+  pointer-events: none;
+}

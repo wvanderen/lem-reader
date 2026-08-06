@@ -25,14 +25,30 @@ import type { CanonicalArticle } from "../content/types";
 import type { LocationRecord } from "../content/schema";
 import { ArticleBody } from "../content/render/BlockRenderer";
 import { loadLocation } from "../persistence/locationStore";
-import { findScrollTarget } from "../reader/restoreLocation";
+import { findScrollTarget, computeTopVisibleOffset } from "../reader/restoreLocation";
 import { useScrollSave } from "../reader/useScrollSave";
 import { useMeasurement } from "../measurement/useMeasurement";
 import { useSettings } from "../settings/SettingsContext";
 import { PaginatedSurface } from "../reader/PaginatedSurface";
+import type { PaginatedSurfaceHandle } from "../reader/PaginatedSurface";
 import { ProgressHairline } from "../reader/ProgressHairline";
 import { SectionAnnouncer } from "../reader/SectionAnnouncer";
 import { ResumeBanner } from "../reader/ResumeBanner";
+
+/** The D4-10 mode-toggle handler signature (App threads a ref of this shape). */
+type ModeToggleHandler = () => void;
+
+export interface ArticleViewProps {
+  articleId: string;
+  /**
+   * D4-10 bridge: App passes a ref here. ArticleView registers its anchor-
+   * capturing toggle handler on mount so the header ModeToggle button (and
+   * the M shortcut via PageTurnControls) preserve the reader's passage across
+   * the mode swap. On unmount the ref clears and App falls back to a plain
+   * preference flip.
+   */
+  modeToggleHandlerRef: React.RefObject<ModeToggleHandler | null>;
+}
 
 function formatDate(iso: string): string {
   try {
@@ -58,7 +74,7 @@ function queryBlocks(articleEl: HTMLElement): HTMLElement[] {
   );
 }
 
-export function ArticleView({ articleId }: { articleId: string }) {
+export function ArticleView({ articleId, modeToggleHandlerRef }: ArticleViewProps) {
   const [article, setArticle] = useState<CanonicalArticle | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   // The restored location (STATE-01). Null when no saved location was found
@@ -114,8 +130,103 @@ export function ArticleView({ articleId }: { articleId: string }) {
   // from the Plan 04-02 Zod value-shape evolution (default "paginated"). The
   // branch is additive — scrolling mode stays byte-unchanged so existing
   // tests regress nothing.
-  const { settings } = useSettings();
+  const { settings, update } = useSettings();
   const isPaginated = settings.readingMode === "paginated";
+
+  // Phase 4 Plan 04-04: imperative handle to the paginated surface. Drives
+  // keyboard + swipe (PageTurnControls) and reads the current page's anchor
+  // offset for the D4-10 paginated→scrolling capture.
+  const surfaceRef = useRef<PaginatedSurfaceHandle | null>(null);
+
+  // Phase 4 Plan 04-04 (D4-10 mode-switch anchor): the reader's current
+  // article-global grapheme offset, kept fresh CONTINUOUSLY so a mode swap
+  // can capture it synchronously BEFORE the render swap (Pitfall 7). In
+  // scrolling mode a passive scroll listener updates it; in paginated mode
+  // PaginatedSurface's onAnchorChange callback updates it. The value is the
+  // offset of the topmost-visible block (scrolling) / the current page's
+  // first block (paginated) — both in the SAME D-05 coordinate system.
+  const currentAnchorOffsetRef = useRef(0);
+  // D4-10 pending mode-swap: {from, offset} captured synchronously in the
+  // toggle handler, consumed by the post-commit apply effect. Cleared on
+  // consumption so a stale swap cannot re-apply.
+  const pendingModeSwapRef = useRef<{ from: string; offset: number } | null>(null);
+  const handleAnchorChange = useCallback((offset: number) => {
+    currentAnchorOffsetRef.current = offset;
+  }, []);
+
+  // Phase 4 Plan 04-04 (D4-09 + D4-10): the mode-toggle handler. Captures the
+  // anchor SYNCHRONOUSLY before calling update() so the post-swap render can
+  // re-anchor to the same passage. Registered on the App-provided ref so the
+  // header ModeToggle button (and the M shortcut via PageTurnControls) share
+  // ONE toggle path with ONE anchor capture.
+  const handleToggleMode = useCallback(() => {
+    // Capture BEFORE the settings update re-renders (Pitfall 7). currentAnchor
+    // OffsetRef is kept fresh by the scroll listener / onAnchorChange above.
+    const offset = currentAnchorOffsetRef.current;
+    pendingModeSwapRef.current = {
+      from: settings.readingMode,
+      offset,
+    };
+    update({
+      readingMode: settings.readingMode === "paginated" ? "scrolling" : "paginated",
+    });
+  }, [settings.readingMode, update]);
+
+  // Register the handler on the App-provided ref. Updated every render so the
+  // closure always sees the latest settings.readingMode; cleared on unmount
+  // so App falls back to the plain-preference-flip path.
+  useEffect(() => {
+    modeToggleHandlerRef.current = handleToggleMode;
+    return () => {
+      modeToggleHandlerRef.current = null;
+    };
+  }, [handleToggleMode, modeToggleHandlerRef]);
+
+  // Phase 4 Plan 04-04 (D4-10 anchor tracking — scrolling mode): keep
+  // currentAnchorOffsetRef fresh on every scroll so the capture at toggle
+  // time reads the live position. Only registered in scrolling mode.
+  useEffect(() => {
+    if (isPaginated || !article || !articleEl) return;
+    const capture = () => {
+      if (!articleRef.current) return;
+      currentAnchorOffsetRef.current = computeTopVisibleOffset(
+        article,
+        queryBlocks(articleRef.current),
+      );
+    };
+    capture(); // initialize at current scroll
+    window.addEventListener("scroll", capture, { passive: true });
+    return () => window.removeEventListener("scroll", capture);
+  }, [isPaginated, article, articleEl]);
+
+  // Phase 4 Plan 04-04 (D4-10 anchor apply — paginated→scrolling): after the
+  // mode swap commits, silent-scroll the scrolling ArticleBody to the captured
+  // offset via the SAME findScrollTarget helper Phase 2's location-restore
+  // uses (no fork). rAF-deferred so the blocks are positioned before the query.
+  const prevModeRef = useRef(settings.readingMode);
+  useEffect(() => {
+    const prev = prevModeRef.current;
+    prevModeRef.current = settings.readingMode;
+    const swap = pendingModeSwapRef.current;
+    if (!swap || prev === settings.readingMode) return;
+    pendingModeSwapRef.current = null;
+    // Only the paginated→scrolling path needs a post-commit apply here — the
+    // scrolling→paginated path is handled by PaginatedSurface's
+    // initialAnchorOffset prop (read at mount from currentAnchorOffsetRef).
+    if (swap.from === "paginated" && settings.readingMode === "scrolling") {
+      if (swap.offset > 0 && article && articleRef.current) {
+        const rafId = requestAnimationFrame(() => {
+          if (!articleRef.current || !article) return;
+          const blocks = queryBlocks(articleRef.current);
+          // Silent + instant (A11Y-06) — never behavior: "smooth".
+          findScrollTarget(article, blocks, swap.offset)?.scrollIntoView({
+            block: "start",
+          });
+        });
+        return () => cancelAnimationFrame(rafId);
+      }
+    }
+  }, [settings.readingMode, article]);
 
   // Paginated geometry: derive the page content-box height from the rendered
   // <article class="paginated-surface"> element after mount. rAF-deferred
@@ -339,13 +450,26 @@ export function ArticleView({ articleId }: { articleId: string }) {
             </a>
           </header>
           {paginatedActive && trustedView && articleEl ? (
-            <PaginatedSurface
-              article={article}
-              trustedView={trustedView}
-              articleEl={articleEl}
-              diagnostics={diagnostics}
-              pageContentBoxHeightPx={pageContentBoxHeightPx}
-            />
+            <>
+              {/*
+                PaginatedSurface owns pages + currentPageIdx + the turn handler.
+                The ref lets PageTurnControls (keyboard + swipe) drive the same
+                state. initialAnchorOffset is the D4-10 scrolling→paginated
+                anchor captured BEFORE the mode swap; onAnchorChange keeps
+                currentAnchorOffsetRef fresh for the NEXT swap (paginated→
+                scrolling).
+              */}
+              <PaginatedSurface
+                ref={surfaceRef}
+                article={article}
+                trustedView={trustedView}
+                articleEl={articleEl}
+                diagnostics={diagnostics}
+                pageContentBoxHeightPx={pageContentBoxHeightPx}
+                initialAnchorOffset={currentAnchorOffsetRef.current}
+                onAnchorChange={handleAnchorChange}
+              />
+            </>
           ) : (
             <ArticleBody article={article} />
           )}
