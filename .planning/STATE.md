@@ -5,14 +5,14 @@ milestone_name: milestone
 current_phase: 04
 current_phase_name: responsive-pagination-and-dual-mode-navigation
 status: executing
-stopped_at: Completed 04-05-PLAN.md (Tasks 1+2; Task 3 human gate pending; PAGE-03 blocked on engine container-handling gap)
-last_updated: "2026-08-06T16:25:00.000Z"
+stopped_at: Created 04-06-PLAN.md (engine container-handling gap-fix plan — unblocks PAGE-03 + 04-05 Task 3 gate)
+last_updated: "2026-08-06T17:30:00.000Z"
 last_activity: 2026-08-06
-last_activity_desc: Phase 04 plan 05 code complete (banner + e2e specs); engine gap surfaced
+last_activity_desc: Phase 04 plan 06 created (engine gap fix: pre-captured line boxes + data-block-index mapping + e2e unskip + persistence repair)
 progress:
   total_phases: 6
   completed_phases: 3
-  total_plans: 16
+  total_plans: 17
   completed_plans: 15
   percent: 50
 ---
@@ -29,11 +29,11 @@ See: .planning/PROJECT.md (updated 2026-08-05)
 ## Current Position
 
 Phase: 04 (responsive-pagination-and-dual-mode-navigation) — EXECUTING
-Plan: 5 of 5 (Plans 04-01..04-04 complete; Plan 04-05 Tasks 1+2 complete, Task 3 human gate PENDING)
-Status: Plan 04-05 code complete — PaginationFallbackBanner + DiagnosticBus subscription + session-mode flip (PAGE-04/09 proven); 8 e2e specs implemented. ⚠️ BLOCKING: the pagination engine cannot paginate ANY corpus fixture (PaginatedSurface replaces the full ArticleBody before the engine reads line boxes + every fixture's container blocks break the 1:1 block↔element mapping) — PAGE-03 corpus matrix proof impossible without engine work (Rule 4, surfaced for human decision).
-Last activity: 2026-08-06 — Phase 04 plan 05 code complete; engine gap surfaced
+Plan: 6 of 6 (Plans 04-01..04-04 complete; Plan 04-05 Tasks 1+2 complete, Task 3 human gate PENDING; Plan 04-06 CREATED — engine gap-fix plan that unblocks PAGE-03 + the 04-05 Task 3 gate)
+Status: Plan 04-06 planned — resolves the Rule-4 engine container-handling blocker surfaced by 04-05 via Option A (capture LineBox[][] during measurement) + data-block-index 1:1 block↔element mapping + e2e ok-path unskip + persistence.spec.ts STATE-01 repair. Once 04-06 executes: the corpus matrix runs, PAGE-03 closes, and 04-05 Task 3's manual gate can proceed.
+Last activity: 2026-08-06 — Plan 04-06 created (engine gap fix)
 
-Progress: [█████████░] 3/6 phases complete (88%) — 15/16 plans executed (94%)
+Progress: [█████████░] 3/6 phases complete (88%) — 15/17 plans executed (88%)
 
 ## Performance Metrics
 
@@ -140,8 +140,8 @@ None yet.
 ### Blockers/Concerns
 
 - [Phase 3 → resolved]: Pretext adoption tolerances + metric fingerprints landed in Phase 3 (calibration/fingerprint.json committed; headings eligible chromium/firefox, partial webkit, paragraphs DOM-only; runtime drift guard + CI gate in place).
-- [Phase 4 → ⚠️ BLOCKING (surfaced Plan 04-05)]: The pagination engine cannot paginate ANY corpus fixture. Two compounding issues: (1) PaginatedSurface replaces the full ArticleBody with a single page fragment before the engine reads live line boxes via `articleEl.querySelectorAll(BLOCK_SELECTOR)`; (2) every fixture contains container blocks (blockquote/lists) whose nested children break the engine's `elements.length !== articleBlocks.length` guard → `dom-fallback`. PAGE-03 corpus matrix proof (the plan's highest-risk deliverable) is impossible without engine work outside Plan 04-05's scope. Human must decide: Option A (capture LineBox[][] in measurement phase) OR Option B (hidden measurement DOM source in PaginatedSurface) + a container-aware block↔element mapping fix. See 04-05-SUMMARY §Blocking Finding.
-- [Phase 4 → deferred]: persistence.spec.ts STATE-01 location-restore tests fail pre-existing since 04-02/04-03 (paginated default + paginated-surface geometry prevents window scroll). Logged to deferred-items.md. Out of Plan 04-05 scope.
+- [Phase 4 → PLANNED (Plan 04-06)]: The pagination engine cannot paginate ANY corpus fixture. Two compounding issues: (1) PaginatedSurface replaces the full ArticleBody with a single page fragment before the engine reads live line boxes via `articleEl.querySelectorAll(BLOCK_SELECTOR)`; (2) every fixture contains container blocks (blockquote/lists) whose nested children break the engine's `elements.length !== articleBlocks.length` guard → `dom-fallback`. **Resolution path = Plan 04-06** (user-approved Option A + data-block-index + fold-in persistence failures): capture LineBox[][] during the measurement phase + add data-block-index for a 1:1 block↔element mapping + engine consumes pre-captured line boxes + remove the corpus-matrix ok-path e2e skips + fix the pre-existing persistence.spec.ts STATE-01 failures. See 04-06-PLAN.md.
+- [Phase 4 → deferred → folded into 04-06]: persistence.spec.ts STATE-01 location-restore tests fail pre-existing since 04-02/04-03 (paginated default + paginated-surface geometry prevents window scroll). Now tracked under Plan 04-06 Task 5 (test-only fix: seed readingMode "scrolling").
 - [Phase 5]: Offset units, grapheme handling, overlap semantics, and anchor confidence thresholds need explicit decisions.
 - [Phase 6]: Concrete browser/OS/screen-reader support combinations and manual protocol remain to be selected.
 
@@ -153,6 +153,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-08-06T16:25:00.000Z
-Stopped at: Completed 04-05-PLAN.md (Tasks 1+2; Task 3 human gate pending; PAGE-03 blocked on engine gap)
+Last session: 2026-08-06T17:30:00.000Z
+Stopped at: Created 04-06-PLAN.md (engine container-handling gap-fix plan — unblocks PAGE-03 + 04-05 Task 3 gate)
 Resume file: None
