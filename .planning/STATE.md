@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 4
-current_phase_name: Responsive Pagination and Dual-Mode Navigation
+current_phase: 04
+current_phase_name: responsive-pagination-and-dual-mode-navigation
 status: executing
-stopped_at: Phase 4 UI-SPEC approved
-last_updated: "2026-08-05T18:03:27.476Z"
-last_activity: 2026-08-05
-last_activity_desc: Phase 03 complete (2/2 plans, 8/8 truths verified, 7/7 UAT passed), transitioned to Phase 4
+stopped_at: Phase 4 plan 04-01 complete
+last_updated: "2026-08-06T14:31:56.000Z"
+last_activity: 2026-08-06
+last_activity_desc: Phase 04 plan 01 (pagination engine) complete
 progress:
   total_phases: 6
   completed_phases: 3
-  total_plans: 11
-  completed_plans: 11
-  percent: 50
+  total_plans: 16
+  completed_plans: 12
+  percent: 53
 ---
 
 # Project State
@@ -28,12 +28,12 @@ See: .planning/PROJECT.md (updated 2026-08-05)
 
 ## Current Position
 
-Phase: 4 — Responsive Pagination and Dual-Mode Navigation
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-08-05 — Phase 03 complete (2/2 plans, 8/8 truths verified, 7/7 UAT passed), transitioned to Phase 4
+Phase: 04 (responsive-pagination-and-dual-mode-navigation) — EXECUTING
+Plan: 2 of 5 (Plan 04-01 complete; Plan 04-02 next)
+Status: Plan 04-01 complete (pagination engine + contracts + widow rules + orchestrator)
+Last activity: 2026-08-06 — Phase 04 plan 01 complete
 
-Progress: [██████████░░░░░░░░░░] 3/6 phases complete (50%) — 11/11 plans executed
+Progress: [██████████░░░░░░░░░░] 3/6 phases complete (53%) — 12/16 plans executed
 
 ## Performance Metrics
 
@@ -66,6 +66,7 @@ Progress: [██████████░░░░░░░░░░] 3/6 pha
 | Phase 02 P04 | 5 min | 2 tasks | 7 files |
 | Phase 03 P01 | 22 min | 3 tasks | 16 files |
 | Phase 03 P02 | 19 min | 2 tasks | 14 files |
+| Phase 04 P01 | 13 min (Task 2) + prior (Task 1) | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -110,6 +111,11 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: Phase 03-02: Calibration harness split — Playwright per-engine parallel + Node compare merge avoids cross-worker coordination for single fingerprint write
 - [Phase ?]: Phase 03-02: Calibration evidence — headings eligible (216/216 chromium+firefox, 156/216 webkit); paragraphs 0/216 (rich-inline marks + wordSpacing Pitfall 6 + system-ui sans Pitfall 5) — D3-01 per-kind gate's purpose realized
 - [Phase ?]: Phase 03-02: fingerprint.compare.ts refuses empty input (exit 2) — never overwrite committed fingerprint with placeholder
+- [Phase 4]: Phase 04-01: SplitDecision simplified to {kind:"atomic"} | {kind:"split"} — Task 1 had over-specified splitAtGrapheme on the split variant; classifyBlock is a pure block.kind→classification switch, and the actual split offset is computed downstream by the orchestrator using line boxes + widow rules. Removed splitAtGrapheme so the type matches the natural code shape.
+- [Phase 4]: Phase 04-01: MVP pagination engine assumes 1:1 article.blocks ↔ querySelectorAll elements (holds for top-level paragraph/heading/figure/code/footnote/unsupported). Container kinds (blockquote + bulleted/numbered lists) currently trip block-element-mismatch fallback; Plan 03's recursive fragment renderer will land the container path.
+- [Phase 4]: Phase 04-01: chooseSplit verifies the before-slice ACTUALLY fits on the current page after the widow bump (not just the 2/2 line-count rule) — prevents overflowing page-1 entries when the candidate is line 0 but the orphan bump pushes the split to SPLIT_WIDOW_LINES.
+- [Phase 4]: Phase 04-01: Atomic-oversize threshold is strictly-greater-than (> 0.75): a block at exactly 75% is allowed; 75.0001% triggers fallback (edge case unit-tested).
+- [Phase 4]: Phase 04-01: applyHeadingWidow falls back to heading-only height check when following block has < HEADING_WIDOW_LINES (=2) lines — the rule can't anchor meaningfully without enough following lines.
 
 ### Pending Todos
 
@@ -130,6 +136,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-08-05T16:31:42.882Z
-Stopped at: Phase 4 UI-SPEC approved
-Resume file: .planning/phases/04-responsive-pagination-and-dual-mode-navigation/04-UI-SPEC.md
+Last session: 2026-08-06T14:31:56.000Z
+Stopped at: Phase 4 plan 04-01 complete (pagination engine shipped)
+Resume file: .planning/phases/04-responsive-pagination-and-dual-mode-navigation/04-02-PLAN.md
