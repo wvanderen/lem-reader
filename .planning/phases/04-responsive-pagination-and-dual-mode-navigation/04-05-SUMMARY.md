@@ -64,7 +64,7 @@ requirements-completed: [PAGE-04, PAGE-09]  # PAGE-03 BLOCKED on the engine cont
 # Metrics
 duration: 27min
 completed: 2026-08-06
-status: code-complete-human-gate-pending  # Tasks 1+2 done; Task 3 human gate pending; PAGE-03 blocked on engine gap (Rule 4 surfaced)
+status: complete  # Tasks 1+2 done in this plan; Task 3 human-verify gate APPROVED 2026-08-06 after Plan 04-06 closed the engine container-handling gap (PAGE-03) and the corpus-matrix ok-paths ran green
 ---
 
 # Phase 04 Plan 05: Pagination Fallback Banner + Corpus Matrix Proofs Summary
@@ -133,7 +133,11 @@ Each task was committed atomically:
 1. **Task 1: PaginationFallbackBanner + DiagnosticBus subscription + session-mode flip + DEV hook + CSS** — `9f1cb03` (feat)
 2. **Task 2: 8 pagination e2e specs + DEV hook extension (blockGraphemeLengths)** — `3ecf91f` (test)
 
-**Task 3 (human gate):** NOT committed — it is a blocking checkpoint; no files modified.
+**Task 3 (human gate):** APPROVED 2026-08-06. The Rule 4 engine gap surfaced by this plan's corpus-matrix suite was resolved by **Plan 04-06** (Option A measurement-phase line boxes + `data-block-index` 1:1 mapping + persistence fold). After 04-06:
+- Full automated suite (`npm run test`): **269 passed / 0 failed** (unit 391/391 + 3-engine e2e: pagination 128/128 no-skips + persistence 21/21 + measurement/anchor specs).
+- Plan 04-05's 8 ok-path specs now run their full corpus × viewport matrix green across chromium/firefox/webkit (the `status !== "ok"` skips removed by 04-06 Task 4).
+- Human performed the 8 manual checks (04-05-PLAN.md L215-226): paginated default, keyboard bundle, M round-trip passage preservation, focus order, swipe + pinch-zoom, resize repagination + fallback banner copy + persisted-preference-untouched, VoiceOver/NVDA reading order across a turn, reduced-motion instant swaps. All approved.
+- No files modified by Task 3 itself (blocking checkpoint only).
 
 ## Decisions Made
 

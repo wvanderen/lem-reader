@@ -9,7 +9,7 @@ Lem Reader reaches its MVP through six vertical slices that keep a usable semant
 - [x] **Phase 1: Canonical Article Foundation** - Readers can open a representative saved corpus whose rich structure and stable logical coordinates are explicit and verifiable. (completed 2026-07-28)
 - [x] **Phase 2: Accessible Scrolling Reader** - Readers have a calm, adaptable scrolling experience with predictable interaction and recoverable local preferences and location. (completed 2026-08-04)
 - [x] **Phase 3: Trustworthy Layout Measurement** - Readers retain a usable view while responsive layout work is calibrated, current, and safe against font and asset changes. (completed 2026-08-05)
-- [x] **Phase 4: Responsive Pagination and Dual-Mode Navigation** - Readers can navigate complete, stable pages or return to scrolling without losing their passage. *(Plan 04-06 code-complete — PAGE-03 closed, corpus matrix green across chromium/firefox/webkit; Plan 04-05 Task 3 manual human-verify gate pending before /gsd-verify-work.)* (code-complete 2026-08-06)
+- [x] **Phase 4: Responsive Pagination and Dual-Mode Navigation** - Readers can navigate complete, stable pages or return to scrolling without losing their passage. *(All 6 plans complete; PAGE-01..09 + STATE-01 ✓. Plan 04-05 Task 3 human-verify gate APPROVED 2026-08-06 after Plan 04-06 closed the engine container-handling gap. Ready for /gsd-verify-work.)* (code-complete 2026-08-06)
 - [ ] **Phase 5: Durable Highlights and Notes** - Readers can create and manage local annotations that remain attached to canonical passages across every view change.
 - [ ] **Phase 6: Prototype Acceptance** - Readers can complete the full reading and annotation flow across the supported browser and accessibility conditions within explicit performance budgets.
 
@@ -135,7 +135,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [x] 04-05-PLAN.md — Wave 4: PaginationFallbackBanner + DiagnosticBus subscription + session-mode flip + 8 pagination e2e specs (PAGE-04/09 fallback path PROVEN across chromium/firefox/webkit; PAGE-03 corpus matrix BLOCKED — engine cannot paginate container-bearing fixtures; Rule 4 surfaced for human decision) + phase-gate human verify (PENDING)
+- [x] 04-05-PLAN.md — Wave 4: PaginationFallbackBanner + DiagnosticBus subscription + session-mode flip + 8 pagination e2e specs (PAGE-04/09 fallback path PROVEN across chromium/firefox/webkit) + phase-gate human verify (APPROVED 2026-08-06 after 04-06 closed the engine gap + PAGE-03)
 
 **Wave 5** *(blocked on Wave 4 — gap closure for the engine container-handling blocker)*
 
