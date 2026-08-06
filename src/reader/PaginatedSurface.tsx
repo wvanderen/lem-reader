@@ -152,6 +152,17 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
     articleRef.current = article;
     const initialAnchorOffsetRef = useRef<number>(initialAnchorOffset);
     initialAnchorOffsetRef.current = initialAnchorOffset;
+    // Plan 04-09 (PAGE-01 round-trip fix): the last anchor offset used by the
+    // pagination effect or commitTurn. The post-render overflow guard (Plan
+    // 04-07) reads this ref to re-anchor refragmented pages to the SAME
+    // passage the pagination effect targeted — NOT just the current page's
+    // start offset. Without this, the raw engine output (pre-overflow-guard)
+    // may place a mid-block anchor on the wrong page (e.g. 3 large pages
+    // where anchor 1284 falls in page 0's [0,1403) range); the guard then
+    // splits page 0 but re-anchors to page 0's start (0) instead of the
+    // original anchor (1284). The shared ref ensures the guard preserves the
+    // precise anchor through refragmentation.
+    const lastAnchorOffsetRef = useRef<number>(initialAnchorOffset);
 
     // Cancelled-flag pagination effect (mirrors ArticleView L107-129 pattern):
     // a stale pagination pass (e.g. after a rapid article swap or viewport
@@ -180,6 +191,14 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
         anchorOffset = pageStartGlobalOffset(currentArticle, currentPages[currentIdx]!);
       } else {
         anchorOffset = initialAnchorOffsetRef.current;
+      }
+      // Plan 04-09: only update lastAnchorOffsetRef on the FIRST pass (when
+      // currentPages was null). On repagination passes (currentPages non-null),
+      // the ref already holds the correct anchor from the initial pass or from
+      // commitTurn — overwriting it with the current page's start offset would
+      // cause the overflow guard to re-anchor to page 0 after splitting.
+      if (!currentPages) {
+        lastAnchorOffsetRef.current = anchorOffset;
       }
 
       const controller = new AbortController();
@@ -323,7 +342,13 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
         if (fragmentScrollHeight <= articleClientHeight + TOLERANCE_PX) return;
 
         // Capture the anchor BEFORE setPages (Pitfall 7).
-        const anchorOffset = pageStartGlobalOffset(currentArticle, currentPage);
+        // Plan 04-09: use lastAnchorOffsetRef (the SAME anchor the pagination
+        // effect or commitTurn targeted) instead of the current page's start
+        // offset. This ensures the overflow guard preserves the precise
+        // reading position through refragmentation — critical when the raw
+        // engine output places a mid-block anchor on the wrong page (the guard
+        // splits the overflowing page and re-anchors to the original target).
+        const anchorOffset = lastAnchorOffsetRef.current;
 
         const result = refragmentOverflowingPage({
           article: currentArticle,
@@ -387,10 +412,17 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
 
     // Report the current anchor offset whenever the page changes so the
     // parent can capture it synchronously before a future mode swap.
+    //
+    // Plan 04-09 (PAGE-01 round-trip fix): when pages is null (initial mount
+    // before the pagination effect commits, or fallback), do NOT call
+    // onAnchorChange. The parent's currentAnchorOffsetRef carries the
+    // scrolling→paginated anchor (initialAnchorOffset); overwriting it to 0
+    // here would cause PaginatedSurface's re-render (triggered by the geometry
+    // effect setting pageContentBoxHeightPx) to receive initialAnchorOffset=0,
+    // landing on page 0 instead of the passage's page.
     useEffect(() => {
       const p = pagesRef.current;
       if (!p || !p[currentPageIdx]) {
-        onAnchorChange?.(0);
         return;
       }
       onAnchorChange?.(pageStartGlobalOffset(articleRef.current, p[currentPageIdx]!));
@@ -416,6 +448,15 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
      * "Page N of M" announce, and D4-07 focus stay in lockstep. Bounds-checked:
      * at page 1 / last page the corresponding direction is a no-op (returns
      * moved:false so the caller skips the announce + focus step).
+     *
+     * Plan 04-09 (PAGE-02 keyboard bundle fix): update currentPageIdxRef.current
+     * SYNCHRONOUSLY before setCurrentPageIdx. Without this, rapid key presses
+     * (e.g. ArrowRight then Space) race React's commit cycle — the ref still
+     * holds the OLD value when the second key fires, so commitTurn reads the
+     * stale ref and computes next === cur (a no-op). The synchronous ref
+     * update makes the imperative turn path the source of truth; setState
+     * triggers the re-render. Also updates lastAnchorOffsetRef so the overflow
+     * guard re-anchors to the new page if it refragments.
      */
     function commitTurn(
       direction: "next" | "previous",
@@ -426,7 +467,11 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
       const next =
         direction === "next" ? Math.min(cur + 1, p.length - 1) : Math.max(0, cur - 1);
       const moved = next !== cur;
-      if (moved) setCurrentPageIdx(next);
+      if (moved) {
+        currentPageIdxRef.current = next;
+        lastAnchorOffsetRef.current = pageStartGlobalOffset(articleRef.current, p[next]!);
+        setCurrentPageIdx(next);
+      }
       return { page: next + 1, total: p.length, moved };
     }
 

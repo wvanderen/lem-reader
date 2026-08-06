@@ -73,12 +73,11 @@ interface PageTurnControlsProps {
    * (b) D4-07 focus restoration (querying the new page's first heading).
    */
   articleEl: HTMLElement | null;
-  /**
-   * Invoked when the reader presses the M shortcut. ArticleView routes this
-   * through the same SettingsContext.update() path as the ModeToggle button +
-   * the same D4-10 anchor capture, so M and the header button behave identically.
-   */
-  onToggleMode: () => void;
+  // NOTE: The M shortcut (D4-09) is NO LONGER handled here. Plan 04-09 moved
+  // the M listener to ArticleView so it survives the paginated↔scrolling mode
+  // swap (PageTurnControls unmounts when paginated mode is off, which broke
+  // the M round-trip — the second M in scrolling mode had no listener). The
+  // page-turn keys (PageDown/ArrowRight/Space/etc.) stay paginated-only here.
 }
 
 /** Horizontal- swipe threshold (px). Below this, a touch is not a swipe. */
@@ -97,15 +96,10 @@ export function PageTurnControls({
   enabled,
   surfaceRef,
   articleEl,
-  onToggleMode,
 }: PageTurnControlsProps): React.ReactElement {
   const [announce, setAnnounce] = useState("");
   // Debounce timer ref — cleared on cleanup so it cannot fire after unmount.
   const timerRef = useRef<number | null>(null);
-  // Stable closure refs — the listeners read the latest handlers without
-  // re-registering on every render (mirrors SectionAnnouncer's pattern).
-  const onToggleModeRef = useRef(onToggleMode);
-  onToggleModeRef.current = onToggleMode;
 
   /**
    * Shared turn path for keyboard + swipe. Reads focus BEFORE the turn (D4-07
@@ -160,11 +154,12 @@ export function PageTurnControls({
       ) {
         event.preventDefault();
         handleTurn("previous");
-      } else if (key === "m" || key === "M") {
-        // M shortcut — same toggle path as the header button (D4-09). Does NOT
-        // move focus (the shortcut did not start from the toggle — UI-SPEC §19).
-        onToggleModeRef.current();
       }
+      // NOTE: The M shortcut (D4-09) was handled here prior to Plan 04-09. It
+      // moved to ArticleView (global listener in BOTH modes) so the round-trip
+      // works — this component unmounts in scrolling mode and the second M
+      // would have no listener. See ArticleView.tsx handleToggleMode + the
+      // global keydown effect.
     };
     // Non-passive: the handler MUST preventDefault on PageDown/Space/etc.
     window.addEventListener("keydown", onKey);
@@ -254,8 +249,12 @@ export function PageTurnControls({
  * keyboard bundle bails in that case so Tab + typing + the settings panel are
  * never hijacked (T-04-10 / A11Y-01 — never trap, never hijack Space inside
  * an input).
+ *
+ * Exported (Plan 04-09) so ArticleView's global M-shortcut listener reuses
+ * the SAME bail rule — one implementation, one contract. The M shortcut must
+ * NOT fire when focus is inside an input/dialog/contenteditable (T-04-10).
  */
-function isFormField(target: EventTarget | null): boolean {
+export function isFormField(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   const tag = target.tagName.toLowerCase();
   if (tag === "input" || tag === "textarea" || tag === "select") return true;

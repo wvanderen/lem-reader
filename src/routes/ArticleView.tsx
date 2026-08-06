@@ -31,9 +31,11 @@ import { useMeasurement } from "../measurement/useMeasurement";
 import { useSettings } from "../settings/SettingsContext";
 import { PaginatedSurface } from "../reader/PaginatedSurface";
 import type { PaginatedSurfaceHandle } from "../reader/PaginatedSurface";
-import { PageTurnControls } from "../reader/PageTurnControls";
+import { PageTurnControls, isFormField } from "../reader/PageTurnControls";
 import { ProgressHairline } from "../reader/ProgressHairline";
 import { SectionAnnouncer } from "../reader/SectionAnnouncer";
+import { blockGraphemeLength } from "../pagination/anchor";
+import { BLOCK_SEPARATOR } from "../content/normalizeText";
 import { ResumeBanner } from "../reader/ResumeBanner";
 import { PaginationFallbackBanner } from "../reader/PaginationFallbackBanner";
 
@@ -64,16 +66,50 @@ function formatDate(iso: string): string {
 }
 
 /**
- * Query the rendered block elements in document order. Used by both the
- * location-restore effect and the Resume handler. Mirrors the selector used
- * by useScrollSave's offset computation so save/restore round-trip exactly.
+ * Query the rendered top-level block elements in document order. Used by both
+ * the location-restore effect and the Resume handler. Mirrors the selector
+ * used by useScrollSave's offset computation so save/restore round-trip
+ * exactly.
+ *
+ * Plan 04-09 (PAGE-01 round-trip fix): switched from a tag-based selector
+ * ("h2, h3, h4, p, blockquote, li, pre, figure, sup, details") to
+ * [data-block-index] (emitted by BlockRenderer on each top-level block per
+ * Plan 04-06). The tag-based selector DOUBLE-COUNTED: (a) the article
+ * header's <p class="meta"> provenance paragraph (not an article block), and
+ * (b) blockquote child <p> elements (a <blockquote> and its child <p> both
+ * matched "p, blockquote"). The extra elements shifted the grapheme offsets
+ * computed by computeTopVisibleOffset so they no longer matched the
+ * article-global offsets from pageStartGlobalOffset (which walks article.blocks
+ * via blockNormalizedText). [data-block-index] matches exactly the top-level
+ * article blocks (verified: 8 vs 13 elements for essay-long-form), aligning
+ * the scrolling-mode anchor with the paginated-mode page boundaries.
  */
 function queryBlocks(articleEl: HTMLElement): HTMLElement[] {
   return Array.from(
-    articleEl.querySelectorAll<HTMLElement>(
-      "h2, h3, h4, p, blockquote, li, pre, figure, sup, details",
-    ),
+    articleEl.querySelectorAll<HTMLElement>("[data-block-index]"),
   );
+}
+
+/**
+ * Plan 04-09 (PAGE-01 round-trip fix): check if two article-global grapheme
+ * offsets fall within the SAME article block. Used by handleToggleMode to
+ * decide whether to prefer the precise paginated-mode anchor over the
+ * block-level scrolling-mode anchor when returning scrolling→paginated.
+ * Walks article.blocks accumulating per-block grapheme lengths + BLOCK_SEPARATOR
+ * (same accumulation as pageStartGlobalOffset / computeTopVisibleOffset).
+ */
+function sameBlock(article: CanonicalArticle, offsetA: number, offsetB: number): boolean {
+  let blockStart = 0;
+  for (const block of article.blocks) {
+    const blockLen = blockGraphemeLength(block, article.lang);
+    const blockEnd = blockStart + blockLen;
+    const aInBlock = offsetA >= blockStart && offsetA <= blockEnd;
+    const bInBlock = offsetB >= blockStart && offsetB <= blockEnd;
+    if (aInBlock && bInBlock) return true;
+    if (aInBlock || bInBlock) return false; // different blocks
+    blockStart = blockEnd + BLOCK_SEPARATOR.length;
+  }
+  return false;
 }
 
 export function ArticleView({ articleId, modeToggleHandlerRef }: ArticleViewProps) {
@@ -170,8 +206,20 @@ export function ArticleView({ articleId, modeToggleHandlerRef }: ArticleViewProp
   // toggle handler, consumed by the post-commit apply effect. Cleared on
   // consumption so a stale swap cannot re-apply.
   const pendingModeSwapRef = useRef<{ from: string; offset: number } | null>(null);
+  // Plan 04-09 (PAGE-01 round-trip fix): the last known PRECISE paginated-mode
+  // anchor offset (from PaginatedSurface's onAnchorChange, which carries
+  // sub-block grapheme precision via pageStartGlobalOffset). The scrolling-mode
+  // anchor (computeTopVisibleOffset) has BLOCK-LEVEL granularity only — it
+  // returns the block's starting offset, losing the intra-block split point.
+  // When the reader toggles scrolling→paginated, if the scrolling anchor and
+  // this precise offset are in the SAME block, we prefer the precise offset
+  // so the reader re-lands on the exact page (not the page before the split).
+  const lastPreciseAnchorRef = useRef<number | null>(null);
   const handleAnchorChange = useCallback((offset: number) => {
     currentAnchorOffsetRef.current = offset;
+    // Track the latest precise offset (only updated in paginated mode where
+    // PaginatedSurface reports via onAnchorChange).
+    lastPreciseAnchorRef.current = offset;
   }, []);
 
   // Phase 4 Plan 04-04 (D4-09 + D4-10): the mode-toggle handler. Captures the
@@ -182,8 +230,26 @@ export function ArticleView({ articleId, modeToggleHandlerRef }: ArticleViewProp
   const handleToggleMode = useCallback(() => {
     // Capture BEFORE the mode swap re-renders (Pitfall 7). currentAnchor
     // OffsetRef is kept fresh by the scroll listener / onAnchorChange above.
-    const offset = currentAnchorOffsetRef.current;
+    let offset = currentAnchorOffsetRef.current;
     const currentEffective = sessionModeOverride ?? settings.readingMode;
+    // Plan 04-09 (PAGE-01 round-trip fix): when returning scrolling→paginated,
+    // the scrolling-mode anchor has BLOCK-LEVEL granularity only. If the last
+    // known PRECISE paginated offset (from onAnchorChange) falls in the SAME
+    // block as the scrolling anchor, prefer the precise offset so the reader
+    // re-lands on the exact page (not the page before a mid-block split).
+    // This is the load-bearing fix for the D4-10 round-trip: without it,
+    // block 2's start offset maps to page 0 (which contains block 2 [0-298]),
+    // not page 1 (which starts at block 2 grapheme 299).
+    if (currentEffective === "scrolling" && article && lastPreciseAnchorRef.current !== null) {
+      const precise = lastPreciseAnchorRef.current;
+      if (sameBlock(article, offset, precise)) {
+        offset = precise;
+        // Also update the ref so PaginatedSurface's initialAnchorOffset prop
+        // (which reads currentAnchorOffsetRef.current) receives the precise
+        // value, not the block-level scrolling anchor.
+        currentAnchorOffsetRef.current = precise;
+      }
+    }
     pendingModeSwapRef.current = {
       from: currentEffective,
       offset,
@@ -206,7 +272,7 @@ export function ArticleView({ articleId, modeToggleHandlerRef }: ArticleViewProp
         readingMode: settings.readingMode === "paginated" ? "scrolling" : "paginated",
       });
     }
-  }, [settings.readingMode, sessionModeOverride, update]);
+  }, [settings.readingMode, sessionModeOverride, update, article]);
 
   // Register the handler on the App-provided ref. Updated every render so the
   // closure always sees the latest settings.readingMode; cleared on unmount
@@ -217,6 +283,50 @@ export function ArticleView({ articleId, modeToggleHandlerRef }: ArticleViewProp
       modeToggleHandlerRef.current = null;
     };
   }, [handleToggleMode, modeToggleHandlerRef]);
+
+  // Plan 04-09 (PAGE-01 M-toggle round-trip fix): register the M shortcut
+  // GLOBALLY on window in BOTH paginated and scrolling modes. Prior to this
+  // fix the M listener lived in PageTurnControls, which only mounts when
+  // `paginatedActive === true`. After the first M flips mode to scrolling,
+  // PageTurnControls unmounts → the listener is removed → the second M (in
+  // scrolling mode) has no handler → the persisted readingMode never flips
+  // back. Moving the listener here (registered whenever an article + its
+  // <article> element are mounted, regardless of mode) closes the round-trip.
+  //
+  // Ref-stable closure pattern (mirrors PageTurnControls L107-108): the
+  // listener is registered once per article mount and reads the LATEST
+  // handleToggleMode via a ref, so it always invokes a closure that sees the
+  // current effectiveMode (settings.readingMode OR sessionModeOverride). The
+  // D4-10 anchor capture inside handleToggleMode is unchanged — it captures
+  // currentAnchorOffsetRef BEFORE the swap (Pitfall 7).
+  //
+  // T-04-10 mitigation preserved: the listener bails on form fields / dialogs
+  // / contenteditable via the SAME isFormField helper PageTurnControls uses
+  // (one implementation, one contract). The M shortcut reads ONLY event.key;
+  // never reads form-field values (T-04-09-01).
+  const handleToggleModeRef = useRef(handleToggleMode);
+  handleToggleModeRef.current = handleToggleMode;
+  useEffect(() => {
+    if (!article || !articleEl) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (isFormField(event.target)) return;
+      const key = event.key;
+      if (key === "m" || key === "M") {
+        // Does NOT preventDefault (M has no native default action to suppress)
+        // and does NOT move focus (the shortcut did not start from the toggle
+        // — UI-SPEC §19). handleToggleMode captures the D4-10 anchor + flips
+        // the persisted readingMode (or clears the session override).
+        handleToggleModeRef.current();
+      }
+    };
+    // Non-passive is fine here — M has no default action to suppress. The
+    // listener is registered on window (captures M from anywhere in the app
+    // while an article is mounted, EXCEPT inside form fields per isFormField).
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [article, articleEl]);
 
   // Phase 4 Plan 04-04 (D4-10 anchor tracking — scrolling mode): keep
   // currentAnchorOffsetRef fresh on every scroll so the capture at toggle
@@ -273,6 +383,20 @@ export function ArticleView({ articleId, modeToggleHandlerRef }: ArticleViewProp
   // (mirror L172-188) so the browser has completed layout before we read.
   // Recomputed on articleEl change (article swap or first mount).
   const [pageContentBoxHeightPx, setPageContentBoxHeightPx] = useState(0);
+  // Plan 04-09 (PAGE-01 round-trip fix): reset pageContentBoxHeightPx to 0
+  // SYNCHRONOUSLY DURING RENDER when the mode changes. React child effects
+  // (PaginatedSurface's pagination effect) run BEFORE parent effects
+  // (ArticleView's geometry effect), so the effect-based reset below was too
+  // late — the pagination effect ran with stale scrolling-mode height on the
+  // first render after a mode swap, produced wrong pages, and overwrote the
+  // D4-10 anchor via onAnchorChange before the correct-height pass could run.
+  // This is the official React pattern for adjusting state when a prop changes
+  // (https://react.dev/reference/react/useState#storing-information-from-previous-renders).
+  const [prevIsPaginated, setPrevIsPaginated] = useState(isPaginated);
+  if (isPaginated !== prevIsPaginated) {
+    setPrevIsPaginated(isPaginated);
+    setPageContentBoxHeightPx(0);
+  }
   // Plan 04-06: recompute the page-content-box height on article mount AND
   // when the active render mode changes (trustedView commits → paginatedActive
   // flips → PaginatedSurface mounts with the .paginated-surface geometry).
@@ -635,7 +759,6 @@ export function ArticleView({ articleId, modeToggleHandlerRef }: ArticleViewProp
                 enabled={paginatedActive}
                 surfaceRef={surfaceRef}
                 articleEl={articleEl}
-                onToggleMode={handleToggleMode}
               />
             </>
           ) : (

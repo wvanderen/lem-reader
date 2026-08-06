@@ -69,7 +69,6 @@ describe("PageTurnControls — keyboard bundle (D4-05)", () => {
         enabled={true}
         surfaceRef={surface.ref}
         articleEl={document.body}
-        onToggleMode={() => {}}
       />,
     );
     dispatchKey("PageDown");
@@ -83,7 +82,6 @@ describe("PageTurnControls — keyboard bundle (D4-05)", () => {
         enabled={true}
         surfaceRef={surface.ref}
         articleEl={document.body}
-        onToggleMode={() => {}}
       />,
     );
     dispatchKey("ArrowRight");
@@ -97,7 +95,6 @@ describe("PageTurnControls — keyboard bundle (D4-05)", () => {
         enabled={true}
         surfaceRef={surface.ref}
         articleEl={document.body}
-        onToggleMode={() => {}}
       />,
     );
     dispatchKey(" ");
@@ -111,7 +108,6 @@ describe("PageTurnControls — keyboard bundle (D4-05)", () => {
         enabled={true}
         surfaceRef={surface.ref}
         articleEl={document.body}
-        onToggleMode={() => {}}
       />,
     );
     dispatchKey("PageUp");
@@ -125,7 +121,6 @@ describe("PageTurnControls — keyboard bundle (D4-05)", () => {
         enabled={true}
         surfaceRef={surface.ref}
         articleEl={document.body}
-        onToggleMode={() => {}}
       />,
     );
     dispatchKey("ArrowLeft");
@@ -139,7 +134,6 @@ describe("PageTurnControls — keyboard bundle (D4-05)", () => {
         enabled={true}
         surfaceRef={surface.ref}
         articleEl={document.body}
-        onToggleMode={() => {}}
       />,
     );
     dispatchKey(" ", true);
@@ -153,7 +147,6 @@ describe("PageTurnControls — keyboard bundle (D4-05)", () => {
         enabled={true}
         surfaceRef={surface.ref}
         articleEl={document.body}
-        onToggleMode={() => {}}
       />,
     );
     const event = dispatchKey(" ");
@@ -167,7 +160,6 @@ describe("PageTurnControls — keyboard bundle (D4-05)", () => {
         enabled={false}
         surfaceRef={surface.ref}
         articleEl={document.body}
-        onToggleMode={() => {}}
       />,
     );
     dispatchKey("PageDown");
@@ -186,7 +178,6 @@ describe("PageTurnControls — form-field/dialog bail (T-04-10, A11Y-01)", () =>
 
   it("bails when the key lands inside an <input> (never hijacks Space in a form)", () => {
     const surface = makeSurface();
-    const onToggleMode = vi.fn();
     render(
       <div>
         <input data-testid="field" />
@@ -194,7 +185,6 @@ describe("PageTurnControls — form-field/dialog bail (T-04-10, A11Y-01)", () =>
           enabled={true}
           surfaceRef={surface.ref}
           articleEl={document.body}
-          onToggleMode={onToggleMode}
         />
       </div>,
     );
@@ -204,9 +194,6 @@ describe("PageTurnControls — form-field/dialog bail (T-04-10, A11Y-01)", () =>
     // to window where the listener receives it.
     fireEvent.keyDown(input, { key: " ", shiftKey: false, bubbles: true });
     expect(surface.turn).not.toHaveBeenCalled();
-    // M should also bail inside a form field.
-    fireEvent.keyDown(input, { key: "m", bubbles: true });
-    expect(onToggleMode).not.toHaveBeenCalled();
   });
 
   it("bails when the key lands inside a contenteditable element", () => {
@@ -218,8 +205,7 @@ describe("PageTurnControls — form-field/dialog bail (T-04-10, A11Y-01)", () =>
           enabled={true}
           surfaceRef={surface.ref}
           articleEl={document.body}
-          onToggleMode={() => {}}
-        />
+          />
       </div>,
     );
     const editable = screen.getByTestId("editable");
@@ -233,44 +219,6 @@ describe("PageTurnControls — form-field/dialog bail (T-04-10, A11Y-01)", () =>
     editable.focus();
     fireEvent.keyDown(editable, { key: "PageDown", bubbles: true });
     expect(surface.turn).not.toHaveBeenCalled();
-  });
-});
-
-describe("PageTurnControls — M shortcut (D4-09)", () => {
-  beforeEach(() => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-  });
-  afterEach(() => {
-    vi.useRealTimers();
-    cleanup();
-  });
-
-  it("pressing M calls onToggleMode", () => {
-    const onToggleMode = vi.fn();
-    render(
-      <PageTurnControls
-        enabled={true}
-        surfaceRef={makeSurface().ref}
-        articleEl={document.body}
-        onToggleMode={onToggleMode}
-      />,
-    );
-    dispatchKey("m");
-    expect(onToggleMode).toHaveBeenCalledTimes(1);
-  });
-
-  it("pressing Shift+M also calls onToggleMode (case-insensitive)", () => {
-    const onToggleMode = vi.fn();
-    render(
-      <PageTurnControls
-        enabled={true}
-        surfaceRef={makeSurface().ref}
-        articleEl={document.body}
-        onToggleMode={onToggleMode}
-      />,
-    );
-    dispatchKey("M", true);
-    expect(onToggleMode).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -311,7 +259,6 @@ describe("PageTurnControls — swipe (D4-06)", () => {
         enabled={true}
         surfaceRef={surface.ref}
         articleEl={articleEl}
-        onToggleMode={() => {}}
       />,
     );
     articleEl.dispatchEvent(
@@ -336,7 +283,6 @@ describe("PageTurnControls — swipe (D4-06)", () => {
         enabled={true}
         surfaceRef={surface.ref}
         articleEl={articleEl}
-        onToggleMode={() => {}}
       />,
     );
     articleEl.dispatchEvent(
@@ -361,7 +307,6 @@ describe("PageTurnControls — swipe (D4-06)", () => {
         enabled={true}
         surfaceRef={surface.ref}
         articleEl={articleEl}
-        onToggleMode={() => {}}
       />,
     );
     // Two touches start → multi-touch flag set → touchend bails.
@@ -389,7 +334,6 @@ describe("PageTurnControls — swipe (D4-06)", () => {
         enabled={true}
         surfaceRef={surface.ref}
         articleEl={articleEl}
-        onToggleMode={() => {}}
       />,
     );
     articleEl.dispatchEvent(
@@ -415,7 +359,6 @@ describe("PageTurnControls — swipe (D4-06)", () => {
         enabled={true}
         surfaceRef={surface.ref}
         articleEl={articleEl}
-        onToggleMode={() => {}}
       />,
     );
     articleEl.dispatchEvent(
@@ -449,7 +392,6 @@ describe("PageTurnControls — announce (A11Y-08)", () => {
         enabled={true}
         surfaceRef={surface.ref}
         articleEl={document.body}
-        onToggleMode={() => {}}
       />,
     );
     // Turn next → page 3 of 4.
@@ -474,7 +416,6 @@ describe("PageTurnControls — announce (A11Y-08)", () => {
         enabled={true}
         surfaceRef={surface.ref}
         articleEl={document.body}
-        onToggleMode={() => {}}
       />,
     );
     dispatchKey("PageDown"); // at last page → moved:false → no announce
@@ -491,7 +432,6 @@ describe("PageTurnControls — announce (A11Y-08)", () => {
         enabled={true}
         surfaceRef={surface.ref}
         articleEl={document.body}
-        onToggleMode={() => {}}
       />,
     );
     // Two rapid next-turns: page 2 → 3 → 4.
