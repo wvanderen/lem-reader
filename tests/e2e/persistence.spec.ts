@@ -52,6 +52,63 @@ async function expectDataTheme(page: import("@playwright/test").Page, expected: 
   });
 }
 
+/**
+ * Seed the Dexie `settings` store with a reader-prefs record carrying
+ * `readingMode: "scrolling"` so a SUBSEQUENT reload hydrates scrolling mode.
+ * Plan 04-06 Task 5: the STATE-01 location-restore tests below were written
+ * in Phase 2 (before readingMode existed) and assume the article opens in
+ * scrolling mode — `window.scrollTo(0, 500)` only scrolls the scrolling
+ * ArticleBody, not the overflow:hidden .paginated-surface (the default
+ * since D4-12). Seeding scrolling mode explicitly tests the STATE-01
+ * contract as written; the alternative (asserting location-restore in
+ * paginated mode via page-index) is documented as option (b) deferred.
+ *
+ * MUST run AFTER the IndexedDB wipe AND AFTER the app has loaded once on
+ * the test page (so Dexie has declared its schema — a raw indexedDB.open
+ * on a wiped DB has no object stores). Callers navigate to the article,
+ * call seedScrollingMode, then reload to hydrate from the seeded record.
+ */
+async function seedScrollingMode(page: import("@playwright/test").Page): Promise<void> {
+  await page.evaluate(() => {
+    return new Promise<void>((resolve) => {
+      const req = indexedDB.open("lem-reader");
+      req.onsuccess = () => {
+        try {
+          const db = req.result;
+          // Dexie's reserved schema declares `settings` with key path `key`.
+          // After the app's first load the store exists.
+          if (!db.objectStoreNames.contains("settings")) {
+            resolve();
+            return;
+          }
+          const tx = db.transaction("settings", "readwrite");
+          const store = tx.objectStore("settings");
+          // Match DEFAULT_SETTINGS shape (src/settings/defaults.ts) except
+          // readingMode: "scrolling". schemaVersion 2 is the canonical write
+          // version (D4-12). Validated by ReaderSettingsSchema on read.
+          store.put({
+            key: "reader-prefs",
+            value: {
+              schemaVersion: 2,
+              font: "serif",
+              size: 18,
+              measure: 64,
+              spacing: "comfortable",
+              theme: "sepia",
+              readingMode: "scrolling",
+            },
+          });
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => resolve();
+        } catch {
+          resolve();
+        }
+      };
+      req.onerror = () => resolve();
+    });
+  });
+}
+
 test.describe("STATE-02 + Pitfall 4 persistence", () => {
   test("typography/theme settings survive a full page reload (STATE-02)", async ({
     page,
@@ -206,8 +263,18 @@ test.describe("STATE-01 location restore", () => {
   test("scrolling an article persists the location; reload restores the scroll position", async ({
     page,
   }) => {
+    // Plan 04-06 Task 5: seed readingMode "scrolling" so the article opens in
+    // scrolling mode (window.scrollTo works). The test was written in Phase 2
+    // before readingMode existed; the default became paginated in D4-12.
+    // The seed runs after the first navigation so Dexie's `settings` store
+    // exists; a subsequent reload hydrates from the seeded record.
     await page.goto(`${BASE}/#/article/${FIRST_FIXTURE}`);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await seedScrollingMode(page);
+    await page.reload();
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    // Wait for SettingsProvider hydration to apply the scrolling mode.
+    await page.waitForTimeout(500);
 
     // Scroll to a specific position (the article body is tall enough on
     // essay-long-form — 8 paragraphs of long-form prose — to support
@@ -251,8 +318,14 @@ test.describe("STATE-01 location restore", () => {
   test("a pending debounced location write flushes on visibilitychange-hidden (Pitfall 4)", async ({
     page,
   }) => {
+    // Plan 04-06 Task 5: seed scrolling mode (same navigate-seed-reload
+    // pattern as the test above).
     await page.goto(`${BASE}/#/article/${FIRST_FIXTURE}`);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await seedScrollingMode(page);
+    await page.reload();
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await page.waitForTimeout(500);
 
     // Scroll partway down WITHOUT waiting for the 1200ms debounce.
     await page.evaluate(() => window.scrollTo(0, 800));
@@ -283,9 +356,16 @@ test.describe("STATE-01 location restore", () => {
   test("locations are isolated per article (D-06 — [articleId+revision] key)", async ({
     page,
   }) => {
-    // Save a location on the FIRST fixture.
+    // Plan 04-06 Task 5: seed scrolling mode here too for consistency (the
+    // test asserts scrollY near 0 after navigating to a different fixture;
+    // in paginated mode the same assertion holds trivially because there's
+    // no scrolling, but seeding scrolling mode keeps the assertion honest).
     await page.goto(`${BASE}/#/article/${FIRST_FIXTURE}`);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await seedScrollingMode(page);
+    await page.reload();
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await page.waitForTimeout(500);
     await page.evaluate(() => window.scrollTo(0, 800));
     await page.waitForTimeout(1400); // debounce
 
