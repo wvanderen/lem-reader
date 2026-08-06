@@ -5,10 +5,10 @@ milestone_name: milestone
 current_phase: 04
 current_phase_name: responsive-pagination-and-dual-mode-navigation
 status: executing
-stopped_at: Completed 04-04-PLAN.md
-last_updated: "2026-08-06T15:51:39.610Z"
+stopped_at: Completed 04-05-PLAN.md (Tasks 1+2; Task 3 human gate pending; PAGE-03 blocked on engine container-handling gap)
+last_updated: "2026-08-06T16:25:00.000Z"
 last_activity: 2026-08-06
-last_activity_desc: Phase 04 plan 03 complete
+last_activity_desc: Phase 04 plan 05 code complete (banner + e2e specs); engine gap surfaced
 progress:
   total_phases: 6
   completed_phases: 3
@@ -29,11 +29,11 @@ See: .planning/PROJECT.md (updated 2026-08-05)
 ## Current Position
 
 Phase: 04 (responsive-pagination-and-dual-mode-navigation) — EXECUTING
-Plan: 5 of 5 (Plan 04-01 + 04-02 + 04-03 complete; Plan 04-04 next)
-Status: Plan 04-03 complete (PageFragmentView reusing BlockView + PaginatedSurface + D4-01 intra-block paragraph slicing + DiagnosticBus single-instance threading + page geometry CSS)
-Last activity: 2026-08-06 — Phase 04 plan 03 complete
+Plan: 5 of 5 (Plans 04-01..04-04 complete; Plan 04-05 Tasks 1+2 complete, Task 3 human gate PENDING)
+Status: Plan 04-05 code complete — PaginationFallbackBanner + DiagnosticBus subscription + session-mode flip (PAGE-04/09 proven); 8 e2e specs implemented. ⚠️ BLOCKING: the pagination engine cannot paginate ANY corpus fixture (PaginatedSurface replaces the full ArticleBody before the engine reads line boxes + every fixture's container blocks break the 1:1 block↔element mapping) — PAGE-03 corpus matrix proof impossible without engine work (Rule 4, surfaced for human decision).
+Last activity: 2026-08-06 — Phase 04 plan 05 code complete; engine gap surfaced
 
-Progress: [█████████░] 3/6 phases complete (88%) — 14/16 plans executed (88%)
+Progress: [█████████░] 3/6 phases complete (88%) — 15/16 plans executed (94%)
 
 ## Performance Metrics
 
@@ -70,6 +70,7 @@ Progress: [█████████░] 3/6 phases complete (88%) — 14/16 p
 | Phase 04 P02 | 5min | 2 tasks | 16 files |
 | Phase 04 P03 | 18min | 2 tasks | 9 files |
 | Phase 04 P04 | 19min | 2 tasks | 14 files |
+| Phase 04 P05 | 27min | 2 tasks (Task 3 human gate pending) | 12 files |
 
 ## Accumulated Context
 
@@ -129,6 +130,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: Phase 04-03: PAGE-02/03/05 split across plans — this plan ships the vertical slice + D4-01 renderer; Plan 04-04 closes PAGE-01/02/05; Plan 04-05 closes PAGE-03/04/09. requirements-completed: [] mirroring 04-02's PAGE-01 precedent.
 - [Phase 04]: Turn-handler seam = forwardRef + useImperativeHandle on PaginatedSurface (Plan 04-03 tests stay green; chevrons + keyboard + swipe share ONE commitTurn path)
 - [Phase 04]: D4-10 mode-switch anchor uses continuous offset capture + App ref-bridge (Pitfall 7 capture-before-swap); pure anchor helpers reuse blockNormalizedText, no fork
+- [Phase 04 P05]: Session-scoped mode override (effectiveMode = sessionModeOverride ?? settings.readingMode) flips to scrolling on fallback WITHOUT overwriting the persisted readingMode (T-04-15); only handleToggleMode persists. Banner Switch to pages reuses the SAME toggle path.
+- [Phase 04 P05]: ⚠️ BLOCKING — pagination engine cannot paginate ANY corpus fixture. (a) PaginatedSurface (04-03) replaces the full ArticleBody before the engine reads live line boxes; (b) every fixture's container blocks break the 1:1 article.blocks↔querySelectorAll assumption. PAGE-03 corpus matrix proof impossible without engine work. Surfaced as Rule 4 for human decision (Options A/B in 04-05-SUMMARY §Blocking Finding).
 
 ### Pending Todos
 
@@ -137,7 +140,8 @@ None yet.
 ### Blockers/Concerns
 
 - [Phase 3 → resolved]: Pretext adoption tolerances + metric fingerprints landed in Phase 3 (calibration/fingerprint.json committed; headings eligible chromium/firefox, partial webkit, paragraphs DOM-only; runtime drift guard + CI gate in place).
-- [Phase 4]: Image readiness and performance profiles for pagination still require empirical planning; rich-content fragmentation and oversize policies need corpus-driven rules.
+- [Phase 4 → ⚠️ BLOCKING (surfaced Plan 04-05)]: The pagination engine cannot paginate ANY corpus fixture. Two compounding issues: (1) PaginatedSurface replaces the full ArticleBody with a single page fragment before the engine reads live line boxes via `articleEl.querySelectorAll(BLOCK_SELECTOR)`; (2) every fixture contains container blocks (blockquote/lists) whose nested children break the engine's `elements.length !== articleBlocks.length` guard → `dom-fallback`. PAGE-03 corpus matrix proof (the plan's highest-risk deliverable) is impossible without engine work outside Plan 04-05's scope. Human must decide: Option A (capture LineBox[][] in measurement phase) OR Option B (hidden measurement DOM source in PaginatedSurface) + a container-aware block↔element mapping fix. See 04-05-SUMMARY §Blocking Finding.
+- [Phase 4 → deferred]: persistence.spec.ts STATE-01 location-restore tests fail pre-existing since 04-02/04-03 (paginated default + paginated-surface geometry prevents window scroll). Logged to deferred-items.md. Out of Plan 04-05 scope.
 - [Phase 5]: Offset units, grapheme handling, overlap semantics, and anchor confidence thresholds need explicit decisions.
 - [Phase 6]: Concrete browser/OS/screen-reader support combinations and manual protocol remain to be selected.
 
@@ -149,6 +153,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-08-06T15:51:39.603Z
-Stopped at: Completed 04-04-PLAN.md
+Last session: 2026-08-06T16:25:00.000Z
+Stopped at: Completed 04-05-PLAN.md (Tasks 1+2; Task 3 human gate pending; PAGE-03 blocked on engine gap)
 Resume file: None

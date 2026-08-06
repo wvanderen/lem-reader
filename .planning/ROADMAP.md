@@ -118,7 +118,7 @@ Plans:
   4. Reader remains anchored through viewport, typography, font, and supported asset changes while a previous valid view remains available during repagination.
   5. Oversized or unsupported content produces an understandable diagnostic and a usable scrolling fallback at the same passage.
 
-**Plans:** 4/5 plans executed
+**Plans:** 5/5 plans executed (Plan 04-05 code-complete; Task 3 human gate pending; ⚠️ PAGE-03 blocked on engine container-handling gap — see 04-05-SUMMARY §Blocking Finding)
 Plans:
 **Wave 1**
 
@@ -135,7 +135,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 04-05-PLAN.md — Wave 4: PaginationFallbackBanner + DiagnosticBus subscription + session-mode flip + the 8 pagination e2e specs across the corpus matrix in Chromium/Firefox/WebKit proving PAGE-03/04/09 + phase-gate human verify
+- [x] 04-05-PLAN.md — Wave 4: PaginationFallbackBanner + DiagnosticBus subscription + session-mode flip + 8 pagination e2e specs (PAGE-04/09 fallback path PROVEN across chromium/firefox/webkit; PAGE-03 corpus matrix BLOCKED — engine cannot paginate container-bearing fixtures; Rule 4 surfaced for human decision) + phase-gate human verify (PENDING)
 
 **UI hint:** yes
 
@@ -178,6 +178,6 @@ Plans:
 | 1. Canonical Article Foundation | 5/5 | Complete   | 2026-07-29 |
 | 2. Accessible Scrolling Reader | 4/4 | Complete    | 2026-08-04 |
 | 3. Trustworthy Layout Measurement | 2/2 | Complete    | 2026-08-05 |
-| 4. Responsive Pagination and Dual-Mode Navigation | 4/5 | In Progress|  |
+| 4. Responsive Pagination and Dual-Mode Navigation | 5/5 | Code-complete (Task 3 gate pending; ⚠️ PAGE-03 blocked on engine gap)|  |
 | 5. Durable Highlights and Notes | 0/TBD | Not started | - |
 | 6. Prototype Acceptance | 0/TBD | Not started | - |
