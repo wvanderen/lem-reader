@@ -27,21 +27,36 @@ interface ProgressHairlineProps {
    * article; 1 = at the bottom. Driven by ArticleView's scroll listener
    * (window.scrollY / (scrollHeight - viewportHeight)). The inline-style
    * write happens on every scroll so the fill tracks the scrollbar.
+   *
+   * Ignored when `page` is present (paginated mode derives the ratio from N/M).
    */
-  progress: number;
+  progress?: number;
+  /**
+   * Paginated-mode page position. When present, the fill derives from
+   * current/total (D4-08) and the scrolling `progress` is ignored. The
+   * swap is instant — no motion property is declared (UI-SPEC §Interaction
+   * 12 + RESEARCH anti-pattern #6 discipline preserved).
+   */
+  page?: { current: number; total: number };
 }
 
-export function ProgressHairline({ progress }: ProgressHairlineProps) {
-  // Clamp to [0, 1] defensively — a scroll-position edge case (e.g. an
-  // article shorter than the viewport) could otherwise produce a negative
-  // or >1 ratio that flips or over-extends the fill.
-  const clamped = Math.max(0, Math.min(1, progress));
+export function ProgressHairline({ progress, page }: ProgressHairlineProps) {
+  // When page is present, derive the ratio from N/M (paginated mode). When
+  // absent, clamp the scroll-progress ratio to [0, 1] defensively — a
+  // scroll-position edge case (e.g. an article shorter than the viewport)
+  // could otherwise produce a negative or >1 ratio that flips or over-
+  // extends the fill.
+  const ratio = page
+    ? page.total > 0
+      ? page.current / page.total
+      : 0
+    : Math.max(0, Math.min(1, progress ?? 0));
   return (
     <div className="progress-hairline" aria-hidden="true">
       <div
         className="progress-hairline-fill"
         style={{
-          transform: `scaleX(${clamped})`,
+          transform: `scaleX(${ratio})`,
           transformOrigin: "left",
         }}
       />
