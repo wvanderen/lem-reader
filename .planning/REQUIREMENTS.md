@@ -43,7 +43,7 @@
 - [ ] **PAGE-06**: Reader can continue using the last valid view while a newer pagination result is being computed. *(⚠️ REGRESSED in Phase 4 — gsd-verifier found article loses content (9→7 children) after re-measure. 3 e2e failures across chromium/firefox/webkit.)*
 - [ ] **PAGE-07**: Stale pagination work cannot replace a result produced for newer content, viewport, typography, font, or asset constraints. *(⚠️ REGRESSED in Phase 4 — rapid-trigger race commits wrong constraints' view. 3 e2e failures.)*
 - [x] **PAGE-08**: The measurement layer is calibrated against browser-rendered fixtures across supported engines before any Pretext.js fast path is enabled.
-- [ ] **PAGE-09**: Pagination records actionable diagnostics and presents an understandable reason when it falls back to scrolling. *(⚠️ PARTIAL — banner copy + announce correct; auto-dismiss races the reader's click on firefox/webkit. 4 failures.)*
+- [x] **PAGE-09**: Pagination records actionable diagnostics and presents an understandable reason when it falls back to scrolling. *(⚠️ PARTIAL — banner copy + announce correct; auto-dismiss races the reader's click on firefox/webkit. 4 failures.)*
 
 ### Annotations
 

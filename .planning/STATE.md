@@ -6,14 +6,14 @@ current_phase: 04
 current_phase_name: responsive-pagination-and-dual-mode-navigation
 status: executing
 stopped_at: Completed 04-09-PLAN.md (PAGE-01 M-toggle round-trip + PAGE-02 keyboard/chevron)
-last_updated: "2026-08-06T21:56:16.160Z"
+last_updated: "2026-08-06T22:17:49.558Z"
 last_activity: 2026-08-06
 last_activity_desc: Plan 04-07 (31 min, 4 files)
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 22
-  completed_plans: 20
+  completed_plans: 21
   percent: 50
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-05)
 ## Current Position
 
 Phase: 04 (responsive-pagination-and-dual-mode-navigation) — EXECUTING (gap-closure)
-Plan: 9 of 11 complete (04-07 closed PAGE-03b)
+Plan: 10 of 11 complete (04-07 closed PAGE-03b)
 Status: Plan 04-07 executed — post-render overflow guard closes PAGE-03b
 Last activity: 2026-08-06 — Plan 04-07 (31 min, 4 files)
 
@@ -80,6 +80,7 @@ Progress: [██████████] 4/6 phases code-complete — 18/22 pl
 | Phase 04 P06 | 56min | 5 tasks | 23 files |
 | Phase 04 P08 | 13min | 1 tasks | 4 files |
 | Phase 04 P09 | 40min | 2 tasks | 6 files |
+| Phase 04 P10 | 18min | 1 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -146,6 +147,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: Phase 04-06: partial-DOM measurement defense — PaginatedSurface replaces ArticleBody, ResizeObserver fires re-measurement against the page fragment, would overwrite good trustedView. Engine silently skips commits where blocks.length !== article.blocks.length. Typography-change re-measure is a known MVP scope limit.
 - [Phase 04]: Plan 04-08 chose Option A (always-mounted hidden ArticleBody alongside PaginatedSurface) over Options B + C because B + C alone do not fix PAGE-07 — typography changes still need a real re-measure against the full article body. The hidden .article-body-measurement wrapper makes measureAllBlocks always return the full [data-block-index] set; the partial-DOM defense becomes unreachable in normal operation but stays as a safety net locked by new engine unit tests. PAGE-06 seeds readingMode scrolling (mirrors Plan 04-06 Task 5); PAGE-07 stays under the paginated default and proves the fix works. — Plan 04-08 chose Option A (always-mounted hidden ArticleBody alongside PaginatedSurface) over Options B + C because B + C alone do not fix PAGE-07 — typography changes still need a real re-measure against the full article body. The hidden .article-body-measurement wrapper makes measureAllBlocks always return the full [data-block-index] set; the partial-DOM defense becomes unreachable in normal operation but stays as a safety net locked by new engine unit tests. PAGE-06 seeds readingMode scrolling (mirrors Plan 04-06 Task 5); PAGE-07 stays under the paginated default and proves the fix works.
 - [Phase 04]: Plan 04-09: queryBlocks switched to [data-block-index] to fix double-counting; M shortcut moved to ArticleView global listener; commitTurn synchronous ref update — Plan 04-09: queryBlocks switched to [data-block-index] to fix double-counting; M shortcut moved to ArticleView global listener; commitTurn synchronous ref update
+- [Phase ?]: Phase 04-10: Banner auto-dismiss race fixed via pointerdown inside-banner guard + scroll-dismiss debounce (300ms)
+- [Phase ?]: Phase 04-10: DEV-only __lemDiagnosticBus hook — firefox never detects oversize; decouples PAGE-09 banner test from measurement cross-engine consistency
 
 ### Pending Todos
 
@@ -168,6 +171,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-08-06T21:56:16.155Z
+Last session: 2026-08-06T22:17:32.654Z
 Stopped at: Completed 04-09-PLAN.md (PAGE-01 M-toggle round-trip + PAGE-02 keyboard/chevron)
 Resume file: None

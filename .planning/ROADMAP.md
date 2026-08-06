@@ -118,7 +118,7 @@ Plans:
   4. Reader remains anchored through viewport, typography, font, and supported asset changes while a previous valid view remains available during repagination.
   5. Oversized or unsupported content produces an understandable diagnostic and a usable scrolling fallback at the same passage.
 
-**Plans:** 9/11 plans executed
+**Plans:** 10/11 plans executed
 Plans:
 **Wave 1**
 
@@ -146,7 +146,7 @@ Plans:
 - [x] 04-07-PLAN.md — Wave 6: PAGE-03 silent-clipping BLOCKER fix — STACK.md-mandated post-render overflow guard (new src/pagination/overflowGuard.ts) wired into PaginatedSurface; re-fragments overflowing pages against live DOM truth. **54 no-overflow cells × 3 engines GREEN** (2026-08-06). PAGE-03a/c preserved. Defensive empty-slice guard added (Rule 1).
 - [x] 04-08-PLAN.md — Wave 6 (parallel): Phase 3 PAGE-06 + PAGE-07 cross-phase regression fix — partial-DOM defense + epoch guard interaction in src/measurement/engine.ts corrected so re-measurement preserves article DOM content AND commits the final valid constraints. 6 cells green.
 - [x] 04-09-PLAN.md — Wave 7: PAGE-01 M-toggle round-trip + PAGE-02 keyboard bundle + chevron boundary — M shortcut registered globally in both modes; synchronous ref update in commitTurn; aria-disabled reflection at boundaries. 9 cells green.
-- [ ] 04-10-PLAN.md — Wave 8: PAGE-09 banner auto-dismiss race — banner stays mounted through reader's click; UI-SPEC verbatim copy + T-04-15 + re-trigger semantics preserved. 9 cells green.
+- [x] 04-10-PLAN.md — Wave 8: PAGE-09 banner auto-dismiss race — banner stays mounted through reader's click; UI-SPEC verbatim copy + T-04-15 + re-trigger semantics preserved. 9 cells green.
 - [ ] 04-11-PLAN.md — Wave 9: PROCESS BLOCKER — full `npm run test` end-to-end with honest pass + fail counts; overturns the "269/0" misreporting pattern; refuses to mark green until exit 0.
 
 **UI hint:** yes
@@ -190,6 +190,6 @@ Plans:
 | 1. Canonical Article Foundation | 5/5 | Complete   | 2026-07-29 |
 | 2. Accessible Scrolling Reader | 4/4 | Complete    | 2026-08-04 |
 | 3. Trustworthy Layout Measurement | 2/2 | Complete    | 2026-08-05 |
-| 4. Responsive Pagination and Dual-Mode Navigation | 9/11 | In Progress|  |
+| 4. Responsive Pagination and Dual-Mode Navigation | 10/11 | In Progress|  |
 | 5. Durable Highlights and Notes | 0/TBD | Not started | - |
 | 6. Prototype Acceptance | 0/TBD | Not started | - |
