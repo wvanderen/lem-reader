@@ -228,4 +228,70 @@ describe("ArticleBody — footnotes region + reading order (DOC-02)", () => {
     expect(topLevel[1]?.tagName.toLowerCase()).toBe("p");
     expect(topLevel[2]?.tagName.toLowerCase()).toBe("blockquote");
   });
+
+  // Plan 04-06 Task 1: ArticleBody emits data-block-index on each top-level
+  // block (1:1 with article.blocks) so the measurement phase + pagination
+  // engine share a guaranteed block↔element mapping that container blocks
+  // (blockquote/lists) cannot break. Container interiors (recursive BlockView
+  // children) MUST NOT carry the attribute — only the top-level ArticleBody
+  // map does. See 04-05-SUMMARY.md §Blocking Finding for the double-count
+  // this attribute eliminates.
+  it("emits data-block-index on each top-level block; container interiors do NOT carry it", () => {
+    const { container } = render(
+      <ArticleBody
+        article={article([
+          paragraph("Top-level paragraph."),
+          blockquote([paragraph("Quoted one."), paragraph("Quoted two.")]),
+          bulletedList(["first item", "second item"]),
+        ])}
+      />,
+    );
+    // Exactly 3 [data-block-index] elements — one per article.blocks entry.
+    const indexed = Array.from(
+      container.querySelectorAll("[data-block-index]"),
+    );
+    expect(indexed).toHaveLength(3);
+    // Indices are "0", "1", "2" in document order.
+    expect(indexed[0]?.getAttribute("data-block-index")).toBe("0");
+    expect(indexed[1]?.getAttribute("data-block-index")).toBe("1");
+    expect(indexed[2]?.getAttribute("data-block-index")).toBe("2");
+    // The indexed elements are the top-level tags (p, blockquote, ul).
+    expect(indexed[0]?.tagName.toLowerCase()).toBe("p");
+    expect(indexed[1]?.tagName.toLowerCase()).toBe("blockquote");
+    expect(indexed[2]?.tagName.toLowerCase()).toBe("ul");
+
+    // Container interiors MUST NOT carry data-block-index. The blockquote's
+    // two child paragraphs and the ul's two <li> children (each wrapping a
+    // <p>) are NOT article.blocks entries — tagging them would re-introduce
+    // the double-count the attribute exists to eliminate.
+    const blockquoteInnerPs = container.querySelectorAll(
+      "blockquote [data-block-index]",
+    );
+    expect(blockquoteInnerPs).toHaveLength(0);
+    const listInner = container.querySelectorAll(
+      "ul [data-block-index]",
+    );
+    expect(listInner).toHaveLength(0);
+
+    // The footnotes <section> is NOT an article.blocks entry either; verified
+    // separately below with a footnote-bearing article.
+  });
+
+  it("does NOT emit data-block-index on the footnotes section", () => {
+    const { container } = render(
+      <ArticleBody
+        article={article([paragraph("Body.")], [
+          { id: "fn-1", content: [{ text: "Footnote body.", marks: [] }] },
+        ])}
+      />,
+    );
+    // Only the paragraph carries data-block-index — the footnotes <section>
+    // and its <li> entries do NOT (they are not article.blocks).
+    const indexed = container.querySelectorAll("[data-block-index]");
+    expect(indexed).toHaveLength(1);
+    expect(indexed[0]?.getAttribute("data-block-index")).toBe("0");
+    const footnotesSection = container.querySelector('section[aria-label="Footnotes"]');
+    expect(footnotesSection).not.toBeNull();
+    expect(footnotesSection?.hasAttribute("data-block-index")).toBe(false);
+  });
 });
