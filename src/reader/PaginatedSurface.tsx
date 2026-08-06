@@ -183,16 +183,42 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
           signal: controller.signal,
         });
         if (cancelled) return;
+        // DEV-only debug hook for the Plan 04-05 e2e suite (coverage /
+        // termination / fallback specs). Mirrors useMeasurement.ts L122-125:
+        // gated behind import.meta.env.DEV so production never exposes engine
+        // state. Exposes the pagination result so e2e can assert the PAGE-03
+        // exactly-once / monotonic invariants + PAGE-04 fallback status
+        // without probing private React state (T-04-16: page count + status
+        // only — no reader content or PII).
+        const publishDev = (
+          status: "ok" | "fallback",
+          pgs: PageFragment[] | null,
+          idx: number,
+        ) => {
+          if (!import.meta.env.DEV) return;
+          (window as unknown as Record<string, unknown>).__lemPagination = {
+            pages: pgs,
+            currentPageIdx: idx,
+            status,
+            pagesLength: pgs?.length ?? 0,
+          };
+        };
         if (result.status === "ok" && result.pages.length > 0) {
-          setPages(result.pages);
-          setCurrentPageIdx(
-            fragmentContainingOffset(result.pages, anchorOffset, currentArticle),
+          const nextIdx = fragmentContainingOffset(
+            result.pages,
+            anchorOffset,
+            currentArticle,
           );
+          setPages(result.pages);
+          setCurrentPageIdx(nextIdx);
+          publishDev("ok", result.pages, nextIdx);
         } else {
-          // PAGE-04 fallback — Plan 04-05 wires the banner + session-mode flip.
-          // For this plan, render nothing (ArticleView's article-body still
-          // shows the provenance header so the surface isn't blank chrome).
+          // PAGE-04 fallback — Plan 04-05 wires the banner + session-mode flip
+          // in ArticleView via the DiagnosticBus subscription (the engine
+          // already emitted dom-fallback). Render nothing here; the shared
+          // <article> header stays visible so the surface isn't blank chrome.
           setPages(null);
+          publishDev("fallback", null, 0);
         }
       } catch (e) {
         // AbortError is the silent-cancel path (rapid article swap or viewport
@@ -217,6 +243,20 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
       }
       onAnchorChange?.(pageStartGlobalOffset(articleRef.current, p[currentPageIdx]!));
     }, [currentPageIdx, pages, onAnchorChange]);
+
+    // DEV-only: keep window.__lemPagination.currentPageIdx fresh on every
+    // turn so the Plan 04-05 page-turn e2e can assert the new page without
+    // poking the imperative handle. pages/status are published in the
+    // pagination effect above; this only refreshes the live index. Gated
+    // behind import.meta.env.DEV (T-04-16).
+    if (import.meta.env.DEV) {
+      const dev = (window as unknown as Record<string, unknown>).__lemPagination as
+        | { pages: PageFragment[] | null; currentPageIdx: number; status: string; pagesLength: number }
+        | undefined;
+      if (dev && dev.currentPageIdx !== currentPageIdx) {
+        dev.currentPageIdx = currentPageIdx;
+      }
+    }
 
     /**
      * The shared turn path — chevrons + imperative handle + (via the handle)

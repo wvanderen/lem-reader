@@ -981,3 +981,99 @@ dialog.wipe-confirm::backdrop {
   height: 20px;
   pointer-events: none;
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+ * Phase 4 Plan 04-05 — Pagination fallback banner (PAGE-04 + PAGE-09)
+ *
+ * PaginationFallbackBanner (UI-SPEC §Interaction 23 + §Copywriting lines
+ * 351–355): extends the .status card pattern (lines 257–263) — non-modal,
+ * dismissible, does NOT trap focus. Sits inline at the top of <main>, near
+ * the article header, ABOVE the article <header> in DOM order. NOT sticky
+ * (READ-04 — sticky chrome competes with content). Mirrors the ResumeBanner
+ * + StorageBanner geometry (flex column: main text block + actions row).
+ *
+ * No motion-related property is declared on any selector here (UI-SPEC
+ * §Interaction 12 + RESEARCH anti-pattern #6 — the global prefers-reduced-
+ * motion gate is trivially satisfied). The banner appears/disappears as an
+ * instant state change (mount/unmount), not a transition.
+ * ════════════════════════════════════════════════════════════════════════ */
+
+/* ── Pagination-fallback banner (non-modal, dismissible status card) ─────── */
+/* Extends .status (lines 257–263) — adds the main + actions row layout.
+   Sits above the article header in DOM order so it's the first thing the
+   reader sees after a fallback flip. Copy verbatim from UI-SPEC §Copywriting
+   lines 351–355. */
+.pagination-fallback-banner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  /* Inset matches main#main so the banner aligns with the article edge
+     (mirrors .resume-banner / .storage-banner). */
+  margin-block-end: var(--space-lg);
+}
+.pagination-fallback-main h2 {
+  /* Reuses .status h2 baseline (lines 258–263). */
+  margin-block: 0 var(--space-sm);
+  font-family: var(--font-ui);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.pagination-fallback-main p {
+  margin-block: 0;
+  color: var(--ink-soft);
+}
+.pagination-fallback-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+}
+/* Switch-to-pages secondary button — neutral border (UI-SPEC §Copywriting
+   line 355: reversible, NOT destructive — mirrors .resume-banner-secondary
+   discipline so the consequence reads as a recovery, not a confirmation). */
+.pagination-fallback-switch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--touch);
+  padding-inline: var(--space-md);
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 16px;
+  cursor: pointer;
+}
+.pagination-fallback-switch:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.pagination-fallback-switch:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+/* Dismiss × button — reuses the ResumeBanner/StorageBanner dismiss geometry
+   (pushed to the inline-end of the actions row). */
+.pagination-fallback-dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--touch);
+  min-width: var(--touch);
+  padding: var(--space-sm);
+  margin-inline-start: auto; /* push to the inline-end of the actions row */
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.pagination-fallback-dismiss:hover {
+  color: var(--accent);
+}
+.pagination-fallback-dismiss:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}

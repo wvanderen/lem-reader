@@ -35,6 +35,7 @@ import { PageTurnControls } from "../reader/PageTurnControls";
 import { ProgressHairline } from "../reader/ProgressHairline";
 import { SectionAnnouncer } from "../reader/SectionAnnouncer";
 import { ResumeBanner } from "../reader/ResumeBanner";
+import { PaginationFallbackBanner } from "../reader/PaginationFallbackBanner";
 
 /** The D4-10 mode-toggle handler signature (App threads a ref of this shape). */
 type ModeToggleHandler = () => void;
@@ -85,6 +86,18 @@ export function ArticleView({ articleId, modeToggleHandlerRef }: ArticleViewProp
   const [showResumeBanner, setShowResumeBanner] = useState(false);
   const [progress, setProgress] = useState(0);
 
+  // Phase 4 Plan 04-05 (PAGE-04 + PAGE-09): the fallback banner visibility +
+  // a SESSION-scoped mode override. On a pagination fallback (dom-fallback /
+  // measurement-error DiagnosticEvent), the override flips the effective mode
+  // to scrolling at the same D-05 passage WITHOUT overwriting the persisted
+  // readingMode preference (T-04-15 — only the user-initiated toggle path
+  // persists). Cleared by the reader's explicit Switch to pages / M / header
+  // toggle (returns to the persisted preference) or by an article swap.
+  const [showFallbackBanner, setShowFallbackBanner] = useState(false);
+  const [sessionModeOverride, setSessionModeOverride] = useState<
+    "paginated" | "scrolling" | null
+  >(null);
+
   // Ref + state for the rendered <article> element. The ref lets
   // useScrollSave/restoreLocation read the DOM imperatively; the state
   // (articleEl) triggers a re-render when the element mounts so
@@ -132,7 +145,13 @@ export function ArticleView({ articleId, modeToggleHandlerRef }: ArticleViewProp
   // branch is additive — scrolling mode stays byte-unchanged so existing
   // tests regress nothing.
   const { settings, update } = useSettings();
-  const isPaginated = settings.readingMode === "paginated";
+  // Phase 4 Plan 04-05: effectiveMode honors a session-scoped override (set
+  // on pagination fallback) WITHOUT overwriting the persisted preference.
+  // The render branch + every mode-aware effect below read effectiveMode, NOT
+  // settings.readingMode directly, so the fallback flip takes effect while
+  // the persisted readingMode stays byte-unchanged (T-04-15).
+  const effectiveMode = sessionModeOverride ?? settings.readingMode;
+  const isPaginated = effectiveMode === "paginated";
 
   // Phase 4 Plan 04-04: imperative handle to the paginated surface. Drives
   // keyboard + swipe (PageTurnControls) and reads the current page's anchor
@@ -161,17 +180,33 @@ export function ArticleView({ articleId, modeToggleHandlerRef }: ArticleViewProp
   // header ModeToggle button (and the M shortcut via PageTurnControls) share
   // ONE toggle path with ONE anchor capture.
   const handleToggleMode = useCallback(() => {
-    // Capture BEFORE the settings update re-renders (Pitfall 7). currentAnchor
+    // Capture BEFORE the mode swap re-renders (Pitfall 7). currentAnchor
     // OffsetRef is kept fresh by the scroll listener / onAnchorChange above.
     const offset = currentAnchorOffsetRef.current;
+    const currentEffective = sessionModeOverride ?? settings.readingMode;
     pendingModeSwapRef.current = {
-      from: settings.readingMode,
+      from: currentEffective,
       offset,
     };
-    update({
-      readingMode: settings.readingMode === "paginated" ? "scrolling" : "paginated",
-    });
-  }, [settings.readingMode, update]);
+    if (sessionModeOverride !== null) {
+      // Reader is in a session-overridden fallback mode and toggling back to
+      // their persisted preference — clear the override WITHOUT persisting.
+      // The fallback never persisted; the reader returns to the mode they
+      // chose. The D4-10 anchor in pendingModeSwapRef preserves the passage.
+      // This SAME path serves the banner's "Switch to pages" action so the
+      // anchor applies either way (header button / M / banner button share
+      // ONE toggle path).
+      setSessionModeOverride(null);
+      setShowFallbackBanner(false);
+    } else {
+      // Normal user-initiated toggle — persist the choice. T-04-15: only
+      // this user-initiated path writes the persisted readingMode; the
+      // fallback subscription NEVER calls update({readingMode}).
+      update({
+        readingMode: settings.readingMode === "paginated" ? "scrolling" : "paginated",
+      });
+    }
+  }, [settings.readingMode, sessionModeOverride, update]);
 
   // Register the handler on the App-provided ref. Updated every render so the
   // closure always sees the latest settings.readingMode; cleared on unmount
@@ -204,17 +239,21 @@ export function ArticleView({ articleId, modeToggleHandlerRef }: ArticleViewProp
   // mode swap commits, silent-scroll the scrolling ArticleBody to the captured
   // offset via the SAME findScrollTarget helper Phase 2's location-restore
   // uses (no fork). rAF-deferred so the blocks are positioned before the query.
-  const prevModeRef = useRef(settings.readingMode);
+  //
+  // Phase 4 Plan 04-05: tracks effectiveMode (NOT settings.readingMode) so a
+  // session-override fallback flip (which does NOT change settings.readingMode)
+  // still triggers the paginated→scrolling re-anchor.
+  const prevEffectiveModeRef = useRef(effectiveMode);
   useEffect(() => {
-    const prev = prevModeRef.current;
-    prevModeRef.current = settings.readingMode;
+    const prev = prevEffectiveModeRef.current;
+    prevEffectiveModeRef.current = effectiveMode;
     const swap = pendingModeSwapRef.current;
-    if (!swap || prev === settings.readingMode) return;
+    if (!swap || prev === effectiveMode) return;
     pendingModeSwapRef.current = null;
     // Only the paginated→scrolling path needs a post-commit apply here — the
     // scrolling→paginated path is handled by PaginatedSurface's
     // initialAnchorOffset prop (read at mount from currentAnchorOffsetRef).
-    if (swap.from === "paginated" && settings.readingMode === "scrolling") {
+    if (swap.from === "paginated" && effectiveMode === "scrolling") {
       if (swap.offset > 0 && article && articleRef.current) {
         const rafId = requestAnimationFrame(() => {
           if (!articleRef.current || !article) return;
@@ -227,7 +266,7 @@ export function ArticleView({ articleId, modeToggleHandlerRef }: ArticleViewProp
         return () => cancelAnimationFrame(rafId);
       }
     }
-  }, [settings.readingMode, article]);
+  }, [effectiveMode, article]);
 
   // Paginated geometry: derive the page content-box height from the rendered
   // <article class="paginated-surface"> element after mount. rAF-deferred
@@ -248,6 +287,36 @@ export function ArticleView({ articleId, modeToggleHandlerRef }: ArticleViewProp
     };
   }, [articleEl]);
 
+  // Phase 4 Plan 04-05 (PAGE-04 + PAGE-09 — DiagnosticBus subscription):
+  // subscribe to the SAME DiagnosticBus instance threaded from useMeasurement
+  // (T-04 contract — never construct a second `new DiagnosticBus()` here).
+  // Only dom-fallback + measurement-error events surface the reader-visible
+  // banner + flip the session-mode override to scrolling; the other 4 kinds
+  // stay silent record (UI-SPEC §23 mapping — D3-05 closed set). The banner
+  // copy is STATIC UI-SPEC text (T-04-14: DiagnosticEvent fields are NEVER
+  // rendered raw). The session flip does NOT call update({readingMode}) — the
+  // persisted preference is untouched (T-04-15).
+  useEffect(() => {
+    // Seed from recent() in case a fallback fired before subscribe registered
+    // (parent effects run after the child useMeasurement engine mount; a
+    // synchronous emit would otherwise be missed).
+    const recent = diagnostics.recent();
+    const hasReaderVisibleFallback = recent.some(
+      (e) => e.kind === "dom-fallback" || e.kind === "measurement-error",
+    );
+    if (hasReaderVisibleFallback) {
+      setShowFallbackBanner(true);
+      setSessionModeOverride((prev) => prev ?? "scrolling");
+    }
+    const unsub = diagnostics.subscribe((event) => {
+      if (event.kind === "dom-fallback" || event.kind === "measurement-error") {
+        setShowFallbackBanner(true);
+        setSessionModeOverride("scrolling");
+      }
+    });
+    return unsub;
+  }, [diagnostics]);
+
   // Load article on articleId change (cancelled-flag pattern preserved from
   // Phase 1 — a slow load cannot overwrite a fast in-flight update).
   useEffect(() => {
@@ -259,6 +328,13 @@ export function ArticleView({ articleId, modeToggleHandlerRef }: ArticleViewProp
     setRestoredOffset(null);
     setShowResumeBanner(false);
     setProgress(0);
+    // Phase 4 Plan 04-05: reset the fallback banner + session-mode override
+    // on article swap so a fallback from the previous article doesn't carry
+    // over (the DiagnosticBus ring buffer is shared across articles via the
+    // stable useMeasurement diagnosticsRef, so recent() seed alone cannot
+    // distinguish articles).
+    setShowFallbackBanner(false);
+    setSessionModeOverride(null);
     openArticle(articleId)
       .then((a) => {
         if (cancelled) return;
@@ -364,6 +440,28 @@ export function ArticleView({ articleId, modeToggleHandlerRef }: ArticleViewProp
     };
   }, [showResumeBanner]);
 
+  // Phase 4 Plan 04-05 (PAGE-09): auto-dismiss the fallback banner on the
+  // reader's first scroll or pointer activity (UI-SPEC §Interaction 23 —
+  // mirrors the ResumeBanner pattern above). Registered ONLY while the banner
+  // is shown. The banner reappears if fallback re-triggers on a later
+  // repagination (it is NOT one-per-session — the subscription re-shows it).
+  // Auto-dismiss hides the banner only; the session-mode override stays so
+  // the reader remains in scrolling until they explicitly Switch to pages /
+  // toggle (the banner is non-blocking chrome, not the fallback itself).
+  useEffect(() => {
+    if (!showFallbackBanner) return;
+    const dismiss = () => setShowFallbackBanner(false);
+    window.addEventListener("scroll", dismiss, { passive: true, once: true });
+    window.addEventListener("pointerdown", dismiss, {
+      passive: true,
+      once: true,
+    });
+    return () => {
+      window.removeEventListener("scroll", dismiss);
+      window.removeEventListener("pointerdown", dismiss);
+    };
+  }, [showFallbackBanner]);
+
   /** Resume reading — re-trigger the silent scroll to the saved offset. */
   const handleResume = () => {
     if (article && restoredOffset && articleRef.current) {
@@ -441,6 +539,19 @@ export function ArticleView({ articleId, modeToggleHandlerRef }: ArticleViewProp
             onResume={handleResume}
             onStartFromTop={handleStartFromTop}
             onDismiss={() => setShowResumeBanner(false)}
+          />
+        )}
+        {showFallbackBanner && (
+          <PaginationFallbackBanner
+            // Switch to pages reuses the SAME toggle path as the header
+            // button + M shortcut (handleToggleMode). When a session override
+            // is active it clears the override (returns to the persisted
+            // preference) WITHOUT persisting — the D4-10 anchor in
+            // pendingModeSwapRef preserves the passage. If the oversize
+            // persists the engine re-emits dom-fallback and the banner
+            // reappears.
+            onSwitchToPages={handleToggleMode}
+            onDismiss={() => setShowFallbackBanner(false)}
           />
         )}
         <article
