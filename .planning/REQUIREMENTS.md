@@ -35,15 +35,15 @@
 
 ### Pagination
 
-- [x] **PAGE-01**: Reader can switch explicitly between paginated and scrolling modes for the same normalized article.
-- [x] **PAGE-02**: Reader can move forward and backward through responsive pages using keyboard, pointer, and touch controls.
-- [x] **PAGE-03**: Pagination preserves every supported content unit exactly once and in canonical order, without silent clipping, duplication, or omission. *(Proven by coverage-invariant + no-overflow-invariant e2e across the full FIXTURES × VIEWPORTS matrix in chromium/firefox/webkit — Plan 04-06.)*
+- [ ] **PAGE-01**: Reader can switch explicitly between paginated and scrolling modes for the same normalized article. *(⚠️ REGRESSION — gsd-verifier found M-toggle round-trip broken: second M does not flip persisted mode back to paginated within timeout. 6 corpus failures.)*
+- [ ] **PAGE-02**: Reader can move forward and backward through responsive pages using keyboard, pointer, and touch controls. *(⚠️ REGRESSION — keyboard bundle Space-after-ArrowRight drops events + chevron aria-disabled not reflected at last page. 6 failures.)*
+- [ ] **PAGE-03**: Pagination preserves every supported content unit exactly once and in canonical order, without silent clipping, duplication, or omission. *(⚠️ BLOCKER — PAGE-03a source-range coverage PASSES; PAGE-03b no-overflow FAILS on every corpus cell (54 failures). Plan 04-06's pre-captured LineBox[][] heights do not predict render-time page-fragment heights → fragments overflow content-box by 4-82px → overflow:hidden silently clips.)*
 - [x] **PAGE-04**: Pagination terminates with a usable result or an explicit scrolling fallback for oversized or unsupported content. *(Proven by fallback-oversize + fallback-banner e2e across chromium/firefox/webkit — Plan 04-05.)*
 - [x] **PAGE-05**: Reader remains at the same logical passage when switching modes or when viewport, typography, font state, or supported asset dimensions trigger repagination.
-- [x] **PAGE-06**: Reader can continue using the last valid view while a newer pagination result is being computed.
-- [x] **PAGE-07**: Stale pagination work cannot replace a result produced for newer content, viewport, typography, font, or asset constraints.
+- [ ] **PAGE-06**: Reader can continue using the last valid view while a newer pagination result is being computed. *(⚠️ REGRESSED in Phase 4 — gsd-verifier found article loses content (9→7 children) after re-measure. 3 e2e failures across chromium/firefox/webkit.)*
+- [ ] **PAGE-07**: Stale pagination work cannot replace a result produced for newer content, viewport, typography, font, or asset constraints. *(⚠️ REGRESSED in Phase 4 — rapid-trigger race commits wrong constraints' view. 3 e2e failures.)*
 - [x] **PAGE-08**: The measurement layer is calibrated against browser-rendered fixtures across supported engines before any Pretext.js fast path is enabled.
-- [x] **PAGE-09**: Pagination records actionable diagnostics and presents an understandable reason when it falls back to scrolling. *(Proven by fallback-banner e2e across chromium/firefox/webkit — Plan 04-05.)*
+- [ ] **PAGE-09**: Pagination records actionable diagnostics and presents an understandable reason when it falls back to scrolling. *(⚠️ PARTIAL — banner copy + announce correct; auto-dismiss races the reader's click on firefox/webkit. 4 failures.)*
 
 ### Annotations
 
@@ -128,15 +128,15 @@
 | A11Y-06 | Phase 2 | Complete |
 | A11Y-07 | Phase 2 | Complete |
 | A11Y-08 | Phase 2 | Complete |
-| PAGE-01 | Phase 4 | Complete |
-| PAGE-02 | Phase 4 | Complete |
-| PAGE-03 | Phase 4 | Complete |
+| PAGE-01 | Phase 4 | ⚠️ Regression (M-toggle round-trip) |
+| PAGE-02 | Phase 4 | ⚠️ Regression (keyboard + chevron) |
+| PAGE-03 | Phase 4 | ⚠️ Blocked (silent clipping) |
 | PAGE-04 | Phase 4 | Complete |
 | PAGE-05 | Phase 4 | Complete |
-| PAGE-06 | Phase 3 | Complete |
-| PAGE-07 | Phase 3 | Complete |
+| PAGE-06 | Phase 3 | ⚠️ Regressed in Phase 4 |
+| PAGE-07 | Phase 3 | ⚠️ Regressed in Phase 4 |
 | PAGE-08 | Phase 3 | Complete |
-| PAGE-09 | Phase 4 | Complete |
+| PAGE-09 | Phase 4 | ⚠️ Partial (banner race) |
 | ANNO-01 | Phase 5 | Pending |
 | ANNO-02 | Phase 5 | Pending |
 | ANNO-03 | Phase 5 | Pending |
