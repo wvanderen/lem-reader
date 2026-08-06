@@ -74,6 +74,29 @@ export const FragmentationResultSchema = z.object({
 });
 export type FragmentationResult = z.infer<typeof FragmentationResultSchema>;
 
+// ── OverflowGuardResult: post-render overflow guard output (Plan 04-07) ──────
+// Mirrors FragmentationResult's shape: status "ok" means the guard returned
+// a corrected (refragmented) PageFragment[] that fits the live page box;
+// status "fallback" means the guard emitted dom-fallback (single atomic
+// block too tall / unsplittable splitting block alone on the page) and the
+// caller MUST route to the existing PAGE-04/PAGE-09 scrolling fallback path
+// (the dom-fallback event the guard emitted on the DiagnosticBus surfaces
+// via the same subscription ArticleView already wires).
+//
+// status "ok" + empty pages[] is forbidden (the guard returns null for the
+// no-overflow pass-through, not an empty-array ok). status "fallback" always
+// carries pages: [] (matches FragmentationResult's fallback convention).
+//
+// schemaVersion: z.literal(1) — Phase 5+ can evolve the contract without
+// retrofitting emit sites.
+
+export const OverflowGuardResultSchema = z.object({
+  schemaVersion: z.literal(1),
+  status: z.enum(["ok", "fallback"]),
+  pages: z.array(PageFragmentSchema),
+});
+export type OverflowGuardResult = z.infer<typeof OverflowGuardResultSchema>;
+
 // ── LineBox: one CSS line box inside a block's text node ────────────────────
 // Plan 04-06: the Zod source of truth lives in src/measurement/types.ts
 // (LineBoxSchema). This re-export keeps every existing

@@ -99,6 +99,9 @@ interface StubChild {
   top: number;
   bottom: number;
   height?: number;
+  /** Optional textContent — required for splitting-kind cases so
+   * blockNormalizedText(childEl) yields the slice text the line boxes index. */
+  text?: string;
 }
 
 /**
@@ -115,6 +118,7 @@ function makeFragmentEl(children: StubChild[]): HTMLElement {
   for (const c of children) {
     const child = document.createElement("div");
     child.setAttribute("data-block-index", String(c.blockIndex));
+    if (c.text !== undefined) child.textContent = c.text;
     const height = c.height ?? Math.max(0, c.bottom - c.top);
     child.getBoundingClientRect = () =>
       stubRect({ top: c.top, bottom: c.bottom, height });
@@ -355,9 +359,9 @@ describe("refragmentOverflowingPage — splitting-kind overflow", () => {
   it("re-splits a paragraph at the largest widow-legal line whose before-slice fits", () => {
     // Paragraph: 5 lines × 20px = 100px tall, charOffset 0..49.
     // pageBox: 50px (≈2 lines fit before widow). Expected split: line 2.
-    const article = articleWithParagraphs([
-      "01234567890123456789012345678901234567890123456789",
-    ]);
+    const paragraphText =
+      "01234567890123456789012345678901234567890123456789";
+    const article = articleWithParagraphs([paragraphText]);
     const pages: PageFragment[] = [
       {
         schemaVersion: 1,
@@ -367,7 +371,7 @@ describe("refragmentOverflowingPage — splitting-kind overflow", () => {
     ];
     // The paragraph child overflows: bottom 250 > pageBox 50.
     const fragmentEl = makeFragmentEl([
-      { blockIndex: 0, top: 0, bottom: 250 },
+      { blockIndex: 0, top: 0, bottom: 250, text: paragraphText },
     ]);
     // Provide 5 uniform line boxes (10 chars / line × 5 lines = 50 chars).
     // Each line 20px tall. With SPLIT_WIDOW_LINES=2 + 5 lines:
@@ -402,7 +406,7 @@ describe("refragmentOverflowingPage — splitting-kind overflow", () => {
     expect(result![1]!.blocks).toEqual([
       { blockIndex: 0, startGrapheme: 20, endGrapheme: 50 },
     ]);
-    expect(readLineBoxesMock).once;
+    expect(readLineBoxesMock).toHaveBeenCalledOnce();
   });
 
   it("moves the splitting block whole to next page when it has too few lines to split (< 2 * SPLIT_WIDOW_LINES)", () => {
@@ -454,10 +458,9 @@ describe("refragmentOverflowingPage — splitting-kind overflow", () => {
 
   it("preserves trailing sibling blocks when re-splitting", () => {
     // Two paragraphs on page 0; P0 overflows and gets split; P1 trails.
-    const article = articleWithParagraphs([
-      "01234567890123456789012345678901234567890123456789",
-      "next",
-    ]);
+    const paragraphText =
+      "01234567890123456789012345678901234567890123456789";
+    const article = articleWithParagraphs([paragraphText, "next"]);
     const pages: PageFragment[] = [
       {
         schemaVersion: 1,
@@ -471,8 +474,8 @@ describe("refragmentOverflowingPage — splitting-kind overflow", () => {
     // child 0 (paragraph 0): bottom 250 overflows pageBox 50.
     // child 1 (paragraph 1): trailing sibling.
     const fragmentEl = makeFragmentEl([
-      { blockIndex: 0, top: 0, bottom: 250 },
-      { blockIndex: 1, top: 250, bottom: 260 },
+      { blockIndex: 0, top: 0, bottom: 250, text: paragraphText },
+      { blockIndex: 1, top: 250, bottom: 260, text: "next" },
     ]);
     readLineBoxesMockReturnValue(
       // 5 lines × 10 chars / line × 20px = paragraph 0.
