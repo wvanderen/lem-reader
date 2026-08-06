@@ -28,6 +28,8 @@ import { loadLocation } from "../persistence/locationStore";
 import { findScrollTarget } from "../reader/restoreLocation";
 import { useScrollSave } from "../reader/useScrollSave";
 import { useMeasurement } from "../measurement/useMeasurement";
+import { useSettings } from "../settings/SettingsContext";
+import { PaginatedSurface } from "../reader/PaginatedSurface";
 import { ProgressHairline } from "../reader/ProgressHairline";
 import { SectionAnnouncer } from "../reader/SectionAnnouncer";
 import { ResumeBanner } from "../reader/ResumeBanner";
@@ -100,7 +102,39 @@ export function ArticleView({ articleId }: { articleId: string }) {
   // Phase 4. D3-04: measurement is invisible by default — the hook writes
   // NOTHING to the `.status` live region (reserved for consequential
   // fallback, a Phase 4 concern).
-  useMeasurement(article, articleRef);
+  //
+  // Phase 4 Plan 04-03: destructure BOTH fields. `trustedView` feeds
+  // PaginatedSurface; `diagnostics` is the SAME DiagnosticBus instance owned
+  // by the hook (T-04 threading contract — never construct a second
+  // `new DiagnosticBus()` here; Plan 04-05's fallback banner subscribes to
+  // this same instance).
+  const { trustedView, diagnostics } = useMeasurement(article, articleRef);
+
+  // Phase 4 Plan 04-03: mode-aware render branch. settings.readingMode comes
+  // from the Plan 04-02 Zod value-shape evolution (default "paginated"). The
+  // branch is additive — scrolling mode stays byte-unchanged so existing
+  // tests regress nothing.
+  const { settings } = useSettings();
+  const isPaginated = settings.readingMode === "paginated";
+
+  // Paginated geometry: derive the page content-box height from the rendered
+  // <article class="paginated-surface"> element after mount. rAF-deferred
+  // (mirror L172-188) so the browser has completed layout before we read.
+  // Recomputed on articleEl change (article swap or first mount).
+  const [pageContentBoxHeightPx, setPageContentBoxHeightPx] = useState(0);
+  useEffect(() => {
+    if (!articleEl) return;
+    let cancelled = false;
+    const rafId = requestAnimationFrame(() => {
+      if (cancelled) return;
+      const rect = articleEl.getBoundingClientRect();
+      setPageContentBoxHeightPx(rect.height);
+    });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(rafId);
+    };
+  }, [articleEl]);
 
   // Load article on articleId change (cancelled-flag pattern preserved from
   // Phase 1 — a slow load cannot overwrite a fast in-flight update).
@@ -257,11 +291,22 @@ export function ArticleView({ articleId }: { articleId: string }) {
 
   const domain = new URL(article.provenance.sourceUrl).hostname;
 
+  // Paginated mode mounts only when trustedView + articleEl are both ready;
+  // otherwise we render the scrolling ArticleBody (the additive branch —
+  // scrolling behavior stays byte-unchanged so existing tests regress
+  // nothing). The .paginated-surface class is applied to the shared
+  // <article> only when PaginatedSurface is actually mounted so the
+  // overflow:hidden geometry never clips a fallback rendering.
+  const paginatedActive = isPaginated && trustedView !== null && articleEl !== null;
+
   return (
     <>
       {/* READ-05: hairline is fixed under the header via CSS. Decorative —
-          progress is conveyed to AT via the SectionAnnouncer live region. */}
-      <ProgressHairline progress={progress} />
+          progress is conveyed to AT via the SectionAnnouncer live region.
+          In paginated mode PaginatedSurface renders its own ProgressHairline
+          with the N/M ratio (D4-08), so we skip the scrolling-mode hairline
+          here to avoid a duplicate. */}
+      {!paginatedActive && <ProgressHairline progress={progress} />}
       {/* A11Y-08: polite live region announcing section changes during scroll.
           articleEl is null during loading; the callback ref sets it once the
           <article> mounts, triggering a re-render so this component receives
@@ -275,7 +320,10 @@ export function ArticleView({ articleId }: { articleId: string }) {
             onDismiss={() => setShowResumeBanner(false)}
           />
         )}
-        <article ref={articleCallbackRef} className="article-body">
+        <article
+          ref={articleCallbackRef}
+          className={paginatedActive ? "article-body paginated-surface" : "article-body"}
+        >
           <header>
             <h1>{article.provenance.title}</h1>
             {(article.provenance.author || article.provenance.publishedAt) && (
@@ -290,7 +338,17 @@ export function ArticleView({ articleId }: { articleId: string }) {
               <span className="visually-hidden"> (opens in a new tab)</span>
             </a>
           </header>
-          <ArticleBody article={article} />
+          {paginatedActive && trustedView && articleEl ? (
+            <PaginatedSurface
+              article={article}
+              trustedView={trustedView}
+              articleEl={articleEl}
+              diagnostics={diagnostics}
+              pageContentBoxHeightPx={pageContentBoxHeightPx}
+            />
+          ) : (
+            <ArticleBody article={article} />
+          )}
         </article>
       </main>
     </>

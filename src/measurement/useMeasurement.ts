@@ -18,9 +18,18 @@
 // but its visible effect is the reflow the scrolling view already does
 // via applyTheme (Phase 2's live-apply).
 //
-// Returns the trusted view (or null before the first commit) so Phase 4's
-// paginated mode can render from it. ArticleView in Phase 3 ignores the
-// return value — it keeps rendering `<ArticleBody>` directly.
+// Returns `{trustedView, diagnostics}` so Phase 4's paginated mode can:
+//   - render from `trustedView` via PaginatedSurface
+//   - subscribe to the SAME DiagnosticBus instance for PAGE-09 fallback
+//     surfacing (Plan 04-05's banner)
+//
+// CRITICAL (T-04 threading contract): the hook owns exactly ONE
+// DiagnosticBus instance (diagnosticsRef L77-80). It exposes that instance
+// via the return value so ArticleView, PaginatedSurface, and Plan 04-05's
+// fallback banner ALL subscribe to the same bus. Constructing a second
+// `new DiagnosticBus()` anywhere downstream would split emissions from
+// subscribers — measurement-error/dom-fallback events would silently
+// never arrive at the banner.
 
 import { useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
@@ -52,13 +61,15 @@ const RUNTIME_DRIFT_SAMPLE_SIZE = 5;
  * @param articleElRef Ref to the rendered <article> DOM node (the callback-
  *   ref + state seam from ArticleView L73–85 — same ref useScrollSave +
  *   SectionAnnouncer consume).
- * @returns The trusted view (last committed MeasurementResult) or null
- *   before the first commit / during loading.
+ * @returns `{trustedView, diagnostics}` — the trusted view (last committed
+ *   MeasurementResult, or null before the first commit / during loading) AND
+ *   the SINGLE DiagnosticBus instance owned by this hook. Consumers MUST NOT
+ *   construct a second DiagnosticBus (T-04 threading contract).
  */
 export function useMeasurement(
   article: CanonicalArticle | null,
   articleElRef: RefObject<HTMLElement | null>,
-): MeasurementResult | null {
+): { trustedView: MeasurementResult | null; diagnostics: DiagnosticBus } {
   const { settings } = useSettings();
   const [trustedView, setTrustedView] = useState<MeasurementResult | null>(null);
 
@@ -151,5 +162,5 @@ export function useMeasurement(
     coalescerRef.current?.notifySettingsChange();
   }, [settings]);
 
-  return trustedView;
+  return { trustedView, diagnostics: diagnosticsRef.current! };
 }

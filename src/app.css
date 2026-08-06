@@ -809,3 +809,111 @@ dialog.wipe-confirm::backdrop {
 .resume-banner-dismiss:hover {
   color: var(--accent);
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+ * Phase 4 Plan 04-03 — Paginated vertical slice
+ *
+ * The .paginated-surface modifier turns the shared .article-body into a
+ * viewport-bounding content box that NEVER scrolls (overflow:hidden). Page
+ * fragments fill it exactly; chevrons turn the page. The .page-fragment
+ * section holds one page's worth of semantic blocks rendered via BlockView
+ * — the SAME renderer scrolling mode uses (A11Y-03 single content tree).
+ * The .page-indicator span shows N of M (D4-08); it is decorative
+ * (aria-hidden) — the SectionAnnouncer live region conveys structural
+ * progress to AT, not this span. The .page-turn buttons are quiet fixed
+ * chevrons at the viewport edges (D4-06 pointer path; Plan 04-04 adds the
+ * keyboard bundle + swipe).
+ *
+ * No motion-related property is declared on any selector here — the global
+ * prefers-reduced-motion gate is trivially satisfied (UI-SPEC §Interaction
+ * 12 + RESEARCH anti-pattern #6 discipline, mirroring .progress-hairline).
+ * Page turns are instant content swaps; the hairline N/M swap is instant.
+ * ════════════════════════════════════════════════════════════════════════ */
+
+/* ── Paginated article-body modifier (page content-box geometry) ─────────── */
+/* Page content-box geometry — viewport-bounding per UI-SPEC §Layout. The
+   48px header + 2px hairline + 2x the 2xl inset (top + bottom) reserve calm
+   whitespace; the reader never scrolls inside the article body.
+   touch-action: pan-y pinch-zoom keeps native vertical scroll + pinch-zoom
+   available for accessibility (a reader can escape the page boundary if
+   needed; chevrons remain the primary turn path). */
+.article-body.paginated-surface {
+  width: var(--measure);
+  max-width: 100%;
+  height: calc(100vh - 48px - 2px - 2 * var(--space-2xl));
+  margin-inline: auto;
+  overflow: hidden;
+  touch-action: pan-y pinch-zoom;
+}
+
+/* The page-fragment section fills the content box height so the engine's
+   page-fit arithmetic matches the rendered geometry. */
+.page-fragment {
+  height: 100%;
+}
+
+/* ── Page indicator (D4-08 — decorative "N of M") ────────────────────────── */
+/* Fixed to the top-end corner, just under the 48px header. aria-hidden in
+   the markup (PageIndicator.tsx) — the SectionAnnouncer live region
+   conveys structural progress to AT. pointer-events:none so it never
+   intercepts chevron clicks. */
+.page-indicator {
+  position: fixed;
+  top: calc(48px + var(--space-sm));
+  right: var(--space-sm);
+  font: 400 14px/1.45 system-ui, -apple-system, sans-serif;
+  color: var(--ink-soft);
+  z-index: 5; /* same layer as the hairline; below the header (10) */
+  pointer-events: none;
+}
+
+/* ── Quiet chevron buttons (D4-06 pointer path) ──────────────────────────── */
+/* Fixed at the viewport edges, vertically centered on the article body.
+   44x44 hit area satisfies A11Y-07. --ink-soft default; --accent on hover/
+   focus-visible. aria-disabled lowers opacity (the button stays focusable
+   for SR users but is visibly muted at the first/last-page boundary).
+   inline-flex centers the 24x24 glyph inside the hit area. */
+.page-turn {
+  position: fixed;
+  top: calc(50% + 25px); /* center on the article body (below the 48px header) */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--touch);
+  min-height: var(--touch);
+  background: transparent;
+  border: 0;
+  color: var(--ink-soft);
+  z-index: 5;
+  touch-action: manipulation;
+  cursor: pointer;
+}
+.page-turn-previous {
+  left: var(--space-sm);
+}
+.page-turn-next {
+  right: var(--space-sm);
+}
+.page-turn:hover,
+.page-turn:focus-visible {
+  color: var(--accent);
+}
+.page-turn[aria-disabled="true"] {
+  opacity: 0.4;
+  cursor: default;
+}
+/* Standard visible-focus baseline (UI-SPEC §Interaction 4 — inherits the
+   global :focus-visible rule but re-declared here so a future refactor of
+   the .page-turn block cannot accidentally drop outline without a regression
+   alarm). */
+.page-turn:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+/* The inline-SVG glyph fills the hit area without intercepting pointer
+   events itself (the button handles the click). */
+.page-turn svg {
+  width: 24px;
+  height: 24px;
+  pointer-events: none;
+}
