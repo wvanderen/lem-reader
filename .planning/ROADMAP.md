@@ -118,7 +118,7 @@ Plans:
   4. Reader remains anchored through viewport, typography, font, and supported asset changes while a previous valid view remains available during repagination.
   5. Oversized or unsupported content produces an understandable diagnostic and a usable scrolling fallback at the same passage.
 
-**Plans:** 6/6 plans complete + 5 gap-closure plans (04-07…04-11) pending execution
+**Plans:** 8/11 plans executed
 Plans:
 **Wave 1**
 
@@ -135,7 +135,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 04-05-PLAN.md — Wave 4: PaginationFallbackBanner + DiagnosticBus subscription + session-mode flip + 8 pagination e2e specs (PAGE-04/09 fallback path PROVEN across chromium/firefox/webkit) + phase-gate human verify (manual UI checks APPROVED 2026-08-06 BUT automated prerequisite was misreported — see 04-VERIFICATION.md)
+- [x] 04-05-PLAN.md — Wave 4: PaginationFallbackBanner + DiagnosticBus subscription + session-mode flip + 8 pagination e2e specs (PAGE-04/09 fallback path PROVEN across chromium/firefox/webkit) + phase-gate human verify (manual UI checks APPROVED 2026-08-06 BUT automated prerequisite was misreported — see 04-VERIFICATION.md)
 
 **Wave 5** *(blocked on Wave 4 — gap closure for the engine container-handling blocker)*
 
@@ -144,7 +144,7 @@ Plans:
 **Gap Closure Waves 6–9** *(gsd-verifier caught 76 hidden e2e failures misreported as "269/0"; routing to /gsd-plan-phase --gaps)*
 
 - [x] 04-07-PLAN.md — Wave 6: PAGE-03 silent-clipping BLOCKER fix — STACK.md-mandated post-render overflow guard (new src/pagination/overflowGuard.ts) wired into PaginatedSurface; re-fragments overflowing pages against live DOM truth. **54 no-overflow cells × 3 engines GREEN** (2026-08-06). PAGE-03a/c preserved. Defensive empty-slice guard added (Rule 1).
-- [ ] 04-08-PLAN.md — Wave 6 (parallel): Phase 3 PAGE-06 + PAGE-07 cross-phase regression fix — partial-DOM defense + epoch guard interaction in src/measurement/engine.ts corrected so re-measurement preserves article DOM content AND commits the final valid constraints. 6 cells green.
+- [x] 04-08-PLAN.md — Wave 6 (parallel): Phase 3 PAGE-06 + PAGE-07 cross-phase regression fix — partial-DOM defense + epoch guard interaction in src/measurement/engine.ts corrected so re-measurement preserves article DOM content AND commits the final valid constraints. 6 cells green.
 - [ ] 04-09-PLAN.md — Wave 7: PAGE-01 M-toggle round-trip + PAGE-02 keyboard bundle + chevron boundary — M shortcut registered globally in both modes; synchronous ref update in commitTurn; aria-disabled reflection at boundaries. 9 cells green.
 - [ ] 04-10-PLAN.md — Wave 8: PAGE-09 banner auto-dismiss race — banner stays mounted through reader's click; UI-SPEC verbatim copy + T-04-15 + re-trigger semantics preserved. 9 cells green.
 - [ ] 04-11-PLAN.md — Wave 9: PROCESS BLOCKER — full `npm run test` end-to-end with honest pass + fail counts; overturns the "269/0" misreporting pattern; refuses to mark green until exit 0.
@@ -190,6 +190,6 @@ Plans:
 | 1. Canonical Article Foundation | 5/5 | Complete   | 2026-07-29 |
 | 2. Accessible Scrolling Reader | 4/4 | Complete    | 2026-08-04 |
 | 3. Trustworthy Layout Measurement | 2/2 | Complete    | 2026-08-05 |
-| 4. Responsive Pagination and Dual-Mode Navigation | 6/6 + 1/5 gap-closure (04-07 PAGE-03b closed) | ⚠️ PHASE_NEEDS_WORK (gap-closure in progress; 22 e2e failures remain across PAGE-01/02/09 + Phase 3 PAGE-06/07) | 2026-08-06 (code-complete); gap-closure wave 6 partial |
+| 4. Responsive Pagination and Dual-Mode Navigation | 8/11 | In Progress|  |
 | 5. Durable Highlights and Notes | 0/TBD | Not started | - |
 | 6. Prototype Acceptance | 0/TBD | Not started | - |

@@ -5,16 +5,16 @@ milestone_name: milestone
 current_phase: 04
 current_phase_name: responsive-pagination-and-dual-mode-navigation
 status: executing
-stopped_at: Phase 04 gap-closure — Plan 04-07 COMPLETE (PAGE-03b silent-clipping BLOCKER closed: 54 e2e cells green). Plans 04-08..04-11 remain (PAGE-01/02/09 + Phase 3 PAGE-06/07 regressions).
-last_updated: "2026-08-06T20:50:33Z"
+stopped_at: Completed 04-08-PLAN.md (PAGE-06+PAGE-07 cross-phase regressions closed)
+last_updated: "2026-08-06T21:13:31.919Z"
 last_activity: 2026-08-06
-last_activity_desc: Plan 04-07 executed — post-render overflow guard closed PAGE-03b
+last_activity_desc: Plan 04-07 (31 min, 4 files)
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 22
-  completed_plans: 18
-  percent: 55
+  completed_plans: 19
+  percent: 50
 ---
 
 # Project State
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-05)
 ## Current Position
 
 Phase: 04 (responsive-pagination-and-dual-mode-navigation) — EXECUTING (gap-closure)
-Plan: 7 of 11 complete (04-07 closed PAGE-03b)
+Plan: 8 of 11 complete (04-07 closed PAGE-03b)
 Status: Plan 04-07 executed — post-render overflow guard closes PAGE-03b
 Last activity: 2026-08-06 — Plan 04-07 (31 min, 4 files)
 
@@ -78,6 +78,7 @@ Progress: [██████████] 4/6 phases code-complete — 18/22 pl
 | Phase 04 P04 | 19min | 2 tasks | 14 files |
 | Phase 04 P05 | 27min | 2 tasks (Task 3 human gate pending) | 12 files |
 | Phase 04 P06 | 56min | 5 tasks | 23 files |
+| Phase 04 P08 | 13min | 1 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -142,6 +143,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: Phase 04-06: Plan 04-05 Option A (pre-captured line boxes) implemented — measurement captures LineBox[][] per block; engine consumes pre-captured data with NO live DOM walk. data-block-index is the 1:1 block↔element mapping. Generalized readLineBoxes via TreeWalker.SHOW_TEXT.
 - [Phase ?]: Phase 04-06: splittingBlockText is the renderer-aligned coordinate system (concatenated runs without separators for paragraphs, BLOCK_SEPARATOR-joined for containers). Engine + renderer + DEV hook share it. Distinct from D-05 substrate.
 - [Phase ?]: Phase 04-06: partial-DOM measurement defense — PaginatedSurface replaces ArticleBody, ResizeObserver fires re-measurement against the page fragment, would overwrite good trustedView. Engine silently skips commits where blocks.length !== article.blocks.length. Typography-change re-measure is a known MVP scope limit.
+- [Phase 04]: Plan 04-08 chose Option A (always-mounted hidden ArticleBody alongside PaginatedSurface) over Options B + C because B + C alone do not fix PAGE-07 — typography changes still need a real re-measure against the full article body. The hidden .article-body-measurement wrapper makes measureAllBlocks always return the full [data-block-index] set; the partial-DOM defense becomes unreachable in normal operation but stays as a safety net locked by new engine unit tests. PAGE-06 seeds readingMode scrolling (mirrors Plan 04-06 Task 5); PAGE-07 stays under the paginated default and proves the fix works. — Plan 04-08 chose Option A (always-mounted hidden ArticleBody alongside PaginatedSurface) over Options B + C because B + C alone do not fix PAGE-07 — typography changes still need a real re-measure against the full article body. The hidden .article-body-measurement wrapper makes measureAllBlocks always return the full [data-block-index] set; the partial-DOM defense becomes unreachable in normal operation but stays as a safety net locked by new engine unit tests. PAGE-06 seeds readingMode scrolling (mirrors Plan 04-06 Task 5); PAGE-07 stays under the paginated default and proves the fix works.
 
 ### Pending Todos
 
@@ -164,6 +166,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-08-06T18:04:15.090Z
-Stopped at: Created 04-06-PLAN.md (engine container-handling gap-fix plan — unblocks PAGE-03 + 04-05 Task 3 gate)
+Last session: 2026-08-06T21:13:31.914Z
+Stopped at: Completed 04-08-PLAN.md (PAGE-06+PAGE-07 cross-phase regressions closed)
 Resume file: None
