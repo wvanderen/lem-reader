@@ -118,12 +118,12 @@ Plans:
   4. Reader remains anchored through viewport, typography, font, and supported asset changes while a previous valid view remains available during repagination.
   5. Oversized or unsupported content produces an understandable diagnostic and a usable scrolling fallback at the same passage.
 
-**Plans:** 1/5 plans complete
+**Plans:** 2/5 plans executed
 Plans:
 **Wave 1**
 
 - [x] 04-01-PLAN.md — Wave 1: project-owned pagination engine (src/pagination/* — types, lineBoxes, splitBlock, widowRules, fragment) + unit tests proving PAGE-03 exactly-once/canonical-order/termination + PAGE-04 oversize/threshold guards
-- [ ] 04-02-PLAN.md — Wave 1: readingMode Zod value-shape evolution (schemaVersion 1→2, default paginated, NO Dexie change per Pitfall 9) + Wave 0 test infrastructure (corpus × viewport × typography matrix + 8 pagination e2e scaffolds)
+- [x] 04-02-PLAN.md — Wave 1: readingMode Zod value-shape evolution (schemaVersion 1→2, default paginated, NO Dexie change per Pitfall 9) + Wave 0 test infrastructure (corpus × viewport × typography matrix + 8 pagination e2e scaffolds)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -178,6 +178,6 @@ Plans:
 | 1. Canonical Article Foundation | 5/5 | Complete   | 2026-07-29 |
 | 2. Accessible Scrolling Reader | 4/4 | Complete    | 2026-08-04 |
 | 3. Trustworthy Layout Measurement | 2/2 | Complete    | 2026-08-05 |
-| 4. Responsive Pagination and Dual-Mode Navigation | 1/5 | Executing | - |
+| 4. Responsive Pagination and Dual-Mode Navigation | 2/5 | In Progress|  |
 | 5. Durable Highlights and Notes | 0/TBD | Not started | - |
 | 6. Prototype Acceptance | 0/TBD | Not started | - |

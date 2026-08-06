@@ -5,16 +5,16 @@ milestone_name: milestone
 current_phase: 04
 current_phase_name: responsive-pagination-and-dual-mode-navigation
 status: executing
-stopped_at: Phase 4 plan 04-01 complete
-last_updated: "2026-08-06T14:31:56.000Z"
+stopped_at: Completed 04-02-PLAN.md
+last_updated: "2026-08-06T14:45:53.214Z"
 last_activity: 2026-08-06
-last_activity_desc: Phase 04 plan 01 (pagination engine) complete
+last_activity_desc: Phase 04 plan 02 complete
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 16
-  completed_plans: 12
-  percent: 53
+  completed_plans: 13
+  percent: 50
 ---
 
 # Project State
@@ -29,11 +29,11 @@ See: .planning/PROJECT.md (updated 2026-08-05)
 ## Current Position
 
 Phase: 04 (responsive-pagination-and-dual-mode-navigation) — EXECUTING
-Plan: 2 of 5 (Plan 04-01 complete; Plan 04-02 next)
-Status: Plan 04-01 complete (pagination engine + contracts + widow rules + orchestrator)
-Last activity: 2026-08-06 — Phase 04 plan 01 complete
+Plan: 3 of 5 (Plan 04-01 + 04-02 complete; Plan 04-03 next)
+Status: Plan 04-02 complete (readingMode Zod value-shape evolution + Wave 0 corpus matrix + 8 pagination e2e scaffolds)
+Last activity: 2026-08-06 — Phase 04 plan 02 complete
 
-Progress: [██████████░░░░░░░░░░] 3/6 phases complete (53%) — 12/16 plans executed
+Progress: [████████░░░░░░░░░░░░] 3/6 phases complete (50%) — 13/16 plans executed (81%)
 
 ## Performance Metrics
 
@@ -67,6 +67,7 @@ Progress: [██████████░░░░░░░░░░] 3/6 pha
 | Phase 03 P01 | 22 min | 3 tasks | 16 files |
 | Phase 03 P02 | 19 min | 2 tasks | 14 files |
 | Phase 04 P01 | 13 min (Task 2) + prior (Task 1) | 2 tasks | 9 files |
+| Phase 04 P02 | 5min | 2 tasks | 16 files |
 
 ## Accumulated Context
 
@@ -116,6 +117,10 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 4]: Phase 04-01: chooseSplit verifies the before-slice ACTUALLY fits on the current page after the widow bump (not just the 2/2 line-count rule) — prevents overflowing page-1 entries when the candidate is line 0 but the orphan bump pushes the split to SPLIT_WIDOW_LINES.
 - [Phase 4]: Phase 04-01: Atomic-oversize threshold is strictly-greater-than (> 0.75): a block at exactly 75% is allowed; 75.0001% triggers fallback (edge case unit-tested).
 - [Phase 4]: Phase 04-01: applyHeadingWidow falls back to heading-only height check when following block has < HEADING_WIDOW_LINES (=2) lines — the rule can't anchor meaningfully without enough following lines.
+- [Phase 04]: Phase 04-02: schemaVersion resolved to z.union([z.literal(1), z.literal(2)]) — plan was internally inconsistent (must_haves said literal(2) but action required {schemaVersion:1,...} hydration); union satisfies both v1 read hydration (Pitfall 9) and v2 canonical write, forward-rejects v3+ (V5 preserved).
+- [Phase 04]: Phase 04-02: PAGE-01 split — this plan ships the schema field + e2e scaffold (foundation); Plan 04-04 ships the reader-facing ModeToggle + M shortcut + D4-10 anchor (behavior). PAGE-01 stays unchecked in REQUIREMENTS.md until Plan 04-04.
+- [Phase 04]: Phase 04-02: Wave 0 scaffolds use h1-visible sentinel (not test.todo) — proves the harness wires up at runtime in chromium + firefox + webkit (24/24 green, 12.4s); test.todo would only prove compilation.
+- [Phase 04]: Phase 04-02: fixtures-matrix.ts FIXTURES verified against src/fixtures/index.ts (6 corpus ids); TypographyVariant type shared (imported) from tests/e2e/calibration/fixtures-matrix.ts — not forked.
 
 ### Pending Todos
 
@@ -136,6 +141,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-08-06T14:31:56.000Z
-Stopped at: Phase 4 plan 04-01 complete (pagination engine shipped)
-Resume file: .planning/phases/04-responsive-pagination-and-dual-mode-navigation/04-02-PLAN.md
+Last session: 2026-08-06T14:45:27.569Z
+Stopped at: Completed 04-02-PLAN.md
+Resume file: None
