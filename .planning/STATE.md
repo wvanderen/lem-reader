@@ -4,17 +4,17 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 04
 current_phase_name: responsive-pagination-and-dual-mode-navigation
-status: needs_work
-stopped_at: Phase 04 PHASE_NEEDS_WORK — gsd-verifier audit found 76 e2e failures (PAGE-03 silent clipping + PAGE-01/02/09 + Phase 3 PAGE-06/07 regressions). Suite was misreported as green throughout the phase. Routing to /gsd-plan-phase --gaps.
-last_updated: "2026-08-06T19:30:00.000Z"
+status: executing
+stopped_at: Phase 04 gap-closure — Plan 04-07 COMPLETE (PAGE-03b silent-clipping BLOCKER closed: 54 e2e cells green). Plans 04-08..04-11 remain (PAGE-01/02/09 + Phase 3 PAGE-06/07 regressions).
+last_updated: "2026-08-06T20:50:33Z"
 last_activity: 2026-08-06
-last_activity_desc: gsd-verifier goal-backward audit — found 76 e2e failures (suite was misreported as 269/0; actually 76 failed / 269 passed). 6 structural gaps. Task 3 manual UI approval stands; automated prerequisite was false.
+last_activity_desc: Plan 04-07 executed — post-render overflow guard closed PAGE-03b
 progress:
   total_phases: 6
-  completed_phases: 4
-  total_plans: 17
-  completed_plans: 17
-  percent: 100
+  completed_phases: 3
+  total_plans: 22
+  completed_plans: 18
+  percent: 55
 ---
 
 # Project State
@@ -28,12 +28,18 @@ See: .planning/PROJECT.md (updated 2026-08-05)
 
 ## Current Position
 
-Phase: 04 (responsive-pagination-and-dual-mode-navigation) — PHASE_NEEDS_WORK (gsd-verifier found 76 e2e failures hidden by misreported suite)
-Plan: 6 of 6 EXECUTED (Tasks nominally complete); but 04-VERIFICATION.md scored 3/7 must-haves — 6 structural gaps blocking the phase goal
-Status: ⚠️ Suite was misreported throughout Phase 4 as "269 passed / 0 failed" — actual: 76 failed / 269 passed (gsd-verifier re-ran clean). 6 gaps: PAGE-03b silent clipping (54 failures, BLOCKER), PAGE-01 M-toggle round-trip (6), PAGE-02 keyboard + chevron (6), PAGE-09 banner race (4), PAGE-06 Phase 3 regression (3), PAGE-07 Phase 3 regression (3). Plan 04-05 Task 3 manual UI approval stands, but the automated prerequisite was false. PAGE-03 cannot be marked complete. Routing to /gsd-plan-phase --gaps.
-Last activity: 2026-08-06 — gsd-verifier audit caught the misreported suite; phase routed to gap-fix planning
+Phase: 04 (responsive-pagination-and-dual-mode-navigation) — EXECUTING (gap-closure)
+Plan: 7 of 11 complete (04-07 closed PAGE-03b)
+Status: Plan 04-07 executed — post-render overflow guard closes PAGE-03b
+Last activity: 2026-08-06 — Plan 04-07 (31 min, 4 files)
 
-Progress: [██████████] 4/6 phases code-complete (100% of plans executed) — 17/17 plans executed
+Progress: [██████████] 4/6 phases code-complete — 18/22 plans executed (gap-closure wave 6 of 9)
+
+## Recent Decisions (Plan 04-07)
+
+- **Guard is additive, not a rewrite.** Plan 04-06's pre-capture pipeline stays as the FIRST pass; the guard runs as the SECOND pass against live DOM truth (STACK.md "per-kind measurement + post-render overflow guard" pattern).
+- **Defensive empty-slice guard.** When live DOM textContent disagrees with the entry's `[startGrapheme, endGrapheme)` range (React re-render race or UTF-16/grapheme divergence), the guard rejects the split and falls back to move-whole or dom-fallback. Never produces an empty PageFragment.blocks entry.
+- **Live DOM truth over pre-capture.** The guard reads getBoundingClientRect + scrollHeight on the actual rendered .page-fragment. Pre-capture's scrolling-geometry heights don't predict paginated-geometry heights (the root cause of the 4–82px overflows).
 
 ## Performance Metrics
 

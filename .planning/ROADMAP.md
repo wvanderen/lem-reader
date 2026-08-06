@@ -143,7 +143,7 @@ Plans:
 
 **Gap Closure Waves 6–9** *(gsd-verifier caught 76 hidden e2e failures misreported as "269/0"; routing to /gsd-plan-phase --gaps)*
 
-- [ ] 04-07-PLAN.md — Wave 6: PAGE-03 silent-clipping BLOCKER fix — STACK.md-mandated post-render overflow guard (new src/pagination/overflowGuard.ts) wired into PaginatedSurface; re-fragments overflowing pages against live DOM truth. 54 no-overflow cells × 3 engines.
+- [x] 04-07-PLAN.md — Wave 6: PAGE-03 silent-clipping BLOCKER fix — STACK.md-mandated post-render overflow guard (new src/pagination/overflowGuard.ts) wired into PaginatedSurface; re-fragments overflowing pages against live DOM truth. **54 no-overflow cells × 3 engines GREEN** (2026-08-06). PAGE-03a/c preserved. Defensive empty-slice guard added (Rule 1).
 - [ ] 04-08-PLAN.md — Wave 6 (parallel): Phase 3 PAGE-06 + PAGE-07 cross-phase regression fix — partial-DOM defense + epoch guard interaction in src/measurement/engine.ts corrected so re-measurement preserves article DOM content AND commits the final valid constraints. 6 cells green.
 - [ ] 04-09-PLAN.md — Wave 7: PAGE-01 M-toggle round-trip + PAGE-02 keyboard bundle + chevron boundary — M shortcut registered globally in both modes; synchronous ref update in commitTurn; aria-disabled reflection at boundaries. 9 cells green.
 - [ ] 04-10-PLAN.md — Wave 8: PAGE-09 banner auto-dismiss race — banner stays mounted through reader's click; UI-SPEC verbatim copy + T-04-15 + re-trigger semantics preserved. 9 cells green.
@@ -190,6 +190,6 @@ Plans:
 | 1. Canonical Article Foundation | 5/5 | Complete   | 2026-07-29 |
 | 2. Accessible Scrolling Reader | 4/4 | Complete    | 2026-08-04 |
 | 3. Trustworthy Layout Measurement | 2/2 | Complete    | 2026-08-05 |
-| 4. Responsive Pagination and Dual-Mode Navigation | 6/6 + 5 gap-closure | ⚠️ PHASE_NEEDS_WORK (76 hidden e2e failures; gap-closure plans 04-07…04-11 created)   | 2026-08-06 (code-complete); gap-closure pending |
+| 4. Responsive Pagination and Dual-Mode Navigation | 6/6 + 1/5 gap-closure (04-07 PAGE-03b closed) | ⚠️ PHASE_NEEDS_WORK (gap-closure in progress; 22 e2e failures remain across PAGE-01/02/09 + Phase 3 PAGE-06/07) | 2026-08-06 (code-complete); gap-closure wave 6 partial |
 | 5. Durable Highlights and Notes | 0/TBD | Not started | - |
 | 6. Prototype Acceptance | 0/TBD | Not started | - |
