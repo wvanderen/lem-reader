@@ -37,7 +37,7 @@
 
 - [x] **PAGE-01**: Reader can switch explicitly between paginated and scrolling modes for the same normalized article.
 - [x] **PAGE-02**: Reader can move forward and backward through responsive pages using keyboard, pointer, and touch controls.
-- [ ] **PAGE-03**: Pagination preserves every supported content unit exactly once and in canonical order, without silent clipping, duplication, or omission. *(⚠️ Blocked — the pagination engine cannot paginate container-bearing fixtures; see 04-05-SUMMARY §Blocking Finding. Corpus-matrix proof pending engine container-handling work.)*
+- [x] **PAGE-03**: Pagination preserves every supported content unit exactly once and in canonical order, without silent clipping, duplication, or omission. *(Proven by coverage-invariant + no-overflow-invariant e2e across the full FIXTURES × VIEWPORTS matrix in chromium/firefox/webkit — Plan 04-06.)*
 - [x] **PAGE-04**: Pagination terminates with a usable result or an explicit scrolling fallback for oversized or unsupported content. *(Proven by fallback-oversize + fallback-banner e2e across chromium/firefox/webkit — Plan 04-05.)*
 - [x] **PAGE-05**: Reader remains at the same logical passage when switching modes or when viewport, typography, font state, or supported asset dimensions trigger repagination.
 - [x] **PAGE-06**: Reader can continue using the last valid view while a newer pagination result is being computed.
@@ -130,7 +130,7 @@
 | A11Y-08 | Phase 2 | Complete |
 | PAGE-01 | Phase 4 | Complete |
 | PAGE-02 | Phase 4 | Complete |
-| PAGE-03 | Phase 4 | ⚠️ Blocked (engine container-handling gap) |
+| PAGE-03 | Phase 4 | Complete |
 | PAGE-04 | Phase 4 | Complete |
 | PAGE-05 | Phase 4 | Complete |
 | PAGE-06 | Phase 3 | Complete |

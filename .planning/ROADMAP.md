@@ -9,7 +9,7 @@ Lem Reader reaches its MVP through six vertical slices that keep a usable semant
 - [x] **Phase 1: Canonical Article Foundation** - Readers can open a representative saved corpus whose rich structure and stable logical coordinates are explicit and verifiable. (completed 2026-07-28)
 - [x] **Phase 2: Accessible Scrolling Reader** - Readers have a calm, adaptable scrolling experience with predictable interaction and recoverable local preferences and location. (completed 2026-08-04)
 - [x] **Phase 3: Trustworthy Layout Measurement** - Readers retain a usable view while responsive layout work is calibrated, current, and safe against font and asset changes. (completed 2026-08-05)
-- [ ] **Phase 4: Responsive Pagination and Dual-Mode Navigation** - Readers can navigate complete, stable pages or return to scrolling without losing their passage. *(Plan 04-06 in progress — resolving the engine container-handling blocker to close PAGE-03.)*
+- [x] **Phase 4: Responsive Pagination and Dual-Mode Navigation** - Readers can navigate complete, stable pages or return to scrolling without losing their passage. *(Plan 04-06 code-complete — PAGE-03 closed, corpus matrix green across chromium/firefox/webkit; Plan 04-05 Task 3 manual human-verify gate pending before /gsd-verify-work.)* (code-complete 2026-08-06)
 - [ ] **Phase 5: Durable Highlights and Notes** - Readers can create and manage local annotations that remain attached to canonical passages across every view change.
 - [ ] **Phase 6: Prototype Acceptance** - Readers can complete the full reading and annotation flow across the supported browser and accessibility conditions within explicit performance budgets.
 
@@ -118,7 +118,7 @@ Plans:
   4. Reader remains anchored through viewport, typography, font, and supported asset changes while a previous valid view remains available during repagination.
   5. Oversized or unsupported content produces an understandable diagnostic and a usable scrolling fallback at the same passage.
 
-**Plans:** 6 plans (Plan 04-05 code-complete; Task 3 human gate pending; Plan 04-06 created to resolve the engine container-handling blocker surfaced by 04-05 — see 04-05-SUMMARY §Blocking Finding)
+**Plans:** 6/6 plans complete
 Plans:
 **Wave 1**
 
@@ -139,7 +139,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 — gap closure for the engine container-handling blocker)*
 
-- [ ] 04-06-PLAN.md — Wave 5: engine gap fix — capture LineBox[][] during measurement (Option A) + data-block-index 1:1 block↔element mapping + engine consumes pre-captured line boxes + remove corpus-matrix ok-path e2e skips + fix pre-existing persistence.spec.ts STATE-01 failures. Unblocks 04-05 Task 3 + closes PAGE-03.
+- [x] 04-06-PLAN.md — Wave 5: engine gap fix — capture LineBox[][] during measurement (Option A) + data-block-index 1:1 block↔element mapping + engine consumes pre-captured line boxes + remove corpus-matrix ok-path e2e skips + fix pre-existing persistence.spec.ts STATE-01 failures. PAGE-03 closed; 04-05 Task 3 gate unblocked.
 
 **UI hint:** yes
 
@@ -182,6 +182,6 @@ Plans:
 | 1. Canonical Article Foundation | 5/5 | Complete   | 2026-07-29 |
 | 2. Accessible Scrolling Reader | 4/4 | Complete    | 2026-08-04 |
 | 3. Trustworthy Layout Measurement | 2/2 | Complete    | 2026-08-05 |
-| 4. Responsive Pagination and Dual-Mode Navigation | 5/6 | Code-complete (Task 3 gate pending; Plan 04-06 created to resolve engine gap → PAGE-03)|  |
+| 4. Responsive Pagination and Dual-Mode Navigation | 6/6 | Complete   | 2026-08-06 |
 | 5. Durable Highlights and Notes | 0/TBD | Not started | - |
 | 6. Prototype Acceptance | 0/TBD | Not started | - |

@@ -4,17 +4,17 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 04
 current_phase_name: responsive-pagination-and-dual-mode-navigation
-status: executing
-stopped_at: Created 04-06-PLAN.md (engine container-handling gap-fix plan — unblocks PAGE-03 + 04-05 Task 3 gate)
-last_updated: "2026-08-06T17:30:00.000Z"
+status: ready_for_verification
+stopped_at: Completed 04-06-PLAN.md (engine container-handling gap-fix — PAGE-03 closed; 04-05 Task 3 manual human-verify gate unblocked). All Phase 4 plans executed; awaiting /gsd-verify-work.
+last_updated: "2026-08-06T18:06:00.000Z"
 last_activity: 2026-08-06
-last_activity_desc: Phase 04 plan 06 created (engine gap fix: pre-captured line boxes + data-block-index mapping + e2e unskip + persistence repair)
+last_activity_desc: Phase 04 plan 06 executed (engine gap fix complete: pre-captured line boxes + data-block-index mapping + splittingBlockText coordinate + e2e ok-paths unskipped + persistence STATE-01 repaired)
 progress:
   total_phases: 6
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 17
-  completed_plans: 15
-  percent: 50
+  completed_plans: 17
+  percent: 100
 ---
 
 # Project State
@@ -28,12 +28,12 @@ See: .planning/PROJECT.md (updated 2026-08-05)
 
 ## Current Position
 
-Phase: 04 (responsive-pagination-and-dual-mode-navigation) — EXECUTING
-Plan: 6 of 6 (Plans 04-01..04-04 complete; Plan 04-05 Tasks 1+2 complete, Task 3 human gate PENDING; Plan 04-06 CREATED — engine gap-fix plan that unblocks PAGE-03 + the 04-05 Task 3 gate)
-Status: Plan 04-06 planned — resolves the Rule-4 engine container-handling blocker surfaced by 04-05 via Option A (capture LineBox[][] during measurement) + data-block-index 1:1 block↔element mapping + e2e ok-path unskip + persistence.spec.ts STATE-01 repair. Once 04-06 executes: the corpus matrix runs, PAGE-03 closes, and 04-05 Task 3's manual gate can proceed.
-Last activity: 2026-08-06 — Plan 04-06 created (engine gap fix)
+Phase: 04 (responsive-pagination-and-dual-mode-navigation) — CODE-COMPLETE (Plan 04-05 Task 3 manual human-verify gate pending)
+Plan: 6 of 6 EXECUTED (Plans 04-01..04-04 complete; Plan 04-05 Tasks 1+2 complete, Task 3 manual gate PENDING — automated prerequisite now unblocked by 04-06; Plan 04-06 COMPLETE — closed PAGE-03)
+Status: All Phase 4 plans executed. The corpus-matrix ok-paths run green (128/128 pagination e2e + 21/21 persistence e2e across chromium + firefox + webkit; 391/391 unit tests; lint + build clean). PAGE-03 marked Complete. Plan 04-05 Task 3's manual gate (screen-reader + reduced-motion + visual spot checks) is the LAST open item before /gsd-verify-work.
+Last activity: 2026-08-06 — Plan 04-06 executed (engine gap fix; PAGE-03 closed; 04-05 Task 3 gate unblocked)
 
-Progress: [█████████░] 3/6 phases complete (88%) — 15/17 plans executed (88%)
+Progress: [██████████] 4/6 phases code-complete (100% of plans executed) — 17/17 plans executed
 
 ## Performance Metrics
 
@@ -71,6 +71,7 @@ Progress: [█████████░] 3/6 phases complete (88%) — 15/17 p
 | Phase 04 P03 | 18min | 2 tasks | 9 files |
 | Phase 04 P04 | 19min | 2 tasks | 14 files |
 | Phase 04 P05 | 27min | 2 tasks (Task 3 human gate pending) | 12 files |
+| Phase 04 P06 | 56min | 5 tasks | 23 files |
 
 ## Accumulated Context
 
@@ -132,6 +133,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 04]: D4-10 mode-switch anchor uses continuous offset capture + App ref-bridge (Pitfall 7 capture-before-swap); pure anchor helpers reuse blockNormalizedText, no fork
 - [Phase 04 P05]: Session-scoped mode override (effectiveMode = sessionModeOverride ?? settings.readingMode) flips to scrolling on fallback WITHOUT overwriting the persisted readingMode (T-04-15); only handleToggleMode persists. Banner Switch to pages reuses the SAME toggle path.
 - [Phase 04 P05]: ⚠️ BLOCKING — pagination engine cannot paginate ANY corpus fixture. (a) PaginatedSurface (04-03) replaces the full ArticleBody before the engine reads live line boxes; (b) every fixture's container blocks break the 1:1 article.blocks↔querySelectorAll assumption. PAGE-03 corpus matrix proof impossible without engine work. Surfaced as Rule 4 for human decision (Options A/B in 04-05-SUMMARY §Blocking Finding).
+- [Phase ?]: Phase 04-06: Plan 04-05 Option A (pre-captured line boxes) implemented — measurement captures LineBox[][] per block; engine consumes pre-captured data with NO live DOM walk. data-block-index is the 1:1 block↔element mapping. Generalized readLineBoxes via TreeWalker.SHOW_TEXT.
+- [Phase ?]: Phase 04-06: splittingBlockText is the renderer-aligned coordinate system (concatenated runs without separators for paragraphs, BLOCK_SEPARATOR-joined for containers). Engine + renderer + DEV hook share it. Distinct from D-05 substrate.
+- [Phase ?]: Phase 04-06: partial-DOM measurement defense — PaginatedSurface replaces ArticleBody, ResizeObserver fires re-measurement against the page fragment, would overwrite good trustedView. Engine silently skips commits where blocks.length !== article.blocks.length. Typography-change re-measure is a known MVP scope limit.
 
 ### Pending Todos
 
@@ -144,6 +148,7 @@ None yet.
 - [Phase 4 → deferred → folded into 04-06]: persistence.spec.ts STATE-01 location-restore tests fail pre-existing since 04-02/04-03 (paginated default + paginated-surface geometry prevents window scroll). Now tracked under Plan 04-06 Task 5 (test-only fix: seed readingMode "scrolling").
 - [Phase 5]: Offset units, grapheme handling, overlap semantics, and anchor confidence thresholds need explicit decisions.
 - [Phase 6]: Concrete browser/OS/screen-reader support combinations and manual protocol remain to be selected.
+- [Phase 4 → resolved by 04-06]: Plan 04-05 corpus matrix blocker RESOLVED. PAGE-03 closed. Plan 04-05 Task 3 manual human-verify gate unblocked.
 
 ## Deferred Items
 
@@ -153,6 +158,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-08-06T17:30:00.000Z
+Last session: 2026-08-06T18:04:15.090Z
 Stopped at: Created 04-06-PLAN.md (engine container-handling gap-fix plan — unblocks PAGE-03 + 04-05 Task 3 gate)
 Resume file: None
