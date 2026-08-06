@@ -118,7 +118,7 @@ Plans:
   4. Reader remains anchored through viewport, typography, font, and supported asset changes while a previous valid view remains available during repagination.
   5. Oversized or unsupported content produces an understandable diagnostic and a usable scrolling fallback at the same passage.
 
-**Plans:** 3/5 plans executed
+**Plans:** 4/5 plans executed
 Plans:
 **Wave 1**
 
@@ -131,7 +131,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 04-04-PLAN.md — Wave 3: full dual-mode navigation (ModeToggle + Header + M shortcut + PageTurnControls keyboard/swipe/chevrons + D4-07 focus + announce + D4-10 mode-switch anchor + D4-11 repagination anchor)
+- [x] 04-04-PLAN.md — Wave 3: full dual-mode navigation (ModeToggle + Header + M shortcut + PageTurnControls keyboard/swipe/chevrons + D4-07 focus + announce + D4-10 mode-switch anchor + D4-11 repagination anchor)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -178,6 +178,6 @@ Plans:
 | 1. Canonical Article Foundation | 5/5 | Complete   | 2026-07-29 |
 | 2. Accessible Scrolling Reader | 4/4 | Complete    | 2026-08-04 |
 | 3. Trustworthy Layout Measurement | 2/2 | Complete    | 2026-08-05 |
-| 4. Responsive Pagination and Dual-Mode Navigation | 3/5 | In Progress|  |
+| 4. Responsive Pagination and Dual-Mode Navigation | 4/5 | In Progress|  |
 | 5. Durable Highlights and Notes | 0/TBD | Not started | - |
 | 6. Prototype Acceptance | 0/TBD | Not started | - |

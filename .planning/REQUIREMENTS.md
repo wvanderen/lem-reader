@@ -35,11 +35,11 @@
 
 ### Pagination
 
-- [ ] **PAGE-01**: Reader can switch explicitly between paginated and scrolling modes for the same normalized article.
-- [ ] **PAGE-02**: Reader can move forward and backward through responsive pages using keyboard, pointer, and touch controls.
+- [x] **PAGE-01**: Reader can switch explicitly between paginated and scrolling modes for the same normalized article.
+- [x] **PAGE-02**: Reader can move forward and backward through responsive pages using keyboard, pointer, and touch controls.
 - [ ] **PAGE-03**: Pagination preserves every supported content unit exactly once and in canonical order, without silent clipping, duplication, or omission.
 - [ ] **PAGE-04**: Pagination terminates with a usable result or an explicit scrolling fallback for oversized or unsupported content.
-- [ ] **PAGE-05**: Reader remains at the same logical passage when switching modes or when viewport, typography, font state, or supported asset dimensions trigger repagination.
+- [x] **PAGE-05**: Reader remains at the same logical passage when switching modes or when viewport, typography, font state, or supported asset dimensions trigger repagination.
 - [x] **PAGE-06**: Reader can continue using the last valid view while a newer pagination result is being computed.
 - [x] **PAGE-07**: Stale pagination work cannot replace a result produced for newer content, viewport, typography, font, or asset constraints.
 - [x] **PAGE-08**: The measurement layer is calibrated against browser-rendered fixtures across supported engines before any Pretext.js fast path is enabled.
@@ -128,11 +128,11 @@
 | A11Y-06 | Phase 2 | Complete |
 | A11Y-07 | Phase 2 | Complete |
 | A11Y-08 | Phase 2 | Complete |
-| PAGE-01 | Phase 4 | Pending |
-| PAGE-02 | Phase 4 | Pending |
+| PAGE-01 | Phase 4 | Complete |
+| PAGE-02 | Phase 4 | Complete |
 | PAGE-03 | Phase 4 | Pending |
 | PAGE-04 | Phase 4 | Pending |
-| PAGE-05 | Phase 4 | Pending |
+| PAGE-05 | Phase 4 | Complete |
 | PAGE-06 | Phase 3 | Complete |
 | PAGE-07 | Phase 3 | Complete |
 | PAGE-08 | Phase 3 | Complete |
