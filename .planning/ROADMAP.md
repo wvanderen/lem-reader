@@ -164,7 +164,7 @@ Plans:
   3. Highlights and notes remain on the same normalized text after repagination, mode or typography changes, and reopening the article.
   4. When quoted-context and canonical-position selectors cannot resolve confidently, reader sees an explicit ambiguous or orphaned state instead of a silent reattachment.
 
-**Plans:** 5/5 core complete + 2 gap-closure (05-06, 05-07 — pending execution)
+**Plans:** 5/7 plans executed
 Plans:
 **Wave 1**
 
@@ -217,5 +217,5 @@ Plans:
 | 2. Accessible Scrolling Reader | 4/4 | Complete    | 2026-08-04 |
 | 3. Trustworthy Layout Measurement | 2/2 | Complete    | 2026-08-05 |
 | 4. Responsive Pagination and Dual-Mode Navigation | 10/11 | In Progress|  |
-| 5. Durable Highlights and Notes | 5/7 | Gap-closure (05-06, 05-07 pending) |  |
+| 5. Durable Highlights and Notes | 5/7 | In Progress|  |
 | 6. Prototype Acceptance | 0/TBD | Not started | - |
