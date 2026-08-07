@@ -14,7 +14,7 @@ Readers can move through long-form web content with calm, stable orientation and
 
 ### Validated
 
-(None yet — ship to validate)
+- [x] Store highlights and attached notes locally and keep their anchors stable across repagination. *(Validated in Phase 5: Durable Highlights and Notes — 7/7 plans, full e2e corpus green across chromium/firefox/webkit)*
 
 ### Active
 
@@ -24,7 +24,6 @@ Readers can move through long-form web content with calm, stable orientation and
 - [ ] Provide predictable keyboard, click/tap, and accessible navigation with reduced-motion support.
 - [ ] Keep pagination stable and responsive as viewport and typography settings change, while handling font loading safely.
 - [ ] Provide typography, spacing, theme, and reading-mode controls that support a calm, low-distraction experience.
-- [ ] Store highlights and attached notes locally and keep their anchors stable across repagination.
 - [ ] Restore the reader's location when reopening the same article.
 - [ ] Fall back gracefully to the clean scrolling view whenever reliable pagination is not possible.
 
@@ -89,4 +88,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-05 after Phase 3*
+*Last updated: 2026-08-07 after Phase 5*
