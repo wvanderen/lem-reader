@@ -108,6 +108,23 @@ body {
     text-decoration-color: CanvasText;
     text-underline-offset: 2px;
   }
+  /* Plan 05-04 (D5-04 / A11Y-05): the unresolved variant (ambiguous/orphan)
+     MUST keep its dashed-outline SHAPE under forced colors. The base rule's
+     `background-color: transparent` keeps the system Highlight fill from
+     masking the outline; the explicit CanvasText outline color survives the
+     UA's forced palette. The three shapes (Highlight fill / dotted
+     underline / dashed outline) remain distinguishable even if the UA
+     collapses the Highlight/HighlightText pair — this is the A11Y-05
+     contract. Without this override the UA would apply the system Highlight
+     fill to every <mark>, flattening the unresolved marker into a normal
+     highlight and hiding the uncertainty cue (T-05-16 mitigation). */
+  mark.highlight.unresolved {
+    background-color: transparent;
+    color: CanvasText;
+    outline: 1px dashed CanvasText;
+    outline-offset: 1px;
+    text-decoration: none;
+  }
 }
 
 /* Visible focus baseline (UI-SPEC §Interaction 4) */

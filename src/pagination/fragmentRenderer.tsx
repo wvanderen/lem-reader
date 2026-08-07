@@ -204,6 +204,13 @@ function sliceHighlightsForEntry(
   return out;
 }
 
+// Test-only export: the D5-16 intersection math is pure (no DOM, no React),
+// so Plan 05-04 ships a pure-math unit test that calls this helper with
+// synthetic article + PageFragment fixtures (jsdom-safe; the full paginated
+// render proof is Plan 05-05's Playwright suite). The function is otherwise
+// internal to PageFragmentView's render path.
+export { sliceHighlightsForEntry as _test_sliceHighlightsForEntry };
+
 /**
  * Resolve a fragment entry to the Block that should be rendered.
  *
