@@ -146,7 +146,35 @@ export function deriveQuoteSelector(
   return { prefix, exact, suffix };
 }
 
-// DEFERRED to Phase 5 (feeds ANNO-07 orphan path):
-//   resolveQuoteSelector(article, selector): TextPositionSelector | "ambiguous" | "orphan"
-// Phase 1 ships types + derive() ONLY — resolve() is the re-anchoring step that
-// belongs with annotation persistence (RESEARCH.md Open Question #4).
+// ── Phase 5: resolveQuoteSelector (D5-02 re-anchoring) ─────────────────────
+// Source: D5-02 in 05-CONTEXT.md (locked decision). Algorithm delegated to
+// src/annotations/resolution.ts so this module stays focused on the D-05
+// substrate; the contract signature stays here per the Phase 1 stub site
+// (05-PATTERNS.md §normalizeText.ts). The import creates a benign module
+// cycle (resolution.ts imports graphemeClusters/normalizeText from here — both
+// are hoisted function declarations used only at call-time, so there is no
+// temporal-dead-zone hazard).
+import { resolveQuoteSelector as resolveQuoteSelectorImpl } from "../annotations/resolution";
+
+/**
+ * Re-resolve a stored TextQuoteSelector against the current revision's
+ * normalized text (D5-02). Returns:
+ *   - a TextPositionSelector when the passage is found confidently;
+ *   - "ambiguous" when the exact text appears N>1 times even after
+ *     prefix/suffix disambiguation (ANNO-07 — the reader is shown the
+ *     ambiguous state, never a silent re-attach);
+ *   - "orphan" when zero exact matches AND no confident prefix/suffix fallback.
+ *
+ * Pure function — no DOM, no React, no side effects. jsdom-safe.
+ *
+ * `positionHint` (the stored TextPositionSelector) is a nearness hint for the
+ * zero-exact fallback only; it is IGNORED when the exact text matches uniquely
+ * (the text IS the anchor). Never silently re-attaches to a wrong spot.
+ */
+export function resolveQuoteSelector(
+  article: CanonicalArticle,
+  selector: TextQuoteSelector,
+  positionHint?: TextPositionSelector,
+): TextPositionSelector | "ambiguous" | "orphan" {
+  return resolveQuoteSelectorImpl(article, selector, positionHint);
+}
