@@ -4,17 +4,17 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 05
 current_phase_name: durable-highlights-and-notes
-status: executing
+status: verifying
 stopped_at: Completed 05-01-PLAN.md
-last_updated: "2026-08-07T17:27:57.241Z"
+last_updated: "2026-08-07T18:46:25.222Z"
 last_activity: 2026-08-07
 last_activity_desc: Phase 05 execution started
 progress:
   total_phases: 6
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 27
-  completed_plans: 26
-  percent: 67
+  completed_plans: 27
+  percent: 83
 ---
 
 # Project State
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-08-05)
 
 Phase: 05 (durable-highlights-and-notes) — EXECUTING
 Plan: 5 of 5
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-08-07 — Phase 05 execution started
 
 Progress: [██████████] 4/6 phases code-complete — 22/22 plans executed (gap-closure wave 9 of 9 complete)
@@ -87,6 +87,7 @@ Progress: [██████████] 4/6 phases code-complete — 22/22 pl
 | Phase 05 P02 | 22min | 2 tasks | 9 files |
 | Phase 05 P03 | 20min | 2 tasks | 12 files |
 | Phase 05 P04 | 12min | 2 tasks | 9 files |
+| Phase 05 P05 | 95min | 3 tasks | 18 files |
 
 ## Accumulated Context
 
@@ -167,6 +168,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: Plan 05-04: D5-16 cross-fragment slicing threads through PageFragmentView (intersect each highlight range with each fragment entry's article-global visible range; emit a per-entry slice per non-empty intersection). A split-block highlight renders a mark on EACH containing fragment — both sharing data-highlight-id (no silent gaps at a page turn).
 - [Phase ?]: Plan 05-04: status-driven inline rendering — HighlightSliceEntry.status threads through sliceRunsForHighlights so ambiguous/orphan highlights render mark.highlight.unresolved (dashed outline) instead of a silent fill. Threading the full tri-state (not a boolean) preserves UI-SPEC's per-kind aria-label distinction.
 - [Phase ?]: Plan 05-04: ANNO-07 enforced at the rendering layer — ArticleBody's effective-highlights filter is 'resolvedPosition !== null' (NOT 'status === confident'), so ambiguous/orphan highlights render at their best-effort vicinity with the dashed-outline modifier. Never silent re-attach.
+- [Phase 05]: 05-05 phase gate green: full npm run test exits 0 (507 unit + 489 e2e = 996 passed / 0 failed) across chromium/firefox/webkit; ANNO-01..05/07 + STATE-03 + A11Y-01/05 proven in real browsers — Executor ran the suite itself; fail=0 honest; no subset/grep/engine-skip (05-05-OUTPUT.md permanent record)
+- [Phase 05]: 05-05: 4 Rule 1 gaps surfaced+fixed (paginated capture binding, mark activation, measurement scoping, firefox focus settle) — the e2e validation plan did its job; unit suite missed all 4 — Each fix committed atomically; full suite green after fixes
 
 ### Pending Todos
 
@@ -189,6 +192,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-08-07T17:25:36.953Z
+Last session: 2026-08-07T18:45:32.103Z
 Stopped at: Completed 05-01-PLAN.md
 Resume file: None

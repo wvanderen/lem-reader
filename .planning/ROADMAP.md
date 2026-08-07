@@ -10,7 +10,7 @@ Lem Reader reaches its MVP through six vertical slices that keep a usable semant
 - [x] **Phase 2: Accessible Scrolling Reader** - Readers have a calm, adaptable scrolling experience with predictable interaction and recoverable local preferences and location. (completed 2026-08-04)
 - [x] **Phase 3: Trustworthy Layout Measurement** - Readers retain a usable view while responsive layout work is calibrated, current, and safe against font and asset changes. (completed 2026-08-05)
 - [ ] **Phase 4: Responsive Pagination and Dual-Mode Navigation** - Readers can navigate complete, stable pages or return to scrolling without losing their passage. *(VERIFIED 2026-08-06T22:24:05Z — Plan 04-11 ran the full `npm run test` suite end-to-end: 753 passed / 0 failed / 0 skipped, exit 0. The prior "269/0" misreport is overturned; all 6 verifier-found gaps closed by 04-07/08/09/10. 04-VERIFICATION.md upgraded gaps_found (3/7) → verified (7/7).)* (in progress 2026-08-06)
-- [ ] **Phase 5: Durable Highlights and Notes** - Readers can create and manage local annotations that remain attached to canonical passages across every view change.
+- [x] **Phase 5: Durable Highlights and Notes** - Readers can create and manage local annotations that remain attached to canonical passages across every view change. (completed 2026-08-07)
 - [ ] **Phase 6: Prototype Acceptance** - Readers can complete the full reading and annotation flow across the supported browser and accessibility conditions within explicit performance budgets.
 
 ## Phase Details
@@ -164,7 +164,7 @@ Plans:
   3. Highlights and notes remain on the same normalized text after repagination, mode or typography changes, and reopening the article.
   4. When quoted-context and canonical-position selectors cannot resolve confidently, reader sees an explicit ambiguous or orphaned state instead of a silent reattachment.
 
-**Plans:** 4/5 plans executed
+**Plans:** 5/5 plans complete
 Plans:
 **Wave 1**
 
@@ -184,7 +184,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 — phase gate)*
 
-- [ ] 05-05-PLAN.md — Wave 5: full Playwright e2e corpus matrix (tests/e2e/annotations/*) across the 6-fixture corpus × theme × mode × chromium/firefox/webkit — capture/reject/keyboard, notes/drawer/delete/navigate-back, survive-repagination/mode-switch/reopen, cross-fragment-render, ambiguous-orphan-surface, persist-reload, forced-colors-shapes. Phase gate = full `npm run test` exit 0 (mirrors Plan 04-11 precedent: honest counts, no subset/grep/engine-skip). Closes ANNO-01..05/07 + STATE-03.
+- [x] 05-05-PLAN.md — Wave 5: full Playwright e2e corpus matrix (tests/e2e/annotations/*) across the 6-fixture corpus × theme × mode × chromium/firefox/webkit — capture/reject/keyboard, notes/drawer/delete/navigate-back, survive-repagination/mode-switch/reopen, cross-fragment-render, ambiguous-orphan-surface, persist-reload, forced-colors-shapes. Phase gate = full `npm run test` exit 0 (mirrors Plan 04-11 precedent: honest counts, no subset/grep/engine-skip). Closes ANNO-01..05/07 + STATE-03.
 
 **UI hint:** yes
 
@@ -212,5 +212,5 @@ Plans:
 | 2. Accessible Scrolling Reader | 4/4 | Complete    | 2026-08-04 |
 | 3. Trustworthy Layout Measurement | 2/2 | Complete    | 2026-08-05 |
 | 4. Responsive Pagination and Dual-Mode Navigation | 10/11 | In Progress|  |
-| 5. Durable Highlights and Notes | 4/5 | In Progress|  |
+| 5. Durable Highlights and Notes | 5/5 | Complete   | 2026-08-07 |
 | 6. Prototype Acceptance | 0/TBD | Not started | - |
