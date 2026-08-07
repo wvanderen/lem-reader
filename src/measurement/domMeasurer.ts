@@ -97,8 +97,16 @@ export function measureAllBlocks(
 ): BlockMeasurement[] {
   // queryBlocks — single DOM read at pass start (Pitfall 2: batch reads).
   // [data-block-index] is 1:1 with article.blocks by BlockRenderer contract.
+  // Plan 05-05: the page-fragment's blocks ALSO carry data-block-index now
+  // (D5-08 capture binding), so exclude .page-fragment descendants — the
+  // measurement body (.article-body-measurement, paginated) or the live
+  // .article-body (scrolling) is the authoritative full-article source; the
+  // fragment is a per-page slice that would double-count + trip the engine's
+  // blocks.length !== article.blocks.length defense.
   const elements = Array.from(
-    articleEl.querySelectorAll<HTMLElement>("[data-block-index]"),
+    articleEl.querySelectorAll<HTMLElement>(
+      "[data-block-index]:not(.page-fragment [data-block-index])",
+    ),
   );
   const out: BlockMeasurement[] = [];
   for (const el of elements) {

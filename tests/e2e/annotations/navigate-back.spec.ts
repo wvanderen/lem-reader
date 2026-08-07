@@ -45,16 +45,18 @@ test.describe("ANNO-04 navigate back (05-05)", () => {
     // Jump → drawer closes, page turns to the target, mark focuses.
     await entry.locator(".drawer-entry").click();
     await expect(page.locator("dialog.annotations-drawer")).toBeHidden();
-    // The mark with the highlight id is now focused (D5-11 + D4-07).
+    // The mark with the highlight id is now focused (D5-11 + D4-07). The
+    // focus is rAF-deferred after the page-turn commit; retry (firefox's
+    // page-turn + rAF focus can race a fixed wait).
     const mark = page.locator(`mark.highlight[data-highlight-id="${hlId}"]`);
     await expect(mark.first()).toBeVisible();
-    // Focus moves to the mark (allow a tick for the rAF deferred focus).
-    await page.waitForTimeout(200);
-    const focusedId = await page.evaluate(() => {
-      const el = document.activeElement;
-      return el?.getAttribute?.("data-highlight-id") ?? null;
-    });
-    expect(focusedId, "navigate-back focuses the <mark>").toBe(hlId);
+    await expect(async () => {
+      const focusedId = await page.evaluate(() => {
+        const el = document.activeElement;
+        return el?.getAttribute?.("data-highlight-id") ?? null;
+      });
+      expect(focusedId, "navigate-back focuses the <mark>").toBe(hlId);
+    }).toPass({ timeout: 3000 });
   });
 
   test("scrolling: drawer entry jump scrollIntoView-s the block + focuses the <mark>", async ({
@@ -80,12 +82,13 @@ test.describe("ANNO-04 navigate back (05-05)", () => {
     await expect(page.locator("dialog.annotations-drawer")).toBeHidden();
     const mark = page.locator(`mark.highlight[data-highlight-id="${hlId}"]`);
     await expect(mark.first()).toBeVisible();
-    await page.waitForTimeout(200);
-    const focusedId = await page.evaluate(() => {
-      const el = document.activeElement;
-      return el?.getAttribute?.("data-highlight-id") ?? null;
-    });
-    expect(focusedId, "scrolling navigate-back focuses the <mark>").toBe(hlId);
+    await expect(async () => {
+      const focusedId = await page.evaluate(() => {
+        const el = document.activeElement;
+        return el?.getAttribute?.("data-highlight-id") ?? null;
+      });
+      expect(focusedId, "scrolling navigate-back focuses the <mark>").toBe(hlId);
+    }).toPass({ timeout: 3000 });
     // Navigating from scrolling mode did NOT force a mode switch.
     await expect(page.getByRole("button", { name: /^Reading mode:/ })).toHaveAttribute(
       "aria-label",

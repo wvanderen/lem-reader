@@ -241,7 +241,13 @@ export class MeasurementEngine {
     const letterSpacingPx = letterSpacingPxForPreset(settings);
 
     const elements = Array.from(
-      this.opts.articleEl.querySelectorAll<HTMLElement>("[data-block-index]"),
+      this.opts.articleEl.querySelectorAll<HTMLElement>(
+        // Plan 05-05: exclude .page-fragment blocks (they carry data-block-
+        // index for D5-08 capture but are a per-page slice, not the full
+        // article set; including them would double-count + misalign the
+        // drift guard's prediction-vs-DOM arrays).
+        "[data-block-index]:not(.page-fragment [data-block-index])",
+      ),
     );
     // Build parallel arrays of (prediction, domReference) for the kinds
     // currently eligible. The guard's sample() caps how many it actually

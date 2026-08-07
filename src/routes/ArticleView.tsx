@@ -997,9 +997,16 @@ export function ArticleView({
 
       // Focus the <mark> after the turn/scroll commits (D4-07 pattern). The
       // rAF defers so the browser completes the layout before we query the mark.
-      requestAnimationFrame(() => {
+      // Firefox quirk: scrollIntoView's async settle can race a single rAF
+      // (the mark is in the DOM + focusable, but the rAF fires before the
+      // scroll completes + the focus call doesn't land). A short setTimeout
+      // belt-and-suspenders re-focuses after firefox's scroll settle so the
+      // mark reclaims focus cross-engine.
+      const focusMark = () => {
         document.getElementById(`hl-${highlightId}`)?.focus();
-      });
+      };
+      requestAnimationFrame(focusMark);
+      window.setTimeout(focusMark, 120);
     },
     [article, isPaginated, onCloseDrawer],
   );

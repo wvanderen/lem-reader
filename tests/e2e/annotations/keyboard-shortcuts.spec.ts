@@ -154,9 +154,14 @@ test.describe("A11Y-01 keyboard shortcuts H/N (05-05)", () => {
     const btn = page
       .locator(".selection-toolbar")
       .getByRole("button", { name: "Highlight", exact: true });
-    // Native button — focusable.
-    await btn.focus();
-    const isFocused = await btn.evaluate((el) => el === document.activeElement);
+    // Native button — focusable. Focus + check in ONE atomic evaluate so
+    // firefox doesn't lose focus across the protocol roundtrip between two
+    // separate evaluate calls (the toolbar can re-render on selectionchange
+    // between roundtrips, dropping activeElement back to body).
+    const isFocused = await btn.evaluate((el) => {
+      (el as HTMLElement).focus();
+      return document.activeElement === el;
+    });
     expect(isFocused, "toolbar button is focusable (fallback keyboard path)").toBeTruthy();
   });
 });
