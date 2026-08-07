@@ -30,8 +30,14 @@ function makeSurface(): {
   });
   const handle: PaginatedSurfaceHandle = {
     turn,
+    turnToPage: vi.fn((idx: number) => {
+      const moved = idx + 1 !== state.page;
+      state.page = idx + 1;
+      return { page: state.page, total: state.total, moved };
+    }),
     getCurrentAnchorOffset: () => 0,
     getState: () => ({ page: state.page, total: state.total }),
+    getPages: () => null,
   };
   const ref = createRef<PaginatedSurfaceHandle | null>();
   ref.current = handle;

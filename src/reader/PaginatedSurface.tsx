@@ -114,6 +114,14 @@ export interface PaginatedSurfaceHandle {
     direction: "next" | "previous",
   ) => { page: number; total: number; moved: boolean } | null;
   /**
+   * Turn to a SPECIFIC page index (0-based). Used by D5-11 navigate-back
+   * (drawer entry → target page). Bounds-checked (clamps to [0, pages.length-1]).
+   * Returns the new {page (1-based), total, moved} or null when no pages mounted.
+   */
+  turnToPage: (
+    pageIndex: number,
+  ) => { page: number; total: number; moved: boolean } | null;
+  /**
    * The article-global D-05 grapheme offset of the current page's first block.
    * Used by ArticleView to capture the paginated→scrolling anchor BEFORE the
    * mode-swap re-render (Pitfall 7). Returns 0 when no pages are mounted.
@@ -121,6 +129,12 @@ export interface PaginatedSurfaceHandle {
   getCurrentAnchorOffset: () => number;
   /** Current {page (1-based), total}, or null when no pages are mounted. */
   getState: () => { page: number; total: number } | null;
+  /**
+   * The current pages array (or null when not yet paginated). Used by D5-11
+   * navigate-back to compute the target page index via
+   * fragmentContainingOffset (anchor.ts — D4-10/D4-11 machinery in reverse).
+   */
+  getPages: () => PageFragment[] | null;
 }
 
 export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurfaceProps>(
@@ -475,11 +489,33 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
       return { page: next + 1, total: p.length, moved };
     }
 
+    /**
+     * Turn to a specific page index (D5-11 navigate-back). Shares the same
+     * ref-update + re-anchor discipline as commitTurn so the overflow guard
+     * + onAnchorChange stay in lockstep. Bounds-checked (clamps to valid range).
+     */
+    function turnToPage(
+      targetIdx: number,
+    ): { page: number; total: number; moved: boolean } | null {
+      const p = pagesRef.current;
+      if (!p || p.length === 0) return null;
+      const cur = currentPageIdxRef.current;
+      const next = Math.max(0, Math.min(targetIdx, p.length - 1));
+      const moved = next !== cur;
+      if (moved) {
+        currentPageIdxRef.current = next;
+        lastAnchorOffsetRef.current = pageStartGlobalOffset(articleRef.current, p[next]!);
+        setCurrentPageIdx(next);
+      }
+      return { page: next + 1, total: p.length, moved };
+    }
+
     // Imperative handle — ADDITIVE (existing no-ref callers are unaffected).
     useImperativeHandle(
       ref,
       (): PaginatedSurfaceHandle => ({
         turn: (direction) => commitTurn(direction),
+        turnToPage: (pageIndex) => turnToPage(pageIndex),
         getCurrentAnchorOffset: () => {
           const p = pagesRef.current;
           const idx = currentPageIdxRef.current;
@@ -491,6 +527,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
           if (!p || p.length === 0) return null;
           return { page: currentPageIdxRef.current + 1, total: p.length };
         },
+        getPages: () => pagesRef.current,
       }),
       [],
     );

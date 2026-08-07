@@ -54,6 +54,8 @@ import { SelectionToolbar } from "../reader/annotations/SelectionToolbar";
 // two-step delete) + AnnotationsDrawer (native <dialog> reading-order list +
 // navigate-back). Both consume useHighlightOverlay() inside the provider.
 import { NotePopover } from "../reader/annotations/NotePopover";
+import { AnnotationsDrawer } from "../reader/annotations/AnnotationsDrawer";
+import { fragmentContainingOffset } from "../pagination/anchor";
 
 /** The D4-10 mode-toggle handler signature (App threads a ref of this shape). */
 type ModeToggleHandler = () => void;
@@ -872,6 +874,60 @@ export function ArticleView({
     setShowResumeBanner(false);
   };
 
+  /**
+   * Phase 5 Plan 05-03 (D5-11 navigate-back): drawer entry → passage.
+   *
+   * Closes the drawer, resolves the highlight's grapheme offset to its block
+   * via data-block-index, then:
+   *   - PAGINATED: fragmentContainingOffset(pages, offset) → turnToPage(pageIdx)
+   *     (the D4-10/D4-11 anchor machinery in reverse — reuses anchor.ts).
+   *   - SCROLLING: findScrollTarget(article, blocks, offset).scrollIntoView
+   *     (reusing Phase 2's findScrollTarget EXACTLY — do not fork).
+   * Then focuses the <mark> (D4-07 pattern — the reader navigated TO this
+   * highlight, so they expect to land on it).
+   *
+   * Ambiguous/orphan entries never call this (their jump button is disabled —
+   * the drawer component enforces ANNO-07's "never jump to an uncertain spot").
+   */
+  const handleNavigateBack = useCallback(
+    (highlightId: string) => {
+      onCloseDrawer();
+      if (!article || !articleRef.current) return;
+      const api = highlightApiRef.current;
+      if (!api) return;
+      const resolved = api.highlights.find(
+        (h) => h.record.id === highlightId,
+      );
+      if (!resolved || !resolved.resolvedPosition) return;
+
+      const offset = resolved.resolvedPosition.start;
+
+      if (isPaginated) {
+        // PAGINATED: resolve offset → page index via fragmentContainingOffset
+        // (anchor.ts — D4-10/D4-11 machinery in reverse), then turn to that
+        // page via the surface's turnToPage imperative handle.
+        const surface = surfaceRef.current;
+        const pages = surface?.getPages();
+        if (surface && pages && pages.length > 0) {
+          const pageIdx = fragmentContainingOffset(pages, offset, article);
+          surface.turnToPage(pageIdx);
+        }
+      } else {
+        // SCROLLING: findScrollTarget + scrollIntoView (reusing Phase 2 EXACTLY).
+        const blocks = queryBlocks(articleRef.current);
+        const target = findScrollTarget(article, blocks, offset);
+        target?.scrollIntoView({ block: "center" });
+      }
+
+      // Focus the <mark> after the turn/scroll commits (D4-07 pattern). The
+      // rAF defers so the browser completes the layout before we query the mark.
+      requestAnimationFrame(() => {
+        document.getElementById(`hl-${highlightId}`)?.focus();
+      });
+    },
+    [article, isPaginated, onCloseDrawer],
+  );
+
   if (status !== "ready" || !article) {
     return (
       <main id="main">
@@ -1084,33 +1140,21 @@ export function ArticleView({
             activating a <mark>). popover="manual" → typing doesn't
             light-dismiss; top-layer rendering with no backdrop. */}
         <NotePopover />
-        {/* Phase 5 Plan 05-03 Task 2 will replace this inline skeleton with
-            the full AnnotationsDrawer component (reading-order list + empty-
-            state + navigate-back). For Task 1, this minimal <dialog> uses the
-            drawerOpen/onCloseDrawer props so the Header trigger is wired end-
-            to-end (click → drawer opens → Esc/× closes → trigger aria-expanded
-            reflects state). The full drawer contents + navigate-back handler
-            land in Task 2. */}
-        <dialog
-          className="annotations-drawer"
-          aria-labelledby="annotations-drawer-title"
-          ref={(el) => {
-            if (el) {
-              if (drawerOpen && !el.open) {
-                el.showModal();
-              } else if (!drawerOpen && el.open) {
-                el.close();
-              }
-            }
+        {/* Phase 5 Plan 05-03 Task 2: AnnotationsDrawer — native <dialog>
+            reading-order list + empty-state + navigate-back. Reads highlights
+            from useHighlightOverlay(); the onNavigate handler runs D5-11
+            (fragmentContainingOffset/commitTurn paginated OR findScrollTarget/
+            scrollIntoView scrolling → focus the <mark>). onEditNote opens the
+            inline popover for Edit/Delete after a navigate-back or directly. */}
+        <AnnotationsDrawer
+          open={drawerOpen}
+          onClose={onCloseDrawer}
+          onNavigate={handleNavigateBack}
+          onEditNote={(id) => {
+            const api = highlightApiRef.current;
+            if (api) api.setOpenPopoverFor(id);
           }}
-        >
-          <h2 id="annotations-drawer-title" className="visually-hidden">
-            Highlights and notes
-          </h2>
-          <button type="button" onClick={onCloseDrawer}>
-            Close
-          </button>
-        </dialog>
+        />
         </HighlightOverlayProvider>
       </main>
     </>
