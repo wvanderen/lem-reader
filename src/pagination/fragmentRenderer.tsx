@@ -108,6 +108,11 @@ export function PageFragmentView({
         // highlight produces a slice on EACH containing fragment — both
         // fragments' <mark> elements share the same data-highlight-id.
         let highlightSlices: ReturnType<typeof sliceRunsForHighlights> | undefined;
+        // Plan 05-07: per-child slices for a blockquote entry (undefined for
+        // non-blockquote kinds + when no highlight intersects any child).
+        let childHighlightSlices:
+          | (ReturnType<typeof sliceRunsForHighlights> | undefined)[]
+          | undefined;
         if (highlights && highlights.length > 0) {
           const entrySlices = sliceHighlightsForEntry(
             highlights,
@@ -118,10 +123,14 @@ export function PageFragmentView({
             lang,
           );
           if (entrySlices.length > 0) {
-            // Only paragraph + heading carry inline mark overlays (the kinds
-            // InlineList serves). resolveBlockSlice returns these kinds
-            // verbatim for whole-block entries and as sliced paragraphs for
-            // sub-block entries; both shapes expose `.content` for the slicer.
+            // paragraph, heading, and blockquote (per-child) carry inline
+            // mark overlays (the kinds InlineList serves directly or via a
+            // child paragraph). resolveBlockSlice returns these kinds verbatim
+            // for whole-block entries and as sliced blocks for sub-block
+            // entries; paragraph/heading expose `.content`, blockquote exposes
+            // `.children`. Lists (different items-shape, no failing UAT case)
+            // and atomic kinds remain deferred; code-block + figure-caption
+            // divergence is deferred to keep the D-05 substrate stable.
             if (resolved.kind === "paragraph" || resolved.kind === "heading") {
               // The resolved block is already the intra-entry slice, so its
               // runs start at entry-relative offset 0. Pass blockGlobalStart
@@ -133,6 +142,57 @@ export function PageFragmentView({
                 entrySlices,
                 lang,
               );
+            } else if (resolved.kind === "blockquote") {
+              // Per-child slice threading (Plan 05-07). Walk resolved.children
+              // (already sliced by resolveBlockSlice -> sliceBlockquote ->
+              // sliceChildBlocks) accumulating each child's ENTRY-LOCAL offset
+              // (BLOCK_SEPARATOR between children — consistent with
+              // sliceRunsForHighlights's internal raw-run-sum blockLen via
+              // splittingBlockGraphemeLength). For each paragraph/heading
+              // child, filter entrySlices to those whose entry-local position
+              // intersects the child's entry-local range and — when non-empty —
+              // call sliceRunsForHighlights(child.content, childIntraStart,
+              // filtered, lang) so the slicer subtracts childIntraStart to
+              // land in child-local coordinates.
+              let childIntraStart = 0;
+              const perChild: (
+                ReturnType<typeof sliceRunsForHighlights>
+                | undefined
+              )[] = [];
+              let anyChildSlices = false;
+              for (const child of resolved.children) {
+                const childLen = splittingBlockGraphemeLength(child, lang);
+                let childSlices:
+                  | ReturnType<typeof sliceRunsForHighlights>
+                  | undefined;
+                if (child.kind === "paragraph" || child.kind === "heading") {
+                  const filtered = entrySlices.filter((e) => {
+                    const intersectStart = Math.max(
+                      e.position.start,
+                      childIntraStart,
+                    );
+                    const intersectEnd = Math.min(
+                      e.position.end,
+                      childIntraStart + childLen,
+                    );
+                    return intersectStart < intersectEnd;
+                  });
+                  if (filtered.length > 0) {
+                    childSlices = sliceRunsForHighlights(
+                      child.content,
+                      childIntraStart,
+                      filtered,
+                      lang,
+                    );
+                    anyChildSlices = true;
+                  }
+                }
+                perChild.push(childSlices);
+                childIntraStart += childLen + BLOCK_SEPARATOR.length;
+              }
+              if (anyChildSlices) {
+                childHighlightSlices = perChild;
+              }
             }
           }
         }
@@ -151,6 +211,7 @@ export function PageFragmentView({
             data-block-index={entry.blockIndex}
             data-block-grapheme-start={entry.startGrapheme}
             highlightSlices={highlightSlices}
+            childHighlightSlices={childHighlightSlices}
           />
         );
       })}
