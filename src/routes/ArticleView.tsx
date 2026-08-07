@@ -48,7 +48,7 @@ import {
   HighlightOverlayProvider,
 } from "../reader/annotations/HighlightOverlay";
 import type { HighlightOverlayValue } from "../reader/annotations/HighlightOverlay";
-import type { CreateFromSelectionResult } from "../reader/annotations/HighlightOverlay";
+import type { CreateFromSelectionResult, ToolbarCaptureResult } from "../reader/annotations/HighlightOverlay";
 import { SelectionToolbar } from "../reader/annotations/SelectionToolbar";
 
 /** The D4-10 mode-toggle handler signature (App threads a ref of this shape). */
@@ -151,6 +151,12 @@ export function ArticleView({ articleId, modeToggleHandlerRef }: ArticleViewProp
   // selection exists within the reading surface. rAF-throttled via the
   // selectionchange listener below so rapid selection shaping doesn't thrash.
   const [selectionRect, setSelectionRect] = useState<DOMRect | null>(null);
+  // The enriched capture result for the current selection (multi-block /
+  // overlap / empty / ineligible / ok). Computed in the selectionchange
+  // listener via the provider's captureCurrentSelection (no highlight created).
+  // Drives the toolbar's buttons-vs-hint rendering.
+  const [captureResult, setCaptureResult] =
+    useState<ToolbarCaptureResult | null>(null);
 
   // Phase 4 Plan 04-05 (PAGE-04 + PAGE-09): the fallback banner visibility +
   // a SESSION-scoped mode override. On a pagination fallback (dom-fallback /
@@ -364,6 +370,11 @@ export function ArticleView({ articleId, modeToggleHandlerRef }: ArticleViewProp
       // ANNO-01: clear the selection so the <mark> renders cleanly (the
       // ephemeral DOM Range is gone; the durable anchor persists).
       window.getSelection()?.removeAllRanges();
+      // Clear the toolbar state so it dismisses on highlight creation
+      // (UI-SPEC §Interaction 25 lifecycle: "Either action button is
+      // activated → the toolbar's job is done").
+      setSelectionRect(null);
+      setCaptureResult(null);
       if (withNote) {
         // N: open the note popover for the new highlight (Plan 05-03's
         // NotePopover reads openPopoverFor from the provider).
@@ -425,6 +436,7 @@ export function ArticleView({ articleId, modeToggleHandlerRef }: ArticleViewProp
         const selection = window.getSelection();
         if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
           setSelectionRect(null);
+          setCaptureResult(null);
           return;
         }
         // Only track selections inside the article element (the reading
@@ -438,6 +450,7 @@ export function ArticleView({ articleId, modeToggleHandlerRef }: ArticleViewProp
           !articleNode.contains(range.endContainer)
         ) {
           setSelectionRect(null);
+          setCaptureResult(null);
           return;
         }
         // Skip selections inside the hidden measurement body (D5-08 — should
@@ -451,9 +464,16 @@ export function ArticleView({ articleId, modeToggleHandlerRef }: ArticleViewProp
             measurementBody.contains(range.endContainer))
         ) {
           setSelectionRect(null);
+          setCaptureResult(null);
           return;
         }
         setSelectionRect(range.getBoundingClientRect());
+        // Compute the enriched capture result for the toolbar display
+        // (capture + D5-13 overlap check — no highlight created).
+        const api = highlightApiRef.current;
+        if (api) {
+          setCaptureResult(api.captureCurrentSelection(articleNode));
+        }
       });
     };
     document.addEventListener("selectionchange", onSelectChange, {
@@ -609,6 +629,7 @@ export function ArticleView({ articleId, modeToggleHandlerRef }: ArticleViewProp
     // announcement + selection rect from the previous article don't flash.
     setAnnotationAnnouncement(null);
     setSelectionRect(null);
+    setCaptureResult(null);
     highlightApiRef.current = null;
     openArticle(articleId)
       .then((a) => {
@@ -972,7 +993,7 @@ export function ArticleView({ articleId, modeToggleHandlerRef }: ArticleViewProp
                 contract.
               */}
               <div className="article-body-measurement" aria-hidden="true">
-                <ArticleBody article={article} />
+                <ArticleBody article={article} highlights={[]} />
               </div>
               {/*
                 PaginatedSurface owns pages + currentPageIdx + the turn handler.
@@ -1011,10 +1032,18 @@ export function ArticleView({ articleId, modeToggleHandlerRef }: ArticleViewProp
         {/* Phase 5 Plan 05-02 Task 2: SelectionToolbar mounts as a sibling of
             the article body, INSIDE the provider so it can consume
             useHighlightOverlay() for createHighlightFromSelection. Passes
-            selectionRect (tracked by the selectionchange listener above).
-            Task 1 ships a stub render-null; Task 2 fills in the full
-            position:fixed geometry + buttons + invalid hints. */}
-        <SelectionToolbar selectionRect={selectionRect} />
+            selectionRect (tracked by the selectionchange listener above) +
+            captureResult (computed via captureCurrentSelection — no highlight
+            created) so the toolbar can show buttons vs. invalid hints.
+            onHighlight/onHighlightAndNote reuse the SAME handleHighlightShortcut
+            the H/N keyboard path uses (ONE create path, ONE capture → persist
+            → clear-selection flow). */}
+        <SelectionToolbar
+          selectionRect={selectionRect}
+          captureResult={captureResult}
+          onHighlight={() => void handleHighlightShortcut(false)}
+          onHighlightAndNote={() => void handleHighlightShortcut(true)}
+        />
         </HighlightOverlayProvider>
       </main>
     </>

@@ -98,6 +98,13 @@ export interface HighlightOverlayValue {
   createHighlightFromSelection: (
     readingRoot: HTMLElement,
   ) => Promise<CreateFromSelectionResult>;
+  /**
+   * Check the current selection validity (capture + D5-13 overlap check)
+   * WITHOUT creating a highlight. Used by the SelectionToolbar's
+   * selectionchange-driven display path so it can show buttons vs. invalid
+   * hints on every selection change without persisting anything.
+   */
+  captureCurrentSelection: (readingRoot: HTMLElement) => ToolbarCaptureResult;
   /** Delete a highlight + cascade-delete its note (D5-12). */
   deleteHighlight: (id: string) => Promise<void>;
   /** STUB note update (Plan 05-03 fills the debounced save). */
@@ -152,20 +159,21 @@ export function HighlightOverlayProvider({
   // and NotePopover (Plan 05-03) both read/set through this one source.
   const [openPopoverFor, setOpenPopoverFor] = useState<string | null>(null);
 
-  // Latest-highlights ref so the createHighlightFromSelection closure reads
-  // the freshest resolved set without re-creating on every state change
-  // (mirrors ArticleView L307-308 handleToggleModeRef).
+  // Latest-highlights ref so the captureCurrentSelection closure reads the
+  // freshest resolved set without re-creating on every state change (mirrors
+  // ArticleView L307-308 handleToggleModeRef).
   const highlightsRef = useRef(state.highlights);
   highlightsRef.current = state.highlights;
 
-  const createHighlightFromSelection = useCallback(
-    async (
-      readingRoot: HTMLElement,
-    ): Promise<CreateFromSelectionResult> => {
+  /**
+   * Capture + D5-13 overlap check WITHOUT creating a highlight. Used by the
+   * SelectionToolbar's selectionchange-driven display path so it can show
+   * buttons vs. invalid hints on every selection change without persisting.
+   */
+  const captureCurrentSelection = useCallback(
+    (readingRoot: HTMLElement): ToolbarCaptureResult => {
       const capture = captureSelection(article, readingRoot);
-      if (!capture.ok) {
-        return { ok: false, reason: capture.reason };
-      }
+      if (!capture.ok) return capture;
       // D5-13 disjoint-range check: reject overlap with ANY existing highlight.
       const overlapsExisting = highlightsRef.current.some((h) => {
         const pos = h.resolvedPosition;
@@ -175,6 +183,22 @@ export function HighlightOverlayProvider({
       if (overlapsExisting) {
         return { ok: false, reason: "overlap" };
       }
+      return capture;
+    },
+    // article is captured in the closure (used by captureSelection). The
+    // callback must be recreated when the article changes so the capture
+    // runs against the right article's block structure.
+    [article],
+  );
+
+  const createHighlightFromSelection = useCallback(
+    async (
+      readingRoot: HTMLElement,
+    ): Promise<CreateFromSelectionResult> => {
+      const capture = captureCurrentSelection(readingRoot);
+      if (!capture.ok) {
+        return { ok: false, reason: capture.reason };
+      }
       const id = await state.createHighlight(capture.position);
       if (id === null) {
         // Persistence failed + was routed to StorageBanner; no highlight created.
@@ -182,20 +206,23 @@ export function HighlightOverlayProvider({
       }
       return { ok: true, highlightId: id, position: capture.position };
     },
-    [article, state],
+    // article is captured transitively via captureCurrentSelection (which
+    // depends on article). state provides createHighlight.
+    [state, captureCurrentSelection],
   );
 
   const value = useMemo<HighlightOverlayValue>(
     () => ({
       highlights: state.highlights,
       createHighlightFromSelection,
+      captureCurrentSelection,
       deleteHighlight: state.deleteHighlight,
       updateNote: state.updateNote,
       openPopoverFor,
       setOpenPopoverFor,
       storageState: state.storageState,
     }),
-    [state, createHighlightFromSelection, openPopoverFor],
+    [state, createHighlightFromSelection, captureCurrentSelection, openPopoverFor],
   );
 
   // Parent bridge: populate apiRef synchronously during render so the parent's
@@ -226,3 +253,14 @@ export function useHighlightOverlay(): HighlightOverlayValue {
   }
   return ctx;
 }
+
+/**
+ * Safe context read — returns null outside the provider. Used by callers that
+ * may render inside OR outside the provider (e.g. ArticleBody in the
+ * measurement-body path renders without a provider ancestor).
+ */
+function useOptionalHighlightOverlay(): HighlightOverlayValue | null {
+  return useContext(HighlightOverlayContext);
+}
+
+export { useOptionalHighlightOverlay };

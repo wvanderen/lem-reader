@@ -15,8 +15,44 @@
 // The reference anchor derives its own "fn-ref-N" id and links to the body's
 // "fn-N" id — the two ids never collide, and source HTML id attributes are
 // never carried through.
+//
+// Phase 5 Plan 05-02 (D5-15 — inline highlight rendering): ArticleBody accepts
+// an optional `highlights` prop and threads per-block highlight slices through
+// BlockView → InlineList via sliceRunsForHighlights (Plan 05-01). The overlay
+// renders INTO the existing semantic output (NO parallel renderer — DOC-02
+// reading order + D-05 offset integrity preserved). When `highlights` is
+// absent or empty, ArticleBody renders exactly as before (existing tests
+// regress nothing).
 import type { Block, CanonicalArticle } from "../types";
 import { InlineList } from "./InlineRenderer";
+import type { TextPositionSelector } from "../normalizeText";
+import { BLOCK_SEPARATOR, blockNormalizedText, graphemeClusters } from "../normalizeText";
+import { sliceRunsForHighlights } from "../../annotations/highlightRanges";
+import type { HighlightSliceEntry } from "../../annotations/highlightRanges";
+// Phase 5 Plan 05-02: ArticleBody reads from the highlight overlay context
+// when no explicit highlights prop is passed, so the scrolling ArticleBody
+// renders <mark> overlays from the provider state. The measurement body
+// (hidden) passes highlights={[]} to suppress. The useOptionalHighlightOverlay
+// hook returns null outside a provider, so legacy callers (component tests
+// without a provider) render without marks — byte-unchanged behavior.
+import { useOptionalHighlightOverlay } from "../../reader/annotations/HighlightOverlay";
+
+/**
+ * The subset of a ResolvedHighlight the renderer needs. Defined locally so
+ * BlockRenderer does not take a runtime dependency on the annotation state
+ * layer (reader/annotations/) — the caller maps its ResolvedHighlight[] to
+ * this shape. `status` drives the unresolved marker rendering (D5-04 —
+ * ambiguous/orphan highlights render as a dashed-outline marker instead of
+ * the normal fill).
+ */
+export interface ArticleBodyHighlight {
+  id: string;
+  /** The article-global D-05 grapheme range to render. */
+  position: TextPositionSelector;
+  hasNote: boolean;
+  /** D5-02 tri-state — drives the unresolved marker (D5-04). */
+  status: "confident" | "ambiguous" | "orphan";
+}
 
 /**
  * Optional data-* attributes forwarded to the rendered element. ArticleBody
@@ -28,24 +64,30 @@ import { InlineList } from "./InlineRenderer";
  */
 type BlockViewProps = {
   block: Block;
+  /**
+   * Phase 5 Plan 05-02: per-block highlight slices (from sliceRunsForHighlights).
+   * When present, InlineList wraps highlighted slices in <mark>. Absent for
+   * non-paragraph/heading kinds + the measurement body.
+   */
+  highlightSlices?: ReturnType<typeof sliceRunsForHighlights>;
 } & {
   [K in `data-${string}`]?: string | number | undefined;
 };
 
-export function BlockView({ block, ...rest }: BlockViewProps) {
+export function BlockView({ block, highlightSlices, ...rest }: BlockViewProps) {
   switch (block.kind) {
     case "heading": {
       const Tag = `h${block.level}` as "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
       return (
         <Tag {...rest}>
-          <InlineList runs={block.content} />
+          <InlineList runs={block.content} highlightSlices={highlightSlices} />
         </Tag>
       );
     }
     case "paragraph":
       return (
         <p {...rest}>
-          <InlineList runs={block.content} />
+          <InlineList runs={block.content} highlightSlices={highlightSlices} />
         </p>
       );
     case "blockquote":
@@ -126,10 +168,127 @@ export function BlockView({ block, ...rest }: BlockViewProps) {
   }
 }
 
-export function ArticleBody({ article }: { article: CanonicalArticle }) {
+/**
+ * Compute the article-global D-05 grapheme start offset of article.blocks[i].
+ * Walks blocks 0..i-1 accumulating per-block grapheme lengths + one
+ * BLOCK_SEPARATOR between blocks (mirrors normalizeText's join rule + the
+ * pageStartGlobalOffset accumulation in src/pagination/anchor.ts).
+ */
+function computeBlockGlobalStart(
+  article: CanonicalArticle,
+  blockIndex: number,
+): number {
+  let offset = 0;
+  for (let i = 0; i < blockIndex && i < article.blocks.length; i++) {
+    const blockText = blockNormalizedText(article.blocks[i]!);
+    offset += graphemeClusters(blockText, article.lang).length;
+    offset += BLOCK_SEPARATOR.length;
+  }
+  return offset;
+}
+
+/**
+ * Filter highlights that intersect a block's article-global range and convert
+ * them to HighlightSliceEntry for sliceRunsForHighlights.
+ */
+function highlightsForBlock(
+  highlights: readonly ArticleBodyHighlight[],
+  blockGlobalStart: number,
+  blockLen: number,
+): HighlightSliceEntry[] {
+  const entries: HighlightSliceEntry[] = [];
+  for (const h of highlights) {
+    const interStart = Math.max(0, h.position.start - blockGlobalStart);
+    const interEnd = Math.min(blockLen, h.position.end - blockGlobalStart);
+    if (interStart < interEnd) {
+      entries.push({
+        id: h.id,
+        position: h.position,
+        hasNote: h.hasNote,
+      });
+    }
+  }
+  return entries;
+}
+
+/**
+ * Per-block grapheme length over the D-05 normalized-text contract (mirrors
+ * pagination/anchor.ts blockGraphemeLength but stays local to avoid an extra
+ * cross-module import in the renderer).
+ */
+function blockGraphemeLen(block: Block, lang: string): number {
+  return graphemeClusters(blockNormalizedText(block), lang).length;
+}
+
+export function ArticleBody({
+  article,
+  highlights: explicitHighlights,
+}: {
+  article: CanonicalArticle;
+  /**
+   * Optional: resolved highlights to render as <mark> overlays. When absent,
+   * ArticleBody reads from the HighlightOverlay context (so the scrolling
+   * ArticleBody renders marks from the provider). When explicitly `[]` (the
+   * measurement body), marks are suppressed. The caller maps its
+   * ResolvedHighlight[] to ArticleBodyHighlight[] — this module does not take
+   * a runtime dep on the annotation state layer's ResolvedHighlight type.
+   */
+  highlights?: readonly ArticleBodyHighlight[];
+}): React.ReactElement {
+  // Call the context hook UNCONDITIONALLY (rules-of-hooks) — even when
+  // explicitHighlights is provided. The return value is only used when the
+  // prop is absent. This is the safe pattern: always call hooks at the top.
+  const ctx = useOptionalHighlightOverlay();
+
+  // Effective highlights: the explicit prop, OR context-derived, OR empty.
+  // Only confident highlights render inline marks in this MVP slice (D5-04
+  // ambiguous/orphan surfacing is Plan 05-04).
+  let effectiveHighlights: ArticleBodyHighlight[];
+  if (explicitHighlights !== undefined) {
+    effectiveHighlights = [...explicitHighlights];
+  } else {
+    const resolved = ctx?.highlights ?? [];
+    effectiveHighlights = resolved
+      .filter((h) => h.status === "confident" && h.resolvedPosition !== null)
+      .map((h) => ({
+        id: h.record.id,
+        position: h.resolvedPosition!,
+        hasNote: h.note !== null && h.note.text.length > 0,
+        status: h.status,
+      }));
+  }
+
   return (
     <>
-      {article.blocks.map((block, i) => (
+      {article.blocks.map((block, i) => {
+        const blockGlobalStart = computeBlockGlobalStart(article, i);
+        // Compute highlight slices ONLY for the paragraph/heading path
+        // (the kinds InlineList serves). Container kinds (blockquote/list)
+        // and atomic kinds (figure/code-block/footnote-reference/unsupported)
+        // do not carry inline highlight overlays in this MVP slice — they
+        // follow the same per-kind exhaustive switch (Pattern F) in a later
+        // plan. For paragraph/heading, compute the slices via
+        // sliceRunsForHighlights so InlineList wraps the highlighted runs.
+        let highlightSlices: ReturnType<typeof sliceRunsForHighlights> | undefined;
+        if (
+          effectiveHighlights.length > 0 &&
+          (block.kind === "paragraph" || block.kind === "heading")
+        ) {
+          const blockLen = blockGraphemeLen(block, article.lang);
+          const entries = highlightsForBlock(
+            effectiveHighlights,
+            blockGlobalStart,
+            blockLen,
+          );
+          if (entries.length > 0) {
+            highlightSlices = sliceRunsForHighlights(
+              block.content,
+              blockGlobalStart,
+              entries,
+              article.lang,
+            );
+          }
+        }
         // data-block-index establishes the 1:1 top-level block↔element mapping
         // the measurement phase + pagination engine share (Plan 04-06). It is
         // emitted ONLY here at the top-level ArticleBody map — recursive
@@ -137,8 +296,15 @@ export function ArticleBody({ article }: { article: CanonicalArticle }) {
         // it (container interiors are not article.blocks entries). The
         // attribute is presentation-only (a numeric array index); React
         // serializes the number to a string attribute value.
-        <BlockView key={i} block={block} data-block-index={i} />
-      ))}
+        return (
+          <BlockView
+            key={i}
+            block={block}
+            data-block-index={i}
+            highlightSlices={highlightSlices}
+          />
+        );
+      })}
       {article.footnotes.length > 0 && (
         <section aria-label="Footnotes">
           <ol>

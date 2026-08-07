@@ -14,6 +14,10 @@
   --focus-ring: #6b4423;
   --destructive: #9b2c2c; /* border/icon only — no destructive actions in Phase 1 */
   --hairline: #d9d1c2;
+  /* Phase 5 Plan 05-02 D5-14: single calm warm-marker fill (UI-SPEC §Color).
+     --ink on --highlight ≥ 4.5:1 in every theme (~13:1 Sepia). Reserved for
+     <mark> inside the article body only — never on chrome. */
+  --highlight: #f5e6c8;
 
   /* UI-SPEC §Spacing Scale (multiples of 4) */
   --space-xs: 4px;
@@ -50,6 +54,8 @@
   --focus-ring: #6b4423;
   --destructive: #9b2c2c;
   --hairline: #ddd9d0;
+  /* Phase 5 D5-14: warm pale yellow for the brighter Light surface (~14:1). */
+  --highlight: #f7eaa6;
 }
 
 [data-theme="dark"] {
@@ -62,6 +68,9 @@
   --focus-ring: #c49a6c;
   --destructive: #e07a7a; /* lightened for dark-surface contrast */
   --hairline: #3a3328;
+  /* Phase 5 D5-14: warm golden-brown, lighter + warmer than the dark surface
+     so the marker reads as a highlight (~7.5:1). */
+  --highlight: #5c4a23;
 }
 
 body {
@@ -86,6 +95,18 @@ body {
 @media (forced-colors: active) {
   a {
     text-decoration: underline; /* never let links lose underline */
+  }
+  /* Phase 5 D5-15 / A11Y-05: the <mark> highlight maps to system
+     Highlight/HighlightText + a fallback underline so the cue survives even
+     if the UA collapses the pair. The three inline states (normal fill /
+     note-bearing dotted underline / unresolved dashed outline) stay
+     distinguishable by SHAPE, never by color alone. */
+  mark.highlight {
+    background-color: Highlight;
+    color: HighlightText;
+    text-decoration: underline;
+    text-decoration-color: CanvasText;
+    text-underline-offset: 2px;
   }
 }
 
@@ -1109,4 +1130,132 @@ dialog.wipe-confirm::backdrop {
 .pagination-fallback-dismiss:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+ * Phase 5 Plan 05-02 — Durable highlights + selection toolbar
+ *
+ * mark.highlight (D5-15): the inline <mark> overlay renders INTO the existing
+ * BlockRenderer/InlineRenderer output (no parallel renderer — DOC-02 reading
+ * order + D-05 offset integrity preserved). Single calm --highlight fill per
+ * D5-14 (never multi-color); the .has-note modifier adds a dotted underline
+ * (shape-distinct, not color-alone — A11Y-05 forced-colors safety); the
+ * .unresolved modifier swaps fill → dashed outline (D5-04 ambiguous/orphan).
+ *
+ * .selection-toolbar (D5-05): a conditionally-rendered position:fixed element
+ * (NOT a popover/dialog). z-index: 8 (above content at 1 + hairline/chevrons
+ * at 5; below header at 10 + top-layer dialogs/popovers). Edge-clamped,
+ * flip-below when <60px above (UI-SPEC §Interaction 25).
+ *
+ * .article-body-measurement user-select:none (D5-08 / Pitfall 3): visibility:
+ * hidden alone does NOT prevent text selection in all engines — adding
+ * user-select:none ensures a reader never accidentally selects invisible text
+ * in paginated mode.
+ *
+ * No motion-related property is declared on any new selector here (A11Y-06 —
+ * the global prefers-reduced-motion gate is trivially satisfied, mirroring
+ * ProgressHairline.tsx L17 discipline).
+ * ════════════════════════════════════════════════════════════════════════ */
+
+/* ── Inline highlight <mark> (D5-14/D5-15) ─────────────────────────────────── */
+/* The fill is var(--highlight) — one calm warm marker per theme. The article
+   text color (--ink) is inherited; links inside keep their --accent + underline
+   (D5-07 — a link stays active inside a highlight). The mark does NOT alter
+   the block's line-height/margin/width — the fill wraps with the text across
+   line breaks (no layout shift on highlight creation/removal). */
+mark.highlight {
+  background-color: var(--highlight);
+  color: inherit;
+  border-radius: 2px;
+}
+mark.highlight:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* D5-14 note-bearing glyph: dotted underline (shape-distinct from a normal
+   highlight fill + from a link's solid --accent underline). */
+mark.highlight.has-note {
+  text-decoration: underline dotted;
+  text-decoration-color: var(--ink-soft);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+
+/* D5-04 unresolved marker (ambiguous/orphan): dashed outline instead of fill.
+   Shape-distinct from the normal fill + the note-bearing dotted underline —
+   the three inline states are distinguishable by SHAPE alone, surviving
+   forced-colors (A11Y-05). */
+mark.highlight.unresolved {
+  background-color: transparent;
+  color: var(--ink);
+  outline: 1px dashed var(--ink-soft);
+  outline-offset: 1px;
+}
+
+/* ── Floating selection toolbar (D5-05, UI-SPEC §Interaction 25) ───────────── */
+/* position:fixed + z-index:8 — above page content + hairline/chevrons at 5;
+   below the header at 10 + top-layer dialogs/popovers. --surface-raised bg +
+   --hairline border + 4px radius, NO shadow (mirrors every prior chrome
+   surface's no-shadow discipline). left/top are set via inline style computed
+   from the selection rect (edge-clamped + flip-below). */
+.selection-toolbar {
+  position: fixed;
+  z-index: 8;
+  display: flex;
+  flex-direction: row;
+  gap: var(--space-sm);
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  /* No transition/animation property (A11Y-06 — instant mount/unmount). */
+}
+/* Two quiet text buttons (UI-SPEC §Typography — Meta/Label role). Default
+   state is --ink so the toolbar reads as quiet chrome, not an accent
+   call-to-action; hover/:focus-visible → --accent (mirrors the page-turn
+   chevron discipline). min-height: var(--touch) satisfies A11Y-07. */
+.selection-toolbar-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--touch);
+  padding-inline: var(--space-md);
+  background: transparent;
+  border: none;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1;
+  font-weight: 400;
+  color: var(--ink);
+  cursor: pointer;
+  /* No transition/animation property (A11Y-06). */
+}
+.selection-toolbar-button:hover,
+.selection-toolbar-button:focus-visible {
+  color: var(--accent);
+}
+.selection-toolbar-button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+/* Invalid-selection hint (D5-06/D5-13): replaces the buttons with a calm
+   non-alarming plain-language cue. */
+.selection-toolbar-hint {
+  margin: 0;
+  padding: var(--space-md) var(--space-lg);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+/* ── Hidden measurement body user-select:none (D5-08 / Pitfall 3) ──────────── */
+/* visibility:hidden alone does NOT prevent text selection in all engines.
+   user-select:none + -webkit-user-select:none ensure a reader never
+   accidentally selects invisible text in paginated mode (the measurement
+   ArticleBody stays mounted for the engine's getBoundingClientRect reads but
+   is never a valid selection source). */
+.article-body-measurement {
+  user-select: none;
+  -webkit-user-select: none;
 }
