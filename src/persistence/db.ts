@@ -4,8 +4,8 @@
 // an in-memory ArticleRepository.
 //
 // CRITICAL (Pitfall 9): this `version(1)` declaration is shipped ONCE in
-// Phase 1 and MUST NEVER be edited. Phase 2 extends the schema by adding
-// db.version(2).stores({...}) WITHOUT touching this declaration. All slots
+// Phase 1 and MUST NEVER be edited. Phase 2 extends the schema by appending a
+// second version block WITHOUT touching this declaration. All slots
 // are reserved now to minimize future version bumps.
 //
 // Index syntax: "primaryKey, index1, index2, &uniqueIndex, [compound+index]"
@@ -30,6 +30,32 @@ export interface LocationRecordRow {
   savedAt: string;
 }
 
+/** Shape of a row in the `highlights` store (Phase 5 — ANNO-05/06/07, STATE-03).
+ * Mirrors HighlightRecordSchema (src/content/schema.ts); the compound index
+ * `[articleId+revision]` is queried as an array range for cross-revision
+ * lookup (D5-01). The row does NOT carry a literal "[articleId+revision]"
+ * field — Dexie derives the compound key from `articleId` + `revision`. */
+export interface HighlightRecordRow {
+  schemaVersion: 1;
+  id: string;
+  articleId: string;
+  revision: number;
+  position: { start: number; end: number };
+  quote: { prefix: string; exact: string; suffix: string };
+  createdAt: string;
+}
+
+/** Shape of a row in the `notes` store (Phase 5 — ANNO-02, STATE-03).
+ * 1:1 with a HighlightRecord via the `highlightId` index. text is plain
+ * string (never HTML — Pitfall 8). */
+export interface NoteRecordRow {
+  schemaVersion: 1;
+  id: string;
+  highlightId: string;
+  text: string;
+  updatedAt: string;
+}
+
 export class LemReaderDB extends Dexie {
   // Declared table properties give TypeScript a handle on the stores reserved
   // by the version blocks below. Without these, `db.settings.get(...)` would
@@ -40,11 +66,15 @@ export class LemReaderDB extends Dexie {
   settings!: Table<SettingsRecord, string>;
   location!: Table<LocationRecordRow, [string, number]>;
   articles!: Table<{ id: string; revision: number }, string>;
-  highlights!: Table<
-    { id: string; "[articleId+revision]": string },
-    string
-  >;
-  notes!: Table<{ id: string; highlightId: string }, string>;
+  // Phase 5: real row types replace the Phase 1 placeholder annotations
+  // (LOW risk — runtime-unaffected; Dexie resolves stores by name from the
+  // version declarations, not from TS types). Mirrors the Phase 02-02
+  // definite-assignment precedent. NO Dexie version bump (Pitfall 9 — the v1/v2
+  // declaration blocks below are byte-unchanged; the v1 store declarations
+  // for highlights and notes are already sufficient — NO new version block is
+  // added this phase).
+  highlights!: Table<HighlightRecordRow, string>;
+  notes!: Table<NoteRecordRow, string>;
 
   constructor() {
     super("lem-reader");
@@ -60,14 +90,15 @@ export class LemReaderDB extends Dexie {
       // Phase 5: ANNO notes attached to highlights
       notes: "id, highlightId",
     });
-    // ── Phase 2 (STATE-04 anchor + Pitfall 9): version(2) is an APPEND ──
-    // The version(1) declaration above is byte-unchanged (Pitfall 9 — never
+    // ── Phase 2 (STATE-04 anchor + Pitfall 9): the second version block is an APPEND ──
+    // The first version declaration above is byte-unchanged (Pitfall 9 — never
     // edit a shipped version block; that breaks the upgrade chain for any
-    // client that already opened v1). Re-declaring the same reserved stores
-    // at v2 is a schema no-op in Dexie ≥3 (the slots were already declared in
-    // v1); the new version anchors the STATE-04 migration hook and gives a
-    // clean place to evolve the stores in later phases. v1 wrote ZERO records
-    // (Phase 1 reads bundled JSON only), so no data migration is needed.
+    // client that already opened it). Re-declaring the same reserved stores
+    // at the second version is a schema no-op in Dexie ≥3 (the slots were
+    // already declared in the first block); the new version anchors the
+    // STATE-04 migration hook and gives a clean place to evolve the stores in
+    // later phases. The first block wrote ZERO records (Phase 1 reads bundled
+    // JSON only), so no data migration is needed.
     this.version(2).stores({
       articles: "id, revision",
       settings: "key",

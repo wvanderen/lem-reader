@@ -250,3 +250,56 @@ export const LocationRecordSchema = z.object({
   savedAt: z.string().datetime(), // ISO-8601 — used for last-write-wins tiebreak
 });
 export type LocationRecord = z.infer<typeof LocationRecordSchema>;
+
+// ── Annotations (Phase 5 — ANNO-05/06/07, STATE-03/04) ──────────────────────
+// W3C Web Annotation selectors over the D-05 grapheme substrate, persisted as
+// part of a HighlightRecord. D5-03: persist BOTH position (O(1) primary anchor
+// for the same-revision common case) AND quote (recovery substrate for the
+// cross-revision re-anchoring path in D5-01). These schemas are the trust
+// boundary between Dexie and runtime (STATE-04) — every row is validated on
+// read. Note text is z.string() — NEVER HTML (Pitfall 8: React escapes text
+// children by default; the react/no-danger ESLint rule forbids the raw-HTML
+// injection prop; there is no URL field and no HTML parsing anywhere).
+
+/** Grapheme offset range into normalizeText(article); start inclusive, end exclusive.
+ * Mirrors the TextPositionSelector interface at normalizeText.ts L117-120. */
+export const TextPositionSelectorSchema = z
+  .object({
+    start: z.number().int().min(0),
+    end: z.number().int().min(0),
+  })
+  .refine((s) => s.end > s.start, { message: "end must be > start" });
+
+/** A TextQuote selector over the normalized grapheme text (prefix/exact/suffix).
+ * Mirrors the TextQuoteSelector interface at normalizeText.ts L123-127. */
+export const TextQuoteSelectorSchema = z.object({
+  prefix: z.string(),
+  exact: z.string().min(1),
+  suffix: z.string(),
+});
+
+/** HighlightRecord — one durable highlight (D5-03 dual-selector persistence).
+ * schemaVersion for STATE-04 migration; id is crypto.randomUUID() at the call
+ * site (05-RESEARCH.md Open Question #2 — no collision with fn-N footnote ids). */
+export const HighlightRecordSchema = z.object({
+  schemaVersion: z.literal(1),
+  id: z.string(),
+  articleId: z.string().regex(/^[a-z0-9-]+$/), // reuse LocationRecord regex (D-06)
+  revision: z.number().int().min(1), // revision AT CREATION TIME (orphan detection)
+  position: TextPositionSelectorSchema, // D5-03: grapheme range (primary anchor)
+  quote: TextQuoteSelectorSchema, // D5-03: prefix/exact/suffix (recovery substrate)
+  createdAt: z.string().datetime(), // ISO-8601
+});
+export type HighlightRecord = z.infer<typeof HighlightRecordSchema>;
+
+/** NoteRecord — one note attached to a highlight (1:1 via highlightId).
+ * text is z.string() (NEVER HTML — Pitfall 8). Empty string = no note
+ * (the caller deletes or never creates the NoteRecord per D5-10). */
+export const NoteRecordSchema = z.object({
+  schemaVersion: z.literal(1),
+  id: z.string(),
+  highlightId: z.string(), // FK → HighlightRecord.id
+  text: z.string(), // reader-authored; React-escaped; never HTML-parsed (Pitfall 8)
+  updatedAt: z.string().datetime(),
+});
+export type NoteRecord = z.infer<typeof NoteRecordSchema>;
