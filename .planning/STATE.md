@@ -5,16 +5,16 @@ milestone_name: milestone
 current_phase: 05
 current_phase_name: durable-highlights-and-notes
 status: executing
-stopped_at: Completed 05-07-PLAN.md (blockquote inline-mark gap closure)
-last_updated: "2026-08-07T20:42:57.697Z"
+stopped_at: Completed 05-06-PLAN.md (initial-pagination-even mega-page gap closure) — Phase 05 code-complete (7/7 plans)
+last_updated: "2026-08-07T21:14:47.305Z"
 last_activity: 2026-08-07
 last_activity_desc: Phase 05 execution started
 progress:
   total_phases: 6
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 29
-  completed_plans: 27
-  percent: 67
+  completed_plans: 29
+  percent: 83
 ---
 
 # Project State
@@ -28,12 +28,12 @@ See: .planning/PROJECT.md (updated 2026-08-05)
 
 ## Current Position
 
-Phase: 05 (durable-highlights-and-notes) — EXECUTING
-Plan: 2 of 7
-Status: Ready to execute
-Last activity: 2026-08-07 — Phase 05 execution started
+Phase: 05 (durable-highlights-and-notes) — CODE-COMPLETE (7/7 plans + summaries)
+Plan: All 7 plans complete (gap-closure wave 05-06/05-07 done)
+Status: Ready for phase verification / next phase
+Last activity: 2026-08-07 — 05-06 closed the UAT Test 11 mega-page BLOCKER
 
-Progress: [██████████] 4/6 phases code-complete — 22/22 plans executed (gap-closure wave 9 of 9 complete)
+Progress: [██████████] 5/6 phases code-complete — 29/29 plans executed
 
 ## Recent Decisions (Plan 04-11)
 
@@ -89,6 +89,7 @@ Progress: [██████████] 4/6 phases code-complete — 22/22 pl
 | Phase 05 P04 | 12min | 2 tasks | 9 files |
 | Phase 05 P05 | 95min | 3 tasks | 18 files |
 | Phase 05 P07 | 12 min | 3 tasks | 3 files |
+| Phase 05 P06 | 22 min | 3 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -172,6 +173,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 05]: 05-05 phase gate green: full npm run test exits 0 (507 unit + 489 e2e = 996 passed / 0 failed) across chromium/firefox/webkit; ANNO-01..05/07 + STATE-03 + A11Y-01/05 proven in real browsers — Executor ran the suite itself; fail=0 honest; no subset/grep/engine-skip (05-05-OUTPUT.md permanent record)
 - [Phase 05]: 05-05: 4 Rule 1 gaps surfaced+fixed (paginated capture binding, mark activation, measurement scoping, firefox focus settle) — the e2e validation plan did its job; unit suite missed all 4 — Each fix committed atomically; full suite green after fixes
 - [Phase 05]: 05-07: blockquote highlight gap closed via per-child childHighlightSlices threading on BlockView — ArticleBody walks block.children with blockGraphemeLen + BLOCK_SEPARATOR (mirrors paragraph path per child); PageFragmentView walks resolved.children with splittingBlockGraphemeLength + BLOCK_SEPARATOR (entry-local coords). Reuses sliceRunsForHighlights + highlightsForBlock UNCHANGED (no forked slicer); InlineRenderer untouched. Lists intentionally out of scope (different items-shape, no failing UAT case).
+- [Phase ?]: 05-06: Option A (class gate) chosen for the initial-load mega-page fix — one-line `if (!articleEl.classList.contains("paginated-surface")) return;` before the rAF height read; useState(0) initial + trustedView effect-dep re-run cover initial mount, so no separate reset was needed. Measurement selector untouched (exonerated). Rule 1 deviation: regression assertion (b) relaxed from settled==first to settled>1 AND stable, because the plan's equality conflated the diagnosed geometry correction (1->3) with the by-design overflow-guard split (2->3, same pinned height).
 
 ### Pending Todos
 
@@ -194,6 +196,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-08-07T20:42:34.490Z
-Stopped at: Completed 05-07-PLAN.md (blockquote inline-mark gap closure)
+Last session: 2026-08-07T21:12:22.129Z
+Stopped at: Completed 05-06-PLAN.md (initial-pagination-even mega-page gap closure) — Phase 05 code-complete
 Resume file: None

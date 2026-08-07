@@ -164,7 +164,7 @@ Plans:
   3. Highlights and notes remain on the same normalized text after repagination, mode or typography changes, and reopening the article.
   4. When quoted-context and canonical-position selectors cannot resolve confidently, reader sees an explicit ambiguous or orphaned state instead of a silent reattachment.
 
-**Plans:** 5/7 plans executed
+**Plans:** 7/7 plans complete
 Plans:
 **Wave 1**
 
@@ -188,8 +188,8 @@ Plans:
 
 **Gap Closure (Wave 6 — UAT Test 11 diagnosed gaps; two independent gaps, zero file overlap → parallel)**
 
-- [ ] 05-06-PLAN.md — Wave 6: BLOCKER — pagination uneven pages. Gate ArticleView's geometry-effect rAF read on the `.paginated-surface` class (debug Option A) so the scrolling-body natural height is never captured on initial load in paginated-default mode (latent since Phase 4; Plan 04-09 sync reset only covered mode swaps). PLUS the CI regression guard the debug flagged as missing: a new initial-pagination-even e2e that captures the FIRST `__lemPagination` publication and asserts >1 page + stable (the existing no-overflow e2e was fooled by `.page-fragment{height:100%}` + a 600ms wait past the racy correction). Unblocks ANNO-05; re-verifies PAGE-03.
-- [ ] 05-07-PLAN.md — Wave 6: MAJOR — blockquote highlight renders no inline mark. Add recursive per-child highlightSlices for blockquote in BOTH render paths (BlockRenderer.ArticleBody scrolling + fragmentRenderer.PageFragmentView paginated), reusing sliceRunsForHighlights/highlightsForBlock unchanged, accounting for BLOCK_SEPARATOR between children (mirrors sliceChildBlocks). BlockView blockquote case forwards childHighlightSlices per child. Closes ANNO-01/05 for blockquote (D5-07 eligible; capture/persistence/resolution already worked).
+- [x] 05-06-PLAN.md — Wave 6: BLOCKER — pagination uneven pages. Gate ArticleView's geometry-effect rAF read on the `.paginated-surface` class (debug Option A) so the scrolling-body natural height is never captured on initial load in paginated-default mode (latent since Phase 4; Plan 04-09 sync reset only covered mode swaps). PLUS the CI regression guard the debug flagged as missing: a new initial-pagination-even e2e that captures the FIRST `__lemPagination` publication and asserts >1 page + stable (the existing no-overflow e2e was fooled by `.page-fragment{height:100%}` + a 600ms wait past the racy correction). Unblocks ANNO-05; re-verifies PAGE-03.
+- [x] 05-07-PLAN.md — Wave 6: MAJOR — blockquote highlight renders no inline mark. Add recursive per-child highlightSlices for blockquote in BOTH render paths (BlockRenderer.ArticleBody scrolling + fragmentRenderer.PageFragmentView paginated), reusing sliceRunsForHighlights/highlightsForBlock unchanged, accounting for BLOCK_SEPARATOR between children (mirrors sliceChildBlocks). BlockView blockquote case forwards childHighlightSlices per child. Closes ANNO-01/05 for blockquote (D5-07 eligible; capture/persistence/resolution already worked).
 
 **UI hint:** yes
 
@@ -217,5 +217,5 @@ Plans:
 | 2. Accessible Scrolling Reader | 4/4 | Complete    | 2026-08-04 |
 | 3. Trustworthy Layout Measurement | 2/2 | Complete    | 2026-08-05 |
 | 4. Responsive Pagination and Dual-Mode Navigation | 10/11 | In Progress|  |
-| 5. Durable Highlights and Notes | 5/7 | In Progress|  |
+| 5. Durable Highlights and Notes | 7/7 | Complete   | 2026-08-07 |
 | 6. Prototype Acceptance | 0/TBD | Not started | - |
