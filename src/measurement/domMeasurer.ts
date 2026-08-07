@@ -117,12 +117,17 @@ export function measureAllBlocks(
     // container blocks; the line-box capture is complete before the next
     // element's reads begin.
     const rect = el.getBoundingClientRect();
+    const style = getComputedStyle(el);
+    const marginBlockStartPx = Number.parseFloat(style.marginBlockStart) || 0;
+    const marginBlockEndPx = Number.parseFloat(style.marginBlockEnd) || 0;
     const lineCount = el.getClientRects().length;
     const fullText = blockNormalizedText(el);
     const lineBoxes = readLineBoxes(el, fullText, signal);
     out.push({
       kind: kindForElement(el),
       heightPx: rect.height,
+      marginBlockStartPx,
+      marginBlockEndPx,
       lineCount,
       lineBoxes,
     });

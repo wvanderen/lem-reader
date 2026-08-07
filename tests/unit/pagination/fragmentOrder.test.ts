@@ -74,6 +74,8 @@ function measurementStub(
   rows: Array<{
     kind: string;
     heightPx: number;
+    marginBlockStartPx?: number;
+    marginBlockEndPx?: number;
     lineCount: number;
     lineBoxes?: LineBox[];
   }>,
@@ -226,6 +228,44 @@ describe("paginateDocument — PAGE-03 exactly-once + canonical order", () => {
     expect(result.pages).toHaveLength(2);
     expect(result.pages[0]!.blocks).toHaveLength(2);
     expect(result.pages[1]!.blocks).toHaveLength(2);
+  });
+
+  it("includes collapsed block margins in the page budget", () => {
+    const texts = ["First paragraph.", "Second paragraph.", "Third paragraph."];
+    const article = parseArticle(
+      texts.map((text) => ({
+        kind: "paragraph" as const,
+        content: [{ text }] as InlineRun[],
+      })),
+    );
+    const measurement = measurementStub(
+      texts.map((text) => ({
+        kind: "paragraph",
+        heightPx: 180,
+        marginBlockStartPx: 30,
+        marginBlockEndPx: 30,
+        lineCount: 6,
+        lineBoxes: uniformLineBoxes(text.length, 3, 30),
+      })),
+    );
+    const { bus } = trackingBus();
+
+    const result = paginateDocument({
+      article,
+      measurement,
+      pageContentBoxHeightPx: 600,
+      diagnostics: bus,
+      signal: new AbortController().signal,
+    });
+
+    expect(result.status).toBe("ok");
+    expect(result.pages).toHaveLength(2);
+    expect(result.pages[0]!.blocks).toHaveLength(3);
+    expect(result.pages[1]!.blocks).toHaveLength(1);
+    expect(result.pages[0]!.blocks[2]!.endGrapheme).toBeLessThan(
+      result.pages[1]!.blocks[0]!.endGrapheme,
+    );
+    assertExactOnceCoverage(article, result);
   });
 
   it("a single-page article (all blocks fit) emits exactly one page covering [0, length)", () => {
