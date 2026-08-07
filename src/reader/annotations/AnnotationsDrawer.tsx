@@ -159,6 +159,16 @@ export function AnnotationsDrawer({
                   : h.status === "orphan"
                     ? "Couldn't relocate this highlight"
                     : null;
+              // D5-04 explanatory body under the flag (UI-SPEC §Interaction
+              // 30). Ambiguous: the passage may have changed; the reader can
+              // still read the excerpt below or delete the highlight. Orphan
+              // shares the same body — the flag text already distinguishes
+              // the kind. Edit is disabled because the underlying anchor is
+              // uncertain; Delete stays enabled (D5-04 — "delete is always
+              // available").
+              const unresolvedBody = isUnresolved
+                ? "The passage may have changed. You can still read the highlighted text below or delete this highlight."
+                : null;
 
               // Build the aria-label for the jump button (UI-SPEC §Copywriting).
               const ariaLabel = isUnresolved
@@ -183,6 +193,9 @@ export function AnnotationsDrawer({
                     </span>
                     {flagText && (
                       <span className="drawer-entry-flag">{flagText}</span>
+                    )}
+                    {unresolvedBody && (
+                      <span className="drawer-entry-body">{unresolvedBody}</span>
                     )}
                     {!flagText && noteText.length > 0 && (
                       <span className="drawer-entry-note">

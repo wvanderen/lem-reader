@@ -54,9 +54,21 @@ import { refragmentOverflowingPage } from "../pagination/overflowGuard";
 import { fragmentContainingOffset, pageStartGlobalOffset } from "../pagination/anchor";
 import { splittingGraphemeLength } from "../pagination/splitBlock";
 import { PageFragmentView } from "../pagination/fragmentRenderer";
+import type { ArticleBodyHighlight } from "../content/render/BlockRenderer";
 import { ProgressHairline } from "./ProgressHairline";
 import { PageIndicator } from "./PageIndicator";
 import { BLOCK_SEPARATOR } from "../content/normalizeText";
+// Phase 5 Plan 05-04 (D5-16 cross-fragment slicing): PaginatedSurface reads
+// the resolved highlights from the HighlightOverlay context (the same
+// provider ArticleView mounts around both the scrolling + paginated
+// branches) and passes confident + ambiguous/orphan highlights down to
+// PageFragmentView. PageFragmentView intersects each highlight range with
+// each fragment's article-global visible range so a split-block highlight
+// renders a <mark> slice on EACH containing fragment (both sharing
+// data-highlight-id — no silent gaps at a page turn). useOptionalHighlight
+// Overlay returns null outside the provider so legacy component tests that
+// render PaginatedSurface without a provider regress nothing.
+import { useOptionalHighlightOverlay } from "./annotations/HighlightOverlay";
 
 export interface PaginatedSurfaceProps {
   /** The canonical article being paginated. */
@@ -152,6 +164,27 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
   ): React.ReactElement | null {
     const [pages, setPages] = useState<PageFragment[] | null>(null);
     const [currentPageIdx, setCurrentPageIdx] = useState(0);
+
+    // Phase 5 Plan 05-04 (D5-16 cross-fragment slicing): read the resolved
+    // highlights from the HighlightOverlay context (mounted by ArticleView
+    // around both the scrolling + paginated branches) so PageFragmentView
+    // can intersect each highlight range with the current page fragment's
+    // article-global visible range. Confident + ambiguous/orphan highlights
+    // are BOTH threaded (ambiguous/orphan render at their best-effort
+    // vicinity via the BlockRenderer/InlineRenderer status-driven modifier
+    // — D5-04). Returns null outside the provider so legacy component tests
+    // that render PaginatedSurface without a provider regress nothing.
+    const overlayCtx = useOptionalHighlightOverlay();
+    const fragmentHighlights: ArticleBodyHighlight[] | undefined = overlayCtx
+      ? overlayCtx.highlights
+          .filter((h) => h.resolvedPosition !== null)
+          .map((h) => ({
+            id: h.record.id,
+            position: h.resolvedPosition!,
+            hasNote: h.note !== null && h.note.text.length > 0,
+            status: h.status,
+          }))
+      : undefined;
 
     // Refs mirror the latest committed state so the imperative handle and the
     // pagination effect read fresh values without re-registering closures.
@@ -558,6 +591,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
           pageIndex={currentPageIdx}
           article={article}
           lang={article.lang}
+          highlights={fragmentHighlights}
         />
 
         <button

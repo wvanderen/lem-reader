@@ -37,8 +37,12 @@
 // slicing path.
 import type { Block, CanonicalArticle } from "../content/types";
 import { BlockView } from "../content/render/BlockRenderer";
+import type { ArticleBodyHighlight } from "../content/render/BlockRenderer";
 import { splitParagraphRuns } from "./splitBlock";
 import { BLOCK_SEPARATOR, graphemeClusters } from "../content/normalizeText";
+import { blockGraphemeLength } from "./anchor";
+import { sliceRunsForHighlights } from "../annotations/highlightRanges";
+import type { HighlightSliceEntry } from "../annotations/highlightRanges";
 import type { PageFragment } from "./types";
 
 /**
@@ -49,21 +53,40 @@ import type { PageFragment } from "./types";
  * user can identify the page boundary (the SectionAnnouncer live region
  * conveys structural progress; this label is a per-page anchor).
  *
+ * D5-16 cross-fragment highlight slicing (Plan 05-04): the optional
+ * `highlights` prop carries the article's resolved highlights (confident +
+ * ambiguous/orphan). For each fragment entry the renderer computes the
+ * entry's article-global visible range, intersects each highlight's range
+ * with it, and — for any non-empty intersection — passes a per-entry slice
+ * to BlockView/InlineList so the renderer wraps the visible slice in
+ * `<mark data-highlight-id={id}>`. A single-block highlight whose block is
+ * split across a page boundary therefore renders a `<mark>` slice on EACH
+ * fragment containing part of its range — both fragments share the same
+ * data-highlight-id (D5-16: no silent gaps at a page turn; the popover/note
+ * is reachable from either page).
+ *
  * @param fragment   The PageFragment to render (entries are {blockIndex, startGrapheme, endGrapheme}).
  * @param pageIndex  0-based page ordinal — used for the aria-label (rendered as Page N+1).
  * @param article    The canonical article (source for resolving blockIndex → Block).
  * @param lang       BCP-47 locale — passed to splitParagraphRuns for Intl.Segmenter.
+ * @param highlights Optional resolved highlights to render as cross-fragment
+ *                  `<mark>` overlays. PaginatedSurface threads these from the
+ *                  HighlightOverlay context; absent/empty → no marks (the
+ *                  pre-Phase-5 path, byte-unchanged so existing tests regress
+ *                  nothing).
  */
 export function PageFragmentView({
   fragment,
   pageIndex,
   article,
   lang,
+  highlights,
 }: {
   fragment: PageFragment;
   pageIndex: number;
   article: CanonicalArticle;
   lang: string;
+  highlights?: readonly ArticleBodyHighlight[];
 }): React.ReactElement {
   return (
     <section className="page-fragment" aria-label={`Page ${pageIndex + 1}`}>
@@ -75,10 +98,110 @@ export function PageFragmentView({
           entry.endGrapheme,
           lang,
         );
-        return <BlockView key={i} block={resolved} />;
+        // D5-16 cross-fragment slicing: compute this entry's article-global
+        // visible range, intersect each highlight's range with it, and (for
+        // any non-empty intersection) build a per-entry HighlightSliceEntry[]
+        // in the SLICED block's coordinate (intra-entry offset 0 = entry
+        // start). sliceRunsForHighlights then slices the resolved block's
+        // runs at the intersection boundaries so InlineList wraps each
+        // visible slice in <mark data-highlight-id={id}>. A split-block
+        // highlight produces a slice on EACH containing fragment — both
+        // fragments' <mark> elements share the same data-highlight-id.
+        let highlightSlices: ReturnType<typeof sliceRunsForHighlights> | undefined;
+        if (highlights && highlights.length > 0) {
+          const entrySlices = sliceHighlightsForEntry(
+            highlights,
+            article,
+            entry.blockIndex,
+            entry.startGrapheme,
+            entry.endGrapheme,
+            lang,
+          );
+          if (entrySlices.length > 0) {
+            // Only paragraph + heading carry inline mark overlays (the kinds
+            // InlineList serves). resolveBlockSlice returns these kinds
+            // verbatim for whole-block entries and as sliced paragraphs for
+            // sub-block entries; both shapes expose `.content` for the slicer.
+            if (resolved.kind === "paragraph" || resolved.kind === "heading") {
+              // The resolved block is already the intra-entry slice, so its
+              // runs start at entry-relative offset 0. Pass blockGlobalStart
+              // = 0 + entry-local slice positions so sliceRunsForHighlights
+              // computes intra-entry intersections correctly.
+              highlightSlices = sliceRunsForHighlights(
+                resolved.content,
+                0,
+                entrySlices,
+                lang,
+              );
+            }
+          }
+        }
+        return <BlockView key={i} block={resolved} highlightSlices={highlightSlices} />;
       })}
     </section>
   );
+}
+
+/**
+ * Compute the per-entry HighlightSliceEntry[] for D5-16 cross-fragment slicing.
+ *
+ * For each confident-or-unresolved highlight, intersect its article-global
+ * `[start, end)` range with the entry's article-global visible range
+ * `[blockGlobalStart + startGrapheme, blockGlobalStart + endGrapheme)`. If
+ * the intersection is non-empty (intersectStart < intersectEnd), translate
+ * it back to ENTRY-LOCAL coordinates (subtract the entry's start offset) and
+ * emit a HighlightSliceEntry whose `position` is the entry-local range.
+ *
+ * The translation is what makes a split-block highlight render on BOTH
+ * fragments: fragment A's entry covers [blockStart, splitPoint) and fragment
+ * B's entry covers [splitPoint, blockEnd); a highlight at [blockStart+10,
+ * blockEnd-10) intersects BOTH entries, producing one entry-local slice on
+ * each fragment — both carrying the same `id` (and therefore the same
+ * data-highlight-id once InlineList wraps them in <mark>).
+ *
+ * End-exclusive boundary: a highlight that touches the entry boundary
+ * exactly (intersectStart === intersectEnd) produces NO slice — matches the
+ * `sliceRunsForHighlights` end-exclusive contract.
+ */
+function sliceHighlightsForEntry(
+  highlights: readonly ArticleBodyHighlight[],
+  article: CanonicalArticle,
+  blockIndex: number,
+  entryStartGrapheme: number,
+  entryEndGrapheme: number,
+  lang: string,
+): HighlightSliceEntry[] {
+  // The block's article-global start offset (mirrors
+  // pageStartGlobalOffset / computeBlockGlobalStart accumulation).
+  let blockGlobalStart = 0;
+  for (let i = 0; i < blockIndex && i < article.blocks.length; i++) {
+    blockGlobalStart +=
+      blockGraphemeLength(article.blocks[i]!, lang) + BLOCK_SEPARATOR.length;
+  }
+  const entryStart = blockGlobalStart + entryStartGrapheme;
+  const entryEnd = blockGlobalStart + entryEndGrapheme;
+
+  const out: HighlightSliceEntry[] = [];
+  for (const h of highlights) {
+    const intersectStart = Math.max(h.position.start, entryStart);
+    const intersectEnd = Math.min(h.position.end, entryEnd);
+    if (intersectStart < intersectEnd) {
+      // Translate back to entry-local coordinates: the resolved block's
+      // runs start at entry-relative offset 0 (resolveBlockSlice already
+      // sliced to [entryStartGrapheme, entryEndGrapheme)). The slice
+      // positions are therefore relative to entryStart.
+      out.push({
+        id: h.id,
+        position: {
+          start: intersectStart - entryStart,
+          end: intersectEnd - entryStart,
+        },
+        hasNote: h.hasNote,
+        status: h.status,
+      });
+    }
+  }
+  return out;
 }
 
 /**

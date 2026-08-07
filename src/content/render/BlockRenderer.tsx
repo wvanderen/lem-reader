@@ -189,7 +189,12 @@ function computeBlockGlobalStart(
 
 /**
  * Filter highlights that intersect a block's article-global range and convert
- * them to HighlightSliceEntry for sliceRunsForHighlights.
+ * them to HighlightSliceEntry for sliceRunsForHighlights. Confident highlights
+ * use their resolvedPosition; ambiguous/orphan highlights use their best-
+ * effort vicinity (resolvedPosition = first candidate / stored position hint
+ * — set by useAnnotationState from the resolveQuoteSelector tri-state). The
+ * status field threads through so InlineRenderer emits the right modifier
+ * (mark.highlight.unresolved for ambiguous/orphan — Plan 05-04 / D5-04).
  */
 function highlightsForBlock(
   highlights: readonly ArticleBodyHighlight[],
@@ -205,6 +210,7 @@ function highlightsForBlock(
         id: h.id,
         position: h.position,
         hasNote: h.hasNote,
+        status: h.status,
       });
     }
   }
@@ -241,15 +247,21 @@ export function ArticleBody({
   const ctx = useOptionalHighlightOverlay();
 
   // Effective highlights: the explicit prop, OR context-derived, OR empty.
-  // Only confident highlights render inline marks in this MVP slice (D5-04
-  // ambiguous/orphan surfacing is Plan 05-04).
+  // Plan 05-04 (D5-04 / ANNO-07): ambiguous + orphan highlights ALSO render
+  // inline — at their best-effort vicinity (resolvedPosition = first candidate
+  // for ambiguous, stored position hint for orphan). The status field threads
+  // through sliceRunsForHighlights → HighlightSlice → InlineRenderer so the
+  // renderer emits mark.highlight.unresolved (dashed outline) instead of the
+  // normal fill (Pitfall 7 — never silent re-attach). Filtering to confident-
+  // only here would HIDE ambiguous/orphan highlights entirely, which violates
+  // ANNO-07's "explicit state instead of silent reattachment" contract.
   let effectiveHighlights: ArticleBodyHighlight[];
   if (explicitHighlights !== undefined) {
     effectiveHighlights = [...explicitHighlights];
   } else {
     const resolved = ctx?.highlights ?? [];
     effectiveHighlights = resolved
-      .filter((h) => h.status === "confident" && h.resolvedPosition !== null)
+      .filter((h) => h.resolvedPosition !== null)
       .map((h) => ({
         id: h.record.id,
         position: h.resolvedPosition!,

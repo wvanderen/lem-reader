@@ -29,6 +29,14 @@ export interface HighlightSliceEntry {
   id: string;
   position: TextPositionSelector;
   hasNote: boolean;
+  /**
+   * D5-02 tri-state (Plan 05-04). Drives the inline modifier:
+   * confident → filled mark.highlight; ambiguous/orphan → dashed-outline
+   * mark.highlight.unresolved (Pitfall 7 — never silent re-attach). Defaults
+   * to "confident" so existing call sites that omit the field regress
+   * nothing.
+   */
+  status?: "confident" | "ambiguous" | "orphan";
 }
 
 /** A run slice produced by sliceRunsForHighlights. */
@@ -39,6 +47,12 @@ export interface HighlightSlice {
   highlightId: string | null;
   /** Whether the owning highlight has an attached note (false for gaps). */
   hasNote: boolean;
+  /**
+   * The owning highlight's D5-02 status. Drives the inline modifier:
+   * confident → filled mark.highlight; ambiguous/orphan → dashed-outline
+   * mark.highlight.unresolved. "confident" for gap slices (no modifier).
+   */
+  status: "confident" | "ambiguous" | "orphan";
 }
 
 /**
@@ -78,6 +92,7 @@ export function sliceRunsForHighlights(
     end: number;
     id: string;
     hasNote: boolean;
+    status: "confident" | "ambiguous" | "orphan";
   }[] = [];
   for (const h of highlights) {
     const interStart = Math.max(0, h.position.start - blockGlobalStart);
@@ -88,13 +103,16 @@ export function sliceRunsForHighlights(
         end: interEnd,
         id: h.id,
         hasNote: h.hasNote,
+        status: h.status ?? "confident",
       });
     }
   }
 
   // No intersections → a single un-highlighted slice over the full run array.
   if (intersections.length === 0) {
-    return [{ runs: [...runs], highlightId: null, hasNote: false }];
+    return [
+      { runs: [...runs], highlightId: null, hasNote: false, status: "confident" },
+    ];
   }
 
   // Sort by start offset so the walk is monotonic. (Stable enough for
@@ -116,6 +134,7 @@ export function sliceRunsForHighlights(
           runs: split.before,
           highlightId: null,
           hasNote: false,
+          status: "confident",
         });
       }
       currentRuns = split.after;
@@ -129,6 +148,7 @@ export function sliceRunsForHighlights(
         runs: split.before,
         highlightId: inter.id,
         hasNote: inter.hasNote,
+        status: inter.status,
       });
     }
     currentRuns = split.after;
@@ -137,7 +157,12 @@ export function sliceRunsForHighlights(
 
   // Trailing un-highlighted slice for the remainder of the run array.
   if (currentRuns.length > 0) {
-    slices.push({ runs: currentRuns, highlightId: null, hasNote: false });
+    slices.push({
+      runs: currentRuns,
+      highlightId: null,
+      hasNote: false,
+      status: "confident",
+    });
   }
 
   return slices;

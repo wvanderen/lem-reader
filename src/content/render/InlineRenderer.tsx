@@ -45,13 +45,22 @@ function Inline({ run }: { run: InlineRun }) {
 
 /**
  * Build the aria-label for a highlighted slice (UI-SPEC §Copywriting).
- * "Highlight: {excerpt}" or "Highlight with note: {excerpt}" depending on
- * hasNote. The excerpt is the first ~80 chars of the slice's visible text.
+ * Confident: "Highlight: {excerpt}" / "Highlight with note: {excerpt}".
+ * Ambiguous: "Highlight that couldn't be matched: {excerpt}" (D5-04 —
+ *   the reader is told the anchor is uncertain so they understand the
+ *   dashed-outline marker + the disabled drawer jump).
+ * Orphan: "Highlight that couldn't be relocated: {excerpt}".
  */
 function highlightAriaLabel(slice: HighlightSlice): string {
-  const prefix = slice.hasNote ? "Highlight with note:" : "Highlight:";
   const text = slice.runs.map((r) => r.text).join("");
   const excerpt = text.slice(0, 80);
+  if (slice.status === "ambiguous") {
+    return `Highlight that couldn't be matched: ${excerpt}`;
+  }
+  if (slice.status === "orphan") {
+    return `Highlight that couldn't be relocated: ${excerpt}`;
+  }
+  const prefix = slice.hasNote ? "Highlight with note:" : "Highlight:";
   return `${prefix} ${excerpt}`;
 }
 
@@ -99,8 +108,13 @@ export function InlineList({
             </span>
           );
         }
-        // Highlighted slice — wrap in <mark class="highlight">.
-        const className = `highlight${slice.hasNote ? " has-note" : ""}`;
+        // Highlighted slice — wrap in <mark class="highlight">. The modifier
+        // reflects the D5-02 tri-state (Plan 05-04): confident → bare fill;
+        // hasNote → dotted underline; ambiguous/orphan → dashed outline
+        // (.unresolved — Pitfall 7 never silent re-attach). The three shapes
+        // are distinguishable by SHAPE alone (A11Y-05 forced-colors safety).
+        const unresolved = slice.status !== "confident";
+        const className = `highlight${slice.hasNote ? " has-note" : ""}${unresolved ? " unresolved" : ""}`;
         return (
           <mark
             key={i}

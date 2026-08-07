@@ -192,6 +192,35 @@ export function ArticleView({
     onAnnotationCountChange(highlightCount);
   }, [highlightCount, onAnnotationCountChange]);
 
+  // Phase 5 Plan 05-04 (D5-04 / ANNO-07 — one-time open-announce): after the
+  // eager batch-resolve completes on article open, count highlights that
+  // resolved to "ambiguous" or "orphan" (the reader's anchor engine could
+  // not confidently relocate them). If N ≥ 1, fire a ONE-TIME polite
+  // `.status` announce: "{N} highlight(s) couldn't be relocated." The guard
+  // ref prevents re-announcing on every provider re-render (CRUD, debounced
+  // note save, etc.) — the announce fires ONCE per article-open and is reset
+  // on article swap (the load effect below clears highlightApiRef.current).
+  // The reader is NOT interrupted (the drawer does not auto-open); the
+  // announce directs them to it (UI-SPEC §Interaction 30 / §Copywriting).
+  const unresolvedAnnouncedRef = useRef(false);
+  const unresolvedHighlightsCount =
+    highlightApiRef.current?.highlights.filter((h) => h.status !== "confident").length ?? 0;
+  useEffect(() => {
+    if (unresolvedAnnouncedRef.current) return;
+    // Wait until the apiRef is populated AND has at least one unresolved
+    // highlight. The apiRef is null during loading + immediately after an
+    // article swap (the load effect clears it); the eager batch-resolve
+    // then populates it with the resolved set.
+    if (!highlightApiRef.current) return;
+    if (unresolvedHighlightsCount < 1) return;
+    unresolvedAnnouncedRef.current = true;
+    const formatter = new Intl.NumberFormat(navigator.language);
+    const noun = unresolvedHighlightsCount === 1 ? "highlight" : "highlights";
+    setAnnotationAnnouncement(
+      `${formatter.format(unresolvedHighlightsCount)} ${noun} couldn't be relocated.`,
+    );
+  }, [unresolvedHighlightsCount]);
+
   // Phase 4 Plan 04-05 (PAGE-04 + PAGE-09): the fallback banner visibility +
   // a SESSION-scoped mode override. On a pagination fallback (dom-fallback /
   // measurement-error DiagnosticEvent), the override flips the effective mode
@@ -665,6 +694,10 @@ export function ArticleView({
     setSelectionRect(null);
     setCaptureResult(null);
     highlightApiRef.current = null;
+    // Phase 5 Plan 05-04: reset the one-time unresolved-announce guard so
+    // the new article's eager batch-resolve can fire its own "{N} couldn't
+    // be relocated." announce if it has unresolved highlights.
+    unresolvedAnnouncedRef.current = false;
     openArticle(articleId)
       .then((a) => {
         if (cancelled) return;
