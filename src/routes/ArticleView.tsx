@@ -454,6 +454,23 @@ export function ArticleView({
     const onKey = (event: KeyboardEvent) => {
       if (isFormField(event.target)) return;
       const key = event.key;
+      // Phase 5 Plan 05-05 (D5-10 / UI-SPEC §Interaction 29): activating a
+      // focused <mark> via Enter/Space opens the inline note popover. The
+      // <mark> carries tabindex=0 + data-highlight-id; the delegated
+      // activation calls setOpenPopoverFor so NotePopover's showPopover
+      // effect runs. (Click activation is handled by the delegated click
+      // listener below.)
+      if (key === "Enter" || key === " ") {
+        const target = event.target as HTMLElement | null;
+        const mark = target?.closest?.("mark.highlight[data-highlight-id]") as HTMLElement | null;
+        if (mark) {
+          event.preventDefault();
+          const id = mark.getAttribute("data-highlight-id");
+          const api = highlightApiRef.current;
+          if (id && api) api.setOpenPopoverFor(id);
+          return;
+        }
+      }
       if (key === "m" || key === "M") {
         // Does NOT preventDefault (M has no native default action to suppress)
         // and does NOT move focus (the shortcut did not start from the toggle
@@ -480,6 +497,32 @@ export function ArticleView({
     window.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("keydown", onKey);
+    };
+  }, [article, articleEl]);
+
+  // Phase 5 Plan 05-05 (D5-10 / UI-SPEC §Interaction 29): delegated click
+  // activation on inline <mark.highlight> elements. Clicking a highlight opens
+  // the inline note popover (setOpenPopoverFor → NotePopover's showPopover
+  // effect). Delegation (rather than per-mark onClick props) avoids drilling
+  // an activation callback through BlockRenderer → InlineList → mark and
+  // keeps InlineRenderer a pure presentational component. The listener is
+  // scoped to the article element so clicks in chrome/header don't trigger.
+  useEffect(() => {
+    const root = articleRef.current;
+    if (!article || !root) return;
+    const onClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      const mark = target?.closest?.("mark.highlight[data-highlight-id]") as HTMLElement | null;
+      if (!mark) return;
+      const id = mark.getAttribute("data-highlight-id");
+      const api = highlightApiRef.current;
+      if (id && api) {
+        api.setOpenPopoverFor(id);
+      }
+    };
+    root.addEventListener("click", onClick);
+    return () => {
+      root.removeEventListener("click", onClick);
     };
   }, [article, articleEl]);
 
