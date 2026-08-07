@@ -164,7 +164,28 @@ Plans:
   3. Highlights and notes remain on the same normalized text after repagination, mode or typography changes, and reopening the article.
   4. When quoted-context and canonical-position selectors cannot resolve confidently, reader sees an explicit ambiguous or orphaned state instead of a silent reattachment.
 
-**Plans:** TBD
+**Plans:** 5 plans
+Plans:
+**Wave 1**
+
+- [ ] 05-01-PLAN.md — Wave 1: annotation anchor engine — resolveQuoteSelector (D5-02 tri-state) + captureSelection (DOM Range→grapheme offset) + overlap + highlightRanges (splitParagraphRuns reuse) + HighlightRecord/NoteRecord Zod schemas + db.ts Table type fix (NO version bump) + highlightsStore/notesStore (compound-index query + cascade-delete transaction) + 6 Wave 0 unit tests proving the ANNO-05/06 round-trip + ANNO-07 tri-state + STATE-04/05
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 05-02-PLAN.md — Wave 2: "create + see a highlight" vertical slice — useAnnotationState hook + HighlightOverlay provider (eager load+resolve on open) + floating SelectionToolbar (position:fixed, edge-clamp, invalid hints) + `<mark class=highlight>` overlay INTO InlineRenderer/BlockRenderer (no fork) + ArticleView selection listener + H/N shortcuts + user-select:none on .article-body-measurement + --highlight token (3 themes) + forced-colors CSS. Closes ANNO-01/05/06.
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 05-03-PLAN.md — Wave 3: notes + drawer + navigate-back + delete slice — NotePopover (Popover API manual + debounced save mirroring SettingsContext + WipeConfirm two-step delete) + AnnotationsDrawer (native `<dialog>` reusing .settings-panel geometry, reading-order list, empty-state) + Header annotations-trigger + D5-11 navigate-back (fragmentContainingOffset/commitTurn paginated OR findScrollTarget/scrollIntoView scrolling + focus the `<mark>`) + .status announces. Closes ANNO-02/03/04.
+
+**Wave 4** *(blocked on Wave 3)*
+
+- [ ] 05-04-PLAN.md — Wave 4: ANNO-07 ambiguous/orphan surfacing (D5-02/D5-04) — status-driven mark.highlight.unresolved dashed marker at position hint/first candidate + drawer flag + disabled jump + one-time "{N} couldn't be relocated" open-announce + D5-16 cross-fragment slicing in fragmentRenderer (highlight range ∩ fragment range, shared data-highlight-id, no silent gap at page turn) + forced-colors three-shape distinction. Closes ANNO-07.
+
+**Wave 5** *(blocked on Wave 4 — phase gate)*
+
+- [ ] 05-05-PLAN.md — Wave 5: full Playwright e2e corpus matrix (tests/e2e/annotations/*) across the 6-fixture corpus × theme × mode × chromium/firefox/webkit — capture/reject/keyboard, notes/drawer/delete/navigate-back, survive-repagination/mode-switch/reopen, cross-fragment-render, ambiguous-orphan-surface, persist-reload, forced-colors-shapes. Phase gate = full `npm run test` exit 0 (mirrors Plan 04-11 precedent: honest counts, no subset/grep/engine-skip). Closes ANNO-01..05/07 + STATE-03.
+
 **UI hint:** yes
 
 ### Phase 6: Prototype Acceptance
@@ -191,5 +212,5 @@ Plans:
 | 2. Accessible Scrolling Reader | 4/4 | Complete    | 2026-08-04 |
 | 3. Trustworthy Layout Measurement | 2/2 | Complete    | 2026-08-05 |
 | 4. Responsive Pagination and Dual-Mode Navigation | 10/11 | In Progress|  |
-| 5. Durable Highlights and Notes | 0/TBD | Not started | - |
+| 5. Durable Highlights and Notes | 0/5 | Not started | - |
 | 6. Prototype Acceptance | 0/TBD | Not started | - |
