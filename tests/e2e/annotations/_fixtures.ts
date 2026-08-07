@@ -215,6 +215,39 @@ export async function selectRangeInBlock(
 }
 
 /**
+ * Find the first visible block index whose total text length is >= minChars,
+ * EXCLUDING the given indices (so successive calls pick disjoint blocks).
+ */
+export async function findFirstBlockWithTextAsync(
+  page: Page,
+  exclude: number[],
+  minChars = 24,
+): Promise<number> {
+  return page.evaluate(
+    ({ exclude, min }) => {
+      const blocks = Array.from(
+        document.querySelectorAll(
+          '[data-block-index]:not(.article-body-measurement [data-block-index])',
+        ),
+      );
+      for (const el of blocks) {
+        const block = el!;
+        const idx = Number(block.getAttribute("data-block-index"));
+        if (
+          !exclude.includes(idx) &&
+          !Number.isNaN(idx) &&
+          (block.textContent?.length ?? 0) >= min
+        ) {
+          return idx;
+        }
+      }
+      return -1;
+    },
+    { exclude, min: minChars },
+  );
+}
+
+/**
  * Find the first visible block index whose total text length is >= minChars.
  * Used by specs that need a known-good capture target without hard-coding a
  * block index that may vary across fixtures or paginated page fragments.
@@ -223,24 +256,7 @@ export async function findFirstBlockWithText(
   page: Page,
   minChars = 24,
 ): Promise<number> {
-  return page.evaluate(
-    (min) => {
-      const blocks = Array.from(
-        document.querySelectorAll(
-          '.page-fragment [data-block-index], .article-body:not(.article-body-measurement) [data-block-index]',
-        ),
-      ).filter((el) => !el.closest(".article-body-measurement"));
-      for (let i = 0; i < blocks.length; i++) {
-        const block = blocks[i]!;
-        const idx = Number(block.getAttribute("data-block-index"));
-        if (!Number.isNaN(idx) && (block.textContent?.length ?? 0) >= min) {
-          return idx;
-        }
-      }
-      return -1;
-    },
-    minChars,
-  );
+  return findFirstBlockWithTextAsync(page, [], minChars);
 }
 
 /**
