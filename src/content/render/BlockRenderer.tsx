@@ -281,6 +281,13 @@ export function ArticleBody({
         // follow the same per-kind exhaustive switch (Pattern F) in a later
         // plan. For paragraph/heading, compute the slices via
         // sliceRunsForHighlights so InlineList wraps the highlighted runs.
+        // D5-07 capture eligibility is independent of inline rendering: a
+        // figure caption / code-block source is CAPTURABLE (the highlight
+        // persists + re-resolves), but no inline <mark> renders until a
+        // later plan threads the overlay through those kinds (figure's
+        // blockNormalizedText includes alt + separator + caption, which
+        // diverges from the DOM textContent the capture map walks — handling
+        // that divergence is deferred to keep the D-05 substrate stable).
         let highlightSlices: ReturnType<typeof sliceRunsForHighlights> | undefined;
         if (
           effectiveHighlights.length > 0 &&

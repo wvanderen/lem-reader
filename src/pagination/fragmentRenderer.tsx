@@ -136,7 +136,23 @@ export function PageFragmentView({
             }
           }
         }
-        return <BlockView key={i} block={resolved} highlightSlices={highlightSlices} />;
+        return (
+          <BlockView
+            key={i}
+            block={resolved}
+            // D5-08 paginated-mode capture binding: emit data-block-index on
+            // EVERY fragment entry so captureSelection's findBlockAncestor
+            // resolves the visible page-fragment blocks (not just the
+            // scrolling ArticleBody / hidden measurement body). For a sliced
+            // entry, data-block-grapheme-start carries the slice's intra-
+            // block start offset so capture can offset the intra-block range
+            // (the slice's textContent is a substring of the full block;
+            // without this offset the raw→norm map would misalign).
+            data-block-index={entry.blockIndex}
+            data-block-grapheme-start={entry.startGrapheme}
+            highlightSlices={highlightSlices}
+          />
+        );
       })}
     </section>
   );

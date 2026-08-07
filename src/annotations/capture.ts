@@ -353,22 +353,48 @@ export function captureSelection(
 
   // 2. Map the DOM Range to intra-block grapheme offsets (whitespace-collapse
   //    correction via the explicit raw-cluster → norm-cluster map).
-  const normClusters = graphemeClusters(
+  //
+  //    D5-08 paginated-mode slicing: the block element may carry
+  //    data-block-grapheme-start when it is a SLICE of a split block (the
+  //    page fragment renders slices, not whole blocks, when D4-01 booklike
+  //    splitting divides a block across a page boundary). The slice's
+  //    textContent is a substring of the full block's text starting at
+  //    startGrapheme; the raw→norm map must align against the slice's portion
+  //    of the normalized text, and the result is offset back by startGrapheme
+  //    to yield the true intra-block range. Without this offset a highlight
+  //    captured on a page-2 slice would be stored at the wrong passage.
+  const sliceStartAttr = startBlock.getAttribute("data-block-grapheme-start");
+  const sliceStart =
+    sliceStartAttr !== null && Number.isInteger(Number(sliceStartAttr))
+      ? Number(sliceStartAttr)
+      : 0;
+  const fullNormClusters = graphemeClusters(
     blockNormalizedText(block),
     article.lang,
   );
+  // The slice's normalized text ≈ the full normalized text from sliceStart to
+  // sliceStart + (slice length). For whole blocks (sliceStart = 0) this is
+  // the entire array. We align the map against the slice's portion so the
+  // raw→norm indices match the slice's textContent (Pitfall 1).
+  const sliceEnd = Math.min(fullNormClusters.length, sliceStart + fullNormClusters.length);
+  const normClusters =
+    sliceStart > 0 ? fullNormClusters.slice(sliceStart, sliceEnd) : fullNormClusters;
   const intraRange = domRangeToIntraBlockGraphemeRange(
     startBlock,
     range,
     article.lang,
     normClusters,
   );
+  const intraOffsetRange = {
+    start: intraRange.start + sliceStart,
+    end: intraRange.end + sliceStart,
+  };
 
   // 3. Add the block's article-global start offset (D-05 substrate coordinate).
   const blockGlobalStart = computeBlockGlobalStart(article, blockIndex);
   const position: TextPositionSelector = {
-    start: blockGlobalStart + intraRange.start,
-    end: blockGlobalStart + intraRange.end,
+    start: blockGlobalStart + intraOffsetRange.start,
+    end: blockGlobalStart + intraOffsetRange.end,
   };
   return { ok: true, blockIndex, position };
 }
