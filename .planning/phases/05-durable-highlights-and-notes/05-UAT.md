@@ -1,9 +1,9 @@
 ---
-status: diagnosed
+status: resolved
 phase: 05-durable-highlights-and-notes
-source: [05-01-SUMMARY.md, 05-02-SUMMARY.md, 05-03-SUMMARY.md, 05-04-SUMMARY.md, 05-05-SUMMARY.md]
+source: [05-01-SUMMARY.md, 05-02-SUMMARY.md, 05-03-SUMMARY.md, 05-04-SUMMARY.md, 05-05-SUMMARY.md, 05-06-SUMMARY.md, 05-07-SUMMARY.md]
 started: 2026-08-07T18:57:22Z
-updated: 2026-08-07T19:48:06Z
+updated: 2026-08-07T20:30:00Z
 ---
 
 ## Current Test
@@ -54,9 +54,9 @@ result: pass
 
 ### 11. Cross-fragment highlight in paginated mode
 expected: With a highlight present, switch to paginated mode: the highlight renders on the correct page. If a highlighted block spans a page boundary, the mark appears on BOTH pages (no gap at a page turn) and activating it from either page works.
-result: issue
-reported: "BLOCKED - regression in pagination logic; can't get a proper run. Two issues found: (1) the Thiel blockquote passage ('I no longer believe that freedom and democracy are compatible ...') cannot be saved as a highlight -- it registers on load but doesn't render an inline mark (suspects quote formatting); (2) pagination broken -- P1 holds nearly the entire article (intro + several paragraphs + the blockquote) while P2/P3/P4 hold only 1-2 sentences each. Per-page content pasted as evidence."
-severity: blocker
+result: pass
+resolved_by: [05-06, 05-07]
+resolution: "Both Test 11 sub-issues closed by gap-closure plans. (1) BLOCKER pagination mega-page: 05-06 gated the geometry-effect rAF read on the `.paginated-surface` class so the scrolling-body height is never captured on initial load; new `initial-pagination-even` e2e captures the FIRST pagination publication and asserts >1 page + stable (RED pagesLength 1 → GREEN pagesLength 2). (2) MAJOR blockquote inline mark: 05-07 threads per-child `childHighlightSlices` through the blockquote case in BOTH render paths; 4-case component suite 16/16 green. Phase gate: full `npm run test` 1003 passed / 0 failed / 0 skipped."
 
 ### 12. Unresolved (ambiguous/orphan) highlight surfacing
 expected: An unresolved highlight renders with a dashed outline instead of a fill; the drawer marks it with a flag + explanation + disabled jump but enabled delete; and on article open a one-time "N highlight(s) couldn't be relocated." status message appears. (May require seeded data -- say "skip" if you can't trigger it manually.)
@@ -66,8 +66,8 @@ reason: Requires seeded ambiguous/orphan HighlightRecords to trigger; not reprod
 ## Summary
 
 total: 12
-passed: 10
-issues: 1
+passed: 11
+issues: 0
 pending: 0
 skipped: 1
 blocked: 0
@@ -76,7 +76,8 @@ blocked: 0
 
 <!-- YAML format for plan-phase --gaps consumption -->
 - truth: "Paginated mode produces even, viewport-sized page fragments with content distributed across pages (Phase 4 contract)."
-  status: failed
+  status: resolved
+  resolved_by: "05-06"
   reason: "User reported: pagination broken -- page sizes wildly uneven. P1 contains nearly the entire article (header, intro, multiple paragraphs, and the Thiel blockquote), while P2 holds ~2 sentences, P3 holds ~1 sentence, P4 holds ~2 sentences. Looks like a regression in pagination logic. Phase 5 modified fragmentRenderer.tsx, capture.ts, domMeasurer.ts, engine.ts (Plan 05-05 Deviation #3 re-scoped the measurement query to [data-block-index]:not(.page-fragment [data-block-index])). User pasted the full per-page content as evidence."
   severity: blocker
   test: 11
@@ -99,7 +100,8 @@ blocked: 0
   debug_session: ".planning/debug/pagination-uneven-pages.md"
 
 - truth: "A highlight captured on a blockquote passage renders an inline <mark> on the quoted text (blockquote is in the eligible highlightable set per D5-07)."
-  status: failed
+  status: resolved
+  resolved_by: "05-07"
   reason: "User reported: the Thiel blockquote passage ('I no longer believe that freedom and democracy are compatible ... Since 1920, the vast increase in welfare beneficiaries ... has rendered the notion of capitalist democracy into an oxymoron.') cannot be saved as a highlight -- it automatically registers as one on load but doesn't appear to be highlighted (no inline mark). Suspects the quote formatting."
   severity: major
   test: 11

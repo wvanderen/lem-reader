@@ -1,8 +1,9 @@
 ---
-status: diagnosed
+status: resolved
+resolved_by: "05-07"
 trigger: "UAT Phase 5 Test 11 — blockquote highlight does not render inline <mark> (Thiel quote in aeon.co fixture). Capture resolves but no <mark> appears."
 created: 2026-08-07T00:00:00Z
-updated: 2026-08-07T00:00:00Z
+updated: 2026-08-07T20:30:00Z
 ---
 
 ## Current Focus
