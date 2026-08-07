@@ -164,7 +164,7 @@ Plans:
   3. Highlights and notes remain on the same normalized text after repagination, mode or typography changes, and reopening the article.
   4. When quoted-context and canonical-position selectors cannot resolve confidently, reader sees an explicit ambiguous or orphaned state instead of a silent reattachment.
 
-**Plans:** 3/5 plans executed
+**Plans:** 4/5 plans executed
 Plans:
 **Wave 1**
 
@@ -180,7 +180,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3)*
 
-- [ ] 05-04-PLAN.md — Wave 4: ANNO-07 ambiguous/orphan surfacing (D5-02/D5-04) — status-driven mark.highlight.unresolved dashed marker at position hint/first candidate + drawer flag + disabled jump + one-time "{N} couldn't be relocated" open-announce + D5-16 cross-fragment slicing in fragmentRenderer (highlight range ∩ fragment range, shared data-highlight-id, no silent gap at page turn) + forced-colors three-shape distinction. Closes ANNO-07.
+- [x] 05-04-PLAN.md — Wave 4: ANNO-07 ambiguous/orphan surfacing (D5-02/D5-04) — status-driven mark.highlight.unresolved dashed marker at position hint/first candidate + drawer flag + disabled jump + one-time "{N} couldn't be relocated" open-announce + D5-16 cross-fragment slicing in fragmentRenderer (highlight range ∩ fragment range, shared data-highlight-id, no silent gap at page turn) + forced-colors three-shape distinction. Closes ANNO-07.
 
 **Wave 5** *(blocked on Wave 4 — phase gate)*
 
@@ -212,5 +212,5 @@ Plans:
 | 2. Accessible Scrolling Reader | 4/4 | Complete    | 2026-08-04 |
 | 3. Trustworthy Layout Measurement | 2/2 | Complete    | 2026-08-05 |
 | 4. Responsive Pagination and Dual-Mode Navigation | 10/11 | In Progress|  |
-| 5. Durable Highlights and Notes | 3/5 | In Progress|  |
+| 5. Durable Highlights and Notes | 4/5 | In Progress|  |
 | 6. Prototype Acceptance | 0/TBD | Not started | - |
