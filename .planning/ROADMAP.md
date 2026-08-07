@@ -164,7 +164,7 @@ Plans:
   3. Highlights and notes remain on the same normalized text after repagination, mode or typography changes, and reopening the article.
   4. When quoted-context and canonical-position selectors cannot resolve confidently, reader sees an explicit ambiguous or orphaned state instead of a silent reattachment.
 
-**Plans:** 2/5 plans executed
+**Plans:** 3/5 plans executed
 Plans:
 **Wave 1**
 
@@ -176,7 +176,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2)*
 
-- [ ] 05-03-PLAN.md — Wave 3: notes + drawer + navigate-back + delete slice — NotePopover (Popover API manual + debounced save mirroring SettingsContext + WipeConfirm two-step delete) + AnnotationsDrawer (native `<dialog>` reusing .settings-panel geometry, reading-order list, empty-state) + Header annotations-trigger + D5-11 navigate-back (fragmentContainingOffset/commitTurn paginated OR findScrollTarget/scrollIntoView scrolling + focus the `<mark>`) + .status announces. Closes ANNO-02/03/04.
+- [x] 05-03-PLAN.md — Wave 3: notes + drawer + navigate-back + delete slice — NotePopover (Popover API manual + debounced save mirroring SettingsContext + WipeConfirm two-step delete) + AnnotationsDrawer (native `<dialog>` reusing .settings-panel geometry, reading-order list, empty-state) + Header annotations-trigger + D5-11 navigate-back (fragmentContainingOffset/commitTurn paginated OR findScrollTarget/scrollIntoView scrolling + focus the `<mark>`) + .status announces. Closes ANNO-02/03/04.
 
 **Wave 4** *(blocked on Wave 3)*
 
@@ -212,5 +212,5 @@ Plans:
 | 2. Accessible Scrolling Reader | 4/4 | Complete    | 2026-08-04 |
 | 3. Trustworthy Layout Measurement | 2/2 | Complete    | 2026-08-05 |
 | 4. Responsive Pagination and Dual-Mode Navigation | 10/11 | In Progress|  |
-| 5. Durable Highlights and Notes | 2/5 | In Progress|  |
+| 5. Durable Highlights and Notes | 3/5 | In Progress|  |
 | 6. Prototype Acceptance | 0/TBD | Not started | - |

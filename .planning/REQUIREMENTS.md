@@ -48,9 +48,9 @@
 ### Annotations
 
 - [x] **ANNO-01**: Reader can select supported article text and create a highlight in either reading mode.
-- [ ] **ANNO-02**: Reader can attach a text note to a highlight.
-- [ ] **ANNO-03**: Reader can view, edit, and delete their locally stored notes and highlights.
-- [ ] **ANNO-04**: Reader can navigate from a saved annotation back to its logical passage.
+- [x] **ANNO-02**: Reader can attach a text note to a highlight.
+- [x] **ANNO-03**: Reader can view, edit, and delete their locally stored notes and highlights.
+- [x] **ANNO-04**: Reader can navigate from a saved annotation back to its logical passage.
 - [x] **ANNO-05**: Highlights and notes remain attached to the same normalized text across repagination, mode changes, typography changes, and reopening.
 - [x] **ANNO-06**: Annotation anchors store canonical position plus quoted context rather than page numbers, pixels, DOM paths, or serialized live ranges.
 - [x] **ANNO-07**: Reader is shown an explicit ambiguous or orphaned state when an annotation cannot be resolved confidently rather than having it silently reattached.
@@ -138,9 +138,9 @@
 | PAGE-08 | Phase 3 | Complete |
 | PAGE-09 | Phase 4 | ✅ Complete (Plan 04-10 closed; re-verified 04-11) |
 | ANNO-01 | Phase 5 | Complete |
-| ANNO-02 | Phase 5 | Pending |
-| ANNO-03 | Phase 5 | Pending |
-| ANNO-04 | Phase 5 | Pending |
+| ANNO-02 | Phase 5 | Complete |
+| ANNO-03 | Phase 5 | Complete |
+| ANNO-04 | Phase 5 | Complete |
 | ANNO-05 | Phase 5 | Complete |
 | ANNO-06 | Phase 5 | Complete |
 | ANNO-07 | Phase 5 | Complete |
