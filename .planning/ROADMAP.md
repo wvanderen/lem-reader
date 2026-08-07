@@ -217,5 +217,5 @@ Plans:
 | 2. Accessible Scrolling Reader | 4/4 | Complete    | 2026-08-04 |
 | 3. Trustworthy Layout Measurement | 2/2 | Complete    | 2026-08-05 |
 | 4. Responsive Pagination and Dual-Mode Navigation | 10/11 | In Progress|  |
-| 5. Durable Highlights and Notes | 7/7 | Complete   | 2026-08-07 |
+| 5. Durable Highlights and Notes | 7/7 | Complete    | 2026-08-07 |
 | 6. Prototype Acceptance | 0/TBD | Not started | - |
