@@ -50,6 +50,10 @@ import {
 import type { HighlightOverlayValue } from "../reader/annotations/HighlightOverlay";
 import type { CreateFromSelectionResult, ToolbarCaptureResult } from "../reader/annotations/HighlightOverlay";
 import { SelectionToolbar } from "../reader/annotations/SelectionToolbar";
+// Phase 5 Plan 05-03: NotePopover (Popover API manual + debounced save +
+// two-step delete) + AnnotationsDrawer (native <dialog> reading-order list +
+// navigate-back). Both consume useHighlightOverlay() inside the provider.
+import { NotePopover } from "../reader/annotations/NotePopover";
 
 /** The D4-10 mode-toggle handler signature (App threads a ref of this shape). */
 type ModeToggleHandler = () => void;
@@ -64,6 +68,20 @@ export interface ArticleViewProps {
    * preference flip.
    */
   modeToggleHandlerRef: React.RefObject<ModeToggleHandler | null>;
+  /**
+   * Phase 5 Plan 05-03 (D5-09): annotations drawer open state — owned by App
+   * (same lifting pattern as settingsOpen) so Header (the trigger) and this
+   * component (which mounts the drawer + handles navigate-back close) share
+   * one source of truth.
+   */
+  drawerOpen: boolean;
+  /** Phase 5 Plan 05-03: close the drawer (App's setter). */
+  onCloseDrawer: () => void;
+  /**
+   * Phase 5 Plan 05-03: push the resolved-highlight count up to App so the
+   * Header badge stays in sync.
+   */
+  onAnnotationCountChange: (count: number) => void;
 }
 
 function formatDate(iso: string): string {
@@ -124,7 +142,13 @@ function sameBlock(article: CanonicalArticle, offsetA: number, offsetB: number):
   return false;
 }
 
-export function ArticleView({ articleId, modeToggleHandlerRef }: ArticleViewProps) {
+export function ArticleView({
+  articleId,
+  modeToggleHandlerRef,
+  drawerOpen,
+  onCloseDrawer,
+  onAnnotationCountChange,
+}: ArticleViewProps) {
   const [article, setArticle] = useState<CanonicalArticle | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   // The restored location (STATE-01). Null when no saved location was found
@@ -157,6 +181,14 @@ export function ArticleView({ articleId, modeToggleHandlerRef }: ArticleViewProp
   // Drives the toolbar's buttons-vs-hint rendering.
   const [captureResult, setCaptureResult] =
     useState<ToolbarCaptureResult | null>(null);
+
+  // Phase 5 Plan 05-03: push the resolved-highlight count up to App so the
+  // Header badge stays in sync. Runs whenever the apiRef bridge updates (which
+  // happens on every render of the provider — highlights, CRUD, etc.).
+  const highlightCount = highlightApiRef.current?.highlights.length ?? 0;
+  useEffect(() => {
+    onAnnotationCountChange(highlightCount);
+  }, [highlightCount, onAnnotationCountChange]);
 
   // Phase 4 Plan 04-05 (PAGE-04 + PAGE-09): the fallback banner visibility +
   // a SESSION-scoped mode override. On a pagination fallback (dom-fallback /
@@ -1044,6 +1076,41 @@ export function ArticleView({ articleId, modeToggleHandlerRef }: ArticleViewProp
           onHighlight={() => void handleHighlightShortcut(false)}
           onHighlightAndNote={() => void handleHighlightShortcut(true)}
         />
+        {/* Phase 5 Plan 05-03: NotePopover mounts inside the provider so it
+            can consume useHighlightOverlay() for openPopoverFor coordination
+            state + CRUD (updateNote/flushNoteSave/deleteHighlight). The
+            popover is controlled by the provider's openPopoverFor state
+            (set by the N shortcut, "Highlight + note" toolbar button, or
+            activating a <mark>). popover="manual" → typing doesn't
+            light-dismiss; top-layer rendering with no backdrop. */}
+        <NotePopover />
+        {/* Phase 5 Plan 05-03 Task 2 will replace this inline skeleton with
+            the full AnnotationsDrawer component (reading-order list + empty-
+            state + navigate-back). For Task 1, this minimal <dialog> uses the
+            drawerOpen/onCloseDrawer props so the Header trigger is wired end-
+            to-end (click → drawer opens → Esc/× closes → trigger aria-expanded
+            reflects state). The full drawer contents + navigate-back handler
+            land in Task 2. */}
+        <dialog
+          className="annotations-drawer"
+          aria-labelledby="annotations-drawer-title"
+          ref={(el) => {
+            if (el) {
+              if (drawerOpen && !el.open) {
+                el.showModal();
+              } else if (!drawerOpen && el.open) {
+                el.close();
+              }
+            }
+          }}
+        >
+          <h2 id="annotations-drawer-title" className="visually-hidden">
+            Highlights and notes
+          </h2>
+          <button type="button" onClick={onCloseDrawer}>
+            Close
+          </button>
+        </dialog>
         </HighlightOverlayProvider>
       </main>
     </>

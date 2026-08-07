@@ -1259,3 +1259,220 @@ mark.highlight.unresolved {
   user-select: none;
   -webkit-user-select: none;
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+ * Phase 5 Plan 05-03 — Note popover + annotations trigger + drawer
+ *
+ * .highlight-popover (D5-10): Popover API (`popover="manual"`) — top-layer
+ * rendering without a backdrop. NOT a <dialog>/showModal (UI-SPEC §Design
+ * System rationale: <dialog> is too heavy for a small positioned editor near
+ * the highlight; the popover needs top-layer + no light-dismiss + no backdrop).
+ *
+ * .annotations-trigger (D5-09): header button inline-start of ModeToggle.
+ * Mirrors the gear-button geometry exactly: 44×44 hit area, transparent bg,
+ * --ink-soft default, --accent ONLY when [aria-expanded="true"].
+ *
+ * No transition/animation property on any selector here (A11Y-06 — the global
+ * prefers-reduced-motion gate is trivially satisfied).
+ * ════════════════════════════════════════════════════════════════════════ */
+
+/* ── Note popover (D5-10, UI-SPEC §Interaction 29) ──────────────────────────── */
+/* --surface-raised bg + --hairline border + 8px radius, NO shadow (mirrors the
+   no-shadow discipline of every prior chrome surface). max-width 380px;
+   width: calc(100vw - 2*--space-md) on narrow viewports. Positioned near the
+   <mark> by the Popover API's default positioning. */
+.highlight-popover {
+  margin: 0;
+  padding: var(--space-lg);
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: var(--surface-raised);
+  color: var(--ink);
+  max-width: 380px;
+  width: calc(100vw - 2 * var(--space-md));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  /* No transition/animation property (A11Y-06 — the Popover API's own
+     transition is disabled by the global prefers-reduced-motion gate). */
+}
+/* Excerpt — italic, --ink-soft, truncated (Meta/Label role per UI-SPEC). */
+.highlight-popover-excerpt {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  font-style: italic;
+  color: var(--ink-soft);
+}
+/* Context wrapper (visually-hidden label + excerpt). */
+.highlight-popover-context {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+/* Note field wrapper. */
+.highlight-popover-note {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+/* Textarea — Body role (18px / selected body stack, 400 weight) so the note
+   reads like the article, not like chrome (UI-SPEC §Typography). Autosizes
+   via rows=3 + max-height. */
+.highlight-popover-textarea {
+  width: 100%;
+  min-height: calc(var(--touch) + var(--space-md));
+  padding: var(--space-sm);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 18px;
+  line-height: 1.5;
+  font-weight: 400;
+  resize: vertical;
+}
+.highlight-popover-textarea:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.highlight-popover-textarea:disabled {
+  opacity: 0.6;
+}
+/* Actions row — Done + Delete, flex-wrap so both keep their hit area on
+   narrow viewports. */
+.highlight-popover-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  justify-content: flex-end;
+}
+.highlight-popover-done,
+.highlight-popover-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--touch);
+  padding-inline: var(--space-md);
+  border-radius: 4px;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1;
+  font-weight: 400;
+  cursor: pointer;
+}
+/* Done button — quiet chrome, neutral --hairline border. */
+.highlight-popover-done {
+  background: transparent;
+  border: 1px solid var(--hairline);
+  color: var(--ink);
+}
+.highlight-popover-done:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+/* Delete button — --destructive border conveys consequence (D5-12, mirrors
+   WipeConfirm). Forced-colors safety so the consequence is conveyed beyond
+   the label. */
+.highlight-popover-delete {
+  background: transparent;
+  border: 1px solid var(--destructive);
+  color: var(--destructive);
+}
+.highlight-popover-delete:hover {
+  background: var(--destructive);
+  color: var(--surface);
+}
+
+/* ── Delete confirm prompt (D5-12, mirrors WipeConfirm L120-143) ────────────── */
+.highlight-popover-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+.highlight-popover-confirm-prompt {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+}
+/* Confirm buttons mirror .wipe-confirm-destructive/.wipe-confirm-cancel geometry
+   exactly (Pitfall 8 — forced-colors safety + non-destructive default focus). */
+.highlight-popover-destructive,
+.highlight-popover-cancel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--touch);
+  padding-inline: var(--space-md);
+  border-radius: 4px;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1;
+  font-weight: 400;
+  cursor: pointer;
+}
+.highlight-popover-destructive {
+  background: transparent;
+  border: 1px solid var(--destructive);
+  color: var(--destructive);
+}
+.highlight-popover-destructive:hover {
+  background: var(--destructive);
+  color: var(--surface);
+}
+.highlight-popover-cancel {
+  background: transparent;
+  border: 1px solid var(--hairline);
+  color: var(--ink);
+}
+.highlight-popover-cancel:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* ── Annotations trigger (D5-09, UI-SPEC §Interaction 30) ───────────────────── */
+/* Mirrors .gear-button geometry EXACTLY: 44×44 hit area, transparent bg,
+   --ink-soft default, --accent ONLY when [aria-expanded="true"]. The header
+   does NOT grow — the three controls (annotations-trigger + mode-toggle +
+   gear) share the same 44×44 geometry; .header-controls gap stays --space-sm. */
+.annotations-trigger {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--touch);
+  min-width: var(--touch);
+  padding: var(--space-sm);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.annotations-trigger:hover {
+  color: var(--accent);
+}
+.annotations-trigger[aria-expanded="true"] {
+  color: var(--accent);
+}
+.annotations-trigger:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+/* Count badge — superscript, --ink-soft. aria-hidden because the count is
+   already in the button's aria-label (no visually-hidden duplicate). */
+.annotations-trigger-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--ink-soft);
+  pointer-events: none;
+}

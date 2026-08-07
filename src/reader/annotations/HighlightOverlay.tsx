@@ -107,8 +107,17 @@ export interface HighlightOverlayValue {
   captureCurrentSelection: (readingRoot: HTMLElement) => ToolbarCaptureResult;
   /** Delete a highlight + cascade-delete its note (D5-12). */
   deleteHighlight: (id: string) => Promise<void>;
-  /** STUB note update (Plan 05-03 fills the debounced save). */
+  /**
+   * Update the note attached to a highlight. In-memory state updates
+   * optimistically; persistence is DEBOUNCED (D2-03 pattern). Empty text =
+   * no NoteRecord.
+   */
   updateNote: (id: string, text: string) => void;
+  /**
+   * Flush any pending debounced note write immediately (D2-03). Called by
+   * NotePopover on Done/Escape so no edit is lost.
+   */
+  flushNoteSave: () => void;
   /**
    * The highlight id whose NotePopover is open, or null. Owned here so the
    * SelectionToolbar + NotePopover coordinate through one source of truth.
@@ -218,6 +227,7 @@ export function HighlightOverlayProvider({
       captureCurrentSelection,
       deleteHighlight: state.deleteHighlight,
       updateNote: state.updateNote,
+      flushNoteSave: state.flushNoteSave,
       openPopoverFor,
       setOpenPopoverFor,
       storageState: state.storageState,

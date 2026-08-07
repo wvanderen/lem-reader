@@ -46,3 +46,13 @@ export async function loadNote(highlightId: string): Promise<NoteRecord | null> 
 export async function saveNote(note: NoteRecord): Promise<void> {
   await db.notes.put(note);
 }
+
+/**
+ * Delete the note attached to a highlight (1:1 via the `highlightId` index).
+ * Used by the annotation state hook's debounced save when the reader clears
+ * the textarea (D5-10 empty-text policy — an empty note = no NoteRecord).
+ * Throws propagate to the caller for STATE-05 routing.
+ */
+export async function deleteNote(highlightId: string): Promise<void> {
+  await db.notes.where("highlightId").equals(highlightId).delete();
+}

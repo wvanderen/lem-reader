@@ -36,9 +36,16 @@ function renderWithProvider(ui: React.ReactElement) {
   return render(<SettingsProvider>{ui}</SettingsProvider>);
 }
 
-/** Build the required ArticleView props, including the D4-10 bridge ref. */
-function withProps(articleId: string): { articleId: string; modeToggleHandlerRef: ArticleViewProps["modeToggleHandlerRef"] } {
-  return { articleId, modeToggleHandlerRef: createRef() };
+/** Build the required ArticleView props, including the D4-10 bridge ref +
+ * Phase 5 Plan 05-03 drawer/annotation-count props. */
+function withProps(articleId: string): { articleId: string; modeToggleHandlerRef: ArticleViewProps["modeToggleHandlerRef"]; drawerOpen: boolean; onCloseDrawer: () => void; onAnnotationCountChange: (n: number) => void } {
+  return {
+    articleId,
+    modeToggleHandlerRef: createRef(),
+    drawerOpen: false,
+    onCloseDrawer: () => {},
+    onAnnotationCountChange: () => {},
+  };
 }
 
 const fullArticle = (): CanonicalArticle => ({

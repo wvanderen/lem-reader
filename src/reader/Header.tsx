@@ -41,9 +41,39 @@ interface HeaderProps {
    * (fixture list) the caller falls back to a plain SettingsContext.update().
    */
   onToggleMode: () => void;
+  /**
+   * Phase 5 Plan 05-03 (D5-09): true when an article is mounted so the
+   * annotations-trigger appears only on the article view (hidden on the
+   * fixture list where there are no highlights).
+   */
+  articleMounted: boolean;
+  /**
+   * Phase 5 Plan 05-03 (D5-09): the count of highlights for the current
+   * article (resolved + unresolved). Shown as a superscript badge when >0
+   * and included in the aria-label.
+   */
+  annotationCount: number;
+  /**
+   * Phase 5 Plan 05-03 (D5-09): whether the annotations drawer is open.
+   * Drives the trigger's aria-expanded.
+   */
+  drawerOpen: boolean;
+  /**
+   * Phase 5 Plan 05-03 (D5-09): invoked when the reader clicks the
+   * annotations-trigger. The caller (App) owns the drawer-open state.
+   */
+  onToggleAnnotations: () => void;
 }
 
-export function Header({ onOpenSettings, settingsOpen, onToggleMode }: HeaderProps) {
+export function Header({
+  onOpenSettings,
+  settingsOpen,
+  onToggleMode,
+  articleMounted,
+  annotationCount,
+  drawerOpen,
+  onToggleAnnotations,
+}: HeaderProps) {
   // Header is a useSettings consumer so the toggle's aria-pressed + glyph
   // reflect the LIVE preference without App prop-drilling. App stays unchanged.
   const { settings } = useSettings();
@@ -58,6 +88,34 @@ export function Header({ onOpenSettings, settingsOpen, onToggleMode }: HeaderPro
         touching with a calm --space-sm gap.
       */}
       <div className="header-controls">
+        {/*
+          Phase 5 Plan 05-03 (D5-09): annotations-trigger button inline-start of
+          ModeToggle so the group reads [annotations] [mode] [gear] = [content]
+          [view] [settings] — grouped by scope. Mirrors the gear-button geometry
+          exactly: 44×44 hit area, transparent bg, --ink-soft default, --accent
+          ONLY when [aria-expanded="true"]. Hidden when no article is mounted.
+        */}
+        {articleMounted && (
+          <button
+            type="button"
+            className="annotations-trigger"
+            onClick={onToggleAnnotations}
+            aria-label={
+              annotationCount > 0
+                ? `Highlights and notes, ${new Intl.NumberFormat(navigator.language).format(annotationCount)}`
+                : "Highlights and notes"
+            }
+            aria-haspopup="dialog"
+            aria-expanded={drawerOpen}
+          >
+            <HighlighterIcon aria-hidden="true" />
+            {annotationCount > 0 && (
+              <span className="annotations-trigger-badge" aria-hidden="true">
+                {new Intl.NumberFormat(navigator.language).format(annotationCount)}
+              </span>
+            )}
+          </button>
+        )}
         <ModeToggle mode={settings.readingMode} onToggle={onToggleMode} />
         <button
           type="button"
@@ -94,6 +152,32 @@ function GearIcon({ ariaHidden }: { ariaHidden?: "true" }) {
     >
       <circle cx="12" cy="12" r="3" />
       <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
+
+/**
+ * Phase 5 Plan 05-03 — highlighter glyph for the annotations-trigger button.
+ * A quiet inline-SVG marker icon; aria-hidden because aria-label carries the
+ * accessible name. Mirrors the gear-button glyph discipline.
+ */
+function HighlighterIcon({ ariaHidden }: { ariaHidden?: "true" }) {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden={ariaHidden}
+      focusable="false"
+    >
+      <path d="M9 11l-6 6v3h3l6-6" />
+      <path d="M12 8l4 4" />
+      <path d="M17 3l4 4-9 9-4-4 9-9z" />
     </svg>
   );
 }

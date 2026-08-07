@@ -120,6 +120,14 @@ function AppInner() {
   // aria-expanded and the dialog's open prop both read from this. Lifted here
   // so Header (the trigger) and SettingsPanel (the dialog) share one source.
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Phase 5 Plan 05-03 (D5-09): annotations drawer open state — same lifting
+  // pattern as settingsOpen. Header (the trigger) and ArticleView (which mounts
+  // the drawer + handles navigate-back close) share one source of truth.
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  // Phase 5 Plan 05-03: annotation count for the header badge. ArticleView
+  // pushes the resolved-highlight count up via onAnnotationCountChange so the
+  // Header badge stays in sync without Header needing to consume the provider.
+  const [annotationCount, setAnnotationCount] = useState(0);
   const { settings, update } = useSettings();
   // D4-10 bridge — ArticleView registers its handler here; null on the list.
   const modeToggleHandlerRef = useRef<ModeToggleHandler | null>(null);
@@ -143,6 +151,13 @@ function AppInner() {
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
+  // Phase 5 Plan 05-03: reset the annotations drawer + count when the view
+  // swaps (back to list or article change) so stale state doesn't carry over.
+  useEffect(() => {
+    setDrawerOpen(false);
+    setAnnotationCount(0);
+  }, [view]);
+
   // D4-09/D4-10: when ArticleView has registered an anchor-capturing handler,
   // route the toggle through it (passage preserved across the mode swap). On
   // the fixture list (no article) fall back to a plain preference flip.
@@ -163,6 +178,10 @@ function AppInner() {
         onOpenSettings={() => setSettingsOpen(true)}
         settingsOpen={settingsOpen}
         onToggleMode={handleToggleMode}
+        articleMounted={view.name === "article"}
+        annotationCount={annotationCount}
+        drawerOpen={drawerOpen}
+        onToggleAnnotations={() => setDrawerOpen((v) => !v)}
       />
       <SettingsPanel
         open={settingsOpen}
@@ -175,6 +194,9 @@ function AppInner() {
         <ArticleView
           articleId={view.id}
           modeToggleHandlerRef={modeToggleHandlerRef}
+          drawerOpen={drawerOpen}
+          onCloseDrawer={() => setDrawerOpen(false)}
+          onAnnotationCountChange={setAnnotationCount}
         />
       )}
     </>

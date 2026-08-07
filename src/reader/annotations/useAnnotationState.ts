@@ -35,7 +35,11 @@ import {
   saveHighlight,
   deleteHighlight as deleteHighlightFromStore,
 } from "../../persistence/highlightsStore";
-import { loadNote } from "../../persistence/notesStore";
+import {
+  loadNote,
+  saveNote,
+  deleteNote,
+} from "../../persistence/notesStore";
 import { classifyStorageError } from "../../persistence/errors";
 
 /** D5-02 tri-state — drives Plan 05-04 ambiguous/orphan surfacing. */
@@ -92,11 +96,18 @@ export interface UseAnnotationStateResult {
    */
   deleteHighlight: (id: string) => Promise<void>;
   /**
-   * STUB (Plan 05-03 fills the debounced save): updates in-memory note state
-   * only so the provider contract is stable. The NotePopover (Plan 05-03)
-   * will wire saveNote through this signature.
+   * Update the note attached to a highlight. The in-memory state updates
+   * optimistically; the persistence write is DEBOUNCED (~800ms, mirroring
+   * SettingsContext D2-03) so rapid typing doesn't hammer IndexedDB. Empty
+   * text = no NoteRecord (the debounce flush deletes the persisted row).
    */
   updateNote: (id: string, text: string) => void;
+  /**
+   * Flush any pending debounced note write immediately (D2-03). Called by
+   * the NotePopover on Done/Escape (and by the dual-event flush listeners
+   * on visibilitychange-hidden + pagehide) so no edit is lost.
+   */
+  flushNoteSave: () => void;
   storageState: AnnotationStorageState;
 }
 
@@ -118,6 +129,15 @@ export function useAnnotationState(
   // drift (mirrors SettingsContext.tsx L67-68 pendingRef pattern).
   const callbacksRef = useRef(callbacks);
   callbacksRef.current = callbacks;
+
+  // ── Debounced note save (D2-03 pattern, mirrors SettingsContext L113-165) ──
+  // pendingNoteRef stashes the {id, text} of the in-flight note edit so the
+  // dual-event flush + Done/Escape flush can persist the latest value without
+  // waiting for the debounce window. Only ONE note can be edited at a time
+  // (only one popover is open), so a single pendingRef is sufficient.
+  const NOTE_SAVE_DEBOUNCE_MS = 800;
+  const noteSaveTimer = useRef<number | null>(null);
+  const pendingNoteRef = useRef<{ id: string; text: string } | null>(null);
 
   // Eager batch-resolve on article open (cancelled-flag pattern — mirrors
   // SettingsContext.tsx L81-105 + ArticleView.tsx L455-484 load effects). A
@@ -238,32 +258,131 @@ export function useAnnotationState(
     }
   }, []);
 
-  // STUB (Plan 05-03 fills the debounced save): updates in-memory note state
-  // only. Empty text = no note (D5-10 empty-text policy enforced upstream).
-  const updateNote = useCallback((id: string, text: string): void => {
-    setHighlights((prev) =>
-      prev.map((h) => {
-        if (h.record.id !== id) return h;
-        const note: NoteRecord | null =
-          text.length > 0
-            ? {
-                schemaVersion: 1,
-                id: h.note?.id ?? crypto.randomUUID(),
-                highlightId: id,
-                text,
-                updatedAt: new Date().toISOString(),
-              }
-            : null;
-        return { ...h, note };
-      }),
-    );
-  }, []);
+  // Debounced note save (D5-10, D2-03 pattern). The in-memory state updates
+  // optimistically (so the <mark>.has-note modifier + drawer note text reflect
+  // immediately); the persistence write is debounced ~800ms so rapid typing
+  // doesn't hammer IndexedDB. Empty text = no NoteRecord (the flush deletes
+  // the persisted row). Mirrors SettingsContext.tsx scheduleSave/flushSave
+  // verbatim, swapping settingsStore.saveSettings → notesStore.saveNote/deleteNote.
+  const commitNoteSave = useCallback(
+    async (id: string, text: string): Promise<void> => {
+      try {
+        if (text.length > 0) {
+          // Upsert: reuse the existing note id if present, else generate one.
+          // The in-memory state already carries the up-to-date note (updateNote
+          // set it optimistically); we read it here so we persist the right id.
+          setHighlights((prev) => {
+            const h = prev.find((x) => x.record.id === id);
+            if (h?.note) {
+              void saveNote(h.note);
+            }
+            return prev; // no state change — just reading
+          });
+          callbacksRef.current.onStatusAnnounce?.("Note saved.");
+        } else {
+          // D5-10 empty-text policy: empty note = no NoteRecord. Delete the
+          // persisted row if one exists.
+          await deleteNote(id);
+        }
+      } catch (e) {
+        const reason = classifyStorageError(e);
+        setStorageState(reason);
+        callbacksRef.current.onStorageError?.(reason);
+      }
+    },
+    [],
+  );
+
+  const scheduleNoteSave = useCallback(
+    (id: string, text: string): void => {
+      pendingNoteRef.current = { id, text };
+      if (noteSaveTimer.current !== null) {
+        window.clearTimeout(noteSaveTimer.current);
+      }
+      noteSaveTimer.current = window.setTimeout(() => {
+        noteSaveTimer.current = null;
+        const pending = pendingNoteRef.current;
+        if (!pending) return;
+        pendingNoteRef.current = null;
+        void commitNoteSave(pending.id, pending.text);
+      }, NOTE_SAVE_DEBOUNCE_MS);
+    },
+    [commitNoteSave],
+  );
+
+  /** Flush the pending note write immediately (D2-03 — Done/Escape/dual-event). */
+  const flushNoteSave = useCallback((): void => {
+    if (noteSaveTimer.current !== null) {
+      window.clearTimeout(noteSaveTimer.current);
+      noteSaveTimer.current = null;
+    }
+    const pending = pendingNoteRef.current;
+    if (!pending) return;
+    pendingNoteRef.current = null;
+    void commitNoteSave(pending.id, pending.text);
+  }, [commitNoteSave]);
+
+  // Dual-event flush (Pitfall 4 — bfcache-safe, mirrors SettingsContext L154-165).
+  // visibilitychange-hidden + pagehide guarantee the final pending value persists
+  // even if the reader tabs away mid-debounce. The deprecated bfcache-breaking
+  // session-end events are FORBIDDEN per Plan 05-02's useAnnotationState header.
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") flushNoteSave();
+    };
+    const onPageHide = () => flushNoteSave();
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", onPageHide);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", onPageHide);
+    };
+  }, [flushNoteSave]);
+
+  // Cleanup the pending note debounce timer on article swap/unmount so it
+  // cannot fire after the hook's state is gone (mirrors SettingsContext L169-177).
+  useEffect(() => {
+    return () => {
+      if (noteSaveTimer.current !== null) {
+        window.clearTimeout(noteSaveTimer.current);
+        noteSaveTimer.current = null;
+      }
+      pendingNoteRef.current = null;
+    };
+  }, [article]);
+
+  const updateNote = useCallback(
+    (id: string, text: string): void => {
+      // Optimistic in-memory update so the <mark>.has-note modifier + drawer
+      // note text reflect immediately (no debounce on the visible state).
+      setHighlights((prev) =>
+        prev.map((h) => {
+          if (h.record.id !== id) return h;
+          const note: NoteRecord | null =
+            text.length > 0
+              ? {
+                  schemaVersion: 1,
+                  id: h.note?.id ?? crypto.randomUUID(),
+                  highlightId: id,
+                  text,
+                  updatedAt: new Date().toISOString(),
+                }
+              : null;
+          return { ...h, note };
+        }),
+      );
+      // Schedule the debounced persistence write.
+      scheduleNoteSave(id, text);
+    },
+    [scheduleNoteSave],
+  );
 
   return {
     highlights,
     createHighlight,
     deleteHighlight,
     updateNote,
+    flushNoteSave,
     storageState,
   };
 }
