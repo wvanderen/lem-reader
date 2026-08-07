@@ -47,7 +47,7 @@
 
 ### Annotations
 
-- [ ] **ANNO-01**: Reader can select supported article text and create a highlight in either reading mode.
+- [x] **ANNO-01**: Reader can select supported article text and create a highlight in either reading mode.
 - [ ] **ANNO-02**: Reader can attach a text note to a highlight.
 - [ ] **ANNO-03**: Reader can view, edit, and delete their locally stored notes and highlights.
 - [ ] **ANNO-04**: Reader can navigate from a saved annotation back to its logical passage.
@@ -137,7 +137,7 @@
 | PAGE-07 | Phase 3 | ✅ Restored (Plan 04-08 closed Phase 4 regression; re-verified 04-11) |
 | PAGE-08 | Phase 3 | Complete |
 | PAGE-09 | Phase 4 | ✅ Complete (Plan 04-10 closed; re-verified 04-11) |
-| ANNO-01 | Phase 5 | Pending |
+| ANNO-01 | Phase 5 | Complete |
 | ANNO-02 | Phase 5 | Pending |
 | ANNO-03 | Phase 5 | Pending |
 | ANNO-04 | Phase 5 | Pending |

@@ -6,14 +6,14 @@ current_phase: 05
 current_phase_name: durable-highlights-and-notes
 status: executing
 stopped_at: Completed 05-01-PLAN.md
-last_updated: "2026-08-07T16:21:01.611Z"
+last_updated: "2026-08-07T16:48:51.100Z"
 last_activity: 2026-08-07
 last_activity_desc: Phase 05 execution started
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 27
-  completed_plans: 23
+  completed_plans: 24
   percent: 67
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-05)
 ## Current Position
 
 Phase: 05 (durable-highlights-and-notes) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 Status: Ready to execute
 Last activity: 2026-08-07 — Phase 05 execution started
 
@@ -84,6 +84,7 @@ Progress: [██████████] 4/6 phases code-complete — 22/22 pl
 | Phase 04 P10 | 18min | 1 tasks | 3 files |
 | Phase 04 P11 | 18min | 1 tasks | 2 files |
 | Phase 05 P01 | 19min | 2 tasks | 12 files |
+| Phase 05 P02 | 22min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -156,6 +157,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: 05-01: resolveQuoteSelector implements D5-02 tri-state (confident|ambiguous|orphan) in src/annotations/resolution.ts; contract signature stays in normalizeText.ts
 - [Phase ?]: 05-01: highlightsStore drops corrupt rows defensively; cascade-delete via Dexie transaction (Pitfall 10); NO Dexie version bump (Pitfall 9)
 - [Phase ?]: 05-01: captureSelection maps DOM Range→grapheme offset via raw-cluster↔norm-cluster whitespace-collapse alignment (Pitfall 1); never uses Selection.toString() (Pitfall 2)
+- [Phase ?]: apiRef bridge over ArticleView split for parent-child provider access
+- [Phase ?]: captureCurrentSelection separated from createHighlightFromSelection for side-effect-free toolbar display
 
 ### Pending Todos
 
@@ -178,6 +181,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-08-07T16:21:01.604Z
+Last session: 2026-08-07T16:48:41.105Z
 Stopped at: Completed 05-01-PLAN.md
 Resume file: None

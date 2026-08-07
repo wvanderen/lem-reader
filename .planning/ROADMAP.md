@@ -164,7 +164,7 @@ Plans:
   3. Highlights and notes remain on the same normalized text after repagination, mode or typography changes, and reopening the article.
   4. When quoted-context and canonical-position selectors cannot resolve confidently, reader sees an explicit ambiguous or orphaned state instead of a silent reattachment.
 
-**Plans:** 1/5 plans executed
+**Plans:** 2/5 plans executed
 Plans:
 **Wave 1**
 
@@ -172,7 +172,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1)*
 
-- [ ] 05-02-PLAN.md — Wave 2: "create + see a highlight" vertical slice — useAnnotationState hook + HighlightOverlay provider (eager load+resolve on open) + floating SelectionToolbar (position:fixed, edge-clamp, invalid hints) + `<mark class=highlight>` overlay INTO InlineRenderer/BlockRenderer (no fork) + ArticleView selection listener + H/N shortcuts + user-select:none on .article-body-measurement + --highlight token (3 themes) + forced-colors CSS. Closes ANNO-01/05/06.
+- [x] 05-02-PLAN.md — Wave 2: "create + see a highlight" vertical slice — useAnnotationState hook + HighlightOverlay provider (eager load+resolve on open) + floating SelectionToolbar (position:fixed, edge-clamp, invalid hints) + `<mark class=highlight>` overlay INTO InlineRenderer/BlockRenderer (no fork) + ArticleView selection listener + H/N shortcuts + user-select:none on .article-body-measurement + --highlight token (3 themes) + forced-colors CSS. Closes ANNO-01/05/06.
 
 **Wave 3** *(blocked on Wave 2)*
 
@@ -212,5 +212,5 @@ Plans:
 | 2. Accessible Scrolling Reader | 4/4 | Complete    | 2026-08-04 |
 | 3. Trustworthy Layout Measurement | 2/2 | Complete    | 2026-08-05 |
 | 4. Responsive Pagination and Dual-Mode Navigation | 10/11 | In Progress|  |
-| 5. Durable Highlights and Notes | 1/5 | In Progress|  |
+| 5. Durable Highlights and Notes | 2/5 | In Progress|  |
 | 6. Prototype Acceptance | 0/TBD | Not started | - |
