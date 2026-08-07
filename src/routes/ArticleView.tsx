@@ -674,6 +674,23 @@ export function ArticleView({
     let cancelled = false;
     const rafId = requestAnimationFrame(() => {
       if (cancelled) return;
+      // Plan 05-06: gate the geometry read on the .paginated-surface class.
+      // On initial load trustedView is null, so the scrolling article branch
+      // (className "article-body", no pinned height) mounts first; the first
+      // rAF would otherwise read the full natural scrolling-body height
+      // (~1148–1313px) and the first pagination pass would pack the ENTIRE
+      // article onto P1 (the mega-page regression). The .paginated-surface
+      // class is applied only once trustedView commits and the paginated
+      // branch mounts (app.css pins height to calc(100vh - 48px - 2px -
+      // 2*var(--space-2xl)) ≈ 654px desktop). Because trustedView is in the
+      // effect deps, the effect re-runs when trustedView commits (class flips
+      // to paginated-surface), the rAF re-fires, and the now-pinned height is
+      // accepted. The pagination effect (PaginatedSurface) guards on
+      // pageContentBoxHeightPx > 0, so it waits for the correct height and
+      // never consumes the inflated scrolling height. The useState(0) initial
+      // value keeps the first render at 0 (pagination waits), so no separate
+      // initial-mount reset is needed.
+      if (!articleEl.classList.contains("paginated-surface")) return;
       const rect = articleEl.getBoundingClientRect();
       setPageContentBoxHeightPx(rect.height);
     });
