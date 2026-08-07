@@ -38,6 +38,18 @@ import { blockGraphemeLength } from "../pagination/anchor";
 import { BLOCK_SEPARATOR } from "../content/normalizeText";
 import { ResumeBanner } from "../reader/ResumeBanner";
 import { PaginationFallbackBanner } from "../reader/PaginationFallbackBanner";
+// Phase 5 Plan 05-02: annotation state seam (ANNO-01/05/06). The provider
+// wraps the article body; the apiRef bridge lets this component's H/N handler
+// call createHighlightFromSelection without consuming the context (a parent
+// cannot useContext its own child's provider). The SelectionToolbar (Task 2)
+// + NotePopover (Plan 05-03) consume useHighlightOverlay() directly as
+// provider children.
+import {
+  HighlightOverlayProvider,
+} from "../reader/annotations/HighlightOverlay";
+import type { HighlightOverlayValue } from "../reader/annotations/HighlightOverlay";
+import type { CreateFromSelectionResult } from "../reader/annotations/HighlightOverlay";
+import { SelectionToolbar } from "../reader/annotations/SelectionToolbar";
 
 /** The D4-10 mode-toggle handler signature (App threads a ref of this shape). */
 type ModeToggleHandler = () => void;
@@ -121,6 +133,24 @@ export function ArticleView({ articleId, modeToggleHandlerRef }: ArticleViewProp
   const [restoredOffset, setRestoredOffset] = useState<LocationRecord | null>(null);
   const [showResumeBanner, setShowResumeBanner] = useState(false);
   const [progress, setProgress] = useState(0);
+
+  // Phase 5 Plan 05-02 (ANNO-01/05/06): annotation state seam. The apiRef
+  // bridge lets this component's H/N keydown handler call
+  // createHighlightFromSelection. The provider populates apiRef.current
+  // synchronously during render; the handler reads the latest value via the
+  // mutable ref. SelectionToolbar (Task 2) consumes via useHighlightOverlay().
+  const highlightApiRef = useRef<HighlightOverlayValue | null>(null);
+  // Polite live region for annotation announces (D5-12, A11Y-08). Concise
+  // copy: "Highlight saved." / "Highlight deleted." Rendered as a visually-
+  // hidden role=status region so it announces to AT without visual clutter.
+  const [annotationAnnouncement, setAnnotationAnnouncement] = useState<
+    string | null
+  >(null);
+  // Phase 5 Plan 05-02: the live selection rect (for the SelectionToolbar's
+  // position:fixed geometry — Task 2 consumes this). Null when no non-collapsed
+  // selection exists within the reading surface. rAF-throttled via the
+  // selectionchange listener below so rapid selection shaping doesn't thrash.
+  const [selectionRect, setSelectionRect] = useState<DOMRect | null>(null);
 
   // Phase 4 Plan 04-05 (PAGE-04 + PAGE-09): the fallback banner visibility +
   // a SESSION-scoped mode override. On a pagination fallback (dom-fallback /
@@ -306,6 +336,45 @@ export function ArticleView({ articleId, modeToggleHandlerRef }: ArticleViewProp
   // never reads form-field values (T-04-09-01).
   const handleToggleModeRef = useRef(handleToggleMode);
   handleToggleModeRef.current = handleToggleMode;
+
+  // Phase 5 Plan 05-02 (ANNO-01 — H/N shortcuts, UI-SPEC §Interaction 33):
+  // H highlights the current selection (bare); N highlights + opens the note
+  // popover (Plan 05-03). Both are SELECTION-DEPENDENT — they bail (no
+  // preventDefault, no action) when window.getSelection() is collapsed or
+  // captureSelection returns ok:false, so H/N are never hijacked while just
+  // reading (UI-SPEC §Interaction 33 guard). The handler reads the annotation
+  // API via the highlightApiRef bridge (populated by HighlightOverlayProvider
+  // during render — see the provider's "PARENT ACCESS" comment).
+  //
+  // Ref-stable so the keydown closure always reads the latest bridge value
+  // without re-registering the listener on every annotation state change.
+  const handleHighlightShortcut = useCallback(
+    async (withNote: boolean): Promise<void> => {
+      const api = highlightApiRef.current;
+      const readingRoot = articleRef.current;
+      if (!api || !readingRoot) return;
+      // Bail on collapsed/empty selection — H/N are selection-dependent.
+      const selection = window.getSelection();
+      if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
+        return;
+      }
+      const result: CreateFromSelectionResult =
+        await api.createHighlightFromSelection(readingRoot);
+      if (!result.ok) return; // invalid selection — toolbar shows the hint
+      // ANNO-01: clear the selection so the <mark> renders cleanly (the
+      // ephemeral DOM Range is gone; the durable anchor persists).
+      window.getSelection()?.removeAllRanges();
+      if (withNote) {
+        // N: open the note popover for the new highlight (Plan 05-03's
+        // NotePopover reads openPopoverFor from the provider).
+        api.setOpenPopoverFor(result.highlightId);
+      }
+    },
+    [],
+  );
+  const handleHighlightShortcutRef = useRef(handleHighlightShortcut);
+  handleHighlightShortcutRef.current = handleHighlightShortcut;
+
   useEffect(() => {
     if (!article || !articleEl) return;
     const onKey = (event: KeyboardEvent) => {
@@ -317,14 +386,82 @@ export function ArticleView({ articleId, modeToggleHandlerRef }: ArticleViewProp
         // — UI-SPEC §19). handleToggleMode captures the D4-10 anchor + flips
         // the persisted readingMode (or clears the session override).
         handleToggleModeRef.current();
+        return;
+      }
+      // Phase 5 Plan 05-02 (UI-SPEC §Interaction 33): H/N highlight the
+      // current selection. preventDefault is NOT called — H/N have no native
+      // default action worth suppressing, and calling preventDefault
+      // unconditionally would break H/N inside inputs (already guarded by
+      // isFormField above, but defense-in-depth).
+      if (key === "h" || key === "H") {
+        void handleHighlightShortcutRef.current(false);
+      } else if (key === "n" || key === "N") {
+        void handleHighlightShortcutRef.current(true);
       }
     };
-    // Non-passive is fine here — M has no default action to suppress. The
-    // listener is registered on window (captures M from anywhere in the app
-    // while an article is mounted, EXCEPT inside form fields per isFormField).
+    // Non-passive is fine here — M/H/N have no default action to suppress.
+    // The listener is registered on window (captures shortcuts from anywhere
+    // in the app while an article is mounted, EXCEPT inside form fields per
+    // isFormField).
     window.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("keydown", onKey);
+    };
+  }, [article, articleEl]);
+
+  // Phase 5 Plan 05-02 (UI-SPEC §Interaction 24): selectionchange listener
+  // tracking the live selection rect for the SelectionToolbar (Task 2
+  // consumes selectionRect via props). rAF-throttled so rapid selection
+  // shaping doesn't thrash React state. Registered whenever an article + its
+  // element are mounted (both modes — the scrolling .article-body and the
+  // paginated .page-fragment are both inside articleRef).
+  useEffect(() => {
+    if (!article || !articleEl) return;
+    let rafId: number | null = null;
+    const onSelectChange = () => {
+      if (rafId !== null) return; // coalesce — one rAF per frame
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        const selection = window.getSelection();
+        if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
+          setSelectionRect(null);
+          return;
+        }
+        // Only track selections inside the article element (the reading
+        // surface). Selections outside (e.g. in chrome) don't trigger the
+        // toolbar.
+        const range = selection.getRangeAt(0);
+        const articleNode = articleRef.current;
+        if (
+          !articleNode ||
+          !articleNode.contains(range.startContainer) ||
+          !articleNode.contains(range.endContainer)
+        ) {
+          setSelectionRect(null);
+          return;
+        }
+        // Skip selections inside the hidden measurement body (D5-08 — should
+        // never happen due to user-select:none, but defend).
+        const measurementBody = articleNode.querySelector(
+          ".article-body-measurement",
+        );
+        if (
+          measurementBody &&
+          (measurementBody.contains(range.startContainer) ||
+            measurementBody.contains(range.endContainer))
+        ) {
+          setSelectionRect(null);
+          return;
+        }
+        setSelectionRect(range.getBoundingClientRect());
+      });
+    };
+    document.addEventListener("selectionchange", onSelectChange, {
+      passive: true,
+    });
+    return () => {
+      document.removeEventListener("selectionchange", onSelectChange);
+      if (rafId !== null) cancelAnimationFrame(rafId);
     };
   }, [article, articleEl]);
 
@@ -468,6 +605,11 @@ export function ArticleView({ articleId, modeToggleHandlerRef }: ArticleViewProp
     // distinguish articles).
     setShowFallbackBanner(false);
     setSessionModeOverride(null);
+    // Phase 5 Plan 05-02: reset annotation state on article swap so a stale
+    // announcement + selection rect from the previous article don't flash.
+    setAnnotationAnnouncement(null);
+    setSelectionRect(null);
+    highlightApiRef.current = null;
     openArticle(articleId)
       .then((a) => {
         if (cancelled) return;
@@ -727,8 +869,23 @@ export function ArticleView({ articleId, modeToggleHandlerRef }: ArticleViewProp
         */}
         <p className="visually-hidden">
           Keyboard shortcuts: M switches reading mode. PageUp and PageDown,
-          ArrowLeft and ArrowRight, and Space and Shift+Space turn pages.
+          ArrowLeft and ArrowRight, and Space and Shift+Space turn pages. H
+          highlights the current selection. N highlights it and opens a note.
         </p>
+        {/* Phase 5 Plan 05-02 (D5-12, A11Y-08): polite live region for
+            annotation announces. Concise copy ("Highlight saved." / "Highlight
+            deleted.") is written by useAnnotationState via the
+            onStatusAnnounce callback wired below. Visually-hidden so it
+            announces to AT without visual clutter (mirrors the SectionAnnouncer
+            pattern). */}
+        <div
+          className="visually-hidden"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          {annotationAnnouncement}
+        </div>
         {showResumeBanner && (
           <ResumeBanner
             onResume={handleResume}
@@ -749,6 +906,30 @@ export function ArticleView({ articleId, modeToggleHandlerRef }: ArticleViewProp
             onDismiss={() => setShowFallbackBanner(false)}
           />
         )}
+        {/* Phase 5 Plan 05-02: HighlightOverlayProvider wraps the article body
+            (both scrolling + paginated branches) so the renderer (Task 2's
+            BlockRenderer/InlineRenderer threading) + SelectionToolbar (Task 2)
+            + NotePopover (Plan 05-03) all consume useHighlightOverlay(). The
+            apiRef bridge lets this component's H/N handler call
+            createHighlightFromSelection (a parent cannot useContext its own
+            child's provider). onStatusAnnounce routes "Highlight saved." /
+            "Highlight deleted." to the visually-hidden .status region above
+            (D5-12, A11Y-08). onStorageError is a calm no-op for now — reading
+            continues with in-memory state (D2-13); the existing StorageBanner
+            handles STATE-05 for settings, and annotation failures degrade
+            gracefully (highlights don't render but the article is readable). */}
+        <HighlightOverlayProvider
+          article={article}
+          apiRef={highlightApiRef}
+          onStatusAnnounce={setAnnotationAnnouncement}
+          onStorageError={() => {
+            /* STATE-05: annotation storage failure degrades gracefully —
+               highlights don't render/save but reading continues. The
+               existing StorageBanner (driven by SettingsContext) surfaces
+               settings-level failures; annotation persistence is local-first
+               and non-critical to the reading experience (D2-13). */
+          }}
+        >
         <article
           ref={articleCallbackRef}
           className={paginatedActive ? "article-body paginated-surface" : "article-body"}
@@ -827,6 +1008,14 @@ export function ArticleView({ articleId, modeToggleHandlerRef }: ArticleViewProp
             <ArticleBody article={article} />
           )}
         </article>
+        {/* Phase 5 Plan 05-02 Task 2: SelectionToolbar mounts as a sibling of
+            the article body, INSIDE the provider so it can consume
+            useHighlightOverlay() for createHighlightFromSelection. Passes
+            selectionRect (tracked by the selectionchange listener above).
+            Task 1 ships a stub render-null; Task 2 fills in the full
+            position:fixed geometry + buttons + invalid hints. */}
+        <SelectionToolbar selectionRect={selectionRect} />
+        </HighlightOverlayProvider>
       </main>
     </>
   );
