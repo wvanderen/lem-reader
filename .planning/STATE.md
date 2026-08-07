@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 04
-current_phase_name: responsive-pagination-and-dual-mode-navigation
-status: phase_verified
-stopped_at: Phase 5 UI-SPEC approved
-last_updated: "2026-08-07T15:09:11.176Z"
-last_activity: 2026-08-06
-last_activity_desc: Plan 04-11 process-blocker closure (~18 min, 2 planning artifacts)
+current_phase: 05
+current_phase_name: durable-highlights-and-notes
+status: executing
+stopped_at: Completed 05-01-PLAN.md
+last_updated: "2026-08-07T16:21:01.611Z"
+last_activity: 2026-08-07
+last_activity_desc: Phase 05 execution started
 progress:
   total_phases: 6
   completed_phases: 4
-  total_plans: 22
-  completed_plans: 22
+  total_plans: 27
+  completed_plans: 23
   percent: 67
 ---
 
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-05)
 
 **Core value:** Readers can move through long-form web content with calm, stable orientation and predictable navigation.
-**Current focus:** Phase 04 — responsive-pagination-and-dual-mode-navigation
+**Current focus:** Phase 05 — durable-highlights-and-notes
 
 ## Current Position
 
-Phase: 04 (responsive-pagination-and-dual-mode-navigation) — **PHASE VERIFIED** (all 11 plans executed; gap-closure complete)
-Plan: 11 of 11 complete (04-11 closed the process blocker)
-Status: Plan 04-11 executed — full `npm run test` end-to-end exits 0 (753 passed / 0 failed / 0 skipped); 04-VERIFICATION.md upgraded gaps_found (3/7) → verified (7/7)
-Last activity: 2026-08-06 — Plan 04-11 process-blocker closure (~18 min, 2 planning artifacts)
+Phase: 05 (durable-highlights-and-notes) — EXECUTING
+Plan: 2 of 5
+Status: Ready to execute
+Last activity: 2026-08-07 — Phase 05 execution started
 
 Progress: [██████████] 4/6 phases code-complete — 22/22 plans executed (gap-closure wave 9 of 9 complete)
 
@@ -83,6 +83,7 @@ Progress: [██████████] 4/6 phases code-complete — 22/22 pl
 | Phase 04 P09 | 40min | 2 tasks | 6 files |
 | Phase 04 P10 | 18min | 1 tasks | 3 files |
 | Phase 04 P11 | 18min | 1 tasks | 2 files |
+| Phase 05 P01 | 19min | 2 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -152,6 +153,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: Phase 04-10: Banner auto-dismiss race fixed via pointerdown inside-banner guard + scroll-dismiss debounce (300ms)
 - [Phase ?]: Phase 04-10: DEV-only __lemDiagnosticBus hook — firefox never detects oversize; decouples PAGE-09 banner test from measurement cross-engine consistency
 - [Phase 04]: Plan 04-11: PROCESS BLOCKER closed by re-running the suite — full `npm run test` exit 0 (753 passed / 0 failed / 0 skipped); the "269/0" misreport pattern (reality 76 failed / 269 passed) is overturned. 04-VERIFICATION.md upgraded gaps_found (3/7) → verified (7/7); all 6 gaps closed by 04-07/08/09/10. Anti-pattern guard: executor ran the suite itself, recorded fail=0 honestly rather than omitting it (04-11-OUTPUT.md is the permanent record).
+- [Phase ?]: 05-01: resolveQuoteSelector implements D5-02 tri-state (confident|ambiguous|orphan) in src/annotations/resolution.ts; contract signature stays in normalizeText.ts
+- [Phase ?]: 05-01: highlightsStore drops corrupt rows defensively; cascade-delete via Dexie transaction (Pitfall 10); NO Dexie version bump (Pitfall 9)
+- [Phase ?]: 05-01: captureSelection maps DOM Range→grapheme offset via raw-cluster↔norm-cluster whitespace-collapse alignment (Pitfall 1); never uses Selection.toString() (Pitfall 2)
 
 ### Pending Todos
 
@@ -174,6 +178,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-08-07T15:09:11.170Z
-Stopped at: Phase 5 UI-SPEC approved
-Resume file: .planning/phases/05-durable-highlights-and-notes/05-UI-SPEC.md
+Last session: 2026-08-07T16:21:01.604Z
+Stopped at: Completed 05-01-PLAN.md
+Resume file: None

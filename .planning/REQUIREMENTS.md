@@ -51,15 +51,15 @@
 - [ ] **ANNO-02**: Reader can attach a text note to a highlight.
 - [ ] **ANNO-03**: Reader can view, edit, and delete their locally stored notes and highlights.
 - [ ] **ANNO-04**: Reader can navigate from a saved annotation back to its logical passage.
-- [ ] **ANNO-05**: Highlights and notes remain attached to the same normalized text across repagination, mode changes, typography changes, and reopening.
-- [ ] **ANNO-06**: Annotation anchors store canonical position plus quoted context rather than page numbers, pixels, DOM paths, or serialized live ranges.
-- [ ] **ANNO-07**: Reader is shown an explicit ambiguous or orphaned state when an annotation cannot be resolved confidently rather than having it silently reattached.
+- [x] **ANNO-05**: Highlights and notes remain attached to the same normalized text across repagination, mode changes, typography changes, and reopening.
+- [x] **ANNO-06**: Annotation anchors store canonical position plus quoted context rather than page numbers, pixels, DOM paths, or serialized live ranges.
+- [x] **ANNO-07**: Reader is shown an explicit ambiguous or orphaned state when an annotation cannot be resolved confidently rather than having it silently reattached.
 
 ### Local State
 
 - [x] **STATE-01**: Reader's current logical location is restored when the same article revision is reopened.
 - [x] **STATE-02**: Reader's typography, theme, and preferred reading mode persist locally across sessions.
-- [ ] **STATE-03**: Reader's highlights and notes persist locally across sessions.
+- [x] **STATE-03**: Reader's highlights and notes persist locally across sessions.
 - [x] **STATE-04**: Local records are versioned and validated so schema migrations do not silently corrupt documents, preferences, locations, or annotations.
 - [x] **STATE-05**: Reader receives a recoverable error state when local storage is unavailable, full, corrupt, or cannot be upgraded.
 
@@ -141,12 +141,12 @@
 | ANNO-02 | Phase 5 | Pending |
 | ANNO-03 | Phase 5 | Pending |
 | ANNO-04 | Phase 5 | Pending |
-| ANNO-05 | Phase 5 | Pending |
-| ANNO-06 | Phase 5 | Pending |
-| ANNO-07 | Phase 5 | Pending |
+| ANNO-05 | Phase 5 | Complete |
+| ANNO-06 | Phase 5 | Complete |
+| ANNO-07 | Phase 5 | Complete |
 | STATE-01 | Phase 2 | Complete |
 | STATE-02 | Phase 2 | Complete |
-| STATE-03 | Phase 5 | Pending |
+| STATE-03 | Phase 5 | Complete |
 | STATE-04 | Phase 2 | Complete |
 | STATE-05 | Phase 2 | Complete |
 | ACPT-01 | Phase 6 | Pending |

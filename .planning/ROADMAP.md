@@ -164,11 +164,11 @@ Plans:
   3. Highlights and notes remain on the same normalized text after repagination, mode or typography changes, and reopening the article.
   4. When quoted-context and canonical-position selectors cannot resolve confidently, reader sees an explicit ambiguous or orphaned state instead of a silent reattachment.
 
-**Plans:** 5 plans
+**Plans:** 1/5 plans executed
 Plans:
 **Wave 1**
 
-- [ ] 05-01-PLAN.md — Wave 1: annotation anchor engine — resolveQuoteSelector (D5-02 tri-state) + captureSelection (DOM Range→grapheme offset) + overlap + highlightRanges (splitParagraphRuns reuse) + HighlightRecord/NoteRecord Zod schemas + db.ts Table type fix (NO version bump) + highlightsStore/notesStore (compound-index query + cascade-delete transaction) + 6 Wave 0 unit tests proving the ANNO-05/06 round-trip + ANNO-07 tri-state + STATE-04/05
+- [x] 05-01-PLAN.md — Wave 1: annotation anchor engine — resolveQuoteSelector (D5-02 tri-state) + captureSelection (DOM Range→grapheme offset) + overlap + highlightRanges (splitParagraphRuns reuse) + HighlightRecord/NoteRecord Zod schemas + db.ts Table type fix (NO version bump) + highlightsStore/notesStore (compound-index query + cascade-delete transaction) + 6 Wave 0 unit tests proving the ANNO-05/06 round-trip + ANNO-07 tri-state + STATE-04/05
 
 **Wave 2** *(blocked on Wave 1)*
 
@@ -212,5 +212,5 @@ Plans:
 | 2. Accessible Scrolling Reader | 4/4 | Complete    | 2026-08-04 |
 | 3. Trustworthy Layout Measurement | 2/2 | Complete    | 2026-08-05 |
 | 4. Responsive Pagination and Dual-Mode Navigation | 10/11 | In Progress|  |
-| 5. Durable Highlights and Notes | 0/5 | Not started | - |
+| 5. Durable Highlights and Notes | 1/5 | In Progress|  |
 | 6. Prototype Acceptance | 0/TBD | Not started | - |
