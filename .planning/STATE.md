@@ -5,16 +5,16 @@ milestone_name: milestone
 current_phase: 06
 current_phase_name: prototype-acceptance
 status: executing
-stopped_at: Completed 06-04-PLAN.md (ACPT-02 instrument authored — versioned docs/ACCEPTANCE-PROTOCOL.md)
-last_updated: "2026-08-08T16:27:41.177Z"
+stopped_at: Completed 06-05-PLAN.md (ACPT-03 closed — 4 edge specs audited to shared invariant)
+last_updated: "2026-08-08T16:40:35.349Z"
 last_activity: 2026-08-08
 last_activity_desc: Phase 06 execution started
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 35
-  completed_plans: 33
-  percent: 83
+  completed_plans: 34
+  percent: 97
 ---
 
 # Project State
@@ -29,11 +29,11 @@ See: .planning/PROJECT.md (updated 2026-08-05)
 ## Current Position
 
 Phase: 06 (prototype-acceptance) — EXECUTING
-Plan: 5 of 6
-Status: Ready to execute
-Last activity: 2026-08-08 — Phase 06 execution started
+Plan: 6 of 6
+Status: Plan 06-05 complete; 06-06 (phase verification) is the last plan
+Last activity: 2026-08-08 — ACPT-03 closed by Plan 06-05
 
-Progress: [█████████░] 5/6 phases code-complete — 32/35 plans executed (Phase 06 in progress)
+Progress: [██████████] 5/6 phases code-complete — 34/35 plans executed (Phase 06 in progress; 06-06 phase verification remains)
 
 ## Recent Decisions (Plan 04-11)
 
@@ -95,6 +95,7 @@ Progress: [█████████░] 5/6 phases code-complete — 32/35 pl
 | Phase 06 P02 | 3 min | 1 tasks | 1 files |
 | Phase 06 P03 | 64min | 3 tasks | 6 files |
 | Phase 06 P04 | 2 min | 1 tasks | 1 files |
+| Phase 06 P05 | 7 min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -188,6 +189,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: [Phase 06]: 06-03 ACPT-04 budget locked at measured p95+25% headroom (24 cells). D6-01 measure-first honored — user approved before locking. headroomPct=0 (25% baked INTO wallClockMs). Warm trigger = typography size change (viewport resize unreliable above measure cap). Fallback shares warm budget (D6-03). npm run perf CI gate exits 0. Two Rule 1 auto-fixes: warm trigger accuracy + compare-script load ordering.
 - [Phase 06]: 06-04 authors docs/ACCEPTANCE-PROTOCOL.md — the durable, re-runnable ACPT-02 instrument (NVDA+Firefox + VoiceOver+Safari matrix, 6 scripted flows as role+name outcomes per Pitfall 7, 5 exploratory charters, zero-blocker/major pass policy D6-07). ACPT-02 does NOT close here — it closes when Plan 06-06 EXECUTES the protocol with zero-blocker findings. Mirrors the 04-02 PAGE-01 split precedent (instrument ships; requirement closes at the plan that proves behavior).
 - [Phase 06]: Manual SR protocol expected outcomes authored as role + accessible name + state (programmatically verifiable), NOT verbatim SR phrasing (Pitfall 7). Confusing-but-completable announcement = minor unless step fails or content/function lost.
+- [Phase ?]: 06-05 closes ACPT-03
+- [Phase ?]: [Phase 06]: 06-05 closes ACPT-03 — all 4 existing edge specs (forced-colors, reduced-motion, reflow, touch-targets) audited against the shared D6-09 invariant + strengthened to apply assertEdgeInvariant uniformly across the 6-fixture corpus x 3 engines (72 new cells). Strengthen-only per D6-12 (no existing assertion removed); wipeDatabase added to every beforeEach (Rule 2 harness-baseline consistency). reflow.spec.ts (the (c) overflow-clause origin) now asserts the COMPLETE invariant (a)/(b)/(c) via the helper. Together with 06-01 (high-zoom + font-failure), all six edge conditions assert the same bar.
 
 ### Pending Todos
 
@@ -210,6 +213,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-08-08T16:25:59.316Z
+Last session: 2026-08-08T16:39:32.728Z
 Stopped at: Completed 06-04-PLAN.md (ACPT-02 instrument authored — versioned docs/ACCEPTANCE-PROTOCOL.md)
 Resume file: None

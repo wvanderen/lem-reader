@@ -206,7 +206,7 @@ Plans:
   3. Reader retains content and required functions under high zoom, narrow reflow, forced colors, reduced motion, touch, and late or failed font loading.
   4. Cold and warm repagination on the selected article and device profiles stays within explicit release budgets or falls back without blocking reading.
 
-**Plans:** 4/6 plans executed
+**Plans:** 5/6 plans executed
 Plans:
 **Wave 1**
 
@@ -217,7 +217,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 — needs `_edge-invariant.ts` from 06-01)*
 
-- [ ] 06-05-PLAN.md — Wave 2: ACPT-03 audit of 4 existing edge specs (forced-colors/reduced-motion/reflow/touch-targets) against the shared D6-09 invariant (D6-12) — strengthen in place, no new files
+- [x] 06-05-PLAN.md — Wave 2: ACPT-03 audit of 4 existing edge specs (forced-colors/reduced-motion/reflow/touch-targets) against the shared D6-09 invariant (D6-12) — strengthen in place, no new files
 
 **Wave 3** *(blocked on Waves 1–2 — final acceptance gate)*
 
@@ -234,4 +234,4 @@ Plans:
 | 3. Trustworthy Layout Measurement | 2/2 | Complete    | 2026-08-05 |
 | 4. Responsive Pagination and Dual-Mode Navigation | 10/11 | In Progress|  |
 | 5. Durable Highlights and Notes | 7/7 | Complete    | 2026-08-07 |
-| 6. Prototype Acceptance | 4/6 | In Progress|  |
+| 6. Prototype Acceptance | 5/6 | In Progress|  |
