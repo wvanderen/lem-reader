@@ -16,6 +16,7 @@ playwright-report
 test-results
 coverage
 .calibration-tmp/
+.perf-tmp/
 .todos/
 .sidecar/
 .sidecar-agent

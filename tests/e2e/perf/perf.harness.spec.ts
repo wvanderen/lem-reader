@@ -138,40 +138,66 @@ async function measureColdSamples(page: Page, fixture: string): Promise<number[]
 }
 
 /**
- * Measure warm repagination: a viewport re-trigger → next trusted commit
- * reflecting the new geometry. PROJECT.md Performance constraint — "stable
+ * Measure warm repagination: a typography re-trigger → next trusted commit
+ * reflecting the new size. PROJECT.md Performance constraint — "stable
  * after fonts settle" — the warm budget is the dimension that proves the
- * reader never sees jank when they resize or change typography. Alternates
- * between two widths so each iteration forces a fresh re-measurement.
+ * reader never sees jank when they resize or change typography.
+ *
+ * Trigger choice (Rule 1 — robustness): a typography size change via the
+ * SettingsPanel slider is the proven warm trigger (stale-drop.spec.ts L86-
+ * 98 drives the same slider through ArrowUp presses). It is unambiguous:
+ * each press changes the `size` constraint by one step (SIZE_STEPS =
+ * [18,20,22,24]), so the predicate waits for `constraints.size !== preSize`
+ * — a guaranteed, geometry-independent signal that a FRESH commit landed.
+ * Viewport resize was considered but rejected: above the ~641px measure cap
+ * the article width doesn't change (no observable commit signal), and below
+ * it the engine's re-commit timing after rapid cold page.gotos was flaky
+ * across engines. The typography path mirrors the exact substrate
+ * stale-drop.spec.ts proves.
+ *
+ * Adaptive direction: pick Up if the current size is below the range
+ * midpoint (22), Down otherwise. This guarantees every press produces a
+ * size change regardless of the starting size (handles the max-24 / min-18
+ * boundaries).
  */
-async function measureWarmSamples(
-  page: Page,
-  anchorWidth: number,
-): Promise<number[]> {
+async function measureWarmSamples(page: Page): Promise<number[]> {
   const samples: number[] = [];
-  // Two distinct target widths, both well inside the engine's re-measure
-  // threshold. Alternate so each iteration's commit reflects a NEW geometry.
-  const targets = [Math.max(480, anchorWidth - 200), Math.max(560, anchorWidth - 120)];
+
+  // Open the settings panel to access the size slider (mirrors stale-
+  // drop.spec.ts L83-86).
+  await page.getByRole("button", { name: "Reading settings" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Reading settings", level: 2 }),
+  ).toBeVisible();
+  const slider = page.getByRole("slider", { name: "Text size" });
+  await slider.focus();
+
   for (let i = 0; i < SAMPLES_PER_CELL; i++) {
-    const targetWidth = targets[i % targets.length]!;
+    const pre = await readTrustedConstraints(page);
+    const preSize = pre?.size ?? 18;
+    // Adaptive direction — guaranteed to change the size from any starting
+    // value in [18, 24]. Below midpoint (22) → Up; at/above → Down.
+    const dir: "ArrowUp" | "ArrowDown" = preSize < 22 ? "ArrowUp" : "ArrowDown";
     const t0 = Date.now();
-    await page.setViewportSize({ width: targetWidth, height: 900 });
-    // Wait for the committed viewportWidthPx to land near the target — this
-    // proves the engine re-measured AND the new trusted view committed
-    // (the hook only updates on a result that survived the font gate +
-    // epoch guard). 100px tolerance covers padding/scrollbar delta.
+    await slider.press(dir);
+    // Wait for the committed size constraint to differ from the pre-press
+    // value — unambiguous proof a fresh trusted commit landed (the hook
+    // only updates on a result that survived the font gate + epoch guard).
     await page.waitForFunction(
-      (target) => {
+      (preS: number) => {
         const c = (window as unknown as Record<string, unknown>).__lemLastTrustedConstraints as
-          | { viewportWidthPx: number }
+          | { size: number }
           | undefined;
-        return c !== undefined && Math.abs(c.viewportWidthPx - target) < 100;
+        return c !== undefined && c.size !== preS;
       },
-      targetWidth,
+      preSize,
       { timeout: 15_000 },
     );
     samples.push(Date.now() - t0);
   }
+
+  // Close the settings panel to leave a clean state for the next fixture.
+  await page.keyboard.press("Escape");
   return samples;
 }
 
@@ -212,6 +238,13 @@ test(
     page.on("pageerror", (err) => pageErrors.push(String(err)));
 
     for (const fixture of PERF_FIXTURES) {
+      // Reset to the default desktop viewport before each fixture so cold
+      // runs at a consistent geometry AND warm starts from the measure-
+      // capped article width (the previous fixture's warm cycle may have
+      // left the viewport at a sub-measure width, which would make the
+      // next fixture's warm iteration 0 a no-op).
+      await page.setViewportSize({ width: 1280, height: 720 });
+
       // Apply throttle INSIDE the per-fixture loop so each cold measurement
       // runs under the configured profile. (Throttle is chromium-only; this
       // branch is a no-op under desktop projects.)
@@ -223,12 +256,14 @@ test(
         projectResults.push({ fixture, profile, engine: browserName, phase: "cold", wallClockMs });
       }
 
-      // Warm: anchor on the last cold load's committed viewport, then run
-      // SAMPLES_PER_CELL resize re-triggers. The hook must be non-null here
-      // (measureColdSamples waited for it); guard defensively anyway.
+      // Warm: run SAMPLES_PER_CELL sub-measure resize re-triggers. The
+      // hook must be non-null here (measureColdSamples waited for it);
+      // guard defensively anyway. Sub-measure widths are required because
+      // above the ~550px measure cap the article width doesn't change on
+      // viewport resize (see measureWarmSamples comment).
       const anchor = await readTrustedConstraints(page);
       if (anchor) {
-        const warmSamples = await measureWarmSamples(page, anchor.viewportWidthPx);
+        const warmSamples = await measureWarmSamples(page);
         for (const wallClockMs of warmSamples) {
           projectResults.push({ fixture, profile, engine: browserName, phase: "warm", wallClockMs });
         }
