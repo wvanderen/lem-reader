@@ -6,6 +6,8 @@
 // close ×, ranges (44px tall via min-height: var(--touch)), and Reset button
 // are also asserted.
 import { test, expect } from "@playwright/test";
+import { assertEdgeInvariant } from "./_edge-invariant";
+import { FIXTURES, wipeDatabase, openArticle } from "./annotations/_fixtures";
 
 const BASE = "http://localhost:5173";
 const FIRST_FIXTURE = "essay-long-form";
@@ -19,6 +21,15 @@ async function bbox(page: import("@playwright/test").Locator) {
 }
 
 test.describe("Touch targets ≥ 44×44px (A11Y-07)", () => {
+  test.beforeEach(async ({ page }) => {
+    // Deterministic first-run state + image stub (the shared e2e harness
+    // discipline — annotations/_fixtures.ts wipeDatabase; 06-PATTERNS §Shared
+    // Patterns). Plan 06-05 audit (D6-12): every edge spec uses the same
+    // harness baseline. Benign to the existing touch-target sizing
+    // assertions below.
+    await wipeDatabase(page);
+  });
+
   test("gear button meets 44×44px before the panel opens", async ({ page }) => {
     await page.goto(`${BASE}/#/article/${FIRST_FIXTURE}`);
     const gear = page.getByRole("button", { name: "Reading settings" });
@@ -112,4 +123,26 @@ test.describe("Touch targets ≥ 44×44px (A11Y-07)", () => {
       `controls failing the 44×44px touch-target contract:\n${failures.join("\n")}`,
     ).toEqual([]);
   });
+
+  // ───────────────────────────────────────────────────────────────────────
+  // D6-09 shared edge-condition invariant (Plan 06-05 audit, D6-12). Under
+  // the touch-target contract the SAME bar holds as every other edge
+  // condition: (a) full content reachable via keyboard in BOTH reading
+  // modes, (b) required functions reachable (the existing sizing test
+  // above proves the gear + controls are ≥44×44 — the A11Y-07 substrate;
+  // this adds the consolidated reachability check), (c) no layout overflow
+  // clips content (WCAG 1.4.10). Applied uniformly across the 6-fixture
+  // corpus so acceptance means the same thing everywhere.
+  // Strengthen-only — no existing assertion removed (D6-12).
+  for (const fixture of FIXTURES) {
+    test(`shared invariant holds under touch-targets @ ${fixture} (D6-09)`, async ({
+      page,
+    }) => {
+      await openArticle(page, fixture);
+      await assertEdgeInvariant(page, {
+        fixture,
+        condition: "touch-targets",
+      });
+    });
+  }
 });
