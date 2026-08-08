@@ -5,6 +5,8 @@
 // settings panel or its controls, so the gate is trivially satisfied. This
 // test guards against a regression that adds a transition.
 import { test, expect } from "@playwright/test";
+import { assertEdgeInvariant } from "./_edge-invariant";
+import { FIXTURES, wipeDatabase, openArticle } from "./annotations/_fixtures";
 
 const BASE = "http://localhost:5173";
 const FIRST_FIXTURE = "essay-long-form";
@@ -12,6 +14,11 @@ const FIRST_FIXTURE = "essay-long-form";
 test.describe("Reduced motion (A11Y-06)", () => {
   test.beforeEach(async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
+    // Deterministic first-run state + image stub (the shared e2e harness
+    // discipline — annotations/_fixtures.ts wipeDatabase; 06-PATTERNS §Shared
+    // Patterns). Plan 06-05 audit (D6-12): every edge spec uses the same
+    // harness baseline. Benign to the existing transition/animation assertions.
+    await wipeDatabase(page);
   });
 
   test("the settings panel has no entrance transition", async ({ page }) => {
@@ -94,4 +101,27 @@ test.describe("Reduced motion (A11Y-06)", () => {
       "opening the panel should not introduce any animation under reduced-motion",
     ).toBe(false);
   });
+
+  // ───────────────────────────────────────────────────────────────────────
+  // D6-09 shared edge-condition invariant (Plan 06-05 audit, D6-12). Under
+  // reduced motion the SAME bar holds as every other edge condition:
+  // (a) full content reachable via keyboard in BOTH reading modes (the mode
+  // toggle is instant + motion-safe under the reduced-motion gate — A11Y-06
+  // substrate), (b) required functions reachable, (c) no layout overflow
+  // clips content (WCAG 1.4.10). Applied uniformly across the 6-fixture
+  // corpus so acceptance means the same thing everywhere. The existing
+  // transition/animation A11Y-06 assertions above stay authoritative for
+  // the motion substrate; this adds the consolidated invariant.
+  // Strengthen-only — no existing assertion removed (D6-12).
+  for (const fixture of FIXTURES) {
+    test(`shared invariant holds under reduced-motion @ ${fixture} (D6-09)`, async ({
+      page,
+    }) => {
+      await openArticle(page, fixture);
+      await assertEdgeInvariant(page, {
+        fixture,
+        condition: "reduced-motion",
+      });
+    });
+  }
 });
