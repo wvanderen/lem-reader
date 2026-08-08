@@ -5,16 +5,16 @@ milestone_name: milestone
 current_phase: 06
 current_phase_name: prototype-acceptance
 status: executing
-stopped_at: Completed 06-01-PLAN.md (ACPT-03 edge gap specs)
-last_updated: "2026-08-08T14:52:43.693Z"
+stopped_at: Completed 06-02-PLAN.md (ACPT-01 consolidated core-reading-flow spec, 18/18 green)
+last_updated: "2026-08-08T15:06:44.587Z"
 last_activity: 2026-08-08
 last_activity_desc: Phase 06 execution started
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 35
-  completed_plans: 30
-  percent: 86
+  completed_plans: 31
+  percent: 83
 ---
 
 # Project State
@@ -29,11 +29,11 @@ See: .planning/PROJECT.md (updated 2026-08-05)
 ## Current Position
 
 Phase: 06 (prototype-acceptance) — EXECUTING
-Plan: 2 of 6
+Plan: 3 of 6
 Status: Ready to execute
 Last activity: 2026-08-08 — Phase 06 execution started
 
-Progress: [█████████░] 5/6 phases code-complete — 30/35 plans executed (Phase 06 in progress)
+Progress: [█████████░] 5/6 phases code-complete — 31/35 plans executed (Phase 06 in progress)
 
 ## Recent Decisions (Plan 04-11)
 
@@ -92,6 +92,7 @@ Progress: [█████████░] 5/6 phases code-complete — 30/35 pl
 | Phase 05 P07 | 12 min | 3 tasks | 3 files |
 | Phase 05 P06 | 22 min | 3 tasks | 2 files |
 | Phase 06 P01 | 13 min | 3 tasks | 3 files |
+| Phase 06 P02 | 3 min | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -181,6 +182,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 06]: High-zoom (D6-10): page.setViewportSize({width:320,height:800}) is the LOAD-BEARING cross-engine reflow assertion (WCAG 1.4.10); document.body.style.zoom='4' is SECONDARY/engine-variable (chromium yes, firefox 126+, webkit partial), applied AFTER assertEdgeInvariant asserting only no-content-lost. deviceScaleFactor never used (DPR not zoom — Pitfall 2). 21/21 green chromium/firefox/webkit.
 - [Phase 06]: Font-failure (D6-11): Lem Reader loads ZERO web fonts, so the harness injects a @font-face FIRST via page.addStyleTag then page.route-intercepts the injected URL. Route registered BEFORE addStyleTag (RESEARCH-proven non-vacuous pattern); !important on the injected font-family rule guarantees the request fires; page.on('request') verifies non-vacuity (Pitfall 1 guard). SWAP mode reuses stale-drop.spec.ts rapid-trigger race with the font active. 9/9 green.
 - [Phase 06]: ACPT-03 spans Plan 06-01 (NEW gap specs: high-zoom + font-failure, 30/30 green) AND Plan 06-05 (audit of 4 existing edge specs against the invariant). requirements-completed is [] for 06-01 mirroring the 04-02 PAGE-01 split precedent; Plan 06-05 closes ACPT-03.
+- [Phase ?]: ACPT-01 closed by Plan 06-02 — consolidated core-reading-flow spec (18/18 green × chromium/firefox/webkit), sibling of open-every-fixture.spec.ts (D6-13), ONE representative typography per RESEARCH OQ2, reuses annotations/_fixtures.ts harness wholesale (Pitfall 6 honored)
 
 ### Pending Todos
 
@@ -203,6 +205,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-08-08T14:52:43.686Z
-Stopped at: Completed 06-01-PLAN.md (ACPT-03 edge gap specs)
+Last session: 2026-08-08T15:06:18.778Z
+Stopped at: Completed 06-02-PLAN.md (ACPT-01 consolidated core-reading-flow spec, 18/18 green)
 Resume file: None

@@ -65,7 +65,7 @@
 
 ### Acceptance
 
-- [ ] **ACPT-01**: Reader can complete the core reading flow on the representative corpus in current Chromium, Firefox, and WebKit without content loss or blocked navigation.
+- [x] **ACPT-01**: Reader can complete the core reading flow on the representative corpus in current Chromium, Firefox, and WebKit without content loss or blocked navigation.
 - [ ] **ACPT-02**: Reader can complete documented keyboard-only and manual screen-reader acceptance flows in the selected support matrix.
 - [ ] **ACPT-03**: Reader retains content and required functions under high zoom, narrow reflow, forced colors, reduced motion, touch, and late or failed font loading scenarios.
 - [ ] **ACPT-04**: Repagination meets explicit cold and warm performance budgets on the representative article and device profiles selected during implementation planning.
@@ -149,7 +149,7 @@
 | STATE-03 | Phase 5 | Complete |
 | STATE-04 | Phase 2 | Complete |
 | STATE-05 | Phase 2 | Complete |
-| ACPT-01 | Phase 6 | Pending |
+| ACPT-01 | Phase 6 | Complete |
 | ACPT-02 | Phase 6 | Pending |
 | ACPT-03 | Phase 6 | Pending |
 | ACPT-04 | Phase 6 | Pending |
