@@ -5,15 +5,15 @@ milestone_name: milestone
 current_phase: 06
 current_phase_name: prototype-acceptance
 status: executing
-stopped_at: Completed 06-03-PLAN.md (ACPT-04 perf budget locked, user-approved, npm run perf exits 0)
-last_updated: "2026-08-08T16:18:00.635Z"
+stopped_at: Completed 06-04-PLAN.md (ACPT-02 instrument authored — versioned docs/ACCEPTANCE-PROTOCOL.md)
+last_updated: "2026-08-08T16:27:41.177Z"
 last_activity: 2026-08-08
 last_activity_desc: Phase 06 execution started
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 35
-  completed_plans: 32
+  completed_plans: 33
   percent: 83
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-05)
 ## Current Position
 
 Phase: 06 (prototype-acceptance) — EXECUTING
-Plan: 4 of 6
+Plan: 5 of 6
 Status: Ready to execute
 Last activity: 2026-08-08 — Phase 06 execution started
 
@@ -94,6 +94,7 @@ Progress: [█████████░] 5/6 phases code-complete — 32/35 pl
 | Phase 06 P01 | 13 min | 3 tasks | 3 files |
 | Phase 06 P02 | 3 min | 1 tasks | 1 files |
 | Phase 06 P03 | 64min | 3 tasks | 6 files |
+| Phase 06 P04 | 2 min | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -185,6 +186,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 06]: ACPT-03 spans Plan 06-01 (NEW gap specs: high-zoom + font-failure, 30/30 green) AND Plan 06-05 (audit of 4 existing edge specs against the invariant). requirements-completed is [] for 06-01 mirroring the 04-02 PAGE-01 split precedent; Plan 06-05 closes ACPT-03.
 - [Phase ?]: ACPT-01 closed by Plan 06-02 — consolidated core-reading-flow spec (18/18 green × chromium/firefox/webkit), sibling of open-every-fixture.spec.ts (D6-13), ONE representative typography per RESEARCH OQ2, reuses annotations/_fixtures.ts harness wholesale (Pitfall 6 honored)
 - [Phase ?]: [Phase 06]: 06-03 ACPT-04 budget locked at measured p95+25% headroom (24 cells). D6-01 measure-first honored — user approved before locking. headroomPct=0 (25% baked INTO wallClockMs). Warm trigger = typography size change (viewport resize unreliable above measure cap). Fallback shares warm budget (D6-03). npm run perf CI gate exits 0. Two Rule 1 auto-fixes: warm trigger accuracy + compare-script load ordering.
+- [Phase 06]: 06-04 authors docs/ACCEPTANCE-PROTOCOL.md — the durable, re-runnable ACPT-02 instrument (NVDA+Firefox + VoiceOver+Safari matrix, 6 scripted flows as role+name outcomes per Pitfall 7, 5 exploratory charters, zero-blocker/major pass policy D6-07). ACPT-02 does NOT close here — it closes when Plan 06-06 EXECUTES the protocol with zero-blocker findings. Mirrors the 04-02 PAGE-01 split precedent (instrument ships; requirement closes at the plan that proves behavior).
+- [Phase 06]: Manual SR protocol expected outcomes authored as role + accessible name + state (programmatically verifiable), NOT verbatim SR phrasing (Pitfall 7). Confusing-but-completable announcement = minor unless step fails or content/function lost.
 
 ### Pending Todos
 
@@ -207,6 +210,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-08-08T16:17:18.375Z
-Stopped at: Completed 06-03-PLAN.md (ACPT-04 perf budget locked, user-approved, npm run perf exits 0)
+Last session: 2026-08-08T16:25:59.316Z
+Stopped at: Completed 06-04-PLAN.md (ACPT-02 instrument authored — versioned docs/ACCEPTANCE-PROTOCOL.md)
 Resume file: None
