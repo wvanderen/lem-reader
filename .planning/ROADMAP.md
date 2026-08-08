@@ -206,7 +206,23 @@ Plans:
   3. Reader retains content and required functions under high zoom, narrow reflow, forced colors, reduced motion, touch, and late or failed font loading.
   4. Cold and warm repagination on the selected article and device profiles stays within explicit release budgets or falls back without blocking reading.
 
-**Plans:** TBD
+**Plans:** 6/6 plans
+Plans:
+**Wave 1**
+
+- [ ] 06-01-PLAN.md — Wave 1: ACPT-03 edge gaps — shared D6-09 invariant helper (`_edge-invariant.ts`) + high-zoom spec (400% + 320 CSS px reflow, D6-10) + font-failure spec (block/delay/swap via injected `@font-face` + `page.route`, D6-11)
+- [ ] 06-02-PLAN.md — Wave 1: ACPT-01 consolidated core-reading-flow spec across the 6-fixture corpus × 3 engines (open→read→switch→restore→highlight+navigate, D6-13) — a sibling of `open-every-fixture.spec.ts`
+- [ ] 06-03-PLAN.md — Wave 1 (autonomous: false): ACPT-04 perf harness + Node CI gate mirroring `fingerprint.compare.ts` exactly + `npm run perf` + chromium-only throttled-mobile project + D6-01 measure-first budget checkpoint (placeholder budget.json → measure → propose p95+headroom → user approves → lock)
+- [ ] 06-04-PLAN.md — Wave 1: ACPT-02 versioned `docs/ACCEPTANCE-PROTOCOL.md` (NVDA+Firefox + VoiceOver+Safari matrix D6-05, hybrid scripted+exploratory D6-06, zero-blocker policy D6-07, re-run flag D6-08)
+
+**Wave 2** *(blocked on Wave 1 — needs `_edge-invariant.ts` from 06-01)*
+
+- [ ] 06-05-PLAN.md — Wave 2: ACPT-03 audit of 4 existing edge specs (forced-colors/reduced-motion/reflow/touch-targets) against the shared D6-09 invariant (D6-12) — strengthen in place, no new files
+
+**Wave 3** *(blocked on Waves 1–2 — final acceptance gate)*
+
+- [ ] 06-06-PLAN.md — Wave 3 (autonomous: false): execute the ACPT-02 manual SR protocol on NVDA+Firefox + VoiceOver+Safari (zero-blocker, D6-07) + honest full-suite `npm run test` exit 0 + author `06-VERIFICATION.md` consolidating ACPT-01..04 evidence
+
 **UI hint:** yes
 
 ## Progress
@@ -218,4 +234,4 @@ Plans:
 | 3. Trustworthy Layout Measurement | 2/2 | Complete    | 2026-08-05 |
 | 4. Responsive Pagination and Dual-Mode Navigation | 10/11 | In Progress|  |
 | 5. Durable Highlights and Notes | 7/7 | Complete    | 2026-08-07 |
-| 6. Prototype Acceptance | 0/TBD | Not started | - |
+| 6. Prototype Acceptance | 0/6 | In Progress| - |
