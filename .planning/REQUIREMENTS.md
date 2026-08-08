@@ -68,7 +68,7 @@
 - [x] **ACPT-01**: Reader can complete the core reading flow on the representative corpus in current Chromium, Firefox, and WebKit without content loss or blocked navigation.
 - [ ] **ACPT-02**: Reader can complete documented keyboard-only and manual screen-reader acceptance flows in the selected support matrix.
 - [ ] **ACPT-03**: Reader retains content and required functions under high zoom, narrow reflow, forced colors, reduced motion, touch, and late or failed font loading scenarios.
-- [ ] **ACPT-04**: Repagination meets explicit cold and warm performance budgets on the representative article and device profiles selected during implementation planning.
+- [x] **ACPT-04**: Repagination meets explicit cold and warm performance budgets on the representative article and device profiles selected during implementation planning. *(VERIFIED 2026-08-08 — Plan 06-03: user-approved locked budget at measured p95+25% headroom across 24 cells [4 engine-profile combos × 3 fixtures × 2 phases]; `npm run perf` CI gate exits 0; D6-01 measure-first honored, D6-03 fallback shares warm budget)*
 
 ## v2 Requirements
 
@@ -152,7 +152,7 @@
 | ACPT-01 | Phase 6 | Complete |
 | ACPT-02 | Phase 6 | Pending |
 | ACPT-03 | Phase 6 | Pending |
-| ACPT-04 | Phase 6 | Pending |
+| ACPT-04 | Phase 6 | Complete |
 
 **Coverage:**
 
