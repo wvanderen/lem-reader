@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": null,
+  "toleranceBound": {
+    "headroomPct": null
+  },
+  "rationale": "PLACEHOLDER — budget not yet measured. Numeric thresholds (cold + warm wall-clock per fixture/profile/engine/phase) are locked ONLY after D6-01 measure-first: the executor runs `npm run perf`, computes p95 across worst-case fixtures (essay-long-form + list-reference + technical-post) × desktop + throttled-mobile-chromium profiles × 3 engines, proposes thresholds at measured p95 + headroom, the user approves, and Task 3 commits the locked budget. Mirrors how Phase 3 derived the calibration tolerance empirically (D3-02). The fallback scrolling commit shares the warm budget — one gate (D6-03).",
+  "engines": {}
+}
