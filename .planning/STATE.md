@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 6
-current_phase_name: Prototype Acceptance
-status: verifying
-stopped_at: Phase 6 context gathered
-last_updated: "2026-08-08T02:19:08.788Z"
-last_activity: 2026-08-07
-last_activity_desc: Phase 05 complete, transitioned to Phase 6
+current_phase: 06
+current_phase_name: prototype-acceptance
+status: executing
+stopped_at: Completed 06-01-PLAN.md (ACPT-03 edge gap specs)
+last_updated: "2026-08-08T14:52:43.693Z"
+last_activity: 2026-08-08
+last_activity_desc: Phase 06 execution started
 progress:
   total_phases: 6
   completed_phases: 5
-  total_plans: 29
-  completed_plans: 29
-  percent: 83
+  total_plans: 35
+  completed_plans: 30
+  percent: 86
 ---
 
 # Project State
@@ -24,16 +24,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-05)
 
 **Core value:** Readers can move through long-form web content with calm, stable orientation and predictable navigation.
-**Current focus:** Phase 05 — durable-highlights-and-notes
+**Current focus:** Phase 06 — prototype-acceptance
 
 ## Current Position
 
-Phase: 6 — Prototype Acceptance
-Plan: Not started
-Status: Ready for phase verification / next phase
-Last activity: 2026-08-07 — Phase 05 complete, transitioned to Phase 6
+Phase: 06 (prototype-acceptance) — EXECUTING
+Plan: 2 of 6
+Status: Ready to execute
+Last activity: 2026-08-08 — Phase 06 execution started
 
-Progress: [██████████] 5/6 phases code-complete — 29/29 plans executed
+Progress: [█████████░] 5/6 phases code-complete — 30/35 plans executed (Phase 06 in progress)
 
 ## Recent Decisions (Plan 04-11)
 
@@ -91,6 +91,7 @@ Progress: [██████████] 5/6 phases code-complete — 29/29 pl
 | Phase 05 P05 | 95min | 3 tasks | 18 files |
 | Phase 05 P07 | 12 min | 3 tasks | 3 files |
 | Phase 05 P06 | 22 min | 3 tasks | 2 files |
+| Phase 06 P01 | 13 min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -175,6 +176,11 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 05]: 05-05: 4 Rule 1 gaps surfaced+fixed (paginated capture binding, mark activation, measurement scoping, firefox focus settle) — the e2e validation plan did its job; unit suite missed all 4 — Each fix committed atomically; full suite green after fixes
 - [Phase 05]: 05-07: blockquote highlight gap closed via per-child childHighlightSlices threading on BlockView — ArticleBody walks block.children with blockGraphemeLen + BLOCK_SEPARATOR (mirrors paragraph path per child); PageFragmentView walks resolved.children with splittingBlockGraphemeLength + BLOCK_SEPARATOR (entry-local coords). Reuses sliceRunsForHighlights + highlightsForBlock UNCHANGED (no forked slicer); InlineRenderer untouched. Lists intentionally out of scope (different items-shape, no failing UAT case).
 - [Phase ?]: 05-06: Option A (class gate) chosen for the initial-load mega-page fix — one-line `if (!articleEl.classList.contains("paginated-surface")) return;` before the rAF height read; useState(0) initial + trustedView effect-dep re-run cover initial mount, so no separate reset was needed. Measurement selector untouched (exonerated). Rule 1 deviation: regression assertion (b) relaxed from settled==first to settled>1 AND stable, because the plan's equality conflated the diagnosed geometry correction (1->3) with the by-design overflow-guard split (2->3, same pinned height).
+- [Phase ?]: [Phase 06] test
+- [Phase 06]: 06-01 ships the shared D6-09 edge-invariant helper (assertEdgeInvariant in tests/e2e/_edge-invariant.ts) encoding all three clauses (keyboard content in both modes + required functions + no overflow). Asserts on VISIBLE blocks only via [data-block-index]:not(.article-body-measurement ...) — the raw count would include the aria-hidden measurement clone (Plan 04-08) which is NOT keyboard-reachable.
+- [Phase 06]: High-zoom (D6-10): page.setViewportSize({width:320,height:800}) is the LOAD-BEARING cross-engine reflow assertion (WCAG 1.4.10); document.body.style.zoom='4' is SECONDARY/engine-variable (chromium yes, firefox 126+, webkit partial), applied AFTER assertEdgeInvariant asserting only no-content-lost. deviceScaleFactor never used (DPR not zoom — Pitfall 2). 21/21 green chromium/firefox/webkit.
+- [Phase 06]: Font-failure (D6-11): Lem Reader loads ZERO web fonts, so the harness injects a @font-face FIRST via page.addStyleTag then page.route-intercepts the injected URL. Route registered BEFORE addStyleTag (RESEARCH-proven non-vacuous pattern); !important on the injected font-family rule guarantees the request fires; page.on('request') verifies non-vacuity (Pitfall 1 guard). SWAP mode reuses stale-drop.spec.ts rapid-trigger race with the font active. 9/9 green.
+- [Phase 06]: ACPT-03 spans Plan 06-01 (NEW gap specs: high-zoom + font-failure, 30/30 green) AND Plan 06-05 (audit of 4 existing edge specs against the invariant). requirements-completed is [] for 06-01 mirroring the 04-02 PAGE-01 split precedent; Plan 06-05 closes ACPT-03.
 
 ### Pending Todos
 
@@ -197,6 +203,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-08-08T02:19:08.781Z
-Stopped at: Phase 6 context gathered
-Resume file: .planning/phases/06-prototype-acceptance/06-CONTEXT.md
+Last session: 2026-08-08T14:52:43.686Z
+Stopped at: Completed 06-01-PLAN.md (ACPT-03 edge gap specs)
+Resume file: None
