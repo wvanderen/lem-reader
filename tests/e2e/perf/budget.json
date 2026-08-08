@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-08T16:14:08.084Z",
+  "generatedAt": "2026-08-08T16:20:07.943Z",
   "toleranceBound": {
     "headroomPct": 0
   },
@@ -11,31 +11,31 @@
         "essay-long-form": {
           "cold": {
             "wallClockMs": 600,
-            "p95WallClockMs": 472,
+            "p95WallClockMs": 475,
             "sampleCount": 5
           },
           "warm": {
             "wallClockMs": 550,
-            "p95WallClockMs": 436,
+            "p95WallClockMs": 431,
             "sampleCount": 5
           }
         },
         "list-reference": {
           "cold": {
             "wallClockMs": 60,
-            "p95WallClockMs": 41,
+            "p95WallClockMs": 43,
             "sampleCount": 5
           },
           "warm": {
             "wallClockMs": 550,
-            "p95WallClockMs": 428,
+            "p95WallClockMs": 431,
             "sampleCount": 5
           }
         },
         "technical-post": {
           "cold": {
             "wallClockMs": 70,
-            "p95WallClockMs": 50,
+            "p95WallClockMs": 52,
             "sampleCount": 5
           },
           "warm": {
@@ -49,36 +49,36 @@
         "essay-long-form": {
           "cold": {
             "wallClockMs": 800,
-            "p95WallClockMs": 617,
+            "p95WallClockMs": 608,
             "sampleCount": 5
           },
           "warm": {
             "wallClockMs": 650,
-            "p95WallClockMs": 515,
+            "p95WallClockMs": 510,
             "sampleCount": 5
           }
         },
         "list-reference": {
           "cold": {
             "wallClockMs": 250,
-            "p95WallClockMs": 173,
+            "p95WallClockMs": 176,
             "sampleCount": 5
           },
           "warm": {
             "wallClockMs": 650,
-            "p95WallClockMs": 499,
+            "p95WallClockMs": 505,
             "sampleCount": 5
           }
         },
         "technical-post": {
           "cold": {
             "wallClockMs": 300,
-            "p95WallClockMs": 218,
+            "p95WallClockMs": 196,
             "sampleCount": 5
           },
           "warm": {
             "wallClockMs": 650,
-            "p95WallClockMs": 503,
+            "p95WallClockMs": 494,
             "sampleCount": 5
           }
         }
@@ -89,36 +89,36 @@
         "essay-long-form": {
           "cold": {
             "wallClockMs": 600,
-            "p95WallClockMs": 450,
+            "p95WallClockMs": 463,
             "sampleCount": 5
           },
           "warm": {
             "wallClockMs": 600,
-            "p95WallClockMs": 433,
+            "p95WallClockMs": 435,
             "sampleCount": 5
           }
         },
         "list-reference": {
           "cold": {
             "wallClockMs": 60,
-            "p95WallClockMs": 38,
+            "p95WallClockMs": 37,
             "sampleCount": 5
           },
           "warm": {
             "wallClockMs": 550,
-            "p95WallClockMs": 428,
+            "p95WallClockMs": 433,
             "sampleCount": 5
           }
         },
         "technical-post": {
           "cold": {
             "wallClockMs": 60,
-            "p95WallClockMs": 38,
+            "p95WallClockMs": 48,
             "sampleCount": 5
           },
           "warm": {
             "wallClockMs": 600,
-            "p95WallClockMs": 435,
+            "p95WallClockMs": 454,
             "sampleCount": 5
           }
         }
@@ -129,36 +129,36 @@
         "essay-long-form": {
           "cold": {
             "wallClockMs": 800,
-            "p95WallClockMs": 626,
+            "p95WallClockMs": 630,
             "sampleCount": 5
           },
           "warm": {
             "wallClockMs": 700,
-            "p95WallClockMs": 510,
+            "p95WallClockMs": 502,
             "sampleCount": 5
           }
         },
         "list-reference": {
           "cold": {
             "wallClockMs": 850,
-            "p95WallClockMs": 632,
+            "p95WallClockMs": 636,
             "sampleCount": 5
           },
           "warm": {
             "wallClockMs": 600,
-            "p95WallClockMs": 460,
+            "p95WallClockMs": 464,
             "sampleCount": 5
           }
         },
         "technical-post": {
           "cold": {
             "wallClockMs": 800,
-            "p95WallClockMs": 608,
+            "p95WallClockMs": 604,
             "sampleCount": 5
           },
           "warm": {
             "wallClockMs": 600,
-            "p95WallClockMs": 445,
+            "p95WallClockMs": 452,
             "sampleCount": 5
           }
         }
