@@ -4,11 +4,11 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 06
 current_phase_name: prototype-acceptance
-status: executing
-stopped_at: Completed 06-05-PLAN.md (ACPT-03 closed — 4 edge specs audited to shared invariant)
-last_updated: "2026-08-08T16:40:35.349Z"
-last_activity: 2026-08-08
-last_activity_desc: Phase 06 execution started
+status: blocked
+stopped_at: "06-06 ACPT-02 acceptance BLOCKED: VoiceOver+Safari run surfaced 3 major SR findings (#1 H shortcut selection-interop, #2 NotePopover popover/dialog focus-scope, #4 scroll-mode VO cursor sync). 06-01..06-05 complete; routing to /gsd-debug for fixes, then SR re-test."
+last_updated: "2026-08-09T00:00:00.000Z"
+last_activity: 2026-08-09
+last_activity_desc: 06-06 SR acceptance run found major defects; entering debug fix cycle
 progress:
   total_phases: 6
   completed_phases: 5
