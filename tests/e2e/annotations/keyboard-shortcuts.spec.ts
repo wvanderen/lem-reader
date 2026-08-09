@@ -68,7 +68,7 @@ test.describe("A11Y-01 keyboard shortcuts H/N (05-05)", () => {
     // The highlight rendered.
     await expect(page.locator("mark.highlight").first()).toBeVisible();
     await expect(announcementRegion(page)).toContainText(/Highlight saved/i);
-    // The note popover opened (Popover API manual element).
+    // The note popover opened (native <dialog> + showModal).
     const popover = page.locator("#highlight-popover.highlight-popover");
     await expect(popover).toBeVisible();
     // The textarea is visible + empty (the N-create-and-open contract).
@@ -92,9 +92,10 @@ test.describe("A11Y-01 keyboard shortcuts H/N (05-05)", () => {
     await expect(page.locator("mark.highlight")).toHaveCount(0);
     await page.keyboard.press("n");
     await expect(page.locator("mark.highlight")).toHaveCount(0);
-    // The popover element is always rendered (popover="manual" + app CSS keeps
-    // display:flex); assert it has NO editable content (the N shortcut did not
-    // open it on a collapsed selection — the body is gated on `resolved`).
+    // The <dialog> element is always mounted (showModal requires it); assert
+    // it has NO editable content (the N shortcut did not open it on a collapsed
+    // selection — the body is gated on `resolved`, and a closed <dialog> is
+    // display:none via the UA stylesheet so it is absent from the a11y tree).
     await expect(page.locator("#highlight-popover textarea")).toHaveCount(0);
   });
 

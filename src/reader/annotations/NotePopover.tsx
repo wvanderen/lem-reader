@@ -1,13 +1,43 @@
 // src/reader/annotations/NotePopover.tsx
-// Phase 5 Plan 05-03 — Popover API (`popover="manual"`) note editor + two-step
-// delete confirm (D5-10, D5-12, ANNO-02/03).
+// Phase 5 Plan 05-03 — note editor + two-step delete confirm (D5-10, D5-12,
+// ANNO-02/03).
 //
-// Mechanism: Popover API (NOT <dialog>/showModal — UI-SPEC §Design System
-// rationale: <dialog> is too heavy with its centered + backdrop overlay; the
-// popover needs top-layer rendering + no light-dismiss + no backdrop so typing
-// doesn't close it and the article stays visible/interactive behind it).
-// `popover="manual"` → typing doesn't light-dismiss. showPopover()/hidePopover()
-// are controlled by React state via the HighlightOverlay context's openPopoverFor.
+// Mechanism: native `<dialog>` + `showModal()` (the proven codebase pattern —
+// SettingsPanel + AnnotationsDrawer both use it; Flow F is the VO-passing
+// reference). The browser supplies the modal-dialog accessibility context
+// VoiceOver needs to ENTER the dialog and honor programmatic focus: it fires
+// the platform "modal shown" AT event, inerts the rest of the document
+// (focus scope + VO browse cannot pass the textarea), and provides a focus
+// trap + Escape-to-close for free.
+//
+// HISTORY (debug session `vo-note-popover-focus`, ACPT-02 finding #2): the
+// original Phase 5 implementation used `<div popover="manual" role="dialog">`
+// to keep the article "visible/interactive behind" the editor with no
+// backdrop. That choice produced a VoiceOver blocker — `popover="manual"` on
+// a non-`<dialog>` element does NOT establish the modal accessibility
+// context, so VO browse passed the textarea and the field was unreachable
+// (programmatic `textarea.focus()` only moves DOM focus; VO's virtual cursor
+// ignores it without the modal AT event). Native `<dialog>` + showModal is
+// the robust fix and matches the existing SettingsPanel/Drawer discipline.
+//
+// Constraint tradeoff (the ONE that changes): the article is now INERT
+// behind the popover while a note is being edited (modal). It remains
+// VISIBLE — `::backdrop` is styled transparent (app.css), so there is no
+// full-screen dimmed overlay; the popover stays a centered box, visually
+// identical to the prior backdrop-less manual popover (which was already
+// centered by the Popover API's default positioning). The reader closes the
+// editor (Done / Delete-confirm / Escape) to interact with the article
+// again — which is the correct semantic for "editing a note about one
+// highlight." All other Phase 5 constraints are preserved:
+//   - No light-dismiss while typing: modal <dialog> does NOT close on
+//     outside click (unlike `popover="auto"`). Typing is safe.
+//   - Reduced motion: instant show/hide (no transition property; the global
+//     prefers-reduced-motion gate is unaffected).
+//   - Focus restore to the triggering <mark>: the `close` event listener
+//     calls triggerRef.current?.focus() (mirrors SettingsPanel).
+//   - Two-step delete confirm (D5-12) + Keep [data-initial-focus]: unchanged.
+//   - Debounced note save (D5-10/D2-03) + flushNoteSave on close: the close
+//     listener flushes before the trigger regains focus — no edit lost.
 //
 // Two-step delete (D5-12, mirrors WipeConfirm Pitfall 8): step 1 Delete replaces
 // the popover body with the confirm prompt "Delete this highlight?" + two
@@ -15,20 +45,10 @@
 // then closes. The Keep button carries [data-initial-focus] — non-destructive
 // default focus so an accidental Enter cannot destroy a highlight+note.
 //
-// Debounced save (D5-10, D2-03 pattern): the textarea persists debounced
-// (no Save button). Each change calls updateNote (optimistic in-memory +
-// scheduleNoteSave internally). On Done/Escape, flushNoteSave fires a final
-// write before close so no edit is lost. Empty textarea = no NoteRecord.
-//
 // Pitfall 8 (note XSS): the note text is rendered as a React text child
 // (`<textarea value={text} />` + excerpt as `<p>{excerpt}</p>`). NEVER raw
 // HTML. The `react/no-danger` ESLint rule (enabled since Phase 1) statically
 // forbids the raw-HTML prop.
-//
-// Reduced motion (A11Y-06): the popover appears/disappears as an instant
-// show/hide. No transition/animation property on any popover selector — the
-// Popover API's own transition is disabled by the global prefers-reduced-motion
-// gate.
 import { useEffect, useRef, useState } from "react";
 import { useHighlightOverlay } from "./HighlightOverlay";
 
@@ -54,13 +74,11 @@ export function NotePopover(): React.ReactElement | null {
     deleteHighlight,
   } = useHighlightOverlay();
 
-  const popoverRef = useRef<HTMLDivElement | null>(null);
+  const popoverRef = useRef<HTMLDialogElement | null>(null);
   // The trigger element that opened the popover (the <mark>). Captured on open
-  // so Done/Escape can restore focus to it (Pitfall 1 — mirrors SettingsPanel).
+  // so the `close` listener can restore focus to it (Pitfall 1 — mirrors
+  // SettingsPanel/AnnotationsDrawer).
   const triggerRef = useRef<HTMLElement | null>(null);
-  // Track whether we've called showPopover so the effect can guard hidePopover
-  // (avoids the :popover-open pseudo-class which jsdom does not implement).
-  const isOpenRef = useRef(false);
 
   // Two-step delete confirm state (D5-12, mirrors WipeConfirm).
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -74,52 +92,81 @@ export function NotePopover(): React.ReactElement | null {
   const excerpt = resolved?.record.quote.exact ?? "";
   const isUnresolved = resolved?.status === "ambiguous" || resolved?.status === "orphan";
 
-  // Sync the popover's visibility with the openPopoverFor state.
+  // Sync the popover's visibility with the openPopoverFor state. Native
+  // <dialog> + showModal gives VoiceOver the modal-dialog accessibility context
+  // (focus scope + background inert + platform "modal shown" AT event) the
+  // Popover-API div lacked. See file header HISTORY note.
   useEffect(() => {
-    const el = popoverRef.current;
-    if (!el) return;
-    if (openPopoverFor && !isOpenRef.current) {
-      // Capture the trigger (the <mark>) for focus restore on close.
+    const dlg = popoverRef.current;
+    if (!dlg) return;
+    if (openPopoverFor && !dlg.open) {
+      // Capture the trigger (the <mark>) BEFORE showModal moves focus into
+      // the dialog (Pitfall 1).
       triggerRef.current = document.activeElement as HTMLElement | null;
       try {
-        el.showPopover();
-        isOpenRef.current = true;
+        dlg.showModal();
       } catch {
-        // showPopover throws if the element is already in the top layer or
-        // if the browser doesn't support Popover API. Either way, the popover
-        // is visually rendered (it's in the DOM); track as open so the close
-        // path knows to attempt hidePopover.
-        isOpenRef.current = true;
+        // showModal throws if the element is already in the top layer or if
+        // the browser doesn't support <dialog>. Either way, the editor is in
+        // the DOM; the close path is guarded by dlg.open below.
       }
       // Reset the confirm state on each open (fresh edit session).
       setConfirmingDelete(false);
-      // Focus the textarea (D5-10 — focus → textarea on open). WebKit quirk:
-      // showPopover does not auto-focus; explicit focus is required.
-      const textarea = el.querySelector<HTMLTextAreaElement>("textarea");
+      // Focus the textarea (D5-10 — focus → textarea on open). Cross-engine
+      // quirk (Pitfall 1): showModal does not reliably focus the first
+      // control (Chromium does; WebKit leaves focus on <body>). Explicit
+      // focus makes the initial reading position predictable everywhere.
+      const textarea = dlg.querySelector<HTMLTextAreaElement>("textarea");
       if (textarea) {
         textarea.focus();
         // Select existing text so the reader can edit or replace (UI-SPEC §29).
         textarea.select();
       }
-    } else if (!openPopoverFor && isOpenRef.current) {
-      // Flush any pending note save before closing (D2-03 — no edit lost).
-      flushNoteSave();
-      try {
-        el.hidePopover();
-      } catch {
-        // Same defensive guard as showPopover.
-      }
-      isOpenRef.current = false;
+    } else if (!openPopoverFor && dlg.open) {
+      // State-driven close (Done / Delete-confirm). dlg.close() fires the
+      // `close` event → the listener below flushes the note save + restores
+      // focus to the trigger <mark>.
+      dlg.close();
     }
-  }, [openPopoverFor, flushNoteSave]);
+  }, [openPopoverFor]);
 
-  /** Close the popover + restore focus to the trigger <mark> (Pitfall 1). */
+  // Register the `close` event listener (with cleanup). Native <dialog> fires
+  // `close` on EVERY close path: Escape (browser-default), the state-driven
+  // dlg.close() above, and delete-confirm. On close: flush the debounced note
+  // save (D2-03 — no edit lost), sync React state if Escape closed the dialog,
+  // and restore focus to the captured trigger <mark> (Pitfall 1 / A11Y-02 —
+  // showModal does NOT auto-restore).
+  useEffect(() => {
+    const dlg = popoverRef.current;
+    if (!dlg) return;
+    const handleClose = () => {
+      flushNoteSave();
+      setOpenPopoverFor(null);
+      triggerRef.current?.focus();
+    };
+    dlg.addEventListener("close", handleClose);
+    return () => dlg.removeEventListener("close", handleClose);
+  }, [flushNoteSave, setOpenPopoverFor]);
+
+  // Two-step delete confirm focus (D5-12, mirrors WipeConfirm Pitfall 8): when
+  // the confirm prompt opens, move focus to the non-destructive Keep button
+  // ([data-initial-focus]) so an accidental Enter keeps the highlight. A
+  // useEffect (not a click-handler rAF) so focus runs AFTER React commits the
+  // confirm view AND after the browser settles the modal focus relocation
+  // that fires when the just-clicked Delete button unmounts. (A rAF form raced
+  // WebKit's modal focus management and left focus on the dialog.)
+  useEffect(() => {
+    if (!confirmingDelete) return;
+    const keepBtn = popoverRef.current?.querySelector<HTMLButtonElement>(
+      "[data-initial-focus]",
+    );
+    keepBtn?.focus();
+  }, [confirmingDelete]);
+
+  /** Close the popover (Done / Delete-confirm route through here). The actual
+   *  hide + focus-restore happens in the `close` event listener above. */
   const handleClose = () => {
     setOpenPopoverFor(null);
-    // Focus restore is deferred so the hidePopover effect runs first.
-    requestAnimationFrame(() => {
-      triggerRef.current?.focus();
-    });
   };
 
   /** Done button — flush the debounced save + close. */
@@ -128,17 +175,13 @@ export function NotePopover(): React.ReactElement | null {
     handleClose();
   };
 
-  /** Step 1: show the confirm prompt (D5-12). */
+  /** Step 1: show the confirm prompt (D5-12). Focus moves to the Keep button
+   *  via the [confirmingDelete] effect below (not a click-handler rAF) so it
+   *  runs AFTER React commits the confirm view + the browser settles modal
+   *  focus relocation when the clicked Delete button unmounts (a rAF raced
+   *  WebKit's modal focus management). */
   const handleDeleteStart = () => {
     setConfirmingDelete(true);
-    // Focus the Keep button (non-destructive default — Pitfall 8). Deferred
-    // so the confirm view renders first.
-    requestAnimationFrame(() => {
-      const keepBtn = popoverRef.current?.querySelector<HTMLButtonElement>(
-        "[data-initial-focus]",
-      );
-      keepBtn?.focus();
-    });
   };
 
   /** Step 2 confirm: delete the highlight + its note, then close. */
@@ -146,10 +189,9 @@ export function NotePopover(): React.ReactElement | null {
     if (!openPopoverFor) return;
     setConfirmingDelete(false);
     await deleteHighlight(openPopoverFor);
-    setOpenPopoverFor(null);
-    requestAnimationFrame(() => {
-      triggerRef.current?.focus();
-    });
+    // handleClose routes through setOpenPopoverFor(null) → the effect calls
+    // dlg.close() → the close listener flushes + restores focus.
+    handleClose();
   };
 
   /** Step 2 cancel: return to the edit view. */
@@ -162,16 +204,15 @@ export function NotePopover(): React.ReactElement | null {
     textarea?.focus();
   };
 
-  // Don't render the popover element at all if there's no article/highlight.
-  // (The element must exist in the DOM for showPopover to work, so we always
-  // render it but it's visually hidden until showPopover is called.)
+  // The <dialog> is always mounted (showModal requires the element to be in
+  // the DOM). Until showModal() runs it is display:none (native dialog UA
+  // stylesheet) and therefore absent from the accessibility tree — no SR
+  // reads the empty editor before it opens.
   return (
-    <div
+    <dialog
       ref={popoverRef}
-      popover="manual"
       id="highlight-popover"
       className="highlight-popover"
-      role="dialog"
       aria-label="Highlight note"
     >
       {resolved && (
@@ -247,9 +288,9 @@ export function NotePopover(): React.ReactElement | null {
                 Delete
               </button>
             </div>
-          </>
+           </>
         )
       )}
-    </div>
+    </dialog>
   );
 }
