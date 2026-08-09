@@ -356,6 +356,51 @@ describe("refragmentOverflowingPage — atomic-block overflow", () => {
 // ── (c) splitting-kind overflow → re-split at widow-legal line ──────────────
 
 describe("refragmentOverflowingPage — splitting-kind overflow", () => {
+  it("accounts for content already above an overflowing paragraph", () => {
+    const firstText = "first";
+    const secondText = "01234567890123456789012345678901234567890123456789";
+    const article = articleWithParagraphs([firstText, secondText]);
+    const pages: PageFragment[] = [
+      {
+        schemaVersion: 1,
+        pageIndex: 0,
+        blocks: [
+          { blockIndex: 0, startGrapheme: 0, endGrapheme: 5 },
+          { blockIndex: 1, startGrapheme: 0, endGrapheme: 50 },
+        ],
+      },
+    ];
+    const fragmentEl = makeFragmentEl([
+      { blockIndex: 0, top: 0, bottom: 100, text: firstText },
+      { blockIndex: 1, top: 100, bottom: 200, text: secondText },
+    ]);
+    readLineBoxesMock.mockReturnValue(
+      uniformLineBoxes(50, 10, 20).map((box) => ({
+        ...box,
+        topPx: box.topPx + 100,
+        bottomPx: box.bottomPx + 100,
+      })),
+    );
+    const { bus } = trackingBus();
+
+    const result = refragmentOverflowingPage({
+      article,
+      pages,
+      overflowingPageIndex: 0,
+      fragmentEl,
+      pageContentBoxHeightPx: 150,
+      tolerance: 2,
+      diagnostics: bus,
+      signal: freshSignal(),
+    });
+
+    expect(result?.[0]?.blocks[1]).toEqual({
+      blockIndex: 1,
+      startGrapheme: 0,
+      endGrapheme: 20,
+    });
+  });
+
   it("re-splits a paragraph at the largest widow-legal line whose before-slice fits", () => {
     // Paragraph: 5 lines × 20px = 100px tall, charOffset 0..49.
     // pageBox: 50px (≈2 lines fit before widow). Expected split: line 2.

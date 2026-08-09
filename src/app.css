@@ -206,6 +206,32 @@ main#main {
   padding-block: var(--space-3xl);
 }
 
+/* Paginated mode is a viewport, never a vertically scrolling document. Its
+   page-height budget reserves 48px on each block edge, so main must use that
+   same inset rather than scrolling mode's 64px inset. The explicit border-box
+   height makes header + main exactly one viewport and removes Safari's root
+   scroll/rubber-band seam. */
+main#main.paginated-main {
+  box-sizing: border-box;
+  height: calc(100vh - 48px);
+  padding-block: var(--space-2xl);
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+html:has(main.paginated-main),
+body:has(main.paginated-main) {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+body:has(main.paginated-main) {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+}
+
 /* ── Article body measure + rhythm (UI-SPEC §Layout + §Typography) ────── */
 /* Calm measure is invariant across breakpoints (Phase 2 lets the reader
    widen it via --measure). Block rhythm uses em so Phase 2 size changes
@@ -872,15 +898,18 @@ dialog.wipe-confirm::backdrop {
 /* Page content-box geometry — viewport-bounding per UI-SPEC §Layout. The
    48px header + 2px hairline + 2x the 2xl inset (top + bottom) reserve calm
    whitespace; the reader never scrolls inside the article body.
-   touch-action: pan-y pinch-zoom keeps native vertical scroll + pinch-zoom
-   available for accessibility (a reader can escape the page boundary if
-   needed; chevrons remain the primary turn path). */
+   touch-action keeps pinch-zoom available; vertical gestures have no scroll
+   range in paginated mode and therefore cannot displace the page surface. */
 .article-body.paginated-surface {
   width: var(--measure);
   max-width: 100%;
   height: calc(100vh - 48px - 2px - 2 * var(--space-2xl));
   margin-inline: auto;
-  overflow: hidden;
+  /* `hidden` still creates a programmatically scrollable box. VoiceOver can
+     scroll that box while traversing past the final visible block, especially
+     because the full measurement article is positioned inside it. `clip`
+     preserves visual clipping without exposing any internal scroll offset. */
+  overflow: clip;
   touch-action: pan-y pinch-zoom;
   /* Plan 04-08: contain the absolute-positioned measurement ArticleBody
      (.article-body-measurement below). Without position:relative, the
@@ -888,6 +917,28 @@ dialog.wipe-confirm::backdrop {
      instead of the paginated-surface content box, breaking width/geometry
      alignment between measurement and the visible page fragments. */
   position: relative;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+/* The provenance header occupies the first grid row. Only the remaining row
+   is page capacity; clipping lives here so the article header never silently
+   steals space from a fragment whose engine budget assumed the full article. */
+.page-viewport {
+  position: relative;
+  min-height: 0;
+  overflow: clip;
+}
+
+/* The screen-reader page boundary must have deterministic spatial geometry.
+   `.visually-hidden` supplies absolute positioning but intentionally leaves
+   inset coordinates unset; its static position would otherwise land after
+   (and below) the visible fragment. VoiceOver Quick Nav then searches Down
+   from below the article and cannot reach blocks above it. */
+.article-body .page-start-heading {
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  margin: 0;
 }
 
 /* ── Plan 04-08: measurement-only ArticleBody (PAGE-06 + PAGE-07 fix) ────── */

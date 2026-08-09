@@ -331,9 +331,9 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
     }, [article, trustedView, articleEl, pageContentBoxHeightPx, diagnostics]);
 
     // Post-render overflow guard (Plan 04-07 — PAGE-03b fix). After every page
-    // commit AND every turn, measure the mounted .page-fragment's scrollHeight
-    // against the article's clientHeight. If it overflows by more than
-    // TOLERANCE_PX, call refragmentOverflowingPage (the pure module from Task 1)
+    // commit AND every turn, inspect the mounted .page-fragment's live child
+    // and text-line geometry against its .page-viewport. If it crosses the
+    // boundary, call refragmentOverflowingPage (the pure module from Task 1)
     // to produce a corrected PageFragment[] and setPages(corrected). The
     // pre-capture pagination effect above stays as the FIRST pass; this is the
     // SECOND (post-render correction) pass that STACK.md mandates ("per-kind
@@ -373,7 +373,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
       const controller = new AbortController();
 
       // rAF-deferred: the browser must finish layout for the just-committed
-      // page fragment before we can trust fragment.scrollHeight. React commits
+      // page fragment before we can trust its live child geometry. React commits
       // synchronously; layout happens in the next animation frame.
       const rafId = requestAnimationFrame(() => {
         if (cancelled || controller.signal.aborted) return;
@@ -383,10 +383,9 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
         ) as HTMLElement | null;
         if (!fragmentEl) return;
 
-        const fragmentScrollHeight = fragmentEl.scrollHeight;
-        const articleClientHeight = articleEl.clientHeight;
-        // No overflow — pass-through.
-        if (fragmentScrollHeight <= articleClientHeight + TOLERANCE_PX) return;
+        const pageViewportEl = fragmentEl.parentElement as HTMLElement | null;
+        const pageViewportHeight =
+          pageViewportEl?.clientHeight ?? pageContentBoxHeightPx;
 
         // Capture the anchor BEFORE setPages (Pitfall 7).
         // Plan 04-09: use lastAnchorOffsetRef (the SAME anchor the pagination
@@ -402,7 +401,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
           pages: currentPages,
           overflowingPageIndex: currentIdx,
           fragmentEl,
-          pageContentBoxHeightPx: articleClientHeight,
+          pageContentBoxHeightPx: pageViewportHeight,
           tolerance: TOLERANCE_PX,
           diagnostics,
           signal: controller.signal,
@@ -585,6 +584,14 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
         */}
         <ProgressHairline page={{ current: currentPageIdx + 1, total: pages.length }} />
         <PageIndicator current={currentPageIdx + 1} total={pages.length} />
+
+        <h2
+          key={`page-start-${currentPageIdx}`}
+          className="visually-hidden page-start-heading"
+          tabIndex={-1}
+        >
+          Page {currentPageIdx + 1} begins
+        </h2>
 
         <PageFragmentView
           fragment={pages[currentPageIdx]!}

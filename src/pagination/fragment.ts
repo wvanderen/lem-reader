@@ -14,8 +14,9 @@
 // whose article-global union covers [0, graphemeLength(article)) exactly.
 //
 // PAGE-04 (termination + oversize fallback): three guards — (1) an atomic
-// block whose measured height > 75% of the page content box → status
-// "fallback" + dom-fallback diagnostic; (2) pages.length > 300 → status
+// block whose measured height exceeds its kind-specific page threshold
+// (75% generally, 90% for code) → status "fallback" + dom-fallback
+// diagnostic; (2) pages.length > 300 → status
 // "fallback" + dom-fallback; (3) a page produced with zero new content →
 // status "fallback" + dom-fallback. The engine NEVER infinite-loops on
 // adversarial input.
@@ -66,6 +67,8 @@ import { applyLineWidowOrphan, SPLIT_WIDOW_LINES } from "./widowRules";
  * block, preserving spatial context before the engine gives up.
  */
 const OVERSIZE_THRESHOLD = 0.75;
+/** Code remains readable as a mostly-full standalone page; allow extra room. */
+const CODE_BLOCK_OVERSIZE_THRESHOLD = 0.9;
 
 /**
  * PAGE-04 termination guard 2: the absolute page-count ceiling. If the
@@ -124,7 +127,7 @@ interface SplitPlan {
  *
  * Walks article.blocks in canonical order; classifies each block via
  * {@link classifyBlock} (D4-02); for atomic kinds places the whole block
- * or moves it to the next page (subject to the 75% oversize guard); for
+ * or moves it to the next page (subject to the kind-specific oversize guard); for
  * splitting kinds reads line boxes via {@link readLineBoxes}, finds the
  * natural split point where the page budget is exceeded, applies
  * {@link applyLineWidowOrphan} (D4-04), and emits a PageFragment with the
@@ -212,16 +215,32 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
       const marginBlockEndPx =
         opts.measurement.blocks[i]?.marginBlockEndPx ?? 0;
       const lineBoxes = blockLineBoxes[i]!;
+      const measuredLineSpanPx =
+        lineBoxes.length > 0
+          ? lineBoxes[lineBoxes.length - 1]!.bottomPx - lineBoxes[0]!.topPx
+          : 0;
+      // Range line boxes describe glyph rows, not container chrome such as
+      // list indentation, nested paragraph rhythm, padding, or line leading.
+      // Preserve the measured difference as structural overhead on either
+      // side of an intra-block split so a list/blockquote slice is not packed
+      // as though its text rows were its entire rendered height.
+      const splitLayoutOverheadPx = Math.max(0, heightPx - measuredLineSpanPx);
       const blockGraphemeLen = blockGraphemeLengths[i]!;
       const blockText = blockTexts[i]!;
 
-      // PAGE-04 termination guard 1: atomic block > 75% of page height.
+      // PAGE-04 termination guard 1: atomic block > its safe page fraction.
+      // Code may occupy up to 90% because it remains readable as a standalone
+      // page; other atomic content retains the calmer 75% ceiling.
       // Atomic blocks can't split; if one alone dominates the page, the
       // reader is better served by the scrolling fallback at the same
       // passage. (Splitting kinds skip this guard — they can split.)
       if (
         decision.kind === "atomic" &&
-        heightPx > OVERSIZE_THRESHOLD * pageHeight
+        heightPx >
+          (block.kind === "code-block"
+            ? CODE_BLOCK_OVERSIZE_THRESHOLD
+            : OVERSIZE_THRESHOLD) *
+            pageHeight
       ) {
         return emitFallback("oversized-block");
       }
@@ -255,9 +274,8 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
       // Case B: block doesn't fit.
       if (decision.kind === "atomic") {
         // Atomic + doesn't fit + not oversized (the guard above caught
-        // > 75%): flush the current page and start a new one with this
-        // block alone. The block fits in a fresh page because it's
-        // <= 75% of the page height.
+        // its safe threshold): flush the current page and start a new one
+        // with this block alone.
         flushPage();
         const freshPageHeightPx =
           marginBlockStartPx + heightPx + marginBlockEndPx;
@@ -279,6 +297,7 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
         lineBoxes,
         occupiedBeforeBlockPx,
         marginBlockEndPx,
+        splitLayoutOverheadPx,
         pageHeight,
       );
       if (plan === null && currentPageBlocks.length > 0) {
@@ -306,6 +325,7 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
           lineBoxes,
           marginBlockStartPx,
           marginBlockEndPx,
+          splitLayoutOverheadPx,
           pageHeight,
         );
       }
@@ -391,6 +411,7 @@ function chooseSplit(
   lineBoxes: readonly LineBox[],
   occupiedBeforeTextPx: number,
   marginBlockEndPx: number,
+  splitLayoutOverheadPx: number,
   pageHeight: number,
 ): SplitPlan | null {
   if (lineBoxes.length === 0) return null;
@@ -408,6 +429,7 @@ function chooseSplit(
     const lineBottomRelativeToPageTop =
       occupiedBeforeTextPx +
       (lineBox.bottomPx - firstLineTop) +
+      splitLayoutOverheadPx +
       marginBlockEndPx;
     if (lineBottomRelativeToPageTop > pageHeight) {
       candidateSplitIdx = li;
@@ -435,7 +457,8 @@ function chooseSplit(
   // orphan bump moved the split to SPLIT_WIDOW_LINES). In that case the
   // block must move whole to the next page rather than produce an
   // overflowing page-1 entry.
-  const beforeHeightPx = lineBoxes[adjusted - 1]!.bottomPx - firstLineTop;
+  const beforeHeightPx =
+    lineBoxes[adjusted - 1]!.bottomPx - firstLineTop + splitLayoutOverheadPx;
   if (occupiedBeforeTextPx + beforeHeightPx + marginBlockEndPx > pageHeight) {
     return null;
   }
@@ -446,6 +469,7 @@ function chooseSplit(
     splitLineIdx: adjusted,
     beforeEndGrapheme: splitLineBox.charOffset,
     beforeHeightPx,
-    afterHeightPx: lastLineBox.bottomPx - splitLineBox.topPx,
+    afterHeightPx:
+      lastLineBox.bottomPx - splitLineBox.topPx + splitLayoutOverheadPx,
   };
 }

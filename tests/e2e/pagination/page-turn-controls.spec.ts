@@ -141,6 +141,148 @@ test.describe("PAGE-02 page-turn controls (04-05)", () => {
     expect(pageErrors, "no uncaught errors during chevron turns").toEqual([]);
   });
 
+  test("document scrolling never turns a page during screen-reader block navigation", async ({
+    page,
+  }) => {
+    const pageErrors: string[] = [];
+    page.on("pageerror", (err) => pageErrors.push(String(err)));
+
+    await gotoPaginated(page);
+    expect(await currentPage(page)).toBe(0);
+
+    // Plain Down Arrow belongs to the screen reader/browser's sequential
+    // reading path. It is intentionally absent from the page-turn key map.
+    await page.keyboard.press("ArrowDown");
+    await page.waitForTimeout(150);
+    expect(await currentPage(page), "Down Arrow must stay on page 1").toBe(0);
+
+    // Paginated mode owns a viewport, not a vertically scrollable document.
+    // A document scroll seam lets VoiceOver/browser focus move the entire
+    // page surface and strand the reader outside its stable page geometry.
+    const maxScroll = await page.evaluate(() =>
+      Math.max(0, document.documentElement.scrollHeight - window.innerHeight),
+    );
+    expect(
+      maxScroll,
+      "paginated mode must not expose a document scroll seam",
+    ).toBe(0);
+    await page.evaluate(() => window.scrollTo(0, 1000));
+
+    const surfaceBeforeWheel = await page
+      .locator(".paginated-surface")
+      .evaluate((surface) => surface.getBoundingClientRect().top);
+    await page.mouse.wheel(0, 1200);
+
+    await page.waitForTimeout(150);
+    expect(await page.evaluate(() => window.scrollY)).toBe(0);
+    expect(
+      await page.locator(".paginated-surface").evaluate((surface) =>
+        surface.getBoundingClientRect().top,
+      ),
+      "wheel input must not displace the paginated surface",
+    ).toBe(surfaceBeforeWheel);
+    expect(
+      await page.evaluate(() => getComputedStyle(document.body).position),
+      "Safari paginated mode uses a viewport-fixed root",
+    ).toBe("fixed");
+    const internalScroll = await page.locator(".paginated-surface").evaluate((surface) => {
+      const article = surface as HTMLElement;
+      const before = article.scrollTop;
+      article.scrollTop = 1000;
+      return {
+        before,
+        after: article.scrollTop,
+        overflow: getComputedStyle(article).overflow,
+      };
+    });
+    expect(internalScroll.before).toBe(0);
+    expect(
+      internalScroll.after,
+      "AT/programmatic scrolling must not move the clipped page surface",
+    ).toBe(0);
+    expect(internalScroll.overflow).toBe("clip");
+    expect(
+      await currentPage(page),
+      "screen-reader-induced scrolling must not advance pagination",
+    ).toBe(0);
+    expect(pageErrors, "no uncaught errors during document scroll").toEqual([]);
+  });
+
+  test("content-triggered turns hand VoiceOver to a fresh page boundary", async ({
+    page,
+  }) => {
+    await gotoPaginated(page);
+
+    // Model a screen-reader/content-origin turn by placing DOM focus on the
+    // current paragraph. The temporary attribute belongs only to this old
+    // page and must not be recreated by the focus-restoration implementation.
+    await page.locator(".page-fragment p").first().evaluate((paragraph) => {
+      paragraph.setAttribute("tabindex", "-1");
+      paragraph.focus();
+    });
+    const scrollBeforeTurn = await page.evaluate(() => window.scrollY);
+    await page.keyboard.press("PageDown");
+
+    await expect
+      .poll(() => currentPage(page), { message: "PageDown advances to page 2" })
+      .toBe(1);
+    const pageBoundary = page.getByRole("heading", {
+      name: "Page 2 begins",
+      level: 2,
+    });
+    await expect(pageBoundary).toBeFocused();
+    await expect(pageBoundary).toHaveAttribute("tabindex", "-1");
+    const boundaryGeometry = await pageBoundary.evaluate((boundary) => {
+      const boundaryRect = boundary.getBoundingClientRect();
+      const viewportRect = document
+        .querySelector<HTMLElement>(".page-viewport")!
+        .getBoundingClientRect();
+      const firstBlockRect = document
+        .querySelector<HTMLElement>(".page-fragment > [data-block-index]")!
+        .getBoundingClientRect();
+      return {
+        boundaryTop: boundaryRect.top,
+        boundaryBottom: boundaryRect.bottom,
+        viewportTop: viewportRect.top,
+        firstBlockTop: firstBlockRect.top,
+      };
+    });
+    expect(boundaryGeometry.boundaryTop).toBeGreaterThanOrEqual(
+      boundaryGeometry.viewportTop,
+    );
+    expect(
+      boundaryGeometry.boundaryTop,
+      "page boundary must be spatially before visible article content",
+    ).toBeLessThanOrEqual(boundaryGeometry.firstBlockTop);
+    await expect(page.locator(".page-fragment")).not.toHaveAttribute("tabindex");
+    await expect(page.locator(".page-fragment > [data-block-index][tabindex]"), {
+      message: "mutable article text must not retain the page-entry focus",
+    }).toHaveCount(0);
+    expect(
+      await page.evaluate(() => window.scrollY),
+      "semantic focus handoff must not scroll the paginated viewport",
+    ).toBe(scrollBeforeTurn);
+
+    // Up/Down remain available to the browser/screen reader after the handoff.
+    const keys = await page.evaluate(() => {
+      const outcomes: boolean[] = [];
+      for (const key of ["ArrowDown", "ArrowUp"]) {
+        const event = new KeyboardEvent("keydown", {
+          key,
+          bubbles: true,
+          cancelable: true,
+        });
+        document.activeElement?.dispatchEvent(event);
+        outcomes.push(event.defaultPrevented);
+      }
+      return outcomes;
+    });
+    expect(keys, "Up/Down remain uncancelled after focus restoration").toEqual([
+      false,
+      false,
+    ]);
+  });
+
   test("Space does NOT hijack a form field outside the article (A11Y-01 bail)", async ({
     page,
   }) => {

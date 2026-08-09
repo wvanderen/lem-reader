@@ -161,6 +161,25 @@ describe("PAGE-04 termination guard 1 — atomic block oversize (>75% page)", ()
     expect(events.filter((e) => e.kind === "dom-fallback")).toHaveLength(1);
   });
 
+  it("code block at 80% is allowed as a standalone page", () => {
+    const article = parseArticle([
+      { kind: "code-block", language: "html", source: "<p>Example</p>" },
+    ]);
+    const measurement = measurementStub([
+      { kind: "code-block", heightPx: 80, lineCount: 4 },
+    ]);
+    const { bus } = trackingBus();
+    const result = paginateDocument({
+      article,
+      measurement,
+      pageContentBoxHeightPx: 100,
+      diagnostics: bus,
+      signal: new AbortController().signal,
+    });
+    expect(result.status).toBe("ok");
+    expect(result.pages).toHaveLength(1);
+  });
+
   it("splitting kind (paragraph) at 90% page does NOT trigger oversize (can split)", () => {
     // Paragraphs are splitting-kind — the oversize guard does NOT apply.
     // Even at 90% page height, the engine splits rather than falls back.

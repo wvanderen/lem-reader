@@ -86,7 +86,6 @@ const SWIPE_MIN_PX = 40;
 const SWIPE_RATIO = 1.5;
 /** Announce debounce — rapid turns reflect the FINAL page (A11Y-08 anti-flood). */
 const ANNOUNCE_DEBOUNCE_MS = 250;
-
 /**
  * PageTurnControls — registers the keyboard bundle + swipe listener + the
  * polite "Page N of M" announce. Renders only the visually-hidden live region
@@ -282,34 +281,23 @@ function isFocusInContent(active: Element | null, articleEl: HTMLElement | null)
 }
 
 /**
- * D4-07: move focus to the top of the newly-committed page — first heading
- * (h2/h3/h4), else first focusable (a/button/[tabindex]), else first paragraph.
- * Predictable: the reader was reading; they expect to resume reading. The
- * heading/focusable/paragraph fallback ladder matches UI-SPEC §19.
+ * D4-07: move focus to a fresh semantic boundary at the start of the newly
+ * committed page. Mutable article paragraphs are deliberately not focus
+ * targets: replacing them loses VoiceOver's cursor, while reusing them can
+ * retain stale AX bounds. The keyed heading provides a deterministic handoff;
+ * the next screen-reader navigation step enters the first article block.
  *
  * Callers rAF-defer this so the new page fragment is committed to the DOM
  * before the query runs.
  */
 function focusNewPageTop(articleEl: HTMLElement | null): void {
   if (!articleEl) return;
-  const heading = articleEl.querySelector<HTMLElement>("h2, h3, h4");
-  if (heading) {
-    heading.focus();
-    return;
-  }
-  const focusable = articleEl.querySelector<HTMLElement>(
-    "a, button:not([aria-disabled='true']):not([disabled]), [tabindex]",
-  );
-  if (focusable) {
-    focusable.focus();
-    return;
-  }
-  // Last-resort fallback: the first paragraph. <p> is not natively focusable,
-  // so add tabindex="-1" temporarily so .focus() lands there and the SR
-  // virtual cursor resumes from a predictable point.
-  const paragraph = articleEl.querySelector<HTMLParagraphElement>("p");
-  if (paragraph) {
-    paragraph.setAttribute("tabindex", "-1");
-    paragraph.focus();
-  }
+  const pageFragment =
+    articleEl.querySelector<HTMLElement>(".page-fragment");
+  if (!pageFragment) return;
+  pageFragment
+    .querySelectorAll<HTMLElement>(":scope > [data-block-index][tabindex='-1']")
+    .forEach((block) => block.removeAttribute("tabindex"));
+  const pageStart = articleEl.querySelector<HTMLElement>(".page-start-heading");
+  pageStart?.focus({ preventScroll: true });
 }

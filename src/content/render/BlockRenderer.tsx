@@ -64,6 +64,9 @@ export interface ArticleBodyHighlight {
  */
 type BlockViewProps = {
   block: Block;
+  /** Allow paginated mode to expose one semantic block as a programmatic-only
+   * page-entry anchor without adding it to ordinary Tab order. */
+  tabIndex?: number;
   /**
    * Phase 5 Plan 05-02: per-block highlight slices (from sliceRunsForHighlights).
    * When present, InlineList wraps highlighted slices in <mark>. Absent for
@@ -88,26 +91,28 @@ export function BlockView({
   block,
   highlightSlices,
   childHighlightSlices,
+  tabIndex,
   ...rest
 }: BlockViewProps) {
+  const elementProps = { ...rest, tabIndex };
   switch (block.kind) {
     case "heading": {
       const Tag = `h${block.level}` as "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
       return (
-        <Tag {...rest}>
+        <Tag {...elementProps}>
           <InlineList runs={block.content} highlightSlices={highlightSlices} />
         </Tag>
       );
     }
     case "paragraph":
       return (
-        <p {...rest}>
+        <p {...elementProps}>
           <InlineList runs={block.content} highlightSlices={highlightSlices} />
         </p>
       );
     case "blockquote":
       return (
-        <blockquote {...rest}>
+        <blockquote {...elementProps}>
           {block.children.map((child, i) => (
             // Plan 05-07: forward the per-child slice (computed by ArticleBody
             // walking block.children) so each child paragraph reaches InlineList
@@ -124,7 +129,7 @@ export function BlockView({
       );
     case "bulleted-list":
       return (
-        <ul {...rest}>
+        <ul {...elementProps}>
           {block.items.map((item, i) => (
             <li key={i}>
               {item.content.map((c, j) => (
@@ -136,7 +141,7 @@ export function BlockView({
       );
     case "numbered-list":
       return (
-        <ol {...rest} start={block.start}>
+        <ol {...elementProps} start={block.start}>
           {block.items.map((item, i) => (
             <li key={i}>
               {item.content.map((c, j) => (
@@ -148,7 +153,7 @@ export function BlockView({
       );
     case "figure":
       return (
-        <figure {...rest}>
+        <figure {...elementProps}>
           <img src={block.src} alt={block.alt} />
           {block.caption.length > 0 && (
             <figcaption>
@@ -160,7 +165,7 @@ export function BlockView({
     case "code-block":
       // NEVER inject raw HTML (Pitfall 6); React escapes source text.
       return (
-        <pre {...rest}>
+        <pre {...elementProps}>
           <code>{block.source}</code>
         </pre>
       );
@@ -170,7 +175,7 @@ export function BlockView({
       // (Pitfall 4 fix — DO NOT set the anchor id to block.footnoteId).
       const n = block.footnoteId.replace(/^fn-/, "");
       return (
-        <sup {...rest}>
+        <sup {...elementProps}>
           <a id={`fn-ref-${n}`} href={`#fn-${n}`}>
             {block.marker}
           </a>
@@ -182,7 +187,7 @@ export function BlockView({
       // Native <details> is keyboard-accessible + screen-reader-compatible by
       // default. Summary microcopy is verbatim from UI-SPEC §Copywriting.
       return (
-        <details {...rest} className="disclosure">
+        <details {...elementProps} className="disclosure">
           <summary>Some content from the original article isn't supported yet.</summary>
           <ul>
             <li>{block.plainDescription}</li>

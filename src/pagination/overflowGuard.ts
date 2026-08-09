@@ -10,8 +10,7 @@
 // walked on the actual rendered slice).
 //
 // Pipeline trace:
-//   caller mounts pages[currentPageIdx] → measures .page-fragment scrollHeight
-//     → if scrollHeight > articleClientHeight + tolerance:
+//   caller mounts pages[currentPageIdx] → invokes the live boundary guard
 //         call refragmentOverflowingPage({ pages, fragmentEl, ... })
 //           → walk fragmentEl.children, find first whose getBoundingClientRect
 //             bottom exceeds pageBox + tolerance
@@ -76,7 +75,7 @@ export interface RefragmentOptions {
   overflowingPageIndex: number;
   /** The live rendered .page-fragment DOM element of the overflowing page. */
   fragmentEl: HTMLElement;
-  /** The article clientHeight — the available page content-box height in CSS px. */
+  /** The dedicated page viewport's available content-box height in CSS px. */
   pageContentBoxHeightPx: number;
   /** Sub-pixel slack (2px per the no-overflow e2e). */
   tolerance: number;
@@ -122,23 +121,26 @@ export function refragmentOverflowingPage(
   if (!overflowPage) return null;
   if (opts.signal.aborted) return null;
 
-  // Measure children against the live fragment. The fragment's
-  // getBoundingClientRect().top is the reference for "fragment-relative"
-  // bottoms — the renderer can mount the fragment at any viewport offset.
-  const fragmentTop = opts.fragmentEl.getBoundingClientRect().top;
+  // Measure against the containing page viewport. A first child's block
+  // margin can collapse through .page-fragment and shift the fragment's own
+  // border box downward, so fragmentEl.top is not a stable page origin. The
+  // parent .page-viewport is the box whose height the caller supplied.
+  const pageTop =
+    opts.fragmentEl.parentElement?.getBoundingClientRect().top ??
+    opts.fragmentEl.getBoundingClientRect().top;
   const pageBox = opts.pageContentBoxHeightPx;
   const tolerance = opts.tolerance;
   const children = Array.from(opts.fragmentEl.children) as HTMLElement[];
 
-  // Find the FIRST child whose bottom (relative to fragment top) exceeds the
-  // page box + tolerance. Children are rendered in fragment.blocks order, so
+  // Find the FIRST child whose bottom (relative to the page viewport) exceeds
+  // the page box + tolerance. Children are rendered in fragment.blocks order, so
   // child[i] ↔ overflowPage.blocks[i] (1:1 correspondence — the renderer
   // walks fragment.blocks left-to-right).
   let offendingChildIndex = -1;
   for (let i = 0; i < children.length; i++) {
     if (opts.signal.aborted) return null;
     const child = children[i]!;
-    const childBottomRel = child.getBoundingClientRect().bottom - fragmentTop;
+    const childBottomRel = child.getBoundingClientRect().bottom - pageTop;
     if (childBottomRel > pageBox + tolerance) {
       offendingChildIndex = i;
       break;
@@ -187,6 +189,7 @@ export function refragmentOverflowingPage(
     lineBoxes,
     sliceText,
     opts.article.lang,
+    pageTop,
     pageBox,
     tolerance,
   );
@@ -275,12 +278,12 @@ function chooseLargestWidowLegalSplit(
   lineBoxes: readonly LineBox[],
   sliceText: string,
   lang: string,
+  pageTopPx: number,
   pageBox: number,
   tolerance: number,
 ): number | null {
   if (lineBoxes.length === 0) return null;
   if (lineBoxes.length < 2 * SPLIT_WIDOW_LINES) return null;
-  const firstLineTop = lineBoxes[0]!.topPx;
   const limit = pageBox + tolerance;
   // Walk from the END backward — we want the LARGEST k whose widow-adjusted
   // before-slice fits. applyLineWidowOrphan clamps to
@@ -290,8 +293,12 @@ function chooseLargestWidowLegalSplit(
   for (let k = lineBoxes.length - 1; k >= SPLIT_WIDOW_LINES; k--) {
     const adjusted = applyLineWidowOrphan(lineBoxes, k);
     if (adjusted <= 0 || adjusted >= lineBoxes.length) continue;
-    const beforeBottom =
-      lineBoxes[adjusted - 1]!.bottomPx - firstLineTop;
+    // Line boxes are viewport-relative. Compare their live bottom against the
+    // page viewport's actual top so content preceding this paragraph consumes its
+    // share of the page. The old line-local calculation treated every
+    // offending paragraph as if it started at y=0 and repeatedly chose a split
+    // that still extended below the page boundary.
+    const beforeBottom = lineBoxes[adjusted - 1]!.bottomPx - pageTopPx;
     if (beforeBottom <= limit) {
       const splitCharOffset = lineBoxes[adjusted]!.charOffset;
       return charOffsetToGrapheme(sliceText, splitCharOffset, lang);

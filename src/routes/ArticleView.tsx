@@ -641,10 +641,11 @@ export function ArticleView({
     }
   }, [effectiveMode, article]);
 
-  // Paginated geometry: derive the page content-box height from the rendered
-  // <article class="paginated-surface"> element after mount. rAF-deferred
-  // (mirror L172-188) so the browser has completed layout before we read.
-  // Recomputed on articleEl change (article swap or first mount).
+  // Paginated geometry: derive the usable page height from .page-viewport,
+  // not from the surrounding <article>. The article also contains its visible
+  // provenance header; treating the article's full height as page capacity
+  // over-packs every fragment by roughly the header height and leaves clipped
+  // text in the accessibility tree.
   const [pageContentBoxHeightPx, setPageContentBoxHeightPx] = useState(0);
   // Plan 04-09 (PAGE-01 round-trip fix): reset pageContentBoxHeightPx to 0
   // SYNCHRONOUSLY DURING RENDER when the mode changes. React child effects
@@ -691,7 +692,9 @@ export function ArticleView({
       // value keeps the first render at 0 (pagination waits), so no separate
       // initial-mount reset is needed.
       if (!articleEl.classList.contains("paginated-surface")) return;
-      const rect = articleEl.getBoundingClientRect();
+      const pageViewport = articleEl.querySelector<HTMLElement>(".page-viewport");
+      if (!pageViewport) return;
+      const rect = pageViewport.getBoundingClientRect();
       setPageContentBoxHeightPx(rect.height);
     });
     return () => {
@@ -1068,7 +1071,7 @@ export function ArticleView({
           <article> mounts, triggering a re-render so this component receives
           the actual DOM node. */}
       <SectionAnnouncer articleEl={articleEl} />
-      <main id="main">
+      <main id="main" className={paginatedActive ? "paginated-main" : undefined}>
         {/*
           A11Y-08 (UI-SPEC §Copywriting "keyboard-help affordance"): a single
           concise visually-hidden paragraph at the top of <main>, preceding the
@@ -1191,27 +1194,29 @@ export function ArticleView({
                 currentAnchorOffsetRef fresh for the NEXT swap (paginated→
                 scrolling).
               */}
-              <PaginatedSurface
-                ref={surfaceRef}
-                article={article}
-                trustedView={trustedView}
-                articleEl={articleEl}
-                diagnostics={diagnostics}
-                pageContentBoxHeightPx={pageContentBoxHeightPx}
-                initialAnchorOffset={currentAnchorOffsetRef.current}
-                onAnchorChange={handleAnchorChange}
-              />
-              {/*
-                PageTurnControls registers the keyboard bundle + swipe + the
-                "Page N of M" announce. Enabled only while paginated mode is
-                active. The M shortcut routes through the SAME handleToggleMode
-                as the header button so the D4-10 anchor applies either way.
-              */}
-              <PageTurnControls
-                enabled={paginatedActive}
-                surfaceRef={surfaceRef}
-                articleEl={articleEl}
-              />
+              <div className="page-viewport">
+                <PaginatedSurface
+                  ref={surfaceRef}
+                  article={article}
+                  trustedView={trustedView}
+                  articleEl={articleEl}
+                  diagnostics={diagnostics}
+                  pageContentBoxHeightPx={pageContentBoxHeightPx}
+                  initialAnchorOffset={currentAnchorOffsetRef.current}
+                  onAnchorChange={handleAnchorChange}
+                />
+                {/*
+                  PageTurnControls registers the keyboard bundle + swipe + the
+                  "Page N of M" announce. Enabled only while paginated mode is
+                  active. The M shortcut routes through the SAME handleToggleMode
+                  as the header button so the D4-10 anchor applies either way.
+                */}
+                <PageTurnControls
+                  enabled={paginatedActive}
+                  surfaceRef={surfaceRef}
+                  articleEl={articleEl}
+                />
+              </div>
             </>
           ) : (
             <ArticleBody article={article} />

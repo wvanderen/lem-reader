@@ -1,13 +1,13 @@
 // tests/e2e/pagination/no-overflow-invariant.spec.ts
-// PAGE-03b — No clipping: no page's rendered content overflows its content-box
-// (scrollHeight <= contentBoxHeight + tolerance). The .paginated-surface is
-// overflow:hidden so any overflow is a fragmentation bug — visible clipping or
-// scroll-bar leakage fails PAGE-03.
+// PAGE-03b — No clipping: no page's rendered text lines extend below the page
+// viewport. A fixed-height fragment can report a safe scrollHeight while block
+// margins and text still paint beyond it, so this spec checks live Range rects
+// in addition to the coarse scrollHeight invariant.
 //
 // SCENARIO: For each cell of the corpus matrix (fixtures × responsive
-// viewports), turn through every page and assert the article element's
-// scrollHeight stays within its content-box height (small tolerance for
-// sub-pixel rounding). Capture pageerror and assert none (V7).
+// viewports), turn through every page and assert that live text-line rects
+// stay inside the dedicated page viewport. Retain scrollHeight as a coarse
+// secondary check and assert that no page errors occur (V7).
 //
 // Plan 04-06: every corpus fixture paginates (containers included) — the
 // no-overflow assertion runs unconditionally. (Earlier MVP skipped fixtures
@@ -71,7 +71,7 @@ test.describe("PAGE-03b no-overflow invariant (04-05)", () => {
   for (const fixture of FIXTURES) {
     for (const viewport of VIEWPORTS) {
       const cell = `${fixture}@${viewport.width}x${viewport.height}`;
-      test(`${cell}: no page overflows its content-box (scrollHeight ≤ contentBoxHeight + tolerance)`, async ({
+      test(`${cell}: no rendered text crosses the page boundary`, async ({
         page,
       }) => {
         const pageErrors: string[] = [];
@@ -91,46 +91,62 @@ test.describe("PAGE-03b no-overflow invariant (04-05)", () => {
         // of pixels.
         const TOLERANCE_PX = 2;
 
-        // Turn through every page; after each turn settles, read the page
-        // fragment's scrollHeight vs the article's clientHeight (content-box).
-        // The .paginated-surface article is overflow:hidden with viewport-
-        // bounded height; the .page-fragment inside it is the actual page
-        // content. We measure the FRAGMENT's scrollHeight (its rendered
-        // content) vs the ARTICLE's clientHeight (the available page box) —
-        // a real fragmentation overflow is the fragment being taller than
-        // the box. (Checking the article's scrollHeight directly is unreliable
-        // because the article also contains a11y live regions positioned
-        // absolutely beyond the viewport; those would inflate scrollHeight
-        // without being reader-visible fragmentation bugs.)
+        // Turn through every page; after each turn settles, compare its live
+        // text-line rects with the dedicated .page-viewport boundary. This is
+        // authoritative because a height-constrained fragment can report a
+        // safe scrollHeight while descendants still paint outside it.
         for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
           // Read geometry for the current page.
           const geom = await page.evaluate(() => {
-            const article = document.querySelector(".article-body.paginated-surface") as HTMLElement | null;
             const fragment = document.querySelector(".page-fragment") as HTMLElement | null;
-            if (!article || !fragment) return null;
+            if (!fragment) return null;
+            const pageViewport = document.querySelector(".page-viewport") as HTMLElement | null;
+            if (!pageViewport) return null;
+            const pageBottom = pageViewport.getBoundingClientRect().bottom;
+            const walker = document.createTreeWalker(fragment, NodeFilter.SHOW_TEXT);
+            const range = document.createRange();
+            let maxTextBottom = Number.NEGATIVE_INFINITY;
+            let clippedTextRects = 0;
+            let node: Node | null;
+            while ((node = walker.nextNode()) !== null) {
+              const parent = node.parentElement;
+              const closedDetails = parent?.closest("details:not([open])");
+              if (closedDetails && !parent?.closest("summary")) continue;
+              range.selectNodeContents(node);
+              for (const rect of range.getClientRects()) {
+                maxTextBottom = Math.max(maxTextBottom, rect.bottom);
+                if (rect.bottom > pageBottom + 2) clippedTextRects += 1;
+              }
+            }
             return {
-              // The fragment's scrollHeight is its actual rendered content
-              // height (the engine's placement + the renderer's slicing).
+              // Coarse secondary signal; live Range rects below are the
+              // authoritative check for painted text crossing the boundary.
               fragmentScrollHeight: fragment.scrollHeight,
-              // The article's clientHeight is the available page box
-              // (.paginated-surface CSS: calc(100vh - 48px - 2px - ...) with
-              // overflow:hidden — content beyond this is clipped).
-              articleClientHeight: article.clientHeight,
+              // The viewport excludes the provenance header and is the exact
+              // height supplied to the pagination engine and overflow guard.
+              pageViewportClientHeight: pageViewport.clientHeight,
+              maxTextBottomRelativeToPage: maxTextBottom - pageBottom,
+              clippedTextRects,
             };
           });
           expect(geom, `page ${pageNum}: paginated-surface + page-fragment must be mounted`).not.toBeNull();
-          const overflow = geom!.fragmentScrollHeight - geom!.articleClientHeight;
+          const overflow =
+            geom!.fragmentScrollHeight - geom!.pageViewportClientHeight;
           expect(
             overflow,
-            `page ${pageNum}/${totalPages}: fragment scrollHeight (${geom!.fragmentScrollHeight}) must not exceed article clientHeight (${geom!.articleClientHeight}) + ${TOLERANCE_PX}px tolerance`,
+            `page ${pageNum}/${totalPages}: fragment scrollHeight (${geom!.fragmentScrollHeight}) must not exceed page viewport clientHeight (${geom!.pageViewportClientHeight}) + ${TOLERANCE_PX}px tolerance`,
           ).toBeLessThanOrEqual(TOLERANCE_PX);
+          expect(
+            geom!.clippedTextRects,
+            `page ${pageNum}/${totalPages}: ${geom!.clippedTextRects} rendered text line(s) extend below the page boundary (furthest by ${geom!.maxTextBottomRelativeToPage}px)`,
+          ).toBe(0);
 
           // Turn to the next page (chevron click — the shared turn path).
           if (pageNum < totalPages) {
             const next = page.getByRole("button", { name: "Next page" });
             await next.click();
             // Let the new page render + measurement settle.
-            await page.waitForTimeout(150);
+            await page.waitForTimeout(600);
           }
         }
 
