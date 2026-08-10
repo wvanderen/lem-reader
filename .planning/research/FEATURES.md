@@ -1,201 +1,523 @@
-# Feature Research
+# Feature Research: v2.0 Personal Library
 
-**Domain:** Accessible, booklike saved-web-article reader
-**Researched:** 2026-07-26
-**Confidence:** MEDIUM-HIGH — accessibility expectations are grounded in W3C standards and guidance; competitor capabilities are verified from current official documentation, while prioritization remains a product judgment to validate with users.
+**Domain:** Local-first accessible reader — adding URL/document ingestion, a personal library, versioned export/import, an annotation review panel, and polish fixes to a shipped v1.0 reading engine.
+**Researched:** 2026-08-10
+**Confidence:** HIGH for table-stakes and competitor patterns (verified against current official docs from Readwise Reader, Mozilla Readability, EPUB/Wikipedia, Wallabag, Hypothes.is); MEDIUM for the calm-library scoping recommendations (product judgment grounded in PROJECT.md positioning, not user studies).
 
-## Feature Landscape
+> **Scope note.** This document covers ONLY the new v2.0 feature areas. The v1.0 reading surface (paginated + scrolling, typography/themes, location restoration, annotations, pagination engine) is already shipped and is treated as substrate. Where v2.0 features depend on or extend v1.0 substrate, the dependency is called out explicitly. The v1.0 FEATURES.md remains the canonical source for the reading engine.
+
+---
+
+## How to read this document
+
+Each of the six feature areas is decomposed into **Table Stakes** (users penalize absence, do not reward presence), **Differentiators** (compete on calm/accessibility positioning, not feature parity), and **Anti-Features** (commonly requested features that would break Lem Reader's positioning, with the right alternative). **Complexity** is sized Small/Medium/Large assuming the v1.0 substrate (canonical document model, Dexie persistence, Zod validation, Playwright cross-engine harness, ANNO-07 tri-state resolution, STATE-04 versioned records, STATE-05 recoverable storage errors) is already in place.
+
+The MVP Definition and Prioritization Matrix at the end consolidate a recommended v2.0 sequencing, which the requirements step can use directly.
+
+---
+
+## Feature Area 1 — Web Article Extraction / "Read It Later" Ingestion
+
+**Standard reader experience (the contract readers bring from Pocket/Instapaper/Readwise Reader):** paste a URL (or use a browser extension / share sheet) → a clean, readable article appears in the library within a few seconds → title/byline/source domain are visible → the article is stored immutably so that highlights survive even if the original page changes or disappears.
+
+**Honest failure is part of the contract, not an edge case.** Readwise explicitly states: *"we'll never be able to parse 100% of the internet 100% perfectly. HTML and CSS are just too flexible."* Their browser extension is positioned as *"an exception handler"* for when server-side URL fetch fails. Lem Reader v1.0 already established this disclosure spirit via **DOC-06** ("informed when a fixture contains unsupported content rather than having it silently omitted") — the URL-ingestion path inherits that contract.
 
 ### Table Stakes (Users Expect These)
 
-Features users assume exist. Missing these makes the reader incomplete or inaccessible.
+| Feature | Why Expected | Complexity | Notes & Dependencies |
+|---------|--------------|------------|----------------------|
+| Paste-URL-to-save input | The defining gesture of the read-it-later category. | SMALL | Single text field + submit; one-tap entry on the library screen. |
+| Server-side fetch + extract + normalize | Naked-URL save must work without an extension, because v2.0 explicitly defers browser-extension packaging. | LARGE | Reuses v1.0 canonical document model (DOC-05). Readability.js or Defuddle produce the candidate HTML; a new normalizer maps onto the existing 9 block kinds + 4 inline marks. Requires a stateless ingestion backend (new to the stack). |
+| Honest null-result on unparseable page | Readability returns `null` below `charThreshold` (default 500 chars) or when no article candidate is found; readers must see "couldn't reliably read this page" rather than an empty or garbage article. | SMALL | Reuses **DOC-06** disclosure pattern. Surface a structured failure reason (network error, paywall, content too short, unsupported media type) with the source URL preserved so the reader can retry or visit the original. |
+| Capture core metadata | Title, byline (author), site name, source URL, fetch date, excerpt are the minimum a reader needs to recognize an article in the library later. Readability exposes exactly these. | MEDIUM | Readability returns `title, byline, siteName, excerpt, lang, publishedTime, length, content, textContent, dir`. Note: Readability does **not** return a lead image URL in its type definition — cover thumbnails must come from explicit `<meta property="og:image">` / `<img>` extraction layered on top. |
+| Preserve source URL + "open original" | Provenance is non-negotiable; readers need to verify, cite, or revisit the publisher's page. | SMALL | Already table stakes in v1.0 (**DOC-03** "follow preserved article links and access the original source URL and article metadata"). v2.0 extends it to dynamically-ingested articles. |
+| Immutability of the saved version | Highlights anchor to canonical text; if the article silently re-extracted on every open, anchors would drift. Readwise is explicit: *"Reader will never try to re-parse previously saved content."* | MEDIUM | Reuses **DOC-04** "stable identity and revision" + **ANNO-05/06** anchor stability contract. Save-once, read-forever is the v1.0 fixture model; v2.0 just adds the ingestion event. Manual refresh = delete + re-save (with explicit warning that highlights will be lost). |
+| Sanitization of ingested HTML | Ingested HTML is untrusted. Readability's maintainers explicitly recommend DOMPurify + CSP and refuse to ship sanitization themselves. | MEDIUM | Defense in depth: server-side sanitize before normalization, then re-validate the canonical JSON with the existing **Zod schema (STATE-04)**. CSP on the SPA. The normalized document model itself is the strongest defense — by the time content reaches React, it is plain JSON, not arbitrary HTML. |
+| SSRF-safe URL fetching | A user-supplied URL must not let the backend reach RFC1918 space, link-local `169.254/16`, cloud-metadata `169.254.169.254`, CGNAT `100.64/10`, or follow redirects into private space (DNS rebinding). | MEDIUM | OWASP/CWE-918 patterns; redirect-following must re-validate each hop. This is new infrastructure risk that v1.0 (no backend) did not face. |
+| Fetch timeout + size cap | A stuck or huge fetch would block the library surface and exhaust storage. Readwise caps uploads at 500 MB / Markdown at 10 MB. | SMALL | Reasonable timeout (~10–30s), max-content-length guard, abort-controller. |
+| Content-type allow-list | Fetching a 200 MB binary or a JavaScript honeypot must be rejected before parsing. | SMALL | Allow `text/html`, `application/xhtml+xml`; reject everything else with a clear message. |
 
-| Feature | Why Expected | Complexity | Prototype vs. extension notes |
-|---------|--------------|------------|-------------------------------|
-| Clean, distraction-free article view | The category promise is to remove navigation, ads, pop-ups, and unrelated page chrome so the article is the primary task. W3C cognitive guidance explicitly recommends limiting interruptions and unnecessary content. | MEDIUM | **Prototype P1.** Use already-normalized saved articles; extraction is a separate later concern. Preserve meaningful article media rather than indiscriminately stripping it. |
-| Faithful semantic article structure | Headings, paragraphs, links, lists, quotations, images/captions, footnotes, and code must remain understandable and navigable by assistive technology. | HIGH | **Prototype P1.** One normalized document model should drive both reading modes. Unsupported structures must degrade without losing access to text. |
-| Adaptable typography and presentation | Reader modes commonly expose font, size, width, spacing, and theme controls; WAI cognitive guidance specifically calls for personalization of font style/size, line height, margins, and contrast. | MEDIUM | **Prototype P1.** Include font family, text size, line height/spacing, measure or margins, and light/dark/sepia or similarly limited themes. Persist preferences locally. |
-| Clean scrolling mode | Continuous scrolling is a familiar, robust baseline and an accessibility escape hatch when pagination is unreliable or not preferred. | MEDIUM | **Prototype P1.** It is not a secondary degraded UI: it needs the same semantics, controls, annotations, and location restoration. |
-| Predictable paginated mode | A booklike reader needs responsive pages, obvious previous/next actions, stable page composition, and no content loss. | HIGH | **Prototype P1 and core hypothesis.** Page boundaries may change with viewport or typography; never treat page number as durable identity. |
-| Explicit mode switching and graceful pagination fallback | Reader preference and access needs vary; no single flow should be forced. A layout failure must not block reading. | MEDIUM | **Prototype P1.** Keep the switch easy to find, preserve logical location across modes, and explain fallback without an interruptive modal. |
-| Full keyboard, pointer, touch, and assistive-technology operation | WCAG 2.2 requires keyboard access/no traps and visible focus; controls must expose semantic names, roles, states, and predictable order. | HIGH | **Prototype P1.** Define a small documented key map, retain normal Tab behavior, avoid hijacking common browser/AT shortcuts, and provide visible focus. |
-| Zoom, reflow, contrast, and reduced-motion compatibility | WCAG 2.2 covers resize/reflow and focus; user contrast and motion preferences must remain effective. | HIGH | **Prototype P1.** Test browser zoom to 200% and narrow reflow at minimum; no required page-turn animation. Honor `prefers-reduced-motion` and forced-colors/high-contrast behavior. |
-| Clear orientation and progress | Long-form readers expect to know the article title, current location, and remaining extent, and to resume after interruption. | HIGH | **Prototype P1.** Use section context plus approximate progress; restore a stable text/content location, not only a volatile percentage or page number. Announce meaningful location changes without chatty live regions. |
-| Local highlights and attached notes | Highlighting and notes are standard in established read-it-later products and complete the save-read-remember loop. | HIGH | **Prototype P1.** Anchor to normalized text selectors/positions independent of layout. Support create, view, edit, delete, and navigation back to the passage. |
-| Preference, annotation, and position persistence | A saved reader should reopen in the user’s chosen presentation and near the passage where reading stopped. | MEDIUM | **Prototype P1.** Local-first per article. Show safe behavior when stored anchors no longer resolve. Accounts and sync are later. |
-| Fast, stable response to viewport/font changes | Visible churn, jumps, blank pages, duplicated passages, or post-font-load repagination undermine calm spatial orientation. | HIGH | **Prototype P1.** Gate measurements on settled fonts where possible; preserve the same logical anchor through repagination; fall back to scroll if confidence fails. |
-| Original-source access and basic article metadata | Readers need title, author/source when available, and a clear path to the original for provenance or unsupported content. | LOW | **Prototype P1.** Keep secondary metadata visually quiet and never make returning to the source the primary reading action. |
+### Differentiators (Lem Reader's calm/accessibility positioning)
 
-### Differentiators (Competitive Advantage)
+| Feature | Value Proposition | Complexity | Notes & Dependencies |
+|---------|-------------------|------------|----------------------|
+| Extraction-failure disclosure surfaced in the reader voice | v1.0's **DOC-06 + PAGE-09 fallback banner** already set the tone ("here's why we fell back"); v2.0 ingestion failures extend that vocabulary rather than introducing loud red error toasts that break the calm surface. | SMALL | Reuse the existing fallback-banner aria/live-region pattern. |
+| Partial-extraction flag | When Readability returns content but is missing a detected section (e.g. images failed, footnote block detected but unparsed), surface a quiet "incomplete extraction" indicator + link to original — rather than presenting the partial article as complete. | MEDIUM | Most competitors silently ship partial content. Honest disclosure is a calm-reader differentiator. |
+| Public-web-only honesty | Hard-refuse paywalled / login-gated / cookie-walled content with a clear "this page is not publicly fetchable" message + link to original. PROJECT.md Out-of-Scope already commits to this. | SMALL | Aligns with v1.0's *honest disclosure over silent success* value. |
+| Stable article revision from ingestion moment | Because **DOC-04** already versions every article, ingested articles inherit the same revision contract: a re-extracted article would be a *new* revision, not a silent overwrite. | SMALL | Direct reuse of v1.0 substrate; only the ingestion event needs to mint the initial revision. |
+| Anchor-preservation across re-extraction (deferred) | When the same URL is re-saved after content changes, attempt to migrate annotations forward using the existing **ANNO-07** tri-state resolver (confident/ambiguous/orphan) rather than silently dropping them. | LARGE | Natural v2.x extension of the v1.0 ANNO-07 contract. Defer from v2.0 initial scope; document the upgrade path. |
 
-Features that reinforce calm orientation rather than competing on collection breadth.
+### Anti-Features (Avoid for Lem Reader)
 
-| Feature | Value Proposition | Complexity | Prototype vs. extension notes |
-|---------|-------------------|------------|-------------------------------|
-| Stable spatial orientation across repagination | Preserve the reader’s exact logical passage while fonts, viewport, controls, or mode change—the most direct expression of “a book that does not lose your place.” | HIGH | **Prototype P1.** This is the main differentiator to validate technically, not a later embellishment. Track a semantic/text anchor and remap it to the new page. |
-| Accessible dual-mode parity | Most reader products optimize one flow; equal-quality page and scroll modes give users control without sacrificing annotation, semantics, or progress. | HIGH | **Prototype P1.** A mode-parity test matrix should cover content structures, navigation, focus, position, and annotations. |
-| Calm-by-default progressive controls | A minimal reading surface with optional controls hidden behind one familiar, consistent panel supports cognitive accessibility without removing user agency. | MEDIUM | **Prototype P1.** Keep the main screen to a few primary actions; avoid a permanent dense toolbar. |
-| Structural navigation and reorientation | A lightweight outline/heading navigator lets a reader recover after distraction and jump among logical chunks while retaining context. | MEDIUM | **v1.x P2.** Include only if the core pagination engine is stable; long-article heading structure is the dependency. |
-| Optional line focus / reading ruler | Showing one, three, or five lines can reduce competing visual information; Microsoft exposes this as an Immersive Reader aid. | MEDIUM | **v1.x P2 differentiator.** User-controlled and off by default. It must work in both modes and not interfere with selection, screen readers, or keyboard navigation. |
-| Annotation resilience with recoverability | Quote plus surrounding context and normalized positions can survive repagination and allow repair when content revisions weaken an anchor. | HIGH | **Prototype P1 for same-document repagination; v1.x for explicit orphan/repair UI.** Follow W3C selector concepts rather than DOM paths or page IDs. |
-| User-tunable calm presets | Named, comprehensible presets can combine font, measure, spacing, theme, and mode while retaining fine controls. | MEDIUM | **v1.x P2.** Add only after observing which combinations help; avoid implying medical efficacy. |
-| Optional read-aloud with synchronized passage focus | Text-to-speech is common in current reader products and WAI notes its value for cognitive/language/learning disabilities. | HIGH | **v2+ P3.** Browser/OS voice behavior, synchronization, controls, and annotation interaction make this too broad for layout validation. |
-| Offline-first saved library | Reliable reading without connectivity and durable local ownership are valued in read-it-later products. | HIGH | **v2+ P3.** The prototype’s bundled/saved fixtures already isolate the engine; service worker caching, storage management, import/export, and library UI are product work. |
-| Privacy-respecting export/import | Portable articles, annotations, notes, and preferences reduce lock-in and prepare for future sync. | MEDIUM | **v2+ P3.** First stabilize internal schemas, then version a portable format. |
+| Feature | Why Requested | Why Problematic for Lem Reader | Alternative |
+|---------|---------------|--------------------------------|-------------|
+| Paywall / authenticated-content extraction | "I want to save my subscription articles." | v2.0 is explicitly public-web-only (PROJECT.md Out-of-Scope); introduces identity, cookies, ToS violations, and a server-side credential store — all of which break local-first and calm. | Surface honest "this page is not publicly fetchable" + link to original. Re-evaluate in v3 alongside accounts. |
+| Server-side re-extraction on every open | "Always show the latest version of the article." | Silently breaks ANNO-05 anchor stability; turns a saved article into a live document; reintroduces extraction variability into a v1.0 contract that explicitly isolates the engine from extraction. | Save-once, read-forever (Readwise's model). Manual refresh = explicit delete + re-save with highlight-loss warning. |
+| Browser-extension packaging in v2.0 | "Higher-fidelity extraction from the rendered DOM." | PROJECT.md defers extension packaging until the ingestion + library loop is proven in the web app first. Adds store policy, permissions, multi-browser build, and update distribution concerns. | Web-app URL ingestion first; extension as a v2.x or v3 path that *replaces* the server-side fetch with a higher-fidelity DOM handoff. |
+| AI-assisted extraction fallback (LLM "read this page") | "Use ChatGPT to clean up bad extractions." | Adds cost, privacy, accuracy, and distraction risks (v1.0 Out-of-Scope); fundamentally conflicts with the calm/local-first positioning. | Honest disclosure of extraction limits. The reader always has the source URL. |
+| Content-level de-duplication | "Don't let me save the same article twice with different utm parameters." | Readwise documents that they cannot do this either (URL-exact only). Building a content-hash de-duper is high-effort with marginal calm benefit. | URL-normalize before de-dup (strip known tracking params); surface "you saved this URL before" when an exact match exists. |
 
-### Anti-Features (Commonly Requested, Often Problematic)
+### Feature Dependencies
 
-| Feature | Why Requested | Why Problematic | Alternative |
-|---------|---------------|-----------------|-------------|
-| Pagination-only experience | Makes the product feel decisively booklike. | Forces one interaction model, can obstruct zoom/reflow or unusual content, and turns a layout failure into loss of access. | Always retain first-class scrolling and automatic, explained fallback. |
-| Page numbers as canonical progress or annotation anchors | Familiar from print and easy to display. | Responsive pages change with viewport, fonts, spacing, and zoom; saved locations and annotations drift. | Store normalized text/semantic anchors; derive page and percentage labels at render time. |
-| Mandatory animated page turns | Adds visual polish and a physical-book metaphor. | Motion can distract or cause discomfort, delays navigation, and complicates focus/measurement. | Instant transitions by default; if explored later, make subtle motion optional and fully disabled for reduced motion. |
-| Dense always-visible toolbar | Makes every capability discoverable at once. | Competes with the article, adds cognitive load, and contradicts WAI guidance to simplify and limit choices. | A few stable primary controls plus a clearly labeled presentation panel and optional annotation affordance. |
-| Aggressive keyboard shortcut capture | Promises power-user speed. | Conflicts with browser, OS, and assistive-technology commands and can create traps or unexpected page turns while editing notes. | Preserve standard navigation; offer a small documented, context-aware shortcut set and never require shortcuts. |
-| Automatic mode changes without preserving place | Lets the engine silently recover from difficult layouts. | Sudden spatial change is disorienting, especially for the target audience, and may appear as content loss. | Preserve the logical anchor, give a concise status, and keep an explicit way to retry or choose the mode. |
-| Arbitrary-live-web extraction in the prototype | Makes the demo feel immediately useful on any URL. | Conflates extraction, CORS, authentication, paywalls, sanitization, and layout quality with the core reading-engine test. No parser is perfect. | Curated normalized fixtures now; extraction and extension packaging after layout/accessibility validation. |
-| Accounts and real-time cloud sync | Delivers cross-device continuity. | Introduces identity, conflict resolution, privacy/security, backend, and offline synchronization before the local reading loop is proven. | Versioned local storage now; portable export/import, then opt-in sync later. |
-| AI summaries, chat, recommendations, and discovery feed | Matches current product trends and appears to accelerate reading. | Adds cost, privacy, accuracy, editorial, and distraction risks; summary-first behavior conflicts with validating sustained calm reading. | Preserve authorial content and structural navigation; evaluate assistive transformations as separate, opt-in product hypotheses. |
-| Speed-reading/RSVP as a core mode | Sounds like a measurable productivity benefit. | Removes spatial and structural context, conflicts with selection/annotation, and does not serve the stable-orientation wedge. | Prioritize page/scroll choice, adaptable measure, line focus, and later optional read-aloud. |
-| Full-web rich content compatibility | Expands addressable content. | Tables, math, interactive embeds, applications, and arbitrary scripts create fundamentally different layout and accessibility problems. | Declare a rich long-form schema; retain source links and fall back cleanly for unsupported blocks. |
-| Medicalized accessibility presets or efficacy claims | Gives settings an authoritative-sounding rationale. | Reader needs are individual; unsupported claims can mislead and stigmatize. | Describe observable presentation changes plainly and let users choose; validate presets with representative users. |
-
-## Feature Dependencies
-
-```text
-[Normalized semantic document model]
-    ├──requires──> [Representative saved-article fixtures]
-    ├──enables───> [Semantic scroll renderer]
-    ├──enables───> [Measured pagination]
-    ├──enables───> [Structural navigation]
-    └──enables───> [Stable text-based annotation anchors]
-
-[Typography + settled font state] ──requires──> [Measurement invalidation/reflow]
-[Measured pagination] ──requires──> [Non-text block measurement]
-[Paginated mode] ──requires──> [Scroll fallback]
-
-[Stable logical location]
-    ├──enables───> [Resume reading]
-    ├──enables───> [Mode-switch continuity]
-    └──enables───> [Repagination continuity]
-
-[Text selection model] ──enables──> [Highlights] ──enables──> [Attached notes]
-[Versioned local persistence] ──requires──> [Stable article identity + schemas]
-
-[Accounts/cloud sync] ──conflicts-with-prototype-focus──> [Local engine validation]
-[Forced animation] ──conflicts-with──> [Reduced motion + immediate navigation]
-[Page-number anchoring] ──conflicts-with──> [Responsive typography and repagination]
+```
+URL Ingestion ───requires───> v1.0 Canonical Document Model (DOC-05)
+                  requires ──> v1.0 Article Revision Contract (DOC-04)
+                  requires ──> v1.0 Zod Schema (STATE-04) for ingested-record validation
+                  requires ──> NEW stateless ingestion backend (no v1.0 dependency)
+                  enhances ──> v1.0 DOC-06 disclosure pattern (extends to ingestion failure)
+                  enhances ──> v1.0 ANNO-07 tri-state (extends to extraction-vs-render drift)
 ```
 
-### Dependency Notes
+---
 
-- **Both renderers require one semantic model:** separate content trees invite mode-specific loss, divergent reading order, and annotation drift.
-- **Pagination requires scroll fallback:** unsupported blocks, font uncertainty, zoom, or measurement failure must never make the article unreadable.
-- **All persistence requires stable article identity and schema versioning:** otherwise fixtures, locations, settings, and annotations cannot evolve safely.
-- **Highlights require layout-independent text selection:** page fragments and transient DOM nodes are presentation artifacts; combine normalized position with exact quote and context.
-- **Mode switching and repagination require a shared logical location:** capture a nearby semantic/text anchor before relayout, then reveal and focus appropriately afterward.
-- **Structural navigation precedes line focus:** line focus needs reliable block/line mapping and a way to reorient within the larger article.
-- **Cloud sync follows local conflict semantics:** only add accounts after local annotation mutations, deletion, migration, and orphan handling are defined.
+## Feature Area 2 — Multi-format Document Intake (HTML / PDF / EPUB / Markdown)
+
+**Reader expectations differ sharply by format.** The same library list must accommodate an HTML article, a 30-chapter EPUB book, a fixed-layout PDF, and a Markdown note — without pretending they are the same shape.
+
+**The EPUB book-vs-article gap is the central design tension.** An EPUB is a multi-chapter *book* with its own spine order, hierarchical TOC, and per-chapter XHTML files — **it is NOT a single normalized article**. Treating an EPUB as "just another article in the library" would either flatten its structure (losing the TOC the reader expects) or force the canonical document model to grow a `Book` shape that v1.0 never had. PROJECT.md already flags this: *"EPUB's multi-chapter book shape and PDF extraction quality are the riskier pipelines and sequence after the URL+HTML path is proven."*
+
+### Per-format reader expectations
+
+| Format | What the reader expects | Complexity for Lem Reader | Sequencing |
+|--------|-------------------------|---------------------------|------------|
+| **HTML (file upload or already-saved page)** | Behaves like an extracted web article. Already in the v1.0 document model's sweet spot. | SMALL | Phase 1 (alongside URL ingestion — same normalization pipeline) |
+| **Markdown** | Plain structured text (headings, paragraphs, lists, code, links, blockquotes). Filename becomes title; first web-hosted image becomes cover (Readwise's documented behavior, because Markdown carries no inherent metadata). | MEDIUM | Phase 1 or 2 (remark/unified pipeline; sanitize; map onto existing block kinds) |
+| **EPUB** | A *book*: multi-chapter, hierarchical TOC, spine order, DRM-free only. Cover image, author/publisher/date from OPF metadata. Stable per-chapter reading position. | LARGE | Phase 2 or 3 (after URL+HTML+Markdown proven). Forces a decision: flatten-into-one-article vs. introduce a Book concept. |
+| **PDF** | Either a fixed-layout page image (the source of truth, what the reader expects from a PDF) or a reflowed "text view" with the tradeoffs below. Title is unreliable. Underlying text is noisy. | LARGE | Phase 3 (latest, highest-risk). Honest disclosure required. |
+
+### Table Stakes (Users Expect These)
+
+| Feature | Why Expected | Complexity | Notes & Dependencies |
+|---------|--------------|------------|----------------------|
+| Drag-drop + file-picker upload | Universal table-stakes gesture across every reader that accepts files. Readwise, Apple Books, Calibre all support it. | SMALL | Library screen drop target + Upload button. |
+| Format detection from file | Readers expect the right pipeline to fire based on `.epub`, `.pdf`, `.md`, `.html` extension + MIME sniff. | SMALL | Map to the right intake pipeline by file type. |
+| Per-format metadata extraction | EPUB has rich OPF metadata (title/creator/publisher/date/identifier); PDF metadata is *"often improperly set or not set at all by the PDF file creator"* (Readwise); Markdown has no inherent metadata. | MEDIUM | EPUB: parse OPF metadata block. PDF: extract PDF Info dictionary but expect noise. Markdown: filename → title, first image → cover. |
+| Edit-metadata panel | Because PDF and Markdown metadata is unreliable, the reader must be able to fix title/author manually. Readwise ships Edit Metadata (Shift+M). | MEDIUM | New v2.0 surface; persists edits as a layer over the original metadata, never mutating the source file. Reuses STATE-04 versioned records. |
+| DRM-free-only honesty | Readwise is explicit that DRM-locked Kindle/Apple/Kobo books cannot be imported. Lem Reader must surface a clear "DRM-protected EPUB cannot be added" message rather than silently failing. | SMALL | Detect Adobe ADEPT / Apple FairPlay / Readium LCP markers; refuse with explanation. Aligns with PROJECT.md public/DRM-free posture. |
+
+### Differentiators
+
+| Feature | Value Proposition | Complexity | Notes & Dependencies |
+|---------|-------------------|------------|----------------------|
+| Two-mode EPUB reading (paginated + scrolling) at chapter granularity | v1.0's signature dual-mode parity extended to books. Most EPUB readers optimize one mode; equal-quality page and scroll is the calm-reader differentiator. | LARGE | Requires extending v1.0 mode switching (**PAGE-01**) from per-article to per-chapter. The reader's "logical passage" becomes chapter-relative. |
+| EPUB chapter as the canonical navigation unit | Reuses **READ-05** ("quiet structural location") at chapter granularity. The library shows book progress by chapter, the TOC is the chapter list. | MEDIUM | Treats each EPUB as a small library-of-chapters sharing a Book record. Annotation anchors extend to (chapter, normalized offset). |
+| Markdown front-matter support | Recognize YAML front-matter (`title:`, `author:`, `date:`) as a metadata source — cleaner than filename-derived metadata. | SMALL | Modest win for users with Markdown libraries (Obsidian/Standard Ebooks notes). |
+| PDF "text view" reflow alongside original-page view | Readwise's "Enhanced text mode" pattern: default to the page image (what the reader expects from a PDF) with a one-tap toggle to a reflowed text version for typography/annotation flexibility. | LARGE | Two rendering paths for PDFs. Annotations made in one mode must remain visible in the Notebook panel even when they don't overlay the other mode (Readwise's documented behavior). |
+| PDF snapshot highlight | Allow image-region highlight for figures/tables/equations that text selection cannot capture (Readwise's snapshot tool). | MEDIUM | Captures a cropped image + page rect as the annotation payload. Extends v1.0 annotation model with a non-text anchor kind. |
+
+### Anti-Features (Avoid for Lem Reader)
+
+| Feature | Why Requested | Why Problematic for Lem Reader | Alternative |
+|---------|---------------|--------------------------------|-------------|
+| Force-flatten EPUB into a single article | "So the library list stays uniform." | Destroys the TOC the reader expects from a book; breaks chapter-based reading progress; pretends EPUB is something it isn't. | Introduce a Book concept (or chapter-as-document collection). The library list already shows heterogeneous items in every competitor. |
+| Mandatory PDF reflow | "So PDFs behave like articles." | Reflow quality is genuinely poor (random line breaks, lost figures, destroyed tables); readers expect PDFs to look like PDFs. Readwise keeps both modes for good reason. | Default to page-image view; offer reflow as a toggle. Disclose noise. |
+| Scanned-PDF OCR | "So I can read anything." | OCR quality is its own research area; introduces a heavy new dependency (Tesseract/cloud OCR) and noisy text that breaks annotation anchors. Out of scope for v2.0. | Detect scanned PDFs (no text layer) and refuse with a "this PDF has no extractable text" message. Defer OCR to a later milestone. |
+| EPUB CSS pass-through | "Render the book exactly as the publisher styled it." | Conflicts with **READ-02/03/04** typography controls and the calm-surface contract; publisher CSS frequently overrides reader preference. | Apply Lem Reader's typography layer; ignore publisher stylesheet. (Apple Books and Calibre both override by default.) |
+| Multi-format export from intake | "Let me convert EPUB → Markdown on the way in." | Conflation of intake and export; doubles the pipeline surface. | Intake preserves the source format; export is a separate feature area. |
+
+### Feature Dependencies
+
+```
+Multi-format Intake ───requires───> v1.0 Canonical Document Model (DOC-05)
+                       requires ──> v1.0 Zod Schema (STATE-04) for per-format records
+                       requires ──> Personal Library (Feature Area 3) — files need a home
+                       enhances ──> v1.0 PAGE-01 mode switching (extended to per-chapter for EPUB)
+                       conflicts─> v1.0 single-article-shape assumption (EPUB forces a Book concept)
+
+EPUB intake ───requires───> EPUB parser (OPF + spine + nav.xhtml/NCX)
+              requires ──> Decision: Book concept vs. flatten-to-article
+              requires ──> Chapter-relative reading position (extends STATE-01)
+
+PDF intake ───requires───> PDF text extraction (pdfjs-dist or unpdf)
+              requires ──> Two rendering paths (page image + reflowed text)
+              requires ──> Honest disclosure of extraction noise
+```
+
+---
+
+## Feature Area 3 — Personal Library
+
+**What "calm library" means for Lem Reader.** The library is *not* a Feedly/Instapaper-style high-throughput triage queue with feeds, recommendations, read/unread gamification, and dense dashboards. It is the **reading-room shelf**: a small, owned, locally-stored set of items the reader has chosen, organized by what they actually do (find, open, resume), not by what an algorithm pushes.
+
+**The library replaces the v1.0 fixture list** — the six hardcoded articles become six rows in a real library, and the library is the surface where ingestion lands.
+
+### Table Stakes (Users Expect These)
+
+| Feature | Why Expected | Complexity | Notes & Dependencies |
+|---------|--------------|------------|----------------------|
+| List view of saved items | The defining library gesture. Every competitor has this. | SMALL | The v1.0 article picker becomes the library list. Sorted by saved-date-descending by default. |
+| Open item into the reader | One tap/double-click from list to reading surface. | SMALL | Existing v1.0 reader mount path. |
+| Delete item | Local ownership includes the right to remove. | SMALL | Cascade deletes highlights, notes, position (with confirmation). Reuses Dexie transactions. |
+| Per-item metadata display | Title, source domain, byline (if known), saved date, content-type indicator (article / book / pdf / note). The minimum a reader needs to recognize an item. | MEDIUM | Reuses v1.0 DOC-03 metadata. Add an item-kind glyph. |
+| Source link visible per item | Provenance on the list, not buried. | SMALL | Direct reuse of DOC-03 source URL display. |
+| Recently-read shortcut | Resume what you were just reading. | SMALL | Sort/filter by last-opened-descending. |
+| Reading-progress indicator per item | Quiet visual signal of how far through you are. | SMALL | A 0–100% bar or "page x of y" hint derived from STATE-01 location vs. article length. Must respect the v1.0 contract that **page number is not permanent identity** — show approximate progress, not a fixed page label. |
+| Item count / empty state | Calm, honest empty state ("your library is empty — paste a URL or upload a file to begin"). | SMALL | Avoids the dense-dashboard feel. |
+| Search | Find an item by title, author, or domain. | MEDIUM | See *search* sub-section below — title/metadata search is table stakes; full-text search is a differentiator. |
+
+### Differentiators (Calm library, not power-reader triage)
+
+| Feature | Value Proposition | Complexity | Notes & Dependencies |
+|---------|-------------------|------------|----------------------|
+| Tags as the default organization | Replaces folder/collection hierarchy with a flat tag set the reader actually maintains. Readwise, Hypothes.is, and Apple Books all converged here. PROJECT.md commits to this: *"Searchable list + tags as the default organization; folders/collections deferred."* | MEDIUM | Document tags apply to library items; highlight tags (Feature Area 5) are a separate namespace. Readwise is explicit that the two do **not** inherit — Lem Reader should follow the same rule to avoid surprise. |
+| Title + metadata search (table stakes, restated) | Find any item by any visible metadata field. | MEDIUM | IndexedDB index over title/byline/siteName/tags/source-url. |
+| Full-text search across article bodies | Find the article "where I read about X." Readwise markets this as a headline feature ("Blazingly fast full text search ... even offline"). | LARGE | Requires indexing the normalized text content of every ingested article. Dexie hooks + a search index (FlexSearch or hand-rolled). High value, but deferrable. |
+| Reading-progress sort | "What am I in the middle of?" — surfaces half-read items at the top. | SMALL | Sort key = absolute distance from 50% progress, descending. |
+| Quiet item count and library size | Calm alternative to dashboard analytics: "47 articles • ~12 MB" in a footer. | SMALL | One line in the library chrome. |
+| Per-source-domain grouping (optional) | A reader who saves a lot from one site can filter "all aeon.co articles." | SMALL | A facet off the existing source-URL metadata. |
+| Light-weight filtered views | Readwise's filtered-view query syntax is a power-user surface; Lem Reader's calm-library version is *saved quick-filters* (tag, format, progress) accessible via a single menu — not a query language. | MEDIUM | Save named filters; no AND/OR/paren syntax. Reduces cognitive load vs. the Readwise benchmark. |
+
+### Anti-Features (Avoid for Lem Reader)
+
+| Feature | Why Requested | Why Problematic for Lem Reader | Alternative |
+|---------|---------------|--------------------------------|-------------|
+| Folders / collections hierarchy | Familiar from file systems and Feedly. | Adds a navigation dimension the reader must maintain; breaks the flat, searchable shelf metaphor; competes with tags for the same cognitive job. PROJECT.md defers folders. | Flat tag set as the default; defer folders to v2.x if user demand emerges. |
+| Read/unread triage gamification | "Make me feel productive." | Conflicts with calm positioning; turns reading into a queue-clearing chore; introduces FOMO surfacing that v1.0 explicitly rejected. | Quiet progress indicator. No streaks, no badges, no "you have N unread." |
+| Recommendation / discovery feed | "Suggest articles I might like." | Out-of-scope per v1.0 (AI/recommendations explicitly excluded); introduces editorial-distraction and privacy concerns. | The library contains *only* what the reader chose. |
+| RSS / auto-push Feed section | "Subscribe to my favorite sites." | Readwise splits Library vs. Feed because they have different dynamics (curated vs. pushed). v2.0 is about putting your own content in, not becoming a feed reader. PROJECT.md Out-of-Scope. | A library only. RSS/feed-ingestion deferred. |
+| Dense dashboard (charts, analytics, "reading velocity") | Quantified-self appeal. | Adds cognitive load; conflicts with the calm value; competes for screen space with the article list. | Quiet per-item progress + library-size line. |
+| Social sharing / public-link generation | "Share what I'm reading." | v2.0 is local-first; social features introduce identity, hosting, and privacy surface area. | Export (Feature Area 4) is the privacy-preserving alternative. |
+
+### Search sub-section — table stakes vs. differentiator
+
+| Search scope | Tier | Why |
+|--------------|------|-----|
+| Title search | **Table stakes** | Universal expectation; cheap to index. |
+| Author / byline search | **Table stakes** | Same metadata is shown in the list. |
+| Source-domain search | **Table stakes** | Same metadata is shown in the list. |
+| Tag-based filtering | **Differentiator (weak)** | Cheap; tied to the tags-as-default-organization decision. |
+| Full-text across article bodies | **Differentiator (strong)** | High value but high cost; deferred is fine. |
+
+### Feature Dependencies
+
+```
+Personal Library ───requires───> v1.0 Article Picker (becomes list)
+                   requires ──> v1.0 Dexie persistence (STATE-03/04)
+                   requires ──> URL Ingestion (Feature Area 1) — fills the library
+                   requires ──> Multi-format Intake (Feature Area 2) — fills the library
+                   enhances ──> v1.0 DOC-03 source URL display (now per-item in list)
+                   enhances ──> v1.0 STATE-01 location (now per-item progress indicator)
+```
+
+---
+
+## Feature Area 4 — Versioned Export / Import (PORT-01 / PORT-02)
+
+**Standard reader expectations.** A local-first reader without accounts needs a credible cross-device story. The widely-accepted pattern (Readwise, Wallabag, Obsidian, Calibre) is a *versioned whole-library bundle* that the reader can download, move to another machine, and import — with validation telling them what survived the trip.
+
+**v2.0 PORT-01/02 contract (from PROJECT.md):** *"export library + highlights + notes + position + preferences as a versioned bundle; import with validation and conflict reporting."*
+
+### Table Stakes (Users Expect These)
+
+| Feature | Why Expected | Complexity | Notes & Dependencies |
+|---------|--------------|------------|----------------------|
+| Whole-library export | The minimum portability promise: nothing is held hostage. | MEDIUM | Bundle articles + reading positions (**STATE-01**) + highlights/notes (**STATE-03/ANNO-06**) + preferences (**STATE-02**) into a single archive. |
+| Versioned bundle schema | Future migrations must not silently corrupt imports. v1.0 **STATE-04** already versions records; the bundle wraps that with a top-level schema version. | SMALL | Top-level `{ schemaVersion, exportedAt, appVersion, records: { ... } }`. Reuse existing Zod schema. |
+| Validation on import | A malformed or partial bundle must be rejected with a structured report, not partially imported. | MEDIUM | Zod-validate every record on import. Surface a pre-flight summary: "X articles, Y highlights, Z preferences — proceed?" |
+| Conflict reporting on import into non-empty library | What happens when the imported article already exists (same stable identity)? Reader must choose: skip / overwrite / duplicate. | MEDIUM | Reuse **DOC-04 stable identity** as the join key. Default to skip with a clear "X items already present" report. |
+| Round-trip integrity | Export then import on a fresh machine yields the same library, same highlights, same positions. | MEDIUM | Canonical-text offsets (**ANNO-06**) survive the trip; page numbers do not, and never appear in the bundle. |
+| Per-article source URL in the bundle | Provenance travels with the article even when the original page is gone. | SMALL | Direct inclusion of DOC-03 source URL. |
+
+### Differentiators
+
+| Feature | Value Proposition | Complexity | Notes & Dependencies |
+|---------|-------------------|------------|----------------------|
+| Per-article export (single item) | Send one article + its highlights to a friend or another device without dumping the whole library. | SMALL | Same format, scoped to one record. |
+| Highlights-only export (Markdown/plain text) | The "take my notes to Obsidian/Notion/Anki" path. Readwise's headline differentiator. | MEDIUM | Markdown export with template variables (`title`, `author`, `source`, `highlights[]`, `notes[]`). Per-article AND per-tag (Feature Area 5) variants. |
+| Preferences-only export | Move typography/theme/mode setup to a new machine without the library. | SMALL | Subset of the bundle schema. |
+| Bundle signing (integrity check) | Detect tampered or truncated bundles. | SMALL | SHA-256 manifest of records; verify on import. |
+| Conflict-resolution UI | Beyond the report, a per-record review screen for ambiguous conflicts. | MEDIUM | Defer the heavy merge UI; v2.0 ships the report + skip-by-default. |
+| Merge semantics (rather than replace) | Two devices export, both import, library union rather than overwrite. | LARGE | Full merge is a sync surrogate and risks drift. Defer to v3 alongside accounts. |
+
+### Anti-Features (Avoid for Lem Reader)
+
+| Feature | Why Requested | Why Problematic for Lem Reader | Alternative |
+|---------|---------------|--------------------------------|-------------|
+| Cloud sync (real-time) | The "real" cross-device experience. | v2.0 explicitly defers accounts/cloud/sync (PROJECT.md Out-of-Scope). | Versioned export/import is the v2.0 cross-device story. |
+| OPF / EPUB-fragment export | "Export my highlights back into the EPUB." | EPUB spec does not standardize annotation storage; round-tripping into a binary EPUB is fragile and outside the calm-reader job. | Markdown / plain-text highlights export. |
+| Export to specific note-app formats (Anki, Roam, Logseq) | Direct integrations are convenient. | Each integration is its own template; scope-creeps into a template engine. | A general Markdown template with editable variables (Readwise's Jinja2 approach is the model). |
+| Encrypted-bundle format | "Privacy for my highlights on disk." | Adds key-management burden; v2.0 is local-first (the storage is already private to the device). | Defer encryption to v3 alongside accounts/cloud. |
+
+### Bundle format recommendation (informed by Readwise/Wallabag patterns)
+
+```
+lem-reader-bundle-v1.json   (or .zip with assets)
+├── schemaVersion: 1
+├── appVersion: "2.0.x"
+├── exportedAt: ISO-8601
+├── records:
+│   ├── articles:       [ { id, revision, sourceUrl, title, byline, ... , normalizedDocument } ]
+│   ├── positions:      [ { articleId, graphemeOffset } ]
+│   ├── annotations:    [ { id, articleId, TextPositionSelector, TextQuoteSelector, note } ]
+│   └── preferences:    { typography, theme, mode, ... }
+└── manifest: { sha256 per record block }
+```
+
+**Why JSON, not OPF/CSV binary:** the v1.0 canonical document model is already JSON; the v1.0 Zod schema already validates it. Reusing the internal shape minimizes the schema-translation surface (and the migration risk) on both export and import.
+
+### Feature Dependencies
+
+```
+Export/Import ───requires───> v1.0 STATE-04 versioned records
+                requires ──> v1.0 ANNO-06 canonical-text selectors (NOT page numbers)
+                requires ──> v1.0 DOC-04 stable identity (import-conflict join key)
+                requires ──> v1.0 Zod schema (import validation)
+                requires ──> Personal Library (Feature Area 3) — what's being exported
+                enhances ──> Annotation Review Panel (Feature Area 5) — export-from-here
+```
+
+---
+
+## Feature Area 5 — Annotation Review Panel (RECV-01)
+
+**What RECV-01 asks for (from PROJECT.md):** *"a dedicated surface to review all highlights/notes (natural pair with the export/curation flow)."*
+
+**The v1.0 annotation substrate is the dependency.** v1.0 already ships ANNO-01–07: highlight creation, notes, view/edit/delete, navigation back to passage, anchor stability, TextPositionSelector + TextQuoteSelector anchors, and the explicit tri-state (confident / ambiguous / orphan) resolution. The review panel is *the library view of the annotation substrate* — it sits above v1.0's per-article annotation drawer and offers a cross-article perspective.
+
+**The two established review-panel patterns (from competitor research):**
+
+1. **Per-document Notebook tab** (Readwise Reader's right-sidebar Notebook) — every highlight + note in the current document, with copy/export-from-here. This is the v1.0 annotation drawer elevated into a first-class surface.
+2. **Cross-document highlights browse** (Readwise "Highlight Tags" page, Hypothes.is annotation list) — all highlights across the library, filterable by tag/article/date, with jump-to-location.
+
+Lem Reader's RECV-01 should ship both, because the per-document surface is cheap (already 80% built) and the cross-document surface is the genuine curation win.
+
+### Table Stakes (Users Expect These)
+
+| Feature | Why Expected | Complexity | Notes & Dependencies |
+|---------|--------------|------------|----------------------|
+| List all highlights/notes (cross-article) | The defining gesture of an annotation review surface. Hypothes.is, Readwise, Apple Books all have it. | MEDIUM | Query all annotations from Dexie, group by article, render as a list. Reuses ANNO-06 anchor schema. |
+| Jump to highlight location | One tap from review → reading surface at the highlighted passage. | SMALL | Reuses ANNO-04 "navigate from a saved annotation back to its logical passage." |
+| Per-highlight metadata (parent article, date created, tag/note) | Recognize which article a highlight came from without leaving the panel. | SMALL | Direct from ANNO-06 record. |
+| Edit highlight note in-place | Fix typo / expand a thought without leaving the review surface. | SMALL | Reuses ANNO-03 view/edit/delete. |
+| Delete highlight from review | Remove a highlight that no longer serves. | SMALL | Reuses ANNO-03 + cascade rules. |
+| Sort by date / by article / by position | Find what you're looking for. | SMALL | Three sort keys; default = date-descending. |
+| Filter by article | "Just show me highlights from this book." | SMALL | Article facet. |
+| Tri-state indicator for ambiguous/orphan annotations | v1.0's ANNO-07 contract must not be silently hidden in the review panel. Show a quiet badge and offer the existing repair path. | SMALL | Direct reuse of ANNO-07. |
+
+### Differentiators
+
+| Feature | Value Proposition | Complexity | Notes & Dependencies |
+|---------|-------------------|------------|----------------------|
+| Filter by tag | The natural pair to tags-as-default-organization (Feature Area 3). Readwise's Highlight Tags page is the model. | SMALL | Filter query off annotation.tag. |
+| Export-from-here | "Send me all highlights with this tag as Markdown." Pairs with Feature Area 4. | SMALL | Reuse the highlights-only export pipeline, scoped to the current filter. |
+| Grouped-by-article table of contents | A two-level TOC: article → its highlights. Readwise ships this on their tag-filtered view. | SMALL | Improves scannability over a flat list. |
+| Keyboard-first navigation between highlights | Up/down-arrow through highlights with the focused one's parent article shown in a sidebar. Readwise's signature keyboard-based reading extended to the review surface. | MEDIUM | Aligns with v1.0 A11Y-01/02 keyboard contract. |
+| Re-anchor ambiguous annotation from the panel | Direct link from a tri-state badge into the v1.0 ANNO-07 repair flow (RECV-02, deferred). v2.0 ships the indicator + a "show in context" jump; the explicit re-anchor UI is RECV-02. | MEDIUM | RECV-02 is deferred per PROJECT.md, but the panel must surface the state honestly now. |
+
+### Anti-Features (Avoid for Lem Reader)
+
+| Feature | Why Requested | Why Problematic for Lem Reader | Alternative |
+|---------|---------------|--------------------------------|-------------|
+| Spaced-repetition resurfacing ("Daily Review") | Readwise's headline feature. | Gamifies reading; introduces notifications and daily-prompt surface; conflicts with calm positioning. | Reader chooses when to review. Export to a spaced-repetition app (Anki) is the user's choice, via Feature Area 4 highlights export. |
+| Social annotation / public sharing of highlights | "Share my notes with my group." | v2.0 is local-first; social features introduce identity, hosting, moderation. | Export-to-Markdown is the share surrogate. |
+| Multi-color highlights | "Color-code my system." | Readwise deliberately ships one color and recommends tags instead — colors are a visual affordance, tags are semantic and accessible to screen readers (A11Y). | Tags. (Also: forced-colors / high-contrast users cannot rely on color.) |
+| AI summarization of highlights | "Generate a summary from my highlights." | v1.0 Out-of-Scope (AI summaries); cost/privacy/accuracy/distraction. | Export raw highlights; user chooses whether and how to summarize elsewhere. |
+
+### Feature Dependencies
+
+```
+Annotation Review Panel ───requires───> v1.0 Annotation substrate (ANNO-01..07)
+                        requires ──> Personal Library (Feature Area 3) — article facet
+                        enhances ──> v1.0 ANNO-04 navigation (now bidirectional: panel ↔ passage)
+                        enhances ──> Export/Import (Feature Area 4) — export-from-here
+                        enables ──> RECV-02 deferred repair UI (surfaces the state now)
+```
+
+---
+
+## Feature Area 6 — Polish Fixes (Context Only)
+
+**Not a feature-research area per the brief.** Two polish items are in scope for v2.0; this section captures only the standard-reader-behavior context the implementation step will need.
+
+### 6a. Initial-load reading-mode flash (FOUC)
+
+**What goes wrong:** the SPA mounts, briefly renders in the default reading mode, then swaps to the persisted mode on hydration — producing a visible flash for readers who chose a non-default mode.
+
+**How other readers handle it:**
+- **Inline bootstrap script** reads `localStorage` *before* React mounts and sets the mode attribute on `<html>` or the reader container so the first paint is already correct.
+- **Readwise / Apple Books / Kindle Cloud** all use a pre-paint preference read; the reader never sees a flash.
+- **v1.0 substrate note:** STATE-02 already persists the preferred reading mode; the bug is that the mode is applied post-hydration rather than pre-paint. The fix is a small inline script in `index.html` that reads the same key STATE-02 will read later.
+
+**Complexity:** SMALL. **Risk:** LOW. No external research dependency.
+
+### 6b. Short-article progress-bar semantics
+
+**What goes wrong:** a 1-page article shows 100% the moment it opens; a 2-page article starts at 50%. Both feel wrong because progress implies remaining work, and there is none (or almost none).
+
+**How other readers handle it:**
+- **Apple Books** shows position ("Location 1 of 1") rather than a percentage for very short works, switching to percentage only when the work has meaningful length.
+- **Kindle** shows "Page 1 of 1" / time-remaining-in-chapter rather than a percentage for short pieces.
+- **Readwise Reader** shows page count and reading-time estimates (minutes) rather than a flat percentage for short documents.
+- The shared pattern: **progress display must adapt to document length** — short works use ordinal/positional language; long works use percentage or time.
+
+**Recommended semantics for Lem Reader (calm positioning):**
+- 1-page article → show position ("Page 1 of 1" or just the section context), not 100%.
+- 2-page article → show "Page 1 of 2" / "Page 2 of 2", not 50% / 100%.
+- Longer articles → percentage or page-x-of-y may coexist, but never display "100%" until the reader has actually advanced to the final page (i.e., progress is *positional*, not *proportional*, at short lengths).
+- Honors v1.0 **READ-05** contract: progress display "does not treat responsive page number as permanent identity."
+
+**Complexity:** SMALL. **Risk:** LOW. Pure UI logic; no external research dependency.
+
+---
+
+## Feature Dependencies (Cross-Area Map)
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                     v1.0 SHIPPED SUBSTRATE                          │
+│  DOC-01..06 · READ-01..05 · A11Y-01..08 · PAGE-01..09              │
+│  ANNO-01..07 · STATE-01..05 · ACPT-01..04                          │
+└─────────────┬───────────────────────────────────────────────────────┘
+              │
+              │ depends on
+              ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  v2.0 NEW FEATURE AREAS                                             │
+│                                                                     │
+│   [1] URL Ingestion ──────┐                                         │
+│                            ├──> [3] Personal Library                │
+│   [2] Multi-format Intake ─┘             │                          │
+│                                           │                          │
+│                                           ├──> [5] Annotation Review │
+│                                           │      Panel               │
+│                                           │                          │
+│                                           └──> [4] Export / Import   │
+│                                                                     │
+│   [6] Polish Fixes (FOUC, progress-bar) — independent of 1–5        │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Critical dependency notes
+
+- **Library (3) requires both ingestion surfaces (1 + 2).** A library with no way to fill it is not a library. The fixture corpus is the v1.0 seed so the library is non-empty during development.
+- **Export/Import (4) requires the Library (3).** It exports what the library holds.
+- **Annotation Review Panel (5) requires the v1.0 Annotation substrate AND the Library (3).** It is the cross-article view; without articles it is just the v1.0 drawer.
+- **EPUB intake forces a Book-concept decision** that may ripple into the Library (3) and Export/Import (4) schemas. Sequence EPUB *after* URL+HTML+Markdown so the document model decision is informed by working pipelines, not pre-emptive.
+- **Polish (6) is independent** — both fixes are local UI changes that can land in any phase.
+
+---
 
 ## MVP Definition
 
-### Launch With (Prototype v1)
+### v2.0 Launch With (Phase ordering recommendation)
 
-- [ ] Curated normalized article set covering every supported semantic block — validates the engine against representative long-form content.
-- [ ] One accessible document model and semantic renderer — prevents page/scroll divergence.
-- [ ] Equal-quality paginated and scrolling modes with explicit switch and scroll fallback — tests the core hypothesis without forcing it.
-- [ ] Stable logical-location preservation across resize, settled fonts, typography changes, and mode switches — the main technical differentiator.
-- [ ] Calm typography controls: font, size, line height/spacing, measure/margins, and limited themes — baseline personalization without a settings maze.
-- [ ] Keyboard/pointer/touch navigation, semantic controls, visible focus, screen-reader reading order, zoom/reflow, contrast, and reduced-motion behavior — accessibility is a release gate.
-- [ ] Local highlights and attached notes anchored to normalized text; create/edit/delete and return-to-passage — completes the local reading loop.
-- [ ] Local persistence for preferences, logical position, annotations, and article identity — supports interruption and reopening.
-- [ ] Original-source link, quiet metadata, explicit unsupported-content behavior, and observable pagination fallback — maintains provenance and trust.
+Minimum viable personal-library milestone. Each item is essential to deliver the v2.0 promise ("put your own content in, take your highlights out"):
 
-### Add After Validation (v1.x)
+- [ ] **URL ingestion (1)** with honest failure disclosure — the defining v2.0 gesture.
+- [ ] **HTML + Markdown intake (2)** — the cheap, high-confidence intake paths that share the URL normalization pipeline.
+- [ ] **Personal library (3)** — list, open, delete, per-item metadata, source link, recently-read, title/metadata search. Tags included (default organization).
+- [ ] **Annotation review panel (5)** — cross-article list, jump-to-location, edit/delete, filter by article/tag. (RECV-01.)
+- [ ] **Versioned export/import (4)** — whole-library bundle + Markdown highlights export. (PORT-01/02.)
+- [ ] **Polish (6a + 6b)** — initial-load mode flash; short-article progress semantics.
+- [ ] **NVDA + Firefox acceptance run** — v1.0 ACPT-02 boundary A4 follow-up.
 
-- [ ] Heading/section navigator — add after semantic rendering and location mapping are stable.
-- [ ] Optional line focus / reading ruler — add after both modes expose reliable line/block movement and test with keyboard/AT users.
-- [ ] Annotation review panel plus orphan detection/repair — add once real anchoring failures reveal the right recovery UI.
-- [ ] Named calm presets and richer theme controls — derive from user preference evidence, not assumptions.
-- [ ] Portable local export/import — add when internal document and annotation schemas stabilize.
-- [ ] Performance diagnostics available to testers — expose measurement/fallback reasons without cluttering the reader surface.
+### Add After Validation (v2.x)
 
-### Future Consideration (v2+ Product/Extension)
+Sequence once v2.0 is in readers' hands:
 
-- [ ] Browser extension and live extraction — requires separate parsing, sanitization, permission, authentication, and failure-design research.
-- [ ] Saved-article library, tagging, search, and offline cache management — product shell after the reading engine proves reliable.
-- [ ] Optional read-aloud with synchronized highlighting — requires a dedicated accessibility and voice-control design phase.
-- [ ] Accounts, encrypted cross-device sync, and conflict resolution — only after local ownership and schema semantics are mature.
-- [ ] EPUB/PDF/newsletter/RSS inputs — different document models and ingestion paths should not dilute article-layout validation.
-- [ ] Opt-in language/learning aids such as translation or picture dictionary — separate audience and evidence requirements.
-- [ ] AI-derived aids — only as explicit, reversible, source-grounded features with privacy and accuracy evaluation.
+- [ ] **EPUB intake (2)** — triggers the Book-concept decision; sequences after URL+HTML+Markdown proven.
+- [ ] **PDF intake (2)** — riskiest pipeline; sequences after EPUB. Honest disclosure of PDF text noise required.
+- [ ] **Full-text search (3)** — high-value but high-cost; deferred from v2.0 launch.
+- [ ] **RECV-02 explicit anchor repair** — surfacing the tri-state in the panel (5) is v2.0; the repair UI is v2.x.
+- [ ] **Per-article export (4)** — small win once the bundle pipeline exists.
+- [ ] **Anchor preservation across re-extraction (1)** — natural ANNO-07 extension when articles change.
+
+### Future Consideration (v3+)
+
+- [ ] **Accounts, cloud sync, encrypted cross-device persistence** — explicitly deferred; v2.0 ships portability instead.
+- [ ] **Browser-extension packaging** — higher-fidelity DOM extraction once the web-app loop is proven.
+- [ ] **Paywalled / authenticated content** — requires identity.
+- [ ] **RSS / Feed auto-push section** — different product dynamic.
+- [ ] **Orientation aids (ORNT-01/02), presentation presets (PRES-01)** — deferred v2 candidates per PROJECT.md.
+- [ ] **Read-aloud, AI, recommendations** — carried Out-of-Scope from v1.0.
+
+---
 
 ## Feature Prioritization Matrix
 
-| Feature | User Value | Implementation Cost | Priority |
-|---------|------------|---------------------|----------|
-| Semantic article fidelity | HIGH | HIGH | P1 |
-| Accessible dual-mode reading | HIGH | HIGH | P1 |
-| Stable repagination/location mapping | HIGH | HIGH | P1 |
-| Typography/theme controls | HIGH | MEDIUM | P1 |
-| Keyboard/AT/zoom/reduced-motion support | HIGH | HIGH | P1 |
-| Local highlights and notes | HIGH | HIGH | P1 |
-| Local resume/preferences | HIGH | MEDIUM | P1 |
-| Graceful scroll fallback | HIGH | MEDIUM | P1 |
-| Structural navigator | HIGH | MEDIUM | P2 |
-| Line focus | MEDIUM-HIGH | MEDIUM | P2 |
-| Annotation repair UI | MEDIUM | HIGH | P2 |
-| Export/import | MEDIUM | MEDIUM | P2 |
-| Read aloud | MEDIUM-HIGH | HIGH | P3 |
-| Extension/live extraction | HIGH for product | HIGH | P3 |
-| Cloud sync | MEDIUM-HIGH | HIGH | P3 |
-| AI summaries/chat | LOW for core wedge | HIGH | P3 / anti-feature for prototype |
+| Feature | User Value | Implementation Cost | Priority | Phase |
+|---------|------------|---------------------|----------|-------|
+| URL ingestion + honest failure | HIGH | HIGH | P1 | 7 |
+| HTML intake | MEDIUM | LOW (shares URL pipeline) | P1 | 7 |
+| Markdown intake | MEDIUM | MEDIUM | P1 | 7 |
+| Personal library (list/open/delete/metadata/search) | HIGH | MEDIUM | P1 | 8 |
+| Tags (default organization) | MEDIUM | MEDIUM | P1 | 8 |
+| Annotation review panel (cross-article) | HIGH | MEDIUM | P1 | 9 |
+| Versioned whole-library export | HIGH | MEDIUM | P1 | 10 |
+| Import with validation + conflict report | HIGH | MEDIUM | P1 | 10 |
+| Markdown highlights export | MEDIUM | MEDIUM | P1 | 10 |
+| Reading-progress indicator per item | MEDIUM | LOW | P1 | 8 |
+| Recently-read shortcut | LOW | LOW | P1 | 8 |
+| Edit-metadata panel | MEDIUM | MEDIUM | P1 | 8 |
+| Initial-load mode-flash fix | MEDIUM | LOW | P1 | 7 (early) |
+| Short-article progress-bar fix | MEDIUM | LOW | P1 | 7 (early) |
+| NVDA+Firefox acceptance run | MEDIUM | MEDIUM | P1 | 11 |
+| EPUB intake + Book concept | HIGH | HIGH | P2 | v2.x |
+| PDF intake (text + page views) | MEDIUM | HIGH | P2 | v2.x |
+| Full-text search across articles | HIGH | HIGH | P2 | v2.x |
+| Per-article export | LOW | LOW | P2 | v2.x |
+| Tag-filtered highlights export-from-here | MEDIUM | LOW | P2 | v2.x |
+| Anchor preservation across re-extraction | MEDIUM | HIGH | P3 | v3 |
+| Filtered views (saved quick-filters) | LOW | MEDIUM | P3 | v3 |
+| Bundle signing | LOW | LOW | P3 | v3 |
 
-**Priority key:** P1 validates this milestone; P2 extends the validated local reader; P3 belongs to a later product or a separate hypothesis.
+**Priority key:**
+- **P1** — Must have for v2.0 launch.
+- **P2** — Should have; add in v2.x once v2.0 is validated in readers' hands.
+- **P3** — Nice to have; future consideration.
+
+---
 
 ## Competitor Feature Analysis
 
-| Feature | Firefox Reader View | Safari Reader | Microsoft Immersive Reader | Instapaper / Readwise Reader | Lem Reader approach |
-|---------|---------------------|---------------|-----------------------------|------------------------------|---------------------|
-| Distraction-free article | Yes | Yes | Yes | Yes | Table stake; operate on curated normalized input in prototype. |
-| Typography/theme | Extensive font, weight, width, line/character/word spacing, theme controls | Font, size, background | Size, spacing, column width, themes | Custom reading presentation | Focused set in v1 with locally persisted, accessible controls. |
-| Read aloud | Yes when system TTS supports language | Not established as core Reader control in cited guide | Yes / reading aids | Yes | Defer to v2; protect layout/accessibility scope. |
-| Line focus/learning aids | Not documented in cited Reader View guide | Not documented in cited Reader guide | One/three/five-line focus, picture dictionary, translation | Power-reading and annotation features vary | Line focus is the best v1.x cognitive-accessibility differentiator; other learning aids later. |
-| Highlights/notes | Not a core feature in cited Reader View docs | Not a core feature in cited Reader guide | Not central to cited Edge guide | Core capability | Local, layout-independent highlights/notes are P1. |
-| Offline/sync/library | Browser page feature | Browser page feature | Browser page feature | Established saved-reading products support offline/library/sync to varying degrees | Intentionally out of prototype; local fixture and persistence layer only. |
-| Pagination plus scroll parity | No responsive-book pagination documented in cited guides | Presents article as one page | No pagination documented in cited guide | Primarily continuous reader experiences | Core differentiator: both modes, same semantics and state, stable place across changes. |
+| Feature | Readwise Reader | Pocket (sunset 2025) | Instapaper | Wallabag | Apple Books | Hypothes.is | **Lem Reader v2.0 approach** |
+|---------|-----------------|----------------------|------------|----------|-------------|-------------|------------------------------|
+| Paste-URL save | Yes | Yes | Yes | Yes | No | No | **Yes (stateless backend, public-web-only)** |
+| Browser extension | Yes | Yes | Yes | Yes (wallabagger) | No | Yes | **Deferred to v2.x** |
+| Honest extraction-failure disclosure | Quiet (Report parsing issue) | None | None | None | N/A | N/A | **First-class (DOC-06 spirit extended to ingestion)** |
+| Multi-format intake | PDF/EPUB/MD/OPML/RSS/email/tweet/video/podcast | URLs only | URLs only | URLs only | EPUB/PDF | PDF + web | **HTML/MD/PDF/EPUB, sequenced by risk** |
+| Library organization | Library + Feed, tags, filtered views (query language) | List + tags | List + folders | List + tags | Library + collections | By URL/group | **Flat library + tags; no Feed, no query language** |
+| Full-text search | Yes (headline feature) | Yes | No | Yes | Yes | Yes | **Title/metadata at launch; full-text in v2.x** |
+| Reading-progress per item | Yes | Yes | Yes | Yes | Yes | N/A | **Yes (positional for short works)** |
+| Annotation review panel | Notebook tab + Highlight Tags page | Highlights list | Highlights list | Annotations export | Notes panel | Annotation list (signature) | **Cross-article panel with tri-state indicator** |
+| Export formats | CSV/OPML/ZIP/Markdown/Jinja2 | CSV/HTML | CSV/HTML | JSON/CSV/EPUB/PDF/MHTML | PDF | JSON/HTML | **Versioned JSON bundle + Markdown highlights** |
+| Sync | Cloud (account) | Cloud | Cloud | Self-host | iCloud | Cloud | **Local-first; versioned export/import** |
+| AI features | Ghostreader (chat/summary/TTS) | No | No | No | Limited | No | **None (Out-of-Scope)** |
+| Calm/accessibility posture | Power-reader, keyboard-first | Triage-queue | Triage-queue | Utility | Booklike | Annotation-first | **Calm + accessible + booklike (v1.0 positioning preserved)** |
 
-## Accessibility Acceptance Expectations
-
-Treat these as feature acceptance criteria, not post-build polish:
-
-- Every function is operable with keyboard alone, focus is visible, focus order follows the interface, and focus can always leave a component.
-- Article semantics and reading order remain correct in both modes; visual page fragments do not become misleading landmarks or repeated headings for assistive technology.
-- Text can resize and content can reflow without loss of information or function; at narrow widths or high zoom the reader may switch or offer scrolling while preserving place.
-- System contrast/forced-color preferences remain usable; custom themes meet contrast needs and do not encode meaning by color alone.
-- Motion is never required, autoplayed, or the only cue. Reduced-motion users receive immediate stable transitions.
-- Controls are familiar, consistently placed, clearly named, and few in number; optional settings remain discoverable without competing with the article.
-- User choices persist but remain reversible. Do not claim that one font, color, or pagination style is universally “accessible.”
-- Selection, highlights, and notes work at zoom and across repagination; highlight styling does not obscure text, selection, focus, or forced-color behavior.
-- Status messages (saved note, fallback, position restored) are concise and programmatically available where useful, without repeated announcements during ordinary page turns.
-- Test with screen readers, keyboard-only navigation, browser zoom/reflow, forced colors/high contrast, reduced motion, touch, long articles, and representative cognitive-accessibility users before making preference or comprehension claims.
+---
 
 ## Sources
 
-Primary and official sources, checked 2026-07-26:
+### Competitor / category documentation (HIGH confidence)
 
-- [W3C — Web Content Accessibility Guidelines (WCAG) 2.2](https://www.w3.org/TR/WCAG22/) — keyboard, focus, resize/reflow, motion, and related normative expectations.
-- [W3C WAI — Limit Interruptions](https://www.w3.org/WAI/WCAG2/supplemental/patterns/o5p01-minimal-interruptions/) — cognitive-accessibility rationale for removing distractions and user control over interruptions.
-- [W3C WAI — Avoid Too Much Content](https://www.w3.org/WAI/WCAG2/supplemental/patterns/o5p03-manageable-quantity/) and [Support Simplification](https://www.w3.org/WAI/WCAG2/supplemental/patterns/o8p03-complexity/) — simple interfaces, fewer primary choices, optional features separated from critical paths.
-- [W3C WAI — Support a Personalized and Familiar Interface](https://www.w3.org/WAI/WCAG2/supplemental/patterns/o8p04-interface/) and [Use White Spacing](https://www.w3.org/WAI/WCAG2/supplemental/patterns/o3p10-whitespace/) — presentation controls and calm visual organization.
-- [W3C WAI — Help Users Focus](https://www.w3.org/WAI/WCAG2/supplemental/objectives/o5-user-focus/) and [Break Media into Chunks](https://www.w3.org/WAI/WCAG2/supplemental/patterns/o2p05-chunked-media/) — reorientation, headings, and logical navigation after distraction.
-- [W3C — Web Annotation Data Model](https://www.w3.org/TR/annotation-model/) — authoritative `TextQuoteSelector` and `TextPositionSelector` concepts for layout-independent annotation targets.
-- [Mozilla Support — Firefox Reader View](https://support.mozilla.org/en-US/kb/firefox-reader-view-clutter-free-web-pages) — current layout, font, spacing, theme, and read-aloud feature baseline.
-- [Apple Support — Hide distractions when reading articles in Safari on Mac](https://support.apple.com/guide/safari/hide-distractions-when-reading-sfri32632/mac) — official Reader behavior, presentation controls, and long-article table of contents.
-- [Microsoft Support — Use Immersive Reader in Microsoft Edge](https://support.microsoft.com/en-US/edge/use-immersive-reader-in-microsoft-edge) — text size/spacing/column/theme controls and line-focus/reading-preference aids.
-- [Instapaper Docs — Read](https://www.instapaper.com/docs/read) and [Getting Started](https://www.instapaper.com/docs/getting-started/welcome) — current read-it-later baseline including themes, highlights/notes, offline access, listening, and optional speed reading.
-- [Readwise Reader Docs — What is Reader?](https://docs.readwise.io/reader/docs) and [Highlights, Tags, and Notes](https://docs.readwise.io/reader/docs/faqs/highlights-tags-notes) — current saved-reader annotation, import breadth, and keyboard-based reading workflow.
+- **Mozilla Readability.js** — official README and `index.d.ts` type definitions (2026-08-10): `parse()` return shape, `isProbablyReaderable()` documented false-positive/false-negative behavior, `charThreshold` default, security recommendation to use DOMPurify + CSP, jsdom usage with URL option for relative-URL absolutization, scripts/remote-fetch disabled.
+  - https://github.com/mozilla/readability
+- **Readwise Reader — marketing page** (readwise.io/reader): multi-format intake (web/RSS/PDF/EPUB/Markdown/newsletter/YouTube/Twitter/podcast), library + feed split, full-text search, keyboard-based reading, export promise ("download every document as a CSV, your feeds as an OPML, your uploaded files as a zip, and every highlight and annotation as Markdown"), Pocket/Instapaper import, DRM-EPUB admission.
+  - https://readwise.io/reader
+- **Readwise Reader — Adding Content FAQ** (docs.readwise.io/reader/docs/faqs/adding-new-content): URL-save format (`https://wise.readwise.io/save?url=`), browser-extension vs. naked-URL fidelity gap, drag-drop upload of PDF/EPUB/Markdown/OPML, Markdown metadata derivation (filename → title, first image → cover, Edit Metadata panel), Kindle/Apple/Kobo DRM admission.
+- **Readwise Reader — Highlights, Tags, Notes FAQ**: keyboard annotation, auto-highlighting, document tags vs. highlight tags with explicit "no inheritance," Notebook tab (per-document annotation panel), Manage Tags page (cross-document highlight browse), highlight-position-mismatch honest disclosure ("notify you that it failed to match ... still visible in the Notebook tab"), single highlight color (tags recommended instead).
+- **Readwise Reader — Filtering Syntax Guide**: filtered-view query parameters (`tag`, `domain`, `category`, `location`, `has`, `progress`, `highlights`, `words`, `minutes`, `saved`, `published`, `last_opened`) with `__gt/__lt/__before/__after/__contains` operators — power-user surface Lem Reader explicitly does not replicate at v2.0.
+- **Readwise Reader — Exporting FAQ**: per-document Notebook export (copy clipboard / Markdown download / Jinja2 template with `url/tags/title/author/summary/category/image_url/site_name/document_note/highlights`), per-tag highlight export, Library CSV, OPML feeds, Full-content ZIP, Print with annotations, Send to Kindle.
+- **Readwise Reader — Parsing FAQ**: "we'll never be able to parse 100% of the internet 100% perfectly" honesty, browser-extension-as-exception-handler pattern, Report-document-parsing-issue feedback channel, immutability ("Reader will never try to re-parse previously saved content"), URL-exact de-dup only.
+- **Readwise Reader — PDFs FAQ**: PDF metadata unreliability ("often improperly set or not set at all"), text-line-break glitch admission, cross-page highlight impossibility without reflow, PDF-view vs. Text-view mode split, dark-mode color-inversion distortion, snapshot tool for figure highlights, auto-highlighting unavailable in PDF view.
+- **Wallabag** — README (github.com/wallabag/wallabag): self-hostable read-it-later, content extraction via Graby + php-readability + ftr-site-config, MIT license, doc.wallabag.org — establishes that the open-source read-it-later category is mature and that extraction libraries are interchangeable substrate.
+- **Hypothes.is — Help** (web.hypothes.is/help): annotation-list-as-product pattern, group/private/public annotation split, PDF annotation emphasis, LMS integration — establishes the cross-document annotation-review surface category.
+
+### Standards reference (HIGH confidence)
+
+- **EPUB — Wikipedia** (en.wikipedia.org/wiki/EPUB): ZIP container structure, OPF four child elements (metadata/manifest/spine/guide), NCX vs. nav.xhtml navigation, required mimetype file, DRM-optional/DRM-unspecified status, EPUB 3.3 (May 2023) current spec, MathML/fixed-layout additions, security/privacy cautions — informs the Book-vs-Article design tension and the DRM-free-only intake posture.
+
+### Project context (HIGH confidence — internal artifacts)
+
+- `.planning/PROJECT.md` — v2.0 milestone scope, Out-of-Scope commitments (no accounts/cloud/sync/extension/paywall in v2.0), ORNT/RECV/PORT/PRES candidate definitions.
+- `.planning/milestones/v1.0-REQUIREMENTS.md` — shipped v1.0 requirement definitions, used to identify substrate dependencies (DOC-03/04/05/06, ANNO-04/05/06/07, STATE-01/02/03/04/05, READ-02/03/04/05, PAGE-01/09, A11Y-01/02).
+- `.planning/research/FEATURES.md` (v1.0) — existing table-stakes/differentiator/anti-feature analysis for the reading engine; not re-researched here.
+
+### Reasoning basis for product judgment (MEDIUM confidence)
+
+- Calm/library scoping recommendations (flat tags vs. folders, no triage gamification, no AI features, no RSS feed section, no spaced-repetition) are grounded in PROJECT.md's "calm, booklike, accessibility-first" positioning and the v1.0 anti-features list, not in user studies. Re-validate after v2.0 ships.
 
 ---
-*Feature research for: Lem Reader*
-*Researched: 2026-07-26*
+*Feature research for: Lem Reader v2.0 Personal Library (URL ingestion, multi-format intake, library, export/import, annotation review panel, polish).*
+*Researched: 2026-08-10.*
