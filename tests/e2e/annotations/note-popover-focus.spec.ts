@@ -205,4 +205,55 @@ test.describe("Note popover modal-dialog focus (ACPT-02 finding #2)", () => {
     // Focus restored to the triggering <mark>.
     await expect(triggerMark).toBeFocused();
   });
+
+  test("dialog announces the highlighted excerpt as its accessible description (ACPT-02 #5)", async ({
+    page,
+  }) => {
+    // ACPT-02 finding #5 (debug session `vo-note-popover-focus`): VoiceOver
+    // announced the visually-hidden "Highlighted text:" label but NOT the
+    // excerpt content — the SR user editing a note never heard WHAT text was
+    // highlighted. The fix makes the excerpt the dialog's accessible
+    // description via aria-describedby, with the "Highlighted text:" prefix
+    // merged inside the excerpt <p> so the description is a single string
+    // ("Highlighted text: <excerpt>"). This test is the automated foundation
+    // beneath the human VO checkpoint: it proves the a11y-tree wiring
+    // (aria-describedby → the excerpt element → its text is in the dialog's
+    // computed description) that VO reads on dialog open.
+    await createHighlightAndOpenEditor(page);
+
+    // (a) The dialog references the excerpt element by id.
+    const dlg = page.getByRole("dialog", { name: "Highlight note" });
+    await expect(dlg).toHaveAttribute(
+      "aria-describedby",
+      "highlight-popover-excerpt",
+    );
+
+    // (b) The referenced element exists and is inside the dialog.
+    const excerptEl = dlg.locator("#highlight-popover-excerpt");
+    await expect(excerptEl).toBeVisible();
+
+    // (c) Read the actual excerpt text (excluding the visually-hidden prefix
+    //     span) so the description assertion is fixture-agnostic.
+    const excerptText = await excerptEl.evaluate((el) => {
+      const clone = el.cloneNode(true) as HTMLElement;
+      clone.querySelector(".visually-hidden")?.remove();
+      return (clone.textContent ?? "").trim();
+    });
+    expect(excerptText.length, "excerpt text is non-empty").toBeGreaterThan(0);
+
+    // (d) THE #5 assertion: the dialog's computed accessible description (the
+    //     a11y-tree value VoiceOver announces on dialog open) includes BOTH
+    //     the "Highlighted text:" prefix AND the excerpt content. Playwright's
+    //     role+description filter resolves through the accessibility tree, so
+    //     a match proves the description is wired end-to-end cross-engine —
+    //     not just that the DOM attribute exists.
+    const escapeRe = (s: string) =>
+      s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const descriptionRe = new RegExp(
+      `Highlighted text:.*${escapeRe(excerptText)}`,
+    );
+    await expect(
+      page.getByRole("dialog", { name: "Highlight note", description: descriptionRe }),
+    ).toBeVisible();
+  });
 });

@@ -214,6 +214,7 @@ export function NotePopover(): React.ReactElement | null {
       id="highlight-popover"
       className="highlight-popover"
       aria-label="Highlight note"
+      aria-describedby="highlight-popover-excerpt"
     >
       {resolved && (
         confirmingDelete ? (
@@ -222,7 +223,8 @@ export function NotePopover(): React.ReactElement | null {
               Delete this highlight?
             </p>
             {excerpt.length > 0 && (
-              <p className="highlight-popover-excerpt">
+              <p className="highlight-popover-excerpt" id="highlight-popover-excerpt">
+                <span className="visually-hidden">Highlighted text:</span>{" "}
                 {truncate(excerpt, EXCERPT_MAX_CHARS)}
               </p>
             )}
@@ -249,8 +251,16 @@ export function NotePopover(): React.ReactElement | null {
         ) : (
           <>
             <div className="highlight-popover-context">
-              <span className="visually-hidden">Highlighted text:</span>
-              <p className="highlight-popover-excerpt">
+              {/* The excerpt is the dialog's accessible description
+                  (aria-describedby above) so VoiceOver announces the
+                  highlighted text when the editor opens (ACPT-02 finding #5).
+                  The visually-hidden "Highlighted text:" prefix lives INSIDE
+                  the <p> so the description is a single, unambiguous string —
+                  "Highlighted text: <excerpt>" — rather than a separate label
+                  VO stops on before reaching the excerpt content. Sighted
+                  readers see only the italic excerpt (the prefix is clipped). */}
+              <p className="highlight-popover-excerpt" id="highlight-popover-excerpt">
+                <span className="visually-hidden">Highlighted text:</span>{" "}
                 {truncate(excerpt, EXCERPT_MAX_CHARS)}
               </p>
             </div>
