@@ -4,17 +4,17 @@ milestone: v1.0
 milestone_name: milestone
 current_phase: 06
 current_phase_name: prototype-acceptance
-status: blocked
-stopped_at: "06-06 ACPT-02 acceptance BLOCKED: VoiceOver+Safari run surfaced 3 major SR findings (#1 H shortcut selection-interop, #2 NotePopover popover/dialog focus-scope, #4 scroll-mode VO cursor sync). 06-01..06-05 complete; routing to /gsd-debug for fixes, then SR re-test."
-last_updated: "2026-08-09T00:00:00.000Z"
-last_activity: 2026-08-09
-last_activity_desc: 06-06 SR acceptance run found major defects; entering debug fix cycle
+status: ready_for_verification
+stopped_at: Completed 06-06-PLAN.md (phase-6 acceptance ledger; ACPT-02 reduced-gate flip pending user)
+last_updated: "2026-08-10T20:38:55.500Z"
+last_activity: 2026-08-10
+last_activity_desc: 06-06 authored 06-VERIFICATION.md + honest full-suite green
 progress:
   total_phases: 6
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 35
-  completed_plans: 34
-  percent: 97
+  completed_plans: 35
+  percent: 100
 ---
 
 # Project State
@@ -28,12 +28,12 @@ See: .planning/PROJECT.md (updated 2026-08-05)
 
 ## Current Position
 
-Phase: 06 (prototype-acceptance) — EXECUTING
-Plan: 6 of 6
-Status: Plan 06-05 complete; 06-06 (phase verification) is the last plan
-Last activity: 2026-08-08 — ACPT-03 closed by Plan 06-05
+Phase: 06 (prototype-acceptance) — EXECUTING (all 6 plans complete; ACPT-02 flip pending user decision)
+Plan: 6 of 6 (complete)
+Status: 06-06 complete; phase-6 acceptance ledger authored; ACPT-02 accepted on reduced gate (VoiceOver+Safari zero-blocker, NVDA = coverage boundary A4) — flip surfaced to user
+Last activity: 2026-08-10 — 06-06 authored 06-VERIFICATION.md + honest full-suite green
 
-Progress: [██████████] 5/6 phases code-complete — 34/35 plans executed (Phase 06 in progress; 06-06 phase verification remains)
+Progress: [██████████] 6/6 phases code-complete — 35/35 plans executed (Phase 6 acceptance ledger complete; ACPT-02 reduced-gate flip pending user)
 
 ## Recent Decisions (Plan 04-11)
 
@@ -96,6 +96,7 @@ Progress: [██████████] 5/6 phases code-complete — 34/35 pl
 | Phase 06 P03 | 64min | 3 tasks | 6 files |
 | Phase 06 P04 | 2 min | 1 tasks | 1 files |
 | Phase 06 P05 | 7 min | 2 tasks | 4 files |
+| Phase 06 P06 | 10 min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -191,6 +192,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 06]: Manual SR protocol expected outcomes authored as role + accessible name + state (programmatically verifiable), NOT verbatim SR phrasing (Pitfall 7). Confusing-but-completable announcement = minor unless step fails or content/function lost.
 - [Phase ?]: 06-05 closes ACPT-03
 - [Phase ?]: [Phase 06]: 06-05 closes ACPT-03 — all 4 existing edge specs (forced-colors, reduced-motion, reflow, touch-targets) audited against the shared D6-09 invariant + strengthened to apply assertEdgeInvariant uniformly across the 6-fixture corpus x 3 engines (72 new cells). Strengthen-only per D6-12 (no existing assertion removed); wipeDatabase added to every beforeEach (Rule 2 harness-baseline consistency). reflow.spec.ts (the (c) overflow-clause origin) now asserts the COMPLETE invariant (a)/(b)/(c) via the helper. Together with 06-01 (high-zoom + font-failure), all six edge conditions assert the same bar.
+- [Phase 06]: 06-06 executes ACPT-02 manual SR protocol on VoiceOver+Safari (zero blocker/major after 5 findings resolved; #1 H-under-VO documented as cross-SR platform constraint, toolbar = primary SR path; #2 NotePopover promoted to modal <dialog>+showModal; #3 minor deferred; #4 visual-only; #5 aria-describedby excerpt). Honest full-suite gate green (1157 passed / 0 failed / exit 0). NVDA+Firefox NOT run = coverage boundary A4 (reduced gate). ACPT-02 NOT unilaterally flipped -- flip decision surfaced to user. — 06-VERIFICATION.md is the durable phase-6 acceptance ledger; reduced-gate honesty over silent full-coverage claim.
 
 ### Pending Todos
 
@@ -202,7 +204,6 @@ None yet.
 - [Phase 4 → PLANNED (Plan 04-06)]: The pagination engine cannot paginate ANY corpus fixture. Two compounding issues: (1) PaginatedSurface replaces the full ArticleBody with a single page fragment before the engine reads live line boxes via `articleEl.querySelectorAll(BLOCK_SELECTOR)`; (2) every fixture contains container blocks (blockquote/lists) whose nested children break the engine's `elements.length !== articleBlocks.length` guard → `dom-fallback`. **Resolution path = Plan 04-06** (user-approved Option A + data-block-index + fold-in persistence failures): capture LineBox[][] during the measurement phase + add data-block-index for a 1:1 block↔element mapping + engine consumes pre-captured line boxes + remove the corpus-matrix ok-path e2e skips + fix the pre-existing persistence.spec.ts STATE-01 failures. See 04-06-PLAN.md.
 - [Phase 4 → deferred → folded into 04-06]: persistence.spec.ts STATE-01 location-restore tests fail pre-existing since 04-02/04-03 (paginated default + paginated-surface geometry prevents window scroll). Now tracked under Plan 04-06 Task 5 (test-only fix: seed readingMode "scrolling").
 - [Phase 5]: Offset units, grapheme handling, overlap semantics, and anchor confidence thresholds need explicit decisions.
-- [Phase 6]: Concrete browser/OS/screen-reader support combinations and manual protocol remain to be selected.
 - [Phase 4 → RESOLVED by 04-07/04-08/04-09/04-10/04-11]: gsd-verifier caught 76 hidden e2e failures misreported as "269 passed / 0 failed" across every Phase 4 SUMMARY + STATE + ROADMAP + REQUIREMENTS + the Plan 04-05 Task 3 gate-approval commit. Reality was 76 failed / 269 passed. Gap-closure plans 04-07 (PAGE-03b overflow guard), 04-08 (PAGE-06/07 always-mounted ArticleBody), 04-09 (PAGE-01/02 M-toggle + keyboard/chevron), 04-10 (PAGE-09 banner race) closed all 6 structural gaps. Plan 04-11 re-ran the FULL `npm run test` suite end-to-end: 753 passed / 0 failed / 0 skipped, exit 0. 04-VERIFICATION.md upgraded gaps_found (3/7) → verified (7/7). The Plan 04-05 Task 3 human-verify gate now has a genuinely-green automated prerequisite.
 
 ## Deferred Items
@@ -213,6 +214,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-08-08T16:39:32.728Z
-Stopped at: Completed 06-04-PLAN.md (ACPT-02 instrument authored — versioned docs/ACCEPTANCE-PROTOCOL.md)
+Last session: 2026-08-10T20:38:50.651Z
+Stopped at: Completed 06-06-PLAN.md (phase-6 acceptance ledger; ACPT-02 reduced-gate flip pending user)
 Resume file: None

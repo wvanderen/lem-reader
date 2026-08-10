@@ -11,7 +11,7 @@ Lem Reader reaches its MVP through six vertical slices that keep a usable semant
 - [x] **Phase 3: Trustworthy Layout Measurement** - Readers retain a usable view while responsive layout work is calibrated, current, and safe against font and asset changes. (completed 2026-08-05)
 - [ ] **Phase 4: Responsive Pagination and Dual-Mode Navigation** - Readers can navigate complete, stable pages or return to scrolling without losing their passage. *(VERIFIED 2026-08-06T22:24:05Z — Plan 04-11 ran the full `npm run test` suite end-to-end: 753 passed / 0 failed / 0 skipped, exit 0. The prior "269/0" misreport is overturned; all 6 verifier-found gaps closed by 04-07/08/09/10. 04-VERIFICATION.md upgraded gaps_found (3/7) → verified (7/7).)* (in progress 2026-08-06)
 - [x] **Phase 5: Durable Highlights and Notes** - Readers can create and manage local annotations that remain attached to canonical passages across every view change. (completed 2026-08-07)
-- [ ] **Phase 6: Prototype Acceptance** - Readers can complete the full reading and annotation flow across the supported browser and accessibility conditions within explicit performance budgets.
+- [x] **Phase 6: Prototype Acceptance** - Readers can complete the full reading and annotation flow across the supported browser and accessibility conditions within explicit performance budgets. (completed 2026-08-10)
 
 ## Phase Details
 
@@ -206,7 +206,7 @@ Plans:
   3. Reader retains content and required functions under high zoom, narrow reflow, forced colors, reduced motion, touch, and late or failed font loading.
   4. Cold and warm repagination on the selected article and device profiles stays within explicit release budgets or falls back without blocking reading.
 
-**Plans:** 5/6 plans executed
+**Plans:** 6/6 plans complete
 Plans:
 **Wave 1**
 
@@ -221,7 +221,7 @@ Plans:
 
 **Wave 3** *(blocked on Waves 1–2 — final acceptance gate)*
 
-- [ ] 06-06-PLAN.md — Wave 3 (autonomous: false): execute the ACPT-02 manual SR protocol on NVDA+Firefox + VoiceOver+Safari (zero-blocker, D6-07) + honest full-suite `npm run test` exit 0 + author `06-VERIFICATION.md` consolidating ACPT-01..04 evidence
+- [x] 06-06-PLAN.md — Wave 3 (autonomous: false): execute the ACPT-02 manual SR protocol on NVDA+Firefox + VoiceOver+Safari (zero-blocker, D6-07) + honest full-suite `npm run test` exit 0 + author `06-VERIFICATION.md` consolidating ACPT-01..04 evidence
 
 **UI hint:** yes
 
@@ -234,4 +234,4 @@ Plans:
 | 3. Trustworthy Layout Measurement | 2/2 | Complete    | 2026-08-05 |
 | 4. Responsive Pagination and Dual-Mode Navigation | 10/11 | In Progress|  |
 | 5. Durable Highlights and Notes | 7/7 | Complete    | 2026-08-07 |
-| 6. Prototype Acceptance | 5/6 | In Progress|  |
+| 6. Prototype Acceptance | 6/6 | Complete   | 2026-08-10 |
