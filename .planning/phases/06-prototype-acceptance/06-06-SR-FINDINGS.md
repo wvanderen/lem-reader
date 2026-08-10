@@ -44,8 +44,26 @@ User chose: **Fix the SR defects, then re-test.** Routing to `/gsd-debug` for th
 
 NVDA+Firefox (Windows) status: **not yet reported.** Reduced-gate (A4) is available if NVDA is unavailable, but the VO findings alone block acceptance regardless. NVDA run should happen during the re-test after fixes.
 
+## Re-test results (2026-08-09, VoiceOver+Safari)
+
+| # | Finding | Re-test outcome |
+|---|---------|-----------------|
+| 1 | H doesn't highlight under VO | **STILL OPEN** — path-forward decision pending (see below) |
+| 2 | Note textarea unreachable via VO | **RESOLVED** — `fcda4ec` promoted NotePopover to modal `<dialog>` + `showModal()`. Tester: "Editor looks good and we can open highlighter now." Inert-behind tradeoff accepted. Session `vo-note-popover-focus` → `resolved/`. |
+| 5 (new) | Highlight excerpt not announced in dialog | **RESOLVED** — `5d2bab5` added `aria-describedby="highlight-popover-excerpt"` + merged label into excerpt `<p>`. Verified via a11y-tree assertion (15/15 note-popover-focus.spec.ts). |
+| 3 | Multi-unit highlight announce noise | MINOR — deferred. |
+| 4 | VO scroll cursor lag (visual) | **RESOLVED for SR** — tester: "VO behavior is correct." Residual is a *visual* polish issue only (sighted observer sees cursor block lag; SR reading is correct). Not an ACPT-02 blocker. |
+
+### Deferred enhancement (captured from tester idea, 2026-08-09)
+
+**Scroll-sync for VO browse cursor (visual polish):** tester proposed — "When in VO mode we reach the bottom of the viewport we should scroll all the way down so [the] current selected text is at [the] top of [the] page, or vice versa for scrolling up." I.e., when VO's browse cursor approaches the viewport edge in scroll mode, auto-scroll so the current passage sits at the top (or bottom) of the viewport, keeping the visible VO position block aligned with the actual reading position. UX enhancement for sighted observers / VO-cursor visibility — not an SR accessibility blocker. **Defer to a post-v1 polish phase.**
+
+## Path-forward decision for #1 (H shortcut under VO)
+
+Outstanding. Session `vo-highlight-selection` returned an evidence-request checkpoint (Probes A/B/C) to determine whether VO text-selection surfaces to the Selection API. Tester did not run the probes. Decision needed: (a) investigate the narrow path if VO selection works, (b) implement a block-level highlight affordance as a guaranteed SR path, or (c) defer H-under-VO as a known limitation (ANNO-01 satisfiable via mouse/keyboard).
+
 ## Artifacts touched by this checkpoint
 
 - This file (`06-06-SR-FINDINGS.md`) — durable record.
 - `.planning/STATE.md` — 06-06 marked blocked; phase status updated.
-- No source changes yet (fixes land in the debug cycle).
+- Source fixes landed via debug sessions: `fcda4ec`, `4c53b66`, `5d2bab5` (#2 + #5).
