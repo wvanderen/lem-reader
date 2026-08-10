@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 06
-status: completed
-stopped_at: "Phase 6 complete — all 4 ACPT requirements verified (ACPT-02 reduced gate A4: VoiceOver+Safari zero-blocker, NVDA documented as post-v1 follow-up). Honest full-suite npm run test = 1157/0 exit 0. v1 milestone ready for /gsd-complete-milestone."
-last_updated: "2026-08-10T20:43:16.808Z"
+current_phase: 0
+status: Awaiting next milestone
+stopped_at: Completed 06-06-PLAN.md (phase-6 acceptance ledger; ACPT-02 reduced-gate flip pending user)
+last_updated: "2026-08-10T20:52:54.517Z"
 last_activity: 2026-08-10
-last_activity_desc: Phase 06 marked complete
+last_activity_desc: Milestone v1.0 completed and archived
 progress:
   total_phases: 6
   completed_phases: 6
@@ -24,16 +24,14 @@ current_phase_name: prototype-acceptance
 See: .planning/PROJECT.md (updated 2026-08-05)
 
 **Core value:** Readers can move through long-form web content with calm, stable orientation and predictable navigation.
-**Current focus:** Phase 06 — prototype-acceptance
+**Current focus:** Planning next milestone (v1.0 shipped)
 
 ## Current Position
 
-Phase: 06 — COMPLETE
-Plan: 6 of 6 (complete)
-Status: Phase 06 complete
-Last activity: 2026-08-10 — Phase 06 marked complete
-
-Progress: [██████████] 6/6 phases code-complete — 35/35 plans executed (Phase 6 acceptance ledger complete; ACPT-02 reduced-gate flip pending user)
+Phase: Milestone v1.0 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-08-10 — Milestone v1.0 completed and archived
 
 ## Recent Decisions (Plan 04-11)
 
@@ -208,12 +206,23 @@ None yet.
 
 ## Deferred Items
 
-| Category | Item | Status | Deferred At |
-|----------|------|--------|-------------|
-| v2 | Orientation aids, annotation recovery, portability, and presentation presets | Deferred | Roadmap creation |
+Items acknowledged and deferred at milestone close on 2026-08-10:
+
+| Category | Item | Status |
+|----------|------|--------|
+| v2 | Orientation aids, annotation recovery, portability, and presentation presets | Deferred at roadmap creation |
+| debug | error-state-guidance-copy | Resolved by Plan 01-04 (file not moved to resolved/) |
+| debug | fixture-list-header-spacing | Resolved by Plan 01-04 (file not moved to resolved/) |
+| debug | footnote-router-collision | Resolved by Plan 01-05 (file not moved to resolved/) |
+| uat | Phase 01 UAT status flag | Gaps closed by 01-04/01-05; status not flipped from diagnosed |
+| verification | Phase 02 verification status flag | 17/17 truths verified; 3 manual-only items (SR announce quality, calm aesthetic, focus-ring visibility) are not code gaps — acknowledged on phase advance |
 
 ## Session Continuity
 
 Last session: 2026-08-10T20:38:50.651Z
 Stopped at: Completed 06-06-PLAN.md (phase-6 acceptance ledger; ACPT-02 reduced-gate flip pending user)
 Resume file: None
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone
