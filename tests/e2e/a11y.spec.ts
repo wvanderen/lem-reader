@@ -94,3 +94,69 @@ test("a11y 02-01 single-content-tree: article is rendered exactly once while pan
   );
   expect(dlgOpen, "dialog must be open (modal inert backdrop active)").toBe(true);
 });
+
+// ── ACPT-02 finding #2: note popover open (native <dialog> + showModal) ──────
+// The Phase 5 note popover used <div popover="manual">, which VoiceOver browse
+// could not enter (the field was unreachable — debug session
+// `vo-note-popover-focus`). The fix promoted it to native <dialog> + showModal.
+// This mirrors the A11Y-03 settings-panel check on the popover-open state:
+// zero serious/critical axe violations, single-content-tree, and the dialog is
+// genuinely modal (:modal — the focus scope + inert background VoiceOver needs
+// to enter the editor and reach the textarea). axe catches only automatable
+// issues; the final VO confirmation is the human ACPT-02 Flow D checkpoint.
+test("a11y ACPT-02 #2: note popover open is a modal dialog + axe-clean + single-content-tree", async ({
+  page,
+}) => {
+  await page.goto(`${BASE}/#/article/essay-long-form`);
+  // Wait for a selectable block to mount.
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  await page.waitForFunction(
+    () =>
+      !!document.querySelector(
+        ".page-fragment [data-block-index], .article-body:not(.article-body-measurement) [data-block-index]",
+      ),
+    undefined,
+    { timeout: 10_000 },
+  );
+  await page.waitForTimeout(600);
+
+  // Create a highlight + open the note editor via the N shortcut.
+  await page.evaluate(() => {
+    const block = document.querySelector<HTMLElement>(
+      '[data-block-index]:not(.article-body-measurement [data-block-index])',
+    );
+    if (!block) return;
+    const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+    const first = walker.nextNode() as Text | null;
+    if (!first) return;
+    const range = document.createRange();
+    range.setStart(first, 0);
+    range.setEnd(first, Math.min(18, first.nodeValue?.length ?? 0));
+    const sel = window.getSelection();
+    sel?.removeAllRanges();
+    sel?.addRange(range);
+  });
+  await page.keyboard.press("n");
+  const popover = page.locator("dialog#highlight-popover");
+  await expect(popover).toBeVisible();
+
+  // (a) Zero serious/critical axe violations with the editor open.
+  const results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
+  const serious = seriousViolations(results);
+  expect(serious, JSON.stringify(serious, null, 2)).toEqual([]);
+
+  // (b) A11Y-03 invariant: exactly ONE .article-body (not duplicated by the
+  //     top-layer editor). Note: .article-body-measurement (the hidden
+  //     measurement copy) is excluded — it is intentionally a second tree but
+  //     aria-hidden + user-select:none.
+  const visibleArticleCount = await page.locator(
+    "article.article-body:not(.article-body-measurement)",
+  ).count();
+  expect(visibleArticleCount, "visible article-body appears exactly once").toBe(1);
+
+  // (c) The popover is genuinely modal — the focus scope + inert background
+  //     VoiceOver needs (the property popover="manual" lacked). :modal matches
+  //     a <dialog> opened via showModal in the target browser baseline.
+  const isModal = await popover.evaluate((el) => el.matches(":modal"));
+  expect(isModal, "note popover is modal (:modal — showModal opened it)").toBe(true);
+});

@@ -1,0 +1,168 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-08T16:20:07.943Z",
+  "toleranceBound": {
+    "headroomPct": 0
+  },
+  "rationale": "ACPT-04 performance budget — LOCKED. Numeric thresholds (cold + warm wall-clock per fixture/profile/engine/phase) derived via D6-01 measure-first methodology: the executor ran `npm run perf` (harness across worst-case fixtures × desktop + throttled-mobile-chromium profiles × 3 engines), computed p95 from 5 samples per cell (120 total), proposed thresholds at measured p95 + 25% headroom (rounded up to clean numbers), and the USER APPROVED them before locking. Mirrors how Phase 3 derived the calibration tolerance empirically (D3-02). The 25% headroom is baked INTO the wallClockMs values (toleranceBound.headroomPct=0 so the gate fires strictly when fresh p95 > wallClockMs — no double-counting). D6-03: the fallback scrolling commit shares the warm budget — one gate. Fallback was not triggered by any worst-case fixture across viewports 320-1280px (the engine paginates all successfully); the architectural argument (Plan 04-05 + 04-08: fallback = same measurement engine + always-mounted ArticleBody → commit work ≤ warm repagination) confirms the warm p95 bounds fallback. Worst cases: cold = webkit (611-647ms across all fixtures; webkit's fonts.ready + JS exec is substantially slower); warm = throttled-mobile chromium (503-509ms) and webkit (456-523ms), both coalescer-debounce-bound and fixture-independent. p95WallClockMs + sampleCount are the latest measured values (refreshed each passing run); wallClockMs is the LOCKED threshold.",
+  "engines": {
+    "chromium": {
+      "desktop": {
+        "essay-long-form": {
+          "cold": {
+            "wallClockMs": 600,
+            "p95WallClockMs": 475,
+            "sampleCount": 5
+          },
+          "warm": {
+            "wallClockMs": 550,
+            "p95WallClockMs": 431,
+            "sampleCount": 5
+          }
+        },
+        "list-reference": {
+          "cold": {
+            "wallClockMs": 60,
+            "p95WallClockMs": 43,
+            "sampleCount": 5
+          },
+          "warm": {
+            "wallClockMs": 550,
+            "p95WallClockMs": 431,
+            "sampleCount": 5
+          }
+        },
+        "technical-post": {
+          "cold": {
+            "wallClockMs": 70,
+            "p95WallClockMs": 52,
+            "sampleCount": 5
+          },
+          "warm": {
+            "wallClockMs": 550,
+            "p95WallClockMs": 430,
+            "sampleCount": 5
+          }
+        }
+      },
+      "throttled-mobile": {
+        "essay-long-form": {
+          "cold": {
+            "wallClockMs": 800,
+            "p95WallClockMs": 608,
+            "sampleCount": 5
+          },
+          "warm": {
+            "wallClockMs": 650,
+            "p95WallClockMs": 510,
+            "sampleCount": 5
+          }
+        },
+        "list-reference": {
+          "cold": {
+            "wallClockMs": 250,
+            "p95WallClockMs": 176,
+            "sampleCount": 5
+          },
+          "warm": {
+            "wallClockMs": 650,
+            "p95WallClockMs": 505,
+            "sampleCount": 5
+          }
+        },
+        "technical-post": {
+          "cold": {
+            "wallClockMs": 300,
+            "p95WallClockMs": 196,
+            "sampleCount": 5
+          },
+          "warm": {
+            "wallClockMs": 650,
+            "p95WallClockMs": 494,
+            "sampleCount": 5
+          }
+        }
+      }
+    },
+    "firefox": {
+      "desktop": {
+        "essay-long-form": {
+          "cold": {
+            "wallClockMs": 600,
+            "p95WallClockMs": 463,
+            "sampleCount": 5
+          },
+          "warm": {
+            "wallClockMs": 600,
+            "p95WallClockMs": 435,
+            "sampleCount": 5
+          }
+        },
+        "list-reference": {
+          "cold": {
+            "wallClockMs": 60,
+            "p95WallClockMs": 37,
+            "sampleCount": 5
+          },
+          "warm": {
+            "wallClockMs": 550,
+            "p95WallClockMs": 433,
+            "sampleCount": 5
+          }
+        },
+        "technical-post": {
+          "cold": {
+            "wallClockMs": 60,
+            "p95WallClockMs": 48,
+            "sampleCount": 5
+          },
+          "warm": {
+            "wallClockMs": 600,
+            "p95WallClockMs": 454,
+            "sampleCount": 5
+          }
+        }
+      }
+    },
+    "webkit": {
+      "desktop": {
+        "essay-long-form": {
+          "cold": {
+            "wallClockMs": 800,
+            "p95WallClockMs": 630,
+            "sampleCount": 5
+          },
+          "warm": {
+            "wallClockMs": 700,
+            "p95WallClockMs": 502,
+            "sampleCount": 5
+          }
+        },
+        "list-reference": {
+          "cold": {
+            "wallClockMs": 850,
+            "p95WallClockMs": 636,
+            "sampleCount": 5
+          },
+          "warm": {
+            "wallClockMs": 600,
+            "p95WallClockMs": 464,
+            "sampleCount": 5
+          }
+        },
+        "technical-post": {
+          "cold": {
+            "wallClockMs": 800,
+            "p95WallClockMs": 604,
+            "sampleCount": 5
+          },
+          "warm": {
+            "wallClockMs": 600,
+            "p95WallClockMs": 452,
+            "sampleCount": 5
+          }
+        }
+      }
+    }
+  }
+}

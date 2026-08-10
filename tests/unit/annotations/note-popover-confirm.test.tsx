@@ -3,7 +3,10 @@
 // confirm + debounced save wiring.
 //
 // Semantic-only (React Testing Library, jsdom). Proves:
-//   1. The popover uses popover="manual" (Popover API, NOT <dialog>).
+//   1. The popover is a native <dialog> (showModal — the modal-dialog
+//      accessibility context VoiceOver needs). See debug session
+//      `vo-note-popover-focus` (ACPT-02 finding #2): the Phase 5
+//      `popover="manual"` div was unreachable by VO browse.
 //   2. The note textarea + excerpt render as React text children (no
 //      dangerouslySetInnerHTML — Pitfall 8 XSS defense).
 //   3. Clicking Delete shows the confirm prompt with Delete/Keep buttons.
@@ -11,9 +14,9 @@
 //      — Pitfall 8).
 //   5. The debounced save calls updateNote on each textarea change.
 //
-// Real-browser layout (popover positioning, showPopover/hidePopover lifecycle,
-// focus management) is Plan 05-05's Playwright suite. jsdom provides the DOM
-// structure; the Popover API methods (showPopover/hidePopover) are polyfilled.
+// Real-browser layout (modal focus scope/trap, showModal/close lifecycle,
+// focus management) is Plan 05-05's Playwright suite + the popover focus-trap
+// spec. jsdom provides the DOM structure; showModal/close are polyfilled.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import { useEffect } from "react";
@@ -110,12 +113,24 @@ vi.mock("../../../src/annotations/overlap", () => ({
   rangesOverlap: vi.fn().mockReturnValue(false),
 }));
 
-// Polyfill Popover API methods for jsdom (showPopover/hidePopover).
-if (typeof HTMLElement !== "undefined") {
-  HTMLElement.prototype.showPopover =
-    HTMLElement.prototype.showPopover ?? function () {};
-  HTMLElement.prototype.hidePopover =
-    HTMLElement.prototype.hidePopover ?? function () {};
+// Polyfill <dialog>.showModal()/close() for jsdom (jsdom does not implement
+// the modal dialog behavior). The polyfill toggles the native `open` property
+// and dispatches the `close` event so the component's effect + listener behave
+// as they do in a real browser. Mirrors how SettingsPanel/AnnotationsDrawer
+// tests bridge jsdom's missing <dialog> runtime.
+if (typeof HTMLDialogElement !== "undefined") {
+  HTMLDialogElement.prototype.showModal =
+    HTMLDialogElement.prototype.showModal ??
+    function showDialogPolyfill(this: HTMLDialogElement) {
+      this.open = true;
+    };
+  HTMLDialogElement.prototype.close =
+    HTMLDialogElement.prototype.close ??
+    function closeDialogPolyfill(this: HTMLDialogElement) {
+      if (!this.open) return;
+      this.open = false;
+      this.dispatchEvent(new Event("close"));
+    };
 }
 
 // ── Test harness ─────────────────────────────────────────────────────────────
@@ -135,12 +150,12 @@ function PopoverOpener({ highlightId }: { highlightId: string }) {
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 
-describe("NotePopover — Popover API + two-step delete confirm (D5-10/D5-12)", () => {
+describe("NotePopover — native <dialog> + two-step delete confirm (D5-10/D5-12)", () => {
   afterEach(() => {
     vi.clearAllMocks();
   });
 
-  it("uses popover=manual (Popover API, not <dialog>) per UI-SPEC §Design System", async () => {
+  it("uses a native <dialog> + showModal (modal-dialog AX context for VoiceOver)", async () => {
     const { container } = render(
       <HighlightOverlayProvider article={article}>
         <PopoverOpener highlightId="hl-test-1" />
@@ -151,11 +166,15 @@ describe("NotePopover — Popover API + two-step delete confirm (D5-10/D5-12)", 
     // Wait for the highlight to load + popover to open.
     const popoverEl = await screen.findByRole("dialog", { name: "Highlight note" });
 
-    expect(popoverEl.tagName).not.toBe("DIALOG");
-    expect(popoverEl.getAttribute("popover")).toBe("manual");
+    // Native <dialog> — the modal accessibility context VoiceOver needs.
+    // (Phase 5 used <div popover="manual">; debug `vo-note-popover-focus`
+    // found VO browse passed the textarea. Native <dialog> + showModal is the
+    // proven SettingsPanel/Drawer pattern.)
+    expect(popoverEl.tagName).toBe("DIALOG");
+    expect(popoverEl.getAttribute("popover")).toBeNull();
     expect(popoverEl.classList.contains("highlight-popover")).toBe(true);
     // Container also has the element.
-    expect(container.querySelector(".highlight-popover")).not.toBeNull();
+    expect(container.querySelector("dialog.highlight-popover")).not.toBeNull();
   });
 
   it("renders note textarea + excerpt as React text children (Pitfall 8 — no raw HTML)", async () => {

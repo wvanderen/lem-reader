@@ -11,7 +11,7 @@ Lem Reader reaches its MVP through six vertical slices that keep a usable semant
 - [x] **Phase 3: Trustworthy Layout Measurement** - Readers retain a usable view while responsive layout work is calibrated, current, and safe against font and asset changes. (completed 2026-08-05)
 - [ ] **Phase 4: Responsive Pagination and Dual-Mode Navigation** - Readers can navigate complete, stable pages or return to scrolling without losing their passage. *(VERIFIED 2026-08-06T22:24:05Z — Plan 04-11 ran the full `npm run test` suite end-to-end: 753 passed / 0 failed / 0 skipped, exit 0. The prior "269/0" misreport is overturned; all 6 verifier-found gaps closed by 04-07/08/09/10. 04-VERIFICATION.md upgraded gaps_found (3/7) → verified (7/7).)* (in progress 2026-08-06)
 - [x] **Phase 5: Durable Highlights and Notes** - Readers can create and manage local annotations that remain attached to canonical passages across every view change. (completed 2026-08-07)
-- [ ] **Phase 6: Prototype Acceptance** - Readers can complete the full reading and annotation flow across the supported browser and accessibility conditions within explicit performance budgets.
+- [x] **Phase 6: Prototype Acceptance** - Readers can complete the full reading and annotation flow across the supported browser and accessibility conditions within explicit performance budgets. (completed 2026-08-10)
 
 ## Phase Details
 
@@ -164,7 +164,7 @@ Plans:
   3. Highlights and notes remain on the same normalized text after repagination, mode or typography changes, and reopening the article.
   4. When quoted-context and canonical-position selectors cannot resolve confidently, reader sees an explicit ambiguous or orphaned state instead of a silent reattachment.
 
-**Plans:** 5/5 plans complete
+**Plans:** 7/7 plans complete
 Plans:
 **Wave 1**
 
@@ -186,6 +186,11 @@ Plans:
 
 - [x] 05-05-PLAN.md — Wave 5: full Playwright e2e corpus matrix (tests/e2e/annotations/*) across the 6-fixture corpus × theme × mode × chromium/firefox/webkit — capture/reject/keyboard, notes/drawer/delete/navigate-back, survive-repagination/mode-switch/reopen, cross-fragment-render, ambiguous-orphan-surface, persist-reload, forced-colors-shapes. Phase gate = full `npm run test` exit 0 (mirrors Plan 04-11 precedent: honest counts, no subset/grep/engine-skip). Closes ANNO-01..05/07 + STATE-03.
 
+**Gap Closure (Wave 6 — UAT Test 11 diagnosed gaps; two independent gaps, zero file overlap → parallel)**
+
+- [x] 05-06-PLAN.md — Wave 6: BLOCKER — pagination uneven pages. Gate ArticleView's geometry-effect rAF read on the `.paginated-surface` class (debug Option A) so the scrolling-body natural height is never captured on initial load in paginated-default mode (latent since Phase 4; Plan 04-09 sync reset only covered mode swaps). PLUS the CI regression guard the debug flagged as missing: a new initial-pagination-even e2e that captures the FIRST `__lemPagination` publication and asserts >1 page + stable (the existing no-overflow e2e was fooled by `.page-fragment{height:100%}` + a 600ms wait past the racy correction). Unblocks ANNO-05; re-verifies PAGE-03.
+- [x] 05-07-PLAN.md — Wave 6: MAJOR — blockquote highlight renders no inline mark. Add recursive per-child highlightSlices for blockquote in BOTH render paths (BlockRenderer.ArticleBody scrolling + fragmentRenderer.PageFragmentView paginated), reusing sliceRunsForHighlights/highlightsForBlock unchanged, accounting for BLOCK_SEPARATOR between children (mirrors sliceChildBlocks). BlockView blockquote case forwards childHighlightSlices per child. Closes ANNO-01/05 for blockquote (D5-07 eligible; capture/persistence/resolution already worked).
+
 **UI hint:** yes
 
 ### Phase 6: Prototype Acceptance
@@ -201,7 +206,23 @@ Plans:
   3. Reader retains content and required functions under high zoom, narrow reflow, forced colors, reduced motion, touch, and late or failed font loading.
   4. Cold and warm repagination on the selected article and device profiles stays within explicit release budgets or falls back without blocking reading.
 
-**Plans:** TBD
+**Plans:** 6/6 plans complete
+Plans:
+**Wave 1**
+
+- [x] 06-01-PLAN.md — Wave 1: ACPT-03 edge gaps — shared D6-09 invariant helper (`_edge-invariant.ts`) + high-zoom spec (400% + 320 CSS px reflow, D6-10) + font-failure spec (block/delay/swap via injected `@font-face` + `page.route`, D6-11)
+- [x] 06-02-PLAN.md — Wave 1: ACPT-01 consolidated core-reading-flow spec across the 6-fixture corpus × 3 engines (open→read→switch→restore→highlight+navigate, D6-13) — a sibling of `open-every-fixture.spec.ts`
+- [x] 06-03-PLAN.md — Wave 1 (autonomous: false): ACPT-04 perf harness + Node CI gate mirroring `fingerprint.compare.ts` exactly + `npm run perf` + chromium-only throttled-mobile project + D6-01 measure-first budget checkpoint. **User-approved locked budget at measured p95+25% headroom (24 cells); `npm run perf` exits 0; D6-03 fallback shares warm budget.** *(2026-08-08)*
+- [x] 06-04-PLAN.md — Wave 1: ACPT-02 versioned `docs/ACCEPTANCE-PROTOCOL.md` (NVDA+Firefox + VoiceOver+Safari matrix D6-05, hybrid scripted+exploratory D6-06, zero-blocker policy D6-07, re-run flag D6-08)
+
+**Wave 2** *(blocked on Wave 1 — needs `_edge-invariant.ts` from 06-01)*
+
+- [x] 06-05-PLAN.md — Wave 2: ACPT-03 audit of 4 existing edge specs (forced-colors/reduced-motion/reflow/touch-targets) against the shared D6-09 invariant (D6-12) — strengthen in place, no new files
+
+**Wave 3** *(blocked on Waves 1–2 — final acceptance gate)*
+
+- [x] 06-06-PLAN.md — Wave 3 (autonomous: false): execute the ACPT-02 manual SR protocol on NVDA+Firefox + VoiceOver+Safari (zero-blocker, D6-07) + honest full-suite `npm run test` exit 0 + author `06-VERIFICATION.md` consolidating ACPT-01..04 evidence
+
 **UI hint:** yes
 
 ## Progress
@@ -212,5 +233,5 @@ Plans:
 | 2. Accessible Scrolling Reader | 4/4 | Complete    | 2026-08-04 |
 | 3. Trustworthy Layout Measurement | 2/2 | Complete    | 2026-08-05 |
 | 4. Responsive Pagination and Dual-Mode Navigation | 10/11 | In Progress|  |
-| 5. Durable Highlights and Notes | 5/5 | Complete   | 2026-08-07 |
-| 6. Prototype Acceptance | 0/TBD | Not started | - |
+| 5. Durable Highlights and Notes | 7/7 | Complete    | 2026-08-07 |
+| 6. Prototype Acceptance | 6/6 | Complete   | 2026-08-10 |

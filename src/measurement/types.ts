@@ -68,6 +68,9 @@ export type LineBox = z.infer<typeof LineBoxSchema>;
 export const BlockMeasurementSchema = z.object({
   kind: z.string(),
   heightPx: z.number(),
+  /** Computed logical margins; pagination needs them because DOMRect excludes margins. */
+  marginBlockStartPx: z.number().nonnegative().optional(),
+  marginBlockEndPx: z.number().nonnegative().optional(),
   lineCount: z.number().int(),
   /**
    * Per-block CSS line boxes captured during the measurement DOM walk

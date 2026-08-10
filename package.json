@@ -12,6 +12,7 @@
     "test:e2e": "playwright test",
     "test": "npm run test:unit -- --run && npm run test:e2e",
     "calibrate": "playwright test calibration.harness && node tests/e2e/calibration/fingerprint.compare.ts",
+    "perf": "playwright test perf.harness && node tests/e2e/perf/budget.compare.ts",
     "lint": "eslint .",
     "format": "prettier --write ."
   },

@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 05
-current_phase_name: durable-highlights-and-notes
-status: verifying
-stopped_at: Completed 05-01-PLAN.md
-last_updated: "2026-08-07T18:46:25.222Z"
-last_activity: 2026-08-07
-last_activity_desc: Phase 05 execution started
+current_phase: 06
+status: completed
+stopped_at: "Phase 6 complete — all 4 ACPT requirements verified (ACPT-02 reduced gate A4: VoiceOver+Safari zero-blocker, NVDA documented as post-v1 follow-up). Honest full-suite npm run test = 1157/0 exit 0. v1 milestone ready for /gsd-complete-milestone."
+last_updated: "2026-08-10T20:43:16.808Z"
+last_activity: 2026-08-10
+last_activity_desc: Phase 06 marked complete
 progress:
   total_phases: 6
-  completed_phases: 5
-  total_plans: 27
-  completed_plans: 27
-  percent: 83
+  completed_phases: 6
+  total_plans: 35
+  completed_plans: 35
+  percent: 100
+current_phase_name: prototype-acceptance
 ---
 
 # Project State
@@ -24,16 +24,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-05)
 
 **Core value:** Readers can move through long-form web content with calm, stable orientation and predictable navigation.
-**Current focus:** Phase 05 — durable-highlights-and-notes
+**Current focus:** Phase 06 — prototype-acceptance
 
 ## Current Position
 
-Phase: 05 (durable-highlights-and-notes) — EXECUTING
-Plan: 5 of 5
-Status: Phase complete — ready for verification
-Last activity: 2026-08-07 — Phase 05 execution started
+Phase: 06 — COMPLETE
+Plan: 6 of 6 (complete)
+Status: Phase 06 complete
+Last activity: 2026-08-10 — Phase 06 marked complete
 
-Progress: [██████████] 4/6 phases code-complete — 22/22 plans executed (gap-closure wave 9 of 9 complete)
+Progress: [██████████] 6/6 phases code-complete — 35/35 plans executed (Phase 6 acceptance ledger complete; ACPT-02 reduced-gate flip pending user)
 
 ## Recent Decisions (Plan 04-11)
 
@@ -46,7 +46,7 @@ Progress: [██████████] 4/6 phases code-complete — 22/22 pl
 
 **Velocity:**
 
-- Total plans completed: 10 (this phase, incl. gap closure)
+- Total plans completed: 24 (this phase, incl. gap closure)
 - Average duration: 25 min
 - Total execution time: 1.5 hours
 
@@ -57,6 +57,7 @@ Progress: [██████████] 4/6 phases code-complete — 22/22 pl
 | 01 | 5 | 14 min | 14 min |
 | 02 | 4 | - | - |
 | 03 | 2 | - | - |
+| 05 | 7 | - | - |
 
 **Recent Trend:**
 
@@ -88,6 +89,14 @@ Progress: [██████████] 4/6 phases code-complete — 22/22 pl
 | Phase 05 P03 | 20min | 2 tasks | 12 files |
 | Phase 05 P04 | 12min | 2 tasks | 9 files |
 | Phase 05 P05 | 95min | 3 tasks | 18 files |
+| Phase 05 P07 | 12 min | 3 tasks | 3 files |
+| Phase 05 P06 | 22 min | 3 tasks | 2 files |
+| Phase 06 P01 | 13 min | 3 tasks | 3 files |
+| Phase 06 P02 | 3 min | 1 tasks | 1 files |
+| Phase 06 P03 | 64min | 3 tasks | 6 files |
+| Phase 06 P04 | 2 min | 1 tasks | 1 files |
+| Phase 06 P05 | 7 min | 2 tasks | 4 files |
+| Phase 06 P06 | 10 min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -170,6 +179,20 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: Plan 05-04: ANNO-07 enforced at the rendering layer — ArticleBody's effective-highlights filter is 'resolvedPosition !== null' (NOT 'status === confident'), so ambiguous/orphan highlights render at their best-effort vicinity with the dashed-outline modifier. Never silent re-attach.
 - [Phase 05]: 05-05 phase gate green: full npm run test exits 0 (507 unit + 489 e2e = 996 passed / 0 failed) across chromium/firefox/webkit; ANNO-01..05/07 + STATE-03 + A11Y-01/05 proven in real browsers — Executor ran the suite itself; fail=0 honest; no subset/grep/engine-skip (05-05-OUTPUT.md permanent record)
 - [Phase 05]: 05-05: 4 Rule 1 gaps surfaced+fixed (paginated capture binding, mark activation, measurement scoping, firefox focus settle) — the e2e validation plan did its job; unit suite missed all 4 — Each fix committed atomically; full suite green after fixes
+- [Phase 05]: 05-07: blockquote highlight gap closed via per-child childHighlightSlices threading on BlockView — ArticleBody walks block.children with blockGraphemeLen + BLOCK_SEPARATOR (mirrors paragraph path per child); PageFragmentView walks resolved.children with splittingBlockGraphemeLength + BLOCK_SEPARATOR (entry-local coords). Reuses sliceRunsForHighlights + highlightsForBlock UNCHANGED (no forked slicer); InlineRenderer untouched. Lists intentionally out of scope (different items-shape, no failing UAT case).
+- [Phase ?]: 05-06: Option A (class gate) chosen for the initial-load mega-page fix — one-line `if (!articleEl.classList.contains("paginated-surface")) return;` before the rAF height read; useState(0) initial + trustedView effect-dep re-run cover initial mount, so no separate reset was needed. Measurement selector untouched (exonerated). Rule 1 deviation: regression assertion (b) relaxed from settled==first to settled>1 AND stable, because the plan's equality conflated the diagnosed geometry correction (1->3) with the by-design overflow-guard split (2->3, same pinned height).
+- [Phase ?]: [Phase 06] test
+- [Phase 06]: 06-01 ships the shared D6-09 edge-invariant helper (assertEdgeInvariant in tests/e2e/_edge-invariant.ts) encoding all three clauses (keyboard content in both modes + required functions + no overflow). Asserts on VISIBLE blocks only via [data-block-index]:not(.article-body-measurement ...) — the raw count would include the aria-hidden measurement clone (Plan 04-08) which is NOT keyboard-reachable.
+- [Phase 06]: High-zoom (D6-10): page.setViewportSize({width:320,height:800}) is the LOAD-BEARING cross-engine reflow assertion (WCAG 1.4.10); document.body.style.zoom='4' is SECONDARY/engine-variable (chromium yes, firefox 126+, webkit partial), applied AFTER assertEdgeInvariant asserting only no-content-lost. deviceScaleFactor never used (DPR not zoom — Pitfall 2). 21/21 green chromium/firefox/webkit.
+- [Phase 06]: Font-failure (D6-11): Lem Reader loads ZERO web fonts, so the harness injects a @font-face FIRST via page.addStyleTag then page.route-intercepts the injected URL. Route registered BEFORE addStyleTag (RESEARCH-proven non-vacuous pattern); !important on the injected font-family rule guarantees the request fires; page.on('request') verifies non-vacuity (Pitfall 1 guard). SWAP mode reuses stale-drop.spec.ts rapid-trigger race with the font active. 9/9 green.
+- [Phase 06]: ACPT-03 spans Plan 06-01 (NEW gap specs: high-zoom + font-failure, 30/30 green) AND Plan 06-05 (audit of 4 existing edge specs against the invariant). requirements-completed is [] for 06-01 mirroring the 04-02 PAGE-01 split precedent; Plan 06-05 closes ACPT-03.
+- [Phase ?]: ACPT-01 closed by Plan 06-02 — consolidated core-reading-flow spec (18/18 green × chromium/firefox/webkit), sibling of open-every-fixture.spec.ts (D6-13), ONE representative typography per RESEARCH OQ2, reuses annotations/_fixtures.ts harness wholesale (Pitfall 6 honored)
+- [Phase ?]: [Phase 06]: 06-03 ACPT-04 budget locked at measured p95+25% headroom (24 cells). D6-01 measure-first honored — user approved before locking. headroomPct=0 (25% baked INTO wallClockMs). Warm trigger = typography size change (viewport resize unreliable above measure cap). Fallback shares warm budget (D6-03). npm run perf CI gate exits 0. Two Rule 1 auto-fixes: warm trigger accuracy + compare-script load ordering.
+- [Phase 06]: 06-04 authors docs/ACCEPTANCE-PROTOCOL.md — the durable, re-runnable ACPT-02 instrument (NVDA+Firefox + VoiceOver+Safari matrix, 6 scripted flows as role+name outcomes per Pitfall 7, 5 exploratory charters, zero-blocker/major pass policy D6-07). ACPT-02 does NOT close here — it closes when Plan 06-06 EXECUTES the protocol with zero-blocker findings. Mirrors the 04-02 PAGE-01 split precedent (instrument ships; requirement closes at the plan that proves behavior).
+- [Phase 06]: Manual SR protocol expected outcomes authored as role + accessible name + state (programmatically verifiable), NOT verbatim SR phrasing (Pitfall 7). Confusing-but-completable announcement = minor unless step fails or content/function lost.
+- [Phase ?]: 06-05 closes ACPT-03
+- [Phase ?]: [Phase 06]: 06-05 closes ACPT-03 — all 4 existing edge specs (forced-colors, reduced-motion, reflow, touch-targets) audited against the shared D6-09 invariant + strengthened to apply assertEdgeInvariant uniformly across the 6-fixture corpus x 3 engines (72 new cells). Strengthen-only per D6-12 (no existing assertion removed); wipeDatabase added to every beforeEach (Rule 2 harness-baseline consistency). reflow.spec.ts (the (c) overflow-clause origin) now asserts the COMPLETE invariant (a)/(b)/(c) via the helper. Together with 06-01 (high-zoom + font-failure), all six edge conditions assert the same bar.
+- [Phase 06]: 06-06 executes ACPT-02 manual SR protocol on VoiceOver+Safari (zero blocker/major after 5 findings resolved; #1 H-under-VO documented as cross-SR platform constraint, toolbar = primary SR path; #2 NotePopover promoted to modal <dialog>+showModal; #3 minor deferred; #4 visual-only; #5 aria-describedby excerpt). Honest full-suite gate green (1157 passed / 0 failed / exit 0). NVDA+Firefox NOT run = coverage boundary A4 (reduced gate). ACPT-02 NOT unilaterally flipped -- flip decision surfaced to user. — 06-VERIFICATION.md is the durable phase-6 acceptance ledger; reduced-gate honesty over silent full-coverage claim.
 
 ### Pending Todos
 
@@ -181,7 +204,6 @@ None yet.
 - [Phase 4 → PLANNED (Plan 04-06)]: The pagination engine cannot paginate ANY corpus fixture. Two compounding issues: (1) PaginatedSurface replaces the full ArticleBody with a single page fragment before the engine reads live line boxes via `articleEl.querySelectorAll(BLOCK_SELECTOR)`; (2) every fixture contains container blocks (blockquote/lists) whose nested children break the engine's `elements.length !== articleBlocks.length` guard → `dom-fallback`. **Resolution path = Plan 04-06** (user-approved Option A + data-block-index + fold-in persistence failures): capture LineBox[][] during the measurement phase + add data-block-index for a 1:1 block↔element mapping + engine consumes pre-captured line boxes + remove the corpus-matrix ok-path e2e skips + fix the pre-existing persistence.spec.ts STATE-01 failures. See 04-06-PLAN.md.
 - [Phase 4 → deferred → folded into 04-06]: persistence.spec.ts STATE-01 location-restore tests fail pre-existing since 04-02/04-03 (paginated default + paginated-surface geometry prevents window scroll). Now tracked under Plan 04-06 Task 5 (test-only fix: seed readingMode "scrolling").
 - [Phase 5]: Offset units, grapheme handling, overlap semantics, and anchor confidence thresholds need explicit decisions.
-- [Phase 6]: Concrete browser/OS/screen-reader support combinations and manual protocol remain to be selected.
 - [Phase 4 → RESOLVED by 04-07/04-08/04-09/04-10/04-11]: gsd-verifier caught 76 hidden e2e failures misreported as "269 passed / 0 failed" across every Phase 4 SUMMARY + STATE + ROADMAP + REQUIREMENTS + the Plan 04-05 Task 3 gate-approval commit. Reality was 76 failed / 269 passed. Gap-closure plans 04-07 (PAGE-03b overflow guard), 04-08 (PAGE-06/07 always-mounted ArticleBody), 04-09 (PAGE-01/02 M-toggle + keyboard/chevron), 04-10 (PAGE-09 banner race) closed all 6 structural gaps. Plan 04-11 re-ran the FULL `npm run test` suite end-to-end: 753 passed / 0 failed / 0 skipped, exit 0. 04-VERIFICATION.md upgraded gaps_found (3/7) → verified (7/7). The Plan 04-05 Task 3 human-verify gate now has a genuinely-green automated prerequisite.
 
 ## Deferred Items
@@ -192,6 +214,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-08-07T18:45:32.103Z
-Stopped at: Completed 05-01-PLAN.md
+Last session: 2026-08-10T20:38:50.651Z
+Stopped at: Completed 06-06-PLAN.md (phase-6 acceptance ledger; ACPT-02 reduced-gate flip pending user)
 Resume file: None

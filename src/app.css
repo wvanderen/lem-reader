@@ -206,6 +206,32 @@ main#main {
   padding-block: var(--space-3xl);
 }
 
+/* Paginated mode is a viewport, never a vertically scrolling document. Its
+   page-height budget reserves 48px on each block edge, so main must use that
+   same inset rather than scrolling mode's 64px inset. The explicit border-box
+   height makes header + main exactly one viewport and removes Safari's root
+   scroll/rubber-band seam. */
+main#main.paginated-main {
+  box-sizing: border-box;
+  height: calc(100vh - 48px);
+  padding-block: var(--space-2xl);
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+html:has(main.paginated-main),
+body:has(main.paginated-main) {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+body:has(main.paginated-main) {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+}
+
 /* ── Article body measure + rhythm (UI-SPEC §Layout + §Typography) ────── */
 /* Calm measure is invariant across breakpoints (Phase 2 lets the reader
    widen it via --measure). Block rhythm uses em so Phase 2 size changes
@@ -872,15 +898,18 @@ dialog.wipe-confirm::backdrop {
 /* Page content-box geometry — viewport-bounding per UI-SPEC §Layout. The
    48px header + 2px hairline + 2x the 2xl inset (top + bottom) reserve calm
    whitespace; the reader never scrolls inside the article body.
-   touch-action: pan-y pinch-zoom keeps native vertical scroll + pinch-zoom
-   available for accessibility (a reader can escape the page boundary if
-   needed; chevrons remain the primary turn path). */
+   touch-action keeps pinch-zoom available; vertical gestures have no scroll
+   range in paginated mode and therefore cannot displace the page surface. */
 .article-body.paginated-surface {
   width: var(--measure);
   max-width: 100%;
   height: calc(100vh - 48px - 2px - 2 * var(--space-2xl));
   margin-inline: auto;
-  overflow: hidden;
+  /* `hidden` still creates a programmatically scrollable box. VoiceOver can
+     scroll that box while traversing past the final visible block, especially
+     because the full measurement article is positioned inside it. `clip`
+     preserves visual clipping without exposing any internal scroll offset. */
+  overflow: clip;
   touch-action: pan-y pinch-zoom;
   /* Plan 04-08: contain the absolute-positioned measurement ArticleBody
      (.article-body-measurement below). Without position:relative, the
@@ -888,6 +917,28 @@ dialog.wipe-confirm::backdrop {
      instead of the paginated-surface content box, breaking width/geometry
      alignment between measurement and the visible page fragments. */
   position: relative;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+/* The provenance header occupies the first grid row. Only the remaining row
+   is page capacity; clipping lives here so the article header never silently
+   steals space from a fragment whose engine budget assumed the full article. */
+.page-viewport {
+  position: relative;
+  min-height: 0;
+  overflow: clip;
+}
+
+/* The screen-reader page boundary must have deterministic spatial geometry.
+   `.visually-hidden` supplies absolute positioning but intentionally leaves
+   inset coordinates unset; its static position would otherwise land after
+   (and below) the visible fragment. VoiceOver Quick Nav then searches Down
+   from below the article and cannot reach blocks above it. */
+.article-body .page-start-heading {
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  margin: 0;
 }
 
 /* ── Plan 04-08: measurement-only ArticleBody (PAGE-06 + PAGE-07 fix) ────── */
@@ -1280,10 +1331,17 @@ mark.highlight.unresolved {
 /* ════════════════════════════════════════════════════════════════════════
  * Phase 5 Plan 05-03 — Note popover + annotations trigger + drawer
  *
- * .highlight-popover (D5-10): Popover API (`popover="manual"`) — top-layer
- * rendering without a backdrop. NOT a <dialog>/showModal (UI-SPEC §Design
- * System rationale: <dialog> is too heavy for a small positioned editor near
- * the highlight; the popover needs top-layer + no light-dismiss + no backdrop).
+ * .highlight-popover (D5-10): native `<dialog>` + showModal — top-layer
+ * rendering with the modal-dialog accessibility context VoiceOver needs
+ * (focus scope + background inert + "modal shown" AT event). See the HISTORY
+ * note in src/reader/annotations/NotePopover.tsx: the Phase 5 `popover="manual"`
+ * div was unreachable by VoiceOver browse (ACPT-02 finding #2); native
+ * <dialog> + showModal is the proven codebase pattern (SettingsPanel +
+ * AnnotationsDrawer; Flow F is the VO-passing reference). ::backdrop is styled
+ * TRANSPARENT so there is no full-screen dimmed overlay — the article stays
+ * visible behind the editor and the popover keeps its centered-box look. The
+ * tradeoff vs. the prior manual popover: the article is now INERT while the
+ * editor is open (modal), which is the necessary cost of reliable VO entry.
  *
  * .annotations-trigger (D5-09): header button inline-start of ModeToggle.
  * Mirrors the gear-button geometry exactly: 44×44 hit area, transparent bg,
@@ -1294,11 +1352,9 @@ mark.highlight.unresolved {
  * ════════════════════════════════════════════════════════════════════════ */
 
 /* ── Note popover (D5-10, UI-SPEC §Interaction 29) ──────────────────────────── */
-/* --surface-raised bg + --hairline border + 8px radius, NO shadow (mirrors the
-   no-shadow discipline of every prior chrome surface). max-width 380px;
-   width: calc(100vw - 2*--space-md) on narrow viewports. Positioned near the
-   <mark> by the Popover API's default positioning. */
-.highlight-popover {
+/* Cosmetic geometry. Applies in both states but is invisible when closed
+   because the UA stylesheet hides dialog:not([open]) with display:none. */
+dialog.highlight-popover {
   margin: 0;
   padding: var(--space-lg);
   border: 1px solid var(--hairline);
@@ -1307,11 +1363,26 @@ mark.highlight.unresolved {
   color: var(--ink);
   max-width: 380px;
   width: calc(100vw - 2 * var(--space-md));
+}
+/* Flex-column layout ONLY when open. Scoping under [open] preserves the UA
+   display:none that hides a closed <dialog> — an author `display:flex` on the
+   base rule would otherwise clobber that UA hiding and leave the empty editor
+   visible after close (caught by the popover focus e2e). showModal()/close()
+   toggle the reflected `open` attribute. Native <dialog> + showModal centers
+   the element in the viewport (same centered-box geometry the Popover API's
+   default positioning produced before). No transition/animation (A11Y-06). */
+dialog.highlight-popover[open] {
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
-  /* No transition/animation property (A11Y-06 — the Popover API's own
-     transition is disabled by the global prefers-reduced-motion gate). */
+}
+/* Transparent ::backdrop — NO full-screen dimmed overlay. The article stays
+   visible behind the editor. The backdrop still exists as a top-layer element
+   (so the modal focus scope + inert background work for VoiceOver), but it is
+   visually invisible. (Preserves the Phase 5 "no backdrop" visual contract
+   while gaining the modal accessibility context.) */
+dialog.highlight-popover::backdrop {
+  background: transparent;
 }
 /* Excerpt — italic, --ink-soft, truncated (Meta/Label role per UI-SPEC). */
 .highlight-popover-excerpt {

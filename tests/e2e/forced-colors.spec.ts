@@ -5,6 +5,8 @@
 // operable. Asserted via emulateMedia({ forcedColors: "active" }) across
 // Chromium/Firefox/WebKit (forced-colors emulation is supported in all three).
 import { test, expect } from "@playwright/test";
+import { assertEdgeInvariant } from "./_edge-invariant";
+import { FIXTURES, wipeDatabase, openArticle } from "./annotations/_fixtures";
 
 const BASE = "http://localhost:5173";
 const FIRST_FIXTURE = "essay-long-form";
@@ -12,6 +14,11 @@ const FIRST_FIXTURE = "essay-long-form";
 test.describe("Forced colors (A11Y-05)", () => {
   test.beforeEach(async ({ page }) => {
     await page.emulateMedia({ forcedColors: "active" });
+    // Deterministic first-run state + image stub (the shared e2e harness
+    // discipline — annotations/_fixtures.ts wipeDatabase; 06-PATTERNS §Shared
+    // Patterns). Plan 06-05 audit (D6-12): every edge spec uses the same
+    // harness baseline. Benign to the existing CSS/aria assertions below.
+    await wipeDatabase(page);
   });
 
   test("article links keep their underlines (UI-SPEC §Interaction 2 / global gate)", async ({
@@ -109,4 +116,27 @@ test.describe("Forced colors (A11Y-05)", () => {
     await expect(page.getByRole("radio", { name: "Dark" })).toBeChecked();
     await expect(sepia).not.toBeChecked();
   });
+
+  // ───────────────────────────────────────────────────────────────────────
+  // D6-09 shared edge-condition invariant (Plan 06-05 audit, D6-12). Under
+  // forced colors the SAME bar holds as every other edge condition:
+  // (a) full content reachable via keyboard in BOTH reading modes,
+  // (b) required functions reachable (settings + mode-toggle),
+  // (c) no layout overflow clips content (WCAG 1.4.10). Applied uniformly
+  // across the 6-fixture corpus so acceptance means the same thing
+  // everywhere. The existing per-control A11Y-05 assertions above stay
+  // authoritative for their substrates (underlines, aria-expanded, focus
+  // outlines, checked state); this adds the consolidated invariant.
+  // Strengthen-only — no existing assertion removed (D6-12).
+  for (const fixture of FIXTURES) {
+    test(`shared invariant holds under forced-colors @ ${fixture} (D6-09)`, async ({
+      page,
+    }) => {
+      await openArticle(page, fixture);
+      await assertEdgeInvariant(page, {
+        fixture,
+        condition: "forced-colors",
+      });
+    });
+  }
 });

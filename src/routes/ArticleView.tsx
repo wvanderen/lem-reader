@@ -641,10 +641,11 @@ export function ArticleView({
     }
   }, [effectiveMode, article]);
 
-  // Paginated geometry: derive the page content-box height from the rendered
-  // <article class="paginated-surface"> element after mount. rAF-deferred
-  // (mirror L172-188) so the browser has completed layout before we read.
-  // Recomputed on articleEl change (article swap or first mount).
+  // Paginated geometry: derive the usable page height from .page-viewport,
+  // not from the surrounding <article>. The article also contains its visible
+  // provenance header; treating the article's full height as page capacity
+  // over-packs every fragment by roughly the header height and leaves clipped
+  // text in the accessibility tree.
   const [pageContentBoxHeightPx, setPageContentBoxHeightPx] = useState(0);
   // Plan 04-09 (PAGE-01 round-trip fix): reset pageContentBoxHeightPx to 0
   // SYNCHRONOUSLY DURING RENDER when the mode changes. React child effects
@@ -674,7 +675,26 @@ export function ArticleView({
     let cancelled = false;
     const rafId = requestAnimationFrame(() => {
       if (cancelled) return;
-      const rect = articleEl.getBoundingClientRect();
+      // Plan 05-06: gate the geometry read on the .paginated-surface class.
+      // On initial load trustedView is null, so the scrolling article branch
+      // (className "article-body", no pinned height) mounts first; the first
+      // rAF would otherwise read the full natural scrolling-body height
+      // (~1148–1313px) and the first pagination pass would pack the ENTIRE
+      // article onto P1 (the mega-page regression). The .paginated-surface
+      // class is applied only once trustedView commits and the paginated
+      // branch mounts (app.css pins height to calc(100vh - 48px - 2px -
+      // 2*var(--space-2xl)) ≈ 654px desktop). Because trustedView is in the
+      // effect deps, the effect re-runs when trustedView commits (class flips
+      // to paginated-surface), the rAF re-fires, and the now-pinned height is
+      // accepted. The pagination effect (PaginatedSurface) guards on
+      // pageContentBoxHeightPx > 0, so it waits for the correct height and
+      // never consumes the inflated scrolling height. The useState(0) initial
+      // value keeps the first render at 0 (pagination waits), so no separate
+      // initial-mount reset is needed.
+      if (!articleEl.classList.contains("paginated-surface")) return;
+      const pageViewport = articleEl.querySelector<HTMLElement>(".page-viewport");
+      if (!pageViewport) return;
+      const rect = pageViewport.getBoundingClientRect();
       setPageContentBoxHeightPx(rect.height);
     });
     return () => {
@@ -1051,7 +1071,7 @@ export function ArticleView({
           <article> mounts, triggering a re-render so this component receives
           the actual DOM node. */}
       <SectionAnnouncer articleEl={articleEl} />
-      <main id="main">
+      <main id="main" className={paginatedActive ? "paginated-main" : undefined}>
         {/*
           A11Y-08 (UI-SPEC §Copywriting "keyboard-help affordance"): a single
           concise visually-hidden paragraph at the top of <main>, preceding the
@@ -1061,8 +1081,11 @@ export function ArticleView({
         */}
         <p className="visually-hidden">
           Keyboard shortcuts: M switches reading mode. PageUp and PageDown,
-          ArrowLeft and ArrowRight, and Space and Shift+Space turn pages. H
-          highlights the current selection. N highlights it and opens a note.
+          ArrowLeft and ArrowRight, and Space and Shift+Space turn pages. To
+          highlight selected text, keyboard and mouse users can press H, or N to
+          highlight and open a note. Screen-reader users: after selecting text,
+          Tab to the "Highlight" toolbar button and press Enter — screen readers
+          reserve single-letter keys like H and N for their own navigation.
         </p>
         {/* Phase 5 Plan 05-02 (D5-12, A11Y-08): polite live region for
             annotation announces. Concise copy ("Highlight saved." / "Highlight
@@ -1174,27 +1197,29 @@ export function ArticleView({
                 currentAnchorOffsetRef fresh for the NEXT swap (paginated→
                 scrolling).
               */}
-              <PaginatedSurface
-                ref={surfaceRef}
-                article={article}
-                trustedView={trustedView}
-                articleEl={articleEl}
-                diagnostics={diagnostics}
-                pageContentBoxHeightPx={pageContentBoxHeightPx}
-                initialAnchorOffset={currentAnchorOffsetRef.current}
-                onAnchorChange={handleAnchorChange}
-              />
-              {/*
-                PageTurnControls registers the keyboard bundle + swipe + the
-                "Page N of M" announce. Enabled only while paginated mode is
-                active. The M shortcut routes through the SAME handleToggleMode
-                as the header button so the D4-10 anchor applies either way.
-              */}
-              <PageTurnControls
-                enabled={paginatedActive}
-                surfaceRef={surfaceRef}
-                articleEl={articleEl}
-              />
+              <div className="page-viewport">
+                <PaginatedSurface
+                  ref={surfaceRef}
+                  article={article}
+                  trustedView={trustedView}
+                  articleEl={articleEl}
+                  diagnostics={diagnostics}
+                  pageContentBoxHeightPx={pageContentBoxHeightPx}
+                  initialAnchorOffset={currentAnchorOffsetRef.current}
+                  onAnchorChange={handleAnchorChange}
+                />
+                {/*
+                  PageTurnControls registers the keyboard bundle + swipe + the
+                  "Page N of M" announce. Enabled only while paginated mode is
+                  active. The M shortcut routes through the SAME handleToggleMode
+                  as the header button so the D4-10 anchor applies either way.
+                */}
+                <PageTurnControls
+                  enabled={paginatedActive}
+                  surfaceRef={surfaceRef}
+                  articleEl={articleEl}
+                />
+              </div>
             </>
           ) : (
             <ArticleBody article={article} />

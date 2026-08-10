@@ -127,28 +127,36 @@ test.describe("ANNO-01 capture highlight (05-05)", () => {
     // path does not apply); we therefore assert capture + persistence rather
     // than an inline mark for this block kind.
     await openArticle(page, "technical-post");
-    const codeBlockIdx = await page.evaluate(() => {
-      const blocks = Array.from(
-        document.querySelectorAll(
-          '[data-block-index]:not(.article-body-measurement [data-block-index])',
-        ),
-      );
-      for (let i = 0; i < blocks.length; i++) {
-        const el = blocks[i]!;
-        const idx = Number(el.getAttribute("data-block-index"));
-        if (
-          (el.tagName === "PRE" || !!el.querySelector("pre")) &&
-          (el.textContent?.length ?? 0) >= 6
-        ) {
-          return idx;
+    // The pagination engine may place the technical-post code block on a
+    // later page than the heading + intro paragraphs (an atomic code block
+    // can occupy up to 90% of a page under the PAGE-04 oversize threshold).
+    // Walk pages until the visible fragment carries a <pre> code block, then
+    // run the capture + persistence assertions from there. This keeps the
+    // test resilient to content-distribution shifts (Plan 04-07's
+    // page-viewport geometry fix changed how many blocks fit on page 1).
+    const total = await totalPages(page);
+    let codeBlockIdx = -1;
+    for (let target = 0; target < total && codeBlockIdx === -1; target++) {
+      await goToPage(page, target);
+      codeBlockIdx = await page.evaluate(() => {
+        const blocks = Array.from(
+          document.querySelectorAll(
+            '[data-block-index]:not(.article-body-measurement [data-block-index])',
+          ),
+        ).filter((el) => !el.closest(".article-body-measurement"));
+        for (const el of blocks) {
+          const idx = Number(el.getAttribute("data-block-index"));
+          if (
+            (el.tagName === "PRE" || !!el.querySelector("pre")) &&
+            (el.textContent?.length ?? 0) >= 6
+          ) {
+            return idx;
+          }
         }
-      }
-      return -1;
-    });
-    if (codeBlockIdx === -1) {
-      expect(codeBlockIdx, "technical-post first page must have a code block").not.toBe(-1);
-      return;
+        return -1;
+      });
     }
+    expect(codeBlockIdx, "technical-post must have a code block on some page").not.toBe(-1);
     const ok = await selectRangeInBlock(page, codeBlockIdx, 0, 6);
     expect(ok, "code-block selection").toBeTruthy();
     // The toolbar shows the action buttons (capture eligible).
@@ -303,6 +311,57 @@ test.describe("ANNO-01 capture highlight (05-05)", () => {
     expect(pageErrors, "no uncaught errors during capture").toEqual([]);
   });
 });
+
+/**
+ * Resolve the current paginated page index via the DEV-only
+ * window.__lemPagination hook. Returns 0 when the hook is not yet populated.
+ */
+async function currentPageIdx(
+  page: import("@playwright/test").Page,
+): Promise<number> {
+  return page.evaluate(
+    () =>
+      (window as unknown as { __lemPagination?: { currentPageIdx: number } })
+        .__lemPagination?.currentPageIdx ?? 0,
+  );
+}
+
+/**
+ * Resolve the total page count from window.__lemPagination. Returns 0 when
+ * the hook is not yet populated (the caller treats 0 as "no pages yet").
+ */
+async function totalPages(page: import("@playwright/test").Page): Promise<number> {
+  return page.evaluate(
+    () =>
+      (window as unknown as { __lemPagination?: { pagesLength: number } })
+        .__lemPagination?.pagesLength ?? 0,
+  );
+}
+
+/**
+ * Navigate to the given 0-based page index in paginated mode via the same
+ * PageDown / PageUp keyboard bundle the reader uses. Settles 200ms between
+ * presses so the rAF-deferred overflow guard + DOM commit complete before
+ * the next press fires (mirrors page-turn-controls.spec.ts timing).
+ */
+async function goToPage(
+  page: import("@playwright/test").Page,
+  target: number,
+): Promise<void> {
+  let cur = await currentPageIdx(page);
+  while (cur < target) {
+    await page.keyboard.press("PageDown");
+    await page.waitForTimeout(200);
+    cur = await currentPageIdx(page);
+    // Defensive — stop if the engine reached the last page without matching.
+    if (cur + 1 >= (await totalPages(page)) && cur < target) break;
+  }
+  while (cur > target) {
+    await page.keyboard.press("PageUp");
+    await page.waitForTimeout(200);
+    cur = await currentPageIdx(page);
+  }
+}
 
 /**
  * Find the first visible block with text length >= minChars that is NOT

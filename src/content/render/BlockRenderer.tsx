@@ -64,43 +64,72 @@ export interface ArticleBodyHighlight {
  */
 type BlockViewProps = {
   block: Block;
+  /** Allow paginated mode to expose one semantic block as a programmatic-only
+   * page-entry anchor without adding it to ordinary Tab order. */
+  tabIndex?: number;
   /**
    * Phase 5 Plan 05-02: per-block highlight slices (from sliceRunsForHighlights).
    * When present, InlineList wraps highlighted slices in <mark>. Absent for
    * non-paragraph/heading kinds + the measurement body.
    */
   highlightSlices?: ReturnType<typeof sliceRunsForHighlights>;
+  /**
+   * Phase 5 Plan 05-07: per-child highlight slices for a blockquote block,
+   * indexed by child position in block.children. Consumed ONLY by the
+   * blockquote case to forward childHighlightSlices[i] as each child
+   * BlockView's `highlightSlices` — so a child paragraph renders its <mark>.
+   * An element may be undefined when that child has no intersecting highlight
+   * or is a non-paragraph/heading kind. Absent for non-container kinds + the
+   * measurement body.
+   */
+  childHighlightSlices?: (ReturnType<typeof sliceRunsForHighlights> | undefined)[];
 } & {
   [K in `data-${string}`]?: string | number | undefined;
 };
 
-export function BlockView({ block, highlightSlices, ...rest }: BlockViewProps) {
+export function BlockView({
+  block,
+  highlightSlices,
+  childHighlightSlices,
+  tabIndex,
+  ...rest
+}: BlockViewProps) {
+  const elementProps = { ...rest, tabIndex };
   switch (block.kind) {
     case "heading": {
       const Tag = `h${block.level}` as "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
       return (
-        <Tag {...rest}>
+        <Tag {...elementProps}>
           <InlineList runs={block.content} highlightSlices={highlightSlices} />
         </Tag>
       );
     }
     case "paragraph":
       return (
-        <p {...rest}>
+        <p {...elementProps}>
           <InlineList runs={block.content} highlightSlices={highlightSlices} />
         </p>
       );
     case "blockquote":
       return (
-        <blockquote {...rest}>
+        <blockquote {...elementProps}>
           {block.children.map((child, i) => (
-            <BlockView key={i} block={child} />
+            // Plan 05-07: forward the per-child slice (computed by ArticleBody
+            // walking block.children) so each child paragraph reaches InlineList
+            // with its own slices and renders the <mark>. Optional chaining
+            // keeps absent/undefined as "no slices" (byte-unchanged when no
+            // highlight intersects this child).
+            <BlockView
+              key={i}
+              block={child}
+              highlightSlices={childHighlightSlices?.[i]}
+            />
           ))}
         </blockquote>
       );
     case "bulleted-list":
       return (
-        <ul {...rest}>
+        <ul {...elementProps}>
           {block.items.map((item, i) => (
             <li key={i}>
               {item.content.map((c, j) => (
@@ -112,7 +141,7 @@ export function BlockView({ block, highlightSlices, ...rest }: BlockViewProps) {
       );
     case "numbered-list":
       return (
-        <ol {...rest} start={block.start}>
+        <ol {...elementProps} start={block.start}>
           {block.items.map((item, i) => (
             <li key={i}>
               {item.content.map((c, j) => (
@@ -124,7 +153,7 @@ export function BlockView({ block, highlightSlices, ...rest }: BlockViewProps) {
       );
     case "figure":
       return (
-        <figure {...rest}>
+        <figure {...elementProps}>
           <img src={block.src} alt={block.alt} />
           {block.caption.length > 0 && (
             <figcaption>
@@ -136,7 +165,7 @@ export function BlockView({ block, highlightSlices, ...rest }: BlockViewProps) {
     case "code-block":
       // NEVER inject raw HTML (Pitfall 6); React escapes source text.
       return (
-        <pre {...rest}>
+        <pre {...elementProps}>
           <code>{block.source}</code>
         </pre>
       );
@@ -146,7 +175,7 @@ export function BlockView({ block, highlightSlices, ...rest }: BlockViewProps) {
       // (Pitfall 4 fix — DO NOT set the anchor id to block.footnoteId).
       const n = block.footnoteId.replace(/^fn-/, "");
       return (
-        <sup {...rest}>
+        <sup {...elementProps}>
           <a id={`fn-ref-${n}`} href={`#fn-${n}`}>
             {block.marker}
           </a>
@@ -158,7 +187,7 @@ export function BlockView({ block, highlightSlices, ...rest }: BlockViewProps) {
       // Native <details> is keyboard-accessible + screen-reader-compatible by
       // default. Summary microcopy is verbatim from UI-SPEC §Copywriting.
       return (
-        <details {...rest} className="disclosure">
+        <details {...elementProps} className="disclosure">
           <summary>Some content from the original article isn't supported yet.</summary>
           <ul>
             <li>{block.plainDescription}</li>
@@ -274,38 +303,89 @@ export function ArticleBody({
     <>
       {article.blocks.map((block, i) => {
         const blockGlobalStart = computeBlockGlobalStart(article, i);
-        // Compute highlight slices ONLY for the paragraph/heading path
-        // (the kinds InlineList serves). Container kinds (blockquote/list)
-        // and atomic kinds (figure/code-block/footnote-reference/unsupported)
-        // do not carry inline highlight overlays in this MVP slice — they
-        // follow the same per-kind exhaustive switch (Pattern F) in a later
-        // plan. For paragraph/heading, compute the slices via
-        // sliceRunsForHighlights so InlineList wraps the highlighted runs.
-        // D5-07 capture eligibility is independent of inline rendering: a
-        // figure caption / code-block source is CAPTURABLE (the highlight
-        // persists + re-resolves), but no inline <mark> renders until a
-        // later plan threads the overlay through those kinds (figure's
-        // blockNormalizedText includes alt + separator + caption, which
-        // diverges from the DOM textContent the capture map walks — handling
-        // that divergence is deferred to keep the D-05 substrate stable).
+        // Compute highlight slices for the paragraph/heading path (direct)
+        // AND the blockquote container path (per-child). Other container kinds
+        // (lists — different items-shape, no failing UAT case) and atomic kinds
+        // (figure/code-block/footnote-reference/unsupported) do not carry inline
+        // highlight overlays in this MVP slice. Code-block + figure-caption
+        // remain deferred: a figure's blockNormalizedText includes alt +
+        // separator + caption, which diverges from the DOM textContent the
+        // capture map walks — handling that divergence is deferred to keep the
+        // D-05 substrate stable.
+        //
+        // D5-07 capture eligibility is independent of inline rendering: every
+        // CAPTURABLE kind persists + re-resolves; inline <mark> coverage is
+        // per-kind. For paragraph/heading, sliceRunsForHighlights wraps the
+        // highlighted runs directly. For blockquote, Plan 05-07 threads slices
+        // per child (mirrors the paragraph path per child paragraph).
         let highlightSlices: ReturnType<typeof sliceRunsForHighlights> | undefined;
-        if (
-          effectiveHighlights.length > 0 &&
-          (block.kind === "paragraph" || block.kind === "heading")
-        ) {
-          const blockLen = blockGraphemeLen(block, article.lang);
-          const entries = highlightsForBlock(
-            effectiveHighlights,
-            blockGlobalStart,
-            blockLen,
-          );
-          if (entries.length > 0) {
-            highlightSlices = sliceRunsForHighlights(
-              block.content,
+        // Plan 05-07: per-child slices for a blockquote block (undefined for
+        // non-blockquote kinds + when no highlight intersects any child).
+        let childHighlightSlices:
+          | (ReturnType<typeof sliceRunsForHighlights> | undefined)[]
+          | undefined;
+        if (effectiveHighlights.length > 0) {
+          if (block.kind === "paragraph" || block.kind === "heading") {
+            const blockLen = blockGraphemeLen(block, article.lang);
+            const entries = highlightsForBlock(
+              effectiveHighlights,
               blockGlobalStart,
-              entries,
-              article.lang,
+              blockLen,
             );
+            if (entries.length > 0) {
+              highlightSlices = sliceRunsForHighlights(
+                block.content,
+                blockGlobalStart,
+                entries,
+                article.lang,
+              );
+            }
+          } else if (block.kind === "blockquote") {
+            // Per-child slice threading (Plan 05-07). Walk block.children
+            // accumulating each child's intra-blockquote grapheme offset
+            // (BLOCK_SEPARATOR between children — mirrors blockNormalizedText's
+            // join rule + sliceChildBlocks in fragmentRenderer). For each
+            // paragraph/heading child, reuse highlightsForBlock +
+            // sliceRunsForHighlights exactly as the paragraph path does (the
+            // child's article-global start = blockGlobalStart + childIntraStart).
+            // The resulting array forwards per-child slices to the blockquote
+            // BlockView case so each child InlineList renders its <mark>.
+            let childIntraStart = 0;
+            const perChild: (
+              ReturnType<typeof sliceRunsForHighlights>
+              | undefined
+            )[] = [];
+            let anyChildSlices = false;
+            for (const child of block.children) {
+              const childLen = blockGraphemeLen(child, article.lang);
+              const childGlobalStart = blockGlobalStart + childIntraStart;
+              let childSlices:
+                | ReturnType<typeof sliceRunsForHighlights>
+                | undefined;
+              if (child.kind === "paragraph" || child.kind === "heading") {
+                const entries = highlightsForBlock(
+                  effectiveHighlights,
+                  childGlobalStart,
+                  childLen,
+                );
+                if (entries.length > 0) {
+                  childSlices = sliceRunsForHighlights(
+                    child.content,
+                    childGlobalStart,
+                    entries,
+                    article.lang,
+                  );
+                  anyChildSlices = true;
+                }
+              }
+              perChild.push(childSlices);
+              childIntraStart += childLen + BLOCK_SEPARATOR.length;
+            }
+            // Only thread when at least one child produced slices (absent =
+            // no marks, mirroring the paragraph path's "absent when empty").
+            if (anyChildSlices) {
+              childHighlightSlices = perChild;
+            }
           }
         }
         // data-block-index establishes the 1:1 top-level block↔element mapping
@@ -321,6 +401,7 @@ export function ArticleBody({
             block={block}
             data-block-index={i}
             highlightSlices={highlightSlices}
+            childHighlightSlices={childHighlightSlices}
           />
         );
       })}
