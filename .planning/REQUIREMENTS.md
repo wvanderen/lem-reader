@@ -100,12 +100,33 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| _(filled by roadmapper)_ | | |
+| ING-01 | Phase 7 | Pending |
+| ING-02 | Phase 7 | Pending |
+| ING-03 | Phase 8 | Pending |
+| ING-04 | Phase 11 | Pending |
+| ING-05 | Phase 12 | Pending |
+| ING-06 | Phase 7 | Pending |
+| ING-07 | Phase 7 | Pending |
+| ING-08 | Phase 7 | Pending |
+| LIB-01 | Phase 8 | Pending |
+| LIB-02 | Phase 8 | Pending |
+| LIB-03 | Phase 8 | Pending |
+| LIB-04 | Phase 8 | Pending |
+| LIB-05 | Phase 8 | Pending |
+| LIB-06 | Phase 8 | Pending |
+| PORT-01 | Phase 9 | Pending |
+| PORT-02 | Phase 9 | Pending |
+| PORT-03 | Phase 9 | Pending |
+| RECV-01 | Phase 10 | Pending |
+| POLISH-01 | Phase 13 | Pending |
+| POLISH-02 | Phase 13 | Pending |
+| ACPT-05 | Phase 13 | Pending |
+| ACPT-06 | Phase 13 | Pending |
 
 **Coverage:**
 - v2.0 requirements: 22 total
-- Mapped to phases: 0 _(pending roadmap)_
-- Unmapped: 22 ⚠️ _(resolved when roadmap is created)_
+- Mapped to phases: 22 ✓
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-08-10*

@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Personal Library
 status: planning
-last_updated: "2026-08-10T22:41:43.264Z"
+last_updated: "2026-08-10T23:30:00.000Z"
 last_activity: 2026-08-10
 progress:
-  total_phases: 0
+  total_phases: 7
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -17,17 +17,19 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-08-05)
+See: .planning/PROJECT.md (updated 2026-08-10)
 
 **Core value:** Readers can move through long-form web content with calm, stable orientation and predictable navigation.
-**Current focus:** Planning next milestone (v1.0 shipped)
+**Current focus:** Phase 7 — Ingestion Substrate (v2.0 Personal Library roadmap created)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-08-10 — Milestone v2.0 started
+Phase: 7 of 13 (Phase 7: Ingestion Substrate) — first v2.0 phase
+Plan: — (not yet planned)
+Status: Ready to plan
+Last activity: 2026-08-10 — v2.0 roadmap created (Phases 7-13, 22/22 requirements mapped)
+
+Progress: [░░░░░░░░░░] 0% of v2.0 milestone
 
 ## Recent Decisions (Plan 04-11)
 
@@ -215,8 +217,8 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-10T20:38:50.651Z
-Stopped at: Completed 06-06-PLAN.md (phase-6 acceptance ledger; ACPT-02 reduced-gate flip pending user)
+Last session: 2026-08-10 — v2.0 roadmap created
+Stopped at: ROADMAP.md (Phases 7-13), REQUIREMENTS.md traceability, and STATE.md updated for v2.0
 Resume file: None
 
 ## Operator Next Steps
