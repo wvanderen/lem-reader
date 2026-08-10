@@ -26,6 +26,25 @@ The prototype supports rich article structure, local highlights and notes, and l
 
 Readers can move through long-form web content with calm, stable orientation and predictable navigation.
 
+## Current Milestone: v2.0 Personal Library
+
+**Goal:** Turn Lem Reader from a fixture-only prototype into a product readers can put their own content into — ingesting URLs and documents into a personal local-first library, with exportable highlights that travel across machines.
+
+**Target features:**
+- URL ingestion — a fetch backend extracts (Readability-style) and normalizes any publicly fetchable web page into the canonical document model, added to the library; honest failure when a page can't be reliably read (reuses the DOC-06 disclosure spirit).
+- Multi-format document intake — HTML, PDF, EPUB, and Markdown uploads, each normalized into the library. EPUB's multi-chapter book shape and PDF extraction quality are the riskier pipelines and sequence after the URL+HTML path is proven.
+- Personal library — readers browse, open, search, tag, and remove their ingested articles (replaces the flat fixture list). Searchable list + tags as the default organization; folders/collections deferred.
+- Versioned export/import (PORT-01/02) — export library + highlights + notes + position + preferences as a versioned bundle; import with validation and conflict reporting. The cross-device story in lieu of accounts.
+- Annotation review panel (RECV-01) — a dedicated surface to review all highlights/notes (natural pair with the export/curation flow).
+- Polish — eliminate the initial-load reading-mode flash (first-paint mode mismatch); fix short-article progress-bar semantics (1-page article no longer reads 100% on open, 2-page article no longer starts at 50%).
+- NVDA+Firefox acceptance run (ACPT-02 coverage boundary A4 — v1.0 post-v1 follow-up).
+
+**Architecture shift:** a stateless ingestion backend enters a stack that deliberately had none (fetch + extract + normalize → canonical JSON); it owns no identity and no library state. The library, highlights, position, and preferences stay local-first, reusing the v1.0 Dexie/Zod substrate. Cross-device happens via versioned export/import, not accounts. Accounts, auth, and cloud sync are deferred to a later milestone.
+
+**Re-opens (intentionally):** live web extraction and portability — two v1.0 out-of-scope items. Accounts/cloud/sync, browser-extension packaging, and authenticated/paywalled content remain out of scope.
+
+**Phase numbering:** continues from Phase 7 (v1.0 ended at Phase 6).
+
 ## Requirements
 
 ### Validated
@@ -42,23 +61,25 @@ Readers can move through long-form web content with calm, stable orientation and
 
 ### Active
 
-Next-milestone candidates (from the v2 requirements defined at roadmap creation):
+v2.0 Personal Library scope (see Current Milestone above for the full picture):
 
-- [ ] Orientation aids — heading/section navigator and an optional line-focus aid (ORNT-01, ORNT-02).
-- [ ] Annotation recovery — a dedicated review panel and explicit anchor repair (RECV-01, RECV-02).
-- [ ] Portability — versioned local export and validated import with conflict reporting (PORT-01, PORT-02).
-- [ ] Presentation presets — evidence-informed calm presentation presets (PRES-01).
-- [ ] NVDA+Firefox screen-reader acceptance run (ACPT-02 coverage boundary A4 — post-v1 follow-up).
+- [ ] URL ingestion — fetch backend extracts and normalizes any publicly fetchable web page into the library.
+- [ ] Multi-format document intake — HTML, PDF, EPUB, and Markdown normalized into the library.
+- [ ] Personal library — browse, open, search, tag, and remove ingested articles.
+- [ ] Versioned export/import (PORT-01/02) — library + highlights + notes + position + preferences; validation + conflict reporting.
+- [ ] Annotation review panel (RECV-01) — dedicated surface to review all highlights/notes.
+- [ ] Polish — eliminate initial-load reading-mode flash; fix short-article progress-bar semantics.
+- [ ] NVDA+Firefox acceptance run (ACPT-02 coverage boundary A4 follow-up).
 
 ### Out of Scope
 
-- Live arbitrary-webpage extraction — the first artifact uses saved representative articles so layout and reading behavior can be validated independently.
-- Browser-extension packaging — deferred until the core reading engine is technically reliable.
-- Remote URL fetching, authenticated content, and paywall handling — unnecessary for the saved-article prototype and complicated by CORS and permissions.
-- Cloud sync, accounts, and encrypted cross-device persistence — local persistence is sufficient to validate the reading and annotation loop.
-- Tables, interactive embeds, math, and irregular application layouts — the prototype targets rich long-form articles rather than the full web.
-- A required page-turn animation — transitions may be explored later, but cannot compromise speed, interruption, or reduced-motion preferences.
-- Proving preference through a formal user study — initial success is stable, responsive behavior on representative content; comparative user validation follows later.
+- **Authenticated, paywalled, or login-gated content** — URL ingestion targets publicly fetchable pages; anything behind a login or paywall is excluded (CORS and permissions).
+- **Accounts, cloud sync, and encrypted cross-device persistence** — deferred to a later milestone (v2.x+); v2.0 delivers cross-device highlights via versioned export/import instead.
+- **Browser-extension packaging** — deferred until the ingestion + library loop is proven in the web app first.
+- **Orientation aids (ORNT-01/02), explicit anchor repair (RECV-02), and presentation presets (PRES-01)** — deferred v2 candidates; re-evaluated after v2.0.
+- **Tables, interactive embeds, math, and irregular application layouts** — the reader targets rich long-form articles rather than the full web (carried from v1.0).
+- **A required page-turn animation** — cannot compromise speed, interruption, or reduced-motion preferences (carried from v1.0).
+- **Formal proof of improved preference, comprehension, or completion** — comparative user-value validation follows after the product loop is trustworthy (carried from v1.0).
 
 ## Context
 
@@ -115,4 +136,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-10 after v1.0 milestone*
+*Last updated: 2026-08-10 after v2.0 milestone start (Personal Library)*

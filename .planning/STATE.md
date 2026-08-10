@@ -1,20 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-current_phase: 0
-status: Awaiting next milestone
-stopped_at: Completed 06-06-PLAN.md (phase-6 acceptance ledger; ACPT-02 reduced-gate flip pending user)
-last_updated: "2026-08-10T20:52:54.517Z"
+milestone: v2.0
+milestone_name: Personal Library
+status: planning
+last_updated: "2026-08-10T22:41:43.264Z"
 last_activity: 2026-08-10
-last_activity_desc: Milestone v1.0 completed and archived
 progress:
-  total_phases: 6
-  completed_phases: 6
-  total_plans: 35
-  completed_plans: 35
-  percent: 100
-current_phase_name: prototype-acceptance
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -28,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-08-05)
 
 ## Current Position
 
-Phase: Milestone v1.0 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-08-10 — Milestone v1.0 completed and archived
+Status: Defining requirements
+Last activity: 2026-08-10 — Milestone v2.0 started
 
 ## Recent Decisions (Plan 04-11)
 
