@@ -82,79 +82,72 @@ test.describe("A11Y-05 forced-colors shape distinction (05-05)", () => {
   test("bare vs note-bearing vs unresolved are distinguishable by shape under forced-colors", async ({
     page,
   }) => {
-    // Seed an orphan first so it's present on open.
+    // Seed an orphan first so it's present on open. The orphan's quote is
+    // not present in the article → "orphan" resolution → renders in the
+    // vicinity of its position hint (~block 0, page 1).
     await seedOrphanAndReload(page);
 
-    // Create a bare highlight on a block DISJOINT from the orphan (the
-    // orphan's best-effort range is at article-global ~[5,15) on block 0;
-    // skip block 0 so the D5-13 overlap check doesn't reject the selection).
+    // === PAGE 1 === Create a bare highlight on a block DISJOINT from the
+    // orphan (the orphan's best-effort range is at article-global ~[5,15)
+    // on block 0; skip block 0 so the D5-13 overlap check doesn't reject
+    // the selection).
     let b = await findFirstBlockWithTextAsync(page, [0], 24);
-    expect(b).not.toBe(-1);
+    expect(b, "page 1 must carry a selectable block for the bare highlight").not.toBe(-1);
     await selectRangeInBlock(page, b, 0, 16);
     await page.locator(".selection-toolbar").getByRole("button", { name: "Highlight", exact: true }).click();
     const bareId = await page.locator("mark.highlight").first().getAttribute("data-highlight-id");
 
-    // Create a note-bearing highlight on another disjoint block.
-    b = await findFirstBlockWithTextAsync(page, [0, b], 24);
-    if (b !== -1) {
-      const ok = await selectRangeInBlock(page, b, 0, 16);
-      if (ok) {
-        await page.keyboard.press("n");
-        await page.locator("textarea.highlight-popover-textarea").fill("Forced-colors note.");
-        await page.locator("#highlight-popover .highlight-popover-done").click();
-      }
-    }
-    const noteId = await page
-      .locator("mark.highlight.has-note")
-      .first()
-      .getAttribute("data-highlight-id");
-
-    // The orphan highlight (seeded) renders with .unresolved.
+    // In paginated mode only the current page fragment is mounted, so the
+    // orphan + bare shapes must be read WHILE STILL ON PAGE 1 (navigating
+    // away unmounts them). The orphan MUST carry a dashed outline (not a
+    // fill, not a dotted underline).
     const unresolvedShape = await computedShape(
       page,
       'mark.highlight.unresolved[data-highlight-id="seed-orphan-fc"]',
     );
-    // The orphan MUST carry a dashed outline (not a fill, not a dotted underline).
     expect(unresolvedShape.outlineStyle, "unresolved uses a dashed outline").toMatch(/dashed/i);
 
-    // The note-bearing highlight should carry a dotted text-decoration-style
-    // (the underline survives forced-colors as a shape cue).
+    // The bare highlight is the solid-fill shape — NOT a dotted underline.
+    if (bareId) {
+      const bareShape = await computedShape(
+        page,
+        `mark.highlight[data-highlight-id="${bareId}"]`,
+      );
+      expect(bareShape.textDecorationStyle, "bare highlight is NOT dotted underline").not.toMatch(
+        /dotted/i,
+      );
+    }
+
+    // === PAGE 2 === Page 1 of essay-long-form carries only the orphan's
+    // vicinity block + the bare-highlight block (Plan 04-07's
+    // page-viewport geometry fix tightened page capacity); advance one page
+    // for a fresh block on which to create the note-bearing highlight.
+    await page.keyboard.press("PageDown");
+    await page.waitForTimeout(300);
+    b = await findFirstBlockWithTextAsync(page, [], 24);
+    expect(b, "page 2 must carry a selectable block for the note-bearing highlight").not.toBe(-1);
+    const ok = await selectRangeInBlock(page, b, 0, 16);
+    expect(ok, "note-bearing target selection").toBeTruthy();
+    await page.keyboard.press("n");
+    await page.locator("textarea.highlight-popover-textarea").fill("Forced-colors note.");
+    await page.locator("#highlight-popover .highlight-popover-done").click();
+    const noteId = await page
+      .locator("mark.highlight.has-note")
+      .first()
+      .getAttribute("data-highlight-id");
+    expect(noteId, "note-bearing highlight was created").toBeTruthy();
+
+    // CRITICAL A11Y-05 contract: each state's shape survives the UA forced
+    // palette (no state relies on color alone). The note-bearing mark
+    // carries a DOTTED underline + NO dashed outline (vs. unresolved's
+    // dashed outline + vs. bare's solid underline read on page 1 above).
+    // The three shapes are MUTUALLY DISTINCT.
     if (noteId) {
       const noteShape = await computedShape(
         page,
         `mark.highlight.has-note[data-highlight-id="${noteId}"]`,
       );
       expect(noteShape.textDecorationStyle, "note-bearing uses dotted underline").toMatch(/dotted/i);
-    }
-
-    // The bare highlight is NOT unresolved (no dashed outline) and NOT
-    // note-bearing (no dotted underline) — it's the solid-fill shape.
-    if (bareId) {
-      const bareShape = await computedShape(
-        page,
-        `mark.highlight[data-highlight-id="${bareId}"]`,
-      );
-      // The bare mark has the forced-colors solid underline (text-decoration-
-      // style solid), NOT the dotted note-bearing underline + NOT the dashed
-      // unresolved outline.
-      expect(bareShape.textDecorationStyle, "bare highlight is NOT dotted underline").not.toMatch(
-        /dotted/i,
-      );
-    }
-
-    // CRITICAL A11Y-05 contract: the three shapes are MUTUALLY DISTINCT.
-    // - unresolved: dashed OUTLINE (no underline).
-    // - note-bearing: DOTTED underline (no dashed outline).
-    // - bare: solid underline (no dashed outline, no dotted).
-    // The outline (dashed) vs underline-style (dotted vs solid) distinction
-    // survives the UA forced palette — no state relies on color alone.
-    expect(unresolvedShape.outlineStyle, "unresolved uses a dashed outline").toMatch(/dashed/i);
-    if (noteId) {
-      const noteShape = await computedShape(
-        page,
-        `mark.highlight.has-note[data-highlight-id="${noteId}"]`,
-      );
-      expect(noteShape.textDecorationStyle, "note-bearing uses a dotted underline").toMatch(/dotted/i);
       expect(noteShape.outlineStyle, "note-bearing has NO dashed outline").not.toMatch(/dashed/i);
     }
   });
