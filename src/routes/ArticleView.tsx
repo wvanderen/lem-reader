@@ -1081,8 +1081,11 @@ export function ArticleView({
         */}
         <p className="visually-hidden">
           Keyboard shortcuts: M switches reading mode. PageUp and PageDown,
-          ArrowLeft and ArrowRight, and Space and Shift+Space turn pages. H
-          highlights the current selection. N highlights it and opens a note.
+          ArrowLeft and ArrowRight, and Space and Shift+Space turn pages. To
+          highlight selected text, keyboard and mouse users can press H, or N to
+          highlight and open a note. Screen-reader users: after selecting text,
+          Tab to the "Highlight" toolbar button and press Enter — screen readers
+          reserve single-letter keys like H and N for their own navigation.
         </p>
         {/* Phase 5 Plan 05-02 (D5-12, A11Y-08): polite live region for
             annotation announces. Concise copy ("Highlight saved." / "Highlight

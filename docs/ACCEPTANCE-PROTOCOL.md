@@ -173,15 +173,32 @@ switch; both modes fully readable; no content lost across the switch.
 confirmation. (Substrate: `capture-highlight.spec.ts` proves the automated path;
 ANNO-01.)
 
+> **Primary SR path = the selection toolbar (Tab → Enter).** Screen readers
+> reserve single-letter keys for their own navigation — VoiceOver single-key
+> Quick Nav (VO-Q) maps **H = next heading**, and NVDA browse mode and the JAWS
+> virtual buffer do the same — so the bare **H** highlight shortcut is consumed
+> by the SR before it reaches the app and is a **sighted keyboard/mouse
+> convenience only**, not a reliable SR path. Under an SR, create highlights via
+> the toolbar's real `<button>`s (`role="toolbar"`, Tab-reachable, Enter /
+> VoiceOver **VO+Space** activatable); this path is tester-confirmed working
+> under VoiceOver.
+
 | # | Keyboard sequence | Expected outcome (role + name + state) |
 |---|-------------------|----------------------------------------|
-| C1 | Navigate into a text block and make a selection: **Shift+Right arrow** (or SR selection gesture) across several words | A text selection exists within a single block (D5-05/D5-06 single-block rule). The SR announces the selected text. |
-| C2 | A selection toolbar (`.selection-toolbar`) appears; **Tab** to it | Focus moves to the selection toolbar. It exposes a **button** with accessible name **"Highlight"**. |
-| C3 | Press **Enter** (or **H** — the highlight shortcut) on the "Highlight" button | A `<mark>` element with the highlight data attribute (`mark.highlight[data-highlight-id]`) wraps the selected text. A **`role="status"` polite live region** announces "Highlight saved." (or equivalent confirmation). |
+| C1 | Navigate into a text block and make a selection: **Shift+Right arrow** (sighted keyboard), or the SR text-selection gesture (VoiceOver: **VO+Enter** to start, arrow keys to extend, **VO+Enter** to end) across several words | A text selection exists within a single block (D5-05/D5-06 single-block rule). The SR announces the selected text. |
+| C2 | A selection toolbar (`.selection-toolbar`) appears; **Tab** to it | Focus moves to the selection toolbar (`role="toolbar"`, accessible name **"Highlight actions"**). It exposes a **button** with accessible name **"Highlight"** (and a second button **"Highlight + note"**). |
+| C3 | With focus on the **"Highlight"** button, press **Enter** (VoiceOver: **VO+Space**) | A `<mark>` element with the highlight data attribute (`mark.highlight[data-highlight-id]`) wraps the selected text. A **`role="status"` polite live region** announces "Highlight saved." (or equivalent confirmation). |
 | C4 | Read the passage containing the mark | The highlighted text is announced/marked. The mark carries a semantic label identifying it as a highlight (D5-15). |
 
-**Pass criterion:** highlight is created from keyboard-only; confirmation is
-announced; the mark is present and semantically labeled.
+> **Sighted keyboard/mouse convenience (not an SR path):** the bare **H**
+> shortcut (highlight) and **N** (highlight + note) also create highlights from a
+> selection, but screen readers intercept bare single letters for their own
+> navigation (see the note above), so H/N are documented as keyboard/mouse
+> conveniences and are intentionally NOT part of this SR flow. The toolbar
+> buttons are the equivalent SR path for both actions.
+
+**Pass criterion:** highlight is created from keyboard-only (or SR-only via the
+toolbar); confirmation is announced; the mark is present and semantically labeled.
 
 ---
 
