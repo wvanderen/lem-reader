@@ -66,51 +66,56 @@ beforeAll(async () => {
 }, 30_000);
 
 describe("jsdom-on-Workers spike — RECORDED OUTCOME", () => {
-  test("workerd spike harness is reachable", { timeout: 30_000 }, () => {
-    if (!workerdReachable || !spike) {
-      test.skip(BOOT_HINT);
-      return;
-    }
-    expect(spike.runtime).toContain("workerd");
+  // `skipIfWorkerdDown` uses the Vitest task context (ctx.skip) to skip the
+  // current test when workerd isn't reachable — Vitest's bare `test.skip()`
+  // registers a NEW test rather than skipping the running one, so the context
+  // form is mandatory here.
+  function skipIfWorkerdDown(ctx: { skip: (reason?: string) => void }) {
+    if (!workerdReachable || !spike) ctx.skip(BOOT_HINT);
+  }
+
+  test("workerd spike harness is reachable", (ctx) => {
+    skipIfWorkerdDown(ctx);
+    expect(spike!.runtime).toContain("workerd");
   });
 
   // The structural PASSes — these are the Workers-viable pieces (the SSRF
   // guard + ip-address + DNS pinning option acceptance survive on workerd).
-  test("ip-address Address4.isInSubnet works on workerd", () => {
-    if (!workerdReachable || !spike) return test.skip(BOOT_HINT);
-    expect(spike.capabilities.ipAddress.ok).toBe(true);
+  test("ip-address Address4.isInSubnet works on workerd", (ctx) => {
+    skipIfWorkerdDown(ctx);
+    expect(spike!.capabilities.ipAddress.ok).toBe(true);
   });
 
-  test("A1: cf.resolveOverride accepted by Workers fetch()", () => {
-    if (!workerdReachable || !spike) return test.skip(BOOT_HINT);
-    expect(spike.a1ResolveOverride.ok).toBe(true);
+  test("A1: cf.resolveOverride accepted by Workers fetch()", (ctx) => {
+    skipIfWorkerdDown(ctx);
+    expect(spike!.a1ResolveOverride.ok).toBe(true);
   });
 
-  test("linkedom parseHTML constructs a usable document on workerd", () => {
-    if (!workerdReachable || !spike) return test.skip(BOOT_HINT);
-    expect(spike.linkedom.linkedomImport.ok).toBe(true);
-    expect(spike.linkedom.linkedomParse.ok).toBe(true);
+  test("linkedom parseHTML constructs a usable document on workerd", (ctx) => {
+    skipIfWorkerdDown(ctx);
+    expect(spike!.linkedom.linkedomImport.ok).toBe(true);
+    expect(spike!.linkedom.linkedomParse.ok).toBe(true);
   });
 
   // The RECORDED FAILures — locked in as regression checks. If workerd later
   // supports jsdom (or DOMPurify-on-linkedom stops no-op'ing), these tests
   // FAIL, flagging that the architecture can revisit Worker-local extraction.
-  test("RECORDED: jsdom-primary REJECTED on workerd (MessagePort)", () => {
-    if (!workerdReachable || !spike) return test.skip(BOOT_HINT);
+  test("RECORDED: jsdom-primary REJECTED on workerd (MessagePort)", (ctx) => {
+    skipIfWorkerdDown(ctx);
     // Regression lock on the spike finding. When this starts failing, the
     // jsdom-primary path is viable again and 07-04 can revisit.
-    expect(spike.capabilities.jsdomImport.ok).toBe(false);
-    expect(String(spike.capabilities.jsdomImport.error)).toMatch(/MessagePort/);
+    expect(spike!.capabilities.jsdomImport.ok).toBe(false);
+    expect(String(spike!.capabilities.jsdomImport.error)).toMatch(/MessagePort/);
   });
 
-  test("RECORDED: linkedom-DOMPurify REJECTED (no-op sanitizer, mXSS gate FAIL)", () => {
-    if (!workerdReachable || !spike) return test.skip(BOOT_HINT);
+  test("RECORDED: linkedom-DOMPurify REJECTED (no-op sanitizer, mXSS gate FAIL)", (ctx) => {
+    skipIfWorkerdDown(ctx);
     // Regression lock on the mXSS-gate failure. DOMPurify bound to linkedom
     // returns input UNCHANGED (script/onerror/onload/javascript: all survive).
     // When this starts failing, linkedom-DOMPurify is viable and 07-04 can
     // revisit Worker-local sanitize.
-    expect(spike.linkedom.linkedomDompurify.ok).toBe(false);
-    const detail = spike.linkedom.linkedomDompurify.detail as {
+    expect(spike!.linkedom.linkedomDompurify.ok).toBe(false);
+    const detail = spike!.linkedom.linkedomDompurify.detail as {
       hasScript?: boolean;
       isSupported?: boolean;
     } | undefined;
@@ -120,16 +125,16 @@ describe("jsdom-on-Workers spike — RECORDED OUTCOME", () => {
     expect(detail?.isSupported).toBeUndefined();
   });
 
-  test("RECORDED: spike verdict is HYBRID CONTINGENCY (extraction on Node)", () => {
-    if (!workerdReachable || !spike) return test.skip(BOOT_HINT);
+  test("RECORDED: spike verdict is HYBRID CONTINGENCY (extraction on Node)", (ctx) => {
+    skipIfWorkerdDown(ctx);
     // The composite verdict: jsdom fails AND linkedom-DOMPurify fails AND
     // ip-address works AND cf.resolveOverride accepted. This combination is
     // exactly the hybrid-contingency trigger per RESEARCH.md §Spike L482:
     // Workers does SSRF-safe fetch; Node-runtime function does extract+sanitize.
-    const jsdomViable = spike.capabilities.jsdomImport.ok;
-    const linkedomViable = spike.linkedom.linkedomDompurify.ok;
+    const jsdomViable = spike!.capabilities.jsdomImport.ok;
+    const linkedomViable = spike!.linkedom.linkedomDompurify.ok;
     const ssrfViableOnWorkers =
-      spike.capabilities.ipAddress.ok && spike.a1ResolveOverride.ok;
+      spike!.capabilities.ipAddress.ok && spike!.a1ResolveOverride.ok;
     // Document the trigger condition (do NOT assert the verdict itself, which
     // is a planner decision — just confirm the factual inputs that drive it).
     expect(jsdomViable).toBe(false);
