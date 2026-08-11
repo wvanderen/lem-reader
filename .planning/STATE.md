@@ -5,16 +5,16 @@ milestone_name: Personal Library
 current_phase: 07
 current_phase_name: ingestion-substrate
 status: executing
-stopped_at: Completed 07-02-PLAN.md (schema + Dexie v3 additive append)
-last_updated: "2026-08-11T03:03:53.643Z"
+stopped_at: "Completed 07-03-PLAN.md (server substrate: SSRF guard + confidence + slugify)"
+last_updated: "2026-08-11T03:21:40.242Z"
 last_activity: 2026-08-11
 last_activity_desc: 07-02 schema + ingestion types envelope + Dexie v3 append complete
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 7
-  completed_plans: 2
-  percent: 29
+  completed_plans: 3
+  percent: 0
 ---
 
 # Project State
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-10)
 ## Current Position
 
 Phase: 07 (ingestion-substrate) — EXECUTING
-Plan: 3 of 7
+Plan: 4 of 7
 Status: 07-02 complete — ready for 07-03
 Last activity: 2026-08-11 — 07-02 schema + ingestion types envelope + Dexie v3 append complete
 
@@ -99,6 +99,7 @@ Progress: [███░░░░░░░] 29% of v2.0 milestone
 | Phase 06 P06 | 10 min | 2 tasks | 1 files |
 | Phase 07 P01 | 40min (incl. human-verify pause) | 2 tasks | 17 files |
 | Phase 07 P02 | 15min | 2 tasks | 7 files |
+| Phase 07 P03 | 8min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -197,6 +198,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 06]: 06-06 executes ACPT-02 manual SR protocol on VoiceOver+Safari (zero blocker/major after 5 findings resolved; #1 H-under-VO documented as cross-SR platform constraint, toolbar = primary SR path; #2 NotePopover promoted to modal <dialog>+showModal; #3 minor deferred; #4 visual-only; #5 aria-describedby excerpt). Honest full-suite gate green (1157 passed / 0 failed / exit 0). NVDA+Firefox NOT run = coverage boundary A4 (reduced gate). ACPT-02 NOT unilaterally flipped -- flip decision surfaced to user. — 06-VERIFICATION.md is the durable phase-6 acceptance ledger; reduced-gate honesty over silent full-coverage claim.
 - [Phase 07]: 07-01 spike verdict (HUMAN-APPROVED 2026-08-11): HYBRID CONTINGENCY — jsdom AND linkedom both fail the mXSS gate on Workers. jsdom: `ReferenceError: MessagePort is not defined` (workerd lacks MessagePort); linkedom-DOMPurify: no-op sanitizer (`isSupported: undefined`, sanitize returns input unchanged with script/onerror intact). Workers handle ONLY the SSRF-safe fetch (ip-address + cf.resolveOverride both PASS); extraction+sanitize run in a Node-runtime function. 07-04 runtime target shifts from a Workers Pages Function to a Node function; /server adapter boundary (D7-05) keeps logic portable, only /functions adapter shape changes. vite.config.ts = Option A (@cloudflare/vite-plugin), A3 PASS (v1.0 smoke 8/8 chromium green).
 - [Phase 07]: 07-02: Dexie v3 APPENDs source + addedAt indexes to articles with NO .upgrade() callback (Pitfall 9 — additive indexes only; articles store wrote zero records in v1/v2). ArticleSourceSchema closed to fixture|url|paste; extractionConfidence persists only high|low (the 'unsupported' ING-06 three-state is refused upstream, surfaced as IngestionFailureReason 'extraction-unsupported'). httpUrl exported from schema.ts for single-source-of-truth reuse in src/ingestion/types.ts. — Plan + 07-RESEARCH.md L590-604 + threat T-7-07 require v3 additive; Pitfall 9 forbids editing v1/v2; D7-08 requires the optional sourceUrl and origin discriminator; ING-06 three-state keeps 'unsupported' out of persistence.
+- [Phase 07]: 07-03: safeFetch ships cf.resolveOverride DNS pinning (07-01 A1 PASS) — Workers fetch honors the option; Node unit-test fetch ignores it. Metadata-hostname check runs BEFORE DNS (RESEARCH.md measure order 1->5->3). IPv4-mapped IPv6 handled via Address6.isMapped4()+to4(). confidence ships locked ING-06 formula (corpus calibration deferred). slugify ships humanish+hash-fallback (D7-07).
 
 ### Pending Todos
 
@@ -225,9 +227,9 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-11T03:03:28.870Z
-Stopped at: Completed 07-01-PLAN.md (HYBRID CONTINGENCY spike approved)
-Resume file: .planning/phases/07-ingestion-substrate/07-02-PLAN.md
+Last session: 2026-08-11T03:20:53.714Z
+Stopped at: Completed 07-03-PLAN.md (server substrate: SSRF guard + confidence + slugify)
+Resume file: None
 
 ## Operator Next Steps
 
