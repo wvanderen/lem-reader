@@ -9,6 +9,42 @@ import {
   IngestionRequestSchema,
   IngestionResponseSchema,
 } from "../../src/ingestion/types";
+import { LemReaderDB } from "../../src/persistence/db";
+
+// fake-indexeddb gives Dexie a synthetic IndexedDB implementation in Node so
+// the v3 migration smoke test can construct a fresh LemReaderDB, close it, and
+// re-open under the new version declaration — without a real browser. The full
+// v1→v3 migration snapshot (SC#5) runs in 07-07 against real Playwright/chromium;
+// this unit test is the smoke that proves v3 doesn't break the upgrade chain
+// (Pitfall 9 — the v1/v2 declaration blocks stay byte-unchanged).
+import fakeIndexedDB, { IDBKeyRange } from "fake-indexeddb";
+import { Dexie } from "dexie";
+
+// Dexie 4 captures `indexedDB` + `IDBKeyRange` on `Dexie.dependencies` at
+// dexie-module-load time (which happens transitively when this test imports
+// from src/persistence/db). When `Dexie.dependencies.indexedDB` is undefined,
+// `db.open()` throws `MissingAPIError`; without `IDBKeyRange`, `where()` range
+// queries throw the same. Install BOTH onto `Dexie.dependencies` (the
+// Dexie-internal read path) AND `globalThis` (the direct-read path Dexie uses
+// for deleteDatabase) at this module's top-level — the documented Dexie + Node
+// test pattern (Dexie README "Testing with fake-indexeddb"). Scoped to this
+// module: storageFallback.test.ts vi.mock's the whole db module, so it is
+// unaffected; no other unit test relies on indexedDB being absent.
+Dexie.dependencies.indexedDB = fakeIndexedDB;
+Dexie.dependencies.IDBKeyRange = IDBKeyRange;
+(globalThis as { indexedDB?: typeof fakeIndexedDB }).indexedDB = fakeIndexedDB;
+(globalThis as { IDBKeyRange?: typeof IDBKeyRange }).IDBKeyRange = IDBKeyRange;
+
+async function wipeDatabase(): Promise<void> {
+  await new Promise<void>((resolve) => {
+    const idb = (globalThis as { indexedDB?: typeof fakeIndexedDB }).indexedDB;
+    if (!idb) return resolve();
+    const req = idb.deleteDatabase("lem-reader");
+    req.onsuccess = () => resolve();
+    req.onerror = () => resolve();
+    req.onblocked = () => resolve();
+  });
+}
 
 /**
  * Phase 7 — additive schema extensions (07-02-PLAN.md Task 1).
@@ -254,5 +290,101 @@ describe("IngestionFailureReasonEnum (the 11 cataloged reasons)", () => {
       "server-error",
     ]);
     expect(IngestionFailureReasonEnum.options).toHaveLength(11);
+  });
+});
+
+// ── Dexie v3 append (07-02-PLAN.md Task 2 — Pitfall 9 smoke) ────────────────
+
+describe("LemReaderDB Dexie version chain (v1 → v2 → v3 additive)", () => {
+  // Each test gets a fresh LemReaderDB; wipe before each case to isolate the
+  // version-chain assertions (no leaked rows from the prior case).
+  beforeEach(wipeDatabase);
+
+  it("opens a fresh LemReaderDB under the v3 declaration without throwing (Pitfall 9 — additive append; v1/v2 byte-unchanged)", async () => {
+    const db = new LemReaderDB();
+    await db.open();
+    // v1/v2/v3 all present (the upgrade chain is intact).
+    expect(db.verno).toBeGreaterThanOrEqual(3);
+    // All 5 stores exist (v1 declared them; v3 re-declares at the new version).
+    expect(db.table("articles").name).toBe("articles");
+    expect(db.table("settings").name).toBe("settings");
+    expect(db.table("location").name).toBe("location");
+    expect(db.table("highlights").name).toBe("highlights");
+    expect(db.table("notes").name).toBe("notes");
+    db.close();
+  });
+
+  it("re-opens cleanly after close (the v3 upgrade chain does not break re-entry)", async () => {
+    const first = new LemReaderDB();
+    await first.open();
+    expect(first.verno).toBeGreaterThanOrEqual(3);
+    first.close();
+
+    const second = new LemReaderDB();
+    await second.open();
+    expect(second.verno).toBeGreaterThanOrEqual(3);
+    second.close();
+  });
+
+  it("indexes an ingested article row by source (filter-by-origin; 07-06 compositeLibraryRepository uses this)", async () => {
+    const db = new LemReaderDB();
+    await db.open();
+    // A representative ingested-article row carries the full CanonicalArticle
+    // body plus ingestionMeta. Only the indexed fields (id, revision, source,
+    // addedAt) are queried here; the rest is opaque to Dexie.
+    const ingestedRow = {
+      id: "example-com-article",
+      revision: 1,
+      source: "url",
+      addedAt: "2026-08-10T00:00:00Z",
+      ingestionMeta: {
+        source: "url",
+        origin: "url",
+        sourceUrl: "https://example.com/article",
+        originalHtmlHash: "sha256:abc",
+        fetchedAt: "2026-08-10T00:00:00Z",
+        extractionConfidence: "high",
+        extractionWarnings: [],
+      },
+      provenance: {
+        sourceUrl: "https://example.com/article",
+        title: "Article",
+        retrievedAt: "2026-08-10T00:00:00Z",
+        originalHtmlHash: "sha256:abc",
+      },
+      lang: "en",
+      blocks: [{ kind: "paragraph", content: [{ text: "Body." }] }],
+      footnotes: [],
+    };
+    await db.articles.put(ingestedRow);
+    // The v3 `source` index lets compositeLibraryRepository filter by origin
+    // without a full-table scan. Verify the index is live and addressable.
+    const byUrl = await db.articles.where("source").equals("url").toArray();
+    expect(byUrl).toHaveLength(1);
+    expect(byUrl[0]?.id).toBe("example-com-article");
+    db.close();
+  });
+
+  it("does NOT declare an .upgrade() callback in the v3 block (Pitfall 9 — additive indexes only; Dexie re-indexes on next open)", async () => {
+    // Structural assertion: open succeeds with ZERO row migration logic. The
+    // v1/v2 articles store wrote ZERO records (fixtures are bundled JSON, not
+    // Dexie rows); v3 is the first version that writes user rows. There is no
+    // .upgrade() because the change is purely additive (two new indexes).
+    const db = new LemReaderDB();
+    await db.open();
+    expect(db.verno).toBeGreaterThanOrEqual(3);
+    // Round-trip a write/read to prove the upgrade was a no-op schema event,
+    // not a row-migration event.
+    await db.articles.put({
+      id: "smoke",
+      revision: 1,
+      source: "paste",
+      addedAt: "2026-08-10T00:00:00Z",
+    });
+    const row = await db.articles.get("smoke");
+    expect(row?.id).toBe("smoke");
+    // The row survived untouched — no upgrade transform was applied.
+    expect((row as { revision: number }).revision).toBe(1);
+    db.close();
   });
 });

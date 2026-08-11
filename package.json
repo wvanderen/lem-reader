@@ -50,6 +50,7 @@
     "eslint-plugin-jsx-a11y": "^6.10.0",
     "eslint-plugin-react": "^7.37.0",
     "eslint-plugin-react-hooks": "^5.0.0",
+    "fake-indexeddb": "6.2.5",
     "linkedom": "^0.18.13",
     "prettier": "^3.4.0",
     "typescript": "7.0.2",
