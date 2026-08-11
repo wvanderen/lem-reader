@@ -5,15 +5,15 @@ milestone_name: Personal Library
 current_phase: 07
 current_phase_name: ingestion-substrate
 status: executing
-stopped_at: "Completed 07-05-PLAN.md (pipeline orchestrator + SC#1 round-trip anchor gate)"
-last_updated: "2026-08-11T03:59:58.491Z"
+stopped_at: Completed 07-06-PLAN.md (edge function adapter + IngestionClient + DexieLibrarySource + minimal ingest UI; HYBRID CONTINGENCY Vite middleware adaptation)
+last_updated: "2026-08-11T13:11:51.998Z"
 last_activity: 2026-08-11
 last_activity_desc: 07-02 schema + ingestion types envelope + Dexie v3 append complete
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 7
-  completed_plans: 5
+  completed_plans: 6
   percent: 0
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-10)
 ## Current Position
 
 Phase: 07 (ingestion-substrate) — EXECUTING
-Plan: 6 of 7
+Plan: 7 of 7
 Status: 07-02 complete — ready for 07-03
 Last activity: 2026-08-11 — 07-02 schema + ingestion types envelope + Dexie v3 append complete
 
@@ -102,6 +102,7 @@ Progress: [███░░░░░░░] 29% of v2.0 milestone
 | Phase 07 P03 | 8min | 2 tasks | 7 files |
 | Phase 07 P04 | 17min | 2 tasks | 5 files |
 | Phase 07 P05 | 12min | 2 tasks | 2 files |
+| Phase 07 P06 | 10min | 2 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -203,6 +204,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 07]: 07-03: safeFetch ships cf.resolveOverride DNS pinning (07-01 A1 PASS) — Workers fetch honors the option; Node unit-test fetch ignores it. Metadata-hostname check runs BEFORE DNS (RESEARCH.md measure order 1->5->3). IPv4-mapped IPv6 handled via Address6.isMapped4()+to4(). confidence ships locked ING-06 formula (corpus calibration deferred). slugify ships humanish+hash-fallback (D7-07).
 - [Phase ?]: 07-04: htmlToBlocks ships Option A (jsdom-primary) per 07-01 HYBRID CONTINGENCY spike — extraction+sanitize run in Node where jsdom works natively; plan L103 Option C throw comment OVERTURNED. mXSS suite SC#4 = 11 DOMPurify Attack Classes payloads all stripped. ING-07 closes here; ING-01/02 close at 07-06.
 - [Phase 07]: 07-05: Pipeline orchestrator ships the locked 7-stage ordering (safeFetch → extractAndNormalize → slugifyUrl → ArticleSchema.parse → assertRoundTripAnchor → deriveConfidence → stamp). assertRoundTripAnchor samples 5 grapheme offsets [0, 25%, 50%, 75%, near-end], refuses entry on ambiguous|orphan via the SHIPPED selectors (Pitfall 2 — no fork). Paste-path id bypasses slugifyUrl (new URL throws on non-URL strings) → content-hash slug paste-<12hex> directly. ING-01 + ING-06 close here.
+- [Phase 07]: 07-06: HYBRID CONTINGENCY adaptation (human-approved 2026-08-11) — /api/ingest served by Vite Node dev middleware for Phase 7, not Cloudflare Pages (workerd). Both adapters share server/ingestAdapter.ts so behavior is byte-identical; functions/api/ingest.ts preserved as production-future shape. — 07-06: HYBRID CONTINGENCY adaptation (human-approved 2026-08-11) — /api/ingest served by Vite Node dev middleware for Phase 7, not Cloudflare Pages (workerd). Both adapters share server/ingestAdapter.ts so behavior is byte-identical; functions/api/ingest.ts preserved as production-future shape.
 
 ### Pending Todos
 
@@ -231,8 +233,8 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-11T03:59:58.485Z
-Stopped at: Completed 07-05-PLAN.md (pipeline orchestrator + SC#1 round-trip anchor gate)
+Last session: 2026-08-11T13:11:31.695Z
+Stopped at: Completed 07-06-PLAN.md (edge function adapter + IngestionClient + DexieLibrarySource + minimal ingest UI; HYBRID CONTINGENCY Vite middleware adaptation)
 Resume file: None
 
 ## Operator Next Steps

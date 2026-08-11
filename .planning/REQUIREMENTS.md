@@ -10,7 +10,7 @@ Requirements for the v2.0 milestone. Each maps to a roadmap phase (traceability 
 ### Ingestion
 
 - [x] **ING-01**: Reader can add an article by entering a URL; the reader fetches, extracts, and normalizes the page into the canonical document model.
-- [ ] **ING-02**: Reader can add an article by pasting or uploading HTML, normalized through the same pipeline.
+- [x] **ING-02**: Reader can add an article by pasting or uploading HTML, normalized through the same pipeline.
 - [ ] **ING-03**: Reader can add an article by uploading a Markdown document, normalized into the canonical document model.
 - [ ] **ING-04**: Reader can add a document by uploading a PDF; text is extracted and normalized, with honest failure when a PDF is scanned/image-only or unrecoverably multi-column.
 - [ ] **ING-05**: Reader can add a book by uploading an EPUB, surfaced as per-chapter articles under a book grouping (EPUB-as-Book, Option A — one article per chapter + thin Book record, preserving every v1.0 substrate contract).
@@ -101,7 +101,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | ING-01 | Phase 7 | Complete |
-| ING-02 | Phase 7 | Pending |
+| ING-02 | Phase 7 | Complete |
 | ING-03 | Phase 8 | Pending |
 | ING-04 | Phase 11 | Pending |
 | ING-05 | Phase 12 | Pending |
