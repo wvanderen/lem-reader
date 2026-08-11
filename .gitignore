@@ -25,3 +25,6 @@ coverage
 .sidecar-start.sh
 .sidecar-base
 .td-root
+
+# Cloudflare Wrangler local state (workerd cache, build artifacts)
+.wrangler/
