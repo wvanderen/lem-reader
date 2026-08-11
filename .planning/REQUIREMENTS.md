@@ -124,6 +124,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ACPT-06 | Phase 13 | Pending |
 
 **Coverage:**
+
 - v2.0 requirements: 22 total
 - Mapped to phases: 22 ✓
 - Unmapped: 0 ✓
