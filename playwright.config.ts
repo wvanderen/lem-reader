@@ -23,10 +23,25 @@ export default defineConfig({
       testMatch: /perf\.harness/,
     },
   ],
-  webServer: {
-    command: "npm run dev",
-    url: "http://localhost:5173",
-    reuseExistingServer: !process.env.CI,
-    timeout: 30_000,
-  },
+  // Phase 7: `webServer` is an ARRAY so a real workerd runtime
+  // (`wrangler pages dev`) boots alongside the v1.0 Vite SPA dev server. The
+  // ingestion e2e project (tests/e2e/ingestion/**) targets the wrangler port
+  // (:8788) — the only honest way to exercise fetch + DNS + redirect behavior
+  // for the SSRF matrix (D7-06); reader-flow tests target :5173 as before.
+  // The jsdom-on-Workers spike (07-01 Task 2) reuses this wrangler process.
+  webServer: [
+    {
+      command: "npm run dev",
+      url: "http://localhost:5173",
+      reuseExistingServer: !process.env.CI,
+      timeout: 30_000,
+    },
+    {
+      command: "npx wrangler pages dev --port 8788",
+      url: "http://localhost:8788",
+      reuseExistingServer: !process.env.CI,
+      timeout: 60_000,
+      cwd: ".",
+    },
+  ],
 });

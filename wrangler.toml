@@ -1,0 +1,19 @@
+# Cloudflare Pages Functions config for Lem Reader's ingestion substrate (Phase 7).
+#
+# nodejs_compat: the Workers flag that exposes node:fs, node:http, node:net, and
+# node:dns (partial). jsdom + isomorphic-dompurify + node:dns.promises.resolve4/6
+# (the SSRF guard) all require it. The earlier separate v2-suffixed compat flag
+# was merged INTO nodejs_compat at compat date 2024-09-23 — we set nodejs_compat
+# only and never the deprecated token (RESEARCH.md §State of the Art L866).
+#
+# compat_date: 2024-09-23 is the date the v2 flag merged into nodejs_compat (the
+# canonical cutoff). Any current date >= this is valid; we pin the merge date as
+# the floor.
+#
+# pages_build_output_dir: Vite's static SPA build output. The /functions/api
+# adapter sits alongside this directory at deploy time.
+
+name = "lem-reader"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = "dist"

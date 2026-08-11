@@ -18,7 +18,11 @@
   },
   "dependencies": {
     "@chenglou/pretext": "0.0.8",
+    "@mozilla/readability": "0.6.0",
     "dexie": "4.4.4",
+    "ip-address": "10.5.0",
+    "isomorphic-dompurify": "3.22.0",
+    "jsdom": "30.0.1",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "zod": "4.4.3"
@@ -29,14 +33,16 @@
     "@babel/eslint-parser": "^8.0.1",
     "@babel/preset-react": "^8.0.1",
     "@babel/preset-typescript": "^8.0.1",
+    "@cloudflare/vite-plugin": "1.51.2",
+    "@cloudflare/workers-types": "5.20260811.1",
     "@playwright/test": "1.61.1",
     "@testing-library/dom": "^10.0.0",
     "@testing-library/jest-dom": "^6.6.0",
     "@testing-library/react": "16.3.2",
     "@testing-library/user-event": "^14.5.0",
+    "@types/node": "26.1.2",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "@types/node": "26.1.2",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
     "@vitejs/plugin-react": "^6.0.0",
@@ -44,11 +50,11 @@
     "eslint-plugin-jsx-a11y": "^6.10.0",
     "eslint-plugin-react": "^7.37.0",
     "eslint-plugin-react-hooks": "^5.0.0",
-    "jsdom": "^25.0.0",
     "linkedom": "^0.18.13",
     "prettier": "^3.4.0",
     "typescript": "7.0.2",
     "vite": "8.1.5",
-    "vitest": "4.1.10"
+    "vitest": "4.1.10",
+    "wrangler": "4.120.1"
   }
 }
