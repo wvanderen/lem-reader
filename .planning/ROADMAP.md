@@ -49,7 +49,15 @@ Seven phases that add one stateless ingestion backend and one new data domain (u
   3. The SSRF guard regression matrix passes — private/loopback/link-local IPs (incl. cloud-metadata 169.254.169.254 and CGNAT 100.64/10), non-http(s) schemes, redirect-into-internal chains, and DNS-rebinding simulations are all refused with no upstream body returned on refusal.
   4. The mXSS regression suite (DOMPurify Attack Classes payloads) passes — no `<script>`, inline `on*` handlers, `javascript:` URLs, or SVG/MathML survives into the canonical Block tree, and no `dangerouslySetInnerHTML` exists anywhere in the codebase.
   5. Extraction yields honest three-state outcomes (confident / low-confidence / unsupported) with a derived multi-signal confidence and a reader-visible reason for every refusal (no silent garbage enters the library), and the v1→v3 Dexie migration passes its CI fixture-snapshot test (every v1.0 article/highlight/note/position/preference intact on upgrade).
-**Plans**: TBD
+**Plans**: 7 plans
+Plans:
+- [ ] 07-01-PLAN.md — Wave-0 scaffolding + jsdom-on-Workers spike (resolves A1/A2/A3; gates the extraction architecture)
+- [ ] 07-02-PLAN.md — Schema additions (ArticleSource, IngestionMeta, Provenance.sourceUrl.optional) + Dexie v3 append
+- [ ] 07-03-PLAN.md — /server pipeline primitives: safeFetch SSRF guard + confidence three-state + slugify
+- [ ] 07-04-PLAN.md — /server extraction: htmlToBlocks (Readability → DOMPurify → 9-kind Block tree) + mXSS suite (SC#4)
+- [ ] 07-05-PLAN.md — /server orchestrator (ingest.ts) + inline round-trip anchor gate (SC#1)
+- [ ] 07-06-PLAN.md — Edge function adapter + IngestionClient + DexieLibrarySource + repository swap + minimal ingest UI
+- [ ] 07-07-PLAN.md — Four phase-exit gates as real e2e tests: SSRF matrix (SC#3) + happy-path (SC#1) + Dexie migration (SC#5) + repo-wide dangerouslySetInnerHTML grep gate
 
 ### Phase 8: Markdown Pipeline and Personal Library
 **Goal**: Readers see the value of ingestion — a personal library replaces the flat fixture list, Markdown joins as the lowest-risk intake format, and the reader can browse, open, search, tag, and track their articles.
@@ -132,7 +140,7 @@ Seven phases that add one stateless ingestion backend and one new data domain (u
 | 4. Responsive Pagination and Dual-Mode Navigation | v1.0 | 11/11 | Complete | 2026-08-06 |
 | 5. Durable Highlights and Notes | v1.0 | 7/7 | Complete | 2026-08-07 |
 | 6. Prototype Acceptance | v1.0 | 6/6 | Complete | 2026-08-10 |
-| 7. Ingestion Substrate | v2.0 | 0/TBD | Not started | - |
+| 7. Ingestion Substrate | v2.0 | 0/7 | Planned | - |
 | 8. Markdown Pipeline and Personal Library | v2.0 | 0/TBD | Not started | - |
 | 9. Versioned Export/Import | v2.0 | 0/TBD | Not started | - |
 | 10. Annotation Review Panel | v2.0 | 0/TBD | Not started | - |
