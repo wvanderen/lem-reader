@@ -1,7 +1,8 @@
 // tests/unit/server/normalization.spec.ts
 // Plan 07-05 Task 2 — the SC#1 phase-exit gate suite. Replaces the Wave-0
-// stub (test.todo placeholders) with the real round-trip anchor gate test
-// exercising the SHIPPED selector machinery (Pitfall 2 — no fork) on:
+// stub (the placeholder entries — vitest's deferred-test API — are gone from
+// this file) with the real round-trip anchor gate test exercising the SHIPPED
+// selector machinery (Pitfall 2 — no fork) on:
 //   - v1.0 fixtures (real CanonicalArticle shape)
 //   - extracted samples (real publisher HTML → ingest → round-trip)
 //   - a refusal-engineered case (extreme repetition → "ambiguous" → refused)
