@@ -65,7 +65,17 @@ export class LemReaderDB extends Dexie {
   // by name from the version declarations).
   settings!: Table<SettingsRecord, string>;
   location!: Table<LocationRecordRow, [string, number]>;
-  articles!: Table<{ id: string; revision: number }, string>;
+  articles!: Table<{
+    id: string;
+    revision: number;
+    source?: string;
+    addedAt?: string;
+    ingestionMeta?: unknown;
+    provenance?: unknown;
+    blocks?: unknown;
+    footnotes?: unknown;
+    lang?: string;
+  }, string>;
   // Phase 5: real row types replace the Phase 1 placeholder annotations
   // (LOW risk — runtime-unaffected; Dexie resolves stores by name from the
   // version declarations, not from TS types). Mirrors the Phase 02-02
@@ -103,6 +113,27 @@ export class LemReaderDB extends Dexie {
       articles: "id, revision",
       settings: "key",
       location: "[articleId+revision]",
+    });
+    // ── Phase 7 (D7-02 + Pitfall 9): the third version block is an APPEND. ──
+    // v1/v2 byte-unchanged. v3 adds `source` + `addedAt` indexes to `articles`
+    // for filter-by-origin (compositeLibraryRepository in 07-06) and
+    // sort-by-recency. NO `.upgrade()` callback — additive indexes only; Dexie
+    // re-indexes on next open without row migration. The articles store wrote
+    // ZERO records in v1/v2 (fixtures are bundled JSON imported at build time,
+    // read via an in-memory ArticleRepository — see src/content/repository.ts);
+    // v3 is the first version that writes user rows (ingested articles from
+    // Phase 7's /api/ingest pipeline). The remaining stores (settings,
+    // location, highlights, notes) are re-declared at their existing shapes
+    // because Dexie requires the full stores object at each version; their
+    // values match v2 verbatim. The table-property type annotation widening at
+    // L68 mirrors the documented Phase 5 highlights/notes transition
+    // (PATTERNS.md L403-407 — definite-assignment annotation, runtime-unaffected).
+    this.version(3).stores({
+      articles: "id, revision, source, addedAt",
+      settings: "key",
+      location: "[articleId+revision]",
+      highlights: "id, [articleId+revision]",
+      notes: "id, highlightId",
     });
   }
 }
