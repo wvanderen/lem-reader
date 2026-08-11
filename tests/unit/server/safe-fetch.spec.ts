@@ -147,7 +147,10 @@ describe("safeFetch SSRF guard (07-03 Task 1)", () => {
 
   it("per-hop re-validation: 302 to http://10.0.0.1/ → ssrf-blocked-private-ip (Measure 2)", async () => {
     // First hop: public DNS, returns a 302 redirect to an internal IP.
-    resolve4Mock.mockResolvedValue(["93.184.216.34"]); // example.com public IP
+    // Hostname-aware DNS mock: attacker.example → public; 10.0.0.1 → itself.
+    resolve4Mock.mockImplementation((hostname: string) =>
+      Promise.resolve(hostname === "10.0.0.1" ? ["10.0.0.1"] : ["93.184.216.34"]),
+    );
     resolve6Mock.mockResolvedValue([]);
     fetchMock.mockResolvedValueOnce(
       fakeResponse({
