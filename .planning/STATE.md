@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Personal Library
-current_phase: 7
-current_phase_name: "Phase 7: Ingestion Substrate"
+current_phase: 07
+current_phase_name: ingestion-substrate
 status: executing
-stopped_at: Phase 7 context gathered
-last_updated: "2026-08-11T01:45:52.474Z"
-last_activity: 2026-08-10
-last_activity_desc: v2.0 roadmap created (Phases 7-13, 22/22 requirements mapped)
+stopped_at: Completed 07-01-PLAN.md (HYBRID CONTINGENCY spike approved)
+last_updated: "2026-08-11T02:40:48.518Z"
+last_activity: 2026-08-11
+last_activity_desc: 07-01 complete — framework + spike (HYBRID CONTINGENCY)
 progress:
   total_phases: 7
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  total_plans: 7
+  completed_plans: 1
+  percent: 14
 ---
 
 # Project State
@@ -24,16 +24,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-10)
 
 **Core value:** Readers can move through long-form web content with calm, stable orientation and predictable navigation.
-**Current focus:** Phase 7 — Ingestion Substrate (v2.0 Personal Library roadmap created)
+**Current focus:** Phase 07 — ingestion-substrate
 
 ## Current Position
 
-Phase: 7 of 13 (Phase 7: Ingestion Substrate) — first v2.0 phase
-Plan: — (not yet planned)
-Status: Ready to execute
-Last activity: 2026-08-10 — v2.0 roadmap created (Phases 7-13, 22/22 requirements mapped)
+Phase: 07 (ingestion-substrate) — EXECUTING
+Plan: 2 of 7
+Status: 07-01 complete — ready for 07-02
+Last activity: 2026-08-11 — 07-01 framework + jsdom-on-Workers spike complete (HYBRID CONTINGENCY approved)
 
-Progress: [░░░░░░░░░░] 0% of v2.0 milestone
+Progress: [█░░░░░░░░░] 14% of v2.0 milestone
 
 ## Recent Decisions (Plan 04-11)
 
@@ -97,6 +97,7 @@ Progress: [░░░░░░░░░░] 0% of v2.0 milestone
 | Phase 06 P04 | 2 min | 1 tasks | 1 files |
 | Phase 06 P05 | 7 min | 2 tasks | 4 files |
 | Phase 06 P06 | 10 min | 2 tasks | 1 files |
+| Phase 07 P01 | 40min (incl. human-verify pause) | 2 tasks | 17 files |
 
 ## Accumulated Context
 
@@ -193,6 +194,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: 06-05 closes ACPT-03
 - [Phase ?]: [Phase 06]: 06-05 closes ACPT-03 — all 4 existing edge specs (forced-colors, reduced-motion, reflow, touch-targets) audited against the shared D6-09 invariant + strengthened to apply assertEdgeInvariant uniformly across the 6-fixture corpus x 3 engines (72 new cells). Strengthen-only per D6-12 (no existing assertion removed); wipeDatabase added to every beforeEach (Rule 2 harness-baseline consistency). reflow.spec.ts (the (c) overflow-clause origin) now asserts the COMPLETE invariant (a)/(b)/(c) via the helper. Together with 06-01 (high-zoom + font-failure), all six edge conditions assert the same bar.
 - [Phase 06]: 06-06 executes ACPT-02 manual SR protocol on VoiceOver+Safari (zero blocker/major after 5 findings resolved; #1 H-under-VO documented as cross-SR platform constraint, toolbar = primary SR path; #2 NotePopover promoted to modal <dialog>+showModal; #3 minor deferred; #4 visual-only; #5 aria-describedby excerpt). Honest full-suite gate green (1157 passed / 0 failed / exit 0). NVDA+Firefox NOT run = coverage boundary A4 (reduced gate). ACPT-02 NOT unilaterally flipped -- flip decision surfaced to user. — 06-VERIFICATION.md is the durable phase-6 acceptance ledger; reduced-gate honesty over silent full-coverage claim.
+- [Phase 07]: 07-01 spike verdict (HUMAN-APPROVED 2026-08-11): HYBRID CONTINGENCY — jsdom AND linkedom both fail the mXSS gate on Workers. jsdom: `ReferenceError: MessagePort is not defined` (workerd lacks MessagePort); linkedom-DOMPurify: no-op sanitizer (`isSupported: undefined`, sanitize returns input unchanged with script/onerror intact). Workers handle ONLY the SSRF-safe fetch (ip-address + cf.resolveOverride both PASS); extraction+sanitize run in a Node-runtime function. 07-04 runtime target shifts from a Workers Pages Function to a Node function; /server adapter boundary (D7-05) keeps logic portable, only /functions adapter shape changes. vite.config.ts = Option A (@cloudflare/vite-plugin), A3 PASS (v1.0 smoke 8/8 chromium green).
 
 ### Pending Todos
 
@@ -221,9 +223,9 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-11T00:58:34.755Z
-Stopped at: Phase 7 context gathered
-Resume file: .planning/phases/07-ingestion-substrate/07-CONTEXT.md
+Last session: 2026-08-11T02:40:48.511Z
+Stopped at: Completed 07-01-PLAN.md (HYBRID CONTINGENCY spike approved)
+Resume file: .planning/phases/07-ingestion-substrate/07-02-PLAN.md
 
 ## Operator Next Steps
 

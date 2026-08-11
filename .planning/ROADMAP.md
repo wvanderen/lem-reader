@@ -52,11 +52,11 @@ Seven phases that add one stateless ingestion backend and one new data domain (u
   4. The mXSS regression suite (DOMPurify Attack Classes payloads) passes — no `<script>`, inline `on*` handlers, `javascript:` URLs, or SVG/MathML survives into the canonical Block tree, and no `dangerouslySetInnerHTML` exists anywhere in the codebase.
   5. Extraction yields honest three-state outcomes (confident / low-confidence / unsupported) with a derived multi-signal confidence and a reader-visible reason for every refusal (no silent garbage enters the library), and the v1→v3 Dexie migration passes its CI fixture-snapshot test (every v1.0 article/highlight/note/position/preference intact on upgrade).
 
-**Plans**: 7 plans
+**Plans**: 1/7 plans executed
 Plans:
 **Wave 1**
 
-- [ ] 07-01-PLAN.md — Wave-0 scaffolding + jsdom-on-Workers spike (resolves A1/A2/A3; gates the extraction architecture)
+- [x] 07-01-PLAN.md — Wave-0 scaffolding + jsdom-on-Workers spike (resolves A1/A2/A3; gates the extraction architecture)
 - [ ] 07-02-PLAN.md — Schema additions (ArticleSource, IngestionMeta, Provenance.sourceUrl.optional) + Dexie v3 append
 
 **Wave 2** *(blocked on Wave 1 completion)*
@@ -175,7 +175,7 @@ Plans:
 | 4. Responsive Pagination and Dual-Mode Navigation | v1.0 | 11/11 | Complete | 2026-08-06 |
 | 5. Durable Highlights and Notes | v1.0 | 7/7 | Complete | 2026-08-07 |
 | 6. Prototype Acceptance | v1.0 | 6/6 | Complete | 2026-08-10 |
-| 7. Ingestion Substrate | v2.0 | 0/7 | Planned | - |
+| 7. Ingestion Substrate | v2.0 | 1/7 | In Progress | - |
 | 8. Markdown Pipeline and Personal Library | v2.0 | 0/TBD | Not started | - |
 | 9. Versioned Export/Import | v2.0 | 0/TBD | Not started | - |
 | 10. Annotation Review Panel | v2.0 | 0/TBD | Not started | - |
