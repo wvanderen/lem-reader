@@ -59,7 +59,8 @@ const validIngestionMeta = {
 
 describe("ArticleSourceSchema", () => {
   it("enum equals exactly [fixture, url, paste] (D7-08)", () => {
-    expect(ArticleSourceSchema.enum).toEqual(["fixture", "url", "paste"]);
+    // Zod 4: `.options` is the value array; `.enum` is now the object map.
+    expect(ArticleSourceSchema.options).toEqual(["fixture", "url", "paste"]);
   });
 
   it.each(["fixture", "url", "paste"] as const)(

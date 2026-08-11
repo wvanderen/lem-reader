@@ -25,8 +25,11 @@ const linkableUrl = z
     message: "Only http, https, mailto schemes allowed",
   });
 
-/** http/https only — for figure sources and provenance sourceUrl (no mailto/data). */
-const httpUrl = z
+/** http/https only — for figure sources and provenance sourceUrl (no mailto/data).
+ * Exported so `src/ingestion/types.ts` can reuse the SAME refinement (single
+ * source of truth for the URL-safety refinement — the Phase 7 ingestion
+ * envelope imports this rather than re-declaring it inline). */
+export const httpUrl = z
   .string()
   .url()
   .refine((u) => /^https?:$/i.test(new URL(u).protocol), {
@@ -172,7 +175,13 @@ export const FootnoteBody = z.object({
 // ── Provenance ───────────────────────────────────────────────────────────────
 
 export const Provenance = z.object({
-  sourceUrl: httpUrl, // scheme-allow-listed (Pitfall 5)
+  // D7-08 + Pitfall 9: sourceUrl is `.optional()` so paste-HTML articles
+  // (ING-02) — which have no canonical source URL — can omit it. Existing v1.0
+  // fixtures always supply it, so they parse identically (additive change,
+  // source-compatible). The renderer's "open original" affordance hides when
+  // sourceUrl is absent (07-06). originalHtmlHash still provides traceability
+  // for paste-sourced articles.
+  sourceUrl: httpUrl.optional(), // scheme-allow-listed when present (Pitfall 5)
   title: z.string().min(1),
   author: z.string().optional(),
   publishedAt: z.string().datetime().optional(),
@@ -183,6 +192,37 @@ export const Provenance = z.object({
 
 // ── Article ──────────────────────────────────────────────────────────────────
 
+// ── Phase 7 ingestion metadata (D7-02, D7-08) ───────────────────────────────
+// Additive sub-schemas introduced by Phase 7. Backward-compatible with v1.0
+// fixtures by construction: ArticleSchema.ingestionMeta is `.optional()`, so a
+// v1.0 fixture (which omits the field) hydrates to `undefined` on read — the
+// Pitfall 9 `.optional()`/`.default()` migration mechanism mirroring
+// ReaderSettingsSchema.readingMode at L233-237. The compositeLibraryRepository
+// (07-06) synthesizes { source: "fixture" } for display only; the canonical
+// v1.0 row never carries ingestionMeta.
+
+/** ArticleSourceSchema — D7-08 origin discriminator. The enum is CLOSED; future
+ * phases widen it by adding variants ("markdown" Phase 8, "pdf" Phase 11,
+ * "epub-chapter" Phase 12) — a forward-compatible schema evolution. */
+export const ArticleSourceSchema = z.enum(["fixture", "url", "paste"]);
+export type ArticleSource = z.infer<typeof ArticleSourceSchema>;
+
+/** IngestionMetaSchema — derived per-article metadata written at ingest time.
+ * Shape per 07-RESEARCH.md §IngestionMeta/ArticleSource Schema L566-574.
+ * `extractionConfidence` carries only "high" | "low" — the "unsupported"
+ * three-state outcome (ING-06) is refused at ingest (never reaches persistence);
+ * the client sees it as the failure envelope reason `extraction-unsupported`. */
+export const IngestionMetaSchema = z.object({
+  source: ArticleSourceSchema,
+  origin: z.enum(["url", "paste"]).optional(), // D7-08: hides "open original" for paste
+  sourceUrl: httpUrl.optional(), // D7-08: Provenance.sourceUrl mirror (present for url; absent for paste)
+  originalHtmlHash: z.string(), // SHA-256 of fetched/pasted HTML — traceability
+  fetchedAt: z.string().datetime().optional(), // ISO-8601 (present for url; absent for paste)
+  extractionConfidence: z.enum(["high", "low"]), // the derived signal; "unsupported" never persists
+  extractionWarnings: z.array(z.string()).default([]), // e.g. "3 unsupported blocks omitted"
+});
+export type IngestionMeta = z.infer<typeof IngestionMetaSchema>;
+
 export const ArticleSchema = z.object({
   id: z.string().regex(/^[a-z0-9-]+$/), // stable slug; never the source URL (D-06)
   revision: z.number().int().min(1), // monotonic (D-06)
@@ -190,6 +230,9 @@ export const ArticleSchema = z.object({
   provenance: Provenance,
   blocks: z.array(BlockSchema).min(1),
   footnotes: z.array(FootnoteBody).default([]),
+  // Phase 7 — additive. v1.0 fixtures omit this field and parse to `undefined`
+  // (Pitfall 9 backward-compat). Ingester path (07-05) always supplies it.
+  ingestionMeta: IngestionMetaSchema.optional(),
 });
 
 // Inferred types — also re-exported from types.ts. Schemas are the single

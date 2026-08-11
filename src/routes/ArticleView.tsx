@@ -1048,7 +1048,14 @@ export function ArticleView({
     );
   }
 
-  const domain = new URL(article.provenance.sourceUrl).hostname;
+  // D7-08 + threat T-7-06: sourceUrl is optional (paste-HTML articles omit it).
+  // The "Originally published at {domain}" affordance hides when sourceUrl is
+  // absent — there is no canonical source URL for a pasted article. v1.0
+  // fixtures always supply sourceUrl so they render identically; paste-HTML
+  // articles (07-06+) trigger the conditional. originalHtmlHash still provides
+  // traceability for paste-sourced articles.
+  const sourceUrl = article.provenance.sourceUrl;
+  const domain = sourceUrl !== undefined ? new URL(sourceUrl).hostname : undefined;
 
   // Paginated mode mounts only when trustedView + articleEl are both ready;
   // otherwise we render the scrolling ArticleBody (the additive branch —
@@ -1158,10 +1165,12 @@ export function ArticleView({
                 {article.provenance.publishedAt && formatDate(article.provenance.publishedAt)}
               </p>
             )}
-            <a href={article.provenance.sourceUrl} rel="noopener noreferrer" target="_blank">
-              Originally published at {domain}
-              <span className="visually-hidden"> (opens in a new tab)</span>
-            </a>
+            {sourceUrl !== undefined && domain !== undefined && (
+              <a href={sourceUrl} rel="noopener noreferrer" target="_blank">
+                Originally published at {domain}
+                <span className="visually-hidden"> (opens in a new tab)</span>
+              </a>
+            )}
           </header>
           {paginatedActive && trustedView && articleEl ? (
             <>
