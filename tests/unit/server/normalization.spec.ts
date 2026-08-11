@@ -13,12 +13,12 @@
 // usage pattern this gate reuses verbatim) + 07-RESEARCH.md §Gate 3 L972-973.
 import { describe, expect, it } from "vitest";
 import { assertRoundTripAnchor, ingest } from "../../../server/ingest";
-import { ArticleSchema, type CanonicalArticle } from "../../src/content/schema";
+import { ArticleSchema, type CanonicalArticle } from "../../../src/content/schema";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import essayLongFormJson from "../../src/fixtures/articles/essay-long-form.canonical.json" with { type: "json" };
-import technicalPostJson from "../../src/fixtures/articles/technical-post.canonical.json" with { type: "json" };
-import footnoteAcademicJson from "../../src/fixtures/articles/footnote-academic.canonical.json" with { type: "json" };
+import essayLongFormJson from "../../../src/fixtures/articles/essay-long-form.canonical.json" with { type: "json" };
+import technicalPostJson from "../../../src/fixtures/articles/technical-post.canonical.json" with { type: "json" };
+import footnoteAcademicJson from "../../../src/fixtures/articles/footnote-academic.canonical.json" with { type: "json" };
 
 /** parseArticle — mirror tests/unit/normalizeText.test.ts L16-30 + selectors.test.ts L15-17. */
 function parseArticle(raw: unknown): CanonicalArticle {
