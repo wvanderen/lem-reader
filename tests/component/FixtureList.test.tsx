@@ -84,7 +84,11 @@ describe("FixtureList (DOC-01)", () => {
       expect(screen.getByText("Couldn't open this article.")).not.toBeNull();
     });
     expect(screen.getByText(/The article could not be loaded/)).not.toBeNull();
-    expect(screen.getByRole("status")).not.toBeNull();
+    // 07-06: FixtureList now mounts <IngestControl /> above the list, which
+    // carries its own .status live region. The list's .status region is
+    // still present — assert at least one role=status exists (getAllByRole
+    // accommodates the two without changing the existing assertion intent).
+    expect(screen.getAllByRole("status").length).toBeGreaterThanOrEqual(1);
   });
 
   it("shows the empty state when the list resolves with no articles", async () => {

@@ -117,7 +117,7 @@ describe("IngestControl (07-06 Task 2)", () => {
     render(<IngestControl />);
 
     const urlInput = screen.getByRole("textbox", { name: /add by url/i });
-    const submitButton = screen.getByRole("button", { name: /add/i });
+    const submitButton = screen.getByRole("button", { name: /^add$/i });
     await user.type(urlInput, "https://example.com/article");
     await user.click(submitButton);
 
@@ -136,7 +136,7 @@ describe("IngestControl (07-06 Task 2)", () => {
 
     const urlInput = screen.getByRole("textbox", { name: /add by url/i });
     await user.type(urlInput, "https://example.com/article");
-    await user.click(screen.getByRole("button", { name: /add/i }));
+    await user.click(screen.getByRole("button", { name: /^add$/i }));
 
     await waitFor(() => expect(ingestUrlMock).toHaveBeenCalledTimes(1));
     expect(ingestUrlMock.mock.calls[0]![0]).toBe("https://example.com/article");
@@ -173,7 +173,7 @@ describe("IngestControl (07-06 Task 2)", () => {
 
     const urlInput = screen.getByRole("textbox", { name: /add by url/i });
     await user.type(urlInput, "https://example.com/article");
-    await user.click(screen.getByRole("button", { name: /add/i }));
+    await user.click(screen.getByRole("button", { name: /^add$/i }));
 
     await waitFor(() => {
       expect(screen.getByText(/already in your library/i)).not.toBeNull();
@@ -189,7 +189,7 @@ describe("IngestControl (07-06 Task 2)", () => {
 
     const urlInput = screen.getByRole("textbox", { name: /add by url/i });
     await user.type(urlInput, "http://169.254.169.254/");
-    await user.click(screen.getByRole("button", { name: /add/i }));
+    await user.click(screen.getByRole("button", { name: /^add$/i }));
 
     await waitFor(() => {
       expect(screen.getByText(/points somewhere the reader can't reach/i)).not.toBeNull();
@@ -205,7 +205,7 @@ describe("IngestControl (07-06 Task 2)", () => {
       screen.getByRole("textbox", { name: /add by url/i }),
       "https://example.com/article",
     );
-    await user.click(screen.getByRole("button", { name: /add/i }));
+    await user.click(screen.getByRole("button", { name: /^add$/i }));
 
     await waitFor(() => {
       expect(screen.getByText(/couldn't reach this page/i)).not.toBeNull();
@@ -221,7 +221,7 @@ describe("IngestControl (07-06 Task 2)", () => {
       screen.getByRole("textbox", { name: /add by url/i }),
       "https://example.com/article",
     );
-    await user.click(screen.getByRole("button", { name: /add/i }));
+    await user.click(screen.getByRole("button", { name: /^add$/i }));
 
     await waitFor(() => {
       expect(screen.getByText(/couldn't reliably read this page/i)).not.toBeNull();
@@ -237,7 +237,7 @@ describe("IngestControl (07-06 Task 2)", () => {
       screen.getByRole("textbox", { name: /add by url/i }),
       "https://example.com/article",
     );
-    await user.click(screen.getByRole("button", { name: /add/i }));
+    await user.click(screen.getByRole("button", { name: /^add$/i }));
 
     await waitFor(() => {
       expect(screen.getByText(/something went wrong. try again/i)).not.toBeNull();
@@ -253,7 +253,7 @@ describe("IngestControl (07-06 Task 2)", () => {
       screen.getByRole("textbox", { name: /add by url/i }),
       "https://example.com/article",
     );
-    await user.click(screen.getByRole("button", { name: /add/i }));
+    await user.click(screen.getByRole("button", { name: /^add$/i }));
 
     await waitFor(() => {
       expect(screen.getByRole("status").textContent?.toLowerCase()).not.toMatch(

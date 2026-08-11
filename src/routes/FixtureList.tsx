@@ -8,6 +8,7 @@
 import { useEffect, useState } from "react";
 import { listArticles } from "../content/repository";
 import type { CanonicalArticle } from "../content/types";
+import { IngestControl } from "../ingestion/IngestControl";
 
 export function FixtureList() {
   const [items, setItems] = useState<CanonicalArticle[]>([]);
@@ -33,6 +34,14 @@ export function FixtureList() {
   return (
     <main id="main">
       <h1>Saved articles</h1>
+      {/* 07-06 (D7-01 + D7-02) — minimal ingest control mounted above the
+          article list. The control's .status live region (refusals +
+          "Fetching article…") is DISTINCT from the list's .status region
+          below (loading/ready/error for listArticles itself) so each
+          surface owns its own responsibility. The control writes ingested
+          articles into Dexie v3; the compositeLibraryRepository swap means
+          they appear in the list on the next render automatically. */}
+      <IngestControl />
       <div className="status" role="status" aria-live="polite" aria-atomic="true">
         {status === "loading" && <p>Opening article…</p>}
         {status === "error" && (
