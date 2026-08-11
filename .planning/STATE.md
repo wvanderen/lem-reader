@@ -5,15 +5,15 @@ milestone_name: Personal Library
 current_phase: 07
 current_phase_name: ingestion-substrate
 status: executing
-stopped_at: "Completed 07-03-PLAN.md (server substrate: SSRF guard + confidence + slugify)"
-last_updated: "2026-08-11T03:21:40.242Z"
+stopped_at: "Completed 07-04-PLAN.md (htmlToBlocks extract+sanitize+walk + mXSS suite SC#4)"
+last_updated: "2026-08-11T03:43:12.096Z"
 last_activity: 2026-08-11
 last_activity_desc: 07-02 schema + ingestion types envelope + Dexie v3 append complete
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 7
-  completed_plans: 3
+  completed_plans: 4
   percent: 0
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-10)
 ## Current Position
 
 Phase: 07 (ingestion-substrate) — EXECUTING
-Plan: 4 of 7
+Plan: 5 of 7
 Status: 07-02 complete — ready for 07-03
 Last activity: 2026-08-11 — 07-02 schema + ingestion types envelope + Dexie v3 append complete
 
@@ -100,6 +100,7 @@ Progress: [███░░░░░░░] 29% of v2.0 milestone
 | Phase 07 P01 | 40min (incl. human-verify pause) | 2 tasks | 17 files |
 | Phase 07 P02 | 15min | 2 tasks | 7 files |
 | Phase 07 P03 | 8min | 2 tasks | 7 files |
+| Phase 07 P04 | 17min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -199,6 +200,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 07]: 07-01 spike verdict (HUMAN-APPROVED 2026-08-11): HYBRID CONTINGENCY — jsdom AND linkedom both fail the mXSS gate on Workers. jsdom: `ReferenceError: MessagePort is not defined` (workerd lacks MessagePort); linkedom-DOMPurify: no-op sanitizer (`isSupported: undefined`, sanitize returns input unchanged with script/onerror intact). Workers handle ONLY the SSRF-safe fetch (ip-address + cf.resolveOverride both PASS); extraction+sanitize run in a Node-runtime function. 07-04 runtime target shifts from a Workers Pages Function to a Node function; /server adapter boundary (D7-05) keeps logic portable, only /functions adapter shape changes. vite.config.ts = Option A (@cloudflare/vite-plugin), A3 PASS (v1.0 smoke 8/8 chromium green).
 - [Phase 07]: 07-02: Dexie v3 APPENDs source + addedAt indexes to articles with NO .upgrade() callback (Pitfall 9 — additive indexes only; articles store wrote zero records in v1/v2). ArticleSourceSchema closed to fixture|url|paste; extractionConfidence persists only high|low (the 'unsupported' ING-06 three-state is refused upstream, surfaced as IngestionFailureReason 'extraction-unsupported'). httpUrl exported from schema.ts for single-source-of-truth reuse in src/ingestion/types.ts. — Plan + 07-RESEARCH.md L590-604 + threat T-7-07 require v3 additive; Pitfall 9 forbids editing v1/v2; D7-08 requires the optional sourceUrl and origin discriminator; ING-06 three-state keeps 'unsupported' out of persistence.
 - [Phase 07]: 07-03: safeFetch ships cf.resolveOverride DNS pinning (07-01 A1 PASS) — Workers fetch honors the option; Node unit-test fetch ignores it. Metadata-hostname check runs BEFORE DNS (RESEARCH.md measure order 1->5->3). IPv4-mapped IPv6 handled via Address6.isMapped4()+to4(). confidence ships locked ING-06 formula (corpus calibration deferred). slugify ships humanish+hash-fallback (D7-07).
+- [Phase ?]: 07-04: htmlToBlocks ships Option A (jsdom-primary) per 07-01 HYBRID CONTINGENCY spike — extraction+sanitize run in Node where jsdom works natively; plan L103 Option C throw comment OVERTURNED. mXSS suite SC#4 = 11 DOMPurify Attack Classes payloads all stripped. ING-07 closes here; ING-01/02 close at 07-06.
 
 ### Pending Todos
 
@@ -227,8 +229,8 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-11T03:20:53.714Z
-Stopped at: Completed 07-03-PLAN.md (server substrate: SSRF guard + confidence + slugify)
+Last session: 2026-08-11T03:43:05.109Z
+Stopped at: Completed 07-04-PLAN.md (htmlToBlocks extract+sanitize+walk + mXSS suite SC#4)
 Resume file: None
 
 ## Operator Next Steps

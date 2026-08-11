@@ -15,7 +15,7 @@ Requirements for the v2.0 milestone. Each maps to a roadmap phase (traceability 
 - [ ] **ING-04**: Reader can add a document by uploading a PDF; text is extracted and normalized, with honest failure when a PDF is scanned/image-only or unrecoverably multi-column.
 - [ ] **ING-05**: Reader can add a book by uploading an EPUB, surfaced as per-chapter articles under a book grouping (EPUB-as-Book, Option A — one article per chapter + thin Book record, preserving every v1.0 substrate contract).
 - [x] **ING-06**: Reader is shown an honest "couldn't read this" state (reusing the DOC-06 disclosure spirit) when extraction cannot reliably produce content — no silent garbage; a derived multi-signal confidence replaces Readability's absent score.
-- [ ] **ING-07**: Ingested content is sanitized and rendered through the canonical document model, so a malicious page cannot execute scripts or inject hostile markup (the doc model is the security boundary; sanitize once at ingest, never `dangerouslySetInnerHTML`).
+- [x] **ING-07**: Ingested content is sanitized and rendered through the canonical document model, so a malicious page cannot execute scripts or inject hostile markup (the doc model is the security boundary; sanitize once at ingest, never `dangerouslySetInnerHTML`).
 - [x] **ING-08**: The ingestion service refuses private, internal, and cloud-metadata endpoints and caps redirects, so the reader cannot be abused to probe internal networks (SSRF — OWASP Case 2).
 
 ### Library
@@ -106,7 +106,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ING-04 | Phase 11 | Pending |
 | ING-05 | Phase 12 | Pending |
 | ING-06 | Phase 7 | Complete |
-| ING-07 | Phase 7 | Pending |
+| ING-07 | Phase 7 | Complete |
 | ING-08 | Phase 7 | Complete |
 | LIB-01 | Phase 8 | Pending |
 | LIB-02 | Phase 8 | Pending |
