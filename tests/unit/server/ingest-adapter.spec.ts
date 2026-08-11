@@ -65,7 +65,8 @@ describe("handleIngestBody (07-06 Task 1 adapter)", () => {
     expect(result.status).toBe(200);
     expect(result.body.ok).toBe(true);
     expect(ingestMock).toHaveBeenCalledTimes(1);
-    expect(ingestMock.mock.calls[0][0]).toEqual({ url: "https://example.com/article" });
+    const firstCall = ingestMock.mock.calls[0]!;
+    expect(firstCall[0]).toEqual({ url: "https://example.com/article" });
   });
 
   it("returns 400 + body when ingest resolves ok:false (typed refusal)", async () => {
@@ -96,6 +97,7 @@ describe("handleIngestBody (07-06 Task 1 adapter)", () => {
   it("accepts the paste path — {html}", async () => {
     ingestMock.mockResolvedValue(okArticle());
     await handleIngestBody({ html: "<article>paste</article>" });
-    expect(ingestMock.mock.calls[0][0]).toEqual({ html: "<article>paste</article>" });
+    const firstCall = ingestMock.mock.calls[0]!;
+    expect(firstCall[0]).toEqual({ html: "<article>paste</article>" });
   });
 });

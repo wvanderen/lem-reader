@@ -112,7 +112,9 @@ describe("IngestionClient (07-06 Task 1)", () => {
     const result = await ingestUrl("https://example.com/article");
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [calledUrl, init] = fetchMock.mock.calls[0];
+    const call = fetchMock.mock.calls[0];
+    expect(call).toBeDefined();
+    const [calledUrl, init] = call as [unknown, RequestInit | undefined];
     expect(calledUrl).toBe("/api/ingest");
     expect(init?.method).toBe("POST");
     expect(JSON.parse((init as RequestInit).body as string)).toEqual({
@@ -308,7 +310,8 @@ describe("compositeLibraryRepository (07-06 Task 1)", () => {
     const { fixtures } = await import("../../src/fixtures");
     const source = new DexieLibrarySource();
     // Save a row with the SAME id as the first fixture.
-    const firstFixtureId = fixtures[0].id;
+    const firstFixture = fixtures[0]!;
+    const firstFixtureId = firstFixture.id;
     await source.save(sampleArticle({ id: firstFixtureId }));
 
     const merged = await compositeLibraryRepository.list();
@@ -325,7 +328,8 @@ describe("compositeLibraryRepository (07-06 Task 1)", () => {
     // From Dexie.
     expect((await compositeLibraryRepository.open("ingested-only"))?.id).toBe("ingested-only");
     // From fixtures.
-    expect((await compositeLibraryRepository.open(fixtures[0].id))?.id).toBe(fixtures[0].id);
+    const first = fixtures[0]!;
+    expect((await compositeLibraryRepository.open(first.id))?.id).toBe(first.id);
     // Absent.
     expect(await compositeLibraryRepository.open("does-not-exist")).toBeNull();
   });
