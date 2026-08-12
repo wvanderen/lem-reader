@@ -14,6 +14,7 @@
     "calibrate": "playwright test calibration.harness && node tests/e2e/calibration/fingerprint.compare.ts",
     "perf": "playwright test perf.harness && node tests/e2e/perf/budget.compare.ts",
     "lint": "eslint .",
+    "lint:no-danger": "node scripts/check-no-danger.js # rejects dangerouslySetInnerHTML in src/server/functions (ING-07)",
     "format": "prettier --write ."
   },
   "dependencies": {

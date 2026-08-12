@@ -144,16 +144,36 @@ describe("jsdom-on-Workers spike — RECORDED OUTCOME", () => {
 });
 
 describe("A3: @cloudflare/vite-plugin preserves v1.0 SPA dev flow", () => {
-  // A3 was verified manually by booting vite WITH cloudflare() in plugins[] and
-  // running the v1.0 smoke (open-every-fixture.spec.ts 8/8 chromium green).
-  // Option A (the cloudflare plugin) is the chosen vite.config.ts shape; the
-  // fallback server.proxy (Option B) was NOT needed. This test locks in that
-  // vite.config.ts uses Option A so the choice is not silently reverted.
-  test("vite.config.ts uses @cloudflare/vite-plugin (Option A)", async () => {
+  // A3 was verified manually in 07-01 by booting vite WITH cloudflare() in
+  // plugins[] and running the v1.0 smoke (open-every-fixture.spec.ts 8/8
+  // chromium green). Option A (the cloudflare plugin) was the chosen
+  // vite.config.ts shape at the time.
+  //
+  // 07-07 Rule 3 blocker follow-up: the cloudflare() plugin was REMOVED from
+  // vite.config.ts because bundling /functions/* (and their transitive undici
+  // dependency) into workerd crashes the Vite dev server with the same
+  // `ReferenceError: MessagePort is not defined` the 07-01 spike documented
+  // for jsdom-on-workers. The Vite Node middleware (viteIngestMiddleware,
+  // 07-06) serves /api/ingest natively in Node; workerd is no longer needed
+  // for Phase 7 dev/e2e. The HYBRID CONTINGENCY verdict (the spike's job-one
+  // deliverable) is preserved; only the dev-server plugin choice changed.
+  //
+  // This test now locks in the OPPOSITE invariant: the cloudflare() plugin
+  // is NOT in vite.config.ts (its presence would crash the dev server).
+  test("vite.config.ts does NOT use @cloudflare/vite-plugin (07-07 Rule 3 removal)", async () => {
     const cfg = await import("node:fs/promises").then((fs) =>
       fs.readFile("./vite.config.ts", "utf-8"),
     );
-    expect(cfg).toContain("@cloudflare/vite-plugin");
-    expect(cfg).toContain("cloudflare()");
+    // The cloudflare plugin import must be absent (the actual import line,
+    // not prose mentions in comments).
+    expect(cfg).not.toMatch(
+      /^\s*import\s+\{[^}]*\bcloudflare\b[^}]*\}\s+from\s+["']@cloudflare\/vite-plugin["']/m,
+    );
+    expect(cfg).not.toMatch(/^\s*cloudflare\(\),?\s*$/m);
+    // The Vite Node middleware (the Phase 7 /api/ingest runtime per the
+    // 07-06 HYBRID CONTINGENCY adaptation) MUST be present as an actual
+    // import + plugin install.
+    expect(cfg).toMatch(/from\s+["']\.\/dev-server\/ingest-middleware["']/);
+    expect(cfg).toMatch(/configureServer:\s*viteIngestMiddleware\(\)/);
   });
 });
