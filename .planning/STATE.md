@@ -5,16 +5,16 @@ milestone_name: Personal Library
 current_phase: 07
 current_phase_name: ingestion-substrate
 status: executing
-stopped_at: Completed 07-06-PLAN.md (edge function adapter + IngestionClient + DexieLibrarySource + minimal ingest UI; HYBRID CONTINGENCY Vite middleware adaptation)
-last_updated: "2026-08-11T13:11:51.998Z"
-last_activity: 2026-08-11
-last_activity_desc: 07-02 schema + ingestion types envelope + Dexie v3 append complete
+stopped_at: "Completed 07-07-PLAN.md (four phase-exit gates GREEN; SC#1/3/4/5 across the full npm run test suite exit 0; Phase 7 complete)"
+last_updated: "2026-08-12T03:18:22.536Z"
+last_activity: 2026-08-12
+last_activity_desc: 07-07 four phase-exit gates GREEN (SC#1/3/4/5); Phase 7 complete
 progress:
   total_phases: 7
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 7
-  completed_plans: 6
-  percent: 0
+  completed_plans: 7
+  percent: 14
 ---
 
 # Project State
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-10)
 
 **Core value:** Readers can move through long-form web content with calm, stable orientation and predictable navigation.
-**Current focus:** Phase 07 — ingestion-substrate
+**Current focus:** Phase 07 — ingestion-substrate (COMPLETE; ready for verification + Phase 8 planning)
 
 ## Current Position
 
-Phase: 07 (ingestion-substrate) — EXECUTING
+Phase: 07 (ingestion-substrate) — COMPLETE (7/7 plans executed; ready for verification)
 Plan: 7 of 7
-Status: 07-02 complete — ready for 07-03
-Last activity: 2026-08-11 — 07-02 schema + ingestion types envelope + Dexie v3 append complete
+Status: 07-07 complete — four phase-exit gates GREEN (SC#1/3/4/5); full `npm run test` exit 0 (Vitest 666/7-skipped + Playwright 709/6-skipped)
+Last activity: 2026-08-12 — 07-07 four phase-exit gates wired as real e2e tests + lint:no-danger grep gate
 
 Progress: [███░░░░░░░] 29% of v2.0 milestone
 
@@ -103,6 +103,7 @@ Progress: [███░░░░░░░] 29% of v2.0 milestone
 | Phase 07 P04 | 17min | 2 tasks | 5 files |
 | Phase 07 P05 | 12min | 2 tasks | 2 files |
 | Phase 07 P06 | 10min | 2 tasks | 12 files |
+| Phase 07 P07 | 28min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -205,6 +206,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: 07-04: htmlToBlocks ships Option A (jsdom-primary) per 07-01 HYBRID CONTINGENCY spike — extraction+sanitize run in Node where jsdom works natively; plan L103 Option C throw comment OVERTURNED. mXSS suite SC#4 = 11 DOMPurify Attack Classes payloads all stripped. ING-07 closes here; ING-01/02 close at 07-06.
 - [Phase 07]: 07-05: Pipeline orchestrator ships the locked 7-stage ordering (safeFetch → extractAndNormalize → slugifyUrl → ArticleSchema.parse → assertRoundTripAnchor → deriveConfidence → stamp). assertRoundTripAnchor samples 5 grapheme offsets [0, 25%, 50%, 75%, near-end], refuses entry on ambiguous|orphan via the SHIPPED selectors (Pitfall 2 — no fork). Paste-path id bypasses slugifyUrl (new URL throws on non-URL strings) → content-hash slug paste-<12hex> directly. ING-01 + ING-06 close here.
 - [Phase 07]: 07-06: HYBRID CONTINGENCY adaptation (human-approved 2026-08-11) — /api/ingest served by Vite Node dev middleware for Phase 7, not Cloudflare Pages (workerd). Both adapters share server/ingestAdapter.ts so behavior is byte-identical; functions/api/ingest.ts preserved as production-future shape. — 07-06: HYBRID CONTINGENCY adaptation (human-approved 2026-08-11) — /api/ingest served by Vite Node dev middleware for Phase 7, not Cloudflare Pages (workerd). Both adapters share server/ingestAdapter.ts so behavior is byte-identical; functions/api/ingest.ts preserved as production-future shape.
+- [Phase 07]: 07-07: Four phase-exit gates GREEN (SC#1/3/4/5). SSRF matrix targets :5173/api/ingest per the 07-06 RUNTIME_GUARDRAIL (Vite Node middleware, not workerd). 19-vector corpus covers all 9 Pitfall 3 measures + 2 documented residuals (DNS-rebinding T-7-04, redirect-into-internal covered by safe-fetch.spec.ts unit). Private-IP vectors accept dual-reason (ssrf-blocked-private-ip OR fetch-failed) because Node c-ares refuses literal IPs. lint:no-danger regex tightened to match JSX USAGE not prose. ING-07 + ING-08 close here.
+- [Phase 07]: 07-07 Rule 3 blocker fixes (three coordinated): (a) dev-server/ingest-middleware.ts Vite configureServer signature corrected to use server.middlewares via the ViteDevServer parameter; (b) cloudflare() plugin REMOVED from vite.config.ts (bundling /functions/* into workerd crashed with MessagePort ReferenceError); (c) wrangler pages dev :8788 webServer REMOVED from playwright.config.ts (same crash). The Vite Node middleware is the sole Phase 7 /api/ingest runtime. A3 spike assertion inverted. Forward note for Phase 8: re-adding workerd requires isolating /functions from undici-bearing imports OR a workerd release with MessagePort.
+- [Phase 07]: 07-07 cross-browser Dexie migration seed via dual-path. seedV1Snapshot tries indexedDB.open(name, 2) first (clean upgrade-chain); on webkit VersionError (deleteDatabase blocked on Dexie's open connection) falls back to opening without a version + seeding existing v3 DB. Both paths prove Pitfall 9 (v3 schema accepts v1/v2 row shapes). beforeEach uses clear-rows NOT deleteDatabase for deterministic first-run state across chromium/firefox/webkit.
 
 ### Pending Todos
 
@@ -233,8 +237,8 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-11T13:11:31.695Z
-Stopped at: Completed 07-06-PLAN.md (edge function adapter + IngestionClient + DexieLibrarySource + minimal ingest UI; HYBRID CONTINGENCY Vite middleware adaptation)
+Last session: 2026-08-12T03:18:22.529Z
+Stopped at: Completed 07-07-PLAN.md (four phase-exit gates GREEN; SC#1/3/4/5 across the full npm run test suite exit 0; Phase 7 complete)
 Resume file: None
 
 ## Operator Next Steps
