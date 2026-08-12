@@ -5,10 +5,10 @@ milestone_name: Personal Library
 current_phase: 07
 current_phase_name: ingestion-substrate
 status: phase-execution-complete
-stopped_at: "Phase 7 executed (7/7 plans); orchestrator verification caught 2 gate misreports (tsc TS2589 + eslint undefined-rule), fixed, full suite green"
-last_updated: "2026-08-12T04:10:00.000Z"
+stopped_at: Phase 8 context gathered
+last_updated: "2026-08-12T13:57:27.214Z"
 last_activity: 2026-08-12
-last_activity_desc: Phase 7 execution complete; orchestrator inline-verification closed 2 gate gaps (tsc + eslint); all gates green
+last_activity_desc: "07-07 four phase-exit gates wired as real e2e tests + lint:no-danger grep gate"
 progress:
   total_phases: 7
   completed_phases: 1
@@ -237,9 +237,9 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-12T03:18:22.529Z
-Stopped at: Completed 07-07-PLAN.md (four phase-exit gates GREEN; SC#1/3/4/5 across the full npm run test suite exit 0; Phase 7 complete)
-Resume file: None
+Last session: 2026-08-12T13:57:27.205Z
+Stopped at: Phase 8 context gathered
+Resume file: .planning/phases/08-markdown-pipeline-and-personal-library/08-CONTEXT.md
 
 ## Operator Next Steps
 
