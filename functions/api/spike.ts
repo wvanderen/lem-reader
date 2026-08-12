@@ -69,7 +69,6 @@ export const onRequest: PagesFunction = async () => {
     '<body><article><h1>Title</h1><p>Body paragraph with <a href="https://example.com">a link</a>.</p></article></body></html>';
   let dom: { window: { document: Document } } | null = null;
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const JSDOM = JSDOMCtor as any;
     if (JSDOM) {
       dom = new JSDOM(sampleHtml, { url: "https://example.com/article" });
@@ -115,7 +114,6 @@ export const onRequest: PagesFunction = async () => {
     const { Readability } = await import("@mozilla/readability");
     if (dom) {
       // Readability mutates its input document — clone first (README guidance).
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const JSDOM = JSDOMCtor as any;
       const cloneDoc = new JSDOM(sampleHtml, { url: "https://example.com/article" }).window.document;
       const reader = new Readability(cloneDoc);
@@ -173,7 +171,6 @@ export const onRequest: PagesFunction = async () => {
     const parsed = parseHTML(sampleHtml);
     linkedomDoc = (parsed as { document: Document }).document;
     // Canonical linkedom+DOMPurify pattern: new Window() then attach document.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const Win = ldExports.Window as (new () => any) | undefined;
     if (Win) {
       const w = new Win();
@@ -271,7 +268,6 @@ export const onRequest: PagesFunction = async () => {
     // The spike only cares whether the OPTION is accepted, not whether the
     // fetch resolves to the pinned IP.
     await fetch("https://0.0.0.0.invalid/", {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       cf: { resolveOverride: "1.1.1.1" } as any,
       signal: AbortSignal.timeout(2000),
     }).catch(() => {

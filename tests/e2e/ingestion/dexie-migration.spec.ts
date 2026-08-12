@@ -22,7 +22,7 @@
 // + oncomplete resolve), extended to seed ALL four v1/v2 stores (settings,
 // location, highlights, notes — articles wrote zero records in v1/v2 because
 // fixtures are bundled JSON).
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 
 const BASE = "http://localhost:5173";
 
@@ -99,7 +99,7 @@ const SEEDED_NOTE = {
  * + indexes Dexie declared at v1+v2 (see src/persistence/db.ts L91-116).
  * Compound indexes use the array keyPath form Dexie expects.
  */
-async function seedV1Snapshot(page: import("@playwright/test").Page): Promise<void> {
+async function seedV1Snapshot(page: Page): Promise<void> {
   await page.evaluate(
     async ({ settings, location, highlight, note }) => {
       /**
@@ -224,13 +224,17 @@ async function seedV1Snapshot(page: import("@playwright/test").Page): Promise<vo
  * (post-upgrade) DB.
  */
 async function readRow(
-  page: import("@playwright/test").Page,
+  page: Page,
   storeName: string,
   key: IDBValidKey,
-): Promise<unknown> {
-  return page.evaluate(
-    async ({ storeName, key }) => {
-      return new Promise((resolve) => {
+): Promise<Record<string, unknown> | null> {
+  type SerializableKey = string | number | (string | number)[];
+  return page.evaluate<
+    Record<string, unknown> | null,
+    { storeName: string; key: SerializableKey }
+  >(
+    async ({ storeName, key }): Promise<Record<string, unknown> | null> => {
+      return new Promise<Record<string, unknown> | null>((resolve) => {
         const req = indexedDB.open("lem-reader");
         req.onsuccess = () => {
           const db = req.result;
@@ -239,14 +243,17 @@ async function readRow(
             return;
           }
           const tx = db.transaction(storeName, "readonly");
-          const getReq = tx.objectStore(storeName).get(key);
-          getReq.onsuccess = () => resolve(getReq.result ?? null);
+          const getReq = tx.objectStore(storeName).get(key as IDBValidKey);
+          getReq.onsuccess = () =>
+            resolve(
+              (getReq.result ?? null) as Record<string, unknown> | null,
+            );
           getReq.onerror = () => resolve(null);
         };
         req.onerror = () => resolve(null);
       });
     },
-    { storeName, key },
+    { storeName, key: key as SerializableKey },
   );
 }
 
@@ -255,7 +262,7 @@ async function readRow(
  * is missing.
  */
 async function countRows(
-  page: import("@playwright/test").Page,
+  page: Page,
   storeName: string,
 ): Promise<number> {
   return page.evaluate(
