@@ -18,7 +18,7 @@
 // ip-address validation covers all 9 OWASP measures on Node;
 // `cf.resolveOverride` is silently ignored on Node (documented residual
 // TOCTOU per T-7-04, acceptable, closed by a future Workers deploy).
-import type { Connect } from "vite";
+import type { ViteDevServer, Connect } from "vite";
 import { handleIngestBody } from "../server/ingestAdapter";
 import type { IngestionResponse } from "../src/ingestion/types";
 
@@ -39,25 +39,25 @@ function readBody(req: Connect.IncomingMessage): Promise<string> {
 }
 
 /**
- * viteIngestMiddleware — a Vite `server.configureServer` plugin that
- * intercepts POST /api/ingest, runs the full ingestion pipeline in Node,
- * and returns the IngestionResponse as JSON. All other requests fall through
- * to the default Vite handler (the SPA bundle).
+ * viteIngestMiddleware — returns a Vite `configureServer` hook that installs
+ * a connect middleware intercepting POST /api/ingest. The middleware runs the
+ * full ingestion pipeline in Node and returns the IngestionResponse as JSON.
+ * All other requests fall through to Vite's default handler (the SPA bundle).
  *
- * Exported as a function so vite.config.ts can install it cleanly:
+ * Vite's `configureServer(server)` hook receives the `ViteDevServer` instance;
+ * the connect middleware stack lives at `server.middlewares`. We install the
+ * handler synchronously inside the hook body so it runs BEFORE Vite's
+ * built-in middleware fallback (the SPA static handler) — POST /api/ingest
+ * is intercepted on the way in, every other request calls next() and reaches
+ * the SPA bundle as usual.
  *
- *   server: { configureServer(server) { viteIngestMiddleware()(server.middlewares); } }
+ * Usage in vite.config.ts:
+ *
+ *   plugins: [{ name: "lem-ingest-dev-middleware", configureServer: viteIngestMiddleware() }]
  */
-export function viteIngestMiddleware(): ReturnType<
-  NonNullable<
-    NonNullable<
-      import("vite").Plugin["configureServer"]
-    >
-  >
-> {
-  // Return a connect-style middleware installer.
-  return (middlewares) => {
-    middlewares.use(async (req, res, next) => {
+export function viteIngestMiddleware(): (server: ViteDevServer) => void {
+  return (server: ViteDevServer) => {
+    server.middlewares.use(async (req, res, next) => {
       const url = req.url ?? "";
       // Match POST /api/ingest exactly. (Vite normalizes the SPA dev server
       // to one origin on :5173, so the client's `fetch("/api/ingest")`

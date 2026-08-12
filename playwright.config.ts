@@ -23,25 +23,28 @@ export default defineConfig({
       testMatch: /perf\.harness/,
     },
   ],
-  // Phase 7: `webServer` is an ARRAY so a real workerd runtime
-  // (`wrangler pages dev`) boots alongside the v1.0 Vite SPA dev server. The
-  // ingestion e2e project (tests/e2e/ingestion/**) targets the wrangler port
-  // (:8788) — the only honest way to exercise fetch + DNS + redirect behavior
-  // for the SSRF matrix (D7-06); reader-flow tests target :5173 as before.
-  // The jsdom-on-Workers spike (07-01 Task 2) reuses this wrangler process.
+  // Phase 7 (07-06 HYBRID CONTINGENCY + 07-07 Rule 3 blocker fix): the
+  // webServer is now a SINGLE entry — the Vite dev server on :5173. The
+  // Vite Node dev middleware (vite.config.ts `lem-ingest-dev-middleware`
+  // plugin → viteIngestMiddleware) serves POST /api/ingest natively in Node
+  // (jsdom/DOMPurify/Readability work in Node), so the SSRF matrix + happy-
+  // path e2e target :5173 directly. The previous `wrangler pages dev --port
+  // 8788` second entry was REMOVED because wrangler's workerd runtime
+  // crashes at startup on the `undici` transitive dep from /functions/*
+  // (`ReferenceError: MessagePort is not defined` — the documented 07-01
+  // spike verdict). The 07-01 spike regression spec
+  // (tests/unit/server/spike-jsdom-workers.spec.ts) skips gracefully when
+  // workerd is unreachable, so the regression-lock discipline is preserved
+  // (the verdict is locked in 07-01-SUMMARY regardless of the spec's
+  // runtime reachability). The functions/api/ingest.ts Pages Function is
+  // preserved as the production-future shape (D7-05) per the 07-06
+  // HYBRID CONTINGENCY adaptation.
   webServer: [
     {
       command: "npm run dev",
       url: "http://localhost:5173",
       reuseExistingServer: !process.env.CI,
       timeout: 30_000,
-    },
-    {
-      command: "npx wrangler pages dev --port 8788",
-      url: "http://localhost:8788",
-      reuseExistingServer: !process.env.CI,
-      timeout: 60_000,
-      cwd: ".",
     },
   ],
 });
