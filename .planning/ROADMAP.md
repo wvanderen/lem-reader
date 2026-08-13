@@ -93,10 +93,24 @@ Plans:
 **UI hint**: yes
 
 Plans:
+**Wave 1**
+
 - [ ] 08-01-PLAN.md — Server Markdown adapter (markdownToBlocks) + schema widening (ArticleSource + origin + tags) + ingest.ts dispatch + IngestionClient.ingestMarkdown
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 08-02-PLAN.md — Tag + location data substrate (Dexie v4 *tags index, loadAllLocations, tagsStore) + dexie-migration v4 e2e
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 08-03-PLAN.md — Library view composition (LibraryView replaces FixtureList, LibraryRow, SourceBadge, ContinueReadingStrip, LibrarySearch, TagFilter, libraryFilter) + App.tsx swap
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 08-04-PLAN.md — File-upload form (.md/.html) + TagEntry in ArticleView + RemoveConfirm cascade-remove dialog
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 08-05-PLAN.md — Phase-exit e2e gates: SC#1 browse-open + v1-regression, SC#2 remove-cascade, SC#3 search-tag-filter, SC#4 markdown-upload, SC#5 progress-recent + full honest-suite gate
 
 ### Phase 9: Versioned Export/Import

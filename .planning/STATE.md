@@ -5,8 +5,8 @@ milestone_name: Personal Library
 current_phase: 07
 current_phase_name: ingestion-substrate
 status: phase-execution-complete
-stopped_at: Phase 8 context gathered
-last_updated: "2026-08-12T13:57:27.214Z"
+stopped_at: Phase 8 UI-SPEC approved
+last_updated: "2026-08-12T21:44:44.587Z"
 last_activity: 2026-08-12
 last_activity_desc: "07-07 four phase-exit gates wired as real e2e tests + lint:no-danger grep gate"
 progress:
@@ -237,9 +237,9 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-12T13:57:27.205Z
-Stopped at: Phase 8 context gathered
-Resume file: .planning/phases/08-markdown-pipeline-and-personal-library/08-CONTEXT.md
+Last session: 2026-08-12T21:44:44.579Z
+Stopped at: Phase 8 UI-SPEC approved
+Resume file: .planning/phases/08-markdown-pipeline-and-personal-library/08-UI-SPEC.md
 
 ## Operator Next Steps
 
