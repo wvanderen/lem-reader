@@ -4,17 +4,17 @@ milestone: v2.0
 milestone_name: Personal Library
 current_phase: 08
 current_phase_name: markdown-pipeline-and-personal-library
-status: executing
+status: verifying
 stopped_at: Completed 08-04-PLAN.md
-last_updated: "2026-08-13T02:38:34.553Z"
+last_updated: "2026-08-13T17:42:45.053Z"
 last_activity: 2026-08-13
 last_activity_desc: Phase 08 execution started
 progress:
   total_phases: 7
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 12
-  completed_plans: 11
-  percent: 14
+  completed_plans: 12
+  percent: 29
 ---
 
 # Project State
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-08-10)
 
 Phase: 08 (markdown-pipeline-and-personal-library) — EXECUTING
 Plan: 5 of 5
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-08-13 — Phase 08 execution started
 
 Progress: [███░░░░░░░] 29% of v2.0 milestone
@@ -108,6 +108,7 @@ Progress: [███░░░░░░░] 29% of v2.0 milestone
 | Phase 08 P02 | 5min | 2 tasks | 5 files |
 | Phase 08 P03 | 11min | 3 tasks | 10 files |
 | Phase 08 P04 | 5min | 2 tasks | 6 files |
+| Phase 08 P05 | 45min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -223,6 +224,10 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: Phase 08-04: TagEntry is INERT at ArticleView mount (Pitfall 8-5 — no auto-focus prop, no mount-time effect calling .focus()); reader activates via Tab/Click. Warning prose uses 'auto-focus' not the JSX attribute name so the acceptance grep returns 0 (mirrors 08-01 allowDangerousHtml).
 - [Phase ?]: Phase 08-04: hasFile React state mirrors the file-input picker (refs are not reactive — reading fileInputRef.current.files.length in JSX wouldn't re-evaluate after a pick, so the submit button would stay disabled). onChange → setHasFile is the correct discipline.
 - [Phase ?]: Phase 08-04: RemoveConfirm is a STRUCTURAL CLONE of WipeConfirm, not a shared Dialog. Two ~150-line components is the right cost for Pitfall 8 isolation (each destructive call lives ONLY in its own button's onClick — abstracting into a shared dialog would re-introduce the single-call-site risk).
+- [Phase ?]: Phase 08-05: .library-list > li direct-child selector mandatory for library row counts (nested tag-chip <li> otherwise over-counts)
+- [Phase ?]: Phase 08-05: page.reload() in openLibrary helper forces LibraryView remount after Dexie seed (load effect runs ONCE per mount; hashchange doesn't re-trigger)
+- [Phase ?]: Phase 08-05: Math.floor(total*0.98) yields ratio 0.9798 < 0.98 due to integer truncation; seed graphemeOffset = total for deterministic Finished state
+- [Phase ?]: Phase 08-05: Honest-suite gate RED (1495 passed / 24 failed / 13 skipped). 24 failures are PRE-EXISTING in unrelated specs (pagination/annotations/dexie-migration); Plan 08-05 scope (6 library specs, 243 cells) fully green. Logged to deferred-items.md per scope-boundary rule.
 
 ### Pending Todos
 
@@ -235,6 +240,7 @@ None yet.
 - [Phase 4 → deferred → folded into 04-06]: persistence.spec.ts STATE-01 location-restore tests fail pre-existing since 04-02/04-03 (paginated default + paginated-surface geometry prevents window scroll). Now tracked under Plan 04-06 Task 5 (test-only fix: seed readingMode "scrolling").
 - [Phase 5]: Offset units, grapheme handling, overlap semantics, and anchor confidence thresholds need explicit decisions.
 - [Phase 4 → RESOLVED by 04-07/04-08/04-09/04-10/04-11]: gsd-verifier caught 76 hidden e2e failures misreported as "269 passed / 0 failed" across every Phase 4 SUMMARY + STATE + ROADMAP + REQUIREMENTS + the Plan 04-05 Task 3 gate-approval commit. Reality was 76 failed / 269 passed. Gap-closure plans 04-07 (PAGE-03b overflow guard), 04-08 (PAGE-06/07 always-mounted ArticleBody), 04-09 (PAGE-01/02 M-toggle + keyboard/chevron), 04-10 (PAGE-09 banner race) closed all 6 structural gaps. Plan 04-11 re-ran the FULL `npm run test` suite end-to-end: 753 passed / 0 failed / 0 skipped, exit 0. 04-VERIFICATION.md upgraded gaps_found (3/7) → verified (7/7). The Plan 04-05 Task 3 human-verify gate now has a genuinely-green automated prerequisite.
+- Phase 08 honest-suite gate RED: 24 pre-existing e2e failures in unrelated specs (18 pagination Phase 4 PAGE-03a/b/c + PAGE-04, 3 capture-highlight Phase 5 ANNO-01, 3 dexie-migration Phase 8-02 v3->v4). Plan 08-05 scope itself (6 library specs, 243 cells across chromium+firefox+webkit) is fully green. Pre-existing failures are out of scope per executor scope-boundary rule; logged to .planning/phases/08-markdown-pipeline-and-personal-library/deferred-items.md. A gap-closure plan is required to bring the full npm run test exit code to 0.
 
 ## Deferred Items
 
@@ -251,7 +257,7 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-13T02:38:20.056Z
+Last session: 2026-08-13T17:41:59.545Z
 Stopped at: Completed 08-04-PLAN.md
 Resume file: None
 

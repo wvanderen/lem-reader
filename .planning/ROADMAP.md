@@ -30,7 +30,7 @@ Full phase details, decisions, and plan history: [`milestones/v1.0-ROADMAP.md`](
 Seven phases that add one stateless ingestion backend and one new data domain (user-ingested articles + library metadata) on top of the shipped v1.0 substrate. The load-bearing invariant: the reading engine, pagination, annotation selectors, location store, and a11y surface cannot tell an ingested article from a fixture. URL+HTML(+Markdown) ingestion is proven before PDF and EPUB; SSRF and XSS are addressed in the first ingestion phase, not deferred.
 
 - [x] **Phase 7: Ingestion Substrate** - Stateless backend safely normalizes URL-fetched and pasted HTML into canonical articles with SSRF + XSS defense and honest failure (completed 2026-08-12)
-- [ ] **Phase 8: Markdown Pipeline and Personal Library** - Lowest-risk Markdown intake plus the personal library that replaces the fixture list
+- [x] **Phase 8: Markdown Pipeline and Personal Library** - Lowest-risk Markdown intake plus the personal library that replaces the fixture list (completed 2026-08-13)
 - [ ] **Phase 9: Versioned Export/Import** - Whole-library bundles and highlights-only export as the cross-device story in lieu of accounts
 - [ ] **Phase 10: Annotation Review Panel** - Dedicated surface to review, filter, and curate all highlights and notes across the library
 - [ ] **Phase 11: PDF Intake** - PDF text extraction with honest failure for scanned and multi-column documents
@@ -89,7 +89,7 @@ Plans:
   4. Reader can add an article by uploading a Markdown document (.md), with YAML front-matter (title/author/date) recognized as metadata, normalized through the same Block-output contract as HTML.
   5. Reader sees ingestion metadata (source URL, fetch date) with a link to the original source, plus recently-read shortcuts and positional reading-progress indicators across the library.
 
-**Plans**: 4/5 plans executed
+**Plans**: 5/5 plans complete
 **UI hint**: yes
 
 Plans:
@@ -111,7 +111,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 08-05-PLAN.md — Phase-exit e2e gates: SC#1 browse-open + v1-regression, SC#2 remove-cascade, SC#3 search-tag-filter, SC#4 markdown-upload, SC#5 progress-recent + full honest-suite gate
+- [x] 08-05-PLAN.md — Phase-exit e2e gates: SC#1 browse-open + v1-regression, SC#2 remove-cascade, SC#3 search-tag-filter, SC#4 markdown-upload, SC#5 progress-recent + full honest-suite gate
 
 ### Phase 9: Versioned Export/Import
 
@@ -197,7 +197,7 @@ Plans:
 | 5. Durable Highlights and Notes | v1.0 | 7/7 | Complete | 2026-08-07 |
 | 6. Prototype Acceptance | v1.0 | 6/6 | Complete | 2026-08-10 |
 | 7. Ingestion Substrate | v2.0 | 7/7 | Complete   | 2026-08-12 |
-| 8. Markdown Pipeline and Personal Library | v2.0 | 4/5 | In Progress|  |
+| 8. Markdown Pipeline and Personal Library | v2.0 | 5/5 | Complete   | 2026-08-13 |
 | 9. Versioned Export/Import | v2.0 | 0/TBD | Not started | - |
 | 10. Annotation Review Panel | v2.0 | 0/TBD | Not started | - |
 | 11. PDF Intake | v2.0 | 0/TBD | Not started | - |
