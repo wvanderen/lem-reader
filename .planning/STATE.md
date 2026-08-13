@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Personal Library
-current_phase: 07
-current_phase_name: ingestion-substrate
-status: phase-execution-complete
-stopped_at: Phase 8 UI-SPEC approved
-last_updated: "2026-08-12T21:44:44.587Z"
-last_activity: 2026-08-12
-last_activity_desc: "07-07 four phase-exit gates wired as real e2e tests + lint:no-danger grep gate"
+current_phase: 08
+current_phase_name: markdown-pipeline-and-personal-library
+status: executing
+stopped_at: Completed 08-01-PLAN.md
+last_updated: "2026-08-13T02:04:29.773Z"
+last_activity: 2026-08-13
+last_activity_desc: Phase 08 execution started
 progress:
   total_phases: 7
   completed_phases: 1
-  total_plans: 7
-  completed_plans: 7
+  total_plans: 12
+  completed_plans: 8
   percent: 14
 ---
 
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-10)
 
 **Core value:** Readers can move through long-form web content with calm, stable orientation and predictable navigation.
-**Current focus:** Phase 07 — ingestion-substrate (COMPLETE; ready for verification + Phase 8 planning)
+**Current focus:** Phase 08 — markdown-pipeline-and-personal-library
 
 ## Current Position
 
-Phase: 07 (ingestion-substrate) — COMPLETE (7/7 plans executed; ready for verification)
-Plan: 7 of 7
-Status: 07-07 complete — four phase-exit gates GREEN (SC#1/3/4/5); full `npm run test` exit 0 (Vitest 666/7-skipped + Playwright 709/6-skipped)
-Last activity: 2026-08-12 — 07-07 four phase-exit gates wired as real e2e tests + lint:no-danger grep gate
+Phase: 08 (markdown-pipeline-and-personal-library) — EXECUTING
+Plan: 2 of 5
+Status: Ready to execute
+Last activity: 2026-08-13 — Phase 08 execution started
 
 Progress: [███░░░░░░░] 29% of v2.0 milestone
 
@@ -104,6 +104,7 @@ Progress: [███░░░░░░░] 29% of v2.0 milestone
 | Phase 07 P05 | 12min | 2 tasks | 2 files |
 | Phase 07 P06 | 10min | 2 tasks | 12 files |
 | Phase 07 P07 | 28min | 2 tasks | 8 files |
+| Phase 08 P01 | 11min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -209,6 +210,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 07]: 07-07: Four phase-exit gates GREEN (SC#1/3/4/5). SSRF matrix targets :5173/api/ingest per the 07-06 RUNTIME_GUARDRAIL (Vite Node middleware, not workerd). 19-vector corpus covers all 9 Pitfall 3 measures + 2 documented residuals (DNS-rebinding T-7-04, redirect-into-internal covered by safe-fetch.spec.ts unit). Private-IP vectors accept dual-reason (ssrf-blocked-private-ip OR fetch-failed) because Node c-ares refuses literal IPs. lint:no-danger regex tightened to match JSX USAGE not prose. ING-07 + ING-08 close here.
 - [Phase 07]: 07-07 Rule 3 blocker fixes (three coordinated): (a) dev-server/ingest-middleware.ts Vite configureServer signature corrected to use server.middlewares via the ViteDevServer parameter; (b) cloudflare() plugin REMOVED from vite.config.ts (bundling /functions/* into workerd crashed with MessagePort ReferenceError); (c) wrangler pages dev :8788 webServer REMOVED from playwright.config.ts (same crash). The Vite Node middleware is the sole Phase 7 /api/ingest runtime. A3 spike assertion inverted. Forward note for Phase 8: re-adding workerd requires isolating /functions from undici-bearing imports OR a workerd release with MessagePort.
 - [Phase 07]: 07-07 cross-browser Dexie migration seed via dual-path. seedV1Snapshot tries indexedDB.open(name, 2) first (clean upgrade-chain); on webkit VersionError (deleteDatabase blocked on Dexie's open connection) falls back to opening without a version + seeding existing v3 DB. Both paths prove Pitfall 9 (v3 schema accepts v1/v2 row shapes). beforeEach uses clear-rows NOT deleteDatabase for deterministic first-run state across chromium/firefox/webkit.
+- [Phase 08]: D8-18 markdown article id = md-<shortHash(canonical content)> (content-hash, NOT filename); two uploads of identical .md produce the same id so dedupe-refuse mirrors D7-07. The filename is metadata-only and feeds the D8-17 title fallback chain, not the id. — Content-hash ids are stable across filename changes (a reader re-saving the same content under a different filename gets the same article, not a duplicate). This mirrors the paste-path content-hash precedent and keeps save-once-read-forever semantics uniform across all three intake formats.
+- [Phase 08]: Strict CommonMark is the security boundary for the markdown path (D8-16, Pitfall 8-2): raw HTML in .md escapes to inert paragraph text by default. Never enable the parser's raw-HTML pass-through; the doc model IS the security boundary (ING-07). — CommonMark's default behavior (escape raw HTML) eliminates the mXSS surface without needing DOMPurify on the markdown path. The html-paths still need DOMPurify because they accept arbitrary HTML; the markdown path doesn't accept HTML at all — it accepts CommonMark, which has no raw-HTML-in-DOM semantics.
+- [Phase 08]: D8-17 title fallback chain front-matter → stripMarkdownExtension(filename) → "Markdown document" runs in server/ingest.ts (the orchestrator), not in markdownToBlocks. The adapter is filename-agnostic; the orchestrator owns provenance assembly. — Keeps markdownToBlocks pure (string in, blocks+provenancePartial out — no I/O, no FS access). The orchestrator already owns the title fallback chain for url + paste paths; markdown mirrors that ownership rather than splitting responsibility across files.
 
 ### Pending Todos
 
@@ -237,9 +241,9 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-12T21:44:44.579Z
-Stopped at: Phase 8 UI-SPEC approved
-Resume file: .planning/phases/08-markdown-pipeline-and-personal-library/08-UI-SPEC.md
+Last session: 2026-08-13T02:04:02.356Z
+Stopped at: Completed 08-01-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 
