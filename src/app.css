@@ -742,6 +742,97 @@ dialog.wipe-confirm::backdrop {
   border-color: var(--accent);
 }
 
+/* ── IngestControl — Plan 07-06 + Plan 08-04 ──────────────────────────────── */
+/* Three stacked forms (URL / paste HTML / file upload). The .ingest-control
+   <section> wraps all three; .ingest-submit is the shared submit-button
+   geometry (neutral hairline border + accent-on-hover, mirroring the
+   .resume-banner-secondary quiet-chrome discipline). */
+.ingest-control {
+  margin-block: var(--space-xl);
+  padding: var(--space-lg);
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+}
+.ingest-control > h2 {
+  margin: 0 0 var(--space-md) 0;
+  font-family: var(--font-ui);
+  font-size: 22px;
+  line-height: 1.3;
+  font-weight: 600;
+  color: var(--ink);
+}
+/* Each form stacks vertically inside the section. */
+.ingest-control form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  margin-block: 0 var(--space-md);
+}
+.ingest-control form:last-of-type {
+  margin-block-end: 0;
+}
+.ingest-control label {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  font-weight: 600;
+  color: var(--ink);
+}
+.ingest-control .meta {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+.ingest-control input[type="url"],
+.ingest-control input[type="file"],
+.ingest-control textarea {
+  width: 100%;
+  min-height: var(--touch);
+  padding: var(--space-sm);
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink);
+  /* :focus-visible inherits the global 2px ring rule (app.css). */
+}
+.ingest-control textarea {
+  min-height: calc(var(--touch) * 2);
+  resize: vertical;
+}
+/* Shared submit-button geometry (A11Y-07 — 44px touch target). The neutral
+   hairline border mirrors .resume-banner-secondary; :hover flips to --accent
+   (border + text) so the affordance reads as quiet until activated. */
+.ingest-submit,
+.ingest-control form button[type="submit"] {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--touch);
+  padding-inline: var(--space-md);
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  font-family: var(--font-ui);
+  font-size: 16px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.ingest-control form button[type="submit"]:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.ingest-control form button[type="submit"]:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 /* ════════════════════════════════════════════════════════════════════════
  * Phase 2 Plan 02-03 — Location restore + quiet progress + section announce
  *

@@ -22,10 +22,11 @@
 //   - T-7-28 (Tampering, re-ingest overwrites + orphans highlights) →
 //     DexieLibrarySource.has(id) BEFORE save; if has returns true, refuse
 //     with "Already in your library." and never call save.
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import {
   ingestUrl,
   ingestHtml,
+  ingestMarkdown,
   IngestionError,
 } from "./IngestionClient";
 import { dexieLibrarySource } from "./LibrarySource";
@@ -78,6 +79,13 @@ export function IngestControl() {
   const [htmlValue, setHtmlValue] = useState("");
   const [status, setStatus] = useState<IngestStatus>("idle");
   const [message, setMessage] = useState<string | null>(null);
+  // hasFile mirrors the file-input selection in React state so the submit
+  // button's disabled flag re-evaluates after the OS file picker resolves.
+  // (Reading `fileInputRef.current.files.length` directly in JSX would NOT
+  // trigger a re-render after a pick — refs are not reactive — and the
+  // button would stay disabled even after the reader selected a file.)
+  const [hasFile, setHasFile] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   /**
    * handleSubmit — shared submit handler for both forms. Picks the ingest
@@ -134,6 +142,63 @@ export function IngestControl() {
     void handleSubmit("paste");
   }
 
+  /**
+   * handleFileSubmit — the file-upload form (Plan 08-04, D8-15). Dispatch by
+   * extension: `.md` → ingestMarkdown (forwards file.name so the server can
+   * run the D8-17 title-fallback chain); `.html` → ingestHtml (no filename —
+   * htmlToBlocks derives title from `<title>`/OpenGraph in the content).
+   *
+   * T-8-14 (DoS, content bomb): client-side 5MB cap refuses oversized files
+   * via the existing "This page is too large." copy. The server re-applies
+   * Phase 7's content-length cap (defense-in-depth).
+   */
+  async function handleFileSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (status === "submitting") return;
+    const file = fileInputRef.current?.files?.[0];
+    if (!file) return;
+
+    // Client-side size cap (UI-SPEC §EXTENDED IngestControl + T-8-14). The
+    // mapReasonToCopy("response-too-large") surface ("This page is too
+    // large.") is reused verbatim — zero new chrome.
+    if (file.size > 5 * 1024 * 1024) {
+      setStatus("error");
+      setMessage(mapReasonToCopy("response-too-large"));
+      return;
+    }
+
+    setStatus("submitting");
+    setMessage("Reading file…");
+    try {
+      const text = await file.text();
+      const isMarkdown = /\.md$/i.test(file.name);
+      const result = isMarkdown
+        ? await ingestMarkdown(text, file.name)
+        : await ingestHtml(text);
+
+      // D7-07 dedupe-refuse (identical to the url/paste paths).
+      const alreadyInLibrary = await dexieLibrarySource.has(result.article.id);
+      if (alreadyInLibrary) {
+        setStatus("error");
+        setMessage(mapReasonToCopy("already-in-library"));
+        return;
+      }
+
+      await dexieLibrarySource.save(result.article);
+      setStatus("success");
+      window.location.hash = `#/article/${result.article.id}`;
+    } catch (err) {
+      setStatus("error");
+      if (err instanceof IngestionError) {
+        setMessage(mapReasonToCopy(err.reason));
+      } else {
+        // Non-typed throw (file read, JSON parse, unexpected client bug) —
+        // surface as the generic server-error copy.
+        setMessage(mapReasonToCopy("server-error"));
+      }
+    }
+  }
+
   const submitting = status === "submitting";
 
   return (
@@ -171,6 +236,28 @@ export function IngestControl() {
         />
         <button type="submit" disabled={submitting || htmlValue.length === 0}>
           Add pasted article
+        </button>
+      </form>
+
+      {/* Plan 08-04 (D8-15) — third form: file upload. The .md branch forwards
+          file.name through ingestMarkdown(text, file.name) so the server can
+          apply the D8-17 title fallback chain. The .html branch calls
+          ingestHtml(text) — htmlToBlocks derives title from content metadata,
+          not filename. T-8-14: client-side 5MB cap refuses oversized files. */}
+      <form onSubmit={handleFileSubmit}>
+        <label htmlFor="ingest-file">Upload a file</label>
+        <p className="meta">Accepts .md and .html</p>
+        <input
+          id="ingest-file"
+          ref={fileInputRef}
+          name="file"
+          type="file"
+          accept=".md,.html"
+          disabled={submitting}
+          onChange={(e) => setHasFile(e.target.files !== null && e.target.files.length > 0)}
+        />
+        <button type="submit" disabled={submitting || !hasFile}>
+          Add file
         </button>
       </form>
 
