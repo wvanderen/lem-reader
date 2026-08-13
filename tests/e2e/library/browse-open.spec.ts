@@ -105,7 +105,7 @@ test.describe("SC#1 + LIB-01 + LIB-05 — browse + open + source badge", () => {
     // assertion (T-8-20 mitigation).
     const expectedCount = fixtures.length;
     await expect(
-      page.locator(".library-list li"),
+      page.locator(".library-list > li"),
       `expected ${expectedCount} library rows (one per fixture)`,
     ).toHaveCount(expectedCount);
   });
@@ -170,7 +170,7 @@ test.describe("SC#1 + LIB-01 + LIB-05 — browse + open + source badge", () => {
       page.getByRole("heading", { level: 1, name: "Saved articles" }),
     ).toBeVisible();
 
-    const baselineRows = await page.locator(".library-list li").count();
+    const baselineRows = await page.locator(".library-list > li").count();
     expect(baselineRows, "baseline fixture count").toBe(fixtures.length);
 
     // Ingest a paste-HTML article through the real Vite Node middleware.
@@ -194,7 +194,7 @@ test.describe("SC#1 + LIB-01 + LIB-05 — browse + open + source badge", () => {
     ).toBeVisible();
 
     // The library list grew by exactly one row (the ingested paste article).
-    await expect(page.locator(".library-list li")).toHaveCount(
+    await expect(page.locator(".library-list > li")).toHaveCount(
       baselineRows + 1,
     );
 

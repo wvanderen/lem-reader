@@ -310,7 +310,7 @@ test.describe("SC#2 + LIB-02 — cascade-remove + confirmation", () => {
     const expectedBaselineRows =
       (await import("../../../src/fixtures")).fixtures.length + 1;
     await expect(
-      page.locator(".library-list li"),
+      page.locator(".library-list > li"),
       "library list includes fixtures + 1 ingested",
     ).toHaveCount(expectedBaselineRows);
 
@@ -319,7 +319,7 @@ test.describe("SC#2 + LIB-02 — cascade-remove + confirmation", () => {
     //    carries a "Pasted" badge instead). We scope by the row's heading
     //    text — the paste article title is deterministic.
     const ingestRow = page
-      .locator(".library-list li")
+      .locator(".library-list > li")
       .filter({ hasText: "Cascade-Remove Test Article" });
     await expect(ingestRow).toBeVisible();
     await ingestRow.locator(".library-row-remove").click();
@@ -350,12 +350,12 @@ test.describe("SC#2 + LIB-02 — cascade-remove + confirmation", () => {
     // 9. The dialog closes; navigation returns to #/ (the reader was on #/
     //    when remove fired). The ingested row is gone.
     await expect(dialog).not.toBeVisible();
-    await expect(page.locator(".library-list li")).toHaveCount(
+    await expect(page.locator(".library-list > li")).toHaveCount(
       (await import("../../../src/fixtures")).fixtures.length,
     );
     // The removed article's title no longer appears anywhere on #/.
     await expect(
-      page.locator(".library-list li").filter({
+      page.locator(".library-list > li").filter({
         hasText: "Cascade-Remove Test Article",
       }),
     ).toHaveCount(0);
@@ -415,7 +415,7 @@ test.describe("SC#2 + LIB-02 — cascade-remove + confirmation", () => {
       page.getByRole("heading", { level: 1, name: "Saved articles" }),
     ).toBeVisible();
     const ingestRow = page
-      .locator(".library-list li")
+      .locator(".library-list > li")
       .filter({ hasText: "Cascade-Remove Test Article" });
     await ingestRow.locator(".library-row-remove").click();
     const dialog = page.locator("dialog.library-remove-confirm");
@@ -428,7 +428,7 @@ test.describe("SC#2 + LIB-02 — cascade-remove + confirmation", () => {
 
     // 4. The article row is STILL present.
     await expect(
-      page.locator(".library-list li").filter({
+      page.locator(".library-list > li").filter({
         hasText: "Cascade-Remove Test Article",
       }),
     ).toHaveCount(1);

@@ -238,7 +238,7 @@ test.describe("SC#4 + ING-03 — markdown + html upload intake", () => {
     ).toBeVisible();
     const expectedRowsAfterFirst =
       (await import("../../../src/fixtures")).fixtures.length + 1;
-    await expect(page.locator(".library-list li")).toHaveCount(
+    await expect(page.locator(".library-list > li")).toHaveCount(
       expectedRowsAfterFirst,
     );
 
@@ -262,7 +262,7 @@ test.describe("SC#4 + ING-03 — markdown + html upload intake", () => {
     // No navigation away from #/ (the dedupe-refuse never calls save →
     // no hash change). The library list count is unchanged (auto-retrying).
     await expect(page).toHaveURL(/\/#\/$/);
-    await expect(page.locator(".library-list li")).toHaveCount(
+    await expect(page.locator(".library-list > li")).toHaveCount(
       expectedRowsAfterFirst,
     );
   });
