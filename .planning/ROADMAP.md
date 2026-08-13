@@ -89,8 +89,15 @@ Plans:
   4. Reader can add an article by uploading a Markdown document (.md), with YAML front-matter (title/author/date) recognized as metadata, normalized through the same Block-output contract as HTML.
   5. Reader sees ingestion metadata (source URL, fetch date) with a link to the original source, plus recently-read shortcuts and positional reading-progress indicators across the library.
 
-**Plans**: TBD
+**Plans**: 5 plans
 **UI hint**: yes
+
+Plans:
+- [ ] 08-01-PLAN.md — Server Markdown adapter (markdownToBlocks) + schema widening (ArticleSource + origin + tags) + ingest.ts dispatch + IngestionClient.ingestMarkdown
+- [ ] 08-02-PLAN.md — Tag + location data substrate (Dexie v4 *tags index, loadAllLocations, tagsStore) + dexie-migration v4 e2e
+- [ ] 08-03-PLAN.md — Library view composition (LibraryView replaces FixtureList, LibraryRow, SourceBadge, ContinueReadingStrip, LibrarySearch, TagFilter, libraryFilter) + App.tsx swap
+- [ ] 08-04-PLAN.md — File-upload form (.md/.html) + TagEntry in ArticleView + RemoveConfirm cascade-remove dialog
+- [ ] 08-05-PLAN.md — Phase-exit e2e gates: SC#1 browse-open + v1-regression, SC#2 remove-cascade, SC#3 search-tag-filter, SC#4 markdown-upload, SC#5 progress-recent + full honest-suite gate
 
 ### Phase 9: Versioned Export/Import
 
@@ -176,7 +183,7 @@ Plans:
 | 5. Durable Highlights and Notes | v1.0 | 7/7 | Complete | 2026-08-07 |
 | 6. Prototype Acceptance | v1.0 | 6/6 | Complete | 2026-08-10 |
 | 7. Ingestion Substrate | v2.0 | 7/7 | Complete   | 2026-08-12 |
-| 8. Markdown Pipeline and Personal Library | v2.0 | 0/TBD | Not started | - |
+| 8. Markdown Pipeline and Personal Library | v2.0 | 0/5 | Not started | - |
 | 9. Versioned Export/Import | v2.0 | 0/TBD | Not started | - |
 | 10. Annotation Review Panel | v2.0 | 0/TBD | Not started | - |
 | 11. PDF Intake | v2.0 | 0/TBD | Not started | - |
