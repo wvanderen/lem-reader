@@ -94,19 +94,29 @@ const validIngestionMeta = {
 // ── ArticleSourceSchema (D7-08) ──────────────────────────────────────────────
 
 describe("ArticleSourceSchema", () => {
-  it("enum equals exactly [fixture, url, paste] (D7-08)", () => {
+  // Phase 8 (Plan 08-01 Task 2) widened the enum additively per D8-15 + D8-16:
+  // "markdown" (.md upload via markdownToBlocks) + "html-upload" (.html file
+  // upload via paste path with a distinct badge per D8-02). Future phases
+  // continue the additive pattern ("pdf" Phase 11, "epub-chapter" Phase 12).
+  it("enum equals exactly [fixture, url, paste, markdown, html-upload] (D7-08 + D8-15 + D8-16)", () => {
     // Zod 4: `.options` is the value array; `.enum` is now the object map.
-    expect(ArticleSourceSchema.options).toEqual(["fixture", "url", "paste"]);
+    expect(ArticleSourceSchema.options).toEqual([
+      "fixture",
+      "url",
+      "paste",
+      "markdown",
+      "html-upload",
+    ]);
   });
 
-  it.each(["fixture", "url", "paste"] as const)(
+  it.each(["fixture", "url", "paste", "markdown", "html-upload"] as const)(
     "parses source %s",
     (source) => {
       expect(ArticleSourceSchema.parse(source)).toBe(source);
     },
   );
 
-  it.each(["invalid-source", "markdown", "pdf", "epub-chapter", "", "URL"])(
+  it.each(["invalid-source", "pdf", "epub-chapter", "", "URL"])(
     "rejects source %s (closed enum — forward-compat via later widening)",
     (bad) => {
       expect(() => ArticleSourceSchema.parse(bad)).toThrow();

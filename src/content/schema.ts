@@ -201,10 +201,19 @@ export const Provenance = z.object({
 // (07-06) synthesizes { source: "fixture" } for display only; the canonical
 // v1.0 row never carries ingestionMeta.
 
-/** ArticleSourceSchema — D7-08 origin discriminator. The enum is CLOSED; future
- * phases widen it by adding variants ("markdown" Phase 8, "pdf" Phase 11,
- * "epub-chapter" Phase 12) — a forward-compatible schema evolution. */
-export const ArticleSourceSchema = z.enum(["fixture", "url", "paste"]);
+/** ArticleSourceSchema — D7-08 + D8-15 + D8-16 origin discriminator. The enum
+ * is CLOSED; future phases widen it additively ("pdf" Phase 11, "epub-chapter"
+ * Phase 12). Phase 8 adds "markdown" (D8-16 — `.md` upload via
+ * markdownToBlocks) and "html-upload" (D8-15 — `.html` file-upload reuses the
+ * paste path but carries a distinct badge per D8-02). Both widenings are
+ * anticipated by ARCHITECTURE.md L390 and are forward-compatible. */
+export const ArticleSourceSchema = z.enum([
+  "fixture",
+  "url",
+  "paste",
+  "markdown", // Phase 8 — D8-16 (.md upload via markdownToBlocks)
+  "html-upload", // Phase 8 — D8-15 (.html file-upload; paste textarea stays as "paste")
+]);
 export type ArticleSource = z.infer<typeof ArticleSourceSchema>;
 
 /** IngestionMetaSchema — derived per-article metadata written at ingest time.
@@ -214,10 +223,14 @@ export type ArticleSource = z.infer<typeof ArticleSourceSchema>;
  * the client sees it as the failure envelope reason `extraction-unsupported`. */
 export const IngestionMetaSchema = z.object({
   source: ArticleSourceSchema,
-  origin: z.enum(["url", "paste"]).optional(), // D7-08: hides "open original" for paste
-  sourceUrl: httpUrl.optional(), // D7-08: Provenance.sourceUrl mirror (present for url; absent for paste)
-  originalHtmlHash: z.string(), // SHA-256 of fetched/pasted HTML — traceability
-  fetchedAt: z.string().datetime().optional(), // ISO-8601 (present for url; absent for paste)
+  // D7-08 + D8-15: origin discriminator widens additively. "upload" covers
+  // BOTH markdown + html-upload (both come from the file picker); the
+  // `source` field carries the format distinction. Hides "open original"
+  // for paste + upload (neither has a canonical sourceUrl).
+  origin: z.enum(["url", "paste", "upload"]).optional(),
+  sourceUrl: httpUrl.optional(), // D7-08: Provenance.sourceUrl mirror (present for url; absent for paste/upload)
+  originalHtmlHash: z.string(), // SHA-256 of fetched/pasted/uploaded source bytes — traceability
+  fetchedAt: z.string().datetime().optional(), // ISO-8601 (present for url; absent for paste/upload)
   extractionConfidence: z.enum(["high", "low"]), // the derived signal; "unsupported" never persists
   extractionWarnings: z.array(z.string()).default([]), // e.g. "3 unsupported blocks omitted"
 });
@@ -233,6 +246,13 @@ export const ArticleSchema = z.object({
   // Phase 7 — additive. v1.0 fixtures omit this field and parse to `undefined`
   // (Pitfall 9 backward-compat). Ingester path (07-05) always supplies it.
   ingestionMeta: IngestionMetaSchema.optional(),
+  // Phase 8 — D8-05..D8-08 + RESEARCH §Pattern 2: document tags denormalized
+  // on the article row. Additive; v1.0 fixtures + Phase 7 rows omit the field
+  // and hydrate to `[]` via `.default([])` (Pitfall 9 backward-compat — same
+  // migration mechanism as `ingestionMeta` above + readingMode at L280).
+  // Plan 02 builds the tag store + the `*tags` Dexie multi-entry index on top
+  // of this field; Plan 01 only lands the schema field so Plan 02 is additive.
+  tags: z.array(z.string().min(1)).default([]).optional(),
 });
 
 // Inferred types — also re-exported from types.ts. Schemas are the single

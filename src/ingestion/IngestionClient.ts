@@ -77,17 +77,35 @@ export async function ingestHtml(html: string): Promise<IngestionSuccess> {
 }
 
 /**
- * Private ingest — the shared POST + parse + throw pipeline. Both
- * ingestUrl and ingestHtml delegate here. The body is always exactly one
- * of {url} | {html} (IngestionRequestSchema on the server enforces this,
- * but the client constructs the body so the contract is by construction).
+ * ingestMarkdown — POST {markdown, filename?} to /api/ingest and re-validate
+ * the response. The Phase 8 markdown upload path (D8-16 + D8-17). The
+ * optional `filename` is forwarded to the server ONLY so the D8-17 title
+ * fallback chain can use it when front-matter is absent; the filename does
+ * NOT affect the article id (D8-18 — id is content-hash). Plan 04 passes
+ * `file.name` from the file picker through this signature.
+ */
+export async function ingestMarkdown(
+  markdown: string,
+  filename?: string,
+): Promise<IngestionSuccess> {
+  return ingest({ markdown, filename });
+}
+
+/**
+ * Private ingest — the shared POST + parse + throw pipeline. ingestUrl,
+ * ingestHtml, and ingestMarkdown all delegate here. The body is always
+ * exactly one of {url} | {html} | {markdown, filename?}
+ * (IngestionRequestSchema on the server enforces this, but the client
+ * constructs the body so the contract is by construction).
  *
  * STATE-04 defense-in-depth: the network response is RE-VALIDATED through
  * `ArticleSchema.parse`. A server that returns a malformed article (whether
  * by bug or by tampering) is refused on the client read path. This is the
  * second Zod parse — the server already parsed at ingest time (07-05).
  */
-async function ingest(body: { url: string } | { html: string }): Promise<IngestionSuccess> {
+async function ingest(
+  body: { url: string } | { html: string } | { markdown: string; filename?: string },
+): Promise<IngestionSuccess> {
   const res = await fetch("/api/ingest", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

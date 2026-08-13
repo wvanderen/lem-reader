@@ -32,7 +32,8 @@
 //   - T-7-24 (Tampering, id drift across re-extraction) → id = slugifyUrl(finalUrl).
 import { createHash } from "node:crypto";
 import { safeFetch, type FetchedContent } from "./safeFetch";
-import { extractAndNormalize } from "./htmlToBlocks";
+import { extractAndNormalize, type ExtractAndNormalizeResult } from "./htmlToBlocks";
+import { markdownToBlocks, stripMarkdownExtension } from "./markdownToBlocks";
 import { deriveConfidence, type ConfidenceResult } from "./confidence";
 import { slugifyUrl } from "./slugify";
 import { IngestionError } from "./errors";
@@ -121,39 +122,106 @@ function safeHostname(urlStr: string): string {
  * IngestionRequest, so reaching this throw is a programming error.
  */
 export async function ingest(input: IngestionRequest): Promise<IngestionResponse> {
-  // Stage 0 — input validation: exactly one of {url} | {html} required.
-  // (Thrown, not serialized — the caller contract is IngestionRequestSchema-
-  // validated; reaching this throw indicates a programming error.)
+  // Stage 0 — input validation: exactly one of {url} | {html} | {markdown}
+  // required. (Thrown, not serialized — the caller contract is
+  // IngestionRequestSchema-validated; reaching this throw indicates a
+  // programming error.)
   const hasUrl = "url" in input && input.url !== undefined;
   const hasHtml = "html" in input && input.html !== undefined;
-  if (hasUrl === hasHtml) {
+  const hasMarkdown = "markdown" in input && input.markdown !== undefined;
+  if ((hasUrl ? 1 : 0) + (hasHtml ? 1 : 0) + (hasMarkdown ? 1 : 0) !== 1) {
     throw new IngestionError("server-error");
   }
 
   try {
-    // Stages 1-2: FETCH (URL path only; paste path uses input.html directly).
-    let html: string;
-    let finalUrl: string | undefined;
-    let origin: "url" | "paste";
+    // Stage 1: SOURCE → EXTRACT → NORMALIZE. Three branches share the same
+    // output shape so the downstream stages (ArticleSchema.parse +
+    // assertRoundTripAnchor + deriveConfidence) run identically on all paths
+    // — the load-bearing invariant (D7-03 input-source-agnostic pipeline).
+    // `MarkdownToBlocksResult` is byte-identical to `ExtractAndNormalizeResult`
+    // (both ship `{ blocks, footnotes, lang, provenancePartial, isReaderable }`),
+    // so a single union type covers all three branches.
+    let blocks: ExtractAndNormalizeResult["blocks"];
+    let footnotes: ExtractAndNormalizeResult["footnotes"];
+    let lang: ExtractAndNormalizeResult["lang"];
+    let provenancePartial: ExtractAndNormalizeResult["provenancePartial"];
+    let isReaderable: ExtractAndNormalizeResult["isReaderable"];
+
+    // id + ingestion metadata vary per source (D7-07 url id, paste content-
+    // hash id, D8-18 markdown content-hash id).
+    let id: string;
+    let source: "url" | "paste" | "markdown" | "html-upload";
+    let origin: "url" | "paste" | "upload";
     let fetchedAt: string | undefined;
+    let finalUrl: string | undefined;
+    // sourceBytes — the raw bytes the article was derived from; used for the
+    // originalHtmlHash traceability field (D8-17 preserves this for markdown).
+    let sourceBytes: string;
+    // markdownFilenameHint — the optional `filename` from the markdown branch,
+    // stashed on the closure so the D8-17 title-fallback chain below can read
+    // it without re-extracting from `input`. Undefined for url + paste paths.
+    let markdownFilenameHint: string | undefined;
 
     if (hasUrl) {
-      // input is narrowed to { url: string } by IngestionRequestSchema; the
-      // runtime guard above ensures we only read the URL branch here.
       const fetched: FetchedContent = await safeFetch(input.url as string);
-      html = fetched.html;
       finalUrl = fetched.finalUrl;
+      const extracted = await extractAndNormalize(fetched.html, fetched.finalUrl);
+      ({
+        blocks,
+        footnotes,
+        lang,
+        provenancePartial,
+        isReaderable,
+      } = extracted);
+      // D7-07 immutability — url id derived from finalUrl after redirects.
+      id = slugifyUrl(fetched.finalUrl);
+      source = "url";
       origin = "url";
       fetchedAt = new Date().toISOString();
-    } else {
-      html = (input as { html: string }).html;
+      sourceBytes = fetched.html;
+    } else if (hasHtml) {
+      const htmlInput = (input as { html: string }).html;
       finalUrl = undefined;
+      const extracted = await extractAndNormalize(htmlInput, undefined);
+      ({
+        blocks,
+        footnotes,
+        lang,
+        provenancePartial,
+        isReaderable,
+      } = extracted);
+      // D7-07 paste id = content-hash slug (slugifyUrl requires a real URL;
+      // paste has none — see Rule 3 auto-fix note at the old L172-176).
+      id = `paste-${shortHash(htmlInput)}`;
+      source = "paste";
       origin = "paste";
+      fetchedAt = undefined;
+      sourceBytes = htmlInput;
+    } else {
+      // MARKDOWN path — Phase 8 Plan 08-01 (D8-16 + D8-17 + D8-18).
+      const mdInput = (input as { markdown: string; filename?: string }).markdown;
+      const filename = (input as { markdown: string; filename?: string }).filename;
+      finalUrl = undefined;
+      const extracted = await markdownToBlocks(mdInput);
+      ({
+        blocks,
+        footnotes,
+        lang,
+        provenancePartial,
+        isReaderable,
+      } = extracted);
+      // D8-18: id = "md-<shortHash(canonical content)>" — content-hash, NOT
+      // filename. Two uploads of identical .md content produce the same id
+      // → dedupe-refuse on re-upload mirrors D7-07. Filename is metadata-only.
+      id = `md-${shortHash(mdInput)}`;
+      source = "markdown";
+      origin = "upload";
+      fetchedAt = undefined;
+      sourceBytes = mdInput;
+      // Stash filename on a closure variable the title-fallback chain reads
+      // below (D8-17 — front-matter → filename → neutral).
+      markdownFilenameHint = filename;
     }
-
-    // Stages 3-5: EXTRACT → SANITIZE → htmlToBlocks (all in /server/htmlToBlocks).
-    const { blocks, footnotes, lang, provenancePartial, isReaderable } =
-      await extractAndNormalize(html, finalUrl);
 
     // ING-06 honest refusal (Rule 2 — auto-added critical guard): if even
     // Readability wouldn't attempt the page OR extraction yielded zero blocks,
@@ -166,23 +234,28 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
       return { ok: false, reason: "extraction-unsupported" };
     }
 
-    // Stage 6a: BUILD the article object. id is URL-derived (D7-07
-    // immutability); the paste path falls back to a content-prefixed hash so
-    // distinct pastes get distinct ids. (Rule 3 auto-fix: the plan's pseudocode
-    // `slugifyUrl(finalUrl ?? paste-<hash>)` doesn't account for slugifyUrl
-    // requiring a real URL — `new URL("paste-<hash>")` throws. The paste path
-    // has no URL to normalize, so it skips slugifyUrl entirely and uses the
-    // content-hash slug directly; both forms satisfy ArticleSchema.id's
-    // `/^[a-z0-9-]+$/` regex.)
-    const id = finalUrl ? slugifyUrl(finalUrl) : `paste-${shortHash(html)}`;
+    // Stage 6a: BUILD the article object.
+    // - id: per-source (url slug / paste hash / md hash) — set above.
+    // - originalHtmlHash: SHA-256 of the source bytes (url HTML / paste HTML /
+    //   markdown source). Preserves traceability per D8-17.
     const originalHtmlHash =
-      "sha256:" + createHash("sha256").update(html).digest("hex");
+      "sha256:" + createHash("sha256").update(sourceBytes).digest("hex");
     const retrievedAt = new Date().toISOString();
-    // Title fallback: a readerable extraction always has SOMETHING to show;
-    // default the title so ArticleSchema.parse doesn't fail when the source
-    // HTML lacked <title>/<h1>/<meta property=og:title>. Provenance.sourceUrl
-    // prefers the canonical link if the source declared one; else finalUrl.
-    const title = provenancePartial.title ?? (finalUrl ? safeHostname(finalUrl) : "Pasted article");
+    // Title fallback chain (per-source):
+    //   url:     provenancePartial.title (from <meta og:title>/<title>/<h1>)
+    //            → finalUrl hostname → "Untitled article"
+    //   paste:   provenancePartial.title → "Pasted article"
+    //   markdown (D8-17): front-matter title → stripMarkdownExtension(filename)
+    //            → "Markdown document" (the neutral last-resort fallback)
+    const title =
+      provenancePartial.title ??
+      (hasMarkdown
+        ? (markdownFilenameHint
+            ? stripMarkdownExtension(markdownFilenameHint)
+            : "Markdown document")
+        : finalUrl
+          ? safeHostname(finalUrl)
+          : "Pasted article");
 
     const assembled = {
       id,
@@ -199,7 +272,7 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
       blocks,
       footnotes,
       ingestionMeta: {
-        source: origin === "url" ? ("url" as const) : ("paste" as const),
+        source,
         origin,
         sourceUrl: finalUrl,
         originalHtmlHash,

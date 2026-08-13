@@ -13,12 +13,21 @@ import { z } from "zod";
 import { ArticleSchema, httpUrl } from "../content/schema";
 
 /** IngestionRequest — D7-03 input-source-agnostic envelope. Exactly one of
- * {url} | {html}. The url variant is httpUrl-refined (single source of truth
- * with Provenance.sourceUrl / IngestionMeta.sourceUrl); the html variant
- * requires `.min(1)` so an empty paste is rejected at the boundary (D7-03). */
+ * {url} | {html} | {markdown}. The url variant is httpUrl-refined (single
+ * source of truth with Provenance.sourceUrl / IngestionMeta.sourceUrl); the
+ * html variant requires `.min(1)` so an empty paste is rejected at the
+ * boundary (D7-03). The Phase 8 markdown variant (D8-16 + D8-17) carries the
+ * raw `.md` source plus an optional `filename` hint — the server uses the
+ * filename ONLY for the title fallback chain (D8-17); it does NOT affect the
+ * article id (D8-18 — id is content-hash, not filename-hash). */
 export const IngestionRequestSchema = z.union([
   z.object({ url: httpUrl }),
   z.object({ html: z.string().min(1) }),
+  // Phase 8 ING-03 + D8-17 — markdown upload with optional filename channel.
+  z.object({
+    markdown: z.string().min(1),
+    filename: z.string().optional(),
+  }),
 ]);
 export type IngestionRequest = z.infer<typeof IngestionRequestSchema>;
 
