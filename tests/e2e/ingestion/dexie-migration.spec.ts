@@ -506,7 +506,16 @@ test.describe("v3 → v4 Dexie migration snapshot (08-02 SC#5 + Pitfall 9)", () 
     //    version(1) → version(2) → version(3) → version(4) declaration chain.
     //    The v4 block adds the `*tags` multi-entry index with NO `.upgrade()`
     //    callback (Pitfall 9 — additive index only; Dexie re-indexes on open).
+    //
+    //    A full page.reload() (not just a hashchange) is required so the SPA
+    //    re-mounts + Dexie re-opens against the externally-seeded row. The
+    //    beforeEach mounted the SPA at BASE/ (no hash); a goto to #/ is only a
+    //    client-side hashchange that reuses the existing Dexie connection +
+    //    LibraryView load effect. The reload mirrors the openLibrary helper in
+    //    tests/e2e/library/progress-recent.spec.ts (the proven seed-then-read
+    //    pattern).
     await page.goto(`${BASE}/#/`);
+    await page.reload();
     await expect(
       page.getByRole("heading", { name: "Saved articles" }),
     ).toBeVisible({ timeout: 10_000 });
