@@ -22,6 +22,8 @@ The prototype supports rich article structure, local highlights and notes, and l
 
 **Final suite:** `npm run test` = 1157 passed / 0 failed / exit 0 (514 unit + 643 e2e across chromium/firefox/webkit).
 
+**v2.0 Personal Library — Phase 8 complete 2026-08-13.** Markdown intake + the personal library that replaces the fixture list are live: `.md`/`.html` uploads flow through the same 7-stage pipeline as URL/paste inputs; `LibraryView` is the default `#/` route (browse + search + tag-filter + source badges + per-row progress hairline + continue-reading strip); cascade-remove with confirmation; tag entry in ArticleView. Dexie v4 (`*tags` multi-entry index, additive). 21 pre-existing cross-phase e2e failures (Phase 4 pagination timing + Phase 5 figure-caption capture) remain open, documented for later gap-closure — unrelated to Phase 8.
+
 ## Core Value
 
 Readers can move through long-form web content with calm, stable orientation and predictable navigation.
@@ -58,14 +60,15 @@ Readers can move through long-form web content with calm, stable orientation and
 - ✓ Restore the reader's location when reopening the same article. — v1.0
 - ✓ Fall back gracefully to the clean scrolling view whenever reliable pagination is not possible. — v1.0
 - ✓ Store highlights and attached notes locally and keep their anchors stable across repagination. — v1.0
+- ✓ Personal library — browse, open, search, tag, and remove ingested articles (LIB-01..LIB-06). — Phase 8
+- ✓ Markdown + HTML-upload intake normalized into the library via the shared ingestion pipeline (ING-03). — Phase 8
 
 ### Active
 
 v2.0 Personal Library scope (see Current Milestone above for the full picture):
 
 - [ ] URL ingestion — fetch backend extracts and normalizes any publicly fetchable web page into the library.
-- [ ] Multi-format document intake — HTML, PDF, EPUB, and Markdown normalized into the library.
-- [ ] Personal library — browse, open, search, tag, and remove ingested articles.
+- [ ] Multi-format document intake — PDF and EPUB remain (Markdown + HTML upload shipped in Phase 8).
 - [ ] Versioned export/import (PORT-01/02) — library + highlights + notes + position + preferences; validation + conflict reporting.
 - [ ] Annotation review panel (RECV-01) — dedicated surface to review all highlights/notes.
 - [ ] Polish — eliminate initial-load reading-mode flash; fix short-article progress-bar semantics.
@@ -136,4 +139,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-10 after v2.0 milestone start (Personal Library)*
+*Last updated: 2026-08-13 after Phase 8 (Markdown Pipeline and Personal Library) completion*
