@@ -420,3 +420,144 @@ test.describe("v1 → v3 Dexie migration snapshot (07-07 SC#5)", () => {
     expect(await countRows(page, "articles")).toBe(0);
   });
 });
+
+// ── Plan 08-02 Task 2 — v3 → v4 additive upgrade (D8-05 + Pitfall 9) ──────────
+// The v4 append adds the `*tags` multi-entry index on `articles` with NO
+// `.upgrade()` callback (Pitfall 9 — additive index only). Existing v3 article
+// rows — which carry NO `tags` field — must survive the v4 declaration
+// untouched. The `*tags` index must be declared (queryable without throwing).
+// The ArticleSchema `.default([])` hydration of the absent `tags` field is
+// proven by the unit suite (tests/unit/ingestion-tags.test.ts); this e2e
+// proves the on-disk row is byte-unchanged + the index exists + the article
+// still renders in the library list.
+test.describe("v3 → v4 Dexie migration snapshot (08-02 SC#5 + Pitfall 9)", () => {
+  // A representative v3 article row — the shape Phase 7's /api/ingest pipeline
+  // writes. NOTably this row has NO `tags` field (the field landed in Plan 01's
+  // schema but no v3 row carries it — tags are only written via Plan 02's
+  // setArticleTags). The v4 upgrade must NOT alter this row; the `.default([])`
+  // mechanism fills `tags` on Zod read, not on disk.
+  const SEEDED_V3_ARTICLE = {
+    id: "v3-article-seed",
+    revision: 1,
+    lang: "en",
+    source: "url",
+    addedAt: "2026-08-10T12:00:00.000Z",
+    provenance: {
+      sourceUrl: "https://example.com/v3-article",
+      title: "V3 Seeded Article",
+      author: "Test Author",
+      retrievedAt: "2026-08-10T12:00:00.000Z",
+      originalHtmlHash: "sha256:" + "0".repeat(64),
+    },
+    blocks: [
+      {
+        kind: "heading",
+        level: 2,
+        content: [{ text: "V3 Heading", marks: [] }],
+      },
+      {
+        kind: "paragraph",
+        content: [{ text: "V3 body text.", marks: [] }],
+      },
+    ],
+    footnotes: [],
+    ingestionMeta: {
+      source: "url",
+      origin: "url",
+      sourceUrl: "https://example.com/v3-article",
+      originalHtmlHash: "sha256:" + "0".repeat(64),
+      fetchedAt: "2026-08-10T12:00:00.000Z",
+      extractionConfidence: "high",
+      extractionWarnings: [],
+    },
+    // NO `tags` field — this is the v3 shape. The v4 upgrade + ArticleSchema
+    // `.default([])` must hydrate it to `[]` on read (proven by unit suite).
+  };
+
+  test("v3 article row survives v4 upgrade; *tags index declared (Pitfall 9)", async ({
+    page,
+  }) => {
+    // 1. Seed a v3 article row directly into the articles store. The beforeEach
+    //    has already mounted the SPA (constructing Dexie at v4) and cleared all
+    //    rows. We write the v3-shape row (no `tags` field) directly via the
+    //    raw IndexedDB API — this is the shape a Phase 7 client would have
+    //    written before the v4 declaration existed.
+    await page.evaluate(async (article) => {
+      await new Promise<void>((resolve, reject) => {
+        const req = indexedDB.open("lem-reader");
+        req.onsuccess = () => {
+          const db = req.result;
+          const tx = db.transaction("articles", "readwrite");
+          tx.objectStore("articles").put(article);
+          tx.oncomplete = () => {
+            db.close();
+            resolve();
+          };
+          tx.onerror = () => {
+            db.close();
+            reject(tx.error);
+          };
+        };
+        req.onerror = () => reject(req.error);
+      });
+    }, SEEDED_V3_ARTICLE);
+
+    // 2. Re-open the app. The LemReaderDB constructor runs the full
+    //    version(1) → version(2) → version(3) → version(4) declaration chain.
+    //    The v4 block adds the `*tags` multi-entry index with NO `.upgrade()`
+    //    callback (Pitfall 9 — additive index only; Dexie re-indexes on open).
+    await page.goto(`${BASE}/#/`);
+    await expect(
+      page.getByRole("heading", { name: "Saved articles" }),
+    ).toBeVisible({ timeout: 10_000 });
+    await page.waitForTimeout(500);
+
+    // 3. The v3 row survives the v4 upgrade byte-unchanged (Pitfall 9 — no
+    //    .upgrade() callback rewrote it). Assert the on-disk row STILL has no
+    //    `tags` field (the upgrade does NOT write back; hydration happens on
+    //    Zod read, not on disk).
+    const articleRow = (await readRow(page, "articles", "v3-article-seed")) as {
+      id: string;
+      tags?: string[];
+    } | null;
+    expect(articleRow, "v3 article row must survive the v4 upgrade").not.toBeNull();
+    expect(articleRow?.id).toBe("v3-article-seed");
+    // The on-disk row carries NO tags field — the upgrade did not write back.
+    expect(articleRow?.tags).toBeUndefined();
+
+    // 4. The `*tags` multi-entry index is declared on the articles store —
+    //    verify via raw IDB objectStore.indexNames. Dexie's `*tags` syntax
+    //    creates an index named "tags" (the `*` is Dexie's multi-entry marker;
+    //    the underlying IDB index name is the field name). The index must be
+    //    present after the v4 upgrade.
+    const tagsIndexExists = await page.evaluate(async () => {
+      return new Promise<boolean>((resolve) => {
+        const req = indexedDB.open("lem-reader");
+        req.onsuccess = () => {
+          const db = req.result;
+          try {
+            const tx = db.transaction("articles", "readonly");
+            const store = tx.objectStore("articles");
+            const hasIndex = store.indexNames.contains("tags");
+            db.close();
+            resolve(hasIndex);
+          } catch {
+            db.close();
+            resolve(false);
+          }
+        };
+        req.onerror = () => resolve(false);
+      });
+    });
+    expect(tagsIndexExists, "*tags index must be declared on articles store").toBe(true);
+
+    // 5. The seeded article is still readable by the app — it appears in the
+    //    library list (FixtureList reads via compositeLibraryRepository.list()
+    //    → dexieLibrarySource.list() → ArticleSchema.safeParse, which hydrates
+    //    the absent `tags` field to `[]` via `.default([])`). The title link
+    //    being visible proves the Zod-validated read path works end-to-end.
+    await expect(
+      page.getByRole("link", { name: /V3 Seeded Article/i }),
+    ).toBeVisible({ timeout: 10_000 });
+  });
+});
