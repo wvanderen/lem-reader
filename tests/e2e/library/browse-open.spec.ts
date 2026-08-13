@@ -153,7 +153,7 @@ test.describe("SC#1 + LIB-01 + LIB-05 — browse + open + source badge", () => {
     // at the row's <h2 id="title-{id}"> (Pitfall 8-5 byte-stable markup).
     // Click it → ArticleView mounts at #/article/<id> and renders the
     // article title as <h1> (provenance.title).
-    const firstFixture = fixtures[0];
+    const firstFixture = fixtures[0]!;
     const openLink = page
       .locator(`a[href="#/article/${firstFixture.id}"]`)
       .first();

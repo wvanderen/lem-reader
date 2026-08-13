@@ -33,15 +33,15 @@ const BASE = "http://localhost:5173";
 // A representative fixture for hairline + finished assertions. Picked for
 // stable content (won't drift between releases) + a non-trivial grapheme
 // length so a 50% offset is comfortably mid-article.
-const HAIRLINE_FIXTURE = fixtures[0];
+const HAIRLINE_FIXTURE = fixtures[0]!;
 const HAIRLINE_TOTAL = graphemeClusters(
   normalizeText(HAIRLINE_FIXTURE),
   HAIRLINE_FIXTURE.lang,
 ).length;
 
 // Two fixtures used for the continue-reading strip derivation.
-const STRIP_FIXTURE_A = fixtures[1];
-const STRIP_FIXTURE_B = fixtures[2];
+const STRIP_FIXTURE_A = fixtures[1]!;
+const STRIP_FIXTURE_B = fixtures[2]!;
 const STRIP_TOTAL_A = graphemeClusters(
   normalizeText(STRIP_FIXTURE_A),
   STRIP_FIXTURE_A.lang,
@@ -215,7 +215,7 @@ test.describe("SC#5 + LIB-06 — progress hairline + continue-reading strip + fi
     );
     const match = /scaleX\(([\d.]+)\)/.exec(transform);
     expect(match, `transform must match scaleX(<number>): got "${transform}"`).not.toBeNull();
-    const ratio = parseFloat(match![1]);
+    const ratio = parseFloat(match![1]!);
     expect(ratio).toBeCloseTo(0.5, 1);
 
     // A fresh article with no location (ratio 0) renders NO hairline. Pick
