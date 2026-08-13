@@ -1631,8 +1631,175 @@ dialog.annotations-drawer::backdrop {
   margin-inline-start: var(--space-sm);
   font-family: var(--font-ui);
   font-size: 14px;
-  font-weight: 400;
+  line-height: 1.45;
   color: var(--ink-soft);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+ * Phase 8 Plan 08-03 — Personal library chrome (LibraryView + LibraryRow +
+ * SourceBadge + ContinueReadingStrip + LibrarySearch + TagFilter).
+ *
+ * ALL selectors here are ADDITIVE (new class hooks only). The :root token
+ * block above is NOT re-declared (UI-SPEC §Spacing + §Color + §Typography
+ * carry forward unchanged). Every selector consumes custom properties only
+ * so the three themes (Sepia default + Light + Dark) re-theme automatically.
+ *
+ * `.library-list` is the renamed `.fixture-list` grid (Pitfall 8-5 + UI-SPEC
+ * §LibraryView — same responsive 1/2/3 columns at 640/1024px breakpoints).
+ * LibraryRow extends the `.fixture-list li` card geometry byte-identically.
+ * ════════════════════════════════════════════════════════════════════════ */
+
+/* Library list grid — byte-identical to .fixture-list (UI-SPEC §LibraryView). */
+.library-list {
+  list-style: none;
+  margin: var(--space-xl) auto;
+  padding: 0;
+  max-width: 1100px;
+  display: grid;
+  gap: var(--space-lg);
+}
+@media (min-width: 640px) {
+  .library-list {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (min-width: 1024px) {
+  .library-list {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Library row — extends .fixture-list li geometry (UI-SPEC §LibraryRow). */
+.library-row {
+  padding: var(--space-lg);
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+}
+/* The byte-stable title link from FixtureList (Pitfall 8-5 — 44px touch). */
+.library-row > article > a[href^="#/article/"] {
+  display: inline-block;
+  min-height: var(--touch);
+  min-width: var(--touch);
+  line-height: var(--touch);
+}
+
+/* SourceBadge — .meta typography; no border, no fill (UI-SPEC §SourceBadge).
+   The link variant inherits the global `a { color: var(--accent) }` rule. */
+.source-badge {
+  margin: var(--space-xs) 0 0 0;
+}
+
+/* FinishedMark — .meta typography + filled-circle glyph (D8-12). */
+.finished-mark {
+  margin: var(--space-xs) 0 0 0;
+}
+
+/* LibraryRowTags — inline chip list, display-only (D8-05). */
+.library-row-tags {
+  list-style: none;
+  margin: var(--space-xs) 0 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+
+/* ContinueReadingStrip — single-column, never widens (UI-SPEC §ContinueReading). */
+.continue-reading-strip {
+  max-width: 1100px;
+  margin: var(--space-xl) auto 0 auto;
+  padding-bottom: var(--space-lg);
+  border-bottom: 1px solid var(--hairline);
+}
+.continue-reading-strip h2 {
+  margin: 0 0 var(--space-md) 0;
+}
+.continue-reading {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr; /* always single column — strip never widens */
+  gap: var(--space-md);
+}
+.continue-reading-row {
+  padding: var(--space-md);
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+}
+.continue-reading-row a {
+  display: inline-block;
+  min-height: var(--touch);
+  line-height: var(--touch);
+}
+.continue-reading-row .meta {
+  margin: var(--space-xs) 0 0 0;
+}
+
+/* LibrarySearch — single text input, 44px touch target (UI-SPEC §LibrarySearch). */
+.library-search {
+  max-width: 1100px;
+  margin: var(--space-lg) auto 0 auto;
+}
+.library-search input[type="search"] {
+  width: 100%;
+  min-height: var(--touch);
+  padding: var(--space-sm);
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink);
+  /* :focus-visible inherits the global 2px ring rule (app.css). */
+}
+
+/* TagFilter + TagChip (interactive + display variants) — UI-SPEC §TagFilter + §TagChip. */
+.tag-filter {
+  max-width: 1100px;
+  margin: var(--space-md) auto 0 auto;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch);
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+  /* :focus-visible inherits the global 2px ring; :hover flips to --accent
+     (mirrors .gear-button / .page-turn quiet-chrome discipline). */
+  cursor: pointer;
+}
+.tag-chip:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+/* Active chip — accent border + accent text (UI-SPEC §TagChip). Forced-colors
+   safety: aria-pressed="true" conveys state beyond color (UI-SPEC §Interaction 10). */
+.tag-chip[aria-pressed="true"] {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+/* Display-only variant on LibraryRow — no interactivity, no aria-pressed. */
+.tag-chip-readonly {
+  cursor: default;
+}
+.tag-chip-readonly:hover {
+  color: var(--ink-soft);
+  border-color: var(--hairline);
 }
 .annotations-drawer-close {
   display: inline-flex;

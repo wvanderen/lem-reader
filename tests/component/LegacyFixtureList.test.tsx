@@ -1,7 +1,10 @@
-// tests/component/FixtureList.test.tsx
-// Component tests for the fixture-list route (DOC-01). The repository seam is
-// mocked so the test asserts the COMPONENT behavior (loading/ready/error copy,
-// row count, aria-labelledby wiring) in isolation from the loader.
+// tests/component/LegacyFixtureList.test.tsx
+// Component tests for the legacy fixture-list route (DOC-01). Preserved for
+// reference alongside src/routes/LegacyFixtureList.tsx after the Plan 08-03
+// swap to LibraryView. The byte-stable invariants (Saved articles heading,
+// Open article links, loading/error copy) are now ALSO covered by LibraryView
+// + the v1.0 e2e suite (happy-path.spec L93 + open-every-fixture.spec L65-69);
+// this file stays as the legacy component's dedicated isolation test.
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 
@@ -12,7 +15,7 @@ vi.mock("../../src/content/repository", () => ({
   openArticle: vi.fn(),
 }));
 
-import { FixtureList } from "../../src/routes/FixtureList";
+import { FixtureList } from "../../src/routes/LegacyFixtureList";
 import { listArticles } from "../../src/content/repository";
 import type { CanonicalArticle } from "../../src/content/types";
 

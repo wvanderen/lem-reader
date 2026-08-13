@@ -1,8 +1,9 @@
 // src/App.tsx
 // Hash-based two-view router (A2 recommendation, no router library —
 // STACK.md "no premature abstractions"). Subscribes to `hashchange` and swaps
-// between the FixtureList (default) and ArticleView (#/article/<id>). The
-// SkipLink is the first focusable element in DOM order (UI-SPEC §Interaction 1).
+// between the LibraryView (default, Plan 08-03) and ArticleView
+// (#/article/<id>). The SkipLink is the first focusable element in DOM order
+// (UI-SPEC §Interaction 1).
 //
 // Phase 2 (D2-01/D2-02): wraps the tree in <SettingsProvider> and mounts the
 // persistent <Header> above the view swap (header sits above <main> on BOTH
@@ -19,7 +20,7 @@
 // Both mount inside the provider so they read the live storageState. Neither
 // blocks reading (article rendering is independent of Dexie — D2-13).
 import { useEffect, useRef, useState } from "react";
-import { FixtureList } from "./routes/FixtureList";
+import { LibraryView } from "./ingestion/library/LibraryView";
 import { ArticleView } from "./routes/ArticleView";
 import { SkipLink } from "./a11y/SkipLink";
 import { Header } from "./reader/Header";
@@ -189,7 +190,7 @@ function AppInner() {
       />
       <StorageRecoverySurfaces />
       {view.name === "list" ? (
-        <FixtureList />
+        <LibraryView />
       ) : (
         <ArticleView
           articleId={view.id}
