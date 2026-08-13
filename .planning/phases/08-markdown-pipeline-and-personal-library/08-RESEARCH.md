@@ -863,22 +863,24 @@ function domainOf(url: string | undefined): string {
 
 **All other claims in this research are tagged `[VERIFIED: ...]` or `[CITED: ...]` — no user confirmation needed.**
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **GFM tables/task-lists in Phase 8?**
+> All three open questions were resolved during planning. Each is tagged inline with `— RESOLVED: <decision>` reflecting the recommendation the plans actually follow.
+
+1. **GFM tables/task-lists in Phase 8?** — RESOLVED: ship plain CommonMark only (D8-16). Tables/task-lists that appear in a `.md` corpus fall through to `UnsupportedBlock` with a DOC-06 `plainDescription` via the existing exhaustive-switch catch-all; no schema change, no `remark-gfm` install. A later phase can add `remark-gfm` (without raw-HTML) if a corpus demands it; the additive path is documented in §Pattern 1.
    - What we know: Plain CommonMark has no tables/task-lists/footnotes (they're GFM extensions). Tables can't map to any existing Block kind (would become `UnsupportedBlock`).
    - What's unclear: Whether the Phase 8 markdown corpus will include tables (real-world `.md` often does).
-   - Recommendation: **Default to plain CommonMark** for Phase 8 MVP (D8-16 locks it). If the test corpus trips on tables frequently, the planner can add `remark-gfm` (without raw-HTML) in a follow-up plan. The schema doesn't need to change — tables already become `UnsupportedBlock` cleanly via the existing DOC-06 disclosure pattern.
+   - Recommendation (followed): **Default to plain CommonMark** for Phase 8 MVP (D8-16 locks it). If the test corpus trips on tables frequently, the planner can add `remark-gfm` (without raw-HTML) in a follow-up plan. The schema doesn't need to change — tables already become `UnsupportedBlock` cleanly via the existing DOC-06 disclosure pattern.
 
-2. **Combined vs sibling Add controls**
+2. **Combined vs sibling Add controls** — RESOLVED: three sibling forms under one heading (per Plan 04 Task 1 + UI-SPEC §EXTENDED IngestControl). The existing IngestControl pattern is extended with a third file-upload `<form>` sibling to the URL + paste forms; all three feed the same `/api/ingest` envelope and the same D7-07 dedupe-refuse check. A combined/tabbed "Add" affordance is deferred as a later-phase UX-polish decision.
    - What we know: CONTEXT.md leaves the layout planner-discretion (D8-15 + "Upload control placement").
    - What's unclear: Whether the three input forms (URL / paste / upload) share one "Add an article" surface or live as three siblings.
-   - Recommendation: Recommend **three sibling forms under one heading** (mirror the existing IngestControl pattern at minimum cost). A combined single "Add" affordance (dropdown/tabbed) is a UX-polish decision the planner can make.
+   - Recommendation (followed): **Three sibling forms under one heading** (mirror the existing IngestControl pattern at minimum cost). A combined single "Add" affordance (dropdown/tabbed) is a UX-polish decision the planner can make.
 
-3. **Remove confirmation copy + placement**
+3. **Remove confirmation Copy + placement** — RESOLVED: card-level trash icon → native `<dialog>`/alertdialog confirmation → on confirm, navigate to `#/` + refresh list (per Plan 04 Task 2 + UI-SPEC §LibraryRemoveConfirm + §Copywriting L262). `RemoveConfirm.tsx` is a structural clone of `WipeConfirm.tsx` (the closest in-repo analog); the destructive `onClick` calls the existing `dexieLibrarySource.remove(id)` cascade. Body copy: "Remove this article? Your highlights and notes for it will also be removed." (D7-04 calm voice, names the consequence, zero jargon).
    - What we know: Cascade is destructive (D8-13/14). Voice is locked (D7-04).
    - What's unclear: Exact words + whether the affordance is card-level or in-ArticleView.
-   - Recommendation: Card-level trash icon → small native `<dialog>` confirmation → on confirm, navigate to `#/` + refresh list. Mirror WipeConfirm pattern.
+   - Recommendation (followed): **Card-level trash icon → small native `<dialog>` confirmation → on confirm, navigate to `#/` + refresh list. Mirror WipeConfirm pattern.**
 
 ## Environment Availability
 
