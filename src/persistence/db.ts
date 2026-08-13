@@ -75,6 +75,7 @@ export class LemReaderDB extends Dexie {
     blocks?: unknown;
     footnotes?: unknown;
     lang?: string;
+    tags?: string[];
   }, string>;
   // Phase 5: real row types replace the Phase 1 placeholder annotations
   // (LOW risk — runtime-unaffected; Dexie resolves stores by name from the
@@ -130,6 +131,32 @@ export class LemReaderDB extends Dexie {
     // (PATTERNS.md L403-407 — definite-assignment annotation, runtime-unaffected).
     this.version(3).stores({
       articles: "id, revision, source, addedAt",
+      settings: "key",
+      location: "[articleId+revision]",
+      highlights: "id, [articleId+revision]",
+      notes: "id, highlightId",
+    });
+    // ── Phase 8 (D8-05 + Pitfall 9): the fourth version block is an APPEND. ──
+    // v1/v2/v3 byte-unchanged. v4 adds the `*tags` multi-entry index on
+    // `articles` for Plan 03's chip-filter derivation + Plan 04's tag-edit
+    // surface (D8-05 — document-tag namespace). The `*tags` syntax (per
+    // RESEARCH §Pattern 2 L393) declares a MULTI-ENTRY index: a row carrying
+    // `tags: ["essay", "philosophy"]` produces two index entries so
+    // `db.articles.where("tags").equals("essay")` finds it. NO `.upgrade()`
+    // callback — additive index only; Dexie re-indexes on next open (mirrors
+    // the v3 additive-index precedent at L131-137). Existing v3 rows hydrate
+    // `tags: undefined`/`[]` via the ArticleSchema `.default([])` mechanism
+    // landed in Plan 01 (Pitfall 9 — additive; the absent field is filled on
+    // Zod read, NOT written back to the row). D8-08 (auto-prune): a tag no
+    // longer carried by any article disappears from `loadAllTags()` on the
+    // next read — the `*tags` index makes future Dexie-only queries possible
+    // but the current `loadAllTags` implementation uses `toArray()` + an
+    // in-memory Set for simplicity (see src/ingestion/library/tagsStore.ts).
+    // The remaining stores are re-declared at their existing shapes because
+    // Dexie requires the full stores object at each version; their values
+    // match v3 verbatim.
+    this.version(4).stores({
+      articles: "id, revision, source, addedAt, *tags",
       settings: "key",
       location: "[articleId+revision]",
       highlights: "id, [articleId+revision]",

@@ -110,3 +110,38 @@ export async function saveLocation(loc: LocationRecord): Promise<void> {
   };
   await db.location.put(row);
 }
+
+/**
+ * `loadAllLocations` — Load EVERY persisted LocationRecord in a single
+ * `db.location.toArray()` read (Plan 08-02 — LIB-06). Used by Plan 03's
+ * LibraryView to derive the continue-reading strip (D8-09) + the per-row
+ * progress hairline.
+ *
+ * Read discipline mirrors `loadLocation` L63-88 (STATE-04 — Zod safeParse on
+ * every row): corrupt rows are DROPPED silently (collected into `valid`), never
+ * coerced. A single malformed row must not block the rest of the strip — the
+ * reader sees the valid rows; the corrupt row is simply absent (it will be
+ * surfaced by WipeConfirm the next time loadLocation is called for that
+ * specific [articleId+revision] and fails the same parse).
+ *
+ * D8-09 (continue-reading strip): callers sort by `savedAt` to derive
+ * recency. D8-10 (recently-read = opened): `savedAt` is updated on every open
+ * via `saveLocation`, so the strip ordering reflects reading activity, not
+ * just first-open.
+ *
+ * Never throws — a Dexie-level error propagates to the caller
+ * (LibraryView's load effect), which routes through the same STATE-05
+ * classification as a single-row read failure.
+ */
+export async function loadAllLocations(): Promise<LocationRecord[]> {
+  const rows = await db.location.toArray();
+  const valid: LocationRecord[] = [];
+  for (const row of rows) {
+    const parsed = LocationRecordSchema.safeParse(row);
+    if (parsed.success) {
+      valid.push(parsed.data);
+    }
+    // else: drop the corrupt row silently — STATE-04 says never coerce.
+  }
+  return valid;
+}
