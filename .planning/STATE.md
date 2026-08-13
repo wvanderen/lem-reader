@@ -6,14 +6,14 @@ current_phase: 08
 current_phase_name: markdown-pipeline-and-personal-library
 status: executing
 stopped_at: Completed 08-01-PLAN.md
-last_updated: "2026-08-13T02:04:29.773Z"
+last_updated: "2026-08-13T02:12:48.433Z"
 last_activity: 2026-08-13
 last_activity_desc: Phase 08 execution started
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 12
-  completed_plans: 8
+  completed_plans: 9
   percent: 14
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-10)
 ## Current Position
 
 Phase: 08 (markdown-pipeline-and-personal-library) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 Status: Ready to execute
 Last activity: 2026-08-13 — Phase 08 execution started
 
@@ -105,6 +105,7 @@ Progress: [███░░░░░░░] 29% of v2.0 milestone
 | Phase 07 P06 | 10min | 2 tasks | 12 files |
 | Phase 07 P07 | 28min | 2 tasks | 8 files |
 | Phase 08 P01 | 11min | 2 tasks | 8 files |
+| Phase 08 P02 | 5min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -213,6 +214,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 08]: D8-18 markdown article id = md-<shortHash(canonical content)> (content-hash, NOT filename); two uploads of identical .md produce the same id so dedupe-refuse mirrors D7-07. The filename is metadata-only and feeds the D8-17 title fallback chain, not the id. — Content-hash ids are stable across filename changes (a reader re-saving the same content under a different filename gets the same article, not a duplicate). This mirrors the paste-path content-hash precedent and keeps save-once-read-forever semantics uniform across all three intake formats.
 - [Phase 08]: Strict CommonMark is the security boundary for the markdown path (D8-16, Pitfall 8-2): raw HTML in .md escapes to inert paragraph text by default. Never enable the parser's raw-HTML pass-through; the doc model IS the security boundary (ING-07). — CommonMark's default behavior (escape raw HTML) eliminates the mXSS surface without needing DOMPurify on the markdown path. The html-paths still need DOMPurify because they accept arbitrary HTML; the markdown path doesn't accept HTML at all — it accepts CommonMark, which has no raw-HTML-in-DOM semantics.
 - [Phase 08]: D8-17 title fallback chain front-matter → stripMarkdownExtension(filename) → "Markdown document" runs in server/ingest.ts (the orchestrator), not in markdownToBlocks. The adapter is filename-agnostic; the orchestrator owns provenance assembly. — Keeps markdownToBlocks pure (string in, blocks+provenancePartial out — no I/O, no FS access). The orchestrator already owns the title fallback chain for url + paste paths; markdown mirrors that ownership rather than splitting responsibility across files.
+- [Phase ?]: Phase 08-02: loadAllTags uses dexieLibrarySource.list() + in-memory Set (NOT a Dexie .where query) — reuses the Zod-validated read path (STATE-04); auto-prune is implicit (D8-08). The *tags multi-entry index enables future Dexie-only queries but the current implementation prioritizes simplicity.
+- [Phase ?]: Phase 08-02: Dexie v4 is APPEND-only with NO .upgrade() callback (Pitfall 9). Existing v3 article rows hydrate tags:[] via ArticleSchema .default([]) on Zod read, NOT via a row write-back. The on-disk row is byte-unchanged by the upgrade (proven by the e2e v3->v4 assertion).
 
 ### Pending Todos
 
@@ -241,7 +244,7 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-13T02:04:02.356Z
+Last session: 2026-08-13T02:12:24.266Z
 Stopped at: Completed 08-01-PLAN.md
 Resume file: None
 

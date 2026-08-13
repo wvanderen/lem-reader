@@ -23,9 +23,9 @@ Requirements for the v2.0 milestone. Each maps to a roadmap phase (traceability 
 - [ ] **LIB-01**: Reader can browse their ingested articles in a personal library that replaces the flat fixture list.
 - [ ] **LIB-02**: Reader can open, read, and remove any article in their library.
 - [ ] **LIB-03**: Reader can search their library by title and metadata.
-- [ ] **LIB-04**: Reader can tag articles and filter the library by tag (flat tags as default organization; no folder hierarchy).
+- [x] **LIB-04**: Reader can tag articles and filter the library by tag (flat tags as default organization; no folder hierarchy).
 - [ ] **LIB-05**: Reader sees ingestion metadata (source URL, fetch date) and can reach the original source.
-- [ ] **LIB-06**: Reader sees recently-read and reading-progress indicators across the library.
+- [x] **LIB-06**: Reader sees recently-read and reading-progress indicators across the library.
 
 ### Portability
 
@@ -111,9 +111,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | LIB-01 | Phase 8 | Pending |
 | LIB-02 | Phase 8 | Pending |
 | LIB-03 | Phase 8 | Pending |
-| LIB-04 | Phase 8 | Pending |
+| LIB-04 | Phase 8 | Complete |
 | LIB-05 | Phase 8 | Pending |
-| LIB-06 | Phase 8 | Pending |
+| LIB-06 | Phase 8 | Complete |
 | PORT-01 | Phase 9 | Pending |
 | PORT-02 | Phase 9 | Pending |
 | PORT-03 | Phase 9 | Pending |
