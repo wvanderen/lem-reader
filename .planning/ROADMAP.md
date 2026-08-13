@@ -89,7 +89,7 @@ Plans:
   4. Reader can add an article by uploading a Markdown document (.md), with YAML front-matter (title/author/date) recognized as metadata, normalized through the same Block-output contract as HTML.
   5. Reader sees ingestion metadata (source URL, fetch date) with a link to the original source, plus recently-read shortcuts and positional reading-progress indicators across the library.
 
-**Plans**: 3/5 plans executed
+**Plans**: 4/5 plans executed
 **UI hint**: yes
 
 Plans:
@@ -107,7 +107,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 08-04-PLAN.md — File-upload form (.md/.html) + TagEntry in ArticleView + RemoveConfirm cascade-remove dialog
+- [x] 08-04-PLAN.md — File-upload form (.md/.html) + TagEntry in ArticleView + RemoveConfirm cascade-remove dialog
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -197,7 +197,7 @@ Plans:
 | 5. Durable Highlights and Notes | v1.0 | 7/7 | Complete | 2026-08-07 |
 | 6. Prototype Acceptance | v1.0 | 6/6 | Complete | 2026-08-10 |
 | 7. Ingestion Substrate | v2.0 | 7/7 | Complete   | 2026-08-12 |
-| 8. Markdown Pipeline and Personal Library | v2.0 | 3/5 | In Progress|  |
+| 8. Markdown Pipeline and Personal Library | v2.0 | 4/5 | In Progress|  |
 | 9. Versioned Export/Import | v2.0 | 0/TBD | Not started | - |
 | 10. Annotation Review Panel | v2.0 | 0/TBD | Not started | - |
 | 11. PDF Intake | v2.0 | 0/TBD | Not started | - |

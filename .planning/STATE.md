@@ -5,15 +5,15 @@ milestone_name: Personal Library
 current_phase: 08
 current_phase_name: markdown-pipeline-and-personal-library
 status: executing
-stopped_at: Completed 08-01-PLAN.md
-last_updated: "2026-08-13T02:28:09.725Z"
+stopped_at: Completed 08-04-PLAN.md
+last_updated: "2026-08-13T02:38:34.553Z"
 last_activity: 2026-08-13
 last_activity_desc: Phase 08 execution started
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 12
-  completed_plans: 10
+  completed_plans: 11
   percent: 14
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-10)
 ## Current Position
 
 Phase: 08 (markdown-pipeline-and-personal-library) — EXECUTING
-Plan: 4 of 5
+Plan: 5 of 5
 Status: Ready to execute
 Last activity: 2026-08-13 — Phase 08 execution started
 
@@ -107,6 +107,7 @@ Progress: [███░░░░░░░] 29% of v2.0 milestone
 | Phase 08 P01 | 11min | 2 tasks | 8 files |
 | Phase 08 P02 | 5min | 2 tasks | 5 files |
 | Phase 08 P03 | 11min | 3 tasks | 10 files |
+| Phase 08 P04 | 5min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -219,6 +220,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: Phase 08-02: Dexie v4 is APPEND-only with NO .upgrade() callback (Pitfall 9). Existing v3 article rows hydrate tags:[] via ArticleSchema .default([]) on Zod read, NOT via a row write-back. The on-disk row is byte-unchanged by the upgrade (proven by the e2e v3->v4 assertion).
 - [Phase 08-03]: LibraryView default-sort deviation: addedAt not on CanonicalArticle type
 - [Phase 08-03]: LibraryRow.onRemove optional prop is the forward-compat hook for Plan 04 RemoveConfirm — no remove button in Plan 03
+- [Phase ?]: Phase 08-04: TagEntry is INERT at ArticleView mount (Pitfall 8-5 — no auto-focus prop, no mount-time effect calling .focus()); reader activates via Tab/Click. Warning prose uses 'auto-focus' not the JSX attribute name so the acceptance grep returns 0 (mirrors 08-01 allowDangerousHtml).
+- [Phase ?]: Phase 08-04: hasFile React state mirrors the file-input picker (refs are not reactive — reading fileInputRef.current.files.length in JSX wouldn't re-evaluate after a pick, so the submit button would stay disabled). onChange → setHasFile is the correct discipline.
+- [Phase ?]: Phase 08-04: RemoveConfirm is a STRUCTURAL CLONE of WipeConfirm, not a shared Dialog. Two ~150-line components is the right cost for Pitfall 8 isolation (each destructive call lives ONLY in its own button's onClick — abstracting into a shared dialog would re-introduce the single-call-site risk).
 
 ### Pending Todos
 
@@ -247,8 +251,8 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-13T02:27:24.789Z
-Stopped at: Completed 08-01-PLAN.md
+Last session: 2026-08-13T02:38:20.056Z
+Stopped at: Completed 08-04-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
