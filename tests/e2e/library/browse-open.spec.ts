@@ -118,10 +118,21 @@ test.describe("SC#1 + LIB-01 + LIB-05 — browse + open + source badge", () => {
       page.getByRole("heading", { level: 1, name: "Saved articles" }),
     ).toBeVisible();
 
+    // Wait for the library list to render before asserting on its
+    // children (the LibraryView load effect resolves async after mount).
+    await expect(page.locator(".library-list > li").first()).toBeVisible({
+      timeout: 10_000,
+    });
+
     // D8-02 — every fixture row carries a SourceBadge. The "fixture"
-    // variant renders the label "Sample" (SourceBadge.tsx badgeLabel switch).
-    const badgeCount = await page.locator(".source-badge").count();
-    expect(badgeCount, "expected at least one source badge").toBeGreaterThanOrEqual(1);
+    // variant renders the label "Sample" (SourceBadge.tsx badgeLabel
+    // switch). Use auto-retrying expect (not the non-retrying .count()
+    // snapshot) so the assertion survives the async load on slower
+    // engines under load.
+    await expect(
+      page.locator(".source-badge").first(),
+      "expected at least one source badge",
+    ).toBeVisible({ timeout: 10_000 });
 
     // The first .source-badge text is "Sample" — fixtures are the only
     // articles present at first run, so the first badge reflects the
