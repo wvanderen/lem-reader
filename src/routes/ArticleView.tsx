@@ -56,6 +56,10 @@ import { SelectionToolbar } from "../reader/annotations/SelectionToolbar";
 import { NotePopover } from "../reader/annotations/NotePopover";
 import { AnnotationsDrawer } from "../reader/annotations/AnnotationsDrawer";
 import { fragmentContainingOffset } from "../pagination/anchor";
+// Plan 08-04 (LIB-04 + D8-05) — TagEntry mounts in the article <header> as a
+// sibling of the title / meta / source-link. Inert at mount (Pitfall 8-5 —
+// does NOT steal focus from the article body).
+import { TagEntry } from "../reader/TagEntry";
 
 /** The D4-10 mode-toggle handler signature (App threads a ref of this shape). */
 type ModeToggleHandler = () => void;
@@ -1171,6 +1175,10 @@ export function ArticleView({
                 <span className="visually-hidden"> (opens in a new tab)</span>
               </a>
             )}
+            {/* Plan 08-04 (D8-05) — tags edited WHILE reading (not in the
+                library list). TagEntry is INERT at mount (Pitfall 8-5 — no
+                autoFocus, no useEffect-driven .focus()). */}
+            <TagEntry articleId={article.id} tags={article.tags ?? []} />
           </header>
           {paginatedActive && trustedView && articleEl ? (
             <>

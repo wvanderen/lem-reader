@@ -44,6 +44,9 @@ import { ContinueReadingStrip } from "./ContinueReadingStrip";
 import { filterLibrary } from "./libraryFilter";
 import { loadAllLocations } from "../../persistence/locationStore";
 import { loadAllTags } from "./tagsStore";
+// Plan 08-04 (LIB-02 + D8-13/D8-14) — RemoveConfirm gates the cascade
+// dexieLibrarySource.remove(id) behind a native <dialog>/alertdialog.
+import { RemoveConfirm } from "./RemoveConfirm";
 
 export function LibraryView() {
   const [items, setItems] = useState<CanonicalArticle[]>([]);
@@ -54,6 +57,13 @@ export function LibraryView() {
   const [locationsByArticle, setLocationsByArticle] = useState<
     Map<string, LocationRecord>
   >(new Map());
+  // Plan 08-04 — row-level trash trigger state. When non-null, RemoveConfirm
+  // is open; the reader confirms or cancels. refreshKey re-triggers the load
+  // effect after a successful remove so the list re-derives from Dexie.
+  const [removeTarget, setRemoveTarget] = useState<
+    { id: string; title: string } | null
+  >(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -84,7 +94,7 @@ export function LibraryView() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [refreshKey]);
 
   // Re-derive allTags when items change (tags may have been edited in
   // ArticleView). For Plan 03 this runs only on mount because items is set
@@ -133,10 +143,42 @@ export function LibraryView() {
               key={a.id}
               article={a}
               location={locationsByArticle.get(a.id)}
+              onRemove={() =>
+                setRemoveTarget({
+                  id: a.id,
+                  title: a.provenance.title,
+                })
+              }
             />
           ))}
         </ul>
       )}
+      {/* Plan 08-04 — row-level trash → cascade-remove confirmation (LIB-02).
+          D8-13: the destructive onClick calls dexieLibrarySource.remove(id)
+          which atomically removes the article + highlights + notes + location
+          in one Dexie transaction (Phase 7 Plan 07-06). On confirm, bump
+          refreshKey to re-trigger the load effect and navigate to #/ if the
+          reader was viewing the removed article (the hash router handles the
+          unknown-article-id case gracefully by falling back to the list). */}
+      <RemoveConfirm
+        open={removeTarget !== null}
+        articleId={removeTarget?.id ?? ""}
+        articleTitle={removeTarget?.title ?? ""}
+        onConfirm={() => {
+          const removedId = removeTarget?.id;
+          setRemoveTarget(null);
+          setRefreshKey((k) => k + 1);
+          // If the reader was viewing the removed article, fall back to the
+          // library list. The hash router's parseHash handles #/ gracefully.
+          if (
+            removedId !== undefined &&
+            window.location.hash === `#/article/${removedId}`
+          ) {
+            window.location.hash = "#/";
+          }
+        }}
+        onCancel={() => setRemoveTarget(null)}
+      />
     </main>
   );
 }

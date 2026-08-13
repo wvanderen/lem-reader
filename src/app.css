@@ -1892,6 +1892,187 @@ dialog.annotations-drawer::backdrop {
   color: var(--ink-soft);
   border-color: var(--hairline);
 }
+
+/* ── TagEntry fieldset (Plan 08-04 — tags edited WHILE reading) ──────────── */
+/* Mounted inside ArticleView's <header> as a sibling of title/meta/source.
+   INERT at mount (Pitfall 8-5 — no autoFocus, no useEffect .focus()). */
+.tag-entry {
+  margin-block: var(--space-md) 0;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+}
+.tag-entry legend {
+  padding-inline: var(--space-xs);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  font-weight: 600;
+  color: var(--ink);
+}
+.tag-entry-list {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  margin: var(--space-xs) 0;
+  padding: 0;
+}
+.tag-entry-list li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+/* × remove glyph — small but 44px touch-target, --ink-soft at rest,
+   --destructive on hover (conveys consequence beyond the aria-label). */
+.tag-chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--touch);
+  min-width: var(--touch);
+  padding: 0 var(--space-xs);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  font-family: var(--font-ui);
+  font-size: 16px;
+  line-height: 1;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.tag-chip-remove:hover {
+  color: var(--destructive);
+  border-color: var(--destructive);
+}
+.tag-entry-add-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-top: var(--space-xs);
+}
+.tag-entry-input {
+  flex: 1 1 14em;
+  min-height: var(--touch);
+  padding: var(--space-sm);
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink);
+  /* :focus-visible inherits the global 2px ring. */
+}
+/* Add button — neutral hairline border, accent on hover (mirrors .ingest-submit
+   geometry — quiet chrome until activated). */
+.tag-entry-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--touch);
+  padding-inline: var(--space-md);
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  font-family: var(--font-ui);
+  font-size: 16px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.tag-entry-add:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+/* The .status live region inside .tag-entry reuses the global .status rule
+   (Plan 02 — polite/atomic). A small inline variant here keeps the failure
+   copy calm and local to the fieldset. */
+.tag-entry .status {
+  margin-top: var(--space-xs);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+/* ── LibraryRemoveConfirm alertdialog (Plan 08-04 — cascade-remove gate) ──── */
+/* Structural clone of .wipe-confirm (Phase 02-02). Centered modal with
+   ::backdrop, destructive button border in --destructive, cancel button
+   carries [data-initial-focus] (Pitfall 8 — non-destructive default focus). */
+dialog.library-remove-confirm {
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: var(--surface-raised);
+  color: var(--ink);
+  width: calc(100vw - var(--space-xl));
+  max-width: 480px;
+  overflow: auto;
+}
+dialog.library-remove-confirm::backdrop {
+  background: rgba(31, 27, 22, 0.5);
+}
+.library-remove-confirm-inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+}
+.library-remove-confirm-inner h2 {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 22px;
+  line-height: 1.3;
+  font-weight: 600;
+}
+.library-remove-confirm-inner p {
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+.library-remove-confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  justify-content: flex-end;
+  margin-top: var(--space-sm);
+}
+.library-remove-destructive,
+.library-remove-cancel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--touch);
+  padding-inline: var(--space-md);
+  border-radius: 4px;
+  font-family: var(--font-ui);
+  font-size: 16px;
+  cursor: pointer;
+}
+/* Destructive button: --destructive border conveys consequence beyond copy
+   (forced-colors safety). The label "Remove article" itself is unambiguous
+   (UI-SPEC §Copywriting L262). */
+.library-remove-destructive {
+  background: transparent;
+  border: 1px solid var(--destructive);
+  color: var(--destructive);
+}
+.library-remove-destructive:hover {
+  background: var(--destructive);
+  color: var(--surface);
+}
+/* Cancel button: neutral border, names the actual outcome (Keep article). */
+.library-remove-cancel {
+  background: transparent;
+  border: 1px solid var(--hairline);
+  color: var(--ink);
+}
+.library-remove-cancel:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
 .annotations-drawer-close {
   display: inline-flex;
   align-items: center;
