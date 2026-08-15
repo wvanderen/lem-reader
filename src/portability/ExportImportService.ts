@@ -69,7 +69,7 @@ import type { ResolvedImportPlan } from "./conflicts";
  * bug surfaced to the caller (the 09-05 UI catches and reports calmly) —
  * it can never produce a half-valid bundle.
  */
-export async function buildBundleBytes(): Promise<Uint8Array> {
+export async function buildBundleBytes(): Promise<Uint8Array<ArrayBuffer>> {
   const [articles, highlights, notes, locations, settingsResult] =
     await Promise.all([
       dexieLibrarySource.list(), // Dexie articles ONLY — fixtures never ride
