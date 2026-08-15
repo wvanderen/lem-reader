@@ -154,4 +154,42 @@ describe("ImportPreviewDialog — preview copy + override plumbing (D9-11)", () 
       (screen.getByLabelText("Apply imported reading preferences") as HTMLInputElement).checked,
     ).toBe(true);
   });
+
+  it("an ESC-originated close (open prop still true) routes cleanup through onCancel; the controlled close does not", () => {
+    // 09-06 Rule 1 regression lock: Esc closes the native dialog WITHOUT the
+    // parent knowing — the close listener must call onCancel so the parent's
+    // import state machine + file input reset on EVERY close path. The
+    // controlled close (Proceed/Cancel already flipped the open prop) must
+    // NOT re-invoke onCancel (it would wipe the Proceed status message).
+    const onCancel = vi.fn();
+    const { container, rerender } = render(
+      <ImportPreviewDialog
+        open={true}
+        preview={samplePreview(false)}
+        onProceed={vi.fn().mockResolvedValue(undefined)}
+        onCancel={onCancel}
+      />,
+    );
+    const dlg = container.querySelector("dialog.import-preview");
+    expect(dlg).not.toBeNull();
+    // ESC path: dispatch `close` while the open prop is still true.
+    act(() => {
+      dlg!.dispatchEvent(new Event("close", { bubbles: false }));
+    });
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    // Controlled path: parent flips open → the sync effect calls close() →
+    // the same `close` event fires, but openRef is now false → no onCancel.
+    rerender(
+      <ImportPreviewDialog
+        open={false}
+        preview={samplePreview(false)}
+        onProceed={vi.fn().mockResolvedValue(undefined)}
+        onCancel={onCancel}
+      />,
+    );
+    act(() => {
+      dlg!.dispatchEvent(new Event("close", { bubbles: false }));
+    });
+    expect(onCancel).toHaveBeenCalledTimes(1); // still exactly the ESC call
+  });
 });

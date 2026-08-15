@@ -13,6 +13,10 @@
 //   - useEffect syncs the `open` prop with showModal()/close().
 //   - Capture document.activeElement on open; restore focus in the `close`
 //     listener (Pitfall 1 — showModal does not auto-restore).
+//   - An ESC-originated close (open prop still true) routes cleanup through
+//     onCancel — the parent's state machine + file input reset on every
+//     close path, mirroring the Cancel button (the controlled close already
+//     cleaned up; onCancel is not re-invoked there).
 //   - Explicit .focus() on [data-initial-focus] after showModal (WebKit
 //     quirk — predictable focus trap + initial reading position).
 //   - [data-initial-focus] on the NON-destructive "Cancel import" button.
@@ -116,6 +120,13 @@ export function ImportPreviewDialog({
   // Capture the previously-focused element on open so the close handler can
   // restore focus (Pitfall 1 — same discipline as WipeConfirm + RemoveConfirm).
   const triggerRef = useRef<HTMLElement | null>(null);
+  // Mirror the `open` prop at event time so the `close` listener can tell an
+  // ESC-originated close (open still true — the parent doesn't know yet, so
+  // the listener must route cleanup via onCancel) from the CONTROLLED close
+  // (open already false — the Proceed/Cancel handler already ran its own
+  // cleanup; calling onCancel again would wipe the Proceed status message).
+  const openRef = useRef(open);
+  openRef.current = open;
 
   // The D9-14 bulk per-kind override choices + the D9-12 preferences choice.
   const [overrides, setOverrides] = useState<Overrides>(DEFAULT_OVERRIDES);
@@ -155,16 +166,20 @@ export function ImportPreviewDialog({
   }, [open, preview]);
 
   // Register the `close` event listener (with cleanup). Restore focus to the
-  // captured trigger (Pitfall 1).
+  // captured trigger (Pitfall 1), and — when the close was ESC-originated
+  // (the open prop still says open) — route cleanup through onCancel so the
+  // parent's import state machine and file input reset on EVERY close path
+  // (the 09-05 same-file-retry guarantee; Esc must not be the hole).
   useEffect(() => {
     const dlg = ref.current;
     if (!dlg) return;
     const handleClose = () => {
       triggerRef.current?.focus();
+      if (openRef.current) onCancel();
     };
     dlg.addEventListener("close", handleClose);
     return () => dlg.removeEventListener("close", handleClose);
-  }, []);
+  }, [onCancel]);
 
   // ── PITFALL 8 LOAD-BEARING HANDLER ──────────────────────────────────────
   // The ONLY place `onProceed` is invoked (the parent routes it to
