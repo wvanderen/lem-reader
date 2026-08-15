@@ -83,3 +83,20 @@ The Plan 08-05 scope itself (the 6 library specs) is fully green: 81
 cases × 3 engines = 243 cells, 0 failures. Recorded honestly per PROJECT.md
 Key Decision #9 (the Phase 4 04-11 + Phase 5 05-05 precedent).
 
+## CLOSED — Phase 9 Plan 09-07 (2026-08-15)
+
+The 24 pre-existing cells recorded above are **closed** by Phase 9 Plan
+09-07. The full `npm run test` suite now exits 0 with 0 failed (1674
+passed | 0 failed | 13 intentional skips across unit + 3 e2e engines) in a
+single invocation. The permanent honest-suite record — literal command,
+per-suite + per-engine counts, literal exit code, and the root-cause
+diagnosis (the header-growth geometry regression, NOT the suspected Vite 8/
+Rolldown measurement timing; the deficit had also silently grown from 18
+to 33 pagination cells) — lives in
+[`.planning/phases/09-versioned-export-import/09-07-OUTPUT.md`](../09-versioned-export-import/09-07-OUTPUT.md).
+
+Note: the 3 dexie-migration cells were NOT stale against LibraryView's row
+shape — the `aria-labelledby` accessible name resolves correctly (the row
+structure is byte-stable from FixtureList by design). The recorded failure
+did not reproduce and closed with zero changes. See 09-07-OUTPUT §5.
+
