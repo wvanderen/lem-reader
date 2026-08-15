@@ -1009,12 +1009,39 @@ dialog.wipe-confirm::backdrop {
      alignment between measurement and the visible page fragments. */
   position: relative;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  /* Plan 09-07 (PAGE-03/PAGE-04 regression fix): the provenance header row
+     is CAPPED at 25% of the pinned article height. It was previously an
+     uncapped `auto` row — fine when the header was h1+byline+link (~150px),
+     but Phase 8-04 (TagEntry) + Phase 9-05 (Export highlights) grew it to
+     ~400px at 360px width, collapsing .page-viewport to 67px (every atomic
+     block exceeded the 75% oversize threshold → bogus `oversized-block`
+     fallback at 360x640) and to 0px at ≤320x420 (pageContentBoxHeightPx
+     never rose above 0, so the pagination effect never ran and the DEV
+     __lemPagination hook never published — the termination/fallback
+     timeouts). minmax(auto, 25%) resolves the percentage against the
+     definite pinned height, guaranteeing the reading page ≥ 75% of the
+     surface. The header itself becomes a scroll container (below) so its
+     interactive content (tags, export) stays reachable at narrow widths. */
+  grid-template-rows: minmax(auto, 25%) minmax(0, 1fr);
 }
 
 /* The provenance header occupies the first grid row. Only the remaining row
    is page capacity; clipping lives here so the article header never silently
-   steals space from a fragment whose engine budget assumed the full article. */
+   steals space from a fragment whose engine budget assumed the full article.
+   Plan 09-07: overflow-y:auto (a) zeroes the grid item's automatic minimum
+   size so the header actually shrinks into its capped 25% track (a grid item
+   with overflow:visible refuses to shrink below content height, which would
+   defeat the cap) and (b) keeps the full header — title, byline, source
+   link, TagEntry, Export highlights — reachable by scroll whenever its
+   natural height exceeds the cap (TagEntry's form alone is ~103px, so the
+   header scrolls even at desktop widths; the title, byline, and source link
+   always fit inside the cap and stay immediately visible). The reading page
+   — the product's core surface — always keeps at least 75% of the pinned
+   height; secondary article chrome scrolls instead of evicting the page. */
+.article-body.paginated-surface > header {
+  min-height: 0;
+  overflow-y: auto;
+}
 .page-viewport {
   position: relative;
   min-height: 0;
