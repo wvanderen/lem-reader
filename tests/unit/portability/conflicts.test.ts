@@ -46,6 +46,7 @@ import {
 import { fixtures } from "../../../src/fixtures";
 import { ExportBundleSchema } from "../../../src/portability/bundle";
 import type { ExportBundle } from "../../../src/portability/bundle";
+import type { Overrides } from "../../../src/portability/conflicts";
 import type { z } from "zod";
 import fakeIndexedDB, { IDBKeyRange } from "fake-indexeddb";
 import { Dexie } from "dexie";
@@ -662,5 +663,351 @@ describe("detectImportPreview — preferences + zero writes (09-03 Task 1)", () 
       notes: await db.notes.count(),
     };
     expect(after).toEqual(before);
+  });
+});
+
+// ── Task 2: resolveImportPlan — bulk per-kind override matrix (D9-14) ───────
+
+/** The D9-14 default: skip every kind. */
+const ALL_SKIP: Overrides = {
+  "article-revision": "skip",
+  "article-content-divergence": "skip",
+  "highlight-id": "skip",
+  "note-id": "skip",
+  location: "skip",
+};
+
+describe("resolveImportPlan — override matrix (09-03 Task 2)", () => {
+  beforeEach(async () => {
+    await wipeDatabase();
+  });
+
+  it("default skip excludes every conflicted kind; new records are always written", async () => {
+    const { detectImportPreview, resolveImportPlan } = await loadConflicts();
+
+    const bundle = sampleBundle({
+      articles: [
+        sampleArticle({ id: "art-new" }),
+        sampleArticle({ id: "art-local", revision: 2 }), // revision conflict
+      ],
+      highlights: [
+        sampleHighlight({ id: "hl-new", articleId: "art-new" }),
+        sampleHighlight({ id: "hl-local", articleId: "art-local" }), // id conflict
+      ],
+      notes: [
+        sampleNote({ id: "note-new", highlightId: "hl-new" }),
+        sampleNote({ id: "note-local", highlightId: "hl-local" }), // id conflict
+      ],
+      locations: [
+        sampleLocation({ articleId: "art-new", revision: 1 }),
+        sampleLocation({ articleId: "art-local", revision: 1 }), // key conflict
+      ],
+    });
+    await seedLocalConflictSurface();
+    const preview = await detectImportPreview(bundle);
+
+    const plan = await resolveImportPlan(bundle, preview, ALL_SKIP, false);
+
+    expect(plan.articlesToWrite.map((a) => a.id)).toEqual(["art-new"]);
+    expect(plan.highlightsToWrite.map((h) => h.id)).toEqual(["hl-new"]);
+    expect(plan.notesToWrite.map((n) => n.id)).toEqual(["note-new"]);
+    expect(plan.locationsToWrite.map((l) => l.articleId)).toEqual(["art-new"]);
+    expect(plan.skipped).toEqual({
+      articles: 1,
+      highlights: 1,
+      notes: 1,
+      locations: 1,
+    });
+    expect(plan.idRewrites.size).toBe(0);
+    expect(plan.applyPreferences).toBe(false);
+    expect(plan.preferences).toBeUndefined();
+  });
+
+  it("article-revision overwrite keeps the HIGHER revision only (D-06 monotonic)", async () => {
+    const { detectImportPreview, resolveImportPlan } = await loadConflicts();
+    await seedLocalConflictSurface(); // local art-local at revision 1
+
+    const bundle = sampleBundle({
+      articles: [sampleArticle({ id: "art-local", revision: 2 })],
+    });
+    const preview = await detectImportPreview(bundle);
+    const plan = await resolveImportPlan(bundle, preview, {
+      ...ALL_SKIP,
+      "article-revision": "overwrite",
+    }, false);
+
+    expect(plan.articlesToWrite).toHaveLength(1);
+    expect(plan.articlesToWrite[0]?.id).toBe("art-local");
+    expect(plan.articlesToWrite[0]?.revision).toBe(2);
+    expect(plan.skipped.articles).toBe(0);
+  });
+
+  it("article-revision overwrite with an EQUAL-OR-LOWER incoming revision stays local (skipped)", async () => {
+    const { detectImportPreview, resolveImportPlan } = await loadConflicts();
+    const { db } = await loadDb();
+    await db.articles.put(sampleArticle({ id: "art-local", revision: 2 }));
+
+    const bundle = sampleBundle({
+      articles: [sampleArticle({ id: "art-local", revision: 1 })],
+    });
+    const preview = await detectImportPreview(bundle);
+    const plan = await resolveImportPlan(bundle, preview, {
+      ...ALL_SKIP,
+      "article-revision": "overwrite",
+    }, false);
+
+    expect(plan.articlesToWrite).toEqual([]);
+    expect(plan.skipped.articles).toBe(1);
+  });
+
+  it("article-content-divergence overwrite: the incoming article wins (same id+revision, content replaced)", async () => {
+    const { detectImportPreview, resolveImportPlan } = await loadConflicts();
+    await seedLocalConflictSurface(); // hash = "a".repeat(64)
+
+    const incoming = sampleArticle({
+      id: "art-local",
+      revision: 1,
+      provenance: {
+        sourceUrl: "https://example.com/article",
+        title: "Sample Article",
+        author: "An Author",
+        retrievedAt: "2026-08-11T00:00:00.000Z",
+        originalHtmlHash: "sha256:" + "b".repeat(64),
+      },
+    });
+    const bundle = sampleBundle({ articles: [incoming] });
+    const preview = await detectImportPreview(bundle);
+    const plan = await resolveImportPlan(bundle, preview, {
+      ...ALL_SKIP,
+      "article-content-divergence": "overwrite",
+    }, false);
+
+    expect(plan.articlesToWrite).toEqual([incoming]);
+    expect(plan.skipped.articles).toBe(0);
+  });
+
+  it("highlight-id keep-both mints a fresh id and rewrites the incoming note's highlightId FK (Pitfall 7)", async () => {
+    const { detectImportPreview, resolveImportPlan } = await loadConflicts();
+    await seedLocalConflictSurface();
+
+    const bundle = sampleBundle({
+      highlights: [sampleHighlight({ id: "hl-local", articleId: "art-local" })],
+      // The note is NEW (no id collision) but follows its rewritten highlight.
+      notes: [sampleNote({ id: "note-follows", highlightId: "hl-local" })],
+    });
+    const preview = await detectImportPreview(bundle);
+    const plan = await resolveImportPlan(bundle, preview, {
+      ...ALL_SKIP,
+      "highlight-id": "keep-both",
+    }, false);
+
+    expect(plan.highlightsToWrite).toHaveLength(1);
+    const minted = plan.highlightsToWrite[0]?.id;
+    expect(minted).toBeDefined();
+    expect(minted).not.toBe("hl-local");
+    expect(plan.idRewrites.get("hl-local")).toBe(minted);
+    expect([...plan.idRewrites.values()]).toContain(minted);
+
+    // The note follows its highlight — the FK points at the MINTED id.
+    expect(plan.notesToWrite).toHaveLength(1);
+    expect(plan.notesToWrite[0]?.id).toBe("note-follows");
+    expect(plan.notesToWrite[0]?.highlightId).toBe(minted);
+    expect(plan.skipped.highlights).toBe(0);
+    expect(plan.skipped.notes).toBe(0);
+  });
+
+  it("note-id keep-both mints a fresh note id and records the rewrite", async () => {
+    const { detectImportPreview, resolveImportPlan } = await loadConflicts();
+    await seedLocalConflictSurface();
+
+    const bundle = sampleBundle({
+      notes: [sampleNote({ id: "note-local", highlightId: "hl-local" })],
+    });
+    const preview = await detectImportPreview(bundle);
+    const plan = await resolveImportPlan(bundle, preview, {
+      ...ALL_SKIP,
+      "note-id": "keep-both",
+    }, false);
+
+    expect(plan.notesToWrite).toHaveLength(1);
+    const minted = plan.notesToWrite[0]?.id;
+    expect(minted).not.toBe("note-local");
+    expect(plan.idRewrites.get("note-local")).toBe(minted);
+    // Note payload survives the mint untouched.
+    expect(plan.notesToWrite[0]?.text).toBe("a reader note");
+    expect(plan.skipped.notes).toBe(0);
+  });
+
+  it("highlight-id overwrite writes the incoming record under the SAME id (upsert semantics)", async () => {
+    const { detectImportPreview, resolveImportPlan } = await loadConflicts();
+    await seedLocalConflictSurface();
+
+    const incoming = sampleHighlight({
+      id: "hl-local",
+      articleId: "art-local",
+      createdAt: "2026-08-15T12:00:00.000Z",
+    });
+    const bundle = sampleBundle({ highlights: [incoming] });
+    const preview = await detectImportPreview(bundle);
+    const plan = await resolveImportPlan(bundle, preview, {
+      ...ALL_SKIP,
+      "highlight-id": "overwrite",
+    }, false);
+
+    expect(plan.highlightsToWrite).toEqual([incoming]);
+    expect(plan.idRewrites.size).toBe(0);
+    expect(plan.skipped.highlights).toBe(0);
+  });
+
+  it("location overwrite applies last-write-wins by savedAt: newer incoming wins", async () => {
+    const { detectImportPreview, resolveImportPlan } = await loadConflicts();
+    await seedLocalConflictSurface(); // savedAt 2026-08-15T00:00:00.000Z
+
+    const newer = sampleLocation({
+      articleId: "art-local",
+      revision: 1,
+      graphemeOffset: 9,
+      savedAt: "2026-08-15T12:00:00.000Z",
+    });
+    const bundle = sampleBundle({ locations: [newer] });
+    const preview = await detectImportPreview(bundle);
+    const plan = await resolveImportPlan(bundle, preview, {
+      ...ALL_SKIP,
+      location: "overwrite",
+    }, false);
+
+    expect(plan.locationsToWrite).toEqual([newer]);
+    expect(plan.skipped.locations).toBe(0);
+  });
+
+  it("location overwrite with an OLDER incoming savedAt stays skipped (local wins)", async () => {
+    const { detectImportPreview, resolveImportPlan } = await loadConflicts();
+    await seedLocalConflictSurface(); // savedAt 2026-08-15T00:00:00.000Z
+
+    const older = sampleLocation({
+      articleId: "art-local",
+      revision: 1,
+      graphemeOffset: 9,
+      savedAt: "2026-08-14T00:00:00.000Z",
+    });
+    const bundle = sampleBundle({ locations: [older] });
+    const preview = await detectImportPreview(bundle);
+    const plan = await resolveImportPlan(bundle, preview, {
+      ...ALL_SKIP,
+      location: "overwrite",
+    }, false);
+
+    expect(plan.locationsToWrite).toEqual([]);
+    expect(plan.skipped.locations).toBe(1);
+  });
+
+  it("keep-both on the article and location kinds behaves as skip (documented D9-14 narrowing)", async () => {
+    const { detectImportPreview, resolveImportPlan } = await loadConflicts();
+    await seedLocalConflictSurface();
+
+    const bundle = sampleBundle({
+      articles: [sampleArticle({ id: "art-local", revision: 2 })],
+      locations: [sampleLocation({ articleId: "art-local", revision: 1 })],
+    });
+    const preview = await detectImportPreview(bundle);
+    const plan = await resolveImportPlan(bundle, preview, {
+      ...ALL_SKIP,
+      "article-revision": "keep-both",
+      location: "keep-both",
+    }, false);
+
+    expect(plan.articlesToWrite).toEqual([]);
+    expect(plan.skipped.articles).toBe(1);
+    expect(plan.locationsToWrite).toEqual([]);
+    expect(plan.skipped.locations).toBe(1);
+    expect(plan.idRewrites.size).toBe(0);
+  });
+
+  it("an identical duplicate article (same id+revision+hash) is a calm no-op: skipped, not written", async () => {
+    const { detectImportPreview, resolveImportPlan } = await loadConflicts();
+    await seedLocalConflictSurface();
+
+    const bundle = sampleBundle({
+      articles: [sampleArticle({ id: "art-local", revision: 1 })],
+    });
+    const preview = await detectImportPreview(bundle);
+    const plan = await resolveImportPlan(bundle, preview, ALL_SKIP, false);
+
+    expect(preview.conflicts).toEqual([]);
+    expect(plan.articlesToWrite).toEqual([]);
+    expect(plan.skipped.articles).toBe(1);
+  });
+
+  it("applyPreferences true ⇒ plan carries the bundle preferences", async () => {
+    const { detectImportPreview, resolveImportPlan } = await loadConflicts();
+    const prefs = samplePrefs({ theme: "dark" });
+    const bundle = sampleBundle({ preferences: prefs });
+
+    const preview = await detectImportPreview(bundle);
+    const plan = await resolveImportPlan(bundle, preview, ALL_SKIP, true);
+
+    expect(plan.applyPreferences).toBe(true);
+    expect(plan.preferences).toEqual(bundle.preferences);
+    expect(plan.preferences?.theme).toBe("dark");
+  });
+
+  it("applyPreferences false ⇒ preferences absent and applyPreferences false", async () => {
+    const { detectImportPreview, resolveImportPlan } = await loadConflicts();
+    const bundle = sampleBundle();
+
+    const preview = await detectImportPreview(bundle);
+    const plan = await resolveImportPlan(bundle, preview, ALL_SKIP, false);
+
+    expect(plan.applyPreferences).toBe(false);
+    expect(plan.preferences).toBeUndefined();
+  });
+
+  it("performs ZERO writes: id minting and FK rewrites are plan data only", async () => {
+    const { detectImportPreview, resolveImportPlan } = await loadConflicts();
+    const { db } = await loadDb();
+    await seedLocalConflictSurface();
+
+    // A maximal plan: every kind resolved (new + skip + overwrite + keep-both
+    // mint) — none of it may touch the stores.
+    const bundle = sampleBundle({
+      articles: [sampleArticle({ id: "art-new" })],
+      highlights: [sampleHighlight({ id: "hl-local", articleId: "art-local" })],
+      notes: [sampleNote({ id: "note-follows", highlightId: "hl-local" })],
+      locations: [
+        sampleLocation({
+          articleId: "art-local",
+          revision: 1,
+          savedAt: "2026-08-15T12:00:00.000Z",
+        }),
+      ],
+    });
+    const preview = await detectImportPreview(bundle);
+    const plan = await resolveImportPlan(bundle, preview, {
+      ...ALL_SKIP,
+      "highlight-id": "keep-both",
+      location: "overwrite",
+    }, true);
+
+    // The plan itself is fully computed…
+    expect(plan.highlightsToWrite).toHaveLength(1);
+    expect(plan.idRewrites.size).toBe(1);
+    expect(plan.locationsToWrite).toHaveLength(1);
+    expect(plan.applyPreferences).toBe(true);
+
+    // …but the stores are byte-for-byte unchanged.
+    const after = {
+      articles: await db.articles.count(),
+      settings: await db.settings.count(),
+      location: await db.location.count(),
+      highlights: await db.highlights.count(),
+      notes: await db.notes.count(),
+    };
+    expect(after).toEqual({
+      articles: 1,
+      settings: 0,
+      location: 1,
+      highlights: 1,
+      notes: 1,
+    });
   });
 });
