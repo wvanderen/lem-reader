@@ -166,8 +166,27 @@ Plans:
   3. Reader can filter the review list (by article, tag, or confidence) and sort it (by date, article, or position).
   4. Ambiguous and orphan annotations surface honestly with a tri-state indicator (never silently hidden), and the reader can edit or delete highlights in place from the panel.
 
-**Plans**: TBD
+**Plans**: 6/6 planned
 **UI hint**: yes
+
+Plans:
+**Wave 1**
+
+- [ ] 10-01-PLAN.md — Pure derivation module (deriveReviewSections + MemoizedArticleText lift-and-export) + unit matrix + Wave-0 e2e sentinels
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 10-02-PLAN.md — Three-view router (#/review + /h/ grammar) + ReviewView surface + LibraryView entry + route-entry e2e
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 10-03-PLAN.md — ArticleView deep-link jump (readiness-gated on-mount effect + replaceState strip) + deep-link e2e
+- [ ] 10-04-PLAN.md — Surface behavior e2e: listing/filter/sort + tri-state + empty states
+- [ ] 10-05-PLAN.md — Curation dialogs (ReviewNoteDialog + DeleteHighlightConfirm) + ReviewView wiring + curate e2e
+
+**Wave 4** *(blocked on Wave 3)*
+
+- [ ] 10-06-PLAN.md — Phase-exit gates: bidirectional loop + a11y/edge route coverage + honest full-suite record (closes RECV-01)
 
 ### Phase 11: PDF Intake
 
@@ -225,7 +244,7 @@ Plans:
 | 7. Ingestion Substrate | v2.0 | 7/7 | Complete   | 2026-08-12 |
 | 8. Markdown Pipeline and Personal Library | v2.0 | 5/5 | Complete    | 2026-08-13 |
 | 9. Versioned Export/Import | v2.0 | 7/7 | Complete    | 2026-08-15 |
-| 10. Annotation Review Panel | v2.0 | 0/TBD | Not started | - |
+| 10. Annotation Review Panel | v2.0 | 0/6 | Not started | - |
 | 11. PDF Intake | v2.0 | 0/TBD | Not started | - |
 | 12. EPUB Intake | v2.0 | 0/TBD | Not started | - |
 | 13. Polish and Acceptance | v2.0 | 0/TBD | Not started | - |
