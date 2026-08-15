@@ -6,14 +6,14 @@ current_phase: 9
 current_phase_name: Versioned Export/Import
 status: executing
 stopped_at: Completed 09-01-PLAN.md
-last_updated: "2026-08-15T17:59:37.267Z"
+last_updated: "2026-08-15T18:08:59.427Z"
 last_activity: 2026-08-15
 last_activity_desc: Phase 9 execution started
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 19
-  completed_plans: 13
+  completed_plans: 14
   percent: 29
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-10)
 ## Current Position
 
 Phase: 9 (Versioned Export/Import) — EXECUTING
-Plan: 2 of 7
+Plan: 3 of 7
 Status: Ready to execute
 Last activity: 2026-08-15 — Phase 9 execution started
 
@@ -111,6 +111,7 @@ Progress: [███░░░░░░░] 29% of v2.0 milestone
 | Phase 08 P04 | 5min | 2 tasks | 6 files |
 | Phase 08 P05 | 45min | 2 tasks | 7 files |
 | Phase 09 P01 | 7 min | 3 tasks | 17 files |
+| Phase 9 P09-02 | 7 min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -234,6 +235,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: [Phase 09-01] playwright.config.ts untouched — download smoke proved acceptDownloads capturable under Playwright 1.61.1 defaults (A1 verified; Pitfall 9 fallback unneeded).
 - [Phase ?]: [Phase 09-01] sha256Hex typed Uint8Array<ArrayBuffer> — BufferSource requires ArrayBuffer backing under TS 7; the server/safeFetch.ts precedent compiles only because server/ is outside tsconfig scope.
 - [Phase ?]: [Phase 09-01] PORT-01/PORT-02 stay unchecked until the plans proving end-to-end behavior — 09-01 ships foundations only (mirrors the 04-02 PAGE-01 / 06-01 ACPT-03 split precedent); requirements-completed is [].
+- [Phase 9]: 09-02: escapeMarkdownLine escapes only the PERIOD of a leading ordered-list marker (1974\.) — CommonMark backslash escapes apply only before ASCII punctuation; escaping a digit leaks a literal backslash. Leading symbol runs (#-+*>) escape per-char.
+- [Phase 9]: 09-02: HighlightSection exported alongside the six required markdown.ts symbols; loadAllHighlights/loadAllNotes mirror loadAllLocations (plain-array whole-library reads, db.ts byte-unchanged — Pitfall 9 held). PORT-01/PORT-03 stay unchecked until the end-to-end export plans (09-01 split precedent).
 
 ### Pending Todos
 
@@ -263,7 +266,7 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-15T17:58:55.775Z
+Last session: 2026-08-15T18:08:48.634Z
 Stopped at: Completed 09-01-PLAN.md
 Resume file: None
 
