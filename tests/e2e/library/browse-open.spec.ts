@@ -181,8 +181,18 @@ test.describe("SC#1 + LIB-01 + LIB-05 — browse + open + source badge", () => {
       page.getByRole("heading", { level: 1, name: "Saved articles" }),
     ).toBeVisible();
 
-    const baselineRows = await page.locator(".library-list > li").count();
-    expect(baselineRows, "baseline fixture count").toBe(fixtures.length);
+    // Wait for the async library load before snapshotting the baseline. A
+    // one-shot .count() here raced LibraryView's load effect (listArticles
+    // resolves through the composite repository + Dexie after the static
+    // h1 paints) and observed 0 rows under full-suite parallel load on
+    // webkit (09-07 honest-gate run). The auto-retrying toHaveCount mirrors
+    // the sibling LIB-01 test's discipline above. Semantics unchanged:
+    // the baseline is exactly one row per bundled fixture.
+    await expect(
+      page.locator(".library-list > li"),
+      `baseline: expected ${fixtures.length} library rows (one per fixture)`,
+    ).toHaveCount(fixtures.length);
+    const baselineRows = fixtures.length;
 
     // Ingest a paste-HTML article through the real Vite Node middleware.
     // This exercises the full pipeline (extractAndNormalize → htmlToBlocks

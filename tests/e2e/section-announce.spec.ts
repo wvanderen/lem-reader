@@ -42,6 +42,14 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.describe("A11Y-08 section-change announce", () => {
+  // 09-07 honest-gate run: under full-suite parallel load a webkit context's
+  // beforeEach page.goto exceeded the default 30s test budget (first module
+  // fetch from the single Vite dev server, starved by sibling workers).
+  // Assertions unchanged — the budget doubles so load contention on a busy
+  // machine cannot flake the spec (calibration.harness + perf.harness set
+  // the same pattern at 300s).
+  test.setTimeout(60_000);
+
   test("the polite live region announces 'Section: {heading}.' after a scroll past an h2", async ({
     page,
   }) => {
