@@ -35,6 +35,8 @@
 import { zipSync, unzipSync, strToU8, strFromU8 } from "fflate";
 import { fixtures } from "../fixtures";
 import { dexieLibrarySource } from "../ingestion/LibrarySource";
+import { db } from "../persistence/db";
+import type { LocationRecordRow } from "../persistence/db";
 import { loadAllHighlights } from "../persistence/highlightsStore";
 import { loadAllNotes } from "../persistence/notesStore";
 import { loadAllLocations } from "../persistence/locationStore";
@@ -45,6 +47,7 @@ import type { ExportBundle } from "./bundle";
 import { computeManifest } from "./manifest";
 import type { Manifest } from "./manifest";
 import { isSafeEntryName } from "./zipSlip";
+import type { ResolvedImportPlan } from "./conflicts";
 
 // ── Export side (PORT-01) ────────────────────────────────────────────────────
 
@@ -253,4 +256,88 @@ export async function validateBundle(
   }
 
   return { ok: true, bundle: parsed.data, manifest: recomputed };
+}
+
+// ── Import apply side (PORT-02, atomic) ──────────────────────────────────────
+
+/** The settings-store key of the composite reader-prefs record — the single
+ * value applyImport ever writes to db.settings (mirrors settingsStore.ts's
+ * KEY and conflicts.ts's READER_PREFS_KEY). */
+const READER_PREFS_KEY = "reader-prefs";
+
+/**
+ * applyImport — apply the FULLY-COMPUTED ResolvedImportPlan (09-03) in ONE
+ * Dexie transaction across every touched store. Atomicity (Pitfall 11 #3 /
+ * T-9-11): any throw — from a put, a Dexie creating hook, or anything else
+ * inside the closure — rolls back EVERY store this transaction locked; no
+ * partial import can survive. The injected-failure rollback test in
+ * tests/unit/portability/atomic-import.test.ts is the proof.
+ *
+ * ⚠️ THE RULE (09-RESEARCH Pitfall 1 / T-9-15): everything async-non-Dexie
+ * completed BEFORE this function is called. The plan is plain data — every
+ * per-record decision, keep-both id mint, and note-FK rewrite happened in
+ * resolveImportPlan. The closure below contains ONLY awaited db.*.put
+ * calls: NO crypto.subtle, NO Zod, NO setTimeout, NO network, NO
+ * non-Dexie await — Dexie silently aborts transactions whose closure
+ * awaits foreign microtasks (code-review gate: read the closure before
+ * touching it).
+ *
+ * Store set: db.settings joins ONLY when plan.applyPreferences is true —
+ * the same conditional-table shape as the DexieLibrarySource.remove
+ * cascade precedent (LibrarySource.ts L108-151), extended with db.settings.
+ * Location rows are put with the LocationRecordRow shape — Dexie derives
+ * the compound [articleId+revision] primary key from the row's fields;
+ * there is no literal bracketed field name anywhere.
+ */
+export async function applyImport(plan: ResolvedImportPlan): Promise<void> {
+  // The puts-only closure, defined once. It is passed to whichever explicit
+  // db.transaction overload matches the plan's touched-store set: db.settings
+  // joins ONLY when plan.applyPreferences is true (the
+  // DexieLibrarySource.remove cascade precedent, extended with db.settings).
+  const applyPuts = async (): Promise<void> => {
+    for (const article of plan.articlesToWrite) {
+      await db.articles.put(article);
+    }
+    for (const highlight of plan.highlightsToWrite) {
+      await db.highlights.put(highlight);
+    }
+    for (const note of plan.notesToWrite) {
+      await db.notes.put(note);
+    }
+    for (const location of plan.locationsToWrite) {
+      // LocationRecordRow shape — Dexie derives [articleId+revision].
+      const row: LocationRecordRow = {
+        schemaVersion: location.schemaVersion,
+        articleId: location.articleId,
+        revision: location.revision,
+        graphemeOffset: location.graphemeOffset,
+        savedAt: location.savedAt,
+      };
+      await db.location.put(row);
+    }
+    if (plan.applyPreferences && plan.preferences !== undefined) {
+      await db.settings.put({ key: READER_PREFS_KEY, value: plan.preferences });
+    }
+  };
+
+  if (plan.applyPreferences) {
+    await db.transaction(
+      "rw",
+      db.articles,
+      db.highlights,
+      db.notes,
+      db.location,
+      db.settings,
+      applyPuts,
+    );
+  } else {
+    await db.transaction(
+      "rw",
+      db.articles,
+      db.highlights,
+      db.notes,
+      db.location,
+      applyPuts,
+    );
+  }
 }

@@ -247,11 +247,12 @@ describe("validateBundle — refusal kinds (09-04 Task 2)", () => {
     const { bundle, manifest } = await validRawBundle();
     // schemaVersion 2 AND other damage (articles not an array; fixtureIds
     // dropped entirely) — the calm newer-version refusal must win.
-    const { fixtureIds: _dropped, ...damaged } = {
+    const damaged: Record<string, unknown> = {
       ...bundle,
       schemaVersion: 2,
       articles: "not-an-array",
     };
+    delete damaged.fixtureIds;
     const file = zipFileOf({
       "bundle.json": bundleJsonOf(damaged),
       "manifest.json": bundleJsonOf(manifest),
@@ -339,7 +340,7 @@ describe("validateBundle — refusal kinds (09-04 Task 2)", () => {
       "bundle.json",
       200_000_001,
     );
-    const result = await validateBundle(new File([bombed], "x.zip"));
+    const result = await validateBundle(new File([new Uint8Array(bombed)], "x.zip"));
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.refusal.kind).toBe("missing-entry");
@@ -381,7 +382,12 @@ describe("validateBundle — round trip (09-04 Task 2)", () => {
     await db.settings.put({ key: "reader-prefs", value: samplePrefs() });
 
     const bytes = await buildBundleBytes();
-    const result = await validateBundle(new File([bytes], "x.zip"));
+    // new Uint8Array(bytes) re-backs the view on a fresh ArrayBuffer —
+    // BlobPart requires ArrayBuffer backing under TS 7 (the 09-01
+    // sha256Hex typing precedent).
+    const result = await validateBundle(
+      new File([new Uint8Array(bytes)], "x.zip"),
+    );
 
     expect(result.ok).toBe(true);
     if (result.ok) {

@@ -211,9 +211,12 @@ const ALL_SKIP: Overrides = {
   location: "skip",
 };
 
-// Dexie creating hooks persist across tests — deregister in afterEach so the
-// injected failure cannot bleed into sibling specs.
-let unregisterCreatingHook: (() => void) | null = null;
+// Dexie creating hooks persist across tests — the SAME function reference is
+// registered via hook("creating", fn) and deregistered via
+// hook("creating").unsubscribe(fn) in afterEach (cross-test bleed guard).
+let injectedCreatingHook:
+  | ((primKey: unknown, obj: { id?: string }) => void)
+  | null = null;
 
 // ── Happy path: new + keep-both-rewritten records all land ───────────────────
 
@@ -335,10 +338,14 @@ describe("applyImport — atomicity / rollback (09-04 Task 3)", () => {
     await wipeDatabase();
   });
 
-  afterEach(() => {
-    // Hooks persist — always deregister (cross-test bleed guard).
-    unregisterCreatingHook?.();
-    unregisterCreatingHook = null;
+  afterEach(async () => {
+    // Hooks persist — always deregister via the same fn reference
+    // (cross-test bleed guard).
+    if (injectedCreatingHook !== null) {
+      const { db } = await loadDb();
+      db.notes.hook("creating").unsubscribe(injectedCreatingHook);
+      injectedCreatingHook = null;
+    }
   });
 
   it("an injected mid-transaction failure rolls back EVERY store to its pre-apply counts", async () => {
@@ -398,14 +405,16 @@ describe("applyImport — atomicity / rollback (09-04 Task 3)", () => {
     // Dexie creating hooks fire INSIDE the transaction; a throw rejects the
     // create, propagates out of the closure, and rolls the WHOLE
     // transaction back — every put that already happened is undone.
-    unregisterCreatingHook = db.notes.hook(
-      "creating",
-      (_key: unknown, obj: { id?: string }) => {
-        if (obj?.id === SENTINEL_NOTE_ID) {
-          throw new Error("injected mid-transaction failure");
-        }
-      },
-    );
+    const creatingHook = (
+      _primKey: unknown,
+      obj: { id?: string },
+    ): void => {
+      if (obj?.id === SENTINEL_NOTE_ID) {
+        throw new Error("injected mid-transaction failure");
+      }
+    };
+    injectedCreatingHook = creatingHook;
+    db.notes.hook("creating", creatingHook);
 
     await expect(applyImport(plan)).rejects.toThrow(
       "injected mid-transaction failure",
