@@ -4,17 +4,17 @@ milestone: v2.0
 milestone_name: Personal Library
 current_phase: 9
 current_phase_name: Versioned Export/Import
-status: executing
-stopped_at: Completed 09-06-PLAN.md
-last_updated: "2026-08-15T19:27:47.827Z"
+status: verifying
+stopped_at: Completed 09-07-PLAN.md
+last_updated: "2026-08-15T20:05:48.038Z"
 last_activity: 2026-08-15
 last_activity_desc: Phase 9 execution started
 progress:
   total_phases: 7
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 19
-  completed_plans: 18
-  percent: 29
+  completed_plans: 19
+  percent: 43
 ---
 
 # Project State
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-08-10)
 
 Phase: 9 (Versioned Export/Import) — EXECUTING
 Plan: 7 of 7
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-08-15 — Phase 9 execution started
 
 Progress: [███░░░░░░░] 29% of v2.0 milestone
@@ -116,6 +116,7 @@ Progress: [███░░░░░░░] 29% of v2.0 milestone
 | Phase 9 P04 | 13 min | 3 tasks | 4 files |
 | Phase 9 P09-05 | 14 min | 3 tasks | 6 files |
 | Phase 9 P09-06 | 27 min | 3 tasks | 11 files |
+| Phase 09 P07 | 34min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -252,6 +253,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: [Phase 9 09-06]: Two browser contexts are the machine A/B surrogate (isolated IndexedDB per profile); the SC#4 round-trip gate runs export→transfer→import through the real UI with offset byte-equality at the raw IndexedDB row level + a visible mark for the fixture-backed highlight
 - [Phase ?]: [Phase 9 09-06]: Rule 1+2 fixes the gates surfaced — Esc-originated close routes cleanup through onCancel (open-prop mirror; every close path resets the import state machine + file input), and library-wide export renders vanished-article highlights in a citation-less 'Highlights without an article' section instead of silently dropping them (D9-09)
 - [Phase ?]: [Phase 9 09-06]: Stacked-modal sequential focus nav diverges by engine (chromium cycles, firefox retains last control, webkit parks on inert body) — universal trap safety + operability asserted on all engines, wrap cycle chromium-only; structural fixes reverse 09-05 decisions so surfaced in deferred-items.md for 09-07/human choice
+- [Phase 09-07]: Phase 09-07: The 24-cell pre-existing deficit (grown to 39) was a GEOMETRY regression, not Vite 8/Rolldown measurement timing - the Phase 8-04 TagEntry + Phase 9-05 Export button grew the pinned paginated article's uncapped header row past the page viewport (67px at 360x640 -> bogus oversize fallback; 0px at <=320x420 -> pagination never ran). Fixed in src/app.css: header row capped at minmax(auto,25%) + scrollable header (page always keeps >=75%); pagination specs byte-unchanged (strengthen-only trivially satisfied).
+- [Phase 09-07]: Phase 09-07: Honest full-suite gate GREEN - npm run test exit 0 in one invocation (unit 851/0/7 + e2e 823/0/6 across chromium/firefox/webkit + throttled perf; the 13 skips are the documented intentional set). First run exit 1 recorded honestly (2 webkit load races, fixed in 9459da1). 09-07-OUTPUT.md is the permanent record; Phase 08 deferred debt closed. dexie-migration cells never reproduced (aria-labelledby row shape was never stale - zero changes). Stacked-modal focus item stays OPEN for human product decision.
 
 ### Pending Todos
 
@@ -264,7 +267,7 @@ None yet.
 - [Phase 4 → deferred → folded into 04-06]: persistence.spec.ts STATE-01 location-restore tests fail pre-existing since 04-02/04-03 (paginated default + paginated-surface geometry prevents window scroll). Now tracked under Plan 04-06 Task 5 (test-only fix: seed readingMode "scrolling").
 - [Phase 5]: Offset units, grapheme handling, overlap semantics, and anchor confidence thresholds need explicit decisions.
 - [Phase 4 → RESOLVED by 04-07/04-08/04-09/04-10/04-11]: gsd-verifier caught 76 hidden e2e failures misreported as "269 passed / 0 failed" across every Phase 4 SUMMARY + STATE + ROADMAP + REQUIREMENTS + the Plan 04-05 Task 3 gate-approval commit. Reality was 76 failed / 269 passed. Gap-closure plans 04-07 (PAGE-03b overflow guard), 04-08 (PAGE-06/07 always-mounted ArticleBody), 04-09 (PAGE-01/02 M-toggle + keyboard/chevron), 04-10 (PAGE-09 banner race) closed all 6 structural gaps. Plan 04-11 re-ran the FULL `npm run test` suite end-to-end: 753 passed / 0 failed / 0 skipped, exit 0. 04-VERIFICATION.md upgraded gaps_found (3/7) → verified (7/7). The Plan 04-05 Task 3 human-verify gate now has a genuinely-green automated prerequisite.
-- Phase 08 honest-suite gate RED: 24 pre-existing e2e failures in unrelated specs (18 pagination Phase 4 PAGE-03a/b/c + PAGE-04, 3 capture-highlight Phase 5 ANNO-01, 3 dexie-migration Phase 8-02 v3->v4). Plan 08-05 scope itself (6 library specs, 243 cells across chromium+firefox+webkit) is fully green. Pre-existing failures are out of scope per executor scope-boundary rule; logged to .planning/phases/08-markdown-pipeline-and-personal-library/deferred-items.md. A gap-closure plan is required to bring the full npm run test exit code to 0.
+- Phase 08 honest-suite gate RED → RESOLVED by Phase 9 Plan 09-07 (2026-08-15): 24 pre-existing e2e failures in unrelated specs (18 pagination Phase 4 PAGE-03a/b/c + PAGE-04, 3 capture-highlight Phase 5 ANNO-01, 3 dexie-migration Phase 8-02 v3->v4; the pagination deficit had silently grown to 33 cells). Root cause was GEOMETRY, not the suspected Vite 8/Rolldown timing: the Phase 8-04 TagEntry + 9-05 Export button grew the pinned paginated article's uncapped header row past the page viewport. One src/app.css fix (header row capped minmax(auto,25%) + scrollable header) closed all 39 affected cells; pagination specs byte-unchanged. FULL npm run test now exits 0 (1674 passed / 0 failed / 13 intentional skips) — 09-07-OUTPUT.md is the permanent record; deferred-items.md carries the closure note.
 
 ## Deferred Items
 
@@ -281,8 +284,8 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-15T19:27:47.820Z
-Stopped at: Completed 09-06-PLAN.md
+Last session: 2026-08-15T20:05:48.030Z
+Stopped at: Completed 09-07-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

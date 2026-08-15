@@ -31,7 +31,7 @@ Seven phases that add one stateless ingestion backend and one new data domain (u
 
 - [x] **Phase 7: Ingestion Substrate** - Stateless backend safely normalizes URL-fetched and pasted HTML into canonical articles with SSRF + XSS defense and honest failure (completed 2026-08-12)
 - [x] **Phase 8: Markdown Pipeline and Personal Library** - Lowest-risk Markdown intake plus the personal library that replaces the fixture list (completed 2026-08-13)
-- [ ] **Phase 9: Versioned Export/Import** - Whole-library bundles and highlights-only export as the cross-device story in lieu of accounts
+- [x] **Phase 9: Versioned Export/Import** - Whole-library bundles and highlights-only export as the cross-device story in lieu of accounts (completed 2026-08-15)
 - [ ] **Phase 10: Annotation Review Panel** - Dedicated surface to review, filter, and curate all highlights and notes across the library
 - [ ] **Phase 11: PDF Intake** - PDF text extraction with honest failure for scanned and multi-column documents
 - [ ] **Phase 12: EPUB Intake** - Multi-chapter EPUB books surfaced as per-chapter articles under a book grouping
@@ -125,7 +125,7 @@ Plans:
   3. Reader can export just their highlights as a Markdown document (with template variables) for use in external tools like Obsidian or Notion.
   4. Round-trip integrity holds: canonical-text offsets survive export and import (page numbers never appear in the bundle), and a bundle exported on one machine re-imports on another with every highlight re-resolving to `confident` or surfacing honestly as `ambiguous`/`orphan`.
 
-**Plans**: 6/7 plans executed
+**Plans**: 7/7 plans complete
 **UI hint**: yes
 
 Plans:
@@ -152,7 +152,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 09-07-PLAN.md — Gap closure: the 24 pre-existing e2e failures (Phase 08 deferred-items) + honest full-suite gate (npm run test exit 0, 09-07-OUTPUT.md record)
+- [x] 09-07-PLAN.md — Gap closure: the 24 pre-existing e2e failures (Phase 08 deferred-items) + honest full-suite gate (npm run test exit 0, 09-07-OUTPUT.md record)
 
 ### Phase 10: Annotation Review Panel
 
@@ -224,7 +224,7 @@ Plans:
 | 6. Prototype Acceptance | v1.0 | 6/6 | Complete | 2026-08-10 |
 | 7. Ingestion Substrate | v2.0 | 7/7 | Complete   | 2026-08-12 |
 | 8. Markdown Pipeline and Personal Library | v2.0 | 5/5 | Complete    | 2026-08-13 |
-| 9. Versioned Export/Import | v2.0 | 6/7 | In Progress|  |
+| 9. Versioned Export/Import | v2.0 | 7/7 | Complete   | 2026-08-15 |
 | 10. Annotation Review Panel | v2.0 | 0/TBD | Not started | - |
 | 11. PDF Intake | v2.0 | 0/TBD | Not started | - |
 | 12. EPUB Intake | v2.0 | 0/TBD | Not started | - |
