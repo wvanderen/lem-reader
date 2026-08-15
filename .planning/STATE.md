@@ -5,15 +5,15 @@ milestone_name: Personal Library
 current_phase: 9
 current_phase_name: Versioned Export/Import
 status: executing
-stopped_at: Completed 09-05-PLAN.md
-last_updated: "2026-08-15T18:57:10.248Z"
+stopped_at: Completed 09-06-PLAN.md
+last_updated: "2026-08-15T19:27:47.827Z"
 last_activity: 2026-08-15
 last_activity_desc: Phase 9 execution started
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 19
-  completed_plans: 17
+  completed_plans: 18
   percent: 29
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-10)
 ## Current Position
 
 Phase: 9 (Versioned Export/Import) — EXECUTING
-Plan: 6 of 7
+Plan: 7 of 7
 Status: Ready to execute
 Last activity: 2026-08-15 — Phase 9 execution started
 
@@ -115,6 +115,7 @@ Progress: [███░░░░░░░] 29% of v2.0 milestone
 | Phase 9 P03 | 10 min | 2 tasks | 2 files |
 | Phase 9 P04 | 13 min | 3 tasks | 4 files |
 | Phase 9 P09-05 | 14 min | 3 tasks | 6 files |
+| Phase 9 P09-06 | 27 min | 3 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -248,6 +249,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 9]: 09-04: applyImport uses two explicit-arity db.transaction calls sharing one puts-only closure (tsc rejects union-of-tuples spread); db.settings joins only under plan.applyPreferences; rollback proven via injected Dexie creating-hook failure — Identical runtime semantics; the table-set gating stays literal and the closure stays puts-only (Pitfall 1)
 - [Phase ?]: 09-05: ImportPreviewDialog is a structural RemoveConfirm clone (D9-11/Pitfall 8) — data-initial-focus on Cancel import; onProceed fires ONLY from the Import button onClick; keep-both only for the id kinds; every override defaults to Skip — Pitfall 8 isolation forbids a shared ConfirmDialog; applyImport keeps a single grep-verifiable call site in the SettingsPanel Proceed handler (T-9-16)
 - [Phase ?]: 09-05: buildBundleBytes returns Uint8Array<ArrayBuffer> (TS 7 BufferSource; 09-01 sha256Hex precedent); import file-input value resets on refusals AND Proceed/Cancel so same-file retry never no-ops — Type-honest service boundary instead of a UI cast; refusal retry without reset would silently ignore re-picking the same file
+- [Phase ?]: [Phase 9 09-06]: Two browser contexts are the machine A/B surrogate (isolated IndexedDB per profile); the SC#4 round-trip gate runs export→transfer→import through the real UI with offset byte-equality at the raw IndexedDB row level + a visible mark for the fixture-backed highlight
+- [Phase ?]: [Phase 9 09-06]: Rule 1+2 fixes the gates surfaced — Esc-originated close routes cleanup through onCancel (open-prop mirror; every close path resets the import state machine + file input), and library-wide export renders vanished-article highlights in a citation-less 'Highlights without an article' section instead of silently dropping them (D9-09)
+- [Phase ?]: [Phase 9 09-06]: Stacked-modal sequential focus nav diverges by engine (chromium cycles, firefox retains last control, webkit parks on inert body) — universal trap safety + operability asserted on all engines, wrap cycle chromium-only; structural fixes reverse 09-05 decisions so surfaced in deferred-items.md for 09-07/human choice
 
 ### Pending Todos
 
@@ -277,8 +281,8 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-15T18:57:10.241Z
-Stopped at: Completed 09-05-PLAN.md
+Last session: 2026-08-15T19:27:47.820Z
+Stopped at: Completed 09-06-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
