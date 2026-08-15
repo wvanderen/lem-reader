@@ -5,15 +5,15 @@ milestone_name: Personal Library
 current_phase: 9
 current_phase_name: Versioned Export/Import
 status: executing
-stopped_at: Completed 09-01-PLAN.md
-last_updated: "2026-08-15T18:22:13.322Z"
+stopped_at: Completed 09-04-PLAN.md
+last_updated: "2026-08-15T18:39:38.585Z"
 last_activity: 2026-08-15
 last_activity_desc: Phase 9 execution started
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 19
-  completed_plans: 15
+  completed_plans: 16
   percent: 29
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-10)
 ## Current Position
 
 Phase: 9 (Versioned Export/Import) — EXECUTING
-Plan: 4 of 7
+Plan: 5 of 7
 Status: Ready to execute
 Last activity: 2026-08-15 — Phase 9 execution started
 
@@ -113,6 +113,7 @@ Progress: [███░░░░░░░] 29% of v2.0 milestone
 | Phase 09 P01 | 7 min | 3 tasks | 17 files |
 | Phase 9 P09-02 | 7 min | 2 tasks | 5 files |
 | Phase 9 P03 | 10 min | 2 tasks | 2 files |
+| Phase 9 P04 | 13 min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -241,6 +242,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: [Phase 9] 09-03: applyPreferencesDefault reads reader-prefs row PRESENCE directly (db.settings.get) — loadSettings returns ok:true+DEFAULT_SETTINGS on first run identically to ok:true+parsed for a persisted row, so the plan's 'ok ⇒ row exists' mechanism was unimplementable; behavior contract (D9-12) wins. Test-locked both ways.
 - [Phase ?]: [Phase 9] 09-03: memoized D9-13 re-resolution calls the exported resolveQuoteSelectorInText core with per-article memoized clusters (normalizeText/graphemeClusters once per article id, not per highlight — RESEARCH Pattern 8 mandate); identical semantics to resolveQuoteSelector without per-highlight recompute. REUSE-DO-NOT-FORK held.
 - [Phase ?]: [Phase 9] 09-03: identical duplicate article (same id+revision+hash — re-import-on-same-device, absent from the D9-14 table) = calm no-op (skipped, never a conflict, not added). id-kind overwrite = same-id upsert. resolveImportPlan re-reads local PK sets (async variant); preview kept for the 09-05 call shape but ignored for decisions. PORT-02 stays unchecked until 09-04/09-05/09-06 prove end-to-end import.
+- [Phase 9]: 09-04: validateBundle never throws — unparseable bundle.json routes to invalid, unusable manifest.json routes to corrupted with all five blocks (six-kind contract + never-throw-to-reader hold on paths the RESEARCH example left unguarded) — Keeps every hostile-input class a calm typed refusal; no throw path reachable from file content
+- [Phase 9]: 09-04: Bomb-cap semantics — fflate filter skips over-cap entries BEFORE inflation; capped REQUIRED entry surfaces as missing-entry, capped extra entries are inert; test crafts a >200MB DECLARED originalSize by patching the zip central-directory size field (the exact metadata the filter reads) — Proves the no-allocation refusal without materializing 200MB in the test process
+- [Phase 9]: 09-04: applyImport uses two explicit-arity db.transaction calls sharing one puts-only closure (tsc rejects union-of-tuples spread); db.settings joins only under plan.applyPreferences; rollback proven via injected Dexie creating-hook failure — Identical runtime semantics; the table-set gating stays literal and the closure stays puts-only (Pitfall 1)
 
 ### Pending Todos
 
@@ -270,8 +274,8 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-15T18:21:40.626Z
-Stopped at: Completed 09-01-PLAN.md
+Last session: 2026-08-15T18:39:38.578Z
+Stopped at: Completed 09-04-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
