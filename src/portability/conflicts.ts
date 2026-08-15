@@ -361,3 +361,173 @@ export async function detectImportPreview(
     applyPreferencesDefault,
   };
 }
+
+// ── resolveImportPlan — bulk per-kind overrides → fully-computed plan ────────
+
+/**
+ * resolveImportPlan — apply the D9-14 bulk per-kind override semantics to the
+ * bundle and return the FULLY-COMPUTED ResolvedImportPlan. Plan 09-04's
+ * applyImport consumes the result inside one Dexie transaction with puts
+ * ONLY — every decision, id mint, and FK rewrite has already happened here,
+ * BEFORE the transaction (RESEARCH Pattern 3: async-non-Dexie work — like
+ * crypto.randomUUID minting — never lives inside the tx closure).
+ *
+ * ZERO WRITES. The only I/O is re-reading the local PK sets through the SAME
+ * loaders detectImportPreview uses (hence async). Determinism note: the
+ * reader's decisions are re-derived from the bundle against the freshly
+ * re-read local state — a mismatch window between the preview the reader saw
+ * and this call (local state changed in between) is acceptable at prototype
+ * scale, and the 09-04 transaction still applies atomically either way.
+ *
+ * Semantics (D9-14 + the plan's behavior block):
+ *   - New records (no local PK match) are ALWAYS written.
+ *   - skip (default): conflicted records are excluded and counted in skipped.
+ *   - article-revision + overwrite: keep-higher-revision (D-06 monotonic) —
+ *     the incoming article is written ONLY when its revision is strictly
+ *     higher; equal-or-lower stays local and counts as skipped.
+ *   - article-content-divergence + overwrite: the incoming article wins
+ *     (same id+revision, content replaced).
+ *   - highlight-id/note-id + keep-both: the incoming record is written under
+ *     a freshly minted crypto.randomUUID() id; idRewrites records old→new;
+ *     every incoming note whose highlightId appears in idRewrites gets its
+ *     highlightId rewritten BEFORE the plan returns (notes follow their
+ *     highlight — Pitfall 7).
+ *   - highlight-id/note-id + overwrite: the incoming record is written under
+ *     its OWN id (a put over the local row — upsert semantics).
+ *   - location + overwrite: last-write-wins by savedAt — the incoming
+ *     location is written only when strictly newer; older incoming stays
+ *     skipped.
+ *   - keep-both on article/location kinds behaves as skip (documented — the
+ *     09-05 dialog offers keep-both only for the id kinds).
+ *   - An incoming article identical to local (same id+revision+hash) is a
+ *     calm no-op: not written, counted as skipped, never a conflict.
+ *   - applyPreferences true ⇒ preferences = bundle.preferences; false ⇒ the
+ *     field is absent (the 09-04 tx then omits db.settings entirely).
+ *
+ * @param bundle The Zod-validated export bundle.
+ * @param _preview The preview the reader saw. NOT re-consumed for decisions —
+ *   every per-record decision is re-derived from `bundle` against freshly
+ *   re-read local PK sets (see the determinism note above). The parameter is
+ *   part of the locked call shape so the dialog (09-05) passes the very
+ *   preview it rendered.
+ * @param overrides One PerKindOverride per conflict kind.
+ * @param applyPreferences The reader's D9-12 "apply imported reading
+ *   preferences?" choice (defaults from applyPreferencesDefault).
+ */
+export async function resolveImportPlan(
+  bundle: ExportBundle,
+  _preview: ImportPreviewData,
+  overrides: Overrides,
+  applyPreferences: boolean,
+): Promise<ResolvedImportPlan> {
+  // Same loaders as detectImportPreview — the write-free re-read.
+  const [localArticles, localHighlights, localNotes, localLocations] =
+    await Promise.all([
+      dexieLibrarySource.list(),
+      loadAllHighlights(),
+      loadAllNotes(),
+      loadAllLocations(),
+    ]);
+
+  const localArticleById = new Map(localArticles.map((a) => [a.id, a]));
+  const localHighlightIds = new Set(localHighlights.map((h) => h.id));
+  const localNoteIds = new Set(localNotes.map((n) => n.id));
+  const localLocationByKey = new Map(
+    localLocations.map((l) => [locationKey(l), l]),
+  );
+
+  const plan: ResolvedImportPlan = {
+    articlesToWrite: [],
+    highlightsToWrite: [],
+    notesToWrite: [],
+    locationsToWrite: [],
+    applyPreferences,
+    idRewrites: new Map<string, string>(),
+    skipped: { articles: 0, highlights: 0, notes: 0, locations: 0 },
+  };
+  if (applyPreferences) {
+    plan.preferences = bundle.preferences;
+  }
+
+  // ── Articles: keep-higher-revision / content overwrite / no-op duplicate ──
+  for (const a of bundle.articles) {
+    const local = localArticleById.get(a.id);
+    if (!local) {
+      plan.articlesToWrite.push(a); // new — always written
+    } else if (a.revision !== local.revision) {
+      // D-06 monotonic: only a STRICTLY higher incoming revision may replace
+      // the local row (an explicit reader choice under Overwrite-all).
+      if (
+        overrides["article-revision"] === "overwrite" &&
+        a.revision > local.revision
+      ) {
+        plan.articlesToWrite.push(a);
+      } else {
+        plan.skipped.articles++; // skip | keep-both(as skip) | lower revision
+      }
+    } else if (
+      a.provenance.originalHtmlHash !== local.provenance.originalHtmlHash
+    ) {
+      if (overrides["article-content-divergence"] === "overwrite") {
+        plan.articlesToWrite.push(a); // incoming wins (content replaced)
+      } else {
+        plan.skipped.articles++;
+      }
+    } else {
+      plan.skipped.articles++; // identical duplicate — calm no-op
+    }
+  }
+
+  // ── Highlights: keep-both mints ids FIRST so notes can follow (Pitfall 7) ──
+  for (const h of bundle.highlights) {
+    if (!localHighlightIds.has(h.id)) {
+      plan.highlightsToWrite.push(h); // new — always written
+    } else if (overrides["highlight-id"] === "keep-both") {
+      const minted = crypto.randomUUID();
+      plan.idRewrites.set(h.id, minted);
+      plan.highlightsToWrite.push({ ...h, id: minted });
+    } else if (overrides["highlight-id"] === "overwrite") {
+      plan.highlightsToWrite.push(h); // same id — a put over the local row
+    } else {
+      plan.skipped.highlights++;
+    }
+  }
+
+  // ── Notes: FK rewrite BEFORE any other decision (notes follow their
+  // highlight), then the note-id conflict policy ──
+  for (const n of bundle.notes) {
+    let note = n;
+    const rewrittenHighlightId = plan.idRewrites.get(n.highlightId);
+    if (rewrittenHighlightId !== undefined) {
+      note = { ...note, highlightId: rewrittenHighlightId };
+    }
+    if (!localNoteIds.has(note.id)) {
+      plan.notesToWrite.push(note); // new — always written (FK already fixed)
+    } else if (overrides["note-id"] === "keep-both") {
+      const minted = crypto.randomUUID();
+      plan.idRewrites.set(note.id, minted);
+      plan.notesToWrite.push({ ...note, id: minted });
+    } else if (overrides["note-id"] === "overwrite") {
+      plan.notesToWrite.push(note); // same id — a put over the local row
+    } else {
+      plan.skipped.notes++;
+    }
+  }
+
+  // ── Locations: last-write-wins by savedAt under overwrite ──
+  for (const l of bundle.locations) {
+    const local = localLocationByKey.get(locationKey(l));
+    if (!local) {
+      plan.locationsToWrite.push(l); // new — always written
+    } else if (
+      overrides["location"] === "overwrite" &&
+      l.savedAt > local.savedAt // strictly newer — LWW (D9-14)
+    ) {
+      plan.locationsToWrite.push(l);
+    } else {
+      plan.skipped.locations++; // skip | keep-both(as skip) | older incoming
+    }
+  }
+
+  return plan;
+}
