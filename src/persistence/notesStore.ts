@@ -56,3 +56,27 @@ export async function saveNote(note: NoteRecord): Promise<void> {
 export async function deleteNote(highlightId: string): Promise<void> {
   await db.notes.where("highlightId").equals(highlightId).delete();
 }
+
+/**
+ * `loadAllNotes` — Load EVERY persisted NoteRecord in a single
+ * `db.notes.toArray()` read (Plan 09-02 — PORT-01 export side; RESEARCH
+ * Pitfall 5: the export service must not N+1 `loadNote` per highlight or
+ * bypass STATE-04 validation with a raw read).
+ *
+ * Mirrors `loadAllLocations` (locationStore.ts L136-147) exactly: whole-store
+ * toArray + per-row `NoteRecordSchema.safeParse()` + silent corrupt-row drop
+ * (STATE-04 says never coerce) + a plain-array return — the whole-library
+ * read contract, symmetric with `loadAllHighlights` in highlightsStore.ts.
+ */
+export async function loadAllNotes(): Promise<NoteRecord[]> {
+  const rows = await db.notes.toArray();
+  const valid: NoteRecord[] = [];
+  for (const row of rows) {
+    const parsed = NoteRecordSchema.safeParse(row);
+    if (parsed.success) {
+      valid.push(parsed.data);
+    }
+    // else: drop the corrupt row silently — STATE-04 says never coerce.
+  }
+  return valid;
+}

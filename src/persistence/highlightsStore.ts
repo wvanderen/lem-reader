@@ -108,3 +108,28 @@ export async function deleteHighlight(highlightId: string): Promise<void> {
     await db.notes.where("highlightId").equals(highlightId).delete();
   });
 }
+
+/**
+ * `loadAllHighlights` — Load EVERY persisted HighlightRecord in a single
+ * `db.highlights.toArray()` read (Plan 09-02 — PORT-01 export side; RESEARCH
+ * Pitfall 5: the export service must not N+1 the per-article loader above or
+ * bypass STATE-04 validation with a raw read).
+ *
+ * Mirrors `loadAllLocations` (locationStore.ts L136-147) exactly: whole-store
+ * toArray + per-row `HighlightRecordSchema.safeParse()` + silent corrupt-row
+ * drop (STATE-04 says never coerce — one bad row must not block the reader's
+ * export) + a plain-array return. This is the whole-library read contract —
+ * deliberately NOT the per-article `HighlightsLoadResult` union.
+ */
+export async function loadAllHighlights(): Promise<HighlightRecord[]> {
+  const rows = await db.highlights.toArray();
+  const valid: HighlightRecord[] = [];
+  for (const row of rows) {
+    const parsed = HighlightRecordSchema.safeParse(row);
+    if (parsed.success) {
+      valid.push(parsed.data);
+    }
+    // else: drop the corrupt row silently — STATE-04 says never coerce.
+  }
+  return valid;
+}
