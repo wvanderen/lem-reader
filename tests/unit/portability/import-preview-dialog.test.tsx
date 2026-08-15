@@ -20,24 +20,17 @@ import { render, screen, fireEvent, act } from "@testing-library/react";
 // behavior. Stub the two methods at the prototype level so the dialog sync
 // effect exercises its real code path (mirrors SettingsPanel.test.tsx).
 beforeEach(() => {
-  HTMLDialogElement.prototype.showModal = vi.fn(function (
-    this: HTMLDialogElement,
-  ) {
+  HTMLDialogElement.prototype.showModal = vi.fn(function (this: HTMLDialogElement) {
     this.open = true;
   });
-  HTMLDialogElement.prototype.close = vi.fn(function (
-    this: HTMLDialogElement,
-  ) {
+  HTMLDialogElement.prototype.close = vi.fn(function (this: HTMLDialogElement) {
     this.open = false;
     this.dispatchEvent(new Event("close"));
   });
 });
 
 import { ImportPreviewDialog } from "../../../src/reader/ImportPreviewDialog";
-import type {
-  ImportPreviewData,
-  Overrides,
-} from "../../../src/portability/conflicts";
+import type { ImportPreviewData, Overrides } from "../../../src/portability/conflicts";
 
 /** A synthetic preview with every conflict kind present so the whole
  * grouped list renders, including the id-kind three-option selects. */
@@ -75,8 +68,7 @@ function renderDialog(overrides?: {
   preview?: ImportPreviewData;
   onProceed?: (o: Overrides, applyPreferences: boolean) => void;
 }) {
-  const onProceed =
-    overrides?.onProceed ?? vi.fn().mockResolvedValue(undefined);
+  const onProceed = overrides?.onProceed ?? vi.fn().mockResolvedValue(undefined);
   render(
     <ImportPreviewDialog
       open={true}
@@ -105,12 +97,8 @@ describe("ImportPreviewDialog — preview copy + override plumbing (D9-11)", () 
     expect(screen.getByText(/1 conflicting article with a different version/)).toBeTruthy();
     expect(screen.getByText(/2 conflicting highlights/)).toBeTruthy();
     expect(screen.getByText(/1 highlight will import as ambiguous/)).toBeTruthy();
-    expect(
-      screen.getByText(/1 highlight anchor to bundled sample articles/),
-    ).toBeTruthy();
-    expect(
-      screen.getByLabelText("Apply imported reading preferences"),
-    ).toBeTruthy();
+    expect(screen.getByText(/1 highlight anchor to bundled sample articles/)).toBeTruthy();
+    expect(screen.getByLabelText("Apply imported reading preferences")).toBeTruthy();
   });
 
   it("carries [data-initial-focus] on Cancel import (Pitfall 8) and renders the Import button", () => {
@@ -127,25 +115,23 @@ describe("ImportPreviewDialog — preview copy + override plumbing (D9-11)", () 
       "Import choice for articles with a different version",
     ) as HTMLSelectElement;
     expect(articleSelect.value).toBe("skip");
-    expect(
-      Array.from(articleSelect.options).map((o) => o.value),
-    ).toEqual(["skip", "overwrite"]);
+    expect(Array.from(articleSelect.options).map((o) => o.value)).toEqual(["skip", "overwrite"]);
 
     const highlightSelect = screen.getByLabelText(
       "Import choice for highlights",
     ) as HTMLSelectElement;
     expect(highlightSelect.value).toBe("skip");
-    expect(
-      Array.from(highlightSelect.options).map((o) => o.value),
-    ).toEqual(["skip", "overwrite", "keep-both"]);
+    expect(Array.from(highlightSelect.options).map((o) => o.value)).toEqual([
+      "skip",
+      "overwrite",
+      "keep-both",
+    ]);
   });
 
   it("submitting after flipping highlight-id to Keep both calls onProceed with keep-both there and skip elsewhere", () => {
     const onProceed = vi.fn().mockResolvedValue(undefined);
     renderDialog({ onProceed });
-    const highlightSelect = screen.getByLabelText(
-      "Import choice for highlights",
-    );
+    const highlightSelect = screen.getByLabelText("Import choice for highlights");
     act(() => {
       fireEvent.change(highlightSelect, { target: { value: "keep-both" } });
     });
@@ -153,10 +139,7 @@ describe("ImportPreviewDialog — preview copy + override plumbing (D9-11)", () 
       fireEvent.click(screen.getByRole("button", { name: "Import" }));
     });
     expect(onProceed).toHaveBeenCalledTimes(1);
-    const [overrides, applyPreferences] = onProceed.mock.calls[0] as [
-      Overrides,
-      boolean,
-    ];
+    const [overrides, applyPreferences] = onProceed.mock.calls[0] as [Overrides, boolean];
     expect(overrides).toEqual({
       ...DEFAULTS,
       "highlight-id": "keep-both",
@@ -168,8 +151,7 @@ describe("ImportPreviewDialog — preview copy + override plumbing (D9-11)", () 
   it("preferences checkbox initial state follows applyPreferencesDefault (D9-12)", () => {
     renderDialog({ preview: samplePreview(true) });
     expect(
-      (screen.getByLabelText("Apply imported reading preferences") as HTMLInputElement)
-        .checked,
+      (screen.getByLabelText("Apply imported reading preferences") as HTMLInputElement).checked,
     ).toBe(true);
   });
 });
