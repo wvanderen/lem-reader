@@ -22,11 +22,7 @@
 // REUSE-DO-NOT-FORK. Any divergence would shift every anchor.
 import { resolveQuoteSelector } from "../content/normalizeText";
 import type { CanonicalArticle } from "../content/types";
-import type {
-  HighlightRecord,
-  LocationRecord,
-  NoteRecord,
-} from "../content/schema";
+import type { HighlightRecord, LocationRecord, NoteRecord } from "../content/schema";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -105,9 +101,7 @@ export function collectHighlightEntries(
   notes: NoteRecord[],
 ): HighlightEntry[] {
   const articleById = new Map(articles.map((a) => [a.id, a] as const));
-  const noteByHighlightId = new Map(
-    notes.map((n) => [n.highlightId, n] as const),
-  );
+  const noteByHighlightId = new Map(notes.map((n) => [n.highlightId, n] as const));
   const entries: HighlightEntry[] = [];
   for (const highlight of highlights) {
     const note = noteByHighlightId.get(highlight.id);
@@ -116,15 +110,8 @@ export function collectHighlightEntries(
     if (!article) {
       status = "orphan";
     } else {
-      const resolved = resolveQuoteSelector(
-        article,
-        highlight.quote,
-        highlight.position,
-      );
-      status =
-        resolved === "ambiguous" || resolved === "orphan"
-          ? resolved
-          : "confident";
+      const resolved = resolveQuoteSelector(article, highlight.quote, highlight.position);
+      status = resolved === "ambiguous" || resolved === "orphan" ? resolved : "confident";
     }
     entries.push(note ? { highlight, note, status } : { highlight, status });
   }
@@ -137,6 +124,9 @@ export function collectHighlightEntries(
 const APPROX_MARKER = "*[approx]* ";
 /** Orphan marker prefixed to an orphan entry's quote line (D9-09). */
 const ORPHAN_MARKER = "*[orphan]* ";
+/** Section heading for the D9-09 never-drop tail of the combined export:
+ * entries whose article no longer exists in the export's article set. */
+const UNMATCHED_SECTION_HEADING = "Highlights without an article";
 
 function markerFor(status: HighlightEntry["status"]): string {
   if (status === "ambiguous") return APPROX_MARKER;
@@ -151,18 +141,17 @@ function citationLine(article: CanonicalArticle): string {
   const core = author
     ? `${author}, *${article.provenance.title}*`
     : `*${article.provenance.title}*`;
-  const source = article.provenance.sourceUrl
-    ? ` ([source](${article.provenance.sourceUrl}))`
-    : "";
+  const source = article.provenance.sourceUrl ? ` ([source](${article.provenance.sourceUrl}))` : "";
   return `> — ${core}${source}`;
 }
 
-/** One entry's block: quote line, citation line, optional Note line. */
-function blockLines(article: CanonicalArticle, e: HighlightEntry): string[] {
-  const lines = [
-    `> ${markerFor(e.status)}${escapeMarkdownLine(e.highlight.quote.exact)}`,
-    citationLine(article),
-  ];
+/** One entry's block: quote line, citation line (only when the article is
+ * known — a vanished article has no citation to build), optional Note line. */
+function blockLines(article: CanonicalArticle | null, e: HighlightEntry): string[] {
+  const lines = [`> ${markerFor(e.status)}${escapeMarkdownLine(e.highlight.quote.exact)}`];
+  if (article !== null) {
+    lines.push(citationLine(article));
+  }
   if (e.note) {
     lines.push(`> Note: ${escapeMarkdownLine(e.note.text)}`);
   }
@@ -198,9 +187,17 @@ export function renderArticleHighlights(
  * renderLibraryHighlights — the combined library-wide file (D9-06): one level-1
  * "Highlights" heading, one `## {article title}` section per section (same
  * blocks + per-section footer), and a final totals footer.
+ *
+ * `unmatchedEntries` (D9-09 never-drop, e2e-locked by Plan 09-06): entries
+ * whose article no longer exists anywhere in the export's article set. They
+ * render as a final "## Highlights without an article" section — blockquote
+ * (with the *[orphan]* marker) + Note line, no citation line — so a vanished
+ * article can never silently take the reader's highlights and notes with it.
+ * The totals footer counts them like any other entry.
  */
 export function renderLibraryHighlights(
   sections: readonly HighlightSection[],
+  unmatchedEntries: readonly HighlightEntry[] = [],
 ): string {
   const lines: string[] = ["# Highlights"];
   for (const section of sections) {
@@ -210,7 +207,14 @@ export function renderLibraryHighlights(
     }
     lines.push("", `_${countsFragment(section.entries)}_`);
   }
-  const all = sections.flatMap((s) => s.entries);
+  if (unmatchedEntries.length > 0) {
+    lines.push("", `## ${UNMATCHED_SECTION_HEADING}`);
+    for (const e of unmatchedEntries) {
+      lines.push("", ...blockLines(null, e));
+    }
+    lines.push("", `_${countsFragment(unmatchedEntries)}_`);
+  }
+  const all = [...sections.flatMap((s) => s.entries), ...unmatchedEntries];
   lines.push("", `_Totals: ${countsFragment(all)}_`);
   return lines.join("\n");
 }
@@ -246,8 +250,6 @@ export function orderSectionsByRecency(
     );
   const unlocated = sections
     .filter((s) => !latestByArticle.has(s.article.id))
-    .sort((a, b) =>
-      a.article.provenance.title.localeCompare(b.article.provenance.title),
-    );
+    .sort((a, b) => a.article.provenance.title.localeCompare(b.article.provenance.title));
   return [...located, ...unlocated];
 }

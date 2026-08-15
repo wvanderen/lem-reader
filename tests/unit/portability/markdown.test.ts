@@ -65,9 +65,7 @@ function sampleArticle(overrides: Partial<CanonicalArticle> = {}): CanonicalArti
   });
 }
 
-function sampleHighlight(
-  overrides: Partial<HighlightRecord> = {},
-): HighlightRecord {
+function sampleHighlight(overrides: Partial<HighlightRecord> = {}): HighlightRecord {
   return HighlightRecordSchema.parse({
     schemaVersion: 1,
     id: "hl-1",
@@ -157,18 +155,14 @@ describe("renderArticleHighlights (D9-08 template, byte-for-byte)", () => {
         originalHtmlHash: "sha256:" + "0".repeat(64),
       },
     });
-    const out = renderArticleHighlights(article, [
-      entry(confidentHighlight, "confident"),
-    ]);
+    const out = renderArticleHighlights(article, [entry(confidentHighlight, "confident")]);
     expect(out).toContain("> — *Paste Piece*\n");
     expect(out).not.toContain("An Author");
     expect(out).not.toContain("([source]");
   });
 
   it("prefixes the ambiguous quote line with the italic approx marker", () => {
-    const out = renderArticleHighlights(sampleArticle(), [
-      entry(ambiguousHighlight, "ambiguous"),
-    ]);
+    const out = renderArticleHighlights(sampleArticle(), [entry(ambiguousHighlight, "ambiguous")]);
     expect(out).toContain("\n> *[approx]* alpha beta gamma delta\n");
   });
 
@@ -185,16 +179,25 @@ describe("renderArticleHighlights (D9-08 template, byte-for-byte)", () => {
     const [collected] = collectHighlightEntries(
       [],
       [absentArticleHighlight],
-      [sampleNote({ highlightId: "hl-absent", text: "Keep my note even though the article is gone." })],
+      [
+        sampleNote({
+          highlightId: "hl-absent",
+          text: "Keep my note even though the article is gone.",
+        }),
+      ],
     );
     expect(collected?.status).toBe("orphan");
     expect(collected?.note?.text).toBe("Keep my note even though the article is gone.");
 
     const out = renderArticleHighlights(sampleArticle(), [
-      entry(absentArticleHighlight, "orphan", sampleNote({
-        highlightId: "hl-absent",
-        text: "Keep my note even though the article is gone.",
-      })),
+      entry(
+        absentArticleHighlight,
+        "orphan",
+        sampleNote({
+          highlightId: "hl-absent",
+          text: "Keep my note even though the article is gone.",
+        }),
+      ),
     ]);
     expect(out).toContain("> *[orphan]* quote from a vanished article");
     expect(out).toContain("> Note: Keep my note even though the article is gone.");
@@ -255,25 +258,13 @@ describe("escapeMarkdownLine", () => {
 
 describe("collectHighlightEntries", () => {
   it("resolves live status for highlights whose article is provided and maps absent articles to orphan", () => {
-    const notes = [
-      sampleNote({ highlightId: "hl-absent", text: "orphan note" }),
-    ];
+    const notes = [sampleNote({ highlightId: "hl-absent", text: "orphan note" })];
     const entries = collectHighlightEntries(
       [sampleArticle()],
-      [
-        confidentHighlight,
-        ambiguousHighlight,
-        orphanInArticleHighlight,
-        absentArticleHighlight,
-      ],
+      [confidentHighlight, ambiguousHighlight, orphanInArticleHighlight, absentArticleHighlight],
       notes,
     );
-    expect(entries.map((e) => e.status)).toEqual([
-      "confident",
-      "ambiguous",
-      "orphan",
-      "orphan",
-    ]);
+    expect(entries.map((e) => e.status)).toEqual(["confident", "ambiguous", "orphan", "orphan"]);
     // The note attached by highlightId rides on the absent-article entry.
     expect(entries[3]?.note?.text).toBe("orphan note");
   });
@@ -294,20 +285,20 @@ describe("collectHighlightEntries", () => {
 describe("renderLibraryHighlights", () => {
   it("emits the h1, one h2 section per article with per-section footers, and the totals footer", () => {
     const articleA = sampleArticle();
-    const articleB = sampleArticle({ id: "article-b", provenance: {
-      sourceUrl: "https://example.com/article-b",
-      title: "Article B",
-      author: "Another Author",
-      retrievedAt: "2026-08-15T00:00:00.000Z",
-      originalHtmlHash: "sha256:" + "0".repeat(64),
-    } });
+    const articleB = sampleArticle({
+      id: "article-b",
+      provenance: {
+        sourceUrl: "https://example.com/article-b",
+        title: "Article B",
+        author: "Another Author",
+        retrievedAt: "2026-08-15T00:00:00.000Z",
+        originalHtmlHash: "sha256:" + "0".repeat(64),
+      },
+    });
     const out = renderLibraryHighlights([
       {
         article: articleA,
-        entries: [
-          entry(confidentHighlight, "confident"),
-          entry(ambiguousHighlight, "ambiguous"),
-        ],
+        entries: [entry(confidentHighlight, "confident"), entry(ambiguousHighlight, "ambiguous")],
       },
       {
         article: articleB,
@@ -339,6 +330,40 @@ describe("renderLibraryHighlights", () => {
       ].join("\n"),
     );
   });
+
+  it("D9-09 never-drop: unmatched entries render as a trailing citation-less section and count in the totals", () => {
+    // Plan 09-06 Rule 2 regression lock: a highlight whose article exists
+    // NOWHERE in the export set must still reach the combined file (with its
+    // note) instead of being silently dropped by the grouping step.
+    const out = renderLibraryHighlights(
+      [{ article: sampleArticle(), entries: [entry(confidentHighlight, "confident")] }],
+      [
+        entry(
+          absentArticleHighlight,
+          "orphan",
+          sampleNote({
+            highlightId: "hl-absent",
+            text: "Keep my note even though the article is gone.",
+          }),
+        ),
+      ],
+    );
+    expect(out).toContain("## Highlights without an article");
+    expect(out).toContain("> *[orphan]* quote from a vanished article");
+    expect(out).toContain("> Note: Keep my note even though the article is gone.");
+    // No citation line exists for a vanished article.
+    expect(out).not.toContain("vanished article ([source]");
+    expect(out).toContain("_1 highlights · 0 ambiguous · 1 orphan_");
+    expect(out).toContain("_Totals: 2 highlights · 0 ambiguous · 1 orphan_");
+  });
+
+  it("omits the unmatched section entirely when there are no unmatched entries (byte-stable legacy shape)", () => {
+    const out = renderLibraryHighlights([
+      { article: sampleArticle(), entries: [entry(confidentHighlight, "confident")] },
+    ]);
+    expect(out).not.toContain("Highlights without an article");
+    expect(out).toContain("_Totals: 1 highlights · 0 ambiguous · 0 orphan_");
+  });
 });
 
 // ── orderSectionsByRecency ──────────────────────────────────────────────────
@@ -346,28 +371,37 @@ describe("renderLibraryHighlights", () => {
 describe("orderSectionsByRecency", () => {
   const sectionA = { article: sampleArticle(), entries: [] };
   const sectionB = {
-    article: sampleArticle({ id: "article-b", provenance: {
-      sourceUrl: "https://example.com/article-b",
-      title: "Article B",
-      retrievedAt: "2026-08-15T00:00:00.000Z",
-      originalHtmlHash: "sha256:" + "0".repeat(64),
-    } }),
+    article: sampleArticle({
+      id: "article-b",
+      provenance: {
+        sourceUrl: "https://example.com/article-b",
+        title: "Article B",
+        retrievedAt: "2026-08-15T00:00:00.000Z",
+        originalHtmlHash: "sha256:" + "0".repeat(64),
+      },
+    }),
     entries: [],
   };
   const sectionCabin = {
-    article: sampleArticle({ id: "article-c", provenance: {
-      title: "Cabin",
-      retrievedAt: "2026-08-15T00:00:00.000Z",
-      originalHtmlHash: "sha256:" + "0".repeat(64),
-    } }),
+    article: sampleArticle({
+      id: "article-c",
+      provenance: {
+        title: "Cabin",
+        retrievedAt: "2026-08-15T00:00:00.000Z",
+        originalHtmlHash: "sha256:" + "0".repeat(64),
+      },
+    }),
     entries: [],
   };
   const sectionZebra = {
-    article: sampleArticle({ id: "article-z", provenance: {
-      title: "Zebra",
-      retrievedAt: "2026-08-15T00:00:00.000Z",
-      originalHtmlHash: "sha256:" + "0".repeat(64),
-    } }),
+    article: sampleArticle({
+      id: "article-z",
+      provenance: {
+        title: "Zebra",
+        retrievedAt: "2026-08-15T00:00:00.000Z",
+        originalHtmlHash: "sha256:" + "0".repeat(64),
+      },
+    }),
     entries: [],
   };
 

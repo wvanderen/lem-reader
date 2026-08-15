@@ -235,6 +235,10 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
       const entries = collectHighlightEntries(articles, highlights, notes);
       // Group into per-article sections (only articles with ≥1 entry get a
       // section — an empty `## title` block would be noise, not calm).
+      // D9-09 never-drop: entries whose article exists NOWHERE in the export
+      // set (vanished article — removed-with-corrupt-row or fixture skew)
+      // become the combined file's trailing unmatched section instead of
+      // being silently dropped; their notes ride along.
       const articleById = new Map(articles.map((a) => [a.id, a] as const));
       const entriesByArticle = new Map<string, HighlightEntry[]>();
       for (const entry of entries) {
@@ -243,11 +247,16 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
         entriesByArticle.set(entry.highlight.articleId, list);
       }
       const sections: HighlightSection[] = [];
+      const unmatched: HighlightEntry[] = [];
       for (const [articleId, list] of entriesByArticle) {
         const article = articleById.get(articleId);
-        if (article !== undefined) sections.push({ article, entries: list });
+        if (article !== undefined) {
+          sections.push({ article, entries: list });
+        } else {
+          unmatched.push(...list);
+        }
       }
-      const md = renderLibraryHighlights(orderSectionsByRecency(sections, locations));
+      const md = renderLibraryHighlights(orderSectionsByRecency(sections, locations), unmatched);
       downloadBlob([md], HIGHLIGHTS_FILENAME, "text/markdown");
       setDataMessage(
         `Exported ${counted(highlights.length, "highlight", "highlights")} to ${HIGHLIGHTS_FILENAME}.`,
