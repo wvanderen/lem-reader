@@ -21,6 +21,7 @@
     "@chenglou/pretext": "0.0.8",
     "@mozilla/readability": "0.6.0",
     "dexie": "4.4.4",
+    "fflate": "0.8.3",
     "ip-address": "10.5.0",
     "isomorphic-dompurify": "3.22.0",
     "jsdom": "30.0.1",

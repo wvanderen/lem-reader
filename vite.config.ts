@@ -1,6 +1,18 @@
+import { readFileSync } from "node:fs";
 import { defineConfig, type PluginOption } from "vite";
 import react from "@vitejs/plugin-react";
 import { viteIngestMiddleware } from "./dev-server/ingest-middleware";
+
+// Phase 9 (D9-04 / 09-RESEARCH A3) — the export bundle's diagnostic-only
+// appVersion field. The version is read from package.json AT CONFIG LOAD
+// (the config runs in Node, so node:fs is available here — never inside
+// src/). The identifier `__APP_VERSION__` is define-replaced at build time;
+// `src/vite-env.d.ts` declares it for TypeScript. bundle.ts's
+// resolveAppVersion() guards with typeof so unit tests (no define) get
+// "dev" instead of a ReferenceError.
+const pkg = JSON.parse(
+  readFileSync(new URL("./package.json", import.meta.url), "utf-8"),
+) as { version: string };
 
 // ── 07-06 HYBRID CONTINGENCY adaptation (human-approved 2026-08-11) ────────
 // Per the 07-01 spike verdict, extraction (jsdom + DOMPurify + Readability)
@@ -41,4 +53,9 @@ export default defineConfig({
       configureServer: viteIngestMiddleware(),
     } as PluginOption,
   ],
+  define: {
+    // Phase 9 (D9-04 / A3): diagnostic-only appVersion — single-sourced from
+    // package.json at config load, never a hardcoded copy.
+    __APP_VERSION__: JSON.stringify(pkg.version),
+  },
 });
