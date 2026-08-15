@@ -27,7 +27,6 @@ import {
 } from "../../../src/content/normalizeText";
 import type { TextPositionSelector, TextQuoteSelector } from "../../../src/content/normalizeText";
 import { ExportBundleSchema } from "../../../src/portability/bundle";
-import type { ExportBundle } from "../../../src/portability/bundle";
 import { computeManifest } from "../../../src/portability/manifest";
 
 export const BASE = "http://localhost:5173";
@@ -299,10 +298,12 @@ export function highlightRow(
  * Build a real, valid bundle .zip in Node from an ExportBundle-shaped object:
  * the same ExportBundleSchema.parse self-check + computeManifest +
  * bundle.json (pretty) / manifest.json (minified) layout buildBundleBytes
- * produces. Returns a Buffer for setInputFiles' { name, mimeType, buffer }
+ * produces. The input is `unknown` on purpose — the parse IS the self-check,
+ * so callers construct plain objects and invalid shapes throw here, in Node.
+ * Returns a Buffer for setInputFiles' { name, mimeType, buffer }
  * payload, or callers may write it to disk for the path payload.
  */
-export async function buildBundleZip(bundle: ExportBundle): Promise<Buffer> {
+export async function buildBundleZip(bundle: unknown): Promise<Buffer> {
   const parsed = ExportBundleSchema.parse(bundle);
   const manifest = await computeManifest(parsed);
   return Buffer.from(
