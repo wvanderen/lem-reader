@@ -60,6 +60,19 @@ import { fragmentContainingOffset } from "../pagination/anchor";
 // sibling of the title / meta / source-link. Inert at mount (Pitfall 8-5 —
 // does NOT steal focus from the article body).
 import { TagEntry } from "../reader/TagEntry";
+// Plan 09-05 (D9-06, PORT-03) — per-article "Export highlights": the fixed
+// markdown template over this article's highlights+notes (collectHighlight
+// Entries re-resolves the honest tri-state through the SHIPPED resolver —
+// no forked resolution logic), a sanitizeFilename-derived download name, and
+// a calm visually-hidden live-region announcement.
+import {
+  collectHighlightEntries,
+  renderArticleHighlights,
+} from "../portability/markdown";
+import { sanitizeFilename } from "../portability/zipSlip";
+import { downloadBlob } from "../portability/download";
+import { loadAllHighlights } from "../persistence/highlightsStore";
+import { loadAllNotes } from "../persistence/notesStore";
 
 /** The D4-10 mode-toggle handler signature (App threads a ref of this shape). */
 type ModeToggleHandler = () => void;
@@ -187,6 +200,16 @@ export function ArticleView({
   // Drives the toolbar's buttons-vs-hint rendering.
   const [captureResult, setCaptureResult] =
     useState<ToolbarCaptureResult | null>(null);
+
+  // Plan 09-05 (D9-06, PORT-03): per-article highlights export state. The
+  // busy flag disables the header button while a download is in flight; the
+  // announcement carries the result through a SECOND visually-hidden
+  // role=status region (below) so export messages never clobber in-flight
+  // annotation announces (mirrors the annotationAnnouncement pattern).
+  const [exportingHighlights, setExportingHighlights] = useState(false);
+  const [exportAnnouncement, setExportAnnouncement] = useState<string | null>(
+    null,
+  );
 
   // Phase 5 Plan 05-03: push the resolved-highlight count up to App so the
   // Header badge stays in sync. Runs whenever the apiRef bridge updates (which
@@ -1061,6 +1084,52 @@ export function ArticleView({
   const sourceUrl = article.provenance.sourceUrl;
   const domain = sourceUrl !== undefined ? new URL(sourceUrl).hostname : undefined;
 
+  /**
+   * Plan 09-05 (D9-06, PORT-03) — export this article's highlights (+ their
+   * notes) as one .md via the fixed D9-06 template. Highlights/notes load
+   * fresh at click time (loadAllHighlights/loadAllNotes filtered by
+   * articleId — the whole-library loaders from 09-02; notes join through
+   * their OWNING highlight's highlightId inside collectHighlightEntries, so
+   * the note filter only needs the article's highlight ids). The tri-state
+   * status is computed by collectHighlightEntries through the SHIPPED
+   * resolveQuoteSelector — no forked resolution logic. The download filename
+   * derives from sanitizeFilename(title, article.id) (T-9-06 — the title is
+   * arbitrary web text). Results announce calmly; a throw announces
+   * "Export didn't complete." and never interrupts reading.
+   */
+  const handleExportHighlights = async () => {
+    setExportingHighlights(true);
+    try {
+      const [allHighlights, allNotes] = await Promise.all([
+        loadAllHighlights(),
+        loadAllNotes(),
+      ]);
+      const articleHighlights = allHighlights.filter(
+        (h) => h.articleId === article.id,
+      );
+      const highlightIds = new Set(articleHighlights.map((h) => h.id));
+      const articleNotes = allNotes.filter((n) =>
+        highlightIds.has(n.highlightId),
+      );
+      const entries = collectHighlightEntries(
+        [article],
+        articleHighlights,
+        articleNotes,
+      );
+      const md = renderArticleHighlights(article, entries);
+      const filename = `highlights-${sanitizeFilename(article.provenance.title, article.id)}.md`;
+      downloadBlob([md], filename, "text/markdown");
+      const noun = articleHighlights.length === 1 ? "highlight" : "highlights";
+      setExportAnnouncement(
+        `Exported ${articleHighlights.length} ${noun} for this article.`,
+      );
+    } catch {
+      setExportAnnouncement("Export didn't complete.");
+    } finally {
+      setExportingHighlights(false);
+    }
+  };
+
   // Paginated mode mounts only when trustedView + articleEl are both ready;
   // otherwise we render the scrolling ArticleBody (the additive branch —
   // scrolling behavior stays byte-unchanged so existing tests regress
@@ -1111,6 +1180,20 @@ export function ArticleView({
           aria-atomic="true"
         >
           {annotationAnnouncement}
+        </div>
+        {/* Plan 09-05 (D9-06, PORT-03): a SECOND visually-hidden polite
+            region for the per-article highlights-export result ("Exported N
+            highlights for this article." / "Export didn't complete."). Kept
+            separate from the annotation region above so an export announce
+            never clobbers an in-flight annotation announce (each live region
+            announces its own atomic phrase — D2-13 pattern). */}
+        <div
+          className="visually-hidden"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          {exportAnnouncement}
         </div>
         {showResumeBanner && (
           <ResumeBanner
@@ -1179,6 +1262,18 @@ export function ArticleView({
                 library list). TagEntry is INERT at mount (Pitfall 8-5 — no
                 autoFocus, no useEffect-driven .focus()). */}
             <TagEntry articleId={article.id} tags={article.tags ?? []} />
+            {/* Plan 09-05 (D9-06, PORT-03) — per-article highlights export.
+                INERT at mount exactly like TagEntry (Pitfall 8-5 — no
+                auto-focus, no effect-driven focus); the reader activates via
+                Tab/Click. Disabled while a download is in flight. */}
+            <button
+              type="button"
+              className="article-export-highlights"
+              onClick={handleExportHighlights}
+              disabled={exportingHighlights}
+            >
+              Export highlights
+            </button>
           </header>
           {paginatedActive && trustedView && articleEl ? (
             <>

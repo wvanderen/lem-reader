@@ -2384,3 +2384,29 @@ dialog.import-preview::backdrop {
   background: transparent;
   border: none;
 }
+
+/* ── ArticleView per-article "Export highlights" (Plan 09-05, D9-06) ─────── */
+/* Mirrors .tag-entry-add geometry — quiet hairline chrome until activated,
+   44px touch target, accent on hover only. INERT at mount (Pitfall 8-5). */
+.article-export-highlights {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--touch);
+  padding-inline: var(--space-md);
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  font-family: var(--font-ui);
+  font-size: 16px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.article-export-highlights:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.article-export-highlights:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
