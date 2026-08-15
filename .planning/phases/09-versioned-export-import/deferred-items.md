@@ -2,7 +2,9 @@
 
 ## [09-06] Stacked-modal sequential focus navigation diverges by engine (found during Task 3 a11y/keyboard gate)
 
-**Status:** Open — needs a product decision (Rule 4-adjacent); not auto-fixed.
+**Status:** RESOLVED 2026-08-15 — decision: Option 1 (accept engine reality).**
+
+**Decision record:** The universal safety properties (focus trap containment, initial focus on the non-destructive action, Esc restore, full keyboard operability of every control) are proven on all three engines by `tests/e2e/portability/a11y.spec.ts` + `import-preview.spec.ts`; only the Tab wrap-cycle nuance differs. Option 2 reverses the deliberate 09-05 "mounted OUTSIDE" DOM reading-order decision (a structural RemoveConfirm/Pitfall 8 clone), and Option 3 breaks spatial orientation — Settings vanishing on dialog close harms the reader's mental map, Lem Reader's core promise (PROJECT.md: "stable spatial orientation and predictable navigation"). The divergence is an engine nuance, not a reader-facing defect: webkit users reach every control via the explicit initial focus + Space/Enter, exactly the calm, predictable path the product optimizes for. The e2e keeps asserting universal safety on all engines + the chromium wrap-cycle, mirroring the high-zoom spec's engine-variable assertion precedent. No code change required.
 
 With two sibling `showModal()` dialogs stacked (the Settings panel stays open
 underneath `ImportPreviewDialog` — the 09-05 locked mount), sequential focus

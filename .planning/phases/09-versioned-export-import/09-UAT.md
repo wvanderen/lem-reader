@@ -3,15 +3,15 @@ status: testing
 phase: 09-versioned-export-import
 source: [09-VERIFICATION.md]
 started: 2026-08-15T20:15:00Z
-updated: 2026-08-15T20:15:00Z
+updated: 2026-08-15T20:30:00Z
 ---
 
 ## Current Test
 
-number: 1
-name: Decide among the three recorded candidate resolutions for stacked-modal sequential focus navigation
+number: 2
+name: Visual calm pass over the new portability surfaces at narrow width
 expected: |
-  A product decision recorded (accept engine reality / nest dialogs / close-settings-while-preview) and logged against deferred-items.md; the safety properties already hold on all engines
+  Calm-booklike visual consistency with existing settings/dialog tokens; no layout disturbance from the new cluster; export button does not crowd the article header at 360px
 awaiting: user response
 
 ## Tests
@@ -25,7 +25,7 @@ awaiting: user response
 - **C. Nested dialog structure** — restructure so preview is a child of Settings; largest structural change, may complicate the RemoveConfirm pattern
 
 expected: A product decision recorded and logged against deferred-items.md (any of A/B/C or your own alternative)
-result: [pending]
+result: [passed] — RESOLVED 2026-08-15: Option A (accept engine reality) recorded in deferred-items.md with rationale; no code change required, e2e continues asserting universal safety on all engines + chromium wrap-cycle
 
 ### 2. Visual calm pass over the new portability surfaces at narrow width
 
@@ -43,9 +43,9 @@ result: [pending]
 ## Summary
 
 total: 2
-passed: 0
+passed: 1
 issues: 0
-pending: 2
+pending: 1
 skipped: 0
 blocked: 0
 
