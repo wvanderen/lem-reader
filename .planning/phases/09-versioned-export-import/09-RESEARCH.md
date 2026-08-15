@@ -742,19 +742,22 @@ test("SC#4 — export on machine A re-imports on machine B with offsets intact",
 | A5 | Playwright `setInputFiles` accepts a filesystem path AND `{ name, mimeType, buffer }` payloads (needed for crafted malicious zips) | Code Examples | Low — documented Playwright API; verify at Wave 0 |
 | A6 | The export `.status` terminal summary granularity is sufficient (no incremental progress) | Discretion | Low — prototype scale is instant; a "Exporting…" intermediate string is a trivial add |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Does Phase 9 own the 24 pre-existing e2e failures?**
    - What we know: STATE.md Phase 08 gate recorded 24 failures in unrelated specs (pagination/annotations/dexie-migration) with a required gap-closure plan pending; PROJECT.md Key Decision #9 mandates honest full-suite execution.
    - What's unclear: whether the gap-closure lands as a Phase 9 plan or a standalone effort.
    - Recommendation: planner surfaces this explicitly in PLAN.md wave structure (a gap-closure plan mirroring Phase 4's 04-07..04-11 precedent, or a logged forward-deferred decision with user sign-off).
+   - **Resolution:** Plan 09-07 (Wave 6) is the gap-closure plan — it closes all 24 cells with root-cause fixes (strengthen-only spec discipline), runs the honest full-suite gate (`npm run test`, exit 0, recorded in 09-07-OUTPUT.md), and appends the closure note to Phase 08's deferred-items.md.
 2. **Exact `.status` copy strings** (corruption, newer-version, unsafe-entry refusals, import result summary).
    - What we know: voice is locked (calm DOC-06); words are UI-SPEC/planner.
    - What's unclear: exact strings.
    - Recommendation: planner drafts; they ride the existing `.status` live-region pattern with zero new vocabulary.
+   - **Resolution:** Locked verbatim in Plan 09-05 Task 2 — all six refusal strings (not-a-zip, unsafe-entry, missing-entry, newer-schema-version, invalid, corrupted), the export/import result summaries, and the insecure-context disable message are specified in the task action; they ride the existing `.status` live-region pattern with zero new vocabulary.
 3. **Combined Markdown file's article ordering.**
    - What we know: contract requires honesty, not order.
    - Recommendation: `savedAt`-recency where locations exist, else title sort — planner decides.
+   - **Resolution:** Plan 09-02 Task 1 — `orderSectionsByRecency`: sections whose article has a location row sort by `savedAt` descending first; articles without locations follow, sorted by `provenance.title` ascending.
 
 ## Environment Availability
 
