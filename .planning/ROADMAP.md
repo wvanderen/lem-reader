@@ -125,7 +125,7 @@ Plans:
   3. Reader can export just their highlights as a Markdown document (with template variables) for use in external tools like Obsidian or Notion.
   4. Round-trip integrity holds: canonical-text offsets survive export and import (page numbers never appear in the bundle), and a bundle exported on one machine re-imports on another with every highlight re-resolving to `confident` or surfacing honestly as `ambiguous`/`orphan`.
 
-**Plans**: 4/7 plans executed
+**Plans**: 5/7 plans executed
 **UI hint**: yes
 
 Plans:
@@ -144,7 +144,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 09-05-PLAN.md — Portability UI: ImportPreviewDialog (structural RemoveConfirm clone) + Settings "Your data" cluster + ArticleView per-article highlights export
+- [x] 09-05-PLAN.md — Portability UI: ImportPreviewDialog (structural RemoveConfirm clone) + Settings "Your data" cluster + ArticleView per-article highlights export
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -224,7 +224,7 @@ Plans:
 | 6. Prototype Acceptance | v1.0 | 6/6 | Complete | 2026-08-10 |
 | 7. Ingestion Substrate | v2.0 | 7/7 | Complete   | 2026-08-12 |
 | 8. Markdown Pipeline and Personal Library | v2.0 | 5/5 | Complete    | 2026-08-13 |
-| 9. Versioned Export/Import | v2.0 | 4/7 | In Progress|  |
+| 9. Versioned Export/Import | v2.0 | 5/7 | In Progress|  |
 | 10. Annotation Review Panel | v2.0 | 0/TBD | Not started | - |
 | 11. PDF Intake | v2.0 | 0/TBD | Not started | - |
 | 12. EPUB Intake | v2.0 | 0/TBD | Not started | - |

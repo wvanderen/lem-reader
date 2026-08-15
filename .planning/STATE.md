@@ -5,15 +5,15 @@ milestone_name: Personal Library
 current_phase: 9
 current_phase_name: Versioned Export/Import
 status: executing
-stopped_at: Completed 09-04-PLAN.md
-last_updated: "2026-08-15T18:39:38.585Z"
+stopped_at: Completed 09-05-PLAN.md
+last_updated: "2026-08-15T18:57:10.248Z"
 last_activity: 2026-08-15
 last_activity_desc: Phase 9 execution started
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 19
-  completed_plans: 16
+  completed_plans: 17
   percent: 29
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-10)
 ## Current Position
 
 Phase: 9 (Versioned Export/Import) — EXECUTING
-Plan: 5 of 7
+Plan: 6 of 7
 Status: Ready to execute
 Last activity: 2026-08-15 — Phase 9 execution started
 
@@ -114,6 +114,7 @@ Progress: [███░░░░░░░] 29% of v2.0 milestone
 | Phase 9 P09-02 | 7 min | 2 tasks | 5 files |
 | Phase 9 P03 | 10 min | 2 tasks | 2 files |
 | Phase 9 P04 | 13 min | 3 tasks | 4 files |
+| Phase 9 P09-05 | 14 min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -245,6 +246,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 9]: 09-04: validateBundle never throws — unparseable bundle.json routes to invalid, unusable manifest.json routes to corrupted with all five blocks (six-kind contract + never-throw-to-reader hold on paths the RESEARCH example left unguarded) — Keeps every hostile-input class a calm typed refusal; no throw path reachable from file content
 - [Phase 9]: 09-04: Bomb-cap semantics — fflate filter skips over-cap entries BEFORE inflation; capped REQUIRED entry surfaces as missing-entry, capped extra entries are inert; test crafts a >200MB DECLARED originalSize by patching the zip central-directory size field (the exact metadata the filter reads) — Proves the no-allocation refusal without materializing 200MB in the test process
 - [Phase 9]: 09-04: applyImport uses two explicit-arity db.transaction calls sharing one puts-only closure (tsc rejects union-of-tuples spread); db.settings joins only under plan.applyPreferences; rollback proven via injected Dexie creating-hook failure — Identical runtime semantics; the table-set gating stays literal and the closure stays puts-only (Pitfall 1)
+- [Phase ?]: 09-05: ImportPreviewDialog is a structural RemoveConfirm clone (D9-11/Pitfall 8) — data-initial-focus on Cancel import; onProceed fires ONLY from the Import button onClick; keep-both only for the id kinds; every override defaults to Skip — Pitfall 8 isolation forbids a shared ConfirmDialog; applyImport keeps a single grep-verifiable call site in the SettingsPanel Proceed handler (T-9-16)
+- [Phase ?]: 09-05: buildBundleBytes returns Uint8Array<ArrayBuffer> (TS 7 BufferSource; 09-01 sha256Hex precedent); import file-input value resets on refusals AND Proceed/Cancel so same-file retry never no-ops — Type-honest service boundary instead of a UI cast; refusal retry without reset would silently ignore re-picking the same file
 
 ### Pending Todos
 
@@ -274,8 +277,8 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-15T18:39:38.578Z
-Stopped at: Completed 09-04-PLAN.md
+Last session: 2026-08-15T18:57:10.241Z
+Stopped at: Completed 09-05-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

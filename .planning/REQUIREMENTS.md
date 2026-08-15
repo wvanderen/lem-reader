@@ -29,9 +29,9 @@ Requirements for the v2.0 milestone. Each maps to a roadmap phase (traceability 
 
 ### Portability
 
-- [ ] **PORT-01**: Reader can export their library + highlights + notes + reading positions + preferences as a versioned bundle.
-- [ ] **PORT-02**: Reader can import a compatible bundle with validation and conflict reporting.
-- [ ] **PORT-03**: Reader can export just their highlights (e.g., as Markdown) for use outside the reader.
+- [x] **PORT-01**: Reader can export their library + highlights + notes + reading positions + preferences as a versioned bundle.
+- [x] **PORT-02**: Reader can import a compatible bundle with validation and conflict reporting.
+- [x] **PORT-03**: Reader can export just their highlights (e.g., as Markdown) for use outside the reader.
 
 ### Annotation Recovery
 
@@ -114,9 +114,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | LIB-04 | Phase 8 | Complete |
 | LIB-05 | Phase 8 | Complete |
 | LIB-06 | Phase 8 | Complete |
-| PORT-01 | Phase 9 | Pending |
-| PORT-02 | Phase 9 | Pending |
-| PORT-03 | Phase 9 | Pending |
+| PORT-01 | Phase 9 | Complete |
+| PORT-02 | Phase 9 | Complete |
+| PORT-03 | Phase 9 | Complete |
 | RECV-01 | Phase 10 | Pending |
 | POLISH-01 | Phase 13 | Pending |
 | POLISH-02 | Phase 13 | Pending |
