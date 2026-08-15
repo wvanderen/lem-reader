@@ -224,7 +224,7 @@ Plans:
 | 6. Prototype Acceptance | v1.0 | 6/6 | Complete | 2026-08-10 |
 | 7. Ingestion Substrate | v2.0 | 7/7 | Complete   | 2026-08-12 |
 | 8. Markdown Pipeline and Personal Library | v2.0 | 5/5 | Complete    | 2026-08-13 |
-| 9. Versioned Export/Import | v2.0 | 7/7 | Complete   | 2026-08-15 |
+| 9. Versioned Export/Import | v2.0 | 7/7 | Complete    | 2026-08-15 |
 | 10. Annotation Review Panel | v2.0 | 0/TBD | Not started | - |
 | 11. PDF Intake | v2.0 | 0/TBD | Not started | - |
 | 12. EPUB Intake | v2.0 | 0/TBD | Not started | - |

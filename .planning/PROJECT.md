@@ -22,7 +22,9 @@ The prototype supports rich article structure, local highlights and notes, and l
 
 **Final suite:** `npm run test` = 1157 passed / 0 failed / exit 0 (514 unit + 643 e2e across chromium/firefox/webkit).
 
-**v2.0 Personal Library — Phase 8 complete 2026-08-13.** Markdown intake + the personal library that replaces the fixture list are live: `.md`/`.html` uploads flow through the same 7-stage pipeline as URL/paste inputs; `LibraryView` is the default `#/` route (browse + search + tag-filter + source badges + per-row progress hairline + continue-reading strip); cascade-remove with confirmation; tag entry in ArticleView. Dexie v4 (`*tags` multi-entry index, additive). 21 pre-existing cross-phase e2e failures (Phase 4 pagination timing + Phase 5 figure-caption capture) remain open, documented for later gap-closure — unrelated to Phase 8.
+**v2.0 Personal Library — Phase 8 complete 2026-08-13.** Markdown intake + the personal library that replaces the fixture list are live: `.md`/`.html` uploads flow through the same 7-stage pipeline as URL/paste inputs; `LibraryView` is the default `#/` route (browse + search + tag-filter + source badges + per-row progress hairline + continue-reading strip); cascade-remove with confirmation; tag entry in ArticleView. Dexie v4 (`*tags` multi-entry index, additive).
+
+**v2.0 Personal Library — Phase 9 complete 2026-08-15.** Versioned export/import is live: whole-library bundles (articles + highlights + notes + positions + preferences) as a versioned zip with SHA-256 manifest; import with Zod validation, dry-run conflict preview, skip-by-default overrides, and an atomic 5-store transaction (Zip Slip guarded); highlights-only Markdown export per-article and library-wide. Gap-closure plan 09-07 closed the 24-cell pre-existing e2e debt (root cause: header-growth geometry, one CSS fix) and the honest full-suite gate is green again: `npm run test` = 1674 passed / 0 failed / exit 0.
 
 ## Core Value
 
@@ -62,6 +64,8 @@ Readers can move through long-form web content with calm, stable orientation and
 - ✓ Store highlights and attached notes locally and keep their anchors stable across repagination. — v1.0
 - ✓ Personal library — browse, open, search, tag, and remove ingested articles (LIB-01..LIB-06). — Phase 8
 - ✓ Markdown + HTML-upload intake normalized into the library via the shared ingestion pipeline (ING-03). — Phase 8
+- ✓ Versioned export/import (PORT-01/02) — whole-library versioned bundle export/import with Zod validation, dry-run conflict preview, skip-by-default resolution, atomic 5-store transaction, Zip Slip guard. — Phase 9
+- ✓ Highlights-only Markdown export (PORT-03) — fixed-template .md with honest tri-state markers, per-article and library-wide. — Phase 9
 
 ### Active
 
@@ -69,7 +73,6 @@ v2.0 Personal Library scope (see Current Milestone above for the full picture):
 
 - [ ] URL ingestion — fetch backend extracts and normalizes any publicly fetchable web page into the library.
 - [ ] Multi-format document intake — PDF and EPUB remain (Markdown + HTML upload shipped in Phase 8).
-- [ ] Versioned export/import (PORT-01/02) — library + highlights + notes + position + preferences; validation + conflict reporting.
 - [ ] Annotation review panel (RECV-01) — dedicated surface to review all highlights/notes.
 - [ ] Polish — eliminate initial-load reading-mode flash; fix short-article progress-bar semantics.
 - [ ] NVDA+Firefox acceptance run (ACPT-02 coverage boundary A4 follow-up).
@@ -120,6 +123,9 @@ Annotations attach to stable normalized-text positions plus quoted context rathe
 | Project-owned pagination engine (no off-the-shelf lib) | Required combination of semantic DOM, responsive repagination, annotation-safe offsets, and scrolling twin that no reviewed library supplied | ✓ Good — corpus paginates green × 3 engines with overflow guard + diagnostics |
 | W3C-inspired TextPositionSelector + TextQuoteSelector for annotations | Page numbers, pixels, DOM paths, and serialized ranges are all ephemeral; canonical normalized-text offsets + quoted context survive relayout | ✓ Good — tri-state resolution (confident/ambiguous/orphan) never silently re-attaches |
 | Honest full-suite execution discipline (run `npm run test` end-to-end, record fail counts) | A "269 passed / 0 failed" misreport hid 76 real e2e failures; only re-running the suite overturned it | ✓ Good — caught by gsd-verifier; closed by gap-closure plans 04-07..04-11 |
+| Portability bundle = zip of JSON blocks with schemaVersion envelope + SHA-256 manifest; canonical-text offsets only (never page numbers) | Page numbers/geometry are ephemeral; offsets + quote selectors survive cross-device round-trips | ✓ Good — Phase 9: round-trip e2e proves offsets byte-equal, tri-state honest |
+| Skip-by-default conflict resolution with bulk per-kind overrides (D9-14) | Never silently overwrite reader data; per-row merge UI deferred as unjustified complexity | ✓ Good — Phase 9 |
+| Stacked-modal focus divergence: accept engine reality (webkit) | Safety properties (trap, initial focus, Esc, operability) proven on all engines; nesting/closing would reverse deliberate 09-05 decisions or break spatial orientation | ✓ Decided Phase 9 — documented in 09 deferred-items.md |
 
 ## Evolution
 
@@ -139,4 +145,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-13 after Phase 8 (Markdown Pipeline and Personal Library) completion*
+*Last updated: 2026-08-15 after Phase 9 (Versioned Export/Import) completion*
