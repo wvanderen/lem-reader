@@ -6,14 +6,14 @@ current_phase: 9
 current_phase_name: Versioned Export/Import
 status: executing
 stopped_at: Completed 09-01-PLAN.md
-last_updated: "2026-08-15T18:08:59.427Z"
+last_updated: "2026-08-15T18:22:13.322Z"
 last_activity: 2026-08-15
 last_activity_desc: Phase 9 execution started
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 19
-  completed_plans: 14
+  completed_plans: 15
   percent: 29
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-10)
 ## Current Position
 
 Phase: 9 (Versioned Export/Import) — EXECUTING
-Plan: 3 of 7
+Plan: 4 of 7
 Status: Ready to execute
 Last activity: 2026-08-15 — Phase 9 execution started
 
@@ -112,6 +112,7 @@ Progress: [███░░░░░░░] 29% of v2.0 milestone
 | Phase 08 P05 | 45min | 2 tasks | 7 files |
 | Phase 09 P01 | 7 min | 3 tasks | 17 files |
 | Phase 9 P09-02 | 7 min | 2 tasks | 5 files |
+| Phase 9 P03 | 10 min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -237,6 +238,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: [Phase 09-01] PORT-01/PORT-02 stay unchecked until the plans proving end-to-end behavior — 09-01 ships foundations only (mirrors the 04-02 PAGE-01 / 06-01 ACPT-03 split precedent); requirements-completed is [].
 - [Phase 9]: 09-02: escapeMarkdownLine escapes only the PERIOD of a leading ordered-list marker (1974\.) — CommonMark backslash escapes apply only before ASCII punctuation; escaping a digit leaks a literal backslash. Leading symbol runs (#-+*>) escape per-char.
 - [Phase 9]: 09-02: HighlightSection exported alongside the six required markdown.ts symbols; loadAllHighlights/loadAllNotes mirror loadAllLocations (plain-array whole-library reads, db.ts byte-unchanged — Pitfall 9 held). PORT-01/PORT-03 stay unchecked until the end-to-end export plans (09-01 split precedent).
+- [Phase ?]: [Phase 9] 09-03: applyPreferencesDefault reads reader-prefs row PRESENCE directly (db.settings.get) — loadSettings returns ok:true+DEFAULT_SETTINGS on first run identically to ok:true+parsed for a persisted row, so the plan's 'ok ⇒ row exists' mechanism was unimplementable; behavior contract (D9-12) wins. Test-locked both ways.
+- [Phase ?]: [Phase 9] 09-03: memoized D9-13 re-resolution calls the exported resolveQuoteSelectorInText core with per-article memoized clusters (normalizeText/graphemeClusters once per article id, not per highlight — RESEARCH Pattern 8 mandate); identical semantics to resolveQuoteSelector without per-highlight recompute. REUSE-DO-NOT-FORK held.
+- [Phase ?]: [Phase 9] 09-03: identical duplicate article (same id+revision+hash — re-import-on-same-device, absent from the D9-14 table) = calm no-op (skipped, never a conflict, not added). id-kind overwrite = same-id upsert. resolveImportPlan re-reads local PK sets (async variant); preview kept for the 09-05 call shape but ignored for decisions. PORT-02 stays unchecked until 09-04/09-05/09-06 prove end-to-end import.
 
 ### Pending Todos
 
@@ -266,7 +270,7 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-15T18:08:48.634Z
+Last session: 2026-08-15T18:21:40.626Z
 Stopped at: Completed 09-01-PLAN.md
 Resume file: None
 

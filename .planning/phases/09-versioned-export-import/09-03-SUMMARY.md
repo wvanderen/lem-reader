@@ -120,3 +120,10 @@ None - no external service configuration required.
 ---
 *Phase: 09-versioned-export-import*
 *Completed: 2026-08-15*
+
+## Self-Check: PASSED
+
+- Created files exist on disk: src/portability/conflicts.ts, tests/unit/portability/conflicts.test.ts, 09-03-SUMMARY.md ✓
+- All 5 plan commits present (bf3fbd7, 0c0361f, 4050b95, cc2b589, 9ebd37d) ✓
+- TDD gate: test→feat commit pairs in order for both tasks ✓
+- Plan verification re-run: `npx vitest run tests/unit/portability` → 6 files / 96 tests / exit 0; `npm run build` → exit 0 ✓
