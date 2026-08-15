@@ -5,15 +5,15 @@ milestone_name: Personal Library
 current_phase: 9
 current_phase_name: Versioned Export/Import
 status: executing
-stopped_at: Phase 9 context gathered
-last_updated: "2026-08-15T17:47:18.112Z"
-last_activity: 2026-08-13
-last_activity_desc: Phase 08 complete, transitioned to Phase 9
+stopped_at: Completed 09-01-PLAN.md
+last_updated: "2026-08-15T17:59:37.267Z"
+last_activity: 2026-08-15
+last_activity_desc: Phase 9 execution started
 progress:
   total_phases: 7
   completed_phases: 2
-  total_plans: 12
-  completed_plans: 12
+  total_plans: 19
+  completed_plans: 13
   percent: 29
 ---
 
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-10)
 
 **Core value:** Readers can move through long-form web content with calm, stable orientation and predictable navigation.
-**Current focus:** Phase 08 — markdown-pipeline-and-personal-library
+**Current focus:** Phase 9 — Versioned Export/Import
 
 ## Current Position
 
-Phase: 9 — Versioned Export/Import
-Plan: Not started
+Phase: 9 (Versioned Export/Import) — EXECUTING
+Plan: 2 of 7
 Status: Ready to execute
-Last activity: 2026-08-13 — Phase 08 complete, transitioned to Phase 9
+Last activity: 2026-08-15 — Phase 9 execution started
 
 Progress: [███░░░░░░░] 29% of v2.0 milestone
 
@@ -110,6 +110,7 @@ Progress: [███░░░░░░░] 29% of v2.0 milestone
 | Phase 08 P03 | 11min | 3 tasks | 10 files |
 | Phase 08 P04 | 5min | 2 tasks | 6 files |
 | Phase 08 P05 | 45min | 2 tasks | 7 files |
+| Phase 09 P01 | 7 min | 3 tasks | 17 files |
 
 ## Accumulated Context
 
@@ -229,6 +230,10 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: Phase 08-05: page.reload() in openLibrary helper forces LibraryView remount after Dexie seed (load effect runs ONCE per mount; hashchange doesn't re-trigger)
 - [Phase ?]: Phase 08-05: Math.floor(total*0.98) yields ratio 0.9798 < 0.98 due to integer truncation; seed graphemeOffset = total for deterministic Finished state
 - [Phase ?]: Phase 08-05: Honest-suite gate RED (1495 passed / 24 failed / 13 skipped). 24 failures are PRE-EXISTING in unrelated specs (pagination/annotations/dexie-migration); Plan 08-05 scope (6 library specs, 243 cells) fully green. Logged to deferred-items.md per scope-boundary rule.
+- [Phase ?]: [Phase 09-01] books/articleTags omitted from ExportBundleSchema entirely — absence is the forward-compatible form (tags travel inside ArticleSchema.tags; RESEARCH Pattern 1).
+- [Phase ?]: [Phase 09-01] playwright.config.ts untouched — download smoke proved acceptDownloads capturable under Playwright 1.61.1 defaults (A1 verified; Pitfall 9 fallback unneeded).
+- [Phase ?]: [Phase 09-01] sha256Hex typed Uint8Array<ArrayBuffer> — BufferSource requires ArrayBuffer backing under TS 7; the server/safeFetch.ts precedent compiles only because server/ is outside tsconfig scope.
+- [Phase ?]: [Phase 09-01] PORT-01/PORT-02 stay unchecked until the plans proving end-to-end behavior — 09-01 ships foundations only (mirrors the 04-02 PAGE-01 / 06-01 ACPT-03 split precedent); requirements-completed is [].
 
 ### Pending Todos
 
@@ -258,9 +263,9 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-14T02:00:34.894Z
-Stopped at: Phase 9 context gathered
-Resume file: .planning/phases/09-versioned-export-import/09-CONTEXT.md
+Last session: 2026-08-15T17:58:55.775Z
+Stopped at: Completed 09-01-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 
