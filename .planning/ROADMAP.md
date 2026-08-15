@@ -125,8 +125,34 @@ Plans:
   3. Reader can export just their highlights as a Markdown document (with template variables) for use in external tools like Obsidian or Notion.
   4. Round-trip integrity holds: canonical-text offsets survive export and import (page numbers never appear in the bundle), and a bundle exported on one machine re-imports on another with every highlight re-resolving to `confident` or surfacing honestly as `ambiguous`/`orphan`.
 
-**Plans**: TBD
+**Plans**: 7 plans
 **UI hint**: yes
+
+Plans:
+**Wave 1**
+
+- [ ] 09-01-PLAN.md — Foundations: fflate + ExportBundleSchema + Zip Slip guard + deterministic SHA-256 manifest + download helper + Wave-0 e2e scaffolds
+- [ ] 09-02-PLAN.md — Highlights Markdown renderer (fixed template, honest tri-state) + loadAllHighlights/loadAllNotes bulk store loaders
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 09-03-PLAN.md — conflicts.ts: dry-run 5-kind conflict detection + eager tri-state re-resolution (imported ∪ local ∪ fixtures) + bulk per-kind override resolution
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 09-04-PLAN.md — ExportImportService: buildBundleBytes + validateBundle (six-refusal pipeline, Zip Slip gate, bomb cap) + applyImport (atomic 5-store transaction)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 09-05-PLAN.md — Portability UI: ImportPreviewDialog (structural RemoveConfirm clone) + Settings "Your data" cluster + ArticleView per-article highlights export
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 09-06-PLAN.md — Phase-exit e2e gates: SC#4 round-trip (two-machine harness), SC#2 Zip Slip regression, import-preview flow, highlights-export content, a11y/keyboard
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 09-07-PLAN.md — Gap closure: the 24 pre-existing e2e failures (Phase 08 deferred-items) + honest full-suite gate (npm run test exit 0, 09-07-OUTPUT.md record)
 
 ### Phase 10: Annotation Review Panel
 
@@ -198,7 +224,7 @@ Plans:
 | 6. Prototype Acceptance | v1.0 | 6/6 | Complete | 2026-08-10 |
 | 7. Ingestion Substrate | v2.0 | 7/7 | Complete   | 2026-08-12 |
 | 8. Markdown Pipeline and Personal Library | v2.0 | 5/5 | Complete    | 2026-08-13 |
-| 9. Versioned Export/Import | v2.0 | 0/TBD | Not started | - |
+| 9. Versioned Export/Import | v2.0 | 0/7 | Not started | - |
 | 10. Annotation Review Panel | v2.0 | 0/TBD | Not started | - |
 | 11. PDF Intake | v2.0 | 0/TBD | Not started | - |
 | 12. EPUB Intake | v2.0 | 0/TBD | Not started | - |
