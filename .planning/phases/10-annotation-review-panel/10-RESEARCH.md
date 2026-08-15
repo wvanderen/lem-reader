@@ -657,7 +657,10 @@ confidence despite MDN being official documentation; the two MDN-derived claims
 are additionally corroborated by in-codebase usage (ArticleView L108 Intl usage;
 LibraryView remove fallback hash behavior).
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> All three questions were resolved by plan choices during `/gsd-plan-phase 10`
+> (revision 1); each resolution cites the deciding plan task below.
 
 1. **Where does `MemoizedArticleText` live?**
    - What we know: the class is module-private in `conflicts.ts`; D10-13 mandates the
@@ -665,23 +668,36 @@ LibraryView remove fallback hash behavior).
    - What's unclear: lift-and-export from conflicts.ts (shared) vs mirror in the review
      module with a citation comment.
    - Recommendation: lift-and-export from conflicts.ts (a 2-line export change, zero
-     behavior change, one less twin). Fallback: mirror verbatim — both acceptable.
+      behavior change, one less twin). Fallback: mirror verbatim — both acceptable.
+   - **RESOLVED — lift-and-export** (10-01-PLAN.md Task 1 step 1: add the `export`
+     keyword to the existing class declaration in `conflicts.ts`; no twin class, no
+     behavior change; acceptance criterion `export class MemoizedArticleText`).
 
 2. **Paginated-mode on-mount readiness signal.**
    - What we know: mid-session, `surfaceRef.getPages()` non-empty is the drawer's
      readiness gate; mount-time needs to wait for the first commit.
    - What's unclear: cleanest signal on mount (state already exposed by
      PaginatedSurface vs a bounded rAF retry loop in the effect).
-   - Recommendation: bounded retry loop with the cancelled-flag discipline (no new
-     API surface on PaginatedSurface; aborts cleanly on unmount/swap). Planner picks.
+    - Recommendation: bounded retry loop with the cancelled-flag discipline (no new
+      API surface on PaginatedSurface; aborts cleanly on unmount/swap). Planner picks.
+   - **RESOLVED — bounded retry loop** (10-03-PLAN.md Task 1 step 2: rAF retry loop
+     gated on `surfaceRef.current?.getPages()` non-empty with the cancelled-flag
+     discipline, capped at ~5 seconds so a never-settling pagination cannot spin; on
+     cap → calm no-op + strip — the recommended option accepted).
 
 3. **Mode-toggle button visibility on #/review.**
    - What we know: `handleToggleMode` falls back to preference-flip when no article
      (App.tsx L165–173); Header's annotations-trigger hides when !articleMounted.
    - What's unclear: whether the mode-toggle is also article-gated in current Header
      markup (not re-verified line-by-line this session).
-   - Recommendation: keep Header byte-stable; verify its existing gating in the e2e
-     three-view smoke rather than changing it.
+    - Recommendation: keep Header byte-stable; verify its existing gating in the e2e
+      three-view smoke rather than changing it.
+   - **RESOLVED — Header byte-stable + gating e2e-asserted** (10-02-PLAN.md Task 2
+     test (e), added in revision 1: on `#/review` the annotations-trigger does not
+     render — `articleMounted={view.name === "article"}` at App.tsx L182 keeps the
+     Header L98 conditional false outside the article view — asserted via
+     toHaveCount(0) on the /Highlights and notes/ button in route-entry.spec; Pitfall
+     10 regression risk now guarded).
 
 ## Environment Availability
 
