@@ -70,6 +70,35 @@ describe("parseHash — route parser (unit)", () => {
     window.location.hash = "#/unknown/route";
     expect(parseHash()).toEqual({ name: "list" });
   });
+
+  // Plan 10-02 (D10-03, RECV-01.h) — the /h/ deep-link grammar + the
+  // #/review route. Strengthen-only: every case above stays byte-stable.
+  it("maps '#/article/<id>/h/<highlightId>' to the article view with jumpHighlightId", () => {
+    window.location.hash = "#/article/a-one/h/hl-123";
+    expect(parseHash()).toEqual({
+      name: "article",
+      id: "a-one",
+      jumpHighlightId: "hl-123",
+    });
+  });
+
+  it("maps '#/article/<id>/h/' (trailing slash, empty id) to the list view", () => {
+    // The optional /h/ group requires [^/]+ — an empty capture fails the
+    // group AND the $ anchor, so the whole regex misses and the parser
+    // falls through to the list fallback. This documents that behavior.
+    window.location.hash = "#/article/a-one/h/";
+    expect(parseHash()).toEqual({ name: "list" });
+  });
+
+  it("maps '#/review' to the review view", () => {
+    window.location.hash = "#/review";
+    expect(parseHash()).toEqual({ name: "review" });
+  });
+
+  it("maps '#/review/x' (unknown sub-route) to the list view", () => {
+    window.location.hash = "#/review/x";
+    expect(parseHash()).toEqual({ name: "list" });
+  });
 });
 
 describe("App — fragment hashes do not swap the view (Gap 3)", () => {

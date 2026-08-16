@@ -6,9 +6,9 @@
 //
 // SENTINEL ONLY (the 04-02 h1-visible precedent): proves the Playwright
 // harness reaches the app under this Phase-10 route form in all three
-// engines. Under today's two-view router `#/review` is an unknown route that
-// falls back to the library list, so the sentinel asserts the list h1 is
-// visible after navigation.
+// engines. Plan 10-02 landed the three-view router, so `#/review` now
+// resolves to ReviewView — the sentinel asserts the review h1 is visible
+// after navigation (updated from the 10-01 two-view fallback assertion).
 //
 // Plan 10-03 REPLACES this sentinel with the real listing assertions
 // (cross-article rows + article/date/position metadata + React-text-children
@@ -19,12 +19,10 @@ import { test, expect } from "@playwright/test";
 import { BASE } from "../annotations/_fixtures";
 
 test.describe("RECV-01.b review-panel listing (10-01 Wave-0 sentinel)", () => {
-  test("#/review reaches the app (h1 visible after router fallback)", async ({
-    page,
-  }) => {
+  test("#/review reaches the app (review h1 visible)", async ({ page }) => {
     await page.goto(`${BASE}/#/review`);
     await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
+      page.getByRole("heading", { level: 1, name: "Review highlights" }),
     ).toBeVisible();
   });
 });

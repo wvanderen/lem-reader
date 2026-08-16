@@ -1,8 +1,9 @@
 // src/App.tsx
-// Hash-based two-view router (A2 recommendation, no router library —
+// Hash-based three-view router (A2 recommendation, no router library —
 // STACK.md "no premature abstractions"). Subscribes to `hashchange` and swaps
-// between the LibraryView (default, Plan 08-03) and ArticleView
-// (#/article/<id>). The SkipLink is the first focusable element in DOM order
+// between the LibraryView (default, Plan 08-03), ArticleView
+// (#/article/<id>[/h/<highlightId>]), and ReviewView (#/review, Plan 10-02).
+// The SkipLink is the first focusable element in DOM order
 // (UI-SPEC §Interaction 1).
 //
 // Phase 2 (D2-01/D2-02): wraps the tree in <SettingsProvider> and mounts the
@@ -22,6 +23,7 @@
 import { useEffect, useRef, useState } from "react";
 import { LibraryView } from "./ingestion/library/LibraryView";
 import { ArticleView } from "./routes/ArticleView";
+import { ReviewView } from "./routes/review/ReviewView";
 import { SkipLink } from "./a11y/SkipLink";
 import { Header } from "./reader/Header";
 import { SettingsPanel } from "./reader/SettingsPanel";
@@ -29,11 +31,33 @@ import { StorageBanner } from "./reader/StorageBanner";
 import { WipeConfirm } from "./reader/WipeConfirm";
 import { SettingsProvider, useSettings } from "./settings/SettingsContext";
 
-type View = { name: "list" } | { name: "article"; id: string };
+// Plan 10-02 (D10-01/D10-03) — the View union gains the review alternative
+// and the article alternative gains the optional /h/<highlightId> deep-link
+// capture (consumed by ArticleView in Plan 10-03; parseHash captures it now
+// so the grammar is locked + unit-tested).
+type View =
+  | { name: "list" }
+  | { name: "article"; id: string; jumpHighlightId?: string }
+  | { name: "review" };
 
 function parseHash(): View {
-  const m = /^#\/article\/([a-z0-9-]+)$/.exec(window.location.hash);
-  return m ? { name: "article", id: m[1] as string } : { name: "list" };
+  // Grammar order matters (10-RESEARCH Pattern 1): the /h/ suffix form
+  // matches FIRST, then the exact #/review equality, then the byte-stable
+  // list fallback. The highlightId capture is [^/]+ — deliberately wider
+  // than the article-id charset because highlight ids arrive from imported
+  // bundles (foreign-controlled strings, T-10-02a). The value is used ONLY
+  // as a lookup key (Array.find / getElementById in Plan 10-03) — never
+  // innerHTML, never dynamic property access.
+  const m = /^#\/article\/([a-z0-9-]+)(?:\/h\/([^/]+))?$/.exec(
+    window.location.hash,
+  );
+  if (m) {
+    return { name: "article", id: m[1] as string, jumpHighlightId: m[2] };
+  }
+  if (window.location.hash === "#/review") {
+    return { name: "review" };
+  }
+  return { name: "list" };
 }
 
 /**
@@ -189,8 +213,18 @@ function AppInner() {
         onClose={() => setSettingsOpen(false)}
       />
       <StorageRecoverySurfaces />
+      {/* Plan 10-02 — three-view swap: list → review → article (branch
+          order per the plan). ReviewView takes no props (it re-derives its
+          whole state from Dexie on mount by design). jumpHighlightId is
+          captured by parseHash but NOT threaded to ArticleView yet — its
+          consumption (on-mount jump pipeline) ships in Plan 10-03; passing
+          it now would be a tsc error against ArticleView's current props.
+          The [view] reset effect above fires on review↔article swaps —
+          desirable (drawer/count reset). */}
       {view.name === "list" ? (
         <LibraryView />
+      ) : view.name === "review" ? (
+        <ReviewView />
       ) : (
         <ArticleView
           articleId={view.id}

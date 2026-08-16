@@ -105,6 +105,22 @@ export function LibraryView() {
     <main id="main">
       {/* byte-stable page heading (SC#1 regression target — Pitfall 8-5) */}
       <h1>Saved articles</h1>
+      {/* Plan 10-02 (D10-02) — the sole Phase-10 entry point into the
+          cross-article review panel. Reuses the quiet-hairline
+          header-cluster button class (.article-export-highlights — the
+          same styling tokens as the sibling header controls: transparent
+          bg, hairline border, 44px touch, accent on hover). Navigation is
+          a plain hash assignment (the #/ fallback precedent below), which
+          pushes a history entry so browser-back returns to the library. */}
+      <button
+        type="button"
+        className="article-export-highlights"
+        onClick={() => {
+          window.location.hash = "#/review";
+        }}
+      >
+        Review highlights
+      </button>
       {/* 07-06 (D7-01 + D7-02) — minimal ingest control mounted above the
           article list. Extended in Plan 04 (file upload form). */}
       <IngestControl />
