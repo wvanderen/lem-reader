@@ -1,0 +1,67 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R /Outlines 9 0 R /PageMode /UseOutlines >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R 5 0 R] /Count 2 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 7 0 R /F2 8 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 489 >>
+stream
+BT /F2 18 Tf 60 740 Td (Outlined Document) Tj ET
+BT /F1 12 Tf 60 706 Td (An outlined document carries a bookmark tree alongside its pages. Screen readers) Tj ET
+BT /F1 12 Tf 60 690 Td (and sidebar views use the outline for navigation, so the first heading of a) Tj ET
+BT /F1 12 Tf 60 674 Td (section can come from a bookmark.) Tj ET
+BT /F1 12 Tf 60 650 Td (Both bookmarks in this fixture point at the top of a page through explicit array) Tj ET
+BT /F1 12 Tf 60 634 Td (destinations.) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 7 0 R /F2 8 0 R >> >> /Contents 6 0 R >>
+endobj
+6 0 obj
+<< /Length 307 >>
+stream
+BT /F2 18 Tf 60 740 Td (Second Section) Tj ET
+BT /F1 12 Tf 60 706 Td (The second section sits on its own page so the second bookmark has an) Tj ET
+BT /F1 12 Tf 60 690 Td (unambiguous target. Heading recovery should prefer the outline entry when one) Tj ET
+BT /F1 12 Tf 60 674 Td (points at this page.) Tj ET
+endstream
+endobj
+7 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+8 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+9 0 obj
+<< /Type /Outlines /First 10 0 R /Last 11 0 R /Count 2 >>
+endobj
+10 0 obj
+<< /Title (Opening Notes) /Parent 9 0 R /Next 11 0 R /Dest [3 0 R /XYZ 0 792 0] >>
+endobj
+11 0 obj
+<< /Title (Second Section) /Parent 9 0 R /Prev 10 0 R /Dest [5 0 R /XYZ 0 792 0] >>
+endobj
+xref
+0 12
+0000000000 65535 f 
+0000000009 00000 n 
+0000000097 00000 n 
+0000000160 00000 n 
+0000000296 00000 n 
+0000000836 00000 n 
+0000000972 00000 n 
+0000001330 00000 n 
+0000001400 00000 n 
+0000001475 00000 n 
+0000001548 00000 n 
+0000001647 00000 n 
+trailer
+<< /Size 12 /Root 1 0 R >>
+startxref
+1747
+%%EOF

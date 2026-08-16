@@ -1,0 +1,80 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R 5 0 R] /Count 2 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 7 0 R /F2 8 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 1147 >>
+stream
+BT /F1 12 Tf 60 740 Td (Columns divide a printed page into) Tj ET
+BT /F1 12 Tf 60 726 Td (parallel streams of prose. A) Tj ET
+BT /F1 12 Tf 60 712 Td (reader follows one stream from the) Tj ET
+BT /F1 12 Tf 60 698 Td (top of the page to the bottom) Tj ET
+BT /F1 12 Tf 60 684 Td (before crossing the gutter to the) Tj ET
+BT /F1 12 Tf 60 670 Td (next column in line.) Tj ET
+BT /F1 12 Tf 60 650 Td (Magazines and journals use columns) Tj ET
+BT /F1 12 Tf 60 636 Td (to control line length, and) Tj ET
+BT /F1 12 Tf 60 622 Td (therefore pacing, on a wide sheet) Tj ET
+BT /F1 12 Tf 60 608 Td (of paper.) Tj ET
+BT /F1 12 Tf 312 740 Td (Screens inherited the convention) Tj ET
+BT /F1 12 Tf 312 726 Td (without the physical constraint.) Tj ET
+BT /F1 12 Tf 312 712 Td (On a narrow viewport two columns) Tj ET
+BT /F1 12 Tf 312 698 Td (squeeze line length below any) Tj ET
+BT /F1 12 Tf 312 684 Td (comfortable reading measure for) Tj ET
+BT /F1 12 Tf 312 670 Td (the eyes.) Tj ET
+BT /F1 12 Tf 312 650 Td (A repagination engine must detect) Tj ET
+BT /F1 12 Tf 312 636 Td (the layout instead of assuming a) Tj ET
+BT /F1 12 Tf 312 622 Td (single flow of text.) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 7 0 R /F2 8 0 R >> >> /Contents 6 0 R >>
+endobj
+6 0 obj
+<< /Length 932 >>
+stream
+BT /F1 12 Tf 60 740 Td (The detector compares text mass in) Tj ET
+BT /F1 12 Tf 60 726 Td (the left and right x-ranges of) Tj ET
+BT /F1 12 Tf 60 712 Td (every page. When both ranges carry) Tj ET
+BT /F1 12 Tf 60 698 Td (more than fifteen percent of the) Tj ET
+BT /F1 12 Tf 60 684 Td (page text the document refuses) Tj ET
+BT /F1 12 Tf 60 670 Td (intake.) Tj ET
+BT /F1 12 Tf 60 650 Td (Detection happens before any block) Tj ET
+BT /F1 12 Tf 60 636 Td (mapping runs.) Tj ET
+BT /F1 12 Tf 312 740 Td (Refusal is honest failure. A) Tj ET
+BT /F1 12 Tf 312 726 Td (silently reordered column would) Tj ET
+BT /F1 12 Tf 312 712 Td (mangle quotations and scramble) Tj ET
+BT /F1 12 Tf 312 698 Td (anchors, so the calm answer is a) Tj ET
+BT /F1 12 Tf 312 684 Td (typed reason and no library entry) Tj ET
+BT /F1 12 Tf 312 670 Td (at all.) Tj ET
+BT /F1 12 Tf 312 650 Td (The reader keeps a predictable) Tj ET
+BT /F1 12 Tf 312 636 Td (surface.) Tj ET
+endstream
+endobj
+7 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+8 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+xref
+0 9
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000121 00000 n 
+0000000257 00000 n 
+0000001456 00000 n 
+0000001592 00000 n 
+0000002575 00000 n 
+0000002645 00000 n 
+trailer
+<< /Size 9 /Root 1 0 R >>
+startxref
+2720
+%%EOF

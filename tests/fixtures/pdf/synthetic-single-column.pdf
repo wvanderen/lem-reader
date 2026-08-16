@@ -1,0 +1,75 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R 5 0 R 7 0 R] /Count 3 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 9 0 R /F2 10 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 742 >>
+stream
+BT /F2 18 Tf 60 740 Td (A Study of Calm Reading) Tj ET
+BT /F1 12 Tf 60 706 Td (Long-form reading asks for steady attention. A page that keeps its place, its) Tj ET
+BT /F1 12 Tf 60 690 Td (measure, and its rhythm lets the reader stay inside the argument instead of) Tj ET
+BT /F1 12 Tf 60 674 Td (managing the window around it.) Tj ET
+BT /F1 12 Tf 60 650 Td (This document is a synthetic fixture. Every glyph inside it was placed by a) Tj ET
+BT /F1 12 Tf 60 634 Td (script so that the byte stream, the page count, and the layout stay identical) Tj ET
+BT /F1 12 Tf 60 618 Td (across machines and re-runs.) Tj ET
+BT /F1 12 Tf 60 594 Td (Good pagination should read like conclu-) Tj ET
+BT /F1 12 Tf 60 578 Td (sion rather than interruption.) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 9 0 R /F2 10 0 R >> >> /Contents 6 0 R >>
+endobj
+6 0 obj
+<< /Length 560 >>
+stream
+BT /F2 18 Tf 60 740 Td (Method) Tj ET
+BT /F1 12 Tf 60 706 Td (The method is deliberately boring. A generator emits a document with known) Tj ET
+BT /F1 12 Tf 60 690 Td (geometry, a reader parses it back, and the test compares the recovered text) Tj ET
+BT /F1 12 Tf 60 674 Td (against what was placed.) Tj ET
+BT /F1 12 Tf 60 650 Td (Any difference between placed and recovered text is a defect in the reading) Tj ET
+BT /F1 12 Tf 60 634 Td (pipeline, never in the fixture, because the fixture is derived from constants) Tj ET
+BT /F1 12 Tf 60 618 Td (alone.) Tj ET
+endstream
+endobj
+7 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 9 0 R /F2 10 0 R >> >> /Contents 8 0 R >>
+endobj
+8 0 obj
+<< /Length 421 >>
+stream
+BT /F1 12 Tf 60 740 Td (The first group of paragraphs sits above the figure stand-in. Its lines are) Tj ET
+BT /F1 12 Tf 60 724 Td (dense enough to establish a reading rhythm before the visual pause.) Tj ET
+BT /F1 12 Tf 60 500 Td (The second group resumes below the figure stand-in. Text after a large vertical) Tj ET
+BT /F1 12 Tf 60 484 Td (gap should still flow into the same reading order without a forced break.) Tj ET
+endstream
+endobj
+9 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+10 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+xref
+0 11
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000127 00000 n 
+0000000264 00000 n 
+0000001057 00000 n 
+0000001194 00000 n 
+0000001805 00000 n 
+0000001942 00000 n 
+0000002414 00000 n 
+0000002484 00000 n 
+trailer
+<< /Size 11 /Root 1 0 R >>
+startxref
+2560
+%%EOF
