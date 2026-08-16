@@ -166,7 +166,7 @@ Plans:
   3. Reader can filter the review list (by article, tag, or confidence) and sort it (by date, article, or position).
   4. Ambiguous and orphan annotations surface honestly with a tri-state indicator (never silently hidden), and the reader can edit or delete highlights in place from the panel.
 
-**Plans**: 4/6 plans executed
+**Plans**: 5/6 plans executed
 **UI hint**: yes
 
 Plans:
@@ -182,7 +182,7 @@ Plans:
 
 - [x] 10-03-PLAN.md — ArticleView deep-link jump (readiness-gated on-mount effect + replaceState strip) + deep-link e2e
 - [x] 10-04-PLAN.md — Surface behavior e2e: listing/filter/sort + tri-state + empty states
-- [ ] 10-05-PLAN.md — Curation dialogs (ReviewNoteDialog + DeleteHighlightConfirm) + ReviewView wiring + curate e2e
+- [x] 10-05-PLAN.md — Curation dialogs (ReviewNoteDialog + DeleteHighlightConfirm) + ReviewView wiring + curate e2e
 
 **Wave 4** *(blocked on Wave 3)*
 
@@ -244,7 +244,7 @@ Plans:
 | 7. Ingestion Substrate | v2.0 | 7/7 | Complete   | 2026-08-12 |
 | 8. Markdown Pipeline and Personal Library | v2.0 | 5/5 | Complete    | 2026-08-13 |
 | 9. Versioned Export/Import | v2.0 | 7/7 | Complete    | 2026-08-15 |
-| 10. Annotation Review Panel | v2.0 | 4/6 | In Progress|  |
+| 10. Annotation Review Panel | v2.0 | 5/6 | In Progress|  |
 | 11. PDF Intake | v2.0 | 0/TBD | Not started | - |
 | 12. EPUB Intake | v2.0 | 0/TBD | Not started | - |
 | 13. Polish and Acceptance | v2.0 | 0/TBD | Not started | - |

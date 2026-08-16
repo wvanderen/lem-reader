@@ -5,15 +5,15 @@ milestone_name: Personal Library
 current_phase: 10
 current_phase_name: annotation-review-panel
 status: executing
-stopped_at: Completed 10-04-PLAN.md (listing/tri-state/empty-states e2e)
-last_updated: "2026-08-16T01:17:14.794Z"
+stopped_at: Completed 10-05-PLAN.md (in-place curation)
+last_updated: "2026-08-16T01:33:42.808Z"
 last_activity: 2026-08-16
 last_activity_desc: Phase 10 execution started
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 25
-  completed_plans: 23
+  completed_plans: 24
   percent: 43
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 ## Current Position
 
 Phase: 10 (annotation-review-panel) — EXECUTING
-Plan: 5 of 6
+Plan: 6 of 6
 Status: Ready to execute
 Last activity: 2026-08-16 — Phase 10 execution started
 
@@ -122,6 +122,7 @@ Progress: [███░░░░░░░] 29% of v2.0 milestone
 | Phase 10 P02 | 14 min | 2 tasks | 12 files |
 | Phase 10 P03 | 12 min | 2 tasks | 4 files |
 | Phase 10 P04 | 6 min | 2 tasks | 3 files |
+| Phase 10 P05 | 10 min | 3 tasks tasks | 6 files files |
 
 ## Accumulated Context
 
@@ -267,6 +268,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: 10-04: RECV-01 stays unchecked — b/.d/.e/.g proven in real browsers (36 new cells) but .c click-from-row, .f curation, .i close in 10-05/10-06 (10-01/02/03 split precedent)
 - [Phase ?]: 10-04: Seed-time corpus self-verification — module-load throws if the corpus loses discriminating power (date/position crossing, excerpt uniqueness, shipped-resolver ambiguity verdict); schema-valid spread augmentation (createdAt/tags/ambiguous anchor) over forked helpers
 - [Phase ?]: 10-04: Position-sort library-order determinism — Dexie toArray() returns primary-key order, so corpus ids review-alpha-corpus < review-zeta-corpus pin the seeded library order the Position sort must reproduce
+- [Phase ?]: [Phase 10 10-05]: Curation dialogs are guarded single-commit structural clones — ReviewNoteDialog invokes ONE commit from BOTH Done onClick and the close listener with a per-session guard (exactly-once writes; Esc commits, Done never double-writes — Pitfall 7 simple option); DeleteHighlightConfirm fires deleteHighlight ONLY in its Proceed onClick and routes Esc-originated closes through onCancel (the 09-06 openRef fix — without it the [open] effect wedges the dialog shut). deleteHighlight's Dexie transaction is the ONE cascade call (highlight+note, one rollback unit).
 
 ### Pending Todos
 
@@ -296,8 +298,8 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-16T01:17:08.332Z
-Stopped at: Completed 10-04-PLAN.md (listing/tri-state/empty-states e2e)
+Last session: 2026-08-16T01:33:33.548Z
+Stopped at: Completed 10-05-PLAN.md (in-place curation)
 Resume file: None
 
 ## Operator Next Steps
