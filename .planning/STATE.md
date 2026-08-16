@@ -5,15 +5,15 @@ milestone_name: Personal Library
 current_phase: 10
 current_phase_name: annotation-review-panel
 status: executing
-stopped_at: Completed 10-03-PLAN.md (deep-link jump arrival half + e2e matrix)
-last_updated: "2026-08-16T01:04:52.663Z"
+stopped_at: Completed 10-04-PLAN.md (listing/tri-state/empty-states e2e)
+last_updated: "2026-08-16T01:17:14.794Z"
 last_activity: 2026-08-16
 last_activity_desc: Phase 10 execution started
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 25
-  completed_plans: 22
+  completed_plans: 23
   percent: 43
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 ## Current Position
 
 Phase: 10 (annotation-review-panel) — EXECUTING
-Plan: 4 of 6
+Plan: 5 of 6
 Status: Ready to execute
 Last activity: 2026-08-16 — Phase 10 execution started
 
@@ -121,6 +121,7 @@ Progress: [███░░░░░░░] 29% of v2.0 milestone
 | Phase 10 P01 | 7 min | 2 tasks | 10 files |
 | Phase 10 P02 | 14 min | 2 tasks | 12 files |
 | Phase 10 P03 | 12 min | 2 tasks | 4 files |
+| Phase 10 P04 | 6 min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -263,6 +264,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: 10-01: MemoizedArticleText lift-and-export from conflicts.ts (not a mirrored twin) — D10-13 reuse discipline; 125/125 portability tests prove behavior-neutrality
 - [Phase ?]: 10-01: orphanEntries keep input order + sections exist only for articles with surviving entries — unspecified display details owned by Plans 10-02/10-03
 - [Phase ?]: 10-03: deep-link jump — readiness-gated on-mount effect (bounded rAF retry over article/highlight/pagination settles, ~5s cap) reuses the D5-11 tail verbatim + strips /h/ via src/'s first history.replaceState; jumpPendingRef (declared-before-the-restore-effect ordering) suppresses the saved-location restore — deep-link wins (Pitfall 3)
+- [Phase ?]: 10-04: RECV-01 stays unchecked — b/.d/.e/.g proven in real browsers (36 new cells) but .c click-from-row, .f curation, .i close in 10-05/10-06 (10-01/02/03 split precedent)
+- [Phase ?]: 10-04: Seed-time corpus self-verification — module-load throws if the corpus loses discriminating power (date/position crossing, excerpt uniqueness, shipped-resolver ambiguity verdict); schema-valid spread augmentation (createdAt/tags/ambiguous anchor) over forked helpers
+- [Phase ?]: 10-04: Position-sort library-order determinism — Dexie toArray() returns primary-key order, so corpus ids review-alpha-corpus < review-zeta-corpus pin the seeded library order the Position sort must reproduce
 
 ### Pending Todos
 
@@ -292,8 +296,8 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-16T01:04:52.655Z
-Stopped at: Completed 10-03-PLAN.md (deep-link jump arrival half + e2e matrix)
+Last session: 2026-08-16T01:17:08.332Z
+Stopped at: Completed 10-04-PLAN.md (listing/tri-state/empty-states e2e)
 Resume file: None
 
 ## Operator Next Steps
