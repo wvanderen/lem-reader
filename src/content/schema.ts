@@ -213,6 +213,7 @@ export const ArticleSourceSchema = z.enum([
   "paste",
   "markdown", // Phase 8 — D8-16 (.md upload via markdownToBlocks)
   "html-upload", // Phase 8 — D8-15 (.html file-upload; paste textarea stays as "paste")
+  "pdf", // Phase 11 — ING-04 (.pdf upload via pdfToBlocks)
 ]);
 export type ArticleSource = z.infer<typeof ArticleSourceSchema>;
 

@@ -1,19 +1,19 @@
 // src/ingestion/library/SourceBadge.tsx
 // Plan 08-03 Task 2 — SourceBadge (D8-02 + LIB-05). A small `.meta`-style
-// `<p>` rendering ONE of five text variants based on
+// `<p>` rendering ONE of six text variants based on
 // `article.ingestionMeta?.source ?? "fixture"`. Reads as quiet provenance
 // metadata — no border, no fill, no icon (UI-SPEC §SourceBadge).
 //
 // LIB-05 "reach the original source" is satisfied at the row level for the
 // `url` + `paste` variants by wrapping the badge text in
 // `<a href={sourceUrl} rel="noreferrer noopener" target="_blank">`. Markdown
-// + html-upload + fixture variants render plain text (no source URL —
+// + html-upload + pdf + fixture variants render plain text (no source URL —
 // D8-17 markdown has no canonical URL; html-upload is a paste of arbitrary
-// HTML; fixtures are bundled). Mirrors the existing ArticleView "Originally
-// published at {domain}" pattern.
+// HTML; pdf is a local upload; fixtures are bundled). Mirrors the existing
+// ArticleView "Originally published at {domain}" pattern.
 //
-// The five variants are EXHAUSTIVE over `ArticleSourceSchema`
-// (fixture|url|paste|markdown|html-upload — Plan 01 widened the enum).
+// The six variants are EXHAUSTIVE over `ArticleSourceSchema`
+// (fixture|url|paste|markdown|html-upload|pdf — Plan 11 widened the enum).
 // Threat T-8-12 (SourceBadge link href injection): the sourceUrl comes from
 // `article.provenance.sourceUrl` which is `httpUrl`-refined at ArticleSchema
 // parse time — only http(s) URLs survive (Pitfall 5). The
@@ -44,6 +44,8 @@ function badgeLabel(source: NonNullable<CanonicalArticle["ingestionMeta"]>["sour
       return "Markdown";
     case "html-upload":
       return "HTML file";
+    case "pdf":
+      return "PDF";
   }
 }
 

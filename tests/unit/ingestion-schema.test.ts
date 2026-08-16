@@ -96,9 +96,10 @@ const validIngestionMeta = {
 describe("ArticleSourceSchema", () => {
   // Phase 8 (Plan 08-01 Task 2) widened the enum additively per D8-15 + D8-16:
   // "markdown" (.md upload via markdownToBlocks) + "html-upload" (.html file
-  // upload via paste path with a distinct badge per D8-02). Future phases
-  // continue the additive pattern ("pdf" Phase 11, "epub-chapter" Phase 12).
-  it("enum equals exactly [fixture, url, paste, markdown, html-upload] (D7-08 + D8-15 + D8-16)", () => {
+  // upload via paste path with a distinct badge per D8-02). Phase 11 (Plan
+  // 11-01 Task 2) adds "pdf" (ING-04 — .pdf upload via pdfToBlocks). Future
+  // phases continue the additive pattern ("epub-chapter" Phase 12).
+  it("enum equals exactly [fixture, url, paste, markdown, html-upload, pdf] (D7-08 + D8-15 + D8-16 + ING-04)", () => {
     // Zod 4: `.options` is the value array; `.enum` is now the object map.
     expect(ArticleSourceSchema.options).toEqual([
       "fixture",
@@ -106,17 +107,18 @@ describe("ArticleSourceSchema", () => {
       "paste",
       "markdown",
       "html-upload",
+      "pdf",
     ]);
   });
 
-  it.each(["fixture", "url", "paste", "markdown", "html-upload"] as const)(
+  it.each(["fixture", "url", "paste", "markdown", "html-upload", "pdf"] as const)(
     "parses source %s",
     (source) => {
       expect(ArticleSourceSchema.parse(source)).toBe(source);
     },
   );
 
-  it.each(["invalid-source", "pdf", "epub-chapter", "", "URL"])(
+  it.each(["invalid-source", "epub-chapter", "", "URL", "PDF"])(
     "rejects source %s (closed enum — forward-compat via later widening)",
     (bad) => {
       expect(() => ArticleSourceSchema.parse(bad)).toThrow();
@@ -217,7 +219,7 @@ describe("ArticleSchema.ingestionMeta (additive optional — Pitfall 9)", () => 
 
 // ── src/ingestion/types.ts envelope schemas ──────────────────────────────────
 
-describe("IngestionRequestSchema (D7-03 — {url} | {html})", () => {
+describe("IngestionRequestSchema (D7-03 — {url} | {html} | {markdown} | {pdf})", () => {
   it("parses a url request", () => {
     expect(IngestionRequestSchema.parse({ url: "https://example.com" })).toEqual({
       url: "https://example.com",
@@ -242,6 +244,30 @@ describe("IngestionRequestSchema (D7-03 — {url} | {html})", () => {
 
   it("rejects empty html (D7-03 — paste path requires content)", () => {
     expect(() => IngestionRequestSchema.parse({ html: "" })).toThrow();
+  });
+
+  // Phase 11 (Plan 11-01 Task 2) — the fourth union member: pdf base64-in-JSON
+  // with an optional filename hint (mirrors the markdown variant's shape).
+  it("parses a valid base64 pdf payload with filename (ING-04 + D11)", () => {
+    // base64 of "%PDF-1.4\n" — a representative (tiny) PDF prefix.
+    const pdfBase64 = "JVBERi0xLjQK";
+    const parsed = IngestionRequestSchema.parse({
+      pdf: pdfBase64,
+      filename: "paper.pdf",
+    });
+    expect(parsed).toEqual({ pdf: pdfBase64, filename: "paper.pdf" });
+  });
+
+  it("rejects a pdf value containing non-base64 characters", () => {
+    // Spaces + '!' are outside the base64 alphabet — the boundary refuses the
+    // payload before the server ever decodes it.
+    expect(() =>
+      IngestionRequestSchema.parse({ pdf: "this is not base64!" }),
+    ).toThrow();
+  });
+
+  it("rejects an empty pdf string (min(1) — mirrors html/markdown)", () => {
+    expect(() => IngestionRequestSchema.parse({ pdf: "" })).toThrow();
   });
 });
 
@@ -268,7 +294,7 @@ describe("IngestionResponseSchema", () => {
     expect(parsed.confidence.state).toBe("low");
   });
 
-  it("parses a failure envelope with one of the 11 IngestionFailureReason values", () => {
+  it("parses a failure envelope with one of the 16 IngestionFailureReason values", () => {
     const parsed = IngestionResponseSchema.parse({
       ok: false,
       reason: "ssrf-blocked-private-ip",
@@ -284,8 +310,8 @@ describe("IngestionResponseSchema", () => {
   });
 });
 
-describe("IngestionFailureReasonEnum (the 11 cataloged reasons)", () => {
-  it("exposes exactly the 11 reasons from RESEARCH.md + the dedupe-refuse + unsupported-extraction additions", () => {
+describe("IngestionFailureReasonEnum (the 16 cataloged reasons)", () => {
+  it("exposes exactly the 16 reasons — the Phase 7 catalog + Phase 11 PDF members slotting in before the dedupe-refuse + catch-all tail", () => {
     expect(IngestionFailureReasonEnum.options).toEqual([
       "ssrf-blocked-scheme",
       "ssrf-blocked-private-ip",
@@ -296,10 +322,25 @@ describe("IngestionFailureReasonEnum (the 11 cataloged reasons)", () => {
       "extraction-unsupported",
       "extraction-too-low-confidence",
       "round-trip-anchor-failed",
+      // Phase 11 ING-04 — Pattern 7 of 11-RESEARCH.md; "already-in-library"
+      // and "server-error" stay last.
+      "pdf-unreadable",
+      "pdf-encrypted",
+      "pdf-scanned",
+      "pdf-multi-column",
+      "pdf-too-large",
       "already-in-library",
       "server-error",
     ]);
-    expect(IngestionFailureReasonEnum.options).toHaveLength(11);
+    expect(IngestionFailureReasonEnum.options).toHaveLength(16);
+  });
+
+  it("parses each Phase 11 PDF reason (pdf-scanned et al. — the enum accepts all five new members)", () => {
+    expect(IngestionFailureReasonEnum.parse("pdf-scanned")).toBe("pdf-scanned");
+    expect(IngestionFailureReasonEnum.parse("pdf-unreadable")).toBe("pdf-unreadable");
+    expect(IngestionFailureReasonEnum.parse("pdf-encrypted")).toBe("pdf-encrypted");
+    expect(IngestionFailureReasonEnum.parse("pdf-multi-column")).toBe("pdf-multi-column");
+    expect(IngestionFailureReasonEnum.parse("pdf-too-large")).toBe("pdf-too-large");
   });
 });
 

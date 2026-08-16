@@ -65,3 +65,45 @@ export const METADATA_HOSTNAMES = [
   "metadata.google.internal",
   "metadata.amazonaws.com",
 ] as const;
+
+// ── Phase 11 — PDF intake resource caps (Plan 11-01 Task 2; T-11-01 DoS) ─────
+// Values from 11-PATTERNS.md §server/limits.ts + the planner resolutions of
+// 11-RESEARCH Open Question 2 (timeout mirrors REQUEST_TIMEOUT_MS) and the
+// ARCHITECTURE.md L781 "16 MB" mislabel correction (State of the Art).
+
+// The decoded-byte cap lives in src/ingestion/types.ts (PDF_MAX_BYTES) because
+// the /src→/server import direction is forbidden — the client picker needs the
+// same constant. Imported + re-exported here so server modules import every cap
+// from ONE module (server/limits.ts), per the Wave-2+ convention above.
+import { PDF_MAX_BYTES } from "../src/ingestion/types";
+export { PDF_MAX_BYTES };
+
+/** Maximum page count of an admitted PDF (T-11-01 DoS cap). ~500 pages covers
+ * book-length documents while bounding extraction work; a document over this
+ * refuses with `pdf-too-large` BEFORE parsing begins. */
+export const PDF_MAX_PAGES = 500;
+
+/** PDF extraction timeout (AbortSignal cap) — mirrors REQUEST_TIMEOUT_MS above
+ * (planner resolution of 11-RESEARCH Open Question 2): Workers CPU limit is
+ * 30s on most plans and text extraction is CPU-bound, so the same wall-clock
+ * generosity/tightness tradeoff applies. */
+export const PDF_EXTRACTION_TIMEOUT_MS = 30_000;
+
+/** MAX_IMAGE_PIXELS — the pdf.js image-decompression bomb cap. PROVENANCE
+ * CORRECTION: this is TOTAL PIXELS (width×height ≈ 16 megapixels), NOT bytes —
+ * correcting the ARCHITECTURE.md L781 "16 MB" label per 11-RESEARCH.md §State
+ * of the Art. A modest pixel count decompresses to enormous byte counts (the
+ * classic zip-bomb analog: a tiny PNG declaring a 65,000×65,000 canvas); the
+ * pdf.js `EvaluatorOptions.maxImagePixels` option counts PIXELS, and 16,777,216
+ * (4096×4096) is its default ceiling — re-stated here explicitly so the cap is
+ * auditable alongside every other server limit. */
+export const MAX_IMAGE_PIXELS = 16_777_216;
+
+/** Maximum raw JSON body size accepted by the ingest middleware for the PDF
+ * path. The request carries base64-in-JSON (~33% inflation over the decoded
+ * PDF_MAX_BYTES) plus JSON envelope overhead (keys, filename, quotes) — Pitfall
+ * 7 of 11-RESEARCH.md: the middleware must refuse on `content-length` BEFORE
+ * readBody accumulates, and this is the number it checks against. The +2048
+ * slack absorbs the envelope; the Math.ceil rounds the 4/3 base64 ratio up so
+ * a maximum-size valid PDF is never refused by the transport guard. */
+export const MAX_INGEST_BODY_BYTES = Math.ceil((PDF_MAX_BYTES * 4) / 3) + 2048;
