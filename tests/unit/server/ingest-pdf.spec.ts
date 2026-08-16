@@ -11,6 +11,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Readable } from "node:stream";
+import type { ServerResponse } from "node:http";
 import { describe, expect, it } from "vitest";
 import type { Connect, ViteDevServer } from "vite";
 import { viteIngestMiddleware } from "../../../dev-server/ingest-middleware";
@@ -217,7 +218,7 @@ describe("ingest — pdf round-trip anchor re-proof (SC#4a)", () => {
 /** Captured connect handler shape the Vite middleware installs. */
 type InstalledHandler = (
   req: Connect.IncomingMessage,
-  res: Connect.ServerResponse,
+  res: ServerResponse,
   next: Connect.NextFunction,
 ) => void | Promise<void>;
 
@@ -243,6 +244,8 @@ interface ResStub {
   headers: Record<string, string>;
   body: string;
   ended: boolean;
+  setHeader(name: string, value: string): void;
+  end(chunk?: string): void;
 }
 
 function resStub(): ResStub {
@@ -252,7 +255,9 @@ function resStub(): ResStub {
     body: "",
     ended: false,
     setHeader(name: string, value: string) {
-      this.headers[name] = value;
+      // Node's ServerResponse.setHeader stores names lowercase — mirror that
+      // so assertions can read headers["content-type"] like real code does.
+      this.headers[name.toLowerCase()] = value;
     },
     end(chunk?: string) {
       this.ended = true;
@@ -293,7 +298,7 @@ describe("viteIngestMiddleware — body caps (T-11-02)", () => {
     });
     const res = resStub();
     let nextCalled = false;
-    await handler(req, res as unknown as Connect.ServerResponse, () => {
+    await handler(req, res as unknown as ServerResponse, () => {
       nextCalled = true;
     });
 
@@ -311,7 +316,7 @@ describe("viteIngestMiddleware — body caps (T-11-02)", () => {
     // re-check fires, and the typed envelope must still come back 413.
     const { req } = reqStub({}, ["A".repeat(MAX_INGEST_BODY_BYTES + 1)]);
     const res = resStub();
-    await handler(req, res as unknown as Connect.ServerResponse, () => {});
+    await handler(req, res as unknown as ServerResponse, () => {});
 
     expect(res.statusCode).toBe(413);
     expect(JSON.parse(res.body)).toEqual({ ok: false, reason: "pdf-too-large" });
@@ -326,7 +331,7 @@ describe("viteIngestMiddleware — body caps (T-11-02)", () => {
     });
     const { req } = reqStub({ "content-length": String(Buffer.byteLength(body, "utf-8")) }, [body]);
     const res = resStub();
-    await handler(req, res as unknown as Connect.ServerResponse, () => {});
+    await handler(req, res as unknown as ServerResponse, () => {});
 
     expect(res.statusCode).toBe(200);
     const parsed = JSON.parse(res.body) as { ok: boolean; article?: { id: string } };
@@ -347,7 +352,7 @@ describe("viteIngestMiddleware — body caps (T-11-02)", () => {
     req.headers = {};
     const res = resStub();
     let nextCalled = false;
-    await handler(req, res as unknown as Connect.ServerResponse, () => {
+    await handler(req, res as unknown as ServerResponse, () => {
       nextCalled = true;
     });
     expect(nextCalled).toBe(true);

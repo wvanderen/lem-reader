@@ -18,8 +18,10 @@
 // ip-address validation covers all 9 OWASP measures on Node;
 // `cf.resolveOverride` is silently ignored on Node (documented residual
 // TOCTOU per T-7-04, acceptable, closed by a future Workers deploy).
+import type { ServerResponse } from "node:http";
 import type { ViteDevServer, Connect } from "vite";
 import { handleIngestBody } from "../server/ingestAdapter";
+import { MAX_INGEST_BODY_BYTES } from "../server/limits";
 import type { IngestionResponse } from "../src/ingestion/types";
 
 /**
@@ -39,10 +41,35 @@ function readBody(req: Connect.IncomingMessage): Promise<string> {
 }
 
 /**
+ * Refuse with the typed pdf-too-large envelope + HTTP 413. Shared by both
+ * cap paths below (content-length pre-read + post-read raw-length re-check)
+ * so the refusal shape stays byte-identical (T-11-02 mitigation).
+ */
+function refuseTooLarge(res: ServerResponse): void {
+  res.statusCode = 413;
+  res.setHeader("Content-Type", "application/json");
+  res.end(
+    JSON.stringify({ ok: false, reason: "pdf-too-large" } satisfies IngestionResponse),
+  );
+}
+
+/**
  * viteIngestMiddleware — returns a Vite `configureServer` hook that installs
  * a connect middleware intercepting POST /api/ingest. The middleware runs the
  * full ingestion pipeline in Node and returns the IngestionResponse as JSON.
  * All other requests fall through to Vite's default handler (the SPA bundle).
+ *
+ * Body-size cap (Pitfall 7 / T-11-02 — Plan 11-03 Task 2): the pdf variant
+ * carries base64-in-JSON bodies up to MAX_INGEST_BODY_BYTES (~13.3MB), and
+ * `readBody` accumulates unbounded. Two guards close that:
+ *   1. PRE-READ — a content-length header over the cap is refused with 413
+ *      BEFORE readBody attaches a single data listener (no allocation).
+ *   2. POST-READ — a chunked request (no content-length) is re-checked
+ *      against the same cap after readBody (byte length, not chars) and
+ *      refused identically.
+ * Nothing else in the route-match/response pattern changes — base64-in-JSON
+ * keeps readBody + handleIngestBody byte-identical (locked transport
+ * decision).
  *
  * Vite's `configureServer(server)` hook receives the `ViteDevServer` instance;
  * the connect middleware stack lives at `server.middlewares`. We install the
@@ -62,13 +89,32 @@ export function viteIngestMiddleware(): (server: ViteDevServer) => void {
       // Match POST /api/ingest exactly. (Vite normalizes the SPA dev server
       // to one origin on :5173, so the client's `fetch("/api/ingest")`
       // arrives here directly — no proxy.)
-      if (req.method !== "POST" || !url.split("?")[0].endsWith("/api/ingest")) {
+      const path = url.split("?")[0] ?? url;
+      if (req.method !== "POST" || !path.endsWith("/api/ingest")) {
         return next();
+      }
+
+      // Guard 1 — content-length PRE-READ cap. An unparseable header falls
+      // through to guard 2 (the post-read re-check still bounds the body).
+      const contentLengthRaw = req.headers["content-length"];
+      if (contentLengthRaw !== undefined) {
+        const contentLength = Number.parseInt(String(contentLengthRaw), 10);
+        if (Number.isFinite(contentLength) && contentLength > MAX_INGEST_BODY_BYTES) {
+          refuseTooLarge(res);
+          return;
+        }
       }
 
       let body: unknown;
       try {
         const raw = await readBody(req);
+        // Guard 2 — post-read raw-length cap (chunked requests carry no
+        // content-length). Byte-accurate: readBody yields a utf-8 string,
+        // the cap counts bytes.
+        if (Buffer.byteLength(raw, "utf-8") > MAX_INGEST_BODY_BYTES) {
+          refuseTooLarge(res);
+          return;
+        }
         body = raw.length === 0 ? null : JSON.parse(raw);
       } catch {
         // JSON.parse failure — surface as the typed server-error envelope.
