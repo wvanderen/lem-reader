@@ -5,15 +5,15 @@ milestone_name: Personal Library
 current_phase: 10
 current_phase_name: annotation-review-panel
 status: executing
-stopped_at: Completed 10-01-PLAN.md (review-panel derivation foundation + Wave-0 sentinels)
-last_updated: "2026-08-16T00:47:19.162Z"
+stopped_at: Completed 10-03-PLAN.md (deep-link jump arrival half + e2e matrix)
+last_updated: "2026-08-16T01:04:52.663Z"
 last_activity: 2026-08-16
 last_activity_desc: Phase 10 execution started
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 25
-  completed_plans: 21
+  completed_plans: 22
   percent: 43
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-15)
 ## Current Position
 
 Phase: 10 (annotation-review-panel) — EXECUTING
-Plan: 3 of 6
+Plan: 4 of 6
 Status: Ready to execute
 Last activity: 2026-08-16 — Phase 10 execution started
 
@@ -120,6 +120,7 @@ Progress: [███░░░░░░░] 29% of v2.0 milestone
 | Phase 09 P07 | 34min | 3 tasks | 5 files |
 | Phase 10 P01 | 7 min | 2 tasks | 10 files |
 | Phase 10 P02 | 14 min | 2 tasks | 12 files |
+| Phase 10 P03 | 12 min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -261,6 +262,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: 10-01: RECV-01 stays unchecked — foundation plan ships deriveReviewSections + Wave-0 sentinels only; requirement closes at the end-to-end panel plans (04-02 PAGE-01 / 09-01 PORT-01 split precedent)
 - [Phase ?]: 10-01: MemoizedArticleText lift-and-export from conflicts.ts (not a mirrored twin) — D10-13 reuse discipline; 125/125 portability tests prove behavior-neutrality
 - [Phase ?]: 10-01: orphanEntries keep input order + sections exist only for articles with surviving entries — unspecified display details owned by Plans 10-02/10-03
+- [Phase ?]: 10-03: deep-link jump — readiness-gated on-mount effect (bounded rAF retry over article/highlight/pagination settles, ~5s cap) reuses the D5-11 tail verbatim + strips /h/ via src/'s first history.replaceState; jumpPendingRef (declared-before-the-restore-effect ordering) suppresses the saved-location restore — deep-link wins (Pitfall 3)
 
 ### Pending Todos
 
@@ -290,8 +292,8 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-16T00:47:19.155Z
-Stopped at: Completed 10-01-PLAN.md (review-panel derivation foundation + Wave-0 sentinels)
+Last session: 2026-08-16T01:04:52.655Z
+Stopped at: Completed 10-03-PLAN.md (deep-link jump arrival half + e2e matrix)
 Resume file: None
 
 ## Operator Next Steps
