@@ -12,6 +12,13 @@
 import { test, expect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { fixtures } from "../../src/fixtures";
+import { wipeDatabase } from "./annotations/_fixtures";
+import {
+  confidentHighlightOn,
+  highlightRow,
+  makeArticle,
+  seedRows,
+} from "./portability/_portability";
 
 const BASE = "http://localhost:5173";
 const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] as const;
@@ -159,4 +166,76 @@ test("a11y ACPT-02 #2: note popover open is a modal dialog + axe-clean + single-
   //     a <dialog> opened via showModal in the target browser baseline.
   const isModal = await popover.evaluate((el) => el.matches(":modal"));
   expect(isModal, "note popover is modal (:modal — showModal opened it)").toBe(true);
+});
+
+// ── Phase 10 (RECV-01.i): the #/review axe gate on a seeded non-empty panel ──
+// Plan 10-06 Task 2 — the review panel route held to the SAME bar as the
+// fixture list + article views: zero serious/critical WCAG 2.2 AA
+// violations plus the Pitfall-8 guards (the one-h1 "Review highlights" +
+// h2 section structure must pass heading-order; the grouped
+// ul.review-section-list rows must pass the list rule). Seeded NON-EMPTY
+// (article + confident highlight + note) so axe samples the real row
+// structure — quote, note preview, date, curation cluster. The two
+// manual-only SR rows in 10-VALIDATION.md stay queued for
+// /gsd-verify-work (axe reports only automatable issues).
+test("review panel #/review: zero serious/critical WCAG 2.2 AA violations (seeded non-empty panel)", async ({
+  page,
+}) => {
+  // Deterministic first-run state (the shared e2e harness discipline).
+  await wipeDatabase(page);
+  // Re-mount so Dexie re-declares its schema BEFORE seeding — the 10-03
+  // harness fix (a hash-only goto is same-document; without the reload,
+  // seedRows' raw indexedDB.open recreates a store-less v1 DB whose open
+  // connection blocks Dexie's v4 upgrade).
+  await page.goto(`${BASE}/#/`);
+  await page.reload();
+  await expect(
+    page.getByRole("heading", { name: "Saved articles" }),
+  ).toBeVisible();
+  // A fixture row renders only once the repository read completed — the
+  // deterministic "Dexie is open + schema declared" signal.
+  await expect(
+    page.getByText("The looting of science fiction").first(),
+  ).toBeVisible();
+  const article = makeArticle({
+    id: "a11y-review-corpus",
+    title: "A Field Guide to Harbor Bells",
+    paragraphs: [
+      "The harbor bells were cast in four different centuries, and the oldest of them still carries an inscription asking to be rung only in fog, a request the pilots have honored so faithfully that nobody alive has heard its voice.",
+      "The bell-ringer's ledger records every fog since 1803, in a hand that grows more confident with each decade, and the margins carry tide notes that the modern meteorological office quietly consults when its models disagree with the water.",
+    ],
+  });
+  const anchor = confidentHighlightOn(article);
+  await seedRows(page, {
+    articles: [article],
+    highlights: [highlightRow("a11y-review-corpus", anchor, "hl-a11y-review-1")],
+    notes: [
+      {
+        schemaVersion: 1,
+        id: "note-a11y-review-1",
+        highlightId: "hl-a11y-review-1",
+        text: "Cross-check the ledger margins against the tide tables.",
+        updatedAt: "2026-08-15T00:00:00.000Z",
+      },
+    ],
+  });
+  await page.goto(`${BASE}/#/review`);
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Review highlights" }),
+  ).toBeVisible();
+  // The seeded row rendered (the panel's load effect settled) before axe
+  // samples the tree — an empty panel would silently weaken the gate.
+  await expect(
+    page.getByRole("button", { name: /^Go to highlight:/ }).first(),
+  ).toBeVisible();
+  const results = await new AxeBuilder({ page })
+    .withTags([...WCAG_TAGS])
+    .analyze();
+  const serious = seriousViolations(results);
+  const ids = serious.map((v) => v.id);
+  // Pitfall 8 — the one-h1 + h2-section and grouped-ul structures must
+  // pass their explicit guards, not just the zero-violation total.
+  expect(ids, JSON.stringify(serious, null, 2)).not.toContain("heading-order");
+  expect(ids).not.toContain("list");
+  expect(serious).toEqual([]);
 });

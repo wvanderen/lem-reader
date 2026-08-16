@@ -7,6 +7,12 @@
 import { test, expect } from "@playwright/test";
 import { assertEdgeInvariant } from "./_edge-invariant";
 import { FIXTURES, wipeDatabase, openArticle } from "./annotations/_fixtures";
+import {
+  confidentHighlightOn,
+  highlightRow,
+  makeArticle,
+  seedRows,
+} from "./portability/_portability";
 
 const BASE = "http://localhost:5173";
 const FIRST_FIXTURE = "essay-long-form";
@@ -100,6 +106,69 @@ test.describe("Reduced motion (A11Y-06)", () => {
       after,
       "opening the panel should not introduce any animation under reduced-motion",
     ).toBe(false);
+  });
+
+  // ───────────────────────────────────────────────────────────────────────
+  // Plan 10-06 (RECV-01.i): the #/review route under reduced motion. The
+  // review block ships NO transition/animation properties (the 10-02/10-05
+  // additive CSS is tokens-only), so the global gate is trivially
+  // satisfied — assert it in this spec's own idiom (no element on the
+  // route declares an animation name under the gate) plus operability
+  // (the row jump button still opens the article). Strengthen-only — the
+  // transition/animation A11Y-06 assertions above stay authoritative.
+  test("review panel renders + operates under reduced-motion (RECV-01.i)", async ({
+    page,
+  }) => {
+    // The beforeEach wipe left the page against a deleted DB — re-mount
+    // so Dexie re-declares its schema before seeding (the 10-03 fix).
+    await page.goto(`${BASE}/#/`);
+    await page.reload();
+    await expect(
+      page.getByRole("heading", { name: "Saved articles" }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("The looting of science fiction").first(),
+    ).toBeVisible();
+    const article = makeArticle({
+      id: "rm-review-corpus",
+      title: "The Tide Clerk's Almanac",
+      paragraphs: [
+        "The tide clerk published the almanac twice a year for forty years, and every edition carried the same apology: that the sea had once again declined to submit its itinerary in advance.",
+        "Readers wrote to ask how the predictions could be right so often anyway, and the clerk replied that the sea is not unpredictable, merely unpublished, and that patience is a kind of subscription.",
+      ],
+    });
+    const anchor = confidentHighlightOn(article);
+    await seedRows(page, {
+      articles: [article],
+      highlights: [highlightRow("rm-review-corpus", anchor, "hl-rm-review-1")],
+    });
+    await page.goto(`${BASE}/#/review`);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Review highlights" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /^Go to highlight:/ }).first(),
+    ).toBeVisible();
+    // The spec's own idiom (see "opening the panel does not animate"): NO
+    // element on the route declares an animation name under the gate.
+    const animated = await page.evaluate(() =>
+      Array.from(document.querySelectorAll("*")).some(
+        (el) => window.getComputedStyle(el).animationName !== "none",
+      ),
+    );
+    expect(
+      animated,
+      "no element on #/review should declare an animation under reduced-motion",
+    ).toBe(false);
+    // Operable: the confident row's jump button opens the article.
+    const rowButton = page
+      .getByRole("button", { name: /^Go to highlight:/ })
+      .first();
+    await expect(rowButton).toBeEnabled();
+    await rowButton.click();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "The Tide Clerk's Almanac" }),
+    ).toBeVisible();
   });
 
   // ───────────────────────────────────────────────────────────────────────

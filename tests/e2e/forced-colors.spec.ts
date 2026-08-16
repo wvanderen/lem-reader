@@ -7,6 +7,12 @@
 import { test, expect } from "@playwright/test";
 import { assertEdgeInvariant } from "./_edge-invariant";
 import { FIXTURES, wipeDatabase, openArticle } from "./annotations/_fixtures";
+import {
+  confidentHighlightOn,
+  highlightRow,
+  makeArticle,
+  seedRows,
+} from "./portability/_portability";
 
 const BASE = "http://localhost:5173";
 const FIRST_FIXTURE = "essay-long-form";
@@ -115,6 +121,110 @@ test.describe("Forced colors (A11Y-05)", () => {
     await page.getByRole("radio", { name: "Dark" }).click();
     await expect(page.getByRole("radio", { name: "Dark" })).toBeChecked();
     await expect(sepia).not.toBeChecked();
+  });
+
+  // ───────────────────────────────────────────────────────────────────────
+  // Plan 10-06 (RECV-01.i): the #/review route under forced-colors. Rows
+  // (quote, note preview) + tri-state badges must stay legible and the
+  // panel operable without color alone: the seeded confident row's jump
+  // button still works, row text keeps a non-transparent forced color,
+  // and the orphan badge conveys its state as TEXT ("Article missing"),
+  // never color-only. Strengthen-only — the A11Y-05 assertions above stay
+  // authoritative for their substrates.
+  test("review panel rows + badges stay legible and operable under forced-colors (RECV-01.i)", async ({
+    page,
+  }) => {
+    // The beforeEach wipe left the page against a deleted DB — re-mount
+    // so Dexie re-declares its schema before seeding (the 10-03 fix).
+    await page.goto(`${BASE}/#/`);
+    await page.reload();
+    await expect(
+      page.getByRole("heading", { name: "Saved articles" }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("The looting of science fiction").first(),
+    ).toBeVisible();
+    const article = makeArticle({
+      id: "fc-review-corpus",
+      title: "Notes on the Lighthouse Ledger",
+      paragraphs: [
+        "The lighthouse keeper kept a double ledger: one column for the ships that passed, one for the birds, and the trustees never quite worked out which column the weather belonged to.",
+        "Her marginalia explain that gulls count only when they land, that cormorants count double in rain, and that a fog lasting more than three days must be entered in both columns at once, which is why the annual totals never reconcile.",
+      ],
+    });
+    const anchor = confidentHighlightOn(article);
+    await seedRows(page, {
+      articles: [article],
+      highlights: [
+        highlightRow("fc-review-corpus", anchor, "hl-fc-review-1"),
+        // An orphan row (articleId with no matching article) so the
+        // orphan tail + its "Article missing" badge render under emulation.
+        {
+          schemaVersion: 1,
+          id: "hl-fc-review-orphan",
+          articleId: "no-such-article",
+          revision: 1,
+          position: { start: 5, end: 15 },
+          quote: {
+            prefix: "zzqxx ",
+            exact: "ZZQXX GHOST PASSAGE QQZZX",
+            suffix: " qqzzx",
+          },
+          createdAt: "2026-08-15T00:00:00.000Z",
+        },
+      ],
+      notes: [
+        {
+          schemaVersion: 1,
+          id: "note-fc-review-1",
+          highlightId: "hl-fc-review-1",
+          text: "The cormorant rule needs a source.",
+          updatedAt: "2026-08-15T00:00:00.000Z",
+        },
+      ],
+    });
+    await page.goto(`${BASE}/#/review`);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Review highlights" }),
+    ).toBeVisible();
+    // The emulation is genuinely active on this page (not just configured).
+    const forced = await page.evaluate(() =>
+      window.matchMedia("(forced-colors: active)").matches,
+    );
+    expect(forced, "forced-colors emulation must be active on #/review").toBe(
+      true,
+    );
+    // Row + badge text keeps a non-transparent forced color — the text
+    // survives the palette override (legibility signal, not a specific
+    // engine color value).
+    for (const sel of [".review-quote", ".review-note-preview", ".review-badge"]) {
+      const color = await page
+        .locator(sel)
+        .first()
+        .evaluate((el) => window.getComputedStyle(el).color);
+      expect(
+        color,
+        `${sel} must keep a non-transparent forced color under forced-colors`,
+      ).not.toBe("rgba(0, 0, 0, 0)");
+      expect(color).not.toBe("transparent");
+    }
+    // The badge conveys its state as TEXT (beyond-color, the A11Y-05 bar).
+    await expect(page.locator(".review-badge").first()).toContainText(
+      "Article missing",
+    );
+    // Operable under emulation: the confident row's jump button opens the
+    // article (a real reader click path).
+    const rowButton = page
+      .getByRole("button", { name: /^Go to highlight:/ })
+      .first();
+    await expect(rowButton).toBeEnabled();
+    await rowButton.click();
+    await expect(
+      page.getByRole("heading", {
+        level: 1,
+        name: "Notes on the Lighthouse Ledger",
+      }),
+    ).toBeVisible();
   });
 
   // ───────────────────────────────────────────────────────────────────────
