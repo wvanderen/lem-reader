@@ -200,7 +200,28 @@ Plans:
   3. Multi-column PDFs are either honestly flagged as low-confidence (reconstructed reading order) or refused via the same disclosure surface; the reader never sees silently reordered text.
   4. A round-trip anchor test gates every successfully extracted PDF article, and a calibration harness validates the font-size→heading and vertical-gap→paragraph thresholds on a real-PDF corpus before promotion.
 
-**Plans**: TBD
+**Plans**: 6 plans
+Plans:
+**Wave 1**
+
+- [ ] 11-01-PLAN.md — unpdf human gate (SUS audit) + schema/limit widening + synthetic fixtures + Wave-0 sentinels
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 11-02-PLAN.md — pdfToBlocks adapter: proxy lifecycle + caps, scanned/multi-column page-weighted detection, typed refusals, block assembly (D11-01/02/03/08)
+- [ ] 11-04-PLAN.md — client upload path: ingestPdf, .pdf picker arm + base64 encode, extension-aware cap, five calm copy entries
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 11-03-PLAN.md — orchestrator fourth branch (pdf-<hash> id, D11-07 title chain, D11-09 consume) + middleware body cap + integration round-trip gate
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 11-05-PLAN.md — e2e pdf-intake spec: upload→read/annotate/restore identity, calm refusals, dedupe (SC#1–3)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 11-06-PLAN.md — calibration harness + local real-PDF corpus (checkpoint) + committed evidence + honest full-suite phase gate (SC#4, D11-04/05/06)
 
 ### Phase 12: EPUB Intake
 
