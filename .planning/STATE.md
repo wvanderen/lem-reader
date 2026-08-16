@@ -5,15 +5,15 @@ milestone_name: Personal Library
 current_phase: 11
 current_phase_name: PDF Intake
 status: executing
-stopped_at: Phase 11 context gathered
-last_updated: "2026-08-16T20:45:58.439Z"
+stopped_at: "Completed 11-01-PLAN.md (PDF intake foundation: unpdf 1.8.1 + schema widenings + synthetic fixture corpus)"
+last_updated: "2026-08-16T22:38:22.236Z"
 last_activity: 2026-08-16
-last_activity_desc: Phase 10 complete, transitioned to Phase 11
+last_activity_desc: Phase 11 execution started
 progress:
   total_phases: 7
   completed_phases: 4
-  total_plans: 25
-  completed_plans: 25
+  total_plans: 31
+  completed_plans: 26
   percent: 57
 ---
 
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-08-16)
 
 ## Current Position
 
-Phase: 11 — PDF Intake
-Plan: Not started
+Phase: 11 (PDF Intake) — EXECUTING
+Plan: 2 of 6
 Status: Ready to execute
-Last activity: 2026-08-16 — Phase 10 complete, transitioned to Phase 11
+Last activity: 2026-08-16 — Phase 11 execution started
 
 Progress: [████████████████████] 25/25 plans (100%)
 
@@ -125,6 +125,7 @@ Progress: [████████████████████] 25/25 p
 | Phase 10 P04 | 6 min | 2 tasks | 3 files |
 | Phase 10 P05 | 10 min | 3 tasks tasks | 6 files files |
 | Phase 10 P06 | 25 min | 3 tasks | 8 files |
+| Phase 11 P01 | 7 min | 3 tasks | 15 files |
 
 ## Accumulated Context
 
@@ -271,6 +272,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: 10-04: Seed-time corpus self-verification — module-load throws if the corpus loses discriminating power (date/position crossing, excerpt uniqueness, shipped-resolver ambiguity verdict); schema-valid spread augmentation (createdAt/tags/ambiguous anchor) over forked helpers
 - [Phase ?]: 10-04: Position-sort library-order determinism — Dexie toArray() returns primary-key order, so corpus ids review-alpha-corpus < review-zeta-corpus pin the seeded library order the Position sort must reproduce
 - [Phase ?]: [Phase 10 10-05]: Curation dialogs are guarded single-commit structural clones — ReviewNoteDialog invokes ONE commit from BOTH Done onClick and the close listener with a per-session guard (exactly-once writes; Esc commits, Done never double-writes — Pitfall 7 simple option); DeleteHighlightConfirm fires deleteHighlight ONLY in its Proceed onClick and routes Esc-originated closes through onCancel (the 09-06 openRef fix — without it the [open] effect wedges the dialog shut). deleteHighlight's Dexie transaction is the ONE cascade call (highlight+note, one rollback unit).
+- [Phase ?]: Phase 11 11-01: unpdf pinned at 1.8.1 (user-approved T-11-SC blocking-human gate, 2026-08-16) — supersedes the STACK.md 1.8.0 lock; diff verified API-neutral; approval record at .planning/phases/11-pdf-intake/11-01-unpdf-approval.md — Exact-pin discipline preserved; legitimacy evidence: unjs publisher, MIT, ~1.85M weekly downloads, zero runtime deps, no install scripts, bundled types
+- [Phase ?]: Phase 11 11-01: PDF_MAX_BYTES = 10MB decoded lives in src/ingestion/types.ts with server/limits.ts import+re-export — /src->/server import direction forbidden, so the shared cap lives client-importable; MAX_INGEST_BODY_BYTES = ceil(bytes*4/3)+2048 is the middleware content-length number (Pitfall 7) — Three enforcement points (client picker, middleware guard, orchestrator re-check) share ONE constant; MAX_IMAGE_PIXELS = 16_777_216 is TOTAL PIXELS not bytes (ARCHITECTURE L781 correction); PDF_EXTRACTION_TIMEOUT_MS = 30_000 mirrors REQUEST_TIMEOUT_MS (OQ2)
+- [Phase ?]: Phase 11 11-01: synthetic PDF fixtures are committable and self-verifying — the generator's built-in self-check (magic prefix, 500B floor, corrupt marker, second-emit hash idempotency) replaces the relocated Wave-0 sentinel assertions; D11-04 real-PDF calibration corpus stays local + gitignored — Fixtures exercise code paths, not calibration thresholds (11-RESEARCH Validation Architecture); all five additionally verified parseable by real pdf.js via unpdf (page counts, column x-ranges, zero-text scanned, outline dests, corrupt throws)
 
 ### Pending Todos
 
@@ -300,9 +304,9 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-16T20:00:18.257Z
-Stopped at: Phase 11 context gathered
-Resume file: .planning/phases/11-pdf-intake/11-CONTEXT.md
+Last session: 2026-08-16T22:38:22.227Z
+Stopped at: Completed 11-01-PLAN.md (PDF intake foundation: unpdf 1.8.1 + schema widenings + synthetic fixture corpus)
+Resume file: None
 
 ## Operator Next Steps
 
