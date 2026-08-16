@@ -1,11 +1,11 @@
 // server/ingest.ts
 // Plan 07-05 — the pipeline orchestrator + inline round-trip anchor gate
-// (SC#1, the integration truth of Phase 7). Composes the four /server
-// primitives (safeFetch + extractAndNormalize + slugifyUrl + deriveConfidence)
-// into the locked 7-stage pipeline, validates the result through
-// ArticleSchema.parse (Zod-at-boundary), and refuses entry to any article
-// whose 5-offset TextQuoteSelector round-trip does not resolve to "confident"
-// (Pitfall 2 — the integration truth).
+// (SC#1, the integration truth of Phase 7). Composes the /server primitives
+// (safeFetch + extractAndNormalize + markdownToBlocks + pdfToBlocks +
+// slugifyUrl + deriveConfidence) into the locked staged pipeline, validates
+// the result through ArticleSchema.parse (Zod-at-boundary), and refuses
+// entry to any article whose 5-offset TextQuoteSelector round-trip does not
+// resolve to "confident" (Pitfall 2 — the integration truth).
 //
 // The orchestrator owns three contracts:
 //   1. Pipeline ordering (must_haves locked sequence):
@@ -34,10 +34,12 @@ import { createHash } from "node:crypto";
 import { safeFetch, type FetchedContent } from "./safeFetch";
 import { extractAndNormalize, type ExtractAndNormalizeResult } from "./htmlToBlocks";
 import { markdownToBlocks, stripMarkdownExtension } from "./markdownToBlocks";
+import { pdfToBlocks } from "./pdfToBlocks";
 import { deriveConfidence, type ConfidenceResult } from "./confidence";
 import { slugifyUrl } from "./slugify";
 import { IngestionError } from "./errors";
-import { ArticleSchema, type CanonicalArticle } from "../src/content/schema";
+import { PDF_MAX_BYTES } from "./limits";
+import { ArticleSchema, type Block, type CanonicalArticle } from "../src/content/schema";
 import {
   normalizeText,
   graphemeClusters,
@@ -106,6 +108,60 @@ function safeHostname(urlStr: string): string {
 }
 
 /**
+ * stripPdfExtension — pure string-only helper that strips a trailing `.pdf`
+ * extension (case-insensitive). Implements the D11-07 filename channel of the
+ * PDF title chain (mirrors stripMarkdownExtension's shape; the chain is
+ * orchestrator-owned per 11-PATTERNS L129, so the helper lives here). Like
+ * its markdown sibling it does NO path-basename logic — the File API returns
+ * just the filename.
+ *
+ * Examples (mirrored in the unit suite):
+ *   stripPdfExtension("Report.pdf")        === "Report"
+ *   stripPdfExtension("report.PDF")        === "report"
+ *   stripPdfExtension("no-extension")      === "no-extension"
+ */
+export function stripPdfExtension(filename: string): string {
+  return filename.replace(/\.pdf$/i, "");
+}
+
+/**
+ * normalizeForTitleMatch — lowercase + separator-collapse (the D11-09 fuzzy
+ * matching basis: case/whitespace-insensitive containment). Hyphens and
+ * underscores count as whitespace because the filename channel slugifies
+ * spaces ("calm-report.pdf" ↔ page-1 heading "Calm Report") — the canonical
+ * filename-fallback doubled-title case only matches when word separators are
+ * normalized uniformly on both sides.
+ */
+function normalizeForTitleMatch(s: string): string {
+  return s.toLowerCase().replace(/[-_\s]+/g, " ").trim();
+}
+
+/**
+ * consumeDuplicatedTitle (D11-09) — if the FIRST block is a heading whose
+ * normalized text fuzzy-matches the final title (case/whitespace-insensitive
+ * containment, either direction), drop it: the provenance header renders the
+ * title and bodies start at h2 (the one-h1-per-page v1.0 discipline — the
+ * body never repeats the title). Any other first block, or a non-matching
+ * leading heading, is kept unchanged. Pure; returns a new array only when a
+ * block is dropped.
+ */
+export function consumeDuplicatedTitle(blocks: Block[], title: string): Block[] {
+  const first = blocks[0];
+  if (!first || first.kind !== "heading") return blocks;
+  const normBlock = normalizeForTitleMatch(
+    first.content.map((run) => run.text).join(""),
+  );
+  const normTitle = normalizeForTitleMatch(title);
+  // An empty normalized heading must not fuzzy-match every title ("" is
+  // contained in everything) — require real text on both sides.
+  if (normBlock.length === 0 || normTitle.length === 0) return blocks;
+  if (normTitle.includes(normBlock) || normBlock.includes(normTitle)) {
+    return blocks.slice(1);
+  }
+  return blocks;
+}
+
+/**
  * ingest — the 7-stage stateless pipeline orchestrator (RESEARCH.md §Pattern 1
  * L249-279). Runs safeFetch → extractAndNormalize → slugifyUrl →
  * ArticleSchema.parse → assertRoundTripAnchor → deriveConfidence, and returns
@@ -113,23 +169,28 @@ function safeHostname(urlStr: string): string {
  * (IngestionError is caught and serialized) so the edge function (07-06) can
  * map it to HTTP 400 cleanly.
  *
- * Input is input-source-agnostic (D7-03): exactly one of {url} | {html}.
- * The url path runs safeFetch (SSRF guard); the html path synthesizes the
- * pipeline input directly with finalUrl=undefined (no fetch, no SSRF surface).
+ * Input is input-source-agnostic (D7-03): exactly one of {url} | {html} |
+ * {markdown} | {pdf}. The url path runs safeFetch (SSRF guard); the html path
+ * synthesizes the pipeline input directly with finalUrl=undefined (no fetch,
+ * no SSRF surface); the markdown + pdf paths mirror that shape through their
+ * sibling adapters (Stage-1 extraction only — stages 2+ are shared).
  *
- * Input validation (exactly one of url/html) throws IngestionError — the
- * caller (07-06 edge function) is expected to pass a Zod-validated
+ * Input validation (exactly one of url/html/markdown/pdf) throws
+ * IngestionError — the caller is expected to pass a Zod-validated
  * IngestionRequest, so reaching this throw is a programming error.
  */
 export async function ingest(input: IngestionRequest): Promise<IngestionResponse> {
-  // Stage 0 — input validation: exactly one of {url} | {html} | {markdown}
-  // required. (Thrown, not serialized — the caller contract is
+  // Stage 0 — input validation: exactly one of {url} | {html} | {markdown} |
+  // {pdf} required. (Thrown, not serialized — the caller contract is
   // IngestionRequestSchema-validated; reaching this throw indicates a
   // programming error.)
   const hasUrl = "url" in input && input.url !== undefined;
   const hasHtml = "html" in input && input.html !== undefined;
   const hasMarkdown = "markdown" in input && input.markdown !== undefined;
-  if ((hasUrl ? 1 : 0) + (hasHtml ? 1 : 0) + (hasMarkdown ? 1 : 0) !== 1) {
+  const hasPdf = "pdf" in input && input.pdf !== undefined;
+  if (
+    (hasUrl ? 1 : 0) + (hasHtml ? 1 : 0) + (hasMarkdown ? 1 : 0) + (hasPdf ? 1 : 0) !== 1
+  ) {
     throw new IngestionError("server-error");
   }
 
@@ -148,9 +209,9 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
     let isReaderable: ExtractAndNormalizeResult["isReaderable"];
 
     // id + ingestion metadata vary per source (D7-07 url id, paste content-
-    // hash id, D8-18 markdown content-hash id).
+    // hash id, D8-18 markdown content-hash id, D11 pdf content-hash id).
     let id: string;
-    let source: "url" | "paste" | "markdown" | "html-upload";
+    let source: "url" | "paste" | "markdown" | "html-upload" | "pdf";
     let origin: "url" | "paste" | "upload";
     let fetchedAt: string | undefined;
     let finalUrl: string | undefined;
@@ -161,6 +222,9 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
     // stashed on the closure so the D8-17 title-fallback chain below can read
     // it without re-extracting from `input`. Undefined for url + paste paths.
     let markdownFilenameHint: string | undefined;
+    // pdfFilenameHint — the sibling channel for the pdf branch's D11-07
+    // filename fallback. Undefined for the other three paths.
+    let pdfFilenameHint: string | undefined;
 
     if (hasUrl) {
       const fetched: FetchedContent = await safeFetch(input.url as string);
@@ -197,6 +261,38 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
       origin = "paste";
       fetchedAt = undefined;
       sourceBytes = htmlInput;
+    } else if (hasPdf) {
+      // PDF path — Phase 11 Plan 11-03 (ING-04 + D11-07 + D11-09 + D8-18
+      // mirror). The request carries base64-in-JSON (locked transport
+      // decision); the id content-hashes the base64 channel exactly like
+      // md-<hash> (D8-18) so identical PDF bytes always dedupe to one id.
+      const { pdf: b64, filename } = input as { pdf: string; filename?: string };
+      const bytes = Buffer.from(b64, "base64");
+      // Decoded re-check — the third enforcement layer (after the client
+      // picker cap and the middleware content-length guard). Base64 hides
+      // size from the transport layers' view of decoded bytes; this is the
+      // authoritative check before any parsing work begins.
+      if (bytes.byteLength > PDF_MAX_BYTES) {
+        throw new IngestionError("pdf-too-large");
+      }
+      finalUrl = undefined;
+      const extracted = await pdfToBlocks(new Uint8Array(bytes));
+      ({
+        blocks,
+        footnotes,
+        lang,
+        provenancePartial,
+        isReaderable,
+      } = extracted);
+      // D7-07 immutability mirror — id = pdf-<shortHash(base64 channel)>.
+      id = `pdf-${shortHash(b64)}`;
+      source = "pdf";
+      origin = "upload";
+      fetchedAt = undefined;
+      sourceBytes = b64;
+      // Stash filename on a closure variable the D11-07 title chain reads
+      // below (checked Info-title → filename → neutral).
+      pdfFilenameHint = filename;
     } else {
       // MARKDOWN path — Phase 8 Plan 08-01 (D8-16 + D8-17 + D8-18).
       const mdInput = (input as { markdown: string; filename?: string }).markdown;
@@ -247,15 +343,28 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
     //   paste:   provenancePartial.title → "Pasted article"
     //   markdown (D8-17): front-matter title → stripMarkdownExtension(filename)
     //            → "Markdown document" (the neutral last-resort fallback)
+    //   pdf (D11-07): sane Info-title (the adapter sets provenancePartial.title
+    //            ONLY when isSanePdfTitle passed — checked-Info is PRIMARY)
+    //            → stripPdfExtension(filename) → "PDF document"
     const title =
       provenancePartial.title ??
       (hasMarkdown
         ? (markdownFilenameHint
             ? stripMarkdownExtension(markdownFilenameHint)
             : "Markdown document")
-        : finalUrl
-          ? safeHostname(finalUrl)
-          : "Pasted article");
+        : hasPdf
+          ? (pdfFilenameHint
+              ? stripPdfExtension(pdfFilenameHint)
+              : "PDF document")
+          : finalUrl
+            ? safeHostname(finalUrl)
+            : "Pasted article");
+
+    // D11-09 doubled-title consume — pdf path ONLY, after the final title
+    // resolves and before assembling the article (the provenance header
+    // renders the title; the body never repeats it — the one-h1-per-page
+    // v1.0 discipline). The url/paste/markdown chains are untouched.
+    const effectiveBlocks = hasPdf ? consumeDuplicatedTitle(blocks, title) : blocks;
 
     const assembled = {
       id,
@@ -269,7 +378,7 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
         retrievedAt,
         originalHtmlHash,
       },
-      blocks,
+      blocks: effectiveBlocks,
       footnotes,
       ingestionMeta: {
         source,
