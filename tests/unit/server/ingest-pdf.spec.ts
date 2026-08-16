@@ -10,9 +10,17 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { Readable } from "node:stream";
 import { describe, expect, it } from "vitest";
-import { consumeDuplicatedTitle, ingest } from "../../../server/ingest";
-import { PDF_MAX_BYTES } from "../../../server/limits";
+import type { Connect, ViteDevServer } from "vite";
+import { viteIngestMiddleware } from "../../../dev-server/ingest-middleware";
+import {
+  assertRoundTripAnchor,
+  consumeDuplicatedTitle,
+  ingest,
+  stripPdfExtension,
+} from "../../../server/ingest";
+import { MAX_INGEST_BODY_BYTES, PDF_MAX_BYTES } from "../../../server/limits";
 import type { Block } from "../../../src/content/schema";
 
 // ── Synthetic fixture loading (tests/fixtures/pdf — committed corpus) ────────
@@ -168,5 +176,181 @@ describe("consumeDuplicatedTitle", () => {
 
   it("returns an empty block list unchanged", () => {
     expect(consumeDuplicatedTitle([], "calm-report")).toEqual([]);
+  });
+});
+
+// ── Task 2 — stripPdfExtension (D11-07 filename channel) ────────────────────
+describe("stripPdfExtension", () => {
+  it("strips a trailing .pdf (case-insensitive)", () => {
+    expect(stripPdfExtension("Report.pdf")).toBe("Report");
+    expect(stripPdfExtension("report.PDF")).toBe("report");
+    expect(stripPdfExtension("archive.v2.Pdf")).toBe("archive.v2");
+  });
+
+  it("passes a filename without a .pdf extension through unchanged", () => {
+    expect(stripPdfExtension("no-extension")).toBe("no-extension");
+    expect(stripPdfExtension("pdf-like-name")).toBe("pdf-like-name");
+  });
+
+  it("does not strip an embedded .pdf that is not the extension", () => {
+    expect(stripPdfExtension("report.pdfdraft")).toBe("report.pdfdraft");
+  });
+});
+
+// ── Task 2 — SC#4a round-trip re-proof at integration level ──────────────────
+describe("ingest — pdf round-trip anchor re-proof (SC#4a)", () => {
+  it("re-running assertRoundTripAnchor on the returned article does not throw", async () => {
+    const response = await ingest({
+      pdf: fixtureB64("synthetic-single-column.pdf"),
+      filename: "calm-report.pdf",
+    });
+    expect(response.ok).toBe(true);
+    if (!response.ok) throw new Error(`expected ok:true, got ${response.reason}`);
+    // The orchestrator already ran the gate internally (Stage 7); re-running
+    // it here proves the PERSISTED article shape round-trips — an admitted
+    // PDF is a fixture to the reading engine (SC#4a integration proof).
+    expect(() => assertRoundTripAnchor(response.article)).not.toThrow();
+  });
+});
+
+// ── Task 2 — middleware body caps (Pitfall 7: refuse BEFORE accumulation) ───
+/** Captured connect handler shape the Vite middleware installs. */
+type InstalledHandler = (
+  req: Connect.IncomingMessage,
+  res: Connect.ServerResponse,
+  next: Connect.NextFunction,
+) => void | Promise<void>;
+
+/** Drive viteIngestMiddleware against a fake ViteDevServer whose
+ * middlewares.use captures the installed handler. */
+function captureHandler(): InstalledHandler {
+  let captured: InstalledHandler | undefined;
+  const fakeServer = {
+    middlewares: {
+      use: (handler: InstalledHandler) => {
+        captured = handler;
+      },
+    },
+  } as unknown as ViteDevServer;
+  viteIngestMiddleware()(fakeServer);
+  if (!captured) throw new Error("middleware did not install a handler");
+  return captured;
+}
+
+/** Response stub capturing statusCode / headers / body. */
+interface ResStub {
+  statusCode: number;
+  headers: Record<string, string>;
+  body: string;
+  ended: boolean;
+}
+
+function resStub(): ResStub {
+  return {
+    statusCode: 0,
+    headers: {},
+    body: "",
+    ended: false,
+    setHeader(name: string, value: string) {
+      this.headers[name] = value;
+    },
+    end(chunk?: string) {
+      this.ended = true;
+      this.body = chunk ?? "";
+    },
+  };
+}
+
+/** Build a POST /api/ingest request stub over a node Readable. When `read`
+ * fires (`pulled === true` afterwards) a data listener switched the stream
+ * to flowing mode — i.e. the body WAS read. */
+function reqStub(
+  headers: Record<string, string>,
+  chunks: string[] = [],
+): { req: Connect.IncomingMessage; pulled: () => boolean } {
+  let pulled = false;
+  const stream = new Readable({
+    read() {
+      pulled = true;
+      this.push(null);
+    },
+  });
+  // Pre-load the chunks without starting flow (paused mode until a listener
+  // attaches) so the not-read assertion below is meaningful.
+  for (const chunk of chunks) stream.push(chunk);
+  const req = stream as unknown as Connect.IncomingMessage;
+  req.method = "POST";
+  req.url = "/api/ingest";
+  req.headers = headers;
+  return { req, pulled: () => pulled };
+}
+
+describe("viteIngestMiddleware — body caps (T-11-02)", () => {
+  it("refuses an over-cap content-length with 413 pdf-too-large WITHOUT reading the body", async () => {
+    const handler = captureHandler();
+    const { req, pulled } = reqStub({
+      "content-length": String(MAX_INGEST_BODY_BYTES + 1),
+    });
+    const res = resStub();
+    let nextCalled = false;
+    await handler(req, res as unknown as Connect.ServerResponse, () => {
+      nextCalled = true;
+    });
+
+    expect(res.statusCode).toBe(413);
+    expect(JSON.parse(res.body)).toEqual({ ok: false, reason: "pdf-too-large" });
+    expect(res.headers["content-type"]).toBe("application/json");
+    // Pitfall 7 — the guard fires BEFORE readBody accumulates anything.
+    expect(pulled()).toBe(false);
+    expect(nextCalled).toBe(false);
+  });
+
+  it("refuses an over-cap chunked body (no content-length) with the same 413 envelope after readBody", async () => {
+    const handler = captureHandler();
+    // One giant non-JSON chunk: readBody accumulates it, the raw-length
+    // re-check fires, and the typed envelope must still come back 413.
+    const { req } = reqStub({}, ["A".repeat(MAX_INGEST_BODY_BYTES + 1)]);
+    const res = resStub();
+    await handler(req, res as unknown as Connect.ServerResponse, () => {});
+
+    expect(res.statusCode).toBe(413);
+    expect(JSON.parse(res.body)).toEqual({ ok: false, reason: "pdf-too-large" });
+    expect(res.headers["content-type"]).toBe("application/json");
+  });
+
+  it("still delegates an under-cap pdf body through the full pipeline (guard does not over-fire)", async () => {
+    const handler = captureHandler();
+    const body = JSON.stringify({
+      pdf: fixtureB64("synthetic-single-column.pdf"),
+      filename: "calm-report.pdf",
+    });
+    const { req } = reqStub({ "content-length": String(Buffer.byteLength(body, "utf-8")) }, [body]);
+    const res = resStub();
+    await handler(req, res as unknown as Connect.ServerResponse, () => {});
+
+    expect(res.statusCode).toBe(200);
+    const parsed = JSON.parse(res.body) as { ok: boolean; article?: { id: string } };
+    expect(parsed.ok).toBe(true);
+    expect(parsed.article?.id).toMatch(/^pdf-[0-9a-f]{12}$/);
+  });
+
+  it("falls through to next() for non-matching routes", async () => {
+    const handler = captureHandler();
+    const stream = new Readable({
+      read() {
+        this.push(null);
+      },
+    });
+    const req = stream as unknown as Connect.IncomingMessage;
+    req.method = "GET";
+    req.url = "/";
+    req.headers = {};
+    const res = resStub();
+    let nextCalled = false;
+    await handler(req, res as unknown as Connect.ServerResponse, () => {
+      nextCalled = true;
+    });
+    expect(nextCalled).toBe(true);
+    expect(res.ended).toBe(false);
   });
 });
