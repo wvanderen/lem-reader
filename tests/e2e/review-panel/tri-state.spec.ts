@@ -168,9 +168,24 @@ test.describe("RECV-01.e review-panel tri-state (10-04 honest surfacing)", () =>
       "Article missing",
     );
 
-    // No jump affordance AT ALL inside the orphan section — the row is a
-    // static div, so there is no button (hence no enabled one).
-    await expect(orphanSection.locator("button")).toHaveCount(0);
+    // No JUMP affordance inside the orphan section — the row body is a
+    // static div, so there is no .review-row button (hence no enabled
+    // one). Updated by Plan 10-05: the curation affordances (Edit note /
+    // Remove highlight) DO render on orphan rows by design (D10-11) — the
+    // original button-count-0 assertion pinned the pre-curation DOM; the
+    // intent (orphan rows are not jumpable) is preserved via the
+    // button.review-row count.
+    await expect(
+      orphanSection.locator("button.review-row"),
+    ).toHaveCount(0);
+    // And the curation affordances are present (D10-11 — orphans are
+    // curatable in place even without an article). The actions cluster is
+    // a SIBLING of the .review-row body inside the row's <li>.
+    await expect(
+      orphanSection.locator("li.review-item").filter({
+        hasText: EXCERPT_ORPHAN,
+      }).locator("button.review-row-action"),
+    ).toHaveCount(2);
   });
 
   test("never silently hidden: All shows unresolved rows; Orphan/Ambiguous narrow correctly", async ({

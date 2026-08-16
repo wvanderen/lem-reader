@@ -2593,3 +2593,58 @@ dialog.import-preview::backdrop {
 .review-badge-orphan {
   border-color: var(--destructive);
 }
+
+/* ── Plan 10-05 — in-place curation affordances (D10-11/D10-12) ───────────
+ * Additive .review-* hooks only (the Phase 10 block rule). Tokens-only
+ * (every color var(--…), no new hex literals); no motion properties. The
+ * two dialogs reuse the existing .highlight-popover* /
+ * .library-remove-confirm* classes verbatim — exact structural clones
+ * deserve identical chrome (zero duplicated dialog CSS). */
+
+/* One list item = row body + the curation cluster beneath it. */
+.review-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+/* The quiet action cluster — right-aligned, hairline buttons sized to the
+ * touch target; never nested inside the jump button (interactive content
+ * cannot nest), so they sit as siblings under the card. */
+.review-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+}
+.review-row-action {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch);
+  padding-inline: var(--space-sm);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  background: var(--surface);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.review-row-action:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+/* The remove affordable hints its consequence on hover only — the label +
+ * the alertdialog copy carry the actual warning (never color alone). */
+.review-row-action-remove:hover {
+  color: var(--destructive);
+  border-color: var(--destructive);
+}
+/* The note dialog's calm heading (the .library-remove-confirm-inner h2
+ * register, sized for the .highlight-popover container it lives in). */
+h2.review-note-title {
+  margin-block: 0;
+  font-family: var(--font-ui);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+}

@@ -34,9 +34,13 @@
 //   - D10-10: honest, distinct empty states — "No highlights yet…" when
 //     the library has zero highlights vs "No highlights match these
 //     filters." when filters matched zero of a non-empty set.
-//
-// Plan 10-05 will add curation affordances (edit-note + delete buttons +
-// dialog wiring + the setRefreshKey bump that re-triggers the load effect).
+//   - D10-11/D10-12 (Plan 10-05): every row — orphans included — is
+//     curatable in place. "Edit note" opens ReviewNoteDialog (notes are
+//     keyed to highlightId, so no article is needed); "Remove highlight"
+//     opens DeleteHighlightConfirm (cascade-honest copy, destructive write
+//     ONLY in its Proceed onClick). Both commits bump refreshKey (Pitfall 6
+//     — re-derive from Dexie, never a stale row) and announce calmly in
+//     .status ("Highlight removed." / "Note saved.").
 //
 // Threat register (10-02-PLAN.md <threat_model>):
 //   - T-10-02b (stored XSS): every quote/note/title/host string renders as
@@ -60,6 +64,8 @@ import {
   type ReviewFilters,
   type ReviewSort,
 } from "./reviewFilter";
+import { ReviewNoteDialog } from "./ReviewNoteDialog";
+import { DeleteHighlightConfirm } from "./DeleteHighlightConfirm";
 
 /** Truncation limits for review rows (the AnnotationsDrawer discipline). */
 const EXCERPT_MAX_CHARS = 120;
@@ -110,12 +116,27 @@ function sourceHost(article: CanonicalArticle): string | null {
  * (D10-03; ambiguous/orphan render it disabled with aria-disabled, the
  * AnnotationsDrawer L184-189 rule). Orphan-tail rows (no article) render
  * a static div — no jump affordance at all, but the same first-class row
- * anatomy (curatable in Plan 10-05, filterable via confidence=orphan).
+ * anatomy.
  *
- * All text renders as React text children (T-10-02b — escaping by
+ * Plan 10-05 (D10-11): EVERY row — section or orphan, any tri-state —
+ * carries the two curation affordances as siblings of the row body (never
+ * nested inside the jump button: interactive content cannot nest). The
+ * buttons' aria-labels prefix the visible text with the quote excerpt so
+ * screen-reader rows are distinguishable (the accessible name contains the
+ * visible label — WCAG 2.5.3 Label in Name).
+ *
+ * All text renders as React text children (T-10-02b/T-10-05a — escaping by
  * default; stored/imported text never becomes markup).
  */
-function ReviewRow({ entry }: { entry: ReviewEntry }) {
+function ReviewRow({
+  entry,
+  onEditNote,
+  onRemove,
+}: {
+  entry: ReviewEntry;
+  onEditNote: (entry: ReviewEntry) => void;
+  onRemove: (entry: ReviewEntry) => void;
+}) {
   const excerpt = entry.highlight.quote.exact;
   const noteText = entry.note?.text ?? "";
   const isUnresolved = entry.status !== "confident";
@@ -147,9 +168,39 @@ function ReviewRow({ entry }: { entry: ReviewEntry }) {
     </>
   );
 
-  // Orphan-tail rows (D10-05): no article → NO jump affordance at all.
+  // The curation cluster — siblings of the row body (D10-11). Accessible
+  // names carry the quote excerpt prefix so rows are distinguishable in a
+  // screen-reader list; the prefix includes the visible label (2.5.3).
+  const actions = (
+    <div className="review-row-actions">
+      <button
+        type="button"
+        className="review-row-action review-row-action-note"
+        aria-label={`Edit note: ${truncate(excerpt, ARIA_MAX_CHARS)}`}
+        onClick={() => onEditNote(entry)}
+      >
+        Edit note
+      </button>
+      <button
+        type="button"
+        className="review-row-action review-row-action-remove"
+        aria-label={`Remove highlight: ${truncate(excerpt, ARIA_MAX_CHARS)}`}
+        onClick={() => onRemove(entry)}
+      >
+        Remove highlight
+      </button>
+    </div>
+  );
+
+  // Orphan-tail rows (D10-05): no article → NO jump affordance at all
+  // (the curation affordances above still render — D10-11).
   if (entry.article === undefined) {
-    return <div className="review-row">{content}</div>;
+    return (
+      <>
+        <div className="review-row">{content}</div>
+        {actions}
+      </>
+    );
   }
 
   // The jump button's aria-label mirrors the drawer-entry pattern.
@@ -160,22 +211,25 @@ function ReviewRow({ entry }: { entry: ReviewEntry }) {
       }`;
 
   return (
-    <button
-      type="button"
-      className="review-row"
-      aria-label={ariaLabel}
-      disabled={isUnresolved}
-      aria-disabled={isUnresolved ? "true" : undefined}
-      onClick={() => {
-        // T-10-02c: template-built from validated record ids only — the
-        // hashchange consumer re-parses through the same App.tsx grammar.
-        if (jumpable) {
-          window.location.hash = `#/article/${entry.highlight.articleId}/h/${entry.highlight.id}`;
-        }
-      }}
-    >
-      {content}
-    </button>
+    <>
+      <button
+        type="button"
+        className="review-row"
+        aria-label={ariaLabel}
+        disabled={isUnresolved}
+        aria-disabled={isUnresolved ? "true" : undefined}
+        onClick={() => {
+          // T-10-02c: template-built from validated record ids only — the
+          // hashchange consumer re-parses through the same App.tsx grammar.
+          if (jumpable) {
+            window.location.hash = `#/article/${entry.highlight.articleId}/h/${entry.highlight.id}`;
+          }
+        }}
+      >
+        {content}
+      </button>
+      {actions}
+    </>
   );
 }
 
@@ -203,10 +257,19 @@ export function ReviewView() {
   });
   // D10-08: Date is the default sort.
   const [sort, setSort] = useState<ReviewSort>("date");
-  // refreshKey re-triggers the load effect after a curation commit
-  // (Plan 10-05 bumps it via setRefreshKey; the setter lands with that
-  // plan — no curation writes exist yet).
-  const [refreshKey] = useState(0);
+  // refreshKey re-triggers the load effect after every curation commit
+  // (Plan 10-05, Pitfall 6 — the panel re-derives from Dexie so no stale
+  // row survives an edit or delete; never a reload).
+  const [refreshKey, setRefreshKey] = useState(0);
+  // Plan 10-05 curation targets: the ReviewEntry under action (null when
+  // the corresponding dialog is closed). Notes are keyed to highlightId, so
+  // the note dialog opens for ANY row — orphan rows included (D10-11).
+  const [noteTarget, setNoteTarget] = useState<ReviewEntry | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<ReviewEntry | null>(null);
+  // D10-12: the calm curation result announced through the .status live
+  // region ("Highlight removed." / "Note saved."). Null = nothing to
+  // announce (loading/error/empty states own the region then).
+  const [announcement, setAnnouncement] = useState<string | null>(null);
 
   // Load effect — the LibraryView L66-97 twin: cancelled-flag +
   // Promise.all over the whole-library Zod-validated readers. NO new store
@@ -259,9 +322,11 @@ export function ReviewView() {
         <h1>Review highlights</h1>
       </header>
       {/* The .status live region (LibraryView L112-123 twin) carries the
-          loading + error states AND both D10-10 empty states — distinct,
-          honest copies announced politely. */}
+          loading + error states, both D10-10 empty states, AND the D10-12
+          curation announcements — distinct, honest copies announced
+          politely. */}
       <div className="status" role="status" aria-live="polite" aria-atomic="true">
+        {announcement !== null && <p>{announcement}</p>}
         {status === "loading" && <p>Opening your highlights…</p>}
         {status === "error" && (
           <>
@@ -359,8 +424,12 @@ export function ReviewView() {
             </h2>
             <ul className="review-section-list">
               {section.entries.map((entry) => (
-                <li key={entry.highlight.id}>
-                  <ReviewRow entry={entry} />
+                <li key={entry.highlight.id} className="review-item">
+                  <ReviewRow
+                    entry={entry}
+                    onEditNote={setNoteTarget}
+                    onRemove={setRemoveTarget}
+                  />
                 </li>
               ))}
             </ul>
@@ -369,19 +438,53 @@ export function ReviewView() {
       })}
       {/* D10-05 — the never-drop orphan tail. Heading text is exactly the
           markdown.ts UNMATCHED_SECTION_HEADING vocabulary ("Highlights
-          without an article"). Rows here have no jump affordance at all. */}
+          without an article"). Rows here have no jump affordance at all —
+          but ARE curatable in place (D10-11: notes are keyed to
+          highlightId, and a delete needs only the highlight row). */}
       {derivation.orphanEntries.length > 0 && (
         <section className="review-section review-section-orphan">
           <h2>Highlights without an article</h2>
           <ul className="review-section-list">
             {derivation.orphanEntries.map((entry) => (
-              <li key={entry.highlight.id}>
-                <ReviewRow entry={entry} />
+              <li key={entry.highlight.id} className="review-item">
+                <ReviewRow
+                  entry={entry}
+                  onEditNote={setNoteTarget}
+                  onRemove={setRemoveTarget}
+                />
               </li>
             ))}
           </ul>
         </section>
       )}
+      {/* Plan 10-05 curation wiring. Both dialogs are always mounted
+          (showModal requires DOM presence). The commit handlers share ONE
+          shape (the LibraryView RemoveConfirm twin): clear the target, bump
+          refreshKey (Pitfall 6 — re-derive from Dexie, no stale rows), and
+          announce calmly through .status. Cancel closes only. */}
+      <ReviewNoteDialog
+        open={noteTarget !== null}
+        highlightId={noteTarget?.highlight.id ?? ""}
+        articleId={noteTarget?.highlight.articleId ?? ""}
+        existing={noteTarget?.note ?? null}
+        onDone={() => {
+          setNoteTarget(null);
+          setRefreshKey((k) => k + 1);
+          setAnnouncement("Note saved.");
+        }}
+      />
+      <DeleteHighlightConfirm
+        open={removeTarget !== null}
+        highlightId={removeTarget?.highlight.id ?? ""}
+        excerpt={removeTarget?.highlight.quote.exact ?? ""}
+        onConfirm={() => {
+          setRemoveTarget(null);
+          setRefreshKey((k) => k + 1);
+          // D10-12 exact copy.
+          setAnnouncement("Highlight removed.");
+        }}
+        onCancel={() => setRemoveTarget(null)}
+      />
     </main>
   );
 }
