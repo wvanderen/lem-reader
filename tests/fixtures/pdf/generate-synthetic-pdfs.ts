@@ -30,7 +30,7 @@
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -66,8 +66,11 @@ const ALL_FIXTURE_NAMES = [...VALID_FIXTURE_NAMES, CORRUPT_FIXTURE_NAME] as cons
 
 type FontKey = "F1" | "F2";
 
-/** One drawn text line: a BT…ET block at an absolute position. */
-interface TextLine {
+/** One drawn text line: a BT…ET block at an absolute position.
+ * Exported (11-02): the adapter unit suite reuses the serializer to build
+ * tiny probe PDFs (x-gap / isReaderable cases) from the same code path that
+ * produced the committed corpus — no forked PDF writer. */
+export interface TextLine {
   x: number;
   y: number;
   font: FontKey;
@@ -82,8 +85,9 @@ interface OutlineEntry {
   pageIndex: number;
 }
 
-/** A complete fixture: page content streams + optional outline tree. */
-interface FixtureSpec {
+/** A complete fixture: page content streams + optional outline tree.
+ * Exported (11-02) alongside serializePdf — see TextLine note. */
+export interface FixtureSpec {
   /** One content-stream string per page (empty string = zero text items). */
   pages: string[];
   outlines?: OutlineEntry[];
@@ -101,8 +105,9 @@ function textLineOperator(line: TextLine): string {
   return `BT /${line.font} ${line.size} Tf ${line.x} ${line.y} Td (${escapePdfText(line.text)}) Tj ET`;
 }
 
-/** Lines → content stream (no trailing newline; /Length counts exact bytes). */
-function buildContentStream(lines: TextLine[]): string {
+/** Lines → content stream (no trailing newline; /Length counts exact bytes).
+ * Exported (11-02) for the adapter unit suite's tiny probe PDFs. */
+export function buildContentStream(lines: TextLine[]): string {
   return lines.map(textLineOperator).join("\n");
 }
 
@@ -158,9 +163,13 @@ function composeParagraphs(
  *   1 = Catalog, 2 = Pages,
  *   page i → object 3+2i, content i → object 4+2i,
  *   /F1 font → 3+2P, /F2 font → 4+2P (P = page count),
- *   outline root → 5+2P, outline item j → 6+2P+j (only when outlines exist).
+ * outline root → 5+2P, outline item j → 6+2P+j (only when outlines exist).
+ *
+ * Exported (11-02): the adapter unit suite builds tiny probe PDFs (x-gap
+ * space insertion, isReaderable-false cases) through THIS serializer so the
+ * byte-level PDF construction lives in one place.
  */
-function serializePdf(spec: FixtureSpec): Buffer {
+export function serializePdf(spec: FixtureSpec): Buffer {
   const pageCount = spec.pages.length;
   const pageObjectNum = (i: number): number => 3 + 2 * i;
   const contentObjectNum = (i: number): number => 4 + 2 * i;
@@ -481,4 +490,11 @@ function main(): void {
   console.log("self-check PASS: 4 valid fixtures (%PDF- prefix + >500B), corrupt marker present, re-emit byte-identical");
 }
 
-main();
+// Run as a script only: `node tests/fixtures/pdf/generate-synthetic-pdfs.ts`.
+// Importing this module (11-02's unit suite) reuses the serializer WITHOUT
+// re-writing fixtures or logging — the direct-run check compares the module
+// URL against the invoked script path (standard ESM main-module idiom).
+const isDirectRun =
+  process.argv[1] !== undefined &&
+  import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isDirectRun) main();

@@ -16,11 +16,20 @@ import type { StructuredTextItem } from "unpdf";
 import {
   assertPageCap,
   classifyDocument,
+  isSanePdfTitle,
   mapPdfjsError,
+  outlineHeadingTargets,
   PDF_THRESHOLDS,
   pdfToBlocks,
+  saneInfoTitle,
 } from "../../../server/pdfToBlocks";
 import { IngestionError } from "../../../server/errors";
+import { BlockSchema, type Block } from "../../../src/content/schema";
+import {
+  buildContentStream,
+  serializePdf,
+  type TextLine,
+} from "../../fixtures/pdf/generate-synthetic-pdfs";
 
 // ── Synthetic fixture loading (tests/fixtures/pdf — committed corpus) ────────
 const FIXTURES_DIR = join(
@@ -209,5 +218,255 @@ describe("PDF_THRESHOLDS — exported calibration surface", () => {
     expect(PDF_THRESHOLDS.nearEmptyItemFloor).toBe(3);
     expect(PDF_THRESHOLDS.nearEmptyCharFloor).toBe(15);
     expect(PDF_THRESHOLDS.scannedMajorityRatio).toBe(0.5);
+  });
+});
+
+// ── Task 2 helpers ────────────────────────────────────────────────────────────
+/** Concatenated inline-run text of a heading/paragraph block (""). */
+function textOf(block: Block): string {
+  if (block.kind === "heading" || block.kind === "paragraph") {
+    return block.content.map((run) => run.text).join("");
+  }
+  return "";
+}
+
+/** A tiny one-page probe PDF from the SAME serializer that built the
+ * committed corpus (no forked PDF writer). */
+function tinyPdf(lines: TextLine[]): Uint8Array {
+  return new Uint8Array(serializePdf({ pages: [buildContentStream(lines)] }));
+}
+
+// ── Task 2 — adapter contract (five-field result, locked invariant) ──────────
+describe("pdfToBlocks — five-field adapter contract (single-column fixture)", () => {
+  it("resolves with exactly the MarkdownToBlocksResult-shaped five fields", async () => {
+    const result = await pdfToBlocks(fixtureBytes("synthetic-single-column.pdf"));
+    expect(Object.keys(result).sort()).toEqual([
+      "blocks",
+      "footnotes",
+      "isReaderable",
+      "lang",
+      "provenancePartial",
+    ]);
+  });
+
+  it("footnotes is empty, lang is 'en', isReaderable is true, blocks ≥ 3", async () => {
+    const result = await pdfToBlocks(fixtureBytes("synthetic-single-column.pdf"));
+    expect(result.footnotes).toEqual([]);
+    expect(result.lang).toBe("en");
+    expect(result.isReaderable).toBe(true);
+    expect(result.blocks.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("every block parses against the Block schema (ArticleSchema's own union)", async () => {
+    const { blocks } = await pdfToBlocks(fixtureBytes("synthetic-single-column.pdf"));
+    for (const block of blocks) {
+      expect(() => BlockSchema.parse(block)).not.toThrow();
+    }
+  });
+
+  it("provenancePartial.title is undefined (fixtures carry no Info titles)", async () => {
+    const result = await pdfToBlocks(fixtureBytes("synthetic-single-column.pdf"));
+    expect(result.provenancePartial.title).toBeUndefined();
+  });
+});
+
+// ── Task 2 — headings via font-size fallback (D11-08) ─────────────────────────
+describe("pdfToBlocks — font-size heading fallback", () => {
+  it("18pt short groups become heading blocks; 12pt groups stay paragraphs", async () => {
+    const { blocks } = await pdfToBlocks(fixtureBytes("synthetic-single-column.pdf"));
+    const headingTexts = blocks
+      .filter((b): b is Extract<Block, { kind: "heading" }> => b.kind === "heading")
+      .map((b) => textOf(b));
+    expect(headingTexts).toContain("A Study of Calm Reading");
+    expect(headingTexts).toContain("Method");
+
+    const paragraphs = blocks.filter((b) => b.kind === "paragraph");
+    expect(paragraphs.length).toBeGreaterThan(0);
+    for (const p of paragraphs) {
+      if (p.kind === "paragraph") {
+        // body text is 12pt — never a heading under the 1.15 ratio
+        expect(p.content.map((r) => r.text).join("")).not.toBe("A Study of Calm Reading");
+      }
+    }
+  });
+
+  it("fallback headings are level 2 (bodies start at h2 — one-h1 rule)", async () => {
+    const { blocks } = await pdfToBlocks(fixtureBytes("synthetic-single-column.pdf"));
+    const headings = blocks.filter((b): b is Extract<Block, { kind: "heading" }> => b.kind === "heading");
+    expect(headings.length).toBeGreaterThan(0);
+    for (const h of headings) {
+      expect(h.level).toBeGreaterThanOrEqual(2);
+      expect(h.level).toBeLessThanOrEqual(6);
+    }
+  });
+});
+
+// ── Task 2 — paragraph assembly + hyphenation joins (Pattern 6) ───────────────
+describe("pdfToBlocks — paragraph assembly and hyphenation", () => {
+  it("lines of one paragraph join with a space", async () => {
+    const { blocks } = await pdfToBlocks(fixtureBytes("synthetic-single-column.pdf"));
+    const texts = blocks.map(textOf).join("\n");
+    // "…keeps its / measure, and its…" spans a wrapped line break.
+    expect(texts).toContain("its measure,");
+  });
+
+  it("a line ending in a hyphen before a lowercase line dehyphenates (no hyphen, no space)", async () => {
+    const { blocks } = await pdfToBlocks(fixtureBytes("synthetic-single-column.pdf"));
+    const texts = blocks.map(textOf).join("\n");
+    expect(texts).toContain("conclusion rather than interruption.");
+    expect(texts).not.toContain("conclu-");
+  });
+
+  it("the page-3 large vertical gap yields one unsupported block mentioning no extractable text", async () => {
+    const { blocks } = await pdfToBlocks(fixtureBytes("synthetic-single-column.pdf"));
+    const gaps = blocks.filter(
+      (b): b is Extract<Block, { kind: "unsupported" }> => b.kind === "unsupported",
+    );
+    expect(gaps.length).toBe(1);
+    expect(gaps[0]?.plainDescription).toMatch(/no extractable text/i);
+    expect(gaps[0]?.originalKind).toBe("non-text-region");
+    // the gap block sits BETWEEN the two paragraph groups of page 3
+    const idx = blocks.findIndex((b) => b.kind === "unsupported");
+    const before = blocks.slice(0, idx).map(textOf).join(" ");
+    const after = blocks.slice(idx + 1).map(textOf).join(" ");
+    expect(before).toContain("figure stand-in");
+    expect(after).toContain("resumes below the figure stand-in");
+  });
+});
+
+// ── Task 2 — x-gap space insertion (tiny probe PDFs, real pdf.js widths) ──────
+describe("pdfToBlocks — intra-line x-gap space rule (itemGapRatio × fontSize)", () => {
+  it("a wide x-gap inserts a space; a tight x-gap does not", async () => {
+    // Helvetica 12pt: "Hello" measures ~29.3pt wide, ending at x≈89.3.
+    // y=700 pair: "wonderful" starts at x=100 → gap ≈10.7 > 0.2×12 ⇒ space.
+    // y=650 pair: "world" starts at x=91 → gap ≈1.7 < 2.4 ⇒ no space.
+    const bytes = tinyPdf([
+      { x: 60, y: 700, font: "F1", size: 12, text: "Hello" },
+      { x: 100, y: 700, font: "F1", size: 12, text: "wonderful" },
+      { x: 60, y: 650, font: "F1", size: 12, text: "Hello" },
+      { x: 91, y: 650, font: "F1", size: 12, text: "world" },
+    ]);
+    const result = await pdfToBlocks(bytes);
+    const texts = result.blocks.map(textOf);
+    const joined = texts.join("\n");
+    expect(joined).toContain("Hello wonderful");
+    expect(joined).toContain("Helloworld");
+  });
+
+  it("isReaderable is false when fewer than 3 blocks (single-paragraph probe)", async () => {
+    const bytes = tinyPdf([
+      { x: 60, y: 700, font: "F1", size: 12, text: "Hello" },
+      { x: 100, y: 700, font: "F1", size: 12, text: "wonderful" },
+      { x: 60, y: 650, font: "F1", size: 12, text: "Hello" },
+      { x: 91, y: 650, font: "F1", size: 12, text: "world" },
+    ]);
+    const result = await pdfToBlocks(bytes);
+    expect(result.blocks.length).toBeLessThan(3);
+    expect(result.isReaderable).toBe(false);
+  });
+});
+
+// ── Task 2 — outline-first heading coercion (D11-08, Pitfall 10) ──────────────
+describe("pdfToBlocks — outline destinations coerce target blocks (outline fixture)", () => {
+  it("top-level bookmarks coerce their page-top targets to heading level 2", async () => {
+    const { blocks } = await pdfToBlocks(fixtureBytes("synthetic-outline.pdf"));
+    const headings = blocks
+      .filter((b): b is Extract<Block, { kind: "heading" }> => b.kind === "heading")
+      .map((b) => ({ text: textOf(b), level: b.level }));
+    const opening = headings.find((h) => h.text === "Outlined Document");
+    const second = headings.find((h) => h.text === "Second Section");
+    // clamp(depth + 2, 2, 6) with depth 0 → level 2 (bodies start at h2).
+    expect(opening?.level).toBe(2);
+    expect(second?.level).toBe(2);
+  });
+
+  it("the outline fixture stays a multi-block readable document", async () => {
+    const result = await pdfToBlocks(fixtureBytes("synthetic-outline.pdf"));
+    expect(result.blocks.length).toBeGreaterThanOrEqual(3);
+    expect(() => BlockSchema.parse(result.blocks[0])).not.toThrow();
+  });
+});
+
+describe("outlineHeadingTargets — two-shaped dest resolution (stub pdf)", () => {
+  it("resolves string-named AND explicit-array dests; skips url-bearing and null dests; nests clamp depth", async () => {
+    const stubPdf = {
+      getOutline: async () => [
+        { title: "Named Dest", dest: "dest-a", url: null, items: [] },
+        {
+          title: "Array Dest",
+          dest: [{ num: 9, gen: 0 }, { name: "XYZ" }, 0, 500, 0],
+          url: null,
+          items: [],
+        },
+        { title: "Null Dest", dest: null, url: null, items: [] },
+        { title: "Url Entry", dest: "dest-b", url: "https://example.com", items: [] },
+        {
+          title: "Parent",
+          dest: [{ num: 11, gen: 0 }, { name: "XYZ" }, 0, 400, 0],
+          url: null,
+          items: [
+            {
+              title: "Nested Child",
+              dest: [{ num: 11, gen: 0 }, { name: "XYZ" }, 0, 380, 0],
+              url: null,
+              items: [],
+            },
+          ],
+        },
+      ],
+      getDestination: async (id: string) =>
+        id === "dest-a" ? [{ num: 3, gen: 0 }, { name: "XYZ" }, 0, 700, 0] : null,
+      getPageIndex: async (ref: unknown) =>
+        (ref as { num: number }).num === 3 ? 0 : 1,
+    };
+    const targets = await outlineHeadingTargets(stubPdf);
+    expect(targets).toHaveLength(3); // url + null entries skipped
+    const named = targets.find((t) => t.title === "Named Dest");
+    expect(named?.pageIndex).toBe(0);
+    expect(named?.destY).toBe(700);
+    expect(named?.level).toBe(2);
+    const array = targets.find((t) => t.title === "Array Dest");
+    expect(array?.pageIndex).toBe(1);
+    expect(array?.destY).toBe(500);
+    expect(array?.level).toBe(2);
+    const nested = targets.find((t) => t.title === "Nested Child");
+    expect(nested?.level).toBe(3); // depth 1 → clamp(1 + 2, 2, 6)
+  });
+});
+
+// ── Task 2 — title sanity (D11-07 helper half) ────────────────────────────────
+describe("isSanePdfTitle — producer-garbage table", () => {
+  it("rejects empty, whitespace, and placeholder titles", () => {
+    expect(isSanePdfTitle("")).toBe(false);
+    expect(isSanePdfTitle("   ")).toBe(false);
+    expect(isSanePdfTitle("untitled")).toBe(false);
+    expect(isSanePdfTitle("Untitled")).toBe(false);
+  });
+
+  it("rejects producer-filename garbage", () => {
+    expect(isSanePdfTitle("Microsoft Word - report.docx")).toBe(false);
+    expect(isSanePdfTitle("slides.pptx")).toBe(false);
+    expect(isSanePdfTitle("export.pdf")).toBe(false);
+  });
+
+  it("rejects hex/UUID blobs and over-200-char titles", () => {
+    expect(isSanePdfTitle("0123456789abcdef0123456789abcdef01234567")).toBe(false);
+    expect(isSanePdfTitle("123e4567-e89b-12d3-a456-426614174000")).toBe(false);
+    expect(isSanePdfTitle("A".repeat(201))).toBe(false);
+  });
+
+  it("accepts real titles", () => {
+    expect(isSanePdfTitle("Annual Report 2025")).toBe(true);
+    expect(isSanePdfTitle("A Study of Calm Reading")).toBe(true);
+  });
+});
+
+describe("saneInfoTitle — Info-dict wiring", () => {
+  it("returns the Info title when sane, undefined otherwise", () => {
+    expect(saneInfoTitle({ Title: "Annual Report 2025" })).toBe("Annual Report 2025");
+    expect(saneInfoTitle({ Title: "untitled" })).toBeUndefined();
+    expect(saneInfoTitle({ Title: "Microsoft Word - x.docx" })).toBeUndefined();
+    expect(saneInfoTitle({})).toBeUndefined();
+    expect(saneInfoTitle({ Title: 42 })).toBeUndefined();
   });
 });
