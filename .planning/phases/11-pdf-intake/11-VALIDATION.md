@@ -40,14 +40,14 @@ created: 2026-08-16
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
 | 11-01-01 | 01 | 1 | — | T-11-SC | Human approves unpdf legitimacy + exact pin before install | checkpoint | (blocking human-verify gate) | n/a | ⬜ pending |
 | 11-01-02 | 01 | 1 | — | T-11-01, T-11-05 | Schemas widen additively; caps defined; no unpdf import under src/ | unit | `npx vitest run tests/unit/ingestion-schema.test.ts && npx tsc --noEmit` | ✅ (extends) | ⬜ pending |
-| 11-01-03 | 01 | 1 | — | — | Synthetic fixtures committable (NOT the D11-04 corpus) | unit + e2e | `node tests/fixtures/pdf/generate-synthetic-pdfs.ts && npx vitest run tests/unit/server/pdf-to-blocks.spec.ts tests/unit/server/ingest-pdf.spec.ts && npx playwright test pdf-intake` | ❌ W0 | ⬜ pending |
-| 11-02-01 | 02 | 2 | ING-04 | T-11-01/03/06/08 | Caps before extraction; timeout race; page-weighted detect+refuse; encrypted/corrupt typed | unit | `npx vitest run tests/unit/server/pdf-to-blocks.spec.ts` | ✅ (sentinel → suite) | ⬜ pending |
+| 11-01-03 | 01 | 1 | — | — | Synthetic fixtures committable (NOT the D11-04 corpus); generator self-check proves integrity + idempotency | unit | `node tests/fixtures/pdf/generate-synthetic-pdfs.ts` | ❌ W0 | ⬜ pending |
+| 11-02-01 | 02 | 2 | ING-04 | T-11-01/03/06/08 | Caps before extraction; timeout race; page-weighted detect+refuse; encrypted/corrupt typed | unit | `npx vitest run tests/unit/server/pdf-to-blocks.spec.ts` | ❌ W0 (created here) | ⬜ pending |
 | 11-02-02 | 02 | 2 | ING-04 | T-11-05 | Block JSON inert; outline-first headings; honest unsupported blocks; sane titles | unit | `npx vitest run tests/unit/server/pdf-to-blocks.spec.ts` | ✅ | ⬜ pending |
 | 11-03-01 | 03 | 3 | ING-04 | T-11-10/11/12 | pdf-hash id stability; decoded size re-check; D11-07/09 chains | unit | `npx tsc --noEmit` (behavior proven by 11-03-02) | ✅ (source) | ⬜ pending |
-| 11-03-02 | 03 | 3 | ING-04 | T-11-02 | 413 pre-read body cap; round-trip anchor on admitted PDF; typed refusals | unit | `npx vitest run tests/unit/server/ingest-pdf.spec.ts && npm run test:unit -- --run` | ✅ (sentinel → suite) | ⬜ pending |
+| 11-03-02 | 03 | 3 | ING-04 | T-11-02 | 413 pre-read body cap; round-trip anchor on admitted PDF; typed refusals | unit | `npx vitest run tests/unit/server/ingest-pdf.spec.ts && npm run test:unit -- --run` | ❌ W0 (created here) | ⬜ pending |
 | 11-04-01 | 04 | 2 | ING-04 | — | Client posts widened envelope; typed refusal throw; re-validation intact | unit | `npx vitest run tests/unit/ingestion-client.test.ts` | ✅ (extends) | ⬜ pending |
 | 11-04-02 | 04 | 2 | ING-04 | T-11-02/04/09 | Pre-POST size cap; exact calm copy; bundle free of pdfjs code | unit + build | `npx vitest run tests/unit/pdf-copy.test.ts && npm run build && npm run test:unit -- --run` | ❌ W0 | ⬜ pending |
-| 11-05-01 | 05 | 4 | ING-04 | T-11-03/04/13 | Refusals prove copy AND zero side effects; dedupe; upload→read | e2e | `npx playwright test pdf-intake` | ✅ (sentinel → suite) | ⬜ pending |
+| 11-05-01 | 05 | 4 | ING-04 | T-11-03/04/13 | Refusals prove copy AND zero side effects; dedupe; upload→read | e2e | `npx playwright test pdf-intake` | ❌ W0 (created here) | ⬜ pending |
 | 11-05-02 | 05 | 4 | ING-04 | — | Annotate + location restore identical to other articles | e2e | `npx playwright test pdf-intake` | ✅ | ⬜ pending |
 | 11-06-01 | 06 | 5 | ING-04 | T-11-07 | Manifest SHA-256 integrity; D11-06 bar validation; refuse-empty | unit | `npx vitest run tests/unit/server/pdf-calibration/harness.test.ts && git check-ignore corpus/pdf/x.pdf` | ❌ W0 | ⬜ pending |
 | 11-06-02 | 06 | 5 | — | — | Human supplies real corpus (cannot be synthesized per D11-04) | checkpoint | (blocking human-verify gate) | n/a | ⬜ pending |
@@ -59,9 +59,9 @@ created: 2026-08-16
 
 ## Wave 0 Requirements
 
-- [ ] `tests/unit/server/pdf-to-blocks.spec.ts` — sentinel created by 11-01 Task 3, suite filled by 11-02
-- [ ] `tests/unit/server/ingest-pdf.spec.ts` — sentinel created by 11-01 Task 3, suite filled by 11-03
-- [ ] `tests/e2e/pdf-intake.spec.ts` — sentinel created by 11-01 Task 3, suite filled by 11-05
+- [ ] `tests/unit/server/pdf-to-blocks.spec.ts` — created (full suite) by 11-02 Task 1
+- [ ] `tests/unit/server/ingest-pdf.spec.ts` — created (full suite) by 11-03 Task 2
+- [ ] `tests/e2e/pdf-intake.spec.ts` — created (full suite) by 11-05 Task 1
 - [ ] `tests/unit/pdf-copy.test.ts` — created by 11-04 Task 2
 - [ ] `tests/unit/server/pdf-calibration/{harness.test,derive.spec,replay.spec}.ts` — created by 11-06
 - [ ] `tests/fixtures/pdf/*` — synthetic fixtures committed by 11-01 Task 3

@@ -374,16 +374,18 @@ export const IngestionRequestSchema = z.union([
 | A5 | English-only corpus ⇒ cmap absence (Pitfall 5) is a documented non-blocker | Pitfalls, Environment | CJK PDFs extract poorly until pdfjs-dist is added as server dep for cmaps |
 | A6 | `err.name` string-matching for PasswordException/InvalidPDFException is stable across the pinned version | Pattern 7 | Pinned exact version; classes verified in shipped types |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Pin 1.8.0 (STACK lock) or 1.8.1 (current)?**
+All five questions were closed during phase planning (revision 1). Per-question
+resolution notes cite the plan task that implements each answer.
+
+1. **Pin 1.8.0 (STACK lock) or 1.8.1 (current)?** — **(RESOLVED → 11-01 Task 1)**
    - What we know: 1.8.0→1.8.1 diff is a Math.sumPrecise polyfill refactor (verified via GitHub compare) — API-neutral; both work on Node 22.
-   - What's unclear: whether the user wants the STACK number honored literally or the patch bump.
-   - Recommendation: fold into the install `checkpoint:human-verify` (also required by the SUS audit); default 1.8.0.
-2. **`PDF_MAX_BYTES` exact value** — recommended 10MB decoded (client + content-length + decoded triple-check). Confirm in plan.
-3. **Failure-reason granularity** — five members recommended (Pattern 7); `pdf-timeout` fold target is planner's call.
-4. **Corpus acquisition** — the calibration plan needs the user's 6–10 real PDFs locally before the derive run; manifest authoring is part of that task. Confirm the user will supply them (licensing/size already decided local-only).
-5. **Ground-truth label authoring effort** — block-level labels for ~4–6 admitted-class PDFs are hand-authored JSON; estimate ~30–60 min. Confirm format acceptance in plan.
+   - Resolution: folded into the install `checkpoint:human-verify` (also required by the SUS audit); the human approves the exact pin at the blocking gate, default 1.8.0. Recommendation adopted verbatim.
+2. **`PDF_MAX_BYTES` exact value** — **(RESOLVED → 11-01 Task 2)**: 10MB decoded (`PDF_MAX_BYTES = 10 * 1024 * 1024`), enforced at all three layers — client picker cap, middleware content-length guard via `MAX_INGEST_BODY_BYTES` (base64-inflated bound), and the orchestrator decoded re-check.
+3. **Failure-reason granularity** — **(RESOLVED → 11-01 Task 2 + 11-02 Task 1)**: five members shipped (pdf-unreadable, pdf-encrypted, pdf-scanned, pdf-multi-column, pdf-too-large); the `pdf-timeout` fold target is settled — timeouts fold into the server-error reason via the `withPdfDocument` timeout race with a descriptive message.
+4. **Corpus acquisition** — **(RESOLVED → 11-06 Task 2 checkpoint)**: the user supplies the 6–10 real PDFs (4 classes, varied producers) into the gitignored `corpus/pdf/` directory at a blocking human checkpoint and reports filename → class; the agent then computes SHA-256 values and authors the manifest (licensing/size local-only decision stands, D11-04/05).
+5. **Ground-truth label authoring effort** — **(RESOLVED → 11-06 Task 1)**: labels are `[{ kind, level?, textPrefix }]` JSON stored beside the manifest; agreement = matched-kind / max(labels, blocks) via normalized textPrefix fuzzy match with ±1 boundary drift; the agent drafts labels from a first extraction and the human corrects them at the Task 2 resume (~30–60 min estimate confirmed acceptable).
 
 ## Environment Availability
 
@@ -426,9 +428,9 @@ export const IngestionRequestSchema = z.union([
 - **Phase gate:** full `npm run test` single invocation, exit 0, counts recorded in OUTPUT.md (the Phase 9/10 honest-gate discipline)
 
 ### Wave 0 Gaps
-- [ ] `tests/unit/server/pdf-to-blocks.spec.ts` — adapter units (REQ ING-04)
-- [ ] `tests/unit/server/ingest-pdf.spec.ts` — fourth-branch pipeline integration incl. round-trip gate
-- [ ] `tests/e2e/pdf-intake.spec.ts` — upload→read + refusal flows (SC#1–3)
+- [ ] `tests/unit/server/pdf-to-blocks.spec.ts` — adapter units (REQ ING-04; created by 11-02 Task 1 — 11-01 ships fixtures only)
+- [ ] `tests/unit/server/ingest-pdf.spec.ts` — fourth-branch pipeline integration incl. round-trip gate (created by 11-03 Task 2)
+- [ ] `tests/e2e/pdf-intake.spec.ts` — upload→read + refusal flows (SC#1–3; created by 11-05 Task 1)
 - [ ] `tests/unit/server/pdf-calibration/{manifest.json, harness, ground-truth/, pdf-evidence.json}` — SC#4b
 - [ ] Corpus dir + `.gitignore` entry (`corpus/pdf/`) + docs note for the local derive workflow
 

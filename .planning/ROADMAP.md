@@ -204,7 +204,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 11-01-PLAN.md — unpdf human gate (SUS audit) + schema/limit widening + synthetic fixtures + Wave-0 sentinels
+- [ ] 11-01-PLAN.md — unpdf human gate (SUS audit) + schema/limit widening + self-verifying synthetic fixtures (spec files owned by 11-02/03/05)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
