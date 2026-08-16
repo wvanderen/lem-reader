@@ -337,14 +337,19 @@ describe("pdfToBlocks — paragraph assembly and hyphenation", () => {
 // ── Task 2 — x-gap space insertion (tiny probe PDFs, real pdf.js widths) ──────
 describe("pdfToBlocks — intra-line x-gap space rule (itemGapRatio × fontSize)", () => {
   it("a wide x-gap inserts a space; a tight x-gap does not", async () => {
-    // Helvetica 12pt: "Hello" measures ~29.3pt wide, ending at x≈89.3.
-    // y=700 pair: "wonderful" starts at x=100 → gap ≈10.7 > 0.2×12 ⇒ space.
-    // y=650 pair: "world" starts at x=91 → gap ≈1.7 < 2.4 ⇒ no space.
+    // Real pdf.js metrics (measured): 12pt "Hello" is 27.336pt wide, ending
+    // at x≈87.34. pdfjs pre-joins close runs into single items (its own
+    // space synthesis — RESEARCH A4) and emits separate items plus a
+    // whitespace-only synthetic for wide gaps (filtered by the adapter; the
+    // x-gap rule owns that join):
+    // y=700 pair: "wonderful" at x=100 → 3 items, gap 12.66 > 0.2×12 ⇒ the
+    //             adapter's x-gap rule inserts the space.
+    // y=650 pair: "world" at x=88 → pdfjs merges gap-free ⇒ "Helloworld".
     const bytes = tinyPdf([
       { x: 60, y: 700, font: "F1", size: 12, text: "Hello" },
       { x: 100, y: 700, font: "F1", size: 12, text: "wonderful" },
       { x: 60, y: 650, font: "F1", size: 12, text: "Hello" },
-      { x: 91, y: 650, font: "F1", size: 12, text: "world" },
+      { x: 88, y: 650, font: "F1", size: 12, text: "world" },
     ]);
     const result = await pdfToBlocks(bytes);
     const texts = result.blocks.map(textOf);
@@ -358,7 +363,7 @@ describe("pdfToBlocks — intra-line x-gap space rule (itemGapRatio × fontSize)
       { x: 60, y: 700, font: "F1", size: 12, text: "Hello" },
       { x: 100, y: 700, font: "F1", size: 12, text: "wonderful" },
       { x: 60, y: 650, font: "F1", size: 12, text: "Hello" },
-      { x: 91, y: 650, font: "F1", size: 12, text: "world" },
+      { x: 88, y: 650, font: "F1", size: 12, text: "world" },
     ]);
     const result = await pdfToBlocks(bytes);
     expect(result.blocks.length).toBeLessThan(3);
@@ -420,7 +425,9 @@ describe("outlineHeadingTargets — two-shaped dest resolution (stub pdf)", () =
         (ref as { num: number }).num === 3 ? 0 : 1,
     };
     const targets = await outlineHeadingTargets(stubPdf);
-    expect(targets).toHaveLength(3); // url + null entries skipped
+    // Null-dest and url-bearing entries are skipped; a parent with a valid
+    // dest IS a target itself (sections nest — parent + child both coerce).
+    expect(targets).toHaveLength(4);
     const named = targets.find((t) => t.title === "Named Dest");
     expect(named?.pageIndex).toBe(0);
     expect(named?.destY).toBe(700);
@@ -429,6 +436,8 @@ describe("outlineHeadingTargets — two-shaped dest resolution (stub pdf)", () =
     expect(array?.pageIndex).toBe(1);
     expect(array?.destY).toBe(500);
     expect(array?.level).toBe(2);
+    const parent = targets.find((t) => t.title === "Parent");
+    expect(parent?.level).toBe(2);
     const nested = targets.find((t) => t.title === "Nested Child");
     expect(nested?.level).toBe(3); // depth 1 → clamp(1 + 2, 2, 6)
   });

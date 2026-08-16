@@ -112,6 +112,21 @@ export const PDF_THRESHOLDS = {
   /** page-weighted majority: near-empty pages > this × ALL pages ⇒ document
    * refuses pdf-scanned (D11-03). */
   scannedMajorityRatio: 0.5,
+  // Pattern 6 — paragraph assembly
+  /** new paragraph when the baseline delta exceeds this × modal line delta. */
+  paragraphGapRatio: 1.35,
+  /** insert a space between same-line items when the x-gap exceeds this × fontSize. */
+  itemGapRatio: 0.2,
+  /** an intra-page vertical gap beyond this × modal line height is a
+   * non-text region (figure/chart stand-in) — emit ONE unsupported block. */
+  figureGapLines: 5,
+  // Pattern 5 — heading detection (outline-first; this is the fallback)
+  /** heading when dominant fontSize ≥ body × this (char-weighted modal body). */
+  headingFontRatio: 1.15,
+  /** …AND the group is under this many words. */
+  headingMaxWords: 10,
+  /** outline dest y matches a block top within this × the page's line delta. */
+  outlineYToleranceLines: 1.5,
 } as const;
 
 // ── Small numeric helpers ────────────────────────────────────────────────────
@@ -476,6 +491,260 @@ export async function withPdfDocument<T>(
   }
 }
 
+// ── Outline machinery — author-declared structure (Pattern 5, Pitfall 10) ────
+/** Minimal outline-entry shape the flattener reads (pdfjs's OutlineNode minus
+ * display-only fields — keeps the stub-injectable surface small for tests). */
+export interface OutlineEntryLike {
+  title: string;
+  dest: string | Array<any> | null;
+  url: string | null;
+  items: OutlineEntryLike[];
+}
+
+/** The pdfjs surface outline resolution needs (the real proxy satisfies this
+ * structurally; the unit suite injects a stub — Pitfall 10's two dest shapes
+ * are provable without an extra fixture). */
+export interface OutlineCapablePdf {
+  getOutline(): Promise<OutlineEntryLike[] | null>;
+  getDestination(id: string): Promise<Array<any> | null>;
+  getPageIndex(ref: unknown): Promise<number>;
+}
+
+/** One resolved outline heading target. `level` is clamp(depth + 2, 2, 6) —
+ * top-level bookmarks coerce to h2 because article bodies start at h2 (the
+ * one-h1 rule; ArticleView renders the title from provenance). */
+export interface OutlineTarget {
+  title: string;
+  pageIndex: number;
+  /** XYZ top y in PDF user space (y-UP), or null for Fit/no-y dests —
+   * treated as "top of page". */
+  destY: number | null;
+  level: 2 | 3 | 4 | 5 | 6;
+}
+
+/** Flatten the outline tree, carrying depth (top level = 0). */
+function flattenOutline(
+  entries: OutlineEntryLike[],
+): Array<{ entry: OutlineEntryLike; depth: number }> {
+  const out: Array<{ entry: OutlineEntryLike; depth: number }> = [];
+  const walk = (list: OutlineEntryLike[], depth: number): void => {
+    for (const entry of list) {
+      out.push({ entry, depth });
+      if (entry.items && entry.items.length > 0) walk(entry.items, depth + 1);
+    }
+  };
+  walk(entries, 0);
+  return out;
+}
+
+/** Extract the XYZ top y from a resolved destination array. VERIFIED against
+ * the real pdfjs shape (synthetic-outline.pdf): explicit dests come back as
+ * `[RefProxy, {name:"XYZ"}, left, top, zoom]` — the coordinates are FLAT
+ * array elements, NOT `.args` (the RESEARCH sketch's `.args` form is kept as
+ * a defensive fallback only). Non-XYZ modes (Fit etc.) return null ⇒ the
+ * coercion treats the dest as "top of page". */
+function destTopY(dest: Array<any>): number | null {
+  const mode = dest[1];
+  if (mode && typeof mode === "object" && "name" in mode) {
+    const name = (mode as { name?: unknown }).name;
+    if (name !== "XYZ") return null;
+    const flatTop = dest[3];
+    if (typeof flatTop === "number") return flatTop;
+    const args = (mode as { args?: unknown }).args;
+    if (Array.isArray(args) && typeof args[1] === "number") {
+      return args[1] as number;
+    }
+  }
+  return null;
+}
+
+/** Resolve the outline into flat heading targets. url-bearing entries are
+ * external links, not headings; null dests have no target; string dests
+ * resolve through getDestination (named destinations — many LaTeX/Word
+ * exporters use them); explicit arrays pass through as-is (Pitfall 10). */
+export async function outlineHeadingTargets(
+  pdf: OutlineCapablePdf,
+): Promise<OutlineTarget[]> {
+  const outline = await pdf.getOutline();
+  if (!outline || outline.length === 0) return [];
+  const targets: OutlineTarget[] = [];
+  for (const { entry, depth } of flattenOutline(outline)) {
+    if (entry.url || !entry.dest) continue;
+    const dest =
+      typeof entry.dest === "string"
+        ? await pdf.getDestination(entry.dest)
+        : entry.dest;
+    if (!dest || dest.length === 0) continue;
+    try {
+      const pageIndex = await pdf.getPageIndex(dest[0]);
+      const level = Math.max(2, Math.min(6, depth + 2)) as 2 | 3 | 4 | 5 | 6;
+      targets.push({ title: entry.title, pageIndex, destY: destTopY(dest), level });
+    } catch {
+      // Unresolvable page ref — skip this entry honestly rather than fail
+      // the whole document over one broken bookmark.
+    }
+  }
+  return targets;
+}
+
+// ── Assembly (Pattern 6) ──────────────────────────────────────────────────────
+/** One block under construction. Paragraph drafts carry the geometry the
+ * outline coercion needs (page index, approximate line-box top, dominant
+ * fontSize, the page's modal line delta). */
+interface DraftBlock {
+  kind: "paragraph" | "heading" | "unsupported";
+  level?: 2 | 3 | 4 | 5 | 6;
+  /** paragraph/heading body text (inline runs are built at emit time). */
+  text?: string;
+  /** unsupported diagnostics. */
+  originalKind?: string;
+  plainDescription?: string;
+  pageIndex: number;
+  /** first-line baseline + dominant fontSize ≈ the line-box top. */
+  topY: number;
+  fontSize: number;
+  /** the page's modal line delta (outline y-tolerance scale). */
+  lineDelta: number;
+}
+
+const NON_TEXT_REGION_DESCRIPTION =
+  "A page or region with no extractable text — likely a figure, chart, or table.";
+
+/** Assemble ONE page's real items into ordered draft blocks: y-descending
+ * line bands → intra-line x-gap joins → paragraph grouping on vertical-gap /
+ * font-regime change → hyphenation joins. A vertical gap beyond
+ * figureGapLines line-heights emits ONE honest unsupported block between the
+ * surrounding paragraphs (DOC-06 disclosure — figure-heavy PDFs may then
+ * honestly derive low confidence downstream; ING-06 working, not a bug). */
+function assemblePage(pageIndex: number, items: StructuredTextItem[]): DraftBlock[] {
+  if (items.length === 0) return [];
+  const lineDelta = modalLineDelta(items);
+  const bands = binIntoBands(items, PDF_THRESHOLDS.bandYToleranceRatio * lineDelta);
+
+  // Lines: dominant font by char weight; text joined with the x-gap rule.
+  interface Line {
+    y: number;
+    text: string;
+    fontSize: number;
+    fontFamily: string;
+  }
+  const lines: Line[] = [];
+  for (const band of bands) {
+    const sorted = [...band.items].sort((a, b) => a.x - b.x);
+    let text = "";
+    let prev: StructuredTextItem | null = null;
+    const sizeWeights = new Map<number, number>();
+    const familyWeights = new Map<string, number>();
+    for (const it of sorted) {
+      if (prev) {
+        const gap = it.x - (prev.x + prev.width);
+        const endsWithSpace = /\s$/.test(prev.str);
+        const startsWithSpace = /^\s/.test(it.str);
+        if (
+          gap > PDF_THRESHOLDS.itemGapRatio * it.fontSize &&
+          !endsWithSpace &&
+          !startsWithSpace
+        ) {
+          text += " ";
+        }
+      }
+      text += it.str;
+      const weight = Math.max(1, nonWsChars(it.str));
+      const size = round2(it.fontSize);
+      sizeWeights.set(size, (sizeWeights.get(size) ?? 0) + weight);
+      familyWeights.set(it.fontFamily, (familyWeights.get(it.fontFamily) ?? 0) + weight);
+      prev = it;
+    }
+    text = text.replace(/\s+/g, " ").trim();
+    if (text.length === 0) continue;
+    let fontSize = 0;
+    let bestSize = -1;
+    for (const [size, weight] of sizeWeights) {
+      if (weight > bestSize) {
+        fontSize = size;
+        bestSize = weight;
+      }
+    }
+    let fontFamily = "";
+    let bestFamily = -1;
+    for (const [family, weight] of familyWeights) {
+      if (weight > bestFamily) {
+        fontFamily = family;
+        bestFamily = weight;
+      }
+    }
+    lines.push({ y: band.y, text, fontSize, fontFamily });
+  }
+  if (lines.length === 0) return [];
+
+  const drafts: DraftBlock[] = [];
+  let current: { texts: string[]; y: number; fontSize: number } | null = null;
+  const flush = (): void => {
+    if (!current) return;
+    // Hyphenation join: a trailing hyphen before a lowercase-starting line
+    // dehyphenates (drop the hyphen, no space); anything else joins with a
+    // single space.
+    let text = "";
+    for (const [i, line] of current.texts.entries()) {
+      if (i === 0) {
+        text = line;
+        continue;
+      }
+      if (text.endsWith("-") && /^[a-z]/.test(line)) {
+        text = text.slice(0, -1) + line;
+      } else {
+        text += " " + line;
+      }
+    }
+    text = text.trim();
+    if (text.length > 0) {
+      drafts.push({
+        kind: "paragraph",
+        text,
+        pageIndex,
+        topY: current.y + current.fontSize,
+        fontSize: current.fontSize,
+        lineDelta,
+      });
+    }
+    current = null;
+  };
+
+  let prevLine: Line | null = null;
+  for (const line of lines) {
+    if (prevLine) {
+      const delta = prevLine.y - line.y;
+      if (delta > PDF_THRESHOLDS.figureGapLines * lineDelta) {
+        // figure-sized gap → honest unsupported block between the groups
+        flush();
+        drafts.push({
+          kind: "unsupported",
+          originalKind: "non-text-region",
+          plainDescription: NON_TEXT_REGION_DESCRIPTION,
+          pageIndex,
+          topY: (prevLine.y + line.y) / 2,
+          fontSize: prevLine.fontSize,
+          lineDelta,
+        });
+      } else if (
+        delta > PDF_THRESHOLDS.paragraphGapRatio * lineDelta ||
+        line.fontSize !== prevLine.fontSize ||
+        line.fontFamily !== prevLine.fontFamily
+      ) {
+        flush();
+      }
+    }
+    if (!current) {
+      current = { texts: [], y: line.y, fontSize: line.fontSize };
+    }
+    current.texts.push(line.text);
+    prevLine = line;
+  }
+  flush();
+  return drafts;
+}
+
+
 // ── Title sanity (D11-07 helper half) ─────────────────────────────────────────
 /** Producer-garbage Info-title patterns (RESEARCH Example 2; A1 — corpus-
  * verified during calibration). Matches run against the TRIMMED title. */
@@ -523,28 +792,24 @@ export interface PdfToBlocksResult {
  * extractTextItems + getOutline under the caps/timeout above; errors map via
  * mapPdfjsError BEFORE anything else; the scanned verdict refuses BEFORE the
  * multi-column verdict (a scanned doc has no columns to detect); only then
- * does assembly run. Task 1 ships lifecycle + detection + typed refusals —
- * assembly (outline-first headings, hyphenation joins, unsupported blocks)
- * lands in Task 2; until then admitted documents resolve the typed stub.
+ * does assembly run: y-descending lines (Pitfall 1), paragraph grouping on
+ * vertical gap / font regime, hyphenation joins, outline-first heading
+ * coercion with the font-size fallback (D11-08), and honest unsupported
+ * blocks for non-text regions (Task 2).
  */
 export async function pdfToBlocks(pdfBytes: Uint8Array): Promise<PdfToBlocksResult> {
   return withPdfDocument(pdfBytes, async (pdf) => {
     let meta: Awaited<ReturnType<typeof getMeta>>;
     let text: Awaited<ReturnType<typeof extractTextItems>>;
-    let outline: Awaited<ReturnType<PDFDocumentProxy["getOutline"]>>;
+    let outlineTargets: OutlineTarget[];
     try {
       meta = await getMeta(pdf);
       text = await extractTextItems(pdf);
-      outline = await pdf.getOutline();
+      outlineTargets = await outlineHeadingTargets(pdf);
     } catch (err) {
       const mapped = mapPdfjsError(err);
       throw mapped ?? err;
     }
-
-    // Fetched on the same proxy now so the lifecycle contract (one proxy,
-    // three reads) is locked by Task 1; Task 2's outline-first heading
-    // coercion is the consumer.
-    void outline;
 
     // Detection BEFORE assembly — never silently reorder (D11-01).
     const verdict = classifyDocument(text.items);
@@ -561,17 +826,130 @@ export async function pdfToBlocks(pdfBytes: Uint8Array): Promise<PdfToBlocksResu
       );
     }
 
-    // Task 2 completes assembly (outline-first headings, dehyphenated
-    // paragraphs, honest unsupported blocks). The typed stub keeps the
-    // five-field contract destructurable in the meantime.
+    // Char-count-weighted modal body fontSize — the heading fallback's
+    // baseline (Pattern 5).
+    const allReal = text.items.flatMap((page) => realItems(page));
+    const bodyFontSize = modalFontSize(allReal, true);
+
+    // Per-page assembly + the near-empty-page disclosure. A near-empty page
+    // inside an ADMITTED document (minority — majority already refused above)
+    // emits ONE unsupported block instead of vanishing silently.
+    const drafts: DraftBlock[] = [];
+    let textBearingPages = 0;
+    text.items.forEach((pageItems, pageIndex) => {
+      const real = realItems(pageItems);
+      const chars = real.reduce((n, it) => n + nonWsChars(it.str), 0);
+      if (
+        real.length >= PDF_THRESHOLDS.scannedItemFloor &&
+        chars >= PDF_THRESHOLDS.scannedCharFloor
+      ) {
+        textBearingPages += 1;
+      }
+      const isNearEmpty =
+        real.length < PDF_THRESHOLDS.nearEmptyItemFloor ||
+        chars < PDF_THRESHOLDS.nearEmptyCharFloor;
+      if (isNearEmpty) {
+        drafts.push({
+          kind: "unsupported",
+          originalKind: "non-text-region",
+          plainDescription: NON_TEXT_REGION_DESCRIPTION,
+          pageIndex,
+          topY: 0,
+          fontSize: bodyFontSize,
+          lineDelta: bodyFontSize,
+        });
+        return;
+      }
+      drafts.push(...assemblePage(pageIndex, real));
+    });
+
+    // Outline-FIRST heading coercion (D11-08): each target picks the block
+    // on its page whose line-box top is within outlineYToleranceLines × the
+    // page's line delta of the dest XYZ y. The classic `/XYZ 0 pageHeight 0`
+    // "top of page" dest sits ABOVE every block top (producers point at the
+    // page edge, not the first baseline) — when the dest y is at/above the
+    // page's topmost block, THAT block is the target. First coercion wins.
+    const coerced = new Set<DraftBlock>();
+    for (const target of outlineTargets) {
+      const candidates = drafts.filter(
+        (d) =>
+          d.kind === "paragraph" &&
+          d.pageIndex === target.pageIndex &&
+          !coerced.has(d),
+      );
+      if (candidates.length === 0) continue;
+      let chosen: DraftBlock | null = null;
+      if (target.destY === null) {
+        chosen = candidates[0] ?? null; // Fit-style dest → top of page
+      } else {
+        let best: DraftBlock | null = null;
+        let bestDist = Infinity;
+        for (const candidate of candidates) {
+          const dist = Math.abs(candidate.topY - target.destY);
+          if (dist < bestDist) {
+            best = candidate;
+            bestDist = dist;
+          }
+        }
+        const tolerance =
+          PDF_THRESHOLDS.outlineYToleranceLines *
+          (best?.lineDelta ?? bodyFontSize);
+        const maxTopY = Math.max(...candidates.map((c) => c.topY));
+        if (best && bestDist <= tolerance) {
+          chosen = best;
+        } else if (target.destY >= maxTopY) {
+          chosen = candidates[0] ?? null; // dest at/above page content
+        }
+      }
+      if (chosen) {
+        chosen.kind = "heading";
+        chosen.level = target.level;
+        coerced.add(chosen);
+      }
+    }
+
+    // Font-size fallback (D11-08): dominant fontSize ≥ body × headingFontRatio
+    // AND under headingMaxWords ⇒ heading level 2 (bodies start at h2). This
+    // is also the gap-filler for outline-less PDFs.
+    for (const draft of drafts) {
+      if (draft.kind !== "paragraph" || coerced.has(draft)) continue;
+      const words = (draft.text ?? "").trim().split(/\s+/).filter(Boolean).length;
+      if (
+        draft.fontSize >= bodyFontSize * PDF_THRESHOLDS.headingFontRatio &&
+        words > 0 &&
+        words <= PDF_THRESHOLDS.headingMaxWords
+      ) {
+        draft.kind = "heading";
+        draft.level = 2;
+      }
+    }
+
+    const blocks: Block[] = drafts.map((draft): Block => {
+      if (draft.kind === "heading") {
+        return {
+          kind: "heading",
+          level: draft.level ?? 2,
+          content: [{ text: draft.text ?? "", marks: [] }],
+        };
+      }
+      if (draft.kind === "unsupported") {
+        return {
+          kind: "unsupported",
+          originalKind: draft.originalKind ?? "non-text-region",
+          plainDescription: draft.plainDescription ?? NON_TEXT_REGION_DESCRIPTION,
+        };
+      }
+      return { kind: "paragraph", content: [{ text: draft.text ?? "", marks: [] }] };
+    });
+
     return {
-      blocks: [] as Block[],
-      footnotes: [],
+      blocks,
+      footnotes: [], // PDF footnotes are body text in Phase 11 (Pattern 1)
       lang: "en", // English-only corpus per Pitfall 5 scope note
       provenancePartial: saneInfoTitle(meta.info) !== undefined
         ? { title: saneInfoTitle(meta.info) }
         : {},
-      isReaderable: false,
+      isReaderable: blocks.length >= 3 && textBearingPages >= 1,
     };
   });
 }
