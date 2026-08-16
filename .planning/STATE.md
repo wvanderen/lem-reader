@@ -6,14 +6,14 @@ current_phase: 11
 current_phase_name: PDF Intake
 status: executing
 stopped_at: "Completed 11-01-PLAN.md (PDF intake foundation: unpdf 1.8.1 + schema widenings + synthetic fixture corpus)"
-last_updated: "2026-08-16T22:59:39.343Z"
+last_updated: "2026-08-16T23:05:23.478Z"
 last_activity: 2026-08-16
 last_activity_desc: Phase 11 execution started
 progress:
   total_phases: 7
   completed_phases: 4
   total_plans: 31
-  completed_plans: 27
+  completed_plans: 28
   percent: 57
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-16)
 ## Current Position
 
 Phase: 11 (PDF Intake) — EXECUTING
-Plan: 3 of 6
+Plan: 4 of 6
 Status: Ready to execute
 Last activity: 2026-08-16 — Phase 11 execution started
 
@@ -127,6 +127,7 @@ Progress: [████████████████████] 25/25 p
 | Phase 10 P06 | 25 min | 3 tasks | 8 files |
 | Phase 11 P01 | 7 min | 3 tasks | 15 files |
 | Phase 11 P02 | 18 min | 2 tasks | 3 files |
+| Phase 11 P04 | 3 min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -279,6 +280,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 11]: Phase 11 11-02: Pattern 3's voting unit is the contiguous X-RUN within a y-band, not the whole band — two-column rows share baselines (synthetic fixture + grid-aligned journals), so whole-band spans always cover both columns and gutters become undetectable; runs split at gaps > 1em, spanning runs never vote
 - [Phase 11]: Phase 11 11-02: colTextShare attributes only narrow-run text mass by x-center (full-width lines are spanning elements, not column text); top-of-page /XYZ dests coerce the topmost block when no block matches the 1.5-line tolerance — single-column pages structurally cannot false-refuse
 - [Phase 11]: Phase 11 11-02: real pdfjs dest arrays are [RefProxy,{name:'XYZ'},left,top,zoom] — coordinates FLAT, not .args (sketch kept as fallback); generator made importable (serializePdf exported, main() direct-run-guarded, fixtures byte-identical) so tiny probe PDFs reuse the corpus serializer
+- [Phase 11]: Phase 11 11-04: Extension-aware client cap branches on /\.pdf$/i BEFORE any file read — an over-cap PDF pick never materializes an ArrayBuffer or a POST (Pitfall 7 at the earliest enforcement point); PDFs cap at PDF_MAX_BYTES with pdf-too-large copy, .md/.html keep the 5MB response-too-large branch
+- [Phase 11]: Phase 11 11-04: mapReasonToCopy exported from IngestControl.tsx so pdf-copy.test.ts pins the five Pattern-7 strings byte-for-byte AT the live surface (em dashes included); no-jargon guard iterates ALL 16 reasons (T-7-26 extended to the widened enum). bytesToBase64 chunked at 0x8000 elements avoids the String.fromCharCode spread call-stack limit on multi-MB binaries
 
 ### Pending Todos
 
@@ -308,7 +311,7 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-16T22:58:48.808Z
+Last session: 2026-08-16T23:05:01.553Z
 Stopped at: Completed 11-01-PLAN.md (PDF intake foundation: unpdf 1.8.1 + schema widenings + synthetic fixture corpus)
 Resume file: None
 
