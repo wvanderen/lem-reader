@@ -20,6 +20,17 @@
 //   5. browser Back from the deep-linked article returns to #/review (the
 //      SC#2 arrival half; the click-from-row loop closes in 10-06).
 //
+// Plan 10-06 Task 1 — the CLOSING half of RECV-01.c: two loop tests (one
+// per reading mode) that drive the jump from the panel row button itself
+// (a real reader click by role + accessible name — the assertion 10-03
+// could not make because the panel surface did not exist yet) and return
+// via page.goBack() to the #/review h1. After Back, panel OPERABILITY is
+// asserted (filter combobox visible/enabled + the row button focusable) —
+// NEVER origin-row focus, which is engine-variable (the manual-only feel
+// check lives in 10-VALIDATION.md). Pitfall 9: the panel remounts scrolled
+// to top after Back — the accepted documented limitation; no
+// scroll-restoration assertions or machinery here.
+//
 // Harness discipline (REUSE-DO-NOT-FORK):
 //   - wipeDatabase from tests/e2e/annotations/_fixtures.ts (deleteDatabase
 //     wipe per test), plus one app load so Dexie re-declares its schema —
@@ -269,5 +280,76 @@ test.describe("RECV-01.c review-panel jump bidirectional (10-03 deep-link arriva
       page.getByRole("heading", { level: 1, name: "Review highlights" }),
     ).toBeVisible();
     await expect(page).toHaveURL(/#\/review$/);
+  });
+});
+
+test.describe("RECV-01.c review-panel jump bidirectional (10-06 click-from-row loop)", () => {
+  /** The shared loop body: from a seeded #/review, click the confident
+   * row's jump button (role + accessible name — a real reader click),
+   * assert focused arrival + stripped URL, then browser Back returns to
+   * the #/review h1 with an operable panel. */
+  async function exerciseRowClickLoop(page: Page): Promise<void> {
+    await page.goto(`${BASE}/#/review`);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Review highlights" }),
+    ).toBeVisible();
+    // The confident row's jump button — enabled (D10-03: only confident
+    // rows are jumpable; ambiguous/orphan render disabled + aria-disabled).
+    const rowButton = page
+      .getByRole("button", { name: /^Go to highlight:/ })
+      .first();
+    await expect(rowButton).toBeVisible();
+    await expect(rowButton).toBeEnabled();
+    // THE reader click — the row button pushes the deep link exactly as
+    // D10-03 specced (plain location.hash assignment = a history push).
+    await rowButton.click();
+    // Arrival: the retrying focus check (document.activeElement is the
+    // mark) + the replaceState-stripped URL.
+    await expect(
+      page.getByRole("heading", { level: 1, name: TITLE }),
+    ).toBeVisible();
+    await expectFocusedArrival(page);
+    // Back returned to #/review — SC#2 bidirectional, now proven through
+    // the real UI path (row click → jump → Back).
+    await page.goBack();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Review highlights" }),
+    ).toBeVisible();
+    await expect(page).toHaveURL(/#\/review$/);
+    // Focus-restore observation — panel OPERABILITY only, never
+    // origin-row focus (engine-variable; 10-VALIDATION.md owns the feel
+    // check). Pitfall 9: the remount-scrolled-to-top behavior is the
+    // accepted limitation — no scroll assertions.
+    const articleFilter = page.getByRole("combobox", { name: "Article" });
+    await expect(articleFilter).toBeVisible();
+    await expect(articleFilter).toBeEnabled();
+    await rowButton.focus();
+    await expect(rowButton).toBeFocused();
+  }
+
+  test("paginated loop: row-button click jumps to the focused mark; Back returns to #/review", async ({
+    page,
+  }) => {
+    await seedCorpus(page);
+    await exerciseRowClickLoop(page);
+  });
+
+  test("scrolling loop: same row-click → focused-mark → Back cycle under readingMode scrolling", async ({
+    page,
+  }) => {
+    await seedCorpus(page, { settings: [SCROLLING_PREFS_ROW] });
+    // Reload so SettingsProvider hydrates the seeded preference (the
+    // persistence.spec.ts seed-then-reload discipline).
+    await page.reload();
+    await expect(
+      page.getByRole("heading", { name: "Saved articles" }),
+    ).toBeVisible();
+    await exerciseRowClickLoop(page);
+    // The seeded preference actually hydrated — the loop above ran with
+    // the scrolling renderer. The header's ModeToggle reflects the live
+    // preference on every view, so pin it here (the 10-03 shape).
+    await expect(
+      page.getByRole("button", { name: /^Reading mode:/ }),
+    ).toHaveAttribute("aria-label", "Reading mode: scrolling");
   });
 });
