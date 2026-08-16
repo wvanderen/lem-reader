@@ -166,7 +166,7 @@ Plans:
   3. Reader can filter the review list (by article, tag, or confidence) and sort it (by date, article, or position).
   4. Ambiguous and orphan annotations surface honestly with a tri-state indicator (never silently hidden), and the reader can edit or delete highlights in place from the panel.
 
-**Plans**: 1/6 plans executed
+**Plans**: 2/6 plans executed
 **UI hint**: yes
 
 Plans:
@@ -176,7 +176,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1)*
 
-- [ ] 10-02-PLAN.md — Three-view router (#/review + /h/ grammar) + ReviewView surface + LibraryView entry + route-entry e2e
+- [x] 10-02-PLAN.md — Three-view router (#/review + /h/ grammar) + ReviewView surface + LibraryView entry + route-entry e2e
 
 **Wave 3** *(blocked on Wave 2)*
 
@@ -244,7 +244,7 @@ Plans:
 | 7. Ingestion Substrate | v2.0 | 7/7 | Complete   | 2026-08-12 |
 | 8. Markdown Pipeline and Personal Library | v2.0 | 5/5 | Complete    | 2026-08-13 |
 | 9. Versioned Export/Import | v2.0 | 7/7 | Complete    | 2026-08-15 |
-| 10. Annotation Review Panel | v2.0 | 1/6 | In Progress|  |
+| 10. Annotation Review Panel | v2.0 | 2/6 | In Progress|  |
 | 11. PDF Intake | v2.0 | 0/TBD | Not started | - |
 | 12. EPUB Intake | v2.0 | 0/TBD | Not started | - |
 | 13. Polish and Acceptance | v2.0 | 0/TBD | Not started | - |
