@@ -1,7 +1,7 @@
 ---
 phase: 10-annotation-review-panel
 verified: 2026-08-16T02:09:26Z
-status: human_needed
+status: verified
 score: 4/4 must-haves verified
 behavior_unverified: 0
 overrides_applied: 0
@@ -9,16 +9,18 @@ human_verification:
   - test: "Navigate the #/review panel with VoiceOver; confirm ambiguous/orphan badges are announced per row (10-VALIDATION.md manual-only row, RECV-01.e)"
     expected: "Each row's badge ('Uncertain anchor' / 'Article missing') is read as row content; the legend and empty-state copies announce calmly; no double-announcement from the live region"
     why_human: "Axe verifies roles/names only — screen-reader announcement QUALITY is a judgment no automated check can make"
+    result: "pass (10-UAT.md test 1, 2026-08-16: badges announced per row after console-seeded tri-state corpus)"
   - test: "From a panel row, jump to the highlight, then press browser Back; repeat in chromium, firefox, and webkit (10-VALIDATION.md manual-only row, RECV-01.c)"
     expected: "Return to #/review feels calm and predictable; panel is operable immediately after return"
     why_human: "Focus-restore FEEL and timing across engines is a judgment call; the e2e suite deliberately asserts operability only (engine-variable focus landing is a documented limitation)"
+    result: "pass (10-UAT.md test 2, 2026-08-16: calm, stable return; panel immediately operable)"
 ---
 
 # Phase 10: Annotation Review Panel Verification Report
 
 **Phase Goal:** Readers have a dedicated surface to review, filter, and curate all their highlights and notes across the library — the natural pair to the export and curation flow.
 **Verified:** 2026-08-16T02:09:26Z
-**Status:** human_needed
+**Status:** verified (human_needed items passed via 10-UAT.md, 2026-08-16)
 **Re-verification:** No — initial verification
 
 ## Goal Achievement
@@ -118,7 +120,7 @@ No TBD/FIXME/XXX markers, no placeholders, no dangerouslySetInnerHTML, no hardco
 
 ### Gaps Summary
 
-No automated gaps. All four roadmap success criteria are verified against the actual codebase with behavioral evidence (46 tests I ran myself: 27 unit/component + 30... — precisely: 16 unit derivation, 11 component parseHash, 30 review-panel e2e cells on chromium, all green). The 10-06-OUTPUT.md full-suite record (1796/0/13, exit 0) is consistent with these spot-checks. Two planned manual-only validation rows (SR announcement quality, focus-restore feel) remain queued for `/gsd-verify-work` per the phase's validation contract — these drive the human_needed status, not any code deficiency.
+No automated gaps. All four roadmap success criteria are verified against the actual codebase with behavioral evidence (46 tests I ran myself: 27 unit/component + 30... — precisely: 16 unit derivation, 11 component parseHash, 30 review-panel e2e cells on chromium, all green). The 10-06-OUTPUT.md full-suite record (1796/0/13, exit 0) is consistent with these spot-checks. Both planned manual-only validation rows (SR announcement quality, focus-restore feel) PASSED via /gsd-verify-work (10-UAT.md, 2026-08-16) — status advanced from human_needed to verified.
 
 ---
 
