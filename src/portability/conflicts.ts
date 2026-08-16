@@ -189,8 +189,14 @@ export function buildArticleLookup(
  * article id regardless of how many incoming highlights key to it. The
  * clusters reuse the canonical D-05 functions exactly (REUSE-DO-NOT-FORK —
  * any divergence shifts every anchor).
+ *
+ * Exported since Plan 10-01 (D10-13): the review-panel derivation
+ * (src/routes/review/reviewFilter.ts) imports THIS class for per-article
+ * cluster caching — lifted in place, never mirrored as a twin (Phase 10
+ * research Open Question 1, preferred option). Zero behavior change for the
+ * Phase 9 usage above.
  */
-class MemoizedArticleText {
+export class MemoizedArticleText {
   private readonly clustersById = new Map<string, readonly string[]>();
 
   clustersFor(article: CanonicalArticle): readonly string[] {
