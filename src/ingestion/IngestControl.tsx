@@ -27,22 +27,28 @@ import {
   ingestUrl,
   ingestHtml,
   ingestMarkdown,
+  ingestPdf,
   IngestionError,
+  type IngestionSuccess,
 } from "./IngestionClient";
 import { dexieLibrarySource } from "./LibrarySource";
-import type { IngestionFailureReason } from "./types";
+import { PDF_MAX_BYTES, type IngestionFailureReason } from "./types";
 
 type IngestStatus = "idle" | "submitting" | "success" | "error";
 
 /**
  * mapReasonToCopy — D7-04 honest-failure copy mapping. Every
- * IngestionFailureReason from the 11-reason catalog (07-02) is mapped to a
- * calm DOC-06 phrase. NEVER surfaces internal jargon (fixture/Zod/schema/
- * revision) — the T-7-26 mitigation. The phrases mirror the existing
- * FixtureList + ArticleView status-region vocabulary so the control feels
- * native to the rest of the reader.
+ * IngestionFailureReason from the 16-reason catalog (07-02 + Phase 11
+ * Pattern 7) is mapped to a calm DOC-06 phrase. NEVER surfaces internal
+ * jargon (fixture/Zod/schema/revision/enum hyphenation) — the T-7-26 +
+ * T-11-04 mitigation. The phrases mirror the existing FixtureList +
+ * ArticleView status-region vocabulary so the control feels native to the
+ * rest of the reader.
+ *
+ * Exported (Phase 11 Plan 04) so tests/unit/pdf-copy.test.ts asserts the
+ * five PDF entries against the EXACT 11-RESEARCH.md §Pattern 7 strings.
  */
-function mapReasonToCopy(reason: IngestionFailureReason): string {
+export function mapReasonToCopy(reason: IngestionFailureReason): string {
   switch (reason) {
     case "ssrf-blocked-scheme":
     case "ssrf-blocked-private-ip":
@@ -58,12 +64,41 @@ function mapReasonToCopy(reason: IngestionFailureReason): string {
     case "extraction-too-low-confidence":
     case "round-trip-anchor-failed":
       return "Couldn't reliably read this page.";
+    case "pdf-unreadable":
+      return "This PDF couldn't be opened — it may be corrupt or not a PDF.";
+    case "pdf-encrypted":
+      return "This PDF is password-protected, so its text can't be read.";
+    case "pdf-scanned":
+      return "This PDF looks like scanned images rather than text. An OCR tool could convert it first.";
+    case "pdf-multi-column":
+      return "This PDF has multiple text columns, and its reading order can't be reconstructed reliably yet.";
+    case "pdf-too-large":
+      return "This PDF is too long or too large to read here.";
     case "already-in-library":
       return "Already in your library.";
     case "server-error":
     default:
       return "Something went wrong. Try again.";
   }
+}
+
+/**
+ * bytesToBase64 — binary→base64 for the PDF upload arm (ING-04). Converts
+ * in 0x8000-element chunks (String.fromCharCode spread + btoa) so a
+ * multi-MB PDF never hits the Function.prototype.apply / spread
+ * call-stack limit — a one-shot String.fromCharCode(...bytes) on a 10MB
+ * file throws RangeError. The server decodes the base64 back to bytes and
+ * runs pdfToBlocks (server-only; unpdf never crosses into this bundle —
+ * Pitfall 12).
+ */
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const CHUNK_SIZE = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += CHUNK_SIZE) {
+    const chunk = bytes.subarray(offset, offset + CHUNK_SIZE);
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
 }
 
 /**
@@ -143,14 +178,19 @@ export function IngestControl() {
   }
 
   /**
-   * handleFileSubmit — the file-upload form (Plan 08-04, D8-15). Dispatch by
-   * extension: `.md` → ingestMarkdown (forwards file.name so the server can
-   * run the D8-17 title-fallback chain); `.html` → ingestHtml (no filename —
+   * handleFileSubmit — the file-upload form (Plan 08-04, D8-15 + Phase 11
+   * Plan 04, ING-04). Dispatch by extension: `.md` → ingestMarkdown
+   * (forwards file.name so the server can run the D8-17 title-fallback
+   * chain); `.pdf` → binary read + base64 → ingestPdf (forwards file.name
+   * for the D11-07 title chain); else → ingestHtml (no filename —
    * htmlToBlocks derives title from `<title>`/OpenGraph in the content).
    *
-   * T-8-14 (DoS, content bomb): client-side 5MB cap refuses oversized files
-   * via the existing "This page is too large." copy. The server re-applies
-   * Phase 7's content-length cap (defense-in-depth).
+   * T-8-14 (DoS, content bomb) + T-11-02: the client-side cap is
+   * extension-aware and refuses BEFORE any read (Pitfall 7 — no network
+   * cost, no arrayBuffer materialization). PDFs cap at PDF_MAX_BYTES with
+   * the calm pdf-too-large copy; `.md`/`.html` keep the existing 5MB +
+   * "This page is too large." branch. The server re-applies the
+   * content-length cap + decoded re-check (defense-in-depth, 11-03).
    */
   async function handleFileSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -158,10 +198,19 @@ export function IngestControl() {
     const file = fileInputRef.current?.files?.[0];
     if (!file) return;
 
-    // Client-side size cap (UI-SPEC §EXTENDED IngestControl + T-8-14). The
-    // mapReasonToCopy("response-too-large") surface ("This page is too
-    // large.") is reused verbatim — zero new chrome.
-    if (file.size > 5 * 1024 * 1024) {
+    const isPdf = /\.pdf$/i.test(file.name);
+
+    // Extension-aware client-side size cap (UI-SPEC §EXTENDED IngestControl
+    // + T-8-14 + T-11-02). Refused before ANY file read or POST — the
+    // reader pays zero network cost for an over-cap pick. Each surface is
+    // reused verbatim through mapReasonToCopy — zero new chrome.
+    if (isPdf) {
+      if (file.size > PDF_MAX_BYTES) {
+        setStatus("error");
+        setMessage(mapReasonToCopy("pdf-too-large"));
+        return;
+      }
+    } else if (file.size > 5 * 1024 * 1024) {
       setStatus("error");
       setMessage(mapReasonToCopy("response-too-large"));
       return;
@@ -170,11 +219,20 @@ export function IngestControl() {
     setStatus("submitting");
     setMessage("Reading file…");
     try {
-      const text = await file.text();
       const isMarkdown = /\.md$/i.test(file.name);
-      const result = isMarkdown
-        ? await ingestMarkdown(text, file.name)
-        : await ingestHtml(text);
+      let result: IngestionSuccess;
+      if (isMarkdown) {
+        result = await ingestMarkdown(await file.text(), file.name);
+      } else if (isPdf) {
+        // Binary read → chunked base64 → ingestPdf. Identical bytes produce
+        // a pdf-<hash> id server-side, so re-uploading the same PDF hits the
+        // D7-07 dedupe-refuse below (D11 id invariant).
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        const b64 = bytesToBase64(bytes);
+        result = await ingestPdf(b64, file.name);
+      } else {
+        result = await ingestHtml(await file.text());
+      }
 
       // D7-07 dedupe-refuse (identical to the url/paste paths).
       const alreadyInLibrary = await dexieLibrarySource.has(result.article.id);
@@ -243,16 +301,19 @@ export function IngestControl() {
           file.name through ingestMarkdown(text, file.name) so the server can
           apply the D8-17 title fallback chain. The .html branch calls
           ingestHtml(text) — htmlToBlocks derives title from content metadata,
-          not filename. T-8-14: client-side 5MB cap refuses oversized files. */}
+          not filename. Phase 11 Plan 04 (ING-04) adds the .pdf arm: binary
+          read → chunked base64 → ingestPdf(b64, file.name). T-8-14 + T-11-02:
+          extension-aware client-side cap refuses oversized files before any
+          read (5MB for .md/.html, PDF_MAX_BYTES for .pdf). */}
       <form onSubmit={handleFileSubmit}>
         <label htmlFor="ingest-file">Upload a file</label>
-        <p className="meta">Accepts .md and .html</p>
+        <p className="meta">Accepts .md, .html, and PDF</p>
         <input
           id="ingest-file"
           ref={fileInputRef}
           name="file"
           type="file"
-          accept=".md,.html"
+          accept=".md,.html,.pdf"
           disabled={submitting}
           onChange={(e) => setHasFile(e.target.files !== null && e.target.files.length > 0)}
         />
