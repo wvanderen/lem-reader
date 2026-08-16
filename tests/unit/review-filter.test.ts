@@ -30,7 +30,6 @@ import {
 import type {
   CanonicalArticle,
   HighlightRecord,
-  NoteRecord,
 } from "../../src/content/schema";
 import {
   deriveQuoteSelector,

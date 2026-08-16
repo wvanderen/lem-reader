@@ -2437,3 +2437,159 @@ dialog.import-preview::backdrop {
   opacity: 0.5;
   cursor: default;
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+ * Phase 10 Plan 10-02 — Annotation review panel surface (ReviewView at
+ * #/review, RECV-01).
+ *
+ * ALL selectors here are ADDITIVE (.review-* hooks only — the Phase 8
+ * section rule). Tokens-only: every color references var(--…) so the three
+ * themes re-theme automatically (the Phase 9 audit bar — no new hex
+ * literals outside :root). No motion properties of any kind appear in this
+ * block — the global reduced-motion gate (A11Y-06) stays trivially
+ * satisfied. TagFilter chips mounted in the review filter row reuse the
+ * existing .tag-chip styles untouched.
+ * ════════════════════════════════════════════════════════════════════════ */
+
+/* Page header cluster — the h1 ("Review highlights"). Same centered
+   1100px measure discipline as .library-list. */
+.review-header {
+  max-width: 1100px;
+  margin-block: 0 var(--space-sm);
+  margin-inline: auto;
+}
+.review-header h1 {
+  margin-block: 0;
+}
+
+/* Filter row (D10-08) — TagFilter chips + the three selects in one calm
+   wrapping row. Labels read by screen readers AND visible (sized as .meta). */
+.review-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-md);
+  max-width: 1100px;
+  margin-block: var(--space-md);
+  margin-inline: auto;
+}
+.review-filter-label {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+.review-select {
+  min-height: var(--touch);
+  padding-inline: var(--space-sm);
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  font-family: var(--font-ui);
+  font-size: 16px;
+  color: var(--ink);
+}
+
+/* D10-07 legend — explains the badge vocabulary quietly (.meta voice). */
+.review-legend {
+  max-width: 1100px;
+  margin-block: 0 var(--space-lg);
+  margin-inline: auto;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+
+/* Grouped-by-article sections (D10-04/D10-06). */
+.review-section {
+  max-width: 1100px;
+  margin-block: var(--space-lg);
+  margin-inline: auto;
+}
+.review-section h2 {
+  margin-block: 0 var(--space-sm);
+  font-size: 20px;
+}
+/* Subtle source-host suffix inside the section h2 (the ArticleView
+   "Originally published at {domain}" vocabulary — quiet, never a link). */
+.review-section-host {
+  font-family: var(--font-ui);
+  font-weight: 400;
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+.review-section-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-sm);
+}
+
+/* Row (D10-03) — the whole-row jump button (the .drawer-entry pattern) and
+   the static orphan-tail twin (identical anatomy, no jump affordance). */
+.review-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-xs);
+  width: 100%;
+  box-sizing: border-box;
+  min-height: var(--touch);
+  padding: var(--space-md);
+  text-align: start;
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  font-family: var(--font-ui);
+  font-size: 16px;
+  color: var(--ink);
+  cursor: pointer;
+}
+/* Focus ring inherits the global :focus-visible 2px rule (app.css L131) —
+   no selector needed here (and the block keeps .review-*-only selectors). */
+.review-row:disabled {
+  cursor: default;
+  opacity: 0.75;
+}
+
+/* Quote excerpt — blockquote styling (serif italic on the raised card). */
+.review-quote {
+  font-family: var(--font-body);
+  font-style: italic;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+/* Note preview line — quiet .meta voice under the quote. */
+.review-note-preview {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+/* Short date — quiet metadata at the row foot. */
+.review-date {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+
+/* Tri-state badge (D10-07) — renders ONLY on ambiguous/orphan rows. A
+   hairline pill whose border token varies by kind; the text itself carries
+   the meaning so color alone is never load-bearing (forced-colors
+   discipline). --destructive stays border-only per the Phase 1 token rule. */
+.review-badge {
+  display: inline-block;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--ink-soft);
+  background: var(--surface);
+}
+.review-badge-ambiguous {
+  border-color: var(--accent);
+}
+.review-badge-orphan {
+  border-color: var(--destructive);
+}
