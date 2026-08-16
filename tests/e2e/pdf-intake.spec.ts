@@ -1,6 +1,10 @@
 // tests/e2e/pdf-intake.spec.ts
-// Plan 11-05 Task 1 — ING-04 browser-level proof (SC#1–SC#3 + D7-07). Proves
-// the .pdf upload intake path end-to-end through the REAL pipeline: picker →
+// Plan 11-05 — ING-04 browser-level proof. Task 1: SC#1 upload→read happy
+// path + the SC#2/SC#3/corrupt refusals + the D7-07 dedupe flow. Task 2: the
+// SC#1 "identically to other articles" second half — a highlight created
+// through the real selection flow survives reload, and the reading position
+// restores after reload. Every flow drives input#ingest-file via
+// setInputFiles + the Add file button through the REAL pipeline: picker →
 // extension-aware client cap → chunked base64 → POST /api/ingest (Vite Node
 // dev middleware — the 07-06 RUNTIME_GUARDRAIL runtime) → server/ingest.ts
 // fourth Stage-1 branch → pdfToBlocks (unpdf) → ArticleSchema.parse →
@@ -50,11 +54,15 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import {
   BASE,
   FIXTURES,
   wipeDatabase,
+  selectRangeInBlock,
+  findFirstBlockWithText,
+  switchMode,
+  announcementRegion,
 } from "./annotations/_fixtures";
 
 /** Load a committed synthetic PDF fixture's bytes (11-01 corpus). */
@@ -73,9 +81,7 @@ const CORRUPT_PDF = pdfFixture("synthetic-corrupt.pdf");
 const BASELINE_ROWS = FIXTURES.length;
 
 /** Library rows whose source badge reads "PDF" (badgeLabel("pdf")). */
-function pdfLibraryRows(
-  page: import("@playwright/test").Page,
-): import("@playwright/test").Locator {
+function pdfLibraryRows(page: Page): import("@playwright/test").Locator {
   return page.locator(".library-list > li").filter({
     has: page.locator(".source-badge", { hasText: "PDF" }),
   });
@@ -83,24 +89,64 @@ function pdfLibraryRows(
 
 /** The calm-refusal status line inside the ingest control's live region. */
 function ingestStatus(
-  page: import("@playwright/test").Page,
+  page: Page,
   text: string,
 ): import("@playwright/test").Locator {
   return page.locator(".ingest-control .status").filter({ hasText: text });
 }
 
 /** Attach a PDF to the picker and submit via the Add file button. */
-async function uploadPdf(
-  page: import("@playwright/test").Page,
-  name: string,
-  bytes: Buffer,
-): Promise<void> {
+async function uploadPdf(page: Page, name: string, bytes: Buffer): Promise<void> {
   await page.locator("input#ingest-file").setInputFiles({
     name,
     mimeType: "application/pdf",
     buffer: bytes,
   });
   await page.getByRole("button", { name: /add file/i }).click();
+}
+
+/** Upload the single-column fixture and wait for the article to settle. */
+async function uploadAndOpen(page: Page): Promise<void> {
+  await page.goto(`${BASE}/#/`);
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Saved articles" }),
+  ).toBeVisible();
+  await uploadPdf(page, "calm-report.pdf", SINGLE_COLUMN_PDF);
+  await page.waitForURL(/#\/article\/pdf-/, { timeout: 15_000 });
+  await waitForOpenedArticle(page);
+}
+
+/**
+ * Wait for the uploaded article's reading surface to be interaction-ready —
+ * the openArticle() waits from annotations/_fixtures.ts minus the goto
+ * (upload navigation already landed on #/article/pdf-<id>): a visible
+ * selectable block mounted, the pagination engine committed (the DEV
+ * __lemPagination hook), then the shared 600ms font/commit settle.
+ */
+async function waitForOpenedArticle(page: Page): Promise<void> {
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible({
+    timeout: 10_000,
+  });
+  await page.waitForFunction(
+    () => {
+      const visible =
+        document.querySelector(".page-fragment [data-block-index]") ??
+        document.querySelector(
+          ".article-body:not(.article-body-measurement) [data-block-index]",
+        );
+      return !!visible;
+    },
+    undefined,
+    { timeout: 10_000 },
+  );
+  await page.waitForFunction(
+    () =>
+      (window as unknown as Record<string, unknown>).__lemPagination !==
+      undefined,
+    undefined,
+    { timeout: 10_000 },
+  );
+  await page.waitForTimeout(600);
 }
 
 test.beforeEach(async ({ page }) => {
@@ -273,5 +319,102 @@ test.describe("ING-04 — PDF upload intake (SC#1–SC#3 + D7-07)", () => {
     await expect(page.locator(".library-list > li")).toHaveCount(
       BASELINE_ROWS + 1,
     );
+  });
+});
+
+// ── Task 2 — the "identically to other articles" proof (SC#1 second half) ──
+//
+// The PDF article must annotate and restore location through the IDENTICAL
+// ArticleView / PaginatedSurface / Dexie machinery as every other article —
+// the load-bearing Phase 7/8 invariant ("ingested = fixture to the reading
+// engine"). Both tests reuse the annotations/_fixtures.ts helpers wholesale
+// (the capture spec's selection→toolbar→highlight flow + the persistence
+// spec's restore assertion shape) at ONE representative typography/viewport
+// (default settings, default Playwright viewport — the core-reading-flow
+// OQ2 economy precedent); the cross-engine matrix is the engine axis.
+test.describe("ING-04 — annotate + location-restore identity (SC#1)", () => {
+  test("highlight created via the real selection flow survives a full reload", async ({
+    page,
+  }) => {
+    await uploadAndOpen(page);
+
+    // Select a known range in the first text-rich block on the visible page
+    // fragment (the capture-highlight.spec.ts flow — a synthetic DOM Range
+    // through the 1:1 [data-block-index] mapping; NEVER Selection.toString()).
+    const blockIndex = await findFirstBlockWithText(page, 24);
+    expect(blockIndex, "pdf article must have a selectable block").not.toBe(-1);
+    const ok = await selectRangeInBlock(page, blockIndex, 0, 24);
+    expect(ok, `selection must be set on block ${blockIndex}`).toBeTruthy();
+
+    // The floating toolbar appears; the bare Highlight action creates the
+    // record through the same Dexie path every other article uses.
+    const toolbar = page.locator(".selection-toolbar");
+    await expect(toolbar).toBeVisible();
+    await toolbar
+      .getByRole("button", { name: "Highlight", exact: true })
+      .click();
+
+    // The inline mark renders + the announce fires (STATE-03 via the shared
+    // persistence path — not a PDF-specific branch).
+    const mark = page.locator("mark.highlight").first();
+    await expect(mark).toBeVisible();
+    await expect(mark).toHaveAttribute("data-highlight-id", /.+/);
+    await expect(announcementRegion(page)).toContainText(/Highlight saved/i);
+    const highlightId = await mark.getAttribute("data-highlight-id");
+    expect(highlightId).toBeTruthy();
+
+    // Full reload — the mark MUST re-render from Dexie at the same passage
+    // (the persist-reload.spec.ts assertion shape).
+    await page.reload();
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await page.waitForTimeout(800);
+    await expect(
+      page.locator(`mark.highlight[data-highlight-id="${highlightId}"]`),
+    ).toHaveCount(1);
+  });
+
+  test("reading position restores after reload (scrolling-mode save/restore)", async ({
+    page,
+  }) => {
+    await uploadAndOpen(page);
+
+    // Switch to scrolling mode via the real M-shortcut toggle (the
+    // annotations switchMode helper). The toggle PERSISTS readingMode
+    // (STATE-02), so the reload below hydrates scrolling mode and the
+    // window-level save/restore path is the one persistence.spec.ts proves
+    // for every other article (its L62-65 comment documents paginated
+    // page-index restore as the deferred option (b) — the plan's sanctioned
+    // "or scroll substantially in scrolling mode" alternative).
+    await switchMode(page);
+    // Wait out the ~400ms settings debounce so readingMode lands in Dexie.
+    await page.waitForTimeout(700);
+
+    // Scroll substantially into the article, then wait out the ~1200ms
+    // location-save debounce (persistence.spec.ts STATE-01 shape).
+    await page.evaluate(() => window.scrollTo(0, 500));
+    await page.waitForTimeout(100);
+    await page.waitForTimeout(1400);
+    const scrollYBefore = await page.evaluate(() => window.scrollY);
+    expect(
+      scrollYBefore,
+      "expected to have scrolled down inside the pdf article",
+    ).toBeGreaterThan(200);
+
+    // Reload — the saved location MUST restore near the same passage
+    // (block-level restore tolerance, never top-of-article for a mid-
+    // article save; persistence.spec.ts tolerances mirrored verbatim).
+    await page.reload();
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await page.waitForTimeout(1000);
+
+    const scrollYAfter = await page.evaluate(() => window.scrollY);
+    expect(
+      scrollYAfter,
+      `expected restored scrollY > 100, got ${scrollYAfter}`,
+    ).toBeGreaterThan(100);
+    expect(
+      Math.abs(scrollYAfter - scrollYBefore),
+      `expected |delta| within 600px, got ${Math.abs(scrollYAfter - scrollYBefore)}`,
+    ).toBeLessThan(600);
   });
 });
