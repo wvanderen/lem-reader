@@ -22,6 +22,7 @@ import { mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   parseManifest,
   loadManifest,
@@ -29,7 +30,6 @@ import {
   validateEvidence,
   writeEvidence,
   computeAgreement,
-  type CalibrationManifest,
   type PdfCalibrationEvidence,
   type GroundTruthLabel,
 } from "./harness";

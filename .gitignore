@@ -17,6 +17,12 @@ test-results
 coverage
 .calibration-tmp/
 .perf-tmp/
+
+# Local real-PDF calibration corpus (D11-04) — licensing/size keep real PDFs
+# local; only DERIVED evidence commits (tests/unit/server/pdf-calibration/).
+# The README is the directory's committed convention card.
+corpus/pdf/*
+!corpus/pdf/README.md
 .todos/
 .sidecar/
 .sidecar-agent
