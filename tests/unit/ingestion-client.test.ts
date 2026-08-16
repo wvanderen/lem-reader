@@ -173,6 +173,74 @@ describe("IngestionClient (07-06 Task 1)", () => {
     expect(IngestionError).toBeDefined();
   });
 
+  // Phase 11 Plan 04 Task 1 — the PDF upload arm (ING-04). ingestPdf posts
+  // the widened {pdf, filename} envelope through the SAME shared ingest
+  // pipeline: typed refusal throw + ArticleSchema re-validation below the
+  // ingest() call site are reused unchanged (plan: "do not fork it").
+  describe("ingestPdf (11-04 Task 1)", () => {
+    it("posts exactly {pdf, filename} and returns the article on a 200 + ok:true response", async () => {
+      const article = sampleArticle({
+        id: "pdf-abc123def456",
+        provenance: {
+          sourceUrl: undefined,
+          title: "Sample PDF",
+          retrievedAt: "2026-08-16T00:00:00.000Z",
+          originalHtmlHash: "sha256:" + "2".repeat(64),
+        },
+        ingestionMeta: {
+          source: "pdf",
+          origin: "upload",
+          originalHtmlHash: "sha256:" + "2".repeat(64),
+          extractionConfidence: "high",
+          extractionWarnings: [],
+        },
+      });
+      const fetchMock = vi
+        .spyOn(globalThis, "fetch")
+        .mockResolvedValue(
+          new Response(
+            JSON.stringify({ ok: true, article, confidence: { state: "confident" } }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          ),
+        );
+
+      const { ingestPdf } = await loadClient();
+      const b64 = "JVBERi0xLjQKJcOkw7zDtsOf"; // "%PDF-1.4" base64-encoded
+      const result = await ingestPdf(b64, "sample.pdf");
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const call = fetchMock.mock.calls[0];
+      expect(call).toBeDefined();
+      const [calledUrl, init] = call as [unknown, RequestInit | undefined];
+      expect(calledUrl).toBe("/api/ingest");
+      expect(init?.method).toBe("POST");
+      // The body is EXACTLY {pdf, filename} — no extra fields, no markdown
+      // variant, no double-encoding (IngestionRequestSchema enforces this on
+      // the server; the client constructs it by construction).
+      expect(JSON.parse((init as RequestInit).body as string)).toEqual({
+        pdf: b64,
+        filename: "sample.pdf",
+      });
+      expect(result.article.id).toBe(article.id);
+      expect(result.confidence.state).toBe("confident");
+    });
+
+    it("throws IngestionError carrying the typed pdf-scanned reason verbatim on a 400 + ok:false response", async () => {
+      vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(
+          JSON.stringify({ ok: false, reason: "pdf-scanned" }),
+          { status: 400, headers: { "Content-Type": "application/json" } },
+        ),
+      );
+
+      const { ingestPdf } = await loadClient();
+      await expect(ingestPdf("JVBERi0=", "scanned.pdf")).rejects.toMatchObject({
+        name: "IngestionError",
+        reason: "pdf-scanned",
+      });
+    });
+  });
+
   it("re-validates the server response through ArticleSchema.parse (STATE-04)", async () => {
     // Server returns 200 + ok:true but the article is malformed (missing
     // required Provenance.title). The client MUST throw — defense-in-depth.
