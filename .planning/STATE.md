@@ -5,15 +5,15 @@ milestone_name: Personal Library
 current_phase: 11
 current_phase_name: PDF Intake
 status: executing
-stopped_at: "Completed 11-01-PLAN.md (PDF intake foundation: unpdf 1.8.1 + schema widenings + synthetic fixture corpus)"
-last_updated: "2026-08-16T23:05:23.478Z"
+stopped_at: Completed 11-03-PLAN.md (pdf fourth branch + title chain + consume + middleware body caps)
+last_updated: "2026-08-16T23:18:20.734Z"
 last_activity: 2026-08-16
 last_activity_desc: Phase 11 execution started
 progress:
   total_phases: 7
   completed_phases: 4
   total_plans: 31
-  completed_plans: 28
+  completed_plans: 29
   percent: 57
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-16)
 ## Current Position
 
 Phase: 11 (PDF Intake) — EXECUTING
-Plan: 4 of 6
+Plan: 5 of 6
 Status: Ready to execute
 Last activity: 2026-08-16 — Phase 11 execution started
 
@@ -128,6 +128,7 @@ Progress: [████████████████████] 25/25 p
 | Phase 11 P01 | 7 min | 3 tasks | 15 files |
 | Phase 11 P02 | 18 min | 2 tasks | 3 files |
 | Phase 11 P04 | 3 min | 2 tasks | 4 files |
+| Phase 11 P03 | 10 min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -282,6 +283,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 11]: Phase 11 11-02: real pdfjs dest arrays are [RefProxy,{name:'XYZ'},left,top,zoom] — coordinates FLAT, not .args (sketch kept as fallback); generator made importable (serializePdf exported, main() direct-run-guarded, fixtures byte-identical) so tiny probe PDFs reuse the corpus serializer
 - [Phase 11]: Phase 11 11-04: Extension-aware client cap branches on /\.pdf$/i BEFORE any file read — an over-cap PDF pick never materializes an ArrayBuffer or a POST (Pitfall 7 at the earliest enforcement point); PDFs cap at PDF_MAX_BYTES with pdf-too-large copy, .md/.html keep the 5MB response-too-large branch
 - [Phase 11]: Phase 11 11-04: mapReasonToCopy exported from IngestControl.tsx so pdf-copy.test.ts pins the five Pattern-7 strings byte-for-byte AT the live surface (em dashes included); no-jargon guard iterates ALL 16 reasons (T-7-26 extended to the widened enum). bytesToBase64 chunked at 0x8000 elements avoids the String.fromCharCode spread call-stack limit on multi-MB binaries
+- [Phase ?]: Phase 11 11-03: D11-09 title-match normalization collapses [-_\\s]+ uniformly (hyphens/underscores count as whitespace) — filenames slugify spaces, so the canonical filename-channel doubled-title case (calm-report.pdf ↔ heading Calm Report) only matches with separator-uniform normalization
+- [Phase ?]: Phase 11 11-03: middleware body caps return HTTP 413 + the typed pdf-too-large envelope on both paths — content-length refused BEFORE readBody attaches a data listener (pulled-flag proof), chunked bodies re-checked by Buffer.byteLength after readBody; invalid content-length falls through to the second guard
 
 ### Pending Todos
 
@@ -311,8 +314,8 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-16T23:05:01.553Z
-Stopped at: Completed 11-01-PLAN.md (PDF intake foundation: unpdf 1.8.1 + schema widenings + synthetic fixture corpus)
+Last session: 2026-08-16T23:18:09.520Z
+Stopped at: Completed 11-03-PLAN.md (pdf fourth branch + title chain + consume + middleware body caps)
 Resume file: None
 
 ## Operator Next Steps
