@@ -200,7 +200,7 @@ Plans:
   3. Multi-column PDFs are either honestly flagged as low-confidence (reconstructed reading order) or refused via the same disclosure surface; the reader never sees silently reordered text.
   4. A round-trip anchor test gates every successfully extracted PDF article, and a calibration harness validates the font-size→heading and vertical-gap→paragraph thresholds on a real-PDF corpus before promotion.
 
-**Plans**: 1/6 plans executed
+**Plans**: 2/6 plans executed
 Plans:
 **Wave 1**
 
@@ -208,7 +208,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 11-02-PLAN.md — pdfToBlocks adapter: proxy lifecycle + caps, scanned/multi-column page-weighted detection, typed refusals, block assembly (D11-01/02/03/08)
+- [x] 11-02-PLAN.md — pdfToBlocks adapter: proxy lifecycle + caps, scanned/multi-column page-weighted detection, typed refusals, block assembly (D11-01/02/03/08)
 - [ ] 11-04-PLAN.md — client upload path: ingestPdf, .pdf picker arm + base64 encode, extension-aware cap, five calm copy entries
 
 **Wave 3** *(blocked on Wave 2 completion)*
@@ -266,6 +266,6 @@ Plans:
 | 8. Markdown Pipeline and Personal Library | v2.0 | 5/5 | Complete    | 2026-08-13 |
 | 9. Versioned Export/Import | v2.0 | 7/7 | Complete    | 2026-08-15 |
 | 10. Annotation Review Panel | v2.0 | 6/6 | Complete    | 2026-08-16 |
-| 11. PDF Intake | v2.0 | 1/6 | In Progress|  |
+| 11. PDF Intake | v2.0 | 2/6 | In Progress|  |
 | 12. EPUB Intake | v2.0 | 0/TBD | Not started | - |
 | 13. Polish and Acceptance | v2.0 | 0/TBD | Not started | - |

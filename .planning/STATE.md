@@ -6,14 +6,14 @@ current_phase: 11
 current_phase_name: PDF Intake
 status: executing
 stopped_at: "Completed 11-01-PLAN.md (PDF intake foundation: unpdf 1.8.1 + schema widenings + synthetic fixture corpus)"
-last_updated: "2026-08-16T22:38:22.236Z"
+last_updated: "2026-08-16T22:59:39.343Z"
 last_activity: 2026-08-16
 last_activity_desc: Phase 11 execution started
 progress:
   total_phases: 7
   completed_phases: 4
   total_plans: 31
-  completed_plans: 26
+  completed_plans: 27
   percent: 57
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-16)
 ## Current Position
 
 Phase: 11 (PDF Intake) — EXECUTING
-Plan: 2 of 6
+Plan: 3 of 6
 Status: Ready to execute
 Last activity: 2026-08-16 — Phase 11 execution started
 
@@ -126,6 +126,7 @@ Progress: [████████████████████] 25/25 p
 | Phase 10 P05 | 10 min | 3 tasks tasks | 6 files files |
 | Phase 10 P06 | 25 min | 3 tasks | 8 files |
 | Phase 11 P01 | 7 min | 3 tasks | 15 files |
+| Phase 11 P02 | 18 min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -275,6 +276,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: Phase 11 11-01: unpdf pinned at 1.8.1 (user-approved T-11-SC blocking-human gate, 2026-08-16) — supersedes the STACK.md 1.8.0 lock; diff verified API-neutral; approval record at .planning/phases/11-pdf-intake/11-01-unpdf-approval.md — Exact-pin discipline preserved; legitimacy evidence: unjs publisher, MIT, ~1.85M weekly downloads, zero runtime deps, no install scripts, bundled types
 - [Phase ?]: Phase 11 11-01: PDF_MAX_BYTES = 10MB decoded lives in src/ingestion/types.ts with server/limits.ts import+re-export — /src->/server import direction forbidden, so the shared cap lives client-importable; MAX_INGEST_BODY_BYTES = ceil(bytes*4/3)+2048 is the middleware content-length number (Pitfall 7) — Three enforcement points (client picker, middleware guard, orchestrator re-check) share ONE constant; MAX_IMAGE_PIXELS = 16_777_216 is TOTAL PIXELS not bytes (ARCHITECTURE L781 correction); PDF_EXTRACTION_TIMEOUT_MS = 30_000 mirrors REQUEST_TIMEOUT_MS (OQ2)
 - [Phase ?]: Phase 11 11-01: synthetic PDF fixtures are committable and self-verifying — the generator's built-in self-check (magic prefix, 500B floor, corrupt marker, second-emit hash idempotency) replaces the relocated Wave-0 sentinel assertions; D11-04 real-PDF calibration corpus stays local + gitignored — Fixtures exercise code paths, not calibration thresholds (11-RESEARCH Validation Architecture); all five additionally verified parseable by real pdf.js via unpdf (page counts, column x-ranges, zero-text scanned, outline dests, corrupt throws)
+- [Phase 11]: Phase 11 11-02: Pattern 3's voting unit is the contiguous X-RUN within a y-band, not the whole band — two-column rows share baselines (synthetic fixture + grid-aligned journals), so whole-band spans always cover both columns and gutters become undetectable; runs split at gaps > 1em, spanning runs never vote
+- [Phase 11]: Phase 11 11-02: colTextShare attributes only narrow-run text mass by x-center (full-width lines are spanning elements, not column text); top-of-page /XYZ dests coerce the topmost block when no block matches the 1.5-line tolerance — single-column pages structurally cannot false-refuse
+- [Phase 11]: Phase 11 11-02: real pdfjs dest arrays are [RefProxy,{name:'XYZ'},left,top,zoom] — coordinates FLAT, not .args (sketch kept as fallback); generator made importable (serializePdf exported, main() direct-run-guarded, fixtures byte-identical) so tiny probe PDFs reuse the corpus serializer
 
 ### Pending Todos
 
@@ -304,7 +308,7 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-16T22:38:22.227Z
+Last session: 2026-08-16T22:58:48.808Z
 Stopped at: Completed 11-01-PLAN.md (PDF intake foundation: unpdf 1.8.1 + schema widenings + synthetic fixture corpus)
 Resume file: None
 
