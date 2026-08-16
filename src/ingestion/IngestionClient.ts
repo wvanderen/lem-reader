@@ -92,11 +92,33 @@ export async function ingestMarkdown(
 }
 
 /**
+ * ingestPdf — POST {pdf, filename?} to /api/ingest and re-validate the
+ * response. The Phase 11 PDF upload path (ING-04 + D11): the browser
+ * base64-encodes the picked file's bytes (IngestControl's chunked
+ * bytesToBase64 helper — multi-MB files must not hit the
+ * String.fromCharCode call-stack limit) and posts base64-in-JSON so the
+ * middleware body path stays byte-identical (locked decision). The optional
+ * `filename` mirrors the markdown variant: a title-fallback hint only
+ * (D11-07), NEVER part of the article id — the id is pdf-<content-hash>
+ * (D11 id invariant), so identical bytes dedupe-refuse (D7-07).
+ *
+ * Everything below the ingest() call site (JSON parse, typed refusal throw,
+ * res.ok guard, ArticleSchema.parse re-validation) is the shared pipeline —
+ * this wrapper does NOT fork it.
+ */
+export async function ingestPdf(
+  pdfBase64: string,
+  filename?: string,
+): Promise<IngestionSuccess> {
+  return ingest({ pdf: pdfBase64, filename });
+}
+
+/**
  * Private ingest — the shared POST + parse + throw pipeline. ingestUrl,
- * ingestHtml, and ingestMarkdown all delegate here. The body is always
- * exactly one of {url} | {html} | {markdown, filename?}
- * (IngestionRequestSchema on the server enforces this, but the client
- * constructs the body so the contract is by construction).
+ * ingestHtml, ingestMarkdown, and ingestPdf all delegate here. The body is
+ * always exactly one of {url} | {html} | {markdown, filename?} |
+ * {pdf, filename?} (IngestionRequestSchema on the server enforces this, but
+ * the client constructs the body so the contract is by construction).
  *
  * STATE-04 defense-in-depth: the network response is RE-VALIDATED through
  * `ArticleSchema.parse`. A server that returns a malformed article (whether
@@ -104,7 +126,11 @@ export async function ingestMarkdown(
  * second Zod parse — the server already parsed at ingest time (07-05).
  */
 async function ingest(
-  body: { url: string } | { html: string } | { markdown: string; filename?: string },
+  body:
+    | { url: string }
+    | { html: string }
+    | { markdown: string; filename?: string }
+    | { pdf: string; filename?: string },
 ): Promise<IngestionSuccess> {
   const res = await fetch("/api/ingest", {
     method: "POST",
