@@ -36,15 +36,22 @@ export default defineConfig({
         },
       },
       // Project 2 — the Phase 7 `/server` pipeline specs (mXSS, extraction,
-      // normalization, confidence, slugify, spike). Same jsdom env + globals +
-      // setupFiles; includes only tests/unit/server/**.
+      // normalization, confidence, slugify, spike) + the Phase 11 calibration
+      // harness tests. Same jsdom env + globals + setupFiles; includes only
+      // tests/unit/server/**. The `*.test.ts` arm (11-06) picks up the
+      // calibration harness behavior table — the `unit` project excludes
+      // tests/unit/server/** wholesale, so without this arm the harness spec
+      // would match NEITHER project and silently never run.
       {
         test: {
           name: "server",
           environment: "jsdom",
           globals: true,
           setupFiles: ["./tests/setup.ts"],
-          include: ["tests/unit/server/**/*.spec.ts"],
+          include: [
+            "tests/unit/server/**/*.spec.ts",
+            "tests/unit/server/**/*.test.ts",
+          ],
           exclude: ["tests/e2e", "node_modules"],
         },
       },
