@@ -3,17 +3,17 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Personal Library
 current_phase: 10
-current_phase_name: Annotation Review Panel
+current_phase_name: annotation-review-panel
 status: executing
-stopped_at: Phase 10 context gathered
-last_updated: "2026-08-15T21:37:06.259Z"
-last_activity: 2026-08-15
-last_activity_desc: Phase 9 complete (verified, UAT 2/2 passed), transitioned to Phase 10
+stopped_at: Completed 10-01-PLAN.md (review-panel derivation foundation + Wave-0 sentinels)
+last_updated: "2026-08-16T00:30:35.633Z"
+last_activity: 2026-08-16
+last_activity_desc: Phase 10 execution started
 progress:
   total_phases: 7
   completed_phases: 3
-  total_plans: 19
-  completed_plans: 19
+  total_plans: 25
+  completed_plans: 20
   percent: 43
 ---
 
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-15)
 
 **Core value:** Readers can move through long-form web content with calm, stable orientation and predictable navigation.
-**Current focus:** Phase 10 — Annotation Review Panel
+**Current focus:** Phase 10 — annotation-review-panel
 
 ## Current Position
 
-Phase: 10 — Annotation Review Panel
-Plan: Not started
+Phase: 10 (annotation-review-panel) — EXECUTING
+Plan: 2 of 6
 Status: Ready to execute
-Last activity: 2026-08-15 — Phase 9 complete (verified, UAT 2/2 passed), transitioned to Phase 10
+Last activity: 2026-08-16 — Phase 10 execution started
 
 Progress: [███░░░░░░░] 29% of v2.0 milestone
 
@@ -118,6 +118,7 @@ Progress: [███░░░░░░░] 29% of v2.0 milestone
 | Phase 9 P09-05 | 14 min | 3 tasks | 6 files |
 | Phase 9 P09-06 | 27 min | 3 tasks | 11 files |
 | Phase 09 P07 | 34min | 3 tasks | 5 files |
+| Phase 10 P01 | 7 min | 2 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -256,6 +257,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: [Phase 9 09-06]: Stacked-modal sequential focus nav diverges by engine (chromium cycles, firefox retains last control, webkit parks on inert body) — universal trap safety + operability asserted on all engines, wrap cycle chromium-only; structural fixes reverse 09-05 decisions so surfaced in deferred-items.md for 09-07/human choice
 - [Phase 09-07]: Phase 09-07: The 24-cell pre-existing deficit (grown to 39) was a GEOMETRY regression, not Vite 8/Rolldown measurement timing - the Phase 8-04 TagEntry + Phase 9-05 Export button grew the pinned paginated article's uncapped header row past the page viewport (67px at 360x640 -> bogus oversize fallback; 0px at <=320x420 -> pagination never ran). Fixed in src/app.css: header row capped at minmax(auto,25%) + scrollable header (page always keeps >=75%); pagination specs byte-unchanged (strengthen-only trivially satisfied).
 - [Phase 09-07]: Phase 09-07: Honest full-suite gate GREEN - npm run test exit 0 in one invocation (unit 851/0/7 + e2e 823/0/6 across chromium/firefox/webkit + throttled perf; the 13 skips are the documented intentional set). First run exit 1 recorded honestly (2 webkit load races, fixed in 9459da1). 09-07-OUTPUT.md is the permanent record; Phase 08 deferred debt closed. dexie-migration cells never reproduced (aria-labelledby row shape was never stale - zero changes). Stacked-modal focus item stays OPEN for human product decision.
+- [Phase ?]: 10-01: RECV-01 stays unchecked — foundation plan ships deriveReviewSections + Wave-0 sentinels only; requirement closes at the end-to-end panel plans (04-02 PAGE-01 / 09-01 PORT-01 split precedent)
+- [Phase ?]: 10-01: MemoizedArticleText lift-and-export from conflicts.ts (not a mirrored twin) — D10-13 reuse discipline; 125/125 portability tests prove behavior-neutrality
+- [Phase ?]: 10-01: orphanEntries keep input order + sections exist only for articles with surviving entries — unspecified display details owned by Plans 10-02/10-03
 
 ### Pending Todos
 
@@ -285,9 +289,9 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-15T20:40:25.849Z
-Stopped at: Phase 10 context gathered
-Resume file: .planning/phases/10-annotation-review-panel/10-CONTEXT.md
+Last session: 2026-08-16T00:30:35.625Z
+Stopped at: Completed 10-01-PLAN.md (review-panel derivation foundation + Wave-0 sentinels)
+Resume file: None
 
 ## Operator Next Steps
 
