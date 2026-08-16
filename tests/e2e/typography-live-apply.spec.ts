@@ -34,6 +34,11 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.describe("READ-02 typography live-apply (02-04 gap 2)", () => {
+  // 60s budget (the calibration/perf harness precedent): under FULL-suite
+  // parallel load, webkit's first module fetch can starve the context long
+  // enough to burn the default 30s inside beforeEach's page.goto — the
+  // 09-07 load-race class (passes in isolation). Assertions unchanged.
+  test.setTimeout(60_000);
   test("the article body's computed font-size and word-spacing track the SettingsPanel controls", async ({
     page,
   }) => {
