@@ -32,7 +32,7 @@ Seven phases that add one stateless ingestion backend and one new data domain (u
 - [x] **Phase 7: Ingestion Substrate** - Stateless backend safely normalizes URL-fetched and pasted HTML into canonical articles with SSRF + XSS defense and honest failure (completed 2026-08-12)
 - [x] **Phase 8: Markdown Pipeline and Personal Library** - Lowest-risk Markdown intake plus the personal library that replaces the fixture list (completed 2026-08-13)
 - [x] **Phase 9: Versioned Export/Import** - Whole-library bundles and highlights-only export as the cross-device story in lieu of accounts (completed 2026-08-15)
-- [ ] **Phase 10: Annotation Review Panel** - Dedicated surface to review, filter, and curate all highlights and notes across the library
+- [x] **Phase 10: Annotation Review Panel** - Dedicated surface to review, filter, and curate all highlights and notes across the library (completed 2026-08-16)
 - [ ] **Phase 11: PDF Intake** - PDF text extraction with honest failure for scanned and multi-column documents
 - [ ] **Phase 12: EPUB Intake** - Multi-chapter EPUB books surfaced as per-chapter articles under a book grouping
 - [ ] **Phase 13: Polish and Acceptance** - FOUC and progress-bar fixes plus the NVDA+Firefox and v2.0 core-flow acceptance gate
@@ -166,7 +166,7 @@ Plans:
   3. Reader can filter the review list (by article, tag, or confidence) and sort it (by date, article, or position).
   4. Ambiguous and orphan annotations surface honestly with a tri-state indicator (never silently hidden), and the reader can edit or delete highlights in place from the panel.
 
-**Plans**: 5/6 plans executed
+**Plans**: 6/6 plans complete
 **UI hint**: yes
 
 Plans:
@@ -186,7 +186,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3)*
 
-- [ ] 10-06-PLAN.md — Phase-exit gates: bidirectional loop + a11y/edge route coverage + honest full-suite record (closes RECV-01)
+- [x] 10-06-PLAN.md — Phase-exit gates: bidirectional loop + a11y/edge route coverage + honest full-suite record (closes RECV-01)
 
 ### Phase 11: PDF Intake
 
@@ -244,7 +244,7 @@ Plans:
 | 7. Ingestion Substrate | v2.0 | 7/7 | Complete   | 2026-08-12 |
 | 8. Markdown Pipeline and Personal Library | v2.0 | 5/5 | Complete    | 2026-08-13 |
 | 9. Versioned Export/Import | v2.0 | 7/7 | Complete    | 2026-08-15 |
-| 10. Annotation Review Panel | v2.0 | 5/6 | In Progress|  |
+| 10. Annotation Review Panel | v2.0 | 6/6 | Complete   | 2026-08-16 |
 | 11. PDF Intake | v2.0 | 0/TBD | Not started | - |
 | 12. EPUB Intake | v2.0 | 0/TBD | Not started | - |
 | 13. Polish and Acceptance | v2.0 | 0/TBD | Not started | - |

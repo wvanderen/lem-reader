@@ -35,7 +35,7 @@ Requirements for the v2.0 milestone. Each maps to a roadmap phase (traceability 
 
 ### Annotation Recovery
 
-- [ ] **RECV-01**: Reader can open a dedicated panel to review all highlights and notes across the library, with jump-to-location, filter/sort, and honest tri-state (confident/ambiguous/orphan) surfacing.
+- [x] **RECV-01**: Reader can open a dedicated panel to review all highlights and notes across the library, with jump-to-location, filter/sort, and honest tri-state (confident/ambiguous/orphan) surfacing.
 
 ### Polish
 
@@ -117,7 +117,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PORT-01 | Phase 9 | Complete |
 | PORT-02 | Phase 9 | Complete |
 | PORT-03 | Phase 9 | Complete |
-| RECV-01 | Phase 10 | Pending |
+| RECV-01 | Phase 10 | Complete |
 | POLISH-01 | Phase 13 | Pending |
 | POLISH-02 | Phase 13 | Pending |
 | ACPT-05 | Phase 13 | Pending |
