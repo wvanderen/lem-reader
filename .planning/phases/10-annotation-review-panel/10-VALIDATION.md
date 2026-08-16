@@ -40,13 +40,13 @@ created: 2026-08-15
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| ⬜ TBD | TBD | TBD | RECV-01.a route entry (`#/review` swap, LibraryView entry button) | Route-param injection | regex-anchored grammar; unknown → list | e2e | `npx playwright test tests/e2e/review-panel/route-entry.spec.ts` | ❌ W0 | ⬜ pending |
-| ⬜ TBD | TBD | TBD | RECV-01.b cross-article listing w/ article/date/position metadata | Stored XSS | React text children only | e2e | `npx playwright test tests/e2e/review-panel/listing.spec.ts` | ❌ W0 | ⬜ pending |
-| ⬜ TBD | TBD | TBD | RECV-01.c jump bidirectional (both reading modes) + deep-link no re-jump | — | replaceState strip, calm no-op | e2e | `npx playwright test tests/e2e/review-panel/jump-bidirectional.spec.ts` | ❌ W0 | ⬜ pending |
-| ⬜ TBD | TBD | TBD | RECV-01.d filter (AND-composed) + sort (date/article/position) | — | pure derivation | unit + e2e smoke | `npm run test:unit -- --run tests/unit/review-filter.test.ts` | ❌ W0 | ⬜ pending |
-| ⬜ TBD | TBD | TBD | RECV-01.e tri-state honest (ambiguous/orphan badges, orphan tail) | — | never silently hidden | unit + e2e | `npx playwright test tests/e2e/review-panel/tri-state.spec.ts` | ❌ W0 | ⬜ pending |
-| ⬜ TBD | TBD | TBD | RECV-01.f curate in place (edit note, delete w/ confirm + cascade copy, `.status`) | Destructive fire; XSS | `[data-initial-focus]` on non-destructive button | e2e | `npx playwright test tests/e2e/review-panel/curate.spec.ts` | ❌ W0 | ⬜ pending |
-| ⬜ TBD | TBD | TBD | RECV-01.g empty states (no highlights vs filters-zero) | — | `.status` announcements | e2e | `npx playwright test tests/e2e/review-panel/empty-states.spec.ts` | ❌ W0 | ⬜ pending |
+| 10-01 T2 | 10-01 | 1 | RECV-01.a route entry (`#/review` swap, LibraryView entry button) | Route-param injection | regex-anchored grammar; unknown → list | e2e | `npx playwright test tests/e2e/review-panel/route-entry.spec.ts` | ✅ | ⬜ pending |
+| 10-01 T2 | 10-01 | 1 | RECV-01.b cross-article listing w/ article/date/position metadata | Stored XSS | React text children only | e2e | `npx playwright test tests/e2e/review-panel/listing.spec.ts` | ✅ | ⬜ pending |
+| 10-01 T2 | 10-01 | 1 | RECV-01.c jump bidirectional (both reading modes) + deep-link no re-jump | — | replaceState strip, calm no-op | e2e | `npx playwright test tests/e2e/review-panel/jump-bidirectional.spec.ts` | ✅ | ⬜ pending |
+| 10-01 T1 | 10-01 | 1 | RECV-01.d filter (AND-composed) + sort (date/article/position) | — | pure derivation | unit + e2e smoke | `npm run test:unit -- --run tests/unit/review-filter.test.ts` | ✅ | ⬜ pending |
+| 10-01 T2 | 10-01 | 1 | RECV-01.e tri-state honest (ambiguous/orphan badges, orphan tail) | — | never silently hidden | unit + e2e | `npx playwright test tests/e2e/review-panel/tri-state.spec.ts` | ✅ | ⬜ pending |
+| 10-01 T2 | 10-01 | 1 | RECV-01.f curate in place (edit note, delete w/ confirm + cascade copy, `.status`) | Destructive fire; XSS | `[data-initial-focus]` on non-destructive button | e2e | `npx playwright test tests/e2e/review-panel/curate.spec.ts` | ✅ | ⬜ pending |
+| 10-01 T2 | 10-01 | 1 | RECV-01.g empty states (no highlights vs filters-zero) | — | `.status` announcements | e2e | `npx playwright test tests/e2e/review-panel/empty-states.spec.ts` | ✅ | ⬜ pending |
 | ⬜ TBD | TBD | TBD | RECV-01.h parseHash grammar (`/h/`, `#/review`, unknown→list, Gap 3) | Route-param injection | regex-constrained params | unit (component) | `npm run test:unit -- --run tests/component/App.test.tsx` | ✅ EXTEND (strengthen-only) | ⬜ pending |
 | ⬜ TBD | TBD | TBD | Regress: forced-colors / reduced-motion / keyboard / a11y on `#/review` | — | global reduced-motion gate | e2e | existing forced-colors/reduced-motion/panel-keyboard/a11y specs | ✅ extend if scoped | ⬜ pending |
 
