@@ -215,10 +215,9 @@ function AppInner() {
       <StorageRecoverySurfaces />
       {/* Plan 10-02 — three-view swap: list → review → article (branch
           order per the plan). ReviewView takes no props (it re-derives its
-          whole state from Dexie on mount by design). jumpHighlightId is
-          captured by parseHash but NOT threaded to ArticleView yet — its
-          consumption (on-mount jump pipeline) ships in Plan 10-03; passing
-          it now would be a tsc error against ArticleView's current props.
+          whole state from Dexie on mount by design). Plan 10-03 threads
+          jumpHighlightId into ArticleView's on-mount jump pipeline (readiness
+          gate + D5-11 jump tail + history.replaceState suffix strip).
           The [view] reset effect above fires on review↔article swaps —
           desirable (drawer/count reset). */}
       {view.name === "list" ? (
@@ -228,6 +227,7 @@ function AppInner() {
       ) : (
         <ArticleView
           articleId={view.id}
+          jumpHighlightId={view.jumpHighlightId}
           modeToggleHandlerRef={modeToggleHandlerRef}
           drawerOpen={drawerOpen}
           onCloseDrawer={() => setDrawerOpen(false)}

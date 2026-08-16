@@ -80,6 +80,18 @@ type ModeToggleHandler = () => void;
 export interface ArticleViewProps {
   articleId: string;
   /**
+   * Plan 10-03 (D10-03 / RECV-01.c): the /h/<highlightId> deep-link param
+   * captured by parseHash (Plan 10-02). When present, a dedicated on-mount
+   * jump effect waits out the three async settles (article load, highlight
+   * resolution, first pagination commit), jumps to the highlight using the
+   * existing D5-11 machinery, focuses the <mark>, and silently strips the
+   * suffix via history.replaceState (never a location.hash assignment —
+   * that would re-fire the router mid-view). Unresolvable ids are a calm
+   * no-op (Pitfall 4). Undefined for normal opens — the effect does not
+   * run and behavior is byte-identical to pre-10-03.
+   */
+  jumpHighlightId?: string;
+  /**
    * D4-10 bridge: App passes a ref here. ArticleView registers its anchor-
    * capturing toggle handler on mount so the header ModeToggle button (and
    * the M shortcut via PageTurnControls) preserve the reader's passage across
@@ -163,6 +175,7 @@ function sameBlock(article: CanonicalArticle, offsetA: number, offsetB: number):
 
 export function ArticleView({
   articleId,
+  jumpHighlightId,
   modeToggleHandlerRef,
   drawerOpen,
   onCloseDrawer,
@@ -803,6 +816,146 @@ export function ArticleView({
     };
   }, [articleId]);
 
+  // Plan 10-03 (D10-03 / RECV-01.c + .i — deep-link jump): coordination
+  // refs shared with the location-restore effect below.
+  //   - jumpPendingRef: TRUE while a /h/<highlightId> param has neither
+  //     jumped nor terminally no-op'd. The restore effect early-returns on
+  //     it (Pitfall 3 — the deep-link jump wins because the reader
+  //     explicitly asked for the highlight; the two restores never race).
+  //   - jumpConsumedRef: the `${articleId}::${highlightId}` key already
+  //     jumped (or calmly no-op'd) in THIS mount — effect re-runs (article
+  //     identity churn, highlight reloads) cannot re-jump.
+  const jumpPendingRef = useRef(false);
+  const jumpConsumedRef = useRef<string | null>(null);
+
+  // Plan 10-03: the on-mount deep-link jump. DECLARED BEFORE the
+  // location-restore effect on purpose — effects run in declaration order,
+  // so this effect claims jumpPendingRef in the same commit before the
+  // restore effect checks it (Pitfall 3). The readiness gate waits out the
+  // three async settles (research Pitfall 2) via a bounded rAF retry loop:
+  //   (a) article truthy (effect gate below),
+  //   (b) highlights loaded + the entry resolved,
+  //   (c) in paginated mode only, the first pagination commit
+  //       (surfaceRef.getPages() non-empty).
+  // Once ready it reuses the handleNavigateBack tail EXACTLY (D5-11 — no
+  // forked math), then strips the /h/ suffix. Every terminal path strips:
+  // jump committed, loaded-but-unresolved, loaded-but-absent, or the retry
+  // cap (T-10-03c — a never-settling pagination/annotation load cannot
+  // spin forever; calm no-op).
+  useEffect(() => {
+    if (!jumpHighlightId) return; // normal open — no jump, restore runs
+    // Claim pending BEFORE the early returns so the restore effect
+    // (declared below) can never start racing the jump while the article
+    // is still loading.
+    jumpPendingRef.current = true;
+    if (!article) return; // settle (a) not reached yet
+    const jumpKey = `${article.id}::${jumpHighlightId}`;
+    if (jumpConsumedRef.current === jumpKey) {
+      // Already consumed within this mount — release the restore
+      // suppression; later real navigation restores normally.
+      jumpPendingRef.current = false;
+      return;
+    }
+
+    let cancelled = false;
+    const RETRY_CAP_MS = 5000; // ~5s of rAF retries before calm no-op
+    const startedAt = performance.now();
+
+    // Terminal path shared by every outcome: silently strip the /h/ suffix
+    // and release the restore suppression. history.replaceState fires NO
+    // hashchange/popstate (research Pitfall 1 — a location.hash assignment
+    // would re-run the router, re-parse mid-view, and knock focus off the
+    // <mark>). The URL is template-built from the validated article id
+    // only — same-origin by construction, no user text enters it
+    // (T-10-03b).
+    const finish = () => {
+      history.replaceState(null, "", `#/article/${article.id}`);
+      jumpConsumedRef.current = jumpKey;
+      jumpPendingRef.current = false;
+    };
+
+    const attempt = () => {
+      if (cancelled) return;
+      // Settle (b): the provider's eager batch-resolve populates
+      // api.highlights atomically ([] → the full resolved set — see
+      // useAnnotationState). [] = not loaded yet (keep waiting); non-empty
+      // means the load completed, so an absent entry is terminal (Pitfall
+      // 4 — deleted in another tab / hand-typed garbage → calm no-op).
+      const api = highlightApiRef.current;
+      const highlights = api?.highlights ?? [];
+      const resolved = highlights.find(
+        (h) => h.record.id === jumpHighlightId,
+      );
+      const position = resolved?.resolvedPosition ?? null;
+      if (resolved && !position) {
+        // Loaded and unresolved — terminal calm no-op (Pitfall 4; the
+        // drawer precedent disables jumps for uncertain anchors).
+        finish();
+        return;
+      }
+      if (highlights.length > 0 && !resolved) {
+        // Loaded and the id is not among the rows — terminal calm no-op.
+        finish();
+        return;
+      }
+      // Settle (c): paginated mode only — the first pagination commit.
+      const pages = isPaginated
+        ? surfaceRef.current?.getPages() ?? null
+        : null;
+      if (isPaginated && (!pages || pages.length === 0)) {
+        if (performance.now() - startedAt >= RETRY_CAP_MS) {
+          finish(); // bounded — never-committing surface (T-10-03c)
+          return;
+        }
+        requestAnimationFrame(attempt);
+        return;
+      }
+      if (!resolved || !position || !articleRef.current) {
+        // Highlight rows still loading (empty array), or the article DOM
+        // not yet committed — keep waiting under the same cap.
+        if (performance.now() - startedAt >= RETRY_CAP_MS) {
+          finish();
+          return;
+        }
+        requestAnimationFrame(attempt);
+        return;
+      }
+
+      // ── Ready: the handleNavigateBack tail, verbatim (D5-11) ──
+      const offset = position.start;
+      if (isPaginated && pages && pages.length > 0) {
+        // PAGINATED: resolve offset → page index via
+        // fragmentContainingOffset (anchor.ts), then turn to that page.
+        const surface = surfaceRef.current;
+        if (surface) {
+          const pageIdx = fragmentContainingOffset(pages, offset, article);
+          surface.turnToPage(pageIdx);
+        }
+      } else {
+        // SCROLLING: findScrollTarget + scrollIntoView (reusing the
+        // Phase 2 helper EXACTLY — no fork).
+        const blocks = queryBlocks(articleRef.current);
+        const target = findScrollTarget(article, blocks, offset);
+        target?.scrollIntoView({ block: "center" });
+      }
+      // Firefox settle guard — BOTH calls on the same closure, verbatim
+      // (scrollIntoView's async settle can race a single rAF on firefox).
+      const focusMark = () => {
+        document.getElementById(`hl-${jumpHighlightId}`)?.focus();
+      };
+      requestAnimationFrame(focusMark);
+      window.setTimeout(focusMark, 120);
+
+      // Strip AFTER the jump commits.
+      finish();
+    };
+
+    requestAnimationFrame(attempt);
+    return () => {
+      cancelled = true;
+    };
+  }, [article, jumpHighlightId, isPaginated]);
+
   // Restore saved location on article ready (STATE-01). Mirrors the
   // cancelled-flag async pattern: a slow loadLocation cannot overwrite an
   // article swap. The scrollIntoView is silent (no behavior: "smooth") —
@@ -810,6 +963,15 @@ export function ArticleView({
   // auto; otherwise the default is also instant (we never declare smooth).
   useEffect(() => {
     if (!article) return;
+    // Plan 10-03 (Pitfall 3): while a deep-link jump param is pending (not
+    // yet consumed + stripped), the saved-location restore skips entirely —
+    // the deep-link jump wins because the reader explicitly asked for the
+    // highlight, and the two restores must never race. jumpPendingRef is
+    // owned by the on-mount jump effect above (declared before this effect
+    // so it claims the flag first in every shared commit). After the jump
+    // consumes and strips, subsequent mounts / real navigation restore
+    // normally.
+    if (jumpPendingRef.current) return;
     let cancelled = false;
     loadLocation(article.id, article.revision)
       .then((result) => {
