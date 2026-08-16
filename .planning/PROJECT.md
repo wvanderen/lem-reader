@@ -26,6 +26,8 @@ The prototype supports rich article structure, local highlights and notes, and l
 
 **v2.0 Personal Library — Phase 9 complete 2026-08-15.** Versioned export/import is live: whole-library bundles (articles + highlights + notes + positions + preferences) as a versioned zip with SHA-256 manifest; import with Zod validation, dry-run conflict preview, skip-by-default overrides, and an atomic 5-store transaction (Zip Slip guarded); highlights-only Markdown export per-article and library-wide. Gap-closure plan 09-07 closed the 24-cell pre-existing e2e debt (root cause: header-growth geometry, one CSS fix) and the honest full-suite gate is green again: `npm run test` = 1674 passed / 0 failed / exit 0.
 
+**v2.0 Personal Library — Phase 10 complete 2026-08-16.** The annotation review panel is live at `#/review`: every highlight and note across the library grouped per article with metadata; jump-to-location deep links (`#/article/<id>/h/<hid>`) with calm Back-return; filter by article/tag/confidence and sort by date/article/position; honest tri-state surfacing ("Uncertain anchor"/"Article missing" badges, never-drop orphan tail); in-place note edit and cascade-honest highlight removal. Human verification (VoiceOver badge announcements, focus-restore feel) passed via UAT; honest full-suite record 1796 passed / 0 failed / exit 0 (10-06-OUTPUT.md).
+
 ## Core Value
 
 Readers can move through long-form web content with calm, stable orientation and predictable navigation.
@@ -66,6 +68,7 @@ Readers can move through long-form web content with calm, stable orientation and
 - ✓ Markdown + HTML-upload intake normalized into the library via the shared ingestion pipeline (ING-03). — Phase 8
 - ✓ Versioned export/import (PORT-01/02) — whole-library versioned bundle export/import with Zod validation, dry-run conflict preview, skip-by-default resolution, atomic 5-store transaction, Zip Slip guard. — Phase 9
 - ✓ Highlights-only Markdown export (PORT-03) — fixed-template .md with honest tri-state markers, per-article and library-wide. — Phase 9
+- ✓ Annotation review panel (RECV-01) — dedicated #/review surface listing all highlights/notes across the library with jump-to-location, filter/sort, honest tri-state badges, and in-place curation. — Phase 10
 
 ### Active
 
@@ -73,7 +76,6 @@ v2.0 Personal Library scope (see Current Milestone above for the full picture):
 
 - [ ] URL ingestion — fetch backend extracts and normalizes any publicly fetchable web page into the library.
 - [ ] Multi-format document intake — PDF and EPUB remain (Markdown + HTML upload shipped in Phase 8).
-- [ ] Annotation review panel (RECV-01) — dedicated surface to review all highlights/notes.
 - [ ] Polish — eliminate initial-load reading-mode flash; fix short-article progress-bar semantics.
 - [ ] NVDA+Firefox acceptance run (ACPT-02 coverage boundary A4 follow-up).
 
@@ -126,6 +128,7 @@ Annotations attach to stable normalized-text positions plus quoted context rathe
 | Portability bundle = zip of JSON blocks with schemaVersion envelope + SHA-256 manifest; canonical-text offsets only (never page numbers) | Page numbers/geometry are ephemeral; offsets + quote selectors survive cross-device round-trips | ✓ Good — Phase 9: round-trip e2e proves offsets byte-equal, tri-state honest |
 | Skip-by-default conflict resolution with bulk per-kind overrides (D9-14) | Never silently overwrite reader data; per-row merge UI deferred as unjustified complexity | ✓ Good — Phase 9 |
 | Stacked-modal focus divergence: accept engine reality (webkit) | Safety properties (trap, initial focus, Esc, operability) proven on all engines; nesting/closing would reverse deliberate 09-05 decisions or break spatial orientation | ✓ Decided Phase 9 — documented in 09 deferred-items.md |
+| Review panel derives from one pure derivation (deriveReviewSections) over the shipped resolver; deep-link jumps via /h/ hash grammar with readiness-gated on-mount effect | Reuse-don't-fork the ANNO-07 tri-state machinery; jump restores calm (replaceState strip, no re-jump) — the panel never re-implements resolution or navigation | ✓ Good — Phase 10: 46-test verification + human UAT passes |
 
 ## Evolution
 
@@ -145,4 +148,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-15 after Phase 9 (Versioned Export/Import) completion*
+*Last updated: 2026-08-16 after Phase 10 (Annotation Review Panel) completion*
