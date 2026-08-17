@@ -33,7 +33,7 @@ Seven phases that add one stateless ingestion backend and one new data domain (u
 - [x] **Phase 8: Markdown Pipeline and Personal Library** - Lowest-risk Markdown intake plus the personal library that replaces the fixture list (completed 2026-08-13)
 - [x] **Phase 9: Versioned Export/Import** - Whole-library bundles and highlights-only export as the cross-device story in lieu of accounts (completed 2026-08-15)
 - [x] **Phase 10: Annotation Review Panel** - Dedicated surface to review, filter, and curate all highlights and notes across the library (completed 2026-08-16)
-- [ ] **Phase 11: PDF Intake** - PDF text extraction with honest failure for scanned and multi-column documents
+- [x] **Phase 11: PDF Intake** - PDF text extraction with honest failure for scanned and multi-column documents (completed 2026-08-17)
 - [ ] **Phase 12: EPUB Intake** - Multi-chapter EPUB books surfaced as per-chapter articles under a book grouping
 - [ ] **Phase 13: Polish and Acceptance** - FOUC and progress-bar fixes plus the NVDA+Firefox and v2.0 core-flow acceptance gate
 
@@ -200,7 +200,7 @@ Plans:
   3. Multi-column PDFs are either honestly flagged as low-confidence (reconstructed reading order) or refused via the same disclosure surface; the reader never sees silently reordered text.
   4. A round-trip anchor test gates every successfully extracted PDF article, and a calibration harness validates the font-size→heading and vertical-gap→paragraph thresholds on a real-PDF corpus before promotion.
 
-**Plans**: 5/6 plans executed
+**Plans**: 6/6 plans complete
 Plans:
 **Wave 1**
 
@@ -221,7 +221,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 11-06-PLAN.md — calibration harness + local real-PDF corpus (checkpoint) + committed evidence + honest full-suite phase gate (SC#4, D11-04/05/06)
+- [x] 11-06-PLAN.md — calibration harness + local real-PDF corpus (checkpoint) + committed evidence + honest full-suite phase gate (SC#4, D11-04/05/06)
 
 ### Phase 12: EPUB Intake
 
@@ -266,6 +266,6 @@ Plans:
 | 8. Markdown Pipeline and Personal Library | v2.0 | 5/5 | Complete    | 2026-08-13 |
 | 9. Versioned Export/Import | v2.0 | 7/7 | Complete    | 2026-08-15 |
 | 10. Annotation Review Panel | v2.0 | 6/6 | Complete    | 2026-08-16 |
-| 11. PDF Intake | v2.0 | 5/6 | In Progress|  |
+| 11. PDF Intake | v2.0 | 6/6 | Complete   | 2026-08-17 |
 | 12. EPUB Intake | v2.0 | 0/TBD | Not started | - |
 | 13. Polish and Acceptance | v2.0 | 0/TBD | Not started | - |

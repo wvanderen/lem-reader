@@ -4,9 +4,9 @@ milestone: v2.0
 milestone_name: Personal Library
 current_phase: 11
 current_phase_name: PDF Intake
-status: executing
-stopped_at: Completed 11-05-PLAN.md (pdf-intake e2e — ING-04 browser proof)
-last_updated: "2026-08-17T17:21:46.792Z"
+status: verifying
+stopped_at: Completed 11-06-PLAN.md (pdf calibration — ING-04 closed, phase 11 ready for verification)
+last_updated: "2026-08-17T18:59:15.870Z"
 last_activity: 2026-08-16
 last_activity_desc: Phase 11 execution started
 progress:
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-08-16)
 
 Phase: 11 (PDF Intake) — EXECUTING
 Plan: 6 of 6
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-08-16 — Phase 11 execution started
 
 Progress: [████████████████████] 25/25 plans (100%)
@@ -130,6 +130,7 @@ Progress: [████████████████████] 25/25 p
 | Phase 11 P04 | 3 min | 2 tasks | 4 files |
 | Phase 11 P03 | 10 min | 2 tasks | 3 files |
 | Phase 11 P05 | 8min | 2 tasks | 1 files |
+| Phase 11 P06 | 47min | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -288,6 +289,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: Phase 11 11-03: middleware body caps return HTTP 413 + the typed pdf-too-large envelope on both paths — content-length refused BEFORE readBody attaches a data listener (pulled-flag proof), chunked bodies re-checked by Buffer.byteLength after readBody; invalid content-length falls through to the second guard
 - [Phase ?]: Phase 11 11-05: PDF refusal e2e no-side-effect assertion = total rows stay at bundled-fixture baseline AND zero PDF-badged rows — the composite library always unions the 6 fixtures with Dexie rows, so a literal 'count is 0' is structurally impossible (markdown-upload dedupe precedent asserts fixtures.length + 1)
 - [Phase ?]: Phase 11 11-05: PDF location-restore identity proven via the scrolling-mode save/restore path (persistence.spec.ts tolerances verbatim) — useScrollSave fires only on window scroll (no save on a paginated turn) and paginated page-index restore is documented deferred option (b)
+- [Phase ?]: Phase 11 11-06: Rule-4 checkpoint resolved (user, all-recommended) — YouAreTheOne (geometrically single-column; forcing multi-column refusal would violate locked D11-03) replaced by user-supplied genuine 3-column IDOM 50 editorial.pdf which refuses pdf-multi-column; TRACE's two running-head labels deleted (furniture, not content); resume Selected Projects/Education & Certification relabeled heading+paragraph (0.6154→0.9231)
+- [Phase ?]: Phase 11 11-06: scriptFragmentGapRatio=1 — the 1.0×lineDelta script-band window is AND-qualified (≤12 chars AND script-sized) so pure decoration fragments (∑ under-limits '𝑘=0' 11.88pt below their equation band) merge while body-sized short lines and math-heavy body lines keep the 0.75 window; a size-only wide window was tried and REVERTED (fused body lines, flipped a synthetic extreme) — synthetic extremes 35/35 green, TRACE 0.8932→0.92
 
 ### Pending Todos
 
@@ -317,8 +320,8 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-17T17:21:46.783Z
-Stopped at: Completed 11-05-PLAN.md (pdf-intake e2e — ING-04 browser proof)
+Last session: 2026-08-17T18:59:15.860Z
+Stopped at: Completed 11-06-PLAN.md (pdf calibration — ING-04 closed, phase 11 ready for verification)
 Resume file: None
 
 ## Operator Next Steps
