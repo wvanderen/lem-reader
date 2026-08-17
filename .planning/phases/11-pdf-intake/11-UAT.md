@@ -1,18 +1,14 @@
 ---
-status: testing
+status: complete
 phase: 11-pdf-intake
 source: [11-01-SUMMARY.md, 11-02-SUMMARY.md, 11-03-SUMMARY.md, 11-04-SUMMARY.md, 11-05-SUMMARY.md, 11-06-SUMMARY.md, 11-07-SUMMARY.md, 11-VERIFICATION.md]
 started: 2026-08-17T19:12:20Z
-updated: 2026-08-17T21:05:00Z
+updated: 2026-08-17T21:20:00Z
 ---
 
 ## Current Test
 
-number: 2
-name: Outline PDF yields section headings (re-test after 11-07 gap closure)
-expected: |
-  Upload tests/fixtures/pdf/synthetic-outline.pdf; the resulting article shows structured section headings (outline bookmarks become h2/h3 headings) rather than one undifferentiated text blob. Gap closed by Plan 11-07 (commit 6f8c655 — isReaderable admits sparse structured docs); e2e automates the identical flow green on chromium/firefox/webkit. Re-run manually to confirm and flip result.
-awaiting: user response
+[testing complete]
 
 ## Tests
 
@@ -22,8 +18,8 @@ result: pass
 
 ### 2. Outline PDF yields section headings
 expected: Upload tests/fixtures/pdf/synthetic-outline.pdf; the resulting article shows structured section headings (outline bookmarks become h2/h3 headings) rather than one undifferentiated text blob
-result: pending
-note: previously result:issue (major) — fixed by gap-closure Plan 11-07 (commit 6f8c655); awaiting manual re-test to flip
+result: pass
+note: re-tested after gap-closure Plan 11-07 (commit 6f8c655) — user confirmed structured headings render
 
 ### 3. Scanned PDF refused calmly with no side effects
 expected: Upload tests/fixtures/pdf/synthetic-scanned.pdf; calm "looks like scanned images" copy appears in the .status live region (no jargon like "pdf-scanned"), URL stays on the library page, no PDF-badged library row is added
@@ -61,9 +57,9 @@ reason: no natural 30s fixture; user chose the skip over temp-lowering the cap. 
 ## Summary
 
 total: 10
-passed: 8
+passed: 9
 issues: 0
-pending: 1
+pending: 0
 skipped: 1
 blocked: 0
 
