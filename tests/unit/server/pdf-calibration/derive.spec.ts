@@ -10,7 +10,7 @@
 // — raw getDocumentProxy+destroy outside withPdfDocument poisons the shared
 // pdfjs worker under jsdom (prior-session finding); this file never touches
 // the raw API.
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";

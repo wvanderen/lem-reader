@@ -1329,7 +1329,25 @@ export async function pdfToBlocks(pdfBytes: Uint8Array): Promise<PdfToBlocksResu
       provenancePartial: saneInfoTitle(meta.info) !== undefined
         ? { title: saneInfoTitle(meta.info) }
         : {},
-      isReaderable: blocks.length >= 3 && textBearingPages >= 1,
+      // Admission algebra (11-07 gap closure): admit when blocks.length >= 3
+      // AND (at least one text-bearing page OR no near-empty page at all).
+      // WHY: legitimately sparse structured documents (outline/title-page
+      // shapes) can carry zero pages reaching scannedItemFloor while NO page
+      // is near-empty; the scanned majority gate (nearEmptyPages >
+      // scannedMajorityRatio × totalPages) already refuses scanned documents
+      // BEFORE assembly, so the old text-bearing conjunct double-guarded and
+      // false-refused this class. Safety envelope: a zero nearEmptyPages
+      // count means EVERY page carried at least nearEmptyItemFloor real
+      // items AND nearEmptyCharFloor non-whitespace chars — a scanned
+      // document's image-only pages are near-empty and refuse earlier via
+      // pdf-scanned, while documents with a minority of near-empty pages but
+      // no text-bearing page (the middle band) remain refused (pinned by the
+      // 11-07 admission-guard test). scannedItemFloor and every
+      // PDF_THRESHOLDS value stay frozen — the 11-06 calibration replay pins
+      // them, and re-tuning requires re-running the derive harness (out of
+      // scope for this gap closure).
+      isReaderable:
+        blocks.length >= 3 && (textBearingPages >= 1 || verdict.nearEmptyPages === 0),
     };
   });
 }
