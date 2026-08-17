@@ -111,6 +111,51 @@ describe("ingest — pdf id stability", () => {
   });
 });
 
+// ── 11-07 — outline-fixture full-pipeline admission (UAT Test 2 gap) ──────────
+describe("ingest — outline-fixture admission (11-07)", () => {
+  it("admits synthetic-outline.pdf with both outline-coerced h2 headings surviving", async () => {
+    // The UAT Test 2 regression this gap closure pins: the outline
+    // fixture's sparse pages (6/4 real items — under scannedItemFloor)
+    // previously false-refused extraction-unsupported at the !isReaderable
+    // gate. FILENAME IS LOAD-BEARING — do not change it to "outlined-doc"
+    // or similar: consumeDuplicatedTitle normalizes [-_\s]+ to whitespace
+    // (D11-09), so "outlined-doc" → "outlined doc" IS contained in the
+    // first heading's "outlined document" and the heading would be
+    // (correctly) consumed. "outline notes" matches NEITHER heading in
+    // either containment direction, so BOTH headings surviving the D11-09
+    // consume is itself part of the proof.
+    const response = await ingest({
+      pdf: fixtureB64("synthetic-outline.pdf"),
+      filename: "outline-notes.pdf",
+    });
+
+    expect(response.ok).toBe(true);
+    if (!response.ok) {
+      throw new Error(`expected ok:true, got refusal: ${response.reason}`);
+    }
+
+    const article = response.article;
+    // D7-07/D8-18/D11 id discipline — content-hash slug, never the filename.
+    expect(article.id).toMatch(/^pdf-[0-9a-f]{12}$/);
+    // Stage-1 metadata — the fourth branch's own channel values.
+    expect(article.ingestionMeta?.source).toBe("pdf");
+    expect(article.ingestionMeta?.origin).toBe("upload");
+    // ING-06 — admitted articles are high|low confidence, never
+    // "unsupported" (that state is refused upstream).
+    expect(["high", "low"]).toContain(article.ingestionMeta?.extractionConfidence);
+    // D11-07 chain — the fixture carries no Info title, so the filename
+    // channel resolves: stripPdfExtension("outline-notes.pdf").
+    expect(article.provenance.title).toBe("outline-notes");
+    // BOTH outline-coerced section headings survive into the article body.
+    const headingTexts = article.blocks
+      .filter((b): b is Extract<Block, { kind: "heading" }> => b.kind === "heading")
+      .map((b) => b.content.map((run) => run.text).join(""));
+    expect(headingTexts).toContain("Outlined Document");
+    expect(headingTexts).toContain("Second Section");
+    expect(article.blocks.length).toBeGreaterThanOrEqual(3);
+  });
+});
+
 // ── Task 1 — typed refusals serialize through the IngestionError catch ───────
 describe("ingest — pdf typed refusals", () => {
   it("corrupt bytes refuse with pdf-unreadable", async () => {

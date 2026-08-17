@@ -121,6 +121,23 @@ describe("pdfToBlocks — typed refusals (synthetic fixtures, real pdf.js)", () 
     const result = await pdfToBlocks(fixtureBytes("synthetic-outline.pdf"));
     expect(result).toBeDefined();
     expect(Array.isArray(result.blocks)).toBe(true);
+    // 11-07 gap closure — the adapter-level ADMISSION assertion the coverage
+    // gap never proved: the orchestrator's !isReaderable gate
+    // (server/ingest.ts L329) reads exactly this field, and the fixture's
+    // sparse pages (6/4 real items, both under scannedItemFloor) carry ZERO
+    // text-bearing pages while NO page is near-empty — legitimately sparse
+    // structured documents (outline/title-page shapes) must admit.
+    expect(result.isReaderable).toBe(true);
+    expect(result.blocks.length).toBeGreaterThanOrEqual(3);
+    // The outline-coerced section headings are present as level-2 blocks
+    // (heading coercion itself is pinned in the outline-destinations
+    // describe below; re-observed here so admission + structure assert
+    // together — the UAT Test 2 expectation at adapter level).
+    const headings = result.blocks
+      .filter((b): b is Extract<Block, { kind: "heading" }> => b.kind === "heading")
+      .map((b) => ({ text: textOf(b), level: b.level }));
+    expect(headings).toContainEqual({ text: "Outlined Document", level: 2 });
+    expect(headings).toContainEqual({ text: "Second Section", level: 2 });
   });
 });
 
@@ -367,6 +384,51 @@ describe("pdfToBlocks — intra-line x-gap space rule (itemGapRatio × fontSize)
     ]);
     const result = await pdfToBlocks(bytes);
     expect(result.blocks.length).toBeLessThan(3);
+    expect(result.isReaderable).toBe(false);
+  });
+
+  it("middle band refuses: ≥3 blocks, zero text-bearing pages, a near-empty page ⇒ isReaderable false (11-07 admission guard)", async () => {
+    // The boundary test for the isReaderable relaxation: a MULTI-page probe
+    // (tinyPdf builds single-page only — call serializePdf directly with an
+    // array of buildContentStream pages; do not fork the serializer). Two
+    // pages carry 4 widely-spaced short real-text lines each — above the
+    // near-empty floors (≥3 items, ≥15 non-ws chars per page) but below
+    // scannedItemFloor=8 (4 items), so they are NEITHER near-empty NOR
+    // text-bearing. A third page carries a single 1-2 word line (1 real
+    // item < nearEmptyItemFloor=3 ⇒ near-empty; 1-of-3 near-empty is NOT a
+    // scanned majority, so the adapter RESOLVES rather than throwing
+    // pdf-scanned). Blocks comfortably assemble, yet admission must refuse:
+    // nearEmptyPages ≥ 1 AND textBearingPages = 0. Proves the relaxed
+    // conjunct can never collapse into a blocks-count-only check.
+    const sparseLinesPage = (label: string): string =>
+      buildContentStream([
+        { x: 60, y: 740, font: "F1", size: 12, text: `${label} opening line of text` },
+        { x: 60, y: 724, font: "F1", size: 12, text: `${label} second line of text` },
+        { x: 60, y: 708, font: "F1", size: 12, text: `${label} third line of text` },
+        // 64pt drop over the 16pt modal line delta → beyond paragraph
+        // spacing (1.35×16) so this short line is its own block; still far
+        // under the 5×lineDelta figure-gap window, and full-width x=60 lines
+        // keep the page non-columnar (moot for the verdict — pageIsColumnar
+        // only runs on text-bearing pages — but honest to the shape).
+        { x: 60, y: 644, font: "F1", size: 12, text: `${label} fourth line of text` },
+      ]);
+    const bytes = new Uint8Array(
+      serializePdf({
+        pages: [
+          sparseLinesPage("Alpha page"),
+          sparseLinesPage("Beta page"),
+          buildContentStream([
+            { x: 60, y: 740, font: "F1", size: 12, text: "Closing note" },
+          ]),
+        ],
+      }),
+    );
+    const result = await pdfToBlocks(bytes);
+    // Assembles ≥3 blocks: two paragraph blocks per sparse page (the 3-line
+    // group + the gap-separated line) plus the near-empty page's ONE
+    // unsupported disclosure block.
+    expect(result.blocks.length).toBeGreaterThanOrEqual(3);
+    // …but the middle band keeps refusing admission.
     expect(result.isReaderable).toBe(false);
   });
 });
