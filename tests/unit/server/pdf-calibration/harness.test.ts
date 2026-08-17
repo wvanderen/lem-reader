@@ -387,4 +387,38 @@ describe("computeAgreement", () => {
     ];
     expect(computeAgreement(labels, blocks)).toBe(1);
   });
+
+  // ── Widened label vocabulary (11-06 Task 3 — the human-corrected labels) ──
+  it("accepts the corrected-label kinds: footnote / table header / table content + level 1", () => {
+    // The schema half: loadGroundTruth parses the observed vocabulary.
+    const widened: GroundTruthLabel[] = [
+      { kind: "heading", level: 1, textPrefix: "A Science of Reality:" },
+      { kind: "paragraph", textPrefix: "Observation is the foundation" },
+      { kind: "footnote", textPrefix: "1The following section outlines" },
+      { kind: "table header", textPrefix: "# Domain Conjecture" },
+      { kind: "table content", textPrefix: "1 Special relativity Minkowski" },
+    ];
+    // The metric half: body-text kinds match extracted paragraph blocks
+    // (PDF footnotes/tables ARE body text in Phase 11 — pdfToBlocks
+    // Pattern 1); heading labels still require heading blocks.
+    const blocks = [
+      heading("A Science of Reality:"),
+      para("Observation is the foundation of science"),
+      para("1The following section outlines a stream"),
+      para("# Domain Conjecture"),
+      para("1 Special relativity Minkowski space eme"),
+    ];
+    expect(computeAgreement(widened, blocks)).toBe(1);
+  });
+
+  it("still discriminates heading-vs-body across the widened vocabulary", () => {
+    const widened: GroundTruthLabel[] = [
+      { kind: "heading", textPrefix: "Introduction" },
+      { kind: "footnote", textPrefix: "1A footnote body" },
+    ];
+    // A paragraph extracted where a heading is labeled, and a heading
+    // extracted where body text is labeled — both cost agreement.
+    const blocks = [para("Introduction and overview"), heading("1A footnote body")];
+    expect(computeAgreement(widened, blocks)).toBe(0);
+  });
 });

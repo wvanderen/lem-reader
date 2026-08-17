@@ -19,11 +19,19 @@ reading order:
 ]
 ```
 
-- `kind` — `"heading"` or `"paragraph"` (the labeled structure; unsupported
-  figure regions are not labeled).
-- `level` — optional, headings only (2–6). Informational for review; the
-  agreement metric matches on **kind** (heading-where-heading,
-  paragraph-where-paragraph).
+- `kind` — the semantic reading: `"heading"`, `"paragraph"`, `"footnote"`,
+  `"table header"`, or `"table content"` (vocabulary widened at the 11-06
+  calibration review — the human corrector's kinds are the truth).
+  Matching maps onto the extractor's vocabulary via an equivalence class:
+  **heading-where-heading**, and every body-text kind (paragraph, footnote,
+  table header, table content) matches an extracted **paragraph** block —
+  PDF footnotes and tables ARE body text in Phase 11 (pdfToBlocks Pattern
+  1), so the metric discriminates the behavior the thresholds control
+  (heading-vs-body), never that intentional scope decision. Unsupported
+  figure regions are not labeled (they still cost the denominator).
+- `level` — optional, headings only (1–6, informational). The extractor
+  clamps outline depth to levels 2–6 (bodies start at h2 — one-h1 rule);
+  the agreement metric matches on **kind** + prefix, never level.
 - `textPrefix` — the first ~40 normalized characters of the block's text.
   Matching is case/whitespace-insensitive prefix fuzzy match with ±1
   boundary drift; `agreement = matched-kind / max(labels, blocks)`.

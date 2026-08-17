@@ -115,10 +115,31 @@ export type PdfCalibrationEvidence = z.infer<typeof EvidenceSchema>;
 
 /** Ground-truth label (D11-06): one ordered block label for admitted-class
  * PDFs — kind (+ optional heading level) + a normalized text prefix (the
- * first ~40 chars of the block's text). */
+ * first ~40 chars of the block's text).
+ *
+ * Label vocabulary (WIDENED at calibration review, 11-06 Task 3): the human
+ * corrector labeled semantic structure beyond the extractor's two text kinds
+ * — `footnote`, `table header`, `table content` — and level-1 document
+ * titles. These are the numerator of truth; the schema must accept them.
+ * Matching (see labelMatchesBlock) maps the vocabulary onto the extraction's
+ * kind via an equivalence class: `heading` labels must match heading blocks;
+ * every body-text kind (paragraph/footnote/table header/table content)
+ * matches paragraph blocks — PDF footnotes and tables ARE body text in
+ * Phase 11 (pdfToBlocks Pattern 1), so the metric discriminates exactly the
+ * behavior the thresholds control (heading-vs-body), never the intentional
+ * scope decision. */
+export const PDF_LABEL_KINDS = [
+  "heading",
+  "paragraph",
+  "footnote",
+  "table header",
+  "table content",
+] as const;
+export type PdfLabelKind = (typeof PDF_LABEL_KINDS)[number];
+
 export const GroundTruthLabelSchema = z.object({
-  kind: z.enum(["heading", "paragraph"]),
-  level: z.number().int().min(2).max(6).optional(),
+  kind: z.enum(PDF_LABEL_KINDS),
+  level: z.number().int().min(1).max(6).optional(),
   textPrefix: z.string().min(1),
 });
 export type GroundTruthLabel = z.infer<typeof GroundTruthLabelSchema>;
@@ -196,11 +217,21 @@ export function verifyCorpus(
 // ── Agreement metric (D11-06 — labels ↔ extracted blocks) ───────────────────
 
 /** Normalization for textPrefix fuzzy matching: lowercase + whitespace
- * collapse (case/whitespace-insensitive; hyphen-insensitivity is NOT wanted
- * here — unlike the D11-09 title match, block prefixes must stay strict
- * about content). */
+ * collapse + producer footnote-marker stripping (case/whitespace-insensitive;
+ * hyphen-insensitivity is NOT wanted here — unlike the D11-09 title match,
+ * block prefixes must stay strict about content). Bracketed digit runs are
+ * footnote/citation markers producers inject ("economy[1] borrowed") — they
+ * are not content and break prefix containment otherwise. */
 function normalizeForPrefix(s: string): string {
-  return s.toLowerCase().replace(/\s+/g, " ").trim();
+  return s.toLowerCase().replace(/\s+/g, " ").replace(/\[[0-9]+\]/g, "").trim();
+}
+
+/** Space-stripped form — the last-resort fuzzy tier. Producers emit
+ * kerned-tight run boundaries with no recoverable space ("Catalyst2025" vs
+ * the labeled "Catalyst 2025"); comparing with spaces removed recovers the
+ * match without weakening kind or order discipline. */
+function spaceless(s: string): string {
+  return s.replace(/\s+/g, "");
 }
 
 /** The concatenated inline text of a block ("" for unsupported blocks). */
@@ -209,27 +240,53 @@ function blockText(block: Block): string {
   return block.content.map((run) => run.text).join("");
 }
 
-/** Does this label match this block? Kind must be equal (heading-where-
- * heading, paragraph-where-paragraph); the normalized label prefix must be
- * a prefix of the normalized block text (fuzzy fallback: containment in
- * either direction, tolerant of lead-in drift producers introduce). */
+/** The extraction kind a label kind matches against (equivalence class —
+ * see GroundTruthLabelSchema: heading labels need heading blocks; every
+ * body-text kind needs a paragraph block. Level is informational — the
+ * extractor clamps outline depth to 2-6 and the metric matches kind+prefix,
+ * never level). */
+function extractionKindForLabel(kind: PdfLabelKind): "heading" | "paragraph" {
+  return kind === "heading" ? "heading" : "paragraph";
+}
+
+/** Does this label match this block? Kind equivalence must hold (heading-
+ * where-heading, body-text-where-body-text); the normalized label prefix
+ * must be a prefix of the normalized block text (fuzzy fallback:
+ * containment in either direction, tolerant of lead-in drift producers
+ * introduce). */
 function labelMatchesBlock(label: GroundTruthLabel, block: Block): boolean {
-  if (label.kind !== block.kind) return false;
+  if (extractionKindForLabel(label.kind) !== block.kind) return false;
   const want = normalizeForPrefix(label.textPrefix);
   if (want.length === 0) return false;
   const have = normalizeForPrefix(blockText(block));
   if (have.length === 0) return false;
-  return have.startsWith(want) || have.includes(want) || want.includes(have);
+  if (have.startsWith(want) || have.includes(want)) return true;
+  // Reverse containment ONLY for substantial blocks: a real block whose
+  // entire text the label prefix covers (lead-in drift). A tiny fragment
+  // block (an equation's "𝑘=0" leftover) must NOT steal its label and jump
+  // the monotone cursor past real content — calibration lesson from TRACE's
+  // equation cluster, where a 4-char fragment consumed the big equation's
+  // label and cost eight downstream matches.
+  if (have.replace(/\s+/g, "").length >= 8 && want.includes(have)) return true;
+  // Spaceless tier — kerned run boundaries ("Catalyst2025" ↔ "Catalyst 2025").
+  const wantFlat = spaceless(want);
+  const haveFlat = spaceless(have);
+  if (wantFlat.length === 0 || haveFlat.length === 0) return false;
+  return haveFlat.startsWith(wantFlat) || haveFlat.includes(wantFlat);
 }
 
 /**
- * computeAgreement — matched-kind / max(labels, blocks) with ±1 boundary
- * drift tolerance. Two-pointer walk: a label matches the block at the
- * cursor, or one block ahead (an extra extracted boundary block between two
- * labeled ones), or one label ahead (labels skip an extraction the human
- * did not label). Drift preserves MATCHES across minor boundary
- * disagreement, but the denominator still counts every label and every
- * block — extra blocks or missing structure still cost agreement honestly.
+ * computeAgreement — matched-kind / max(labels, blocks) with a MONOTONE
+ * full-lookahead alignment (11-06 Task 3 calibration finding). The original
+ * ±1-drift greedy walk derailed permanently on CLUSTERED divergence: two
+ * consecutive extra blocks (an equation fragmenting into 3, a TOC entry
+ * splitting off a heading) blinded every later match — a 95%-correct
+ * extraction scored 0.02. The monotone walk keeps the plan's honesty (each
+ * label takes the EARLIEST unused block at or after the cursor, so extra
+ * and missing blocks still cost the denominator exactly once) while
+ * measuring real structural agreement instead of walk artifacts. The
+ * committed behavior table (one extra block between labels ⇒ 2/3) is
+ * unchanged under both walks.
  */
 export function computeAgreement(
   labels: GroundTruthLabel[],
@@ -238,36 +295,19 @@ export function computeAgreement(
   const denominator = Math.max(labels.length, blocks.length);
   if (denominator === 0) return 1;
   let matched = 0;
-  let li = 0;
   let bi = 0;
-  while (li < labels.length && bi < blocks.length) {
+  const used = new Set<number>();
+  for (let li = 0; li < labels.length; li++) {
     const label = labels[li]!;
-    const block = blocks[bi]!;
-    if (labelMatchesBlock(label, block)) {
-      matched += 1;
-      li += 1;
-      bi += 1;
-      continue;
+    for (let b = bi; b < blocks.length; b++) {
+      if (used.has(b)) continue;
+      if (labelMatchesBlock(label, blocks[b]!)) {
+        used.add(b);
+        matched += 1;
+        bi = b + 1;
+        break;
+      }
     }
-    // Drift +1 on the block side: an extra block sits between labels.
-    const nextBlock = blocks[bi + 1];
-    if (nextBlock !== undefined && labelMatchesBlock(label, nextBlock)) {
-      matched += 1;
-      li += 1;
-      bi += 2;
-      continue;
-    }
-    // Drift +1 on the label side: a labeled block was not extracted.
-    const nextLabel = labels[li + 1];
-    if (nextLabel !== undefined && labelMatchesBlock(nextLabel, block)) {
-      matched += 1;
-      li += 2;
-      bi += 1;
-      continue;
-    }
-    // No local alignment — count both as unmatched and advance.
-    li += 1;
-    bi += 1;
   }
   return matched / denominator;
 }
