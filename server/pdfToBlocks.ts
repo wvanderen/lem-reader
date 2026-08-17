@@ -121,12 +121,57 @@ export const PDF_THRESHOLDS = {
    * non-text region (figure/chart stand-in) — emit ONE unsupported block. */
   figureGapLines: 5,
   // Pattern 5 — heading detection (outline-first; this is the fallback)
-  /** heading when dominant fontSize ≥ body × this (char-weighted modal body). */
-  headingFontRatio: 1.15,
+  /** heading when dominant fontSize ≥ body × this (char-weighted modal body).
+   * 1.15 → 1.1 at 11-06 calibration: TRACE's section headings are 12pt over
+   * a 10.9pt body (ratio 1.101) — 1.1 lands exactly AT the boundary (10.9091 × 1.1 =
+   * 12.00001 > the 12pt headings), so 1.095; nothing in the corpus sits between body
+   * and 11.49pt display operators, so 1.1 admits true headings safely. */
+  headingFontRatio: 1.095,
   /** …AND the group is under this many words. */
   headingMaxWords: 10,
   /** outline dest y matches a block top within this × the page's line delta. */
   outlineYToleranceLines: 1.5,
+  // ── 11-06 corpus calibration additions (D11-02/D11-06 tuned values) ──────
+  // Pattern 6a — page-furniture suppression (repeated running heads / feet +
+  // bare page numbers). Calibrated against: wage-labour (35 bare page-number
+  // blocks + section-end gaps manufacturing unsupported regions), TRACE (13
+  // running-head blocks interleaving the body), YouAreTheOne (per-page
+  // running heads whose repetition broke quote resolution at the anchor gate).
+  /** digit-normalized first/last-band text repeating on ≥ this many pages is
+   * furniture (running head/foot). */
+  furnitureRepeatPages: 3,
+  /** a furniture candidate band must be at most this many characters. */
+  furnitureMaxChars: 60,
+  // Pattern 6b — super/subscript band merge. Calibrated against TRACE's
+  // display equations: math script bands (8pt) sit 4.5–9.6pt from their base
+  // band (10.9pt) and were splitting equations into 2–4 blocks. Merging a
+  // smaller-dominant-size band into its larger-size neighbor within this ×
+  // the page's line delta reconstructs one equation block (the labeled
+  // structure) without touching uniform-size documents.
+  /** a band whose dominant font is smaller than an adjacent band's merges
+   * into it when the y-distance is under this × the page's line delta. */
+  scriptBandRatio: 0.75,
+  // Pattern 5b — standalone-line + bold-section heuristics. A SHORT line
+  // (≤ headingMaxWords) whose gap ABOVE exceeds paragraph spacing is its own
+  // group (resume section titles at Δ14–16 vs body Δ12; display equations
+  // with display skips both sides — both labeled as their own blocks). The
+  // bold-section fallback arm then promotes standalone ASCII titles of ≤ this
+  // many words (no sentence punctuation) to headings: unpdf exposes only
+  // generic fontFamily ("serif"), so boldness is invisible — the corpus
+  // showed same-size bold sections ("Summary", "Core Strengths",
+  // "Experience") need this arm, while 4+ word standalone lines ("Orphic
+  // Hymn to Artemis") and sentence-shaped lines stay paragraphs.
+  /** bold-section fallback: standalone ASCII title at body size becomes a
+   * heading when at most this many words. */
+  sectionTitleMaxWords: 3,
+  /** a band this many non-whitespace characters or fewer, sitting within
+   * scriptBandRatio × line delta of a neighbor, is an equation fragment
+   * (superscript sums/indices like "Õ∞", "𝑘𝑘", "𝑘=0") — merged into the
+   * neighbor regardless of relative font size (some producers set display
+   * operators LARGER than the base). 8 → 12 at calibration: merged fragment
+   * chains ("\"#\"#∞∞ÕÕ𝑘𝑘" = 10 chars) must keep cascading into the base
+   * band — an 8-char cap stalled the chain one band short. */
+  scriptFragmentChars: 12,
 } as const;
 
 // ── Small numeric helpers ────────────────────────────────────────────────────
@@ -243,6 +288,114 @@ function bandRuns(band: LineBand, splitGap: number): XRun[] {
     }
   }
   return runs;
+}
+
+// ── Page-furniture suppression (11-06 calibration — Pattern 6a) ──────────────
+/** Normalize a band text into a furniture-comparison key: lowercase,
+ * whitespace-collapsed, digit-runs → "#" (running heads carry varying page
+ * numbers; "A Science of Reality: … 3" and "… 4" must compare equal). */
+function furnitureKey(text: string): string {
+  return text.replace(/\s+/g, " ").trim().replace(/[0-9]+/g, "#").toLowerCase();
+}
+
+/** A bare page number band ("1".."2026", optionally decorated) — the classic
+ * page folio. Only ever considered at a page's first/last band. */
+function isBarePageNumber(text: string): boolean {
+  return /^[#|\-–—\s]*[0-9]{1,4}[#|\-–—\s]*$/.test(text.replace(/\s+/g, " ").trim());
+}
+
+/**
+ * stripPageFurniture — remove repeated running heads/feet and bare page
+ * numbers from each page's items, BEFORE classification and assembly
+ * (11-06 corpus calibration). Furniture is a FIRST-or-LAST band phenomenon:
+ * a candidate must sit at a page edge, be short (≤ furnitureMaxChars), and
+ * either be a bare page number or repeat (digit-normalized) on ≥
+ * furnitureRepeatPages pages. Everything stripped here was breaking the
+ * corpus three ways: furniture blocks polluted block agreement, section-end
+ * gaps down to a lone page number manufactured unsupported "figure" regions,
+ * and repeated head text made the SC#4a quote-resolution gate ambiguous.
+ * Pages whose only content was furniture become empty — honestly blank
+ * (not a "non-text region"), and still counted as near-empty for the
+ * scanned verdict, which runs on the stripped pages.
+ */
+export function stripPageFurniture(
+  pages: StructuredTextItem[][],
+): StructuredTextItem[][] {
+  // Pass 1 — band each page once, collect first/last band candidate keys.
+  interface PageBands {
+    bands: LineBand[];
+    firstKey: string | null;
+    lastKey: string | null;
+  }
+  const banded: PageBands[] = pages.map((page) => {
+    const real = realItems(page);
+    if (real.length === 0) {
+      return { bands: [], firstKey: null, lastKey: null };
+    }
+    const lineDelta = modalLineDelta(real);
+    const bands = binIntoBands(real, PDF_THRESHOLDS.bandYToleranceRatio * lineDelta);
+    if (bands.length < 2) {
+      // Single-band pages have no interior to protect furniture FROM —
+      // never strip (a lone heading or lone paragraph is not furniture).
+      return { bands, firstKey: null, lastKey: null };
+    }
+    const textOf = (band: LineBand): string =>
+      band.items.map((i) => i.str).join("").replace(/\s+/g, " ").trim();
+    const short = (t: string) => t.length > 0 && t.length <= PDF_THRESHOLDS.furnitureMaxChars;
+    // ISOLATION (calibration lesson): furniture floats apart from the body.
+    // A first/last band must be separated from the page's remaining content
+    // by more than paragraph spacing — TRACE's bibliography opens pages with
+    // reference entries that BEGIN with the running-head text ("A Science
+    // Reality: … 3" as a citation title); those sit at normal line spacing
+    // and are CONTENT, never furniture. Distance is absolute (y descends:
+    // the first band is ABOVE its inner neighbor, the last band BELOW).
+    const isolatedFromBody = (edge: LineBand, inner: LineBand): boolean =>
+      Math.abs(edge.y - inner.y) > PDF_THRESHOLDS.paragraphGapRatio * lineDelta;
+    const first = textOf(bands[0]!);
+    const last = textOf(bands[bands.length - 1]!);
+    return {
+      bands,
+      firstKey:
+        short(first) && isolatedFromBody(bands[0]!, bands[1]!)
+          ? furnitureKey(first)
+          : null,
+      lastKey:
+        short(last) && isolatedFromBody(bands[bands.length - 1]!, bands[bands.length - 2]!)
+          ? furnitureKey(last)
+          : null,
+    };
+  });
+
+  const repeatCounts = new Map<string, number>();
+  for (const { firstKey, lastKey } of banded) {
+    for (const key of [firstKey, lastKey]) {
+      if (key) repeatCounts.set(key, (repeatCounts.get(key) ?? 0) + 1);
+    }
+  }
+  const isFurniture = (key: string | null): boolean => {
+    if (key === null) return false;
+    return (
+      isBarePageNumber(key) ||
+      (repeatCounts.get(key) ?? 0) >= PDF_THRESHOLDS.furnitureRepeatPages
+    );
+  };
+
+  // Pass 2 — drop furniture band items.
+  return pages.map((page, pageIndex) => {
+    const { bands, firstKey, lastKey } = banded[pageIndex]!;
+    if (firstKey === null && lastKey === null) return page;
+    const real = realItems(page);
+    const drop = new Set<StructuredTextItem>();
+    if (isFurniture(firstKey)) for (const it of bands[0]!.items) drop.add(it);
+    const lastBand = bands[bands.length - 1];
+    if (lastBand && bands.length > 1 && isFurniture(lastKey)) {
+      for (const it of lastBand.items) drop.add(it);
+    }
+    if (drop.size === 0) return page;
+    // Empty-string pdfjs artifacts were already excluded by realItems; strip
+    // only REAL items so the page's remaining content is untouched.
+    return real.filter((it) => !drop.has(it));
+  });
 }
 
 // ── Per-page columnarity — band-coverage gutters (Pattern 3) ─────────────────
@@ -599,6 +752,13 @@ interface DraftBlock {
   /** unsupported diagnostics. */
   originalKind?: string;
   plainDescription?: string;
+  /** true when this paragraph group is a standalone short line (Pattern 5b —
+   * gap-above beyond paragraph spacing, ≤ headingMaxWords) OR the first
+   * group on its page (a section opener at a page top has no in-page
+   * gap-above to measure). The bold-section + numbered-section fallback
+   * arms key off these flags. */
+  standalone?: boolean;
+  pageTop?: boolean;
   pageIndex: number;
   /** first-line baseline + dominant fontSize ≈ the line-box top. */
   topY: number;
@@ -610,6 +770,17 @@ interface DraftBlock {
 const NON_TEXT_REGION_DESCRIPTION =
   "A page or region with no extractable text — likely a figure, chart, or table.";
 
+/** Bold-section title shape (11-06 calibration — Pattern 5b): letter-first,
+ * ASCII letters/digits/spaces plus the light connective punctuation real
+ * section titles use. Excludes sentence terminators, quotes, brackets, and
+ * every math glyph class (display equations must never match). */
+const SECTION_TITLE_TEXT = /^[A-Za-z][A-Za-z0-9\s&'/,-]*$/;
+
+/** Numbered-section shape (11-06 calibration — Pattern 5b): a dotted
+ * section number followed by the title ("5.3 Metaphysics: …"). The dot
+ * separates real section headings from table rows and footnote markers. */
+const NUMBERED_SECTION_TEXT = /^\d+(\.\d+)+\s+\S/;
+
 /** Assemble ONE page's real items into ordered draft blocks: y-descending
  * line bands → intra-line x-gap joins → paragraph grouping on vertical-gap /
  * font-regime change → hyphenation joins. A vertical gap beyond
@@ -619,7 +790,85 @@ const NON_TEXT_REGION_DESCRIPTION =
 function assemblePage(pageIndex: number, items: StructuredTextItem[]): DraftBlock[] {
   if (items.length === 0) return [];
   const lineDelta = modalLineDelta(items);
-  const bands = binIntoBands(items, PDF_THRESHOLDS.bandYToleranceRatio * lineDelta);
+  let bands = binIntoBands(items, PDF_THRESHOLDS.bandYToleranceRatio * lineDelta);
+
+  // Script-band merge (11-06 calibration — Pattern 6b): a band whose dominant
+  // font is smaller than an adjacent band's, or whose entire text is a tiny
+  // fragment (≤ scriptFragmentChars — super/subscript sums and indices like
+  // "Õ∞", "𝑘𝑘", "𝑘=0"), is equation script sitting close to its base line
+  // (TRACE's display equations: script bands 4.5–9.6pt from their base, some
+  // set LARGER than the body by the producer). Converge-loop each such band
+  // into the CLOSER adjacent band within scriptBandRatio × line delta so one
+  // equation is one block — the labeled structure (a superscript band sits
+  // closest to its own base line; chains of fragments coalesce stepwise
+  // toward it). Uniform-size, full-line documents never have bands inside
+  // the tolerance (body spacing is a full line delta) and are untouched.
+  {
+    const dominant = (band: LineBand): number => {
+      const weights = new Map<number, number>();
+      for (const it of band.items) {
+        const size = round2(it.fontSize);
+        weights.set(size, (weights.get(size) ?? 0) + Math.max(1, nonWsChars(it.str)));
+      }
+      let size = 0;
+      let best = -1;
+      for (const [s, w] of weights) {
+        if (w > best) {
+          size = s;
+          best = w;
+        }
+      }
+      return size;
+    };
+    const chars = (band: LineBand): number =>
+      band.items.reduce((n, it) => n + nonWsChars(it.str), 0);
+    /** A band's bottom edge (min item y) — merged fragment chains grow
+     * downward, so proximity to the NEXT band must be measured from the
+     * bottom, not from the stale top reference y. */
+    const bottom = (band: LineBand): number =>
+      Math.min(...band.items.map((it) => it.y));
+    const tol = PDF_THRESHOLDS.scriptBandRatio * lineDelta;
+    const sizes = bands.map(dominant);
+    const charCounts = bands.map(chars);
+    const isScriptBand = (i: number): boolean =>
+      charCounts[i]! <= PDF_THRESHOLDS.scriptFragmentChars ||
+      sizes[i]! < (sizes[i - 1] ?? -Infinity) ||
+      sizes[i]! < (sizes[i + 1] ?? -Infinity);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (let i = 0; i < bands.length; i++) {
+        if (!isScriptBand(i)) continue;
+        const curr = bands[i]!;
+        const prev = i > 0 ? bands[i - 1]! : null;
+        const next = i + 1 < bands.length ? bands[i + 1]! : null;
+        const prevOk = prev !== null && bottom(prev) - curr.y <= tol;
+        const nextOk = next !== null && bottom(curr) - next.y <= tol;
+        let target: number | null = null;
+        if (prevOk && nextOk) {
+          target =
+            bottom(prev) - curr.y <= bottom(curr) - next.y ? i - 1 : i + 1;
+        } else if (prevOk) {
+          target = i - 1;
+        } else if (nextOk) {
+          target = i + 1;
+        }
+        if (target === null) continue;
+        const into = bands[target]!;
+        into.items.push(...curr.items);
+        into.y = Math.max(into.y, curr.y);
+        bands.splice(i, 1);
+        sizes.splice(i, 1);
+        charCounts.splice(i, 1);
+        // splice shifted indices ABOVE i down by one — retarget before update.
+        if (target > i) target -= 1;
+        sizes[target] = dominant(into);
+        charCounts[target] = chars(into);
+        changed = true;
+        break;
+      }
+    }
+  }
 
   // Lines: dominant font by char weight; text joined with the x-gap rule.
   interface Line {
@@ -678,7 +927,10 @@ function assemblePage(pageIndex: number, items: StructuredTextItem[]): DraftBloc
   if (lines.length === 0) return [];
 
   const drafts: DraftBlock[] = [];
-  let current: { texts: string[]; y: number; fontSize: number } | null = null;
+  let current:
+    | { texts: string[]; y: number; fontSize: number; standalone: boolean }
+    | null = null;
+  let pageTopPending = true; // the next flushed paragraph opens this page
   const flush = (): void => {
     if (!current) return;
     // Hyphenation join: a trailing hyphen before a lowercase-starting line
@@ -705,13 +957,32 @@ function assemblePage(pageIndex: number, items: StructuredTextItem[]): DraftBloc
         topY: current.y + current.fontSize,
         fontSize: current.fontSize,
         lineDelta,
+        standalone: current.standalone,
+        pageTop: pageTopPending,
       });
+      pageTopPending = false;
     }
     current = null;
   };
 
   let prevLine: Line | null = null;
   for (const line of lines) {
+    // Standalone short line (11-06 calibration — Pattern 5b): a line under
+    // headingMaxWords whose gap ABOVE exceeds paragraph spacing is its OWN
+    // group and never merges downward. Corpus-proven on both sides: the
+    // resume's same-size section titles (Δ14–16 above body Δ12) and TRACE's
+    // display equations (display skips both sides) — both labeled as their
+    // own blocks — while mid-paragraph short wraps ("Markov process") have
+    // normal gap-above and keep merging.
+    const words = line.text.trim().split(/\s+/).filter(Boolean).length;
+    const standalone =
+      prevLine !== null &&
+      words > 0 &&
+      words <= PDF_THRESHOLDS.headingMaxWords &&
+      // A trailing hyphen means the line continues into the next one — it
+      // is never a complete group (the hyphenation join must run).
+      !line.text.trim().endsWith("-") &&
+      prevLine.y - line.y > PDF_THRESHOLDS.paragraphGapRatio * lineDelta;
     if (prevLine) {
       const delta = prevLine.y - line.y;
       if (delta > PDF_THRESHOLDS.figureGapLines * lineDelta) {
@@ -726,6 +997,13 @@ function assemblePage(pageIndex: number, items: StructuredTextItem[]): DraftBloc
           fontSize: prevLine.fontSize,
           lineDelta,
         });
+      } else if (standalone) {
+        // Own complete group — flush what came before, emit this line alone.
+        flush();
+        current = { texts: [line.text], y: line.y, fontSize: line.fontSize, standalone: true };
+        flush();
+        prevLine = line;
+        continue;
       } else if (
         delta > PDF_THRESHOLDS.paragraphGapRatio * lineDelta ||
         line.fontSize !== prevLine.fontSize ||
@@ -735,7 +1013,12 @@ function assemblePage(pageIndex: number, items: StructuredTextItem[]): DraftBloc
       }
     }
     if (!current) {
-      current = { texts: [], y: line.y, fontSize: line.fontSize };
+      current = {
+        texts: [],
+        y: line.y,
+        fontSize: line.fontSize,
+        standalone: false,
+      };
     }
     current.texts.push(line.text);
     prevLine = line;
@@ -811,8 +1094,15 @@ export async function pdfToBlocks(pdfBytes: Uint8Array): Promise<PdfToBlocksResu
       throw mapped ?? err;
     }
 
-    // Detection BEFORE assembly — never silently reorder (D11-01).
-    const verdict = classifyDocument(text.items);
+    // Detection BEFORE assembly — never silently reorder (D11-01). Furniture
+    // (repeated running heads / bare page numbers — 11-06 calibration
+    // Pattern 6a) is stripped FIRST so classification, voting, and assembly
+    // all see the cleaned pages: furniture blocks polluted block agreement,
+    // section-end gaps down to a lone folio manufactured unsupported
+    // "figure" regions, and repeated head text made quote resolution
+    // ambiguous at the SC#4a anchor gate.
+    const strippedPages = stripPageFurniture(text.items);
+    const verdict = classifyDocument(strippedPages);
     if (verdict.scanned) {
       throw new IngestionError(
         "pdf-scanned",
@@ -827,16 +1117,20 @@ export async function pdfToBlocks(pdfBytes: Uint8Array): Promise<PdfToBlocksResu
     }
 
     // Char-count-weighted modal body fontSize — the heading fallback's
-    // baseline (Pattern 5).
-    const allReal = text.items.flatMap((page) => realItems(page));
+    // baseline (Pattern 5). Computed over the STRIPPED pages so running-head
+    // fonts (typically smaller) do not skew the body estimate.
+    const allReal = strippedPages.flatMap((page) => realItems(page));
     const bodyFontSize = modalFontSize(allReal, true);
 
     // Per-page assembly + the near-empty-page disclosure. A near-empty page
     // inside an ADMITTED document (minority — majority already refused above)
-    // emits ONE unsupported block instead of vanishing silently.
+    // emits ONE unsupported block instead of vanishing silently — EXCEPT a
+    // page with ZERO real items after furniture stripping: that page is
+    // honestly blank (its only content was a folio), not a "non-text region"
+    // claiming a figure may live there.
     const drafts: DraftBlock[] = [];
     let textBearingPages = 0;
-    text.items.forEach((pageItems, pageIndex) => {
+    strippedPages.forEach((pageItems, pageIndex) => {
       const real = realItems(pageItems);
       const chars = real.reduce((n, it) => n + nonWsChars(it.str), 0);
       if (
@@ -848,6 +1142,12 @@ export async function pdfToBlocks(pdfBytes: Uint8Array): Promise<PdfToBlocksResu
       const isNearEmpty =
         real.length < PDF_THRESHOLDS.nearEmptyItemFloor ||
         chars < PDF_THRESHOLDS.nearEmptyCharFloor;
+      if (real.length === 0) {
+        // Blank page (often furniture-only after stripping) — no content
+        // claim, no disclosure block. Still counted by classifyDocument's
+        // near-empty majority on the stripped pages.
+        return;
+      }
       if (isNearEmpty) {
         drafts.push({
           kind: "unsupported",
@@ -921,6 +1221,65 @@ export async function pdfToBlocks(pdfBytes: Uint8Array): Promise<PdfToBlocksResu
       ) {
         draft.kind = "heading";
         draft.level = 2;
+      }
+    }
+
+    // Bold-section fallback arm (11-06 calibration — Pattern 5b): unpdf
+    // exposes only generic fontFamily ("serif"), so same-size BOLD section
+    // titles are invisible to the size rule. Corpus-proven discriminator: a
+    // STANDALONE short ASCII title (≤ sectionTitleMaxWords, letter-first, no
+    // sentence punctuation, no math glyphs) at body size is a section
+    // heading — "Summary" / "Core Strengths" / "Experience" — while 4+-word
+    // standalone lines ("Orphic Hymn to Artemis"), sentence-shaped lines,
+    // quoted dialogue, and display equations stay paragraphs.
+    for (const draft of drafts) {
+      if (
+        draft.kind !== "paragraph" ||
+        coerced.has(draft) ||
+        !(draft.standalone || draft.pageTop)
+      ) {
+        continue;
+      }
+      const text = (draft.text ?? "").trim();
+      const words = text.split(/\s+/).filter(Boolean).length;
+      if (
+        words > 0 &&
+        words <= PDF_THRESHOLDS.sectionTitleMaxWords &&
+        SECTION_TITLE_TEXT.test(text) &&
+        draft.fontSize >= bodyFontSize * 0.95 &&
+        draft.fontSize < bodyFontSize * PDF_THRESHOLDS.headingFontRatio
+      ) {
+        draft.kind = "heading";
+        draft.level = 2;
+        coerced.add(draft);
+      }
+    }
+
+    // Numbered-section fallback arm (11-06 calibration — Pattern 5b): a
+    // standalone "N.N Title" group (dotted section number, ≤ headingMaxWords)
+    // is a heading even at body size — catches subsections whose outline
+    // dest failed to coerce (TRACE's "5.3 Metaphysics: …"). The DOT is
+    // load-bearing: table rows ("1 Special relativity…") and footnote
+    // markers ("3Philosophically…") never match; body sentences referencing
+    // a section never carry the paragraph-gap-above standalone flag.
+    for (const draft of drafts) {
+      if (
+        draft.kind !== "paragraph" ||
+        coerced.has(draft) ||
+        !(draft.standalone || draft.pageTop)
+      ) {
+        continue;
+      }
+      const text = (draft.text ?? "").trim();
+      const words = text.split(/\s+/).filter(Boolean).length;
+      if (
+        words > 0 &&
+        words <= PDF_THRESHOLDS.headingMaxWords &&
+        NUMBERED_SECTION_TEXT.test(text)
+      ) {
+        draft.kind = "heading";
+        draft.level = 2;
+        coerced.add(draft);
       }
     }
 
