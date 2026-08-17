@@ -1,32 +1,77 @@
 ---
-status: testing
+status: complete
 phase: 11-pdf-intake
-source: [11-VERIFICATION.md]
-started: 2026-08-17T19:10:00Z
-updated: 2026-08-17T19:10:00Z
+source: [11-01-SUMMARY.md, 11-02-SUMMARY.md, 11-03-SUMMARY.md, 11-04-SUMMARY.md, 11-05-SUMMARY.md, 11-06-SUMMARY.md, 11-VERIFICATION.md]
+started: 2026-08-17T19:12:20Z
+updated: 2026-08-17T19:30:00Z
 ---
 
 ## Current Test
 
-number: 1
-name: PDF extraction timeout firing (30s)
-expected: |
-  Typed server-error envelope with the timeout message reaches the .status live region as calm copy; no worker/proxy leak (subsequent ingests still succeed). In code terms: the Promise.race timer rejects with IngestionError('server-error', 'PDF extraction timed out — …'), the timer is cleared, and pdf.loadingTask.destroy() still runs in the finally block.
-awaiting: user response
+[testing complete]
 
 ## Tests
 
-### 1. Exercise the 30s PDF-extraction timeout (hang an extraction or upload a pathologically complex PDF) and observe the refusal
-expected: Typed server-error envelope with the timeout message reaches the .status live region as calm copy; no worker/proxy leak (subsequent ingests still succeed)
-result: [pending]
+### 1. Upload and read a single-column PDF
+expected: Picker accepts .pdf; uploading a single-column text PDF (e.g. tests/fixtures/pdf/synthetic-single-column.pdf) navigates to #/article/pdf-<hash>, shows the filename-derived title, readable paginated body, and a "PDF" badge on the library row
+result: pass
+
+### 2. Outline PDF yields section headings
+expected: Upload tests/fixtures/pdf/synthetic-outline.pdf; the resulting article shows structured section headings (outline bookmarks become h2/h3 headings) rather than one undifferentiated text blob
+result: issue
+reported: "fail - synthetic-outline gives Couldn't reliably read this page refusal"
+severity: major
+
+### 3. Scanned PDF refused calmly with no side effects
+expected: Upload tests/fixtures/pdf/synthetic-scanned.pdf; calm "looks like scanned images" copy appears in the .status live region (no jargon like "pdf-scanned"), URL stays on the library page, no PDF-badged library row is added
+result: pass
+
+### 4. Multi-column PDF refused calmly with no side effects
+expected: Upload tests/fixtures/pdf/synthetic-two-column.pdf; calm "multiple text columns" copy appears in the status region, no navigation away from the library, no new row
+result: pass
+
+### 5. Corrupt PDF refused calmly with no side effects
+expected: Upload tests/fixtures/pdf/synthetic-corrupt.pdf; calm "couldn't be opened" copy appears in the status region, no navigation, no new row
+result: pass
+
+### 6. Identical re-upload dedupes
+expected: Re-upload the exact same PDF bytes as a previously admitted one; the status shows "Already in your library." and the library row count does not increase (no duplicate)
+result: pass
+
+### 7. Oversized PDF refused client-side before upload
+expected: Pick a .pdf larger than 10MB (e.g. `mkfile 11m big.pdf`); refusal copy appears immediately in the status region (too-large message), no network request/ingest spinner — refusal happens before the file is read
+result: pass
+
+### 8. Highlight on a PDF article survives reload
+expected: Open an admitted PDF article, select text, use the toolbar to create a highlight; reload the page fully; the highlight re-renders at the same text with the same identity (no lost/duplicated marks)
+result: pass
+
+### 9. Reading position restores on a PDF article
+expected: Open an admitted PDF article, switch to scrolling mode (M shortcut), scroll down ~a screen, wait a moment; reload the page; the reading position restores near where you scrolled (not top-of-article)
+result: pass
+
+### 10. PDF extraction timeout (30s) fires calmly
+expected: Hang or stall an extraction (pathologically complex PDF); after 30s a typed server-error envelope with the timeout message reaches the status region as calm copy; no worker/proxy leak — subsequent ingests still succeed
+result: skipped
+reason: no natural 30s fixture; timeout race (timer rejects, timer cleared, destroy in finally) is unit-covered in tests/unit/server/pdf-to-blocks.spec.ts — user chose the unit-covered skip over temp-lowering the cap
 
 ## Summary
 
-total: 1
-passed: 0
-issues: 0
-pending: 1
-skipped: 0
+total: 10
+passed: 8
+issues: 1
+pending: 0
+skipped: 1
 blocked: 0
 
 ## Gaps
+
+- truth: "synthetic-outline.pdf admits with outline bookmarks coerced to structured h2/h3 headings"
+  status: failed
+  reason: "User reported: fail - synthetic-outline gives Couldn't reliably read this page refusal"
+  severity: major
+  test: 2
+  root_cause: ""
+  artifacts: []
+  missing: []
+  debug_session: ""
