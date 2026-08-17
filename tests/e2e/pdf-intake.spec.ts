@@ -76,6 +76,7 @@ const SINGLE_COLUMN_PDF = pdfFixture("synthetic-single-column.pdf");
 const TWO_COLUMN_PDF = pdfFixture("synthetic-two-column.pdf");
 const SCANNED_PDF = pdfFixture("synthetic-scanned.pdf");
 const CORRUPT_PDF = pdfFixture("synthetic-corrupt.pdf");
+const OUTLINE_PDF = pdfFixture("synthetic-outline.pdf");
 
 /** Baseline library row count after the wipe: the bundled corpus only. */
 const BASELINE_ROWS = FIXTURES.length;
@@ -204,6 +205,55 @@ test.describe("ING-04 — PDF upload intake (SC#1–SC#3 + D7-07)", () => {
 
     // Navigate back to #/ — the library row carries the quiet "PDF" badge
     // (SourceBadge badgeLabel("pdf") — markdown-upload L205-208 shape).
+    await page.evaluate(() => {
+      window.location.hash = "#/";
+    });
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Saved articles" }),
+    ).toBeVisible();
+    await expect(pdfLibraryRows(page)).toHaveCount(1);
+  });
+
+  test("outline admission (11-07): sparse outline PDF → h2 section headings from bookmarks + one PDF row", async ({
+    page,
+  }) => {
+    await page.goto(`${BASE}/#/`);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Saved articles" }),
+    ).toBeVisible();
+
+    // Same D11-09 filename discipline as the ingest regression: the
+    // synthetic fixtures carry no /Info title, so the title chain lands on
+    // stripPdfExtension("outline-notes.pdf") = "outline-notes" — and
+    // "outline notes" fuzzy-matches NEITHER section heading in either
+    // containment direction, so BOTH h2 headings reaching the DOM is part
+    // of the proof (a filename like "outlined-doc" would consume the first
+    // heading via consumeDuplicatedTitle).
+    await uploadPdf(page, "outline-notes.pdf", OUTLINE_PDF);
+
+    // Admission navigates to the article (the UAT Test 2 flow this gap
+    // closure pins — previously refused "Couldn't reliably read this page").
+    await page.waitForURL(/#\/article\/pdf-/, { timeout: 15_000 });
+    await waitForOpenedArticle(page);
+
+    // D11-07 filename title chain — no Info title on the fixture, so the
+    // level-1 heading is the filename-derived provenance title alone.
+    await expect(
+      page.getByRole("heading", { level: 1, name: "outline-notes" }),
+    ).toBeVisible();
+
+    // UAT Test 2 expectation — the outline bookmarks reach the real reading
+    // surface as structured h2 section headings, not one undifferentiated
+    // text blob. The fixture's full 5-block body fits the first page
+    // fragment at default typography, so both section headings are visible.
+    await expect(
+      page.getByRole("heading", { name: "Outlined Document" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Second Section" }),
+    ).toBeVisible();
+
+    // One admitted PDF-badged library row (the SC#1 badge shape).
     await page.evaluate(() => {
       window.location.hash = "#/";
     });
