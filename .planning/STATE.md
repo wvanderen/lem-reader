@@ -3,17 +3,17 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Personal Library
 current_phase: 11
-current_phase_name: PDF Intake
-status: verifying
-stopped_at: Completed 11-06-PLAN.md (pdf calibration — ING-04 closed, phase 11 ready for verification)
-last_updated: "2026-08-17T18:59:15.870Z"
-last_activity: 2026-08-16
+current_phase_name: pdf-intake
+status: executing
+stopped_at: Completed 11-07-PLAN.md (outline PDF isReaderable gap closure — UAT Test 2 closed at adapter/ingest/browser levels)
+last_updated: "2026-08-17T20:43:22.678Z"
+last_activity: 2026-08-17
 last_activity_desc: Phase 11 execution started
 progress:
   total_phases: 7
   completed_phases: 5
-  total_plans: 31
-  completed_plans: 31
+  total_plans: 32
+  completed_plans: 32
   percent: 71
 ---
 
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-16)
 
 **Core value:** Readers can move through long-form web content with calm, stable orientation and predictable navigation.
-**Current focus:** Phase 11 — PDF Intake
+**Current focus:** Phase 11 — pdf-intake
 
 ## Current Position
 
-Phase: 11 (PDF Intake) — EXECUTING
-Plan: 6 of 6
-Status: Phase complete — ready for verification
-Last activity: 2026-08-16 — Phase 11 execution started
+Phase: 11 (pdf-intake) — EXECUTING
+Plan: 2 of 7
+Status: Ready to execute
+Last activity: 2026-08-17 — Phase 11 execution started
 
 Progress: [████████████████████] 25/25 plans (100%)
 
@@ -131,6 +131,7 @@ Progress: [████████████████████] 25/25 p
 | Phase 11 P03 | 10 min | 2 tasks | 3 files |
 | Phase 11 P05 | 8min | 2 tasks | 1 files |
 | Phase 11 P06 | 47min | 3 tasks | 12 files |
+| Phase 11 P07 | 6 min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -291,6 +292,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: Phase 11 11-05: PDF location-restore identity proven via the scrolling-mode save/restore path (persistence.spec.ts tolerances verbatim) — useScrollSave fires only on window scroll (no save on a paginated turn) and paginated page-index restore is documented deferred option (b)
 - [Phase ?]: Phase 11 11-06: Rule-4 checkpoint resolved (user, all-recommended) — YouAreTheOne (geometrically single-column; forcing multi-column refusal would violate locked D11-03) replaced by user-supplied genuine 3-column IDOM 50 editorial.pdf which refuses pdf-multi-column; TRACE's two running-head labels deleted (furniture, not content); resume Selected Projects/Education & Certification relabeled heading+paragraph (0.6154→0.9231)
 - [Phase ?]: Phase 11 11-06: scriptFragmentGapRatio=1 — the 1.0×lineDelta script-band window is AND-qualified (≤12 chars AND script-sized) so pure decoration fragments (∑ under-limits '𝑘=0' 11.88pt below their equation band) merge while body-sized short lines and math-heavy body lines keep the 0.75 window; a size-only wide window was tried and REVERTED (fused body lines, flipped a synthetic extreme) — synthetic extremes 35/35 green, TRACE 0.8932→0.92
+- [Phase ?]: Phase 11 11-07: isReaderable relaxed to blocks.length >= 3 && (textBearingPages >= 1 || nearEmptyPages === 0) — the scanned majority gate already refuses scanned docs BEFORE assembly, so the old text-bearing conjunct double-guarded and false-refused legitimately sparse structured documents (outline/title-page shapes); scannedItemFloor and all PDF_THRESHOLDS stay frozen (11-06 replay pin; re-tuning requires the derive harness)
+- [Phase ?]: Phase 11 11-07: Filename discipline in doubled-title-sensitive PDF tests — 'outline-notes.pdf' normalizes to 'outline notes' which fuzzy-matches NEITHER outline heading in either containment direction, so both h2 headings surviving D11-09 consume (ingest) and reaching the DOM (e2e) is itself part of the proof; a filename like 'outlined-doc' would be correctly consumed
 
 ### Pending Todos
 
@@ -320,8 +323,8 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-17T18:59:15.860Z
-Stopped at: Completed 11-06-PLAN.md (pdf calibration — ING-04 closed, phase 11 ready for verification)
+Last session: 2026-08-17T20:43:22.670Z
+Stopped at: Completed 11-07-PLAN.md (outline PDF isReaderable gap closure — UAT Test 2 closed at adapter/ingest/browser levels)
 Resume file: None
 
 ## Operator Next Steps

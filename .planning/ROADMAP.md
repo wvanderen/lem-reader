@@ -200,8 +200,11 @@ Plans:
   3. Multi-column PDFs are either honestly flagged as low-confidence (reconstructed reading order) or refused via the same disclosure surface; the reader never sees silently reordered text.
   4. A round-trip anchor test gates every successfully extracted PDF article, and a calibration harness validates the font-size→heading and vertical-gap→paragraph thresholds on a real-PDF corpus before promotion.
 
-**Plans**: 6/6 plans complete
+**Plans**: 7/7 plans complete
 Plans:
+
+- [x] 11-07-PLAN.md
+
 **Wave 1**
 
 - [x] 11-01-PLAN.md — unpdf human gate (SUS audit) + schema/limit widening + self-verifying synthetic fixtures (spec files owned by 11-02/03/05)
@@ -266,6 +269,6 @@ Plans:
 | 8. Markdown Pipeline and Personal Library | v2.0 | 5/5 | Complete    | 2026-08-13 |
 | 9. Versioned Export/Import | v2.0 | 7/7 | Complete    | 2026-08-15 |
 | 10. Annotation Review Panel | v2.0 | 6/6 | Complete    | 2026-08-16 |
-| 11. PDF Intake | v2.0 | 6/6 | Complete   | 2026-08-17 |
+| 11. PDF Intake | v2.0 | 7/7 | Complete   | 2026-08-17 |
 | 12. EPUB Intake | v2.0 | 0/TBD | Not started | - |
 | 13. Polish and Acceptance | v2.0 | 0/TBD | Not started | - |
