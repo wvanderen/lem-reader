@@ -137,3 +137,7 @@ None — the local corpus workflow is documented in `docs/pdf-calibration.md` (P
 ---
 *Phase: 11-pdf-intake*
 *Completed: 2026-08-17 (checkpoint-pending)*
+
+## Self-Check: PASSED
+
+All 7 key files exist on disk; all 6 task commits present in git log.
