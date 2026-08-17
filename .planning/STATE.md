@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Personal Library
-current_phase: 11
-current_phase_name: pdf-intake
+current_phase: 12
+current_phase_name: EPUB Intake
 status: executing
 stopped_at: Completed 11-07-PLAN.md (outline PDF isReaderable gap closure — UAT Test 2 closed at adapter/ingest/browser levels)
-last_updated: "2026-08-17T20:43:22.678Z"
+last_updated: "2026-08-17T21:52:41.132Z"
 last_activity: 2026-08-17
-last_activity_desc: Phase 11 execution started
+last_activity_desc: Phase 11 complete, transitioned to Phase 12
 progress:
   total_phases: 7
   completed_phases: 5
@@ -21,32 +21,32 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-08-16)
+See: .planning/PROJECT.md (updated 2026-08-17)
 
-**Core value:** Readers can move through long-form web content with calm, stable orientation and predictable navigation.
-**Current focus:** Phase 11 — pdf-intake
+**Core value:** Readers can move through long-form web content with calm, stable orientation, and predictable navigation.
+**Current focus:** Phase 12 — EPUB Intake
 
 ## Current Position
 
-Phase: 11 (pdf-intake) — EXECUTING
-Plan: 2 of 7
-Status: Ready to execute
-Last activity: 2026-08-17 — Phase 11 execution started
+Phase: 12 — EPUB Intake
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-08-17 — Phase 11 complete, transitioned to Phase 12
 
-Progress: [████████████████████] 25/25 plans (100%)
+Progress: [████████████████████] 32/32 plans (100%)
 
-## Recent Decisions (Plan 04-11)
+## Recent Decisions (Phase 11)
 
-- **PROCESS BLOCKER closed by re-running the suite, not by re-asserting SUMMARYs.** The executor ran the FULL `npm run test` in ONE invocation (no subset, no `--grep`, no engine skip) and recorded both pass AND fail counts honestly. Result: 753 passed (408 unit + 345 e2e × chromium/firefox/webkit, 115 each) / 0 failed / 0 skipped, exit 0. The prior "269 passed / 0 failed" misreport pattern (reality was 76 failed / 269 passed) is overturned; the 76 previously-failing cells now all pass.
-- **04-VERIFICATION.md upgraded gaps_found (3/7) → verified (7/7).** re_verification block records gaps_closed [PAGE-03b, PAGE-01, PAGE-02, PAGE-09, PAGE-06, PAGE-07], gaps_remaining [], regressions []. The historical narrative is retained verbatim for audit traceability; every prior `✗ FAILED` row is flipped to `✓ VERIFIED` with the closing plan cited.
-- **Closing-plan attribution:** 04-07 (PAGE-03b, 54 cells), 04-08 (PAGE-06/07, 6 cells), 04-09 (PAGE-01/02, 15 cells), 04-10 (PAGE-09, 9 cells). The Plan 04-05 Task 3 human-verify gate now has a genuinely-green automated prerequisite underneath it.
-- **New artifact 04-11-OUTPUT.md** is the permanent record: the literal command, per-suite + per-engine counts, and the literal exit code. Anti-pattern guard attestation included (executor ran the suite itself; did not trust any prior SUMMARY; recorded fail=0 honestly rather than omitting it).
+- **PDF honesty over best-effort.** Scanned/image-only and unrecoverably multi-column PDFs are refused calmly before assembly with zero library side effects; thresholds are corpus-calibrated (6 real PDFs) and CI-replay-pinned so admission changes can't silently loosen detection (11-06).
+- **11-07 gap closure: isReaderable admission algebra relaxed to `blocks.length >= 3 && (textBearingPages >= 1 || nearEmptyPages === 0)`** — the old text-bearing conjunct double-guarded and false-refused legitimately sparse structured docs (outline/title-page shapes); all PDF_THRESHOLDS stayed frozen (commit 6f8c655, UAT Test 2 re-verified).
+- **unpdf pinned exactly at 1.8.1** (user-approved blocking-human gate, supersedes STACK.md 1.8.0; legitimacy evidence recorded in 11-01-unpdf-approval.md); server-side only — dist/ greps prove zero PDF code reaches the client bundle.
+- **Acknowledged gap: the 30 s extraction-timeout firing path (withPdfDocument race) has no automated coverage** — race is wired and code-read present; user acknowledged at UAT completion; closure path is a fake-timers unit test with zero production changes (11-VERIFICATION.md § Acknowledged Gaps).
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 42 (this phase, incl. gap closure)
+- Total plans completed: 49 (this phase, incl. gap closure)
 - Average duration: 25 min
 - Total execution time: 1.5 hours
 
@@ -61,6 +61,7 @@ Progress: [████████████████████] 25/25 p
 | 08 | 5 | - | - |
 | 9 | 7 | - | - |
 | 10 | 6 | - | - |
+| 11 | 7 | - | - |
 
 **Recent Trend:**
 
@@ -323,8 +324,8 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-17T20:43:22.670Z
-Stopped at: Completed 11-07-PLAN.md (outline PDF isReaderable gap closure — UAT Test 2 closed at adapter/ingest/browser levels)
+Last session: 2026-08-17T21:52:00Z
+Stopped at: Phase 11 complete, ready to plan Phase 12
 Resume file: None
 
 ## Operator Next Steps

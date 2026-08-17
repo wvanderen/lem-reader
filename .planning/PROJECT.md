@@ -28,6 +28,8 @@ The prototype supports rich article structure, local highlights and notes, and l
 
 **v2.0 Personal Library — Phase 10 complete 2026-08-16.** The annotation review panel is live at `#/review`: every highlight and note across the library grouped per article with metadata; jump-to-location deep links (`#/article/<id>/h/<hid>`) with calm Back-return; filter by article/tag/confidence and sort by date/article/position; honest tri-state surfacing ("Uncertain anchor"/"Article missing" badges, never-drop orphan tail); in-place note edit and cascade-honest highlight removal. Human verification (VoiceOver badge announcements, focus-restore feel) passed via UAT; honest full-suite record 1796 passed / 0 failed / exit 0 (10-06-OUTPUT.md).
 
+**v2.0 Personal Library — Phase 11 complete 2026-08-17.** PDF intake is live: text-heavy single-column PDFs upload through the shared pipeline into `pdf-<hash>` articles (outline bookmarks coerce to h2/h3 headings) that paginate, annotate, and restore location identically to every other source; scanned/image-only, multi-column, encrypted/corrupt, and oversized PDFs are refused calmly with no library side effects; thresholds are corpus-calibrated against six real PDFs with a CI replay pin. Gap-closure plan 11-07 fixed the outline-PDF false refusal (isReaderable admission algebra). UAT 9/10 passed (1 intentional skip: the 30 s extraction-timeout firing path has no automated coverage — acknowledged in 11-VERIFICATION.md; a fake-timers unit test would close it).
+
 ## Core Value
 
 Readers can move through long-form web content with calm, stable orientation and predictable navigation.
@@ -69,13 +71,14 @@ Readers can move through long-form web content with calm, stable orientation and
 - ✓ Versioned export/import (PORT-01/02) — whole-library versioned bundle export/import with Zod validation, dry-run conflict preview, skip-by-default resolution, atomic 5-store transaction, Zip Slip guard. — Phase 9
 - ✓ Highlights-only Markdown export (PORT-03) — fixed-template .md with honest tri-state markers, per-article and library-wide. — Phase 9
 - ✓ Annotation review panel (RECV-01) — dedicated #/review surface listing all highlights/notes across the library with jump-to-location, filter/sort, honest tri-state badges, and in-place curation. — Phase 10
+- ✓ URL ingestion (ING-01/02) — SSRF-guarded fetch backend normalizes publicly fetchable pages and pasted HTML into canonical articles with honest three-state confidence. — Phase 7
+- ✓ PDF intake (ING-04) — text-heavy single-column PDFs extract and normalize into the library with outline-coerced headings; scanned/multi-column/corrupt/oversized refused calmly. — Phase 11
 
 ### Active
 
 v2.0 Personal Library scope (see Current Milestone above for the full picture):
 
-- [ ] URL ingestion — fetch backend extracts and normalizes any publicly fetchable web page into the library.
-- [ ] Multi-format document intake — PDF and EPUB remain (Markdown + HTML upload shipped in Phase 8).
+- [ ] Multi-format document intake — EPUB remains (Markdown + HTML shipped in Phase 8; PDF shipped in Phase 11).
 - [ ] Polish — eliminate initial-load reading-mode flash; fix short-article progress-bar semantics.
 - [ ] NVDA+Firefox acceptance run (ACPT-02 coverage boundary A4 follow-up).
 
@@ -129,6 +132,7 @@ Annotations attach to stable normalized-text positions plus quoted context rathe
 | Skip-by-default conflict resolution with bulk per-kind overrides (D9-14) | Never silently overwrite reader data; per-row merge UI deferred as unjustified complexity | ✓ Good — Phase 9 |
 | Stacked-modal focus divergence: accept engine reality (webkit) | Safety properties (trap, initial focus, Esc, operability) proven on all engines; nesting/closing would reverse deliberate 09-05 decisions or break spatial orientation | ✓ Decided Phase 9 — documented in 09 deferred-items.md |
 | Review panel derives from one pure derivation (deriveReviewSections) over the shipped resolver; deep-link jumps via /h/ hash grammar with readiness-gated on-mount effect | Reuse-don't-fork the ANNO-07 tri-state machinery; jump restores calm (replaceState strip, no re-jump) — the panel never re-implements resolution or navigation | ✓ Good — Phase 10: 46-test verification + human UAT passes |
+| PDF honesty over best-effort: corpus-calibrated refusal thresholds (scanned/multi-column) + unpdf at human-approved exact pin 1.8.1, server-side only | Silent garbage (OCR-less scanned text, reordered columns) entering the library violates the calm-reading promise more than a refusal does; thresholds are replay-pinned so later admission fixes can't silently loosen detection | ✓ Good — Phase 11: 6-PDF corpus calibration + CI replay; 11-07 relaxed admission algebra without touching thresholds |
 
 ## Evolution
 
@@ -148,4 +152,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-16 after Phase 10 (Annotation Review Panel) completion*
+*Last updated: 2026-08-17 after Phase 11 (PDF Intake) completion*

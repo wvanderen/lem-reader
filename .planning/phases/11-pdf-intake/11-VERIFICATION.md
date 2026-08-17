@@ -160,6 +160,10 @@ Zero `TBD`/`FIXME`/`XXX`/`TODO`/`HACK`/`PLACEHOLDER` markers across the five 11-
 
 No failed truths, no missing/stub artifacts, no unwired links, no debt markers, no requirement gaps. The 11-07 gap closure is genuinely closed and pinned at all three levels: the production change is exactly one expression + comment (git-diff-verified), the tests that were missing when the bug shipped now exist and demonstrably bite (RED→GREEN commit pair), scanned/multi-column/middle-band refusals are provably un-loosened (code read + guard test + thresholds replay pin + 3-engine e2e), and ING-04 stands satisfied end-to-end. The single non-verified item is unchanged from the prior cycle and remains a **test-coverage hole, not a code hole**: `withPdfDocument`'s timeout-firing branch (30 s race) has no automated coverage anywhere in tests/ — a fake-timers unit test would close it without production changes. Newly surfaced this cycle: the UAT ledger's Test 10 skip reason misstates this coverage as existing, which should be corrected so the gap cannot be mistaken for closed.
 
+## Acknowledged Gaps
+
+- **2026-08-17 (UAT completion):** The `withPdfDocument` timeout-firing branch (30 s race → typed server-error + destroy-in-finally, truth 12 / UAT Test 10) remains behaviorally unverified — no automated test exercises it, and the user declined a natural 30 s manual test (no fixture). User explicitly acknowledged and chose to proceed to phase completion. The race is code-read present and wired (server/pdfToBlocks.ts L620–651). Closure path if desired later: a fake-timers unit test stubbing a never-resolving op inside `withPdfDocument` — zero production changes required. Note: Human Verification item 2 (UAT Test 2 record flip) is now resolved — Test 2 re-tested and flipped to pass on 2026-08-17.
+
 ---
 
 _Verified: 2026-08-17T20:57:00Z_
