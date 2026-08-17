@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-17T17:11:03.059Z",
+  "thresholds": {
+    "bandYToleranceRatio": 0.3,
+    "marginBandRatio": 0.05,
+    "wideBandRatio": 0.55,
+    "xBinEm": 0.5,
+    "gutterVoteRatio": 0.2,
+    "minGutterEm": 1,
+    "colTextShare": 0.15,
+    "columnarMajorityRatio": 0.5,
+    "scannedItemFloor": 8,
+    "scannedCharFloor": 40,
+    "nearEmptyItemFloor": 3,
+    "nearEmptyCharFloor": 15,
+    "scannedMajorityRatio": 0.5,
+    "paragraphGapRatio": 1.35,
+    "itemGapRatio": 0.2,
+    "figureGapLines": 5,
+    "headingFontRatio": 1.095,
+    "headingMaxWords": 10,
+    "outlineYToleranceLines": 1.5,
+    "furnitureRepeatPages": 3,
+    "furnitureMaxChars": 60,
+    "scriptBandRatio": 0.75,
+    "sectionTitleMaxWords": 3,
+    "scriptFragmentChars": 12
+  },
+  "results": [
+    {
+      "file": "Lunar Meditation -word.pdf",
+      "sha256": "b3e23470e0b39ea334c015adb44db6fc4b4529ee55c94a6230fb8f64bd9ce50e",
+      "expectedClass": "single-column",
+      "verdict": "admitted",
+      "agreement": 0.94,
+      "anchorRoundTrip": true
+    },
+    {
+      "file": "T.J.CHISUM HX DATA-scanned.pdf",
+      "sha256": "69b6f614a78381110b6f6b57cdcf3c8d98246753a211ca1a59cdc5c227cd9e41",
+      "expectedClass": "scanned",
+      "verdict": "refused:pdf-scanned"
+    },
+    {
+      "file": "TRACE_INSTITUTE_WHITE_PAPER-borderline.pdf",
+      "sha256": "f49d61a5de40709ba7c07502a4c3aa6430367f0c544104105157663ac567201d",
+      "expectedClass": "borderline",
+      "verdict": "admitted",
+      "agreement": 0.8932,
+      "anchorRoundTrip": true
+    },
+    {
+      "file": "WilliamVanDeren-resume-latex.pdf",
+      "sha256": "884db07795b1626cd712739784f671cb94cd2574f6ffd0e31d8842d72cbcf8c8",
+      "expectedClass": "single-column",
+      "verdict": "admitted",
+      "agreement": 0.6154,
+      "anchorRoundTrip": true
+    },
+    {
+      "file": "wage-labour-capital-1-col.pdf",
+      "sha256": "5d15f988ec7cef8ba7f53acc0129021d1baf8817103c37256a19bf96f8964347",
+      "expectedClass": "single-column",
+      "verdict": "admitted",
+      "agreement": 0.9356,
+      "anchorRoundTrip": true
+    },
+    {
+      "file": "YouAreTheOne book-2-col.pdf",
+      "sha256": "c36fbf404dbd768cd2b76d45f5e0a5d9251443e2be0fdd4e15bba91c981cc788",
+      "expectedClass": "multi-column",
+      "verdict": "refused:round-trip-anchor-failed"
+    }
+  ]
+}

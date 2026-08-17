@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "entries": [
+    {
+      "file": "Lunar Meditation -word.pdf",
+      "sha256": "b3e23470e0b39ea334c015adb44db6fc4b4529ee55c94a6230fb8f64bd9ce50e",
+      "expectedClass": "single-column",
+      "producer": "Skia/PDF m152 Google Docs Renderer"
+    },
+    {
+      "file": "T.J.CHISUM HX DATA-scanned.pdf",
+      "sha256": "69b6f614a78381110b6f6b57cdcf3c8d98246753a211ca1a59cdc5c227cd9e41",
+      "expectedClass": "scanned",
+      "producer": "Quartz PDFContext (macOS) / ScanSnap Manager #iX500"
+    },
+    {
+      "file": "TRACE_INSTITUTE_WHITE_PAPER-borderline.pdf",
+      "sha256": "f49d61a5de40709ba7c07502a4c3aa6430367f0c544104105157663ac567201d",
+      "expectedClass": "borderline",
+      "producer": "pdfTeX-1.40.26 (LaTeX with hyperref)"
+    },
+    {
+      "file": "WilliamVanDeren-resume-latex.pdf",
+      "sha256": "884db07795b1626cd712739784f671cb94cd2574f6ffd0e31d8842d72cbcf8c8",
+      "expectedClass": "single-column",
+      "producer": "xdvipdfmx 0.1 (LaTeX with hyperref)"
+    },
+    {
+      "file": "wage-labour-capital-1-col.pdf",
+      "sha256": "5d15f988ec7cef8ba7f53acc0129021d1baf8817103c37256a19bf96f8964347",
+      "expectedClass": "single-column",
+      "producer": "calibre 9.4.0"
+    },
+    {
+      "file": "YouAreTheOne book-2-col.pdf",
+      "sha256": "c36fbf404dbd768cd2b76d45f5e0a5d9251443e2be0fdd4e15bba91c981cc788",
+      "expectedClass": "multi-column",
+      "producer": "Adobe PDF Library 9.0 / InDesign CS4"
+    }
+  ]
+}

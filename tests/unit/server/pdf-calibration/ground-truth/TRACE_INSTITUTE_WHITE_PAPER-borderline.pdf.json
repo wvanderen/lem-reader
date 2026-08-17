@@ -1,0 +1,411 @@
+[
+  {
+    "kind": "paragraph",
+    "textPrefix": "June 2, 2026"
+  },
+  {
+    "kind": "heading",
+    "level": 1,
+    "textPrefix": "A Science of Reality:"
+  },
+  {
+    "kind": "heading",
+    "level": 2,
+    "textPrefix": "Observers, Interfaces, and Traces"
+  },
+  {
+    "kind": "heading",
+    "level": 3,
+    "textPrefix": "Abstract"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "Observation is the foundation of science"
+  },
+  {
+    "kind": "heading",
+    "level": 3,
+    "textPrefix": "1 Introduction"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "In the fleeting development of human civ"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "retreating to a dualistic metaphysical p"
+  },
+  {
+    "kind": "heading",
+    "level": 3,
+    "textPrefix": "2 The Observer and the Interface"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "A long-standing paradox of science is th"
+  },
+  {
+    "kind": "heading",
+    "level": 3,
+    "textPrefix": "3 Basic Trace Logic"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "The trace logic theory starts with model"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "Q : 𝑋×𝒳→[0,1]."
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "Here 𝑋 is the set of experiences and th"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "x𝑡+1 = x𝑡Q,"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "where we adopt the convention that proba"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "𝑛 x𝑡+𝑛 = x𝑡Q ."
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "We discuss additional useful properties "
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "𝐶 = ⟨(𝑋,𝒳 ),Q, 𝑛⟩,"
+  },
+  {
+    "kind": "footnote",
+    "textPrefix": "1The following section outlines a stream"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "see also Fig. 1. Equipped with these ing"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "Figure 1: The Basic Architecture of a Co"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "We now need to show how (i) all theoreti"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "Q𝐴 = 𝐼𝐴Q∞𝑘=0(𝐼𝑈Q)𝑘𝐼𝐴 = 𝐼𝐴∞ 𝑘=0 (𝐼𝑈Q)𝑘 Q𝐼𝐴,"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "where 𝐼𝐴 and 𝐼𝑈 represent multiplica"
+  },
+  {
+    "kind": "footnote",
+    "textPrefix": "3Philosophically, this would correspond "
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "If we restrict attention to the subspace"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "𝑞𝐴 := 𝑎+𝑏 ∞ 𝑘=0 𝑐𝑘 𝑑,"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "see also Fig. 2."
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "Figure 2: Geometry of the Trace Chain. S"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "The trace kernel characterizes the effec"
+  },
+  {
+    "kind": "footnote",
+    "textPrefix": "5The trace logic has been proven to be h"
+  },
+  {
+    "kind": "heading",
+    "level": 3,
+    "textPrefix": "4 Recursive Trace Logic"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "From the trace logic, we then define the"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "experience is usually not viewed as ever"
+  },
+  {
+    "kind": "heading",
+    "level": 3,
+    "textPrefix": "5 The Research Roadmap"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "We will use recursive trace logic to con"
+  },
+  {
+    "kind": "heading",
+    "level": 4,
+    "textPrefix": "5.1 Physics: Eight Conjectures of the Tr"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "By positing a perspective of science bas"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "mathematics and computer simulations can"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "Table 1: Eight Conjectures. The guide to"
+  },
+  {
+    "kind": "table header",
+    "textPrefix": "# Domain Conjecture"
+  },
+  {
+    "kind": "table content",
+    "textPrefix": "1 Special relativity Minkowski space eme"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "Once these conjectures are proven, we ca"
+  },
+  {
+    "kind": "heading",
+    "level": 4,
+    "textPrefix": "5.2 Neuroscience: Engineering the Observ"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "In the materialist reductionist epistemo"
+  },
+  {
+    "kind": "footnote",
+    "textPrefix": "6This is underscored by the sheer volume"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "understood as the mapping between neural"
+  },
+  {
+    "kind": "heading",
+    "level": 4,
+    "textPrefix": "5.3 Metaphysics: Toward a Mathematical F"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "The trace logic framework is predicated "
+  },
+  {
+    "kind": "heading",
+    "level": 4,
+    "textPrefix": "5.4 Technology: Innovating a New Science"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "Advances in technology tend to accompany"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "as RTL that centers the conscious observ"
+  },
+  {
+    "kind": "heading",
+    "level": 5,
+    "textPrefix": "Physics and Engineering"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "Our scientific program may ultimately re"
+  },
+  {
+    "kind": "heading",
+    "level": 5,
+    "textPrefix": "Human Intelligence"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "One application of RTL is to reverse eng"
+  },
+  {
+    "kind": "heading",
+    "level": 5,
+    "textPrefix": "Machine Intelligence"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "RTL provides a radically different and m"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "has proven to be difficult to leverage t"
+  },
+  {
+    "kind": "heading",
+    "level": 3,
+    "textPrefix": "Abbreviations"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "The following abbreviations are used in "
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "ITP The Interface Theory of Perception N"
+  },
+  {
+    "kind": "heading",
+    "level": 3,
+    "textPrefix": "References"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "Nima Arkani-Hamed, Qu Cao, Jin Dong, Car"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "Bruce Bennett, Donald D. Hoffman, and Ch"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "David J. Chalmers. Facing Up to the Prob"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "David J. Chalmers. Idealism and the Mind"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "Andy Clark. How to knit your own Markov "
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "Andrew R. Gallimore, Donald Hoffman, and"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "Daniel J. Gauthier, Erik Bollt, Aaron Gr"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "Alex Gomez-Marin and Anil K. Seth. A sci"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "Donald D. Hoffman. Conscious Realism and"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "A Science of Reality: Observers, Interfa"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "Donald D. Hoffman. The Case Against Real"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "Donald D. Hoffman and Chetan Prakash. Ob"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "Donald D. Hoffman, Manish Singh, and Che"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "Donald D. Hoffman, Chetan Prakash, and R"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "Donald D. Hoffman, Chetan Prakash, and S"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "IIT-Concerned, , Michał Klincewicz, Tony"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "Immanuel Kant. Critique of Pure Reason. "
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "Christof Koch, Marcello Massimini, Melan"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "Robert Lawrence Kuhn. A landscape of con"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "Thomas S. Kuhn. The Structure of Scienti"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "Brian Lord, Joseph L. Sanguinetti, Lisan"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "Juan M. Maldacena. The Large N Limit of "
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "Albert Newen, Leon De Bruin, and Shaun G"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "Thomas Parr, Giovanni Pezzulo, and Karl "
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "Francisco Estevão Simão Pereira, Senthil"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "A Science of Reality: Observers, Interfa"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "Chetan Prakash, Chris Fields, Donald D. "
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "Chetan Prakash, Kyle D. Stephens, Donald"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "Daniel Revuz. Markov Chains. North Holla"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "Giulio Tononi, Larissa Albantakis, and L"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "Francisco J. Varela, Evan Thompson, and "
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "Ashish Vaswani, Noam Shazeer, Niki Parma"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "Jan C. Westerhoff. The Golden Age of Ind"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "John A. Wheeler. Information, physics, q"
+  }
+]
