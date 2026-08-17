@@ -32,10 +32,10 @@
       "producer": "calibre 9.4.0"
     },
     {
-      "file": "YouAreTheOne book-2-col.pdf",
-      "sha256": "c36fbf404dbd768cd2b76d45f5e0a5d9251443e2be0fdd4e15bba91c981cc788",
+      "file": "IDOM 50 editorial.pdf",
+      "sha256": "17e84fc979c6593a9b8f993c3dfa7bb7f3e5b3a9d91ee103782467c052f5edf9",
       "expectedClass": "multi-column",
-      "producer": "Adobe PDF Library 9.0 / InDesign CS4"
+      "producer": "macOS Version 26.6 Quartz / Preview (user-supplied genuine 3-column editorial)"
     }
   ]
 }

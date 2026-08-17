@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-17T17:11:03.059Z",
+  "generatedAt": "2026-08-17T18:50:21.203Z",
   "thresholds": {
     "bandYToleranceRatio": 0.3,
     "marginBandRatio": 0.05,
@@ -24,6 +24,7 @@
     "furnitureRepeatPages": 3,
     "furnitureMaxChars": 60,
     "scriptBandRatio": 0.75,
+    "scriptFragmentGapRatio": 1,
     "sectionTitleMaxWords": 3,
     "scriptFragmentChars": 12
   },
@@ -47,7 +48,7 @@
       "sha256": "f49d61a5de40709ba7c07502a4c3aa6430367f0c544104105157663ac567201d",
       "expectedClass": "borderline",
       "verdict": "admitted",
-      "agreement": 0.8932,
+      "agreement": 0.92,
       "anchorRoundTrip": true
     },
     {
@@ -55,7 +56,7 @@
       "sha256": "884db07795b1626cd712739784f671cb94cd2574f6ffd0e31d8842d72cbcf8c8",
       "expectedClass": "single-column",
       "verdict": "admitted",
-      "agreement": 0.6154,
+      "agreement": 0.9231,
       "anchorRoundTrip": true
     },
     {
@@ -67,10 +68,10 @@
       "anchorRoundTrip": true
     },
     {
-      "file": "YouAreTheOne book-2-col.pdf",
-      "sha256": "c36fbf404dbd768cd2b76d45f5e0a5d9251443e2be0fdd4e15bba91c981cc788",
+      "file": "IDOM 50 editorial.pdf",
+      "sha256": "17e84fc979c6593a9b8f993c3dfa7bb7f3e5b3a9d91ee103782467c052f5edf9",
       "expectedClass": "multi-column",
-      "verdict": "refused:round-trip-anchor-failed"
+      "verdict": "refused:pdf-multi-column"
     }
   ]
 }

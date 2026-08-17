@@ -36,11 +36,21 @@
     "textPrefix": "Duluth Trading Co May 2024 – Present Sen"
   },
   {
-    "kind": "paragraph",
-    "textPrefix": "Selected Projects Catalyst 2025 – Presen"
+    "kind": "heading",
+    "level": 3,
+    "textPrefix": "Selected Projects"
   },
   {
     "kind": "paragraph",
-    "textPrefix": "Education & Certification Brown Universi"
+    "textPrefix": "Catalyst 2025 – Presen"
+  },
+  {
+    "kind": "heading",
+    "level": 3,
+    "textPrefix": "Education & Certification"
+  },
+  {
+    "kind": "paragraph",
+    "textPrefix": "Brown Universi"
   }
 ]

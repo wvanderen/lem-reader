@@ -151,6 +151,17 @@ export const PDF_THRESHOLDS = {
   /** a band whose dominant font is smaller than an adjacent band's merges
    * into it when the y-distance is under this × the page's line delta. */
   scriptBandRatio: 0.75,
+  /** a band that is BOTH a tiny fragment (≤ scriptFragmentChars) AND
+   * smaller-dominant-size than an adjacent band — a pure script decoration
+   * such as a stacked ∑/∏ under-limit — merges within this × line delta.
+   * TRACE's under-limits "𝑘=0" (7.97pt over a 10.91pt body) sit 11.88pt
+   * below their equation band, outside the 0.75 window (10.16pt), and
+   * orphaned as standalone paragraph blocks. The AND-qualification is the
+   * safety: a body-SIZED short line (a paragraph's last line, "given by:")
+   * is never size-qualified, and a math-heavy body LINE exceeds the char
+   * cap, so both keep the 0.75 window and near-line-delta paragraph
+   * spacing never fuses (11-06 continuation calibration). */
+  scriptFragmentGapRatio: 1,
   // Pattern 5b — standalone-line + bold-section heuristics. A SHORT line
   // (≤ headingMaxWords) whose gap ABOVE exceeds paragraph spacing is its own
   // group (resume section titles at Δ14–16 vs body Δ12; display equations
@@ -828,12 +839,15 @@ function assemblePage(pageIndex: number, items: StructuredTextItem[]): DraftBloc
     const bottom = (band: LineBand): number =>
       Math.min(...band.items.map((it) => it.y));
     const tol = PDF_THRESHOLDS.scriptBandRatio * lineDelta;
+    const orphanTol = PDF_THRESHOLDS.scriptFragmentGapRatio * lineDelta;
     const sizes = bands.map(dominant);
     const charCounts = bands.map(chars);
-    const isScriptBand = (i: number): boolean =>
-      charCounts[i]! <= PDF_THRESHOLDS.scriptFragmentChars ||
+    const sizeQualified = (i: number): boolean =>
       sizes[i]! < (sizes[i - 1] ?? -Infinity) ||
       sizes[i]! < (sizes[i + 1] ?? -Infinity);
+    const charQualified = (i: number): boolean =>
+      charCounts[i]! <= PDF_THRESHOLDS.scriptFragmentChars;
+    const isScriptBand = (i: number): boolean => charQualified(i) || sizeQualified(i);
     let changed = true;
     while (changed) {
       changed = false;
@@ -842,8 +856,15 @@ function assemblePage(pageIndex: number, items: StructuredTextItem[]): DraftBloc
         const curr = bands[i]!;
         const prev = i > 0 ? bands[i - 1]! : null;
         const next = i + 1 < bands.length ? bands[i + 1]! : null;
-        const prevOk = prev !== null && bottom(prev) - curr.y <= tol;
-        const nextOk = next !== null && bottom(curr) - next.y <= tol;
+        // A pure decoration fragment (tiny AND script-sized — a stacked
+        // operator limit) may reach a full line delta: it sits further from
+        // its base line than inline script. Everything else — body-sized
+        // short lines, math-heavy body lines — keeps the tighter window so
+        // paragraph line spacing never fuses.
+        const window =
+          charQualified(i) && sizeQualified(i) ? orphanTol : tol;
+        const prevOk = prev !== null && bottom(prev) - curr.y <= window;
+        const nextOk = next !== null && bottom(curr) - next.y <= window;
         let target: number | null = null;
         if (prevOk && nextOk) {
           target =
