@@ -2876,8 +2876,12 @@ dialog.book-remove-confirm::backdrop {
 .chapter-nav a:hover {
   color: var(--ink);
 }
+/* The neighbor chapter's title in the secondary register — italic, the
+ * figcaption discipline. NOT opacity: a blended foreground drops the muted
+ * link below the 4.5:1 AA floor (axe color-contrast: 3.83:1 at 0.75), while
+ * the full --ink-soft token passes at ~6.4:1 in every theme. */
 .chapter-nav-title {
-  opacity: 0.75; /* lighter tone for the neighbor chapter's title */
+  font-style: italic;
 }
 .article-body .chapter-nav-page {
   position: fixed;

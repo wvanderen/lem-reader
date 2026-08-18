@@ -67,6 +67,44 @@ function makeArticle(opts: {
   });
 }
 
+// Plan 12-06 Task 3 (Pitfall 8 — the deriveReviewSections half): a chapter
+// article is an ORDINARY article carrying ingestionMeta source "epub-chapter"
+// + bookId/chapterIndex. Built through the same shipped ArticleSchema so the
+// fixture exercises the exact persisted shape (strengthen-only — the
+// standalone makeArticle above is untouched).
+function makeChapterArticle(opts: {
+  id: string;
+  title: string;
+  paragraphs: string[];
+  bookId: string;
+  chapterIndex: number;
+  tags?: string[];
+}): CanonicalArticle {
+  return ArticleSchema.parse({
+    id: opts.id,
+    revision: 1,
+    lang: "en",
+    provenance: {
+      title: opts.title,
+      retrievedAt: "2026-01-01T00:00:00.000Z",
+      originalHtmlHash: "0".repeat(64),
+    },
+    blocks: opts.paragraphs.map((text) => ({
+      kind: "paragraph",
+      content: [{ text }],
+    })),
+    ...(opts.tags !== undefined ? { tags: opts.tags } : {}),
+    ingestionMeta: {
+      source: "epub-chapter",
+      originalHtmlHash: "1".repeat(64),
+      extractionConfidence: "high",
+      extractionWarnings: [],
+      bookId: opts.bookId,
+      chapterIndex: opts.chapterIndex,
+    },
+  });
+}
+
 /**
  * Derive a position+quote pair for a passage that appears EXACTLY ONCE in the
  * article's normalized text (the confident-anchor knob). Throws when the
@@ -516,5 +554,171 @@ describe("deriveReviewSections — purity", () => {
     expect(sampleArticles).toEqual(articlesSnapshot);
     expect(sampleHighlights).toEqual(highlightsSnapshot);
     expect(sampleNotes).toEqual(notesSnapshot);
+  });
+});
+
+// ── Chapter-bearing library (Plan 12-06 Task 3 — Pitfall 8 strengthen-only) ──
+//
+// A many-chapter book multiplies highlight rows exactly as the same count of
+// standalone articles would: chapters ARE articles to the review panel (one
+// section per chapter id, per-article entry counts, tri-state classification,
+// filters + sorts over the article row). Counts stay PINNED — assertions are
+// added, none of the fixed-corpus assertions above are loosened.
+
+const CHAPTER_BOOK_ID = "epub-a1b2c3d4e5f6";
+
+const chapter1 = makeChapterArticle({
+  id: `${CHAPTER_BOOK_ID}-c00`,
+  title: "Chapter 1. Loomings",
+  paragraphs: [
+    "The lighthouse ledger opens with a calm inventory of the keeper's tools.",
+    "A second paragraph carries the foghorn maintenance notes forward.",
+    "The third paragraph closes the chapter by the quartz lens.",
+  ],
+  bookId: CHAPTER_BOOK_ID,
+  chapterIndex: 0,
+  tags: ["voyage"],
+});
+
+const chapter2 = makeChapterArticle({
+  id: `${CHAPTER_BOOK_ID}-c01`,
+  title: "Chapter 2. The Carpet-Bag",
+  paragraphs: [
+    "The carpet-bag chapter unpacks a shuffled deck of harbour maps.",
+    "Its second paragraph counts the brass instruments twice.",
+    "The final paragraph folds the maps away for the night watch.",
+  ],
+  bookId: CHAPTER_BOOK_ID,
+  chapterIndex: 1,
+});
+
+const chapter3 = makeChapterArticle({
+  id: `${CHAPTER_BOOK_ID}-c02`,
+  title: "Chapter 3. The Sermon",
+  paragraphs: [
+    "The sermon chapter assembles the whole crew on the quarterdeck.",
+    "A middle paragraph measures the silence between the bell strikes.",
+    "The closing paragraph releases the crew back to the rigging.",
+  ],
+  bookId: CHAPTER_BOOK_ID,
+  chapterIndex: 2,
+});
+
+const hlChapter1 = makeHighlight({
+  id: "hl-chapter-1",
+  articleId: `${CHAPTER_BOOK_ID}-c00`,
+  anchor: uniqueAnchor(chapter1, "lighthouse ledger opens"),
+  createdAt: "2026-04-01T10:00:00.000Z", // newest in the combined corpus
+});
+const hlChapter2 = makeHighlight({
+  id: "hl-chapter-2",
+  articleId: `${CHAPTER_BOOK_ID}-c01`,
+  anchor: uniqueAnchor(chapter2, "brass instruments twice"),
+  createdAt: "2026-02-15T10:00:00.000Z", // interleaves BETWEEN zebra (02-01) and alpha (03-01)
+});
+const hlChapter3 = makeHighlight({
+  id: "hl-chapter-3",
+  articleId: `${CHAPTER_BOOK_ID}-c02`,
+  anchor: uniqueAnchor(chapter3, "silence between the bell"),
+  createdAt: "2026-01-12T10:00:00.000Z", // older than every sample entry
+});
+
+const chapterArticles = [chapter1, chapter2, chapter3];
+const chapterHighlights = [hlChapter1, hlChapter2, hlChapter3];
+
+describe("deriveReviewSections — chapter-bearing library (Pitfall 8)", () => {
+  it("chapter highlights join + classify EXACTLY like standalone articles — sections grow by the chapter count with pinned per-section entries", () => {
+    const baseline = deriveReviewSections(
+      sampleArticles,
+      sampleHighlights,
+      sampleNotes,
+      noFilters,
+      "date",
+    );
+    const baselineSections = baseline.sections.length; // twin, zebra, alpha = 3
+    const baselineEntries = baseline.sections.reduce(
+      (n, s) => n + s.entries.length,
+      0,
+    );
+
+    const combined = deriveReviewSections(
+      [...sampleArticles, ...chapterArticles],
+      [...sampleHighlights, ...chapterHighlights],
+      sampleNotes,
+      noFilters,
+      "date",
+    );
+
+    // PINNED: the three chapter articles add exactly three sections, each
+    // carrying exactly its one highlight — a many-chapter book multiplies
+    // rows exactly as the same count of standalone articles would.
+    expect(combined.sections).toHaveLength(baselineSections + 3);
+    expect(combined.sections.reduce((n, s) => n + s.entries.length, 0)).toBe(
+      baselineEntries + 3,
+    );
+    for (const chapter of chapterArticles) {
+      const section = combined.sections.find((s) => s.key === chapter.id);
+      expect(section, `section for ${chapter.id}`).toBeDefined();
+      expect(section!.entries).toHaveLength(1);
+      // Same confident classification the standalone corpus proves.
+      expect(section!.entries[0]!.status).toBe("confident");
+    }
+    // The orphan tail is untouched by the chapter flood.
+    expect(combined.orphanEntries).toHaveLength(1);
+    expect(combined.orphanEntries[0]!.highlight.id).toBe("hl-ghost");
+  });
+
+  it("date sort interleaves chapter sections with standalone articles by createdAt — no book grouping in the panel", () => {
+    const combined = deriveReviewSections(
+      [...sampleArticles, ...chapterArticles],
+      [...sampleHighlights, ...chapterHighlights],
+      sampleNotes,
+      noFilters,
+      "date",
+    );
+    // Newest per section: ch1 04-01 > alpha 03-01 > ch2 02-15 > zebra 02-01
+    // > twin 01-15 > ch3 01-12 — chapters interleave by genuine recency.
+    expect(combined.sections.map((s) => s.article.id)).toEqual([
+      `${CHAPTER_BOOK_ID}-c00`,
+      "alpha-piece",
+      `${CHAPTER_BOOK_ID}-c01`,
+      "zebra-piece",
+      "twin-piece",
+      `${CHAPTER_BOOK_ID}-c02`,
+    ]);
+  });
+
+  it("tag filter keeps only the chapter whose OWN article row carries the tag (per-chapter tags, not book tags)", () => {
+    const combined = deriveReviewSections(
+      [...sampleArticles, ...chapterArticles],
+      [...sampleHighlights, ...chapterHighlights],
+      sampleNotes,
+      { tag: "voyage", articleId: null, confidence: "all" },
+      "date",
+    );
+    expect(combined.sections).toHaveLength(1);
+    expect(combined.sections[0]!.article.id).toBe(`${CHAPTER_BOOK_ID}-c00`);
+    expect(combined.sections[0]!.entries.map((e) => e.highlight.id)).toEqual([
+      "hl-chapter-1",
+    ]);
+  });
+
+  it("articleId filter isolates one chapter of the book like any standalone article", () => {
+    const combined = deriveReviewSections(
+      [...sampleArticles, ...chapterArticles],
+      [...sampleHighlights, ...chapterHighlights],
+      sampleNotes,
+      {
+        tag: null,
+        articleId: `${CHAPTER_BOOK_ID}-c01`,
+        confidence: "all",
+      },
+      "date",
+    );
+    expect(combined.sections).toHaveLength(1);
+    expect(combined.sections[0]!.article.provenance.title).toBe(
+      "Chapter 2. The Carpet-Bag",
+    );
+    expect(combined.sections[0]!.entries).toHaveLength(1);
   });
 });

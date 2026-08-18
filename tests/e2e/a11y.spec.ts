@@ -9,7 +9,7 @@
 // axe reports only automatable issues — these tests do NOT replace the manual
 // keyboard and screen-reader passes documented in VALIDATION.md Manual-Only
 // Verifications (performed before /gsd-verify-work).
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { fixtures } from "../../src/fixtures";
 import { wipeDatabase } from "./annotations/_fixtures";
@@ -19,6 +19,18 @@ import {
   makeArticle,
   seedRows,
 } from "./portability/_portability";
+// Plan 12-06 Task 3 — the book/chapter surfaces (ING-05): the synthetic
+// EPUB corpus builder (the generator IS the fixture source; 12-01
+// discipline).
+import { validBookEpub3 } from "../unit/server/epub-fixtures";
+// The D-05 substrate — the SAME normalizeText + graphemeClusters the
+// in-browser derivations use (the 08-05/12-05 deterministic-seed
+// precedent: compute the location offset in Node, never in-page).
+import {
+  normalizeText,
+  graphemeClusters,
+} from "../../src/content/normalizeText";
+import type { CanonicalArticle } from "../../src/content/types";
 
 const BASE = "http://localhost:5173";
 const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] as const;
@@ -238,4 +250,492 @@ test("review panel #/review: zero serious/critical WCAG 2.2 AA violations (seede
   expect(ids, JSON.stringify(serious, null, 2)).not.toContain("heading-order");
   expect(ids).not.toContain("list");
   expect(serious).toEqual([]);
+});
+
+// ── Plan 12-06 (ING-05): the book + chapter surfaces ────────────────────────
+// The D12-08 context line, the D12-05 chapter nav, and the 12-05 book row
+// held to the SAME bar as every other surface: zero serious/critical WCAG
+// 2.2 AA violations with the Pitfall guards (heading-order, list), native
+// keyboard operability (Tab reaches, Enter activates, aria-expanded toggles
+// via keyboard), visible focus, and the reduced-motion gate on the
+// disclosure animation. axe reports only automatable issues — the manual
+// SR flows stay Phase 13's ACPT gate.
+
+const BOOK_BASE = "http://localhost:5173";
+
+/** Attach an EPUB to the picker + submit (the epub-intake harness clone). */
+async function uploadEbook(page: Page): Promise<void> {
+  await page.locator("input#ingest-file").setInputFiles({
+    name: "the-synthetic-book.epub",
+    mimeType: "application/epub+zip",
+    buffer: Buffer.from(validBookEpub3()),
+  });
+  await page.getByRole("button", { name: /add file/i }).click();
+}
+
+/** Wipe + upload + remount the library with the book row visible. */
+async function seedBookLibrary(page: Page): Promise<void> {
+  await wipeDatabase(page);
+  await page.goto(`${BOOK_BASE}/#/`);
+  await uploadEbook(page);
+  await expect(
+    page.locator(".ingest-control .status").filter({ hasText: "Book added" }),
+  ).toBeVisible({ timeout: 15_000 });
+  await page.reload();
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Saved articles" }),
+  ).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator("li.book-row")).toBeVisible({ timeout: 10_000 });
+}
+
+/**
+ * Keyboard-order proof, engine-honest (the 09-06 stacked-modal precedent):
+ * chromium + firefox follow DOM order from a programmatic focus, so the
+ * tab-order walks assert there. WebKit's sequential navigation skips
+ * links/buttons (the Safari form-controls-only default — probe: body →
+ * INPUT → TEXTAREA), so on webkit the claim degrades to focusability +
+ * Enter activation (asserted separately, all engines).
+ */
+function tabOrderFollowsDom(): boolean {
+  return test.info().project.name !== "webkit";
+}
+
+async function tabWalkFrom(
+  page: Page,
+  startSelector: string,
+  targetSelector: string,
+  maxPresses = 8,
+): Promise<boolean> {
+  await page.locator(startSelector).first().focus();
+  for (let i = 0; i < maxPresses; i++) {
+    await page.keyboard.press("Tab");
+    await page.waitForTimeout(60);
+    const matched = await page.evaluate(
+      (s) => document.activeElement?.matches(s) ?? false,
+      targetSelector,
+    );
+    if (matched) return true;
+  }
+  return false;
+}
+
+test.describe("a11y 12-06 — library with a book", () => {
+  test("zero serious/critical violations collapsed AND expanded; disclosure animation reduced-motion-gated", async ({
+    page,
+  }) => {
+    await seedBookLibrary(page);
+
+    // Collapsed book row — the SAME bar + explicit guards as the fixture
+    // list scan above.
+    let results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
+    let serious = seriousViolations(results);
+    let ids = serious.map((v) => v.id);
+    expect(ids, JSON.stringify(serious, null, 2)).not.toContain("heading-order");
+    expect(ids).not.toContain("list");
+    expect(serious).toEqual([]);
+
+    // Expanded — the chapter sub-list (h3 rows), skip disclosure, TagEntry,
+    // and Remove trigger join the tree. Settle first: the positively-gated
+    // disclosure animation fades opacity 0→1 over 160ms, and axe resolves
+    // contrast from COMPUTED styles — sampling mid-animation reports a
+    // blended foreground and false-fails color-contrast.
+    await page.locator("li.book-row .book-toggle").click();
+    await expect(page.locator("li.book-row .book-toggle")).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    await expect(
+      page.locator("li.book-row .book-chapter-list > li").first(),
+    ).toBeVisible();
+    await page.waitForTimeout(350); // out-run the 160ms book-disclose animation
+    results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
+    serious = seriousViolations(results);
+    ids = serious.map((v) => v.id);
+    expect(ids, JSON.stringify(serious, null, 2)).not.toContain("heading-order");
+    expect(ids).not.toContain("list");
+    expect(serious).toEqual([]);
+
+    // Reduced-motion (structural — the visual-motion assertions stay in
+    // reduced-motion.spec.ts's domain): the disclosure animation exists
+    // ONLY inside a positive (prefers-reduced-motion: no-preference) media
+    // guard. Proven via the CSSOM — .book-chapters animation rules must
+    // live inside the media block, never at the top level.
+    const guarded = await page.evaluate(() => {
+      const mediaTexts: string[] = [];
+      for (const sheet of Array.from(document.styleSheets)) {
+        let rules: CSSRuleList;
+        try {
+          rules = sheet.cssRules;
+        } catch {
+          continue; // cross-origin sheet — skip
+        }
+        for (const rule of Array.from(rules)) {
+          if (rule instanceof CSSMediaRule) {
+            mediaTexts.push(rule.media.mediaText);
+            for (const inner of Array.from(rule.cssRules)) {
+              if (
+                inner instanceof CSSStyleRule &&
+                inner.selectorText.includes(".book-chapters")
+              ) {
+                return {
+                  found: true,
+                  media: rule.media.mediaText,
+                  selector: inner.selectorText,
+                };
+              }
+            }
+          }
+        }
+      }
+      return { found: false, media: mediaTexts.join(" ; "), selector: "" };
+    });
+    expect(guarded.found, "the .book-chapters animation rule must exist").toBe(true);
+    expect(guarded.media).toContain("prefers-reduced-motion: no-preference");
+  });
+
+  test("keyboard walkthrough: chevron aria-expanded via keyboard; Tab order reaches Resume, chapter links, Remove; focus ring visible", async ({
+    page,
+  }) => {
+    await seedBookLibrary(page);
+
+    // Deterministic Resume link: seed a mid-chapter location for chapter 1
+    // via raw IndexedDB (the 12-05 seeding precedent — the scroll-save path
+    // is proven by epub-intake SC#3; THIS test is about keyboard semantics,
+    // so the location must not depend on the 1200ms save debounce). The
+    // library rows are visible = Dexie is open + schema declared (10-03).
+    await page.locator("li.book-row .book-toggle").click();
+    const chapter1Id = await page
+      .locator("li.book-row .book-chapter-list > li")
+      .filter({ hasText: "Chapter 1. Loomings" })
+      .locator('a[href^="#/article/"]')
+      .getAttribute("href")
+      .then((h) => (h ?? "").replace("#/article/", ""));
+    expect(chapter1Id).toMatch(/-c00$/);
+    const articleRow = await page.evaluate(
+      async (id) => {
+        return new Promise<Record<string, unknown> | null>((resolve) => {
+          const req = indexedDB.open("lem-reader");
+          req.onsuccess = () => {
+            const tx = req.result.transaction("articles", "readonly");
+            const get = tx.objectStore("articles").get(id);
+            get.onsuccess = () => resolve(get.result ?? null);
+            get.onerror = () => resolve(null);
+          };
+          req.onerror = () => resolve(null);
+        });
+      },
+      chapter1Id,
+    );
+    expect(articleRow, "chapter 1 article row must exist").not.toBeNull();
+    // Mid-chapter offset (half the D-05 grapheme total) — an UNFINISHED
+    // location so the Resume link renders (computed in Node by the SAME
+    // substrate the in-browser derivation uses).
+    const total = graphemeClusters(
+      normalizeText(articleRow as unknown as CanonicalArticle),
+      "en",
+    ).length;
+    await page.evaluate(
+      async ({ chapter1Id, offset }) => {
+        await new Promise<void>((resolve) => {
+          const req = indexedDB.open("lem-reader");
+          req.onsuccess = () => {
+            const tx = req.result.transaction("location", "readwrite");
+            tx.objectStore("location").put({
+              schemaVersion: 1,
+              articleId: chapter1Id,
+              revision: 1,
+              graphemeOffset: offset,
+              savedAt: new Date().toISOString(),
+            });
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => resolve();
+          };
+          req.onerror = () => resolve();
+        });
+      },
+      { chapter1Id, offset: Math.max(1, Math.floor(total / 2)) },
+    );
+    // Remount so LibraryView's load picks the location up.
+    await page.reload();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Saved articles" }),
+    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("li.book-row")).toBeVisible({ timeout: 10_000 });
+
+    // Keyboard-order proof: the Resume link is the focusable IMMEDIATELY
+    // before the chevron in DOM order — focus it (focusability, ALL
+    // engines), then ONE real Tab must land on the chevron (the DOM-order
+    // claim on chromium + firefox; webkit skips links in sequential nav —
+    // the 09-06 engine-divergence precedent).
+    const resume = page.locator("li.book-row .book-resume");
+    await expect(resume).toBeVisible({ timeout: 10_000 });
+    await resume.focus();
+    await expect(resume).toBeFocused();
+    if (tabOrderFollowsDom()) {
+      expect(
+        await tabWalkFrom(page, "li.book-row .book-resume", "li.book-row .book-toggle", 2),
+        "Tab from Resume must reach the book chevron (adjacent focusables)",
+      ).toBe(true);
+      // Keyboard focus → the global :focus-visible ring (UI-SPEC §4): a
+      // Tab-originated focus matches :focus-visible, so the computed
+      // outline carries the 2px token ring.
+      const focusRing = await page.evaluate(() => {
+        const el = document.activeElement as HTMLElement | null;
+        if (!el) return { style: "none", width: "0" };
+        const cs = getComputedStyle(el);
+        return { style: cs.outlineStyle, width: cs.outlineWidth };
+      });
+      expect(focusRing.style).not.toBe("none");
+    }
+
+    // aria-expanded toggles via KEYBOARD (Enter on the focused button) —
+    // ALL engines (button activation, not sequential navigation).
+    await page.locator("li.book-row .book-toggle").focus();
+    await page.keyboard.press("Enter");
+    await expect(page.locator("li.book-row .book-toggle")).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    await page.keyboard.press("Enter");
+    await expect(page.locator("li.book-row .book-toggle")).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+
+    // Sane order — DOM order: Resume link BEFORE the chevron, chapter open
+    // links + Remove AFTER it (inside the expanded region).
+    const bookRow = page.locator("li.book-row");
+    await expect(bookRow.locator(".book-resume")).toBeVisible();
+    const resumeIndex = await bookRow.locator(".book-resume").evaluate((el) => {
+      const row = el.closest("li");
+      const focusables = row?.querySelectorAll(
+        "a[href], button:not([disabled]), input",
+      );
+      return focusables ? Array.from(focusables).indexOf(el) : -1;
+      });
+    const toggleIndex = await bookRow.locator(".book-toggle").evaluate((el) => {
+      const row = el.closest("li");
+      const focusables = row?.querySelectorAll(
+        "a[href], button:not([disabled]), input",
+      );
+      return focusables ? Array.from(focusables).indexOf(el) : -1;
+    });
+    expect(resumeIndex).toBeGreaterThan(-1);
+    expect(toggleIndex).toBeGreaterThan(resumeIndex);
+
+    // Expand again, then walk forward from the (still-focused) chevron
+    // through the region: the chapter open link and the Remove button are
+    // keyboard-reachable in DOM order after the toggle (chromium + firefox;
+    // on webkit the structural DOM-order indices above + focus() +
+    // Enter-activation carry the claim).
+    await page.keyboard.press("Enter"); // re-expand (still focused)
+    await expect(page.locator("li.book-row .book-toggle")).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    if (tabOrderFollowsDom()) {
+      expect(
+        await tabWalkFrom(
+          page,
+          "li.book-row .book-toggle",
+          "li.book-row .book-chapter-list a[href^='#/article/']",
+          6,
+        ),
+        "Tab from the chevron must reach the chapter sub-row open link",
+      ).toBe(true);
+      // Continue the walk to the Remove book trigger.
+      expect(
+        await tabWalkFrom(
+          page,
+          "li.book-row .book-chapter-list a[href^='#/article/']",
+          "li.book-row .book-remove",
+          12,
+        ),
+        "Tab must reach the Remove book button",
+      ).toBe(true);
+      // The focused Remove button also carries the visible focus ring.
+      const removeRing = await page.evaluate(() => {
+        const el = document.activeElement as HTMLElement | null;
+        if (!el) return "none";
+        return getComputedStyle(el).outlineStyle;
+      });
+      expect(removeRing).not.toBe("none");
+    }
+  });
+});
+
+test.describe("a11y 12-06 — chapter reading (both modes)", () => {
+  test("context line + chapter nav axe-clean; Next/Previous Tab-reachable + Enter-activatable; context line is a paragraph", async ({
+    page,
+  }) => {
+    // 360x480 — chapters paginate into ~3 pages (the epub-intake geometry).
+    await page.setViewportSize({ width: 360, height: 480 });
+    await seedBookLibrary(page);
+
+    // Open chapter 2 (default paginated mode on first run).
+    await page.locator("li.book-row .book-toggle").click();
+    await page
+      .locator("li.book-row .book-chapter-list > li")
+      .filter({ hasText: "Chapter 2. The Carpet-Bag" })
+      .locator('a[href^="#/article/"]')
+      .click();
+    await page.waitForURL(/#\/article\/epub-[a-z0-9]+-c01$/, { timeout: 10_000 });
+    await expect(
+      page.locator(".page-fragment [data-block-index]").first(),
+    ).toBeVisible({ timeout: 10_000 });
+    await page.waitForTimeout(800);
+
+    // The context line is a PARAGRAPH, never a heading — the h1 chapter
+    // title owns the header structure (heading-order preservation).
+    const contextTag = await page.evaluate(
+      () => document.querySelector("p.book-context")?.tagName ?? "MISSING",
+    );
+    expect(contextTag).toBe("P");
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Chapter 2. The Carpet-Bag" }),
+    ).toBeVisible();
+
+    // ── PAGINATED: turn to the final page (real keys) — the Next link
+    // mounts there; Tab-reach + Enter-activate it.
+    for (let i = 0; i < 30; i++) {
+      const state = await page.evaluate(() => {
+        const dev = (window as unknown as Record<string, unknown>)
+          .__lemPagination as
+          | { pagesLength: number; currentPageIdx: number }
+          | undefined;
+        if (!dev || dev.pagesLength === 0) return { done: false };
+        return { done: dev.currentPageIdx === dev.pagesLength - 1 };
+      });
+      if (state.done) break;
+      await page.keyboard.press("ArrowRight");
+      await page.waitForTimeout(150);
+    }
+    await expect(page.locator("a.chapter-next")).toBeVisible();
+    // Tab-reach the Next link from the deterministic nearby start (the
+    // page-turn chevron immediately precedes the chapter nav in DOM order)
+    // on chromium + firefox; on webkit the link is still keyboard-FOCUSABLE
+    // and Enter-activatable (asserted right after — the 09-06 precedent).
+    if (tabOrderFollowsDom()) {
+      expect(
+        await tabWalkFrom(page, ".page-turn-next", "a.chapter-next", 4),
+        "Tab must reach the Next chapter link in paginated mode",
+      ).toBe(true);
+    } else {
+      await page.locator("a.chapter-next").focus();
+      await expect(page.locator("a.chapter-next")).toBeFocused();
+    }
+    await page.keyboard.press("Enter");
+    await page.waitForURL(/#\/article\/epub-[a-z0-9]+-c02$/, { timeout: 10_000 });
+    await expect(
+      page.locator(".page-fragment [data-block-index]").first(),
+    ).toBeVisible({ timeout: 10_000 });
+    await page.waitForTimeout(600);
+
+    // axe on the chapter view in PAGINATED mode (context line + chapter
+    // nav + page fragment all in the tree).
+    let results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
+    let serious = seriousViolations(results);
+    let ids = serious.map((v) => v.id);
+    expect(ids, JSON.stringify(serious, null, 2)).not.toContain("heading-order");
+    expect(ids).not.toContain("list");
+    expect(serious).toEqual([]);
+
+    // ── PAGINATED chapter start: the Previous link is Tab-reachable from
+    // the FIRST page + Enter-activatable (back to chapter 2).
+    for (let i = 0; i < 30; i++) {
+      const idx = await page.evaluate(() => {
+        const dev = (window as unknown as Record<string, unknown>)
+          .__lemPagination as { currentPageIdx: number } | undefined;
+        return dev?.currentPageIdx ?? -1;
+      });
+      if (idx === 0) break;
+      await page.keyboard.press("ArrowLeft");
+      await page.waitForTimeout(150);
+    }
+    await expect(page.locator("a.chapter-prev")).toBeVisible();
+    if (tabOrderFollowsDom()) {
+      expect(
+        await tabWalkFrom(page, ".page-turn-previous", "a.chapter-prev", 4),
+        "Tab must reach the Previous chapter link in paginated mode",
+      ).toBe(true);
+    } else {
+      await page.locator("a.chapter-prev").focus();
+      await expect(page.locator("a.chapter-prev")).toBeFocused();
+    }
+    await page.keyboard.press("Enter");
+    await page.waitForURL(/#\/article\/epub-[a-z0-9]+-c01$/, { timeout: 10_000 });
+    // Ordered union (the ?? discipline): in paginated mode the hidden
+    // measurement body precedes .page-viewport in DOM order, so a comma-
+    // union locator would match its invisible blocks first.
+    await page.waitForFunction(
+      () =>
+        !!(
+          document.querySelector(".page-fragment [data-block-index]") ??
+          document.querySelector(
+            ".article-body:not(.article-body-measurement) [data-block-index]",
+          )
+        ),
+      undefined,
+      { timeout: 10_000 },
+    );
+    await page.waitForTimeout(600);
+
+    // ── SCROLLING: M toggles (persisted); scroll to the flow end — the
+    // Next link is Tab-reachable + Enter-activatable there too.
+    await page.keyboard.press("m");
+    await page.waitForTimeout(700);
+    await page.evaluate(() =>
+      window.scrollTo(0, document.documentElement.scrollHeight),
+    );
+    await expect(page.locator("a.chapter-next")).toBeVisible();
+    // The Export button is the LAST header focusable; the flow order is
+    // header → prev nav → body → next nav, so a short walk reaches it.
+    if (tabOrderFollowsDom()) {
+      expect(
+        await tabWalkFrom(
+          page,
+          ".article-export-highlights",
+          "a.chapter-next",
+          5,
+        ),
+        "Tab must reach the Next chapter link in scrolling mode",
+      ).toBe(true);
+    } else {
+      await page.locator("a.chapter-next").focus();
+      await expect(page.locator("a.chapter-next")).toBeFocused();
+    }
+    await page.keyboard.press("Enter");
+    await page.waitForURL(/#\/article\/epub-[a-z0-9]+-c02$/, { timeout: 10_000 });
+    await expect(
+      page.locator(
+        ".article-body:not(.article-body-measurement) [data-block-index]",
+      ).first(),
+    ).toBeVisible({ timeout: 10_000 });
+    await page.waitForTimeout(600);
+
+    // axe on the chapter view in SCROLLING mode (context line + both flow
+    // navs in the tree).
+    results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
+    serious = seriousViolations(results);
+    ids = serious.map((v) => v.id);
+    expect(ids, JSON.stringify(serious, null, 2)).not.toContain("heading-order");
+    expect(ids).not.toContain("list");
+    expect(serious).toEqual([]);
+
+    // SCROLLING chapter start: the Previous link sits before the body —
+    // the FIRST focusable after the header cluster + Enter-activatable.
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await expect(page.locator("a.chapter-prev")).toBeVisible();
+    if (tabOrderFollowsDom()) {
+      expect(
+        await tabWalkFrom(page, ".article-export-highlights", "a.chapter-prev", 2),
+        "Tab must reach the Previous chapter link in scrolling mode",
+      ).toBe(true);
+    } else {
+      await page.locator("a.chapter-prev").focus();
+      await expect(page.locator("a.chapter-prev")).toBeFocused();
+    }
+    await page.keyboard.press("Enter");
+    await page.waitForURL(/#\/article\/epub-[a-z0-9]+-c01$/, { timeout: 10_000 });
+  });
 });
