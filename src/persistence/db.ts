@@ -10,6 +10,7 @@
 //
 // Index syntax: "primaryKey, index1, index2, &uniqueIndex, [compound+index]"
 import { Dexie, type Table } from "dexie";
+import type { Book } from "../content/schema";
 
 /** Shape of a row in the `settings` store (composite reader-prefs record). */
 export interface SettingsRecord {
@@ -76,6 +77,9 @@ export class LemReaderDB extends Dexie {
     footnotes?: unknown;
     lang?: string;
     tags?: string[];
+    // Phase 12 (ING-05): the bookId FK → books.id powers grouping reads
+    // (D12-01). Additive-optional — existing rows parse unchanged (Pitfall 9).
+    bookId?: string;
   }, string>;
   // Phase 5: real row types replace the Phase 1 placeholder annotations
   // (LOW risk — runtime-unaffected; Dexie resolves stores by name from the
@@ -86,6 +90,12 @@ export class LemReaderDB extends Dexie {
   // added this phase).
   highlights!: Table<HighlightRecordRow, string>;
   notes!: Table<NoteRecordRow, string>;
+  // Phase 12 (ING-05, Plan 12-03): the books table is typed by Book
+  // (z.infer of BookSchema — src/content/schema.ts is the single source of
+  // truth). Definite-assignment annotation mirrors the Phase 02-02
+  // precedent; runtime-unaffected (Dexie resolves stores by name from the
+  // version declarations below).
+  books!: Table<Book, string>;
 
   constructor() {
     super("lem-reader");
@@ -161,6 +171,28 @@ export class LemReaderDB extends Dexie {
       location: "[articleId+revision]",
       highlights: "id, [articleId+revision]",
       notes: "id, highlightId",
+    });
+    // ── Phase 12 (D12-01..D12-04 + Pitfall 9): the fifth version block is an
+    // APPEND. ──
+    // v1/v2/v3/v4 byte-unchanged. v5 adds the `bookId` index on `articles`
+    // (grouping reads — D12-01 expandable book rows key on it) plus the NEW
+    // `books` store ("id, title, *tags" — the *tags multi-entry index powers
+    // D12-04 book-tag filtering, mirroring the v4 articles *tags mechanism).
+    // NO `.upgrade()` callback — additive indexes + a new store that starts
+    // EMPTY; Dexie re-indexes on next open without row migration (the v3/v4
+    // additive precedent at L132-164). Existing v4 article rows simply omit
+    // `bookId` (absent from the index — additive, Pitfall 9); the books
+    // store bootstraps empty until the first .epub upload saves into it
+    // (12-03 booksStore.saveBook). The remaining stores are re-declared at
+    // their existing shapes because Dexie requires the full stores object at
+    // each version; their values match v4 verbatim.
+    this.version(5).stores({
+      articles: "id, revision, source, addedAt, *tags, bookId",
+      settings: "key",
+      location: "[articleId+revision]",
+      highlights: "id, [articleId+revision]",
+      notes: "id, highlightId",
+      books: "id, title, *tags",
     });
   }
 }
