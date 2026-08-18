@@ -185,8 +185,13 @@ describe("epubToBooks — TOC-merge + chapters", () => {
     expect(ch1.title).toBe("Chapter 1. Loomings");
     expect(ch1.spineIndex).toBe(1); // ch1a — the first document of the range
     const text = JSON.stringify(ch1.blocks);
-    const partA = text.indexOf("chapter 1 of its book");
-    const partB = text.indexOf("chapter 2 of its book");
+    // The 12-04 prose-uniqueness contract gives each document its own
+    // "Prose N.K" tokens (the old "(chapter N of its book)" markers were
+    // shared-run prose the per-chapter anchor gate cannot admit once
+    // merged); the first paragraphs' tokens still prove the spine-order
+    // merge: doc 1's opening prose precedes doc 2's.
+    const partA = text.indexOf("Prose 1.1");
+    const partB = text.indexOf("Prose 2.1");
     expect(partA).toBeGreaterThanOrEqual(0);
     expect(partB).toBeGreaterThanOrEqual(0);
     expect(partA).toBeLessThan(partB); // spine order preserved across the merge

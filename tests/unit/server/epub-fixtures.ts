@@ -275,12 +275,22 @@ ${points}
 // ── Chapter documents ────────────────────────────────────────────────────────
 
 /** Deterministic chapter prose — 3+ paragraph-bearing chapters clear the
- * D12-10 readerability admission; identical inputs → identical bytes. */
+ * D12-10 readerability admission; identical inputs → identical bytes.
+ * UNIQUENESS CONTRACT (12-04): the per-chapter round-trip anchor gate
+ * samples the ASSEMBLED chapter text, and a publisher-split chapter
+ * (publisherSplitBook) merges two documents into one article — two
+ * occurrences of the same 20-grapheme window with identical 32-grapheme
+ * prefix/suffix context resolve "ambiguous" (correct gate behavior; SC#4).
+ * Every sentence therefore carries a "Prose N.K" document token so no two
+ * documents share a prose run anywhere near the 84-grapheme danger length
+ * (prefix 32 + window 20 + suffix 32) — the max inter-token gap here is
+ * ~64 graphemes. */
 function chapterParagraphs(chapterLabel: string, index: number): string[] {
+  const n = index + 1;
   return [
-    `${chapterLabel} opens in calm prose. Every sentence in this synthetic chapter was written by the fixture generator so that the bytes, the block counts, and the reading order stay identical across machines and re-runs.`,
-    `The second paragraph carries the argument forward (chapter ${index + 1} of its book). A chapter document needs enough text to clear the readerability admission algebra, so this paragraph and the next provide honest block mass rather than decoration.`,
-    `The third paragraph closes the chapter. When the adapter walks this document, the heading and these paragraphs become heading and paragraph blocks in the canonical document model, and nothing else survives.`,
+    `${chapterLabel} opens in calm prose (document ${n}). Prose ${n}.1 is fixture-written so identical inputs give identical bytes. Prose ${n}.2 keeps block counts stable.`,
+    `The second paragraph of document ${n} carries the argument forward. Prose ${n}.3 must clear the readerability admission algebra. Prose ${n}.4 adds honest block mass.`,
+    `The third paragraph of document ${n} closes the chapter. Prose ${n}.5 turns the heading and paragraphs into canonical blocks. Prose ${n}.6 lets nothing else survive the walk.`,
   ];
 }
 
@@ -996,6 +1006,74 @@ function mixedAdmissionBookSpec(): FixtureSpec {
   return { entries, tocXml: nav, tocKind: "nav", topLevelCount: 3 };
 }
 
+/** A paragraph of whitespace-collapse-hostile repeated separator runs. The
+ * normalized text is PERIODIC: every 20-grapheme sample window drawn from it
+ * occurs at N>1 offsets with IDENTICAL periodic prefix/suffix context, so the
+ * SHIPPED TextQuoteSelector machinery cannot disambiguate and returns
+ * "ambiguous" — exactly what the per-chapter round-trip anchor gate (SC#4,
+ * stage level) refuses on. The D12-10 admission still passes (real block
+ * mass: h2 + 3 non-empty paragraphs), so the chapter reaches the gate. */
+function separatorRunParagraph(): string {
+  return "* ".repeat(120).trim();
+}
+
+/** The anchor-hostile chapter document (readerable-looking, periodic text). */
+function anchorHostileXhtml(title: string): string {
+  const ps = [separatorRunParagraph(), separatorRunParagraph(), separatorRunParagraph()]
+    .map((p) => `    <p>${p}</p>`)
+    .join("\n");
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
+  <head>
+    <title>${title}</title>
+  </head>
+  <body>
+    <section>
+      <h2>${title}</h2>
+${ps}
+    </section>
+  </body>
+</html>
+`;
+}
+
+/** 21. anchorGateFailBook — one good chapter + one anchor-hostile chapter:
+ * the adapter ADMITS both (D12-10 judges block mass, not anchorability), but
+ * the hostile chapter's normalized text round-trips ambiguously, so the
+ * PER-CHAPTER anchor gate (12-04's stage-level skip path, D12-11) skips and
+ * discloses it end-to-end. */
+function anchorGateFailBookSpec(): FixtureSpec {
+  const toc: TocEntry[] = [
+    { label: "Chapter 1. Loomings", href: "ch1.xhtml" },
+    { label: "Chapter 2. The Gauntlet", href: "ch2.xhtml" },
+  ];
+  const nav = navDocXml("Contents", toc);
+  const opf = opfXml({
+    version: "3.0",
+    title: "The Synthetic Book",
+    authors: ["Ada Author"],
+    language: "en",
+    identifier: "urn:uuid:synthetic-book-anchor-gate",
+    manifest: [
+      { id: "nav", href: "nav.xhtml", mediaType: "application/xhtml+xml", properties: "nav" },
+      { id: "c1", href: "ch1.xhtml", mediaType: "application/xhtml+xml" },
+      { id: "c2", href: "ch2.xhtml", mediaType: "application/xhtml+xml" },
+    ],
+    spine: [{ idref: "nav", linear: "no" }, { idref: "c1" }, { idref: "c2" }],
+  });
+  const entries: EpubEntries = {
+    mimetype: mimetypeEntry(),
+    "META-INF/container.xml": deflated(containerXml("content.opf")),
+    "content.opf": deflated(opf),
+    "nav.xhtml": deflated(nav),
+    "ch1.xhtml": deflated(chapterXhtml("Chapter 1. Loomings", 0)),
+    // STORED: this document IS the fixture's marker carrier (the periodic
+    // separator runs must be byte-visible to the self-check).
+    "ch2.xhtml": stored(anchorHostileXhtml("Chapter 2. The Gauntlet")),
+  };
+  return { entries, tocXml: nav, tocKind: "nav", topLevelCount: 2 };
+}
+
 // ── Declared-size patch (the 09-04 technique — never materialize bytes) ─────
 
 /** Patch the zip CENTRAL DIRECTORY's declared uncompressed size for one
@@ -1177,6 +1255,12 @@ export function mixedAdmissionBook(): Uint8Array {
   return zipBook(mixedAdmissionBookSpec());
 }
 
+/** 21. Good chapter + anchor-hostile periodic chapter → the per-chapter
+ * round-trip anchor gate (stage level, 12-04) skips and discloses it. */
+export function anchorGateFailBook(): Uint8Array {
+  return zipBook(anchorGateFailBookSpec());
+}
+
 // ── Self-check helpers ───────────────────────────────────────────────────────
 
 function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
@@ -1267,6 +1351,7 @@ const FIXTURES: NamedFixture[] = [
   { name: "imageChapterBook", build: imageChapterBook, spec: imageChapterBookSpec },
   { name: "emptyBook", build: emptyBook, spec: emptyBookSpec },
   { name: "mixedAdmissionBook", build: mixedAdmissionBook, spec: mixedAdmissionBookSpec },
+  { name: "anchorGateFailBook", build: anchorGateFailBook, spec: anchorGateFailBookSpec },
 ];
 
 function selfCheck(): void {
@@ -1319,6 +1404,7 @@ function selfCheck(): void {
   disc("zipSlipBook", "../../evil.xhtml", true);
   disc("imageChapterBook", "https://attacker.example/track.png", true);
   disc("imageChapterBook", "images/figure-1.png", true);
+  disc("anchorGateFailBook", "* * * * * * * * * * * * * * * * * *", true);
 
   // bombEntryBook: the DECLARED central-directory size must equal the
   // exported lie (the 12-02 spec asserts it exceeds the REAL
