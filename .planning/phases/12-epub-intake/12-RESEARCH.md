@@ -639,23 +639,23 @@ export const ExportBundleSchema = z.object({
 
 ## Open Questions
 
-1. **fast-xml-parser pin: 5.10.1 or 5.11.0?**
+1. **fast-xml-parser pin: 5.10.1 or 5.11.0?** (RESOLVED — 12-01 Task 1: the D12-15 blocking-human legitimacy gate approves the exact pin; default 5.10.1, 5.11.0 only on a verified API-neutral diff)
    - What we know: 5.11.0 published 2026-08-16 (1 day pre-research — the SUS "too-new" driver); 5.10.1 is STACK.md's verified version (2026-07-16); both MIT, zero scripts, same major.
    - What's unclear: whether 5.11.0's diff is API-neutral for our option surface.
    - Recommendation: present both in the D12-15 checkpoint with the legitimacy table from this research; default to **5.10.1** (older signal, STACK.md lineage) unless the diff check is clean and the user prefers latest.
 
-2. **End-of-chapter link placement in paginated mode — inside the last page fragment, or after the surface?**
+2. **End-of-chapter link placement in paginated mode — inside the last page fragment, or after the surface?** (RESOLVED — 12-06 Task 1: AFTER the surface as ArticleView-owned chrome; Next link rendered only while on the final page, Previous only on the first page — never inside fragments, never permanent)
    - What we know: D12-05 requires last-page visibility, no permanent chrome; blocks are substrate (untouchable); the pagination surface is viewport-height.
    - What's unclear: whether "after the last fragment inside the surface" is geometrically stable across engines at fragment boundaries.
    - Recommendation: planner decides with a tiny UI probe; scrolling-mode placement (after last block in flow) is unambiguous.
 
-3. **Do chapter sub-rows get Remove affordances, or is removal book-level only?**
+3. **Do chapter sub-rows get Remove affordances, or is removal book-level only?** (RESOLVED — 12-05: book-level remove only via BookRemoveConfirm (single removeBook call site); chapter sub-rows are open-only, preserving "Chapter N of M" numbering)
    - What we know: LIB-02 gives per-article remove; chapters are articles; but removing one chapter breaks "Chapter N of 12" numbering semantics mid-book.
    - Recommendation: book-level remove only (the book is the unit); chapter rows are open-only. Planner confirms.
 
-4. **Bundle schemaVersion 2 vs optional-field-on-1** — see A3. Recommendation: bump to 2 with union read; the D9-04 refusal of newer bundles by older readers is the honest behavior.
+4. **Bundle schemaVersion 2 vs optional-field-on-1** — see A3. Recommendation: bump to 2 with union read; the D9-04 refusal of newer bundles by older readers is the honest behavior. (RESOLVED — 12-07 Task 1: schemaVersion z.union([z.literal(1), z.literal(2)]), optional books array, newer-version peek refuses > 2)
 
-5. **Should `BookRow` read the book record from a new `booksStore.ts` seam or extend an existing store?**
+5. **Should `BookRow` read the book record from a new `booksStore.ts` seam or extend an existing store?** (RESOLVED — 12-03 Task 1: new `src/persistence/booksStore.ts` following the locationStore/settingsStore seam conventions)
    - What we know: locationStore/settingsStore/tagsStore establish the seam convention; LibraryView already parallel-loads via Promise.all.
    - Recommendation: new `src/persistence/booksStore.ts` (listBooks/getBook/saveBook/removeBook cascade) following the conventions; planner confirms file placement.
 
