@@ -5,15 +5,15 @@ milestone_name: Personal Library
 current_phase: 12
 current_phase_name: EPUB Intake
 status: executing
-stopped_at: Completed 12-05-PLAN.md
-last_updated: "2026-08-18T16:22:43.501Z"
+stopped_at: Completed 12-07-PLAN.md
+last_updated: "2026-08-18T16:45:00.856Z"
 last_activity: 2026-08-18
 last_activity_desc: Phase 12 execution started
 progress:
   total_phases: 7
   completed_phases: 5
   total_plans: 40
-  completed_plans: 37
+  completed_plans: 38
   percent: 71
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 ## Current Position
 
 Phase: 12 (EPUB Intake) — EXECUTING
-Plan: 6 of 8
+Plan: 7 of 8
 Status: Ready to execute
 Last activity: 2026-08-18 — Phase 12 execution started
 
@@ -137,6 +137,7 @@ Progress: [████████████████████] 32/32 p
 | Phase 12 P03 | 15 min | 2 tasks | 7 files |
 | Phase 12 P04 | 20 min | 2 tasks tasks | 5 files files |
 | Phase 12 P05 | 18 min | 3 tasks | 13 files |
+| Phase 12 P07 | 19 min | 2 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -310,6 +311,10 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: [Phase 12 12-04]: Every persisted EPUB hash carries the 'sha256:' prefix (chapter originalHtmlHash + book originalFileHash) — prefix-uniformity with every other persisted hash field wins over the plan's literal bare-hex pass-through
 - [Phase ?]: [Phase 12 12-04]: Middleware post-read 413 reason = parsed-body-key then URL-hint then pdf-too-large — body key authoritative when parseable; hint fallback keeps the pinned 11-03 non-JSON over-cap behavior byte-identical while an over-cap EPUB never sees PDF copy (Pitfall 2 closed)
 - [Phase ?]: [Phase 12 12-04]: Fixture prose-uniqueness contract — synthetic prose for documents that can MERGE into one article must interleave a per-document token at least every ~64 graphemes (84 = 32 prefix + 20 window + 32 suffix is the shipped selector machinery's ambiguity threshold); the 12-01 shared-run prose made the publisherSplit merge un-admittable at the new per-chapter anchor gate (Rule 1 fix)
+- [Phase ?]: [Phase 12 12-07] Bundle v2 ships as the 1|2 union read (ReaderSettingsSchema precedent): v1 bundles import unchanged, v3+ forward-refuses via the peek bumped to > 2, writers emit 2 always carrying the books array; BUNDLE_FILENAME stays lem-reader-bundle-v1.zip — the zip filename is not the version contract
+- [Phase ?]: [Phase 12 12-07] manifest.ts deliberately untouched — books are NOT a manifest block (the five Phase-9 blocks stay); T-12-17's mitigation is Zod-at-boundary + the puts-only transaction
+- [Phase ?]: [Phase 12 12-07] Book conflict semantics: same id + different originalFileHash skips by default; identical-hash is a calm no-op; keep-both behaves as skip — a minted book id would strand every chapter FK
+- [Phase ?]: [Phase 12 12-07] applyImport stamps the top-level bookId on chapter puts (Rule 2 — saveBook's v5 index contract): imported chapter rows stay index-uniform with saved ones; canonical FK stays ingestionMeta.bookId; the six-table settings branch uses Dexie's readonly-array overload (tuple overloads stop at five tables)
 
 ### Pending Todos
 
@@ -339,8 +344,8 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-18T16:22:43.492Z
-Stopped at: Completed 12-05-PLAN.md
+Last session: 2026-08-18T16:45:00.848Z
+Stopped at: Completed 12-07-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
