@@ -34,7 +34,7 @@ Seven phases that add one stateless ingestion backend and one new data domain (u
 - [x] **Phase 9: Versioned Export/Import** - Whole-library bundles and highlights-only export as the cross-device story in lieu of accounts (completed 2026-08-15)
 - [x] **Phase 10: Annotation Review Panel** - Dedicated surface to review, filter, and curate all highlights and notes across the library (completed 2026-08-16)
 - [x] **Phase 11: PDF Intake** - PDF text extraction with honest failure for scanned and multi-column documents (completed 2026-08-17)
-- [ ] **Phase 12: EPUB Intake** - Multi-chapter EPUB books surfaced as per-chapter articles under a book grouping
+- [x] **Phase 12: EPUB Intake** - Multi-chapter EPUB books surfaced as per-chapter articles under a book grouping (completed 2026-08-18)
 - [ ] **Phase 13: Polish and Acceptance** - FOUC and progress-bar fixes plus the NVDA+Firefox and v2.0 core-flow acceptance gate
 
 ## Phase Details
@@ -238,7 +238,7 @@ Plans:
   3. Cross-chapter navigation (next/previous chapter) and book-level progress (derived from per-chapter locations) work; reopening a book resumes at the last-read chapter.
   4. The EPUB parser is isolated behind an adapter (so the dependency can be swapped), the epub.js renderer is NOT used inside React, and a round-trip anchor test gates every successfully extracted chapter.
 
-**Plans**: 7/8 plans executed
+**Plans**: 8/8 plans complete
 **UI hint**: yes
 
 Plans:
@@ -266,7 +266,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5)*
 
-- [ ] 12-08-PLAN.md — calibration harness + local real-EPUB corpus checkpoint (D12-12) + SC#4 structural gates + honest full-suite phase gate
+- [x] 12-08-PLAN.md — calibration harness + local real-EPUB corpus checkpoint (D12-12) + SC#4 structural gates + honest full-suite phase gate
 
 ### Phase 13: Polish and Acceptance
 
@@ -297,5 +297,5 @@ Plans:
 | 9. Versioned Export/Import | v2.0 | 7/7 | Complete    | 2026-08-15 |
 | 10. Annotation Review Panel | v2.0 | 6/6 | Complete    | 2026-08-16 |
 | 11. PDF Intake | v2.0 | 7/7 | Complete    | 2026-08-17 |
-| 12. EPUB Intake | v2.0 | 7/8 | In Progress|  |
+| 12. EPUB Intake | v2.0 | 8/8 | Complete   | 2026-08-18 |
 | 13. Polish and Acceptance | v2.0 | 0/TBD | Not started | - |

@@ -159,3 +159,7 @@ None beyond the local corpus (already supplied at `corpus/epub/`, gitignored per
 ---
 *Phase: 12-epub-intake*
 *Completed: 2026-08-18*
+
+## Self-Check: PASSED
+
+All 11 created/modified files exist on disk; all 6 task/metadata commits (`4e2ecbf`, `131621f`, `8ba6b26`, `e66cdde`, `3f43082`, `065538f`) verified in git log; working tree clean at check time.

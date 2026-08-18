@@ -4,17 +4,17 @@ milestone: v2.0
 milestone_name: Personal Library
 current_phase: 12
 current_phase_name: EPUB Intake
-status: executing
-stopped_at: Completed 12-07-PLAN.md
-last_updated: "2026-08-18T17:32:46.922Z"
+status: verifying
+stopped_at: Completed 12-08-PLAN.md
+last_updated: "2026-08-18T21:30:04.301Z"
 last_activity: 2026-08-18
 last_activity_desc: Phase 12 execution started
 progress:
   total_phases: 7
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 40
-  completed_plans: 39
-  percent: 71
+  completed_plans: 40
+  percent: 86
 ---
 
 # Project State
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 
 Phase: 12 (EPUB Intake) — EXECUTING
 Plan: 8 of 8
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-08-18 — Phase 12 execution started
 
 Progress: [████████████████████] 32/32 plans (100%)
@@ -139,6 +139,7 @@ Progress: [████████████████████] 32/32 p
 | Phase 12 P05 | 18 min | 3 tasks | 13 files |
 | Phase 12 P07 | 19 min | 2 tasks | 11 files |
 | Phase 12 P06 | 38 min | 3 tasks | 5 files |
+| Phase 12 P08 | 110min | 3 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -318,6 +319,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: [Phase 12 12-07] applyImport stamps the top-level bookId on chapter puts (Rule 2 — saveBook's v5 index contract): imported chapter rows stay index-uniform with saved ones; canonical FK stays ingestionMeta.bookId; the six-table settings branch uses Dexie's readonly-array overload (tuple overloads stop at five tables)
 - [Phase 12]: 12-06: D12-05 paginated chapter nav is ArticleView-owned position:fixed chrome after the surface — out of the grid flow so mounting on the final page never perturbs .page-viewport geometry; pageState mirrored from onAnchorChange via surfaceRef.getState() (no props changed, no state lifted) — 12-06: D12-05 paginated chapter nav is ArticleView-owned position:fixed chrome after the surface — out of the grid flow so mounting on the final page never perturbs .page-viewport geometry; pageState mirrored from onAnchorChange via surfaceRef.getState() (no props changed, no state lifted)
 - [Phase 12]: 12-06: chapter links are the first article→article navigation keeping ArticleView mounted — D4-10 anchor refs reset on swap (stale offset opened the next chapter at its END); .chapter-nav-title italic not opacity (0.75 blended to 3.83:1, an axe AA fail) — 12-06: chapter links are the first article→article navigation keeping ArticleView mounted — D4-10 anchor refs reset on swap (stale offset opened the next chapter at its END); .chapter-nav-title italic not opacity (0.75 blended to 3.83:1, an axe AA fail)
+- [Phase ?]: 12-08: EPUB DTD guard calibrated to the threat — refuses only internal-subset <!ENTITY declarations (billion-laughs/entityBombOpf shape); the EPUB 3.3 spec own DOCTYPE html nav template is tolerated after the corpus proved the blanket refusal false-refused accessible_epub_3 into the fallback partition (Rule 1, 131621f) — The corpus did its declared job: proved the novel TOC-merge logic against real publisher output and caught a real false-refusal. Synthetic suites stayed green; no threshold values changed.
+- [Phase ?]: 12-08 D12-12 closed: 7 real books admitted at TOC-derived chapter counts with zero fallback fires and per-chapter anchor round-trips; evidence is CI-replay-pinned (thresholds deep-equal) so admission changes cannot silently loosen. Anchor-gate ambiguous skips (identical figure-fallback openings, Lorem repetition) are honest D12-11 disclosures, and the minimal-v2 packaging template is a manifest gap record — not a threshold-loosening excuse. — Real-corpus honesty: expected counts encode post-stage admissions with per-book derivation bases; gaps recorded (single_entry_toc verbatim, ncx_primary_toc consequence). Whole-novel allocation churn + unbounded per-chapter stage loop deferred with diagnosis (deferred-items.md).
 
 ### Pending Todos
 
@@ -347,8 +350,8 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-18T17:32:29.263Z
-Stopped at: Completed 12-07-PLAN.md
+Last session: 2026-08-18T21:30:04.289Z
+Stopped at: Completed 12-08-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
