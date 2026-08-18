@@ -37,6 +37,7 @@ import { fixtures } from "../fixtures";
 import { dexieLibrarySource } from "../ingestion/LibrarySource";
 import { db } from "../persistence/db";
 import type { LocationRecordRow } from "../persistence/db";
+import { listBooks } from "../persistence/booksStore";
 import { loadAllHighlights } from "../persistence/highlightsStore";
 import { loadAllNotes } from "../persistence/notesStore";
 import { loadAllLocations } from "../persistence/locationStore";
@@ -52,10 +53,11 @@ import type { ResolvedImportPlan } from "./conflicts";
 // ── Export side (PORT-01) ────────────────────────────────────────────────────
 
 /**
- * buildBundleBytes — read the five record sources through the Zod-validated
- * loaders (STATE-04 — never raw db.* reads, never N+1 per-article loaders),
- * derive fixtureIds, self-check the envelope, and zip bundle.json (pretty,
- * human-debuggable — negligible after DEFLATE) + manifest.json (minified).
+ * buildBundleBytes — read the six record sources (five Phase-9 sources +
+ * books since Phase 12) through the Zod-validated loaders (STATE-04 — never
+ * raw db.* reads, never N+1 per-article loaders), derive fixtureIds,
+ * self-check the envelope, and zip bundle.json (pretty, human-debuggable —
+ * negligible after DEFLATE) + manifest.json (minified).
  *
  * fixtureIds (D9-04): the ids of bundled fixtures the reader's records
  * actually reference — highlights.articleId, locations.articleId, and notes
@@ -70,7 +72,7 @@ import type { ResolvedImportPlan } from "./conflicts";
  * it can never produce a half-valid bundle.
  */
 export async function buildBundleBytes(): Promise<Uint8Array<ArrayBuffer>> {
-  const [articles, highlights, notes, locations, settingsResult] =
+  const [articles, highlights, notes, locations, settingsResult, booksResult] =
     await Promise.all([
       dexieLibrarySource.list(), // Dexie articles ONLY — fixtures never ride
       loadAllHighlights(),
@@ -80,10 +82,19 @@ export async function buildBundleBytes(): Promise<Uint8Array<ArrayBuffer>> {
       // !ok ⇒ storage trouble — still export, with defaults (D9-12
       // always-present; the reader's records must not be hostage to a
       // settings-read failure).
+      listBooks(), // Phase 12 (12-07) — Book records ride the v2 bundle.
+      // Same D9-12-shaped tolerance as settings: !ok ⇒ storage trouble —
+      // still export the records that DID read (books: []; chapters keep
+      // riding articles with ingestionMeta.bookId, so machine B re-groups
+      // them only if the book row also traveled — the never-silent ethos is
+      // served by refusing to hostage the whole export to one store read).
     ]);
   const preferences = settingsResult.ok
     ? settingsResult.settings
     : DEFAULT_SETTINGS;
+  // Writers ALWAYS emit the books field on v2 (empty array on a book-free
+  // library) — the field's presence is the v2 write contract (bundle.ts).
+  const books = booksResult.ok ? booksResult.books : [];
 
   // fixtureIds: referenced article ids ∩ bundled fixture ids.
   const highlightById = new Map(highlights.map((h) => [h.id, h]));
@@ -99,7 +110,9 @@ export async function buildBundleBytes(): Promise<Uint8Array<ArrayBuffer>> {
     .map((f) => f.id);
 
   const bundle = ExportBundleSchema.parse({
-    schemaVersion: 1 as const,
+    // Phase 12 (12-07): writers emit v2 — the 1|2 union read stays in
+    // bundle.ts; a v3+ bundle is refused by the peek below (D9-04).
+    schemaVersion: 2 as const,
     exportedAt: new Date().toISOString(),
     appVersion: resolveAppVersion(),
     articles,
@@ -108,6 +121,7 @@ export async function buildBundleBytes(): Promise<Uint8Array<ArrayBuffer>> {
     notes,
     preferences,
     fixtureIds,
+    books,
   });
 
   const manifest = await computeManifest(bundle);
@@ -156,9 +170,10 @@ const MAX_ENTRY_ORIGINAL_SIZE = 200_000_000;
  *   2. isSafeEntryName on EVERY entry key — one bad name refuses the WHOLE
  *      bundle (SC#2 hard gate; fflate exposes names unsanitized, D9-02).
  *   3. Required entries bundle.json + manifest.json → missing-entry.
- *   4. JSON.parse + PEEK schemaVersion: a number > 1 → newer-schema-version
+ *   4. JSON.parse + PEEK schemaVersion: a number > 2 → newer-schema-version
  *      BEFORE the full schema parse (the calm refusal instead of a Zod
- *      error wall — 09-RESEARCH anti-pattern).
+ *      error wall — 09-RESEARCH anti-pattern; v2 bundles parse normally
+ *      since Phase 12 — books ride them).
  *   5. ExportBundleSchema.safeParse → invalid with ALL issues mapped to
  *      "path: message" strings.
  *   6. computeManifest over the parsed bundle, compared block-by-block
@@ -209,6 +224,8 @@ export async function validateBundle(
   // 4. Peek the version BEFORE the full parse → calm "newer version"
   //    refusal. A bundle.json that is not valid JSON at all is an invalid
   //    bundle (the issues list carries it); it can never reach Zod.
+  //    Phase 12 (12-07): the threshold moved from > 1 to > 2 — v2 bundles
+  //    (books-capable) now parse; v3+ still refuses loudly (D9-04).
   let raw: unknown;
   try {
     raw = JSON.parse(strFromU8(bundleBytes));
@@ -219,7 +236,7 @@ export async function validateBundle(
     };
   }
   const peeked = (raw as { schemaVersion?: unknown }).schemaVersion;
-  if (typeof peeked === "number" && peeked > 1) {
+  if (typeof peeked === "number" && peeked > 2) {
     return {
       ok: false,
       refusal: { kind: "newer-schema-version", bundleVersion: peeked },

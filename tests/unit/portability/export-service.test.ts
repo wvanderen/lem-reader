@@ -24,12 +24,14 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   ArticleSchema,
+  BookSchema,
   HighlightRecordSchema,
   LocationRecordSchema,
   NoteRecordSchema,
   ReaderSettingsSchema,
 } from "../../../src/content/schema";
 import type {
+  Book,
   CanonicalArticle,
   HighlightRecord,
   LocationRecord,
@@ -160,6 +162,45 @@ function sampleLocation(overrides: Partial<LocationInput> = {}): LocationRecord 
   });
 }
 
+/** A schema-valid Book row (Phase 12 — the 12-03 BookSchema contract). */
+function sampleBook(overrides: Partial<Book> = {}): Book {
+  return BookSchema.parse({
+    id: "epub-111111111111",
+    title: "The Portable Book",
+    authors: ["Grace Gatherer"],
+    language: "en",
+    chapterArticleIds: ["epub-111111111111-c00", "epub-111111111111-c01"],
+    skippedChapterCount: 0,
+    source: "epub-upload",
+    originalFileHash: "sha256:" + "c".repeat(64),
+    addedAt: "2026-08-17T00:00:00.000Z",
+    ...overrides,
+  });
+}
+
+/** An epub-chapter article — an ordinary ArticleSchema row whose
+ * ingestionMeta carries the book FK (the 12-01 Phase-12 widening). */
+function sampleChapter(
+  overrides: Partial<ArticleInput> = {},
+): CanonicalArticle {
+  return sampleArticle({
+    id: "epub-111111111111-c00",
+    provenance: {
+      title: "Chapter 1. The Gathering",
+      retrievedAt: "2026-08-17T00:00:00.000Z",
+      originalHtmlHash: "sha256:" + "d".repeat(64),
+    },
+    ingestionMeta: {
+      source: "epub-chapter",
+      originalHtmlHash: "sha256:" + "d".repeat(64),
+      extractionConfidence: "high",
+      bookId: "epub-111111111111",
+      chapterIndex: 0,
+    },
+    ...overrides,
+  });
+}
+
 /** A REAL passage of a bundled fixture, with its true grapheme span — the
  * highlight seed keys to a real fixture id + real fixture text so resolution
  * semantics are exercised end-to-end (mirrors conflicts.test.ts). */
@@ -272,7 +313,7 @@ describe("buildBundleBytes (09-04 Task 1)", () => {
     const entries = await buildEntries();
 
     const bundle = ExportBundleSchema.parse(JSON.parse(strFromU8(entries["bundle.json"]!)));
-    expect(bundle.schemaVersion).toBe(1);
+    expect(bundle.schemaVersion).toBe(2);
     expect(bundle.articles).toHaveLength(2);
     expect(bundle.articles.map((a) => a.id).sort()).toEqual([
       "art-plain",
@@ -333,5 +374,93 @@ describe("buildBundleBytes (09-04 Task 1)", () => {
     };
     const recomputed = await computeManifest(bundle);
     expect(claimed.blocks.articles).toBe(recomputed.blocks.articles);
+  });
+
+  // ── Phase 12 (12-07 Task 1): books ride the v2 bundle ────────────────────
+
+  it("emits schemaVersion 2 with the books array and chapters among articles carrying ingestionMeta.bookId", async () => {
+    const { db } = await loadDb();
+    const book = sampleBook();
+    const chapter0 = sampleChapter();
+    const chapter1 = sampleChapter({
+      id: "epub-111111111111-c01",
+      provenance: {
+        title: "Chapter 2. The Voyage",
+        retrievedAt: "2026-08-17T00:00:00.000Z",
+        originalHtmlHash: "sha256:" + "e".repeat(64),
+      },
+      ingestionMeta: {
+        source: "epub-chapter",
+        originalHtmlHash: "sha256:" + "e".repeat(64),
+        extractionConfidence: "high",
+        bookId: "epub-111111111111",
+        chapterIndex: 1,
+      },
+    });
+    await db.books.put(book);
+    await db.articles.put(chapter0);
+    await db.articles.put(chapter1);
+
+    const entries = await buildEntries();
+    const bundle = ExportBundleSchema.parse(JSON.parse(strFromU8(entries["bundle.json"]!)));
+
+    // Writers emit v2 with the FULL book record.
+    expect(bundle.schemaVersion).toBe(2);
+    expect(bundle.books).toEqual([book]);
+
+    // Chapters ride articles as ordinary articles — ingestionMeta.bookId
+    // survives serialization (the grouping FK on the receiving machine).
+    expect(bundle.articles.map((a) => a.id).sort()).toEqual([
+      "epub-111111111111-c00",
+      "epub-111111111111-c01",
+    ]);
+    for (const article of bundle.articles) {
+      expect(article.ingestionMeta?.bookId).toBe("epub-111111111111");
+    }
+    expect(bundle.articles[0]?.ingestionMeta?.chapterIndex).toBe(0);
+  });
+
+  it("an empty-books library still emits v2 with books: [] (writers always emit the field)", async () => {
+    await seedExportSurface(true);
+    const entries = await buildEntries();
+
+    const bundle = ExportBundleSchema.parse(JSON.parse(strFromU8(entries["bundle.json"]!)));
+    expect(bundle.schemaVersion).toBe(2);
+    expect(bundle.books).toEqual([]);
+  });
+
+  it("determinism — two exports of the same library hash identically (manifest blocks equal; only exportedAt moves)", async () => {
+    const { db } = await loadDb();
+    await db.books.put(sampleBook());
+    await db.articles.put(sampleChapter());
+    await db.highlights.put(
+      sampleHighlight({
+        id: "hl-chapter",
+        articleId: "epub-111111111111-c00",
+        revision: 1,
+        position: { start: 0, end: 10 },
+        quote: { prefix: "", exact: "Alpha beta", suffix: "" },
+      }),
+    );
+
+    const first = await buildEntries();
+    const second = await buildEntries();
+
+    const parse = (entries: Record<string, Uint8Array>) =>
+      ExportBundleSchema.parse(JSON.parse(strFromU8(entries["bundle.json"]!)));
+
+    // The whole record content is byte-stable: books, articles, highlights,
+    // notes, locations, preferences, fixtureIds all deep-equal — only the
+    // exportedAt timestamp may move between the two runs.
+    const firstBundle = parse(first);
+    const secondBundle = parse(second);
+    const { exportedAt: _firstAt, ...firstRest } = firstBundle;
+    const { exportedAt: _secondAt, ...secondRest } = secondBundle;
+    expect(secondRest).toEqual(firstRest);
+
+    // And the deterministic SHA-256 manifest blocks hash identically.
+    expect(await computeManifest(secondBundle)).toEqual(
+      await computeManifest(firstBundle),
+    );
   });
 });

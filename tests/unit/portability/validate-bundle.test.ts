@@ -9,8 +9,9 @@
 //   2. unsafe-entry       — ../../evil.sh alongside valid entries; AND the
 //                           URL-encoded traversal form ..%2F..%2Fevil.sh
 //   3. missing-entry      — zip without manifest.json (and without bundle.json)
-//   4. newer-schema-version — schemaVersion 2 peeked BEFORE the full schema
-//                           parse (a v2 bundle with OTHER invalid fields still
+//   4. newer-schema-version — schemaVersion 3 (v2 is readable since Phase
+//                           12 12-07) peeked BEFORE the full schema parse
+//                           (a v3 bundle with OTHER invalid fields still
 //                           refuses newer-schema-version, not invalid)
 //   5. invalid            — safeParse issues as a LIST (multiple problems at
 //                           once — Pitfall 11 #2), each a path+message string
@@ -29,6 +30,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   ArticleSchema,
+  BookSchema,
   ReaderSettingsSchema,
 } from "../../../src/content/schema";
 import type { CanonicalArticle, ReaderSettings } from "../../../src/content/schema";
@@ -242,14 +244,15 @@ describe("validateBundle — refusal kinds (09-04 Task 2)", () => {
     }
   });
 
-  it("peeks schemaVersion BEFORE the full parse: a v2 bundle with OTHER invalid fields still refuses newer-schema-version", async () => {
+  it("peeks schemaVersion BEFORE the full parse: a v3 bundle with OTHER invalid fields still refuses newer-schema-version", async () => {
     const { validateBundle } = await loadService();
     const { bundle, manifest } = await validRawBundle();
-    // schemaVersion 2 AND other damage (articles not an array; fixtureIds
-    // dropped entirely) — the calm newer-version refusal must win.
+    // schemaVersion 3 (v2 is now readable — Phase 12 12-07) AND other damage
+    // (articles not an array; fixtureIds dropped entirely) — the calm
+    // newer-version refusal must win.
     const damaged: Record<string, unknown> = {
       ...bundle,
-      schemaVersion: 2,
+      schemaVersion: 3,
       articles: "not-an-array",
     };
     delete damaged.fixtureIds;
@@ -262,8 +265,43 @@ describe("validateBundle — refusal kinds (09-04 Task 2)", () => {
     if (!result.ok) {
       expect(result.refusal).toEqual({
         kind: "newer-schema-version",
-        bundleVersion: 2,
+        bundleVersion: 3,
       });
+    }
+  });
+
+  it("accepts a v2 bundle (books-capable) through the peek — Phase 12 12-07 threshold bump", async () => {
+    const { validateBundle } = await loadService();
+    const { bundle } = await validRawBundle();
+    const v2 = {
+      ...bundle,
+      schemaVersion: 2 as const,
+      books: [
+        BookSchema.parse({
+          id: "epub-222222222222",
+          title: "The Peeked Book",
+          authors: [],
+          language: "en",
+          chapterArticleIds: [],
+          skippedChapterCount: 0,
+          source: "epub-upload",
+          originalFileHash: "sha256:" + "f".repeat(64),
+          addedAt: "2026-08-17T00:00:00.000Z",
+        }),
+      ],
+    };
+    // An honestly-computed manifest over the v2 shape (books are not a
+    // manifest block — the five Phase-9 blocks are unchanged).
+    const v2Manifest = await computeManifest(ExportBundleSchema.parse(v2));
+    const file = zipFileOf({
+      "bundle.json": bundleJsonOf(v2),
+      "manifest.json": bundleJsonOf(v2Manifest),
+    });
+    const result = await validateBundle(file);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.bundle.schemaVersion).toBe(2);
+      expect(result.bundle.books).toHaveLength(1);
     }
   });
 
@@ -391,7 +429,7 @@ describe("validateBundle — round trip (09-04 Task 2)", () => {
 
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.bundle.schemaVersion).toBe(1);
+      expect(result.bundle.schemaVersion).toBe(2); // writers emit v2 (12-07)
       expect(result.bundle.articles.map((a) => a.id)).toEqual([
         "example-article",
       ]);

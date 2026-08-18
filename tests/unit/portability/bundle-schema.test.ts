@@ -1,8 +1,10 @@
 // tests/unit/portability/bundle-schema.test.ts
-// Plan 09-01 Task 2 (TDD RED → GREEN) — PORT-01/02 versioning hook truth.
-// Locks the D9-04 envelope shape: schemaVersion z.literal(1) forward-rejects
-// v2+ (the "exported by a newer Lem Reader version" refusal gate), all five
-// record blocks compose the EXISTING schemas from src/content/schema.ts (no
+// Plan 09-01 Task 2 (TDD RED → GREEN), extended by Plan 12-07 Task 1 —
+// PORT-01/02 versioning hook truth. Locks the D9-04 envelope shape:
+// schemaVersion is the 1|2 UNION (the ReaderSettingsSchema precedent —
+// v1 rows hydrate, v3+ forward-rejects per D9-04), books compose BookSchema
+// optionally (absent on v1, always present on v2 writes), all five record
+// blocks compose the EXISTING schemas from src/content/schema.ts (no
 // record shape re-declared), preferences are always present (D9-12), and
 // fixtureIds carries only fixture ids (fixtures never serialize).
 import { describe, expect, it } from "vitest";
@@ -61,6 +63,25 @@ function sampleNote() {
   };
 }
 
+/** A schema-valid Book row (Phase 12 — the 12-03 BookSchema contract). */
+function sampleBook(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "epub-000000000001",
+    title: "The Synthetic Book",
+    authors: ["Ada Author"],
+    language: "en",
+    chapterArticleIds: [
+      "epub-000000000001-c00",
+      "epub-000000000001-c01",
+    ],
+    skippedChapterCount: 0,
+    source: "epub-upload" as const,
+    originalFileHash: "sha256:" + "c".repeat(64),
+    addedAt: "2026-08-17T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
 function samplePreferences() {
   return {
     schemaVersion: 2 as const,
@@ -96,10 +117,62 @@ describe("ExportBundleSchema (D9-04 envelope)", () => {
     expect(result.success).toBe(true);
   });
 
-  it("rejects schemaVersion 2 (forward-compat gate — no silent partial import)", () => {
+  it("v1 regression (12-07): a v1 bundle carries NO books key and hydrates books to undefined", () => {
+    const result = ExportBundleSchema.safeParse(sampleBundle());
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect("books" in result.data).toBe(false);
+      expect(result.data.books).toBeUndefined();
+    }
+  });
+
+  it("parses a v2 bundle with a books array (the 12-07 write shape)", () => {
     const result = ExportBundleSchema.safeParse({
       ...sampleBundle(),
       schemaVersion: 2,
+      books: [sampleBook()],
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.schemaVersion).toBe(2);
+      expect(result.data.books).toHaveLength(1);
+      expect(result.data.books?.[0]?.title).toBe("The Synthetic Book");
+    }
+  });
+
+  it("parses a v2 bundle with books: [] (writers always emit the field)", () => {
+    const result = ExportBundleSchema.safeParse({
+      ...sampleBundle(),
+      schemaVersion: 2,
+      books: [],
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.books).toEqual([]);
+    }
+  });
+
+  it("tolerates a books-less v2 envelope on read (optional field, version-independent)", () => {
+    const result = ExportBundleSchema.safeParse({
+      ...sampleBundle(),
+      schemaVersion: 2,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects schemaVersion 3 (forward-compat gate — no silent partial import)", () => {
+    const result = ExportBundleSchema.safeParse({
+      ...sampleBundle(),
+      schemaVersion: 3,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a malformed book row inside a v2 bundle (BookSchema composition)", () => {
+    const result = ExportBundleSchema.safeParse({
+      ...sampleBundle(),
+      schemaVersion: 2,
+      books: [sampleBook({ source: "not-a-source" })],
     });
     expect(result.success).toBe(false);
   });
