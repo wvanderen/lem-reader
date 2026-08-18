@@ -238,7 +238,7 @@ Plans:
   3. Cross-chapter navigation (next/previous chapter) and book-level progress (derived from per-chapter locations) work; reopening a book resumes at the last-read chapter.
   4. The EPUB parser is isolated behind an adapter (so the dependency can be swapped), the epub.js renderer is NOT used inside React, and a round-trip anchor test gates every successfully extracted chapter.
 
-**Plans**: 8/8 plans
+**Plans**: 2/8 plans executed
 **UI hint**: yes
 
 Plans:
@@ -248,7 +248,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1)*
 
-- [ ] 12-02-PLAN.md — epubToBooks adapter: unzip + Zip Slip/bomb gates + DRM allowlist + container/OPF/nav/NCX parse + TOC-merge (D12-09) + per-chapter sanitize/walk + figure downgrade
+- [x] 12-02-PLAN.md — epubToBooks adapter: unzip + Zip Slip/bomb gates + DRM allowlist + container/OPF/nav/NCX parse + TOC-merge (D12-09) + per-chapter sanitize/walk + figure downgrade
 - [ ] 12-03-PLAN.md — client persistence + upload path: Dexie v5 books store + booksStore (atomic save/cascade remove) + ingestEpub + .epub picker arm + calm copy
 
 **Wave 3** *(blocked on Wave 2)*
@@ -297,5 +297,5 @@ Plans:
 | 9. Versioned Export/Import | v2.0 | 7/7 | Complete    | 2026-08-15 |
 | 10. Annotation Review Panel | v2.0 | 6/6 | Complete    | 2026-08-16 |
 | 11. PDF Intake | v2.0 | 7/7 | Complete    | 2026-08-17 |
-| 12. EPUB Intake | v2.0 | 1/8 | In Progress | - |
+| 12. EPUB Intake | v2.0 | 2/8 | In Progress|  |
 | 13. Polish and Acceptance | v2.0 | 0/TBD | Not started | - |

@@ -6,14 +6,14 @@ current_phase: 12
 current_phase_name: EPUB Intake
 status: executing
 stopped_at: Phase 12 context gathered
-last_updated: "2026-08-18T14:13:53.501Z"
+last_updated: "2026-08-18T15:11:49.353Z"
 last_activity: 2026-08-18
 last_activity_desc: Phase 12 execution started
 progress:
   total_phases: 7
   completed_phases: 5
   total_plans: 40
-  completed_plans: 32
+  completed_plans: 34
   percent: 71
 ---
 
@@ -29,8 +29,8 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 ## Current Position
 
 Phase: 12 (EPUB Intake) — EXECUTING
-Plan: 1 of 8
-Status: Executing Phase 12
+Plan: 3 of 8
+Status: Ready to execute
 Last activity: 2026-08-18 — Phase 12 execution started
 
 Progress: [████████████████████] 32/32 plans (100%)
@@ -133,6 +133,7 @@ Progress: [████████████████████] 32/32 p
 | Phase 11 P05 | 8min | 2 tasks | 1 files |
 | Phase 11 P06 | 47min | 3 tasks | 12 files |
 | Phase 11 P07 | 6 min | 3 tasks | 5 files |
+| Phase 12 P02 | 13min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -295,6 +296,10 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: Phase 11 11-06: scriptFragmentGapRatio=1 — the 1.0×lineDelta script-band window is AND-qualified (≤12 chars AND script-sized) so pure decoration fragments (∑ under-limits '𝑘=0' 11.88pt below their equation band) merge while body-sized short lines and math-heavy body lines keep the 0.75 window; a size-only wide window was tried and REVERTED (fused body lines, flipped a synthetic extreme) — synthetic extremes 35/35 green, TRACE 0.8932→0.92
 - [Phase ?]: Phase 11 11-07: isReaderable relaxed to blocks.length >= 3 && (textBearingPages >= 1 || nearEmptyPages === 0) — the scanned majority gate already refuses scanned docs BEFORE assembly, so the old text-bearing conjunct double-guarded and false-refused legitimately sparse structured documents (outline/title-page shapes); scannedItemFloor and all PDF_THRESHOLDS stay frozen (11-06 replay pin; re-tuning requires the derive harness)
 - [Phase ?]: Phase 11 11-07: Filename discipline in doubled-title-sensitive PDF tests — 'outline-notes.pdf' normalizes to 'outline notes' which fuzzy-matches NEITHER outline heading in either containment direction, so both h2 headings surviving D11-09 consume (ingest) and reaching the DOM (e2e) is itself part of the proof; a filename like 'outlined-doc' would be correctly consumed
+- [Phase ?]: 12-02: EPUB admission (D12-10) judges the ASSEMBLED chapter unit, not the individual spine document — frontMatterBook's 2-block front-matter docs vs the pinned 3-unit outcome proved per-document reading contradicts the plan's binding contract; skippedCount discloses units — Pitfall 10 admitted-only numbering coherence; 12-RESEARCH Pattern 5 'the unit is the chapter document'
+- [Phase ?]: 12-02: entity-bomb guard = DTD refusal across every parsed XML document — processEntities:false alone parses the DOCTYPE harmlessly (verified against fast-xml-parser 5.10.1), so the pinned epub-unreadable outcome required refusing <!DOCTYPE outright
+- [Phase ?]: 12-02: bomb-entry refusal via fflate filter-rejection detection (over-cap entry names recorded, then the book refuses epub-unreadable) — the plan's missing-required-document theory cannot hold — bomb.xhtml is referenced by nothing; filter-before-inflate discipline intact
+- [Phase ?]: 12-02: chapter document titles come from the RAW xhtml (sanitize strips <title>); epubToBooks ships bytes-only and computes both hashes in-adapter (originalFileHash + per-chapter sourceHtmlHash) — the orchestrator never re-reads bytes for IngestionMeta.originalHtmlHash
 
 ### Pending Todos
 
@@ -324,7 +329,7 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-18T02:13:12.771Z
+Last session: 2026-08-18T15:11:16.159Z
 Stopped at: Phase 12 context gathered
 Resume file: .planning/phases/12-epub-intake/12-CONTEXT.md
 
