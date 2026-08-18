@@ -2,7 +2,8 @@
 // Plan 07-05 — the pipeline orchestrator + inline round-trip anchor gate
 // (SC#1, the integration truth of Phase 7). Composes the /server primitives
 // (safeFetch + extractAndNormalize + markdownToBlocks + pdfToBlocks +
-// slugifyUrl + deriveConfidence) into the locked staged pipeline, validates
+// epubToBooks + slugifyUrl + deriveConfidence) into the locked staged
+// pipeline, validates
 // the result through ArticleSchema.parse (Zod-at-boundary), and refuses
 // entry to any article whose 5-offset TextQuoteSelector round-trip does not
 // resolve to "confident" (Pitfall 2 — the integration truth).
@@ -35,11 +36,18 @@ import { safeFetch, type FetchedContent } from "./safeFetch";
 import { extractAndNormalize, type ExtractAndNormalizeResult } from "./htmlToBlocks";
 import { markdownToBlocks, stripMarkdownExtension } from "./markdownToBlocks";
 import { pdfToBlocks } from "./pdfToBlocks";
+import { epubToBooks } from "./epubToBooks";
 import { deriveConfidence, type ConfidenceResult } from "./confidence";
 import { slugifyUrl } from "./slugify";
 import { IngestionError } from "./errors";
-import { PDF_MAX_BYTES } from "./limits";
-import { ArticleSchema, type Block, type CanonicalArticle } from "../src/content/schema";
+import { EPUB_MAX_BYTES, PDF_MAX_BYTES } from "./limits";
+import {
+  ArticleSchema,
+  BookSchema,
+  type Block,
+  type Book,
+  type CanonicalArticle,
+} from "../src/content/schema";
 import {
   normalizeText,
   graphemeClusters,
@@ -125,6 +133,42 @@ export function stripPdfExtension(filename: string): string {
 }
 
 /**
+ * stripEpubExtension — pure string-only helper that strips a trailing `.epub`
+ * extension (case-insensitive). The second arm of the book title chain
+ * (Phase 12 Plan 12-04): OPF dc:title is spec-REQUIRED and the adapter
+ * already falls back to "Untitled book" (never an empty string), so this arm
+ * is reached only when a caller wants the filename channel to override the
+ * tolerant fallback — the chain is deliberately short (mirrors
+ * stripPdfExtension's shape; orchestrator-owned per the 11-PATTERNS L129
+ * precedent).
+ *
+ * Examples (mirrored in the unit suite):
+ *   stripEpubExtension("my-book.epub")   === "my-book"
+ *   stripEpubExtension("MY-BOOK.EPUB")   === "MY-BOOK"
+ *   stripEpubExtension("no-extension")   === "no-extension"
+ */
+export function stripEpubExtension(filename: string): string {
+  return filename.replace(/\.epub$/i, "");
+}
+
+/**
+ * toIsoDatetimeOrNull — normalize a raw OPF dc:date string for
+ * Provenance.publishedAt. Provenance.publishedAt is `.datetime()`-refined
+ * (Zod-at-boundary), while BookSchema.publishedDate intentionally keeps the
+ * RAW publisher string (formats vary). A bare "2026-01-01" would fail the
+ * article parse, so the chapter provenance carries the date ONLY when
+ * Date can parse it, normalized to a full ISO datetime (midnight UTC for
+ * date-only values); an unparseable string (or absence) yields undefined —
+ * tolerant, never a refusal (Rule 1: the literal pass-through would fail
+ * the plan's own pinned happy path on every dated fixture).
+ */
+function toIsoDatetimeOrNull(raw: string | undefined): string | undefined {
+  if (raw === undefined || raw.length === 0) return undefined;
+  const d = new Date(raw);
+  return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
+}
+
+/**
  * normalizeForTitleMatch — lowercase + separator-collapse (the D11-09 fuzzy
  * matching basis: case/whitespace-insensitive containment). Hyphens and
  * underscores count as whitespace because the filename channel slugifies
@@ -161,6 +205,176 @@ export function consumeDuplicatedTitle(blocks: Block[], title: string): Block[] 
   return blocks;
 }
 
+// ── Phase 12 (Plan 12-04): the EPUB book flow ────────────────────────────────
+
+/**
+ * ingestEpubBook — the fifth Stage-1 branch's dedicated flow. The EPUB path
+ * diverges after Stage 1: a book is MANY articles, so the shared single-
+ * article tail (title chain → assemble → parse → gate → confidence → stamp)
+ * cannot host it. Instead this flow runs the UNCHANGED stages 2+ PER CHAPTER
+ * (ArticleSchema.parse → assertRoundTripAnchor → deriveConfidence → stamp —
+ * SC#4 per chapter, the same imported gate, no fork) and returns the book
+ * ok-variant envelope.
+ *
+ * Honesty algebra (D12-11):
+ *   - the adapter's own skippedCount (admission-level skips) seeds the count;
+ *   - a chapter failing ANY per-chapter stage (parse, the round-trip anchor
+ *     gate, confidence) increments the count and is OMITTED — never a
+ *     whole-book failure (each chapter is wrapped in its own try/catch);
+ *   - only ZERO admitted chapters refuses, with `epub-empty`.
+ *
+ * Identity (content-hash determinism — the dedupe-refuse foundation):
+ *   bookBase = `epub-<shortHash(base64 channel)>` (the D11 pdf-<hash>
+ *   precedent, D12 edition); admitted chapter i (position within the
+ *   ADMITTED list — Pitfall 10: skipped chapters never renumber) gets
+ *   `${bookBase}-c<NN>` zero-padded.
+ *
+ * Threat register (12-04-PLAN.md `<threat_model>`):
+ *   - T-12-09 (DoS, oversized upload): the decoded re-check below is the
+ *     third enforcement layer (client picker + middleware preceded it).
+ *   - T-12-13 (Tampering, book envelope forgery): BookSchema.parse before
+ *     the record crosses the response boundary.
+ *   - T-12-14 (DoS, per-chapter work amplification): the adapter's timeout
+ *     race + chapter cap already bound the draft list; the skip accounting
+ *     bounds wasted stage work here.
+ *   - T-12-07 (DRM posture): refusal reasons pass through the shared catch
+ *     envelope verbatim — no orchestrator DRM-specific code.
+ */
+async function ingestEpubBook(input: {
+  epub: string;
+  filename?: string;
+}): Promise<IngestionResponse> {
+  const { epub: b64, filename } = input;
+
+  // Stage 1, layer 3 — decoded re-check (base64 hides size from the
+  // transport layers' view of decoded bytes; this is the authoritative
+  // check before any parsing work begins — the pdf branch's exact pattern).
+  const bytes = Buffer.from(b64, "base64");
+  if (bytes.byteLength > EPUB_MAX_BYTES) {
+    throw new IngestionError("epub-too-large");
+  }
+
+  // Stage 1 — the adapter owns its timeout race (withEpubTimeout) and has
+  // already run the D12-10 admission + D12-09 TOC-merge; both hashes were
+  // computed in-adapter so this orchestrator never re-reads bytes.
+  const { bookMeta, chapters, skippedCount: adapterSkipped, originalFileHash } =
+    await epubToBooks(new Uint8Array(bytes));
+
+  const bookBase = `epub-${shortHash(b64)}`;
+  const admitted: CanonicalArticle[] = [];
+  const chapterArticleIds: string[] = [];
+  let skipped = adapterSkipped;
+
+  for (const draft of chapters) {
+    // i = position within the ADMITTED list (Pitfall 10) — a chapter that
+    // fails a stage below never consumes a number.
+    const i = admitted.length;
+    const id = `${bookBase}-c${String(i).padStart(2, "0")}`;
+    try {
+      // D11-09 EPUB analog — bodies start at h2; the provenance header
+      // renders the chapter's TOC-derived title.
+      const title = draft.title;
+      const effectiveBlocks = consumeDuplicatedTitle(draft.blocks, title);
+      const originalHtmlHash = `sha256:${draft.sourceHtmlHash}`;
+      const retrievedAt = new Date().toISOString();
+
+      // Stage 6a: BUILD the chapter article (the five per-article fields
+      // ride the same contract as every other Stage-1 adapter; provenance
+      // carries the BOOK's authors/publishedDate and the chapter's own
+      // TOC-derived title).
+      const assembled = {
+        id,
+        revision: 1,
+        lang: draft.lang,
+        provenance: {
+          title,
+          author: bookMeta.authors.length > 0 ? bookMeta.authors.join(", ") : undefined,
+          publishedAt: toIsoDatetimeOrNull(bookMeta.publishedDate),
+          retrievedAt,
+          originalHtmlHash,
+        },
+        blocks: effectiveBlocks,
+        footnotes: draft.footnotes,
+        ingestionMeta: {
+          source: "epub-chapter" as const,
+          origin: "upload" as const,
+          originalHtmlHash,
+          extractionConfidence: "high" as const, // placeholder — stamped post-gate
+          extractionWarnings: [],
+          bookId: bookBase,
+          chapterIndex: i,
+        },
+      };
+
+      // Stage 6b: VALIDATE — ArticleSchema.parse (unchanged stage).
+      const article: CanonicalArticle = ArticleSchema.parse(assembled);
+
+      // Stage 7: ROUND-TRIP ANCHOR GATE (SC#4) — the SAME imported gate,
+      // per chapter (ambiguous|orphan throws below into the chapter skip).
+      assertRoundTripAnchor(article);
+
+      // ING-06 three-state confidence (unchanged stage). The adapter's
+      // D12-10 admission already established readerability — the chapter
+      // would not exist as a draft otherwise — so isReaderable:true.
+      const confidence: ConfidenceResult = deriveConfidence(article, {
+        isReaderable: true,
+      });
+      if (confidence.state === "unsupported") {
+        skipped += 1; // honest per-chapter refusal (D12-11) — omitted
+        continue;
+      }
+
+      // Stamp (mutation safe — local to this request; same pattern as the
+      // single-article tail).
+      if (article.ingestionMeta) {
+        article.ingestionMeta.extractionConfidence =
+          confidence.state === "confident" ? "high" : "low";
+      }
+
+      chapterArticleIds.push(id);
+      admitted.push(article);
+    } catch {
+      // A chapter failing parse / the anchor gate / any stage is SKIPPED
+      // and disclosed — never a whole-book failure (D12-11).
+      skipped += 1;
+    }
+  }
+
+  // Zero admitted chapters → whole-book refusal.
+  if (admitted.length === 0) {
+    throw new IngestionError("epub-empty");
+  }
+
+  // Book assembly — the thin record (BookSchema, T-12-13: parsed before it
+  // crosses the boundary). Title chain: OPF dc:title (spec-REQUIRED; the
+  // adapter's tolerant "Untitled book" fallback) → stripEpubExtension(
+  // filename) → "Book" (the chain is short by construction).
+  const book: Book = BookSchema.parse({
+    id: bookBase,
+    title: bookMeta.title || (filename !== undefined ? stripEpubExtension(filename) : "") || "Book",
+    authors: bookMeta.authors,
+    language: bookMeta.language,
+    chapterArticleIds,
+    ...(bookMeta.publisher !== undefined ? { publisher: bookMeta.publisher } : {}),
+    ...(bookMeta.publishedDate !== undefined ? { publishedDate: bookMeta.publishedDate } : {}),
+    ...(bookMeta.identifier !== undefined ? { identifier: bookMeta.identifier } : {}),
+    skippedChapterCount: skipped,
+    source: "epub-upload",
+    originalFileHash: `sha256:${originalFileHash}`,
+    tags: [], // books start untagged — D12-04 tagging is a reader act
+    addedAt: new Date().toISOString(),
+  });
+
+  // The book ok-variant envelope (12-03's IngestionClient.ingestEpub
+  // consumes exactly this shape).
+  return {
+    ok: true,
+    book,
+    articles: admitted,
+    skippedCount: book.skippedChapterCount,
+  };
+}
+
 /**
  * ingest — the 7-stage stateless pipeline orchestrator (RESEARCH.md §Pattern 1
  * L249-279). Runs safeFetch → extractAndNormalize → slugifyUrl →
@@ -170,31 +384,51 @@ export function consumeDuplicatedTitle(blocks: Block[], title: string): Block[] 
  * map it to HTTP 400 cleanly.
  *
  * Input is input-source-agnostic (D7-03): exactly one of {url} | {html} |
- * {markdown} | {pdf}. The url path runs safeFetch (SSRF guard); the html path
- * synthesizes the pipeline input directly with finalUrl=undefined (no fetch,
- * no SSRF surface); the markdown + pdf paths mirror that shape through their
- * sibling adapters (Stage-1 extraction only — stages 2+ are shared).
+ * {markdown} | {pdf} | {epub}. The url path runs safeFetch (SSRF guard); the
+ * html path synthesizes the pipeline input directly with finalUrl=undefined
+ * (no fetch, no SSRF surface); the markdown + pdf paths mirror that shape
+ * through their sibling adapters (Stage-1 extraction only — stages 2+ are
+ * shared). The epub path (Phase 12 Plan 12-04, the fifth Stage-1 branch)
+ * diverges after Stage 1: it runs stages 2+ PER CHAPTER inside
+ * ingestEpubBook and returns the book ok-variant envelope — the single-
+ * article stages below stay byte-stable for the four prior formats.
  *
- * Input validation (exactly one of url/html/markdown/pdf) throws
+ * Input validation (exactly one of url/html/markdown/pdf/epub) throws
  * IngestionError — the caller is expected to pass a Zod-validated
  * IngestionRequest, so reaching this throw is a programming error.
  */
 export async function ingest(input: IngestionRequest): Promise<IngestionResponse> {
   // Stage 0 — input validation: exactly one of {url} | {html} | {markdown} |
-  // {pdf} required. (Thrown, not serialized — the caller contract is
-  // IngestionRequestSchema-validated; reaching this throw indicates a
+  // {pdf} | {epub} required. (Thrown, not serialized — the caller contract
+  // is IngestionRequestSchema-validated; reaching this throw indicates a
   // programming error.)
   const hasUrl = "url" in input && input.url !== undefined;
   const hasHtml = "html" in input && input.html !== undefined;
   const hasMarkdown = "markdown" in input && input.markdown !== undefined;
   const hasPdf = "pdf" in input && input.pdf !== undefined;
+  const hasEpub = "epub" in input && input.epub !== undefined;
   if (
-    (hasUrl ? 1 : 0) + (hasHtml ? 1 : 0) + (hasMarkdown ? 1 : 0) + (hasPdf ? 1 : 0) !== 1
+    (hasUrl ? 1 : 0) +
+      (hasHtml ? 1 : 0) +
+      (hasMarkdown ? 1 : 0) +
+      (hasPdf ? 1 : 0) +
+      (hasEpub ? 1 : 0) !==
+    1
   ) {
     throw new IngestionError("server-error");
   }
 
   try {
+    // Stage 1, fifth branch — EPUB (Phase 12 Plan 12-04). Returns the book
+    // ok-variant envelope from its own dedicated flow; its refusals
+    // (epub-too-large / epub-protected / epub-unreadable / epub-empty)
+    // throw IngestionError and serialize through the SAME catch envelope
+    // below (T-7-23). Placed first so the four single-article branches and
+    // the shared stages 2+ tail stay byte-stable for existing formats.
+    if (hasEpub) {
+      return await ingestEpubBook(input as { epub: string; filename?: string });
+    }
+
     // Stage 1: SOURCE → EXTRACT → NORMALIZE. Three branches share the same
     // output shape so the downstream stages (ArticleSchema.parse +
     // assertRoundTripAnchor + deriveConfidence) run identically on all paths
