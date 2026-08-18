@@ -5,15 +5,15 @@ milestone_name: Personal Library
 current_phase: 12
 current_phase_name: EPUB Intake
 status: executing
-stopped_at: Phase 12 context gathered
-last_updated: "2026-08-18T15:30:45.767Z"
+stopped_at: Completed 12-04-PLAN.md
+last_updated: "2026-08-18T15:54:46.318Z"
 last_activity: 2026-08-18
 last_activity_desc: Phase 12 execution started
 progress:
   total_phases: 7
   completed_phases: 5
   total_plans: 40
-  completed_plans: 35
+  completed_plans: 36
   percent: 71
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 ## Current Position
 
 Phase: 12 (EPUB Intake) — EXECUTING
-Plan: 4 of 8
+Plan: 5 of 8
 Status: Ready to execute
 Last activity: 2026-08-18 — Phase 12 execution started
 
@@ -135,6 +135,7 @@ Progress: [████████████████████] 32/32 p
 | Phase 11 P07 | 6 min | 3 tasks | 5 files |
 | Phase 12 P02 | 13min | 2 tasks | 2 files |
 | Phase 12 P03 | 15 min | 2 tasks | 7 files |
+| Phase 12 P04 | 20 min | 2 tasks tasks | 5 files files |
 
 ## Accumulated Context
 
@@ -304,6 +305,10 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 12]: Phase 12-03: saveBook denormalizes a TOP-LEVEL bookId onto stored chapter rows — the plan's v5 articles index is top-level but CanonicalArticle carries bookId only in ingestionMeta; ArticleSchema strip-mode drops the unknown key on read so the canonical contract stays ingestionMeta.bookId
 - [Phase 12]: Phase 12-03: ingestEpub parses the FULL widened IngestionResponseSchema (envelope validates the Book itself) then runs the mandated per-article ArticleSchema.parse loop — two-layer T-12-10 defense-in-depth; ?format=epub stays a copy-only middleware hint
 - [Phase 12]: Phase 12-03: the .status region gained a success render arm for the book path (stays on the list — navigation is 12-06's); single-article success paths now setMessage(null), behavior-preserving
+- [Phase ?]: [Phase 12 12-04]: EPUB provenance.publishedAt is NORMALIZED (toIsoDatetimeOrNull: Date-parsable OPF dc:date to midnight-UTC ISO; unparseable omitted) — Provenance is .datetime()-refined so the plan's literal raw pass-through would fail ArticleSchema.parse on every dated fixture; BookSchema.publishedDate keeps the raw string
+- [Phase ?]: [Phase 12 12-04]: Every persisted EPUB hash carries the 'sha256:' prefix (chapter originalHtmlHash + book originalFileHash) — prefix-uniformity with every other persisted hash field wins over the plan's literal bare-hex pass-through
+- [Phase ?]: [Phase 12 12-04]: Middleware post-read 413 reason = parsed-body-key then URL-hint then pdf-too-large — body key authoritative when parseable; hint fallback keeps the pinned 11-03 non-JSON over-cap behavior byte-identical while an over-cap EPUB never sees PDF copy (Pitfall 2 closed)
+- [Phase ?]: [Phase 12 12-04]: Fixture prose-uniqueness contract — synthetic prose for documents that can MERGE into one article must interleave a per-document token at least every ~64 graphemes (84 = 32 prefix + 20 window + 32 suffix is the shipped selector machinery's ambiguity threshold); the 12-01 shared-run prose made the publisherSplit merge un-admittable at the new per-chapter anchor gate (Rule 1 fix)
 
 ### Pending Todos
 
@@ -333,9 +338,9 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-18T15:30:00.028Z
-Stopped at: Phase 12 context gathered
-Resume file: .planning/phases/12-epub-intake/12-CONTEXT.md
+Last session: 2026-08-18T15:54:46.309Z
+Stopped at: Completed 12-04-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 

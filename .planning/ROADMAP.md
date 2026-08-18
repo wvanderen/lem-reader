@@ -238,7 +238,7 @@ Plans:
   3. Cross-chapter navigation (next/previous chapter) and book-level progress (derived from per-chapter locations) work; reopening a book resumes at the last-read chapter.
   4. The EPUB parser is isolated behind an adapter (so the dependency can be swapped), the epub.js renderer is NOT used inside React, and a round-trip anchor test gates every successfully extracted chapter.
 
-**Plans**: 3/8 plans executed
+**Plans**: 4/8 plans executed
 **UI hint**: yes
 
 Plans:
@@ -253,7 +253,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2)*
 
-- [ ] 12-04-PLAN.md — orchestrator fifth Stage-1 branch (per-chapter stages 2+ with skip/disclose) + middleware cap-coupling fix + integration round-trip gate
+- [x] 12-04-PLAN.md — orchestrator fifth Stage-1 branch (per-chapter stages 2+ with skip/disclose) + middleware cap-coupling fix + integration round-trip gate
 
 **Wave 4** *(blocked on Wave 3)*
 
@@ -297,5 +297,5 @@ Plans:
 | 9. Versioned Export/Import | v2.0 | 7/7 | Complete    | 2026-08-15 |
 | 10. Annotation Review Panel | v2.0 | 6/6 | Complete    | 2026-08-16 |
 | 11. PDF Intake | v2.0 | 7/7 | Complete    | 2026-08-17 |
-| 12. EPUB Intake | v2.0 | 3/8 | In Progress|  |
+| 12. EPUB Intake | v2.0 | 4/8 | In Progress|  |
 | 13. Polish and Acceptance | v2.0 | 0/TBD | Not started | - |
