@@ -25,6 +25,8 @@
 //     typed `reason`; mapReasonToCopy (lives in IngestControl) is the only
 //     place reason → reader-facing phrase.
 import { ArticleSchema, type CanonicalArticle } from "../content/schema";
+import type { Book } from "../content/schema";
+import { IngestionResponseSchema } from "./types";
 import type { IngestionFailureReason, IngestionResponse } from "./types";
 
 /**
@@ -111,6 +113,98 @@ export async function ingestPdf(
   filename?: string,
 ): Promise<IngestionSuccess> {
   return ingest({ pdf: pdfBase64, filename });
+}
+
+/**
+ * EpubIngestionSuccess — the book-shaped success returned by ingestEpub
+ * (Phase 12 ING-05). `book` is BookSchema-validated (through the envelope
+ * parse below); `articles` are the admitted chapter articles (min 1 — the
+ * envelope refuses zero-chapter books as epub-empty server-side, D12-11);
+ * `skippedCount` is the D12-11 skip-disclosure count surfaced additively
+ * by the success copy.
+ */
+export interface EpubIngestionSuccess {
+  book: Book;
+  articles: CanonicalArticle[];
+  skippedCount: number;
+}
+
+/**
+ * ingestEpub — POST {epub, filename?} to /api/ingest?format=epub and
+ * re-validate the book envelope (Phase 12 ING-05). The base64 encoding
+ * mirrors ingestPdf (IngestControl's chunked bytesToBase64); `filename`
+ * is a title-fallback hint ONLY — the book + chapter ids are content-hash
+ * (D7-07 discipline), so identical bytes dedupe-refuse at the book level.
+ *
+ * The `?format=epub` query param is a COPY-ONLY hint for the middleware's
+ * pre-read 413 reason selection (12-RESEARCH Pitfall 2 resolution —
+ * enforcement stays content-length-based and body-agnostic; the
+ * authoritative reason comes from the post-read parsed shape on the
+ * server). It does NOT fork the endpoint.
+ *
+ * T-12-10 (STATE-04 defense-in-depth, two layers):
+ *   1. the response is parsed through the widened IngestionResponseSchema
+ *      (validates the Book ok-variant — or the refusal — against the
+ *      committed contract);
+ *   2. EVERY article in the book variant is re-validated through
+ *      ArticleSchema.parse in an explicit loop — the network is a trust
+ *      boundary, and the per-article contract is the load-bearing one.
+ *
+ * Refusals throw `IngestionError` with the typed `.reason`; a malformed
+ * envelope throws ZodError (the caller's catch-all surfaces the calm
+ * server-error copy).
+ */
+export async function ingestEpub(
+  epubBase64: string,
+  filename?: string,
+): Promise<EpubIngestionSuccess> {
+  const res = await fetch("/api/ingest?format=epub", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ epub: epubBase64, filename }),
+  });
+
+  // Parse the response body as IngestionResponse. A non-JSON body (e.g. an
+  // HTML 502 page from a misconfigured proxy) throws here; surface it as
+  // the catch-all server-error.
+  let json: IngestionResponse;
+  try {
+    json = (await res.json()) as IngestionResponse;
+  } catch {
+    throw new IngestionError("server-error");
+  }
+
+  // T-12-10 layer 1: the envelope parse. Unlike the single-article
+  // pipeline (which narrows by key), the book call parses the FULL widened
+  // schema so the Book ok-variant itself is validated at the boundary.
+  const parsed = IngestionResponseSchema.parse(json);
+
+  // Typed refusal: ok:false carries the cataloged reason.
+  if (!parsed.ok) {
+    throw new IngestionError(parsed.reason);
+  }
+
+  // HTTP non-2xx with an ok:true body is a contract violation — refuse
+  // rather than trust a partial payload.
+  if (!res.ok) {
+    throw new IngestionError("server-error");
+  }
+
+  // A single-article envelope on an epub call is a contract violation for
+  // THIS call (the 12-01 narrowing rule, mirrored from ingest()).
+  if (!("book" in parsed)) {
+    throw new IngestionError("server-error");
+  }
+
+  // T-12-10 layer 2: re-validate EVERY article through ArticleSchema.parse
+  // in an explicit loop. ZodError propagates; the caller's catch-all
+  // surfaces "Something went wrong. Try again."
+  const articles: CanonicalArticle[] = [];
+  for (const article of parsed.articles) {
+    articles.push(ArticleSchema.parse(article));
+  }
+
+  return { book: parsed.book, articles, skippedCount: parsed.skippedCount };
 }
 
 /**

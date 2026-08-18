@@ -12,8 +12,12 @@
 // fake-indexeddb so save/has/list/remove assert real IndexedDB semantics
 // without a browser.
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ArticleSchema } from "../../src/content/schema";
+import { screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { ArticleSchema, BookSchema } from "../../src/content/schema";
+import type { Book } from "../../src/content/schema";
 import type { CanonicalArticle } from "../../src/content/types";
+import { EPUB_MAX_BYTES } from "../../src/ingestion/types";
 import fakeIndexedDB, { IDBKeyRange } from "fake-indexeddb";
 import { Dexie } from "dexie";
 
@@ -45,6 +49,12 @@ async function loadClient() {
 }
 async function loadLibrarySource() {
   return await import("../../src/ingestion/LibrarySource");
+}
+async function loadBooksStore() {
+  return await import("../../src/persistence/booksStore");
+}
+async function loadDb() {
+  return await import("../../src/persistence/db");
 }
 
 // A schema-valid article used as the IngestionClient success payload + as
@@ -86,6 +96,53 @@ function sampleArticle(overrides: Partial<CanonicalArticle> = {}): CanonicalArti
       extractionConfidence: "high",
       extractionWarnings: [],
     },
+    ...overrides,
+  });
+}
+
+// Phase 12 Plan 03 — a schema-valid chapter article (epub-chapter meta) +
+// a schema-valid Book, the ingestEpub book ok-variant payload.
+function sampleChapter(
+  overrides: Partial<CanonicalArticle> = {},
+): CanonicalArticle {
+  return ArticleSchema.parse({
+    id: "epub-abc123def456-c00",
+    revision: 1,
+    lang: "en",
+    provenance: {
+      sourceUrl: undefined,
+      title: "Chapter One",
+      retrievedAt: "2026-08-18T00:00:00.000Z",
+      originalHtmlHash: "sha256:" + "c".repeat(64),
+    },
+    blocks: [
+      { kind: "paragraph", content: [{ text: "Chapter body.", marks: [] }] },
+    ],
+    footnotes: [],
+    ingestionMeta: {
+      source: "epub-chapter",
+      origin: "upload",
+      originalHtmlHash: "sha256:" + "c".repeat(64),
+      extractionConfidence: "high",
+      extractionWarnings: [],
+      bookId: "epub-abc123def456",
+      chapterIndex: 0,
+    },
+    ...overrides,
+  });
+}
+
+function sampleBook(overrides: Partial<Book> = {}): Book {
+  return BookSchema.parse({
+    id: "epub-abc123def456",
+    title: "A Sample Book",
+    authors: ["An Author"],
+    language: "en",
+    chapterArticleIds: ["epub-abc123def456-c00", "epub-abc123def456-c01"],
+    skippedChapterCount: 2,
+    source: "epub-upload",
+    originalFileHash: "sha256:" + "b".repeat(64),
+    addedAt: "2026-08-18T00:00:00.000Z",
     ...overrides,
   });
 }
@@ -400,5 +457,245 @@ describe("compositeLibraryRepository (07-06 Task 1)", () => {
     expect((await compositeLibraryRepository.open(first.id))?.id).toBe(first.id);
     // Absent.
     expect(await compositeLibraryRepository.open("does-not-exist")).toBeNull();
+  });
+});
+
+// ── ingestEpub (Phase 12 Plan 03 Task 2) ─────────────────────────────────────
+
+describe("ingestEpub (12-03 Task 2)", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("posts exactly {epub, filename} to /api/ingest?format=epub and returns {book, articles, skippedCount}", async () => {
+    const book = sampleBook();
+    const chapters = [
+      sampleChapter(),
+      sampleChapter({
+        id: "epub-abc123def456-c01",
+        provenance: {
+          sourceUrl: undefined,
+          title: "Chapter Two",
+          retrievedAt: "2026-08-18T00:00:00.000Z",
+          originalHtmlHash: "sha256:" + "d".repeat(64),
+        },
+        ingestionMeta: {
+          source: "epub-chapter",
+          origin: "upload",
+          originalHtmlHash: "sha256:" + "d".repeat(64),
+          extractionConfidence: "high",
+          extractionWarnings: [],
+          bookId: "epub-abc123def456",
+          chapterIndex: 1,
+        },
+      }),
+    ];
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(
+        new Response(
+          JSON.stringify({ ok: true, book, articles: chapters, skippedCount: 2 }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      );
+
+    const { ingestEpub } = await loadClient();
+    const b64 = "UEsDBA=="; // "PK\x03\x04" base64-encoded
+    const result = await ingestEpub(b64, "sample.epub");
+
+    // The URL carries the format query param + the body is EXACTLY
+    // {epub, filename} (IngestionRequestSchema enforces this on the
+    // server; the client constructs it by construction).
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const call = fetchMock.mock.calls[0];
+    expect(call).toBeDefined();
+    const [calledUrl, init] = call as [unknown, RequestInit | undefined];
+    expect(calledUrl).toBe("/api/ingest?format=epub");
+    expect(init?.method).toBe("POST");
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({
+      epub: b64,
+      filename: "sample.epub",
+    });
+    expect(result.book.id).toBe(book.id);
+    expect(result.articles.map((a) => a.id)).toEqual([
+      "epub-abc123def456-c00",
+      "epub-abc123def456-c01",
+    ]);
+    expect(result.skippedCount).toBe(2);
+  });
+
+  it("rejects when ONE article in the envelope is malformed (per-article re-validation fires)", async () => {
+    const malformed = {
+      id: "epub-abc123def456-c99",
+      revision: 1,
+      lang: "en",
+      // Missing required Provenance fields (no title) + empty blocks —
+      // fails BOTH the envelope's embedded ArticleSchema and the explicit
+      // per-article loop.
+      provenance: {
+        retrievedAt: "2026-08-18T00:00:00.000Z",
+        originalHtmlHash: "x",
+      },
+      blocks: [],
+      footnotes: [],
+    };
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          book: sampleBook(),
+          articles: [sampleChapter(), malformed],
+          skippedCount: 0,
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    const { ingestEpub } = await loadClient();
+    await expect(ingestEpub("UEsDBA==", "bad.epub")).rejects.toThrow();
+  });
+
+  it("throws IngestionError carrying the typed epub-protected reason on a refusal envelope", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ ok: false, reason: "epub-protected" }),
+        { status: 400, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    const { ingestEpub } = await loadClient();
+    await expect(ingestEpub("UEsDBA==", "drm.epub")).rejects.toMatchObject({
+      name: "IngestionError",
+      reason: "epub-protected",
+    });
+  });
+});
+
+// ── IngestControl .epub picker arm (Phase 12 Plan 03 Task 2) ─────────────────
+// No 11-04 picker test exists (tests/component/IngestControl.test.tsx has no
+// file-upload case), so per the plan's fallback these assertions live HERE:
+// the over-cap pick performs ZERO fetch calls and never materializes an
+// ArrayBuffer; the book save path dedupe-refuses at book level and writes
+// through saveBook in one transaction.
+
+describe("IngestControl .epub picker arm (12-03 Task 2)", () => {
+  beforeEach(async () => {
+    vi.restoreAllMocks();
+    await wipeDatabase();
+  });
+
+  it("refuses an over-cap .epub BEFORE any read — zero fetch calls, no ArrayBuffer materialized, calm epub-too-large copy (T-12-09)", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response("{}", { status: 200 }));
+    const { IngestControl } = await import("../../src/ingestion/IngestControl");
+
+    // A .epub File stub whose size is patched over the cap — no 10MB
+    // allocation needed; the component only reads .name/.size when the
+    // cap fires.
+    const file = new File(["PK"], "big-book.epub", {
+      type: "application/epub+zip",
+    });
+    Object.defineProperty(file, "size", { value: EPUB_MAX_BYTES + 1 });
+    const arrayBufferSpy = vi.spyOn(file, "arrayBuffer");
+
+    const { render } = await import("@testing-library/react");
+    const { createElement } = await import("react");
+    render(createElement(IngestControl));
+    const input = screen.getByLabelText("Upload a file") as HTMLInputElement;
+    await user.upload(input, file);
+    await user.click(screen.getByRole("button", { name: /add file/i }));
+
+    // Earliest enforcement: no bytes read, no POST, calm copy surfaced.
+    await screen.findByText("This book is too large to add.");
+    expect(arrayBufferSpy).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("saves a book through hasBook-then-saveBook and surfaces the D12-11 skip disclosure", async () => {
+    const user = userEvent.setup();
+    const book = sampleBook();
+    const chapters = [
+      sampleChapter(),
+      sampleChapter({
+        id: "epub-abc123def456-c01",
+        provenance: {
+          sourceUrl: undefined,
+          title: "Chapter Two",
+          retrievedAt: "2026-08-18T00:00:00.000Z",
+          originalHtmlHash: "sha256:" + "d".repeat(64),
+        },
+        ingestionMeta: {
+          source: "epub-chapter",
+          origin: "upload",
+          originalHtmlHash: "sha256:" + "d".repeat(64),
+          extractionConfidence: "high",
+          extractionWarnings: [],
+          bookId: "epub-abc123def456",
+          chapterIndex: 1,
+        },
+      }),
+    ];
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ ok: true, book, articles: chapters, skippedCount: 2 }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    const { IngestControl } = await import("../../src/ingestion/IngestControl");
+    const { render } = await import("@testing-library/react");
+    const { createElement } = await import("react");
+    render(createElement(IngestControl));
+    const input = screen.getByLabelText("Upload a file") as HTMLInputElement;
+    await user.upload(input, new File(["PK"], "sample.epub"));
+    await user.click(screen.getByRole("button", { name: /add file/i }));
+
+    // Success copy + the skip disclosure (D12-11 — same phrasing the
+    // library disclosure will use).
+    await screen.findByText(
+      "Book added to your library. 2 chapters could not be read.",
+    );
+
+    // The book + both chapters landed (saveBook's one-transaction write).
+    const { db } = await loadDb();
+    expect(await db.books.count()).toBe(1);
+    expect(await db.articles.count()).toBe(2);
+  });
+
+  it("book-level dedupe-refuse: a re-upload of an already-saved book surfaces 'Already in your library.' with no second write (D7-07)", async () => {
+    const user = userEvent.setup();
+    const book = sampleBook();
+    const { saveBook } = await loadBooksStore();
+    const { db } = await loadDb();
+    // Pre-seed the library with the identical book (same content-hash id).
+    await saveBook(book, [sampleChapter()]);
+    expect(await db.books.count()).toBe(1);
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          book,
+          articles: [sampleChapter()],
+          skippedCount: 0,
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    const { IngestControl } = await import("../../src/ingestion/IngestControl");
+    const { render } = await import("@testing-library/react");
+    const { createElement } = await import("react");
+    render(createElement(IngestControl));
+    const input = screen.getByLabelText("Upload a file") as HTMLInputElement;
+    await user.upload(input, new File(["PK"], "same-book.epub"));
+    await user.click(screen.getByRole("button", { name: /add file/i }));
+
+    await screen.findByText("Already in your library.");
+    // No second write: still exactly one book row + one chapter row.
+    expect(await db.books.count()).toBe(1);
+    expect(await db.articles.count()).toBe(1);
   });
 });

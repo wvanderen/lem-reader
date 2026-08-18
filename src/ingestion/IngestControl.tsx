@@ -28,25 +28,29 @@ import {
   ingestHtml,
   ingestMarkdown,
   ingestPdf,
+  ingestEpub,
   IngestionError,
   type IngestionSuccess,
 } from "./IngestionClient";
 import { dexieLibrarySource } from "./LibrarySource";
-import { PDF_MAX_BYTES, type IngestionFailureReason } from "./types";
+import { hasBook, saveBook } from "../persistence/booksStore";
+import { EPUB_MAX_BYTES, PDF_MAX_BYTES, type IngestionFailureReason } from "./types";
 
 type IngestStatus = "idle" | "submitting" | "success" | "error";
 
 /**
  * mapReasonToCopy — D7-04 honest-failure copy mapping. Every
- * IngestionFailureReason from the 16-reason catalog (07-02 + Phase 11
- * Pattern 7) is mapped to a calm DOC-06 phrase. NEVER surfaces internal
- * jargon (fixture/Zod/schema/revision/enum hyphenation) — the T-7-26 +
- * T-11-04 mitigation. The phrases mirror the existing FixtureList +
+ * IngestionFailureReason from the 20-reason catalog (07-02 + Phase 11
+ * Pattern 7 + Phase 12) is mapped to a calm DOC-06 phrase. NEVER surfaces
+ * internal jargon (fixture/Zod/schema/revision/enum hyphenation) — the
+ * T-7-26 + T-11-04 mitigation. The phrases mirror the existing FixtureList +
  * ArticleView status-region vocabulary so the control feels native to the
  * rest of the reader.
  *
  * Exported (Phase 11 Plan 04) so tests/unit/pdf-copy.test.ts asserts the
- * five PDF entries against the EXACT 11-RESEARCH.md §Pattern 7 strings.
+ * five PDF entries against the EXACT 11-RESEARCH.md §Pattern 7 strings;
+ * tests/unit/epub-copy.test.ts (Phase 12 Plan 03) pins the four EPUB
+ * entries byte-for-byte at this same live exported surface.
  */
 export function mapReasonToCopy(reason: IngestionFailureReason): string {
   switch (reason) {
@@ -74,6 +78,16 @@ export function mapReasonToCopy(reason: IngestionFailureReason): string {
       return "This PDF has multiple text columns, and its reading order can't be reconstructed reliably yet.";
     case "pdf-too-large":
       return "This PDF is too long or too large to read here.";
+    // Phase 12 (ING-05) — the four EPUB refusal reasons. Calm DOC-06
+    // strings; pinned byte-for-byte by tests/unit/epub-copy.test.ts.
+    case "epub-protected":
+      return "This book is protected by DRM and cannot be added.";
+    case "epub-unreadable":
+      return "This file could not be read as an EPUB book.";
+    case "epub-empty":
+      return "No readable chapters were found in this book.";
+    case "epub-too-large":
+      return "This book is too large to add.";
     case "already-in-library":
       return "Already in your library.";
     case "server-error":
@@ -151,7 +165,10 @@ export function IngestControl() {
 
       await dexieLibrarySource.save(result.article);
       setStatus("success");
-      // Navigation takes the user to ArticleView; no separate success copy.
+      // Navigation takes the user to ArticleView; no separate success copy
+      // (clear the submitting message so the success render arm stays
+      // quiet on this path).
+      setMessage(null);
       window.location.hash = `#/article/${result.article.id}`;
     } catch (e) {
       setStatus("error");
@@ -179,18 +196,23 @@ export function IngestControl() {
 
   /**
    * handleFileSubmit — the file-upload form (Plan 08-04, D8-15 + Phase 11
-   * Plan 04, ING-04). Dispatch by extension: `.md` → ingestMarkdown
-   * (forwards file.name so the server can run the D8-17 title-fallback
-   * chain); `.pdf` → binary read + base64 → ingestPdf (forwards file.name
-   * for the D11-07 title chain); else → ingestHtml (no filename —
-   * htmlToBlocks derives title from `<title>`/OpenGraph in the content).
+   * Plan 04, ING-04 + Phase 12 Plan 03, ING-05). Dispatch by extension:
+   * `.md` → ingestMarkdown (forwards file.name so the server can run the
+   * D8-17 title-fallback chain); `.pdf` → binary read + base64 →
+   * ingestPdf (forwards file.name for the D11-07 title chain); `.epub` →
+   * binary read + base64 → ingestEpub (the book path — book-level
+   * hasBook/saveBook instead of the single-article has/save); else →
+   * ingestHtml (no filename — htmlToBlocks derives title from
+   * `<title>`/OpenGraph in the content).
    *
-   * T-8-14 (DoS, content bomb) + T-11-02: the client-side cap is
-   * extension-aware and refuses BEFORE any read (Pitfall 7 — no network
+   * T-8-14 (DoS, content bomb) + T-11-02 + T-12-09: the client-side cap
+   * is extension-aware and refuses BEFORE any read (Pitfall 7 — no network
    * cost, no arrayBuffer materialization). PDFs cap at PDF_MAX_BYTES with
-   * the calm pdf-too-large copy; `.md`/`.html` keep the existing 5MB +
-   * "This page is too large." branch. The server re-applies the
-   * content-length cap + decoded re-check (defense-in-depth, 11-03).
+   * the calm pdf-too-large copy; EPUBs cap at EPUB_MAX_BYTES with the calm
+   * epub-too-large copy (the 11-04 earliest-enforcement pattern); `.md`/
+   * `.html` keep the existing 5MB + "This page is too large." branch. The
+   * server re-applies the content-length cap + decoded re-check
+   * (defense-in-depth, 11-03 + 12-04).
    */
   async function handleFileSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -199,15 +221,22 @@ export function IngestControl() {
     if (!file) return;
 
     const isPdf = /\.pdf$/i.test(file.name);
+    const isEpub = /\.epub$/i.test(file.name);
 
     // Extension-aware client-side size cap (UI-SPEC §EXTENDED IngestControl
-    // + T-8-14 + T-11-02). Refused before ANY file read or POST — the
-    // reader pays zero network cost for an over-cap pick. Each surface is
-    // reused verbatim through mapReasonToCopy — zero new chrome.
+    // + T-8-14 + T-11-02 + T-12-09). Refused before ANY file read or POST —
+    // the reader pays zero network cost for an over-cap pick. Each surface
+    // is reused verbatim through mapReasonToCopy — zero new chrome.
     if (isPdf) {
       if (file.size > PDF_MAX_BYTES) {
         setStatus("error");
         setMessage(mapReasonToCopy("pdf-too-large"));
+        return;
+      }
+    } else if (isEpub) {
+      if (file.size > EPUB_MAX_BYTES) {
+        setStatus("error");
+        setMessage(mapReasonToCopy("epub-too-large"));
         return;
       }
     } else if (file.size > 5 * 1024 * 1024) {
@@ -219,6 +248,39 @@ export function IngestControl() {
     setStatus("submitting");
     setMessage("Reading file…");
     try {
+      // Phase 12 (ING-05): the book arm. Binary read → chunked base64 →
+      // ingestEpub; the book ok-variant carries book + chapter articles +
+      // skippedCount. Book-level dedupe-refuse: hasBook(book.id) BEFORE
+      // saveBook (D7-07 at book level — re-uploading identical bytes
+      // produces the same content-hash book id). The save is ONE Dexie
+      // transaction (booksStore.saveBook), so a half-saved book is
+      // impossible. No navigation yet — the book library surface lands in
+      // 12-06; success surfaces as calm copy in the .status region, with
+      // the D12-11 skip disclosure appended when skippedCount > 0.
+      if (isEpub) {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        const b64 = bytesToBase64(bytes);
+        const result = await ingestEpub(b64, file.name);
+
+        if (await hasBook(result.book.id)) {
+          setStatus("error");
+          setMessage(mapReasonToCopy("already-in-library"));
+          return;
+        }
+
+        await saveBook(result.book, result.articles);
+        setStatus("success");
+        let successCopy = "Book added to your library.";
+        if (result.skippedCount > 0) {
+          successCopy +=
+            result.skippedCount === 1
+              ? " 1 chapter could not be read."
+              : ` ${result.skippedCount} chapters could not be read.`;
+        }
+        setMessage(successCopy);
+        return;
+      }
+
       const isMarkdown = /\.md$/i.test(file.name);
       let result: IngestionSuccess;
       if (isMarkdown) {
@@ -244,6 +306,10 @@ export function IngestControl() {
 
       await dexieLibrarySource.save(result.article);
       setStatus("success");
+      // Navigation takes the user to ArticleView; no separate success copy
+      // (clear the submitting message so the success render arm stays
+      // quiet on this path).
+      setMessage(null);
       window.location.hash = `#/article/${result.article.id}`;
     } catch (err) {
       setStatus("error");
@@ -302,18 +368,22 @@ export function IngestControl() {
           apply the D8-17 title fallback chain. The .html branch calls
           ingestHtml(text) — htmlToBlocks derives title from content metadata,
           not filename. Phase 11 Plan 04 (ING-04) adds the .pdf arm: binary
-          read → chunked base64 → ingestPdf(b64, file.name). T-8-14 + T-11-02:
+          read → chunked base64 → ingestPdf(b64, file.name). Phase 12 Plan 03
+          (ING-05) adds the .epub arm: binary read → chunked base64 →
+          ingestEpub(b64, file.name) with the book-level dedupe-refuse +
+          one-transaction saveBook path. T-8-14 + T-11-02 + T-12-09:
           extension-aware client-side cap refuses oversized files before any
-          read (5MB for .md/.html, PDF_MAX_BYTES for .pdf). */}
+          read (5MB for .md/.html, PDF_MAX_BYTES for .pdf, EPUB_MAX_BYTES
+          for .epub). */}
       <form onSubmit={handleFileSubmit}>
         <label htmlFor="ingest-file">Upload a file</label>
-        <p className="meta">Accepts .md, .html, and PDF</p>
+        <p className="meta">Accepts .md, .html, PDF, and EPUB books</p>
         <input
           id="ingest-file"
           ref={fileInputRef}
           name="file"
           type="file"
-          accept=".md,.html,.pdf"
+          accept=".md,.html,.pdf,.epub"
           disabled={submitting}
           onChange={(e) => setHasFile(e.target.files !== null && e.target.files.length > 0)}
         />
@@ -324,9 +394,11 @@ export function IngestControl() {
 
       {/* The .status live region mirrors FixtureList's existing surface
           (D7-04 — zero new chrome). Refusals + the submitting state
-          announce here; success navigates away so no success copy is
-          needed. aria-atomic="true" so the SR re-announces the whole
-          phrase on every change (not just the diff). */}
+          announce here; single-article success navigates away (message
+          nulled), while the Phase 12 book path STAYS on the list and
+          surfaces its calm success copy + the D12-11 skip disclosure
+          ("N chapters could not be read."). aria-atomic="true" so the SR
+          re-announces the whole phrase on every change (not just the diff). */}
       <div
         className="status"
         role="status"
@@ -335,6 +407,7 @@ export function IngestControl() {
       >
         {status === "submitting" && message !== null && <p>{message}</p>}
         {status === "error" && message !== null && <p>{message}</p>}
+        {status === "success" && message !== null && <p>{message}</p>}
       </div>
     </section>
   );
