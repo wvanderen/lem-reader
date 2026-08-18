@@ -290,18 +290,32 @@ const READER_PREFS_KEY = "reader-prefs";
  * partial import can survive. The injected-failure rollback test in
  * tests/unit/portability/atomic-import.test.ts is the proof.
  *
+ * Phase 12 (Plan 12-07): db.books joins BOTH table sets — books write in
+ * the SAME transaction as their chapters + annotations, so a half-imported
+ * book is impossible (the saveBook atomicity discipline, applied to
+ * import). Chapters ride the existing article puts; each chapter row is
+ * written with the top-level `bookId` denormalization saveBook stamps (the
+ * 12-03 v5 index contract — imported chapter rows stay index-uniform with
+ * saved ones; the canonical FK remains ingestionMeta.bookId, and
+ * ArticleSchema strips the top-level key on every Zod read). A chapter
+ * whose book is NOT written (skipped conflict or absent from the bundle)
+ * still rides — orphan-tolerant: it lands as a standalone epub-chapter
+ * article the library renders ungrouped.
+ *
  * ⚠️ THE RULE (09-RESEARCH Pitfall 1 / T-9-15): everything async-non-Dexie
  * completed BEFORE this function is called. The plan is plain data — every
  * per-record decision, keep-both id mint, and note-FK rewrite happened in
  * resolveImportPlan. The closure below contains ONLY awaited db.*.put
- * calls: NO crypto.subtle, NO Zod, NO setTimeout, NO network, NO
- * non-Dexie await — Dexie silently aborts transactions whose closure
+ * calls (plus the synchronous bookId spread — pure data shaping, the exact
+ * saveBook pattern): NO crypto.subtle, NO Zod, NO setTimeout, NO network,
+ * NO non-Dexie await — Dexie silently aborts transactions whose closure
  * awaits foreign microtasks (code-review gate: read the closure before
  * touching it).
  *
  * Store set: db.settings joins ONLY when plan.applyPreferences is true —
  * the same conditional-table shape as the DexieLibrarySource.remove
- * cascade precedent (LibrarySource.ts L108-151), extended with db.settings.
+ * cascade precedent (LibrarySource.ts L108-151), extended with db.settings;
+ * db.books joins unconditionally (books are record data, like articles).
  * Location rows are put with the LocationRecordRow shape — Dexie derives
  * the compound [articleId+revision] primary key from the row's fields;
  * there is no literal bracketed field name anywhere.
@@ -310,10 +324,27 @@ export async function applyImport(plan: ResolvedImportPlan): Promise<void> {
   // The puts-only closure, defined once. It is passed to whichever explicit
   // db.transaction overload matches the plan's touched-store set: db.settings
   // joins ONLY when plan.applyPreferences is true (the
-  // DexieLibrarySource.remove cascade precedent, extended with db.settings).
+  // DexieLibrarySource.remove cascade precedent, extended with db.settings);
+  // db.books always joins (Phase 12 — books are record data). The two-call
+  // explicit-arity shape is preserved (tsc rejects a union-of-tuples
+  // spread); the six-table branch uses Dexie's readonly-array overload
+  // because the tuple overloads stop at five tables.
   const applyPuts = async (): Promise<void> => {
+    for (const book of plan.booksToWrite) {
+      await db.books.put(book);
+    }
     for (const article of plan.articlesToWrite) {
-      await db.articles.put(article);
+      // Denormalize the top-level `bookId` onto each stored chapter row so
+      // the v5 Dexie index ("...,*tags, bookId") serves grouping reads +
+      // removeBook's live-truth cascade for IMPORTED chapters exactly as it
+      // does for saveBook-written ones (the 12-03 store-seam discipline).
+      // The CANONICAL contract stays `ingestionMeta.bookId` — the spread is
+      // synchronous data shaping inside the puts-only closure (saveBook
+      // precedent); non-chapter articles pass through byte-identically.
+      const bookId = article.ingestionMeta?.bookId;
+      await db.articles.put(
+        bookId !== undefined ? { ...article, bookId } : article,
+      );
     }
     for (const highlight of plan.highlightsToWrite) {
       await db.highlights.put(highlight);
@@ -338,13 +369,13 @@ export async function applyImport(plan: ResolvedImportPlan): Promise<void> {
   };
 
   if (plan.applyPreferences) {
+    // Dexie's tuple overloads stop at FIVE tables (dexie.d.ts L859-863);
+    // this branch locks SIX (articles/highlights/notes/location/settings/
+    // books since 12-07), so it uses the readonly-array overload (L858) —
+    // the same explicit-table-set discipline, the tsc-required arity form.
     await db.transaction(
       "rw",
-      db.articles,
-      db.highlights,
-      db.notes,
-      db.location,
-      db.settings,
+      [db.articles, db.highlights, db.notes, db.location, db.settings, db.books],
       applyPuts,
     );
   } else {
@@ -354,6 +385,7 @@ export async function applyImport(plan: ResolvedImportPlan): Promise<void> {
       db.highlights,
       db.notes,
       db.location,
+      db.books,
       applyPuts,
     );
   }

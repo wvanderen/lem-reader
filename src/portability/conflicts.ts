@@ -26,6 +26,7 @@ import { dexieLibrarySource } from "../ingestion/LibrarySource";
 import { loadAllHighlights } from "../persistence/highlightsStore";
 import { loadAllNotes } from "../persistence/notesStore";
 import { loadAllLocations } from "../persistence/locationStore";
+import { listBooks } from "../persistence/booksStore";
 import { db } from "../persistence/db";
 import { fixtures } from "../fixtures";
 import {
@@ -34,6 +35,7 @@ import {
 } from "../content/normalizeText";
 import { resolveQuoteSelectorInText } from "../annotations/resolution";
 import type {
+  Book,
   CanonicalArticle,
   HighlightRecord,
   LocationRecord,
@@ -42,10 +44,12 @@ import type {
 } from "../content/schema";
 import type { ExportBundle } from "./bundle";
 
-// ── Conflict taxonomy (D9-14 table) ──────────────────────────────────────────
+// ── Conflict taxonomy (D9-14 table, extended by Phase 12 Plan 12-07) ─────────
 
-/** The five D9-14 conflict kinds, in preview display order. */
+/** The six conflict kinds (the five D9-14 kinds + the Phase 12 book kind),
+ * in preview display order. */
 export type ConflictKind =
+  | "book" // same book id, different originalFileHash (Phase 12 12-07 — D9-14 extended)
   | "article-revision" // same id, different revision (keep-higher-revision under overwrite)
   | "article-content-divergence" // same id+revision, different provenance.originalHtmlHash
   | "highlight-id" // incoming highlight id exists locally
@@ -54,8 +58,9 @@ export type ConflictKind =
 
 /** Bulk per-kind override choices (D9-11/D9-14). "keep-both" is meaningful
  * only for the id kinds (highlight-id/note-id) where a minted id can hold
- * both records; on article/location kinds it behaves as skip (documented —
- * the dialog in Plan 09-05 offers keep-both only for the id kinds). */
+ * both records; on article/location/book kinds it behaves as skip
+ * (documented — the dialog in Plan 09-05 offers keep-both only for the id
+ * kinds). */
 export type PerKindOverride = "skip" | "overwrite" | "keep-both";
 
 /** One override per conflict kind — the bulk toggles the preview dialog
@@ -81,12 +86,14 @@ export interface ConflictSummary {
  * "apply imported reading preferences?" choice. */
 export interface ImportPreviewData {
   incoming: {
+    books: number;
     articles: number;
     highlights: number;
     notes: number;
     locations: number;
   };
   added: {
+    books: number;
     articles: number;
     highlights: number;
     notes: number;
@@ -108,8 +115,13 @@ export interface ImportPreviewData {
  * BEFORE the transaction. `idRewrites` maps old incoming ids → minted
  * crypto.randomUUID() ids (keep-both). `skipped` counts conflicted records
  * excluded from the *ToWrite arrays. `preferences` is present iff
- * `applyPreferences` is true. */
+ * `applyPreferences` is true. `booksToWrite` (Phase 12 12-07) carries the
+ * winning Book rows; their chapters ride `articlesToWrite` as ordinary
+ * articles — a chapter whose book was skipped or absent from the bundle
+ * STILL rides (orphan-tolerant: it imports as a standalone epub-chapter
+ * article the library renders ungrouped). */
 export interface ResolvedImportPlan {
+  booksToWrite: Book[];
   articlesToWrite: CanonicalArticle[];
   highlightsToWrite: HighlightRecord[];
   notesToWrite: NoteRecord[];
@@ -118,6 +130,7 @@ export interface ResolvedImportPlan {
   applyPreferences: boolean;
   idRewrites: Map<string, string>;
   skipped: {
+    books: number;
     articles: number;
     highlights: number;
     notes: number;
@@ -237,44 +250,70 @@ function resolveHighlightStatus(
 /**
  * detectImportPreview — the D9-11 dry-run conflict pass + the D9-13 eager
  * tri-state re-resolution. Classifies every incoming record of the
- * Zod-validated bundle against existing local state per the D9-14 table.
+ * Zod-validated bundle against existing local state per the D9-14 table
+ * (+ the Phase 12 book kind: same id + different originalFileHash).
  *
  * Reads (and ONLY reads): local articles via dexieLibrarySource.list()
  * (Zod-validated read path, STATE-04), highlights/notes/locations via
- * loadAllHighlights()/loadAllNotes()/loadAllLocations(), reader-prefs row
- * presence via a settings-store get. Zero writes — the transaction lives in
- * Plan 09-04's applyImport.
+ * loadAllHighlights()/loadAllNotes()/loadAllLocations(), books via
+ * listBooks() (the 12-03 Zod-validated seam; a !ok read classifies against
+ * an empty local set — the transaction in applyImport is still atomic, so
+ * an unavailable store can never yield a partial write), reader-prefs row
+ * presence via a settings-store get. Zero writes — the transaction lives
+ * in Plan 09-04's applyImport.
  */
 export async function detectImportPreview(
   bundle: ExportBundle,
 ): Promise<ImportPreviewData> {
-  const [localArticles, localHighlights, localNotes, localLocations] =
+  const [localArticles, localHighlights, localNotes, localLocations, localBooksResult] =
     await Promise.all([
       dexieLibrarySource.list(),
       loadAllHighlights(),
       loadAllNotes(),
       loadAllLocations(),
+      listBooks(),
     ]);
+  const localBooks = localBooksResult.ok ? localBooksResult.books : [];
 
   const localArticleById = new Map(localArticles.map((a) => [a.id, a]));
+  const localBookById = new Map(localBooks.map((b) => [b.id, b]));
   const localHighlightIds = new Set(localHighlights.map((h) => h.id));
   const localNoteIds = new Set(localNotes.map((n) => n.id));
   const localLocationByKey = new Map(
     localLocations.map((l) => [locationKey(l), l]),
   );
 
-  // ── D9-14 conflict classification (PK comparisons only) ──
+  // ── Conflict classification (PK comparisons only) ──
+  const bookConflicts: string[] = [];
   const revisionConflicts: string[] = [];
   const divergenceConflicts: string[] = [];
   const highlightIdConflicts: string[] = [];
   const noteIdConflicts: string[] = [];
   const locationConflicts: string[] = [];
   const added = {
+    books: 0,
     articles: 0,
     highlights: 0,
     notes: 0,
     locations: 0,
   };
+
+  // Books (Phase 12 12-07 — the D9-14 table's book row): same id +
+  // DIFFERENT originalFileHash is a conflict; the same id + identical hash
+  // is a calm no-op skip (the 09-03 identical-duplicate precedent applied
+  // at book level). Chapters never reference-check their book here — a
+  // chapter whose book is absent from the bundle is orphan-TOLERANT and
+  // rides `articles` like any other (classified below).
+  for (const b of bundle.books ?? []) {
+    const local = localBookById.get(b.id);
+    if (!local) {
+      added.books++;
+    } else if (b.originalFileHash !== local.originalFileHash) {
+      bookConflicts.push(b.id);
+    }
+    // else: identical-hash duplicate book — no decision for the reader to
+    // make: not a conflict, not added (a calm no-op).
+  }
 
   for (const a of bundle.articles) {
     const local = localArticleById.get(a.id);
@@ -319,6 +358,7 @@ export async function detectImportPreview(
 
   const conflicts: ConflictSummary[] = [];
   for (const summary of [
+    summarize("book", bookConflicts),
     summarize("article-revision", revisionConflicts),
     summarize("article-content-divergence", divergenceConflicts),
     summarize("highlight-id", highlightIdConflicts),
@@ -355,6 +395,7 @@ export async function detectImportPreview(
 
   return {
     incoming: {
+      books: bundle.books?.length ?? 0,
       articles: bundle.articles.length,
       highlights: bundle.highlights.length,
       notes: bundle.notes.length,
@@ -387,6 +428,16 @@ export async function detectImportPreview(
  *
  * Semantics (D9-14 + the plan's behavior block):
  *   - New records (no local PK match) are ALWAYS written.
+ *   - book (Phase 12 12-07): a same-id DIFFERENT-originalFileHash book is a
+ *     conflict; skip (default) excludes it; overwrite writes the incoming
+ *     book (a put over the local row — content replaced); keep-both behaves
+ *     as skip (a minted book id would strand the chapter FKs — keep-both is
+ *     offered only for the id kinds, the documented narrowing). A same-id
+ *     identical-hash book is a calm no-op: skipped, never a conflict.
+ *   - Chapters are orphan-tolerant by construction: every chapter rides the
+ *     article classification below regardless of whether its book is
+ *     written — a chapter whose book was skipped still imports as a
+ *     standalone epub-chapter article the library renders ungrouped.
  *   - skip (default): conflicted records are excluded and counted in skipped.
  *   - article-revision + overwrite: keep-higher-revision (D-06 monotonic) —
  *     the incoming article is written ONLY when its revision is strictly
@@ -427,15 +478,18 @@ export async function resolveImportPlan(
   applyPreferences: boolean,
 ): Promise<ResolvedImportPlan> {
   // Same loaders as detectImportPreview — the write-free re-read.
-  const [localArticles, localHighlights, localNotes, localLocations] =
+  const [localArticles, localHighlights, localNotes, localLocations, localBooksResult] =
     await Promise.all([
       dexieLibrarySource.list(),
       loadAllHighlights(),
       loadAllNotes(),
       loadAllLocations(),
+      listBooks(),
     ]);
+  const localBooks = localBooksResult.ok ? localBooksResult.books : [];
 
   const localArticleById = new Map(localArticles.map((a) => [a.id, a]));
+  const localBookById = new Map(localBooks.map((b) => [b.id, b]));
   const localHighlightIds = new Set(localHighlights.map((h) => h.id));
   const localNoteIds = new Set(localNotes.map((n) => n.id));
   const localLocationByKey = new Map(
@@ -443,16 +497,33 @@ export async function resolveImportPlan(
   );
 
   const plan: ResolvedImportPlan = {
+    booksToWrite: [],
     articlesToWrite: [],
     highlightsToWrite: [],
     notesToWrite: [],
     locationsToWrite: [],
     applyPreferences,
     idRewrites: new Map<string, string>(),
-    skipped: { articles: 0, highlights: 0, notes: 0, locations: 0 },
+    skipped: { books: 0, articles: 0, highlights: 0, notes: 0, locations: 0 },
   };
   if (applyPreferences) {
     plan.preferences = bundle.preferences;
+  }
+
+  // ── Books: same-id different-hash conflict / overwrite / no-op duplicate ──
+  for (const b of bundle.books ?? []) {
+    const local = localBookById.get(b.id);
+    if (!local) {
+      plan.booksToWrite.push(b); // new — always written
+    } else if (b.originalFileHash !== local.originalFileHash) {
+      if (overrides["book"] === "overwrite") {
+        plan.booksToWrite.push(b); // incoming wins (same id — put over the local row)
+      } else {
+        plan.skipped.books++; // skip | keep-both (behaves as skip — no minted book ids)
+      }
+    } else {
+      plan.skipped.books++; // identical-hash duplicate — calm no-op
+    }
   }
 
   // ── Articles: keep-higher-revision / content overwrite / no-op duplicate ──

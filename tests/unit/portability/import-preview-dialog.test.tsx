@@ -33,11 +33,13 @@ import { ImportPreviewDialog } from "../../../src/reader/ImportPreviewDialog";
 import type { ImportPreviewData, Overrides } from "../../../src/portability/conflicts";
 
 /** A synthetic preview with every conflict kind present so the whole
- * grouped list renders, including the id-kind three-option selects. */
+ * grouped list renders, including the id-kind three-option selects.
+ * (Book counts ride the 12-07 preview shape; the summary sentence's copy
+ * is 12-06+ UI scope.) */
 function samplePreview(applyPreferencesDefault: boolean): ImportPreviewData {
   return {
-    incoming: { articles: 4, highlights: 6, notes: 2, locations: 3 },
-    added: { articles: 3, highlights: 6, notes: 1, locations: 3 },
+    incoming: { books: 1, articles: 4, highlights: 6, notes: 2, locations: 3 },
+    added: { books: 1, articles: 3, highlights: 6, notes: 1, locations: 3 },
     conflicts: [
       {
         kind: "article-revision",
@@ -57,6 +59,7 @@ function samplePreview(applyPreferencesDefault: boolean): ImportPreviewData {
 }
 
 const DEFAULTS: Overrides = {
+  book: "skip",
   "article-revision": "skip",
   "article-content-divergence": "skip",
   "highlight-id": "skip",

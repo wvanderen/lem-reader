@@ -27,12 +27,14 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   ArticleSchema,
+  BookSchema,
   HighlightRecordSchema,
   LocationRecordSchema,
   NoteRecordSchema,
   ReaderSettingsSchema,
 } from "../../../src/content/schema";
 import type {
+  Book,
   CanonicalArticle,
   HighlightRecord,
   LocationRecord,
@@ -166,6 +168,44 @@ function sampleLocation(overrides: Partial<LocationInput> = {}): LocationRecord 
     revision: 1,
     graphemeOffset: 3,
     savedAt: "2026-08-15T00:00:00.000Z",
+    ...overrides,
+  });
+}
+
+/** A schema-valid Book row (Phase 12 — the 12-03 BookSchema contract). */
+function sampleBook(overrides: Partial<Book> = {}): Book {
+  return BookSchema.parse({
+    id: "epub-333333333333",
+    title: "The Conflicted Book",
+    authors: ["Ada Author"],
+    language: "en",
+    chapterArticleIds: ["epub-333333333333-c00"],
+    skippedChapterCount: 0,
+    source: "epub-upload",
+    originalFileHash: "sha256:" + "c".repeat(64),
+    addedAt: "2026-08-17T00:00:00.000Z",
+    ...overrides,
+  });
+}
+
+/** An epub-chapter article riding the bundle's articles block. */
+function sampleChapterArticle(
+  overrides: Partial<ArticleInput> = {},
+): CanonicalArticle {
+  return sampleArticle({
+    id: "epub-333333333333-c00",
+    provenance: {
+      title: "Chapter 1. The Conflict",
+      retrievedAt: "2026-08-17T00:00:00.000Z",
+      originalHtmlHash: "sha256:" + "d".repeat(64),
+    },
+    ingestionMeta: {
+      source: "epub-chapter",
+      originalHtmlHash: "sha256:" + "d".repeat(64),
+      extractionConfidence: "high",
+      bookId: "epub-333333333333",
+      chapterIndex: 0,
+    },
     ...overrides,
   });
 }
@@ -359,12 +399,14 @@ describe("detectImportPreview — conflict kinds (09-03 Task 1)", () => {
     );
 
     expect(preview.incoming).toEqual({
+      books: 0,
       articles: 1,
       highlights: 1,
       notes: 1,
       locations: 1,
     });
     expect(preview.added).toEqual({
+      books: 0,
       articles: 1,
       highlights: 1,
       notes: 1,
@@ -668,8 +710,9 @@ describe("detectImportPreview — preferences + zero writes (09-03 Task 1)", () 
 
 // ── Task 2: resolveImportPlan — bulk per-kind override matrix (D9-14) ───────
 
-/** The D9-14 default: skip every kind. */
+/** The D9-14 default: skip every kind (the book row included — 12-07). */
 const ALL_SKIP: Overrides = {
+  book: "skip",
   "article-revision": "skip",
   "article-content-divergence": "skip",
   "highlight-id": "skip",
@@ -713,6 +756,7 @@ describe("resolveImportPlan — override matrix (09-03 Task 2)", () => {
     expect(plan.notesToWrite.map((n) => n.id)).toEqual(["note-new"]);
     expect(plan.locationsToWrite.map((l) => l.articleId)).toEqual(["art-new"]);
     expect(plan.skipped).toEqual({
+      books: 0,
       articles: 1,
       highlights: 1,
       notes: 1,
@@ -1009,5 +1053,180 @@ describe("resolveImportPlan — override matrix (09-03 Task 2)", () => {
       highlights: 1,
       notes: 1,
     });
+  });
+});
+
+// ── Phase 12 (12-07 Task 2): the book-id conflict kind (D9-14 extended) ─────
+
+describe("detectImportPreview + resolveImportPlan — book conflicts (12-07)", () => {
+  beforeEach(async () => {
+    await wipeDatabase();
+  });
+
+  it("detects the book kind when a local book shares the id with a DIFFERENT originalFileHash (skip default)", async () => {
+    const { detectImportPreview } = await loadConflicts();
+    const { db } = await loadDb();
+    await db.books.put(
+      sampleBook({ originalFileHash: "sha256:" + "z".repeat(64) }),
+    );
+
+    const preview = await detectImportPreview(
+      sampleBundle({
+        schemaVersion: 2,
+        books: [sampleBook()], // same id, hash "c".repeat(64) ≠ local "z"
+      }),
+    );
+
+    expect(preview.incoming.books).toBe(1);
+    expect(preview.added.books).toBe(0);
+    const conflict = preview.conflicts.find((c) => c.kind === "book");
+    expect(conflict).toBeDefined();
+    expect(conflict?.count).toBe(1);
+    expect(conflict?.sampleIds).toContain("epub-333333333333");
+  });
+
+  it("an identical-hash book (same id + originalFileHash) is a calm no-op: no conflict, not added", async () => {
+    const { detectImportPreview, resolveImportPlan } = await loadConflicts();
+    const { db } = await loadDb();
+    await db.books.put(sampleBook());
+
+    const bundle = sampleBundle({
+      schemaVersion: 2,
+      books: [sampleBook()],
+    });
+    const preview = await detectImportPreview(bundle);
+
+    expect(preview.incoming.books).toBe(1);
+    expect(preview.added.books).toBe(0);
+    expect(preview.conflicts).toEqual([]);
+
+    // And on the plan side: skipped (calm no-op), never written, never a conflict.
+    const plan = await resolveImportPlan(bundle, preview, ALL_SKIP, false);
+    expect(plan.booksToWrite).toEqual([]);
+    expect(plan.skipped.books).toBe(1);
+  });
+
+  it("a NEW book counts as added; the preview shape carries book counts (incoming + added)", async () => {
+    const { detectImportPreview } = await loadConflicts();
+
+    const preview = await detectImportPreview(
+      sampleBundle({
+        schemaVersion: 2,
+        books: [sampleBook()],
+      }),
+    );
+
+    expect(preview.incoming.books).toBe(1);
+    expect(preview.added.books).toBe(1);
+    expect(preview.conflicts).toEqual([]);
+  });
+
+  it("a v1 bundle (no books key) reports zero book counts everywhere", async () => {
+    const { detectImportPreview } = await loadConflicts();
+
+    const preview = await detectImportPreview(sampleBundle()); // schemaVersion 1
+
+    expect(preview.incoming.books).toBe(0);
+    expect(preview.added.books).toBe(0);
+    expect(preview.conflicts.find((c) => c.kind === "book")).toBeUndefined();
+  });
+
+  it("book overwrite writes the incoming book under the SAME id (put over the local row)", async () => {
+    const { detectImportPreview, resolveImportPlan } = await loadConflicts();
+    const { db } = await loadDb();
+    await db.books.put(
+      sampleBook({ originalFileHash: "sha256:" + "z".repeat(64) }),
+    );
+
+    const incoming = sampleBook();
+    const bundle = sampleBundle({
+      schemaVersion: 2,
+      books: [incoming],
+    });
+    const preview = await detectImportPreview(bundle);
+    const plan = await resolveImportPlan(
+      bundle,
+      preview,
+      { ...ALL_SKIP, book: "overwrite" },
+      false,
+    );
+
+    expect(plan.booksToWrite).toEqual([incoming]);
+    expect(plan.skipped.books).toBe(0);
+  });
+
+  it("book skip (default) and keep-both both exclude the conflicting book (keep-both behaves as skip — documented narrowing)", async () => {
+    const { detectImportPreview, resolveImportPlan } = await loadConflicts();
+    const { db } = await loadDb();
+    await db.books.put(
+      sampleBook({ originalFileHash: "sha256:" + "z".repeat(64) }),
+    );
+
+    const bundle = sampleBundle({
+      schemaVersion: 2,
+      books: [sampleBook()],
+    });
+    const preview = await detectImportPreview(bundle);
+
+    const skipPlan = await resolveImportPlan(bundle, preview, ALL_SKIP, false);
+    expect(skipPlan.booksToWrite).toEqual([]);
+    expect(skipPlan.skipped.books).toBe(1);
+    expect(skipPlan.idRewrites.size).toBe(0); // no minted book ids — chapters would strand
+
+    const keepBothPlan = await resolveImportPlan(
+      bundle,
+      preview,
+      { ...ALL_SKIP, book: "keep-both" },
+      false,
+    );
+    expect(keepBothPlan.booksToWrite).toEqual([]);
+    expect(keepBothPlan.skipped.books).toBe(1);
+    expect(keepBothPlan.idRewrites.size).toBe(0);
+  });
+
+  it("orphan tolerance: a chapter whose book is ABSENT from the bundle still rides articlesToWrite", async () => {
+    const { detectImportPreview, resolveImportPlan } = await loadConflicts();
+
+    // The bundle carries the chapter but NOT its book (partial export or a
+    // skipped book conflict on the exporting side) — the chapter must still
+    // import as a standalone epub-chapter article.
+    const chapter = sampleChapterArticle();
+    const bundle = sampleBundle({
+      schemaVersion: 2,
+      books: [],
+      articles: [chapter],
+    });
+
+    const preview = await detectImportPreview(bundle);
+    expect(preview.incoming.books).toBe(0);
+    expect(preview.added.articles).toBe(1);
+
+    const plan = await resolveImportPlan(bundle, preview, ALL_SKIP, false);
+    expect(plan.articlesToWrite).toEqual([chapter]);
+    expect(plan.articlesToWrite[0]?.ingestionMeta?.bookId).toBe(
+      "epub-333333333333",
+    );
+  });
+
+  it("orphan tolerance: a chapter whose book was SKIPPED as a conflict still rides articlesToWrite", async () => {
+    const { detectImportPreview, resolveImportPlan } = await loadConflicts();
+    const { db } = await loadDb();
+    await db.books.put(
+      sampleBook({ originalFileHash: "sha256:" + "z".repeat(64) }),
+    );
+
+    const chapter = sampleChapterArticle();
+    const bundle = sampleBundle({
+      schemaVersion: 2,
+      books: [sampleBook()], // conflicting book — skipped by default
+      articles: [chapter],
+    });
+
+    const preview = await detectImportPreview(bundle);
+    expect(preview.conflicts.find((c) => c.kind === "book")).toBeDefined();
+
+    const plan = await resolveImportPlan(bundle, preview, ALL_SKIP, false);
+    expect(plan.booksToWrite).toEqual([]); // the book is skipped…
+    expect(plan.articlesToWrite).toEqual([chapter]); // …but the chapter still rides
   });
 });

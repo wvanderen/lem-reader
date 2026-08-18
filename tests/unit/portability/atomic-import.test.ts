@@ -24,12 +24,14 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   ArticleSchema,
+  BookSchema,
   HighlightRecordSchema,
   LocationRecordSchema,
   NoteRecordSchema,
   ReaderSettingsSchema,
 } from "../../../src/content/schema";
 import type {
+  Book,
   CanonicalArticle,
   HighlightRecord,
   LocationRecord,
@@ -157,6 +159,43 @@ function sampleLocation(overrides: Partial<LocationInput> = {}): LocationRecord 
   });
 }
 
+/** A schema-valid Book row (Phase 12 — the 12-03 BookSchema contract). */
+function sampleBook(overrides: Partial<Book> = {}): Book {
+  return BookSchema.parse({
+    id: "epub-444444444444",
+    title: "The Atomic Book",
+    authors: ["Grace Gatherer"],
+    language: "en",
+    chapterArticleIds: ["epub-444444444444-c00", "epub-444444444444-c01"],
+    skippedChapterCount: 0,
+    source: "epub-upload",
+    originalFileHash: "sha256:" + "c".repeat(64),
+    addedAt: "2026-08-17T00:00:00.000Z",
+    ...overrides,
+  });
+}
+
+/** An epub-chapter article riding the bundle's articles block. */
+function sampleChapterArticle(
+  chapterIndex: 0 | 1,
+): CanonicalArticle {
+  return sampleArticle({
+    id: `epub-444444444444-c0${chapterIndex}`,
+    provenance: {
+      title: `Chapter ${chapterIndex + 1}. The Atomic Voyage`,
+      retrievedAt: "2026-08-17T00:00:00.000Z",
+      originalHtmlHash: "sha256:" + "d".repeat(64),
+    },
+    ingestionMeta: {
+      source: "epub-chapter",
+      originalHtmlHash: "sha256:" + "d".repeat(64),
+      extractionConfidence: "high",
+      bookId: "epub-444444444444",
+      chapterIndex,
+    },
+  });
+}
+
 type BundleInput = z.input<typeof ExportBundleSchema>;
 
 function sampleBundle(overrides: Partial<BundleInput> = {}): ExportBundle {
@@ -194,6 +233,7 @@ async function seedLocalConflictSurface(): Promise<void> {
 async function countAllStores(): Promise<Record<string, number>> {
   const { db } = await loadDb();
   return {
+    books: await db.books.count(),
     articles: await db.articles.count(),
     highlights: await db.highlights.count(),
     notes: await db.notes.count(),
@@ -202,8 +242,9 @@ async function countAllStores(): Promise<Record<string, number>> {
   };
 }
 
-/** The D9-14 default: skip every kind. */
+/** The D9-14 default: skip every kind (the book row included — 12-07). */
 const ALL_SKIP: Overrides = {
+  book: "skip",
   "article-revision": "skip",
   "article-content-divergence": "skip",
   "highlight-id": "skip",
@@ -395,6 +436,7 @@ describe("applyImport — atomicity / rollback (09-04 Task 3)", () => {
 
     const before = await countAllStores();
     expect(before).toEqual({
+      books: 0,
       articles: 1,
       highlights: 1,
       notes: 1,
@@ -429,5 +471,142 @@ describe("applyImport — atomicity / rollback (09-04 Task 3)", () => {
     expect(await db.notes.get(SENTINEL_NOTE_ID)).toBeUndefined();
     expect((await db.articles.get("art-local"))?.revision).toBe(1);
     expect(await db.articles.get("art-new")).toBeUndefined();
+  });
+});
+
+// ── Phase 12 (12-07 Task 2): books apply atomically with their chapters ─────
+
+describe("applyImport — books + chapters (12-07)", () => {
+  beforeEach(async () => {
+    await wipeDatabase();
+  });
+
+  afterEach(async () => {
+    if (injectedCreatingHook !== null) {
+      const { db } = await loadDb();
+      db.notes.hook("creating").unsubscribe(injectedCreatingHook);
+      injectedCreatingHook = null;
+    }
+  });
+
+  it("applies books + chapters + a chapter highlight in ONE transaction: every store populated, chapters carry BOTH bookId forms", async () => {
+    const { applyImport } = await loadService();
+    const { detectImportPreview, resolveImportPlan } = await loadConflicts();
+    const { db } = await loadDb();
+
+    const book = sampleBook();
+    const chapter0 = sampleChapterArticle(0);
+    const chapter1 = sampleChapterArticle(1);
+    const highlight = sampleHighlight({
+      id: "hl-chapter-1",
+      articleId: chapter1.id,
+      revision: 1,
+      position: { start: 22, end: 39 },
+      quote: { prefix: "", exact: "epsilon zeta eta", suffix: "" },
+    });
+    const bundle = sampleBundle({
+      schemaVersion: 2,
+      books: [book],
+      articles: [chapter0, chapter1],
+      highlights: [highlight],
+    });
+
+    const preview = await detectImportPreview(bundle);
+    const plan = await resolveImportPlan(bundle, preview, ALL_SKIP, false);
+    await applyImport(plan);
+
+    // The book row landed.
+    expect(await db.books.get(book.id)).toEqual(book);
+
+    // Both chapters landed with the top-level bookId denormalization (the
+    // v5 index contract — imported rows stay index-uniform with saveBook
+    // rows) AND the canonical ingestionMeta.bookId.
+    for (const chapter of [chapter0, chapter1]) {
+      const row = await db.articles.get(chapter.id);
+      expect(row, `chapter ${chapter.id} must exist`).toBeDefined();
+      expect((row as { bookId?: string }).bookId).toBe(book.id);
+      expect((row as { ingestionMeta?: { bookId?: string } }).ingestionMeta?.bookId).toBe(
+        book.id,
+      );
+    }
+
+    // The chapter highlight re-resolves confident against the imported
+    // chapter (the same passage the sample builder pins).
+    expect(await db.highlights.get("hl-chapter-1")).toEqual(highlight);
+  });
+
+  it("an injected mid-transaction failure rolls back books AND chapters — no partial book persists", async () => {
+    const { applyImport } = await loadService();
+    const { detectImportPreview, resolveImportPlan } = await loadConflicts();
+    const { db } = await loadDb();
+
+    const SENTINEL_NOTE_ID = "note-book-boom";
+    const bundle = sampleBundle({
+      schemaVersion: 2,
+      books: [sampleBook()],
+      articles: [sampleChapterArticle(0), sampleChapterArticle(1)],
+      highlights: [sampleHighlight({ id: "hl-bk", articleId: "epub-444444444444-c00" })],
+      notes: [sampleNote({ id: SENTINEL_NOTE_ID, highlightId: "hl-bk" })],
+    });
+
+    const preview = await detectImportPreview(bundle);
+    const plan = await resolveImportPlan(bundle, preview, ALL_SKIP, false);
+
+    const before = await countAllStores();
+    expect(before).toEqual({
+      books: 0,
+      articles: 0,
+      highlights: 0,
+      notes: 0,
+      location: 0,
+      settings: 0,
+    });
+
+    // The books/chapters/highlights puts precede the sentinel note's put —
+    // the hook throw must unwind ALL of them.
+    const creatingHook = (
+      _primKey: unknown,
+      obj: { id?: string },
+    ): void => {
+      if (obj?.id === SENTINEL_NOTE_ID) {
+        throw new Error("injected mid-transaction failure");
+      }
+    };
+    injectedCreatingHook = creatingHook;
+    db.notes.hook("creating", creatingHook);
+
+    await expect(applyImport(plan)).rejects.toThrow(
+      "injected mid-transaction failure",
+    );
+
+    // FULL rollback: no book row, no chapter rows, no highlight rows.
+    const after = await countAllStores();
+    expect(after).toEqual(before);
+    expect(await db.books.get("epub-444444444444")).toBeUndefined();
+    expect(await db.articles.get("epub-444444444444-c00")).toBeUndefined();
+  });
+
+  it("v1 regression: a v1 bundle (no books key) applies exactly as before with ZERO book writes", async () => {
+    const { applyImport } = await loadService();
+    const { detectImportPreview, resolveImportPlan } = await loadConflicts();
+    const { db } = await loadDb();
+
+    // The Phase 9 v1 shape — no books key anywhere.
+    const bundle = sampleBundle({
+      schemaVersion: 1,
+      articles: [sampleArticle({ id: "art-v1-new" })],
+      highlights: [sampleHighlight({ id: "hl-v1-new", articleId: "art-v1-new" })],
+    });
+
+    const preview = await detectImportPreview(bundle);
+    expect(preview.incoming.books).toBe(0);
+    const plan = await resolveImportPlan(bundle, preview, ALL_SKIP, false);
+    await applyImport(plan);
+
+    // The article + highlight landed…
+    expect(await db.articles.get("art-v1-new")).toBeDefined();
+    expect(await db.highlights.get("hl-v1-new")).toBeDefined();
+    // …and the books store gained nothing.
+    expect(await db.books.count()).toBe(0);
   });
 });

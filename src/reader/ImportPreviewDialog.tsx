@@ -49,8 +49,10 @@ interface ImportPreviewDialogProps {
   onCancel: () => void;
 }
 
-/** Skip is the default override for EVERY kind (D9-14 skip-by-default). */
+/** Skip is the default override for EVERY kind (D9-14 skip-by-default).
+ * The `book` entry (Phase 12 12-07) widens the table additively. */
 const DEFAULT_OVERRIDES: Overrides = {
+  book: "skip",
   "article-revision": "skip",
   "article-content-divergence": "skip",
   "highlight-id": "skip",
@@ -61,6 +63,7 @@ const DEFAULT_OVERRIDES: Overrides = {
 /** Calm plain-word kind labels for the D9-14 conflict table (DOC-06 voice,
  * zero jargon). `one`/`other` forms keep count agreement honest. */
 const KIND_LABELS: Record<ConflictKind, { one: string; other: string }> = {
+  book: { one: "book", other: "books" }, // Phase 12 12-07 — same id, different file
   "article-revision": {
     one: "article with a different version",
     other: "articles with a different version",
