@@ -2842,3 +2842,49 @@ dialog.book-remove-confirm::backdrop {
     animation: book-disclose 160ms ease;
   }
 }
+
+/* ── Plan 12-06 (D12-08 + D12-05): epub-chapter reader chrome ────────────
+ * .book-context — the calm "Book Title · Chapter N of M" line under the
+ * provenance .meta (epub-chapter articles only; a plain p, never a heading).
+ * .chapter-nav — the start-of-chapter / end-of-chapter links. Scrolling
+ * mode: in flow before/after the body, muted link color (calm, never the
+ * accent call-to-action). Paginated mode (.chapter-nav-page): fixed in the
+ * chrome band below the pinned article surface (the page-indicator/chevron
+ * layer). position:fixed takes it OUT of the article grid's flow, so
+ * mounting it on the final page can never change .page-viewport geometry
+ * and re-trigger pagination — geometrically stable by construction.
+ * Nothing animated (no transitions) — a static disclosure, trivially
+ * reduced-motion safe; :focus-visible inherits the global 2px ring. */
+.book-context {
+  margin: var(--space-xs) 0 0 0;
+}
+.chapter-nav {
+  margin: var(--space-lg) 0 0 0;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.chapter-nav-previous {
+  margin: 0 0 var(--space-lg) 0;
+}
+.chapter-nav a {
+  display: inline-block;
+  min-height: var(--touch); /* A11Y-07 pointer hit area (fixture-list pattern) */
+  line-height: var(--touch);
+  color: var(--ink-soft); /* muted — calm wayfinding, not a call-to-action */
+}
+.chapter-nav a:hover {
+  color: var(--ink);
+}
+.chapter-nav-title {
+  opacity: 0.75; /* lighter tone for the neighbor chapter's title */
+}
+.article-body .chapter-nav-page {
+  position: fixed;
+  bottom: var(--space-xs);
+  left: 0;
+  right: 0;
+  margin: 0;
+  text-align: center;
+  z-index: 5; /* same chrome layer as the page indicator + chevrons */
+}

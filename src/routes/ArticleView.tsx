@@ -22,7 +22,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { openArticle } from "../content/repository";
 import type { CanonicalArticle } from "../content/types";
-import type { LocationRecord } from "../content/schema";
+import type { LocationRecord, Book } from "../content/schema";
 import { ArticleBody } from "../content/render/BlockRenderer";
 import { loadLocation } from "../persistence/locationStore";
 import { findScrollTarget, computeTopVisibleOffset } from "../reader/restoreLocation";
@@ -73,6 +73,15 @@ import { sanitizeFilename } from "../portability/zipSlip";
 import { downloadBlob } from "../portability/download";
 import { loadAllHighlights } from "../persistence/highlightsStore";
 import { loadAllNotes } from "../persistence/notesStore";
+// Plan 12-06 (ING-05 — D12-08 + D12-05): the epub-chapter context line +
+// end-of-chapter navigation. The Book record loads through the booksStore
+// seam (getBook is Zod-validated + tolerant — a missing/corrupt row returns
+// null and renders neither the line nor the nav, never an error state); the
+// "Chapter N" ordinal derives from the book's own TOC via chapterOrdinal
+// (D12-06 — publisher intent is the unit of truth). Ordinary articles never
+// reach either code path (the load effect gates on source "epub-chapter").
+import { getBook } from "../persistence/booksStore";
+import { chapterOrdinal } from "../ingestion/library/bookProgress";
 
 /** The D4-10 mode-toggle handler signature (App threads a ref of this shape). */
 type ModeToggleHandler = () => void;
@@ -189,6 +198,30 @@ export function ArticleView({
   const [restoredOffset, setRestoredOffset] = useState<LocationRecord | null>(null);
   const [showResumeBanner, setShowResumeBanner] = useState(false);
   const [progress, setProgress] = useState(0);
+
+  // Plan 12-06 (D12-08 + D12-05): epub-chapter context. chapterContext holds
+  // the resolved Book plus the derived neighbor chapter ids (next/prev within
+  // the book's ordered TOC); null renders NEITHER the context line NOR the
+  // chapter nav (tolerant lookup — a missing/corrupt book record is a calm
+  // no-chrome read, never an error state). neighborTitles carries the
+  // next/prev chapter titles for the nav's lighter span (null → the bare
+  // "Next chapter" / "Previous chapter" text). Both reset on article swap.
+  const [chapterContext, setChapterContext] = useState<{
+    book: Book;
+    prevId: string | undefined;
+    nextId: string | undefined;
+  } | null>(null);
+  const [neighborTitles, setNeighborTitles] = useState<{
+    prev: string | null;
+    next: string | null;
+  }>({ prev: null, next: null });
+  // Plan 12-06 (D12-05): the paginated surface's current {page, total},
+  // mirrored from onAnchorChange (which fires on every page/pages commit) so
+  // the chapter nav can mount the Next link ONLY on the final page and the
+  // Previous link ONLY on the first page — never permanent chrome.
+  const [pageState, setPageState] = useState<{ page: number; total: number } | null>(
+    null,
+  );
 
   // Phase 5 Plan 05-02 (ANNO-01/05/06): annotation state seam. The apiRef
   // bridge lets this component's H/N keydown handler call
@@ -359,6 +392,26 @@ export function ArticleView({
     // Track the latest precise offset (only updated in paginated mode where
     // PaginatedSurface reports via onAnchorChange).
     lastPreciseAnchorRef.current = offset;
+    // Plan 12-06 (D12-05): mirror the committed page state (the handle reads
+    // from refs, so by the time this effect-scoped callback runs the values
+    // are post-commit) so the chapter nav's first/last-page gating reacts to
+    // every turn WITHOUT lifting PaginatedSurface's page state up. The
+    // functional update keeps object identity stable when the page did not
+    // change (refragmentation that re-lands on the same page causes zero
+    // re-render churn).
+    setPageState((prev) => {
+      const next = surfaceRef.current?.getState() ?? null;
+      if (prev === next) return prev;
+      if (
+        prev !== null &&
+        next !== null &&
+        prev.page === next.page &&
+        prev.total === next.total
+      ) {
+        return prev;
+      }
+      return next;
+    });
   }, []);
 
   // Phase 4 Plan 04-04 (D4-09 + D4-10): the mode-toggle handler. Captures the
@@ -700,6 +753,11 @@ export function ArticleView({
   if (isPaginated !== prevIsPaginated) {
     setPrevIsPaginated(isPaginated);
     setPageContentBoxHeightPx(0);
+    // Plan 12-06 (D12-05): no stale page state across a mode swap — the
+    // chapter nav's first/last-page gating re-arms on the next pagination
+    // commit (onAnchorChange), so a stale "final page" from the previous
+    // paginated session can never flash the Next link on re-entry.
+    setPageState(null);
   }
   // Plan 04-06: recompute the page-content-box height on article mount AND
   // when the active render mode changes (trustedView commits → paginatedActive
@@ -801,11 +859,64 @@ export function ArticleView({
     // the new article's eager batch-resolve can fire its own "{N} couldn't
     // be relocated." announce if it has unresolved highlights.
     unresolvedAnnouncedRef.current = false;
+    // Plan 12-06 (D12-08 + D12-05): reset the epub-chapter context so a
+    // stale book line / nav from the previous article never flashes.
+    setChapterContext(null);
+    setNeighborTitles({ prev: null, next: null });
+    setPageState(null);
     openArticle(articleId)
-      .then((a) => {
+      .then(async (a) => {
         if (cancelled) return;
         setArticle(a);
         setStatus(a ? "ready" : "error");
+        // Plan 12-06 (D12-08 + D12-05): epub-chapter context + neighbor
+        // links. Ordinary articles (no epub-chapter ingestionMeta with a
+        // bookId) return here — zero new code paths for them. The book
+        // lookup is TOLERANT: getBook returns null for a missing/corrupt
+        // row (Zod-at-boundary) and renders neither the context line nor
+        // the nav; a Dexie-level throw is caught into the same calm null.
+        const meta = a?.ingestionMeta;
+        if (!a || meta?.source !== "epub-chapter" || !meta.bookId) return;
+        let book: Book | null = null;
+        try {
+          book = await getBook(meta.bookId);
+        } catch {
+          book = null; // tolerant — reading continues without chapter chrome
+        }
+        if (cancelled) return;
+        if (!book) return; // missing/corrupt record → no line, no nav
+        // Neighbor derivation (D12-05): prefer the stamped chapterIndex when
+        // it still agrees with the book's own TOC (partial imports can leave
+        // the declared list stale), else fall back to indexOf — either way a
+        // chapter outside the record gets NO links (never a self-reference).
+        const idx =
+          meta.chapterIndex !== undefined &&
+          book.chapterArticleIds[meta.chapterIndex] === a.id
+            ? meta.chapterIndex
+            : book.chapterArticleIds.indexOf(a.id);
+        const prevId = idx >= 0 ? book.chapterArticleIds[idx - 1] : undefined;
+        const nextId = idx >= 0 ? book.chapterArticleIds[idx + 1] : undefined;
+        setChapterContext({ book, prevId, nextId });
+        // Neighbor titles for the nav's lighter span — light repository
+        // reads through the same Zod-validated seam (tolerant of missing
+        // rows: a null title renders the bare "Next chapter" text).
+        const loadTitle = async (
+          id: string | undefined,
+        ): Promise<string | null> => {
+          if (!id) return null;
+          try {
+            const neighbor = await openArticle(id);
+            return neighbor?.provenance.title ?? null;
+          } catch {
+            return null;
+          }
+        };
+        const [prevTitle, nextTitle] = await Promise.all([
+          loadTitle(prevId),
+          loadTitle(nextId),
+        ]);
+        if (cancelled) return;
+        setNeighborTitles({ prev: prevTitle, next: nextTitle });
       })
       .catch(() => {
         if (cancelled) return;
@@ -1414,6 +1525,26 @@ export function ArticleView({
                 {article.provenance.publishedAt && formatDate(article.provenance.publishedAt)}
               </p>
             )}
+            {/* Plan 12-06 (D12-08): epub-chapter context line — calm book
+                provenance below the article provenance, epub-chapter only
+                (chapterContext is non-null ONLY when the source is
+                epub-chapter AND the Book record resolved through the
+                tolerant lookup). Rendered as a paragraph, never a heading —
+                the h1 chapter title owns the header's heading structure. A
+                chapter outside the book's declared TOC (partial import)
+                shows the title alone; chapterOrdinal returns 0 there and the
+                callers-skip-0 contract (bookProgress.ts) keeps the label
+                honest. The separator is the U+00B7 middle dot with
+                surrounding spaces — byte-identical to the .meta separator
+                above. No book-progress indicator here (progress lives on
+                the library row). */}
+            {chapterContext && (
+              <p className="meta book-context">
+                {chapterContext.book.title}
+                {chapterOrdinal(chapterContext.book, article.id) > 0 &&
+                  ` · Chapter ${chapterOrdinal(chapterContext.book, article.id)} of ${chapterContext.book.chapterArticleIds.length}`}
+              </p>
+            )}
             {sourceUrl !== undefined && domain !== undefined && (
               <a href={sourceUrl} rel="noopener noreferrer" target="_blank">
                 Originally published at {domain}
@@ -1494,9 +1625,108 @@ export function ArticleView({
                   articleEl={articleEl}
                 />
               </div>
+              {/* Plan 12-06 (D12-05): paginated chapter nav — ArticleView-
+                  owned chrome rendered AFTER the surface element (never
+                  inside page fragments), so it is geometrically stable: the
+                  CSS places it in the fixed chrome band below the pinned
+                  article surface (position:fixed is out of the grid flow —
+                  mounting it can NEVER change .page-viewport geometry and
+                  re-trigger pagination). The Next link mounts ONLY while the
+                  current page is the final page and the Previous link ONLY
+                  on the first page — state-conditional on the mirrored page
+                  state, never permanent chrome. Native focusable anchors
+                  (Tab/Enter only, no shortcut registration); the page-turn
+                  key handlers in PageTurnControls are untouched. */}
+              {chapterContext?.nextId &&
+                pageState !== null &&
+                pageState.page === pageState.total && (
+                  <nav
+                    className="chapter-nav chapter-nav-page chapter-nav-next"
+                    aria-label="Book chapters"
+                  >
+                    <a
+                      className="chapter-next"
+                      href={`#/article/${chapterContext.nextId}`}
+                    >
+                      Next chapter
+                      {neighborTitles.next && (
+                        <span className="chapter-nav-title">
+                          {" "}
+                          {neighborTitles.next}
+                        </span>
+                      )}
+                    </a>
+                  </nav>
+                )}
+              {chapterContext?.prevId && pageState !== null && pageState.page === 1 && (
+                <nav
+                  className="chapter-nav chapter-nav-page chapter-nav-previous"
+                  aria-label="Book chapters"
+                >
+                  <a
+                    className="chapter-prev"
+                    href={`#/article/${chapterContext.prevId}`}
+                  >
+                    Previous chapter
+                    {neighborTitles.prev && (
+                      <span className="chapter-nav-title">
+                        {" "}
+                        {neighborTitles.prev}
+                      </span>
+                    )}
+                  </a>
+                </nav>
+              )}
             </>
           ) : (
-            <ArticleBody article={article} />
+            <>
+              {/* Plan 12-06 (D12-05): Previous chapter at chapter START —
+                  mounted BEFORE the body in the article flow so it is
+                  reachable from the top of the chapter (symmetric with the
+                  Next link at the end). */}
+              {chapterContext?.prevId && (
+                <nav
+                  className="chapter-nav chapter-nav-previous"
+                  aria-label="Book chapters"
+                >
+                  <a
+                    className="chapter-prev"
+                    href={`#/article/${chapterContext.prevId}`}
+                  >
+                    Previous chapter
+                    {neighborTitles.prev && (
+                      <span className="chapter-nav-title">
+                        {" "}
+                        {neighborTitles.prev}
+                      </span>
+                    )}
+                  </a>
+                </nav>
+              )}
+              <ArticleBody article={article} />
+              {/* Plan 12-06 (D12-05): Next chapter exactly at chapter END —
+                  after the last block in the article flow; a calm link, not
+                  permanent chrome. */}
+              {chapterContext?.nextId && (
+                <nav
+                  className="chapter-nav chapter-nav-next"
+                  aria-label="Book chapters"
+                >
+                  <a
+                    className="chapter-next"
+                    href={`#/article/${chapterContext.nextId}`}
+                  >
+                    Next chapter
+                    {neighborTitles.next && (
+                      <span className="chapter-nav-title">
+                        {" "}
+                        {neighborTitles.next}
+                      </span>
+                    )}
+                  </a>
+                </nav>
+              )}
+            </>
           )}
         </article>
         {/* Phase 5 Plan 05-02 Task 2: SelectionToolbar mounts as a sibling of
