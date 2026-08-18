@@ -2648,3 +2648,131 @@ h2.review-note-title {
   font-weight: 600;
   color: var(--ink);
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+ * Phase 12 Plan 12-05 — Book grouping chrome (BookRow: expandable book
+ * rows + chapter sub-list + skip disclosure + Remove book trigger).
+ *
+ * ALL selectors here are ADDITIVE (new .book-* hooks only); tokens only
+ * (every color/spacing var(--…), no new hex literals) so the three themes
+ * re-theme automatically. The card reuses the .library-row geometry tokens
+ * (surface-raised + hairline + 4px radius). Chapter sub-rows live INSIDE
+ * the book <li> — `.library-list > li` direct-child row counts keep
+ * working (the 08-05 lesson). Co-owned with 12-06: keep additions scoped
+ * to this block (the 08-01 CSS ownership precedent).
+ * ════════════════════════════════════════════════════════════════════════ */
+
+/* Book row — the same card geometry as .library-row. */
+.book-row {
+  padding: var(--space-lg);
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+}
+/* The collapsed card's primary actions (Resume + any open link) get the
+   byte-stable 44px touch discipline (the .library-row link rule). */
+.book-card > a[href^="#/article/"] {
+  display: inline-block;
+  min-height: var(--touch);
+  min-width: var(--touch);
+  line-height: var(--touch);
+}
+
+/* The disclosure chevron — quiet hairline button, 44px touch target,
+   inline with the card's meta cluster. aria-expanded conveys state beyond
+   the glyph rotation (forced-colors safety). */
+.book-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--touch);
+  min-width: var(--touch);
+  padding: 0 var(--space-xs);
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.book-toggle:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.book-chevron {
+  display: inline-block;
+  font-size: 16px;
+  line-height: 1;
+}
+
+/* The controlled disclosure region — always in the DOM (aria-controls
+   resolves in both states); [hidden] collapses it. */
+.book-chapters[hidden] {
+  display: none;
+}
+/* Chapter sub-list spacing INSIDE the book li — sub-rows are nested
+   children, never .library-list siblings (the 08-05 direct-child lesson). */
+.book-chapter-list {
+  list-style: none;
+  margin: var(--space-md) 0 0 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-sm);
+}
+/* Nested chapter cards sit slightly tighter than top-level rows — the
+   grouping reads as contained without a second surface token. */
+.book-chapter-list .library-row {
+  padding: var(--space-md);
+}
+
+/* D12-11 skip disclosure — quiet .meta voice (calm, honest, no chrome). */
+.book-skip-disclosure {
+  margin: var(--space-sm) 0 0 0;
+}
+
+/* Remove book — the calm destructive trigger. Consequence is named in the
+   BookRemoveConfirm copy; hover hints --destructive (never color alone). */
+.book-remove {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch);
+  margin-top: var(--space-md);
+  padding: 0 var(--space-md);
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.book-remove:hover {
+  color: var(--destructive);
+  border-color: var(--destructive);
+}
+
+/* Book disclosure animation — gated behind prefers-reduced-motion:
+   no-preference (the POSITIVE gate; the global reduce gate at the top of
+   this file is the belt-and-suspenders second layer). The chevron rotates
+   90° on expand; the region content fades/slides in 4px. Under reduced
+   motion both are instant. */
+@media (prefers-reduced-motion: no-preference) {
+  .book-chevron {
+    transition: transform 160ms ease;
+  }
+  .book-toggle[aria-expanded="true"] .book-chevron {
+    transform: rotate(90deg);
+  }
+  @keyframes book-disclose {
+    from {
+      opacity: 0;
+      translate: 0 -4px;
+    }
+    to {
+      opacity: 1;
+      translate: 0 0;
+    }
+  }
+  .book-chapters:not([hidden]) {
+    animation: book-disclose 160ms ease;
+  }
+}

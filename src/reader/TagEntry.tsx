@@ -28,6 +28,16 @@ interface TagEntryProps {
   articleId: string;
   /** The current tag array on the article row. */
   tags: string[];
+  /**
+   * Optional persistence override (Plan 12-05 — D12-04 book tags). When
+   * present, commitTags writes through THIS callback instead of
+   * setArticleTags; BookRow passes `(tags) => setBookTags(book.id, tags)`
+   * so tags persist on the BOOK record (db.articles.update(bookId, …)
+   * would be a silent no-op — no article carries a book id). Default
+   * callers (ArticleView) are unaffected: the prop is absent and the
+   * setArticleTags path runs exactly as before.
+   */
+  saveTags?: (tags: string[]) => Promise<void>;
 }
 
 /**
@@ -39,7 +49,7 @@ interface TagEntryProps {
  * Errors (Dexie write failure) surface in a small .status live region inside
  * the fieldset (mirrors IngestControl's discipline — A11Y-08).
  */
-export function TagEntry({ articleId, tags }: TagEntryProps) {
+export function TagEntry({ articleId, tags, saveTags }: TagEntryProps) {
   const [draft, setDraft] = useState("");
   // Local mirror of the tag array so the UI updates immediately on add/remove
   // without waiting for the parent's next render. The Dexie write is fire-and-
@@ -57,7 +67,14 @@ export function TagEntry({ articleId, tags }: TagEntryProps) {
     setErrorCopy(null);
     setLocalTags(next);
     try {
-      await setArticleTags(articleId, next);
+      // Plan 12-05 — the optional override routes BOOK tag commits to
+      // setBookTags (D12-04); the default path is byte-identical to the
+      // Phase 8 article-tag write.
+      if (saveTags) {
+        await saveTags(next);
+      } else {
+        await setArticleTags(articleId, next);
+      }
     } catch {
       // Dexie write failure — the article row stays unchanged on disk; the
       // local mirror may diverge until the next ArticleView mount. Calm voice.

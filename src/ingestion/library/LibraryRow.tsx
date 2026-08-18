@@ -49,9 +49,21 @@ interface LibraryRowProps {
    * leaves it undefined (no remove affordance on the row by default).
    */
   onRemove?: () => void;
+  /**
+   * Heading level for the row title (Plan 12-05 — BookRow chapter sub-rows).
+   * Default 2 keeps the standalone-row markup byte-stable (Pitfall 8-5);
+   * 3 nests chapter sub-rows inside an expanded book group (h2 book title →
+   * h3 chapter titles) so heading order is preserved within the group.
+   */
+  headingLevel?: 2 | 3;
 }
 
-export function LibraryRow({ article, location, onRemove }: LibraryRowProps) {
+export function LibraryRow({
+  article,
+  location,
+  onRemove,
+  headingLevel = 2,
+}: LibraryRowProps) {
   const id = article.id;
   // Compute the grapheme-total once per article (D-05 substrate). useMemo so
   // the Intl.Segmenter pass doesn't re-run on every parent re-render (e.g.
@@ -64,11 +76,16 @@ export function LibraryRow({ article, location, onRemove }: LibraryRowProps) {
   const isFinished = ratio >= FINISHED_RATIO;
   const showHairline = ratio > 0 && !isFinished;
   const tags = article.tags ?? [];
+  // Dynamic heading element (Plan 12-05): h2 (default — byte-stable for
+  // standalone rows) or h3 (chapter sub-rows inside a book group). The id
+  // contract (`title-{id}`) is identical at either level, so the
+  // aria-labelledby open-link pairing is unchanged.
+  const Title = headingLevel === 2 ? "h2" : "h3";
   return (
     <li className="library-row" key={id}>
       <article>
-        {/* byte-stable h2 (Pitfall 8-5) */}
-        <h2 id={`title-${id}`}>{article.provenance.title}</h2>
+        {/* byte-stable title heading (Pitfall 8-5; h3 inside book groups) */}
+        <Title id={`title-${id}`}>{article.provenance.title}</Title>
         {/* byte-stable author meta (omitted when absent) */}
         {article.provenance.author && (
           <p className="meta">{article.provenance.author}</p>

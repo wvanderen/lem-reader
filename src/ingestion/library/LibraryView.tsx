@@ -35,18 +35,29 @@
 import { useEffect, useState } from "react";
 import { listArticles } from "../../content/repository";
 import type { CanonicalArticle } from "../../content/types";
-import type { LocationRecord } from "../../content/schema";
+import type { Book, LocationRecord } from "../../content/schema";
 import { IngestControl } from "../IngestControl";
 import { LibrarySearch } from "./LibrarySearch";
 import { TagFilter } from "./TagFilter";
 import { LibraryRow } from "./LibraryRow";
+import { BookRow } from "./BookRow";
 import { ContinueReadingStrip } from "./ContinueReadingStrip";
 import { filterLibrary } from "./libraryFilter";
 import { loadAllLocations } from "../../persistence/locationStore";
+import { listBooks } from "../../persistence/booksStore";
 import { loadAllTags } from "./tagsStore";
 // Plan 08-04 (LIB-02 + D8-13/D8-14) — RemoveConfirm gates the cascade
 // dexieLibrarySource.remove(id) behind a native <dialog>/alertdialog.
 import { RemoveConfirm } from "./RemoveConfirm";
+
+/** A book pending destructive confirmation (Plan 12-05 — Task 2 mounts
+ * BookRemoveConfirm against this state; the Remove book trigger in BookRow
+ * is the only setter caller). */
+interface BookRemoveTarget {
+  id: string;
+  title: string;
+  chapterCount: number;
+}
 
 export function LibraryView() {
   const [items, setItems] = useState<CanonicalArticle[]>([]);
@@ -57,22 +68,42 @@ export function LibraryView() {
   const [locationsByArticle, setLocationsByArticle] = useState<
     Map<string, LocationRecord>
   >(new Map());
+  // Plan 12-05 — the RAW locations array feeds BookRow's derivations
+  // (deriveBookProgress/resolveResumeChapterId fold internally); the folded
+  // per-article map above keeps serving standalone LibraryRow hairlines.
+  const [allLocations, setAllLocations] = useState<LocationRecord[]>([]);
+  // Plan 12-05 — book groups (listBooks, Zod-validated per row at the store
+  // seam) + their chapter rows, partitioned from the article list by
+  // ingestionMeta.bookId (D12-01 — chapters never render top-level).
+  const [books, setBooks] = useState<Book[]>([]);
   // Plan 08-04 — row-level trash trigger state. When non-null, RemoveConfirm
   // is open; the reader confirms or cancels. refreshKey re-triggers the load
   // effect after a successful remove so the list re-derives from Dexie.
   const [removeTarget, setRemoveTarget] = useState<
     { id: string; title: string } | null
   >(null);
+  // Plan 12-05 — book-level Remove trigger state. Task 2 mounts the
+  // BookRemoveConfirm dialog against it; only the setter is consumed until
+  // then (the BookRow onRemove callback below is its sole caller).
+  const [, setBookRemoveTarget] = useState<BookRemoveTarget | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     // Parallel load — listArticles (compositeLibraryRepository) +
     // loadAllLocations (per-row hairline + finished mark) + loadAllTags
-    // (auto-pruned chip list). Each is independent; Promise.all mirrors the
-    // composite-library read discipline.
-    Promise.all([listArticles(), loadAllLocations(), loadAllTags()])
-      .then(([articles, locations, tags]) => {
+    // (auto-pruned chip list) + listBooks (Plan 12-05 — the book groups).
+    // Each is independent; Promise.all mirrors the composite-library read
+    // discipline. A books-load failure routes calmly to zero book rows —
+    // the standalone library stays usable (the strip's fail-quiet
+    // discipline; recovery happens on the next refreshKey cycle).
+    Promise.all([
+      listArticles(),
+      loadAllLocations(),
+      loadAllTags(),
+      listBooks(),
+    ])
+      .then(([articles, locations, tags, booksResult]) => {
         if (cancelled) return;
         // Index the latest location per articleId (max savedAt — D8-10).
         const latest = new Map<string, LocationRecord>();
@@ -83,8 +114,10 @@ export function LibraryView() {
           }
         }
         setItems(articles);
+        setAllLocations(locations);
         setLocationsByArticle(latest);
         setAllTags(tags);
+        setBooks(booksResult.ok ? booksResult.books : []);
         setStatus("ready");
       })
       .catch(() => {
@@ -96,10 +129,37 @@ export function LibraryView() {
     };
   }, [refreshKey]);
 
-  // Re-derive allTags when items change (tags may have been edited in
-  // ArticleView). For Plan 03 this runs only on mount because items is set
-  // once; Plan 04's tag-edit wiring will trigger re-derivation naturally.
-  const visibleItems = filterLibrary(items, { query, activeTag });
+  // Plan 12-05 — the book/article partition (D12-01): articles carrying
+  // ingestionMeta.bookId are CHAPTER members (grouped under their Book;
+  // never top-level rows); everything else is standalone and renders as
+  // today. Chapter rows whose Book record is absent (orphaned by a partial
+  // import) do not render — the live-truth cascade in booksStore.removeBook
+  // makes orphans unreachable through normal flows.
+  const standaloneArticles: CanonicalArticle[] = [];
+  const chaptersByBook = new Map<string, CanonicalArticle[]>();
+  for (const article of items) {
+    const bookId = article.ingestionMeta?.bookId;
+    if (bookId) {
+      const list = chaptersByBook.get(bookId) ?? [];
+      list.push(article);
+      chaptersByBook.set(bookId, list);
+    } else {
+      standaloneArticles.push(article);
+    }
+  }
+
+  // Filter the standalone half exactly as before (D8-06 + D8-07 — chapter
+  // members are already partitioned out, and filterLibrary excludes any
+  // stragglers defensively). Book-side filtering lands with the Task 2
+  // libraryFilter restructure; until then books render unfiltered.
+  const visibleItems = filterLibrary(standaloneArticles, { query, activeTag });
+
+  // Books render addedAt-descending (the plan's addedAt default-sort
+  // extended to books; the article half keeps the composite-library order
+  // locked by the 08-03 deviation — CanonicalArticle carries no addedAt).
+  const sortedBooks = [...books].sort((a, b) =>
+    a.addedAt < b.addedAt ? 1 : a.addedAt > b.addedAt ? -1 : 0,
+  );
 
   return (
     <main id="main">
@@ -145,9 +205,10 @@ export function LibraryView() {
           whatever items are available). */}
       <LibrarySearch query={query} onQueryChange={setQuery} />
       <TagFilter tags={allTags} activeTag={activeTag} onSelect={setActiveTag} />
-      {visibleItems.length === 0 && status === "ready" ? (
+      {visibleItems.length === 0 && sortedBooks.length === 0 && status === "ready" ? (
         // D8-04 empty state — calm voice pointing at Add (IngestControl above).
-        // Replaces FixtureList's "No articles yet" copy.
+        // Replaces FixtureList's "No articles yet" copy. Plan 12-05: a library
+        // holding ONLY book groups is not empty.
         <>
           <h2>Your library is empty</h2>
           <p>Paste a URL or upload a file to begin.</p>
@@ -163,6 +224,24 @@ export function LibraryView() {
                 setRemoveTarget({
                   id: a.id,
                   title: a.provenance.title,
+                })
+              }
+            />
+          ))}
+          {/* Plan 12-05 — one expandable BookRow per Book (chapters nested
+              INSIDE the li, never top-level siblings — the 08-05 direct-
+              child lesson). */}
+          {sortedBooks.map((book) => (
+            <BookRow
+              key={book.id}
+              book={book}
+              chapters={chaptersByBook.get(book.id) ?? []}
+              locations={allLocations}
+              onRemove={() =>
+                setBookRemoveTarget({
+                  id: book.id,
+                  title: book.title,
+                  chapterCount: book.chapterArticleIds.length,
                 })
               }
             />
