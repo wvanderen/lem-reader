@@ -134,19 +134,30 @@ export function createEpubXmlParser(): XMLParser {
 
 const epubXmlParser = createEpubXmlParser();
 
-/** DTD refusal — the strong form of the entity-expansion guard: OCF
- * container/OPF/nav/NCX documents never legitimately carry a DOCTYPE, so
- * document-type declarations are refused outright instead of parsed around
- * (the entityBombOpf fixture class). */
-function containsDtd(text: string): boolean {
-  return /<!DOCTYPE/i.test(text);
+/** Entity-declaring DTD detection — the strong form of the entity-expansion
+ * guard, CALIBRATED against real books (12-08 Rule 1 finding): EPUB 3 nav
+ * documents legitimately open with the spec's own `<!DOCTYPE html>` template
+ * (EPUB 3.3 §7.1), and real-world XHTML/NCX documents commonly carry
+ * external-only PUBLIC/SYSTEM declarations the parser never fetches. The
+ * 12-08 corpus proved the original blanket DOCTYPE refusal false-refused
+ * those navs (resolveNavToc failed → the one-per-spine-doc fallback fired
+ * on a fully navigable O'Reilly book — the Pitfall 1 warning sign). The
+ * threat (T-12-04) is the ENTITY declaration itself — the billion-laughs
+ * internal subset (exactly the entityBombOpf fixture shape) — so a DOCTYPE
+ * is refused precisely when its internal subset declares <!ENTITY; bare
+ * and external-only DOCTYPEs declare nothing to expand and stay inert
+ * under processEntities:false. */
+function declaresEntities(text: string): boolean {
+  const m = /<!DOCTYPE[^>]*\[([\s\S]*?)\]>/i.exec(text);
+  return m !== null && /<!ENTITY/i.test(m[1]!);
 }
 
 /** Parse with the hardened config; ANY failure throws calm `epub-unreadable`
  * (malformed XML, hostile property names — the parser's dangerous-property
- * guard throws on __proto__-shaped names — and over-nesting all land here). */
+ * guard throws on __proto__-shaped names — and entity-declaring DTDs all
+ * land here). */
 function parseEpubXml(text: string): unknown {
-  if (containsDtd(text)) {
+  if (declaresEntities(text)) {
     throw new IngestionError(
       "epub-unreadable",
       "This EPUB contains a document-type declaration that the reader does not accept.",
@@ -166,7 +177,7 @@ function parseEpubXml(text: string): unknown {
  * encryption manifest that cannot be parsed can never be cleared as
  * DRM-free). */
 function tryParseEpubXml(text: string): unknown {
-  if (containsDtd(text)) return undefined;
+  if (declaresEntities(text)) return undefined;
   try {
     return epubXmlParser.parse(text);
   } catch {
