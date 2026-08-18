@@ -5,8 +5,8 @@ milestone_name: Personal Library
 current_phase: 12
 current_phase_name: EPUB Intake
 status: executing
-stopped_at: Completed 11-07-PLAN.md (outline PDF isReaderable gap closure — UAT Test 2 closed at adapter/ingest/browser levels)
-last_updated: "2026-08-17T21:52:41.132Z"
+stopped_at: Phase 12 context gathered
+last_updated: "2026-08-18T02:13:12.790Z"
 last_activity: 2026-08-17
 last_activity_desc: Phase 11 complete, transitioned to Phase 12
 progress:
@@ -324,9 +324,9 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-17T21:52:00Z
-Stopped at: Phase 11 complete, ready to plan Phase 12
-Resume file: None
+Last session: 2026-08-18T02:13:12.771Z
+Stopped at: Phase 12 context gathered
+Resume file: .planning/phases/12-epub-intake/12-CONTEXT.md
 
 ## Operator Next Steps
 
