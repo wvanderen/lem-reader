@@ -297,5 +297,5 @@ Plans:
 | 9. Versioned Export/Import | v2.0 | 7/7 | Complete    | 2026-08-15 |
 | 10. Annotation Review Panel | v2.0 | 6/6 | Complete    | 2026-08-16 |
 | 11. PDF Intake | v2.0 | 7/7 | Complete    | 2026-08-17 |
-| 12. EPUB Intake | v2.0 | 8/8 | Complete   | 2026-08-18 |
+| 12. EPUB Intake | v2.0 | 8/8 | Complete    | 2026-08-18 |
 | 13. Polish and Acceptance | v2.0 | 0/TBD | Not started | - |
