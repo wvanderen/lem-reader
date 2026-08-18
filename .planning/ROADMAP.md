@@ -238,8 +238,35 @@ Plans:
   3. Cross-chapter navigation (next/previous chapter) and book-level progress (derived from per-chapter locations) work; reopening a book resumes at the last-read chapter.
   4. The EPUB parser is isolated behind an adapter (so the dependency can be swapped), the epub.js renderer is NOT used inside React, and a round-trip anchor test gates every successfully extracted chapter.
 
-**Plans**: TBD
+**Plans**: 8/8 plans
 **UI hint**: yes
+
+Plans:
+**Wave 1**
+
+- [ ] 12-01-PLAN.md — fast-xml-parser human gate (D12-15) + schema/cap widening (epub variant, BookSchema, epub-chapter source) + self-verifying synthetic EPUB generator
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 12-02-PLAN.md — epubToBooks adapter: unzip + Zip Slip/bomb gates + DRM allowlist + container/OPF/nav/NCX parse + TOC-merge (D12-09) + per-chapter sanitize/walk + figure downgrade
+- [ ] 12-03-PLAN.md — client persistence + upload path: Dexie v5 books store + booksStore (atomic save/cascade remove) + ingestEpub + .epub picker arm + calm copy
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 12-04-PLAN.md — orchestrator fifth Stage-1 branch (per-chapter stages 2+ with skip/disclose) + middleware cap-coupling fix + integration round-trip gate
+
+**Wave 4** *(blocked on Wave 3)*
+
+- [ ] 12-05-PLAN.md — library book grouping UI (BookRow expandable + progress/resume derivations + continue-strip entries + book/chapter search + tags + remove cascade) + SC#1 e2e
+- [ ] 12-07-PLAN.md — books in the portability loop (bundle schemaVersion 2 union + book conflicts + orphan tolerance + two-context round-trip)
+
+**Wave 5** *(blocked on Wave 4)*
+
+- [ ] 12-06-PLAN.md — ArticleView chapter chrome (context line D12-08 + end-of-chapter nav D12-05) + SC#2/SC#3 e2e + refusal no-side-effect gates + a11y extension
+
+**Wave 6** *(blocked on Wave 5)*
+
+- [ ] 12-08-PLAN.md — calibration harness + local real-EPUB corpus checkpoint (D12-12) + SC#4 structural gates + honest full-suite phase gate
 
 ### Phase 13: Polish and Acceptance
 
