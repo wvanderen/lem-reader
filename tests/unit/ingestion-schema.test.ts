@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   ArticleSchema,
   ArticleSourceSchema,
+  BookSchema,
   IngestionMetaSchema,
 } from "../../src/content/schema";
 import {
@@ -91,15 +92,35 @@ const validIngestionMeta = {
   extractionWarnings: [],
 } as const;
 
+/** A fixture-shaped Book row (Plan 12-01 Task 2) — the Phase 12 ING-05
+ * Option-A book record. Mirrors the epub-fixtures validBookEpub3() shape
+ * (dc:title "The Synthetic Book", two dc:creator). */
+const validBook = {
+  id: "epub-abc123def456",
+  title: "The Synthetic Book",
+  authors: ["Ada Author", "Bob Builder"],
+  language: "en",
+  chapterArticleIds: ["epub-abc123def456-c00", "epub-abc123def456-c01"],
+  publisher: "Synthetic Press",
+  publishedDate: "2026-01-01",
+  identifier: "urn:uuid:synthetic-book",
+  skippedChapterCount: 0,
+  source: "epub-upload",
+  originalFileHash: "sha256:abc123",
+  tags: [],
+  addedAt: "2026-08-18T00:00:00Z",
+} as const;
+
 // ── ArticleSourceSchema (D7-08) ──────────────────────────────────────────────
 
 describe("ArticleSourceSchema", () => {
   // Phase 8 (Plan 08-01 Task 2) widened the enum additively per D8-15 + D8-16:
   // "markdown" (.md upload via markdownToBlocks) + "html-upload" (.html file
   // upload via paste path with a distinct badge per D8-02). Phase 11 (Plan
-  // 11-01 Task 2) adds "pdf" (ING-04 — .pdf upload via pdfToBlocks). Future
-  // phases continue the additive pattern ("epub-chapter" Phase 12).
-  it("enum equals exactly [fixture, url, paste, markdown, html-upload, pdf] (D7-08 + D8-15 + D8-16 + ING-04)", () => {
+  // 11-01 Task 2) adds "pdf" (ING-04 — .pdf upload via pdfToBlocks). Phase 12
+  // (Plan 12-01 Task 2) adds "epub-chapter" (ING-05 — .epub upload via
+  // epubToBooks; one article per chapter, Option A).
+  it("enum equals exactly [fixture, url, paste, markdown, html-upload, pdf, epub-chapter] (D7-08 + D8-15 + D8-16 + ING-04 + ING-05)", () => {
     // Zod 4: `.options` is the value array; `.enum` is now the object map.
     expect(ArticleSourceSchema.options).toEqual([
       "fixture",
@@ -108,17 +129,23 @@ describe("ArticleSourceSchema", () => {
       "markdown",
       "html-upload",
       "pdf",
+      "epub-chapter",
     ]);
   });
 
-  it.each(["fixture", "url", "paste", "markdown", "html-upload", "pdf"] as const)(
-    "parses source %s",
-    (source) => {
-      expect(ArticleSourceSchema.parse(source)).toBe(source);
-    },
-  );
+  it.each([
+    "fixture",
+    "url",
+    "paste",
+    "markdown",
+    "html-upload",
+    "pdf",
+    "epub-chapter",
+  ] as const)("parses source %s", (source) => {
+    expect(ArticleSourceSchema.parse(source)).toBe(source);
+  });
 
-  it.each(["invalid-source", "epub-chapter", "", "URL", "PDF"])(
+  it.each(["invalid-source", "epub", "book", "", "URL", "PDF", "Epub-Chapter"])(
     "rejects source %s (closed enum — forward-compat via later widening)",
     (bad) => {
       expect(() => ArticleSourceSchema.parse(bad)).toThrow();
@@ -175,6 +202,43 @@ describe("IngestionMetaSchema", () => {
       }),
     ).toThrow();
   });
+
+  // Phase 12 (Plan 12-01 Task 2) — the additive epub-chapter fields.
+  it("parses bookId + chapterIndex on an epub-chapter meta (additive optional — ARCHITECTURE L401-402)", () => {
+    const parsed = IngestionMetaSchema.parse({
+      source: "epub-chapter",
+      originalHtmlHash: "sha256:epub",
+      extractionConfidence: "high",
+      bookId: "epub-abc123def456",
+      chapterIndex: 3,
+    });
+    expect(parsed.bookId).toBe("epub-abc123def456");
+    expect(parsed.chapterIndex).toBe(3);
+  });
+
+  it("existing rows parse unchanged WITHOUT bookId/chapterIndex (Pitfall 9 — absent fields hydrate to undefined)", () => {
+    const parsed = IngestionMetaSchema.parse(validIngestionMeta);
+    expect(parsed.bookId).toBeUndefined();
+    expect(parsed.chapterIndex).toBeUndefined();
+  });
+
+  it("rejects a bookId outside the id regex (mirrors ArticleSchema.id/BookSchema.id)", () => {
+    expect(() =>
+      IngestionMetaSchema.parse({
+        ...validIngestionMeta,
+        bookId: "NOT/VALID",
+      }),
+    ).toThrow();
+  });
+
+  it("rejects a negative chapterIndex (int min(0) — positions are 0-based admitted order)", () => {
+    expect(() =>
+      IngestionMetaSchema.parse({
+        ...validIngestionMeta,
+        chapterIndex: -1,
+      }),
+    ).toThrow();
+  });
 });
 
 // ── ArticleSchema.ingestionMeta.optional() (Pitfall 9 backward-compat) ───────
@@ -219,7 +283,7 @@ describe("ArticleSchema.ingestionMeta (additive optional — Pitfall 9)", () => 
 
 // ── src/ingestion/types.ts envelope schemas ──────────────────────────────────
 
-describe("IngestionRequestSchema (D7-03 — {url} | {html} | {markdown} | {pdf})", () => {
+describe("IngestionRequestSchema (D7-03 — {url} | {html} | {markdown} | {pdf} | {epub})", () => {
   it("parses a url request", () => {
     expect(IngestionRequestSchema.parse({ url: "https://example.com" })).toEqual({
       url: "https://example.com",
@@ -269,6 +333,31 @@ describe("IngestionRequestSchema (D7-03 — {url} | {html} | {markdown} | {pdf})
   it("rejects an empty pdf string (min(1) — mirrors html/markdown)", () => {
     expect(() => IngestionRequestSchema.parse({ pdf: "" })).toThrow();
   });
+
+  // Phase 12 (Plan 12-01 Task 2) — the fifth union member: epub
+  // base64-in-JSON with an optional filename hint (mirrors the pdf variant's
+  // shape; the middleware body path stays byte-identical).
+  it("parses a valid base64 epub payload with filename (ING-05 + D12)", () => {
+    // base64 of "PK\x03\x04" — a representative (tiny) zip local-file header.
+    const epubBase64 = "UEsDBA==";
+    const parsed = IngestionRequestSchema.parse({
+      epub: epubBase64,
+      filename: "novel.epub",
+    });
+    expect(parsed).toEqual({ epub: epubBase64, filename: "novel.epub" });
+  });
+
+  it("rejects an epub value containing non-base64 characters", () => {
+    // Spaces + '!' are outside the base64 alphabet — the boundary refuses the
+    // payload before the server ever decodes it.
+    expect(() =>
+      IngestionRequestSchema.parse({ epub: "this is not base64!" }),
+    ).toThrow();
+  });
+
+  it("rejects an empty epub string (min(1) — mirrors html/markdown/pdf)", () => {
+    expect(() => IngestionRequestSchema.parse({ epub: "" })).toThrow();
+  });
 });
 
 describe("IngestionResponseSchema", () => {
@@ -279,7 +368,8 @@ describe("IngestionResponseSchema", () => {
       confidence: { state: "confident" },
     };
     const parsed = IngestionResponseSchema.parse(raw);
-    if (!parsed.ok) throw new Error("expected ok envelope");
+    // Two ok-variants since Phase 12 — narrow on the article key, not just ok.
+    if (!parsed.ok || !("article" in parsed)) throw new Error("expected article ok envelope");
     expect(parsed.confidence.state).toBe("confident");
     expect(parsed.article.ingestionMeta?.source).toBe("url");
   });
@@ -290,7 +380,7 @@ describe("IngestionResponseSchema", () => {
       article: validV1Article({ ingestionMeta: validIngestionMeta }),
       confidence: { state: "low" },
     });
-    if (!parsed.ok) throw new Error("expected ok envelope");
+    if (!parsed.ok || !("article" in parsed)) throw new Error("expected article ok envelope");
     expect(parsed.confidence.state).toBe("low");
   });
 
@@ -308,10 +398,70 @@ describe("IngestionResponseSchema", () => {
       IngestionResponseSchema.parse({ ok: false, reason: "mystery-reason" }),
     ).toThrow();
   });
+
+  // Phase 12 (Plan 12-01 Task 2) — the SECOND ok-variant: the multi-article
+  // book envelope (ING-05). Planner resolution of 12-RESEARCH Pitfall 3: no
+  // top-level confidence — each article carries its own
+  // ingestionMeta.extractionConfidence.
+  it("parses the book ok-variant {ok, book, articles min 1, skippedCount} (ING-05)", () => {
+    const chapterArticle = validV1Article({
+      ingestionMeta: {
+        source: "epub-chapter",
+        originalHtmlHash: "sha256:epub",
+        extractionConfidence: "high",
+        bookId: "epub-abc123def456",
+        chapterIndex: 0,
+      },
+    });
+    const parsed = IngestionResponseSchema.parse({
+      ok: true,
+      book: validBook,
+      articles: [chapterArticle],
+      skippedCount: 0,
+    });
+    if (!parsed.ok || !("book" in parsed)) throw new Error("expected book envelope");
+    expect(parsed.book.id).toBe("epub-abc123def456");
+    expect(parsed.articles).toHaveLength(1);
+    expect(parsed.articles[0]?.ingestionMeta?.bookId).toBe("epub-abc123def456");
+    expect(parsed.skippedCount).toBe(0);
+  });
+
+  it("the legacy single-article ok-variant still parses byte-stably (url/paste/markdown/pdf)", () => {
+    const parsed = IngestionResponseSchema.parse({
+      ok: true,
+      article: validV1Article({ ingestionMeta: validIngestionMeta }),
+      confidence: { state: "confident" },
+    });
+    if (!parsed.ok || !("article" in parsed)) throw new Error("expected article envelope");
+    expect(parsed.article.ingestionMeta?.source).toBe("url");
+    expect(parsed.confidence.state).toBe("confident");
+  });
+
+  it("rejects a book ok-variant with articles: [] (min(1) — an admitted book always has ≥1 chapter; epub-empty refuses upstream)", () => {
+    expect(() =>
+      IngestionResponseSchema.parse({
+        ok: true,
+        book: validBook,
+        articles: [],
+        skippedCount: 0,
+      }),
+    ).toThrow();
+  });
+
+  it("rejects a book ok-variant with a negative skippedCount (D12-11 count is ≥ 0)", () => {
+    expect(() =>
+      IngestionResponseSchema.parse({
+        ok: true,
+        book: validBook,
+        articles: [validV1Article()],
+        skippedCount: -1,
+      }),
+    ).toThrow();
+  });
 });
 
-describe("IngestionFailureReasonEnum (the 16 cataloged reasons)", () => {
-  it("exposes exactly the 16 reasons — the Phase 7 catalog + Phase 11 PDF members slotting in before the dedupe-refuse + catch-all tail", () => {
+describe("IngestionFailureReasonEnum (the 20 cataloged reasons)", () => {
+  it("exposes exactly the 20 reasons — the Phase 7 catalog + Phase 11 PDF + Phase 12 EPUB members slotting in before the dedupe-refuse + catch-all tail", () => {
     expect(IngestionFailureReasonEnum.options).toEqual([
       "ssrf-blocked-scheme",
       "ssrf-blocked-private-ip",
@@ -322,17 +472,22 @@ describe("IngestionFailureReasonEnum (the 16 cataloged reasons)", () => {
       "extraction-unsupported",
       "extraction-too-low-confidence",
       "round-trip-anchor-failed",
-      // Phase 11 ING-04 — Pattern 7 of 11-RESEARCH.md; "already-in-library"
-      // and "server-error" stay last.
+      // Phase 11 ING-04 — Pattern 7 of 11-RESEARCH.md.
       "pdf-unreadable",
       "pdf-encrypted",
       "pdf-scanned",
       "pdf-multi-column",
       "pdf-too-large",
+      // Phase 12 ING-05 — the four EPUB members; "already-in-library" and
+      // "server-error" stay last.
+      "epub-protected",
+      "epub-unreadable",
+      "epub-empty",
+      "epub-too-large",
       "already-in-library",
       "server-error",
     ]);
-    expect(IngestionFailureReasonEnum.options).toHaveLength(16);
+    expect(IngestionFailureReasonEnum.options).toHaveLength(20);
   });
 
   it("parses each Phase 11 PDF reason (pdf-scanned et al. — the enum accepts all five new members)", () => {
@@ -341,6 +496,59 @@ describe("IngestionFailureReasonEnum (the 16 cataloged reasons)", () => {
     expect(IngestionFailureReasonEnum.parse("pdf-encrypted")).toBe("pdf-encrypted");
     expect(IngestionFailureReasonEnum.parse("pdf-multi-column")).toBe("pdf-multi-column");
     expect(IngestionFailureReasonEnum.parse("pdf-too-large")).toBe("pdf-too-large");
+  });
+
+  it("parses each Phase 12 EPUB reason (the enum accepts all four new members)", () => {
+    expect(IngestionFailureReasonEnum.parse("epub-protected")).toBe("epub-protected");
+    expect(IngestionFailureReasonEnum.parse("epub-unreadable")).toBe("epub-unreadable");
+    expect(IngestionFailureReasonEnum.parse("epub-empty")).toBe("epub-empty");
+    expect(IngestionFailureReasonEnum.parse("epub-too-large")).toBe("epub-too-large");
+  });
+});
+
+// ── BookSchema (Phase 12 ING-05 — Option A thin book record) ─────────────────
+
+describe("BookSchema (Plan 12-01 Task 2)", () => {
+  it("parses the canonical shape (fixture-shaped validBook row)", () => {
+    const parsed = BookSchema.parse(validBook);
+    expect(parsed.id).toBe("epub-abc123def456");
+    expect(parsed.authors).toEqual(["Ada Author", "Bob Builder"]);
+    expect(parsed.chapterArticleIds).toHaveLength(2);
+    expect(parsed.source).toBe("epub-upload");
+    expect(parsed.tags).toEqual([]);
+  });
+
+  it("defaults authors/skippedChapterCount/tags when omitted (library rows written minimally)", () => {
+    const parsed = BookSchema.parse({
+      id: "epub-fff",
+      title: "Minimal Book",
+      language: "en",
+      chapterArticleIds: ["epub-fff-c00"],
+      source: "epub-upload",
+      originalFileHash: "sha256:min",
+      addedAt: "2026-08-18T00:00:00Z",
+    });
+    expect(parsed.authors).toEqual([]);
+    expect(parsed.skippedChapterCount).toBe(0);
+    expect(parsed.tags).toEqual([]);
+  });
+
+  it("rejects a chapterArticleId outside the id regex (chapter ids share the D-06 slug shape)", () => {
+    expect(() =>
+      BookSchema.parse({ ...validBook, chapterArticleIds: ["BAD ID"] }),
+    ).toThrow();
+  });
+
+  it("rejects source values other than the epub-upload literal (only book-producing source in Phase 12)", () => {
+    expect(() =>
+      BookSchema.parse({ ...validBook, source: "fixture" }),
+    ).toThrow();
+  });
+
+  it("rejects a negative skippedChapterCount (D12-11 disclosure count is ≥ 0)", () => {
+    expect(() =>
+      BookSchema.parse({ ...validBook, skippedChapterCount: -1 }),
+    ).toThrow();
   });
 });
 

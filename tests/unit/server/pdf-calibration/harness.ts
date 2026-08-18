@@ -472,7 +472,7 @@ export async function deriveEvidence(
     const bytes = readFileSync(join(paths.corpusDir, entry.file));
     const b64 = Buffer.from(bytes).toString("base64");
     const response = await ingest({ pdf: b64, filename: entry.file });
-    if (response.ok) {
+    if (response.ok && "article" in response) {
       // Admitted — the SC#4a anchor gate ran INSIDE ingest and passed
       // (ok implies assertRoundTripAnchor did not refuse). Agreement needs
       // ground truth: required for admitted-expected classes, computed
@@ -503,12 +503,22 @@ export async function deriveEvidence(
           anchorRoundTrip: true,
         });
       }
-    } else {
+    } else if (!response.ok) {
       results.push({
         file: entry.file,
         sha256: entry.sha256,
         expectedClass: entry.expectedClass,
         verdict: `refused:${response.reason}`,
+      });
+    } else {
+      // ok:true but the book envelope — unreachable on the pdf path (the
+      // pdf branch always answers with the single-article variant); keep the
+      // harness honest by recording the contract violation.
+      results.push({
+        file: entry.file,
+        sha256: entry.sha256,
+        expectedClass: entry.expectedClass,
+        verdict: "refused:server-error",
       });
     }
   }

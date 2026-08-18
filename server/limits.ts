@@ -99,11 +99,48 @@ export const PDF_EXTRACTION_TIMEOUT_MS = 30_000;
  * auditable alongside every other server limit. */
 export const MAX_IMAGE_PIXELS = 16_777_216;
 
-/** Maximum raw JSON body size accepted by the ingest middleware for the PDF
- * path. The request carries base64-in-JSON (~33% inflation over the decoded
- * PDF_MAX_BYTES) plus JSON envelope overhead (keys, filename, quotes) — Pitfall
- * 7 of 11-RESEARCH.md: the middleware must refuse on `content-length` BEFORE
- * readBody accumulates, and this is the number it checks against. The +2048
- * slack absorbs the envelope; the Math.ceil rounds the 4/3 base64 ratio up so
- * a maximum-size valid PDF is never refused by the transport guard. */
-export const MAX_INGEST_BODY_BYTES = Math.ceil((PDF_MAX_BYTES * 4) / 3) + 2048;
+// ── Phase 12 — EPUB intake resource caps (Plan 12-01 Task 2; T-12-01 DoS) ─────
+// Values from 12-PATTERNS.md §dev-server/ingest-middleware.ts + server/limits.ts
+// and the planner resolutions of 12-RESEARCH assumption A2 (caps mirror the
+// PDF precedent) + Pitfall 2 (transport cap derives from the max of both).
+
+// The EPUB decoded-byte cap lives in src/ingestion/types.ts (EPUB_MAX_BYTES)
+// for the same /src→/server import-direction reason as PDF_MAX_BYTES above —
+// the client picker needs the same constant. Imported + re-exported here so
+// server modules keep importing every cap from ONE module.
+import { EPUB_MAX_BYTES } from "../src/ingestion/types";
+export { EPUB_MAX_BYTES };
+
+/** Maximum chapter (article) count of an admitted EPUB (assumption A2 sanity
+ * ceiling; T-12-01 DoS cap). A real book never approaches 1000 chapters; an
+ * EPUB whose TOC/spine derives more refuses with `epub-too-large` before
+ * per-chapter work begins. */
+export const EPUB_MAX_CHAPTERS = 1000;
+
+/** EPUB extraction timeout (AbortSignal cap) — mirrors REQUEST_TIMEOUT_MS and
+ * PDF_EXTRACTION_TIMEOUT_MS above: the EPUB unzip + XML parse + per-chapter
+ * sanitize/walk is CPU-bound, so the same wall-clock generosity/tightness
+ * tradeoff applies (12-RESEARCH Open Question 2's PDF resolution, EPUB
+ * edition). */
+export const EPUB_EXTRACTION_TIMEOUT_MS = 30_000;
+
+/** Per-entry decompressed bomb cap for EPUB archive entries (T-12-01). A
+ * single XHTML document over 64MB inside a ≤10MB zip is pathological; this
+ * is the Phase 9 MAX_ENTRY_ORIGINAL_SIZE discipline (fflate filter skips
+ * over-cap entries BEFORE inflation — over-cap entries are never inflated)
+ * at an EPUB-appropriate constant. Enforced in 12-02's epubToBooks. */
+export const EPUB_MAX_ENTRY_BYTES = 64 * 1024 * 1024;
+
+/** Maximum raw JSON body size accepted by the ingest middleware for the
+ * binary upload paths. The request carries base64-in-JSON (~33% inflation
+ * over the decoded cap) plus JSON envelope overhead (keys, filename, quotes)
+ * — Pitfall 7 of 11-RESEARCH.md + Pitfall 2 of 12-RESEARCH.md: the
+ * middleware must refuse on `content-length` BEFORE readBody accumulates,
+ * and this is the number it checks against. Derived from the LARGER of the
+ * two decoded caps so whichever format diverges upward stays admissible —
+ * numerically identical today (equal 10MB caps) but structurally correct
+ * for future divergence. The +2048 slack absorbs the envelope; the
+ * Math.ceil rounds the 4/3 base64 ratio up so a maximum-size valid upload
+ * is never refused by the transport guard. */
+export const MAX_INGEST_BODY_BYTES =
+  Math.ceil((Math.max(PDF_MAX_BYTES, EPUB_MAX_BYTES) * 4) / 3) + 2048;

@@ -214,6 +214,7 @@ export const ArticleSourceSchema = z.enum([
   "markdown", // Phase 8 — D8-16 (.md upload via markdownToBlocks)
   "html-upload", // Phase 8 — D8-15 (.html file-upload; paste textarea stays as "paste")
   "pdf", // Phase 11 — ING-04 (.pdf upload via pdfToBlocks)
+  "epub-chapter", // Phase 12 — ING-05 (.epub upload via epubToBooks; one article per chapter, Option A)
 ]);
 export type ArticleSource = z.infer<typeof ArticleSourceSchema>;
 
@@ -234,6 +235,15 @@ export const IngestionMetaSchema = z.object({
   fetchedAt: z.string().datetime().optional(), // ISO-8601 (present for url; absent for paste/upload)
   extractionConfidence: z.enum(["high", "low"]), // the derived signal; "unsupported" never persists
   extractionWarnings: z.array(z.string()).default([]), // e.g. "3 unsupported blocks omitted"
+  // Phase 12 (Plan 12-01 Task 2) — ARCHITECTURE L401-402: epub-chapter
+  // articles carry their book + position within it. Additive-optional;
+  // existing rows parse unchanged (absent fields — Pitfall 9 backward-compat,
+  // the same mechanism as `source`-era widenings above).
+  bookId: z
+    .string()
+    .regex(/^[a-z0-9-]+$/)
+    .optional(), // FK → BookSchema.id (grouping reads key on this)
+  chapterIndex: z.number().int().min(0).optional(), // position within BookSchema.chapterArticleIds (admitted order — D12-10/D12-11 numbering)
 });
 export type IngestionMeta = z.infer<typeof IngestionMetaSchema>;
 
@@ -262,6 +272,34 @@ export const ArticleSchema = z.object({
 // infer a self-referential const without a type annotation (Pitfall 7).
 export type CanonicalArticle = z.infer<typeof ArticleSchema>;
 export type InlineRun = z.infer<typeof InlineRun>;
+
+// ── Book (Phase 12 — ING-05, Option A: one article per chapter + thin record) ─
+
+/** BookSchema — the thin book record grouping epub-chapter articles
+ * (ARCHITECTURE Pattern 4; shape per 12-RESEARCH.md L565-577 lifted verbatim
+ * PLUS two planner additions the sketch omitted: `tags` (D12-04 — tags live
+ * on the Book record, mirroring the ArticleSchema.tags Phase 8 mechanism)
+ * and `addedAt` (library default-sort + continue-strip ordering)).
+ * `chapterArticleIds` is ORDERED — the book's own TOC per D12-06: "Chapter
+ * N of M" numbering runs over this list, and `skippedChapterCount` is
+ * disclosed additively (D12-11) rather than renumbering it. `source` is the
+ * literal "epub-upload" (the only book-producing source in Phase 12). */
+export const BookSchema = z.object({
+  id: z.string().regex(/^[a-z0-9-]+$/), // `epub-<12hex>` — content-hash, dedupe-refuse (D7-07 precedent)
+  title: z.string().min(1), // OPF dc:title (spec-REQUIRED; fallback filename)
+  authors: z.array(z.string()).default([]), // dc:creator (repeatable; all kept)
+  language: z.string().min(2), // OPF dc:language (spec-REQUIRED)
+  chapterArticleIds: z.array(z.string().regex(/^[a-z0-9-]+$/)), // ordered — the book's TOC (D12-06)
+  publisher: z.string().optional(), // dc:publisher
+  publishedDate: z.string().optional(), // dc:date (raw OPF string; publisher formats vary — not datetime-refined)
+  identifier: z.string().optional(), // dc:identifier (ISBN/UUID — traceability only)
+  skippedChapterCount: z.number().int().min(0).default(0), // D12-11 disclosure derives from this
+  source: z.literal("epub-upload"),
+  originalFileHash: z.string(), // sha256 of the EPUB bytes
+  tags: z.array(z.string().min(1)).default([]).optional(), // D12-04 — tags live on the Book record
+  addedAt: z.string().datetime(), // library default-sort + continue-strip ordering stamp
+});
+export type Book = z.infer<typeof BookSchema>;
 
 // ── Reader settings (Phase 2 — READ-02/03, STATE-02/04) ──────────────────────
 // Single composite record under Dexie key "reader-prefs" (D2 discretion /

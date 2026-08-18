@@ -59,8 +59,9 @@ describe("ingest — pdf fourth branch happy path", () => {
     });
 
     expect(response.ok).toBe(true);
-    if (!response.ok) {
-      throw new Error(`expected ok:true, got refusal: ${response.reason}`);
+    // Two ok-variants since Phase 12 — narrow on the article key.
+    if (!response.ok || !("article" in response)) {
+      throw new Error("expected ok:true article envelope");
     }
 
     const article = response.article;
@@ -85,7 +86,7 @@ describe("ingest — pdf fourth branch happy path", () => {
   it("falls back to the neutral 'PDF document' title when no filename is given", async () => {
     const response = await ingest({ pdf: fixtureB64("synthetic-single-column.pdf") });
     expect(response.ok).toBe(true);
-    if (response.ok) {
+    if (response.ok && "article" in response) {
       expect(response.article.provenance.title).toBe("PDF document");
     }
   });
@@ -105,7 +106,7 @@ describe("ingest — pdf id stability", () => {
 
     expect(first.ok).toBe(true);
     expect(second.ok).toBe(true);
-    if (first.ok && second.ok) {
+    if (first.ok && second.ok && "article" in first && "article" in second) {
       expect(first.article.id).toBe(second.article.id);
     }
   });
@@ -130,8 +131,9 @@ describe("ingest — outline-fixture admission (11-07)", () => {
     });
 
     expect(response.ok).toBe(true);
-    if (!response.ok) {
-      throw new Error(`expected ok:true, got refusal: ${response.reason}`);
+    // Two ok-variants since Phase 12 — narrow on the article key.
+    if (!response.ok || !("article" in response)) {
+      throw new Error("expected ok:true article envelope");
     }
 
     const article = response.article;
@@ -251,7 +253,7 @@ describe("ingest — pdf round-trip anchor re-proof (SC#4a)", () => {
       filename: "calm-report.pdf",
     });
     expect(response.ok).toBe(true);
-    if (!response.ok) throw new Error(`expected ok:true, got ${response.reason}`);
+    if (!response.ok || !("article" in response)) throw new Error("expected ok:true article envelope");
     // The orchestrator already ran the gate internally (Stage 7); re-running
     // it here proves the PERSISTED article shape round-trips — an admitted
     // PDF is a fixture to the reading engine (SC#4a integration proof).

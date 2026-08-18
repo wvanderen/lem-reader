@@ -159,6 +159,16 @@ async function ingest(
     throw new IngestionError("server-error");
   }
 
+  // Phase 12 (Plan 12-01 Task 2): the envelope widened with a second
+  // {ok:true, book, articles, skippedCount} variant (ING-05). The
+  // single-article wrappers only accept the article variant — a book
+  // envelope arriving here is a contract violation for THIS call, refused
+  // as the catch-all server-error (the ingestEpub wrapper with its
+  // book-shaped return lands in 12-04).
+  if (!("article" in json)) {
+    throw new IngestionError("server-error");
+  }
+
   // STATE-04 re-validation. ArticleSchema.parse throws ZodError on a
   // malformed article; the caller's catch-all surfaces "Something went
   // wrong. Try again." (server-error copy). This is the load-bearing

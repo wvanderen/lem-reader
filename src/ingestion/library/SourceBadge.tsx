@@ -1,19 +1,21 @@
 // src/ingestion/library/SourceBadge.tsx
 // Plan 08-03 Task 2 — SourceBadge (D8-02 + LIB-05). A small `.meta`-style
-// `<p>` rendering ONE of six text variants based on
+// `<p>` rendering ONE of seven text variants based on
 // `article.ingestionMeta?.source ?? "fixture"`. Reads as quiet provenance
 // metadata — no border, no fill, no icon (UI-SPEC §SourceBadge).
 //
 // LIB-05 "reach the original source" is satisfied at the row level for the
 // `url` + `paste` variants by wrapping the badge text in
 // `<a href={sourceUrl} rel="noreferrer noopener" target="_blank">`. Markdown
-// + html-upload + pdf + fixture variants render plain text (no source URL —
-// D8-17 markdown has no canonical URL; html-upload is a paste of arbitrary
-// HTML; pdf is a local upload; fixtures are bundled). Mirrors the existing
-// ArticleView "Originally published at {domain}" pattern.
+// + html-upload + pdf + epub-chapter + fixture variants render plain text
+// (no source URL — D8-17 markdown has no canonical URL; html-upload is a
+// paste of arbitrary HTML; pdf/epub are local uploads; fixtures are
+// bundled). Mirrors the existing ArticleView "Originally published at
+// {domain}" pattern.
 //
-// The six variants are EXHAUSTIVE over `ArticleSourceSchema`
-// (fixture|url|paste|markdown|html-upload|pdf — Plan 11 widened the enum).
+// The seven variants are EXHAUSTIVE over `ArticleSourceSchema`
+// (fixture|url|paste|markdown|html-upload|pdf|epub-chapter — Plan 12 widened
+// the enum; the D12-01 chapter sub-rows reuse this badge).
 // Threat T-8-12 (SourceBadge link href injection): the sourceUrl comes from
 // `article.provenance.sourceUrl` which is `httpUrl`-refined at ArticleSchema
 // parse time — only http(s) URLs survive (Pitfall 5). The
@@ -29,8 +31,8 @@ interface SourceBadgeProps {
 /**
  * Maps an `ArticleSource` to its display label. Exhaustive over the closed
  * enum (UI-SPEC §SourceBadge table). The switch has NO default — if the enum
- * widens additively in a later phase (e.g. "pdf" Phase 11), TypeScript will
- * flag the unhandled case here.
+ * widens additively in a later phase (e.g. "epub-chapter" Phase 12, returning
+ * "Book"), TypeScript will flag the unhandled case here.
  */
 function badgeLabel(source: NonNullable<CanonicalArticle["ingestionMeta"]>["source"]): string {
   switch (source) {
@@ -46,6 +48,8 @@ function badgeLabel(source: NonNullable<CanonicalArticle["ingestionMeta"]>["sour
       return "HTML file";
     case "pdf":
       return "PDF";
+    case "epub-chapter":
+      return "Book";
   }
 }
 

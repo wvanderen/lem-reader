@@ -46,8 +46,9 @@ describe("normalization / round-trip anchor gate (SC#1)", () => {
     const result = await ingest({ html });
     // If extraction succeeded, the round-trip gate MUST pass on the extracted
     // article (the gate already ran inside ingest; this re-asserts it on the
-    // returned article for defense-in-depth).
-    if (result.ok) {
+    // returned article for defense-in-depth). Two ok-variants since Phase 12
+    // — narrow on the article key.
+    if (result.ok && "article" in result) {
       expect(() => assertRoundTripAnchor(result.article)).not.toThrow();
     }
   });
@@ -81,7 +82,7 @@ describe("normalization / round-trip anchor gate (SC#1)", () => {
     const html = readFileSync(join(SOURCE_HTML_DIR, "technical-post.html"), "utf-8");
     const result = await ingest({ html });
     expect(result.ok).toBe(true);
-    if (result.ok) {
+    if (result.ok && "article" in result) {
       expect(result.article.blocks.length).toBeGreaterThan(0);
       expect(result.confidence.state === "confident" || result.confidence.state === "low").toBe(true);
     }
