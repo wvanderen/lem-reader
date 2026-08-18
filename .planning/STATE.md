@@ -6,14 +6,14 @@ current_phase: 12
 current_phase_name: EPUB Intake
 status: executing
 stopped_at: Phase 12 context gathered
-last_updated: "2026-08-18T15:11:49.353Z"
+last_updated: "2026-08-18T15:30:45.767Z"
 last_activity: 2026-08-18
 last_activity_desc: Phase 12 execution started
 progress:
   total_phases: 7
   completed_phases: 5
   total_plans: 40
-  completed_plans: 34
+  completed_plans: 35
   percent: 71
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 ## Current Position
 
 Phase: 12 (EPUB Intake) — EXECUTING
-Plan: 3 of 8
+Plan: 4 of 8
 Status: Ready to execute
 Last activity: 2026-08-18 — Phase 12 execution started
 
@@ -134,6 +134,7 @@ Progress: [████████████████████] 32/32 p
 | Phase 11 P06 | 47min | 3 tasks | 12 files |
 | Phase 11 P07 | 6 min | 3 tasks | 5 files |
 | Phase 12 P02 | 13min | 2 tasks | 2 files |
+| Phase 12 P03 | 15 min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -300,6 +301,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: 12-02: entity-bomb guard = DTD refusal across every parsed XML document — processEntities:false alone parses the DOCTYPE harmlessly (verified against fast-xml-parser 5.10.1), so the pinned epub-unreadable outcome required refusing <!DOCTYPE outright
 - [Phase ?]: 12-02: bomb-entry refusal via fflate filter-rejection detection (over-cap entry names recorded, then the book refuses epub-unreadable) — the plan's missing-required-document theory cannot hold — bomb.xhtml is referenced by nothing; filter-before-inflate discipline intact
 - [Phase ?]: 12-02: chapter document titles come from the RAW xhtml (sanitize strips <title>); epubToBooks ships bytes-only and computes both hashes in-adapter (originalFileHash + per-chapter sourceHtmlHash) — the orchestrator never re-reads bytes for IngestionMeta.originalHtmlHash
+- [Phase 12]: Phase 12-03: saveBook denormalizes a TOP-LEVEL bookId onto stored chapter rows — the plan's v5 articles index is top-level but CanonicalArticle carries bookId only in ingestionMeta; ArticleSchema strip-mode drops the unknown key on read so the canonical contract stays ingestionMeta.bookId
+- [Phase 12]: Phase 12-03: ingestEpub parses the FULL widened IngestionResponseSchema (envelope validates the Book itself) then runs the mandated per-article ArticleSchema.parse loop — two-layer T-12-10 defense-in-depth; ?format=epub stays a copy-only middleware hint
+- [Phase 12]: Phase 12-03: the .status region gained a success render arm for the book path (stays on the list — navigation is 12-06's); single-article success paths now setMessage(null), behavior-preserving
 
 ### Pending Todos
 
@@ -329,7 +333,7 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-18T15:11:16.159Z
+Last session: 2026-08-18T15:30:00.028Z
 Stopped at: Phase 12 context gathered
 Resume file: .planning/phases/12-epub-intake/12-CONTEXT.md
 
