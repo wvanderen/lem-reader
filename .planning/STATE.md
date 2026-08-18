@@ -6,14 +6,14 @@ current_phase: 12
 current_phase_name: EPUB Intake
 status: executing
 stopped_at: Completed 12-07-PLAN.md
-last_updated: "2026-08-18T16:45:00.856Z"
+last_updated: "2026-08-18T17:32:46.922Z"
 last_activity: 2026-08-18
 last_activity_desc: Phase 12 execution started
 progress:
   total_phases: 7
   completed_phases: 5
   total_plans: 40
-  completed_plans: 38
+  completed_plans: 39
   percent: 71
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 ## Current Position
 
 Phase: 12 (EPUB Intake) — EXECUTING
-Plan: 7 of 8
+Plan: 8 of 8
 Status: Ready to execute
 Last activity: 2026-08-18 — Phase 12 execution started
 
@@ -138,6 +138,7 @@ Progress: [████████████████████] 32/32 p
 | Phase 12 P04 | 20 min | 2 tasks tasks | 5 files files |
 | Phase 12 P05 | 18 min | 3 tasks | 13 files |
 | Phase 12 P07 | 19 min | 2 tasks | 11 files |
+| Phase 12 P06 | 38 min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -315,6 +316,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: [Phase 12 12-07] manifest.ts deliberately untouched — books are NOT a manifest block (the five Phase-9 blocks stay); T-12-17's mitigation is Zod-at-boundary + the puts-only transaction
 - [Phase ?]: [Phase 12 12-07] Book conflict semantics: same id + different originalFileHash skips by default; identical-hash is a calm no-op; keep-both behaves as skip — a minted book id would strand every chapter FK
 - [Phase ?]: [Phase 12 12-07] applyImport stamps the top-level bookId on chapter puts (Rule 2 — saveBook's v5 index contract): imported chapter rows stay index-uniform with saved ones; canonical FK stays ingestionMeta.bookId; the six-table settings branch uses Dexie's readonly-array overload (tuple overloads stop at five tables)
+- [Phase 12]: 12-06: D12-05 paginated chapter nav is ArticleView-owned position:fixed chrome after the surface — out of the grid flow so mounting on the final page never perturbs .page-viewport geometry; pageState mirrored from onAnchorChange via surfaceRef.getState() (no props changed, no state lifted) — 12-06: D12-05 paginated chapter nav is ArticleView-owned position:fixed chrome after the surface — out of the grid flow so mounting on the final page never perturbs .page-viewport geometry; pageState mirrored from onAnchorChange via surfaceRef.getState() (no props changed, no state lifted)
+- [Phase 12]: 12-06: chapter links are the first article→article navigation keeping ArticleView mounted — D4-10 anchor refs reset on swap (stale offset opened the next chapter at its END); .chapter-nav-title italic not opacity (0.75 blended to 3.83:1, an axe AA fail) — 12-06: chapter links are the first article→article navigation keeping ArticleView mounted — D4-10 anchor refs reset on swap (stale offset opened the next chapter at its END); .chapter-nav-title italic not opacity (0.75 blended to 3.83:1, an axe AA fail)
 
 ### Pending Todos
 
@@ -344,7 +347,7 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-18T16:45:00.848Z
+Last session: 2026-08-18T17:32:29.263Z
 Stopped at: Completed 12-07-PLAN.md
 Resume file: None
 
