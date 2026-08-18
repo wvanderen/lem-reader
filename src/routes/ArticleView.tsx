@@ -864,6 +864,15 @@ export function ArticleView({
     setChapterContext(null);
     setNeighborTitles({ prev: null, next: null });
     setPageState(null);
+    // Plan 12-06 (Rule 1 — chapter links are the first article→article
+    // navigation that keeps ArticleView MOUNTED): reset the D4-10 anchor
+    // refs on swap. A stale offset from the previous article would feed
+    // PaginatedSurface's initialAnchorOffset on its fresh mount and land
+    // the NEXT chapter at the previous article's passage (its final page)
+    // instead of the chapter start. Resetting mirrors the fresh-mount
+    // behavior every library open already gets.
+    currentAnchorOffsetRef.current = 0;
+    lastPreciseAnchorRef.current = null;
     openArticle(articleId)
       .then(async (a) => {
         if (cancelled) return;
