@@ -30,6 +30,7 @@
 //     URLs survive); `new URL()` here is therefore defensive (it never sees a
 //     javascript:/data: URI). See T-8-12 mitigation in the plan.
 import type { CanonicalArticle } from "../../content/types";
+import type { Book } from "../../content/schema";
 
 /**
  * `LibraryFilter` — the filter shape consumed by `filterLibrary`. Mirrors the
@@ -54,13 +55,20 @@ export interface LibraryFilter {
  * filter (D8-07) AND the query filter (D8-06) — both must pass for an article
  * to remain in the result set.
  *
+ * Plan 12-05 (D12-01): CHAPTER members — articles carrying
+ * `ingestionMeta.bookId` — are excluded here; they render only as sub-rows
+ * inside their BookRow grouping, never as standalone results. (LibraryView
+ * partitions them out upstream; this guard keeps the pure function honest
+ * for any caller.)
+ *
  * The function does NOT sort; the caller (LibraryView) owns the default sort
  * (recently-added descending per D8-03) because the sort key (`addedAt`) is
  * available at the repository layer, not inside this pure helper.
  *
  * @param articles The composite library list (fixtures + ingested).
  * @param filter   `{ query, activeTag }` — see `LibraryFilter`.
- * @returns        A new array (input is not mutated) of matching articles.
+ * @returns        A new array (input is not mutated) of matching standalone
+ *                 articles (chapter members excluded).
  */
 export function filterLibrary(
   articles: CanonicalArticle[],
@@ -68,6 +76,9 @@ export function filterLibrary(
 ): CanonicalArticle[] {
   const q = filter.query.trim().toLowerCase();
   return articles.filter((a) => {
+    // Plan 12-05 (D12-01) — chapter members never surface standalone; the
+    // book grouping (filterBooks) owns their visibility.
+    if (a.ingestionMeta?.bookId) return false;
     // Tag filter (D8-07 — single tag, AND-style within a tag).
     if (filter.activeTag !== null) {
       if (!(a.tags ?? []).includes(filter.activeTag)) return false;
@@ -79,6 +90,49 @@ export function filterLibrary(
         a.provenance.author ?? "",
         domainOf(a.provenance.sourceUrl),
         ...(a.tags ?? []),
+      ]
+        .join(" ")
+        .toLowerCase();
+      if (!haystack.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+/**
+ * `filterBooks` — Pure filter over the Book[] half of the library
+ * (Plan 12-05 — D12-04). A book surfaces when it passes BOTH the tag filter
+ * (via `book.tags` — tags live on the Book record) AND the query filter.
+ *
+ * The book haystack is the lowercase join of [title, ...authors, ...chapter
+ * titles] — searching a CHAPTER title surfaces the BOOK row (never a chapter
+ * row): "find the essay collection containing the essay" works. Chapter
+ * titles arrive as a caller-supplied Map (bookId → titles) so this function
+ * stays pure — no Dexie, no article lookups.
+ *
+ * @param books               The library's Book records.
+ * @param filter              `{ query, activeTag }` — the SAME filter shape
+ *                            filterLibrary consumes (the two compose).
+ * @param chapterTitlesByBook Chapter provenance titles per book id.
+ * @returns A new array of matching books.
+ */
+export function filterBooks(
+  books: Book[],
+  filter: LibraryFilter,
+  chapterTitlesByBook: Map<string, string[]>,
+): Book[] {
+  const q = filter.query.trim().toLowerCase();
+  return books.filter((book) => {
+    // Tag filter (D12-04 — tags live on the Book record).
+    if (filter.activeTag !== null) {
+      if (!(book.tags ?? []).includes(filter.activeTag)) return false;
+    }
+    // Search (D12-04 — book title + authors AND chapter titles).
+    if (q.length > 0) {
+      const haystack = [
+        book.title,
+        ...book.authors,
+        ...(chapterTitlesByBook.get(book.id) ?? []),
       ]
         .join(" ")
         .toLowerCase();
