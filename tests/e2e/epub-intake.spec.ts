@@ -856,7 +856,15 @@ test.describe("ING-05 — chapter reading identity (SC#2)", () => {
     await reloadLibrary(page);
 
     // Open chapter 2 (default paginated mode on first run).
-    await openChapterByTitle(page, "Chapter 2. The Carpet-Bag");
+    const chapter2Id = await openChapterByTitle(page, "Chapter 2. The Carpet-Bag");
+    expect(chapter2Id).toMatch(/-c01$/);
+
+    // Physical substrate identity: the persisted row carries ingestionMeta
+    // source "epub-chapter" + the book FK (SC#2's "a chapter IS an article"
+    // starts from the row the reader engine actually reads).
+    const chapter2Row = await readArticleRow(page, chapter2Id);
+    expect(chapter2Row.ingestionMeta?.source).toBe("epub-chapter");
+    expect(chapter2Row.ingestionMeta?.bookId).toBeTruthy();
 
     // D12-08 — the context line pins the exact literal shape (U+00B7).
     await expect(page.locator("p.book-context")).toHaveText(
