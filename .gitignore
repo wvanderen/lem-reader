@@ -23,6 +23,12 @@ coverage
 # The README is the directory's committed convention card.
 corpus/pdf/*
 !corpus/pdf/README.md
+
+# Local real-EPUB calibration corpus (D12-12, the D11-04 mirror) —
+# licensing/size keep real books local; only DERIVED evidence commits
+# (tests/unit/server/epub-calibration/). README is the convention card.
+corpus/epub/*
+!corpus/epub/README.md
 .todos/
 .sidecar/
 .sidecar-agent
