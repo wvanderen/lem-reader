@@ -546,6 +546,116 @@ export function parseEpubArchive(bytes: Uint8Array): EpubArchive {
   return { bookMeta, opfDir, manifestItems, spine, navItem, ncxItem, entryText };
 }
 
+// ── Navigation resolution — nav (EPUB 3) preferred, NCX (EPUB 2) fallback ────
+
+/** One flattened TOC entry: label + href normalized to a zip-root-relative
+ * path (through the ONE shared normalizeEpubHref) + nesting depth (top
+ * level = 1). */
+interface FlatTocEntry {
+  label: string;
+  href: string;
+  depth: number;
+}
+
+/** Flatten one nav <ol> level: each <li> with an <a> yields an entry at
+ * `depth`; a nested <ol> inside a li increments depth (top-level li = 1 —
+ * deeper entries are in-chapter sections, never chapter units). */
+function flattenNavOl(
+  ol: unknown,
+  navDir: string,
+  depth: number,
+  out: FlatTocEntry[],
+): void {
+  for (const li of xmlArr(asObj(ol)?.li)) {
+    const liObj = asObj(li);
+    const a = asObj(liObj?.a);
+    const href = a !== undefined ? xmlAttr(a, "href") : undefined;
+    const label = a !== undefined ? xmlText(a).trim() : "";
+    if (a !== undefined && href !== undefined && href.length > 0 && label.length > 0) {
+      out.push({ label, href: normalizeEpubHref(href, navDir), depth });
+    }
+    for (const nested of xmlArr(liObj?.ol)) {
+      flattenNavOl(nested, navDir, depth + 1, out);
+    }
+  }
+}
+
+/**
+ * resolveNavToc — the EPUB 3 navigation document (EPUB 3.3 §7): the manifest
+ * item whose properties include "nav", parsed with the shared hardened
+ * config; the single nav element whose epub:type is "toc" (the "@_type" key
+ * under removeNSPrefix — assumption A7); its ol>li>a hierarchy flattened to
+ * ordered {label, href, depth}. A nav document that fails XML parsing falls
+ * through to the NCX path (tolerated — malformed XHTML navs are common);
+ * undefined when no usable toc nav exists.
+ */
+function resolveNavToc(archive: EpubArchive): FlatTocEntry[] | undefined {
+  if (archive.navItem === undefined) return undefined;
+  const text = archive.entryText(archive.navItem.href);
+  if (text === undefined) return undefined;
+  let doc: unknown;
+  try {
+    doc = parseEpubXml(text);
+  } catch {
+    return undefined; // tolerated → NCX path
+  }
+  const body = asObj(asObj(asObj(doc)?.html)?.body);
+  const navDir = dirOf(archive.navItem.href);
+  const out: FlatTocEntry[] = [];
+  for (const navEl of xmlArr(body?.nav)) {
+    if (xmlAttr(navEl, "type") !== "toc") continue;
+    for (const ol of xmlArr(asObj(navEl)?.ol)) {
+      flattenNavOl(ol, navDir, 1, out);
+    }
+  }
+  return out.length > 0 ? out : undefined;
+}
+
+/** Flatten NCX navPoints recursively: label = navLabel text, href =
+ * content@src, depth by nesting (top level = 1). */
+function flattenNcxNavPoints(
+  points: unknown[],
+  ncxDir: string,
+  depth: number,
+  out: FlatTocEntry[],
+): void {
+  for (const np of points) {
+    const obj = asObj(np);
+    const label = xmlText(asObj(xmlArr(obj?.navLabel)[0])?.text).trim();
+    const src = xmlAttr(obj?.content, "src");
+    if (label.length > 0 && src !== undefined && src.length > 0) {
+      out.push({ label, href: normalizeEpubHref(src, ncxDir), depth });
+    }
+    flattenNcxNavPoints(xmlArr(obj?.navPoint), ncxDir, depth + 1, out);
+  }
+}
+
+/**
+ * resolveNcxToc — the EPUB 2 fallback (also used when an EPUB 3 book's nav
+ * is unusable): spine@toc idref → the application/x-dtbncx+xml manifest
+ * item → navMap>navPoint flattening. EPUB 3 nav is ALWAYS preferred over
+ * NCX when both exist (EPUB 3.3 §5.9.5 — "the EPUB navigation document
+ * replaces the NCX for EPUB 3 reading systems"); undefined when no NCX
+ * resolves.
+ */
+function resolveNcxToc(archive: EpubArchive): FlatTocEntry[] | undefined {
+  if (archive.ncxItem === undefined) return undefined;
+  const text = archive.entryText(archive.ncxItem.href);
+  if (text === undefined) return undefined;
+  let doc: unknown;
+  try {
+    doc = parseEpubXml(text);
+  } catch {
+    return undefined;
+  }
+  const navMap = asObj(asObj(asObj(doc)?.ncx)?.navMap);
+  if (navMap === undefined) return undefined;
+  const ncxDir = dirOf(archive.ncxItem.href);
+  const out: FlatTocEntry[] = [];
+  flattenNcxNavPoints(xmlArr(navMap.navPoint), ncxDir, 1, out);
+  return out.length > 0 ? out : undefined;
+}
+
 // ── Chapter normalization — the SHARED sanitize + walk path (D12-14) ─────────
 
 /** Plain text of a paragraph/heading block (admission + title chain). */
@@ -629,11 +739,15 @@ function walkChapterDocument(xhtml: string): WalkedDocument {
 
 /**
  * D12-10 admission — the EPUB-adapted readerability algebra (the 11-07
- * relaxed form, translated to the document unit): at least
- * minChapterBlocks blocks AND at least one paragraph/heading block with
- * non-empty text. Cover plates and pure-image pages fail; front matter with
- * real paragraphs passes. linear="no" is a skip HINT only — THIS gate
- * decides (spec: "purely supplemental").
+ * relaxed form): the ASSEMBLED CHAPTER UNIT must walk to at least
+ * minChapterBlocks blocks AND carry at least one paragraph/heading block
+ * with non-empty text. The unit is the reading document the reader
+ * experiences — a publisher-split chapter or a multi-document front-matter
+ * range is judged as a whole (its pieces are often individually tiny), while
+ * a lone cover plate or pure-image page fails alone. Cover plates and
+ * pure-image pages fail; front matter with real paragraphs passes.
+ * linear="no" is a skip HINT only — THIS gate decides (spec: "purely
+ * supplemental").
  */
 function isReaderableDocument(blocks: Block[]): boolean {
   return (
@@ -642,14 +756,14 @@ function isReaderableDocument(blocks: Block[]): boolean {
   );
 }
 
-/** A spine document loaded, walked, and admission-judged. */
+/** A spine document loaded and walked once (a document can only occupy one
+ * spine position's worth of work). */
 interface SpineDoc {
   /** Position within the OPF spine. */
   pos: number;
   item: EpubManifestItem;
   xhtml: string;
   walked: WalkedDocument;
-  admitted: boolean;
 }
 
 /** Media types that can be content documents; anything else in the spine
@@ -657,15 +771,16 @@ interface SpineDoc {
 const CONTENT_MEDIA_TYPES = new Set(["application/xhtml+xml", "text/html"]);
 
 /**
- * loadSpineDocs — walk + judge every spine document once (a document can
- * only occupy one spine position's worth of work). Structural skips (the
- * nav document by its known manifest id, dangling idrefs, missing entries,
- * non-content media types) are NOT failures and NOT disclosed; a document
- * that exists and fails admission IS disclosed (D12-11's skippedCount).
+ * loadSpineDocs — walk every spine document once. Structural skips (the nav
+ * document by its known manifest id, dangling idrefs, missing entries,
+ * non-content media types) are NOT failures and NOT disclosed; admission
+ * (D12-10) is judged per assembled chapter unit in assembleChapters, and
+ * disclosure (D12-11's skippedCount) counts UNITS — the "2 chapters could
+ * not be read" the reader sees, consistent with admitted-only numbering
+ * (Pitfall 10).
  */
-function loadSpineDocs(archive: EpubArchive): { docs: SpineDoc[]; skippedCount: number } {
+function loadSpineDocs(archive: EpubArchive): SpineDoc[] {
   const docs: SpineDoc[] = [];
-  let skippedCount = 0;
   for (const [pos, spineItem] of archive.spine.entries()) {
     const item = spineItem.item;
     if (item === undefined) continue; // dangling idref — no document exists
@@ -675,12 +790,9 @@ function loadSpineDocs(archive: EpubArchive): { docs: SpineDoc[]; skippedCount: 
     if (!CONTENT_MEDIA_TYPES.has(item.mediaType)) continue;
     const xhtml = archive.entryText(item.href);
     if (xhtml === undefined) continue; // manifest item with no zip entry
-    const walked = walkChapterDocument(xhtml);
-    const admitted = isReaderableDocument(walked.blocks);
-    if (!admitted) skippedCount += 1;
-    docs.push({ pos, item, xhtml, walked, admitted });
+    docs.push({ pos, item, xhtml, walked: walkChapterDocument(xhtml) });
   }
-  return { docs, skippedCount };
+  return docs;
 }
 
 // ── Chapter units + the output contract ──────────────────────────────────────
@@ -727,34 +839,115 @@ export interface EpubToBooksResult {
 }
 
 /**
- * partitionSpineFallback — the D12-09 FALLBACK partition: one chapter unit
- * per spine document (admission still filters at emit time). Fires when no
- * navigation resolves or fewer than tocMergeMinEntries distinct TOC entries
- * resolve — the honest behavior for weird-but-valid books.
+ * partitionChapters — the book's own TOC declares the chapter unit (D12-09):
+ *
+ *   1. Top-level (depth-1) TOC entries are chapter units; deeper entries are
+ *      in-chapter sections (Pitfall 4 — flattening them yields 300
+ *      "chapters"). Degenerate case: exactly one depth-1 entry (often
+ *      "Contents" wrapping the real book) → descend one level and use its
+ *      depth-2 children.
+ *   2. Each unit's href → manifest id → FIRST spine position it appears at
+ *      (a TOC-only href absent from the spine is ignored; fragments were
+ *      already stripped by the shared normalizer). Two units resolving to
+ *      the same position keep the first.
+ *   3. Chapter k's spine range = [pos(k), pos(k+1)); spine items BEFORE the
+ *      first TOC entry form their own leading unit (front matter — it stays
+ *      only when its assembled blocks pass admission).
+ *   4. Fallback: no usable TOC, or fewer than tocMergeMinEntries distinct
+ *      entries resolve → one unit per spine document, fallbackUsed: true —
+ *      the calibration warning sign (Pitfall 1: fallback on a book with a
+ *      good TOC means href normalization regressed).
  */
-function partitionSpineFallback(docs: SpineDoc[]): ChapterUnit[] {
-  return docs.map((d) => ({
-    label: undefined,
-    fallbackLabel: "Chapter",
-    startPos: d.pos,
-    endPos: d.pos + 1,
-  }));
+function partitionChapters(
+  archive: EpubArchive,
+  docs: SpineDoc[],
+): { units: ChapterUnit[]; fallbackUsed: boolean } {
+  const fallbackUnits = (): ChapterUnit[] =>
+    docs.map((d) => ({
+      label: undefined,
+      fallbackLabel: "Chapter",
+      startPos: d.pos,
+      endPos: d.pos + 1,
+    }));
+
+  // EPUB 3 nav preferred over NCX whenever both exist (EPUB 3.3 §5.9.5).
+  const toc = resolveNavToc(archive) ?? resolveNcxToc(archive);
+  if (toc === undefined) return { units: fallbackUnits(), fallbackUsed: true };
+
+  let units = toc.filter((e) => e.depth === 1);
+  if (units.length === 1) {
+    const children = toc.filter((e) => e.depth === 2);
+    if (children.length > 0) units = children; // degenerate descent (D12-09)
+  }
+
+  // href → manifest id → first spine position among the loaded docs (the
+  // nav document and structurally-skipped items hold no position, so TOC
+  // entries pointing at them resolve to nothing and are ignored).
+  const firstPosByItemId = new Map<string, number>();
+  for (const d of docs) {
+    if (!firstPosByItemId.has(d.item.id)) firstPosByItemId.set(d.item.id, d.pos);
+  }
+  const hrefToItem = new Map<string, EpubManifestItem>();
+  for (const it of archive.manifestItems) {
+    if (!hrefToItem.has(it.href)) hrefToItem.set(it.href, it);
+  }
+
+  const resolved: Array<{ unit: FlatTocEntry; pos: number }> = [];
+  const seenPos = new Set<number>();
+  for (const unit of units) {
+    if (unit.href.length === 0) continue;
+    const item = hrefToItem.get(unit.href);
+    if (item === undefined) continue; // TOC-only href — ignored
+    const pos = firstPosByItemId.get(item.id);
+    if (pos === undefined || seenPos.has(pos)) continue;
+    seenPos.add(pos);
+    resolved.push({ unit, pos });
+  }
+  resolved.sort((a, b) => a.pos - b.pos);
+  if (resolved.length < EPUB_THRESHOLDS.tocMergeMinEntries) {
+    return { units: fallbackUnits(), fallbackUsed: true };
+  }
+
+  const spineEnd = archive.spine.length;
+  const out: ChapterUnit[] = [];
+  const firstPos = resolved[0]?.pos ?? 0;
+  if (firstPos > 0) {
+    // Spine items before the first TOC entry — the leading front-matter
+    // unit (A5 resolution: titled from its first document, "Front matter"
+    // as the label of last resort).
+    out.push({
+      label: undefined,
+      fallbackLabel: "Front matter",
+      startPos: 0,
+      endPos: firstPos,
+    });
+  }
+  resolved.forEach((r, i) => {
+    const next = resolved[i + 1];
+    out.push({
+      label: r.unit.label,
+      fallbackLabel: "Chapter",
+      startPos: r.pos,
+      endPos: next !== undefined ? next.pos : spineEnd,
+    });
+  });
+  return { units: out, fallbackUsed: false };
 }
 
 /** The chapter title chain (12-RESEARCH Pattern 4): TOC label (publisher
- * intent — primary) → first admitted document's <title> → first heading
- * block text → "<fallbackLabel> N". Numbering runs over ADMITTED chapters
+ * intent — primary) → first document's <title> → first heading block text →
+ * the unit's label of last resort. Numbering runs over ADMITTED chapters
  * only (Pitfall 10 — skipped chapters are disclosed, never renumbered). */
 function chapterTitle(
   unit: ChapterUnit,
-  admittedDocs: SpineDoc[],
+  unitDocs: SpineDoc[],
   number: number,
 ): string {
   const label = unit.label?.trim();
   if (label !== undefined && label.length > 0) return label;
-  const docTitle = admittedDocs[0]?.walked.docTitle?.trim();
+  const docTitle = unitDocs[0]?.walked.docTitle?.trim();
   if (docTitle !== undefined && docTitle.length > 0) return docTitle;
-  for (const d of admittedDocs) {
+  for (const d of unitDocs) {
     for (const b of d.walked.blocks) {
       if (b.kind === "heading") {
         const t = blockText(b);
@@ -762,30 +955,34 @@ function chapterTitle(
       }
     }
   }
-  return `${unit.fallbackLabel} ${number}`;
+  // The leading unit's last resort is its plain label (an unnumbered
+  // "Front matter 1" would read as a chapter number the book never had).
+  return unit.fallbackLabel === "Front matter"
+    ? unit.fallbackLabel
+    : `${unit.fallbackLabel} ${number}`;
 }
 
-/** Emit one ChapterDraft from a unit's admitted documents, in spine order. */
+/** Emit one ChapterDraft from a unit's documents, in spine order. */
 function emitChapter(
   unit: ChapterUnit,
-  admittedDocs: SpineDoc[],
+  unitDocs: SpineDoc[],
   number: number,
   lang: string,
 ): ChapterDraft {
   const blocks: Block[] = [];
   const footnotes: { id: string; content: InlineRun[] }[] = [];
   const hasher = createHash("sha256");
-  for (const d of admittedDocs) {
+  for (const d of unitDocs) {
     blocks.push(...d.walked.blocks);
     footnotes.push(...d.walked.footnotes);
     hasher.update(d.xhtml);
   }
-  const first = admittedDocs[0];
+  const first = unitDocs[0];
   return {
     blocks,
     footnotes,
     lang,
-    title: chapterTitle(unit, admittedDocs, number),
+    title: chapterTitle(unit, unitDocs, number),
     spineIndex: first !== undefined ? first.pos : unit.startPos,
     sourceHtmlHash: hasher.digest("hex"),
   };
@@ -793,26 +990,35 @@ function emitChapter(
 
 /**
  * assembleChapters — partition the walked spine documents into chapter
- * units and emit the admitted chapters. (Task 1 ships the fallback
- * partition; Task 2 layers the nav/NCX TOC-merge on top of this same
- * machinery.)
+ * units (D12-09), judge each unit's assembled blocks against the D12-10
+ * admission algebra, and emit the admitted chapters in spine order. A unit
+ * that fails admission is DISCLOSED (skippedCount, D12-11) — never a
+ * whole-book refusal; only zero admitted chapters refuses (epub-empty).
  */
 function assembleChapters(archive: EpubArchive): {
   chapters: ChapterDraft[];
   skippedCount: number;
   fallbackUsed: boolean;
 } {
-  const { docs, skippedCount } = loadSpineDocs(archive);
-  const units = partitionSpineFallback(docs);
+  const docs = loadSpineDocs(archive);
+  const { units, fallbackUsed } = partitionChapters(archive, docs);
   const chapters: ChapterDraft[] = [];
+  let skippedCount = 0;
   for (const unit of units) {
-    const admitted = docs.filter(
-      (d) => d.pos >= unit.startPos && d.pos < unit.endPos && d.admitted,
+    const unitDocs = docs.filter(
+      (d) => d.pos >= unit.startPos && d.pos < unit.endPos,
     );
-    if (admitted.length === 0) continue; // unit drops; its docs are disclosed
-    chapters.push(emitChapter(unit, admitted, chapters.length + 1, archive.bookMeta.language));
+    if (unitDocs.length === 0) continue; // structurally empty (e.g. a
+    // leading range holding only the nav document) — not a disclosed skip
+    const blocks: Block[] = [];
+    for (const d of unitDocs) blocks.push(...d.walked.blocks);
+    if (!isReaderableDocument(blocks)) {
+      skippedCount += 1; // cover plates / pure-image pages — disclosed
+      continue;
+    }
+    chapters.push(emitChapter(unit, unitDocs, chapters.length + 1, archive.bookMeta.language));
   }
-  return { chapters, skippedCount, fallbackUsed: true };
+  return { chapters, skippedCount, fallbackUsed };
 }
 
 // ── epubToBooks — the SC#4 swappable adapter entry ───────────────────────────

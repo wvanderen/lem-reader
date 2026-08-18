@@ -4,30 +4,42 @@
 // the decompression-bomb cap, and the container→OPF manifest stage over the
 // 12-01 synthetic fixture matrix. Task 2 (same file) adds describe 2: the
 // TOC→spine-range chapter merge, admission, and the output contract.
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
   BOMB_ENTRY_DECLARED_SIZE,
   bombEntryBook,
   corruptNotEpub,
+  deepNavBook,
+  degenerateTocBook,
   drmAdeptBook,
   drmLcpBook,
   drmUnknownAlgBook,
+  emptyBook,
   entityBombOpf,
   fontObfuscatedBook,
+  frontMatterBook,
+  imageChapterBook,
+  mixedAdmissionBook,
   missingContainerBook,
+  ncxOnlyBook,
   oebpsNestedBook,
   protoPollutionOpf,
+  publisherSplitBook,
   validBookEpub3,
   zipSlipBook,
 } from "./epub-fixtures";
 import {
   createEpubXmlParser,
   epubToBooks,
+  EPUB_THRESHOLDS,
   normalizeEpubHref,
   parseEpubArchive,
+  type ChapterDraft,
 } from "../../../server/epubToBooks";
 import { IngestionError } from "../../../server/errors";
 import { EPUB_MAX_ENTRY_BYTES } from "../../../server/limits";
+import { BlockSchema } from "../../../src/content/schema";
 
 /** Rejects with an IngestionError carrying exactly `reason`; returns the
  * error so per-test message assertions can chain. */
@@ -149,5 +161,169 @@ describe("epubToBooks — archive + DRM + manifests", () => {
     expect(normalizeEpubHref("ch2.xhtml#s1", "")).toBe("ch2.xhtml");
     // An undecodable %XX sequence stays literal (tolerant, never a refusal).
     expect(normalizeEpubHref("%E0%A4%A", "")).toBe("%E0%A4%A");
+  });
+});
+
+describe("epubToBooks — TOC-merge + chapters", () => {
+  it("validBookEpub3 → 4 chapters; nested depth-2 entries are NOT split out", async () => {
+    const result = await epubToBooks(validBookEpub3());
+    expect(result.chapters.length).toBe(4);
+    expect(result.fallbackUsed).toBe(false);
+    expect(result.skippedCount).toBe(0);
+    expect(result.chapters.map((c) => c.title)).toEqual([
+      "Chapter 1. Loomings",
+      "Chapter 2. The Carpet-Bag",
+      "Chapter 3. The Sermon",
+      "Chapter 4. The Cataract",
+    ]);
+  });
+
+  it("publisherSplitBook → 3 chapters; the split documents MERGE in spine order (D12-09)", async () => {
+    const result = await epubToBooks(publisherSplitBook());
+    expect(result.chapters.length).toBe(3);
+    const ch1 = result.chapters[0] as ChapterDraft;
+    expect(ch1.title).toBe("Chapter 1. Loomings");
+    expect(ch1.spineIndex).toBe(1); // ch1a — the first document of the range
+    const text = JSON.stringify(ch1.blocks);
+    const partA = text.indexOf("chapter 1 of its book");
+    const partB = text.indexOf("chapter 2 of its book");
+    expect(partA).toBeGreaterThanOrEqual(0);
+    expect(partB).toBeGreaterThanOrEqual(0);
+    expect(partA).toBeLessThan(partB); // spine order preserved across the merge
+  });
+
+  it("ncxOnlyBook → 3 chapters via the EPUB 2 NCX navMap", async () => {
+    const result = await epubToBooks(ncxOnlyBook());
+    expect(result.chapters.length).toBe(3);
+    expect(result.fallbackUsed).toBe(false);
+    expect(result.chapters.map((c) => c.title)).toEqual([
+      "Chapter 1. Loomings",
+      "Chapter 2. The Carpet-Bag",
+      "Chapter 3. The Sermon",
+    ]);
+  });
+
+  it("oebpsNestedBook → chapters resolve through normalization with fallbackUsed false (Pitfall 1 regression pin)", async () => {
+    const result = await epubToBooks(oebpsNestedBook());
+    expect(result.fallbackUsed).toBe(false);
+    expect(result.chapters.length).toBe(3);
+    expect(result.chapters.map((c) => c.title)).toEqual([
+      "Chapter 1. Loomings",
+      "Chapter 2. The Carpet-Bag",
+      "Chapter 3. The Sermon",
+    ]);
+  });
+
+  it("deepNavBook → exactly 3 chapters (depth-2/3 sections never become units — Pitfall 4)", async () => {
+    const result = await epubToBooks(deepNavBook());
+    expect(result.chapters.length).toBe(3);
+    expect(result.chapters.map((c) => c.title)).toEqual([
+      "Part One",
+      "Part Two",
+      "Part Three",
+    ]);
+  });
+
+  it("degenerateTocBook → 4 chapters (single-entry descent)", async () => {
+    const result = await epubToBooks(degenerateTocBook());
+    expect(result.chapters.length).toBe(4);
+    expect(result.fallbackUsed).toBe(false); // descent is still TOC-driven
+    expect(result.chapters.map((c) => c.title)).toEqual([
+      "Chapter 1. Loomings",
+      "Chapter 2. The Carpet-Bag",
+      "Chapter 3. The Sermon",
+      "Chapter 4. The Cataract",
+    ]);
+  });
+
+  it("frontMatterBook → 3 units with the leading unit first, titled from its first document", async () => {
+    const result = await epubToBooks(frontMatterBook());
+    expect(result.chapters.length).toBe(3);
+    const [leading, ch1, ch2] = result.chapters as [ChapterDraft, ChapterDraft, ChapterDraft];
+    expect(leading.title).toBe("The Synthetic Book"); // titlepage <title> — the document-title fallback
+    expect(leading.spineIndex).toBe(1); // after the (structurally skipped) nav document
+    expect(ch1.title).toBe("Chapter 1. Loomings");
+    expect(ch2.title).toBe("Chapter 2. The Carpet-Bag");
+  });
+
+  it("imageChapterBook → zero figure-kind blocks survive; remote URL absent from all payloads (T-12-05)", async () => {
+    const result = await epubToBooks(imageChapterBook());
+    expect(result.chapters.length).toBe(1);
+    const blocks = (result.chapters[0] as ChapterDraft).blocks;
+    // The acceptance scan: NO block of kind figure survives anywhere.
+    expect(blocks.every((b) => b.kind !== "figure")).toBe(true);
+    const downgraded = blocks.filter(
+      (b) => b.kind === "unsupported" && b.originalKind === "figure",
+    );
+    expect(downgraded.length).toBeGreaterThanOrEqual(1);
+    for (const b of downgraded) {
+      expect(b.kind === "unsupported" && b.plainDescription.length > 0).toBe(true);
+    }
+    // The tracking URL must not leak into any block payload.
+    expect(JSON.stringify(blocks)).not.toContain("attacker.example");
+  });
+
+  it("emptyBook → epub-empty (zero readerable documents — whole-book refusal, D12-11)", async () => {
+    await expectRefusal(emptyBook, "epub-empty");
+  });
+
+  it("mixedAdmissionBook → 2 admitted chapters + skippedCount 1 (the plate is disclosed)", async () => {
+    const result = await epubToBooks(mixedAdmissionBook());
+    expect(result.chapters.length).toBe(2);
+    expect(result.skippedCount).toBe(1);
+    expect(result.chapters.map((c) => c.title)).toEqual([
+      "Chapter 1. Loomings",
+      "Chapter 2. The Carpet-Bag",
+    ]);
+  });
+
+  it("chapter titles chain: TOC label primary, document title fallback (Pitfall 10 numbering over admitted only)", async () => {
+    const result = await epubToBooks(validBookEpub3());
+    for (const c of result.chapters) {
+      expect(c.title.startsWith("Chapter")).toBe(true); // TOC labels won
+    }
+    // The leading-unit case above already proves the document-title arm;
+    // here the admitted-order spineIndex sequence pins the numbering order.
+    const spineIndexes = result.chapters.map((c) => c.spineIndex);
+    expect(spineIndexes).toEqual([1, 2, 3, 4]);
+    for (let i = 1; i < spineIndexes.length; i++) {
+      expect(spineIndexes[i]).toBeGreaterThan(spineIndexes[i - 1] as number);
+    }
+  });
+
+  it("every chapter's blocks parse against the Block schema; footnotes default to []", async () => {
+    const result = await epubToBooks(validBookEpub3());
+    expect(result.chapters.length).toBeGreaterThan(0);
+    for (const c of result.chapters) {
+      expect(Array.isArray(c.footnotes)).toBe(true);
+      expect(c.lang).toBe("en");
+      for (const b of c.blocks) {
+        expect(() => BlockSchema.parse(b)).not.toThrow();
+      }
+    }
+  });
+
+  it("the output contract carries every field stages 2+ consume (incl. both hashes)", async () => {
+    const bytes = validBookEpub3();
+    const result = await epubToBooks(bytes);
+    for (const key of ["bookMeta", "chapters", "skippedCount", "originalFileHash", "fallbackUsed"] as const) {
+      expect(Object.prototype.hasOwnProperty.call(result, key)).toBe(true);
+    }
+    const chapter = result.chapters[0] as ChapterDraft;
+    for (const key of ["blocks", "footnotes", "lang", "title", "spineIndex", "sourceHtmlHash"] as const) {
+      expect(Object.prototype.hasOwnProperty.call(chapter, key)).toBe(true);
+    }
+    expect(result.originalFileHash).toBe(
+      createHash("sha256").update(bytes).digest("hex"),
+    );
+    expect(chapter.sourceHtmlHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(result.bookMeta.title).toBe("The Synthetic Book");
+    expect(EPUB_THRESHOLDS.minChapterBlocks).toBe(3);
+  });
+
+  it("identical bytes produce identical output (deterministic adapter)", async () => {
+    const a = await epubToBooks(validBookEpub3());
+    const b = await epubToBooks(validBookEpub3());
+    expect(a).toEqual(b);
   });
 });
