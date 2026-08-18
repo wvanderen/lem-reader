@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "entries": [
+    {
+      "file": "accessible_epub_3.epub",
+      "sha256": "67f75b8e3cd1abe4bb143d91d5424191d5af3115c9d26ff029a38e19f8d16feb",
+      "expected": {
+        "drmFree": true,
+        "navType": "nav",
+        "expectedChapters": 5,
+        "tocResolvable": true
+      },
+      "producer": "O'Reilly Media (IDPF accessible-epub-3 sample, Matt Garrish)",
+      "basis": "EPUB/package.opf nested OPF; nav opens with the EPUB 3.3 spec's own <!DOCTYPE html> template (the 12-08 Rule 1 DTD-guard fix); 5 depth-1 nav entries (Preface, ch01-ch04) over a 3-level TOC — depth-2/3 sections merge; leading front-matter spine range (cover + spi-ad + index) assembles to 13 blocks, admits at the D12-10 floor, but its offset-0 anchor-gate sample resolves 'ambiguous' (the chapter opens with TWO relative-src images downgraded to the reader's IDENTICAL unsupported-block fallback description, so the opening quote legitimately matches twice with no disambiguating prefix — ANNO-07) and the unit is skipped + disclosed per D12-11; 5 = Preface + 4 chapters (0.4-conclusion range absorbs the trailing colophon doc)"
+    },
+    {
+      "file": "bram-stoker_dracula.epub",
+      "sha256": "568ee9d37b2cc12dfd5e24ebf7b16ae71a805e269af159dc836647751739340a",
+      "expected": {
+        "drmFree": true,
+        "navType": "nav",
+        "expectedChapters": 5,
+        "tocResolvable": true
+      },
+      "producer": "Standard Ebooks",
+      "basis": "7 depth-1 nav entries; the 27 publisher-split chapter spine files merge under the single 'Dracula' depth-1 entry (28 depth-2 sections stay in-chapter — D12-09 merge); real front matter before the main unit; Dedication + Preface are single-paragraph documents (1 walked block) and legitimately fail the D12-10 minChapterBlocks=3 floor as disclosed skips; 5 = Titlepage + Imprint + Dracula(main, 174 blocks) + Colophon + Uncopyright"
+    },
+    {
+      "file": "emily-bronte_wuthering-heights.epub",
+      "sha256": "708797eb1a8bb63aeb91dd3dfbef52cfe2b7aae521ccc5943692c2a40d6c71be",
+      "expected": {
+        "drmFree": true,
+        "navType": "nav",
+        "expectedChapters": 38,
+        "tocResolvable": true
+      },
+      "producer": "Standard Ebooks",
+      "basis": "Flat 38-entry depth-1 nav TOC (Titlepage, Imprint, chapters I-XXXIV, Colophon, Uncopyright), every unit passes the D12-10 floor (3-126 walked blocks); real front matter (title page + imprint before chapter I); 38 admitted, 0 disclosed skips"
+    },
+    {
+      "file": "joseph-conrad_nostromo.epub",
+      "sha256": "52d6cb6f3bb9ddc9aba087781f6af4e81b3db85e6cadd985bde34165f02dac3d",
+      "expected": {
+        "drmFree": true,
+        "navType": "nav",
+        "expectedChapters": 6,
+        "tocResolvable": true
+      },
+      "producer": "Standard Ebooks",
+      "basis": "8 depth-1 nav entries over a nested TOC; the entire novel (34 spine docs, 2219 walked blocks) merges under the single 'Nostromo' depth-1 entry; Epigraph (2 blocks) + Dedication (1 block) legitimately fail the D12-10 floor as disclosed skips; 6 = Titlepage + Imprint + Author's Note + Nostromo(main) + Colophon + Uncopyright"
+    },
+    {
+      "file": "minimal.epub",
+      "sha256": "b985ee62c7325de77fad02cd51d55c79eb0b56ca7563794f2b69fc8c70257424",
+      "expected": {
+        "drmFree": true,
+        "navType": "nav",
+        "expectedChapters": 1,
+        "tocResolvable": true
+      },
+      "producer": "IDPF EPUB 3 minimal sample (Thomas Hansen)",
+      "basis": "OEBPS/content.opf nested OPF; 3 depth-1 nav entries (Chapter 1, Chapter 2, Copyright); the nav document itself sits at spine position 0 and is structurally skipped; Copyright page walks to 2 blocks and legitimately fails the D12-10 floor as a disclosed skip; Chapter 1 is Lorem Ipsum whose opening 20 graphemes appear 3x in the chapter's real text, so its offset-0 anchor-gate sample resolves 'ambiguous' (empty prefix at position 0 cannot disambiguate — ANNO-07 honesty) and the chapter is skipped + disclosed per D12-11; 1 = Chapter 2 only"
+    },
+    {
+      "file": "pg11-images-3.epub",
+      "sha256": "6b79f2d23b804172816e81c463dbcea689593bbde63ef200d52b6c0da7ef629c",
+      "expected": {
+        "drmFree": true,
+        "navType": "nav",
+        "expectedChapters": 13,
+        "tocResolvable": true
+      },
+      "producer": "Project Gutenberg (pg11-images-3, Millennium Fulcrum Edition 3.0)",
+      "basis": "OEBPS/content.opf nested OPF; image-heavy book (cover wrapper page + inline figures — the D12-16 figure downgrade surface); 16 depth-1 nav entries of which the first 3 share one href (title page duplicates collapse to the first — two units ignored, not chapters); the leading cover-wrapper spine range has no text-bearing block and is a disclosed skip; 13 = title document + CHAPTER I-XII"
+    },
+    {
+      "file": "thomas-mann_buddenbrooks_h-t-lowe-porter.epub",
+      "sha256": "d9399213b11332884e4cc3a658ce1c41dc6b6671ed08a59398ddaaf2c8248919",
+      "expected": {
+        "drmFree": true,
+        "navType": "nav",
+        "expectedChapters": 6,
+        "tocResolvable": true
+      },
+      "producer": "Standard Ebooks",
+      "basis": "6 depth-1 nav entries over a deep-nested TOC (11 depth-2 part sections); the entire novel (107 publisher-split spine docs, 3290 walked blocks) merges under the single 'Buddenbrooks' depth-1 entry; real front matter (title page, imprint, translator's note before the half-title); every unit passes the D12-10 floor; 6 admitted, 0 disclosed skips"
+    }
+  ],
+  "gaps": {
+    "single_entry_toc": {
+      "reason": "No suitably licensed real-world publication was identified; synthetic fixtures were deliberately excluded from this corpus."
+    },
+    "minimal_v2_two_block_template": {
+      "reason": "The IDPF minimal-v2 packaging template (1908 bytes, dc:title 'Your title here', one 2-block section document) legitimately fails the D12-10 minChapterBlocks=3 admission floor and refuses epub-empty — it is a packaging template, not a real publication, so it is recorded here rather than pinned as a false refusal. Consequence: the ncx_primary_toc shape (a book whose TOC resolves ONLY through an EPUB 2 NCX) is unrepresented by an admitting corpus book — every admitted book carries an EPUB 3 nav document the reader correctly prefers (EPUB 3.3 §5.9.5); NCX resolution remains covered by the committed 12-01/12-02 synthetic suite (tests/unit/server/epub-to-books.spec.ts, ncxOnlyBook + fallback blocks)."
+    }
+  }
+}

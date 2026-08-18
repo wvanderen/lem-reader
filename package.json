@@ -13,7 +13,7 @@
     "test": "npm run test:unit -- --run && npm run test:e2e",
     "calibrate": "playwright test calibration.harness && node tests/e2e/calibration/fingerprint.compare.ts",
     "calibrate:pdf": "PDF_CALIBRATION_DERIVE=1 vitest run tests/unit/server/pdf-calibration/derive.spec.ts",
-    "calibrate:epub": "EPUB_CALIBRATION_DERIVE=1 vitest run tests/unit/server/epub-calibration/derive.spec.ts",
+    "calibrate:epub": "EPUB_CALIBRATION_DERIVE=1 NODE_OPTIONS=--max-old-space-size=8192 vitest run tests/unit/server/epub-calibration/derive.spec.ts",
     "perf": "playwright test perf.harness && node tests/e2e/perf/budget.compare.ts",
     "lint": "eslint .",
     "lint:no-danger": "node scripts/check-no-danger.js # rejects dangerouslySetInnerHTML in src/server/functions (ING-07)",

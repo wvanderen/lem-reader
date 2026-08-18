@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-18T21:01:35.306Z",
+  "thresholds": {
+    "minChapterBlocks": 3,
+    "tocMergeMinEntries": 2,
+    "maxNestedXmlTags": 40
+  },
+  "results": [
+    {
+      "file": "accessible_epub_3.epub",
+      "sha256": "67f75b8e3cd1abe4bb143d91d5424191d5af3115c9d26ff029a38e19f8d16feb",
+      "verdict": "admitted",
+      "chapterCount": 5,
+      "fallbackUsed": false,
+      "anchorRoundTrip": true
+    },
+    {
+      "file": "bram-stoker_dracula.epub",
+      "sha256": "568ee9d37b2cc12dfd5e24ebf7b16ae71a805e269af159dc836647751739340a",
+      "verdict": "admitted",
+      "chapterCount": 5,
+      "fallbackUsed": false,
+      "anchorRoundTrip": true
+    },
+    {
+      "file": "emily-bronte_wuthering-heights.epub",
+      "sha256": "708797eb1a8bb63aeb91dd3dfbef52cfe2b7aae521ccc5943692c2a40d6c71be",
+      "verdict": "admitted",
+      "chapterCount": 38,
+      "fallbackUsed": false,
+      "anchorRoundTrip": true
+    },
+    {
+      "file": "joseph-conrad_nostromo.epub",
+      "sha256": "52d6cb6f3bb9ddc9aba087781f6af4e81b3db85e6cadd985bde34165f02dac3d",
+      "verdict": "admitted",
+      "chapterCount": 6,
+      "fallbackUsed": false,
+      "anchorRoundTrip": true
+    },
+    {
+      "file": "minimal.epub",
+      "sha256": "b985ee62c7325de77fad02cd51d55c79eb0b56ca7563794f2b69fc8c70257424",
+      "verdict": "admitted",
+      "chapterCount": 1,
+      "fallbackUsed": false,
+      "anchorRoundTrip": true
+    },
+    {
+      "file": "pg11-images-3.epub",
+      "sha256": "6b79f2d23b804172816e81c463dbcea689593bbde63ef200d52b6c0da7ef629c",
+      "verdict": "admitted",
+      "chapterCount": 13,
+      "fallbackUsed": false,
+      "anchorRoundTrip": true
+    },
+    {
+      "file": "thomas-mann_buddenbrooks_h-t-lowe-porter.epub",
+      "sha256": "d9399213b11332884e4cc3a658ce1c41dc6b6671ed08a59398ddaaf2c8248919",
+      "verdict": "admitted",
+      "chapterCount": 6,
+      "fallbackUsed": false,
+      "anchorRoundTrip": true
+    }
+  ]
+}

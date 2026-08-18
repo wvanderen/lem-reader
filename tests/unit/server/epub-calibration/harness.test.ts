@@ -146,14 +146,25 @@ function validEvidence(): EpubCalibrationEvidence {
 // ── parseManifest / loadManifest ────────────────────────────────────────────
 
 describe("parseManifest", () => {
-  it("accepts a valid manifest (3 nav types, optional producer)", () => {
-    const m = parseManifest(VALID_MANIFEST);
+  it("accepts a valid manifest (3 nav types, optional producer/basis/gaps)", () => {
+    const withExtras = {
+      ...(VALID_MANIFEST as { schemaVersion: number; entries: unknown[] }),
+      gaps: {
+        single_entry_toc: { reason: "No suitably licensed real-world publication was identified." },
+      },
+      entries: (VALID_MANIFEST as { entries: Record<string, unknown>[] }).entries.map((e, i) =>
+        i === 0 ? { ...e, basis: "depth-1 nav entries; cover plate excluded" } : e,
+      ),
+    };
+    const m = parseManifest(withExtras);
     expect(m.entries).toHaveLength(4);
     expect(m.entries[0]).toMatchObject({
       file: "novel-nav.epub",
       expected: { navType: "nav", expectedChapters: 12, tocResolvable: true },
     });
+    expect(m.entries[0]?.basis).toContain("depth-1 nav entries");
     expect(m.entries[2]?.producer).toBeUndefined();
+    expect(m.gaps?.["single_entry_toc"]?.reason).toContain("No suitably licensed");
   });
 
   it("rejects duplicate files", () => {

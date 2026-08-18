@@ -84,6 +84,15 @@ export const ExpectedShapeSchema = z.object({
 });
 export type ExpectedShape = z.infer<typeof ExpectedShapeSchema>;
 
+/** One recorded corpus gap (12-08 Task 2): a shape the bar discriminates
+ * that no suitably licensed real book supplied — recorded verbatim with the
+ * human's (or executor's, post-checkpoint) reason. Gaps never loosen the
+ * bar; they document corpus coverage honestly (the 4+-book floor note). */
+export const GapRecordSchema = z.object({
+  reason: z.string().min(1),
+});
+export type GapRecord = z.infer<typeof GapRecordSchema>;
+
 export const ManifestSchema = z.object({
   schemaVersion: z.literal(1),
   entries: z
@@ -95,9 +104,17 @@ export const ManifestSchema = z.object({
         /** Producer tool when known (Sigil/calibre/InDesign…) — the pdf
          * manifest's entry-level producer convention, informational. */
         producer: z.string().optional(),
+        /** The derivation basis for expectedChapters — how the count was
+         * derived from the book's real TOC (12-08 Task 2: the human did not
+         * hand-count; the executor derived each count by inspecting the
+         * nav/NCX document directly). Informational, never bar-enforced. */
+        basis: z.string().min(1).optional(),
       }),
     )
     .min(1),
+  /** Shape gaps recorded honestly (e.g. single_entry_toc) — presence never
+   * weakens the bar; the corpus floor (4+ books) is the proceed rule. */
+  gaps: z.record(z.string(), GapRecordSchema).optional(),
 });
 export type CalibrationManifest = z.infer<typeof ManifestSchema>;
 

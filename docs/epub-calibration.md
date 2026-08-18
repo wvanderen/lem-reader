@@ -63,7 +63,12 @@ enforces, inside `npm run test` via the always-on `replay.spec.ts`:
    derive. The derive verifies corpus presence + SHA-256 against the
    manifest (refuses on mismatch or absence), runs the real adapter +
    orchestrator path (`ingest({epub})` → `epubToBooks` → the current
-   `EPUB_THRESHOLDS`), and writes `epub-evidence.json`.
+   `EPUB_THRESHOLDS`), and writes `epub-evidence.json`. The script sets
+   `NODE_OPTIONS=--max-old-space-size=8192`: whole-novel chapters
+   (Buddenbrooks admits a single 3290-block chapter) push the per-chapter
+   anchor-gate + Zod stages through several GB of transient allocation —
+   the default ~4GB heap OOMs mid-derive (recorded as a deferred item; see
+   the phase's deferred-items.md).
 4. **Review + tune to bar.** If any book refuses, admits the wrong chapter
    count, or trips the fallback on a resolvable TOC, adjust
    `EPUB_THRESHOLDS` in `server/epubToBooks.ts` — **strengthen-only** (the
