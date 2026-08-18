@@ -16,6 +16,12 @@
 // `bookRemoveTarget !== null` to this dialog (open); the actual cascade
 // fires only when the reader clicks "Remove book" below.
 //
+// NOTE on class names: the dialog uses its OWN .book-remove-confirm* hooks
+// (NOT the shared .library-remove-confirm class) so e2e dialog locators
+// stay strict-mode-unique — both dialogs mount simultaneously in
+// LibraryView, and a shared class would make `dialog.library-remove-confirm`
+// match two elements. Same discipline as ImportPreviewDialog (09-05).
+//
 // Cascade behavior (D12-01 + the plan's cascade truth): removes the Book
 // row + every chapter article + every highlight + every note + every
 // location row keyed to any chapter, in ONE Dexie transaction
@@ -125,26 +131,26 @@ export function BookRemoveConfirm({
   return (
     <dialog
       ref={ref}
-      className="library-remove-confirm"
+      className="book-remove-confirm"
       role="alertdialog"
       aria-modal="true"
       aria-labelledby="book-remove-title"
       aria-describedby="book-remove-body"
     >
-      <div className="library-remove-confirm-inner">
+      <div className="book-remove-confirm-inner">
         <h2 id="book-remove-title">Remove book</h2>
         <p id="book-remove-body">
           Remove {bookTitle}? Its {chapterCount}{" "}
           {chapterCount === 1 ? "chapter" : "chapters"} and their highlights
           will be removed.
         </p>
-        <div className="library-remove-confirm-actions">
+        <div className="book-remove-confirm-actions">
           {/* Destructive action — Pitfall 8: booksStore.removeBook fires
               ONLY in onDestructiveClick above. The label names the outcome
               unambiguously (UI-SPEC §Copywriting). */}
           <button
             type="button"
-            className="library-remove-destructive"
+            className="book-remove-destructive"
             onClick={onDestructiveClick}
           >
             Remove book
@@ -155,7 +161,7 @@ export function BookRemoveConfirm({
               safer default per Pitfall 8). */}
           <button
             type="button"
-            className="library-remove-cancel"
+            className="book-remove-cancel"
             onClick={onCancel}
             data-initial-focus
           >
