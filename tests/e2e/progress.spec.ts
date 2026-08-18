@@ -111,18 +111,23 @@ test.describe("READ-05 progress hairline", () => {
         behavior: "instant",
       });
     });
-    await page.waitForTimeout(300);
-
-    const transform = await page
-      .locator(".progress-hairline-fill")
-      .evaluate((el) => getComputedStyle(el).transform);
-    const match = /matrix\(([\d.eE+-]+)/.exec(transform ?? "");
-    const a = match && match[1] ? parseFloat(match[1]) : transform === "none" ? 1 : 0;
-    // At the bottom, scaleX should be ≥ 0.9 (close to 1).
-    expect(
-      a,
-      `expected scaleX close to 1 at bottom, got transform=${transform}`,
-    ).toBeGreaterThanOrEqual(0.9);
+    // 12-08 Rule 3 load-race fix (the 09-07 webkit-race class): the fixed
+    // 300ms sleep raced firefox's rAF-throttled scroll handler + debounced
+    // detect under full-suite load (observed scaleX 0.25 at bottom in the
+    // Phase 12 gate run, green in isolation). Poll the observable end
+    // condition deterministically instead — same assertion, no sleep.
+    await expect
+      .poll(
+        async () => {
+          const transform = await page
+            .locator(".progress-hairline-fill")
+            .evaluate((el) => getComputedStyle(el).transform);
+          const match = /matrix\(([\d.eE+-]+)/.exec(transform ?? "");
+          return match && match[1] ? parseFloat(match[1]) : transform === "none" ? 1 : 0;
+        },
+        { timeout: 5000, message: "expected scaleX close to 1 at bottom" },
+      )
+      .toBeGreaterThanOrEqual(0.9);
   });
 
   test("the fill's computed transform-origin resolves to the left edge (not center) — fills left-to-right", async ({
