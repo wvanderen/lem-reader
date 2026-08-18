@@ -30,6 +30,8 @@ The prototype supports rich article structure, local highlights and notes, and l
 
 **v2.0 Personal Library — Phase 11 complete 2026-08-17.** PDF intake is live: text-heavy single-column PDFs upload through the shared pipeline into `pdf-<hash>` articles (outline bookmarks coerce to h2/h3 headings) that paginate, annotate, and restore location identically to every other source; scanned/image-only, multi-column, encrypted/corrupt, and oversized PDFs are refused calmly with no library side effects; thresholds are corpus-calibrated against six real PDFs with a CI replay pin. Gap-closure plan 11-07 fixed the outline-PDF false refusal (isReaderable admission algebra). UAT 9/10 passed (1 intentional skip: the 30 s extraction-timeout firing path has no automated coverage — acknowledged in 11-VERIFICATION.md; a fake-timers unit test would close it).
 
+**v2.0 Personal Library — Phase 12 complete 2026-08-18.** EPUB intake is live: DRM-free EPUBs upload through the shared pipeline into `epub-<hash>` books surfaced as per-chapter articles (`-cNN`) under an expandable book grouping (Option A — thin Book record, one article per chapter); chapters paginate, annotate, and restore location identically to every other source, with chapter context line + end-of-chapter navigation in both reading modes, book-level progress/resume, book-aware search/tags, book-scoped cascade remove, and books riding the export/import loop (bundle schemaVersion 2). The parser is a pure server-side adapter (`server/epubToBooks.ts`, fast-xml-parser 5.10.1 exact-pin — zero XML code in the client bundle); DRM/encrypted, corrupt, and oversized EPUBs refuse calmly with no library side effects. Thresholds are corpus-calibrated against 7 real EPUBs (gitignored corpus, CI-replay-pinned evidence); honest full-suite record 2162 passed / 0 failed / exit 0 (12-08-OUTPUT.md).
+
 ## Core Value
 
 Readers can move through long-form web content with calm, stable orientation and predictable navigation.
@@ -152,4 +154,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-17 after Phase 11 (PDF Intake) completion*
+*Last updated: 2026-08-18 after Phase 12 (EPUB Intake) completion*
