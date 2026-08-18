@@ -244,7 +244,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 12-01-PLAN.md — fast-xml-parser human gate (D12-15) + schema/cap widening (epub variant, BookSchema, epub-chapter source) + self-verifying synthetic EPUB generator
+- [x] 12-01-PLAN.md — fast-xml-parser human gate (D12-15) + schema/cap widening (epub variant, BookSchema, epub-chapter source) + self-verifying synthetic EPUB generator
 
 **Wave 2** *(blocked on Wave 1)*
 
@@ -297,5 +297,5 @@ Plans:
 | 9. Versioned Export/Import | v2.0 | 7/7 | Complete    | 2026-08-15 |
 | 10. Annotation Review Panel | v2.0 | 6/6 | Complete    | 2026-08-16 |
 | 11. PDF Intake | v2.0 | 7/7 | Complete    | 2026-08-17 |
-| 12. EPUB Intake | v2.0 | 0/TBD | Not started | - |
+| 12. EPUB Intake | v2.0 | 1/8 | In Progress | - |
 | 13. Polish and Acceptance | v2.0 | 0/TBD | Not started | - |
