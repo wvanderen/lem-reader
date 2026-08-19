@@ -193,8 +193,16 @@ test.describe("ING-04 — PDF upload intake (SC#1–SC#3 + D7-07)", () => {
 
     // Fixture body text is visibly rendered on the standard reading surface
     // (page-1 first paragraph, verbatim from the generator's constants).
+    // 13-10 gate-run repair: scope to the VISIBLE surface — the always-
+    // mounted hidden measurement clone (Plan 04-08) carries the same
+    // paragraph and trips strict mode on a bare getByText once pagination
+    // commits (the visibleBlocks selector discipline used right below).
     await expect(
-      page.getByText("Long-form reading asks for steady attention"),
+      page
+        .locator(
+          "[data-block-index]:not(.article-body-measurement [data-block-index])",
+        )
+        .filter({ hasText: "Long-form reading asks for steady attention" }),
     ).toBeVisible();
 
     // The article paginates through the standard machinery: [data-block-

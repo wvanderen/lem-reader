@@ -110,6 +110,12 @@ async function seedScrollingMode(page: import("@playwright/test").Page): Promise
 }
 
 test.describe("STATE-02 + Pitfall 4 persistence", () => {
+  // 13-10 gate-run repair (the 09-07 section-announce precedent): under
+  // full-suite parallel load a webkit context's beforeEach page.goto starved
+  // on the single Vite dev server and blew the default 30s budget.
+  // Assertions unchanged — the budget doubles so load contention cannot
+  // flake the spec (calibration.harness + perf.harness set 300s).
+  test.setTimeout(60_000);
   test("typography/theme settings survive a full page reload (STATE-02)", async ({
     page,
   }) => {
@@ -260,6 +266,9 @@ test.describe("STATE-02 + Pitfall 4 persistence", () => {
 //   3. Locations are ISOLATED per [articleId+revision] (D-06) — opening a
 //      DIFFERENT article does NOT restore the first article's location.
 test.describe("STATE-01 location restore", () => {
+  // Same starvation budget as the STATE-02 describe above (one spec file,
+  // one discipline).
+  test.setTimeout(60_000);
   test("scrolling an article persists the location; reload restores the scroll position", async ({
     page,
   }) => {

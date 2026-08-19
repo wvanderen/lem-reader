@@ -88,6 +88,12 @@ async function seedExportLibrary(page: Page): Promise<void> {
 }
 
 test.describe("PORT-03 — highlights Markdown export content", () => {
+  // 13-10 gate-run repair (the 09-07 section-announce precedent): under
+  // full-suite parallel load a webkit context's prepareFreshPage page.goto
+  // starved on the single Vite dev server and blew the default 30s budget.
+  // Assertions unchanged — the budget doubles so load contention cannot
+  // flake the content gate.
+  test.setTimeout(60_000);
   test("per-article export: blockquotes, italic-title citation, Note line, footer, sanitized filename", async ({
     page,
   }) => {

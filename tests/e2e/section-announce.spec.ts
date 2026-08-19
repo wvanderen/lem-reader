@@ -56,6 +56,15 @@ test.describe("A11Y-08 section-change announce", () => {
     await page.goto(`${BASE}/#/article/${FIXTURE}`);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 
+    // 13-10 gate-run repair (the 13-09 pending-window class): the
+    // SectionAnnouncer tracks WINDOW scrolling — meaningful only in
+    // scrolling mode. The paginated default locks window scrolling, so an
+    // unpinned run never crosses the h2 and the announce never fires. Pin
+    // scrolling via the REAL mode toggle (the header-geometry scrolling-
+    // test discipline — same path as the M shortcut).
+    await page.getByRole("button", { name: /reading mode/i }).click();
+    await expect(page.locator(".page-viewport")).toHaveCount(0);
+
     // The live region exists and is polite (never assertive). There may be
     // multiple polite status regions (loading, resume banner); we filter
     // for the one that will carry "Section:" text after scroll.
@@ -94,6 +103,13 @@ test.describe("A11Y-08 section-change announce", () => {
   }) => {
     await page.goto(`${BASE}/#/article/${FIXTURE}`);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+
+    // 13-10 gate-run repair: same scrolling-mode pin as the announce test
+    // above — the fast-scroll coalescing under test only exists when the
+    // window actually scrolls (the paginated default locks it, which would
+    // make "no flood" pass vacuously).
+    await page.getByRole("button", { name: /reading mode/i }).click();
+    await expect(page.locator(".page-viewport")).toHaveCount(0);
 
     // Capture every text update to the live region across a fast scroll.
     // We attach a mutation observer BEFORE the scroll so we see every

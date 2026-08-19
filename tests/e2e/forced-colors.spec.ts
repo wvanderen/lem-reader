@@ -34,7 +34,16 @@ test.describe("Forced colors (A11Y-05)", () => {
     // The global @media (forced-colors: active) { a { text-decoration: underline } }
     // gate in app.css keeps link underlines visible under forced-colors. Find
     // any link inside the article body and assert underline.
-    const link = page.locator(".article-body a").first();
+    // 13-10 gate-run repair (the 13-09 pending-window class): the always-
+    // mounted hidden measurement clone (Plan 04-08) precedes .page-viewport
+    // in DOM order, so an unscoped `.article-body a` resolves FIRST to the
+    // clone's hidden inline link once pagination commits — deterministically
+    // invisible. Scope the clone subtree out (the _fixtures.ts visible-
+    // surface selector discipline). During the paginated pending window no
+    // anchor matches yet; the poll settles once the surface mounts.
+    const link = page
+      .locator(".article-body a:not(.article-body-measurement a)")
+      .first();
     await expect(link).toBeVisible();
     const td = await link.evaluate(
       (el) => window.getComputedStyle(el).textDecoration,

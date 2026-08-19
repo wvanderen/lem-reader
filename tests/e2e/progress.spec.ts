@@ -104,6 +104,15 @@ test.describe("READ-05 progress hairline", () => {
     await page.goto(`${BASE}/#/article/${FIXTURE}`);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 
+    // 13-10 gate-run repair (the 13-09 pending-window class): this test
+    // scrolls the WINDOW — meaningful only in scrolling mode. The paginated
+    // default locks window scrolling, so an unpinned run reads the
+    // page-ratio fill (0 at page 1) and can never reach 0.9. Pin scrolling
+    // via the REAL mode toggle (the header-geometry scrolling-test
+    // discipline — same path as the M shortcut).
+    await page.getByRole("button", { name: /reading mode/i }).click();
+    await expect(page.locator(".page-viewport")).toHaveCount(0);
+
     // Scroll to the bottom of the article.
     await page.evaluate(() => {
       window.scrollTo({
