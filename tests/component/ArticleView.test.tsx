@@ -19,6 +19,8 @@ import type { ArticleViewProps } from "../../src/routes/ArticleView";
 import { openArticle } from "../../src/content/repository";
 import type { CanonicalArticle } from "../../src/content/types";
 import { SettingsProvider } from "../../src/settings/SettingsContext";
+import { DEFAULT_SETTINGS } from "../../src/settings/defaults";
+import { SETTINGS_MIRROR_KEY } from "../../src/settings/settingsMirror";
 
 const openArticleMock = vi.mocked(openArticle);
 
@@ -74,6 +76,18 @@ const fullArticle = (): CanonicalArticle => ({
 
 beforeEach(() => {
   openArticleMock.mockReset();
+  // Plan 13-09 (G4): under the paginated default, jsdom's layout-less
+  // measurement never settles, so ArticleView stays in the paginatedPending
+  // branch (measurement clone + placeholder viewport — by design, the
+  // scrolling surface must NOT paint). The metadata spot carrying the
+  // DOC-03 source link only mounts on a settled surface, so these
+  // component tests pin SCROLLING mode via the app's own lazy-init mirror
+  // (the POLISH-01 mechanism): Dexie is unavailable in this jsdom env, so
+  // hydration fails quiet and the mirror value holds for the whole test.
+  localStorage.setItem(
+    SETTINGS_MIRROR_KEY,
+    JSON.stringify({ ...DEFAULT_SETTINGS, readingMode: "scrolling" }),
+  );
 });
 
 describe("ArticleView (DOC-03)", () => {
