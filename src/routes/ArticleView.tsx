@@ -820,23 +820,21 @@ export function ArticleView({
           setMetaSpotReservePx(reserve);
         }
       }
-      // Plan 05-06: gate the geometry read on the .paginated-surface class.
-      // On initial load trustedView is null, so the scrolling article branch
-      // (className "article-body", no pinned height) mounts first; the first
-      // rAF would otherwise read the full natural scrolling-body height
-      // (~1148–1313px) and the first pagination pass would pack the ENTIRE
-      // article onto P1 (the mega-page regression). The .paginated-surface
-      // class is applied only once trustedView commits and the paginated
-      // branch mounts (app.css pins height to calc(100vh - 48px - 2px -
-      // 2*var(--space-2xl)) ≈ 654px desktop). Because trustedView is in the
-      // effect deps, the effect re-runs when trustedView commits (class flips
-      // to paginated-surface), the rAF re-fires, and the now-pinned height is
-      // accepted. The pagination effect (PaginatedSurface) guards on
-      // pageContentBoxHeightPx > 0, so it waits for the correct height and
-      // never consumes the inflated scrolling height. The useState(0) initial
-      // value keeps the first render at 0 (pagination waits), so no separate
-      // initial-mount reset is needed.
-      if (!articleEl.classList.contains("paginated-surface")) return;
+      // Plan 13-09 (G4): the pinned-frame class no longer orders this read —
+      // it now arrives with the pending placeholder frame at first paint, so
+      // it is present BEFORE the engine has committed a trusted measurement
+      // view, and reading the viewport height in that window would publish
+      // page geometry with no metadata-spot reserve measured yet (an early
+      // reserve-less first publication — the exact 13-04 regression class:
+      // first-publication ≠ settled). The trustedView check below now does
+      // the ordering: the height read runs only once the engine has
+      // committed, in the same rAF batch as the reserve measurement above,
+      // so the first publication still carries height + reserve together
+      // (the 05-06 mega-page guard and the 13-04 measure-once contract,
+      // both preserved). In scrolling mode the early return keeps the
+      // height at its useState(0) initial value, so the pagination effect
+      // (which guards on a positive height) never runs there.
+      if (!isPaginated || trustedView === null) return;
       const pageViewport = articleEl.querySelector<HTMLElement>(".page-viewport");
       if (!pageViewport) return;
       const rect = pageViewport.getBoundingClientRect();
@@ -1464,13 +1462,21 @@ export function ArticleView({
     }
   };
 
-  // Paginated mode mounts only when trustedView + articleEl are both ready;
-  // otherwise we render the scrolling ArticleBody (the additive branch —
-  // scrolling behavior stays byte-unchanged so existing tests regress
-  // nothing). The .paginated-surface class is applied to the shared
-  // <article> only when PaginatedSurface is actually mounted so the
-  // overflow:hidden geometry never clips a fallback rendering.
+  // Paginated mode mounts PaginatedSurface only when trustedView + articleEl
+  // are both ready (paginatedActive). The .paginated-surface frame class,
+  // however, is applied to the shared <article> whenever the EFFECTIVE mode
+  // is paginated (see the className below) so the pinned frame is present
+  // from the first paint — a fallback flip (session override → scrolling)
+  // reverts the class in the same render that mounts the scrolling body, so
+  // the overflow locks never clip a fallback rendering.
   const paginatedActive = isPaginated && trustedView !== null && articleEl !== null;
+  // Plan 13-09 (G4 — 13-UAT stable first paint): the pending window — the
+  // effective mode is paginated but measurement has not settled. Render the
+  // stable paginated frame with a calm placeholder, NEVER the scrolling
+  // surface (the old code mounted the scrolling ArticleBody + its hairline
+  // here, then swapped once trustedView committed — a visible jump on every
+  // paginated first load).
+  const paginatedPending = isPaginated && !paginatedActive;
 
   // Plan 13-04 (POLISH-03 / D13-13) — the article-top metadata spot: byline,
   // source link, book-context line, TagEntry, and the per-article
@@ -1560,14 +1566,23 @@ export function ArticleView({
           progress is conveyed to AT via the SectionAnnouncer live region.
           In paginated mode PaginatedSurface renders its own ProgressHairline
           with the N/M ratio (D4-08), so we skip the scrolling-mode hairline
-          here to avoid a duplicate. */}
-      {!paginatedActive && <ProgressHairline progress={progress} />}
+          here to avoid a duplicate. Plan 13-09 (G4): the gate is the
+          EFFECTIVE mode, not the settled state — the scrolling hairline must
+          never paint during the paginated pending window either (it would
+          appear, then vanish at the swap — the exact first-load jump this
+          plan closes). */}
+      {!isPaginated && <ProgressHairline progress={progress} />}
       {/* A11Y-08: polite live region announcing section changes during scroll.
           articleEl is null during loading; the callback ref sets it once the
           <article> mounts, triggering a re-render so this component receives
           the actual DOM node. */}
       <SectionAnnouncer articleEl={articleEl} />
-      <main id="main" className={paginatedActive ? "paginated-main" : undefined}>
+      {/* Plan 13-09 (G4 — stable first paint): paginated-main locks from the
+          FIRST paint whenever the effective mode is paginated (pending
+          window included). The html/body :has overflow locks + the viewport
+          inset therefore engage before measurement settles, so the frame
+          never changes shape when pagination commits. */}
+      <main id="main" className={isPaginated ? "paginated-main" : undefined}>
         {/*
           A11Y-08 (UI-SPEC §Copywriting "keyboard-help affordance"): a single
           concise visually-hidden paragraph at the top of <main>, preceding the
@@ -1655,9 +1670,17 @@ export function ArticleView({
                and non-critical to the reading experience (D2-13). */
           }}
         >
+        {/* Plan 13-09 (G4 — stable first paint): the pinned paginated frame
+            (fixed viewport height + grid + overflow clip) is applied whenever
+            the EFFECTIVE mode is paginated — including the pre-settle pending
+            window — so the frame is byte-stable from the first article paint
+            through the placeholder→page-1 transition. A fallback flip
+            reverts the class in the same render that mounts the scrolling
+            body (disclosed by the banner), so the clip never traps a
+            scrolling rendering. */}
         <article
           ref={articleCallbackRef}
-          className={paginatedActive ? "article-body paginated-surface" : "article-body"}
+          className={isPaginated ? "article-body paginated-surface" : "article-body"}
         >
           {/* Plan 13-04 (POLISH-03 / D13-13): the pinned per-page header is
               SLIM — BackToLibrary + the title ONLY. Byline/source/book
@@ -1799,6 +1822,39 @@ export function ArticleView({
                   </a>
                 </nav>
               )}
+            </>
+          ) : paginatedPending ? (
+            <>
+              {/*
+                Plan 13-09 (G4): the pending window — the effective mode is
+                paginated but measurement has not settled (trustedView or
+                articleEl not yet ready). This branch renders the SAME hidden
+                measurement wrapper the active branch mounts (Plan 04-08 —
+                the engine's measureAllBlocks reads the full
+                [data-block-index] set from the <article> subtree with valid
+                geometry; it is the ONLY ArticleBody here, so the scrolling
+                surface never paints while the effective mode is paginated —
+                the G4 must-not). See app.css for the wrapper's geometry
+                contract (position:absolute out of flow, visibility:hidden
+                boxes preserved).
+              */}
+              <div className="article-body-measurement" aria-hidden="true">
+                <ArticleBody article={article} highlights={[]} />
+              </div>
+              {/*
+                Plan 13-09 (G4): a calm placeholder inside the REAL page
+                viewport — the frame rides the pinned .paginated-surface
+                geometry already applied to the <article>, and this paragraph
+                rides the existing .meta typography (zero new CSS). Polite
+                role=status announcement; no motion, no spinner. Placeholder
+                cannot wedge: a measurement failure/oversize emits
+                dom-fallback → the session override flips to scrolling →
+                this branch unmounts and the banner discloses the mode
+                change.
+              */}
+              <div className="page-viewport">
+                <p className="meta" role="status" aria-live="polite">Preparing pages…</p>
+              </div>
             </>
           ) : (
             <>
