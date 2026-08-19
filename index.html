@@ -4,6 +4,90 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Lem Reader</title>
+    <script>
+      // Settings-mirror paint hint (POLISH-01, D13-01/D13-02). Before React
+      // mounts, apply the persisted ReaderSettings tokens to :root so a cold
+      // load with non-default settings paints them from the first frame —
+      // no default-to-persisted flip. The localStorage mirror is a BEST-EFFORT
+      // HINT ONLY: Dexie (via loadSettings) stays the source of truth, and
+      // this script NEVER routes recovery UI (D13-03). Any failure — absent,
+      // corrupt, or blocked storage — fails silent to the CSS literal
+      // fallbacks (18px / 1.6 / 0 — the 02-04 cascade contract).
+      //
+      // Security (T-13-03 / T-02-02 parity): only style-property writes
+      // (setProperty) and a dataset assignment — no markup-string or
+      // HTML-injection APIs anywhere; every value is coerced
+      // through enum/number token maps before it reaches CSS — worst case a
+      // bad-looking theme, never script execution.
+      //
+      // The FONT_STACKS / SPACING_PRESETS values are INLINE COPIES of
+      // src/settings/tokens.ts (this script cannot import modules). The
+      // marker comments below are extraction anchors for the sync-check
+      // unit test (tests/unit/settings/mirror.test.ts — A2 drift guard):
+      // if tokens.ts changes, update these copies in the same commit.
+      (function () {
+        try {
+          // tokens:FONT_STACKS:start
+          var FONT_STACKS = {
+            serif:
+              "'Iowan Old Style', 'Source Serif Pro', 'Source Serif 4', Georgia, Charter, 'Times New Roman', serif",
+            sans: "system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+            dyslexic: "Verdana, Tahoma, 'Segoe UI', Geneva, sans-serif"
+          };
+          // tokens:FONT_STACKS:end
+          // tokens:SPACING_PRESETS:start
+          var SPACING_PRESETS = {
+            compact: { lineHeight: 1.4, letterSpacing: "0", wordSpacing: "0" },
+            comfortable: { lineHeight: 1.6, letterSpacing: "0", wordSpacing: "0" },
+            spacious: { lineHeight: 1.8, letterSpacing: "0.01em", wordSpacing: "0.05em" }
+          };
+          // tokens:SPACING_PRESETS:end
+          var THEMES = { sepia: true, light: true, dark: true };
+          var own = Object.prototype.hasOwnProperty;
+
+          var raw = null;
+          try {
+            raw = localStorage.getItem("lem-settings-mirror-v1");
+          } catch (e) {
+            return; // blocked storage → CSS literal fallbacks paint
+          }
+          if (!raw) return; // first run → defaults paint (D13-03)
+          var s = null;
+          try {
+            s = JSON.parse(raw);
+          } catch (e) {
+            return; // corrupt JSON → defaults paint
+          }
+          if (!s || typeof s !== "object") return;
+
+          var r = document.documentElement;
+          // The SAME writes applyTheme performs (T-02-02 parity): dataset
+          // theme, then the six custom properties. An unknown enum key skips
+          // that single write; size/measure must be finite numbers with
+          // px/ch units.
+          if (typeof s.theme === "string" && THEMES[s.theme]) {
+            r.dataset.theme = s.theme;
+          }
+          if (typeof s.font === "string" && own.call(FONT_STACKS, s.font)) {
+            r.style.setProperty("--font-body", FONT_STACKS[s.font]);
+          }
+          if (typeof s.size === "number" && isFinite(s.size)) {
+            r.style.setProperty("--font-size", s.size + "px");
+          }
+          if (typeof s.spacing === "string" && own.call(SPACING_PRESETS, s.spacing)) {
+            var p = SPACING_PRESETS[s.spacing];
+            r.style.setProperty("--line-height", String(p.lineHeight));
+            r.style.setProperty("--letter-spacing", p.letterSpacing);
+            r.style.setProperty("--word-spacing", p.wordSpacing);
+          }
+          if (typeof s.measure === "number" && isFinite(s.measure)) {
+            r.style.setProperty("--measure", s.measure + "ch");
+          }
+        } catch (e) {
+          // The mirror is a hint — never route recovery UI (D13-03).
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

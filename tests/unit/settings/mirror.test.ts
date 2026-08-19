@@ -12,7 +12,7 @@
 // no polyfill needed). Throwing-storage cases replace window.localStorage
 // wholesale via Object.defineProperty with a stub whose accessors throw
 // (quota-blocked / storage-blocked browsers), restored in afterEach.
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   clearSettingsMirror,
   readSettingsMirror,
@@ -178,6 +178,91 @@ describe("clearSettingsMirror", () => {
       expect(() => clearSettingsMirror()).not.toThrow();
     } finally {
       restore();
+    }
+  });
+});
+
+// ── index.html inline-script sync checks (A2 drift guard) ───────────────────
+//
+// The pre-React paint-hint script in index.html cannot import
+// src/settings/tokens.ts, so it carries INLINE COPIES of FONT_STACKS and
+// SPACING_PRESETS between marker comments. These checks pin the copies to
+// the module maps so a tokens.ts change that forgets index.html fails here
+// (13-RESEARCH A2), and pin the placement/security contracts of the script
+// itself.
+
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
+// jsdom-env specs get a non-file import.meta.url, so anchor to the vitest
+// cwd (always the project root) instead.
+const INDEX_HTML = readFileSync(resolve(process.cwd(), "index.html"), "utf-8");
+
+/** Extract the source between two `// tokens:<name>:start|end` markers. */
+function extractMarked(name: string): string {
+  const re = new RegExp(
+    `//\\s*tokens:${name}:start([\\s\\S]*?)//\\s*tokens:${name}:end`,
+  );
+  const match = re.exec(INDEX_HTML);
+  if (!match) {
+    throw new Error(`marker tokens:${name}:start/end not found in index.html`);
+  }
+  return match[1] ?? "";
+}
+
+/** Evaluate a marked `var NAME = { ... };` block into its object value. */
+function evalMarkedMap(name: string): unknown {
+  const src = extractMarked(name);
+  const stripped = src
+    .replace(new RegExp(`^\\s*var\\s+${name}\\s*=`), "")
+    .replace(/;\s*$/, "")
+    .trim();
+  // Test-only evaluation of a repo-authored literal (not user input).
+  return new Function(`return (${stripped});`)();
+}
+
+describe("index.html inline script sync checks", () => {
+  it("appears before the /src/main.tsx module script", () => {
+    // The first plain <script> tag in the document is the inline hint.
+    const inlineIdx = INDEX_HTML.indexOf("<script>");
+    const moduleIdx = INDEX_HTML.indexOf(
+      '<script type="module" src="/src/main.tsx">',
+    );
+    expect(inlineIdx).toBeGreaterThan(-1);
+    expect(moduleIdx).toBeGreaterThan(-1);
+    expect(inlineIdx).toBeLessThan(moduleIdx);
+  });
+
+  it("contains no markup-string or HTML-injection APIs (T-13-03)", () => {
+    expect(INDEX_HTML).not.toMatch(/innerHTML|insertAdjacentHTML|outerHTML/);
+  });
+
+  it("reads the SETTINGS_MIRROR_KEY key", () => {
+    expect(INDEX_HTML).toContain(`localStorage.getItem("${SETTINGS_MIRROR_KEY}")`);
+  });
+
+  it("inline FONT_STACKS copy equals tokens.ts FONT_STACKS for every key", async () => {
+    const { FONT_STACKS } = await import("../../../src/settings/tokens");
+    const inline = evalMarkedMap("FONT_STACKS") as Record<string, string>;
+    const keys = Object.keys(FONT_STACKS) as Array<keyof typeof FONT_STACKS>;
+    expect(Object.keys(inline).sort()).toEqual([...keys].sort());
+    for (const key of keys) {
+      expect(inline[key]).toEqual(FONT_STACKS[key]);
+    }
+  });
+
+  it("inline SPACING_PRESETS copy equals tokens.ts SPACING_PRESETS for every key", async () => {
+    const { SPACING_PRESETS } = await import("../../../src/settings/tokens");
+    const inline = evalMarkedMap("SPACING_PRESETS") as Record<
+      string,
+      { lineHeight: number; letterSpacing: string; wordSpacing: string }
+    >;
+    const keys = Object.keys(SPACING_PRESETS) as Array<
+      keyof typeof SPACING_PRESETS
+    >;
+    expect(Object.keys(inline).sort()).toEqual([...keys].sort());
+    for (const key of keys) {
+      expect(inline[key]).toEqual(SPACING_PRESETS[key]);
     }
   });
 });

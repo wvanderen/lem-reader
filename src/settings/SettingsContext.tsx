@@ -30,6 +30,11 @@ import type { ReactNode } from "react";
 import type { ReaderSettings } from "../content/schema";
 import { DEFAULT_SETTINGS } from "./defaults";
 import { applyTheme } from "./applyTheme";
+import {
+  clearSettingsMirror,
+  readSettingsMirror,
+  writeSettingsMirror,
+} from "./settingsMirror";
 import { loadSettings, saveSettings } from "../persistence/settingsStore";
 import { classifyStorageError } from "../persistence/errors";
 
@@ -58,7 +63,15 @@ const SettingsContext = createContext<SettingsContextValue | null>(null);
 const SAVE_DEBOUNCE_MS = 400;
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
-  const [settings, setSettings] = useState<ReaderSettings>(() => DEFAULT_SETTINGS);
+  // POLISH-01 (D13-01, Pitfall 2): lazy-init from the localStorage mirror so
+  // the FIRST React render already carries the persisted settings — the
+  // mount-time applyTheme effect below then writes byte-identical values to
+  // the inline pre-React script in index.html instead of snapping defaults
+  // back over the mirror's tokens for the frames before Dexie hydrates.
+  // readSettingsMirror is null-on-doubt (absent/corrupt/throwing → defaults).
+  const [settings, setSettings] = useState<ReaderSettings>(
+    () => readSettingsMirror() ?? DEFAULT_SETTINGS,
+  );
   const [storageState, setStorageState] = useState<StorageState>("ok");
 
   // Pending debounced write + the latest settings snapshot for flush-on-hide.
@@ -86,6 +99,18 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         if (result.ok) {
           setSettings(result.settings);
           setStorageState("ok");
+          // Stale-mirror self-correct (POLISH-01, 13-RESEARCH OQ2): Dexie is
+          // the truth — when the hydrated settings differ from what the
+          // mirror carries (including no mirror at all), rewrite the mirror
+          // NOW so the next cold load in this same session paints the
+          // corrected values. Failure handling lives inside the seam
+          // (silent no-op — Pitfall 4).
+          if (
+            JSON.stringify(readSettingsMirror()) !==
+            JSON.stringify(result.settings)
+          ) {
+            writeSettingsMirror(result.settings);
+          }
         } else {
           // Keep in-memory DEFAULT_SETTINGS active so the reader is never
           // blocked (D2-13). App routes the reason to the right surface.
@@ -120,6 +145,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       const s = pendingRef.current;
       if (!s) return;
       pendingRef.current = null;
+      // Mirror write rides the same pending value, before the Dexie call
+      // (POLISH-01/D13-01). All failure handling lives inside the seam —
+      // a quota-blocked mirror write is a silent no-op and NEVER classifies
+      // as a storage failure (Pitfall 4).
+      writeSettingsMirror(s);
       saveSettings(s).catch((e) => {
         // STATE-05: classify the failure and surface the right banner. Never
         // throw to the reader. db.delete() is NOT called here (Pitfall 8).
@@ -137,6 +167,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const s = pendingRef.current;
     if (!s) return;
     pendingRef.current = null;
+    // Mirror write rides the flush too (POLISH-01/D13-01) — same value, same
+    // silent-failure seam as scheduleSave (Pitfall 4).
+    writeSettingsMirror(s);
     // Fire-and-forget — pagehide may not await, but the write is queued into
     // the IndexedDB transaction pipeline before the page tears down in all
     // three target engines (verified pattern, 02-RESEARCH Pattern 4).
@@ -202,6 +235,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
           saveTimer.current = null;
         }
         pendingRef.current = null;
+        // Pitfall 1 (POLISH-01): localStorage survives db.delete(). Clear the
+        // mirror here — the single post-wipe seam — or a wiped reader
+        // cold-loads to the dead preferences forever (zombie settings).
+        clearSettingsMirror();
         setSettings(DEFAULT_SETTINGS);
         setStorageState("ok");
       },

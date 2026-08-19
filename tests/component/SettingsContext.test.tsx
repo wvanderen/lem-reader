@@ -75,6 +75,12 @@ beforeEach(() => {
   delete document.documentElement.dataset.theme;
   latest = null;
 
+  // POLISH-01 (13-01): the provider lazy-inits from the localStorage mirror,
+  // and the hydrate path below can WRITE the mirror as a side effect. Clear
+  // it per test so every test starts from the same first-run state (a stale
+  // mirror from an earlier test would change the lazy-init baseline).
+  window.localStorage.clear();
+
   // Default happy-path mocks: every existing test passes unchanged because
   // loadSettings resolves with the same DEFAULT_SETTINGS that the provider
   // initializes state to, and saveSettings is a no-op vi.fn().
@@ -238,6 +244,37 @@ describe("SettingsContext (02-02 persistence + STATE-05)", () => {
     });
     // Reader keeps reading with in-memory defaults (D2-13 — never blocked).
     expect(latest?.settings).toEqual(DEFAULT_SETTINGS);
+  });
+
+  it("keeps the mirror-painted settings (no second flash) on STATE-05 failure with a valid mirror present (13-01 Pitfall 3)", async () => {
+    // With a valid mirror, the lazy-init paints the mirrored record and a
+    // Dexie failure keeps what's painted — 13-RESEARCH Pitfall 3: "keep
+    // what's painted (defaults or mirror — planner picks, but no second
+    // flash)". Recovery UI still routes from loadSettings's reason ONLY;
+    // the mirror never routes it.
+    const mirrored: ReaderSettings = {
+      schemaVersion: 2,
+      font: "sans",
+      size: 22,
+      measure: 58,
+      spacing: "compact",
+      theme: "dark",
+      readingMode: "scrolling",
+    };
+    window.localStorage.setItem(
+      "lem-settings-mirror-v1",
+      JSON.stringify(mirrored),
+    );
+    loadMock.mockResolvedValue({ ok: false, reason: "unavailable" });
+    render(
+      <SettingsProvider>
+        <Probe />
+      </SettingsProvider>,
+    );
+    await waitFor(() => {
+      expect(latest?.storageState).toBe("unavailable");
+    });
+    expect(latest?.settings).toEqual(mirrored);
   });
 
   it("routes storageState to 'corrupt' when loadSettings returns ok:false reason corrupt", async () => {
