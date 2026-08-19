@@ -137,6 +137,20 @@ export function IngestControl() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   /**
+   * resetFilePick — the single reset seam for the upload picker (Plan
+   * 13-08, gap G2). Clears the input's value so re-picking the SAME file
+   * re-fires onChange (the import-input reset discipline — a stale value
+   * would make same-file retry a silent no-op) and drops the hasFile
+   * mirror so Add file returns to disabled. Every terminal outcome of
+   * handleFileSubmit and the Remove file control route through this ONE
+   * helper — no scattered clears.
+   */
+  function resetFilePick() {
+    if (fileInputRef.current !== null) fileInputRef.current.value = "";
+    setHasFile(false);
+  }
+
+  /**
    * handleSubmit — shared submit handler for both forms. Picks the ingest
    * path based on `which`, runs the D7-07 dedupe-refuse check, and routes
    * every failure to a calm DOC-06 phrase.
@@ -231,17 +245,20 @@ export function IngestControl() {
       if (file.size > PDF_MAX_BYTES) {
         setStatus("error");
         setMessage(mapReasonToCopy("pdf-too-large"));
+        resetFilePick();
         return;
       }
     } else if (isEpub) {
       if (file.size > EPUB_MAX_BYTES) {
         setStatus("error");
         setMessage(mapReasonToCopy("epub-too-large"));
+        resetFilePick();
         return;
       }
     } else if (file.size > 5 * 1024 * 1024) {
       setStatus("error");
       setMessage(mapReasonToCopy("response-too-large"));
+      resetFilePick();
       return;
     }
 
@@ -265,6 +282,7 @@ export function IngestControl() {
         if (await hasBook(result.book.id)) {
           setStatus("error");
           setMessage(mapReasonToCopy("already-in-library"));
+          resetFilePick();
           return;
         }
 
@@ -278,6 +296,10 @@ export function IngestControl() {
               : ` ${result.skippedCount} chapters could not be read.`;
         }
         setMessage(successCopy);
+        // G2: the book path STAYS mounted on the library — without this
+        // reset the queued pick (and the enabled Add file button) would
+        // linger until a page refresh.
+        resetFilePick();
         return;
       }
 
@@ -301,6 +323,7 @@ export function IngestControl() {
       if (alreadyInLibrary) {
         setStatus("error");
         setMessage(mapReasonToCopy("already-in-library"));
+        resetFilePick();
         return;
       }
 
@@ -310,6 +333,9 @@ export function IngestControl() {
       // (clear the submitting message so the success render arm stays
       // quiet on this path).
       setMessage(null);
+      // Uniform reset contract (G2): harmless here — the control unmounts
+      // on navigation — but keeps every terminal outcome identical.
+      resetFilePick();
       window.location.hash = `#/article/${result.article.id}`;
     } catch (err) {
       setStatus("error");
@@ -320,6 +346,7 @@ export function IngestControl() {
         // surface as the generic server-error copy.
         setMessage(mapReasonToCopy("server-error"));
       }
+      resetFilePick();
     }
   }
 
@@ -374,7 +401,11 @@ export function IngestControl() {
           one-transaction saveBook path. T-8-14 + T-11-02 + T-12-09:
           extension-aware client-side cap refuses oversized files before any
           read (5MB for .md/.html, PDF_MAX_BYTES for .pdf, EPUB_MAX_BYTES
-          for .epub). */}
+          for .epub). Plan 13-08 (G2): the picker resets at EVERY terminal
+          outcome — refusal, dedupe, success, or error — so a completed or
+          refused upload never leaves a stale queued pick, and re-picking
+          the same file always re-fires the picker. A Remove file control
+          offers the same reset pre-submit (the import-input discipline). */}
       <form onSubmit={handleFileSubmit}>
         <label htmlFor="ingest-file">Upload a file</label>
         <p className="meta">Accepts .md, .html, PDF, and EPUB books</p>
@@ -387,6 +418,16 @@ export function IngestControl() {
           disabled={submitting}
           onChange={(e) => setHasFile(e.target.files !== null && e.target.files.length > 0)}
         />
+        {hasFile && (
+          <button
+            type="button"
+            className="article-export-highlights ingest-remove-file"
+            disabled={submitting}
+            onClick={resetFilePick}
+          >
+            Remove file
+          </button>
+        )}
         <button type="submit" disabled={submitting || !hasFile}>
           Add file
         </button>
