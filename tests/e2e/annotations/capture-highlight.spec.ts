@@ -27,6 +27,10 @@ import {
   visibleReadingSurface,
   switchMode,
   announcementRegion,
+  findDisjointBlockWalkingPages,
+  turnToPage,
+  totalPages,
+  currentPageIdx,
 } from "./_fixtures";
 
 // Representative subset (mirrors mode-switch-anchor.spec.ts SWATCH_FIXTURES).
@@ -96,11 +100,19 @@ test.describe("ANNO-01 capture highlight (05-05)", () => {
     page,
   }) => {
     // D5-07 "if you can read it, you can highlight it": capture must succeed
-    // in multiple eligible block kinds. We exercise heading + paragraph
-    // (two distinct blocks, disjoint ranges) against essay-long-form which
-    // carries a generous mix. technical-post / figure-heavy below cover the
-    // rarer kinds (code + caption).
+    // in multiple eligible block kinds. We exercise two distinct blocks with
+    // disjoint ranges against essay-long-form which carries a generous mix.
+    // technical-post / figure-heavy below cover the rarer kinds (code +
+    // caption).
+    //
+    // Plan 13-06 repair: under the Option A page-1 budget (viewport − the
+    // metadata spot's reserve), essay page 1 carries a single long paragraph
+    // — the second DISJOINT block legitimately lives on a later page. Walk
+    // pages to it (the D13-09 technical-post precedent), then walk BACK to
+    // assert both inline marks render at their own pages (only the current
+    // fragment is mounted in paginated mode) + the physical Dexie rows.
     await openArticle(page, "essay-long-form");
+    const b1Page = await currentPageIdx(page);
     // First eligible block.
     const b1 = await findFirstBlockWithText(page, 6);
     expect(b1, "first selectable block").not.toBe(-1);
@@ -109,13 +121,40 @@ test.describe("ANNO-01 capture highlight (05-05)", () => {
     await page.locator(".selection-toolbar").getByRole("button", { name: "Highlight", exact: true }).click();
     await expect(page.locator("mark.highlight").first()).toBeVisible();
     await expect(announcementRegion(page)).toContainText(/Highlight saved/i);
-    // A second disjoint block (D5-13 disjoint-ranges proof in the positive).
-    const b2 = await findSecondBlockWithText(page, b1, 20);
+    // A second disjoint block (D5-13 disjoint-ranges proof in the positive) —
+    // walking pages under the Option A page-1 budget.
+    const { blockIndex: b2, pageIndex: b2Page } = await findDisjointBlockWalkingPages(page, [b1], 20);
     expect(b2, "second disjoint selectable block").not.toBe(-1);
     ok = await selectRangeInBlock(page, b2, 0, 20);
     expect(ok, "second selection").toBeTruthy();
     await page.locator(".selection-toolbar").getByRole("button", { name: "Highlight", exact: true }).click();
-    await expect(page.locator("mark.highlight")).toHaveCount(2);
+    await expect(page.locator("mark.highlight").first()).toBeVisible();
+    // Both captures persisted (physical Dexie rows — the mode-independent
+    // count) + both inline marks render at their own pages.
+    const persisted = await page.evaluate(async () => {
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const req = indexedDB.open("lem-reader");
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+      return new Promise<number>((resolve, reject) => {
+        const tx = db.transaction("highlights", "readonly");
+        const req = tx.objectStore("highlights").count();
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    });
+    expect(persisted, "both eligible-set captures persisted").toBeGreaterThanOrEqual(2);
+    await expect(
+      page.locator("mark.highlight").first(),
+      "the walked-to block's mark renders on its page",
+    ).toBeVisible();
+    await turnToPage(page, b1Page);
+    await expect(
+      page.locator("mark.highlight").first(),
+      "the first block's mark renders on page 1",
+    ).toBeVisible();
+    expect(b2Page, "the second block was found on a real page").toBeGreaterThanOrEqual(0);
   });
 
   test("technical-post: code-block source is capturable (D5-07 — capture + persist)", async ({ page }) => {
@@ -137,7 +176,7 @@ test.describe("ANNO-01 capture highlight (05-05)", () => {
     const total = await totalPages(page);
     let codeBlockIdx = -1;
     for (let target = 0; target < total && codeBlockIdx === -1; target++) {
-      await goToPage(page, target);
+      await turnToPage(page, target);
       codeBlockIdx = await page.evaluate(() => {
         const blocks = Array.from(
           document.querySelectorAll(
@@ -191,24 +230,34 @@ test.describe("ANNO-01 capture highlight (05-05)", () => {
     // the DOM textContent the capture map walks; handling that divergence is
     // deferred to keep the D-05 substrate stable). We assert capture +
     // persistence rather than an inline mark for this block kind.
+    //
+    // Plan 13-06 repair: under the Option A page-1 budget the figure +
+    // caption no longer sit on page 1 — WALK PAGES until the visible
+    // fragment carries a FIGURE with a figcaption (the same walk-pages
+    // discipline the technical-post cell below uses for its <pre> block).
     await openArticle(page, "figure-heavy");
-    const captionIdx = await page.evaluate(() => {
-      const blocks = Array.from(
-        document.querySelectorAll(
-          '.page-fragment [data-block-index], .article-body:not(.article-body-measurement) [data-block-index]',
-        ),
-      ).filter((el) => !el.closest(".article-body-measurement"));
-      for (let i = 0; i < blocks.length; i++) {
-        const el = blocks[i]!;
-        const idx = Number(el.getAttribute("data-block-index"));
-        if (el.tagName === "FIGURE" && el.querySelector("figcaption")) return idx;
-      }
-      return -1;
-    });
-    if (captionIdx === -1) {
-      expect(captionIdx, "figure-heavy first page must have a figure+caption").not.toBe(-1);
-      return;
+    const total = await totalPages(page);
+    let captionIdx = -1;
+    for (let target = 0; target < total && captionIdx === -1; target++) {
+      await turnToPage(page, target);
+      captionIdx = await page.evaluate(() => {
+        const blocks = Array.from(
+          document.querySelectorAll(
+            '.page-fragment [data-block-index], .article-body:not(.article-body-measurement) [data-block-index]',
+          ),
+        ).filter((el) => !el.closest(".article-body-measurement"));
+        for (let i = 0; i < blocks.length; i++) {
+          const el = blocks[i]!;
+          const idx = Number(el.getAttribute("data-block-index"));
+          if (el.tagName === "FIGURE" && el.querySelector("figcaption")) return idx;
+        }
+        return -1;
+      });
     }
+    expect(
+      captionIdx,
+      "figure-heavy must have a figure+caption on some page",
+    ).not.toBe(-1);
     // Select inside the figcaption specifically (the figure may have an img
     // + caption; we want the caption text).
     const ok = await page.evaluate((blockIndex) => {
@@ -313,60 +362,10 @@ test.describe("ANNO-01 capture highlight (05-05)", () => {
 });
 
 /**
- * Resolve the current paginated page index via the DEV-only
- * window.__lemPagination hook. Returns 0 when the hook is not yet populated.
- */
-async function currentPageIdx(
-  page: import("@playwright/test").Page,
-): Promise<number> {
-  return page.evaluate(
-    () =>
-      (window as unknown as { __lemPagination?: { currentPageIdx: number } })
-        .__lemPagination?.currentPageIdx ?? 0,
-  );
-}
-
-/**
- * Resolve the total page count from window.__lemPagination. Returns 0 when
- * the hook is not yet populated (the caller treats 0 as "no pages yet").
- */
-async function totalPages(page: import("@playwright/test").Page): Promise<number> {
-  return page.evaluate(
-    () =>
-      (window as unknown as { __lemPagination?: { pagesLength: number } })
-        .__lemPagination?.pagesLength ?? 0,
-  );
-}
-
-/**
- * Navigate to the given 0-based page index in paginated mode via the same
- * PageDown / PageUp keyboard bundle the reader uses. Settles 200ms between
- * presses so the rAF-deferred overflow guard + DOM commit complete before
- * the next press fires (mirrors page-turn-controls.spec.ts timing).
- */
-async function goToPage(
-  page: import("@playwright/test").Page,
-  target: number,
-): Promise<void> {
-  let cur = await currentPageIdx(page);
-  while (cur < target) {
-    await page.keyboard.press("PageDown");
-    await page.waitForTimeout(200);
-    cur = await currentPageIdx(page);
-    // Defensive — stop if the engine reached the last page without matching.
-    if (cur + 1 >= (await totalPages(page)) && cur < target) break;
-  }
-  while (cur > target) {
-    await page.keyboard.press("PageUp");
-    await page.waitForTimeout(200);
-    cur = await currentPageIdx(page);
-  }
-}
-
-/**
  * Find the first visible block with text length >= minChars that is NOT
- * the already-used block (so the eligible-set breadth test picks a disjoint
- * second block). Local helper (mirrors findFirstBlockWithText shape).
+ * the already-used block (so the page-error-free test picks a disjoint
+ * second block in scrolling mode, where the whole article is one flow).
+ * Local helper (mirrors findFirstBlockWithText shape).
  */
 async function findSecondBlockWithText(
   page: import("@playwright/test").Page,

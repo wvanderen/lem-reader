@@ -481,3 +481,111 @@ export async function countHighlightsInDexie(
     });
   }, articleId);
 }
+
+// ── Plan 13-06 repair (post-merge follow-up): the walk-pages helpers ─────────
+// The 13-04 Option A page-1 budget (viewport − firstPageReservedPx, the
+// article-top metadata spot's sanctioned seat) legitimately shrinks page 1's
+// content capacity — page 1 of a default-viewport essay now carries a single
+// long paragraph, not the pre-13-04 multi-block spread. Specs that need a
+// SECOND disjoint block, a rarer block kind, or two consecutive text blocks
+// WALK PAGES until the wanted geometry is on the visible fragment (the
+// technical-post walk-pages precedent in capture-highlight.spec.ts,
+// promoted here per D13-09) instead of assuming page-1 content distribution.
+
+/**
+ * Resolve the total page count from the DEV-only window.__lemPagination
+ * hook. Returns 0 when the hook is not yet populated (the caller treats
+ * 0 as "no pages yet").
+ */
+export async function totalPages(
+  page: import("@playwright/test").Page,
+): Promise<number> {
+  return page.evaluate(
+    () =>
+      (window as unknown as { __lemPagination?: { pagesLength: number } })
+        .__lemPagination?.pagesLength ?? 0,
+  );
+}
+
+/**
+ * Resolve the current 0-based page index from window.__lemPagination.
+ * Returns 0 when the hook is not yet populated.
+ */
+export async function currentPageIdx(
+  page: import("@playwright/test").Page,
+): Promise<number> {
+  return page.evaluate(
+    () =>
+      (window as unknown as { __lemPagination?: { currentPageIdx: number } })
+        .__lemPagination?.currentPageIdx ?? 0,
+  );
+}
+
+/**
+ * Navigate to the given 0-based page index in paginated mode via the same
+ * PageDown / PageUp keyboard bundle the reader uses. Settles 200ms between
+ * presses so the rAF-deferred overflow guard + DOM commit complete before
+ * the next press fires (mirrors page-turn-controls.spec.ts timing).
+ */
+export async function turnToPage(
+  page: import("@playwright/test").Page,
+  target: number,
+): Promise<void> {
+  let cur = await currentPageIdx(page);
+  while (cur < target) {
+    await page.keyboard.press("PageDown");
+    await page.waitForTimeout(200);
+    cur = await currentPageIdx(page);
+    // Defensive — stop if the engine reached the last page without matching.
+    if (cur + 1 >= (await totalPages(page)) && cur < target) break;
+  }
+  while (cur > target) {
+    await page.keyboard.press("PageUp");
+    await page.waitForTimeout(200);
+    cur = await currentPageIdx(page);
+  }
+}
+
+/**
+ * Find the first visible block index with >= minChars text that is NOT in
+ * `exclude`, WALKING PAGES forward from the current one until a page's
+ * visible fragment carries a match (the D13-09 walk-pages precedent —
+ * under the Option A page-1 budget, disjoint/rarer blocks legitimately
+ * live on later pages). Returns the block index and the 0-based page it
+ * was found on so callers can turn back to assert marks rendered there;
+ * { blockIndex: -1, pageIndex: -1 } when no page carries a match.
+ */
+export async function findDisjointBlockWalkingPages(
+  page: import("@playwright/test").Page,
+  exclude: number[],
+  minChars = 24,
+): Promise<{ blockIndex: number; pageIndex: number }> {
+  const total = await totalPages(page);
+  const start = await currentPageIdx(page);
+  for (let target = start; target < total; target++) {
+    await turnToPage(page, target);
+    const idx = await page.evaluate(
+      ({ exclude, min }) => {
+        const blocks = Array.from(
+          document.querySelectorAll(
+            '[data-block-index]:not(.article-body-measurement [data-block-index])',
+          ),
+        );
+        for (const el of blocks) {
+          const i = Number(el!.getAttribute("data-block-index"));
+          if (
+            !exclude.includes(i) &&
+            !Number.isNaN(i) &&
+            (el!.textContent?.length ?? 0) >= min
+          ) {
+            return i;
+          }
+        }
+        return -1;
+      },
+      { exclude, min: minChars },
+    );
+    if (idx !== -1) return { blockIndex: idx, pageIndex: target };
+  }
+  return { blockIndex: -1, pageIndex: -1 };
+}
