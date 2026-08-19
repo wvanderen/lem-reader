@@ -101,3 +101,40 @@ test("byte-stable library anchors survive the tidy (Pitfall 8-5)", async ({ page
   await expect(page.locator("ul.library-list")).toBeAttached();
   await expect(page.locator(".library-list > li").first()).toBeVisible();
 });
+
+test("add section shares the library measure (G1)", async ({ page }) => {
+  // Wide viewport: the add-content section sits inside the SAME centered
+  // content measure as the library list — both capped at the shared width
+  // and sharing one horizontal center — instead of spanning edge-to-edge.
+  await page.setViewportSize({ width: 1400, height: 900 });
+  await prepareFreshPage(page);
+  // Gate on committed rows so ul.library-list reflects its final state
+  // (same gate as the order test — direct reads after, no fixed sleeps).
+  await expect(page.locator(".library-list > li").first()).toBeVisible({
+    timeout: 10_000,
+  });
+
+  const wideAdd = await page.locator(".library-section-add").boundingBox();
+  const wideList = await page.locator("ul.library-list").boundingBox();
+  if (!wideAdd || !wideList) {
+    throw new Error("tidy spec: measure boxes unresolved at 1400×900");
+  }
+  expect(wideAdd.width, "add section is capped at the shared measure").toBeLessThanOrEqual(1100);
+  expect(wideList.width, "library list is capped at the shared measure").toBeLessThanOrEqual(1100);
+  const addCenter = wideAdd.x + wideAdd.width / 2;
+  const listCenter = wideList.x + wideList.width / 2;
+  expect(
+    Math.abs(addCenter - listCenter),
+    "both sections share one horizontal center",
+  ).toBeLessThanOrEqual(1);
+
+  // Narrow viewport: both boxes fill the main content box exactly — the
+  // measure rule introduces no narrow-viewport regression.
+  await page.setViewportSize({ width: 360, height: 640 });
+  const narrowAdd = await page.locator(".library-section-add").boundingBox();
+  const narrowList = await page.locator("ul.library-list").boundingBox();
+  if (!narrowAdd || !narrowList) {
+    throw new Error("tidy spec: measure boxes unresolved at 360×640");
+  }
+  expect(narrowAdd.width, "add section fills the content box like its siblings").toBe(narrowList.width);
+});

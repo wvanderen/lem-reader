@@ -1955,6 +1955,16 @@ dialog.annotations-drawer::backdrop {
 .library-section {
   margin-block: var(--space-xl) 0;
 }
+/* G1 (Phase 13 user review) — the add-content section joins the shared
+   centered measure its siblings already carry (.library-header, the
+   continue-reading strip, the search field, the tag filter, and the
+   library list all cap at the same width and center identically); the
+   wrapper stays padding/border-free so the 13-03 collapsing rhythm is
+   preserved. Zero motion properties by design. */
+.library-section-add {
+  max-width: 1100px;
+  margin-inline: auto;
+}
 
 /* ── TagEntry fieldset (Plan 08-04 — tags edited WHILE reading) ──────────── */
 /* Mounted inside ArticleView's <header> as a sibling of title/meta/source.
