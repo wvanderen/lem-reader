@@ -399,6 +399,28 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
         // back — the reserve must never manufacture a fallback the
         // unreserved engine would not produce. The transient overshoot is
         // the post-render overflow guard's documented net.
+        //
+        // Post-merge repair (human-sanctioned Option A refinement,
+        // 2026-08-19): when the block fits WHOLE at the full page height,
+        // the unreserved engine would PLACE it whole — chooseSplit returns
+        // null in exactly that geometry ("whole block fits after all"), so
+        // a split-only retry fell through to the unsplittable fallback and
+        // manufactured the very fallback the reserve must never produce
+        // (recorded reproducer class: 640×360 — 251px page box, 209px
+        // reserve → 62.75px floor budget; a 180px whole paragraph no
+        // widow-legal split fits). Place it whole; the guard heals the
+        // transient overshoot past the reserved budget exactly as it
+        // heals the split retry below.
+        if (wholeBlockPageHeightPx <= pageHeight) {
+          currentPageBlocks.push({
+            blockIndex: i,
+            startGrapheme: 0,
+            endGrapheme: blockGraphemeLen,
+          });
+          currentPageHeightPx = wholeBlockPageHeightPx;
+          currentTrailingMarginPx = marginBlockEndPx;
+          continue;
+        }
         plan = chooseSplit(
           lineBoxes,
           occupiedBeforeBlockPx,

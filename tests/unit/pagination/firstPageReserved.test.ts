@@ -314,4 +314,117 @@ describe("paginateDocument — firstPageReservedPx (Plan 13-04 Option A)", () =>
     );
     expect(page2HasPartialSlice).toBe(true);
   });
+
+  // ─── post-merge repair (human-sanctioned Option A refinement, ─────────
+  // 2026-08-19): the soft-budget escape must PLACE a block that fits WHOLE
+  // at the full page height. chooseSplit returns null in exactly that
+  // geometry ("whole block fits after all"), so the split-only retry
+  // manufactured the very dom-fallback the reserve must never produce
+  // (Regression A of the 13-06 honest-gate record: 15 epub/a11y cells
+  // flipped every synthetic chapter to scrolling at 360×480).
+  describe("soft-budget escape — whole-fitting block (post-merge repair)", () => {
+    /**
+     * The recorded reproducer geometry (13-06-OUTPUT probe, chapter 2,
+     * chromium, 360×480): 251px page box, 209px metadata-spot reserve →
+     * page-1 budget floors at 0.25 × 251 = 62.75px. Each chapter
+     * paragraph measures 144px tall + 18px/18px block margins = 180px
+     * whole — fits the FULL 251px page but no widow-legal split fits the
+     * 62.75px floor (the 2-line before-slice + margins = 105px).
+     * uniformLineBoxes(text, 5, 25) yields line bottoms at i*25+23 →
+     * span 123px, so heightPx 144 carries the recorded 21px structural
+     * overhead.
+     */
+    const REPRO_TEXTS = [
+      "aaaa bbbb cccc dddd eeee",
+      "ffff gggg hhhh iiii jjjj",
+    ];
+    const reproMeasurement = () =>
+      measurementStub(
+        REPRO_TEXTS.map((t) => ({
+          kind: "paragraph",
+          heightPx: 144,
+          marginBlockStartPx: 18,
+          marginBlockEndPx: 18,
+          lineCount: 5,
+          lineBoxes: uniformLineBoxes(t.length, 5, 25),
+        })),
+      );
+
+    it("places a whole-fitting block WHOLE at the full page height instead of falling back (recorded reproducer class)", () => {
+      const article = parseArticle(REPRO_TEXTS.map(para));
+      const bus = new DiagnosticBus();
+      const fallbackEvents: number[] = [];
+      bus.subscribe((e) => {
+        if (e.kind === "dom-fallback") fallbackEvents.push(1);
+      });
+      const result = paginateDocument({
+        article,
+        measurement: reproMeasurement(),
+        pageContentBoxHeightPx: 251,
+        firstPageReservedPx: 209,
+        diagnostics: bus,
+        signal: new AbortController().signal,
+      });
+      // Pre-fix this emitted status "fallback" / reason
+      // "unsplittable-block-overflow" with zero pages (the split-only
+      // escape retry returns null when the whole block fits).
+      expect(result.status).toBe("ok");
+      expect(fallbackEvents).toHaveLength(0);
+      // Page 1 holds block 0 WHOLE (start 0 → full grapheme length).
+      expect(result.pages[0]!.blocks).toHaveLength(1);
+      expect(result.pages[0]!.blocks[0]!).toEqual({
+        blockIndex: 0,
+        startGrapheme: 0,
+        endGrapheme: blockGraphemeLength(article.blocks[0]!),
+      });
+      assertExactOnceCoverage(article, result);
+    });
+
+    it("INVARIANT: the reserved walk never falls back where the unreserved walk does not — here their pages are identical", () => {
+      const article = parseArticle(REPRO_TEXTS.map(para));
+      const unreserved = run(article, reproMeasurement(), 251);
+      const reserved = run(article, reproMeasurement(), 251, 209);
+      expect(unreserved.status).toBe("ok");
+      expect(reserved.status).toBe("ok");
+      // Every block fits whole at the full page height, so the reserved
+      // walk must produce exactly the unreserved placement (the reserve
+      // may shrink page 1's budget; it may not change the outcome class).
+      expect(reserved.pages).toEqual(unreserved.pages);
+    });
+
+    it("a splitting-kind block TOO SHORT to split (fewer than 2×SPLIT_WIDOW_LINES lines) that fits whole at full height is placed whole, not fallen back", () => {
+      // 3 lines — chooseSplit returns null at ANY budget for < 4 lines,
+      // so pre-fix this class hit the unsplittable fallback even though
+      // the unreserved engine (Case A) places it whole.
+      const shortText = "aaaa bbbb ccc";
+      const texts = [shortText, REPRO_TEXTS[0]!];
+      const article = parseArticle(texts.map(para));
+      const measurement = measurementStub([
+        {
+          kind: "paragraph",
+          heightPx: 100,
+          marginBlockStartPx: 18,
+          marginBlockEndPx: 18,
+          lineCount: 3,
+          lineBoxes: uniformLineBoxes(shortText.length, 5, 25),
+        },
+        ...REPRO_TEXTS.slice(0, 1).map((t) => ({
+          kind: "paragraph",
+          heightPx: 144,
+          marginBlockStartPx: 18,
+          marginBlockEndPx: 18,
+          lineCount: 5,
+          lineBoxes: uniformLineBoxes(t.length, 5, 25),
+        })),
+      ]);
+      const result = run(article, measurement, 251, 209);
+      expect(result.status).toBe("ok");
+      expect(result.pages[0]!.blocks[0]!).toEqual({
+        blockIndex: 0,
+        startGrapheme: 0,
+        endGrapheme: blockGraphemeLength(article.blocks[0]!),
+      });
+      assertExactOnceCoverage(article, result);
+    });
+  });
 });
