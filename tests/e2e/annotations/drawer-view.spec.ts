@@ -15,6 +15,7 @@ import {
   openArticle,
   selectRangeInBlock,
   findFirstBlockWithText,
+  findDisjointBlockWalkingPages,
   drawerTrigger,
 } from "./_fixtures";
 
@@ -63,6 +64,13 @@ test.describe("ANNO-03 drawer view (05-05)", () => {
     await openArticle(page, FIXTURE);
     // Create 3 highlights on disjoint blocks/ranges so the drawer list has
     // multiple entries in distinct reading-order positions.
+    //
+    // Plan 13-06 repair: under the Option A page-1 budget (viewport − the
+    // metadata spot's reserve), essay page 1 carries a single long paragraph
+    // — the disjoint 2nd/3rd blocks live on later pages. WALK PAGES to each
+    // candidate (the D13-09 walk-pages precedent). The drawer assertions
+    // (reading order, count badge) are unchanged — the drawer lists Dexie
+    // rows regardless of the current page.
     const blocks: number[] = [];
     let first = await findFirstBlockWithText(page, 24);
     expect(first).not.toBe(-1);
@@ -72,9 +80,9 @@ test.describe("ANNO-03 drawer view (05-05)", () => {
     await page.locator(".selection-toolbar").getByRole("button", { name: "Highlight", exact: true }).click();
     await expect(page.locator("mark.highlight").first()).toBeVisible();
     blocks.push(first);
-    // Highlight 2 + 3 on subsequent disjoint blocks.
+    // Highlights 2 + 3 on subsequent disjoint blocks — walking pages.
     for (let k = 1; k <= 2 && blocks.length < 3; k++) {
-      const candidate = await findBlockAwayFrom(page, blocks, 24);
+      const { blockIndex: candidate } = await findDisjointBlockWalkingPages(page, blocks, 24);
       if (candidate === -1) break;
       ok = await selectRangeInBlock(page, candidate, 0, 12);
       if (!ok) continue;
@@ -141,31 +149,3 @@ test.describe("ANNO-03 drawer view (05-05)", () => {
     }
   });
 });
-
-/**
- * Find the first visible block with >= minChars text whose index is NOT in
- * the exclude list (so successive highlights land on disjoint blocks).
- */
-async function findBlockAwayFrom(
-  page: import("@playwright/test").Page,
-  exclude: number[],
-  minChars: number,
-): Promise<number> {
-  return page.evaluate(
-    ({ exclude, min }) => {
-      const blocks = Array.from(
-        document.querySelectorAll(
-          '[data-block-index]:not(.article-body-measurement [data-block-index])',
-        ),
-      );
-      for (const el of blocks) {
-        const idx = Number(el!.getAttribute("data-block-index"));
-        if (!exclude.includes(idx) && (el!.textContent?.length ?? 0) >= min) {
-          return idx;
-        }
-      }
-      return -1;
-    },
-    { exclude, min: minChars },
-  );
-}
