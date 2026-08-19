@@ -89,12 +89,16 @@ const PAGE_CEILING = 300;
 /**
  * Plan 13-04 (Option A — human decision 2026-08-18): the safety floor for
  * the first page's reserved content budget. `firstPageReservedPx` can never
- * push page 1's budget below this fraction of the page height — a starved
- * page 1 could tip atomic-start articles into the zero-progress dom-fallback
- * path (the documented 360×640 collapse class), and half a viewport always
- * leaves room for meaningful content beneath the article-top metadata spot.
+ * push page 1's budget below this fraction of the page height — a floor
+ * ABOVE the physically remaining space would only manufacture overflow the
+ * post-render guard must repeatedly heal, so the floor is kept MODEST
+ * (anti-degenerate, not space-making): it guarantees the widow-legal
+ * minimum (2 lines) stays budgetable on any realistic page. ArticleView's
+ * compact metadata spot keeps the corpus reserves well away from the
+ * floor; a degenerate reserve (pathological spot growth) surfaces as a
+ * clean typed fallback rather than a poisoned empty first page.
  */
-const FIRST_PAGE_BUDGET_FLOOR = 0.5;
+const FIRST_PAGE_BUDGET_FLOOR = 0.25;
 
 /** Internal sentinel thrown from the walk to short-circuit into a fallback result. */
 class PaginateFallback extends Error {
@@ -133,10 +137,10 @@ export interface PaginateOptions {
    * FIRST_PAGE_BUDGET_FLOOR for safety; pages 2+ keep the full viewport
    * budget. The reserve applies to PLACEMENT decisions only — the
    * oversize / page-ceiling / zero-progress termination guards stay
-   * measured against the full page height, and an empty first page can
-   * always accept a block that fits the full height (see the soft-budget
-   * escape in the walk). Default 0 (absent) is byte-equivalent to the
-   * pre-13-04 engine for every existing caller and test.
+   * measured against the full page height, and a splitting-kind block on
+   * an empty first page retries its split at the full height before
+   * falling back (see the walk). Default 0 (absent) is byte-equivalent
+   * to the pre-13-04 engine for every existing caller and test.
    */
   firstPageReservedPx?: number;
 }
@@ -306,17 +310,13 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
 
       // Case A: whole block fits on the current page — place + continue.
       // Plan 13-04 (Option A): the placement budget is the current page's
-      // budget (page 1 carries the reserve). While page 1 is still EMPTY,
-      // a block that fits the FULL page height still places there even
-      // when it exceeds the reserved budget — moving it to page 2 instead
-      // would emit an empty first page (the zero-progress fallback class).
-      // The transient overshoot is the post-render overflow guard's
-      // documented net (guard stays reserve-unaware by decision).
-      const placementBudgetPx =
-        pages.length === 0 && currentPageBlocks.length === 0
-          ? pageHeight
-          : currentBudgetPx();
-      if (wholeBlockPageHeightPx <= placementBudgetPx) {
+      // budget (page 1 carries the reserve; pages 2+ are the full page). A
+      // block that cannot fit its page's budget moves on through Case B/C —
+      // including on an empty page 1, where an atomic block that exceeds
+      // the reserved budget yields the honest typed fallback (Case B's
+      // zero-progress guard) rather than a placed-overflow page the guard
+      // would have to correct into an empty first page (anchor poison).
+      if (wholeBlockPageHeightPx <= currentBudgetPx()) {
         currentPageBlocks.push({
           blockIndex: i,
           startGrapheme: 0,

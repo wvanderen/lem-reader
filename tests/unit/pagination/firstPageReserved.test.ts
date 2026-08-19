@@ -219,11 +219,15 @@ describe("paginateDocument — firstPageReservedPx (Plan 13-04 Option A)", () =>
     expect(negative).toEqual(baseline);
   });
 
-  it("ATOMIC first block that exceeds the reserved budget but fits the full page still places on page 1", () => {
+  it("ATOMIC first block that exceeds the reserved budget yields the honest typed fallback (no empty page 1)", () => {
     // Heading (atomic per classifyBlock): 120px on a 200px page with a 100px
-    // reserve → exceeds the 100px reserved budget, fits the full page.
-    // Without the soft-budget escape, Case B's flushPage() on the EMPTY
-    // first page throws zero-progress → dom-fallback (the collapse class).
+    // reserve → exceeds the 100px reserved budget. Placing it anyway would
+    // overflow the physical space and force the post-render guard into an
+    // empty-first-page correction (anchor poison) — instead the engine
+    // emits the clean typed fallback (Case B's zero-progress guard), the
+    // calm scrolling path. This path is unreachable for the corpus (the
+    // compact metadata spot keeps every first block within budget); it
+    // locks the degenerate-reserve behavior.
     const article = parseArticle([
       { kind: "heading", level: 2, content: [{ text: "A tall opening heading" }] },
       ...TEXTS.slice(0, 2).map(para),
@@ -242,14 +246,22 @@ describe("paginateDocument — firstPageReservedPx (Plan 13-04 Option A)", () =>
         lineBoxes: uniformLineBoxes(t.length, 5),
       })),
     ]);
-    const result = run(article, measurement, 200, 100);
-    expect(result.status).toBe("ok");
-    expect(result.pages[0]!.blocks[0]!.blockIndex).toBe(0);
-    expect(result.pages[0]!.blocks[0]!.startGrapheme).toBe(0);
-    expect(result.pages[0]!.blocks[0]!.endGrapheme).toBe(
-      blockGraphemeLength(article.blocks[0]!),
-    );
-    assertExactOnceCoverage(article, result);
+    const bus = new DiagnosticBus();
+    const fallbackEvents: number[] = [];
+    bus.subscribe((e) => {
+      if (e.kind === "dom-fallback") fallbackEvents.push(1);
+    });
+    const result = paginateDocument({
+      article,
+      measurement,
+      pageContentBoxHeightPx: 200,
+      firstPageReservedPx: 100,
+      diagnostics: bus,
+      signal: new AbortController().signal,
+    });
+    expect(result.status).toBe("fallback");
+    expect(result.pages).toHaveLength(0);
+    expect(fallbackEvents).toHaveLength(1);
   });
 
   it("SPLITTING first block with no widow-legal reserved-budget split retries at the full page height", () => {
