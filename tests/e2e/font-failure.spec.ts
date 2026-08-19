@@ -107,9 +107,22 @@ test.describe("ACPT-03 font-failure (D6-11)", () => {
     await page.evaluate(() => document.fonts.ready);
 
     // PAGE-06 last-valid-view: h1 + first paragraph stay visible (no blank
-    // flash while the font gate settles).
+    // flash while the font gate settles). Plan 13-06 repair: the 13-04 slim
+    // header moved the byline out of <header> into the article-top metadata
+    // spot, so the first bare `article p` now resolves to the aria-hidden
+    // .article-body-measurement clone (hidden → toBeVisible can never pass).
+    // Assert the VISIBLE reading surface's paragraph instead — the
+    // corpus-authoritative ordered-union shape (the live .page-fragment in
+    // paginated mode, the live .article-body in scrolling mode), never the
+    // measurement clone. The PAGE-06 intent (content readable, no blank
+    // flash) is unchanged.
+    const visibleParagraph = page
+      .locator(
+        ".page-fragment p, .article-body p:not(.article-body-measurement p)",
+      )
+      .first();
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-    await expect(page.locator("article p").first()).toBeVisible();
+    await expect(visibleParagraph).toBeVisible();
 
     // Shared D6-09 invariant holds under font block (content + functions +
     // no overflow in both reading modes).
@@ -145,9 +158,17 @@ test.describe("ACPT-03 font-failure (D6-11)", () => {
     // PAGE-06 last-valid-view: content is visible DURING the delay (before
     // document.fonts.ready resolves + the engine commits). The scrolling
     // ArticleBody renders immediately on mount; the paginated surface mounts
-    // after the first trusted commit. Either way, no blank flash.
+    // after the first trusted commit. Either way, no blank flash. Plan 13-06
+    // repair: assert the VISIBLE reading surface's paragraph (the 13-04 slim
+    // header moved the byline out of <header>, so the first bare `article p`
+    // is now the aria-hidden measurement clone — see the BLOCK cell above).
+    const visibleParagraph = page
+      .locator(
+        ".page-fragment p, .article-body p:not(.article-body-measurement p)",
+      )
+      .first();
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-    await expect(page.locator("article p").first()).toBeVisible();
+    await expect(visibleParagraph).toBeVisible();
 
     // __lemLastTrustedConstraints UPDATES after fonts.ready resolves (the
     // re-commit). The engine awaits document.fonts.ready (D3-06); the delayed
