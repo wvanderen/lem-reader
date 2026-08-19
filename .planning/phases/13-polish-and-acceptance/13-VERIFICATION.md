@@ -1,10 +1,16 @@
 ---
 phase: 13-polish-and-acceptance
 verified: 2026-08-19T16:25:00Z
-status: human_needed
+status: gaps_found
 score: 7/8 must-haves verified
 behavior_unverified: 0 # every code-level behavior-dependent truth had behavioral evidence (independent full-suite run + named unit specs)
 overrides_applied: 0
+gaps:
+  - "G1: Add-a-Page section breaks library width measure (POLISH-06)"
+  - "G2: No way to remove a queued upload file; state persists after upload until refresh"
+  - "G3: Emoji trash icon in LibraryRow.tsx:125 — icon policy violation (no emoji icons)"
+  - "G4: First-load jump in paginated mode — scrolling surface + progress flash before pagination settles"
+  - "G5: Article-top metadata spot design rejected; tag entry should move to a top-bar icon near highlights/mode controls (partially supersedes D13-13/Option A placement)"
 human_verification:
   - test: "Run the ACPT-05 NVDA+Firefox acceptance protocol (Appendix §1 runbook) on Windows hardware: docs/ACCEPTANCE-PROTOCOL.md v1.0 as-documented — six scripted flows A–F + five exploratory charters 1–5, outcomes recorded as role + accessible name + state"
     expected: "Zero blocker and zero major findings (D6-07). Record results in Appendix §1.3 findings + §1.4 checklist + verdict; ACPT-05 flips from Pending only then (D13-07). Blocker/major findings follow fix-then-re-run (D13-06); minors are recorded and deferred."
@@ -37,6 +43,20 @@ human_verification:
 | 8 | SC#8 (POLISH-06): organized library home — continue reading / add content / library list within existing components | ✓ VERIFIED | `LibraryView.tsx`: header row (L207) + three ordered sections (continue L229 → add L236 → list L255); byte-stable anchors preserved (`main#main` L199, h1 "Saved articles" L209, `.status` live region L238, `ul.library-list` L268). Behavioral: library-tidy 6/6 cells + 81 library regression cells green in verifier's run |
 
 **Score:** 7/8 truths verified (1 pending user run — ACPT-05)
+
+## Gaps Found — Human Review (2026-08-19)
+
+The user manually reviewed the shipped phase-13 surface BEFORE running the UAT and rejected five items as phase-13 scope not acceptably addressed. These gaps BLOCK phase completion (gap-closure cycle required: `/gsd-plan-phase 13 --gaps`). Full detail in 13-UAT.md § Gaps.
+
+| # | Gap | Against | Root finding |
+|---|-----|---------|--------------|
+| G1 | Add-a-Page section spans edge-to-edge instead of the shared content measure/inset | POLISH-06 (13-03 library tidy) | Width tokens not applied to the add-page section; visually out of place |
+| G2 | Queued upload file cannot be removed — even after upload completes, until page refresh | Upload control (v2.0 intake) | No clear/remove affordance; file-input state not reset post-upload (09-05 reset precedent exists) |
+| G3 | 🗑 emoji used as the library remove icon | Icon policy (D13-12 chrome polish) | `LibraryRow.tsx:125` — repo grep confirms it is the only emoji-as-icon in src/; replace with SVG icon |
+| G4 | First-load jump in paginated mode: scrolling surface + its progress paint first, then swap to paginated | POLISH-01/02 territory (13-01/13-02 killed the settings-token flash, not the mode-surface flash) | Scroll-then-paginate swap visible on every paginated first load; scrolling mode is stable. User bar: zero jumping |
+| G5 | Tag-adding section below the article title rejected; metadata spot design called unacceptable | POLISH-03 (D13-13, 13-04 Option A) | User direction: tag affordance as a small icon in the top bar NEAR the highlights-drawer + mode-toggle controls, not inline with the title. Partially supersedes the Option A placement decision (user-direction change; byline/source/export disposition decided in planning). Must not regress 09-07 geometry or firstPageReservedPx contracts |
+
+Automated truths 1–8 above remain evidence-backed, but G1/G4/G5 mean POLISH-06, POLISH-01/02 (mode-surface aspect), and POLISH-03 do NOT meet the user's acceptance bar despite the green specs — the specs encode a weaker contract than the user's intent. Gap plans must strengthen the specs to the user bar, not just the implementation.
 
 ### Required Artifacts
 

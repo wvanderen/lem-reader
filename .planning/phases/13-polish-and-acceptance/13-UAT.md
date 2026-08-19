@@ -31,9 +31,41 @@ result: [pending]
 
 total: 2
 passed: 0
-issues: 0
+issues: 5
 pending: 2
 skipped: 0
 blocked: 0
 
 ## Gaps
+
+User manual review 2026-08-19 (post-execution, before UAT run) — five findings against phase-13 scope. Gap closure required before phase completion.
+
+### G1 — Add-a-Page section breaks library width measure
+status: failed
+source: user review; POLISH-06 (library tidy, 13-03)
+detail: The "Add a Page" section on the library/home spans edge-to-edge full width instead of conforming to the shared content measure/inset tokens used by the surrounding sections. Looks out of place.
+expected: Add-a-Page conforms to the same width/inset tokens as sibling library sections.
+
+### G2 — No way to remove a queued upload file
+status: failed
+source: user review
+detail: In "Upload a File", once a file is queued/picked there is no affordance to remove it — even after the upload completes the queued file persists until page refresh.
+expected: A remove/clear affordance for the queued pick, and the file-input state resets after a completed upload. Precedent: 09-05 import file-input value reset on refusals AND Proceed/Cancel.
+
+### G3 — Emoji trash icon in library rows
+status: failed
+source: user review
+detail: LibraryRow.tsx:125 renders the 🗑 emoji as the remove icon. Policy: real icons (SVG), no emoji icons. (Repo grep confirms this is the only emoji icon in src/.)
+expected: Replace with a proper SVG/icon glyph; sweep confirms zero emoji-as-icon usage in the UI.
+
+### G4 — First-load jump in paginated mode (scroll surface + progress flashes first)
+status: failed
+source: user review; POLISH-01/02 territory (13-01/13-02 killed the settings-token flash but not the mode-surface flash)
+detail: Opening an article in paginated mode first shows the scrolling surface and its progress, then swaps to the paginated surface — visible jump on every first load. Scrolling mode has no jump.
+expected: Zero jumping on first load in paginated mode — the first stable paint is the paginated surface (or a stable placeholder until pagination settles), never scroll-then-swap.
+
+### G5 — Article-top metadata spot design + tag entry placement
+status: failed
+source: user review; POLISH-03 (D13-13 metadata spot, 13-04 Option A)
+detail: User rejects the tag-adding section below the article title: proposes the tag affordance as a small icon in the top bar NEAR the highlights-drawer and mode-toggle controls instead of inline with the title. The metadata section's visual design is also called unacceptable as-is. Partially supersedes the 13-04 Option A placement decision (user-direction change; byline/source/export disposition to be decided in planning).
+expected: Tag entry reachable via top-bar icon alongside highlights/mode controls; metadata spot visually redesigned or restructured per plan; no regression to the 09-07 geometry lesson or the firstPageReservedPx contracts.
