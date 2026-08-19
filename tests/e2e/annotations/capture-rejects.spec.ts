@@ -20,6 +20,9 @@ import {
   openArticle,
   selectRangeInBlock,
   findFirstBlockWithText,
+  totalPages,
+  turnToPage,
+  currentPageIdx,
 } from "./_fixtures";
 
 const FIXTURE = FIXTURES[0]!; // essay-long-form
@@ -33,6 +36,38 @@ test.describe("ANNO-01 capture rejects (D5-06 + D5-13) — 05-05", () => {
     page,
   }) => {
     await openArticle(page, FIXTURE);
+    // Plan 13-06 repair: under the Option A page-1 budget (viewport − the
+    // metadata spot's reserve), essay page 1 carries a single long paragraph
+    // — two CONSECUTIVE text blocks live on a later page. Walk pages until
+    // the visible fragment carries such a pair (the D13-09 walk-pages
+    // precedent), then span the selection across them. The D5-06 contract
+    // (multi-block selection → hint, no action buttons, H is a no-op) is
+    // unchanged.
+    const total = await totalPages(page);
+    let spannedPage = -1;
+    for (let target = await currentPageIdx(page); target < total; target++) {
+      await turnToPage(page, target);
+      const hasPair = await page.evaluate(() => {
+        const blocks = Array.from(
+          document.querySelectorAll(
+            '.page-fragment [data-block-index], .article-body:not(.article-body-measurement) [data-block-index]',
+          ),
+        ).filter((el) => !el.closest(".article-body-measurement"));
+        for (let i = 0; i + 1 < blocks.length; i++) {
+          const a = blocks[i]!;
+          const b = blocks[i + 1]!;
+          if ((a.textContent?.length ?? 0) < 4) continue;
+          if ((b.textContent?.length ?? 0) < 4) continue;
+          return true;
+        }
+        return false;
+      });
+      if (hasPair) {
+        spannedPage = target;
+        break;
+      }
+    }
+    expect(spannedPage, "some page must carry two consecutive text blocks").toBeGreaterThanOrEqual(0);
     // Find two adjacent visible blocks + span a selection across them.
     const spanned = await page.evaluate(() => {
       const blocks = Array.from(
