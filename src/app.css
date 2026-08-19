@@ -667,7 +667,13 @@ dialog.settings-panel::backdrop {
    destructive button border uses --destructive (UI-SPEC §Copywriting line
    330 + forced-colors contrast contract). */
 dialog.wipe-confirm {
-  margin: 0;
+  /* margin:auto restores the UA dialog:modal margin-auto centering (WHATWG
+     HTML Rendering §15.3.3 — an author margin:0 defeats it and pins the
+     over-constrained fixed box to the start edges, i.e. top-left in LTR).
+     Plan 13-03 (POLISH-04 / D13-14). The side sheets (settings-panel above,
+     annotations-drawer below) keep margin:0 ON PURPOSE — they anchor to the
+     inline end, do not blanket-fix. */
+  margin: auto;
   padding: 0;
   border: 1px solid var(--hairline);
   border-radius: 8px;
@@ -675,8 +681,6 @@ dialog.wipe-confirm {
   color: var(--ink);
   width: calc(100vw - var(--space-xl));
   max-width: 480px;
-  /* Centered alertdialog (not a sheet) — vertically centered via auto margin
-     under the top-layer positioning the user agent provides for <dialog>. */
   overflow: auto;
 }
 dialog.wipe-confirm::backdrop {
@@ -1473,7 +1477,11 @@ mark.highlight.unresolved {
 /* Cosmetic geometry. Applies in both states but is invisible when closed
    because the UA stylesheet hides dialog:not([open]) with display:none. */
 dialog.highlight-popover {
-  margin: 0;
+  /* margin:auto restores the UA dialog:modal margin-auto centering (WHATWG
+     HTML Rendering §15.3.3 — the prior author margin:0 defeated it and
+     pinned the note editor to the top-left corner; Plan 13-03 POLISH-04 /
+     D13-14 — the reported visual bug). */
+  margin: auto;
   padding: var(--space-lg);
   border: 1px solid var(--hairline);
   border-radius: 8px;
@@ -2028,7 +2036,9 @@ dialog.annotations-drawer::backdrop {
    ::backdrop, destructive button border in --destructive, cancel button
    carries [data-initial-focus] (Pitfall 8 — non-destructive default focus). */
 dialog.library-remove-confirm {
-  margin: 0;
+  /* margin:auto restores the UA dialog:modal centering (D13-14 — same
+     root cause as the wipe-confirm fix; Plan 13-03 POLISH-04). */
+  margin: auto;
   padding: 0;
   border: 1px solid var(--hairline);
   border-radius: 8px;
@@ -2238,7 +2248,9 @@ li + li .drawer-entry {
 
 /* ── ImportPreviewDialog alertdialog (import confirm gate) ──────────────── */
 dialog.import-preview {
-  margin: 0;
+  /* margin:auto restores the UA dialog:modal centering (D13-14 — same
+     root cause as the wipe-confirm fix; Plan 13-03 POLISH-04). */
+  margin: auto;
   padding: 0;
   border: 1px solid var(--hairline);
   border-radius: 8px;
