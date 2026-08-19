@@ -3,6 +3,19 @@ import { defineConfig, devices } from "@playwright/test";
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: true,
+  // 13-10 honest-gate repair (the 09-07 starvation class, converged): the
+  // default worker count (cores/2 = 5 on the 10-core reference machine)
+  // oversubscribes the CPU under ordinary multi-user load (observed load
+  // avg 6–10), and late-suite webkit contexts starved on the single Vite
+  // dev server's module fetches — page.goto exceeded the 30s test budget
+  // on a DIFFERENT moving set of tail specs each full-suite run (two runs,
+  // 5 webkit goto-timeouts each, zero code-level failures). Per-spec
+  // budget raises cannot converge against a moving target; the scheduling
+  // cap removes the oversubscription at the source. The perf harness's
+  // ACPT-04 ceilings are UPPER bounds — reduced contention keeps them
+  // green (never tighter). Assertions, engines, and spec selection are
+  // byte-unchanged; only concurrency drops (≈7m → ≈10m full suite).
+  workers: 3,
   use: { trace: "on-first-retry" },
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
