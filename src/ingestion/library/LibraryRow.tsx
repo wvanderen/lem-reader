@@ -14,7 +14,8 @@
 //   - `<p class="meta finished-mark">● Finished</p>` (D8-12 — only when ratio >= 0.98)
 //   - `<ul class="library-row-tags">` of display-only `<span>` chips (D8-05)
 //   - `<button class="library-row-remove">` (only when onRemove is provided —
-//     Plan 04 wires it; default is no remove button in Plan 03)
+//     Plan 04 wires it; default is no remove button in Plan 03; the glyph is
+//     the inline-SVG TrashIcon below per the Phase 13 G3 icon policy)
 //
 // `ratio` is `Math.min(1, location.graphemeOffset / total)` where
 // `total = graphemeClusters(normalizeText(article), article.lang).length`
@@ -114,7 +115,11 @@ export function LibraryRow({
         <a href={`#/article/${id}`} aria-labelledby={`title-${id}`}>
           Open article
         </a>
-        {/* Remove affordance — only when onRemove is wired (Plan 04) */}
+        {/* Remove affordance — only when onRemove is wired (Plan 04). The
+            glyph is the inline-SVG waste-bin below (Phase 13 G3 — real icon,
+            not an emoji character); aria-label carries the accessible name
+            and locates this button for the remove-cascade + dialog-centering
+            specs, so its template stays byte-stable. */}
         {onRemove && (
           <button
             type="button"
@@ -122,10 +127,44 @@ export function LibraryRow({
             aria-label={`Remove ${article.provenance.title} from library`}
             onClick={onRemove}
           >
-            <span aria-hidden="true">🗑</span>
+            <TrashIcon aria-hidden="true" />
           </button>
         )}
       </article>
     </li>
+  );
+}
+
+/**
+ * Phase 13 Plan 13-07 (G3 — icon policy / D13-12 chrome polish) — waste-bin
+ * glyph for the row remove affordance. Mirrors the GearIcon/HighlighterIcon
+ * anatomy exactly (20×20, 24-unit viewBox, currentColor stroke, round
+ * caps/joins, aria-hidden + focusable=false): decorative, so the button's
+ * aria-label carries the full accessible name.
+ */
+function TrashIcon({ ariaHidden }: { ariaHidden?: "true" }) {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden={ariaHidden}
+      focusable="false"
+    >
+      {/* lid */}
+      <path d="M3 6h18" />
+      {/* handle */}
+      <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      {/* body */}
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+      {/* inner lines */}
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+    </svg>
   );
 }

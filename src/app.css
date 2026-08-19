@@ -1809,6 +1809,28 @@ dialog.annotations-drawer::backdrop {
   min-width: var(--touch);
   line-height: var(--touch);
 }
+/* G3 (Phase 13 user review) — quiet destructive icon button for the row
+   remove affordance, mirroring the × chip-remove discipline: transparent
+   rest state, 44px touch box, --ink-soft at rest, --destructive on hover
+   so consequence is conveyed beyond the accessible name (forced-colors
+   safe: shape + name carry the meaning). Zero motion properties. */
+.library-row-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--touch);
+  min-width: var(--touch);
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.library-row-remove:hover {
+  color: var(--destructive);
+  border-color: var(--destructive);
+}
 
 /* SourceBadge — .meta typography; no border, no fill (UI-SPEC §SourceBadge).
    The link variant inherits the global `a { color: var(--accent) }` rule. */
