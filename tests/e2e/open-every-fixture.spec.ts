@@ -12,6 +12,8 @@
 // resource-load noise.
 import { test, expect } from "@playwright/test";
 import { fixtures } from "../../src/fixtures";
+import { DEFAULT_SETTINGS } from "../../src/settings/defaults";
+import { seedRows, prepareFreshPage } from "./portability/_portability";
 
 const BASE = "http://localhost:5173";
 // Pure-string SVG stub so remote <img> elements (figure-heavy's Wikimedia
@@ -76,7 +78,37 @@ test("fixture list exposes one row per curated fixture (DOC-01)", async ({ page 
 // three matching footnote bodies (per 01-03 SUMMARY). Scoped to figure-heavy
 // (outside the per-fixture loop). Image stubbing from the top-level
 // beforeEach still applies (figure-heavy loads remote Wikimedia images).
+//
+// Plan 13-09 (G4): the round-trip is a scrolling-flow interaction — native
+// fragment scrolling to the footnote body and back. Before G4 it ran under
+// the paginated default but only worked by clicking the marker inside the
+// pre-settle scrolling window, the exact first-paint surface this plan
+// removed (in settled paginated mode the DOM-first marker lives inside the
+// hidden measurement clone and footnote bodies sit on other pages). Pinned
+// to scrolling mode via persisted settings in BOTH truths (Dexie row +
+// settings mirror — the cold-load-no-snap SC#1 seeding discipline) with an
+// about:blank hop so the seeded row hydrates on a true cold load. The
+// default-mode first-paint surface now has its own dedicated contract in
+// polish/first-paint-mode-surface.spec.ts.
 test("footnote round-trip stays in-article (figure-heavy, Gap 3)", async ({ page }) => {
+  const SCROLLING = { ...DEFAULT_SETTINGS, readingMode: "scrolling" as const };
+  // prepareFreshPage waits for the app to mount BEFORE clearing/seeding —
+  // seeding concurrent with Dexie's first open/upgrade loses the write on
+  // webkit (observed: hydration read no row and self-corrected the mirror
+  // back to the paginated default). The cold-load-no-snap discipline.
+  await prepareFreshPage(page);
+  await seedRows(page, { settings: [{ key: "reader-prefs", value: SCROLLING }] });
+  await page.addInitScript(
+    (seed) => {
+      try {
+        localStorage.setItem("lem-settings-mirror-v1", seed);
+      } catch {
+        /* best-effort (about:blank hop) */
+      }
+    },
+    JSON.stringify(SCROLLING),
+  );
+  await page.goto("about:blank");
   await page.goto(`${BASE}/#/article/figure-heavy`);
   const articleH1 = page.getByRole("heading", { level: 1, name: "Hummingbird" });
   await expect(articleH1).toBeVisible();
