@@ -98,15 +98,20 @@ test.describe("header geometry (13-04 — POLISH-03 / D13-13)", () => {
   }) => {
     await openPaginatedAtSmallPhone(page);
 
-    // (a) Render-once: exactly ONE metadata spot; exactly ONE TagEntry —
-    //     and it lives in the TOP-BAR POPOVER (Plan 13-10 G5), never inside
-    //     the spot and never in the pinned header (CSS locators match the
-    //     closed popover's DOM; role/visibility queries would not).
+    // (a) Render-once: exactly ONE metadata spot — the compact provenance
+    //     block with ZERO button descendants (strengthened — the old
+    //     contract allowed the actions row). Exactly ONE TagEntry — and it
+    //     lives in the TOP-BAR POPOVER (Plan 13-10 G5), never inside the
+    //     spot and never in the pinned header (CSS locators match the
+    //     closed popover's DOM; role/visibility queries would not). The
+    //     Export button lives in the annotations drawer — exactly one,
+    //     counted css-scoped for the same closed-dialog reason.
     expect(await page.locator(".article-top-meta").count()).toBe(1);
+    expect(await page.locator(".article-top-meta button").count()).toBe(0);
     expect(await page.locator(".article-top-meta .tag-entry").count()).toBe(0);
     expect(await page.locator(".tag-entry").count()).toBe(1);
     expect(
-      await page.getByRole("button", { name: "Export highlights" }).count(),
+      await page.locator(".annotations-drawer .annotations-drawer-export").count(),
     ).toBe(1);
 
     // (b) Option A geometry: spot + page-1 content coexist inside

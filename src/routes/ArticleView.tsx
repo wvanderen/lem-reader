@@ -1535,25 +1535,25 @@ export function ArticleView({
   // paginated first load).
   const paginatedPending = isPaginated && !paginatedActive;
 
-  // Plan 13-04 (POLISH-03 / D13-13) — the article-top metadata spot: byline,
-  // source link, book-context line, TagEntry, and the per-article
-  // Export-highlights button, moved OUT of the pinned per-page header into
-  // an ArticleView-owned block rendered EXACTLY ONCE in the DOM (the
-  // scrolling branch mounts it directly; the paginated branch hands it to
-  // PaginatedSurface via articleStartChrome, which shows it only on page
-  // 1). The pinned header keeps only BackToLibrary + the h1 title.
-  // Placement contract:
+  // Plan 13-10 (G5 — the recorded user-direction change): the article-top
+  // metadata spot is a COMPACT, quiet PROVENANCE block — byline·date, the
+  // epub book-context line, and the "Originally published at {domain}"
+  // source link. NO tag controls (the tag affordance is the top-bar
+  // popover), NO Export button (the per-article export lives in the
+  // annotations drawer — a highlight-scoped action in the highlight-scoped
+  // surface). Placement contract (13-04 Option A, unchanged): render-once
+  // page-1 mount + the measured firstPageReservedPx reserve; the anatomy is
+  // now provenance-only, so the reserve is simply much smaller — a generous
+  // page-1 content budget at 360×640.
   //   - scrolling mode: ordinary flow content above the article body —
   //     scrolls away naturally.
   //   - paginated mode: mounted INSIDE .page-viewport as flow content above
   //     the fragment ONLY on the article's first page — OUTSIDE the grid
   //     header row (the page-viewport row height never oscillates between
-  //     turns; the .page-viewport box is grid-determined, so the spot
-  //     cannot fire the article ResizeObserver — no re-measure loop) and
-  //     OUTSIDE the pagination block stream (it never enters page-capacity
-  //     math directly; the engine's firstPageReservedPx budget — fed with
-  //     the once-measured spot height below — is its sanctioned seat per
-  //     the Option A human decision, 2026-08-18).
+  //     turns) and OUTSIDE the pagination block stream (the engine's
+  //     firstPageReservedPx budget — fed with the once-measured spot height
+  //     below — is its sanctioned seat per the Option A human decision,
+  //     2026-08-18).
   const articleTopMeta = (
     <div className="article-top-meta">
       {(article.provenance.author || article.provenance.publishedAt) && (
@@ -1588,25 +1588,6 @@ export function ArticleView({
           <span className="visually-hidden"> (opens in a new tab)</span>
         </a>
       )}
-      {/* Plan 13-04 (Option A geometry): the actions row (Task 1 of the G5
-          relocation has moved TagEntry to the top-bar popover; the Export
-          button remains here until Task 2 moves it into the annotations
-          drawer). Compact chrome — the spot must leave page 1 a meaningful
-          content budget at 360×640. */}
-      <div className="article-top-actions">
-        {/* Plan 09-05 (D9-06, PORT-03) — per-article highlights export.
-            INERT at mount exactly like TagEntry (Pitfall 8-5 — no
-            auto-focus, no effect-driven focus); the reader activates via
-            Tab/Click. Disabled while a download is in flight. */}
-        <button
-          type="button"
-          className="article-export-highlights"
-          onClick={handleExportHighlights}
-          disabled={exportingHighlights}
-        >
-          Export highlights
-        </button>
-      </div>
     </div>
   );
 
@@ -1734,11 +1715,11 @@ export function ArticleView({
         >
           {/* Plan 13-04 (POLISH-03 / D13-13): the pinned per-page header is
               SLIM — BackToLibrary + the title ONLY. Byline/source/book
-              context/TagEntry/Export moved to the article-top metadata spot
-              (articleTopMeta above), rendered once at article start. The
-              header row's 09-07 geometry cap stays byte-unchanged; the
-              slimmer content keeps it far under the cap (no internal
-              scrolling at 360×640). */}
+              context moved to the article-top metadata spot (13-10 G5:
+              provenance-only); tags live in the top-bar popover and export
+              in the annotations drawer. The header row's 09-07 geometry cap
+              stays byte-unchanged; the slimmer content keeps it far under
+              the cap (no internal scrolling at 360×640). */}
           <header>
             {/* Plan 13-04 (POLISH-05 / D13-15) — the standardized back
                 affordance at the article header start, BEFORE the title
@@ -1908,9 +1889,9 @@ export function ArticleView({
             </>
           ) : (
             <>
-              {/* Plan 13-04 (D13-13): in scrolling mode the metadata spot is
+              {/* Plan 13-10 (G5): in scrolling mode the metadata spot is
                   ordinary flow content above the article body — byline,
-                  source, book context, TagEntry, Export — scrolling away
+                  source, book context (provenance-only) — scrolling away
                   naturally with the article (rendered once, never pinned). */}
               {articleTopMeta}
               {/* Plan 12-06 (D12-05): Previous chapter at chapter START —
@@ -2018,6 +1999,8 @@ export function ArticleView({
             const api = highlightApiRef.current;
             if (api) api.setOpenPopoverFor(id);
           }}
+          onExportHighlights={handleExportHighlights}
+          exportingHighlights={exportingHighlights}
         />
         </HighlightOverlayProvider>
       </main>

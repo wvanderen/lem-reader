@@ -95,6 +95,19 @@ test.describe("PORT-03 — highlights Markdown export content", () => {
     await seedExportLibrary(page);
 
     await page.goto(`${BASE}/#/article/${EXPORT_ARTICLE.id}`);
+    // Plan 13-10 (G5): the per-article Export button now lives INSIDE the
+    // annotations drawer (a showModal dialog). A closed dialog's subtree is
+    // display:none — excluded from role/visibility queries — so open the
+    // drawer via the header trigger BEFORE locating the button (the
+    // count-suffix-tolerant /^Highlights and notes/ regex shape from
+    // annotations/_fixtures.ts drawerTrigger, inlined — this suite does not
+    // import that helper).
+    await page
+      .getByRole("button", { name: /^Highlights and notes/ })
+      .click();
+    await expect(page.locator("dialog.annotations-drawer")).toBeVisible({
+      timeout: 15_000,
+    });
     const exportButton = page.getByRole("button", { name: "Export highlights" });
     await expect(exportButton).toBeVisible({ timeout: 15_000 });
 

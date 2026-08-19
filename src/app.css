@@ -3081,25 +3081,19 @@ dialog.book-remove-confirm::backdrop {
   }
 }
 
-/* Plan 13-04 (POLISH-03 / D13-13 + Option A) — the article-top metadata
- * spot: byline, source link, book-context line, TagEntry, and the
- * per-article export button, rendered EXACTLY ONCE at article start
- * (ArticleView-owned). In scrolling mode it is ordinary flow content above
- * the article body; in paginated mode it mounts inside .page-viewport only
- * on the article's first page — never in the grid header row, never in the
- * pagination block stream (the engine's firstPageReservedPx budget, fed by
- * the once-measured margin-box height below, is its sanctioned seat).
- *
- * COMPACT BY DESIGN (Option A geometry lesson): a stacked spot measured
- * ~86% of the 360×640 page viewport (293–322px of ~370px) and starved page
- * 1 past any honest engine budget — the corpus fell back to scrolling. The
- * compact column (meta lines, then ONE actions row with TagEntry + Export
- * side by side, no-wrap flexible tag input) keeps the spot ≈150px at
- * desktop and ≈160–190px at 360px, leaving every corpus fixture's first
- * block a legal page-1 placement. TagEntry itself is byte-untouched — all
- * compaction lives on the spot's own wrappers. The hairline separates the
- * spot from the reading surface. Tokens only; zero motion properties by
- * design (A11Y-06 discipline). */
+/* Plan 13-10 (G5 — the recorded user-direction change): the article-top
+ * spot is a COMPACT, QUIET PROVENANCE block — byline·date, the epub
+ * book-context line, the source link. Rendered EXACTLY ONCE at article
+ * start (ArticleView-owned); scrolling mode keeps it ordinary flow content
+ * above the body, paginated mode mounts it inside .page-viewport only on
+ * the article's first page (the engine's firstPageReservedPx budget, fed by
+ * the once-measured margin-box height, is its sanctioned seat — 13-04
+ * Option A, unchanged). NO tag controls (the top-bar popover owns tags),
+ * NO Export button (the annotations drawer owns it), no card chrome — just
+ * these quiet lines and the hairline separating them from the reading
+ * surface. The much smaller reserve restores a generous page-1 content
+ * budget at 360×640 (the 09-07 geometry lesson holds). Tokens only; zero
+ * motion properties by design (A11Y-06 discipline). */
 .article-top-meta {
   display: flex;
   flex-direction: column;
@@ -3111,48 +3105,6 @@ dialog.book-remove-confirm::backdrop {
 .article-top-meta .meta,
 .article-top-meta > a {
   margin-block: 0;
-}
-.article-top-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: stretch;
-  gap: var(--space-xs);
-}
-/* The fieldset flexes to the row's remaining width; the never-wrapping
-   add-row keeps the input + Add-tag button on ONE line at 360px (the
-   stacked row was the single largest chunk of the starved-page-1 spot).
-   44px touch targets are preserved via the components' own min-heights.
-   Post-merge repair (human-sanctioned 2026-08-19): min-width 0 lets the
-   fieldset shrink below its intrinsic min-content — firefox refuses to
-   flex-shrink fieldsets under min-content (the never-wrapping add-row:
-   input + Add-tag + padding = 294px), which overflowed the 288px
-   320px-viewport content box by ~10px (WCAG 1.4.10 reflow violation;
-   the .tag-entry-input inside already carries its own min-width: 0).
-   Empirical refinement (same spot, same intent): firefox sizes the
-   fieldset's internal wrapper from the input's INTRINSIC size=20 width
-   and ignores min-width/width/max-width ON THE FIELDSET for that inner
-   clamp — width 100% on the input makes its intrinsic contribution
-   definite (probed: overflow 298→288; the input still fills the row via
-   flex-grow, 191px at 320px / full row at desktop). */
-.article-top-meta .tag-entry {
-  flex: 1 1 16em;
-  min-width: 0;
-  margin-block: 0;
-  padding: var(--space-xs) var(--space-sm);
-}
-.article-top-meta .tag-entry-add-row {
-  flex-wrap: nowrap;
-  gap: var(--space-xs);
-  margin-top: var(--space-xs);
-}
-.article-top-meta .tag-entry-input {
-  flex: 1 1 auto;
-  width: 100%;
-  min-width: 0;
-}
-.article-top-actions .article-export-highlights {
-  flex: 0 0 auto;
-  align-self: flex-start;
 }
 /* Mechanism note (Option A): PaginatedSurface sets the PAGE-1 fragment's
  * inline flow height to calc(100% - firstPageReservedPx) — the same

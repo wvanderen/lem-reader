@@ -52,6 +52,18 @@ export interface AnnotationsDrawerProps {
    * note, or directly for the popover's own Delete confirm).
    */
   onEditNote: (highlightId: string) => void;
+  /**
+   * Plan 13-10 (G5): export this article's highlights — the per-article
+   * PORT-03 action relocated INTO the drawer (highlight-scoped action in the
+   * highlight-scoped surface). ArticleView owns the handler + the
+   * visually-hidden announcement region; only the trigger moved.
+   */
+  onExportHighlights: () => void;
+  /**
+   * Plan 13-10 (G5): true while a download is in flight — disables the
+   * export button (the ArticleView state, threaded in).
+   */
+  exportingHighlights: boolean;
 }
 
 export function AnnotationsDrawer({
@@ -59,6 +71,8 @@ export function AnnotationsDrawer({
   onClose,
   onNavigate,
   onEditNote,
+  onExportHighlights,
+  exportingHighlights,
 }: AnnotationsDrawerProps): React.ReactElement {
   const ref = useRef<HTMLDialogElement>(null);
   // Capture the trigger (the annotations-trigger button in the header) on open
@@ -129,6 +143,20 @@ export function AnnotationsDrawer({
               </span>
             )}
           </h2>
+          {/* Plan 13-10 (G5) — the relocated per-article Export button
+              (09-05 D9-06/PORT-03). Reuses the generic .article-export-
+              highlights quiet-button tokens; .annotations-drawer-export is
+              the drawer-scoped hook. Disabled while a download is in
+              flight; the result announces through ArticleView's
+              visually-hidden live region (the handler stays there). */}
+          <button
+            type="button"
+            className="article-export-highlights annotations-drawer-export"
+            onClick={onExportHighlights}
+            disabled={exportingHighlights}
+          >
+            Export highlights
+          </button>
           <button
             type="button"
             className="annotations-drawer-close"
