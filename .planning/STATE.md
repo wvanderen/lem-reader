@@ -6,14 +6,14 @@ current_phase: 13
 current_phase_name: polish-and-acceptance
 status: executing
 stopped_at: Completed 13-03-PLAN.md
-last_updated: "2026-08-19T02:15:14.821Z"
+last_updated: "2026-08-19T02:24:17.925Z"
 last_activity: 2026-08-19
 last_activity_desc: Phase 13 execution started
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 46
-  completed_plans: 42
+  completed_plans: 44
   percent: 86
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 ## Current Position
 
 Phase: 13 (polish-and-acceptance) — EXECUTING
-Plan: 4 of 6
+Plan: 5 of 6
 Status: Ready to execute
 Last activity: 2026-08-19 — Phase 13 execution started
 
@@ -144,6 +144,7 @@ Progress: [████████████████████] 32/32 p
 | Phase 13 P01 | 16 min | 3 tasks | 6 files |
 | Phase 13 P02 | 7 min | 3 tasks | 5 files |
 | Phase 13 P03 | 12 min | 2 tasks | 4 files |
+| Phase 13 P05 | 3 min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -329,6 +330,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 13]: 13-02: paginatedProgressRatio = pageStartGlobalOffset / graphemeLength clamped [0,1] (POLISH-02) — the D8-11 LibraryRow ratio transplanted to the paginated hairline; composes ONLY the two shipped helpers (REUSE-DO-NOT-FORK, no new offset walk) — Old N/M semantics read 100% on a one-page open and 50% at page 1 of 2 — offset anchoring matches actual text position and the D-05 restore coordinates
 - [Phase ?]: 13-03: margin:auto on the four centered modals restores WHATWG §15.3.3 UA dialog:modal centering — CSS-only, zero JS positioning; side sheets keep intentional margin:0 inline-end anchoring
 - [Phase ?]: 13-03: LibraryView tidy is structure-only — header row (h1 + Review button) then three unlabeled sections (continue → add+status → list); margin-collapsing wrappers keep one --space-xl rhythm
+- [Phase 13]: [Phase 13]: 13-05: ACPT-05 instrument ships now / requirement closes at proof (D13-07) — 13-VERIFICATION.md carries the NVDA runbook + empty findings sheets + the in-file flip condition (zero blocker/major at results-land, fix-then-re-run D13-06); REQUIREMENTS.md ACPT-05 deliberately stays unchecked — instrument-ships-now / requirement-closes-at-proof — the 04-02/06-04 precedent; the user runs docs/ACCEPTANCE-PROTOCOL.md v1.0 as-documented (D13-04) on Windows hardware on their own schedule
+- [Phase 13]: [Phase 13]: 13-05 D13-11 gap closure: withPdfDocument 30s timeout firing path proven by a 3-case fake-timers spec (typed server-error rejection with exact copy, always-destroy finally, control race) — zero production changes; PDF_EXTRACTION_TIMEOUT_MS imported from server/limits.ts (its definition site; the plan's read_first pointer to src/ingestion/types.ts was a doc misdirection corrected by grep) — the 11-VERIFICATION § Acknowledged Gaps closure terms mandate test-only closure; the race was wired since 11-02 but exercised by no test
 
 ### Pending Todos
 
@@ -358,7 +361,7 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-19T02:15:14.813Z
+Last session: 2026-08-19T02:23:52.984Z
 Stopped at: Completed 13-03-PLAN.md
 Resume file: None
 
