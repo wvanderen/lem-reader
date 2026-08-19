@@ -5,15 +5,15 @@ milestone_name: Personal Library
 current_phase: 13
 current_phase_name: polish-and-acceptance
 status: executing
-stopped_at: Completed 13-01-PLAN.md
-last_updated: "2026-08-19T01:52:18.953Z"
+stopped_at: Completed 13-02-PLAN.md
+last_updated: "2026-08-19T02:00:37.756Z"
 last_activity: 2026-08-19
 last_activity_desc: Phase 13 execution started
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 46
-  completed_plans: 41
+  completed_plans: 42
   percent: 86
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 ## Current Position
 
 Phase: 13 (polish-and-acceptance) — EXECUTING
-Plan: 2 of 6
+Plan: 3 of 6
 Status: Ready to execute
 Last activity: 2026-08-19 — Phase 13 execution started
 
@@ -142,6 +142,7 @@ Progress: [████████████████████] 32/32 p
 | Phase 12 P06 | 38 min | 3 tasks | 5 files |
 | Phase 12 P08 | 110min | 3 tasks | 13 files |
 | Phase 13 P01 | 16 min | 3 tasks | 6 files |
+| Phase 13 P02 | 7 min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -324,6 +325,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: 12-08: EPUB DTD guard calibrated to the threat — refuses only internal-subset <!ENTITY declarations (billion-laughs/entityBombOpf shape); the EPUB 3.3 spec own DOCTYPE html nav template is tolerated after the corpus proved the blanket refusal false-refused accessible_epub_3 into the fallback partition (Rule 1, 131621f) — The corpus did its declared job: proved the novel TOC-merge logic against real publisher output and caught a real false-refusal. Synthetic suites stayed green; no threshold values changed.
 - [Phase ?]: 12-08 D12-12 closed: 7 real books admitted at TOC-derived chapter counts with zero fallback fires and per-chapter anchor round-trips; evidence is CI-replay-pinned (thresholds deep-equal) so admission changes cannot silently loosen. Anchor-gate ambiguous skips (identical figure-fallback openings, Lorem repetition) are honest D12-11 disclosures, and the minimal-v2 packaging template is a manifest gap record — not a threshold-loosening excuse. — Real-corpus honesty: expected counts encode post-stage admissions with per-book derivation bases; gaps recorded (single_entry_toc verbatim, ncx_primary_toc consequence). Whole-novel allocation churn + unbounded per-chapter stage loop deferred with diagnosis (deferred-items.md).
 - [Phase 13]: 13-01: localStorage settings mirror (lem-settings-mirror-v1) + inline pre-React paint-hint script in index.html kill the cold-load settings flash (POLISH-01) — Dexie stays sole truth; on STATE-05 failure the provider keeps the mirror-painted settings (no second flash); hydrate self-correct rewrites a stale/missing mirror at first successful hydration
+- [Phase 13]: 13-02: paginatedProgressRatio = pageStartGlobalOffset / graphemeLength clamped [0,1] (POLISH-02) — the D8-11 LibraryRow ratio transplanted to the paginated hairline; composes ONLY the two shipped helpers (REUSE-DO-NOT-FORK, no new offset walk) — Old N/M semantics read 100% on a one-page open and 50% at page 1 of 2 — offset anchoring matches actual text position and the D-05 restore coordinates
 
 ### Pending Todos
 
@@ -353,8 +355,8 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-19T01:52:13.383Z
-Stopped at: Completed 13-01-PLAN.md
+Last session: 2026-08-19T02:00:30.127Z
+Stopped at: Completed 13-02-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
