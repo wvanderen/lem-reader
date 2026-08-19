@@ -39,7 +39,7 @@ Requirements for the v2.0 milestone. Each maps to a roadmap phase (traceability 
 
 ### Polish
 
-- [ ] **POLISH-01**: Reader sees the persisted reading mode on first paint with no flash or snap to a different mode.
+- [x] **POLISH-01**: Reader sees the persisted reading mode on first paint with no flash or snap to a different mode.
 - [ ] **POLISH-02**: Reader sees progress-bar semantics that reflect actual position (a one-page article does not show 100% on open; a multi-page article progresses from the start).
 - [ ] **POLISH-03**: Reader sees a slim article header — tags and article metadata move to a calm article-top spot rendered once (not repeated per paginated page), and the header no longer scrolls internally at reference viewports (360×640). *(Added at Phase 13 planning per D13-12/D13-13.)*
 - [ ] **POLISH-04**: Reader's centered modal dialogs (note editor, wipe confirmation, library remove confirmation, import preview) open centered in the viewport instead of pinned to the top-left corner. *(Added per D13-12/D13-14.)*
@@ -122,7 +122,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PORT-02 | Phase 9 | Complete |
 | PORT-03 | Phase 9 | Complete |
 | RECV-01 | Phase 10 | Complete |
-| POLISH-01 | Phase 13 | Pending |
+| POLISH-01 | Phase 13 | Complete |
 | POLISH-02 | Phase 13 | Pending |
 | POLISH-03 | Phase 13 | Pending |
 | POLISH-04 | Phase 13 | Pending |

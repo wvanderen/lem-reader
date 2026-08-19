@@ -143,6 +143,10 @@ None — no external service configuration required.
 - POLISH-01 closed; the mirror seam + inline-script pattern is ready for 13-02 (first-paint progress) and 13-04 (chrome polish) to build on
 - Note for later plans: the hydrate self-correct seeds a missing mirror on first successful hydration (defaults) — harmless, but specs asserting a null mirror must check immediately after a wipe, before reload+hydration (the wipe e2e documents this)
 
+## Self-Check: PASSED
+
+All 4 key files exist on disk; all 5 plan commits (120a2d3, fe324a0, 760572e, 173b38b, da34676) present in git log.
+
 ---
 *Phase: 13-polish-and-acceptance*
 *Completed: 2026-08-19*

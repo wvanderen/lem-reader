@@ -284,12 +284,12 @@ Plans:
    7. Reader gets a keyboard-reachable "Back to library" affordance on article and review views that never exits the app on a deep link (POLISH-05, D13-15).
    8. Reader sees an organized library home — continue reading / add content / library list — within existing components (POLISH-06, D13-16).
 
-**Plans**: 6 plans
+**Plans**: 1/6 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 13-01-PLAN.md — POLISH-01 first-paint settings mirror: settingsMirror seam + index.html inline script + SettingsContext lazy-init + cold-load no-snap e2e
+- [x] 13-01-PLAN.md — POLISH-01 first-paint settings mirror: settingsMirror seam + index.html inline script + SettingsContext lazy-init + cold-load no-snap e2e
 - [ ] 13-02-PLAN.md — POLISH-02 offset-anchored progress: pure ratio helper + boundary tests + PaginatedSurface/ProgressHairline ratio path + first-paint-progress e2e
 - [ ] 13-03-PLAN.md — POLISH-04 + POLISH-06 chrome polish: dialog centering restoration (4 modals) + LibraryView bounded tidy
 - [ ] 13-05-PLAN.md — ACPT-05 preparation: NVDA runbook + record sheet + VO supplementary checklist + D13-11 pdf-timeout fake-timers spec
@@ -318,4 +318,4 @@ Plans:
 | 10. Annotation Review Panel | v2.0 | 6/6 | Complete    | 2026-08-16 |
 | 11. PDF Intake | v2.0 | 7/7 | Complete    | 2026-08-17 |
 | 12. EPUB Intake | v2.0 | 8/8 | Complete    | 2026-08-18 |
-| 13. Polish and Acceptance | v2.0 | 0/6 | Not started | - |
+| 13. Polish and Acceptance | v2.0 | 1/6 | In Progress|  |
