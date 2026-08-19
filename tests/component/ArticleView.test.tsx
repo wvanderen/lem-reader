@@ -41,13 +41,16 @@ function renderWithProvider(ui: React.ReactElement) {
 /** Build the required ArticleView props, including the D4-10 bridge ref +
  * Phase 5 Plan 05-03 drawer/annotation-count props + the Plan 13-04 back-
  * affordance flag (false = the "#/" fallback branch; the unit surface
- * doesn't exercise navigation). */
-function withProps(articleId: string): { articleId: string; modeToggleHandlerRef: ArticleViewProps["modeToggleHandlerRef"]; drawerOpen: boolean; onCloseDrawer: () => void; onAnnotationCountChange: (n: number) => void; hasAppHistory: boolean } {
+ * doesn't exercise navigation) + the Plan 13-10 tag-popover props (closed —
+ * the popover surface stays display:none in jsdom). */
+function withProps(articleId: string): { articleId: string; modeToggleHandlerRef: ArticleViewProps["modeToggleHandlerRef"]; drawerOpen: boolean; onCloseDrawer: () => void; tagsOpen: boolean; onCloseTags: () => void; onAnnotationCountChange: (n: number) => void; hasAppHistory: boolean } {
   return {
     articleId,
     modeToggleHandlerRef: createRef(),
     drawerOpen: false,
     onCloseDrawer: () => {},
+    tagsOpen: false,
+    onCloseTags: () => {},
     onAnnotationCountChange: () => {},
     hasAppHistory: false,
   };

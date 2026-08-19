@@ -1691,6 +1691,53 @@ dialog.highlight-popover::backdrop {
   pointer-events: none;
 }
 
+/* ── Tags trigger + tag popover (Plan 13-10 — G5) ────────────────────────────── */
+/* .tags-trigger mirrors .annotations-trigger geometry EXACTLY: 44×44 hit area,
+   transparent bg + transparent border, 4px radius, --ink-soft default,
+   --accent on hover and ONLY when [aria-expanded="true"] (the quiet-chrome
+   open-state discipline). The header does NOT grow — the four controls share
+   the same 44×44 geometry; .header-controls gap stays --space-sm. */
+.tags-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--touch);
+  min-width: var(--touch);
+  padding: var(--space-sm);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.tags-trigger:hover {
+  color: var(--accent);
+}
+.tags-trigger[aria-expanded="true"] {
+  color: var(--accent);
+}
+.tags-trigger:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+/* .tag-popover — the ArticleView-owned surface wrapping the byte-unchanged
+   TagEntry. popover="auto" puts it in the top layer (above everything — no
+   stacking-index needed) with free light-dismiss + Esc; the UA hides the
+   closed panel. Anchored visually under the header's inline-end control
+   cluster (the 48px bar). Zero motion properties by design (A11Y-06 — the
+   global reduced-motion gate stays trivially satisfied). */
+.tag-popover {
+  position: fixed;
+  top: calc(48px + var(--space-xs));
+  inset-inline-end: var(--space-md);
+  margin: 0;
+  padding: var(--space-md);
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  width: min(420px, calc(100vw - 2 * var(--space-md)));
+}
+
 /* ════════════════════════════════════════════════════════════════════════
  * Phase 5 Plan 05-03 Task 2 — Annotations drawer CSS
  *

@@ -132,9 +132,9 @@ test.describe("SC#3 + LIB-03 + LIB-04 — search + tag filter + auto-prune", () 
     await ingestPaste(page, SENECA_HTML);
     await openLibrary(page);
 
-    // Navigate to one article's ArticleView. TagEntry is mounted in the
-    // ArticleView <header> (Pitfall 8-5 — inert at mount; reader activates
-    // via Tab/Click). Add tag "stoic".
+    // Navigate to one article's ArticleView. TagEntry lives in the top-bar
+    // tag popover (Plan 13-10 G5; Pitfall 8-5 — inert at mount; reader
+    // activates via Tab/Click). Add tag "stoic".
     const platoRow = page
       .locator(".library-list > li")
       .filter({ hasText: "Plato Essay" });
@@ -144,6 +144,11 @@ test.describe("SC#3 + LIB-03 + LIB-04 — search + tag filter + auto-prune", () 
       page.getByRole("heading", { level: 1, name: "Plato Essay" }).first(),
     ).toBeVisible({ timeout: 10_000 });
 
+    // Tag picker (Plan 13-10 — G5): TagEntry lives in the top-bar tag
+    // popover now, so open it via the header trigger first (the closed
+    // popover is display:none — the input is unreachable until shown).
+    await page.getByRole("button", { name: "Article tags" }).click();
+    await expect(page.locator(".tag-popover")).toBeVisible();
     // TagEntry: focus input, type "stoic", press Enter (or click Add tag).
     const tagInput = page.locator("input#tag-entry-new");
     await tagInput.fill("stoic");
@@ -198,7 +203,8 @@ test.describe("SC#3 + LIB-03 + LIB-04 — search + tag filter + auto-prune", () 
     await ingestPaste(page, MARCUS_HTML);
     await openLibrary(page);
 
-    // Add "stoic" to the Plato article.
+    // Add "stoic" to the Plato article (open the tag popover first — Plan
+    // 13-10 G5: TagEntry lives in the top-bar popover).
     const platoRow = page
       .locator(".library-list > li")
       .filter({ hasText: "Plato Essay" });
@@ -207,6 +213,8 @@ test.describe("SC#3 + LIB-03 + LIB-04 — search + tag filter + auto-prune", () 
     await expect(
       page.getByRole("heading", { level: 1, name: "Plato Essay" }).first(),
     ).toBeVisible({ timeout: 10_000 });
+    await page.getByRole("button", { name: "Article tags" }).click();
+    await expect(page.locator(".tag-popover")).toBeVisible();
     await page.locator("input#tag-entry-new").fill("stoic");
     await page.getByRole("button", { name: /add tag/i }).click();
     await expect(
@@ -220,12 +228,15 @@ test.describe("SC#3 + LIB-03 + LIB-04 — search + tag filter + auto-prune", () 
     ).toBeVisible();
 
     // Remove "stoic" from the Plato article (the ONLY article carrying it).
-    // Use the × remove on the TagEntry chip (NOT the TagFilter chip).
+    // Use the × remove on the TagEntry chip (NOT the TagFilter chip). The
+    // popover must be open again — the view swap reset it on return.
     await platoRow.locator('a[href^="#/article/"]').click();
     await page.waitForURL(/#\/article\//, { timeout: 10_000 });
     await expect(
       page.getByRole("heading", { level: 1, name: "Plato Essay" }).first(),
     ).toBeVisible({ timeout: 10_000 });
+    await page.getByRole("button", { name: "Article tags" }).click();
+    await expect(page.locator(".tag-popover")).toBeVisible();
     await page
       .locator(".tag-entry-list li")
       .filter({ hasText: "stoic" })
@@ -293,12 +304,15 @@ test.describe("SC#3 + LIB-03 + LIB-04 — search + tag filter + auto-prune", () 
     await ingestPaste(page, MARCUS_HTML);
     await openLibrary(page);
 
-    // Add "stoic" to the Plato article.
+    // Add "stoic" to the Plato article (open the tag popover first — Plan
+    // 13-10 G5: TagEntry lives in the top-bar popover).
     const platoRow = page
       .locator(".library-list > li")
       .filter({ hasText: "Plato Essay" });
     await platoRow.locator('a[href^="#/article/"]').click();
     await page.waitForURL(/#\/article\//, { timeout: 10_000 });
+    await page.getByRole("button", { name: "Article tags" }).click();
+    await expect(page.locator(".tag-popover")).toBeVisible();
     await page.locator("input#tag-entry-new").fill("stoic");
     await page.getByRole("button", { name: /add tag/i }).click();
     await openLibrary(page);

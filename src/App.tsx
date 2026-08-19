@@ -149,6 +149,12 @@ function AppInner() {
   // pattern as settingsOpen. Header (the trigger) and ArticleView (which mounts
   // the drawer + handles navigate-back close) share one source of truth.
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // Plan 13-10 (G5 — the drawerOpen pattern): tag-popover open state, lifted
+  // so Header (the tags-trigger) and ArticleView (which mounts the popover
+  // surface wrapping the byte-unchanged TagEntry) share one source of truth.
+  // The popover's native light-dismiss/Esc close routes back through
+  // onCloseTags so App state never desyncs from the top layer.
+  const [tagsOpen, setTagsOpen] = useState(false);
   // Phase 5 Plan 05-03: annotation count for the header badge. ArticleView
   // pushes the resolved-highlight count up via onAnnotationCountChange so the
   // Header badge stays in sync without Header needing to consume the provider.
@@ -191,9 +197,12 @@ function AppInner() {
 
   // Phase 5 Plan 05-03: reset the annotations drawer + count when the view
   // swaps (back to list or article change) so stale state doesn't carry over.
+  // Plan 13-10: the tag popover resets the same way (a closed-surface carry
+  // across an article swap would re-show against the wrong article's tags).
   useEffect(() => {
     setDrawerOpen(false);
     setAnnotationCount(0);
+    setTagsOpen(false);
   }, [view]);
 
   // D4-09/D4-10: when ArticleView has registered an anchor-capturing handler,
@@ -220,6 +229,8 @@ function AppInner() {
         annotationCount={annotationCount}
         drawerOpen={drawerOpen}
         onToggleAnnotations={() => setDrawerOpen((v) => !v)}
+        tagsOpen={tagsOpen}
+        onToggleTags={() => setTagsOpen((v) => !v)}
       />
       <SettingsPanel
         open={settingsOpen}
@@ -244,6 +255,8 @@ function AppInner() {
           modeToggleHandlerRef={modeToggleHandlerRef}
           drawerOpen={drawerOpen}
           onCloseDrawer={() => setDrawerOpen(false)}
+          tagsOpen={tagsOpen}
+          onCloseTags={() => setTagsOpen(false)}
           onAnnotationCountChange={setAnnotationCount}
           hasAppHistory={hasAppHistory}
         />

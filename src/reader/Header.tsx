@@ -63,6 +63,16 @@ interface HeaderProps {
    * annotations-trigger. The caller (App) owns the drawer-open state.
    */
   onToggleAnnotations: () => void;
+  /**
+   * Plan 13-10 (G5): whether the tag popover is open. Drives the
+   * tags-trigger's aria-expanded (the annotations-trigger discipline).
+   */
+  tagsOpen: boolean;
+  /**
+   * Plan 13-10 (G5): invoked when the reader clicks the tags-trigger. The
+   * caller (App) owns the tag-popover open state (the drawerOpen pattern).
+   */
+  onToggleTags: () => void;
 }
 
 export function Header({
@@ -73,6 +83,8 @@ export function Header({
   annotationCount,
   drawerOpen,
   onToggleAnnotations,
+  tagsOpen,
+  onToggleTags,
 }: HeaderProps) {
   // Header is a useSettings consumer so the toggle's aria-pressed + glyph
   // reflect the LIVE preference without App prop-drilling. App stays unchanged.
@@ -88,6 +100,28 @@ export function Header({
         touching with a calm --space-sm gap.
       */}
       <div className="header-controls">
+        {/*
+          Plan 13-10 (G5 — the recorded user-direction change): tags-trigger
+          button, inline-START of the annotations trigger so the group reads
+          [tags] [annotations] [mode] [gear] — the tag affordance lives beside
+          the reader controls, never inline under the article title. Mirrors
+          the annotations-trigger geometry exactly: 44×44 hit area,
+          transparent bg, --ink-soft default, --accent ONLY when
+          [aria-expanded="true"]. Hidden when no article is mounted (same
+          gating as the annotations trigger — tags are article-scoped).
+        */}
+        {articleMounted && (
+          <button
+            type="button"
+            className="tags-trigger"
+            onClick={onToggleTags}
+            aria-label="Article tags"
+            aria-haspopup="dialog"
+            aria-expanded={tagsOpen}
+          >
+            <TagIcon aria-hidden="true" />
+          </button>
+        )}
         {/*
           Phase 5 Plan 05-03 (D5-09): annotations-trigger button inline-start of
           ModeToggle so the group reads [annotations] [mode] [gear] = [content]
@@ -178,6 +212,32 @@ function HighlighterIcon({ ariaHidden }: { ariaHidden?: "true" }) {
       <path d="M9 11l-6 6v3h3l6-6" />
       <path d="M12 8l4 4" />
       <path d="M17 3l4 4-9 9-4-4 9-9z" />
+    </svg>
+  );
+}
+
+/**
+ * Plan 13-10 (G5) — tag-label glyph for the tags-trigger button. A quiet
+ * inline-SVG icon (the classic tag silhouette with its pin dot); aria-hidden
+ * because aria-label carries the accessible name. Mirrors the GearIcon /
+ * HighlighterIcon anatomy exactly (same box, stroke, caps, joins).
+ */
+function TagIcon({ ariaHidden }: { ariaHidden?: "true" }) {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden={ariaHidden}
+      focusable="false"
+    >
+      <path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z" />
+      <circle cx="7.5" cy="7.5" r="0.5" fill="currentColor" />
     </svg>
   );
 }

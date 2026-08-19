@@ -56,9 +56,10 @@ import { SelectionToolbar } from "../reader/annotations/SelectionToolbar";
 import { NotePopover } from "../reader/annotations/NotePopover";
 import { AnnotationsDrawer } from "../reader/annotations/AnnotationsDrawer";
 import { fragmentContainingOffset } from "../pagination/anchor";
-// Plan 08-04 (LIB-04 + D8-05) — TagEntry mounts in the article <header> as a
-// sibling of the title / meta / source-link. Inert at mount (Pitfall 8-5 —
-// does NOT steal focus from the article body).
+// Plan 08-04 (LIB-04 + D8-05) — TagEntry edits tags WHILE reading. Plan
+// 13-10 (G5) mounts it inside the top-bar tag popover (see the .tag-popover
+// surface below). Inert at mount (Pitfall 8-5 — does NOT steal focus from
+// the article body).
 import { TagEntry } from "../reader/TagEntry";
 import { BackToLibrary } from "../reader/BackToLibrary";
 // Plan 09-05 (D9-06, PORT-03) — per-article "Export highlights": the fixed
@@ -118,6 +119,16 @@ export interface ArticleViewProps {
   drawerOpen: boolean;
   /** Phase 5 Plan 05-03: close the drawer (App's setter). */
   onCloseDrawer: () => void;
+  /**
+   * Plan 13-10 (G5 — the drawerOpen pattern): tag-popover open state, owned
+   * by App so Header (the tags-trigger) and this component (which mounts the
+   * popover surface wrapping the byte-unchanged TagEntry) share one source
+   * of truth. The popover's native light-dismiss/Esc close routes back
+   * through onCloseTags (the toggle-event close seam below).
+   */
+  tagsOpen: boolean;
+  /** Plan 13-10: close the tag popover (App's setter). */
+  onCloseTags: () => void;
   /**
    * Phase 5 Plan 05-03: push the resolved-highlight count up to App so the
    * Header badge stays in sync.
@@ -196,6 +207,8 @@ export function ArticleView({
   modeToggleHandlerRef,
   drawerOpen,
   onCloseDrawer,
+  tagsOpen,
+  onCloseTags,
   onAnnotationCountChange,
   hasAppHistory,
 }: ArticleViewProps) {
@@ -265,6 +278,50 @@ export function ArticleView({
   const [exportAnnouncement, setExportAnnouncement] = useState<string | null>(
     null,
   );
+
+  // Plan 13-10 (G5 — the AnnotationsDrawer ownership pattern): the tag
+  // popover surface (a native popover="auto" panel wrapping the
+  // byte-unchanged TagEntry). App lifts tagsOpen; this component owns the
+  // surface + its focus discipline. The trigger captured on open (Pitfall 1)
+  // is the header tags-trigger button — restored on every close path.
+  const tagPopoverRef = useRef<HTMLDivElement>(null);
+  const tagsTriggerRef = useRef<HTMLElement | null>(null);
+
+  // Sync the tagsOpen prop with the underlying popover's shown state
+  // (mirrors the AnnotationsDrawer open/close effect). When opening,
+  // capture document.activeElement as the trigger BEFORE showPopover() so
+  // the close seam can restore it. When the prop closes programmatically
+  // (view-swap reset), hide the surface; the hidePopover() call fires the
+  // same toggle event the native paths use — one close seam for everything.
+  useEffect(() => {
+    const el = tagPopoverRef.current;
+    if (!el) return;
+    if (tagsOpen && !el.matches(":popover-open")) {
+      tagsTriggerRef.current = document.activeElement as HTMLElement | null;
+      el.showPopover();
+    } else if (!tagsOpen && el.matches(":popover-open")) {
+      el.hidePopover();
+    }
+  }, [tagsOpen]);
+
+  // The popover toggle event: fires after every state change (open or
+  // closed) — from showPopover()/hidePopover() AND the native light-dismiss
+  // + Esc paths popover="auto" provides for free. On close, route through
+  // onCloseTags (so App state stays in sync) and restore focus to the
+  // captured trigger (Pitfall 1 — the same discipline as AnnotationsDrawer
+  // and SettingsPanel).
+  useEffect(() => {
+    const el = tagPopoverRef.current;
+    if (!el) return;
+    const handleToggle = (event: Event) => {
+      if ((event as ToggleEvent).newState === "closed") {
+        onCloseTags();
+        tagsTriggerRef.current?.focus();
+      }
+    };
+    el.addEventListener("toggle", handleToggle);
+    return () => el.removeEventListener("toggle", handleToggle);
+  }, [onCloseTags]);
 
   // Phase 5 Plan 05-03: push the resolved-highlight count up to App so the
   // Header badge stays in sync. Runs whenever the apiRef bridge updates (which
@@ -1531,19 +1588,12 @@ export function ArticleView({
           <span className="visually-hidden"> (opens in a new tab)</span>
         </a>
       )}
-      {/* Plan 13-04 (Option A geometry): TagEntry + Export share ONE calm
-          actions row (compact chrome — the spot must leave page 1 a
-          meaningful content budget at 360×640; a stacked layout measured
-          ~86% of the small-phone viewport and starved page 1 past the
-          engine's honest budget). TagEntry stays byte-identical — only its
-          mount point moved; the compaction is CSS on the spot's own
-          wrappers, never on the component. */}
+      {/* Plan 13-04 (Option A geometry): the actions row (Task 1 of the G5
+          relocation has moved TagEntry to the top-bar popover; the Export
+          button remains here until Task 2 moves it into the annotations
+          drawer). Compact chrome — the spot must leave page 1 a meaningful
+          content budget at 360×640. */}
       <div className="article-top-actions">
-        {/* Plan 08-04 (D8-05) — tags edited WHILE reading (not in the
-            library list). TagEntry is INERT at mount (Pitfall 8-5 — no
-            autoFocus, no useEffect-driven .focus()); the discipline
-            carries VERBATIM to this new home. */}
-        <TagEntry articleId={article.id} tags={article.tags ?? []} />
         {/* Plan 09-05 (D9-06, PORT-03) — per-article highlights export.
             INERT at mount exactly like TagEntry (Pitfall 8-5 — no
             auto-focus, no effect-driven focus); the reader activates via
@@ -1935,6 +1985,25 @@ export function ArticleView({
             activating a <mark>). popover="manual" → typing doesn't
             light-dismiss; top-layer rendering with no backdrop. */}
         <NotePopover />
+        {/* Plan 13-10 (G5 — the AnnotationsDrawer ownership pattern): the
+            tag-editing popover. A native popover="auto" panel in the top
+            layer — free light-dismiss + Esc; the toggle-event close seam
+            above restores focus to the trigger and routes the state back to
+            App. Wraps the byte-unchanged TagEntry (only its mount point
+            moved); TagEntry stays inert at popover-show until the reader
+            activates it (Pitfall 8-5 carries verbatim — no focus-on-mount
+            call anywhere in this path). role="dialog" + aria-label give the
+            surface its accessible name; the closed panel is display:none
+            (UA popover styling) so it never leaks into the reading flow. */}
+        <div
+          ref={tagPopoverRef}
+          popover="auto"
+          role="dialog"
+          aria-label="Article tags"
+          className="tag-popover"
+        >
+          <TagEntry articleId={article.id} tags={article.tags ?? []} />
+        </div>
         {/* Phase 5 Plan 05-03 Task 2: AnnotationsDrawer — native <dialog>
             reading-order list + empty-state + navigate-back. Reads highlights
             from useHighlightOverlay(); the onNavigate handler runs D5-11

@@ -98,8 +98,12 @@ test.describe("header geometry (13-04 — POLISH-03 / D13-13)", () => {
   }) => {
     await openPaginatedAtSmallPhone(page);
 
-    // (a) Render-once: exactly ONE metadata spot / TagEntry / Export.
+    // (a) Render-once: exactly ONE metadata spot; exactly ONE TagEntry —
+    //     and it lives in the TOP-BAR POPOVER (Plan 13-10 G5), never inside
+    //     the spot and never in the pinned header (CSS locators match the
+    //     closed popover's DOM; role/visibility queries would not).
     expect(await page.locator(".article-top-meta").count()).toBe(1);
+    expect(await page.locator(".article-top-meta .tag-entry").count()).toBe(0);
     expect(await page.locator(".tag-entry").count()).toBe(1);
     expect(
       await page.getByRole("button", { name: "Export highlights" }).count(),
@@ -160,11 +164,14 @@ test.describe("header geometry (13-04 — POLISH-03 / D13-13)", () => {
       "page-1 fragment must start below the metadata spot (no overlap)",
     ).toBe(true);
 
-    // (c) First turn: the spot unmounts; the page count NEVER changes.
+    // (c) First turn: the spot unmounts; the page count NEVER changes. The
+    //     popover TagEntry is article chrome (not page content) — it stays
+    //     mounted (count 1) while the SPOT-scoped count stays 0.
     await page.getByRole("button", { name: "Next page" }).click();
     await page.waitForTimeout(600);
     expect(await page.locator(".article-top-meta").count()).toBe(0);
-    expect(await page.locator(".tag-entry").count()).toBe(0);
+    expect(await page.locator(".article-top-meta .tag-entry").count()).toBe(0);
+    expect(await page.locator(".tag-entry").count()).toBe(1);
     const afterTurnPages = await page.evaluate(
       () =>
         ((window as unknown as Record<string, unknown>).__lemPagination as {
@@ -237,7 +244,12 @@ test.describe("header geometry (13-04 — POLISH-03 / D13-13)", () => {
         headerScrollHeight: header.scrollHeight,
         headerClientHeight: header.clientHeight,
         spotCount: document.querySelectorAll(".article-top-meta").length,
+        // Plan 13-10 G5: the TagEntry count is popover-scoped — zero inside
+        // the spot, exactly one overall (the closed popover instance).
         tagEntryCount: document.querySelectorAll(".tag-entry").length,
+        spotTagEntryCount: document.querySelectorAll(
+          ".article-top-meta .tag-entry",
+        ).length,
         spotAboveFirstBlock:
           spot.getBoundingClientRect().bottom <=
           firstBlock.getBoundingClientRect().top + 1,
@@ -254,6 +266,7 @@ test.describe("header geometry (13-04 — POLISH-03 / D13-13)", () => {
     ).toBeLessThanOrEqual(geom!.headerClientHeight + 2);
     expect(geom!.spotCount).toBe(1);
     expect(geom!.tagEntryCount).toBe(1);
+    expect(geom!.spotTagEntryCount).toBe(0);
     expect(geom!.spotAboveFirstBlock).toBe(true);
   });
 });
