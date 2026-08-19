@@ -1928,6 +1928,34 @@ dialog.annotations-drawer::backdrop {
   border-color: var(--hairline);
 }
 
+/* ── LibraryView tidy sections (Plan 13-03 — POLISH-06 / D13-16) ────────── */
+/* The library home reads as a header row plus three calm ordered regions:
+   continue reading, then add content, then the library list. Structure-only
+   grouping (no labels added — the D13-16 audit names ordering/density/weight,
+   not missing copy). Token-only spacing: the section wrappers carry NO
+   padding/border, so the children's own margins collapse straight through —
+   one consistent --space-xl region rhythm without doubled gaps. Zero motion
+   properties by design (A11Y-06 discipline — the global reduced-motion gate
+   stays trivially satisfied; wording kept free of greppable property names
+   per the 13-01 comment discipline). */
+.library-header {
+  max-width: 1100px;
+  margin-inline: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm) var(--space-md);
+}
+/* The h1 keeps its byte-stable text; inside the flex header its default
+   block margins would add noise, so they collapse to the row's rhythm. */
+.library-header h1 {
+  margin-block: 0;
+}
+.library-section {
+  margin-block: var(--space-xl) 0;
+}
+
 /* ── TagEntry fieldset (Plan 08-04 — tags edited WHILE reading) ──────────── */
 /* Mounted inside ArticleView's <header> as a sibling of title/meta/source.
    INERT at mount (Pitfall 8-5 — no autoFocus, no useEffect .focus()). */

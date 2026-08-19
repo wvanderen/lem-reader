@@ -13,6 +13,13 @@
 //     structure byte-stable via LibraryRow)
 //   - Empty-state block (D8-04 — calm voice)
 //
+// Plan 13-03 (POLISH-06 / D13-16) bounded tidy — the same components,
+// regrouped into a header row plus three calm ordered sections: (1) the h1
+// with the Review-highlights button beside it, (2) continue reading, (3) add
+// content (IngestControl + the .status live region directly following it),
+// (4) the library list (search, tag filter, rows). Structure-only reorg: no
+// new features, no new data loading, every byte-stable anchor preserved.
+//
 // The hash router (App.tsx) is unchanged — only the list-view component
 // import swaps (`FixtureList` → `LibraryView`). parseHash + hashchange + the
 // Gap 3 fragment guard stay byte-stable.
@@ -190,93 +197,110 @@ export function LibraryView() {
 
   return (
     <main id="main">
-      {/* byte-stable page heading (SC#1 regression target — Pitfall 8-5) */}
-      <h1>Saved articles</h1>
-      {/* Plan 10-02 (D10-02) — the sole Phase-10 entry point into the
-          cross-article review panel. Reuses the quiet-hairline
-          header-cluster button class (.article-export-highlights — the
-          same styling tokens as the sibling header controls: transparent
-          bg, hairline border, 44px touch, accent on hover). Navigation is
-          a plain hash assignment (the #/ fallback precedent below), which
-          pushes a history entry so browser-back returns to the library. */}
-      <button
-        type="button"
-        className="article-export-highlights"
-        onClick={() => {
-          window.location.hash = "#/review";
-        }}
-      >
-        Review highlights
-      </button>
-      {/* 07-06 (D7-01 + D7-02) — minimal ingest control mounted above the
-          article list. Extended in Plan 04 (file upload form). */}
-      <IngestControl />
-      {/* byte-stable .status live region (FixtureList L45-53 copy verbatim) */}
-      <div className="status" role="status" aria-live="polite" aria-atomic="true">
-        {status === "loading" && <p>Opening article…</p>}
-        {status === "error" && (
+      {/* Plan 13-03 (POLISH-06 / D13-16) bounded tidy — the library home
+          reads as a header row plus three calm ordered regions: continue
+          reading first, then add content, then the library list. Section
+          wrappers are structure-only (app.css token spacing; no new
+          features, no new data loading). Byte-stable anchors are preserved
+          exactly: main#main, the h1 text, the .status live region, the
+          LibraryRow markup, and the hash-assignment fallbacks below. */}
+      <header className="library-header">
+        {/* byte-stable page heading (SC#1 regression target — Pitfall 8-5) */}
+        <h1>Saved articles</h1>
+        {/* Plan 10-02 (D10-02) — the sole Phase-10 entry point into the
+            cross-article review panel, now a quiet control BESIDE the h1
+            (the same .article-export-highlights tokens: transparent bg,
+            hairline border, 44px touch, accent on hover). Navigation is
+            a plain hash assignment (the #/ fallback precedent below), which
+            pushes a history entry so browser-back returns to the library. */}
+        <button
+          type="button"
+          className="article-export-highlights"
+          onClick={() => {
+            window.location.hash = "#/review";
+          }}
+        >
+          Review highlights
+        </button>
+      </header>
+      {/* (1) Continue reading — the strip returns null while loading OR when
+          the unfinished set is empty (spare chrome per UI-SPEC); the section
+          wrapper keeps the region's place in the order regardless. */}
+      <section className="library-section library-section-continue">
+        <ContinueReadingStrip />
+      </section>
+      {/* (2) Add content — 07-06 (D7-01 + D7-02) minimal ingest control
+          (extended in Plan 04 with the file upload form), with the
+          byte-stable .status live region directly following it (FixtureList
+          L45-53 copy verbatim). */}
+      <section className="library-section library-section-add">
+        <IngestControl />
+        <div className="status" role="status" aria-live="polite" aria-atomic="true">
+          {status === "loading" && <p>Opening article…</p>}
+          {status === "error" && (
+            <>
+              <h2>Couldn't open this article.</h2>
+              <p>
+                The article could not be loaded. Select it again from the list, or
+                try a different article.
+              </p>
+            </>
+          )}
+        </div>
+      </section>
+      {/* (3) The library list — D8-06 search + D8-07 tag filter always
+          mounted (the reader can type/click even before items finish
+          loading; the filter runs over whatever items are available),
+          then the rows. */}
+      <section className="library-section library-section-list">
+        <LibrarySearch query={query} onQueryChange={setQuery} />
+        <TagFilter tags={allTags} activeTag={activeTag} onSelect={setActiveTag} />
+        {visibleItems.length === 0 && visibleBooks.length === 0 && status === "ready" ? (
+          // D8-04 empty state — calm voice pointing at Add (IngestControl above).
+          // Replaces FixtureList's "No articles yet" copy. Plan 12-05: a library
+          // holding ONLY book groups is not empty (and a filtered-out view is
+          // not empty either — the chips/query above explain the absence).
           <>
-            <h2>Couldn't open this article.</h2>
-            <p>
-              The article could not be loaded. Select it again from the list, or
-              try a different article.
-            </p>
+            <h2>Your library is empty</h2>
+            <p>Paste a URL or upload a file to begin.</p>
           </>
+        ) : (
+          <ul className="library-list">
+            {visibleItems.map((a) => (
+              <LibraryRow
+                key={a.id}
+                article={a}
+                location={locationsByArticle.get(a.id)}
+                onRemove={() =>
+                  setRemoveTarget({
+                    id: a.id,
+                    title: a.provenance.title,
+                  })
+                }
+              />
+            ))}
+            {/* Plan 12-05 — one expandable BookRow per VISIBLE Book (chapters
+                nested INSIDE the li, never top-level siblings — the 08-05
+                direct-child lesson). */}
+            {visibleBooks.map((book) => (
+              <BookRow
+                key={book.id}
+                book={book}
+                chapters={chaptersByBook.get(book.id) ?? []}
+                locations={allLocations}
+                onRemove={() =>
+                  setBookRemoveTarget({
+                    id: book.id,
+                    title: book.title,
+                    chapterCount: book.chapterArticleIds.length,
+                    chapterIds: book.chapterArticleIds,
+                  })
+                }
+              />
+            ))}
+          </ul>
         )}
-      </div>
-      {/* ContinueReadingStrip returns null while loading OR when the
-          unfinished set is empty (spare chrome per UI-SPEC). */}
-      <ContinueReadingStrip />
-      {/* D8-06 search + D8-07 tag filter — always mounted so the reader can
-          type/click even before items finish loading (the filter runs over
-          whatever items are available). */}
-      <LibrarySearch query={query} onQueryChange={setQuery} />
-      <TagFilter tags={allTags} activeTag={activeTag} onSelect={setActiveTag} />
-      {visibleItems.length === 0 && visibleBooks.length === 0 && status === "ready" ? (
-        // D8-04 empty state — calm voice pointing at Add (IngestControl above).
-        // Replaces FixtureList's "No articles yet" copy. Plan 12-05: a library
-        // holding ONLY book groups is not empty (and a filtered-out view is
-        // not empty either — the chips/query above explain the absence).
-        <>
-          <h2>Your library is empty</h2>
-          <p>Paste a URL or upload a file to begin.</p>
-        </>
-      ) : (
-        <ul className="library-list">
-          {visibleItems.map((a) => (
-            <LibraryRow
-              key={a.id}
-              article={a}
-              location={locationsByArticle.get(a.id)}
-              onRemove={() =>
-                setRemoveTarget({
-                  id: a.id,
-                  title: a.provenance.title,
-                })
-              }
-            />
-          ))}
-          {/* Plan 12-05 — one expandable BookRow per VISIBLE Book (chapters
-              nested INSIDE the li, never top-level siblings — the 08-05
-              direct-child lesson). */}
-          {visibleBooks.map((book) => (
-            <BookRow
-              key={book.id}
-              book={book}
-              chapters={chaptersByBook.get(book.id) ?? []}
-              locations={allLocations}
-              onRemove={() =>
-                setBookRemoveTarget({
-                  id: book.id,
-                  title: book.title,
-                  chapterCount: book.chapterArticleIds.length,
-                  chapterIds: book.chapterArticleIds,
-                })
-              }
-            />
-          ))}
-        </ul>
-      )}
+      </section>
       {/* Plan 08-04 — row-level trash → cascade-remove confirmation (LIB-02).
           D8-13: the destructive onClick calls dexieLibrarySource.remove(id)
           which atomically removes the article + highlights + notes + location
