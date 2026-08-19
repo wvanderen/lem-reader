@@ -749,6 +749,21 @@ export function ArticleView({
   // over-packs every fragment by roughly the header height and leaves clipped
   // text in the accessibility tree.
   const [pageContentBoxHeightPx, setPageContentBoxHeightPx] = useState(0);
+  // Plan 13-04 (Option A — human decision 2026-08-18): the measured
+  // margin-box height of the article-top metadata spot, threaded BOTH into
+  // PaginatedSurface's firstPageReservedPx (the engine's page-1 budget) and
+  // the --article-top-meta-reserve CSS var on .page-viewport (the page-1
+  // fragment's flow height) — one value, one source, so the engine budget
+  // and the rendered geometry always agree. Measured ONCE per article at
+  // settle (same rAF batch as pageContentBoxHeightPx below, so the FIRST
+  // pagination publication already carries the reserve — the
+  // first-publication==settled contract holds). A mid-article typography
+  // change or tag-add producing a stale reserve is the documented
+  // guard-covered edge (the post-render overflow guard corrects any
+  // overshoot); re-measuring would re-trigger pagination and oscillate.
+  const [metaSpotReservePx, setMetaSpotReservePx] = useState(0);
+  // null = not yet measured for this article; guards the measure-once rule.
+  const metaSpotReserveRef = useRef<number | null>(null);
   // Plan 04-09 (PAGE-01 round-trip fix): reset pageContentBoxHeightPx to 0
   // SYNCHRONOUSLY DURING RENDER when the mode changes. React child effects
   // (PaginatedSurface's pagination effect) run BEFORE parent effects
@@ -782,6 +797,29 @@ export function ArticleView({
     let cancelled = false;
     const rafId = requestAnimationFrame(() => {
       if (cancelled) return;
+      // Plan 13-04 (Option A): measure the metadata spot's margin-box
+      // height ONCE per article, after the measurement view commits
+      // (fonts settled — the spot's wrap is final) and BEFORE the page
+      // height below lands in the same rAF batch. PaginatedSurface's first
+      // pagination pass therefore sees the reserve together with the
+      // height: no intermediate reserve=0 publication, so first-publication
+      // == settled (page-turn-stability) and page 1 is never displaced by
+      // an unaccounted spot. The spot is mounted in BOTH modes at this
+      // point (scrolling flow above the body / first child of
+      // .page-viewport at article start), and its height is
+      // width-determined — identical in either home.
+      if (trustedView !== null && metaSpotReserveRef.current === null) {
+        const spot = articleEl.querySelector<HTMLElement>(".article-top-meta");
+        if (spot) {
+          const rect = spot.getBoundingClientRect();
+          const style = getComputedStyle(spot);
+          const marginTop = parseFloat(style.marginTop) || 0;
+          const marginBottom = parseFloat(style.marginBottom) || 0;
+          const reserve = Math.ceil(rect.height + marginTop + marginBottom);
+          metaSpotReserveRef.current = reserve;
+          setMetaSpotReservePx(reserve);
+        }
+      }
       // Plan 05-06: gate the geometry read on the .paginated-surface class.
       // On initial load trustedView is null, so the scrolling article branch
       // (className "article-body", no pinned height) mounts first; the first
@@ -873,6 +911,11 @@ export function ArticleView({
     setChapterContext(null);
     setNeighborTitles({ prev: null, next: null });
     setPageState(null);
+    // Plan 13-04 (Option A): reset the metadata-spot reserve so the next
+    // article's spot (different byline/tags shape) re-measures at its own
+    // settle. A stale cross-article reserve would mis-bound page 1.
+    metaSpotReserveRef.current = null;
+    setMetaSpotReservePx(0);
     // Plan 12-06 (Rule 1 — chapter links are the first article→article
     // navigation that keeps ArticleView MOUNTED): reset the D4-10 anchor
     // refs on swap. A stale offset from the previous article would feed
@@ -1429,6 +1472,88 @@ export function ArticleView({
   // overflow:hidden geometry never clips a fallback rendering.
   const paginatedActive = isPaginated && trustedView !== null && articleEl !== null;
 
+  // Plan 13-04 (POLISH-03 / D13-13) — the article-top metadata spot: byline,
+  // source link, book-context line, TagEntry, and the per-article
+  // Export-highlights button, moved OUT of the pinned per-page header into
+  // an ArticleView-owned block rendered EXACTLY ONCE in the DOM (the
+  // scrolling branch mounts it directly; the paginated branch hands it to
+  // PaginatedSurface via articleStartChrome, which shows it only on page
+  // 1). The pinned header keeps only BackToLibrary + the h1 title.
+  // Placement contract:
+  //   - scrolling mode: ordinary flow content above the article body —
+  //     scrolls away naturally.
+  //   - paginated mode: mounted INSIDE .page-viewport as flow content above
+  //     the fragment ONLY on the article's first page — OUTSIDE the grid
+  //     header row (the page-viewport row height never oscillates between
+  //     turns; the .page-viewport box is grid-determined, so the spot
+  //     cannot fire the article ResizeObserver — no re-measure loop) and
+  //     OUTSIDE the pagination block stream (it never enters page-capacity
+  //     math directly; the engine's firstPageReservedPx budget — fed with
+  //     the once-measured spot height below — is its sanctioned seat per
+  //     the Option A human decision, 2026-08-18).
+  const articleTopMeta = (
+    <div className="article-top-meta">
+      {(article.provenance.author || article.provenance.publishedAt) && (
+        <p className="meta">
+          {article.provenance.author}
+          {article.provenance.author && article.provenance.publishedAt && " · "}
+          {article.provenance.publishedAt && formatDate(article.provenance.publishedAt)}
+        </p>
+      )}
+      {/* Plan 12-06 (D12-08): epub-chapter context line — calm book
+          provenance below the article provenance, epub-chapter only
+          (chapterContext is non-null ONLY when the source is epub-chapter
+          AND the Book record resolved through the tolerant lookup).
+          Rendered as a paragraph, never a heading — the h1 chapter title
+          owns the heading structure. A chapter outside the book's declared
+          TOC (partial import) shows the title alone; chapterOrdinal returns
+          0 there and the callers-skip-0 contract (bookProgress.ts) keeps
+          the label honest. The separator is the U+00B7 middle dot with
+          surrounding spaces — byte-identical to the .meta separator above.
+          No book-progress indicator here (progress lives on the library
+          row). */}
+      {chapterContext && (
+        <p className="meta book-context">
+          {chapterContext.book.title}
+          {chapterOrdinal(chapterContext.book, article.id) > 0 &&
+            ` · Chapter ${chapterOrdinal(chapterContext.book, article.id)} of ${chapterContext.book.chapterArticleIds.length}`}
+        </p>
+      )}
+      {sourceUrl !== undefined && domain !== undefined && (
+        <a href={sourceUrl} rel="noopener noreferrer" target="_blank">
+          Originally published at {domain}
+          <span className="visually-hidden"> (opens in a new tab)</span>
+        </a>
+      )}
+      {/* Plan 13-04 (Option A geometry): TagEntry + Export share ONE calm
+          actions row (compact chrome — the spot must leave page 1 a
+          meaningful content budget at 360×640; a stacked layout measured
+          ~86% of the small-phone viewport and starved page 1 past the
+          engine's honest budget). TagEntry stays byte-identical — only its
+          mount point moved; the compaction is CSS on the spot's own
+          wrappers, never on the component. */}
+      <div className="article-top-actions">
+        {/* Plan 08-04 (D8-05) — tags edited WHILE reading (not in the
+            library list). TagEntry is INERT at mount (Pitfall 8-5 — no
+            autoFocus, no useEffect-driven .focus()); the discipline
+            carries VERBATIM to this new home. */}
+        <TagEntry articleId={article.id} tags={article.tags ?? []} />
+        {/* Plan 09-05 (D9-06, PORT-03) — per-article highlights export.
+            INERT at mount exactly like TagEntry (Pitfall 8-5 — no
+            auto-focus, no effect-driven focus); the reader activates via
+            Tab/Click. Disabled while a download is in flight. */}
+        <button
+          type="button"
+          className="article-export-highlights"
+          onClick={handleExportHighlights}
+          disabled={exportingHighlights}
+        >
+          Export highlights
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <>
       {/* READ-05: hairline is fixed under the header via CSS. Decorative —
@@ -1534,6 +1659,13 @@ export function ArticleView({
           ref={articleCallbackRef}
           className={paginatedActive ? "article-body paginated-surface" : "article-body"}
         >
+          {/* Plan 13-04 (POLISH-03 / D13-13): the pinned per-page header is
+              SLIM — BackToLibrary + the title ONLY. Byline/source/book
+              context/TagEntry/Export moved to the article-top metadata spot
+              (articleTopMeta above), rendered once at article start. The
+              header row's 09-07 geometry cap stays byte-unchanged; the
+              slimmer content keeps it far under the cap (no internal
+              scrolling at 360×640). */}
           <header>
             {/* Plan 13-04 (POLISH-05 / D13-15) — the standardized back
                 affordance at the article header start, BEFORE the title
@@ -1542,55 +1674,6 @@ export function ArticleView({
                 "#/" fallback (Pitfall 7 — deep-link tabs never exit). */}
             <BackToLibrary hasAppHistory={hasAppHistory} />
             <h1>{article.provenance.title}</h1>
-            {(article.provenance.author || article.provenance.publishedAt) && (
-              <p className="meta">
-                {article.provenance.author}
-                {article.provenance.author && article.provenance.publishedAt && " · "}
-                {article.provenance.publishedAt && formatDate(article.provenance.publishedAt)}
-              </p>
-            )}
-            {/* Plan 12-06 (D12-08): epub-chapter context line — calm book
-                provenance below the article provenance, epub-chapter only
-                (chapterContext is non-null ONLY when the source is
-                epub-chapter AND the Book record resolved through the
-                tolerant lookup). Rendered as a paragraph, never a heading —
-                the h1 chapter title owns the header's heading structure. A
-                chapter outside the book's declared TOC (partial import)
-                shows the title alone; chapterOrdinal returns 0 there and the
-                callers-skip-0 contract (bookProgress.ts) keeps the label
-                honest. The separator is the U+00B7 middle dot with
-                surrounding spaces — byte-identical to the .meta separator
-                above. No book-progress indicator here (progress lives on
-                the library row). */}
-            {chapterContext && (
-              <p className="meta book-context">
-                {chapterContext.book.title}
-                {chapterOrdinal(chapterContext.book, article.id) > 0 &&
-                  ` · Chapter ${chapterOrdinal(chapterContext.book, article.id)} of ${chapterContext.book.chapterArticleIds.length}`}
-              </p>
-            )}
-            {sourceUrl !== undefined && domain !== undefined && (
-              <a href={sourceUrl} rel="noopener noreferrer" target="_blank">
-                Originally published at {domain}
-                <span className="visually-hidden"> (opens in a new tab)</span>
-              </a>
-            )}
-            {/* Plan 08-04 (D8-05) — tags edited WHILE reading (not in the
-                library list). TagEntry is INERT at mount (Pitfall 8-5 — no
-                autoFocus, no useEffect-driven .focus()). */}
-            <TagEntry articleId={article.id} tags={article.tags ?? []} />
-            {/* Plan 09-05 (D9-06, PORT-03) — per-article highlights export.
-                INERT at mount exactly like TagEntry (Pitfall 8-5 — no
-                auto-focus, no effect-driven focus); the reader activates via
-                Tab/Click. Disabled while a download is in flight. */}
-            <button
-              type="button"
-              className="article-export-highlights"
-              onClick={handleExportHighlights}
-              disabled={exportingHighlights}
-            >
-              Export highlights
-            </button>
           </header>
           {paginatedActive && trustedView && articleEl ? (
             <>
@@ -1626,6 +1709,19 @@ export function ArticleView({
                 currentAnchorOffsetRef fresh for the NEXT swap (paginated→
                 scrolling).
               */}
+              {/* Plan 13-04 (Option A — human decision 2026-08-18): the
+                  metadata spot is OWNED here but MOUNTED by
+                  PaginatedSurface (articleStartChrome) — the surface shows
+                  it exactly on page 1, in the same render as the page-1
+                  fragment whose height yields the measured reserve (the
+                  same value threaded as firstPageReservedPx). Single-owner
+                  mounting keeps spot, fragment height, and page index in
+                  one commit — a parent-state spot can lag a turn by one
+                  effect cycle and transiently render page 2 inside page-1
+                  geometry (observed: guard overflow → dom-fallback flip).
+                  The viewport box itself is grid-determined: the spot
+                  mount/unmount never changes its height (no ResizeObserver
+                  re-measure loop). */}
               <div className="page-viewport">
                 <PaginatedSurface
                   ref={surfaceRef}
@@ -1634,6 +1730,8 @@ export function ArticleView({
                   articleEl={articleEl}
                   diagnostics={diagnostics}
                   pageContentBoxHeightPx={pageContentBoxHeightPx}
+                  firstPageReservedPx={metaSpotReservePx}
+                  articleStartChrome={articleTopMeta}
                   initialAnchorOffset={currentAnchorOffsetRef.current}
                   onAnchorChange={handleAnchorChange}
                 />
@@ -1704,6 +1802,11 @@ export function ArticleView({
             </>
           ) : (
             <>
+              {/* Plan 13-04 (D13-13): in scrolling mode the metadata spot is
+                  ordinary flow content above the article body — byline,
+                  source, book context, TagEntry, Export — scrolling away
+                  naturally with the article (rendered once, never pinned). */}
+              {articleTopMeta}
               {/* Plan 12-06 (D12-05): Previous chapter at chapter START —
                   mounted BEFORE the body in the article flow so it is
                   reachable from the top of the chapter (symmetric with the

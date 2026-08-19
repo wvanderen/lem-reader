@@ -2964,3 +2964,105 @@ dialog.book-remove-confirm::backdrop {
   color: var(--accent);
   border-color: var(--accent);
 }
+
+/* Plan 13-04 (POLISH-03 / D13-13) — the SLIMMED article header anatomy:
+ * the pinned per-page header is the back affordance + the title ONLY (the
+ * byline/source/book-context/TagEntry/Export cluster moved to the
+ * article-top metadata spot below). The two share one calm row at the
+ * reference viewport; the title wraps within its own flex share when long.
+ * This rule COMPOSES with the 09-07 geometry cap above (which stays
+ * byte-unchanged): min-height/overflow on the paginated header rule still
+ * apply, and the slimmer content keeps the row far under the 25% cap — no
+ * internal scrolling at 360×640. Tokens only; zero motion properties by
+ * design (A11Y-06 discipline). */
+.article-body > header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm) var(--space-md);
+}
+/* Mobile-first: the slim header's title uses a calmer size under 640px so
+ * the row (back affordance beside/above a wrapped title) always fits the
+ * 09-07 25% cap WITHOUT internal scrolling at 360×640 — the D13-13 bar.
+ * line-height is a whole-pixel 32px (ratio 1.23 — display leading): the
+ * inherited unitless 1.2 yields fractional 31.2px lines whose wrapped
+ * accumulation rounds scrollHeight above clientHeight by 2-3px on
+ * chromium/firefox (integer rounding of fractional line boxes), which is
+ * rounding noise — but whole pixels remove the class entirely. Every
+ * corpus title (≤30 chars) wraps to ≤3 lines at this size next to the
+ * back button; longer titles keep the 09-07 overflow safety net. */
+.article-body > header h1 {
+  margin-block: 0;
+  font-size: 26px;
+  line-height: 32px;
+}
+@media (min-width: 640px) {
+  .article-body > header h1 {
+    font-size: 32px;
+  }
+}
+
+/* Plan 13-04 (POLISH-03 / D13-13 + Option A) — the article-top metadata
+ * spot: byline, source link, book-context line, TagEntry, and the
+ * per-article export button, rendered EXACTLY ONCE at article start
+ * (ArticleView-owned). In scrolling mode it is ordinary flow content above
+ * the article body; in paginated mode it mounts inside .page-viewport only
+ * on the article's first page — never in the grid header row, never in the
+ * pagination block stream (the engine's firstPageReservedPx budget, fed by
+ * the once-measured margin-box height below, is its sanctioned seat).
+ *
+ * COMPACT BY DESIGN (Option A geometry lesson): a stacked spot measured
+ * ~86% of the 360×640 page viewport (293–322px of ~370px) and starved page
+ * 1 past any honest engine budget — the corpus fell back to scrolling. The
+ * compact column (meta lines, then ONE actions row with TagEntry + Export
+ * side by side, no-wrap flexible tag input) keeps the spot ≈150px at
+ * desktop and ≈160–190px at 360px, leaving every corpus fixture's first
+ * block a legal page-1 placement. TagEntry itself is byte-untouched — all
+ * compaction lives on the spot's own wrappers. The hairline separates the
+ * spot from the reading surface. Tokens only; zero motion properties by
+ * design (A11Y-06 discipline). */
+.article-top-meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin-block: var(--space-xs) var(--space-sm);
+  padding-block-end: var(--space-xs);
+  border-block-end: 1px solid var(--hairline);
+}
+.article-top-meta .meta,
+.article-top-meta > a {
+  margin-block: 0;
+}
+.article-top-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: var(--space-xs);
+}
+/* The fieldset flexes to the row's remaining width; the never-wrapping
+   add-row keeps the input + Add-tag button on ONE line at 360px (the
+   stacked row was the single largest chunk of the starved-page-1 spot).
+   44px touch targets are preserved via the components' own min-heights. */
+.article-top-meta .tag-entry {
+  flex: 1 1 16em;
+  margin-block: 0;
+  padding: var(--space-xs) var(--space-sm);
+}
+.article-top-meta .tag-entry-add-row {
+  flex-wrap: nowrap;
+  gap: var(--space-xs);
+  margin-top: var(--space-xs);
+}
+.article-top-meta .tag-entry-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.article-top-actions .article-export-highlights {
+  flex: 0 0 auto;
+  align-self: flex-start;
+}
+/* Mechanism note (Option A): PaginatedSurface sets the PAGE-1 fragment's
+ * inline flow height to calc(100% - firstPageReservedPx) — the same
+ * measured value the engine receives as page 1's content budget — so no
+ * CSS rule is needed for the reserve. Pages 2+ and every legacy caller
+ * keep the full .page-fragment { height: 100% } rule, byte-unchanged. */

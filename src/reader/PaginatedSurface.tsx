@@ -102,6 +102,32 @@ export interface PaginatedSurfaceProps {
    * →scrolling) can capture it synchronously before the render swap. Optional.
    */
   onAnchorChange?: (offset: number) => void;
+  /**
+   * Plan 13-04 (Option A — human decision 2026-08-18): CSS px reserved at
+   * the top of the FIRST page for ArticleView's article-top metadata spot.
+   * Threaded straight into paginateDocument's page-1 budget; pages 2+ keep
+   * the full viewport budget. The post-render overflow guard, DEV hook, and
+   * anchor machinery stay reserve-unaware by decision. ArticleView measures
+   * the spot once at settle and passes the same value here — the engine
+   * budget and the rendered page-1 fragment height (below) always agree.
+   * Default 0 = byte-equivalent to the pre-13-04 surface for every
+   * existing caller.
+   */
+  firstPageReservedPx?: number;
+  /**
+   * Plan 13-04 (Option A / D13-13): the article-top metadata spot element,
+   * OWNED by ArticleView but MOUNTED by this surface. The surface shows it
+   * exactly when the reader is at the article's first page — including the
+   * pre-pagination window before the first commit (so the parent's settle-
+   * time measurement finds it laid out). Mounting here — rather than in
+   * the parent from pageState — keeps the spot, the page-1 fragment
+   * height, and currentPageIdx in ONE component's render: no parent state
+   * can lag a turn by a commit and transiently render page 2 inside
+   * page-1 geometry (the observed guard-overflow → dom-fallback flip).
+   * Absent for legacy callers — the surface renders identically to
+   * pre-13-04.
+   */
+  articleStartChrome?: React.ReactNode;
 }
 
 /**
@@ -161,6 +187,8 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
       pageContentBoxHeightPx,
       initialAnchorOffset = 0,
       onAnchorChange,
+      firstPageReservedPx = 0,
+      articleStartChrome,
     },
     ref,
   ): React.ReactElement | null {
@@ -258,10 +286,15 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
         // engine no longer queries live DOM (PaginatedSurface's articleEl
         // contains the single mounted page fragment at this point, not the
         // full ArticleBody the engine would need).
+        // Plan 13-04 (Option A): firstPageReservedPx reduces page 1's
+        // content budget so the metadata spot and page-1 content fit the
+        // viewport together — no post-publication correction, keeping the
+        // first-publication==settled contract (page-turn-stability).
         const result = paginateDocument({
           article: currentArticle,
           measurement: trustedView,
           pageContentBoxHeightPx,
+          firstPageReservedPx,
           diagnostics,
           signal: controller.signal,
         });
@@ -330,7 +363,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
         cancelled = true;
         controller.abort();
       };
-    }, [article, trustedView, articleEl, pageContentBoxHeightPx, diagnostics]);
+    }, [article, trustedView, articleEl, pageContentBoxHeightPx, firstPageReservedPx, diagnostics]);
 
     // Post-render overflow guard (Plan 04-07 — PAGE-03b fix). After every page
     // commit AND every turn, inspect the mounted .page-fragment's live child
@@ -579,10 +612,14 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
     }, [article, pages, currentPageIdx]);
 
     // Until the first pagination pass commits (or when status is "fallback"),
-    // render nothing inside the article body. The shared <article> header stays
-    // visible above this surface.
+    // render only the article-start chrome (Plan 13-04 Option A). The spot
+    // stays laid out during this window so the parent's settle-time
+    // measurement can size the reserve BEFORE the first paginateDocument
+    // call — the first publication then already carries the correct page-1
+    // budget (first-publication==settled, page-turn-stability). Without
+    // chrome (legacy callers) this is byte-identical to the old null return.
     if (!pages || pages.length === 0) {
-      return null;
+      return articleStartChrome !== undefined ? <>{articleStartChrome}</> : null;
     }
 
     const isFirst = currentPageIdx === 0;
@@ -590,6 +627,19 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
 
     return (
       <>
+        {/*
+          Plan 13-04 (Option A / D13-13): the article-top metadata spot —
+          mounted as .page-viewport's first flow child ONLY on the article's
+          first page, in the SAME render that shows page 1 (single owner of
+          the decision). It never enters the pagination block stream: the
+          engine's firstPageReservedPx budget (the parent-measured value
+          below) is its sanctioned seat, and the post-render overflow guard
+          — measuring live child rects against the same viewport — remains
+          the documented net for stale-reserve edge cases. The .page-
+          viewport box is grid-determined, so mounting/unmounting the spot
+          never changes its height (no ResizeObserver re-measure loop).
+        */}
+        {isFirst && articleStartChrome !== undefined ? articleStartChrome : null}
         {/*
           ProgressHairline receives the offset-anchored progress ratio
           (POLISH-02); PageIndicator is the sibling decorative N-of-M span.
@@ -613,6 +663,11 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
           article={article}
           lang={article.lang}
           highlights={fragmentHighlights}
+          style={
+            isFirst && firstPageReservedPx > 0
+              ? { height: `calc(100% - ${firstPageReservedPx}px)` }
+              : undefined
+          }
         />
 
         <button

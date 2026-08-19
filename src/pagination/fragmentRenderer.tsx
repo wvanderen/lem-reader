@@ -81,15 +81,24 @@ export function PageFragmentView({
   article,
   lang,
   highlights,
+  style,
 }: {
   fragment: PageFragment;
   pageIndex: number;
   article: CanonicalArticle;
   lang: string;
   highlights?: readonly ArticleBodyHighlight[];
+  /**
+   * Plan 13-04 (Option A): optional style pass-through. The surface sets
+   * the page-1 fragment's flow height to calc(100% - firstPageReservedPx)
+   * so the article-top metadata spot and page-1 content share .page-
+   * viewport. Additive — absent for every legacy caller, which keep the
+   * full .page-fragment height from app.css.
+   */
+  style?: React.CSSProperties;
 }): React.ReactElement {
   return (
-    <section className="page-fragment" aria-label={`Page ${pageIndex + 1}`}>
+    <section className="page-fragment" aria-label={`Page ${pageIndex + 1}`} style={style}>
       {fragment.blocks.map((entry, i) => {
         const sourceBlock = article.blocks[entry.blockIndex]!;
         const resolved = resolveBlockSlice(
