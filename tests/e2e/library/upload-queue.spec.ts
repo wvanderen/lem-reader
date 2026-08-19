@@ -96,7 +96,7 @@ test("Remove file clears a queued pick before upload", async ({ page }) => {
   // the queued pick: the raw input value reads as the empty string and
   // Add file is disabled again.
   await page.locator("button.ingest-remove-file").click();
-  expect(await fileInput.evaluate((el) => el.value)).toBe("");
+  expect(await fileInput.evaluate((el) => (el as HTMLInputElement).value)).toBe("");
   await expect(addFile).toBeDisabled();
   // The Remove control unmounts with the pick (rendered only when
   // hasFile).
@@ -129,7 +129,7 @@ test("a completed book upload resets the picker without a page refresh", async (
   // library view — NO reload. The picker must already be empty and the
   // Add file button back to disabled.
   const fileInput = page.locator("input#ingest-file");
-  expect(await fileInput.evaluate((el) => el.value)).toBe("");
+  expect(await fileInput.evaluate((el) => (el as HTMLInputElement).value)).toBe("");
   await expect(page.getByRole("button", { name: /add file/i })).toBeDisabled();
   await expect(page.locator("button.ingest-remove-file")).toHaveCount(0);
 });
@@ -156,7 +156,7 @@ test("a refusal clears the pick so re-picking the same file re-fires the picker"
 
   // The refusal cleared the pick: the raw input value reads empty and
   // Add file is disabled again.
-  expect(await fileInput.evaluate((el) => el.value)).toBe("");
+  expect(await fileInput.evaluate((el) => (el as HTMLInputElement).value)).toBe("");
   await expect(addFile).toBeDisabled();
 
   // Re-pick the SAME name+buffer — the reset made the second pick count
@@ -179,6 +179,6 @@ test("a refusal clears the pick so re-picking the same file re-fires the picker"
     ingestStatus(page, "This file could not be read as an EPUB book."),
   ).toBeVisible({ timeout: 15_000 });
   // And the terminal state resets the picker once more.
-  expect(await fileInput.evaluate((el) => el.value)).toBe("");
+  expect(await fileInput.evaluate((el) => (el as HTMLInputElement).value)).toBe("");
   await expect(addFile).toBeDisabled();
 });
