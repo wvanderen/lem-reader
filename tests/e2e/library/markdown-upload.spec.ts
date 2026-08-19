@@ -34,52 +34,14 @@
 //     test asserts BOTH the .status copy ("Already in your library.") AND
 //     the row count (no new row appeared).
 import { test, expect } from "@playwright/test";
+// Plan 13-06 (Option A): the representative .md payload now lives in the
+// non-spec helper ./markdown-payload.ts so the ACPT-06 core-flow spine
+// reuses the PROVEN bytes without re-registering this spec's cells
+// (REUSE-DO-NOT-FORK — both import-from-spec forms were empirically
+// rejected; see the spine's header for the probes).
+import { MARKDOWN_WITH_FRONTMATTER } from "./markdown-payload";
 
 const BASE = "http://localhost:5173";
-
-// A representative .md payload with YAML front-matter + heading + paragraph +
-// bulleted list + blockquote + code block. Rich enough to clear the ING-06
-// confidence thresholds (blockCount >= 3 AND textLength >= 500 — the
-// threshold gates the markdown path identically to the URL/paste paths) and
-// varied enough that the round-trip anchor gate samples 5 grapheme offsets
-// that all resolve to confident.
-const MARKDOWN_WITH_FRONTMATTER = `---
-title: "The Discipline of Calm Reading"
-author: "An Experiment in Leisure"
-date: "2026-08-13"
----
-
-# The Discipline of Calm Reading
-
-The first paragraph opens the essay and runs long enough to clear the ING-06
-confidence threshold on its own. Long-form publishing rewards patience: the
-reader who slows down to read every word meets the author on the author's
-terms, not on the terms of a feed.
-
-The second paragraph continues the long-form prose. The reading engine cannot
-tell this markdown-derived article from a fixture or an ingested URL — that
-is the load-bearing invariant of Phase 7 and Phase 8. Pagination, annotation,
-location restore, and the accessible reading surface all behave identically
-because the article IS a CanonicalArticle by the time it reaches ArticleView.
-
-## A Section on Lists
-
-The essay touches on three habits:
-
-- Read deliberately, not greedily.
-- Mark only what you would quote aloud.
-- Return to what you have marked.
-
-> The reader who annotates sparingly annotates well.
-
-Inline \`code\` is rendered as a code mark, and a fenced code block follows:
-
-\`\`\`
-function calm(page) {
-  return page.read({ pauseBetween: true });
-}
-\`\`\`
-`;
 
 // A .md payload WITHOUT YAML front-matter. The D8-17 title-fallback chain
 // falls through to stripMarkdownExtension(filename) → neutral title. The
