@@ -41,6 +41,10 @@ Requirements for the v2.0 milestone. Each maps to a roadmap phase (traceability 
 
 - [ ] **POLISH-01**: Reader sees the persisted reading mode on first paint with no flash or snap to a different mode.
 - [ ] **POLISH-02**: Reader sees progress-bar semantics that reflect actual position (a one-page article does not show 100% on open; a multi-page article progresses from the start).
+- [ ] **POLISH-03**: Reader sees a slim article header — tags and article metadata move to a calm article-top spot rendered once (not repeated per paginated page), and the header no longer scrolls internally at reference viewports (360×640). *(Added at Phase 13 planning per D13-12/D13-13.)*
+- [ ] **POLISH-04**: Reader's centered modal dialogs (note editor, wipe confirmation, library remove confirmation, import preview) open centered in the viewport instead of pinned to the top-left corner. *(Added per D13-12/D13-14.)*
+- [ ] **POLISH-05**: Reader gets a standardized, keyboard-reachable "Back to library" affordance on the article and review views that returns to the library and never exits the app on a deep link. *(Added per D13-12/D13-15.)*
+- [ ] **POLISH-06**: Reader sees an organized library home — clear sections (continue reading / add content / library list) with consistent spacing and a calmer control hierarchy, within existing components. *(Added per D13-12/D13-16.)*
 
 ### Acceptance
 
@@ -120,15 +124,19 @@ Which phases cover which requirements. Updated during roadmap creation.
 | RECV-01 | Phase 10 | Complete |
 | POLISH-01 | Phase 13 | Pending |
 | POLISH-02 | Phase 13 | Pending |
+| POLISH-03 | Phase 13 | Pending |
+| POLISH-04 | Phase 13 | Pending |
+| POLISH-05 | Phase 13 | Pending |
+| POLISH-06 | Phase 13 | Pending |
 | ACPT-05 | Phase 13 | Pending |
 | ACPT-06 | Phase 13 | Pending |
 
 **Coverage:**
 
-- v2.0 requirements: 22 total
-- Mapped to phases: 22 ✓
+- v2.0 requirements: 26 total
+- Mapped to phases: 26 ✓
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-08-10*
-*Last updated: 2026-08-10 after v2.0 milestone definition*
+*Last updated: 2026-08-18 after Phase 13 planning — POLISH-03..06 added per D13-12*

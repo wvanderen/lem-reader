@@ -35,7 +35,7 @@ Seven phases that add one stateless ingestion backend and one new data domain (u
 - [x] **Phase 10: Annotation Review Panel** - Dedicated surface to review, filter, and curate all highlights and notes across the library (completed 2026-08-16)
 - [x] **Phase 11: PDF Intake** - PDF text extraction with honest failure for scanned and multi-column documents (completed 2026-08-17)
 - [x] **Phase 12: EPUB Intake** - Multi-chapter EPUB books surfaced as per-chapter articles under a book grouping (completed 2026-08-18)
-- [ ] **Phase 13: Polish and Acceptance** - FOUC and progress-bar fixes plus the NVDA+Firefox and v2.0 core-flow acceptance gate
+- [ ] **Phase 13: Polish and Acceptance** - FOUC and progress-bar fixes, user-widened chrome polish (header/modal/nav/library), plus the NVDA+Firefox and v2.0 core-flow acceptance gate
 
 ## Phase Details
 
@@ -270,17 +270,37 @@ Plans:
 
 ### Phase 13: Polish and Acceptance
 
-**Goal**: The v2.0 quality gate — eliminate the two known polish regressions and close acceptance across the supported browser matrix, mirroring v1.0 Phase 6.
+**Goal**: The v2.0 quality gate — eliminate the two known polish regressions, land the user-widened chrome polish (D13-12), and close acceptance across the supported browser matrix, mirroring v1.0 Phase 6.
 **Depends on**: Phase 12
-**Requirements**: POLISH-01, POLISH-02, ACPT-05, ACPT-06
+**Requirements**: POLISH-01, POLISH-02, POLISH-03, POLISH-04, POLISH-05, POLISH-06, ACPT-05, ACPT-06
 **Success Criteria** (what must be TRUE):
 
-  1. Reader sees the persisted reading mode on first paint with no flash or snap to a different mode (a Playwright cold-load no-snap test passes).
-  2. Reader sees a progress bar that reflects actual position — a one-page article does not show 100% on open and a multi-page article progresses from the start (offset-anchored formula with boundary tests).
-  3. The documented screen-reader acceptance flows complete on NVDA+Firefox with zero blocker/major findings, closing the v1.0 ACPT-02 coverage boundary A4.
-  4. The v2.0 core flow (ingest → read → highlight → export → re-import) completes across Chromium, Firefox, and WebKit without content loss, and the full `npm run test` suite exits 0 (mirroring the v1.0 honest-suite precedent).
+   1. Reader sees the persisted reading mode on first paint with no flash or snap to a different mode (a Playwright cold-load no-snap test passes).
+   2. Reader sees a progress bar that reflects actual position — a one-page article does not show 100% on open and a multi-page article progresses from the start (offset-anchored formula with boundary tests).
+   3. The documented screen-reader acceptance flows complete on NVDA+Firefox with zero blocker/major findings, closing the v1.0 ACPT-02 coverage boundary A4.
+   4. The v2.0 core flow (ingest → read → highlight → export → re-import) completes across Chromium, Firefox, and WebKit without content loss, and the full `npm run test` suite exits 0 (mirroring the v1.0 honest-suite precedent).
+   5. Reader sees a slim article header (title + essential controls) with tags/metadata in a render-once article-top spot — no internal header scrolling at 360×640 (POLISH-03, D13-13).
+   6. Reader's four centered modal dialogs open centered, not top-left (POLISH-04, D13-14).
+   7. Reader gets a keyboard-reachable "Back to library" affordance on article and review views that never exits the app on a deep link (POLISH-05, D13-15).
+   8. Reader sees an organized library home — continue reading / add content / library list — within existing components (POLISH-06, D13-16).
 
-**Plans**: TBD
+**Plans**: 6 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 13-01-PLAN.md — POLISH-01 first-paint settings mirror: settingsMirror seam + index.html inline script + SettingsContext lazy-init + cold-load no-snap e2e
+- [ ] 13-02-PLAN.md — POLISH-02 offset-anchored progress: pure ratio helper + boundary tests + PaginatedSurface/ProgressHairline ratio path + first-paint-progress e2e
+- [ ] 13-03-PLAN.md — POLISH-04 + POLISH-06 chrome polish: dialog centering restoration (4 modals) + LibraryView bounded tidy
+- [ ] 13-05-PLAN.md — ACPT-05 preparation: NVDA runbook + record sheet + VO supplementary checklist + D13-11 pdf-timeout fake-timers spec
+
+**Wave 2** *(blocked on Wave 1 — shares app.css with 13-03)*
+
+- [ ] 13-04-PLAN.md — POLISH-03 + POLISH-05 chrome polish: header slim + render-once metadata spot + BackToLibrary affordance
+
+**Wave 3** *(blocked on all — runs the honest full-suite gate)*
+
+- [ ] 13-06-PLAN.md — ACPT-06 core-flow spine (.md ingest → read → highlight → export → re-import, 3 engines) + honest full-suite phase gate
 
 ## Progress
 
@@ -298,4 +318,4 @@ Plans:
 | 10. Annotation Review Panel | v2.0 | 6/6 | Complete    | 2026-08-16 |
 | 11. PDF Intake | v2.0 | 7/7 | Complete    | 2026-08-17 |
 | 12. EPUB Intake | v2.0 | 8/8 | Complete    | 2026-08-18 |
-| 13. Polish and Acceptance | v2.0 | 0/TBD | Not started | - |
+| 13. Polish and Acceptance | v2.0 | 0/6 | Not started | - |
