@@ -156,6 +156,15 @@ function AppInner() {
   const { settings, update } = useSettings();
   // D4-10 bridge — ArticleView registers its handler here; null on the list.
   const modeToggleHandlerRef = useRef<ModeToggleHandler | null>(null);
+  // Plan 13-04 (D13-15 / Pitfall 7): in-app navigation flag. Flips true on
+  // the FIRST in-app hashchange AFTER initial mount and never flips back.
+  // The initial load fires no hashchange — so a fresh deep-link tab AND a
+  // reload mid-article both keep the flag false (a reload has browser
+  // history, but back() would exit to the prior site, not an app route;
+  // flag-from-mount-start is the robust shape). Threaded to ArticleView and
+  // ReviewView so their BackToLibrary affordance picks history.back() only
+  // when a prior in-app entry provably exists, else the "#/" fallback.
+  const [hasAppHistory, setHasAppHistory] = useState(false);
 
   useEffect(() => {
     // Gap 3 / UAT test 10: only hashes prefixed with "#/" are app routes.
@@ -170,6 +179,10 @@ function AppInner() {
     const onHash = () => {
       const hash = window.location.hash;
       if (hash !== "" && !hash.startsWith("#/")) return;
+      // Only ROUTED (in-app) hashes count as in-app navigation — a
+      // fragment-only hop (e.g. #fn-1) returns above and must not fake
+      // in-app history for the BackToLibrary guard.
+      setHasAppHistory(true);
       setView(parseHash());
     };
     window.addEventListener("hashchange", onHash);
@@ -223,7 +236,7 @@ function AppInner() {
       {view.name === "list" ? (
         <LibraryView />
       ) : view.name === "review" ? (
-        <ReviewView />
+        <ReviewView hasAppHistory={hasAppHistory} />
       ) : (
         <ArticleView
           articleId={view.id}
@@ -232,6 +245,7 @@ function AppInner() {
           drawerOpen={drawerOpen}
           onCloseDrawer={() => setDrawerOpen(false)}
           onAnnotationCountChange={setAnnotationCount}
+          hasAppHistory={hasAppHistory}
         />
       )}
     </>

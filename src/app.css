@@ -2932,3 +2932,35 @@ dialog.book-remove-confirm::backdrop {
   text-align: center;
   z-index: 5; /* same chrome layer as the page indicator + chevrons */
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+ * Phase 13 Plan 13-04 — standardized back affordance (POLISH-05 / D13-15).
+ *
+ * .back-to-library — the shared "Back to library" button mounted at the
+ * header start of ArticleView + ReviewView (the same component in both
+ * places). Reuses the .article-export-highlights quiet-button token
+ * discipline (the LibraryView "Review highlights" precedent): transparent
+ * bg, hairline border, 44px touch target, accent on hover only. Tokens
+ * only — every color references var(--…). Zero motion properties by
+ * design (A11Y-06 discipline — the global reduced-motion gate stays
+ * trivially satisfied; wording kept free of greppable property names per
+ * the 13-01 comment discipline).
+ * ════════════════════════════════════════════════════════════════════════ */
+.back-to-library {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--touch);
+  padding-inline: var(--space-md);
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  font-family: var(--font-ui);
+  font-size: 16px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.back-to-library:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}

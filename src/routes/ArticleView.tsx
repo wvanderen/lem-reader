@@ -60,6 +60,7 @@ import { fragmentContainingOffset } from "../pagination/anchor";
 // sibling of the title / meta / source-link. Inert at mount (Pitfall 8-5 —
 // does NOT steal focus from the article body).
 import { TagEntry } from "../reader/TagEntry";
+import { BackToLibrary } from "../reader/BackToLibrary";
 // Plan 09-05 (D9-06, PORT-03) — per-article "Export highlights": the fixed
 // markdown template over this article's highlights+notes (collectHighlight
 // Entries re-resolves the honest tri-state through the SHIPPED resolver —
@@ -122,6 +123,13 @@ export interface ArticleViewProps {
    * Header badge stays in sync.
    */
   onAnnotationCountChange: (count: number) => void;
+  /**
+   * Plan 13-04 (D13-15): App's in-app navigation flag — true once an in-app
+   * hashchange routed AFTER initial mount. Drives the BackToLibrary
+   * affordance's history.back() vs "#/" fallback choice (Pitfall 7 — a
+   * fresh deep-link tab must never exit the app on back).
+   */
+  hasAppHistory: boolean;
 }
 
 function formatDate(iso: string): string {
@@ -189,6 +197,7 @@ export function ArticleView({
   drawerOpen,
   onCloseDrawer,
   onAnnotationCountChange,
+  hasAppHistory,
 }: ArticleViewProps) {
   const [article, setArticle] = useState<CanonicalArticle | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
@@ -1526,6 +1535,12 @@ export function ArticleView({
           className={paginatedActive ? "article-body paginated-surface" : "article-body"}
         >
           <header>
+            {/* Plan 13-04 (POLISH-05 / D13-15) — the standardized back
+                affordance at the article header start, BEFORE the title
+                cluster. Native button = keyboard-reachable by construction;
+                history.back() only when App's in-app flag is set, else the
+                "#/" fallback (Pitfall 7 — deep-link tabs never exit). */}
+            <BackToLibrary hasAppHistory={hasAppHistory} />
             <h1>{article.provenance.title}</h1>
             {(article.provenance.author || article.provenance.publishedAt) && (
               <p className="meta">

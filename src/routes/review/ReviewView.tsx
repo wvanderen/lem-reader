@@ -66,6 +66,7 @@ import {
 } from "./reviewFilter";
 import { ReviewNoteDialog } from "./ReviewNoteDialog";
 import { DeleteHighlightConfirm } from "./DeleteHighlightConfirm";
+import { BackToLibrary } from "../../reader/BackToLibrary";
 
 /** Truncation limits for review rows (the AnnotationsDrawer discipline). */
 const EXCERPT_MAX_CHARS = 120;
@@ -240,7 +241,7 @@ function ReviewRow({
  * (D10-09 — no effect chains), and renders grouped-by-article sections
  * plus the never-drop orphan tail.
  */
-export function ReviewView() {
+export function ReviewView({ hasAppHistory }: { hasAppHistory: boolean }) {
   const [status, setStatus] = useState<"loading" | "ready" | "error">(
     "loading",
   );
@@ -318,6 +319,11 @@ export function ReviewView() {
   return (
     <main id="main">
       <header className="review-header">
+        {/* Plan 13-04 (POLISH-05 / D13-15) — the shared back affordance at
+            the review header start, identical anatomy to ArticleView's
+            mount (the same component). App's in-app flag drives
+            history.back() vs the "#/" fallback (Pitfall 7). */}
+        <BackToLibrary hasAppHistory={hasAppHistory} />
         {/* One h1 per page (D10-01) — skip-link parity via main#main. */}
         <h1>Review highlights</h1>
       </header>
