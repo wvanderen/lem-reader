@@ -35,7 +35,7 @@ Seven phases that add one stateless ingestion backend and one new data domain (u
 - [x] **Phase 10: Annotation Review Panel** - Dedicated surface to review, filter, and curate all highlights and notes across the library (completed 2026-08-16)
 - [x] **Phase 11: PDF Intake** - PDF text extraction with honest failure for scanned and multi-column documents (completed 2026-08-17)
 - [x] **Phase 12: EPUB Intake** - Multi-chapter EPUB books surfaced as per-chapter articles under a book grouping (completed 2026-08-18)
-- [ ] **Phase 13: Polish and Acceptance** - FOUC and progress-bar fixes, user-widened chrome polish (header/modal/nav/library), plus the NVDA+Firefox and v2.0 core-flow acceptance gate
+- [x] **Phase 13: Polish and Acceptance** - FOUC and progress-bar fixes, user-widened chrome polish (header/modal/nav/library), plus the NVDA+Firefox and v2.0 core-flow acceptance gate (completed 2026-08-19)
 
 ## Phase Details
 
@@ -284,7 +284,7 @@ Plans:
    7. Reader gets a keyboard-reachable "Back to library" affordance on article and review views that never exits the app on a deep link (POLISH-05, D13-15).
    8. Reader sees an organized library home — continue reading / add content / library list — within existing components (POLISH-06, D13-16).
 
-**Plans**: 5/6 plans executed
+**Plans**: 6/6 plans complete
 
 Plans:
 **Wave 1**
@@ -300,7 +300,7 @@ Plans:
 
 **Wave 3** *(blocked on all — runs the honest full-suite gate)*
 
-- [ ] 13-06-PLAN.md — ACPT-06 core-flow spine (.md ingest → read → highlight → export → re-import, 3 engines) + honest full-suite phase gate
+- [x] 13-06-PLAN.md — ACPT-06 core-flow spine (.md ingest → read → highlight → export → re-import, 3 engines) + honest full-suite phase gate
 
 ## Progress
 
@@ -318,4 +318,4 @@ Plans:
 | 10. Annotation Review Panel | v2.0 | 6/6 | Complete    | 2026-08-16 |
 | 11. PDF Intake | v2.0 | 7/7 | Complete    | 2026-08-17 |
 | 12. EPUB Intake | v2.0 | 8/8 | Complete    | 2026-08-18 |
-| 13. Polish and Acceptance | v2.0 | 5/6 | In Progress|  |
+| 13. Polish and Acceptance | v2.0 | 6/6 | Complete   | 2026-08-19 |

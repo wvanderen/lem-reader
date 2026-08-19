@@ -49,7 +49,7 @@ Requirements for the v2.0 milestone. Each maps to a roadmap phase (traceability 
 ### Acceptance
 
 - [ ] **ACPT-05**: Reader can complete the documented screen-reader acceptance flows on NVDA+Firefox, closing the v1.0 ACPT-02 reduced-gate coverage boundary (A4).
-- [ ] **ACPT-06**: Reader can complete the v2.0 core flow (ingest → read → highlight → export → re-import) across the supported browser matrix (Chromium/Firefox/WebKit) without content loss.
+- [x] **ACPT-06**: Reader can complete the v2.0 core flow (ingest → read → highlight → export → re-import) across the supported browser matrix (Chromium/Firefox/WebKit) without content loss.
 
 ## v1.0 Validated Requirements
 
@@ -129,7 +129,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | POLISH-05 | Phase 13 | Complete |
 | POLISH-06 | Phase 13 | Complete |
 | ACPT-05 | Phase 13 | Pending |
-| ACPT-06 | Phase 13 | Pending |
+| ACPT-06 | Phase 13 | Complete |
 
 **Coverage:**
 
