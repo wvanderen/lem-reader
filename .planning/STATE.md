@@ -5,16 +5,16 @@ milestone_name: Personal Library
 current_phase: 13
 current_phase_name: polish-and-acceptance
 status: executing
-stopped_at: Completed 13-03-PLAN.md
-last_updated: "2026-08-19T21:00:26.892Z"
+stopped_at: Completed 13-07-PLAN.md
+last_updated: "2026-08-19T21:05:41.860Z"
 last_activity: 2026-08-19
 last_activity_desc: Phase 13 execution started
 progress:
   total_phases: 7
-  completed_phases: 7
-  total_plans: 46
+  completed_phases: 6
+  total_plans: 50
   completed_plans: 46
-  percent: 100
+  percent: 86
 ---
 
 # Project State
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 ## Current Position
 
 Phase: 13 (polish-and-acceptance) — EXECUTING
-Plan: 6 of 6
+Plan: 2 of 10
 Status: Ready to execute
 Last activity: 2026-08-19 — Phase 13 execution started
 
@@ -146,6 +146,7 @@ Progress: [████████████████████] 32/32 p
 | Phase 13 P03 | 12 min | 2 tasks | 4 files |
 | Phase 13 P05 | 3 min | 2 tasks | 2 files |
 | Phase 13 P04 | 95min | 2 tasks | 11 files |
+| Phase 13 P07 | 3 min | 2 tasks tasks | 3 files files |
 
 ## Accumulated Context
 
@@ -338,6 +339,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
  - [Phase 13]: 13-06 repair (HUMAN-SANCTIONED Option A fixes, 2026-08-18 decision): (A) engine soft-budget whole-fitting escape in fragment.ts — a block that cannot widow-split the reserved page-1 budget but fits WHOLE at the FULL page height is placed whole (chooseSplit returns null in exactly that geometry, so the split-only retry manufactured the fallback the reserve must never produce — the module's own L396-401 invariant); the guard heals the overshoot where physics allow. 3 engine unit tests lock it (reproducer 251px/209px/62.75px budget, reserved==unreserved pages identity, short-block class).
  - [Phase 13]: 13-06 repair: firefox fieldset internal-clamp mechanism — firefox sizes the .tag-entry fieldset's internal wrapper from the input's intrinsic size=20 width and IGNORES min-width/width/max-width ON THE FIELDSET for that inner clamp; min-width:0 alone leaves 298 vs 288 at 320px (WCAG 1.4.10). width:100% on .tag-entry-input makes the intrinsic contribution definite → overflow eliminated, input still fills the row via flex-grow. Probed empirically; firefox reflow ×7 + high-zoom ×6 green.
  - [Phase 13]: 13-06 repair: the epub/a11y chapter cells' 360×480 geometry is BELOW the Option A spot's physics floor — the ~209px spot in a 251px page-1 box leaves no room for ANY widow-legal slice, so the guard's honest scrolling fallback fires (uniform for articles AND chapters) and the M-label round-trip can never pass inside an override session (the header ModeToggle label tracks only the PERSISTED preference; M clears the override invisibly). Realigned strengthen-only to 360×640 (the D13-13 pinned mobile geometry where the sanctioned engine escape + guard heal work as designed — probe-verified 3 guard-healed pages). Honest gate exit 0: 2257 passed / 0 failed / 19 skipped.
+- [Phase ?]: Phase 13-07 (G1+G3 gap closure): .library-section-add measure rule mirrors .library-header exactly (max-width 1100px + margin-inline auto) — wrapper stays padding/border-free so the 13-03 margin-collapsing rhythm is preserved; the add section now conforms to the same centered measure as .library-list/.library-search/.tag-filter/.continue-reading-strip
+- [Phase ?]: Phase 13-07: LibraryRow remove glyph is a local TrashIcon inline-SVG (GearIcon anatomy, 20x20 currentColor stroke) — button aria-label template byte-identical so remove-cascade/dialog-centering specs locate it unchanged; .library-row-remove rule mirrors .tag-chip-remove (transparent rest, var(--touch) box, hover color+border-color var(--destructive)); src/ is now emoji-as-icon free
 
 ### Pending Todos
 
@@ -368,8 +371,8 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-19T16:10:00Z (13-06 post-merge repair complete)
-Stopped at: 13-06 repair complete — honest gate exit 0 (2257 passed / 0 failed / 19 skipped); Phase 13 ready for verification
+Last session: 2026-08-19T21:05:35.084Z
+Stopped at: Completed 13-07-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
