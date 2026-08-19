@@ -1,15 +1,17 @@
 ---
 phase: 13
 slug: polish-and-acceptance
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: active
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-08-18
+updated: 2026-08-18
 ---
 
 # Phase 13 — Validation Strategy
 
 > Per-phase validation contract for feedback sampling during execution.
+> Populated at plan time (2026-08-18 revision) from 13-RESEARCH.md § Validation Architecture and the adopted plans 13-01 … 13-06.
 
 ---
 
@@ -17,20 +19,20 @@ created: 2026-08-18
 
 | Property | Value |
 |----------|-------|
-| **Framework** | {pytest 7.x / jest 29.x / vitest / go test / other} |
-| **Config file** | {path or "none — Wave 0 installs"} |
-| **Quick run command** | `{quick command}` |
-| **Full suite command** | `{full command}` |
-| **Estimated runtime** | ~{N} seconds |
+| **Framework** | Vitest 4.x (unit — `npm run test:unit -- --run`) + Playwright Test 1.61.1 (e2e — `npm run test:e2e`); React Testing Library 16.3.2 available for component tests |
+| **Config file** | playwright.config.ts (chromium/firefox/webkit projects); vitest via package defaults + tests/setup.ts |
+| **Quick run command** | the owning task's targeted spec (see map below), e.g. `npx vitest run tests/unit/pagination/progress-formula.test.ts` or `npx playwright test tests/e2e/polish/cold-load-no-snap.spec.ts` |
+| **Full suite command** | `npm run test` (vitest --run && playwright test — the D13-10 phase gate) |
+| **Estimated runtime** | targeted unit spec < 10s; single e2e spec × 3 engines ~1–3 min; full suite ~10–20 min (baseline 12-08: ~1160 unit + 1000 e2e cells, exit 0) |
 
 ---
 
 ## Sampling Rate
 
-- **After every task commit:** Run `{quick run command}`
-- **After every plan wave:** Run `{full suite command}`
-- **Before `/gsd-verify-work`:** Full suite must be green
-- **Max feedback latency:** {N} seconds
+- **After every task commit:** the task's targeted spec (unit or single e2e spec) green — see map
+- **After every plan wave:** `npm run test:unit -- --run` + every e2e directory touched by the wave
+- **Before `/gsd-verify-work`:** full `npm run test` single invocation green (D13-10 — runs LAST, gap-closure precedent)
+- **Max feedback latency:** ~3 min (one e2e spec across 3 engines)
 
 ---
 
@@ -38,7 +40,20 @@ created: 2026-08-18
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| {N}-01-01 | 01 | 1 | REQ-{XX} | T-{N}-01 / — | {expected secure behavior or "N/A"} | unit | `{command}` | ✅ / ❌ W0 | ⬜ pending |
+| 13-01-01 | 01 | 1 | POLISH-01 | T-13-01 / T-13-02 | Mirror reads null-on-doubt (ReaderSettingsSchema.safeParse); writes are silent no-ops never routed through classifyStorageError | unit (TDD) | `npx vitest run tests/unit/settings/mirror.test.ts` | ❌ → created by this task (test-first) | ⬜ pending |
+| 13-01-02 | 01 | 1 | POLISH-01 | T-13-03 | Inline script writes only via setProperty/dataset (no markup-string APIs); lazy-init prevents React re-introducing the flash | unit + typecheck | `npx vitest run tests/unit/settings/mirror.test.ts && npx tsc --noEmit` | ✅ (mirror.test.ts from 13-01-01) | ⬜ pending |
+| 13-01-03 | 01 | 1 | POLISH-01 | T-13-01 | Corrupt/absent/quota-blocked mirror fails silent to defaults; wipe clears the mirror (no zombie preferences) | e2e (3 engines) | `npx playwright test tests/e2e/polish/cold-load-no-snap.spec.ts` | ❌ → created by this task | ⬜ pending |
+| 13-02-01 | 02 | 1 | POLISH-02 | — | Pure clamped ratio over already-validated canonical records; never persisted | unit (pure, TDD) | `npx vitest run tests/unit/pagination/progress-formula.test.ts` | ❌ → created by this task (test-first) | ⬜ pending |
+| 13-02-02 | 02 | 1 | POLISH-02 | — | Hairline stays aria-hidden, zero-motion, origin-left (strengthen-only; PageIndicator untouched) | typecheck + e2e regression | `npx tsc --noEmit && npx playwright test tests/e2e/progress.spec.ts` | ✅ (progress.spec.ts existing, byte-unchanged) | ⬜ pending |
+| 13-02-03 | 02 | 1 | POLISH-02 | — | — | e2e (3 engines) | `npx playwright test tests/e2e/polish/first-paint-progress.spec.ts` | ❌ → created by this task | ⬜ pending |
+| 13-03-01 | 03 | 1 | POLISH-04 | — | CSS-only fix; side-sheet (settings-panel/annotations-drawer) isolation rules byte-unchanged; no JS positioning | e2e (3 engines) | `npx playwright test tests/e2e/chrome/dialog-centering.spec.ts` | ❌ → created by this task | ⬜ pending |
+| 13-03-02 | 03 | 1 | POLISH-06 | — | Byte-stable library anchors preserved (main#main, h1 "Saved articles", .status live region, LibraryRow markup) | e2e (new + existing) | `npx playwright test tests/e2e/chrome/library-tidy.spec.ts tests/e2e/library/` | ❌ tidy spec → created by this task; tests/e2e/library/ ✅ existing | ⬜ pending |
+| 13-04-01 | 04 | 2 | POLISH-05 | T-13-06 (accept) | Deep-link fallback assigns only the literal "#/" route — never exits the app origin; keyboard-reachable native button | e2e (3 engines) | `npx playwright test tests/e2e/chrome/back-nav.spec.ts` | ❌ → created by this task | ⬜ pending |
+| 13-04-02 | 04 | 2 | POLISH-03 | — | 09-07 grid cap byte-unchanged; TagEntry inert-at-mount discipline carried to the new home | e2e (new + corpus regression) | `npx playwright test tests/e2e/chrome/header-geometry.spec.ts tests/e2e/pagination/ tests/e2e/open-every-fixture.spec.ts` | ❌ geometry spec → created by this task; corpus ✅ existing | ⬜ pending |
+| 13-05-01 | 05 | 1 | ACPT-05 | T-13-07 | Protocol byte-unchanged; role+name outcome discipline recorded (no verbatim SR phrasing); flip condition stated | doc/gate check | `test -f .planning/phases/13-polish-and-acceptance/13-VERIFICATION.md && grep -c "NVDA" .planning/phases/13-polish-and-acceptance/13-VERIFICATION.md && git diff --stat docs/ACCEPTANCE-PROTOCOL.md \| wc -l \| grep -x "0"` | ❌ → created by this task | ⬜ pending |
+| 13-05-02 | 05 | 1 | ACPT-05 (D13-11) | — | Zero production changes; typed server-error rejection + always-destroy finally proven by test alone | unit (fake timers, TDD) | `npx vitest run tests/unit/server/pdfTimeout.spec.ts` | ❌ → created by this task (test-first) | ⬜ pending |
+| 13-06-01 | 06 | 3 | ACPT-06 | T-13-08 | Shipped Zod-at-boundary ingest pipeline exercised, not modified; no production source changes | e2e (3 engines) | `npx playwright test tests/e2e/portability/core-flow-spine.spec.ts` | ❌ → created by this task | ⬜ pending |
+| 13-06-02 | 06 | 3 | ACPT-06 (D13-10) | T-13-09 | Honest gate: single plain npm run test invocation; counts + full red-run history recorded in 13-06-OUTPUT.md | full-suite gate | `npm run test` | ✅ command exists; record = 13-06-OUTPUT.md (created by this task) | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -46,11 +61,7 @@ created: 2026-08-18
 
 ## Wave 0 Requirements
 
-- [ ] `{tests/test_file.py}` — stubs for REQ-{XX}
-- [ ] `{tests/conftest.py}` — shared fixtures
-- [ ] `{framework install}` — if no framework detected
-
-*If none: "Existing infrastructure covers all phase requirements."*
+None — existing infrastructure (Vitest + Playwright 3-engine matrix, `npm run test` harness) covers all phase requirements. Every new spec file in the map above is created **by its owning task**, test-first where the plan marks `tdd="true"` (13-01-01, 13-02-01, 13-05-02); no separate Wave 0 plan is needed.
 
 ---
 
@@ -58,19 +69,18 @@ created: 2026-08-18
 
 | Behavior | Requirement | Why Manual | Test Instructions |
 |----------|-------------|------------|-------------------|
-| {behavior} | REQ-{XX} | {reason} | {steps} |
-
-*If none: "All phase behaviors have automated verification."*
+| NVDA+Firefox acceptance protocol run (6 scripted flows + 5 exploratory charters), zero blocker/major to pass | ACPT-05 | NVDA + Windows hardware unavailable to the agent (D13-07 prepare-then-run-later) | Run docs/ACCEPTANCE-PROTOCOL.md AS-DOCUMENTED on Windows; record role+name outcomes in the 13-VERIFICATION.md findings table; fix-then-re-run per D13-06; ACPT-05 flips only when results land |
+| VoiceOver+Safari supplementary re-run over the NEW v2.0 surfaces | D13-05 (supplementary — explicitly NOT an ACPT-05 gate) | VoiceOver is interactive AT on the user's macOS hardware; not agent-runnable | Follow the VO checklist in 13-VERIFICATION.md (library browse/search/tags, ingest + refusals, review panel, export/import dialogs, book groupings); record findings; same fix-then-re-run policy |
 
 ---
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < {N}s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies (no MISSING refs — every new spec is created by its owning task)
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify (every task in the map has one)
+- [x] Wave 0 covers all MISSING references (none exist — see Wave 0 section)
+- [x] No watch-mode flags (all commands are single-shot `--run` invocations)
+- [x] Feedback latency < 3 min per task; full gate ~10–20 min
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** {pending / approved YYYY-MM-DD}
+**Approval:** approved 2026-08-18 (plan-time — populated from adopted plans 13-01…13-06 per checker revision; re-affirmed per wave during execution)

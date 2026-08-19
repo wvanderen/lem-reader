@@ -488,22 +488,29 @@ function BackToLibrary({ hasAppHistory }: { hasAppHistory: boolean }) {
 
 **All other claims are [VERIFIED: file:line] against the working tree or [CITED: WHATWG/protocol/ledger] against named project documents.**
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> All five questions resolved at plan time (2026-08-18). Per-question resolutions cite the adopting plan; the recommendation lines below are preserved for context.
 
 1. **Within-page offset contribution for POLISH-02**
    - What we know: start-anchored (page-start offset / total) satisfies both SC#2 boundaries (1-page opens 0%, multi-page starts ~0% and grows per turn); library rows + scrolling short-article behavior both already show 0-at-start semantics (parity argument).
    - What's unclear: whether the final page should read as "complete" for anyone relying on the hairline shape (start-anchored never shows 100% — matching the library rows' separate `Finished` mark convention, which the reader surface does not have).
    - Recommendation: ship pure start-anchored; boundary tests encode 1-page→0%, page1→0%, monotonic growth, last-page→<100%. If the planner wants a finish signal, mirror the D8-12 `● Finished` mark convention rather than distorting the ratio (discretion area explicitly names the ≥98% convention).
+   - Resolution (RESOLVED via 13-02): pure start-anchored formula adopted — `paginatedProgressRatio` in src/pagination/progress.ts with boundary unit tests encoding 1-page→0%, page-1→0%, monotonic per-turn growth, last-page<100%; no finish signal added (the hairline stays a pure ratio; the library rows keep their separate Finished mark).
 2. **Mirror key name + write-back policy on stale hydration**
    - What we know: one key, all settings, versioned shape (D13-02); rides scheduleSave + flushSave.
    - What's unclear: exact key name and whether a stale-mirror self-correct happens immediately at hydration (write mirror at hydrate-diff) or only on next save.
    - Recommendation: name it after the settings record it mirrors (`lem-reader-settings-mirror-v1` shape is planner's); self-correct at hydrate when values differ (one extra write, kills drift in the same session).
+   - Resolution (RESOLVED via 13-01): key = `lem-settings-mirror-v1` (SETTINGS_MIRROR_KEY in settingsMirror.ts); stale mirror self-corrects immediately at hydration — loadSettings writes the corrected mirror on divergence — and mirror writes ride scheduleSave/flushSave thereafter.
 3. **Article-top metadata spot anatomy in paginated mode (D13-13)**
    - What we know: TagEntry + source line leave the pinned header; the pinned header keeps title + essential controls; "rendered once" implies the metadata spot is not permanently visible chrome.
    - What's unclear: whether the spot renders (a) only on page 1 / article start as flow content inside the surface, or (b) a collapsed affordance in the slimmed header. Option (a) is truer to "rendered once" but interacts with page-fragment geometry (chrome must not enter page capacity math — the 12-06 fixed-chrome lesson); option (b) risks re-growing the header.
    - Recommendation: prefer (a) — article-start flow content rendered outside the pagination fragment stream (ArticleView-owned, like the chapter nav's out-of-flow discipline); planner validates geometry against the 360×640 no-scroll bar.
+   - Resolution (RESOLVED via 13-04): option (a) adopted — an ArticleView-owned article-top spot rendered exactly once, mounted OUTSIDE the grid header row (no page-viewport oscillation) and OUTSIDE the pagination block stream (no page-capacity math), visible at article start (first page); geometry validated against the 360×640 no-internal-scroll bar with a documented visibility fallback if corpus specs object.
 4. **Back-affordance history guard shape** — see Pitfall 7; the flag-on-first-in-app-hashchange shape is recommended but the planner owns the exact mechanism (including the reload-mid-article edge).
+   - Resolution (RESOLVED via 13-04): flag-on-first-post-mount-in-app-hashchange adopted — App.tsx tracks `hasAppHistory`, flips it on the first in-app hashchange after mount (initial load and reload-mid-article do not count), passes it as a prop to both views; `history.back()` when true, else `location.hash = "#/"` (parseHash routes it to the library list).
 5. **Whether the four centered dialogs get one fix sweep or NotePopover only** — research diagnosed all four sharing the root cause; the sweep is recommended (one CSS change class + one parameterized assertion), but scope confirmation is the planner's per D13-14's letter ("the fix follows the existing UI-SPEC dialog contracts" — all four carry the same contract).
+   - Resolution (RESOLVED via 13-03): one sweep — all four centered modals (highlight-popover, wipe-confirm, library-remove-confirm, import-preview) get `margin: auto`; the intentional side sheets (settings-panel, annotations-drawer) stay byte-unchanged; one parameterized dialog-centering.spec.ts covers the family across 3 engines.
 
 ## Environment Availability
 
