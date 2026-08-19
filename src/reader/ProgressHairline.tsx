@@ -23,34 +23,24 @@
 // §Layout line 491 — no scroll progress to show there).
 interface ProgressHairlineProps {
   /**
-   * Scroll progress as a clamped ratio in [0, 1]. 0 = at the top of the
-   * article; 1 = at the bottom. Driven by ArticleView's scroll listener
-   * (window.scrollY / (scrollHeight - viewportHeight)). The inline-style
-   * write happens on every scroll so the fill tracks the scrollbar.
-   *
-   * Ignored when `page` is present (paginated mode derives the ratio from N/M).
+   * Position progress as a ratio in [0, 1]. 0 = at the start of the article;
+   * 1 = at the end. Ratio-only since POLISH-02 (Phase 13 Plan 02): scrolling
+   * mode passes window.scrollY / (scrollHeight - viewportHeight); paginated
+   * mode passes paginatedProgressRatio(article, fragment) — the offset-
+   * anchored D-05 position, replacing the old N/M division that read 100%
+   * on a one-page open. The inline-style write happens on every position
+   * change so the fill tracks like a native scrollbar.
    */
   progress?: number;
-  /**
-   * Paginated-mode page position. When present, the fill derives from
-   * current/total (D4-08) and the scrolling `progress` is ignored. The
-   * swap is instant — no motion property is declared (UI-SPEC §Interaction
-   * 12 + RESEARCH anti-pattern #6 discipline preserved).
-   */
-  page?: { current: number; total: number };
 }
 
-export function ProgressHairline({ progress, page }: ProgressHairlineProps) {
-  // When page is present, derive the ratio from N/M (paginated mode). When
-  // absent, clamp the scroll-progress ratio to [0, 1] defensively — a
-  // scroll-position edge case (e.g. an article shorter than the viewport)
-  // could otherwise produce a negative or >1 ratio that flips or over-
-  // extends the fill.
-  const ratio = page
-    ? page.total > 0
-      ? page.current / page.total
-      : 0
-    : Math.max(0, Math.min(1, progress ?? 0));
+export function ProgressHairline({ progress }: ProgressHairlineProps) {
+  // Clamp the ratio to [0, 1] defensively — a position edge case (e.g. an
+  // article shorter than the viewport, or a stale paginated offset) could
+  // otherwise produce a negative or >1 ratio that flips or over-extends
+  // the fill. paginatedProgressRatio clamps upstream too; this is the
+  // presentational last line of defense.
+  const ratio = Math.max(0, Math.min(1, progress ?? 0));
   return (
     <div className="progress-hairline" aria-hidden="true">
       <div

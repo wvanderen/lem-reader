@@ -2,8 +2,9 @@
 // Paginated mode renderer — derives page fragments from the trusted
 // measurement view and mounts ONE PageFragmentView at a time (Pattern 5
 // single content tree — A11Y-03). The surface owns currentPageIdx + pages
-// state; chevrons turn the page; ProgressHairline + PageIndicator reflect
-// N/M (D4-08).
+// state; chevrons turn the page; ProgressHairline carries the offset-anchored
+// progress ratio (POLISH-02) while PageIndicator keeps the N/M readout
+// (D4-08 — page numbers stay informational, never identity).
 //
 // PAGE-05 substrate: the staleness contract (PAGE-06 last-valid-view + PAGE-07
 // stale-epoch drop) is inherited from useMeasurement — this surface consumes
@@ -44,7 +45,7 @@
 // its fragment + chevrons + indicator + hairline as children of that shared
 // article element.
 
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type { CanonicalArticle } from "../content/types";
 import type { MeasurementResult } from "../measurement/types";
 import type { DiagnosticBus } from "../measurement/diagnostics";
@@ -52,6 +53,7 @@ import type { PageFragment } from "../pagination/types";
 import { paginateDocument } from "../pagination/fragment";
 import { refragmentOverflowingPage } from "../pagination/overflowGuard";
 import { fragmentContainingOffset, pageStartGlobalOffset } from "../pagination/anchor";
+import { paginatedProgressRatio } from "../pagination/progress";
 import { splittingGraphemeLength } from "../pagination/splitBlock";
 import { PageFragmentView } from "../pagination/fragmentRenderer";
 import type { ArticleBodyHighlight } from "../content/render/BlockRenderer";
@@ -564,6 +566,18 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
       [],
     );
 
+    // POLISH-02 (Phase 13 Plan 02): the hairline's progress is the offset-
+    // anchored D-05 ratio of the committed page's START, memoized per
+    // (article, pages, currentPageIdx) the way LibraryRow memoizes its
+    // grapheme total — pageStartGlobalOffset + graphemeLength run once per
+    // committed page, not per render. First page of any article (including a
+    // one-page article) reads 0; the last page stays below 1.
+    const progressRatio = useMemo(() => {
+      const p = pages;
+      if (!p || !p[currentPageIdx]) return 0;
+      return paginatedProgressRatio(article, p[currentPageIdx]!);
+    }, [article, pages, currentPageIdx]);
+
     // Until the first pagination pass commits (or when status is "fallback"),
     // render nothing inside the article body. The shared <article> header stays
     // visible above this surface.
@@ -577,12 +591,12 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
     return (
       <>
         {/*
-          ProgressHairline accepts a `page` prop in paginated mode; the fill
-          derives from N/M. PageIndicator is a sibling decorative span. The
-          SectionAnnouncer live region in ArticleView conveys structural
+          ProgressHairline receives the offset-anchored progress ratio
+          (POLISH-02); PageIndicator is the sibling decorative N-of-M span.
+          The SectionAnnouncer live region in ArticleView conveys structural
           progress to AT; both elements here are aria-hidden.
         */}
-        <ProgressHairline page={{ current: currentPageIdx + 1, total: pages.length }} />
+        <ProgressHairline progress={progressRatio} />
         <PageIndicator current={currentPageIdx + 1} total={pages.length} />
 
         <h2
