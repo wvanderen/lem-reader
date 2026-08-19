@@ -3042,9 +3042,16 @@ dialog.book-remove-confirm::backdrop {
 /* The fieldset flexes to the row's remaining width; the never-wrapping
    add-row keeps the input + Add-tag button on ONE line at 360px (the
    stacked row was the single largest chunk of the starved-page-1 spot).
-   44px touch targets are preserved via the components' own min-heights. */
+   44px touch targets are preserved via the components' own min-heights.
+   Post-merge repair (human-sanctioned 2026-08-19): min-width 0 lets the
+   fieldset shrink below its intrinsic min-content — firefox refuses to
+   flex-shrink fieldsets under min-content (the never-wrapping add-row:
+   input + Add-tag + padding = 294px), which overflowed the 288px
+   320px-viewport content box by ~10px (WCAG 1.4.10 reflow violation;
+   the .tag-entry-input inside already carries its own min-width: 0). */
 .article-top-meta .tag-entry {
   flex: 1 1 16em;
+  min-width: 0;
   margin-block: 0;
   padding: var(--space-xs) var(--space-sm);
 }
