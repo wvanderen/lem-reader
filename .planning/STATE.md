@@ -5,15 +5,15 @@ milestone_name: Personal Library
 current_phase: 13
 current_phase_name: polish-and-acceptance
 status: executing
-stopped_at: Completed 13-07-PLAN.md
-last_updated: "2026-08-19T21:05:41.860Z"
+stopped_at: Completed 13-08-PLAN.md
+last_updated: "2026-08-19T21:13:31.299Z"
 last_activity: 2026-08-19
 last_activity_desc: Phase 13 execution started
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 50
-  completed_plans: 46
+  completed_plans: 48
   percent: 86
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 ## Current Position
 
 Phase: 13 (polish-and-acceptance) — EXECUTING
-Plan: 2 of 10
+Plan: 3 of 10
 Status: Ready to execute
 Last activity: 2026-08-19 — Phase 13 execution started
 
@@ -147,6 +147,7 @@ Progress: [████████████████████] 32/32 p
 | Phase 13 P05 | 3 min | 2 tasks | 2 files |
 | Phase 13 P04 | 95min | 2 tasks | 11 files |
 | Phase 13 P07 | 3 min | 2 tasks tasks | 3 files files |
+| Phase 13 P08 | 6 min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -341,6 +342,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
  - [Phase 13]: 13-06 repair: the epub/a11y chapter cells' 360×480 geometry is BELOW the Option A spot's physics floor — the ~209px spot in a 251px page-1 box leaves no room for ANY widow-legal slice, so the guard's honest scrolling fallback fires (uniform for articles AND chapters) and the M-label round-trip can never pass inside an override session (the header ModeToggle label tracks only the PERSISTED preference; M clears the override invisibly). Realigned strengthen-only to 360×640 (the D13-13 pinned mobile geometry where the sanctioned engine escape + guard heal work as designed — probe-verified 3 guard-healed pages). Honest gate exit 0: 2257 passed / 0 failed / 19 skipped.
 - [Phase ?]: Phase 13-07 (G1+G3 gap closure): .library-section-add measure rule mirrors .library-header exactly (max-width 1100px + margin-inline auto) — wrapper stays padding/border-free so the 13-03 margin-collapsing rhythm is preserved; the add section now conforms to the same centered measure as .library-list/.library-search/.tag-filter/.continue-reading-strip
 - [Phase ?]: Phase 13-07: LibraryRow remove glyph is a local TrashIcon inline-SVG (GearIcon anatomy, 20x20 currentColor stroke) — button aria-label template byte-identical so remove-cascade/dialog-centering specs locate it unchanged; .library-row-remove rule mirrors .tag-chip-remove (transparent rest, var(--touch) box, hover color+border-color var(--destructive)); src/ is now emoji-as-icon free
+- [Phase ?]: 13-08: resetFilePick is the single reset seam for the intake upload picker (imperative input.value clear + setHasFile false) wired to all 8 terminal outcomes of handleFileSubmit — the 09-05 import-input reset discipline applied to intake; cap/dedupe guards byte-unchanged, resets append after the calm copy
+- [Phase ?]: 13-08: Remove file button reuses .article-export-highlights quiet-button tokens + the ingest-remove-file behavioral hook class — type=button (never submits), disabled while submitting; zero CSS additions (13-03 cross-surface reuse precedent)
 
 ### Pending Todos
 
@@ -371,8 +374,8 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-19T21:05:35.084Z
-Stopped at: Completed 13-07-PLAN.md
+Last session: 2026-08-19T21:13:31.291Z
+Stopped at: Completed 13-08-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

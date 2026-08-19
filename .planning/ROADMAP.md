@@ -284,7 +284,7 @@ Plans:
    7. Reader gets a keyboard-reachable "Back to library" affordance on article and review views that never exits the app on a deep link (POLISH-05, D13-15).
    8. Reader sees an organized library home — continue reading / add content / library list — within existing components (POLISH-06, D13-16).
 
-**Plans**: 7/10 plans executed
+**Plans**: 8/10 plans executed
 
 Plans:
 **Wave 1**
@@ -305,7 +305,7 @@ Plans:
 **Wave 4** *(gap closure — G1–G4 from the 2026-08-19 user review; no file overlap, parallel)*
 
 - [x] 13-07-PLAN.md — G1+G3 library chrome: add-section shared 1100px measure + SVG trash icon replacing the emoji glyph + strengthened library-tidy parity assertions
-- [ ] 13-08-PLAN.md — G2 upload control: resetFilePick + Remove file affordance + terminal-outcome resets (09-05 discipline) + upload-queue e2e
+- [x] 13-08-PLAN.md — G2 upload control: resetFilePick + Remove file affordance + terminal-outcome resets (09-05 discipline) + upload-queue e2e
 - [ ] 13-09-PLAN.md — G4 paginated first-paint: paginatedPending stable-placeholder branch (never scroll-then-swap) + first-paint-mode-surface e2e (strengthened POLISH-01/02)
 
 **Wave 5** *(blocked on Wave 4 — shares app.css with 13-07 and ArticleView.tsx with 13-09)*
@@ -328,4 +328,4 @@ Plans:
 | 10. Annotation Review Panel | v2.0 | 6/6 | Complete    | 2026-08-16 |
 | 11. PDF Intake | v2.0 | 7/7 | Complete    | 2026-08-17 |
 | 12. EPUB Intake | v2.0 | 8/8 | Complete    | 2026-08-18 |
-| 13. Polish and Acceptance | v2.0 | 7/10 | In Progress|  |
+| 13. Polish and Acceptance | v2.0 | 8/10 | In Progress|  |
