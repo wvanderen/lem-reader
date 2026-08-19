@@ -6,14 +6,14 @@ current_phase: 13
 current_phase_name: polish-and-acceptance
 status: executing
 stopped_at: Completed 13-03-PLAN.md
-last_updated: "2026-08-19T02:24:17.925Z"
+last_updated: "2026-08-19T03:54:12.935Z"
 last_activity: 2026-08-19
 last_activity_desc: Phase 13 execution started
 progress:
   total_phases: 7
   completed_phases: 6
   total_plans: 46
-  completed_plans: 44
+  completed_plans: 45
   percent: 86
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 ## Current Position
 
 Phase: 13 (polish-and-acceptance) — EXECUTING
-Plan: 5 of 6
+Plan: 6 of 6
 Status: Ready to execute
 Last activity: 2026-08-19 — Phase 13 execution started
 
@@ -145,6 +145,7 @@ Progress: [████████████████████] 32/32 p
 | Phase 13 P02 | 7 min | 3 tasks | 5 files |
 | Phase 13 P03 | 12 min | 2 tasks | 4 files |
 | Phase 13 P05 | 3 min | 2 tasks | 2 files |
+| Phase 13 P04 | 95min | 2 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -332,6 +333,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: 13-03: LibraryView tidy is structure-only — header row (h1 + Review button) then three unlabeled sections (continue → add+status → list); margin-collapsing wrappers keep one --space-xl rhythm
 - [Phase 13]: [Phase 13]: 13-05: ACPT-05 instrument ships now / requirement closes at proof (D13-07) — 13-VERIFICATION.md carries the NVDA runbook + empty findings sheets + the in-file flip condition (zero blocker/major at results-land, fix-then-re-run D13-06); REQUIREMENTS.md ACPT-05 deliberately stays unchecked — instrument-ships-now / requirement-closes-at-proof — the 04-02/06-04 precedent; the user runs docs/ACCEPTANCE-PROTOCOL.md v1.0 as-documented (D13-04) on Windows hardware on their own schedule
 - [Phase 13]: [Phase 13]: 13-05 D13-11 gap closure: withPdfDocument 30s timeout firing path proven by a 3-case fake-timers spec (typed server-error rejection with exact copy, always-destroy finally, control race) — zero production changes; PDF_EXTRACTION_TIMEOUT_MS imported from server/limits.ts (its definition site; the plan's read_first pointer to src/ingestion/types.ts was a doc misdirection corrected by grep) — the 11-VERIFICATION § Acknowledged Gaps closure terms mandate test-only closure; the race was wired since 11-02 but exercised by no test
+- [Phase ?]: [Phase 13 13-04] Option A (HUMAN DECISION 2026-08-18, Rule 4 checkpoint resolved): additive pagination-engine parameter firstPageReservedPx (default 0 = byte-equivalent) — page-1 content budget = viewport − reserve, floor-clamped; ArticleView measures the metadata-spot margin-box once at settle (same rAF batch as the viewport height, so first-publication==settled holds) and threads it through PaginatedSurface; pages 2+ full budget; guard/DEV-hook/anchors reserve-unaware; stale reserve after mid-article typography change is a documented guard-covered edge.
+- [Phase ?]: [Phase 13 13-04] Single-owner chrome mounting: the article-top spot is parent-OWNED but surface-MOUNTED (articleStartChrome) — a pageState-gated spot lags turns by one commit and transiently renders page 2 inside page-1 geometry (guard overflow → dom-fallback session flip, observed 3 engines). Reserve floors must stay honest: a floor above physically remaining space only manufactures guard-healed overflow (0.25 anti-degenerate floor + compact spot CSS ≈169px desktop / ≈217-246px mobile).
 
 ### Pending Todos
 
@@ -361,7 +364,7 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-19T02:23:52.984Z
+Last session: 2026-08-19T03:53:24.760Z
 Stopped at: Completed 13-03-PLAN.md
 Resume file: None
 

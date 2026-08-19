@@ -284,7 +284,7 @@ Plans:
    7. Reader gets a keyboard-reachable "Back to library" affordance on article and review views that never exits the app on a deep link (POLISH-05, D13-15).
    8. Reader sees an organized library home — continue reading / add content / library list — within existing components (POLISH-06, D13-16).
 
-**Plans**: 4/6 plans executed
+**Plans**: 5/6 plans executed
 
 Plans:
 **Wave 1**
@@ -296,7 +296,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 — shares app.css with 13-03)*
 
-- [ ] 13-04-PLAN.md — POLISH-03 + POLISH-05 chrome polish: header slim + render-once metadata spot + BackToLibrary affordance
+- [x] 13-04-PLAN.md — POLISH-03 + POLISH-05 chrome polish: header slim + render-once metadata spot + BackToLibrary affordance
 
 **Wave 3** *(blocked on all — runs the honest full-suite gate)*
 
@@ -318,4 +318,4 @@ Plans:
 | 10. Annotation Review Panel | v2.0 | 6/6 | Complete    | 2026-08-16 |
 | 11. PDF Intake | v2.0 | 7/7 | Complete    | 2026-08-17 |
 | 12. EPUB Intake | v2.0 | 8/8 | Complete    | 2026-08-18 |
-| 13. Polish and Acceptance | v2.0 | 4/6 | In Progress|  |
+| 13. Polish and Acceptance | v2.0 | 5/6 | In Progress|  |
