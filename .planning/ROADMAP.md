@@ -284,7 +284,7 @@ Plans:
    7. Reader gets a keyboard-reachable "Back to library" affordance on article and review views that never exits the app on a deep link (POLISH-05, D13-15).
    8. Reader sees an organized library home — continue reading / add content / library list — within existing components (POLISH-06, D13-16).
 
-**Plans**: 9/10 plans executed
+**Plans**: 10/10 plans complete
 
 Plans:
 **Wave 1**
@@ -310,7 +310,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 — shares app.css with 13-07 and ArticleView.tsx with 13-09)*
 
-- [ ] 13-10-PLAN.md — G5 metadata/tag redesign: TagEntry → top-bar popover beside highlights/mode controls + compact provenance-only spot + Export → highlights drawer + realigned/strengthened geometry + tag-popover specs
+- [x] 13-10-PLAN.md — G5 metadata/tag redesign: TagEntry → top-bar popover beside highlights/mode controls + compact provenance-only spot + Export → highlights drawer + realigned/strengthened geometry + tag-popover specs
 
 ## Progress
 
@@ -328,4 +328,4 @@ Plans:
 | 10. Annotation Review Panel | v2.0 | 6/6 | Complete    | 2026-08-16 |
 | 11. PDF Intake | v2.0 | 7/7 | Complete    | 2026-08-17 |
 | 12. EPUB Intake | v2.0 | 8/8 | Complete    | 2026-08-18 |
-| 13. Polish and Acceptance | v2.0 | 9/10 | In Progress|  |
+| 13. Polish and Acceptance | v2.0 | 10/10 | Complete   | 2026-08-19 |
