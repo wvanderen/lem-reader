@@ -10,7 +10,7 @@ import {
   wipeDatabase,
   openArticle,
   selectRangeInBlock,
-  findFirstBlockWithTextAsync,
+  findDisjointBlockWalkingPages,
 } from "./_fixtures";
 import type { Page } from "@playwright/test";
 
@@ -87,25 +87,28 @@ test.describe("A11Y-05 forced-colors shape distinction (05-05)", () => {
     // vicinity of its position hint (~block 0, page 1).
     await seedOrphanAndReload(page);
 
-    // === PAGE 1 === Create a bare highlight on a block DISJOINT from the
-    // orphan (the orphan's best-effort range is at article-global ~[5,15)
-    // on block 0; skip block 0 so the D5-13 overlap check doesn't reject
-    // the selection).
-    let b = await findFirstBlockWithTextAsync(page, [0], 24);
-    expect(b, "page 1 must carry a selectable block for the bare highlight").not.toBe(-1);
-    await selectRangeInBlock(page, b, 0, 16);
-    await page.locator(".selection-toolbar").getByRole("button", { name: "Highlight", exact: true }).click();
-    const bareId = await page.locator("mark.highlight").first().getAttribute("data-highlight-id");
-
-    // In paginated mode only the current page fragment is mounted, so the
-    // orphan + bare shapes must be read WHILE STILL ON PAGE 1 (navigating
-    // away unmounts them). The orphan MUST carry a dashed outline (not a
-    // fill, not a dotted underline).
+    // Plan 13-06 repair: under the Option A page-1 budget (viewport − the
+    // metadata spot's reserve), essay page 1 carries ONLY the orphan's
+    // vicinity block — the bare + note-bearing targets legitimately live on
+    // later pages. Read the orphan's shape WHILE STILL ON PAGE 1 (in
+    // paginated mode only the current page fragment is mounted), then WALK
+    // PAGES to disjoint blocks for the bare + note-bearing highlights (the
+    // D13-09 walk-pages precedent). All three SHAPE assertions are
+    // unchanged — each mark's shape is read on the page where it renders.
     const unresolvedShape = await computedShape(
       page,
       'mark.highlight.unresolved[data-highlight-id="seed-orphan-fc"]',
     );
     expect(unresolvedShape.outlineStyle, "unresolved uses a dashed outline").toMatch(/dashed/i);
+
+    // === BARE === Walk to the first block DISJOINT from the orphan's
+    // vicinity (block 0, page 1 — skipping it also keeps the D5-13 overlap
+    // check from rejecting the selection).
+    const bare = await findDisjointBlockWalkingPages(page, [0], 24);
+    expect(bare.blockIndex, "a later page must carry a selectable block for the bare highlight").not.toBe(-1);
+    await selectRangeInBlock(page, bare.blockIndex, 0, 16);
+    await page.locator(".selection-toolbar").getByRole("button", { name: "Highlight", exact: true }).click();
+    const bareId = await page.locator("mark.highlight").first().getAttribute("data-highlight-id");
 
     // The bare highlight is the solid-fill shape — NOT a dotted underline.
     if (bareId) {
@@ -118,15 +121,14 @@ test.describe("A11Y-05 forced-colors shape distinction (05-05)", () => {
       );
     }
 
-    // === PAGE 2 === Page 1 of essay-long-form carries only the orphan's
-    // vicinity block + the bare-highlight block (Plan 04-07's
-    // page-viewport geometry fix tightened page capacity); advance one page
-    // for a fresh block on which to create the note-bearing highlight.
-    await page.keyboard.press("PageDown");
-    await page.waitForTimeout(300);
-    b = await findFirstBlockWithTextAsync(page, [], 24);
-    expect(b, "page 2 must carry a selectable block for the note-bearing highlight").not.toBe(-1);
-    const ok = await selectRangeInBlock(page, b, 0, 16);
+    // === NOTE-BEARING === Walk onward for a fresh disjoint block on which
+    // to create the note-bearing highlight.
+    const noted = await findDisjointBlockWalkingPages(page, [0, bare.blockIndex], 24);
+    expect(
+      noted.blockIndex,
+      "a later page must carry a selectable block for the note-bearing highlight",
+    ).not.toBe(-1);
+    const ok = await selectRangeInBlock(page, noted.blockIndex, 0, 16);
     expect(ok, "note-bearing target selection").toBeTruthy();
     await page.keyboard.press("n");
     await page.locator("textarea.highlight-popover-textarea").fill("Forced-colors note.");
@@ -140,8 +142,8 @@ test.describe("A11Y-05 forced-colors shape distinction (05-05)", () => {
     // CRITICAL A11Y-05 contract: each state's shape survives the UA forced
     // palette (no state relies on color alone). The note-bearing mark
     // carries a DOTTED underline + NO dashed outline (vs. unresolved's
-    // dashed outline + vs. bare's solid underline read on page 1 above).
-    // The three shapes are MUTUALLY DISTINCT.
+    // dashed outline + vs. bare's solid underline read above). The three
+    // shapes are MUTUALLY DISTINCT.
     if (noteId) {
       const noteShape = await computedShape(
         page,
