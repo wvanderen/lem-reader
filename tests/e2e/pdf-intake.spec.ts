@@ -63,6 +63,8 @@ import {
   findFirstBlockWithText,
   switchMode,
   announcementRegion,
+  totalPages,
+  turnToPage,
 } from "./annotations/_fixtures";
 
 /** Load a committed synthetic PDF fixture's bytes (11-01 corpus). */
@@ -244,14 +246,30 @@ test.describe("ING-04 — PDF upload intake (SC#1–SC#3 + D7-07)", () => {
 
     // UAT Test 2 expectation — the outline bookmarks reach the real reading
     // surface as structured h2 section headings, not one undifferentiated
-    // text blob. The fixture's full 5-block body fits the first page
-    // fragment at default typography, so both section headings are visible.
+    // text blob. Plan 13-06 repair: under the Option A page-1 budget
+    // (viewport − the metadata spot's reserve) the fixture's 5-block body no
+    // longer fits page 1 whole — WALK PAGES until the SECOND section
+    // heading is on the visible fragment (the D13-09 walk-pages precedent;
+    // only the current page fragment is mounted in paginated mode). The
+    // first section heading asserts on page 1 as before.
     await expect(
       page.getByRole("heading", { name: "Outlined Document" }),
     ).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: "Second Section" }),
-    ).toBeVisible();
+    const total = await totalPages(page);
+    let secondSectionFound = false;
+    for (let target = 0; target < total; target++) {
+      await turnToPage(page, target);
+      const heading = page.getByRole("heading", { name: "Second Section" });
+      if ((await heading.count()) > 0) {
+        await expect(heading).toBeVisible();
+        secondSectionFound = true;
+        break;
+      }
+    }
+    expect(
+      secondSectionFound,
+      "Second Section heading must render on some page",
+    ).toBe(true);
 
     // One admitted PDF-badged library row (the SC#1 badge shape).
     await page.evaluate(() => {
