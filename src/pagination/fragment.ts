@@ -48,6 +48,13 @@
 // FragmentationResult; it does NOT write to Dexie or any store. Page
 // count, indices, and boundaries are ephemeral compute outputs that
 // change with every viewport/typography/font/asset change.
+//
+// Plan 13-04 (Option A — human decision 2026-08-18): the additive
+// `firstPageReservedPx` option reserves vertical space at the top of the
+// FIRST page for ArticleView's article-top metadata spot (page-1 budget =
+// pageContentBoxHeightPx - reserve, floor-clamped; pages 2+ unchanged;
+// default 0 byte-equivalent). The overflow guard, DEV hook, and anchors
+// stay reserve-unaware by decision.
 
 import type { CanonicalArticle } from "../content/types";
 import type { MeasurementResult } from "../measurement/types";
@@ -79,6 +86,16 @@ const CODE_BLOCK_OVERSIZE_THRESHOLD = 0.9;
  */
 const PAGE_CEILING = 300;
 
+/**
+ * Plan 13-04 (Option A — human decision 2026-08-18): the safety floor for
+ * the first page's reserved content budget. `firstPageReservedPx` can never
+ * push page 1's budget below this fraction of the page height — a starved
+ * page 1 could tip atomic-start articles into the zero-progress dom-fallback
+ * path (the documented 360×640 collapse class), and half a viewport always
+ * leaves room for meaningful content beneath the article-top metadata spot.
+ */
+const FIRST_PAGE_BUDGET_FLOOR = 0.5;
+
 /** Internal sentinel thrown from the walk to short-circuit into a fallback result. */
 class PaginateFallback extends Error {
   readonly reason: string;
@@ -108,6 +125,20 @@ export interface PaginateOptions {
   diagnostics: DiagnosticBus;
   /** Cancel signal; AbortError is thrown if aborted (silent cancel, V7). */
   signal: AbortSignal;
+  /**
+   * Plan 13-04 (Option A — human decision 2026-08-18): vertical CSS px
+   * reserved at the top of the FIRST page for article-top chrome
+   * (ArticleView's metadata spot). Page 1's content budget is
+   * `pageContentBoxHeightPx - firstPageReservedPx`, floor-clamped to
+   * FIRST_PAGE_BUDGET_FLOOR for safety; pages 2+ keep the full viewport
+   * budget. The reserve applies to PLACEMENT decisions only — the
+   * oversize / page-ceiling / zero-progress termination guards stay
+   * measured against the full page height, and an empty first page can
+   * always accept a block that fits the full height (see the soft-budget
+   * escape in the walk). Default 0 (absent) is byte-equivalent to the
+   * pre-13-04 engine for every existing caller and test.
+   */
+  firstPageReservedPx?: number;
 }
 
 /** The widow-legal split decision returned by {@link chooseSplit}. */
@@ -176,6 +207,20 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
   let currentPageBlocks: PageFragment["blocks"] = [];
   let currentPageHeightPx = 0;
   let currentTrailingMarginPx = 0;
+
+  // Plan 13-04 (Option A — human decision 2026-08-18): the reserved page-1
+  // budget. Negative/absent reserves normalize to 0; the floor clamp keeps
+  // page 1 viable no matter how tall the measured metadata spot is. Pages
+  // 2+ always keep the full viewport budget — the spot only ever renders at
+  // article start, so only the article's first page pays for it.
+  const firstPageReservedPx = Math.max(0, opts.firstPageReservedPx ?? 0);
+  const firstPageBudgetPx = Math.max(
+    pageHeight - firstPageReservedPx,
+    FIRST_PAGE_BUDGET_FLOOR * pageHeight,
+  );
+  /** Placement budget for the page currently being built (page 1 reserved). */
+  const currentBudgetPx = (): number =>
+    pages.length === 0 ? firstPageBudgetPx : pageHeight;
 
   const emitFallback = (reason: string): FragmentationResult => {
     diagnostics.emit({ kind: "dom-fallback", ts: new Date().toISOString() });
@@ -260,7 +305,18 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
         occupiedBeforeBlockPx + heightPx + marginBlockEndPx;
 
       // Case A: whole block fits on the current page — place + continue.
-      if (wholeBlockPageHeightPx <= pageHeight) {
+      // Plan 13-04 (Option A): the placement budget is the current page's
+      // budget (page 1 carries the reserve). While page 1 is still EMPTY,
+      // a block that fits the FULL page height still places there even
+      // when it exceeds the reserved budget — moving it to page 2 instead
+      // would emit an empty first page (the zero-progress fallback class).
+      // The transient overshoot is the post-render overflow guard's
+      // documented net (guard stays reserve-unaware by decision).
+      const placementBudgetPx =
+        pages.length === 0 && currentPageBlocks.length === 0
+          ? pageHeight
+          : currentBudgetPx();
+      if (wholeBlockPageHeightPx <= placementBudgetPx) {
         currentPageBlocks.push({
           blockIndex: i,
           startGrapheme: 0,
@@ -298,7 +354,7 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
         occupiedBeforeBlockPx,
         marginBlockEndPx,
         splitLayoutOverheadPx,
-        pageHeight,
+        currentBudgetPx(),
       );
       if (plan === null && currentPageBlocks.length > 0) {
         // No valid split on the current (partially-filled) page — flush it
@@ -321,9 +377,31 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
           currentTrailingMarginPx = marginBlockEndPx;
           continue;
         }
+        // currentBudgetPx() now resolves to the FULL page height — the
+        // flush above emitted page 1, so the fresh page pays no reserve.
         plan = chooseSplit(
           lineBoxes,
           marginBlockStartPx,
+          marginBlockEndPx,
+          splitLayoutOverheadPx,
+          currentBudgetPx(),
+        );
+      }
+      if (
+        plan === null &&
+        firstPageBudgetPx < pageHeight &&
+        pages.length === 0 &&
+        currentPageBlocks.length === 0
+      ) {
+        // Plan 13-04 (Option A) soft-budget escape for splitting kinds: no
+        // widow-legal split fit page 1's reserved budget while the page is
+        // still empty. Retry against the FULL page height before falling
+        // back — the reserve must never manufacture a fallback the
+        // unreserved engine would not produce. The transient overshoot is
+        // the post-render overflow guard's documented net.
+        plan = chooseSplit(
+          lineBoxes,
+          occupiedBeforeBlockPx,
           marginBlockEndPx,
           splitLayoutOverheadPx,
           pageHeight,
