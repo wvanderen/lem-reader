@@ -3048,7 +3048,13 @@ dialog.book-remove-confirm::backdrop {
    flex-shrink fieldsets under min-content (the never-wrapping add-row:
    input + Add-tag + padding = 294px), which overflowed the 288px
    320px-viewport content box by ~10px (WCAG 1.4.10 reflow violation;
-   the .tag-entry-input inside already carries its own min-width: 0). */
+   the .tag-entry-input inside already carries its own min-width: 0).
+   Empirical refinement (same spot, same intent): firefox sizes the
+   fieldset's internal wrapper from the input's INTRINSIC size=20 width
+   and ignores min-width/width/max-width ON THE FIELDSET for that inner
+   clamp — width 100% on the input makes its intrinsic contribution
+   definite (probed: overflow 298→288; the input still fills the row via
+   flex-grow, 191px at 320px / full row at desktop). */
 .article-top-meta .tag-entry {
   flex: 1 1 16em;
   min-width: 0;
@@ -3062,6 +3068,7 @@ dialog.book-remove-confirm::backdrop {
 }
 .article-top-meta .tag-entry-input {
   flex: 1 1 auto;
+  width: 100%;
   min-width: 0;
 }
 .article-top-actions .article-export-highlights {
