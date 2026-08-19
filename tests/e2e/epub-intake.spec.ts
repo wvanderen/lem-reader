@@ -400,7 +400,13 @@ test.describe("ING-05 — EPUB book intake (SC#1)", () => {
     // viewport so the chapter has real scroll depth and a mid-article
     // window-scroll saves a NONZERO offset (setViewportSize is the
     // sanctioned harness control — the 06 high-zoom precedent).
-    await page.setViewportSize({ width: 360, height: 480 });
+    // 13-06 repair: 360×640 (the D13-13 pinned mobile geometry) — at
+    // 360×480 the 13-04 compact metadata spot (~209px) leaves the 251px
+    // page-1 box physically unsplittable (no widow-legal slice fits under
+    // the spot), so the guard's honest scrolling fallback fires and the
+    // M-label round-trip below cannot pass. At 640 the spot + a
+    // widow-legal slice coexist (the 13-04 header-geometry target).
+    await page.setViewportSize({ width: 360, height: 640 });
     await page.goto(`${BASE}/#/`);
     await uploadValidBook(page);
     await reloadLibrary(page);
@@ -850,7 +856,13 @@ test.describe("ING-05 — chapter reading identity (SC#2)", () => {
     page,
   }) => {
     // Real scroll depth for a one-screen synthetic chapter (12-05 precedent).
-    await page.setViewportSize({ width: 360, height: 480 });
+    // 13-06 repair: 360×640, not 360×480 — at 480 the 13-04 metadata spot
+    // (~209px) makes the 251px page-1 box unsplittable (the guard's honest
+    // scrolling fallback fires; the M-label round-trips below cannot pass).
+    // 640 is the D13-13 pinned mobile geometry where the spot + a
+    // widow-legal page-1 slice coexist (probe-verified: chapters paginate
+    // into 3 guard-healed pages).
+    await page.setViewportSize({ width: 360, height: 640 });
     await page.goto(`${BASE}/#/`);
     await uploadValidBook(page);
     await reloadLibrary(page);
@@ -961,8 +973,11 @@ test.describe("ING-05 — cross-chapter navigation, resume, progress (SC#3)", ()
     // Shrunk viewport (the 12-05 precedent): at the default 1280x720 a
     // synthetic chapter fits ONE page (page 1 IS the final page, so the
     // absent-on-non-final assertion would be geometrically impossible);
-    // 360x480 paginates each chapter into ~3 pages.
-    await page.setViewportSize({ width: 360, height: 480 });
+    // 360x640 paginates each chapter into ~3 pages (13-06 repair: 640,
+    // not 480 — at 480 the 13-04 metadata spot makes the page-1 box
+    // unsplittable and the guard flips every chapter to the scrolling
+    // fallback, so the paginated-mode assertions below could never run).
+    await page.setViewportSize({ width: 360, height: 640 });
     await page.goto(`${BASE}/#/`);
     await uploadValidBook(page);
     await reloadLibrary(page);
@@ -1043,7 +1058,10 @@ test.describe("ING-05 — cross-chapter navigation, resume, progress (SC#3)", ()
   test("reopen-resume: the strip resumes the LAST-read chapter (D12-07 re-skim wins)", async ({
     page,
   }) => {
-    await page.setViewportSize({ width: 360, height: 480 });
+    // 13-06 repair: 360×640 (the D13-13 pinned mobile geometry — see the
+    // SC#2 comment above; at 480 the guard's spot-induced fallback wedges
+    // the M-label round-trip this cell's scrolling section depends on).
+    await page.setViewportSize({ width: 360, height: 640 });
     await page.goto(`${BASE}/#/`);
     await uploadValidBook(page);
     await reloadLibrary(page);

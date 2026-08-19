@@ -568,8 +568,14 @@ test.describe("a11y 12-06 — chapter reading (both modes)", () => {
   test("context line + chapter nav axe-clean; Next/Previous Tab-reachable + Enter-activatable; context line is a paragraph", async ({
     page,
   }) => {
-    // 360x480 — chapters paginate into ~3 pages (the epub-intake geometry).
-    await page.setViewportSize({ width: 360, height: 480 });
+    // 360x640 — chapters paginate into ~3 pages (the epub-intake geometry;
+    // 13-06 repair: 640, not 480 — at 360×480 the 13-04 compact metadata
+    // spot (~209px) leaves the 251px page-1 box unsplittable, the guard
+    // flips every chapter to the honest scrolling fallback, and the
+    // page-fragment/chapter-nav assertions below could never run. 640 is
+    // the D13-13 pinned mobile geometry where the spot + a widow-legal
+    // page-1 slice coexist).
+    await page.setViewportSize({ width: 360, height: 640 });
     await seedBookLibrary(page);
 
     // Open chapter 2 (default paginated mode on first run).
