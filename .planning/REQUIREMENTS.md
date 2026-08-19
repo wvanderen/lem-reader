@@ -41,7 +41,7 @@ Requirements for the v2.0 milestone. Each maps to a roadmap phase (traceability 
 
 - [x] **POLISH-01**: Reader sees the persisted reading mode on first paint with no flash or snap to a different mode.
 - [x] **POLISH-02**: Reader sees progress-bar semantics that reflect actual position (a one-page article does not show 100% on open; a multi-page article progresses from the start).
-- [x] **POLISH-03**: Reader sees a slim article header — tags and article metadata move to a calm article-top spot rendered once (not repeated per paginated page), and the header no longer scrolls internally at reference viewports (360×640). *(Added at Phase 13 planning per D13-12/D13-13.)*
+- [x] **POLISH-03**: Reader sees a slim article header — tags and article metadata move to a calm article-top spot rendered once (not repeated per paginated page), and the header no longer scrolls internally at reference viewports (360×640). *(Added at Phase 13 planning per D13-12/D13-13. Amended 2026-08-19 by the G5 user review: the tag affordance is reached from a top-bar icon beside the highlights/mode controls rather than in the article-top spot, and the spot is a compact provenance block — user-direction change recorded in 13-UAT.md § G5, closed by plan 13-10. Every other clause, incl. no internal header scrolling at 360×640, is unchanged.)*
 - [x] **POLISH-04**: Reader's centered modal dialogs (note editor, wipe confirmation, library remove confirmation, import preview) open centered in the viewport instead of pinned to the top-left corner. *(Added per D13-12/D13-14.)*
 - [x] **POLISH-05**: Reader gets a standardized, keyboard-reachable "Back to library" affordance on the article and review views that returns to the library and never exits the app on a deep link. *(Added per D13-12/D13-15.)*
 - [x] **POLISH-06**: Reader sees an organized library home — clear sections (continue reading / add content / library list) with consistent spacing and a calmer control hierarchy, within existing components. *(Added per D13-12/D13-16.)*
@@ -139,4 +139,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-08-10*
-*Last updated: 2026-08-18 after Phase 13 planning — POLISH-03..06 added per D13-12*
+*Last updated: 2026-08-19 after Phase 13 gap-closure planning — POLISH-03 amended per the G5 user review (13-UAT.md § G5, plan 13-10); POLISH-03..06 originally added 2026-08-18 per D13-12*

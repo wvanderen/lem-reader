@@ -5,13 +5,14 @@ status: active
 nyquist_compliant: true
 wave_0_complete: true
 created: 2026-08-18
-updated: 2026-08-18
+updated: 2026-08-19
 ---
 
 # Phase 13 — Validation Strategy
 
 > Per-phase validation contract for feedback sampling during execution.
 > Populated at plan time (2026-08-18 revision) from 13-RESEARCH.md § Validation Architecture and the adopted plans 13-01 … 13-06.
+> Gap-closure rows 13-07-01 … 13-10-03 appended 2026-08-19 (revision 1) from the adopted gap-closure plans 13-07 … 13-10 (G1–G5); 13-10-03 owns the post-wave-5 honest full-suite re-run.
 
 ---
 
@@ -31,7 +32,7 @@ updated: 2026-08-18
 
 - **After every task commit:** the task's targeted spec (unit or single e2e spec) green — see map
 - **After every plan wave:** `npm run test:unit -- --run` + every e2e directory touched by the wave
-- **Before `/gsd-verify-work`:** full `npm run test` single invocation green (D13-10 — runs LAST, gap-closure precedent)
+- **Before `/gsd-verify-work`:** full `npm run test` single invocation green (D13-10 — owned by task 13-10-03 in the gap-closure wave; runs LAST, gap-closure precedent)
 - **Max feedback latency:** ~3 min (one e2e spec across 3 engines)
 
 ---
@@ -54,6 +55,15 @@ updated: 2026-08-18
 | 13-05-02 | 05 | 1 | ACPT-05 (D13-11) | — | Zero production changes; typed server-error rejection + always-destroy finally proven by test alone | unit (fake timers, TDD) | `npx vitest run tests/unit/server/pdfTimeout.spec.ts` | ❌ → created by this task (test-first) | ⬜ pending |
 | 13-06-01 | 06 | 3 | ACPT-06 | T-13-08 | Shipped Zod-at-boundary ingest pipeline exercised, not modified; no production source changes | e2e (3 engines) | `npx playwright test tests/e2e/portability/core-flow-spine.spec.ts` | ❌ → created by this task | ⬜ pending |
 | 13-06-02 | 06 | 3 | ACPT-06 (D13-10) | T-13-09 | Honest gate: single plain npm run test invocation; counts + full red-run history recorded in 13-06-OUTPUT.md | full-suite gate | `npm run test` | ✅ command exists; record = 13-06-OUTPUT.md (created by this task) | ⬜ pending |
+| 13-07-01 | 07 | 4 | POLISH-06 | T-13-07-01/02 | Token-only CSS measure fix; no new selectors reachable by content strings | e2e (strengthened) | `npx playwright test tests/e2e/chrome/library-tidy.spec.ts` | ✅ existing (strengthened by this task) | ⬜ pending |
+| 13-07-02 | 07 | 4 | POLISH-06 | T-13-07-SC (accept) | Accessible name + RemoveConfirm gating byte-identical through the SVG glyph swap | e2e + unit | `npx playwright test tests/e2e/library/remove-cascade.spec.ts tests/e2e/chrome/dialog-centering.spec.ts tests/e2e/chrome/library-tidy.spec.ts && npx vitest run tests/unit/library/` | ✅ existing | ⬜ pending |
+| 13-08-01 | 08 | 4 | ING-03 (traceability — G2 maps to no Phase-13 ID) | T-13-08-01/02 | Remove is type=button (cannot submit); cap/dedupe guards byte-unchanged, resets added after the refusal copy | typecheck + unit | `npx tsc --noEmit && npx vitest run tests/unit/pdf-copy.test.ts tests/unit/epub-copy.test.ts` | ✅ existing | ⬜ pending |
+| 13-08-02 | 08 | 4 | ING-03 (traceability) | — | Reset discipline proven in real browsers; zero fixed sleeps in the new spec | e2e (new, 3 engines) | `npx playwright test tests/e2e/library/upload-queue.spec.ts tests/e2e/library/markdown-upload.spec.ts tests/e2e/pdf-intake.spec.ts` | ❌ upload-queue → created by this task | ⬜ pending |
+| 13-09-01 | 09 | 4 | POLISH-01/02 | T-13-09-03 | First publication still carries page height + firstPageReservedPx reserve together (05-06/13-04 contracts) | typecheck + unit + e2e | `npx tsc --noEmit && npx vitest run tests/unit/pagination/ && npx playwright test tests/e2e/pagination/initial-pagination-even.spec.ts tests/e2e/polish/cold-load-no-snap.spec.ts tests/e2e/polish/first-paint-progress.spec.ts` | ✅ existing | ⬜ pending |
+| 13-09-02 | 09 | 4 | POLISH-01/02 | T-13-09-02 (accept) | Recorder is test-only plain JS reading the DOM; no production surface | e2e (new, 3 engines) | `npx playwright test tests/e2e/polish/first-paint-mode-surface.spec.ts tests/e2e/polish/cold-load-no-snap.spec.ts` | ❌ first-paint-mode-surface → created by this task | ⬜ pending |
+| 13-10-01 | 10 | 5 | POLISH-03 | T-13-10-01/04 | Popover renders only React children (no markup-string APIs); toggle-event close seam restores focus (Pitfall 1) | typecheck + e2e | `npx tsc --noEmit && npx playwright test tests/e2e/library/search-tag-filter.spec.ts tests/e2e/chrome/header-geometry.spec.ts tests/e2e/library/v1-regression.spec.ts` | ✅ existing (realigned by this task) | ⬜ pending |
+| 13-10-02 | 10 | 5 | POLISH-03 | T-13-10-02/03 | Export handler + filename sanitization unchanged (trigger mount point only); smaller page-1 reserve proven by geometry + corpus specs | e2e (new + realigned) | `npx playwright test tests/e2e/chrome/tag-popover.spec.ts tests/e2e/chrome/header-geometry.spec.ts tests/e2e/chrome/dialog-centering.spec.ts tests/e2e/a11y.spec.ts tests/e2e/portability/highlights-export.spec.ts` | ❌ tag-popover → created by this task; highlights-export ✅ existing (realigned — drawer-open step) | ⬜ pending |
+| 13-10-03 | 10 | 5 | ACPT-06 (D13-10 re-run) | — | Honest full-suite gate re-run after the gap-closure wave (13-10 is wave 5, runs last); exit 0 with counts recorded in 13-10-SUMMARY.md | full-suite gate | `npm run test` | ✅ command exists; record = 13-10-SUMMARY.md (created by this task) | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 

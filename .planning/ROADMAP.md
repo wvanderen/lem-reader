@@ -279,12 +279,12 @@ Plans:
    2. Reader sees a progress bar that reflects actual position — a one-page article does not show 100% on open and a multi-page article progresses from the start (offset-anchored formula with boundary tests).
    3. The documented screen-reader acceptance flows complete on NVDA+Firefox with zero blocker/major findings, closing the v1.0 ACPT-02 coverage boundary A4.
    4. The v2.0 core flow (ingest → read → highlight → export → re-import) completes across Chromium, Firefox, and WebKit without content loss, and the full `npm run test` suite exits 0 (mirroring the v1.0 honest-suite precedent).
-   5. Reader sees a slim article header (title + essential controls) with tags/metadata in a render-once article-top spot — no internal header scrolling at 360×640 (POLISH-03, D13-13).
+   5. Reader sees a slim article header (title + essential controls) with tags/metadata in a render-once article-top spot — no internal header scrolling at 360×640 (POLISH-03, D13-13). *(Amended 2026-08-19 by the G5 user review: the tag affordance is reached from a top-bar icon popover beside the highlights/mode controls — not in the article-top spot — and the spot is now a compact provenance block; see 13-UAT.md § G5 and plan 13-10. The no-internal-header-scrolling clause is unchanged.)*
    6. Reader's four centered modal dialogs open centered, not top-left (POLISH-04, D13-14).
    7. Reader gets a keyboard-reachable "Back to library" affordance on article and review views that never exits the app on a deep link (POLISH-05, D13-15).
    8. Reader sees an organized library home — continue reading / add content / library list — within existing components (POLISH-06, D13-16).
 
-**Plans**: 10/10 plans complete
+**Plans**: 6/10 plans complete (4 gap-closure plans pending — G1–G5 wave)
 
 Plans:
 **Wave 1**
