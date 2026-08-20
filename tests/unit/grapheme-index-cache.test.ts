@@ -15,7 +15,7 @@
 // fixture builder, baseArticle with id/revision/lang/provenance) and
 // tests/unit/pagination/progress-formula.test.ts (hand-built PageFragment
 // fixtures).
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ArticleSchema } from "../../src/content/schema";
 import type { CanonicalArticle } from "../../src/content/types";
 import {
@@ -32,6 +32,11 @@ import {
   pageStartGlobalOffset,
 } from "../../src/pagination/anchor";
 import { findAllOccurrences } from "../../src/annotations/resolution";
+import {
+  computeTopVisibleOffset,
+  findScrollTarget,
+  normalizeElText,
+} from "../../src/reader/restoreLocation";
 import type { PageFragment } from "../../src/pagination/types";
 
 function parseArticle(raw: unknown): CanonicalArticle {
@@ -370,5 +375,164 @@ describe("findAllOccurrences matches a naive reference implementation", () => {
     expect(findAllOccurrences(clusters, needle)).toEqual(
       naiveOccurrences(clusters, needle),
     );
+  });
+});
+
+// ── Task 3: per-element length cache for scroll/restore ──────────────────────
+
+/**
+ * HTMLElement stub mirroring what BlockRenderer emits (restoreLocation.test.ts
+ * makeBlock convention) — jsdom is sufficient: only .textContent + dataset.kind
+ * + getBoundingClientRect (all-zero in jsdom) are exercised.
+ */
+function makeBlock(
+  text: string,
+  kind?: string,
+  tag: keyof HTMLElementTagNameMap = "p",
+): HTMLElement {
+  const el = document.createElement(tag);
+  el.textContent = text;
+  if (kind) el.dataset.kind = kind;
+  return el;
+}
+
+/** Body elements mirroring multiBlockArticle()'s blocks, in document order. */
+function bodyElements(article: CanonicalArticle): HTMLElement[] {
+  const tagFor: Record<string, keyof HTMLElementTagNameMap> = {
+    heading: "h2",
+    paragraph: "p",
+    "code-block": "pre",
+    "footnote-reference": "sup",
+  };
+  return article.blocks.map((block) => {
+    const kind = block.kind;
+    return makeBlock(
+      blockNormalizedText(block),
+      kind,
+      tagFor[kind] ?? "p",
+    );
+  });
+}
+
+/** OLD computeTopVisibleOffset replica (pre-change oracle — uncached walk). */
+function oldTopVisibleOffset(
+  article: CanonicalArticle,
+  els: HTMLElement[],
+  headerPx = 48,
+): number {
+  let consumed = 0;
+  let offset = 0;
+  for (const el of els) {
+    const len = graphemeClusters(normalizeElText(el), article.lang).length;
+    if (el.getBoundingClientRect().top <= headerPx + 8) {
+      offset = consumed;
+    }
+    consumed += len + BLOCK_SEPARATOR.length;
+  }
+  return offset;
+}
+
+/** OLD findScrollTarget replica (pre-change oracle — uncached walk). */
+function oldScrollTarget(
+  article: CanonicalArticle,
+  els: HTMLElement[],
+  offset: number,
+): HTMLElement | null {
+  if (els.length === 0) return null;
+  let consumed = 0;
+  let last: HTMLElement | null = null;
+  for (const el of els) {
+    last = el;
+    const len = graphemeClusters(normalizeElText(el), article.lang).length;
+    if (offset <= consumed + len) return el;
+    consumed += len + BLOCK_SEPARATOR.length;
+  }
+  return last;
+}
+
+describe("elementGraphemeLength cache — same offsets as the uncached walk, stable on cache hit", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("computeTopVisibleOffset equals the uncached replica and repeats identically without re-segmenting", () => {
+    const article = multiBlockArticle();
+    const els = bodyElements(article);
+    const segmentSpy = vi.spyOn(Intl.Segmenter.prototype, "segment");
+    const first = computeTopVisibleOffset(article, els);
+    expect(first).toBe(oldTopVisibleOffset(article, els));
+    // Cache-hit pass: identical value, ZERO segmentation work.
+    segmentSpy.mockClear();
+    const second = computeTopVisibleOffset(article, els);
+    expect(second).toBe(first);
+    expect(segmentSpy).not.toHaveBeenCalled();
+  });
+
+  it("findScrollTarget equals the uncached replica at several offsets and repeats without re-segmenting", () => {
+    const article = multiBlockArticle();
+    const els = bodyElements(article);
+    const segmentSpy = vi.spyOn(Intl.Segmenter.prototype, "segment");
+    const offsets = [0, 3, 14, 30, 60, 1000];
+    // First pass: oracle-verified targets (the oracle itself segments — that
+    // is fine, it runs OUTSIDE the measured cache-hit window below).
+    const expected = offsets.map((offset) =>
+      findScrollTarget(article, els, offset),
+    );
+    offsets.forEach((offset, i) => {
+      expect(expected[i]).toBe(oldScrollTarget(article, els, offset));
+    });
+    // Cache-hit pass: same targets, ZERO segmentation work.
+    segmentSpy.mockClear();
+    offsets.forEach((offset, i) => {
+      expect(findScrollTarget(article, els, offset)).toBe(expected[i]);
+    });
+    expect(segmentSpy).not.toHaveBeenCalled();
+  });
+
+  it("the SAME element under a DIFFERENT article object recomputes (identity guard — no stale length)", () => {
+    const raw = {
+      ...baseArticle,
+      blocks: [
+        { kind: "paragraph", content: [{ text: "Alpha first body." }] },
+        { kind: "paragraph", content: [{ text: "Alpha second body." }] },
+      ],
+    };
+    const articleA = parseArticle(raw);
+    const articleB = parseArticle(raw); // distinct object, identical content
+    expect(articleB).not.toBe(articleA);
+    const els = bodyElements(articleA);
+    // Prime the cache under articleA.
+    const first = computeTopVisibleOffset(articleA, els);
+    expect(first).toBe(oldTopVisibleOffset(articleA, els));
+    // Oracle for articleB computed BEFORE the spy window (it segments too).
+    const expectedB = oldTopVisibleOffset(articleB, els);
+    // React can reconcile-reuse a DOM node across an article swap: the same
+    // element objects measured under articleB MUST re-segment (fresh entry),
+    // never serve articleA's cached lengths.
+    const segmentSpy = vi.spyOn(Intl.Segmenter.prototype, "segment");
+    const second = computeTopVisibleOffset(articleB, els);
+    expect(second).toBe(expectedB);
+    expect(segmentSpy).toHaveBeenCalledTimes(els.length);
+  });
+
+  it("a code-block element still contributes verbatim text length through the cache", () => {
+    const article = parseArticle({
+      ...baseArticle,
+      blocks: [
+        { kind: "paragraph", content: [{ text: "Intro." }] },
+        { kind: "code-block", source: "  a\n  b" },
+        { kind: "paragraph", content: [{ text: "Outro." }] },
+      ],
+    });
+    const els = bodyElements(article);
+    // jsdom rects are all zero → computeTopVisibleOffset returns the start of
+    // the LAST top-visible block = introLen + sep + codeLen + sep.
+    const introLen = graphemeClusters("Intro.", article.lang).length;
+    const codeLen = graphemeClusters("  a\n  b", article.lang).length; // 7 — verbatim whitespace
+    const expected = introLen + BLOCK_SEPARATOR.length + codeLen + BLOCK_SEPARATOR.length;
+    expect(computeTopVisibleOffset(article, els)).toBe(expected);
+    // Cache-hit pass is identical (verbatim length served from the WeakMap).
+    expect(computeTopVisibleOffset(article, els)).toBe(expected);
+    expect(expected).toBe(6 + 1 + 7 + 1);
   });
 });

@@ -24,6 +24,48 @@ import {
   normalizeRunText,
 } from "../content/normalizeText";
 
+// ── Per-element grapheme-length cache (260819-tld) ───────────────────────────
+// computeTopVisibleOffset runs on EVERY scroll event (useScrollSave listener +
+// ArticleView anchor-capture listener) and used to re-segment every element's
+// text on each pass. After the first pass per article, scroll events do only
+// getBoundingClientRect reads and WeakMap lookups here.
+//
+// INVALIDATION RATIONALE: element textContent is stable for a mounted article
+// body, but React reconciliation can REUSE a DOM node across an article swap
+// (same tag at the same position) with different textContent — hence the
+// article identity guard rather than element-only keying. Re-rendered or
+// replaced elements are new objects → fresh entries; stale entries are
+// garbage-collected with their elements. Deliberately minimal: no versioning,
+// no explicit eviction.
+
+/** Cached per-element measurement, valid only for the recorded article object. */
+interface ElementGraphemeLengthEntry {
+  readonly article: CanonicalArticle;
+  readonly length: number;
+}
+
+const elementGraphemeLengthCache = new WeakMap<
+  HTMLElement,
+  ElementGraphemeLengthEntry
+>();
+
+/**
+ * Grapheme length of one rendered element's normalized text, cached per
+ * (element, article) pair. Composes normalizeElText + graphemeClusters —
+ * the SAME substrate helpers (imported, never reimplemented) — so the cached
+ * value is byte-identical to the uncached computation.
+ */
+function elementGraphemeLength(
+  article: CanonicalArticle,
+  el: HTMLElement,
+): number {
+  const cached = elementGraphemeLengthCache.get(el);
+  if (cached && cached.article === article) return cached.length;
+  const length = graphemeClusters(normalizeElText(el), article.lang).length;
+  elementGraphemeLengthCache.set(el, { article, length });
+  return length;
+}
+
 /**
  * Normalize a single rendered DOM element's text contribution, mirroring
  * normalizeText's per-block rules EXACTLY (D-05 contract):
@@ -88,8 +130,7 @@ export function findScrollTarget(
   let last: HTMLElement | null = null;
   for (const el of blocks) {
     last = el;
-    const text = normalizeElText(el);
-    const len = graphemeClusters(text, article.lang).length;
+    const len = elementGraphemeLength(article, el);
     // Offset falls in [consumed, consumed + len] → this block contains it.
     // (offset <= consumed + len handles the boundary case offset == consumed.)
     if (offset <= consumed + len) {
@@ -132,8 +173,7 @@ export function computeTopVisibleOffset(
   let consumed = 0;
   let offset = 0;
   for (const el of blocks) {
-    const text = normalizeElText(el);
-    const len = graphemeClusters(text, article.lang).length;
+    const len = elementGraphemeLength(article, el);
     // A block whose top has scrolled to (or past) the header line marks the
     // reader's current section. Capture its STARTING offset (not mid-block)
     // so the anchor lands at the block top — calm and predictable (Pattern 5:
