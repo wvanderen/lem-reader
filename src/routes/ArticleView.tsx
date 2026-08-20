@@ -24,6 +24,7 @@ import { openArticle } from "../content/repository";
 import type { CanonicalArticle } from "../content/types";
 import type { LocationRecord, Book } from "../content/schema";
 import { ArticleBody } from "../content/render/BlockRenderer";
+import type { ArticleBodyHighlight } from "../content/render/BlockRenderer";
 import { loadLocation } from "../persistence/locationStore";
 import { findScrollTarget, computeTopVisibleOffset } from "../reader/restoreLocation";
 import { useScrollSave } from "../reader/useScrollSave";
@@ -87,6 +88,16 @@ import { chapterOrdinal } from "../ingestion/library/bookProgress";
 
 /** The D4-10 mode-toggle handler signature (App threads a ref of this shape). */
 type ModeToggleHandler = () => void;
+
+/**
+ * 260820 giant-article freeze: the referentially-stable empty highlights
+ * array for ArticleBody's memoized measurement-body call sites. An inline
+ * `highlights={[]}` literal would defeat React.memo's identity comparator
+ * (new array per render → full block-tree re-render on every progress /
+ * pageState update in the owner). Module-level const: zero allocations,
+ * stable identity across renders, semantically read-only.
+ */
+const EMPTY_HIGHLIGHTS: readonly ArticleBodyHighlight[] = [];
 
 export interface ArticleViewProps {
   articleId: string;
@@ -1249,18 +1260,37 @@ export function ArticleView({
   // article is ready; re-registers on article swap. Computed on every scroll
   // from window.scrollY / (scrollHeight - viewportHeight). Clamped to [0, 1]
   // by ProgressHairline defensively.
+  //
+  // 260820 giant-article freeze: the read is rAF-COALESCED (one per animation
+  // frame — the selectionchange pattern at this file's D5-10 effect). The
+  // former unthrottled listener called setProgress per scroll EVENT; scroll
+  // events fire faster than frames during a fling, and every call re-rendered
+  // this component (the owner of the full ArticleBody tree), starving paint
+  // on long articles — readers saw unpainted white space that "snapped in"
+  // when the main thread caught up. Values are unchanged; only the schedule
+  // tightens (the rAF callback reads live geometry at frame time, strictly
+  // fresher than the old per-event read).
   useEffect(() => {
     if (!article) return;
-    const onScroll = () => {
+    let rafId: number | null = null;
+    const read = () => {
+      rafId = null;
       const scrollMax =
         document.documentElement.scrollHeight - window.innerHeight;
       setProgress(scrollMax > 0 ? window.scrollY / scrollMax : 0);
     };
+    const onScroll = () => {
+      if (rafId !== null) return; // coalesce — one read per frame
+      rafId = requestAnimationFrame(read);
+    };
     // Initialize on mount so the hairline reflects the initial scroll
     // position (e.g. after a restore) rather than flashing from 0.
-    onScroll();
+    read();
     window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (rafId !== null) cancelAnimationFrame(rafId);
+    };
   }, [article]);
 
   // Auto-dismiss the resume banner on the reader's first scroll or pointer
@@ -1753,7 +1783,7 @@ export function ArticleView({
                 contract.
               */}
               <div className="article-body-measurement" aria-hidden="true">
-                <ArticleBody article={article} highlights={[]} />
+                <ArticleBody article={article} highlights={EMPTY_HIGHLIGHTS} />
               </div>
               {/*
                 PaginatedSurface owns pages + currentPageIdx + the turn handler.
@@ -1870,7 +1900,7 @@ export function ArticleView({
                 boxes preserved).
               */}
               <div className="article-body-measurement" aria-hidden="true">
-                <ArticleBody article={article} highlights={[]} />
+                <ArticleBody article={article} highlights={EMPTY_HIGHLIGHTS} />
               </div>
               {/*
                 Plan 13-09 (G4): a calm placeholder inside the REAL page
