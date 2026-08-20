@@ -58,9 +58,9 @@ Eliminated ~100k-grapheme-article reader lag by caching segmentation in the D-05
 - `src/reader/restoreLocation.ts`: `elementGraphemeLength(article, el)` behind `WeakMap<HTMLElement, {article, length}>` with an article-identity guard (React DOM-node reuse across article swaps forces recompute — invalidation rationale in-code); both `findScrollTarget` and `computeTopVisibleOffset` served by it. After the first pass, scroll listeners do only `getBoundingClientRect` reads + lookups.
 - `tests/unit/grapheme-index-cache.test.ts` (538 lines): old-walk replica oracles for both scroll helpers, an `Intl.Segmenter.prototype.segment` call-count spy proving zero segmentation on cache hit and exactly N recomputes under a different article object, and code-block verbatim-length coverage through the cache.
 
-## Task 4 — PENDING (blocking human checkpoint)
+## Task 4 — APPROVED 2026-08-20 (blocking human checkpoint)
 
-Task 4 (`checkpoint:human-verify`, gate=blocking) was **not** attempted per instructions: human smoke check on the longest saved article — smooth continuous scrolling, ~10 instant page turns, unchanged restore/highlight behavior (steps in `260819-tld-PLAN.md` Task 4). No dev server was started by the executor.
+Human smoke initially FAILED on the ~100k-grapheme marxist.com article (residual blank screens + page-turn lag — NOT a defect of this task's caches; symptom persisted because the dominant cost was elsewhere). Final verdict after round 2 (260820-beo) + debug session giant-article-freeze (O(n²) render-path walk, fix 68f07a5): **"passes and feels pretty smooth now"** — scrolling, page turns, and mode switch all smooth. Checkpoint closed.
 
 ## Verification Results
 

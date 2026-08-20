@@ -56,9 +56,9 @@ Eliminated the two remaining ~100k-grapheme-article lag causes: readLineBoxes no
 **Task 3 — Chromium longtask tripwire + full gate (`d12d54a`)**
 - `tests/e2e/measurement/longtask-smoke.spec.ts` (174 lines): PerformanceObserver longtask accumulator via addInitScript across cold open + one adaptive typography warm re-trigger of essay-long-form (trusted-constraints DEV seam); asserts every entry ≤ 150ms and zero pageerrors (V7); `test.skip` on non-chromium with Pitfall 5 honesty comments; honestly scoped as a sync-pass regression tripwire (3k-char fixtures cannot reproduce the 100k article — that is Task 4's job). `tests/e2e/perf/` untouched.
 
-## Task 4 — PENDING (blocking human checkpoint)
+## Task 4 — APPROVED 2026-08-20 (blocking human checkpoint)
 
-Task 4 (`checkpoint:human-verify`, gate=blocking) was **not** attempted per instructions: human smoke on the SAME ~100k-grapheme article that failed the round-1 smoke — continuous scrolling shows no seconds-long blank screens (symptom A), ~10 consecutive page turns each well under 1 second (symptom B), and mode-switch/highlight/reload regressions none (steps in `260820-beo-PLAN.md` Task 4). No dev server was started by the executor (the Playwright run managed its own config-declared webServer lifecycle and shut it down).
+Human smoke initially FAILED on the same article (blank screens + 5-10s turns persisted) — this round's fixes were necessary but not sufficient; the dominant cost was an O(n²) render-path walk outside measurement (see debug session giant-article-freeze, fix 68f07a5). Final verdict with all three rounds landed: **"passes and feels pretty smooth now"** — continuous scrolling clean, page turns snappy, mode switch fast. Checkpoint closed.
 
 ## Verification Results
 
