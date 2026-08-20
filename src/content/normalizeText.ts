@@ -91,6 +91,24 @@ export function normalizeText(article: CanonicalArticle): string {
   return [bodyText, footnoteText].filter(Boolean).join(BLOCK_SEPARATOR);
 }
 
+// ── Locale-keyed Intl.Segmenter cache (260819-tld) ───────────────────────────
+// Constructing an Intl.Segmenter is expensive; the hot paths (scroll listeners,
+// page turns, highlight resolution) used to pay it on EVERY graphemeClusters
+// call. One instance per locale is constructed for the page lifetime. The
+// exported signature and output of graphemeClusters are UNCHANGED.
+
+/** Locale-keyed grapheme-granularity segmenter instances (one per locale). */
+const segmenterCache = new Map<string, Intl.Segmenter>();
+
+function segmenterFor(locale: string): Intl.Segmenter {
+  let segmenter = segmenterCache.get(locale);
+  if (!segmenter) {
+    segmenter = new Intl.Segmenter(locale, { granularity: "grapheme" });
+    segmenterCache.set(locale, segmenter);
+  }
+  return segmenter;
+}
+
 /**
  * Grapheme-offset substrate.
  *
@@ -101,13 +119,84 @@ export function normalizeText(article: CanonicalArticle): string {
  * derive offsets as array indices.
  */
 export function graphemeClusters(text: string, locale: string): string[] {
-  const segmenter = new Intl.Segmenter(locale, { granularity: "grapheme" });
-  return Array.from(segmenter.segment(text), (s) => s.segment);
+  return Array.from(segmenterFor(locale).segment(text), (s) => s.segment);
+}
+
+// ── Per-article grapheme index (260819-tld) ──────────────────────────────────
+// Precomputed full-article segmentation + per-block prefix sums, so
+// article-level consumers (graphemeLength, deriveQuoteSelector,
+// pageStartGlobalOffset, resolveQuoteSelector) segment an article ONCE per
+// parsed object instead of per call.
+//
+// D-05 guarantees ONE deterministic normalized-text string per article
+// revision, and articles are immutable once parsed — so each parsed article
+// object gets exactly one index, keyed on the article OBJECT in a WeakMap and
+// garbage-collected with it. A different revision parses to a different
+// object → a fresh index (never a stale one).
+
+/** Precomputed grapheme index for one parsed article object. */
+export interface ArticleGraphemeIndex {
+  /** normalizeText(article) — the D-05 canonical string. */
+  readonly normalizedText: string;
+  /** Full-article grapheme clusters of normalizedText (footnotes included). */
+  readonly clusters: readonly string[];
+  /** Body-block grapheme lengths (per-block segmentation, in block order). */
+  readonly perBlockLengths: readonly number[];
+  /**
+   * Prefix sums over perBlockLengths, length blocks.length + 1. Entry i =
+   * sum over j < i of perBlockLengths[j] + BLOCK_SEPARATOR.length — the exact
+   * quantity the pre-change pageStartGlobalOffset loop accumulated. The final
+   * entry (i = blocks.length) is the SENTINEL: the capped accumulation an
+   * out-of-range blockIndex used to produce.
+   */
+  readonly blockStartOffsets: readonly number[];
+  /** clusters.length — the canonical article length in grapheme clusters. */
+  readonly totalGraphemes: number;
+}
+
+const articleIndexCache = new WeakMap<CanonicalArticle, ArticleGraphemeIndex>();
+
+/**
+ * The per-article grapheme index (built once per article object, then cached).
+ *
+ * CRITICAL: perBlockLengths are derived by segmenting blockText(block) per
+ * block. Do NOT split the joined normalizedText on BLOCK_SEPARATOR — code-block
+ * sources are verbatim and can themselves contain newline characters, so
+ * separator positions in the joined string are not reliable block boundaries.
+ */
+export function articleGraphemeIndex(
+  article: CanonicalArticle,
+): ArticleGraphemeIndex {
+  let index = articleIndexCache.get(article);
+  if (!index) {
+    const normalizedText = normalizeText(article);
+    const clusters = graphemeClusters(normalizedText, article.lang);
+    const perBlockLengths = article.blocks.map(
+      (block) => graphemeClusters(blockText(block), article.lang).length,
+    );
+    const blockStartOffsets: number[] = [];
+    let accumulated = 0;
+    for (const len of perBlockLengths) {
+      blockStartOffsets.push(accumulated);
+      accumulated += len + BLOCK_SEPARATOR.length;
+    }
+    // Sentinel entry: the capped accumulation for an out-of-range blockIndex.
+    blockStartOffsets.push(accumulated);
+    index = {
+      normalizedText,
+      clusters,
+      perBlockLengths,
+      blockStartOffsets,
+      totalGraphemes: clusters.length,
+    };
+    articleIndexCache.set(article, index);
+  }
+  return index;
 }
 
 /** The canonical length of an article in grapheme clusters. */
 export function graphemeLength(article: CanonicalArticle): number {
-  return graphemeClusters(normalizeText(article), article.lang).length;
+  return articleGraphemeIndex(article).totalGraphemes;
 }
 
 // ── W3C Web Annotation selectors (types + derive only in Phase 1) ───────────
@@ -135,7 +224,9 @@ export function deriveQuoteSelector(
   position: TextPositionSelector,
   contextRadius = 32, // grapheme clusters of prefix/suffix
 ): TextQuoteSelector {
-  const clusters = graphemeClusters(normalizeText(article), article.lang);
+  // Served by the per-article index — one segmentation per article object,
+  // not one per capture (260819-tld).
+  const clusters = articleGraphemeIndex(article).clusters;
   const exact = clusters.slice(position.start, position.end).join("");
   const prefix = clusters
     .slice(Math.max(0, position.start - contextRadius), position.start)
