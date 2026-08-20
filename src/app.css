@@ -1078,7 +1078,43 @@ dialog.wipe-confirm::backdrop {
  * rule below is scoped under .article-body.paginated-surface, so scrolling
  * mode and the ReviewView mount keep the 13-04 base register
  * pixel-unchanged.
+ *
+ * DEVIATION (executor Rule 3, evidenced by isolated-grid + live-app probes
+ * on chromium/firefox/webkit): the 09-07 row template minmax(auto, 25%)
+ * does NOT size row 1 at its content when the content is under the cap —
+ * the grid maximize-tracks step grows the capped track to its 25% growth
+ * limit BEFORE the 1fr sibling absorbs free space, so the pinned row has
+ * reserved exactly 25% (123.5px at 360×640) regardless of header content
+ * since 09-07 landed. The quiet register above cannot deliver the goal
+ * ("nearly all pinned surface height goes to the reading page") while the
+ * row is template-locked at 25%. The two rules directly below keep the
+ * 09-07 locked rules byte-unchanged but re-express the cap's ALGEBRA so
+ * its own stated intent ("guaranteeing the reading page ≥ 75%") holds in
+ * BOTH directions: row = min(content, 25%). Probes: content-following
+ * 20.3px row / 473.7px page at 494px; ~400px content still clamps at
+ * exactly 123.5px with the locked overflow scroll net engaging; the
+ * ≤320×420 regime gains capacity (no collapse).
  * ════════════════════════════════════════════════════════════════════════ */
+/* Row follows header content (later same-specificity source-order override
+   — the 09-07 rule above stays byte-unchanged). The locked header rule's
+   min-height:0 + overflow-y:auto keep the auto row shrinkable, so the
+   09-07 fat-header protections are re-anchored here by the max-height
+   clamp below rather than by the growth limit. */
+.article-body.paginated-surface {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+/* The 09-07 25% cap, expressed against the same definite pinned height the
+   .article-body.paginated-surface height formula uses (keep the two
+   formulas in sync). A percentage max-height cannot be used here: on a
+   grid item it resolves against the TRACK, not the container (probed —
+   cyclic for sizing), which would clamp against the row it is meant to
+   cap. Definite-length max-height DOES clamp the auto track's intrinsic
+   sizing, giving row = min(content, 25%); when content exceeds the cap
+   the locked overflow-y:auto rule makes the header scroll (09-07
+   semantics exactly). */
+.article-body.paginated-surface > header {
+  max-height: calc((100vh - 48px - 2px - 2 * var(--space-2xl)) * 0.25);
+}
 .article-body.paginated-surface > header .back-to-library {
   position: fixed;
   top: calc(48px + var(--space-sm));
