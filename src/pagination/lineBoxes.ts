@@ -15,6 +15,14 @@
 // discipline: batch every read before any caller write (Pitfall 2 — layout
 // thrash), check signal.aborted per block, and throw AbortError on cancel.
 //
+// 260820-beo: readLineBoxes finds each line boundary via BINARY SEARCH over
+// the rounded-top predicate — O(lines × log L) Range.getClientRects probes
+// per text node instead of the former O(L) per-character prefix scan (a
+// 500-char paragraph dropped from 501 probes to ~lines × 9). The overflow
+// guard (overflowGuard.ts) calls readLineBoxes on the live fragment per
+// correction iteration, so it inherits this speedup through the unchanged
+// signature with zero edits — that call site is why this rewrite exists.
+//
 // D-05 contract (Pitfall 3 — do NOT fork normalization): the per-block text
 // used for offset math MUST be produced by the SAME rules as normalizeText.
 // We import normalizeElText from ../reader/restoreLocation (which mirrors
@@ -84,11 +92,20 @@ export function charOffsetToGrapheme(
  * Plan 04-06 generalization: walks ALL descendant text nodes in document
  * order (TreeWalker), maintaining a running UTF-16 char-offset accumulator
  * that maps each text node's local offset into the block's full normalized
- * text. For each text node, walks character offsets building a Range per
- * candidate boundary (reusing the rect-comparison logic from the prior
- * single-text-node implementation), and records a LineBox each time the
- * rounded top changes — the LineBox.charOffset is the GLOBAL offset into
- * the concatenated text (the coordinate charOffsetToGrapheme expects).
+ * text. For each text node, finds each next line boundary by BINARY-SEARCHING
+ * the minimal prefix offset whose probe's rounded last-rect top differs from
+ * the current line's — and records a LineBox each time one is found — the
+ * LineBox.charOffset is the GLOBAL offset into the concatenated text (the
+ * coordinate charOffsetToGrapheme expects).
+ *
+ * 260820-beo: the former per-character prefix scan probed EVERY i in
+ * 0..localLen (a 500-char paragraph = 501 Range.getClientRects queries;
+ * ~100k+ rect queries per measurement pass on a long article, multiplied by
+ * every overflow-guard correction). The binary search produces a
+ * byte-identical LineBox[] at O(lines × log L) probe cost — equivalence is
+ * pinned by tests/unit/pagination/lineBoxesBinarySearch.test.ts, which
+ * replicates the OLD linear walk as a test-local oracle and deep-equals the
+ * two across diverse schedules (plateau/container/surrogate).
  *
  * For flat blocks (paragraph/heading with a single text node) the output is
  * byte-identical to the prior implementation. For container blocks
@@ -150,27 +167,70 @@ export function readLineBoxes(
 
   for (const textNode of textNodes) {
     const localLen = textNode.data.length;
-    for (let i = 0; i <= localLen; i++) {
-      // Check cancel between iterations — a long block is O(totalLen) DOM
-      // reads, so a newer trigger must be able to cancel mid-walk.
-      if ((globalBase + i) > 0 && signal.aborted) throw new AbortError();
-      range.setStart(textNode, 0);
-      range.setEnd(textNode, i);
-      const rects = range.getClientRects();
-      if (rects.length === 0) continue;
-      const lastRect = rects[rects.length - 1]!;
-      const top = lastRect.top;
-      if (Number.isNaN(lastTop) || Math.round(top) !== Math.round(lastTop)) {
-        // New line detected. Line 1 always starts at charOffset 0; later
-        // lines began at the char that triggered the wrap (globalBase + i - 1),
-        // since the range [0, i-1) within this text node was on the previous
-        // line and [0, i) now spans both. globalBase advances the offset
-        // across text node boundaries so containers report GLOBAL offsets.
-        const isFirst = boxes.length === 0;
-        const charOffset = isFirst ? 0 : globalBase + i - 1;
-        boxes.push({ charOffset, topPx: top, bottomPx: lastRect.bottom });
-        lastTop = top;
+    // 260820-beo binary-search line walk. Given the current line established
+    // at local offset `cur` (initially 0) with recorded `lastTop` (NaN before
+    // the first box), find the MINIMAL i in (cur, localLen] whose probe
+    // [0, i) returns non-empty rects AND whose rounded last-rect top differs
+    // from `lastTop` (a NaN lastTop matches any non-empty probe). The
+    // predicate is monotone in i because rounded last-rect tops are
+    // non-decreasing in top-to-bottom LTR flow (same value within a line,
+    // larger on later lines — all three engines lay out lines this way;
+    // the replica-oracle tests in lineBoxesBinarySearch.test.ts pin the
+    // schedules, including the rounded-top plateau where two adjacent lines
+    // merge). Binary search over a monotone predicate therefore finds the
+    // same minimal i the former per-character linear scan found — the probe
+    // count drops from O(L) to O(lines × log L) per text node.
+    let cur = 0;
+    for (;;) {
+      if (cur >= localLen) break; // no offsets remain in this text node
+      let lo = cur + 1;
+      let hi = localLen;
+      let boundary = -1;
+      let boundaryRects: DOMRectList | null = null;
+      while (lo <= hi) {
+        // Check cancel before every probe — the probe count is now
+        // ~lines × log L per node, so cancellation latency drops, but the
+        // mid-walk AbortError contract is preserved. (The function-entry
+        // check above covers the pre-aborted case; every binary-search
+        // probe sits at globalBase + mid ≥ 1, matching the old walk's
+        // abort-check condition.)
+        if (signal.aborted) throw new AbortError();
+        const mid = (lo + hi) >> 1;
+        range.setStart(textNode, 0);
+        range.setEnd(textNode, mid);
+        const rects = range.getClientRects();
+        if (rects.length > 0) {
+          const lastRect = rects[rects.length - 1]!;
+          if (
+            Number.isNaN(lastTop) ||
+            Math.round(lastRect.top) !== Math.round(lastTop)
+          ) {
+            // Predicate holds at mid — the boundary is at mid or earlier.
+            boundary = mid;
+            boundaryRects = rects;
+            hi = mid - 1;
+            continue;
+          }
+        }
+        // Predicate fails at mid — the boundary (if any) is later.
+        lo = mid + 1;
       }
+      if (boundary < 0) break; // no further boundary in this text node
+      // New line detected. Line 1 always starts at charOffset 0; later
+      // lines began at the char that triggered the wrap (globalBase + i - 1),
+      // since the range [0, i-1) within this text node was on the previous
+      // line and [0, i) now spans both. The box is emitted from the BOUNDARY
+      // probe's own last rect (topPx/bottomPx are exactly the values the
+      // linear scan observed at that i — probes are deterministic within a
+      // write-free read phase, Pitfall 2). globalBase advances the offset
+      // across text node boundaries so containers report GLOBAL offsets.
+      const lastRect = boundaryRects![boundaryRects!.length - 1]!;
+      const top = lastRect.top;
+      const isFirst = boxes.length === 0;
+      const charOffset = isFirst ? 0 : globalBase + boundary - 1;
+      boxes.push({ charOffset, topPx: top, bottomPx: lastRect.bottom });
+      lastTop = top;
+      cur = boundary;
     }
     globalBase += localLen;
   }
