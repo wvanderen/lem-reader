@@ -22,7 +22,7 @@
 
 import type { CanonicalArticle } from "../content/types";
 import {
-  BLOCK_SEPARATOR,
+  articleGraphemeIndex,
   blockNormalizedText,
   graphemeClusters,
 } from "../content/normalizeText";
@@ -32,8 +32,10 @@ import type { PageFragment } from "./types";
  * Per-block grapheme length over the D-05 normalized-text contract.
  *
  * Mirrors the accumulation normalizeText(article) performs (blocks joined by
- * BLOCK_SEPARATOR). Used by pageStartGlobalOffset to walk article.blocks up
- * to a target blockIndex.
+ * BLOCK_SEPARATOR). ArticleView's sameBlock mode-toggle helper still calls
+ * this; with the 260819-tld segmenter cache it no longer pays the per-call
+ * constructor cost. ARTICLE-OFFSET HOT PATHS (page turns, progress ratio)
+ * must use articleGraphemeIndex(article) instead — never this per-block walk.
  */
 export function blockGraphemeLength(
   block: CanonicalArticle["blocks"][number],
@@ -45,13 +47,15 @@ export function blockGraphemeLength(
 /**
  * Compute the article-global D-05 grapheme offset of a page fragment's START.
  *
- * Walks article.blocks accumulating per-block grapheme lengths + one
- * BLOCK_SEPARATOR between blocks up to the fragment's first entry's
- * blockIndex, then adds that entry's intra-block startGrapheme. The result
- * is in the SAME coordinate system as findScrollTarget / computeTopVisibleOffset
- * — callers can round-trip fragment → offset → DOM target (D4-10 paginated→
- * scrolling) and offset → fragment (D4-10 scrolling→paginated via
- * fragmentContainingOffset) without any coordinate translation.
+ * O(1): reads the fragment's first entry's blockIndex from the per-article
+ * index's blockStartOffsets prefix sums (260819-tld — previously a per-block
+ * accumulation walk on every call). An out-of-range blockIndex falls to the
+ * sentinel entry, reproducing the old loop's capped accumulation exactly. The
+ * result is in the SAME coordinate system as findScrollTarget /
+ * computeTopVisibleOffset — callers can round-trip fragment → offset → DOM
+ * target (D4-10 paginated→scrolling) and offset → fragment (D4-10
+ * scrolling→paginated via fragmentContainingOffset) without any coordinate
+ * translation.
  *
  * Returns 0 for an empty fragment (defensive — the engine never emits empty
  * fragments, but callers should not crash if one arrives).
@@ -63,12 +67,13 @@ export function pageStartGlobalOffset(
   if (fragment.blocks.length === 0) return 0;
   const first = fragment.blocks[0];
   if (!first) return 0;
-  let offset = 0;
-  for (let i = 0; i < first.blockIndex && i < article.blocks.length; i++) {
-    offset += blockGraphemeLength(article.blocks[i]!, article.lang) +
-      BLOCK_SEPARATOR.length;
-  }
-  return offset + first.startGrapheme;
+  // Out-of-range blockIndex clamps to the sentinel entry (index blocks.length)
+  // — byte-identical to the old loop's `i < article.blocks.length` cap.
+  const blockIndex = Math.min(first.blockIndex, article.blocks.length);
+  return (
+    articleGraphemeIndex(article).blockStartOffsets[blockIndex]! +
+    first.startGrapheme
+  );
 }
 
 /**
@@ -89,6 +94,10 @@ export function pageStartGlobalOffset(
  * An offset that overshoots the last page clamps to the last page index
  * (calm nearest-page fallback — corpus changed since the offset was captured).
  *
+ * O(pages): each page's start is computed ONCE and carried forward as the
+ * next iteration's end bound (260819-tld — previously two pageStartGlobalOffset
+ * calls per page, each an O(blocks) walk).
+ *
  * Returns 0 for an empty pages array (defensive).
  */
 export function fragmentContainingOffset(
@@ -98,14 +107,15 @@ export function fragmentContainingOffset(
 ): number {
   if (pages.length === 0) return 0;
   let best = 0;
+  let start = pageStartGlobalOffset(article, pages[0]!);
   for (let i = 0; i < pages.length; i++) {
-    const start = pageStartGlobalOffset(article, pages[i]!);
     const end =
       i + 1 < pages.length
         ? pageStartGlobalOffset(article, pages[i + 1]!)
         : Number.MAX_SAFE_INTEGER;
     if (offset >= start && offset < end) return i;
     best = i;
+    start = end;
   }
   // Offset overshoots the article (corpus changed) — clamp to the last page.
   return best;

@@ -13,15 +13,15 @@
 //      confident (low-certainty; renders as normal per Open Question #3);
 //      zero candidates or N>1 → "orphan".
 //
-// REUSE-DO-NOT-FORK (Pattern 5): graphemeClusters + normalizeText are imported
-// from src/content/normalizeText.ts — the single canonical D-05 coordinate.
-// Any divergence shifts every anchor.
+// REUSE-DO-NOT-FORK (Pattern 5): graphemeClusters + articleGraphemeIndex are
+// imported from src/content/normalizeText.ts — the single canonical D-05
+// coordinate. Any divergence shifts every anchor.
 //
 // Pure domain logic — no DOM, no React, no side effects. jsdom-safe to unit
 // test with synthetic fixtures.
 import {
+  articleGraphemeIndex,
   graphemeClusters,
-  normalizeText,
 } from "../content/normalizeText";
 import type { CanonicalArticle } from "../content/types";
 import type {
@@ -44,8 +44,15 @@ export function findAllOccurrences(
   if (needle.length === 0 || haystack.length < needle.length) return [];
   const positions: number[] = [];
   const needleStr = needle.join("");
+  // First-cluster guard (260819-tld): a position whose first cluster differs
+  // from the needle's first cluster can never produce an equal joined string,
+  // so skip it WITHOUT the slice+join comparison. On a ~100k-cluster article
+  // this removes the per-position array-slice + string-join allocation; only
+  // positions whose first cluster matches pay the join. Semantics identical.
+  const firstCluster = needle[0]!;
   const limit = haystack.length - needle.length;
   for (let i = 0; i <= limit; i++) {
+    if (haystack[i] !== firstCluster) continue;
     if (haystack.slice(i, i + needle.length).join("") === needleStr) {
       positions.push(i);
     }
@@ -244,7 +251,9 @@ export function resolveQuoteSelector(
   selector: TextQuoteSelector,
   positionHint?: TextPositionSelector,
 ): TextPositionSelector | "ambiguous" | "orphan" {
-  const text = normalizeText(article);
-  const clusters = graphemeClusters(text, article.lang);
+  // Served by the per-article index (260819-tld): ONE segmentation per
+  // article object regardless of highlight count — ArticleView's eager batch
+  // on open used to re-run normalizeText + graphemeClusters per highlight.
+  const clusters = articleGraphemeIndex(article).clusters;
   return resolveQuoteSelectorInText(clusters, selector, article.lang, positionHint);
 }
