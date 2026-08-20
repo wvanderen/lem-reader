@@ -1046,6 +1046,77 @@ dialog.wipe-confirm::backdrop {
   min-height: 0;
   overflow-y: auto;
 }
+
+/* ── Quick task 260819-qbq — paginated quiet-header register ───────────────
+ * GOAL: in paginated mode the pinned header row drops to the page-indicator
+ * register (one ~14px/1.45 line, ≤44px row at 360×640) so nearly all
+ * pinned-surface height goes to the reading page.
+ *
+ * MECHANISM — why a real fixed box instead of a hit-area ::after shim: the
+ * header is a scroll container by the locked 09-07 rule directly above
+ * (byte-unchanged), and a scroll container clips its descendants —
+ * including an absolutely-positioned pseudo-element — at its padding box
+ * for BOTH painting and pointer hit-testing. Inside a ~20px quiet row a
+ * shim could deliver at most a ~20px effective target (A11Y-07 silently
+ * violated), and its end-ward extension would add scrollable overflow (a
+ * phantom header scrollbar). A REAL 44×44 border box in the fixed chrome
+ * layer escapes ancestor clipping entirely (containing block = viewport;
+ * no transformed ancestors on this path — the .page-indicator/.page-turn/
+ * .chapter-nav-page precedents) and delivers the full hit area with zero
+ * new ::after precedent.
+ *
+ * DOM/focus order is invariant by construction: fixed positioning never
+ * alters DOM order, so sequential focus still reaches the back button
+ * before the title (the back-nav (d) Tab-order contract holds). The box's
+ * transparent lower half overlaps the top of the pinned surface — the
+ * .page-turn chevron precedent (44px transparent hit boxes over the
+ * reading surface) already establishes that trade.
+ *
+ * Tokens only; zero motion properties by design (A11Y-06 discipline — the
+ * global reduced-motion gate stays trivially satisfied; wording kept free
+ * of greppable property names per the 13-01 comment discipline). Every
+ * rule below is scoped under .article-body.paginated-surface, so scrolling
+ * mode and the ReviewView mount keep the 13-04 base register
+ * pixel-unchanged.
+ * ════════════════════════════════════════════════════════════════════════ */
+.article-body.paginated-surface > header .back-to-library {
+  position: fixed;
+  top: calc(48px + var(--space-sm));
+  left: var(--space-sm);
+  z-index: 5; /* same chrome layer as .page-indicator (below the app header's 10) */
+  min-width: var(--touch);
+  min-height: var(--touch); /* A11Y-07 REAL 44×44 box — no ::after hit-area shim */
+  padding: 0; /* label flush at the left inset, mirroring the indicator's right */
+  border: 0; /* quiet TEXT register — .page-indicator/.resume-banner-dismiss are unboxed */
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+  align-items: flex-start; /* label rides the indicator line; the transparent lower half is the hit zone (.page-turn precedent) */
+}
+/* The .resume-banner-dismiss text-button discipline: quiet ink, accent on
+   engagement. The base hover's border-color declaration is inert once
+   border-width is 0 above. :focus-visible keeps the global 2px ring around
+   the real 44px box. */
+.article-body.paginated-surface > header .back-to-library:hover,
+.article-body.paginated-surface > header .back-to-library:focus-visible {
+  color: var(--accent);
+}
+/* Quiet title register — the exact .page-indicator/.chapter-nav visual
+   line. Scoped specificity (0,2,2) beats BOTH the base
+   .article-body > header h1 (26px/32px, (0,1,2)) and its ≥640px 32px
+   media override (media queries add no specificity), so no media query is
+   needed — flat 14px like the indicator. margin-block stays 0 from the
+   base rule. The element REMAINS an h1 (heading semantics + the
+   one-h1-per-page D-01-02 decision untouched); only the visual register
+   changes in paginated mode. */
+.article-body.paginated-surface > header h1 {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  font-weight: 400; /* the .page-indicator/.chapter-nav weight — 500 unjustified */
+  color: var(--ink-soft); /* passes AA at ~6.4:1 per the .chapter-nav note */
+}
 .page-viewport {
   position: relative;
   min-height: 0;
@@ -3043,6 +3114,9 @@ dialog.book-remove-confirm::backdrop {
   color: var(--accent);
   border-color: var(--accent);
 }
+/* Paginated mode overrides this register in the Phase 4 paginated-surface
+   section (the 260819-qbq quiet fixed 44px box near .page-viewport); this
+   rule remains the home for scrolling mode + ReviewView. */
 
 /* Plan 13-04 (POLISH-03 / D13-13) — the SLIMMED article header anatomy:
  * the pinned per-page header is the back affordance + the title ONLY (the
