@@ -25,6 +25,14 @@
 //   - Check signal.aborted between blocks and throw AbortError if a newer
 //     trigger cancelled this pass (composes with the epoch guard).
 //
+// 260820-beo: the pass is now ASYNC and cooperatively TIME-SLICED — after
+// every ~DEFAULT_SLICE_BUDGET_MS of accumulated block reads it yields to the
+// main thread (scheduler.yield when available, setTimeout(0) fallback) and
+// re-checks the signal. A full measurement pass therefore never blocks
+// paint for seconds on long articles (symptom A: readers scrolling during
+// re-measure storms saw blank unpainted screens). Yields happen BETWEEN
+// block slices only — reads stay batched WITHIN a slice (Pitfall 2).
+//
 // Tag-name → kind map mirrors src/content/render/BlockRenderer.tsx output:
 //   h1..h6 → "heading", p → "paragraph", blockquote → "blockquote",
 //   li (parent ul) → "bulleted-list", li (parent ol) → "numbered-list",
@@ -73,10 +81,48 @@ function kindForElement(el: HTMLElement): string {
 }
 
 /**
- * Measure every top-level rendered block in a single read-phase. Returns
- * fractional heights + per-line counts + per-block LineBox[] (Plan 04-06).
- * Aborts mid-pass (via AbortError) if `signal` fires — the engine treats
- * AbortError as a silent cancel.
+ * Cooperative slice budget (ms). A slice must stay well under a frame-pair
+ * budget so paint and input interleave with the measurement pass; ~10ms
+ * sits inside the 8–12ms direction (260820-beo). The budget is a CEILING —
+ * a small article that measures in under 10ms completes with zero yields.
+ */
+export const DEFAULT_SLICE_BUDGET_MS = 10;
+
+/**
+ * Yield control to the main thread so paint/input can interleave with a
+ * long measurement pass. Prefers scheduler.yield() when the platform
+ * provides it; falls back to setTimeout(0) otherwise (jsdom, older
+ * engines). `scheduler` is read DYNAMICALLY off globalThis via STRUCTURAL
+ * typing — no reliance on lib.dom's Scheduler typings (coverage under the
+ * project's TypeScript lib is unverified) and no `any`. The dynamic
+ * per-call read is also what makes the jsdom spy in
+ * domMeasurerSlicing.test.ts (a globalThis.scheduler stub) effective.
+ */
+async function yieldToMain(): Promise<void> {
+  const s = (globalThis as { scheduler?: { yield?: unknown } }).scheduler;
+  if (s && typeof s.yield === "function") {
+    await (s as { yield: () => Promise<void> }).yield();
+  } else {
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0);
+    });
+  }
+}
+
+/**
+ * Measure every top-level rendered block in a single read-phase per slice.
+ * Returns fractional heights + per-line counts + per-block LineBox[]
+ * (Plan 04-06). Aborts mid-pass (via AbortError) if `signal` fires — the
+ * engine treats AbortError as a silent cancel.
+ *
+ * 260820-beo: the pass is async and cooperatively time-sliced — DOM reads
+ * are batched within a ~sliceBudgetMs slice, and between slices the pass
+ * yields to the main thread and re-checks the signal. Layout drift BETWEEN
+ * slices (scroll, an image load shifting earlier blocks) is ACCEPTED and
+ * must NOT be "fixed" by re-reading earlier blocks: heights were always
+ * measured against shifting geometry, and the engine's epoch/commit guard
+ * is the invalidation mechanism — re-reading would reintroduce the
+ * re-measure storm this slicing removes.
  *
  * Plan 04-06: queries `[data-block-index]` (1:1 with article.blocks by
  * BlockRenderer construction) instead of the legacy flat BLOCK_SELECTOR.
@@ -88,13 +134,16 @@ function kindForElement(el: HTMLElement): string {
  *   callback-ref seam). Must contain top-level blocks emitted by ArticleBody
  *   (each carrying data-block-index).
  * @param signal The current epoch's AbortSignal; checked between blocks AND
- *   between text-node iterations inside readLineBoxes so a newer trigger
- *   cancels a long measurement.
+ *   after every yield AND between text-node iterations inside readLineBoxes
+ *   so a newer trigger cancels a long measurement.
+ * @param sliceBudgetMs Ceiling on accumulated read time before the pass
+ *   yields to the main thread (defaults to DEFAULT_SLICE_BUDGET_MS).
  */
-export function measureAllBlocks(
+export async function measureAllBlocks(
   articleEl: HTMLElement,
   signal: AbortSignal,
-): BlockMeasurement[] {
+  sliceBudgetMs: number = DEFAULT_SLICE_BUDGET_MS,
+): Promise<BlockMeasurement[]> {
   // queryBlocks — single DOM read at pass start (Pitfall 2: batch reads).
   // [data-block-index] is 1:1 with article.blocks by BlockRenderer contract.
   // Plan 05-05: the page-fragment's blocks ALSO carry data-block-index now
@@ -109,6 +158,7 @@ export function measureAllBlocks(
     ),
   );
   const out: BlockMeasurement[] = [];
+  let sliceStart = performance.now();
   for (const el of elements) {
     if (signal.aborted) throw new AbortError();
     // Per-block: read rect (fractional height) + line boxes (DOMRect count)
@@ -131,6 +181,15 @@ export function measureAllBlocks(
       lineCount,
       lineBoxes,
     });
+    // Cooperative slice boundary — yields BETWEEN block slices only (reads
+    // stay batched within a slice; this function never writes the DOM).
+    // The signal is re-checked after every yield so a newer trigger
+    // cancels the pass before the next slice's reads begin.
+    if (performance.now() - sliceStart >= sliceBudgetMs) {
+      await yieldToMain();
+      if (signal.aborted) throw new AbortError();
+      sliceStart = performance.now();
+    }
   }
   return out;
 }

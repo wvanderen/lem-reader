@@ -143,10 +143,11 @@ export class MeasurementEngine {
     try {
       await awaitFontsReady(signal);
       if (signal.aborted) return; // cancelled mid-gate
-      // DOM truth — single read-phase (Pitfall 2). Always computed: it is
-      // the calibration reference (D3-03) AND the runtime fallback when a
-      // kind is not Pretext-eligible.
-      const blocks = measureAllBlocks(this.opts.articleEl, signal);
+      // DOM truth — read-phase per ~10ms slice (Pitfall 2 within a slice;
+      // 260820-beo: the pass is async and yields between slices so it never
+      // blocks paint). Always computed: it is the calibration reference
+      // (D3-03) AND the runtime fallback when a kind is not Pretext-eligible.
+      const blocks = await measureAllBlocks(this.opts.articleEl, signal);
       // Plan 04-06 contract defense: MeasurementResult.blocks MUST be 1:1
       // with article.blocks. PaginatedSurface replaces ArticleBody with a
       // single page fragment in paginated mode — when the ResizeObserver
