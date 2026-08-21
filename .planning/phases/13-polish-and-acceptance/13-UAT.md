@@ -1,5 +1,5 @@
 ---
-status: complete
+status: diagnosed
 phase: 13-polish-and-acceptance
 source: [13-VERIFICATION.md]
 started: 2026-08-19T00:00:00.000Z
@@ -76,13 +76,25 @@ detail: User rejects the tag-adding section below the article title: proposes th
 expected: Tag entry reachable via top-bar icon alongside highlights/mode controls; metadata spot visually redesigned or restructured per plan; no regression to the 09-07 geometry lesson or the firstPageReservedPx contracts.
 
 ### G6 — ACPT-05 Flow C: selection toolbar unreachable under NVDA+Firefox
-status: open
+status: diagnosed
 - truth: "After making a text selection in the reader, Tab reaches the selection toolbar (role=toolbar, accessible name 'Highlight actions') and Enter on the 'Highlight' button creates a mark with a polite confirmation announcement (ACCEPTANCE-PROTOCOL.md v1.0, Flow C steps C2–C3)"
   status: failed
   reason: "User reported: All pass besides C, I can't get to that selection toolbar but I'm not sure if it's user error"
   severity: major
   test: 1
-  root_cause: ""     # Filled by diagnosis
-  artifacts: []      # Filled by diagnosis
-  missing: []        # Filled by diagnosis
-  debug_session: ""  # Filled by diagnosis
+  root_cause: "Gecko/WebKit collapse the document selection synchronously when DOM focus moves (including to the toolbar's own buttons). SelectionToolbar lifecycle is driven solely by selectionchange (collapsed → unmount), so the first Tab press in Firefox destroys the selection and unmounts the toolbar before focus can reach it — keyboard-unreachable regardless of technique. Chromium works. Never surfaced before: e2e specs use programmatic selections + mouse clicks; keyboard-shortcuts.spec.ts:140-167 skipped the Tab-activation assertion with a comment observing the collapse; VoiceOver run used accessibility-layer navigation, not DOM-focus Tab."
+  artifacts:
+    - path: "src/routes/ArticleView.tsx"
+      issue: "selectionchange listener L705-762 unmounts toolbar on collapsed selection with no focus-containment awareness (L713-716)"
+    - path: "src/reader/annotations/SelectionToolbar.tsx"
+      issue: "conditional render on selectionRect/captureResult (L122); no focus containment or announce-on-appear"
+    - path: "docs/ACCEPTANCE-PROTOCOL.md"
+      issue: "Flow C1/C3 (L188-190) document VoiceOver gestures only; no NVDA selection/activation gestures documented"
+    - path: "tests/e2e/annotations/keyboard-shortcuts.spec.ts"
+      issue: "L140-167 skipped Tab-activation assertion ('focusing the button clears the text selection') — automation gap that hid the defect"
+  missing:
+    - "Keep toolbar mounted while it contains document.activeElement (focus-containment) and/or move focus to first toolbar button + polite announce on appear"
+    - "Add Tab-walk e2e spec asserting toolbar reachability + Enter activation in firefox and webkit"
+    - "Document NVDA selection gesture (Firefox-native browse-mode Shift+arrows) and NVDA activation note in ACCEPTANCE-PROTOCOL.md Flow C1/C3"
+    - "Re-run ACPT-05 per D13-06 after fix lands"
+  debug_session: ".planning/debug/flowc-selection-toolbar-nvda.md"
