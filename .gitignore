@@ -40,3 +40,7 @@ corpus/epub/*
 
 # Cloudflare Wrangler local state (workerd cache, build artifacts)
 .wrangler/
+
+# Vercel CLI local state (project link written on first deploy — 260821-k6z;
+# the .vercel/ dir holds per-machine org/project bindings, never committable)
+.vercel/

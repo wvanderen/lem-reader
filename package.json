@@ -17,6 +17,7 @@
     "perf": "playwright test perf.harness && node tests/e2e/perf/budget.compare.ts",
     "lint": "eslint .",
     "lint:no-danger": "node scripts/check-no-danger.js # rejects dangerouslySetInnerHTML in src/server/functions (ING-07)",
+    "deploy:vercel": "npx --yes vercel@latest deploy --prod --yes",
     "format": "prettier --write ."
   },
   "dependencies": {
