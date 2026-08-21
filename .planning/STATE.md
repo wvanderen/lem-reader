@@ -350,7 +350,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 
 ### Pending Todos
 
-None yet.
+- [2026-08-21] Fix prod UI paste-ingest flow (endpoint verified, client flow fails) — [todo](./todos/pending/2026-08-21-fix-prod-ui-paste-ingest-flow.md)
 
 ### Blockers/Concerns
 
