@@ -284,7 +284,7 @@ Plans:
    7. Reader gets a keyboard-reachable "Back to library" affordance on article and review views that never exits the app on a deep link (POLISH-05, D13-15).
    8. Reader sees an organized library home — continue reading / add content / library list — within existing components (POLISH-06, D13-16).
 
-**Plans**: 10/10 plans complete
+**Plans**: 11 plans (10 complete — G6 gap closure 13-11 pending UAT re-run)
 
 Plans:
 **Wave 1**
@@ -312,6 +312,10 @@ Plans:
 
 - [x] 13-10-PLAN.md — G5 metadata/tag redesign: TagEntry → top-bar popover beside highlights/mode controls + compact provenance-only spot + Export → highlights drawer + realigned/strengthened geometry + tag-popover specs
 
+**Wave 6** *(gap closure — G6 from the ACPT-05 UAT run; fix-then-re-run per D13-06)*
+
+- [ ] 13-11-PLAN.md — G6 selection toolbar keyboard reachability: focus-containment lifecycle + single-Tab routing + saved-range activation (Gecko/WebKit selection collapse) + announce-on-appear + 3-engine Tab-walk e2e (both modes) + NVDA gesture docs for Flow C1/C3; ACPT-05 re-run is the tester's
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -328,4 +332,4 @@ Plans:
 | 10. Annotation Review Panel | v2.0 | 6/6 | Complete    | 2026-08-16 |
 | 11. PDF Intake | v2.0 | 7/7 | Complete    | 2026-08-17 |
 | 12. EPUB Intake | v2.0 | 8/8 | Complete    | 2026-08-18 |
-| 13. Polish and Acceptance | v2.0 | 10/10 | Complete   | 2026-08-19 |
+| 13. Polish and Acceptance | v2.0 | 10/11 | Gap closure (G6) | 2026-08-19 |
