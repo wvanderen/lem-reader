@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 Phase: 13 (polish-and-acceptance) — EXECUTING
 Plan: 5 of 10
 Status: Ready to execute
-Last activity: 2026-08-20 — Completed quick task 260820-beo: Fix residual long-article lag round 2 (binary-search line boxes + time-sliced measurement)
+Last activity: 2026-08-21 — Completed quick task 260821-k6z: Deploy minimal production to Vercel (ingest endpoint ported per D7-05)
 
 Progress: [████████████████████] 32/32 plans (100%)
 
@@ -369,6 +369,7 @@ None yet.
 | 260819-qbq | Reduce header and back-to-library prominence in paginated reader view | 2026-08-19 | 4f3c85d | [260819-qbq-reduce-header-and-back-to-library-promin](./quick/260819-qbq-reduce-header-and-back-to-library-promin/) |
 | 260819-tld | Fix long-article lag: cache Intl.Segmenter + per-article grapheme index + per-element length cache in D-05 hot paths | 2026-08-20 | 9bd73ee | [260819-tld-fix-long-article-lag-cache-intl-segmente](./quick/260819-tld-fix-long-article-lag-cache-intl-segmente/) |
 | 260820-beo | Fix residual long-article lag round 2: binary-search line boxes + time-sliced measurement passes | 2026-08-20 | d12d54a | [260820-beo-fix-residual-long-article-lag-round-2-o-](./quick/260820-beo-fix-residual-long-article-lag-round-2-o-/) |
+| 260821-k6z | Deploy minimal production to Vercel — port /api/ingest to a Vercel Node function (D7-05 adapter), vercel.json + deploy script; ingestion works in prod (workerd can't run jsdom per 07-01 spike) | 2026-08-21 | 934853f | [260821-k6z-deploy-minimal-production-to-vercel-port](./quick/260821-k6z-deploy-minimal-production-to-vercel-port/) |
 
 ## Deferred Items
 
