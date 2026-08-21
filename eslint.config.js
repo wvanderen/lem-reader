@@ -28,7 +28,10 @@ import globals from "globals";
 //   BLOCKER, not a nicety.
 export default [
   {
-    ignores: ["dist", "node_modules", "playwright-report"],
+    // `api/` + `.vercel/` are GENERATED (esbuild bundle + vercel-build
+    // output — vercel-ingest-500); `functions/` stays linted. dist is the
+    // vite build output; playwright-report is test output.
+    ignores: ["dist", "node_modules", "playwright-report", "api", ".vercel"],
   },
   js.configs.recommended,
   {

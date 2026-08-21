@@ -1,4 +1,4 @@
-// api/ingest.ts
+// api-src/ingest.ts — esbuild ENTRY; bundles to api/ingest.js (build:api).
 // PRODUCTION — Quick task 260821-k6z. This is the D7-05 adapter-boundary
 // port to Vercel: the production host moved off Cloudflare workerd per the
 // 07-01 spike verdict (HYBRID CONTINGENCY, human-approved 2026-08-11) —
@@ -10,16 +10,29 @@
 // so this port ships in the same change as the deploy prep (locked
 // decision 2).
 //
-// A repo-root `api/ingest.ts` file auto-serves at /api/ingest on Vercel's
-// DEFAULT Node.js runtime — never opt into edge (jsdom requires Node). The
-// handler is the current-docs module-object web-standard form: a default
-// export whose `fetch(request)` returns a `Response`. Zero npm dependencies
-// — no @vercel/node import (that package only supplies
-// VercelRequest/VercelResponse typings, which the web-standard form
-// avoids). Vercel bundles api/ functions with its own esbuild-based
-// bundler at deploy time; jsdom + isomorphic-dompurify + Readability bundle
-// fine, and safeFetch's node:dns + ip-address SSRF pipeline runs with full
-// Node API coverage (T-Q1-01 inherited mitigation, unchanged code path).
+// THIS FILE is the esbuild entry (source), not the deployed file: it lives
+// in `api-src/`, and `npm run build:api` bundles it (with ALL relative
+// imports inlined) into `api/ingest.js` — gitignored build output that
+// Vercel serves at /api/ingest on the DEFAULT Node.js runtime — never opt
+// into edge (jsdom requires Node). The handler is the current-docs
+// module-object web-standard form: a default export whose `fetch(request)`
+// returns a `Response`. Zero npm dependencies — no @vercel/node import
+// (that package only supplies VercelRequest/VercelResponse typings, which
+// the web-standard form avoids).
+//
+// WHY PRE-BUNDLED (debug session vercel-ingest-500, 2026-08-21): @vercel/node
+// transpiles each traced TS file INDIVIDUALLY — it does not bundle relative
+// imports. An extensionless relative specifier (the original
+// `../server/ingestAdapter` import) survives into the emitted JS verbatim,
+// and under `"type": "module"` Node ESM requires explicit extensions on
+// relative imports (no CJS-style probing) → ERR_MODULE_NOT_FOUND at cold
+// start → every /api/ingest request 500s (9× in prod logs, first deploy).
+// Pre-bundling inlines ALL relative imports into one self-contained ESM
+// file with `--packages=external` (bare imports remain for @vercel/nft to
+// trace from node_modules): jsdom + isomorphic-dompurify + Readability
+// resolve from traced packages, and safeFetch's node:dns + ip-address SSRF
+// pipeline runs with full Node API coverage (T-Q1-01 inherited mitigation,
+// unchanged code path).
 //
 // The Cloudflare spike/adapter artifacts STAY in-repo untouched per locked
 // decision 3: `functions/api/ingest.ts` (the Pages Function shape) +

@@ -1,6 +1,8 @@
 // tests/unit/server/vercel-ingest-endpoint.spec.ts
 // Quick task 260821-k6z Task 1 — RED gate. Contract tests for the Vercel
-// Node function wrapper (api/ingest.ts): the D7-05 adapter-boundary port
+// Node function wrapper (api-src/ingest.ts, bundled to api/ingest.js by
+// `npm run build:api` — vercel-ingest-500): the D7-05 adapter-boundary
+// port
 // that serves POST /api/ingest on Vercel's DEFAULT Node.js runtime (jsdom +
 // isomorphic-dompurify + Readability run natively there — the exact reason
 // the 07-01 spike verdict moved the host off workerd, HYBRID CONTINGENCY,
@@ -34,7 +36,7 @@ vi.mock("../../../server/ingest", () => ({
 }));
 
 import { ingest } from "../../../server/ingest";
-import handler from "../../../api/ingest";
+import handler from "../../../api-src/ingest";
 import type { IngestionResponse } from "../../../src/ingestion/types";
 
 const ingestMock = vi.mocked(ingest);

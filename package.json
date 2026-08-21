@@ -6,7 +6,8 @@
   "description": "Lem Reader — a calm, booklike reader for web articles.",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "npm run build:api && tsc && vite build",
+    "build:api": "esbuild api-src/ingest.ts --bundle --platform=node --format=esm --target=node22 --packages=external --outfile=api/ingest.js",
     "preview": "vite preview",
     "test:unit": "vitest",
     "test:e2e": "playwright test",
@@ -62,6 +63,7 @@
     "eslint-plugin-jsx-a11y": "^6.10.0",
     "eslint-plugin-react": "^7.37.0",
     "eslint-plugin-react-hooks": "^5.0.0",
+    "esbuild": "0.28.1",
     "fake-indexeddb": "6.2.5",
     "linkedom": "^0.18.13",
     "prettier": "^3.4.0",
