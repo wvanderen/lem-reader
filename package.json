@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "npm run build:api && tsc && vite build",
-    "build:api": "esbuild api-src/ingest.ts --bundle --platform=node --format=esm --target=node22 --packages=external --outfile=api/ingest.js",
+    "build:api": "node scripts/build-api.mjs",
     "preview": "vite preview",
     "test:unit": "vitest",
     "test:e2e": "playwright test",
@@ -18,7 +18,7 @@
     "perf": "playwright test perf.harness && node tests/e2e/perf/budget.compare.ts",
     "lint": "eslint .",
     "lint:no-danger": "node scripts/check-no-danger.js # rejects dangerouslySetInnerHTML in src/server/functions (ING-07)",
-    "deploy:vercel": "npx --yes vercel@latest deploy --prod --yes",
+    "deploy:vercel": "node scripts/deploy-vercel.mjs",
     "format": "prettier --write ."
   },
   "dependencies": {
@@ -59,15 +59,16 @@
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
     "@vitejs/plugin-react": "^6.0.0",
+    "esbuild": "0.28.1",
     "eslint": "^9.0.0",
     "eslint-plugin-jsx-a11y": "^6.10.0",
     "eslint-plugin-react": "^7.37.0",
     "eslint-plugin-react-hooks": "^5.0.0",
-    "esbuild": "0.28.1",
     "fake-indexeddb": "6.2.5",
     "linkedom": "^0.18.13",
     "prettier": "^3.4.0",
     "typescript": "7.0.2",
+    "vercel": "59.3.0",
     "vite": "8.1.5",
     "vitest": "4.1.10",
     "wrangler": "4.120.1"

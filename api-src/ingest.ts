@@ -20,19 +20,27 @@
 // (that package only supplies VercelRequest/VercelResponse typings, which
 // the web-standard form avoids).
 //
-// WHY PRE-BUNDLED (debug session vercel-ingest-500, 2026-08-21): @vercel/node
-// transpiles each traced TS file INDIVIDUALLY — it does not bundle relative
-// imports. An extensionless relative specifier (the original
-// `../server/ingestAdapter` import) survives into the emitted JS verbatim,
+// WHY FULLY PRE-BUNDLED (debug session vercel-ingest-500, 2026-08-21, fix 2):
+// @vercel/node transpiles each traced TS file INDIVIDUALLY — it does not
+// bundle relative imports. An extensionless relative specifier (the original
+// `../server/ingestAdapter` import) survived into the emitted JS verbatim,
 // and under `"type": "module"` Node ESM requires explicit extensions on
 // relative imports (no CJS-style probing) → ERR_MODULE_NOT_FOUND at cold
 // start → every /api/ingest request 500s (9× in prod logs, first deploy).
-// Pre-bundling inlines ALL relative imports into one self-contained ESM
-// file with `--packages=external` (bare imports remain for @vercel/nft to
-// trace from node_modules): jsdom + isomorphic-dompurify + Readability
-// resolve from traced packages, and safeFetch's node:dns + ip-address SSRF
-// pipeline runs with full Node API coverage (T-Q1-01 inherited mitigation,
-// unchanged code path).
+// Fix 1 (esbuild --packages=external) fixed that but regressed in prod: the
+// function then resolved bare imports at RUNTIME against @vercel/nft's
+// TRACED node_modules subset, where CJS `html-encoding-sniffer` (jsdom dep)
+// require()s `@exodus/bytes/encoding-lite.js` — an ESM-only subpath (no
+// `require` export condition) → ERR_REQUIRE_ESM cold-start crash. Fix 2
+// bundles node_modules INTO api/ingest.js itself: esbuild resolves the
+// CJS↔ESM seam at BUILD time via its interop shims, so runtime module
+// resolution is eliminated entirely. Only jsdom's optional `canvas`
+// native module stays `--external` (not installed; jsdom's try/catch
+// degrade path handles the failed require). safeFetch's node:dns +
+// ip-address SSRF pipeline runs with full Node API coverage
+// (T-Q1-01 inherited mitigation, unchanged code path). LESSON from fix 1:
+// verify packaged output in ISOLATION (no repo node_modules reachable) —
+// a smoke run from the repo root masks traced-subset divergence.
 //
 // The Cloudflare spike/adapter artifacts STAY in-repo untouched per locked
 // decision 3: `functions/api/ingest.ts` (the Pages Function shape) +
@@ -53,9 +61,10 @@
 // bypass (Vercel KB "bypass body size limit") is explicitly out of scope
 // for this minimal deploy.
 //
-// The deploy itself is USER-RUN (locked decision 4): `npx vercel login`
-// (interactive browser flow) then `npm run deploy:vercel`. The agent
-// prepares everything but never deploys and never attempts login.
+// The deploy runs via `npm run deploy:vercel` (locked decision 4: prod
+// deploys go through the user's authenticated CLI — the agent may run it
+// only on explicit user authorization, as granted in the vercel-ingest-500
+// reopen).
 import { handleIngestBody } from "../server/ingestAdapter";
 import type { IngestionResponse } from "../src/ingestion/types";
 
