@@ -4,13 +4,12 @@
 // ~14px/1.45 line, ≤44px row at 360×640) so nearly all pinned-surface
 // height goes to the reading page.
 //
-// MECHANISM (one sentence): the back button keeps a REAL position:fixed
-// 44×44 chrome-layer box because the header is a scroll container by the
-// locked 09-07 rule, which clips any pseudo-element hit-area expansion for
-// painting AND hit-testing (and would add scrollable overflow).
+// MECHANISM (one sentence): on mobile the article header is the REAL 44px
+// subheader row, so Back to library remains in flow with a full touch target
+// while the title truncates instead of forcing a wrap or colliding with it.
 //
 // CONTRACT CLAUSES:
-//   1. PAGINATED @ 360×640: back button computed position "fixed" with a
+//   1. PAGINATED @ 360×640: back button computed position "static" with a
 //      boundingBox ≥ 44×44 (A11Y-07 real box); the header h1 computed
 //      font-size "14px"; the header row (article.article-body > header)
 //      bounding height ≤ 44px; header scrollHeight ≤ clientHeight (the
@@ -68,7 +67,7 @@ async function openPaginatedAtSmallPhone(
   await page.waitForTimeout(600);
 }
 
-test("paginated: header is the quiet indicator register and the back button keeps a real 44×44 fixed box", async ({
+test("paginated: header is a quiet mobile subheader and the back button keeps a real 44×44 in-flow box", async ({
   page,
 }) => {
   await openPaginatedAtSmallPhone(page);
@@ -95,9 +94,8 @@ test("paginated: header is the quiet indicator register and the back button keep
   });
   expect(geom, "header + back button + h1 must be mounted").not.toBeNull();
 
-  // A11Y-07 real box: fixed in the chrome layer, ≥44×44 border box (no
-  // pseudo-element shim — see the mechanism note in the header comment).
-  expect(geom!.backPosition).toBe("fixed");
+  // A11Y-07 real box: in the structural subheader, ≥44×44 border box.
+  expect(geom!.backPosition).toBe("static");
   expect(
     geom!.backWidth,
     `back button width must be ≥44px (got ${geom!.backWidth})`,

@@ -214,6 +214,7 @@ main#main {
 main#main.paginated-main {
   box-sizing: border-box;
   height: calc(100vh - 48px);
+  height: calc(100dvh - 48px);
   padding-block: var(--space-2xl);
   overflow: hidden;
   overscroll-behavior: none;
@@ -998,7 +999,12 @@ dialog.wipe-confirm::backdrop {
 .article-body.paginated-surface {
   width: var(--measure);
   max-width: 100%;
+  /* Legacy fallback for browsers without dynamic viewport units. */
   height: calc(100vh - 48px - 2px - 2 * var(--space-2xl));
+  /* Mobile browser chrome changes the visible page height without changing
+     legacy `vh`. Size the source geometry box to the dynamic viewport so the
+     measured page budget never extends behind an expanded bottom toolbar. */
+  height: calc(100dvh - 48px - 2px - 2 * var(--space-2xl));
   margin-inline: auto;
   /* `hidden` still creates a programmatically scrollable box. VoiceOver can
      scroll that box while traversing past the final visible block, especially
@@ -1113,7 +1119,9 @@ dialog.wipe-confirm::backdrop {
    the locked overflow-y:auto rule makes the header scroll (09-07
    semantics exactly). */
 .article-body.paginated-surface > header {
+  /* Keep the fallback and dynamic formulas synchronized with the surface. */
   max-height: calc((100vh - 48px - 2px - 2 * var(--space-2xl)) * 0.25);
+  max-height: calc((100dvh - 48px - 2px - 2 * var(--space-2xl)) * 0.25);
 }
 .article-body.paginated-surface > header .back-to-library {
   position: fixed;
@@ -3215,6 +3223,103 @@ dialog.book-remove-confirm::backdrop {
 .article-top-meta .meta,
 .article-top-meta > a {
   margin-block: 0;
+}
+
+/* Mobile paginated chrome is a structural subheader, not a collection of
+ * coincident fixed offsets. The article header owns one real 44px row for
+ * Back to library + the quiet title; the decorative page indicator aligns
+ * to that row. Reducing the old 48px top inset gives that row an explicit
+ * home, and the synchronized surface-height formula returns the recovered
+ * space to the article page. */
+@media (max-width: 639px) {
+  main#main.paginated-main {
+    padding-block: var(--space-sm) var(--space-2xl);
+  }
+
+  .article-body.paginated-surface {
+    height: calc(100vh - 48px - 2px - var(--space-sm) - var(--space-2xl));
+    height: calc(100dvh - 48px - 2px - var(--space-sm) - var(--space-2xl));
+  }
+
+  .article-body.paginated-surface > header {
+    min-height: var(--touch);
+    max-height: calc(
+      (100vh - 48px - 2px - var(--space-sm) - var(--space-2xl)) * 0.25
+    );
+    max-height: calc(
+      (100dvh - 48px - 2px - var(--space-sm) - var(--space-2xl)) * 0.25
+    );
+    flex-wrap: nowrap;
+    padding-inline-end: calc(var(--touch) + var(--space-sm));
+    overflow: hidden;
+  }
+
+  .article-body.paginated-surface > header .back-to-library {
+    position: static;
+    flex: 0 0 auto;
+    min-width: var(--touch);
+    min-height: var(--touch);
+    padding-inline: 0;
+    align-items: center;
+  }
+
+  .article-body.paginated-surface > header h1 {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .page-indicator {
+    top: calc(48px + var(--space-sm) + (var(--touch) - 1.45em) / 2);
+  }
+
+  /* A resume prompt is transient page chrome. Keeping it out of main flow
+   * prevents it from displacing the independently height-budgeted reader.
+   * The compact bottom sheet preserves both 44px actions and leaves the
+   * article as the primary surface behind it. */
+  .resume-banner {
+    position: fixed;
+    inset-inline: var(--space-md);
+    bottom: calc(var(--space-md) + env(safe-area-inset-bottom, 0px));
+    z-index: 8;
+    max-height: calc(100dvh - 48px - 2 * var(--space-md));
+    margin: 0;
+    padding: var(--space-md);
+    gap: var(--space-sm);
+    overflow-y: auto;
+  }
+
+  .resume-banner-main {
+    padding-inline-end: var(--touch);
+  }
+
+  .resume-banner-main h2 {
+    margin-block-end: var(--space-xs);
+  }
+
+  .resume-banner-main p {
+    font-size: 14px;
+  }
+
+  .resume-banner-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .resume-banner-primary,
+  .resume-banner-secondary {
+    min-width: 0;
+    padding-inline: var(--space-sm);
+    font-size: 14px;
+  }
+
+  .resume-banner-dismiss {
+    position: absolute;
+    top: var(--space-sm);
+    right: var(--space-sm);
+    margin: 0;
+  }
 }
 /* Mechanism note (Option A): PaginatedSurface sets the PAGE-1 fragment's
  * inline flow height to calc(100% - firstPageReservedPx) — the same
