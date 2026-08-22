@@ -279,6 +279,32 @@ export function ArticleView({
   // Drives the toolbar's buttons-vs-hint rendering.
   const [captureResult, setCaptureResult] =
     useState<ToolbarCaptureResult | null>(null);
+  // Plan 13-11 (G6 — ACPT-05 Flow C2/C3): the saved live Range from the
+  // last VALID selection. Gecko/WebKit collapse the document selection
+  // synchronously whenever DOM focus moves (verified inside the focus()
+  // call itself — .planning/debug/flowc-selection-toolbar-nvda.md), so
+  // the toolbar's keyboard activation path cannot rely on the live
+  // selection. This ref holds range.cloneRange() from the
+  // selectionchange valid branch below; its ONLY consumer is the restore
+  // branch in handleHighlightShortcut (gated on focus being INSIDE the
+  // toolbar). Cleared in every branch that clears
+  // selectionRect/captureResult so it can never resurrect a stale
+  // selection. The clone is the ONLY persisted selection state;
+  // captureResult/selectionRect continue to drive display as before.
+  const lastValidRangeRef = useRef<Range | null>(null);
+  // Plan 13-11 (G6): event-time mirrors for the Tab-routing guard in the
+  // window keydown listener below. That listener is registered once per
+  // article mount (deps [article, articleEl] — the established
+  // ref-stable pattern, cf. handleToggleModeRef), so it must NEVER close
+  // over toolbar state; it reads these refs at EVENT time. Without this,
+  // a Tab pressed from body AFTER a focus-exit dismissal would bounce
+  // focus back to a stale toolbar in Chromium (the selection survives
+  // focus moves there, so selectionchange never clears anything on its
+  // own — the trap-proofing requirement).
+  const captureOkRef = useRef(false);
+  captureOkRef.current = captureResult?.ok === true;
+  const toolbarRectActiveRef = useRef<DOMRect | null>(null);
+  toolbarRectActiveRef.current = selectionRect;
 
   // Plan 09-05 (D9-06, PORT-03): per-article highlights export state. The
   // busy flag disables the header button while a download is in flight; the
@@ -595,7 +621,33 @@ export function ArticleView({
       // Bail on collapsed/empty selection — H/N are selection-dependent.
       const selection = window.getSelection();
       if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
-        return;
+        // Plan 13-11 (G6 saved-range restore): Gecko/WebKit collapse the
+        // selection synchronously when focus moved onto the toolbar, so
+        // Enter on a focused toolbar button (or H/N with focus inside the
+        // toolbar) arrives with a collapsed live selection. If focus is
+        // INSIDE the toolbar and we hold the last valid Range, restore it
+        // and fall through. The restored Range re-enters
+        // createHighlightFromSelection → captureCurrentSelection, so the
+        // single-block rule (D5-05/D5-06), overlap check (D5-13),
+        // measurement-body guard, and grapheme capture all re-validate
+        // against the live DOM — ONE creation path, zero forked
+        // validation. The activeElement-inside-toolbar guard means H/N
+        // pressed with focus anywhere else can never resurrect a stale
+        // selection — the pre-fix keyboard-shortcut behavior is preserved
+        // exactly. A stale/detached Range fails containment inside capture
+        // and returns a typed not-ok → calm bail (no crash path).
+        const active = document.activeElement;
+        if (
+          selection &&
+          active instanceof Element &&
+          active.closest(".selection-toolbar") !== null &&
+          lastValidRangeRef.current !== null
+        ) {
+          selection.removeAllRanges();
+          selection.addRange(lastValidRangeRef.current);
+        } else {
+          return;
+        }
       }
       const result: CreateFromSelectionResult =
         await api.createHighlightFromSelection(readingRoot);
@@ -605,12 +657,18 @@ export function ArticleView({
       window.getSelection()?.removeAllRanges();
       // Clear the toolbar state so it dismisses on highlight creation
       // (UI-SPEC §Interaction 25 lifecycle: "Either action button is
-      // activated → the toolbar's job is done").
+      // activated → the toolbar's job is done"). Runs BEFORE any focus
+      // move (Enter does not move focus), so the focus-exit dismissal
+      // below can only ever be a no-op after this.
       setSelectionRect(null);
       setCaptureResult(null);
+      lastValidRangeRef.current = null;
       if (withNote) {
         // N: open the note popover for the new highlight (Plan 05-03's
-        // NotePopover reads openPopoverFor from the provider).
+        // NotePopover reads openPopoverFor from the provider). Strictly
+        // ordered: state-clear → toolbar unmount → popover opens — any
+        // focusout the unmount dispatches is an idempotent no-op, never a
+        // double-dismiss or resurrection.
         api.setOpenPopoverFor(result.highlightId);
       }
     },
@@ -618,6 +676,25 @@ export function ArticleView({
   );
   const handleHighlightShortcutRef = useRef(handleHighlightShortcut);
   handleHighlightShortcutRef.current = handleHighlightShortcut;
+
+  // Plan 13-11 (G6 — truth 4, the Tab-past exit): stable focus-exit
+  // dismissal passed to SelectionToolbar as onFocusExit (the focusout
+  // detection itself lives on the toolbar root — React's onFocusOut).
+  // Clears the exact trio every other clear-branch clears. Idempotent by
+  // construction (clearing already-cleared state is a no-op), which is
+  // what makes it safe around both activation paths: the Enter/click
+  // activation relies on its OWN clear above, which runs before any focus
+  // move, and the withNote handoff is strictly ordered state-clear →
+  // toolbar unmount → setOpenPopoverFor opens NotePopover. This is the
+  // ONLY Tab-past dismissal mechanism in Chromium, where the live
+  // selection survives the focus move so selectionchange never fires a
+  // collapse — without it the toolbar would stay wedged (and the Tab
+  // routing below would pull focus back from body indefinitely).
+  const dismissToolbarFromFocusExit = useCallback(() => {
+    setSelectionRect(null);
+    setCaptureResult(null);
+    lastValidRangeRef.current = null;
+  }, []);
 
   useEffect(() => {
     if (!article || !articleEl) return;
@@ -649,6 +726,86 @@ export function ArticleView({
         handleToggleModeRef.current();
         return;
       }
+      // Plan 13-11 (G6 — Flow C2 Tab routing): a plain Tab from the reading
+      // context routes focus DIRECTLY onto the toolbar's first button.
+      // Without this, the toolbar sits near the END of DOM order (after
+      // every article focusable — L1976-1990), so "Tab to it" meant a long
+      // walk; and in Gecko/WebKit the FIRST Tab collapsed the selection and
+      // unmounted the toolbar before focus could ever arrive (the G6
+      // defect). Per engine: chromium keeps the live selection (activation
+      // proceeds normally); firefox/webkit collapse it synchronously inside
+      // focus() → the containment guard in the selectionchange listener
+      // keeps the toolbar mounted. Guards, ALL evaluated at EVENT time
+      // (refs — never a stale closure; this listener is registered once
+      // per article mount):
+      //   - plain Tab only (event.key === "Tab", NOT shiftKey — never
+      //     touch Shift+Tab);
+      //   - captureResult?.ok — never route into a hint-only toolbar (no
+      //     buttons to focus);
+      //   - selectionRect non-null — the toolbar is actually mounted;
+      //   - activeElement is document.body OR contained by the article
+      //     (the reading context). Dialogs/popovers (NotePopover, tag
+      //     popover, AnnotationsDrawer) are never intercepted: their focus
+      //     targets are outside articleRef and are not body;
+      //   - activeElement NOT already inside .selection-toolbar — focus
+      //     moves naturally within/past the toolbar;
+      //   - a .selection-toolbar button actually exists in the mounted DOM
+      //     right before preventDefault (trap-proofing: after the
+      //     focus-exit dismissal unmounts the toolbar, this check fails →
+      //     a Tab pressed from body proceeds natively → no bounce-back
+      //     loop; load-bearing in Chromium, where the selection survives
+      //     focus moves so stale state never clears on its own).
+      if (key === "Tab" && !event.shiftKey) {
+        const active = document.activeElement;
+        const activeEl = active instanceof Element ? active : null;
+        const articleNode = articleRef.current;
+        const inReadingContext =
+          active === document.body ||
+          (activeEl !== null &&
+            articleNode !== null &&
+            articleNode.contains(activeEl));
+        const insideToolbar =
+          activeEl !== null &&
+          activeEl.closest(".selection-toolbar") !== null;
+        if (
+          captureOkRef.current &&
+          toolbarRectActiveRef.current !== null &&
+          inReadingContext &&
+          !insideToolbar
+        ) {
+          const toolbarBtn = document.querySelector<HTMLElement>(
+            ".selection-toolbar button",
+          );
+          if (toolbarBtn) {
+            event.preventDefault();
+            toolbarBtn.focus();
+            return;
+          }
+        }
+        // Plan 13-11 (G6 — truth 4 completion): a Tab pressed ON the
+        // toolbar's LAST button is "tabbing past the toolbar" — dismiss.
+        // The focusout dismissal (SelectionToolbar's onFocusExit) covers
+        // engines where focus actually moves OUT (chromium: focus →
+        // body/next focusable → focusout → dismiss). Firefox, however,
+        // leaves focus parked on the last focusable when nothing follows
+        // it in the document (the toolbar IS the last focusable cluster —
+        // verified: Tab from "Highlight + note" never moves focus → no
+        // focusout fires → the toolbar would wedge). No preventDefault:
+        // if the engine can move focus natively it may; this dismissal is
+        // idempotent with any focusout that follows.
+        if (insideToolbar) {
+          const toolbarRoot = document.querySelector(".selection-toolbar");
+          const toolbarButtons = toolbarRoot?.querySelectorAll("button");
+          const lastBtn = toolbarButtons?.[toolbarButtons.length - 1];
+          if (
+            activeEl !== null &&
+            lastBtn instanceof Element &&
+            lastBtn.contains(activeEl)
+          ) {
+            dismissToolbarFromFocusExit();
+          }
+        }
+      }
       // Phase 5 Plan 05-02 (UI-SPEC §Interaction 33): H/N highlight the
       // current selection. preventDefault is NOT called — H/N have no native
       // default action worth suppressing, and calling preventDefault
@@ -660,7 +817,9 @@ export function ArticleView({
         void handleHighlightShortcutRef.current(true);
       }
     };
-    // Non-passive is fine here — M/H/N have no default action to suppress.
+    // Keydown listeners are never passive, so the Tab branch's
+    // preventDefault (G6 routing) works; M/H/N have no default action of
+    // their own.
     // The listener is registered on window (captures shortcuts from anywhere
     // in the app while an article is mounted, EXCEPT inside form fields per
     // isFormField).
@@ -668,7 +827,10 @@ export function ArticleView({
     return () => {
       window.removeEventListener("keydown", onKey);
     };
-  }, [article, articleEl]);
+    // dismissToolbarFromFocusExit is stable (useCallback, empty deps) — it
+    // never re-registers this listener; listed for the exhaustive-deps rule
+    // (Plan 13-11: NO state deps — the Tab branch reads refs at event time).
+  }, [article, articleEl, dismissToolbarFromFocusExit]);
 
   // Phase 5 Plan 05-05 (D5-10 / UI-SPEC §Interaction 29): delegated click
   // activation on inline <mark.highlight> elements. Clicking a highlight opens
@@ -711,8 +873,34 @@ export function ArticleView({
         rafId = null;
         const selection = window.getSelection();
         if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
+          // Plan 13-11 (G6 focus-containment hold): if the toolbar
+          // currently owns focus, this collapse was caused by the focus
+          // move itself (Gecko/WebKit collapse the selection
+          // synchronously inside focus() — verified in
+          // .planning/debug/flowc-selection-toolbar-nvda.md). The standard
+          // floating-toolbar focus-containment pattern: keep the toolbar
+          // mounted with its last captureResult/selectionRect while it
+          // contains document.activeElement (the one-line check:
+          // activeElement.closest(".selection-toolbar")). Intra-toolbar
+          // survival (the Highlight → Highlight + note Tab move also
+          // collapses the selection in Gecko/WebKit — activeElement stays
+          // inside .selection-toolbar) routes here too. Focus-INTO and
+          // intra-toolbar survival are owned by this guard; focus-EXIT is
+          // owned by the toolbar's focusout → dismissToolbarFromFocusExit
+          // (the onFocusExit prop). They never conflict: the guard holds
+          // only while activeElement is inside the toolbar, and the
+          // dismissal fires only when the incoming focus target is outside
+          // it.
+          const active = document.activeElement;
+          if (
+            active instanceof Element &&
+            active.closest(".selection-toolbar") !== null
+          ) {
+            return; // the toolbar stays mounted while it owns focus
+          }
           setSelectionRect(null);
           setCaptureResult(null);
+          lastValidRangeRef.current = null;
           return;
         }
         // Only track selections inside the article element (the reading
@@ -727,6 +915,7 @@ export function ArticleView({
         ) {
           setSelectionRect(null);
           setCaptureResult(null);
+          lastValidRangeRef.current = null;
           return;
         }
         // Skip selections inside the hidden measurement body (D5-08 — should
@@ -741,9 +930,15 @@ export function ArticleView({
         ) {
           setSelectionRect(null);
           setCaptureResult(null);
+          lastValidRangeRef.current = null;
           return;
         }
         setSelectionRect(range.getBoundingClientRect());
+        // Plan 13-11 (G6): persist the valid Range for the toolbar's
+        // keyboard activation path (the restore branch in
+        // handleHighlightShortcut). Cloned — the live Range mutates with
+        // the selection; the clone is the ONLY persisted selection state.
+        lastValidRangeRef.current = range.cloneRange();
         // Compute the enriched capture result for the toolbar display
         // (capture + D5-13 overlap check — no highlight created).
         const api = highlightApiRef.current;
@@ -967,6 +1162,10 @@ export function ArticleView({
     setAnnotationAnnouncement(null);
     setSelectionRect(null);
     setCaptureResult(null);
+    // Plan 13-11 (G6): never carry a saved Range across an article swap —
+    // a stale (detached) Range would fail capture containment anyway, but
+    // clearing here keeps the ref's lifetime identical to the toolbar state.
+    lastValidRangeRef.current = null;
     highlightApiRef.current = null;
     // Phase 5 Plan 05-04: reset the one-time unresolved-announce guard so
     // the new article's eager batch-resolve can fire its own "{N} couldn't
@@ -1981,12 +2180,15 @@ export function ArticleView({
             created) so the toolbar can show buttons vs. invalid hints.
             onHighlight/onHighlightAndNote reuse the SAME handleHighlightShortcut
             the H/N keyboard path uses (ONE create path, ONE capture → persist
-            → clear-selection flow). */}
+            → clear-selection flow). Plan 13-11 (G6): onFocusExit wires the
+            toolbar's focusout-driven dismissal (Tab-past / focus-exit) to the
+            stable dismissToolbarFromFocusExit callback. */}
         <SelectionToolbar
           selectionRect={selectionRect}
           captureResult={captureResult}
           onHighlight={() => void handleHighlightShortcut(false)}
           onHighlightAndNote={() => void handleHighlightShortcut(true)}
+          onFocusExit={dismissToolbarFromFocusExit}
         />
         {/* Phase 5 Plan 05-03: NotePopover mounts inside the provider so it
             can consume useHighlightOverlay() for openPopoverFor coordination
