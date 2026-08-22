@@ -5,15 +5,15 @@ milestone_name: Personal Library
 current_phase: 13
 current_phase_name: polish-and-acceptance
 status: executing
-stopped_at: Completed 13-11-PLAN.md (G6 toolbar keyboard-reachability gap closure)
-last_updated: "2026-08-22T00:41:24.423Z"
+stopped_at: Completed 13-12-PLAN.md (G7 NVDA browse-mode Tab bypass gap closure)
+last_updated: "2026-08-22T18:30:33.807Z"
 last_activity: 2026-08-22
 last_activity_desc: Phase 13 execution started
 progress:
   total_phases: 7
   completed_phases: 7
-  total_plans: 51
-  completed_plans: 51
+  total_plans: 52
+  completed_plans: 52
   percent: 100
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 ## Current Position
 
 Phase: 13 (polish-and-acceptance) — EXECUTING
-Plan: 2 of 11
+Plan: 2 of 12
 Status: Ready to execute
 Last activity: 2026-08-22 — Phase 13 execution started
 
@@ -151,6 +151,7 @@ Progress: [████████████████████] 32/32 p
 | Phase 13 P09 | 19min | 2 tasks | 5 files |
 | Phase 13 P10 | 74 min | 2 tasks | 16 files |
 | Phase 13 P11 | 10 min | 3 tasks | 5 files |
+| Phase 13 P12 | 6 min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -349,6 +350,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: 13-08: Remove file button reuses .article-export-highlights quiet-button tokens + the ingest-remove-file behavioral hook class — type=button (never submits), disabled while submitting; zero CSS additions (13-03 cross-surface reuse precedent)
 - [Phase ?]: 13-09 (G4): paginatedPending branch — the paginated pre-settle window renders the hidden measurement clone + a calm role=status placeholder inside the real page viewport (zero new CSS); frame classes gate on the EFFECTIVE mode so the pinned frame is byte-stable from first paint; the geometry read is ordered by trustedView commit (not class presence), preserving the same-rAF-batch height+reserve first publication (05-06 + 13-04 contracts green, engine files byte-unchanged)
 - [Phase 13]: [Phase 13]: G6 fix: selection toolbar keyboard-reachable via single Tab + Enter-activatable in all 3 engines + both modes — focus containment (hold while activeElement inside), event-time-guarded Tab routing, saved-range restore into the ONE creation path; Firefox needs an extra last-button Tab-past keydown dismissal (it parks focus when nothing follows the toolbar — focusout never fires); no auto-focus on appear
+- [Phase 13]: G7-D1: focus-mode-only SR reachability under NVDA accepted + documented (protocol v1.1); toolbar focus-on-appear REJECTED — Gecko/WebKit would collapse the selection on every settled selection (recorded harm), the debounce race can still lose to NVDA's Tab, and unsolicited focus moves disorient SR users; browse mode is out of the reachability contract, pinned as a documented boundary by toolbar-keydownless-focus.spec.ts — Live firefox Phase A proved the current build routes a real Tab keydown (focus mode) onto the Highlight button with the toolbar surviving; NVDA+Space is the platform convention for operating interactive widgets; zero product risk — pointer, sighted-keyboard, chromium, and VoiceOver paths byte-unchanged
+- [Phase 13]: ACPT-05 stays Pending after 13-12 (G7 closure) — it flips ONLY when the tester's NVDA+Firefox re-run of Flow C on the v1.1 protocol lands in 13-VERIFICATION.md §1.3/§1.4 with zero blocker/major (D13-06/D13-07); the re-run must confirm the C1 'Highlight actions available.' mount cue and the NVDA+Space-then-Tab focus-mode sequence — The 13-11 precedent: documentation + automation coverage do not substitute for the human SR acceptance run
 
 ### Pending Todos
 
@@ -389,8 +392,8 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-22T00:41:24.414Z
-Stopped at: Completed 13-11-PLAN.md (G6 toolbar keyboard-reachability gap closure)
+Last session: 2026-08-22T18:30:33.785Z
+Stopped at: Completed 13-12-PLAN.md (G7 NVDA browse-mode Tab bypass gap closure)
 Resume file: None
 
 ## Operator Next Steps
