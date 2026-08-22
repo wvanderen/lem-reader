@@ -284,7 +284,7 @@ Plans:
    7. Reader gets a keyboard-reachable "Back to library" affordance on article and review views that never exits the app on a deep link (POLISH-05, D13-15).
    8. Reader sees an organized library home — continue reading / add content / library list — within existing components (POLISH-06, D13-16).
 
-**Plans**: 12/13 plans complete
+**Plans**: 13/13 plans complete
 
 Plans:
 **Wave 1**
@@ -322,7 +322,7 @@ Plans:
 
 **Wave 8** *(gap closure — G8 from the ACPT-05 v1.1 re-run; protocol + boundary spec only, zero product changes; ACPT-05 flip awaits the human NVDA re-run per D13-06)*
 
-- [ ] 13-13-PLAN.md — G8 NVDA native-selection-mode protocol correction (v1.2): C1 NVDA+shift+f10 precondition + false Firefox-native parenthetical removed + older-NVDA F7 caret-browsing fallback + platform-boundary note + selection-gated mount/announce boundary e2e (the C1 cue gains its first automated substrate) — decision G8-D1: zero production changes (page-side mount path exonerated; buffer-only selections unobservable by construction)
+- [x] 13-13-PLAN.md — G8 NVDA native-selection-mode protocol correction (v1.2): C1 NVDA+shift+f10 precondition + false Firefox-native parenthetical removed + older-NVDA F7 caret-browsing fallback + platform-boundary note + selection-gated mount/announce boundary e2e (the C1 cue gains its first automated substrate) — decision G8-D1: zero production changes (page-side mount path exonerated; buffer-only selections unobservable by construction)
 
 ## Progress
 
@@ -340,4 +340,4 @@ Plans:
 | 10. Annotation Review Panel | v2.0 | 6/6 | Complete    | 2026-08-16 |
 | 11. PDF Intake | v2.0 | 7/7 | Complete    | 2026-08-17 |
 | 12. EPUB Intake | v2.0 | 8/8 | Complete    | 2026-08-18 |
-| 13. Polish and Acceptance | v2.0 | 12/12 | Complete   | 2026-08-19 |
+| 13. Polish and Acceptance | v2.0 | 13/13 | Complete   | 2026-08-19 |
