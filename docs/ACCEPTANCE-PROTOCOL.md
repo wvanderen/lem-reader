@@ -29,7 +29,7 @@ automated test. It is a human-run manual protocol on real hardware.
 
 | Field | Value |
 |-------|-------|
-| **Version** | 1.1 |
+| **Version** | 1.2 |
 | **Authoritative decisions** | D6-05 (SR matrix), D6-06 (hybrid protocol shape), D6-07 (zero-blocker policy), D6-08 (versioned + re-run) |
 | **Applies to** | Lem Reader prototype (v1.0 milestone) |
 | **Results recorded in** | `.planning/phases/06-prototype-acceptance/06-VERIFICATION.md` |
@@ -189,11 +189,18 @@ ANNO-01.)
 > focus itself via accessibility APIs WITHOUT delivering any keydown to the
 > page (official NVDA user guide), so under NVDA the tester enters focus
 > mode at C2 (see `.planning/debug/g7-nvda-tab-bypass-selection-toolbar.md`,
-> gap G7).
+> gap G7). The focus-mode instruction at C2 has a sibling precondition one
+> step earlier, at C1 — by default, NVDA browse-mode text selection exists
+> only within NVDA's virtual buffer and never changes the Firefox document
+> selection ("not within the application itself" — official NVDA User Guide,
+> §Native Selection Mode), so the tester MUST enable Native Selection Mode
+> (**NVDA+shift+f10**) BEFORE the C1 Shift+arrows selection or the toolbar
+> cannot mount and no announce can fire; see the note below the checklist
+> and `.planning/debug/g8-toolbar-never-mounts-nvda.md` (gap G8).
 
 | # | Keyboard sequence | Expected outcome (role + name + state) |
 |---|-------------------|----------------------------------------|
-| C1 | Navigate into a text block and make a selection: **Shift+Right arrow** (sighted keyboard), or the SR text-selection gesture (VoiceOver: **VO+Enter** to start, arrow keys to extend, **VO+Enter** to end; NVDA (Firefox): browse-mode **Shift+arrows** (Firefox-native selection)) across several words | A text selection exists within a single block (D5-05/D5-06 single-block rule). The SR announces the selected text. A polite live-region announcement (**"Highlight actions available."**) confirms the toolbar has appeared once the selection settles — the mount cue to listen for after this step. |
+| C1 | Navigate into a text block and make a selection: **Shift+Right arrow** (sighted keyboard), or the SR text-selection gesture (VoiceOver: **VO+Enter** to start, arrow keys to extend, **VO+Enter** to end; NVDA (Firefox): enable Native Selection Mode first (**NVDA+shift+f10**, NVDA >= 2024.1 — required, see the note below), then browse-mode **Shift+arrows**) across several words | A text selection exists within a single block (D5-05/D5-06 single-block rule). The SR announces the selected text. A polite live-region announcement (**"Highlight actions available."**) confirms the toolbar has appeared once the selection settles — the mount cue to listen for after this step. With Native Selection Mode on, the selection is also reflected in the page itself (visible on screen). |
 | C2 | A selection toolbar (`.selection-toolbar`) appears. **NVDA (Firefox): press NVDA+Space to enter focus mode FIRST, then Tab** (the tester hears NVDA's focus-mode toggle confirmation before the Tab); sighted keyboard users **Tab** directly | Focus moves to the selection toolbar (`role="toolbar"`, accessible name **"Highlight actions"**). It exposes a **button** with accessible name **"Highlight"** (and a second button **"Highlight + note"**). |
 | C3 | With focus on the **"Highlight"** button, press **Enter** (VoiceOver: **VO+Space**; NVDA (Firefox): **Enter** — you are in focus mode from C2, where keys pass through to the control; **NVDA+Space** also activates) | A `<mark>` element with the highlight data attribute (`mark.highlight[data-highlight-id]`) wraps the selected text. A **`role="status"` polite live region** announces "Highlight saved." (or equivalent confirmation). |
 | C4 | Read the passage containing the mark | The highlighted text is announced/marked. The mark carries a semantic label identifying it as a highlight (D5-15). |
@@ -204,6 +211,28 @@ ANNO-01.)
 > navigation (see the note above), so H/N are documented as keyboard/mouse
 > conveniences and are intentionally NOT part of this SR flow. The toolbar
 > buttons are the equivalent SR path for both actions.
+
+> **NVDA Native Selection Mode (required at C1):** **WHY** — by default on
+> every NVDA since 2024.1 (the per-document toggle; NVDA 2026.3 adds a
+> persistent Browse Mode setting, also disabled by default), browse-mode
+> Shift+arrows selects only within NVDA's virtual buffer: the selection is
+> not visible on screen and the page's document selection never changes. The
+> toolbar's lifecycle is driven by the document selection, so with native
+> selection off the toolbar cannot appear — and NO page-side code can observe
+> a buffer-only selection. This is a platform boundary, not a product defect
+> (NVDA User Guide §Native Selection Mode;
+> `.planning/debug/g8-toolbar-never-mounts-nvda.md`, gap G8). **WHAT TO DO** —
+> NVDA >= 2024.1: press **NVDA+shift+f10** (per-document; NVDA announces the
+> mode change) BEFORE the C1 Shift+arrows; on NVDA 2026.3+ it can be made
+> persistent in Browse Mode settings (still off by default). **FALLBACK** —
+> older NVDA or a document where the toggle is unavailable: press **F7** to
+> enable Firefox caret browsing (confirm the prompt), then select with
+> Shift+arrows from focus mode — the caret selection IS the document
+> selection (page-visible), then continue at C2 as written. **RE-RUN READING
+> AID** — the C1 mount cue ("Highlight actions available.") is the
+> confirmation the document selection followed; and keep C1 selections
+> within a single block — a selection crossing a block boundary mounts the
+> toolbar in a silent hint variant (no buttons, no announce).
 
 **Pass criterion:** highlight is created from keyboard-only (or SR-only via the
 toolbar); confirmation is announced; the mark is present and semantically labeled.
