@@ -284,7 +284,7 @@ Plans:
    7. Reader gets a keyboard-reachable "Back to library" affordance on article and review views that never exits the app on a deep link (POLISH-05, D13-15).
    8. Reader sees an organized library home — continue reading / add content / library list — within existing components (POLISH-06, D13-16).
 
-**Plans**: 12/12 plans complete
+**Plans**: 12/13 plans complete
 
 Plans:
 **Wave 1**
@@ -319,6 +319,10 @@ Plans:
 **Wave 7** *(gap closure — G7 from the ACPT-05 re-run; protocol + boundary spec only, zero product changes; ACPT-05 flip awaits the human NVDA re-run per D13-06)*
 
 - [x] 13-12-PLAN.md — G7 NVDA browse-mode Tab boundary: Flow C2 focus-mode (NVDA+Space) protocol correction (v1.1) + keydown-less-focus boundary/recovery e2e + false-comment fix — decision G7-D1: focus-mode-only SR reachability documented (focus-on-appear rejected: Gecko/WebKit visual-selection destruction + unwinnable debounce race)
+
+**Wave 8** *(gap closure — G8 from the ACPT-05 v1.1 re-run; protocol + boundary spec only, zero product changes; ACPT-05 flip awaits the human NVDA re-run per D13-06)*
+
+- [ ] 13-13-PLAN.md — G8 NVDA native-selection-mode protocol correction (v1.2): C1 NVDA+shift+f10 precondition + false Firefox-native parenthetical removed + older-NVDA F7 caret-browsing fallback + platform-boundary note + selection-gated mount/announce boundary e2e (the C1 cue gains its first automated substrate) — decision G8-D1: zero production changes (page-side mount path exonerated; buffer-only selections unobservable by construction)
 
 ## Progress
 
