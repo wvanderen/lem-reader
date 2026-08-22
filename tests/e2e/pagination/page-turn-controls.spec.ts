@@ -77,6 +77,11 @@ test.describe("PAGE-02 page-turn controls (04-05)", () => {
     const dev = await gotoPaginated(page);
     const total = dev.pagesLength;
     expect(total).toBeGreaterThan(1);
+    // The key bundle walks pages 1–3, so it needs ≥3 pages to prove each
+    // key ADVANCES (rather than clamping at the last page). Page count
+    // varies with geometry (13-10 compacted the article-top reserve);
+    // fail here — not on a wrong engine claim — if the fixture drifts.
+    expect(total, "key bundle needs ≥3 pages").toBeGreaterThanOrEqual(3);
 
     // Forward keys advance one page each.
     expect(await currentPage(page)).toBe(0);
@@ -84,14 +89,17 @@ test.describe("PAGE-02 page-turn controls (04-05)", () => {
     expect(await currentPage(page), "PageDown advances to page 2").toBe(1);
     await page.keyboard.press("ArrowRight");
     expect(await currentPage(page), "ArrowRight advances to page 3").toBe(2);
-    await page.keyboard.press("Space");
-    expect(await currentPage(page), "Space advances to page 4").toBe(3);
 
     // Backward keys retreat one page each.
     await page.keyboard.press("PageUp");
-    expect(await currentPage(page), "PageUp retreats to page 3").toBe(2);
+    expect(await currentPage(page), "PageUp retreats to page 2").toBe(1);
     await page.keyboard.press("ArrowLeft");
-    expect(await currentPage(page), "ArrowLeft retreats to page 2").toBe(1);
+    expect(await currentPage(page), "ArrowLeft retreats to page 1").toBe(0);
+
+    // Space/Shift+Space prove the space-bar pair from page 1 (positioned
+    // away from the last-page boundary so each press must move).
+    await page.keyboard.press("Space");
+    expect(await currentPage(page), "Space advances to page 2").toBe(1);
     await page.keyboard.press("Shift+Space");
     expect(await currentPage(page), "Shift+Space retreats to page 1").toBe(0);
 

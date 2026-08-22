@@ -191,9 +191,18 @@ test.describe("tag popover (13-10 — G5)", () => {
 
     // Light-dismiss: click the article surface outside the popover → the
     // popover hides, focus rests on the trigger, aria-expanded flips false.
-    await page.locator("article.article-body > header h1").click({
-      position: { x: 8, y: 8 },
-    });
+    // The point is computed from the popover's box: the fixed top-right
+    // popover overlays the article top at this viewport (its .tag-entry
+    // subtree intercepts the h1's top-left), so a hardcoded element offset
+    // is not a stable outside point.
+    const popBox = await page.locator(".tag-popover").boundingBox();
+    expect(popBox, "popover box measurable before light-dismiss").toBeTruthy();
+    const vp = page.viewportSize() ?? { width: 1280, height: 720 };
+    const dismissX = Math.round(vp.width / 2);
+    const dismissY = Math.round(
+      Math.min(popBox!.y + popBox!.height + 24, vp.height - 8),
+    );
+    await page.mouse.click(dismissX, dismissY);
     await expect(page.locator(".tag-popover")).toBeHidden();
     await expect(tagsTrigger(page)).toHaveAttribute("aria-expanded", "false");
     await expectFocusOnTrigger(page);
