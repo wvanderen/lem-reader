@@ -181,13 +181,15 @@ ANNO-01.)
 > convenience only**, not a reliable SR path. Under an SR, create highlights via
 > the toolbar's real `<button>`s (`role="toolbar"`, Tab-reachable, Enter /
 > VoiceOver **VO+Space** activatable); this path is tester-confirmed working
-> under VoiceOver.
+> under VoiceOver. Since the G6 fix (Plan 13-11), the toolbar is
+> keyboard-reachable via a single **Tab** from the reading context in all
+> supported engines, so this flow may be exercised exactly as documented.
 
 | # | Keyboard sequence | Expected outcome (role + name + state) |
 |---|-------------------|----------------------------------------|
-| C1 | Navigate into a text block and make a selection: **Shift+Right arrow** (sighted keyboard), or the SR text-selection gesture (VoiceOver: **VO+Enter** to start, arrow keys to extend, **VO+Enter** to end) across several words | A text selection exists within a single block (D5-05/D5-06 single-block rule). The SR announces the selected text. |
+| C1 | Navigate into a text block and make a selection: **Shift+Right arrow** (sighted keyboard), or the SR text-selection gesture (VoiceOver: **VO+Enter** to start, arrow keys to extend, **VO+Enter** to end; NVDA (Firefox): browse-mode **Shift+arrows** (Firefox-native selection)) across several words | A text selection exists within a single block (D5-05/D5-06 single-block rule). The SR announces the selected text. |
 | C2 | A selection toolbar (`.selection-toolbar`) appears; **Tab** to it | Focus moves to the selection toolbar (`role="toolbar"`, accessible name **"Highlight actions"**). It exposes a **button** with accessible name **"Highlight"** (and a second button **"Highlight + note"**). |
-| C3 | With focus on the **"Highlight"** button, press **Enter** (VoiceOver: **VO+Space**) | A `<mark>` element with the highlight data attribute (`mark.highlight[data-highlight-id]`) wraps the selected text. A **`role="status"` polite live region** announces "Highlight saved." (or equivalent confirmation). |
+| C3 | With focus on the **"Highlight"** button, press **Enter** (VoiceOver: **VO+Space**; NVDA (Firefox): **Enter** — browse mode passes Enter through; **NVDA+Space** also activates) | A `<mark>` element with the highlight data attribute (`mark.highlight[data-highlight-id]`) wraps the selected text. A **`role="status"` polite live region** announces "Highlight saved." (or equivalent confirmation). |
 | C4 | Read the passage containing the mark | The highlighted text is announced/marked. The mark carries a semantic label identifying it as a highlight (D5-15). |
 
 > **Sighted keyboard/mouse convenience (not an SR path):** the bare **H**
