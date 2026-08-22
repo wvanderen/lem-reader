@@ -375,7 +375,14 @@ export function IngestControl() {
       </form>
 
       <form onSubmit={handlePasteSubmit}>
-        <label htmlFor="ingest-paste">Paste HTML</label>
+        {/* 260821-ov7 — the server's Stage 0.5 reroute now admits tag-less
+            pastes through the markdown intake, so the label stops
+            under-promising: honesty copy only, the fix itself is
+            server-side. The accessible name keeps matching the unanchored
+            /paste html/i queries in tests/component/IngestControl.test.tsx
+            and tests/e2e/ingestion/happy-path.spec.ts (verified by the
+            planner — zero test edits). */}
+        <label htmlFor="ingest-paste">Paste HTML or text</label>
         <textarea
           id="ingest-paste"
           name="html"
