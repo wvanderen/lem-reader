@@ -1,18 +1,14 @@
 ---
-status: testing
+status: complete
 phase: 13-polish-and-acceptance
 source: [13-VERIFICATION.md]
 started: 2026-08-19T00:00:00.000Z
-updated: 2026-08-22T19:00:00.000Z
+updated: 2026-08-22T20:00:00.000Z
 ---
 
 ## Current Test
 
-number: 5
-name: ACPT-05 Flow C re-run on ACCEPTANCE-PROTOCOL v1.1 (NVDA+Firefox)
-expected: |
-  On NVDA+Firefox/Windows, re-execute Flow C (C1–C4) against the G6+G7-fixed build using the v1.1 protocol: C1 browse-mode Shift+arrows selection — listen for the "Highlight actions available." mount announcement; C2 NVDA+Space to enter focus mode FIRST, THEN Tab; C3 Enter on the focused Highlight button. Zero blocker/major across the full protocol flips ACPT-05 (D13-06/D13-07). Known pinned boundary: a browse-mode Tab WITHOUT NVDA+Space still lands on Previous page and unmounts the toolbar — documented + recoverable, not a finding.
-awaiting: user response
+[testing complete]
 
 ## Tests
 
@@ -42,18 +38,21 @@ resolution: Root cause diagnosed (G7) and closed by 13-12 — NVDA browse mode c
 
 ### 5. ACPT-05 Flow C re-run on ACCEPTANCE-PROTOCOL v1.1 (NVDA+Firefox)
 expected: On NVDA+Firefox/Windows, re-execute Flow C (C1–C4) against the G6+G7-fixed build using the v1.1 protocol: C1 browse-mode Shift+arrows selection — listen for the "Highlight actions available." mount announcement (the toolbar-appeared cue); C2 NVDA+Space to enter focus mode FIRST (listen for NVDA's focus-mode toggle confirmation), THEN Tab; C3 Enter on the focused Highlight button creates mark.highlight with the polite "Highlight saved." confirmation. Record outcomes in 13-VERIFICATION.md Appendix §1.3 findings + §1.4 checklist + verdict; ACPT-05 flips from Pending only on zero blocker/major (D13-06/D13-07). Known pinned boundary: a browse-mode Tab WITHOUT NVDA+Space still lands on Previous page and unmounts the toolbar — documented + recoverable (re-select, NVDA+Space, Tab), not a finding. Any NEW blocker/major follows fix-then-re-run; minors are recorded and deferred.
-result: [pending]
+result: issue
+reported: "Toolbar is still not appearing even after NVDA+space. I never hear the 'highlight actions available'"
+severity: major
+detail: Failure occurs at C1 — the toolbar appears to never mount (no "Highlight actions available." announce-on-appear heard after browse-mode Shift+arrows selection), so the failure precedes the C2 focus-mode/Tab path entirely. Distinct observable from G6 (mounted, unmounted on focus move) and G7 (keydown-less Tab bypass in browse mode): here the mount/announcement itself is not observed under NVDA+Firefox.
 
 ### 6. VoiceOver+Safari supplementary re-walk incl. the toolbar announce-on-appear surface (optional, non-gating)
 expected: Optionally re-walk the Appendix §3 checklist for the v2.0 surface groups (library/browse-search-tags, ingest incl. calm refusals, review panel, export/import dialogs, book groupings) — now including the 13-11 toolbar announce-on-appear surface, which post-dates the Test 2 pass. NOT an ACPT-05 gate (D13-05) — supplementary evidence on the user's own schedule; record notes in Appendix §3.2.
-result: [pending]
+result: pass
 
 ## Summary
 
 total: 6
-passed: 2
-issues: 0
-pending: 2
+passed: 3
+issues: 1
+pending: 0
 skipped: 0
 blocked: 0
 
@@ -142,3 +141,15 @@ closed_by: 13-12 (commits f09c58d keydown-less boundary/recovery spec, 59c3470 A
     - "E2e: add a keydown-less-focus spec (today it reproduces G7) and correct the false spec comment"
     - "Manual NVDA re-run should confirm whether 'Highlight actions available.' is heard after C1 (toolbar mount pre-Tab); re-run ACPT-05 Flow C per D13-06 after fix lands"
   debug_session: ".planning/debug/g7-nvda-tab-bypass-selection-toolbar.md"
+
+### G8 — ACPT-05 Flow C (v1.1 protocol): selection toolbar never mounts under NVDA+Firefox — no "Highlight actions available." announcement
+status: open
+- truth: "On NVDA+Firefox (protocol v1.1), after browse-mode Shift+arrows text selection (C1) the selection toolbar mounts with the polite 'Highlight actions available.' announce-on-appear cue, and after NVDA+Space then Tab (C2) Enter on the Highlight button creates the highlight (C3)"
+  status: failed
+  reason: "User reported: Toolbar is still not appearing even after NVDA+space. I never hear the 'highlight actions available'"
+  severity: major
+  test: 5
+  root_cause: ""
+  artifacts: []
+  missing: []
+  debug_session: ""
