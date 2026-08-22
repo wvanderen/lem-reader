@@ -284,7 +284,7 @@ Plans:
    7. Reader gets a keyboard-reachable "Back to library" affordance on article and review views that never exits the app on a deep link (POLISH-05, D13-15).
    8. Reader sees an organized library home — continue reading / add content / library list — within existing components (POLISH-06, D13-16).
 
-**Plans**: 11/11 plans complete
+**Plans**: 12 plans (11 complete — 13-12 gap closure pending)
 
 Plans:
 **Wave 1**
@@ -316,6 +316,10 @@ Plans:
 
 - [x] 13-11-PLAN.md — G6 selection toolbar keyboard reachability: focus-containment lifecycle + single-Tab routing + saved-range activation (Gecko/WebKit selection collapse) + announce-on-appear + 3-engine Tab-walk e2e (both modes) + NVDA gesture docs for Flow C1/C3; ACPT-05 re-run is the tester's
 
+**Wave 7** *(gap closure — G7 from the ACPT-05 re-run; protocol + boundary spec only, zero product changes; ACPT-05 flip awaits the human NVDA re-run per D13-06)*
+
+- [ ] 13-12-PLAN.md — G7 NVDA browse-mode Tab boundary: Flow C2 focus-mode (NVDA+Space) protocol correction (v1.1) + keydown-less-focus boundary/recovery e2e + false-comment fix — decision G7-D1: focus-mode-only SR reachability documented (focus-on-appear rejected: Gecko/WebKit visual-selection destruction + unwinnable debounce race)
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -332,4 +336,4 @@ Plans:
 | 10. Annotation Review Panel | v2.0 | 6/6 | Complete    | 2026-08-16 |
 | 11. PDF Intake | v2.0 | 7/7 | Complete    | 2026-08-17 |
 | 12. EPUB Intake | v2.0 | 8/8 | Complete    | 2026-08-18 |
-| 13. Polish and Acceptance | v2.0 | 11/11 | Complete   | 2026-08-19 |
+| 13. Polish and Acceptance | v2.0 | 11/12 | Needs Review (G7 gap closure) | 2026-08-19 |
