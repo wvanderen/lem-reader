@@ -16,6 +16,9 @@
 //        re-ingest produces the same id → dedupe-refuse in 07-06.
 //   3. Honesty (ING-06): three-state confidence → unsupported refused /
 //      low enters library flagged / confident normal.
+//   4. Plain-text admission (260821-ov7): a tag-less {html} paste is valid
+//      strict CommonMark — Stage 0.5 reroutes it onto the markdown intake
+//      before Stage-1 dispatch (one place; every client fixed).
 //
 // Pitfall 2 honored (no fork): assertRoundTripAnchor imports normalizeText +
 // graphemeClusters + deriveQuoteSelector + resolveQuoteSelector from
@@ -92,6 +95,41 @@ export function assertRoundTripAnchor(article: CanonicalArticle): void {
       throw new IngestionError("round-trip-anchor-failed");
     }
   }
+}
+
+// 260821-ov7 — the plain-text paste reroute predicate + Stage 0.5 reroute.
+// Prod-confirmed root cause (.planning/todos/pending/2026-08-21-fix-prod-ui-paste-ingest-flow.md):
+// the paste textarea receives RENDERED text (a <textarea> holds text, and
+// copying an article from a browser page yields rendered text, not HTML
+// source), so the html branch's isProbablyReaderable pre-check refused every
+// tag-less paste with extraction-unsupported.
+//
+// An HTML tag opener: a "<" immediately followed by an ASCII letter (opening
+// tag), a slash (closing tag), or "!" (comments/DOCTYPE). Any HTML markup
+// necessarily contains at least one of these three.
+const HTML_TAG_OPENER = /<[A-Za-z!/]/;
+
+/**
+ * looksLikePlainText — the 260821-ov7 reroute predicate. True when the
+ * TRIMMED content contains no HTML tag opener, i.e. it cannot be HTML
+ * markup. The direction is deliberately CONSERVATIVE: when in doubt (e.g.
+ * prose MENTIONING a tag, like "you can use <br> in HTML"), the content
+ * KEEPS the byte-stable html path — the reroute only admits content that
+ * provably carries no markup at all.
+ *
+ * Security (T-OV7-01): why untrusted text through the markdown intake is
+ * safe — the D8-16 boundary in server/markdownToBlocks.ts (§SECURITY
+ * BOUNDARY, Pitfall 8-2) already holds for arbitrary untrusted .md uploads:
+ * strict CommonMark escapes raw HTML to inert paragraph text by default (the
+ * parser's raw-HTML pass-through is never enabled), the Block tree is pure
+ * inert JSON, React escapes text children on render, and the repo-wide
+ * eslint react/no-danger rule is the belt-and-suspenders structural
+ * defense. The predicate itself only reroutes content with NO tag opener,
+ * so real HTML never enters the markdown path via this route — and even if
+ * it did, D8-16 holds regardless.
+ */
+export function looksLikePlainText(content: string): boolean {
+  return !HTML_TAG_OPENER.test(content.trim());
 }
 
 /**
@@ -401,22 +439,56 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
   // Stage 0 — input validation: exactly one of {url} | {html} | {markdown} |
   // {pdf} | {epub} required. (Thrown, not serialized — the caller contract
   // is IngestionRequestSchema-validated; reaching this throw indicates a
-  // programming error.)
-  const hasUrl = "url" in input && input.url !== undefined;
-  const hasHtml = "html" in input && input.html !== undefined;
-  const hasMarkdown = "markdown" in input && input.markdown !== undefined;
-  const hasPdf = "pdf" in input && input.pdf !== undefined;
-  const hasEpub = "epub" in input && input.epub !== undefined;
+  // programming error.) Counts the variants of `input` — the request the
+  // caller SENT — BEFORE the Stage 0.5 reroute; the reroute preserves this
+  // count by construction ({html:x} → {markdown:x} maps one variant onto
+  // another 1:1), so re-deriving the dispatch flags from the rerouted
+  // `request` below is equivalent.
+  const inputHasUrl = "url" in input && input.url !== undefined;
+  const inputHasHtml = "html" in input && input.html !== undefined;
+  const inputHasMarkdown = "markdown" in input && input.markdown !== undefined;
+  const inputHasPdf = "pdf" in input && input.pdf !== undefined;
+  const inputHasEpub = "epub" in input && input.epub !== undefined;
   if (
-    (hasUrl ? 1 : 0) +
-      (hasHtml ? 1 : 0) +
-      (hasMarkdown ? 1 : 0) +
-      (hasPdf ? 1 : 0) +
-      (hasEpub ? 1 : 0) !==
+    (inputHasUrl ? 1 : 0) +
+      (inputHasHtml ? 1 : 0) +
+      (inputHasMarkdown ? 1 : 0) +
+      (inputHasPdf ? 1 : 0) +
+      (inputHasEpub ? 1 : 0) !==
     1
   ) {
     throw new IngestionError("server-error");
   }
+
+  // Stage 0.5 — 260821-ov7 plain-text paste reroute. The paste textarea
+  // yields RENDERED text (a <textarea> holds text; copying an article from a
+  // browser page copies rendered text, not HTML source), and Readability
+  // cannot extract tag-less content — so the html branch's
+  // isProbablyReaderable pre-check refused every plain-text paste with
+  // extraction-unsupported (prod-confirmed: the pending todo above). Plain
+  // text IS valid strict CommonMark, and the markdown branch returns the
+  // byte-identical downstream shape ({blocks, footnotes, lang,
+  // provenancePartial, isReaderable}), so rewriting {html: tagless} onto
+  // {markdown: tagless} here — BEFORE Stage-1 dispatch — fixes every client
+  // (dev middleware, Vercel prod api function, future Cloudflare shape all
+  // funnel through ingest() per D7-05) in this single orchestrator-owned
+  // place. The reroute preserves the exactly-one-of invariant by
+  // construction; downstream (ArticleSchema.parse, assertRoundTripAnchor,
+  // deriveConfidence, persistence, dedupe) is shared and unchanged. The
+  // `"html" in input` narrowing makes input.html type-safe with no cast.
+  const request: IngestionRequest =
+    "html" in input && looksLikePlainText(input.html)
+      ? { markdown: input.html }
+      : input;
+
+  // Dispatch flags read the REROUTED request (260821-ov7): a tag-less {html}
+  // input has already been rewritten onto {markdown}, so the hasHtml branch
+  // below can only fire for TAGGED content.
+  const hasUrl = "url" in request && request.url !== undefined;
+  const hasHtml = "html" in request && request.html !== undefined;
+  const hasMarkdown = "markdown" in request && request.markdown !== undefined;
+  const hasPdf = "pdf" in request && request.pdf !== undefined;
+  const hasEpub = "epub" in request && request.epub !== undefined;
 
   try {
     // Stage 1, fifth branch — EPUB (Phase 12 Plan 12-04). Returns the book
@@ -426,7 +498,7 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
     // below (T-7-23). Placed first so the four single-article branches and
     // the shared stages 2+ tail stay byte-stable for existing formats.
     if (hasEpub) {
-      return await ingestEpubBook(input as { epub: string; filename?: string });
+      return await ingestEpubBook(request as { epub: string; filename?: string });
     }
 
     // Stage 1: SOURCE → EXTRACT → NORMALIZE. Three branches share the same
@@ -454,14 +526,14 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
     let sourceBytes: string;
     // markdownFilenameHint — the optional `filename` from the markdown branch,
     // stashed on the closure so the D8-17 title-fallback chain below can read
-    // it without re-extracting from `input`. Undefined for url + paste paths.
+    // it without re-extracting from the request. Undefined for url + paste paths.
     let markdownFilenameHint: string | undefined;
     // pdfFilenameHint — the sibling channel for the pdf branch's D11-07
     // filename fallback. Undefined for the other three paths.
     let pdfFilenameHint: string | undefined;
 
     if (hasUrl) {
-      const fetched: FetchedContent = await safeFetch(input.url as string);
+      const fetched: FetchedContent = await safeFetch(request.url as string);
       finalUrl = fetched.finalUrl;
       const extracted = await extractAndNormalize(fetched.html, fetched.finalUrl);
       ({
@@ -478,7 +550,10 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
       fetchedAt = new Date().toISOString();
       sourceBytes = fetched.html;
     } else if (hasHtml) {
-      const htmlInput = (input as { html: string }).html;
+      // 260821-ov7: after the Stage 0.5 reroute this branch only receives
+      // TAGGED content — a tag-less {html} paste was rewritten onto the
+      // markdown branch above.
+      const htmlInput = (request as { html: string }).html;
       finalUrl = undefined;
       const extracted = await extractAndNormalize(htmlInput, undefined);
       ({
@@ -500,7 +575,7 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
       // mirror). The request carries base64-in-JSON (locked transport
       // decision); the id content-hashes the base64 channel exactly like
       // md-<hash> (D8-18) so identical PDF bytes always dedupe to one id.
-      const { pdf: b64, filename } = input as { pdf: string; filename?: string };
+      const { pdf: b64, filename } = request as { pdf: string; filename?: string };
       const bytes = Buffer.from(b64, "base64");
       // Decoded re-check — the third enforcement layer (after the client
       // picker cap and the middleware content-length guard). Base64 hides
@@ -528,9 +603,13 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
       // below (checked Info-title → filename → neutral).
       pdfFilenameHint = filename;
     } else {
-      // MARKDOWN path — Phase 8 Plan 08-01 (D8-16 + D8-17 + D8-18).
-      const mdInput = (input as { markdown: string; filename?: string }).markdown;
-      const filename = (input as { markdown: string; filename?: string }).filename;
+      // MARKDOWN path — Phase 8 Plan 08-01 (D8-16 + D8-17 + D8-18). Since
+      // 260821-ov7 this branch also receives the Stage 0.5 reroute: a
+      // tag-less {html} paste (rendered article text), which is valid strict
+      // CommonMark and yields the identical md-<content-hash> id (D8-18) the
+      // same text uploaded as .md would produce.
+      const mdInput = (request as { markdown: string; filename?: string }).markdown;
+      const filename = (request as { markdown: string; filename?: string }).filename;
       finalUrl = undefined;
       const extracted = await markdownToBlocks(mdInput);
       ({
