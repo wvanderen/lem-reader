@@ -1,14 +1,18 @@
 ---
-status: diagnosed
+status: resolved
 phase: 13-polish-and-acceptance
 source: [13-VERIFICATION.md]
 started: 2026-08-19T00:00:00.000Z
-updated: 2026-08-21T21:54:42Z
+updated: 2026-08-22T00:00:00.000Z
 ---
 
 ## Current Test
 
-[testing complete]
+number: 4
+name: ACPT-05 Flow C re-run on the G6-fixed build (NVDA+Firefox)
+expected: |
+  Re-run ACCEPTANCE-PROTOCOL.md Flow C (C1–C4) under NVDA+Firefox on Windows hardware — the protocol now documents the explicit NVDA selection + activation gestures in C1/C3 (13-11 commit 1aa22bf). C2 (Tab reaches the toolbar) and C3 (Enter creates the highlight) are backed by the 3-engine toolbar-tab-path e2e. Record in 13-VERIFICATION.md Appendix §1.3/§1.4; zero blocker/major across the full protocol flips ACPT-05 (D13-06/D13-07).
+awaiting: user response
 
 ## Tests
 
@@ -18,6 +22,7 @@ result: issue
 reported: "All pass besides C, I can't get to that selection toolbar but I'm not sure if it's user error"
 severity: major
 detail: Flows A, B, D, E, F + charters pass. Flow C (Create a highlight) fails at the selection-toolbar path (C2/C3 protocol steps) under NVDA+Firefox. User unsure whether tester technique or product defect — diagnosis to determine.
+resolution: Root cause diagnosed (G6) and closed by 13-11 — not user error. Gecko/WebKit collapse the document selection when DOM focus moves, unmounting the toolbar before focus could arrive. Fixed via focus-containment lifecycle + Tab routing + saved-range activation; regression-proven by the 3-engine toolbar-tab-path e2e (both reading modes). Re-run Flow C per Current Test 4.
 
 ### 2. VoiceOver+Safari supplementary checklist (v2.0 surfaces)
 expected: Walk the Appendix §3 checklist for the five v2.0 surface groups (library, markdown/epub/pdf intake, export/import, review, header/nav polish) — now including the G4 placeholder and G5 tag-popover/drawer-export surfaces. NOT an ACPT-05 gate — supplementary coverage on the user's own schedule; record notes in the appendix.
@@ -29,10 +34,10 @@ result: pass
 
 ## Summary
 
-total: 3
+total: 4
 passed: 2
-issues: 1
-pending: 0
+issues: 0
+pending: 1
 skipped: 0
 blocked: 0
 
@@ -76,7 +81,8 @@ detail: User rejects the tag-adding section below the article title: proposes th
 expected: Tag entry reachable via top-bar icon alongside highlights/mode controls; metadata spot visually redesigned or restructured per plan; no regression to the 09-07 geometry lesson or the firstPageReservedPx contracts.
 
 ### G6 — ACPT-05 Flow C: selection toolbar unreachable under NVDA+Firefox
-status: diagnosed
+status: resolved
+closed_by: 13-11 (commits 4487e45 RED spec, 42f1113 GREEN fix, 1aa22bf NVDA gesture docs) — focus-containment toolbar lifecycle + event-time-guarded Tab routing + saved-range activation feeding the ONE existing creation path; 3-engine toolbar-tab-path e2e (both modes) + strengthened keyboard-shortcuts assertion; independently re-verified 2026-08-22 (verifier behavioral runs + honest full-suite gate exit 0: unit 1261/0/13 + e2e 1101/0/10)
 - truth: "After making a text selection in the reader, Tab reaches the selection toolbar (role=toolbar, accessible name 'Highlight actions') and Enter on the 'Highlight' button creates a mark with a polite confirmation announcement (ACCEPTANCE-PROTOCOL.md v1.0, Flow C steps C2–C3)"
   status: failed
   reason: "User reported: All pass besides C, I can't get to that selection toolbar but I'm not sure if it's user error"
