@@ -140,21 +140,33 @@ test.describe("A11Y-01 keyboard shortcuts H/N (05-05)", () => {
   test("Toolbar buttons are keyboard-focusable (fallback keyboard path, UI-SPEC §25)", async ({
     page,
   }) => {
-    // The toolbar is a pointer/touch affordance; H/N are the primary keyboard
-    // path. UI-SPEC §25 also requires the toolbar buttons to be reachable as
-    // a fallback. We verify the buttons are native <button>s (inherently
-    // focusable) + that programmatic focus lands on them. (Activating via
-    // keyboard after Tab is NOT asserted: focusing the button clears the text
-    // selection, so the H/N shortcuts — which preserve the selection — are
-    // the documented keyboard-activation path, tested above.)
+    // Plan 13-11 (G6): the toolbar is the PRIMARY screen-reader path (the
+    // Phase 6 protocol rewrite); H/N are the sighted keyboard convenience.
+    // UI-SPEC §25 requires the toolbar buttons to be reachable + activatable
+    // by keyboard: native <button>s (inherently focusable), ONE Tab from the
+    // reading context onto "Highlight" (ArticleView's Tab routing — the G6
+    // fix), and REAL Enter activation creating the highlight. Full 3-engine ×
+    // both-modes coverage lives in toolbar-tab-path.spec.ts; this test keeps
+    // the historical programmatic-focus assertion below and adds the
+    // formerly-skipped keyboard-activation assertions.
     await openArticle(page, FIXTURE);
     const blockIdx = await findFirstBlockWithText(page, 24);
     expect(blockIdx).not.toBe(-1);
     await selectRangeInBlock(page, blockIdx, 0, 18);
     await expect(page.locator(".selection-toolbar")).toBeVisible();
+    // One REAL Tab from the reading context lands focus on the Highlight
+    // button (pre-fix, a raw Tab walked past every article focusable — the
+    // toolbar sits near the END of DOM order; and in firefox/webkit the
+    // first Tab collapsed the selection and unmounted the toolbar).
+    await page.keyboard.press("Tab");
+    await page.waitForTimeout(150); // rAF-throttled selectionchange settle
     const btn = page
       .locator(".selection-toolbar")
       .getByRole("button", { name: "Highlight", exact: true });
+    const tabFocused = await btn.evaluate(
+      (el) => document.activeElement === el,
+    );
+    expect(tabFocused, "one Tab reaches the Highlight button").toBeTruthy();
     // Native button — focusable. Focus + check in ONE atomic evaluate so
     // firefox doesn't lose focus across the protocol roundtrip between two
     // separate evaluate calls (the toolbar can re-render on selectionchange
@@ -164,5 +176,14 @@ test.describe("A11Y-01 keyboard shortcuts H/N (05-05)", () => {
       return document.activeElement === el;
     });
     expect(isFocused, "toolbar button is focusable (fallback keyboard path)").toBeTruthy();
+    // Real keyboard activation (formerly NOT asserted — the stale comment
+    // blamed the focus-induced selection collapse that Plan 13-11 fixed):
+    // Enter creates the highlight + announces + dismisses the toolbar. In
+    // firefox/webkit the selection collapsed inside focus(); the G6
+    // saved-range restore re-enters the unchanged creation path.
+    await page.keyboard.press("Enter");
+    await expect(page.locator("mark.highlight").first()).toBeVisible();
+    await expect(announcementRegion(page)).toContainText(/Highlight saved/i);
+    await expect(page.locator(".selection-toolbar")).toHaveCount(0);
   });
 });
