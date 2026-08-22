@@ -1,0 +1,72 @@
+---
+status: diagnosed
+trigger: "G7: On the G6-fixed build (post 13-11), under NVDA+Firefox on Windows hardware, pressing Tab with text selected in the reader moves focus to the Previous Page control instead of the selection toolbar — the toolbar never appears/becomes reachable."
+created: 2026-08-22T00:00:00Z
+updated: 2026-08-22T01:10:00Z
+---
+
+## Current Focus
+<!-- OVERWRITE on each update - reflects NOW -->
+
+hypothesis: CONFIRMED — see Resolution. NVDA browse mode consumes the Tab keydown; the 13-11 fix's Tab routing is keydown-only and is never reached.
+test: complete (code reading + NVDA official user guide + live firefox control/emulation experiment)
+expecting: — (diagnosis complete)
+next_action: none — verdict returned; fix planning belongs to the gap-closure flow (plan-phase --gaps)
+
+## Symptoms
+<!-- Written during gathering, then IMMUTABLE -->
+
+expected: With text selected in the reader under NVDA+Firefox, Tab reaches the selection toolbar (role=toolbar, accessible name 'Highlight actions') and Enter on the 'Highlight' button creates a mark with a polite confirmation announcement (ACCEPTANCE-PROTOCOL.md v1.0, Flow C steps C2–C3) on the G6-fixed build.
+actual: "fail - tab goes to previous page button on tab with text selected in NVDA, no selection toolbar appears"
+errors: None reported
+reproduction: Test 4 in UAT (.planning/phases/13-polish-and-acceptance/13-UAT.md). Windows hardware, NVDA + Firefox, real keyboard. Make a text selection per protocol Flow C1 (NVDA Firefox-native browse-mode Shift+arrows), then press Tab. Focus lands on the Previous Page button; no selection toolbar appears.
+started: Discovered during UAT re-run (2026-08-22) AFTER the 13-11 G6 fix landed (commits 4487e45 RED spec, 42f1113 GREEN fix, 1aa22bf NVDA gesture docs). Recurrence of G6 failure mode (.planning/debug/flowc-selection-toolbar-nvda.md) on the supposedly-fixed build.
+
+## Eliminated
+<!-- APPEND only - prevents re-investigating -->
+
+## Evidence
+<!-- APPEND only - facts discovered -->
+
+- timestamp: 2026-08-22T00:05Z
+  checked: .planning/debug/flowc-selection-toolbar-nvda.md (prior G6 session, status=diagnosed)
+  found: G6 root cause was Gecko/WebKit collapsing the selection synchronously on any DOM focus move, unmounting the toolbar. 13-11 fix (commits 4487e45/42f1113/1aa22bf) = focus-containment toolbar lifecycle + event-time-guarded Tab routing in ArticleView.tsx + saved-range activation in SelectionToolbar.tsx + NVDA gesture docs + 3-engine toolbar-tab-path e2e (passing).
+  implication: The fix works under Playwright synthetic conditions but not real NVDA+Firefox — the delta is NVDA's focus/selection sequencing vs synthetic events.
+
+- timestamp: 2026-08-22T00:15Z
+  checked: src/routes/ArticleView.tsx L699-833 (window keydown listener, Tab routing) + L867-957 (selectionchange listener, containment guard) + L693-697 (focus-exit dismissal); src/reader/annotations/SelectionToolbar.tsx (full)
+  found: The Tab routing to the toolbar exists ONLY inside `window.addEventListener("keydown", onKey)` (L758-784): plain Tab + captureOkRef + toolbarRectActiveRef + activeElement in reading context (body or inside article) + not inside toolbar → preventDefault + toolbarBtn.focus(). The ONLY three focus-moment defenses are (a) this keydown routing, (b) the focus-containment hold (selectionchange collapsed branch, L894-900 — applies ONLY when activeElement is INSIDE .selection-toolbar), (c) the toolbar-root focusout dismissal (requires the toolbar to HAVE focus). NONE of them fire on a keydown-less focus jump to an outside element: no keydown → (a) dead; focus lands outside toolbar → (b) doesn't apply; toolbar never had focus → (c) never fires.
+  implication: If NVDA browse mode moves focus without delivering a Tab keydown to the page, the entire 13-11 fix is bypassed by construction — there is no defense at the focus/selection layer against keydown-less focus moves.
+
+- timestamp: 2026-08-22T00:25Z
+  checked: tests/e2e/annotations/toolbar-tab-path.spec.ts L70-72 + keyboard-shortcuts.spec.ts L157-169
+  found: The passing e2e presses `page.keyboard.press("Tab")` — a REAL trusted keydown delivered by CDP into the page. Its own comment states the assumption: "REAL Tab — the exact key NVDA browse mode passes through to Firefox". No e2e emulates a keydown-less focus move while the toolbar is live.
+  implication: The e2e verifies the fix only under the assumption that NVDA passes Tab through as a keydown. If that assumption is false (browse mode consumes Tab), the e2e is structurally blind to the real NVDA path.
+
+- timestamp: 2026-08-22T00:35Z
+  checked: docs/ACCEPTANCE-PROTOCOL.md Flow C (L170-203, post-1aa22bf)
+  found: C1 documents "NVDA (Firefox): browse-mode Shift+arrows (Firefox-native selection)". C2 says only "Tab to it" — NO instruction to enter NVDA focus mode (NVDA+Space) before Tab. C3 notes "NVDA (Firefox): Enter — browse mode passes Enter through". The flow as documented keeps the tester in browse mode through C2.
+  implication: If browse mode consumes Tab (see NVDA-guide evidence below), the documented protocol exercises exactly the path where the fix cannot work. Protocol-doc defect AND product exposure coexist.
+
+- timestamp: 2026-08-22T00:45Z
+  checked: Official NVDA User Guide (github.com/nvaccess/nvda user_docs/en/userGuide.md, Browse Mode section)
+  found: (a) "You do this by switching to focus mode, where almost all keys are passed to the control" — explicit contrast: in BROWSE mode keys are NOT passed to the page. (b) "When in Browse mode, by default, NVDA will automatically switch to focus mode if you tab to or click on a particular control that requires it. Conversely, tabbing to or clicking on a control that does not require focus mode will switch back to browse mode." — "tabbing to" a control is described as NVDA's own browse-mode action; a plain button (Previous Page chevron) does not require focus mode, so NVDA stays in browse mode and handles the Tab itself. (c) "Pass next key through (NVDA+f2): Tells NVDA to pass the next key press straight through to the active application - even if it is normally treated as an NVDA key command" — the existence of this command proves browse-mode-bound keys (Tab, arrows, single letters) are consumed by NVDA and never reach the app as keydowns.
+  implication: The e2e comment's assumption ("the exact key NVDA browse mode passes through to Firefox") is FALSE. Under browse mode the page receives no Tab keydown; NVDA moves DOM focus itself via accessibility APIs. The project already acknowledged this consumption class for bare letters (H/N — protocol L176-181) but missed that Tab belongs to the same class.
+
+- timestamp: 2026-08-22T01:00Z
+  checked: Live firefox experiment (fresh vite dev server :5174, essay-long-form, paginated default; scratch script deleted after run — reproduced the e2e's selectRangeInBlock technique; keydown instrumentation via capture-phase window listener)
+  found: PHASE A (control — real Tab keydown after programmatic selection): pre-Tab state = focus BODY + live selection + toolbar mounted (2 buttons); after real Tab = focus on the toolbar's Highlight button (routing engaged), toolbar SURVIVES. The 13-11 fix works whenever the page receives a real Tab keydown. PHASE B (NVDA browse-mode emulation — keydown-less programmatic focus jump to the "Previous page" button from the IDENTICAL pre-state): selection collapsed SYNCHRONOUSLY inside the focus() call (collapsedInsideFocusCall=true — the G6 Gecko behavior); 300ms later = activeElement BUTTON[aria-label="Previous page"].page-turn.page-turn-previous, toolbar UNMOUNTED (count 0), and ZERO keydown events delivered to the page (keydowns="").
+  implication: The product has no defense against keydown-less focus moves — confirmed live in firefox. NVDA browse mode produces exactly this DOM event sequence for Tab (no keydown + a11y-API focus jump), so the observable outcome is identical to the tester's report: focus on Previous Page, no toolbar. This is G6's failure mode reachable through a path the 13-11 fix cannot intercept, because the fix's only Tab interception point is a window keydown listener.
+
+- timestamp: 2026-08-22T01:05Z
+  checked: Consistency cross-check of the full C1→C2 event chain against the tester report
+  found: (1) C1 browse-mode Shift+arrows extends the Firefox-native selection (the protocol gesture was chosen for this; toolbar should mount + politely announce "Highlight actions available."). (2) C2 Tab in browse mode is consumed by NVDA; NVDA moves focus to the next focusable from the virtual caret — inside the article/page area that is the "Previous page" chevron. (3) Gecko collapses the selection inside the focus move; selectionchange → rAF → collapsed branch; the focus-containment hold does NOT apply (activeElement outside .selection-toolbar) → toolbar state cleared → unmount. Every sentence of the report ("tab goes to previous page button", "no selection toolbar appears") maps 1:1 to this chain. Residual uncertainty (cannot run NVDA here): whether the tester heard the announce after C1 (confirms toolbar mounted pre-Tab). The root cause holds in either sub-case — with no Tab keydown reaching the page, the routing cannot engage regardless of mount state.
+  implication: Root cause fully specified; the NVDA-layer facts (browse-mode Tab consumption) are documented by the official NVDA user guide and corroborated by the DOM-level emulation reproducing the exact observable.
+
+## Resolution
+<!-- OVERWRITE as understanding evolves -->
+
+root_cause: PRODUCT DEFECT + PROTOCOL-DOC DEFECT (both). The 13-11 fix routes Tab to the selection toolbar ONLY via a window `keydown` listener (src/routes/ArticleView.tsx L758-784: plain Tab + captureOk + toolbar mounted + activeElement in reading context → preventDefault + toolbarBtn.focus()). Its enabling assumption — recorded verbatim in the passing e2e (tests/e2e/annotations/toolbar-tab-path.spec.ts L70-71: "REAL Tab — the exact key NVDA browse mode passes through to Firefox") — is FALSE. NVDA browse mode binds Tab as its own navigation gesture (official NVDA user guide, Browse Mode: focus mode is where "almost all keys are passed to the control"; "tabbing to" a control is NVDA's browse-mode action; NVDA+f2 exists precisely because browse-mode-bound keys never reach the application). Under the documented Flow C sequence (C1 browse-mode Shift+arrows, NO focus-mode switch, C2 Tab), NVDA consumes the Tab keydown and moves DOM focus itself to the next focusable from the virtual caret — the Previous Page control (aria-label "Previous page", matching the report). The page sees no keydown, so the routing never engages; Gecko then collapses the selection synchronously inside the focus move (the G6 engine behavior), and the selectionchange collapsed branch (L875-905) clears the toolbar state — the focus-containment hold (L894-900) does not apply because activeElement is outside .selection-toolbar. Net: the toolbar unmounts (or never becomes reachable), and focus sits on Previous Page — G6's observable, reachable through a path the fix structurally cannot intercept. Verified live in firefox: real Tab keydown → routing engages + toolbar survives (Phase A); keydown-less focus jump from the identical pre-state → collapse inside focus() + toolbar unmounted + zero keydowns delivered (Phase B — exact G7 reproduction). The 3-engine e2e passes because Playwright's page.keyboard.press("Tab") always delivers a real trusted keydown — a condition NVDA browse mode never produces. Secondary protocol-doc defect: ACCEPTANCE-PROTOCOL.md Flow C C2 says only "Tab to it" with no NVDA focus-mode instruction (C1 keeps the tester in browse mode; nothing switches it), so the documented flow exercises exactly the un-interceptable path. With NVDA in FOCUS mode (NVDA+Space), Tab does reach the page and the fix works (Phase A behavior) — a valid protocol workaround, but the product truth "Tab reaches the toolbar" is currently false under the documented browse-mode flow.
+fix: NOT APPLIED (goal: find_root_cause_only). Fix directions for plan-phase --gaps: (1) PROTOCOL: ACCEPTANCE-PROTOCOL.md Flow C2 must instruct NVDA users to enter focus mode (NVDA+Space) before Tab — the minimal, correct-by-ARIA-convention path under which the current fix already works (and soften/annotate the "browse mode passes Enter through" C3 note the same way). (2) PRODUCT (choose in planning): (a) focus-on-appear — when the toolbar mounts with capture ok and the selection settles (debounced), move focus to its first button + rely on the EXISTING containment hold + saved-range activation to survive the Gecko collapse (this was the prior G6 session's recommended option (b); it works with zero page-visible keydowns, i.e., under browse mode AND focus mode; caution: must not fire mid-selection-shaping, hence the debounce), and/or (b) keep keydown routing as-is and accept focus-mode-only reachability, documented in the protocol. (3) E2E GAP: add a spec emulating the SR condition the current suite is blind to — live selection + mounted toolbar + keydown-less programmatic focus to an outside focusable (assert the post-fix invariant; today this reproduces G7 — the exact DOM sequence NVDA browse mode produces). Also fix the false comment at toolbar-tab-path.spec.ts L70-71 so the suite stops encoding the wrong assumption.
+verification: Diagnosis verified by: (a) code reading — the Tab routing exists only in the window keydown listener; the three focus-moment defenses (keydown routing, containment hold, toolbar focusout) provably cannot fire on a keydown-less focus jump to an outside element; (b) official NVDA user guide citations (browse-mode key consumption, focus-mode pass-through contrast, NVDA+f2 semantics); (c) live firefox experiment (fresh dev server, essay-long-form, paginated): Phase A control reproduced the passing e2e (real Tab → Highlight button, toolbar survives), Phase B reproduced the G7 report exactly (keydown-less focus to "Previous page" → selection collapses inside focus(), toolbar unmounts, zero keydowns). Cannot run NVDA in this environment — the NVDA-layer link (browse-mode Tab consumed, focus moved programmatically) rests on official documentation + the tester's report matching the emulated DOM sequence 1:1. Manual NVDA disambiguation for the re-run: confirm whether "Highlight actions available." is heard after C1 (toolbar mounted pre-Tab) and whether NVDA+Space → Tab engages the routing.
+files_changed: []
