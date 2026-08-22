@@ -1,5 +1,5 @@
 ---
-status: resolved
+status: complete
 phase: 13-polish-and-acceptance
 source: [13-VERIFICATION.md]
 started: 2026-08-19T00:00:00.000Z
@@ -8,11 +8,7 @@ updated: 2026-08-22T00:00:00.000Z
 
 ## Current Test
 
-number: 4
-name: ACPT-05 Flow C re-run on the G6-fixed build (NVDA+Firefox)
-expected: |
-  Re-run ACCEPTANCE-PROTOCOL.md Flow C (C1–C4) under NVDA+Firefox on Windows hardware — the protocol now documents the explicit NVDA selection + activation gestures in C1/C3 (13-11 commit 1aa22bf). C2 (Tab reaches the toolbar) and C3 (Enter creates the highlight) are backed by the 3-engine toolbar-tab-path e2e. Record in 13-VERIFICATION.md Appendix §1.3/§1.4; zero blocker/major across the full protocol flips ACPT-05 (D13-06/D13-07).
-awaiting: user response
+[testing complete]
 
 ## Tests
 
@@ -32,12 +28,19 @@ result: pass
 expected: Human eyeball of the G5 closure on real hardware: top-bar tag popover (open/edit/light-dismiss), compact provenance-only article-top spot, Export highlights in the annotations drawer. G5 originated as a design rejection, so a final visual sign-off closes what specs cannot pin.
 result: pass
 
+### 4. ACPT-05 Flow C re-run on the G6-fixed build (NVDA+Firefox)
+expected: Re-run ACCEPTANCE-PROTOCOL.md Flow C (C1–C4) under NVDA+Firefox on Windows hardware — the protocol now documents the explicit NVDA selection + activation gestures in C1/C3 (13-11 commit 1aa22bf). C2 (Tab reaches the toolbar) and C3 (Enter creates the highlight) are backed by the 3-engine toolbar-tab-path e2e. Record in 13-VERIFICATION.md Appendix §1.3/§1.4; zero blocker/major across the full protocol flips ACPT-05 (D13-06/D13-07).
+result: issue
+reported: "fail - tab goes to previous page button on tab with text selected in NVDA, no selection toolbar appears"
+severity: major
+detail: Recurrence of G6-class behavior on the G6-fixed build: with text selected in the reader under NVDA+Firefox, pressing Tab moves focus to the Previous Page control instead of the selection toolbar; the toolbar never becomes reachable (and may never mount). 13-11's Tab routing (event-time-guarded) is not engaging under NVDA+Firefox real-keyboard conditions despite the 3-engine e2e passing.
+
 ## Summary
 
 total: 4
 passed: 2
-issues: 0
-pending: 1
+issues: 1
+pending: 0
 skipped: 0
 blocked: 0
 
@@ -104,3 +107,14 @@ closed_by: 13-11 (commits 4487e45 RED spec, 42f1113 GREEN fix, 1aa22bf NVDA gest
     - "Document NVDA selection gesture (Firefox-native browse-mode Shift+arrows) and NVDA activation note in ACCEPTANCE-PROTOCOL.md Flow C1/C3"
     - "Re-run ACPT-05 per D13-06 after fix lands"
   debug_session: ".planning/debug/flowc-selection-toolbar-nvda.md"
+
+### G7 — ACPT-05 Flow C (post-G6 build): Tab bypasses selection toolbar to Previous Page under NVDA+Firefox
+status: failed
+- truth: "With text selected in the reader under NVDA+Firefox, Tab reaches the selection toolbar (role=toolbar, accessible name 'Highlight actions') and Enter on the 'Highlight' button creates a mark (ACCEPTANCE-PROTOCOL.md v1.0, Flow C steps C2–C3) on the G6-fixed build"
+  reason: "User reported: fail - tab goes to previous page button on tab with text selected in NVDA, no selection toolbar appears"
+  severity: major
+  test: 4
+  root_cause: ""
+  artifacts: []
+  missing: []
+  debug_session: ""
