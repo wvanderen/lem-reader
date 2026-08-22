@@ -32,6 +32,10 @@
 // experiments). REAL Tab presses are the point of this spec — never
 // selectViaKeyboard here (real-arrow selection from a focused block is
 // engine-divergent; see keyboard-shortcuts.spec.ts's header).
+// G7 (Plan 13-12) refined what the real Tab here models: it is the
+// keydown-reaches-page condition (sighted keyboard or NVDA focus mode) —
+// NVDA browse mode delivers NO Tab keydown (pinned by the sibling
+// toolbar-keydownless-focus.spec.ts).
 import { test, expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import {
@@ -67,8 +71,12 @@ async function assertTabReachAndEnterActivate(page: Page): Promise<void> {
     name: "Highlight",
     exact: true,
   });
-  // REAL Tab — the exact key NVDA browse mode passes through to Firefox,
-  // and the assertion that failed under NVDA+Firefox (Flow C2).
+  // REAL Tab — models the condition where a keydown actually reaches the
+  // page: the sighted keyboard, or NVDA focus mode (NVDA+Space), which
+  // passes keys through. NVDA browse mode consumes Tab as its own gesture
+  // and moves focus itself with zero page keydowns — that keydown-less
+  // boundary is pinned by the sibling toolbar-keydownless-focus.spec.ts
+  // (G7; see .planning/debug/g7-nvda-tab-bypass-selection-toolbar.md).
   await page.keyboard.press("Tab");
   // Let the rAF-throttled selectionchange listener settle (the Gecko/WebKit
   // collapse fires inside focus(); the containment decision happens on the
