@@ -5,15 +5,15 @@ milestone_name: Personal Library
 current_phase: 13
 current_phase_name: polish-and-acceptance
 status: executing
-stopped_at: Completed 13-10-PLAN.md
-last_updated: "2026-08-19T22:51:32.723Z"
-last_activity: 2026-08-19
+stopped_at: Completed 13-11-PLAN.md (G6 toolbar keyboard-reachability gap closure)
+last_updated: "2026-08-22T00:41:24.423Z"
+last_activity: 2026-08-22
 last_activity_desc: Phase 13 execution started
 progress:
   total_phases: 7
   completed_phases: 7
-  total_plans: 50
-  completed_plans: 50
+  total_plans: 51
+  completed_plans: 51
   percent: 100
 ---
 
@@ -29,9 +29,9 @@ See: .planning/PROJECT.md (updated 2026-08-17)
 ## Current Position
 
 Phase: 13 (polish-and-acceptance) — EXECUTING
-Plan: 5 of 10
+Plan: 2 of 11
 Status: Ready to execute
-Last activity: 2026-08-21 — Completed quick task 260821-ov7: plain-text pastes accepted via markdown intake reroute
+Last activity: 2026-08-22 — Phase 13 execution started
 
 Progress: [████████████████████] 32/32 plans (100%)
 
@@ -150,6 +150,7 @@ Progress: [████████████████████] 32/32 p
 | Phase 13 P08 | 6 min | 2 tasks | 2 files |
 | Phase 13 P09 | 19min | 2 tasks | 5 files |
 | Phase 13 P10 | 74 min | 2 tasks | 16 files |
+| Phase 13 P11 | 10 min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -347,6 +348,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: 13-08: resetFilePick is the single reset seam for the intake upload picker (imperative input.value clear + setHasFile false) wired to all 8 terminal outcomes of handleFileSubmit — the 09-05 import-input reset discipline applied to intake; cap/dedupe guards byte-unchanged, resets append after the calm copy
 - [Phase ?]: 13-08: Remove file button reuses .article-export-highlights quiet-button tokens + the ingest-remove-file behavioral hook class — type=button (never submits), disabled while submitting; zero CSS additions (13-03 cross-surface reuse precedent)
 - [Phase ?]: 13-09 (G4): paginatedPending branch — the paginated pre-settle window renders the hidden measurement clone + a calm role=status placeholder inside the real page viewport (zero new CSS); frame classes gate on the EFFECTIVE mode so the pinned frame is byte-stable from first paint; the geometry read is ordered by trustedView commit (not class presence), preserving the same-rAF-batch height+reserve first publication (05-06 + 13-04 contracts green, engine files byte-unchanged)
+- [Phase 13]: [Phase 13]: G6 fix: selection toolbar keyboard-reachable via single Tab + Enter-activatable in all 3 engines + both modes — focus containment (hold while activeElement inside), event-time-guarded Tab routing, saved-range restore into the ONE creation path; Firefox needs an extra last-button Tab-past keydown dismissal (it parks focus when nothing follows the toolbar — focusout never fires); no auto-focus on appear
 
 ### Pending Todos
 
@@ -387,8 +389,8 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-19T22:51:32.715Z
-Stopped at: Completed 13-10-PLAN.md
+Last session: 2026-08-22T00:41:24.414Z
+Stopped at: Completed 13-11-PLAN.md (G6 toolbar keyboard-reachability gap closure)
 Resume file: None
 
 ## Operator Next Steps
