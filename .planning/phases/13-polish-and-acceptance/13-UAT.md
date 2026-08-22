@@ -1,9 +1,9 @@
 ---
-status: complete
+status: diagnosed
 phase: 13-polish-and-acceptance
 source: [13-VERIFICATION.md]
 started: 2026-08-19T00:00:00.000Z
-updated: 2026-08-22T20:00:00.000Z
+updated: 2026-08-22T20:30:00.000Z
 ---
 
 ## Current Test
@@ -143,13 +143,22 @@ closed_by: 13-12 (commits f09c58d keydown-less boundary/recovery spec, 59c3470 A
   debug_session: ".planning/debug/g7-nvda-tab-bypass-selection-toolbar.md"
 
 ### G8 — ACPT-05 Flow C (v1.1 protocol): selection toolbar never mounts under NVDA+Firefox — no "Highlight actions available." announcement
-status: open
+status: diagnosed
 - truth: "On NVDA+Firefox (protocol v1.1), after browse-mode Shift+arrows text selection (C1) the selection toolbar mounts with the polite 'Highlight actions available.' announce-on-appear cue, and after NVDA+Space then Tab (C2) Enter on the Highlight button creates the highlight (C3)"
   status: failed
   reason: "User reported: Toolbar is still not appearing even after NVDA+space. I never hear the 'highlight actions available'"
   severity: major
   test: 5
-  root_cause: ""
-  artifacts: []
-  missing: []
-  debug_session: ""
+  root_cause: "PROTOCOL-PREMISE DEFECT (platform boundary, not a code regression). Protocol v1.1 Flow C C1 documents the NVDA selection gesture as 'browse-mode Shift+arrows (Firefox-native selection)' — false on default NVDA configurations. Per the NVDA User Guide (§Native Selection Mode), browse-mode Shift+arrows selects only within NVDA's virtual-buffer representation, 'not within the application itself', and the selection is not visible on screen; the Firefox document selection follows only when Native Selection Mode is enabled (NVDA+shift+f10, off by default; per-document toggle since NVDA 2024.1, persistent setting 2026.3, also off by default). NVDA source (gecko_ia2.py _setSelectionOffsets) pushes the selection to the document only under _nativeAppSelectionMode. Under the documented C1 gesture, document.getSelection() never becomes non-collapsed → ArticleView's selectionchange listener (L867-957) never reaches its valid branch → selectionRect/captureResult stay null → SelectionToolbar never mounts → no announce-on-appear → C2's Tab routing (requires toolbarRectActiveRef) cannot engage. The tester hears NVDA speak the buffer selection while the page is selection-blind. Also retroactively explains why no NVDA run (G6/G7/G8) ever observed a mounted toolbar. Page-side mount path exonerated: no origin/suppression gates; programmatic selections still mount the toolbar in firefox (toolbar-tab-path.spec.ts green; 13-12 shipped zero source changes); all annotations e2e use programmatic selections, so selection CREATION was never automated under real NVDA — the C1 premise was never verified."
+  artifacts:
+    - path: "docs/ACCEPTANCE-PROTOCOL.md"
+      issue: "Flow C C1 (L196) encodes the false premise — 'browse-mode Shift+arrows (Firefox-native selection)' — and expects a mount cue that cannot occur on default NVDA; C2/C3 inherit the broken pre-state"
+    - path: "src/routes/ArticleView.tsx"
+      issue: "L867-957 selectionchange-driven mount is correctly built but structurally requires a page-visible document selection — unreachable by construction under default browse mode (not defective; context)"
+    - path: "src/reader/annotations/SelectionToolbar.tsx"
+      issue: "L148-156, L176, L193-194 announce-on-appear/mount gating correctly implemented; same structural dependency (not defective; context)"
+  missing:
+    - "Protocol v1.2: C1 must instruct NVDA users to enable Native Selection Mode (NVDA+shift+f10, NVDA >= 2024.1) BEFORE browse-mode Shift+arrows; correct the false '(Firefox-native selection)' parenthetical"
+    - "Protocol v1.2: document the fallback for older NVDA (F7 caret browsing + focus-mode selection) and the platform boundary (native selection OFF = no page-side fix can observe browse-mode selections)"
+    - "Re-run ACPT-05 Flow C on protocol v1.2 (D13-06); residual to confirm: NVDA verbalizes the mount announce in browse mode with native selection ON"
+  debug_session: ".planning/debug/g8-toolbar-never-mounts-nvda.md"
