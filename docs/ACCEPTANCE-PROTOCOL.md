@@ -29,7 +29,7 @@ automated test. It is a human-run manual protocol on real hardware.
 
 | Field | Value |
 |-------|-------|
-| **Version** | 1.0 |
+| **Version** | 1.1 |
 | **Authoritative decisions** | D6-05 (SR matrix), D6-06 (hybrid protocol shape), D6-07 (zero-blocker policy), D6-08 (versioned + re-run) |
 | **Applies to** | Lem Reader prototype (v1.0 milestone) |
 | **Results recorded in** | `.planning/phases/06-prototype-acceptance/06-VERIFICATION.md` |
@@ -183,13 +183,19 @@ ANNO-01.)
 > VoiceOver **VO+Space** activatable); this path is tester-confirmed working
 > under VoiceOver. Since the G6 fix (Plan 13-11), the toolbar is
 > keyboard-reachable via a single **Tab** from the reading context in all
-> supported engines, so this flow may be exercised exactly as documented.
+> supported engines. That single-Tab reachability holds whenever a real Tab
+> keydown reaches the page — the sighted keyboard, or NVDA **focus mode**.
+> NVDA **browse mode** binds **Tab** as its own navigation gesture and moves
+> focus itself via accessibility APIs WITHOUT delivering any keydown to the
+> page (official NVDA user guide), so under NVDA the tester enters focus
+> mode at C2 (see `.planning/debug/g7-nvda-tab-bypass-selection-toolbar.md`,
+> gap G7).
 
 | # | Keyboard sequence | Expected outcome (role + name + state) |
 |---|-------------------|----------------------------------------|
-| C1 | Navigate into a text block and make a selection: **Shift+Right arrow** (sighted keyboard), or the SR text-selection gesture (VoiceOver: **VO+Enter** to start, arrow keys to extend, **VO+Enter** to end; NVDA (Firefox): browse-mode **Shift+arrows** (Firefox-native selection)) across several words | A text selection exists within a single block (D5-05/D5-06 single-block rule). The SR announces the selected text. |
-| C2 | A selection toolbar (`.selection-toolbar`) appears; **Tab** to it | Focus moves to the selection toolbar (`role="toolbar"`, accessible name **"Highlight actions"**). It exposes a **button** with accessible name **"Highlight"** (and a second button **"Highlight + note"**). |
-| C3 | With focus on the **"Highlight"** button, press **Enter** (VoiceOver: **VO+Space**; NVDA (Firefox): **Enter** — browse mode passes Enter through; **NVDA+Space** also activates) | A `<mark>` element with the highlight data attribute (`mark.highlight[data-highlight-id]`) wraps the selected text. A **`role="status"` polite live region** announces "Highlight saved." (or equivalent confirmation). |
+| C1 | Navigate into a text block and make a selection: **Shift+Right arrow** (sighted keyboard), or the SR text-selection gesture (VoiceOver: **VO+Enter** to start, arrow keys to extend, **VO+Enter** to end; NVDA (Firefox): browse-mode **Shift+arrows** (Firefox-native selection)) across several words | A text selection exists within a single block (D5-05/D5-06 single-block rule). The SR announces the selected text. A polite live-region announcement (**"Highlight actions available."**) confirms the toolbar has appeared once the selection settles — the mount cue to listen for after this step. |
+| C2 | A selection toolbar (`.selection-toolbar`) appears. **NVDA (Firefox): press NVDA+Space to enter focus mode FIRST, then Tab** (the tester hears NVDA's focus-mode toggle confirmation before the Tab); sighted keyboard users **Tab** directly | Focus moves to the selection toolbar (`role="toolbar"`, accessible name **"Highlight actions"**). It exposes a **button** with accessible name **"Highlight"** (and a second button **"Highlight + note"**). |
+| C3 | With focus on the **"Highlight"** button, press **Enter** (VoiceOver: **VO+Space**; NVDA (Firefox): **Enter** — you are in focus mode from C2, where keys pass through to the control; **NVDA+Space** also activates) | A `<mark>` element with the highlight data attribute (`mark.highlight[data-highlight-id]`) wraps the selected text. A **`role="status"` polite live region** announces "Highlight saved." (or equivalent confirmation). |
 | C4 | Read the passage containing the mark | The highlighted text is announced/marked. The mark carries a semantic label identifying it as a highlight (D5-15). |
 
 > **Sighted keyboard/mouse convenience (not an SR path):** the bare **H**
