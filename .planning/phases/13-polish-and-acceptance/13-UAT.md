@@ -3,12 +3,16 @@ status: diagnosed
 phase: 13-polish-and-acceptance
 source: [13-VERIFICATION.md]
 started: 2026-08-19T00:00:00.000Z
-updated: 2026-08-22T20:30:00.000Z
+updated: 2026-08-22T21:05:00.000Z
 ---
 
 ## Current Test
 
-[testing complete]
+number: 7
+name: ACPT-05 Flow C re-run on ACCEPTANCE-PROTOCOL v1.2 (NVDA+Firefox)
+expected: |
+  On NVDA+Firefox/Windows, re-execute Flow C (C1–C4) against protocol v1.2: C1 — enable Native Selection Mode FIRST (NVDA+shift+f10, NVDA >= 2024.1; toggle confirmation heard), THEN browse-mode Shift+arrows selection, listening for the "Highlight actions available." mount cue (older NVDA: F7 caret browsing + focus-mode Shift+arrows fallback per the protocol note); C2 NVDA+Space then Tab; C3 Enter creates mark.highlight with "Highlight saved."; C4 verify. Record outcomes in 13-VERIFICATION.md Appendix §1.3 findings + §1.4 checklist + verdict; ACPT-05 flips from Pending only on zero blocker/major (D13-06/D13-07). Known pinned boundary (not a finding): with Native Selection Mode OFF, browse-mode selections live only in NVDA's virtual buffer — the page is structurally selection-blind (platform boundary, pinned by toolbar-mount-selection-gated.spec.ts).
+awaiting: user response
 
 ## Tests
 
@@ -42,17 +46,22 @@ result: issue
 reported: "Toolbar is still not appearing even after NVDA+space. I never hear the 'highlight actions available'"
 severity: major
 detail: Failure occurs at C1 — the toolbar appears to never mount (no "Highlight actions available." announce-on-appear heard after browse-mode Shift+arrows selection), so the failure precedes the C2 focus-mode/Tab path entirely. Distinct observable from G6 (mounted, unmounted on focus move) and G7 (keydown-less Tab bypass in browse mode): here the mount/announcement itself is not observed under NVDA+Firefox.
+resolution: Root cause diagnosed (G8) and closed by 13-13 — a protocol-premise defect, not a code regression: with Native Selection Mode OFF (any default NVDA), browse-mode Shift+arrows selections exist only in NVDA's virtual buffer and never reach the Firefox document selection, so no page-side code can observe them (platform boundary; page mount path exonerated). Protocol v1.2 C1 now instructs NVDA+shift+f10 BEFORE the selection, documents the F7 fallback + boundary, and the boundary is pinned by the new 3-engine selection-gated spec (6/6). ZERO production source changes. Re-run Flow C per Current Test 7.
 
 ### 6. VoiceOver+Safari supplementary re-walk incl. the toolbar announce-on-appear surface (optional, non-gating)
 expected: Optionally re-walk the Appendix §3 checklist for the v2.0 surface groups (library/browse-search-tags, ingest incl. calm refusals, review panel, export/import dialogs, book groupings) — now including the 13-11 toolbar announce-on-appear surface, which post-dates the Test 2 pass. NOT an ACPT-05 gate (D13-05) — supplementary evidence on the user's own schedule; record notes in Appendix §3.2.
 result: pass
 
+### 7. ACPT-05 Flow C re-run on ACCEPTANCE-PROTOCOL v1.2 (NVDA+Firefox)
+expected: On NVDA+Firefox/Windows, re-execute Flow C (C1–C4) against protocol v1.2: C1 — enable Native Selection Mode FIRST (NVDA+shift+f10, NVDA >= 2024.1; toggle confirmation heard), THEN browse-mode Shift+arrows selection, listening for the "Highlight actions available." mount cue (older NVDA: F7 caret browsing + focus-mode Shift+arrows fallback per the protocol note); C2 NVDA+Space then Tab; C3 Enter on the focused Highlight button creates mark.highlight with the polite "Highlight saved." confirmation; C4 verify. Record outcomes in 13-VERIFICATION.md Appendix §1.3 findings + §1.4 checklist + verdict; ACPT-05 flips from Pending only on zero blocker/major (D13-06/D13-07). Residual to confirm: NVDA verbalizes the mount announce in browse mode with native selection ON. Known pinned boundary (not a finding): with Native Selection Mode OFF, browse-mode selections live only in NVDA's virtual buffer — the page is structurally selection-blind (platform boundary, pinned by toolbar-mount-selection-gated.spec.ts).
+result: [pending]
+
 ## Summary
 
-total: 6
+total: 7
 passed: 3
-issues: 1
-pending: 0
+issues: 0
+pending: 1
 skipped: 0
 blocked: 0
 
