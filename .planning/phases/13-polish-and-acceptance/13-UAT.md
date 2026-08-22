@@ -1,14 +1,18 @@
 ---
-status: diagnosed
+status: testing
 phase: 13-polish-and-acceptance
 source: [13-VERIFICATION.md]
 started: 2026-08-19T00:00:00.000Z
-updated: 2026-08-22T00:00:00.000Z
+updated: 2026-08-22T19:00:00.000Z
 ---
 
 ## Current Test
 
-[testing complete]
+number: 5
+name: ACPT-05 Flow C re-run on ACCEPTANCE-PROTOCOL v1.1 (NVDA+Firefox)
+expected: |
+  On NVDA+Firefox/Windows, re-execute Flow C (C1–C4) against the G6+G7-fixed build using the v1.1 protocol: C1 browse-mode Shift+arrows selection — listen for the "Highlight actions available." mount announcement; C2 NVDA+Space to enter focus mode FIRST, THEN Tab; C3 Enter on the focused Highlight button. Zero blocker/major across the full protocol flips ACPT-05 (D13-06/D13-07). Known pinned boundary: a browse-mode Tab WITHOUT NVDA+Space still lands on Previous page and unmounts the toolbar — documented + recoverable, not a finding.
+awaiting: user response
 
 ## Tests
 
@@ -34,13 +38,22 @@ result: issue
 reported: "fail - tab goes to previous page button on tab with text selected in NVDA, no selection toolbar appears"
 severity: major
 detail: Recurrence of G6-class behavior on the G6-fixed build: with text selected in the reader under NVDA+Firefox, pressing Tab moves focus to the Previous Page control instead of the selection toolbar; the toolbar never becomes reachable (and may never mount). 13-11's Tab routing (event-time-guarded) is not engaging under NVDA+Firefox real-keyboard conditions despite the 3-engine e2e passing.
+resolution: Root cause diagnosed (G7) and closed by 13-12 — NVDA browse mode consumes the Tab keydown itself and moves DOM focus via accessibility APIs; per decision G7-D1 the reachability contract is focus-mode-only, documented in protocol v1.1 (NVDA+Space at C2) and pinned by the keydown-less boundary e2e. Re-run Flow C per Current Test 5.
+
+### 5. ACPT-05 Flow C re-run on ACCEPTANCE-PROTOCOL v1.1 (NVDA+Firefox)
+expected: On NVDA+Firefox/Windows, re-execute Flow C (C1–C4) against the G6+G7-fixed build using the v1.1 protocol: C1 browse-mode Shift+arrows selection — listen for the "Highlight actions available." mount announcement (the toolbar-appeared cue); C2 NVDA+Space to enter focus mode FIRST (listen for NVDA's focus-mode toggle confirmation), THEN Tab; C3 Enter on the focused Highlight button creates mark.highlight with the polite "Highlight saved." confirmation. Record outcomes in 13-VERIFICATION.md Appendix §1.3 findings + §1.4 checklist + verdict; ACPT-05 flips from Pending only on zero blocker/major (D13-06/D13-07). Known pinned boundary: a browse-mode Tab WITHOUT NVDA+Space still lands on Previous page and unmounts the toolbar — documented + recoverable (re-select, NVDA+Space, Tab), not a finding. Any NEW blocker/major follows fix-then-re-run; minors are recorded and deferred.
+result: [pending]
+
+### 6. VoiceOver+Safari supplementary re-walk incl. the toolbar announce-on-appear surface (optional, non-gating)
+expected: Optionally re-walk the Appendix §3 checklist for the v2.0 surface groups (library/browse-search-tags, ingest incl. calm refusals, review panel, export/import dialogs, book groupings) — now including the 13-11 toolbar announce-on-appear surface, which post-dates the Test 2 pass. NOT an ACPT-05 gate (D13-05) — supplementary evidence on the user's own schedule; record notes in Appendix §3.2.
+result: [pending]
 
 ## Summary
 
-total: 4
+total: 6
 passed: 2
-issues: 1
-pending: 0
+issues: 0
+pending: 2
 skipped: 0
 blocked: 0
 
@@ -109,7 +122,8 @@ closed_by: 13-11 (commits 4487e45 RED spec, 42f1113 GREEN fix, 1aa22bf NVDA gest
   debug_session: ".planning/debug/flowc-selection-toolbar-nvda.md"
 
 ### G7 — ACPT-05 Flow C (post-G6 build): Tab bypasses selection toolbar to Previous Page under NVDA+Firefox
-status: diagnosed
+status: resolved
+closed_by: 13-12 (commits f09c58d keydown-less boundary/recovery spec, 59c3470 ACCEPTANCE-PROTOCOL v1.1) — decision G7-D1: focus-on-appear REJECTED (Gecko/WebKit visual-selection destruction + unwinnable debounce race + SR disorientation); focus-mode-only reachability accepted as the platform convention and documented (C2 NVDA+Space before Tab, C1 mount-announcement cue, C3 focus-mode-anchored); browse-mode boundary pinned by the new toolbar-keydownless-focus.spec.ts; false Tab-equivalence comment corrected in toolbar-tab-path.spec.ts. ZERO production source changes (G7-D1 compliance). Independently re-verified 2026-08-22 (verifier's own 15/15 toolbar cells across chromium/firefox/webkit + line-by-line protocol diff inspection + zero-src-diff proof 7521cf2..cb1527d; orchestrator's honest full-suite gate exit 0: unit 1262/0/13 + e2e 1113/0/10). ACPT-05 stays Pending the tester's v1.1 re-run (Test 5).
 - truth: "With text selected in the reader under NVDA+Firefox, Tab reaches the selection toolbar (role=toolbar, accessible name 'Highlight actions') and Enter on the 'Highlight' button creates a mark (ACCEPTANCE-PROTOCOL.md v1.0, Flow C steps C2–C3) on the G6-fixed build"
   reason: "User reported: fail - tab goes to previous page button on tab with text selected in NVDA, no selection toolbar appears"
   severity: major
