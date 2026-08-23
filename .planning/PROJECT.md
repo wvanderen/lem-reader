@@ -39,9 +39,19 @@ Readers can move through long-form web content with calm, stable orientation and
 
 </details>
 
-## Current Milestone
+## Current Milestone: v2.1 Reader Experience
 
-None — v2.0 archived 2026-08-23. Start the next milestone with `/gsd-new-milestone` (questioning → research → requirements → roadmap). Future-requirement candidates already identified in REQUIREMENTS.md archives: orientation aids (ORNT-01/02), explicit anchor repair (RECV-02), presentation presets (PRES-01), full-text search, folders/collections, per-article export, accounts/cloud sync (deferred per export/import-first), browser-extension packaging — plus the v2.0 tech-debt backlog (EPUB OOM, per-chapter timeout bounds).
+**Goal:** Make Lem Reader feel like a cohesive, calm reading application by reorganizing its primary workflows, polishing inconsistent interfaces, and improving orientation and content fidelity inside the reader.
+
+**Target features:**
+- Clear SPA-style navigation among Library, Highlights, and Reader views, with coherent headers and back navigation.
+- A structured library organized around unread, in-progress, and finished reading states.
+- A focused Add to Library workflow and editable article title/author metadata.
+- A redesigned highlights review surface and a general Impeccable-informed interface refinement pass.
+- Non-intrusive reading-position restoration, correctly anchored menus, and a corrected reading-width slider.
+- Safely preserved original article images and semantic captions.
+- A keyboard- and screen-reader-navigable table of contents derived from heading hierarchy.
+- Durable highlights that can span multiple semantic blocks and survive repagination, mode changes, and reopening.
 
 ## Requirements
 
@@ -69,14 +79,21 @@ None — v2.0 archived 2026-08-23. Start the next milestone with `/gsd-new-miles
 
 ### Active
 
-None — the next milestone defines fresh requirements via `/gsd-new-milestone`.
+- [ ] Readers can move predictably among a structured Library, Highlights review, and Reader without dead-end or misaligned navigation.
+- [ ] Readers can browse content by unread, in-progress, and finished state and add content through a focused workflow.
+- [ ] Readers can edit saved article titles and authors without changing canonical content identity or losing annotations.
+- [ ] Reader orientation aids do not shift or obstruct content and include a navigable heading-derived table of contents.
+- [ ] Safely ingested source images and captions retain their semantic relationship and render consistently in both reading modes.
+- [ ] A highlight can span multiple semantic blocks while retaining durable, honest anchors across layout and persistence changes.
+- [ ] Existing interface inconsistencies and known control bugs are corrected without regressing accessibility or reading-engine guarantees.
 
 ### Out of Scope
 
 - **Authenticated, paywalled, or login-gated content** — URL ingestion targets publicly fetchable pages; login/paywall content raises CORS, permissions, and ToS issues (carried from v2.0).
 - **Accounts, cloud sync, and encrypted cross-device persistence** — deferred; the export/import loop is the proven cross-device story (re-evaluate now that the library + portability loop has shipped).
 - **Browser-extension packaging** — deferred until the ingestion + library loop proves out further in the web app.
-- **Orientation aids (ORNT-01/02), explicit anchor repair (RECV-02), and presentation presets (PRES-01)** — future-requirement candidates, not committed.
+- **Explicit anchor repair (RECV-02) and presentation presets (PRES-01)** — future-requirement candidates, not committed.
+- **Bionic reading, Spritz, and other alternative focus methodologies** — promising future experiments, but not a priority for this refinement milestone.
 - **Tables, interactive embeds, math, and irregular application layouts** — the reader targets rich long-form articles rather than the full web (carried from v1.0).
 - **A required page-turn animation** — cannot compromise speed, interruption, or reduced-motion preferences (carried from v1.0).
 - **AI summaries, chat, recommendations, read-aloud, RSS/newsletter ingestion** — outside the bring-your-own-library hypothesis (carried from v2.0).
@@ -87,6 +104,8 @@ None — the next milestone defines fresh requirements via `/gsd-new-milestone`.
 The product promise is to turn "read this webpage" into "open this as a book" without requiring publishers to change their sites. v1.0 isolated the reading engine from extraction variability; v2.0 built the ingestion + library + portability loop on top without the reading engine being able to tell an ingested article from a fixture — the load-bearing invariant held through every format.
 
 The audience focus is cognitive accessibility: reducing distraction, maintaining a sense of place, and making navigation predictable. Pagination is the distinctive default experience, but never mandatory; readers retain explicit control and the system falls back when content cannot be laid out reliably. Honesty is a product principle: extraction and annotation both surface three-state outcomes (confident/low/unsupported; confident/ambiguous/orphan) rather than silent garbage or silent re-attachment.
+
+Post-v2.0 product feedback found that the major capabilities work but their organization still feels incidental: Continue Reading, ingestion, and the full article list compete on one scrolling page; Highlights lacks first-class navigation; headers and gutters vary by view; the tag popover is misplaced; and the reading-position banner shifts content. v2.1 treats this as an information-architecture and interaction-design problem, not merely a cosmetic pass. It also expands reader fidelity and orientation through source images/captions, a heading-derived table of contents, and cross-block highlighting.
 
 Pretext.js remains a calibrated fast path for heading blocks only (2592-sample cross-engine calibration); DOM measurement is authoritative for everything else. Annotations attach to stable normalized-text positions plus quoted context — page numbers never persist. Cross-device travel uses versioned export bundles, not accounts.
 
@@ -141,4 +160,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-23 after v2.0 milestone*
+*Last updated: 2026-08-23 after starting v2.1 Reader Experience milestone*
