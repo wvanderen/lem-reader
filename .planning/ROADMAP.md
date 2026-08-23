@@ -3,7 +3,7 @@
 ## Milestones
 
 - ✅ **v1.0 MVP** — Phases 1-6 (shipped 2026-08-10) — [archive](milestones/v1.0-ROADMAP.md)
-- 🚧 **v2.0 Personal Library** — Phases 7-13 (in progress — planning)
+- ✅ **v2.0 Personal Library** — Phases 7-13 (shipped 2026-08-23) — [archive](milestones/v2.0-ROADMAP.md)
 
 ## Phases
 
@@ -23,306 +23,22 @@ Full phase details, decisions, and plan history: [`milestones/v1.0-ROADMAP.md`](
 
 </details>
 
-### 🚧 v2.0 Personal Library (Phases 7-13)
+<details>
+<summary>✅ v2.0 Personal Library (Phases 7-13) — SHIPPED 2026-08-23</summary>
 
-**Milestone Goal:** Turn Lem Reader from a fixture-only prototype into a product readers can put their own content into — ingesting URLs and documents into a personal local-first library, with exportable highlights that travel across machines.
+Seven phases that turned Lem Reader from a fixture-only prototype into a product readers can put their own content into: a stateless SSRF/XSS-guarded ingestion backend (URL, paste-HTML, Markdown, PDF, EPUB), a personal library replacing the fixture list, versioned whole-library export/import, a cross-library annotation review panel, and the polish + acceptance quality gate. The load-bearing invariant held: the reading engine, pagination, annotation selectors, location store, and a11y surface cannot tell an ingested article from a fixture.
 
-Seven phases that add one stateless ingestion backend and one new data domain (user-ingested articles + library metadata) on top of the shipped v1.0 substrate. The load-bearing invariant: the reading engine, pagination, annotation selectors, location store, and a11y surface cannot tell an ingested article from a fixture. URL+HTML(+Markdown) ingestion is proven before PDF and EPUB; SSRF and XSS are addressed in the first ingestion phase, not deferred.
+- [x] **Phase 7: Ingestion Substrate** (7/7 plans) — completed 2026-08-12
+- [x] **Phase 8: Markdown Pipeline and Personal Library** (5/5 plans) — completed 2026-08-13
+- [x] **Phase 9: Versioned Export/Import** (7/7 plans) — completed 2026-08-15
+- [x] **Phase 10: Annotation Review Panel** (6/6 plans) — completed 2026-08-16
+- [x] **Phase 11: PDF Intake** (7/7 plans) — completed 2026-08-17
+- [x] **Phase 12: EPUB Intake** (8/8 plans) — completed 2026-08-18
+- [x] **Phase 13: Polish and Acceptance** (13/13 plans) — completed 2026-08-19
 
-- [x] **Phase 7: Ingestion Substrate** - Stateless backend safely normalizes URL-fetched and pasted HTML into canonical articles with SSRF + XSS defense and honest failure (completed 2026-08-12)
-- [x] **Phase 8: Markdown Pipeline and Personal Library** - Lowest-risk Markdown intake plus the personal library that replaces the fixture list (completed 2026-08-13)
-- [x] **Phase 9: Versioned Export/Import** - Whole-library bundles and highlights-only export as the cross-device story in lieu of accounts (completed 2026-08-15)
-- [x] **Phase 10: Annotation Review Panel** - Dedicated surface to review, filter, and curate all highlights and notes across the library (completed 2026-08-16)
-- [x] **Phase 11: PDF Intake** - PDF text extraction with honest failure for scanned and multi-column documents (completed 2026-08-17)
-- [x] **Phase 12: EPUB Intake** - Multi-chapter EPUB books surfaced as per-chapter articles under a book grouping (completed 2026-08-18)
-- [x] **Phase 13: Polish and Acceptance** - FOUC and progress-bar fixes, user-widened chrome polish (header/modal/nav/library), plus the NVDA+Firefox and v2.0 core-flow acceptance gate (completed 2026-08-19)
+Full phase details, decisions, and plan history: [`milestones/v2.0-ROADMAP.md`](milestones/v2.0-ROADMAP.md)
 
-## Phase Details
-
-### Phase 7: Ingestion Substrate
-
-**Goal**: A stateless ingestion backend safely turns URL-fetched and pasted-HTML pages into validated canonical articles that the v1.0 reader treats identically to fixtures — without exposing the reader to SSRF or XSS.
-**Depends on**: v1.0 shipped substrate (Phases 1-6)
-**Requirements**: ING-01, ING-02, ING-06, ING-07, ING-08
-**Success Criteria** (what must be TRUE):
-
-  1. Reader submits a real publisher URL and the resulting article opens in the existing reader, paginating, annotating, and restoring location identically to a v1.0 fixture — with a round-trip anchor test (TextPositionSelector + TextQuoteSelector re-resolves to `confident`) gating every successfully ingested article.
-  2. Reader pastes or uploads an HTML document and it normalizes through the same pipeline as a URL, producing the same canonical Block shape.
-  3. The SSRF guard regression matrix passes — private/loopback/link-local IPs (incl. cloud-metadata 169.254.169.254 and CGNAT 100.64/10), non-http(s) schemes, redirect-into-internal chains, and DNS-rebinding simulations are all refused with no upstream body returned on refusal.
-  4. The mXSS regression suite (DOMPurify Attack Classes payloads) passes — no `<script>`, inline `on*` handlers, `javascript:` URLs, or SVG/MathML survives into the canonical Block tree, and no `dangerouslySetInnerHTML` exists anywhere in the codebase.
-  5. Extraction yields honest three-state outcomes (confident / low-confidence / unsupported) with a derived multi-signal confidence and a reader-visible reason for every refusal (no silent garbage enters the library), and the v1→v3 Dexie migration passes its CI fixture-snapshot test (every v1.0 article/highlight/note/position/preference intact on upgrade).
-
-**Plans**: 7/7 plans complete
-Plans:
-**Wave 1**
-
-- [x] 07-01-PLAN.md — Wave-0 scaffolding + jsdom-on-Workers spike (resolves A1/A2/A3; gates the extraction architecture)
-- [x] 07-02-PLAN.md — Schema additions (ArticleSource, IngestionMeta, Provenance.sourceUrl.optional) + Dexie v3 append
-
-**Wave 2** *(blocked on Wave 1 completion)*
-
-- [x] 07-03-PLAN.md — /server pipeline primitives: safeFetch SSRF guard + confidence three-state + slugify
-- [x] 07-04-PLAN.md — /server extraction: htmlToBlocks (Readability → DOMPurify → 9-kind Block tree) + mXSS suite (SC#4)
-
-**Wave 3** *(blocked on Wave 2 completion)*
-
-- [x] 07-05-PLAN.md — /server orchestrator (ingest.ts) + inline round-trip anchor gate (SC#1)
-
-**Wave 4** *(blocked on Wave 3 completion)*
-
-- [x] 07-06-PLAN.md — Edge function adapter + IngestionClient + DexieLibrarySource + repository swap + minimal ingest UI
-
-**Wave 5** *(blocked on Wave 4 completion)*
-
-- [x] 07-07-PLAN.md — Four phase-exit gates as real e2e tests: SSRF matrix (SC#3) + happy-path (SC#1) + Dexie migration (SC#5) + repo-wide dangerouslySetInnerHTML grep gate
-
-### Phase 8: Markdown Pipeline and Personal Library
-
-**Goal**: Readers see the value of ingestion — a personal library replaces the flat fixture list, Markdown joins as the lowest-risk intake format, and the reader can browse, open, search, tag, and track their articles.
-**Depends on**: Phase 7
-**Requirements**: ING-03, LIB-01, LIB-02, LIB-03, LIB-04, LIB-05, LIB-06
-**Success Criteria** (what must be TRUE):
-
-  1. The personal library is the default route (replacing the flat fixture list) and shows v1.0 fixtures (badged `source: "fixture"`) alongside newly ingested articles, with no v1.0 e2e test regressing.
-  2. Reader can open, read, and remove any article in their library; removal cascades to the article's highlights, notes, and position records.
-  3. Reader can search the library by title and metadata, tag articles, and filter the library by tag (flat tags as the default organization — no folder hierarchy).
-  4. Reader can add an article by uploading a Markdown document (.md), with YAML front-matter (title/author/date) recognized as metadata, normalized through the same Block-output contract as HTML.
-  5. Reader sees ingestion metadata (source URL, fetch date) with a link to the original source, plus recently-read shortcuts and positional reading-progress indicators across the library.
-
-**Plans**: 5/5 plans complete
-**UI hint**: yes
-
-Plans:
-**Wave 1**
-
-- [x] 08-01-PLAN.md — Server Markdown adapter (markdownToBlocks) + schema widening (ArticleSource + origin + tags) + ingest.ts dispatch + IngestionClient.ingestMarkdown
-
-**Wave 2** *(blocked on Wave 1 completion)*
-
-- [x] 08-02-PLAN.md — Tag + location data substrate (Dexie v4 *tags index, loadAllLocations, tagsStore) + dexie-migration v4 e2e
-
-**Wave 3** *(blocked on Wave 2 completion)*
-
-- [x] 08-03-PLAN.md — Library view composition (LibraryView replaces FixtureList, LibraryRow, SourceBadge, ContinueReadingStrip, LibrarySearch, TagFilter, libraryFilter) + App.tsx swap
-
-**Wave 4** *(blocked on Wave 3 completion)*
-
-- [x] 08-04-PLAN.md — File-upload form (.md/.html) + TagEntry in ArticleView + RemoveConfirm cascade-remove dialog
-
-**Wave 5** *(blocked on Wave 4 completion)*
-
-- [x] 08-05-PLAN.md — Phase-exit e2e gates: SC#1 browse-open + v1-regression, SC#2 remove-cascade, SC#3 search-tag-filter, SC#4 markdown-upload, SC#5 progress-recent + full honest-suite gate
-
-### Phase 9: Versioned Export/Import
-
-**Goal**: Readers can take their whole library with them — exporting articles, highlights, notes, position, and preferences as a versioned bundle, re-importing it on another machine with validation and conflict reporting, and exporting just their highlights for use outside the reader.
-**Depends on**: Phase 8
-**Requirements**: PORT-01, PORT-02, PORT-03
-**Success Criteria** (what must be TRUE):
-
-  1. Reader can export their entire library (articles + highlights + notes + positions + preferences) as a single versioned bundle carrying a `schemaVersion` field and per-article source URLs.
-  2. Reader can import a compatible bundle on another machine with Zod validation, a dry-run conflict preview, and skip-by-default conflict resolution with per-entity reader overrides; the import applies atomically in a single Dexie transaction (no partial state on failure), and a Zip Slip guard (`path.resolve + startsWith` on every archive entry) plus filename sanitization refuses directory-traversal entries.
-  3. Reader can export just their highlights as a Markdown document (with template variables) for use in external tools like Obsidian or Notion.
-  4. Round-trip integrity holds: canonical-text offsets survive export and import (page numbers never appear in the bundle), and a bundle exported on one machine re-imports on another with every highlight re-resolving to `confident` or surfacing honestly as `ambiguous`/`orphan`.
-
-**Plans**: 7/7 plans complete
-**UI hint**: yes
-
-Plans:
-**Wave 1**
-
-- [x] 09-01-PLAN.md — Foundations: fflate + ExportBundleSchema + Zip Slip guard + deterministic SHA-256 manifest + download helper + Wave-0 e2e scaffolds
-- [x] 09-02-PLAN.md — Highlights Markdown renderer (fixed template, honest tri-state) + loadAllHighlights/loadAllNotes bulk store loaders
-
-**Wave 2** *(blocked on Wave 1 completion)*
-
-- [x] 09-03-PLAN.md — conflicts.ts: dry-run 5-kind conflict detection + eager tri-state re-resolution (imported ∪ local ∪ fixtures) + bulk per-kind override resolution
-
-**Wave 3** *(blocked on Wave 2 completion)*
-
-- [x] 09-04-PLAN.md — ExportImportService: buildBundleBytes + validateBundle (six-refusal pipeline, Zip Slip gate, bomb cap) + applyImport (atomic 5-store transaction)
-
-**Wave 4** *(blocked on Wave 3 completion)*
-
-- [x] 09-05-PLAN.md — Portability UI: ImportPreviewDialog (structural RemoveConfirm clone) + Settings "Your data" cluster + ArticleView per-article highlights export
-
-**Wave 5** *(blocked on Wave 4 completion)*
-
-- [x] 09-06-PLAN.md — Phase-exit e2e gates: SC#4 round-trip (two-machine harness), SC#2 Zip Slip regression, import-preview flow, highlights-export content, a11y/keyboard
-
-**Wave 6** *(blocked on Wave 5 completion)*
-
-- [x] 09-07-PLAN.md — Gap closure: the 24 pre-existing e2e failures (Phase 08 deferred-items) + honest full-suite gate (npm run test exit 0, 09-07-OUTPUT.md record)
-
-### Phase 10: Annotation Review Panel
-
-**Goal**: Readers have a dedicated surface to review, filter, and curate all their highlights and notes across the library — the natural pair to the export and curation flow.
-**Depends on**: Phase 9
-**Requirements**: RECV-01
-**Success Criteria** (what must be TRUE):
-
-  1. Reader can open a dedicated panel listing every highlight and note across the library (cross-article), with per-highlight metadata (article, date, position).
-  2. Reader can jump from any highlight in the panel directly to its location in the reader and navigate back to the panel (bidirectional).
-  3. Reader can filter the review list (by article, tag, or confidence) and sort it (by date, article, or position).
-  4. Ambiguous and orphan annotations surface honestly with a tri-state indicator (never silently hidden), and the reader can edit or delete highlights in place from the panel.
-
-**Plans**: 6/6 plans complete
-**UI hint**: yes
-
-Plans:
-**Wave 1**
-
-- [x] 10-01-PLAN.md — Pure derivation module (deriveReviewSections + MemoizedArticleText lift-and-export) + unit matrix + Wave-0 e2e sentinels
-
-**Wave 2** *(blocked on Wave 1)*
-
-- [x] 10-02-PLAN.md — Three-view router (#/review + /h/ grammar) + ReviewView surface + LibraryView entry + route-entry e2e
-
-**Wave 3** *(blocked on Wave 2)*
-
-- [x] 10-03-PLAN.md — ArticleView deep-link jump (readiness-gated on-mount effect + replaceState strip) + deep-link e2e
-- [x] 10-04-PLAN.md — Surface behavior e2e: listing/filter/sort + tri-state + empty states
-- [x] 10-05-PLAN.md — Curation dialogs (ReviewNoteDialog + DeleteHighlightConfirm) + ReviewView wiring + curate e2e
-
-**Wave 4** *(blocked on Wave 3)*
-
-- [x] 10-06-PLAN.md — Phase-exit gates: bidirectional loop + a11y/edge route coverage + honest full-suite record (closes RECV-01)
-
-### Phase 11: PDF Intake
-
-**Goal**: Readers can add PDF documents to their library with text extracted and normalized — and honest failure when a PDF is scanned, image-only, or unrecoverably multi-column.
-**Depends on**: Phase 10
-**Requirements**: ING-04
-**Success Criteria** (what must be TRUE):
-
-  1. Reader can upload a text-heavy PDF and receive a normalized article that opens in the reader and paginates, annotates, and restores location identically to other articles.
-  2. Scanned or image-only PDFs are detected and refused with an honest "couldn't read this" reason (reusing the DOC-06 disclosure pattern) — no silent garbage enters the library.
-  3. Multi-column PDFs are either honestly flagged as low-confidence (reconstructed reading order) or refused via the same disclosure surface; the reader never sees silently reordered text.
-  4. A round-trip anchor test gates every successfully extracted PDF article, and a calibration harness validates the font-size→heading and vertical-gap→paragraph thresholds on a real-PDF corpus before promotion.
-
-**Plans**: 7/7 plans complete
-Plans:
-
-- [x] 11-07-PLAN.md
-
-**Wave 1**
-
-- [x] 11-01-PLAN.md — unpdf human gate (SUS audit) + schema/limit widening + self-verifying synthetic fixtures (spec files owned by 11-02/03/05)
-
-**Wave 2** *(blocked on Wave 1 completion)*
-
-- [x] 11-02-PLAN.md — pdfToBlocks adapter: proxy lifecycle + caps, scanned/multi-column page-weighted detection, typed refusals, block assembly (D11-01/02/03/08)
-- [x] 11-04-PLAN.md — client upload path: ingestPdf, .pdf picker arm + base64 encode, extension-aware cap, five calm copy entries
-
-**Wave 3** *(blocked on Wave 2 completion)*
-
-- [x] 11-03-PLAN.md — orchestrator fourth branch (pdf-<hash> id, D11-07 title chain, D11-09 consume) + middleware body cap + integration round-trip gate
-
-**Wave 4** *(blocked on Wave 3 completion)*
-
-- [x] 11-05-PLAN.md — e2e pdf-intake spec: upload→read/annotate/restore identity, calm refusals, dedupe (SC#1–3)
-
-**Wave 5** *(blocked on Wave 4 completion)*
-
-- [x] 11-06-PLAN.md — calibration harness + local real-PDF corpus (checkpoint) + committed evidence + honest full-suite phase gate (SC#4, D11-04/05/06)
-
-### Phase 12: EPUB Intake
-
-**Goal**: Readers can add an EPUB book to their library, surfaced as per-chapter articles under a book grouping (Option A) — preserving every v1.0 substrate contract at chapter granularity.
-**Depends on**: Phase 11
-**Requirements**: ING-05
-**Success Criteria** (what must be TRUE):
-
-  1. Reader can upload a DRM-free EPUB and the library shows it as a book grouping with expandable chapter articles (Option A: one article per chapter + a thin Book record).
-  2. Each chapter opens in the reader and paginates, annotates, and restores location identically to other articles; two-mode reading works at chapter granularity.
-  3. Cross-chapter navigation (next/previous chapter) and book-level progress (derived from per-chapter locations) work; reopening a book resumes at the last-read chapter.
-  4. The EPUB parser is isolated behind an adapter (so the dependency can be swapped), the epub.js renderer is NOT used inside React, and a round-trip anchor test gates every successfully extracted chapter.
-
-**Plans**: 8/8 plans complete
-**UI hint**: yes
-
-Plans:
-**Wave 1**
-
-- [x] 12-01-PLAN.md — fast-xml-parser human gate (D12-15) + schema/cap widening (epub variant, BookSchema, epub-chapter source) + self-verifying synthetic EPUB generator
-
-**Wave 2** *(blocked on Wave 1)*
-
-- [x] 12-02-PLAN.md — epubToBooks adapter: unzip + Zip Slip/bomb gates + DRM allowlist + container/OPF/nav/NCX parse + TOC-merge (D12-09) + per-chapter sanitize/walk + figure downgrade
-- [x] 12-03-PLAN.md — client persistence + upload path: Dexie v5 books store + booksStore (atomic save/cascade remove) + ingestEpub + .epub picker arm + calm copy
-
-**Wave 3** *(blocked on Wave 2)*
-
-- [x] 12-04-PLAN.md — orchestrator fifth Stage-1 branch (per-chapter stages 2+ with skip/disclose) + middleware cap-coupling fix + integration round-trip gate
-
-**Wave 4** *(blocked on Wave 3)*
-
-- [x] 12-05-PLAN.md — library book grouping UI (BookRow expandable + progress/resume derivations + continue-strip entries + book/chapter search + tags + remove cascade) + SC#1 e2e
-- [x] 12-07-PLAN.md — books in the portability loop (bundle schemaVersion 2 union + book conflicts + orphan tolerance + two-context round-trip)
-
-**Wave 5** *(blocked on Wave 4)*
-
-- [x] 12-06-PLAN.md — ArticleView chapter chrome (context line D12-08 + end-of-chapter nav D12-05) + SC#2/SC#3 e2e + refusal no-side-effect gates + a11y extension
-
-**Wave 6** *(blocked on Wave 5)*
-
-- [x] 12-08-PLAN.md — calibration harness + local real-EPUB corpus checkpoint (D12-12) + SC#4 structural gates + honest full-suite phase gate
-
-### Phase 13: Polish and Acceptance
-
-**Goal**: The v2.0 quality gate — eliminate the two known polish regressions, land the user-widened chrome polish (D13-12), and close acceptance across the supported browser matrix, mirroring v1.0 Phase 6.
-**Depends on**: Phase 12
-**Requirements**: POLISH-01, POLISH-02, POLISH-03, POLISH-04, POLISH-05, POLISH-06, ACPT-05, ACPT-06
-**Success Criteria** (what must be TRUE):
-
-   1. Reader sees the persisted reading mode on first paint with no flash or snap to a different mode (a Playwright cold-load no-snap test passes).
-   2. Reader sees a progress bar that reflects actual position — a one-page article does not show 100% on open and a multi-page article progresses from the start (offset-anchored formula with boundary tests).
-   3. The documented screen-reader acceptance flows complete on NVDA+Firefox with zero blocker/major findings, closing the v1.0 ACPT-02 coverage boundary A4.
-   4. The v2.0 core flow (ingest → read → highlight → export → re-import) completes across Chromium, Firefox, and WebKit without content loss, and the full `npm run test` suite exits 0 (mirroring the v1.0 honest-suite precedent).
-   5. Reader sees a slim article header (title + essential controls) with tags/metadata in a render-once article-top spot — no internal header scrolling at 360×640 (POLISH-03, D13-13). *(Amended 2026-08-19 by the G5 user review: the tag affordance is reached from a top-bar icon popover beside the highlights/mode controls — not in the article-top spot — and the spot is now a compact provenance block; see 13-UAT.md § G5 and plan 13-10. The no-internal-header-scrolling clause is unchanged.)*
-   6. Reader's four centered modal dialogs open centered, not top-left (POLISH-04, D13-14).
-   7. Reader gets a keyboard-reachable "Back to library" affordance on article and review views that never exits the app on a deep link (POLISH-05, D13-15).
-   8. Reader sees an organized library home — continue reading / add content / library list — within existing components (POLISH-06, D13-16).
-
-**Plans**: 13/13 plans complete
-
-Plans:
-**Wave 1**
-
-- [x] 13-01-PLAN.md — POLISH-01 first-paint settings mirror: settingsMirror seam + index.html inline script + SettingsContext lazy-init + cold-load no-snap e2e
-- [x] 13-02-PLAN.md — POLISH-02 offset-anchored progress: pure ratio helper + boundary tests + PaginatedSurface/ProgressHairline ratio path + first-paint-progress e2e
-- [x] 13-03-PLAN.md — POLISH-04 + POLISH-06 chrome polish: dialog centering restoration (4 modals) + LibraryView bounded tidy
-- [x] 13-05-PLAN.md — ACPT-05 preparation: NVDA runbook + record sheet + VO supplementary checklist + D13-11 pdf-timeout fake-timers spec
-
-**Wave 2** *(blocked on Wave 1 — shares app.css with 13-03)*
-
-- [x] 13-04-PLAN.md — POLISH-03 + POLISH-05 chrome polish: header slim + render-once metadata spot + BackToLibrary affordance
-
-**Wave 3** *(blocked on all — runs the honest full-suite gate)*
-
-- [x] 13-06-PLAN.md — ACPT-06 core-flow spine (.md ingest → read → highlight → export → re-import, 3 engines) + honest full-suite phase gate
-
-**Wave 4** *(gap closure — G1–G4 from the 2026-08-19 user review; no file overlap, parallel)*
-
-- [x] 13-07-PLAN.md — G1+G3 library chrome: add-section shared 1100px measure + SVG trash icon replacing the emoji glyph + strengthened library-tidy parity assertions
-- [x] 13-08-PLAN.md — G2 upload control: resetFilePick + Remove file affordance + terminal-outcome resets (09-05 discipline) + upload-queue e2e
-- [x] 13-09-PLAN.md — G4 paginated first-paint: paginatedPending stable-placeholder branch (never scroll-then-swap) + first-paint-mode-surface e2e (strengthened POLISH-01/02)
-
-**Wave 5** *(blocked on Wave 4 — shares app.css with 13-07 and ArticleView.tsx with 13-09)*
-
-- [x] 13-10-PLAN.md — G5 metadata/tag redesign: TagEntry → top-bar popover beside highlights/mode controls + compact provenance-only spot + Export → highlights drawer + realigned/strengthened geometry + tag-popover specs
-
-**Wave 6** *(gap closure — G6 from the ACPT-05 UAT run; fix-then-re-run per D13-06)*
-
-- [x] 13-11-PLAN.md — G6 selection toolbar keyboard reachability: focus-containment lifecycle + single-Tab routing + saved-range activation (Gecko/WebKit selection collapse) + announce-on-appear + 3-engine Tab-walk e2e (both modes) + NVDA gesture docs for Flow C1/C3; ACPT-05 re-run is the tester's
-
-**Wave 7** *(gap closure — G7 from the ACPT-05 re-run; protocol + boundary spec only, zero product changes; ACPT-05 flip awaits the human NVDA re-run per D13-06)*
-
-- [x] 13-12-PLAN.md — G7 NVDA browse-mode Tab boundary: Flow C2 focus-mode (NVDA+Space) protocol correction (v1.1) + keydown-less-focus boundary/recovery e2e + false-comment fix — decision G7-D1: focus-mode-only SR reachability documented (focus-on-appear rejected: Gecko/WebKit visual-selection destruction + unwinnable debounce race)
-
-**Wave 8** *(gap closure — G8 from the ACPT-05 v1.1 re-run; protocol + boundary spec only, zero product changes; ACPT-05 flip awaits the human NVDA re-run per D13-06)*
-
-- [x] 13-13-PLAN.md — G8 NVDA native-selection-mode protocol correction (v1.2): C1 NVDA+shift+f10 precondition + false Firefox-native parenthetical removed + older-NVDA F7 caret-browsing fallback + platform-boundary note + selection-gated mount/announce boundary e2e (the C1 cue gains its first automated substrate) — decision G8-D1: zero production changes (page-side mount path exonerated; buffer-only selections unobservable by construction)
+</details>
 
 ## Progress
 
@@ -334,10 +50,10 @@ Plans:
 | 4. Responsive Pagination and Dual-Mode Navigation | v1.0 | 11/11 | Complete | 2026-08-06 |
 | 5. Durable Highlights and Notes | v1.0 | 7/7 | Complete | 2026-08-07 |
 | 6. Prototype Acceptance | v1.0 | 6/6 | Complete | 2026-08-10 |
-| 7. Ingestion Substrate | v2.0 | 7/7 | Complete   | 2026-08-12 |
-| 8. Markdown Pipeline and Personal Library | v2.0 | 5/5 | Complete    | 2026-08-13 |
-| 9. Versioned Export/Import | v2.0 | 7/7 | Complete    | 2026-08-15 |
-| 10. Annotation Review Panel | v2.0 | 6/6 | Complete    | 2026-08-16 |
-| 11. PDF Intake | v2.0 | 7/7 | Complete    | 2026-08-17 |
-| 12. EPUB Intake | v2.0 | 8/8 | Complete    | 2026-08-18 |
-| 13. Polish and Acceptance | v2.0 | 13/13 | Complete    | 2026-08-19 |
+| 7. Ingestion Substrate | v2.0 | 7/7 | Complete | 2026-08-12 |
+| 8. Markdown Pipeline and Personal Library | v2.0 | 5/5 | Complete | 2026-08-13 |
+| 9. Versioned Export/Import | v2.0 | 7/7 | Complete | 2026-08-15 |
+| 10. Annotation Review Panel | v2.0 | 6/6 | Complete | 2026-08-16 |
+| 11. PDF Intake | v2.0 | 7/7 | Complete | 2026-08-17 |
+| 12. EPUB Intake | v2.0 | 8/8 | Complete | 2026-08-18 |
+| 13. Polish and Acceptance | v2.0 | 13/13 | Complete | 2026-08-19 |

@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Personal Library
-current_phase: 13
-status: executing
+current_phase: 0
+status: Awaiting next milestone
 stopped_at: Completed 13-13-PLAN.md (G8 NVDA native-selection-mode gap closure)
-last_updated: "2026-08-23T17:30:00.000Z"
+last_updated: "2026-08-23T17:25:58.979Z"
 last_activity: 2026-08-23
-last_activity_desc: Completed quick task 260823-gfi (retro phase 07 verification + v2.0 audit re-run → pass)
+last_activity_desc: Milestone v2.0 completed and archived
 progress:
   total_phases: 7
   completed_phases: 7
@@ -21,19 +21,17 @@ current_phase_name: polish-and-acceptance
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-08-17)
+See: .planning/PROJECT.md (updated 2026-08-23)
 
 **Core value:** Readers can move through long-form web content with calm, stable orientation, and predictable navigation.
-**Current focus:** Phase 13 — polish-and-acceptance
+**Current focus:** v2.0 archived — planning next milestone via /gsd-new-milestone
 
 ## Current Position
 
-Phase: 13
-Plan: Not started
-Status: Ready to execute
-Last activity: 2026-08-23 — Completed quick task 260823-gfi: retroactive phase 07 verification + v2.0 milestone audit re-run
-
-Progress: [████████████████████] 32/32 plans (100%)
+Phase: Milestone v2.0 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-08-23 — Milestone v2.0 completed and archived
 
 ## Recent Decisions (Phase 11)
 
@@ -382,6 +380,20 @@ None yet. (2026-08-21-fix-prod-ui-paste-ingest-flow resolved by quick task 26082
 | 260823-gfi | Retroactive gsd-verifier on phase 07-ingestion-substrate (07-VERIFICATION.md — 12/12 truths, 5 SCs verified w/ fresh evidence) + v2.0 milestone audit re-run flipped gaps_found → pass (26/26) | 2026-08-23 | 602453c | [260823-gfi-run-gsd-verifier-on-phase-07-ingestion-s](./quick/260823-gfi-run-gsd-verifier-on-phase-07-ingestion-s/) |
 
 ## Deferred Items
+
+Items acknowledged and deferred at milestone close on 2026-08-23 (v2.0):
+
+| Category | Item | Status |
+|----------|------|--------|
+| debug | error-state-guidance-copy | Carried from v1.0 close — resolved by Plan 01-04; debug file never moved to resolved/ |
+| debug | fixture-list-header-spacing | Carried from v1.0 close — resolved by Plan 01-04; debug file never moved to resolved/ |
+| debug | footnote-router-collision | Carried from v1.0 close — resolved by Plan 01-05; debug file never moved to resolved/ |
+| debug | flowc-selection-toolbar-nvda | Hypothesis CONFIRMED — resolved by Phase 13 G6 fix (13-11 keyboard reachability); ACPT-05 re-run passed |
+| debug | g7-nvda-tab-bypass-selection-toolbar | Resolved by 13-12 (protocol v1.1 + boundary spec, zero production changes per G7-D1) |
+| debug | g8-toolbar-never-mounts-nvda | Resolved by 13-13 (protocol v1.2 + boundary spec, zero production changes per G8-D1) |
+| debug | giant-article-freeze | Marked CONFIRMED + FIXED in session notes (quadratic computeBlockGlobalStart fix; superseded by quick tasks 260819-tld/260820-beo caching work) |
+| debug | mobile-first-page-chrome | Committed as 8d00fc0 fix(quick): mobile chrome (13-VERIFICATION note 5); tree clean at audit time |
+| verification | Phase 11: 11-VERIFICATION.md human_needed | Effectively passed per v2.0-MILESTONE-AUDIT.md §1 — timeout gap closed by 13-05 fake-timers spec; UAT Test 2 flipped pass |
 
 Items acknowledged and deferred at milestone close on 2026-08-10:
 
