@@ -4,21 +4,21 @@
 
 **Lem Reader**
 
-Lem Reader is a calm, booklike reader for web articles. Its first artifact is a saved-article prototype for accessibility users—especially readers who benefit from reduced distraction, stable spatial orientation, and predictable navigation—that presents normalized long-form content in either responsive pages or a clean scrolling view.
+Lem Reader is a calm, booklike reader for web articles and documents, designed for accessibility users—especially readers who benefit from reduced distraction, stable spatial orientation, and predictable navigation—that presents normalized long-form content in either responsive pages or a clean scrolling view.
 
-The prototype will support rich article structure, local highlights and notes, and location restoration while testing whether web content can be repaginated quickly and reliably without sacrificing semantic HTML, keyboard access, reduced-motion behavior, or reader choice.
+**Shipped v1.0:** a saved-article prototype proving web content can be repaginated quickly and reliably without sacrificing semantic HTML, keyboard access, reduced-motion behavior, or reader choice. **Shipped v2.0:** a bring-your-own personal library — URL/HTML/Markdown/PDF/EPUB ingestion through one SSRF/XSS-guarded pipeline, a local-first library, versioned export/import, and a cross-library annotation review panel, with the v1.0 reading-engine guarantees holding unchanged for every ingested format.
 
 **Core Value:** Readers can move through long-form web content with calm, stable orientation and predictable navigation.
 
 ### Constraints
 
-- **Prototype input**: Use a curated set of saved, representative articles — separates reading-engine validation from extraction variability.
-- **Content scope**: Support text, headings, links, quotations, lists, images, captions, footnotes, and code blocks — enough to represent rich long-form publishing without claiming full-web compatibility.
+- **Content scope**: Text, headings, links, quotations, lists, images, captions, footnotes, and code blocks — rich long-form publishing, not full-web compatibility (tables/math/embeds excluded).
 - **Reading modes**: Paginated and scrolling modes must both remain available — accessibility and reader preference take precedence over enforcing pagination.
-- **Accessibility**: Semantic HTML, keyboard navigation, screen-reader compatibility, zoom, visible focus, and reduced motion are foundational — the initial audience depends on predictable and adaptable interaction.
-- **Persistence**: Reading position, highlights, and notes are local-first — avoids premature account and sync infrastructure.
-- **Performance**: Repagination must feel responsive and remain stable after fonts settle — visible layout churn would undermine the product's core promise.
-- **Validation**: Initial success is technical reliability on representative articles — formal preference, comprehension, and completion studies are later validation work.
+- **Accessibility**: Semantic HTML, keyboard navigation, screen-reader compatibility, zoom, visible focus, and reduced motion are foundational.
+- **Persistence**: Reading position, highlights, notes, library, and preferences are local-first — cross-device via versioned export/import, not accounts.
+- **Security**: The canonical document model is the security boundary — sanitize once at ingest, never `dangerouslySetInnerHTML`; ingestion refuses private/internal/cloud-metadata endpoints (SSRF) and caps sizes/redirects.
+- **Honesty**: No silent garbage — unsupported content refuses calmly with reader-visible reasons; annotations never silently re-attach.
+- **Performance**: Repagination must feel responsive and remain stable after fonts settle — enforced by a user-approved CI budget.
 
 <!-- GSD:project-end -->
 
