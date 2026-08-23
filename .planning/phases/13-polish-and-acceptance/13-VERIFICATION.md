@@ -1,8 +1,8 @@
 ---
 phase: 13-polish-and-acceptance
-verified: 2026-08-22T21:21:49Z
-status: human_needed
-score: 7/8 must-haves verified
+verified: 2026-08-23T00:00:00Z
+status: passed
+score: 8/8 must-haves verified
 behavior_unverified: 0 # every code-level behavior-dependent truth has behavioral test evidence (verifier's own runs this cycle: 21/21 G8+G7+G6 toolbar cells across 3 engines — including the NEW selection-gated spec 6/6 — plus the unit leg 1262/0/13 reproduced; the honest full-suite gate on cb1527d: exit 0, still valid — git-proven zero src/ changes since)
 overrides_applied: 0
 re_verification:
@@ -11,6 +11,7 @@ re_verification:
   gaps_closed:
     - "G8: ACPT-05 Flow C (v1.1 re-run, UAT test 5) — with NVDA Native Selection Mode OFF (the default on every NVDA since 2024.1), browse-mode Shift+arrows selects only within NVDA's virtual buffer; the Firefox document selection never changes, so the toolbar never mounts and the 'Highlight actions available.' cue never fires (protocol-PREMISE defect — a platform boundary, not a code regression) — closed by 13-13 per decision G8-D1: ACCEPTANCE-PROTOCOL v1.2 (C1 NVDA+shift+f10 precondition, false 'Firefox-native selection' parenthetical removed, F7 caret-browsing fallback, four-part platform-boundary note) + the selection-gated mount/announce boundary spec (the C1 cue's FIRST automated substrate), ZERO production source changes (e38fb43, ba73a7b)"
   gaps_remaining: [] # no code gaps; the ACPT-05 tester re-run (now on protocol v1.2) is a human_verification item by design (D13-06/D13-07), not a code gap
+  human_run_outcome: "ACPT-05 Flow C re-run on protocol v1.2 PASSED (2026-08-23, 13-UAT.md Test 7): Native Selection Mode enabled at C1, 'Highlight actions available.' cue heard, C2/C3 completed, zero blocker/major — SC#3/ACPT-05 flipped to complete per D13-06/D13-07"
   regressions: [] # verifier's own runs this cycle: the combined toolbar net 21/21 green (toolbar-mount-selection-gated 6 + toolbar-keydownless-focus 6 + toolbar-tab-path 9, chromium/firefox/webkit, 20.4s); unit leg 1262 passed / 0 failed / 13 skipped (14.4s); git diff cb1527d..8b666a4 shows ZERO src/ + zero package.json/lockfile changes (0 diff lines) — the recorded full-suite gate on cb1527d (exit 0) therefore remains valid for the production tree
 human_verification:
   - test: "ACPT-05 re-run (D13-06 fix-then-re-run), now on ACCEPTANCE-PROTOCOL v1.2: on NVDA+Firefox/Windows, re-execute Flow C (C1–C4). v1.2 prerequisite (load-bearing): at C1, enable Native Selection Mode FIRST — NVDA+shift+f10, NVDA >= 2024.1 (per-document; NVDA announces the mode change) — BEFORE the browse-mode Shift+arrows selection, or use the documented F7 Firefox caret-browsing fallback on older NVDA (caret selection IS the document selection). Then C2 (NVDA+Space to focus mode, then Tab) and C3 (Enter) proceed as documented in v1.1 (unchanged). Keep the C1 selection within a single block — a cross-block selection mounts the silent hint variant (no buttons, no announce)"
@@ -24,9 +25,9 @@ human_verification:
 # Phase 13: Polish and Acceptance — Verification Report
 
 **Phase Goal:** The v2.0 quality gate — eliminate the two known polish regressions, land the user-widened chrome polish (D13-12), and close acceptance across the supported browser matrix, mirroring v1.0 Phase 6.
-**Verified:** 2026-08-22T21:21:49Z
-**Status:** human_needed — G8 (the third and final diagnosed ACPT-05 Flow C gap) closed with independently reproduced behavioral evidence (verifier's own 21/21 toolbar cells across all three engines, including the new selection-gated spec's 6/6); 7/8 success criteria verified; SC#3 (ACPT-05) awaits the tester's NVDA+Firefox re-run of Flow C on the v1.2 protocol (D13-06 fix-then-re-run; the protocol correction and both-sides automation have landed)
-**Re-verification:** Yes — fifth cycle. Lineage: gaps_found (G1–G5, 2026-08-19T16:25Z) → human_needed (G1–G5 closed, 2026-08-19T23:10Z) → human_needed (G6 closed, 2026-08-22T01:13Z) → human_needed (G7 closed, 2026-08-22T18:52Z) → human_needed (G8 closed, this cycle). The v1.1 re-run the last cycle awaited WAS executed by the tester (13-UAT.md test 5) and surfaced G8 as a major — the fix-then-re-run policy (D13-06) is functioning as designed.
+**Verified:** 2026-08-23T00:00:00Z
+**Status:** passed — the tester's NVDA+Firefox re-run of Flow C on protocol v1.2 completed with zero blocker/major (13-UAT.md Test 7, 2026-08-23): the G8 protocol correction (NVDA+shift+f10 precondition) made the flow executable as written, closing the G6→G7→G8 fix-then-re-run loop and ACPT-05 (v1.0 coverage boundary A4 closed); 8/8 success criteria verified
+**Re-verification:** Yes — sixth cycle. Lineage: gaps_found (G1–G5, 2026-08-19T16:25Z) → human_needed (G1–G5 closed, 2026-08-19T23:10Z) → human_needed (G6 closed, 2026-08-22T01:13Z) → human_needed (G7 closed, 2026-08-22T18:52Z) → human_needed (G8 closed) → passed (tester v1.2 re-run pass, 2026-08-23).
 
 ## Goal Achievement
 
@@ -36,14 +37,14 @@ human_verification:
 |---|--------------------|--------|----------|
 | 1 | SC#1 (POLISH-01): persisted reading mode/theme/typography paint first — no flash or snap (cold-load no-snap test passes) | ✓ VERIFIED (regression) | Artifacts intact (`src/settings/settingsMirror.ts`, `index.html` inline script, SettingsContext lazy-init); git diff cb1527d..8b666a4 shows ZERO src/ changes this cycle (0 diff lines); cold-load-no-snap green in the recorded full-suite gate on cb1527d (exit 0) |
 | 2 | SC#2 (POLISH-02): progress bar reflects actual position — 1-page ≠ 100% on open, multi-page progresses from start | ✓ VERIFIED (regression) | `src/pagination/progress.ts` untouched (zero-src-diff proof above); first-paint-progress green in the recorded gate |
-| 3 | SC#3 (ACPT-05): documented SR acceptance flows complete on NVDA+Firefox with zero blocker/major, closing v1.0 A4 boundary | ⏳ PENDING TESTER RE-RUN — see Human Verification | Three fix-then-re-run rounds have landed: G6 (13-11: focus containment + Tab routing + saved-range activation), G7 (13-12: protocol v1.1 focus-mode sequence + keydown-less boundary automation), G8 (13-13: protocol v1.2 native-selection-mode precondition + selection-gated mount/announce automation). The v1.2 Flow C is executable as written by an NVDA+Firefox tester on default-adjacent hardware (C1: NVDA+shift+f10 BEFORE Shift+arrows, or the F7 fallback; C2/C3 unchanged from v1.1). Per D13-06/D13-07 the flip requires the tester's re-run results in Appendix §1.3/§1.4 with zero blocker/major. REQUIREMENTS.md honestly shows ACPT-05 `- [ ]` Pending. Automation-level equivalence proven on both sides of both NVDA boundaries (verifier's own runs, below) |
+| 3 | SC#3 (ACPT-05): documented SR acceptance flows complete on NVDA+Firefox with zero blocker/major, closing v1.0 A4 boundary | ✓ VERIFIED (human run) | Tester re-run on protocol v1.2 PASSED (13-UAT.md Test 7, 2026-08-23): Flow C end-to-end under NVDA+Firefox — Native Selection Mode at C1, mount cue heard, C2/C3 complete, zero blocker/major. Three fix-then-re-run rounds converged: G6 (13-11), G7 (13-12), G8 (13-13). REQUIREMENTS.md ACPT-05 flipped complete |
 | 4 | SC#4 (ACPT-06): v2.0 core flow (ingest→read→highlight→export→re-import) across Chromium/Firefox/WebKit without content loss, AND full `npm run test` exits 0 | ✓ VERIFIED | Honest full-suite gate on cb1527d in one invocation (plan 13-06, re-run at the G7 cycle): **exit 0 — unit 1262/0/13 + e2e 1113/0/10 (10.6m)** across chromium/firefox/webkit + the throttled perf profile. Validity since 13-13: git-proven ZERO production changes (0 src/ diff lines cb1527d..8b666a4), so the recorded result still describes the production tree; the only delta is +6 test cells, covered by the orchestrator's annotations-directory run (180 passed = 174 prior + 6 new, 3 engines) and corroborated by the verifier's own 21/21 toolbar net + unit leg 1262/0/13 this cycle |
 | 5 | SC#5 (POLISH-03, amended 2026-08-19): slim article header; tag affordance from top-bar icon popover; compact provenance spot; no internal header scrolling at 360×640 | ✓ VERIFIED (regression) | Zero committed chrome/header changes this cycle (git diff proof above); tag-popover + header-geometry green in the recorded gate |
 | 6 | SC#6 (POLISH-04): four centered modal dialogs open centered, not top-left | ✓ VERIFIED (regression) | No committed CSS/dialog changes this cycle; green in the recorded gate |
 | 7 | SC#7 (POLISH-05): keyboard-reachable "Back to library" on article + review views; never exits app on deep link | ✓ VERIFIED (regression) | `src/reader/BackToLibrary.tsx` intact; green in the recorded gate |
 | 8 | SC#8 (POLISH-06): organized library home — continue reading / add content / library list within existing components | ✓ VERIFIED (regression) | LibraryView + `.library-section-add` measure rule untouched this cycle; library-tidy green in the recorded gate |
 
-**Score:** 7/8 truths verified (1 pending the tester's NVDA re-run on the v1.2 protocol — ACPT-05)
+**Score:** 8/8 truths verified (SC#3/ACPT-05 closed by the tester's passing v1.2 re-run)
 
 ## Gap Closure Verification (re-verification focus — G8, plan 13-13)
 

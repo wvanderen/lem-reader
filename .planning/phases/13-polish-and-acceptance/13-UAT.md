@@ -1,18 +1,14 @@
 ---
-status: diagnosed
+status: resolved
 phase: 13-polish-and-acceptance
 source: [13-VERIFICATION.md]
 started: 2026-08-19T00:00:00.000Z
-updated: 2026-08-22T21:05:00.000Z
+updated: 2026-08-23T00:00:00.000Z
 ---
 
 ## Current Test
 
-number: 7
-name: ACPT-05 Flow C re-run on ACCEPTANCE-PROTOCOL v1.2 (NVDA+Firefox)
-expected: |
-  On NVDA+Firefox/Windows, re-execute Flow C (C1–C4) against protocol v1.2: C1 — enable Native Selection Mode FIRST (NVDA+shift+f10, NVDA >= 2024.1; toggle confirmation heard), THEN browse-mode Shift+arrows selection, listening for the "Highlight actions available." mount cue (older NVDA: F7 caret browsing + focus-mode Shift+arrows fallback per the protocol note); C2 NVDA+Space then Tab; C3 Enter creates mark.highlight with "Highlight saved."; C4 verify. Record outcomes in 13-VERIFICATION.md Appendix §1.3 findings + §1.4 checklist + verdict; ACPT-05 flips from Pending only on zero blocker/major (D13-06/D13-07). Known pinned boundary (not a finding): with Native Selection Mode OFF, browse-mode selections live only in NVDA's virtual buffer — the page is structurally selection-blind (platform boundary, pinned by toolbar-mount-selection-gated.spec.ts).
-awaiting: user response
+[testing complete]
 
 ## Tests
 
@@ -54,14 +50,15 @@ result: pass
 
 ### 7. ACPT-05 Flow C re-run on ACCEPTANCE-PROTOCOL v1.2 (NVDA+Firefox)
 expected: On NVDA+Firefox/Windows, re-execute Flow C (C1–C4) against protocol v1.2: C1 — enable Native Selection Mode FIRST (NVDA+shift+f10, NVDA >= 2024.1; toggle confirmation heard), THEN browse-mode Shift+arrows selection, listening for the "Highlight actions available." mount cue (older NVDA: F7 caret browsing + focus-mode Shift+arrows fallback per the protocol note); C2 NVDA+Space then Tab; C3 Enter on the focused Highlight button creates mark.highlight with the polite "Highlight saved." confirmation; C4 verify. Record outcomes in 13-VERIFICATION.md Appendix §1.3 findings + §1.4 checklist + verdict; ACPT-05 flips from Pending only on zero blocker/major (D13-06/D13-07). Residual to confirm: NVDA verbalizes the mount announce in browse mode with native selection ON. Known pinned boundary (not a finding): with Native Selection Mode OFF, browse-mode selections live only in NVDA's virtual buffer — the page is structurally selection-blind (platform boundary, pinned by toolbar-mount-selection-gated.spec.ts).
-result: [pending]
+result: pass
+reported: "pass" — Flow C completed end-to-end under NVDA+Firefox on protocol v1.2: Native Selection Mode enabled at C1, "Highlight actions available." mount cue heard, C2 NVDA+Space→Tab reached the toolbar, C3 Enter created the highlight with the "Highlight saved." confirmation. Zero blocker/major findings — ACPT-05 flips to complete per D13-06/D13-07.
 
 ## Summary
 
 total: 7
-passed: 3
+passed: 4
 issues: 0
-pending: 1
+pending: 0
 skipped: 0
 blocked: 0
 
@@ -152,7 +149,8 @@ closed_by: 13-12 (commits f09c58d keydown-less boundary/recovery spec, 59c3470 A
   debug_session: ".planning/debug/g7-nvda-tab-bypass-selection-toolbar.md"
 
 ### G8 — ACPT-05 Flow C (v1.1 protocol): selection toolbar never mounts under NVDA+Firefox — no "Highlight actions available." announcement
-status: diagnosed
+status: resolved
+closed_by: 13-13 (commits e38fb43 selection-gated boundary spec, ba73a7b ACCEPTANCE-PROTOCOL v1.2) — decision G8-D1: protocol-premise fix + boundary-pin spec, ZERO production source changes; tester re-run on v1.2 passed Flow C end-to-end (UAT Test 7, zero blocker/major — ACPT-05 complete)
 - truth: "On NVDA+Firefox (protocol v1.1), after browse-mode Shift+arrows text selection (C1) the selection toolbar mounts with the polite 'Highlight actions available.' announce-on-appear cue, and after NVDA+Space then Tab (C2) Enter on the Highlight button creates the highlight (C3)"
   status: failed
   reason: "User reported: Toolbar is still not appearing even after NVDA+space. I never hear the 'highlight actions available'"
