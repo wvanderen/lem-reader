@@ -32,6 +32,8 @@ The prototype supports rich article structure, local highlights and notes, and l
 
 **v2.0 Personal Library — Phase 12 complete 2026-08-18.** EPUB intake is live: DRM-free EPUBs upload through the shared pipeline into `epub-<hash>` books surfaced as per-chapter articles (`-cNN`) under an expandable book grouping (Option A — thin Book record, one article per chapter); chapters paginate, annotate, and restore location identically to every other source, with chapter context line + end-of-chapter navigation in both reading modes, book-level progress/resume, book-aware search/tags, book-scoped cascade remove, and books riding the export/import loop (bundle schemaVersion 2). The parser is a pure server-side adapter (`server/epubToBooks.ts`, fast-xml-parser 5.10.1 exact-pin — zero XML code in the client bundle); DRM/encrypted, corrupt, and oversized EPUBs refuse calmly with no library side effects. Thresholds are corpus-calibrated against 7 real EPUBs (gitignored corpus, CI-replay-pinned evidence); honest full-suite record 2162 passed / 0 failed / exit 0 (12-08-OUTPUT.md).
 
+**v2.0 Personal Library — Phase 13 (final) complete 2026-08-23.** The v2.0 quality gate closed: first-paint polish (settings mirror kills the mode/theme/typography flash; offset-anchored progress; no paginated first-load jump), user-widened chrome polish (centered modals, slim header with top-bar tag popover + compact provenance spot, Back to library, organized library home), and acceptance across the matrix — ACPT-06 core-flow spine 3-engine green with honest full-suite exit 0, and ACPT-05 closed by a passing NVDA+Firefox run on ACCEPTANCE-PROTOCOL v1.2 after three fix-then-re-run rounds (G6 focus containment, G7 focus-mode protocol, G8 native-selection-mode precondition — the last two platform boundaries resolved in protocol + boundary-pin specs with zero production changes). All 8 phase requirements verified 8/8 (13-VERIFICATION.md).
+
 ## Core Value
 
 Readers can move through long-form web content with calm, stable orientation and predictable navigation.
@@ -154,4 +156,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-18 after Phase 12 (EPUB Intake) completion*
+*Last updated: 2026-08-23 after Phase 13 (Polish and Acceptance, milestone-final) completion*
