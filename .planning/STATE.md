@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Reader Experience
 status: planning
-last_updated: "2026-08-23T17:47:14.128Z"
-last_activity: 2026-08-23
+last_updated: "2026-08-24T00:00:00.000Z"
+last_activity: 2026-08-24
 progress:
-  total_phases: 0
+  total_phases: 8
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,14 +20,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-23)
 
 **Core value:** Readers can move through long-form web content with calm, stable orientation, and predictable navigation.
-**Current focus:** v2.0 archived — planning next milestone via /gsd-new-milestone
+**Current focus:** v2.1 Reader Experience — Phase 14 ready for planning
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 14 of 21 (Navigation and Library Contracts)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-08-23 — Milestone v2.1 started
+Status: Roadmap drafted; awaiting approval
+Last activity: 2026-08-24 — v2.1 roadmap created with 40/40 requirements mapped
 
 ## Recent Decisions (Phase 11)
 

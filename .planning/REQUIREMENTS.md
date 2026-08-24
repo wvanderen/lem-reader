@@ -105,16 +105,54 @@
 
 ## Traceability
 
-Roadmap mapping will be populated after phase approval.
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
+| NAV-01 | Phase 15 | Pending |
+| NAV-02 | Phase 15 | Pending |
+| NAV-03 | Phase 15 | Pending |
+| NAV-04 | Phase 14 | Pending |
+| NAV-05 | Phase 15 | Pending |
+| LIB-07 | Phase 14 | Pending |
+| LIB-08 | Phase 14 | Pending |
+| LIB-09 | Phase 16 | Pending |
+| LIB-10 | Phase 16 | Pending |
+| ADD-01 | Phase 16 | Pending |
+| ADD-02 | Phase 16 | Pending |
+| ADD-03 | Phase 16 | Pending |
+| ADD-04 | Phase 16 | Pending |
+| META-01 | Phase 17 | Pending |
+| META-02 | Phase 17 | Pending |
+| META-03 | Phase 17 | Pending |
+| META-04 | Phase 17 | Pending |
+| ORNT-01 | Phase 18 | Pending |
+| ORNT-03 | Phase 18 | Pending |
+| ORNT-04 | Phase 18 | Pending |
+| ORNT-05 | Phase 18 | Pending |
+| ORNT-06 | Phase 18 | Pending |
+| ANNO-08 | Phase 19 | Pending |
+| ANNO-09 | Phase 19 | Pending |
+| ANNO-10 | Phase 19 | Pending |
+| ANNO-11 | Phase 19 | Pending |
+| ANNO-12 | Phase 19 | Pending |
+| IMG-01 | Phase 20 | Pending |
+| IMG-02 | Phase 20 | Pending |
+| IMG-03 | Phase 20 | Pending |
+| IMG-04 | Phase 20 | Pending |
+| IMG-05 | Phase 20 | Pending |
+| IMG-06 | Phase 20 | Pending |
+| POLISH-07 | Phase 15 | Pending |
+| POLISH-08 | Phase 21 | Pending |
+| POLISH-09 | Phase 21 | Pending |
+| POLISH-10 | Phase 21 | Pending |
+| POLISH-11 | Phase 21 | Pending |
+| ACPT-07 | Phase 21 | Pending |
+| ACPT-08 | Phase 21 | Pending |
 
 **Coverage:**
 - v2.1 requirements: 40 total
-- Mapped to phases: 0
-- Unmapped: 40 ⚠️
+- Mapped to phases: 40
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-08-23*
-*Last updated: 2026-08-23 after initial v2.1 definition*
+*Last updated: 2026-08-24 after v2.1 roadmap creation*
