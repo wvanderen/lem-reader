@@ -8,7 +8,7 @@
 
 ## Phases
 
-- [ ] **Phase 14: Navigation and Library Contracts** - Establish truthful destination behavior and reading-state policy.
+- [x] **Phase 14: Navigation and Library Contracts** - Establish truthful destination behavior and reading-state policy. (completed 2026-08-25)
 - [ ] **Phase 15: Application Shell and Destinations** - Make Library, Highlights, and Reader predictable first-class destinations.
 - [ ] **Phase 16: Organized Library and Focused Add Flow** - Browse by reading state and add content without permanent form clutter.
 - [ ] **Phase 17: Reader-Owned Metadata** - Edit display title and author without disturbing canonical identity.
@@ -44,7 +44,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 14-04-PLAN.md — 3-engine e2e views/counts/focus/title/history matrix + honest full-suite gate
+- [x] 14-04-PLAN.md — 3-engine e2e views/counts/focus/title/history matrix + honest full-suite gate
 
 **UI hint**: yes
 
@@ -165,7 +165,7 @@ Plans:
 |-------|-----------|----------------|--------|-----------|
 | 1-6 | v1.0 | 35/35 | Complete | 2026-08-10 |
 | 7-13 | v2.0 | 53/53 | Complete | 2026-08-23 |
-| 14. Navigation and Library Contracts | v2.1 | 3/4 | In Progress|  |
+| 14. Navigation and Library Contracts | v2.1 | 4/4 | Complete    | 2026-08-25 |
 | 15. Application Shell and Destinations | v2.1 | 0/TBD | Not started | - |
 | 16. Organized Library and Focused Add Flow | v2.1 | 0/TBD | Not started | - |
 | 17. Reader-Owned Metadata | v2.1 | 0/TBD | Not started | - |
