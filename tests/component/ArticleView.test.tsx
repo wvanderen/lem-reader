@@ -5,7 +5,7 @@
 // COMPONENT behavior in isolation.
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { createRef } from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, act } from "@testing-library/react";
 
 // vi.mock is hoisted above imports — the factory must not reference outer
 // variables. We mock the module, then drive it via vi.mocked(openArticle).
@@ -149,5 +149,52 @@ describe("ArticleView (DOC-03)", () => {
     });
     expect(screen.getByText(/The article could not be loaded/)).not.toBeNull();
     expect(screen.getByRole("status")).not.toBeNull();
+  });
+});
+
+// Plan 14-03 Task 2 (D14-02/D14-06/D14-07 — Pitfall 7 boundary: jsdom owns
+// title STRINGS only; the deep-link/restore/browser timing proofs are Plan
+// 14-04's e2e scope). The three cases pin the per-destination title forms
+// exactly per the UI-SPEC Copywriting table, including the " — Lem Reader"
+// suffix assembled by the shared pageMeta helper.
+describe("ArticleView document.title (Plan 14-03 Task 2)", () => {
+  // jsdom shares one document across tests in a file — reset to the static
+  // index.html default so each case observes only its own write.
+  beforeEach(() => {
+    document.title = "Lem Reader";
+  });
+
+  it("sets \"<provenance.title> — Lem Reader\" when a standalone article resolves", async () => {
+    openArticleMock.mockResolvedValue(fullArticle());
+    renderWithProvider(<ArticleView {...withProps("stub-article")} />);
+    await screen.findByRole("heading", { level: 1, name: "Stub Article" });
+    await waitFor(() => {
+      expect(document.title).toBe("Stub Article — Lem Reader");
+    });
+  });
+
+  it("sets \"Couldn't open this article — Lem Reader\" when openArticle rejects (D14-06)", async () => {
+    openArticleMock.mockRejectedValue(new Error("boom"));
+    renderWithProvider(<ArticleView {...withProps("stub-article")} />);
+    await screen.findByRole("heading", {
+      level: 1,
+      name: "Couldn't open this article.",
+    });
+    await waitFor(() => {
+      // No trailing period before the suffix — the visible h1 keeps its
+      // own period (UI-SPEC Copywriting).
+      expect(document.title).toBe("Couldn't open this article — Lem Reader");
+    });
+  });
+
+  it("writes NO title while the article is null and status is loading (transient state — T-14-06)", async () => {
+    openArticleMock.mockReturnValue(new Promise<CanonicalArticle | null>(() => {}));
+    document.title = "Unchanged sentinel";
+    renderWithProvider(<ArticleView {...withProps("stub-article")} />);
+    expect(screen.getByText("Opening article…")).not.toBeNull();
+    // Flush microtasks — a transient-state write would surface here; the
+    // previous/static title must stand until real truth arrives.
+    await act(async () => {});
+    expect(document.title).toBe("Unchanged sentinel");
   });
 });
