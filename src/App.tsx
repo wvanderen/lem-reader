@@ -82,6 +82,17 @@ function parseHash(): View {
   return { name: "list", view: "all" };
 }
 
+// Plan 14-02 (D14-13) — the four view-route hrefs, as template constants.
+// replaceState is called ONLY with these (same-origin by construction —
+// T-14-04: history.replaceState throws on cross-origin URLs, and a constant
+// table can never carry one).
+const VIEW_HREFS: Record<LibraryViewName, string> = {
+  all: "#/",
+  unread: "#/unread",
+  "in-progress": "#/in-progress",
+  finished: "#/finished",
+};
+
 /**
  * The D4-10 mode-toggle bridge. ArticleView registers its anchor-capturing
  * handler here on mount (so the passage is preserved across the mode swap);
@@ -240,6 +251,22 @@ function AppInner() {
     }
   };
 
+  // Plan 14-02 (D14-13 / 14-RESEARCH Pitfall 2) — view switches are
+  // state-within-destination: history.replaceState + a DIRECT router
+  // update. replaceState fires NO hashchange and NO popstate, so the
+  // direct setView(parseHash()) call is load-bearing — without it the URL
+  // and the DOM desync (THE failure mode). A same-view click is a calm
+  // no-op. Deliberately does NOT touch setHasAppHistory (Pitfall 4): a
+  // view switch is not destination navigation, and hasAppHistory is not
+  // flipped by design — BackToLibrary's history.back() guard composes
+  // unchanged (destinations push via window.location.hash assignments,
+  // which stay byte-unchanged).
+  const switchLibraryView = (next: LibraryViewName) => {
+    if (view.name === "list" && view.view === next) return;
+    history.replaceState(null, "", VIEW_HREFS[next]);
+    setView(parseHash());
+  };
+
   return (
     <>
       <SkipLink />
@@ -267,7 +294,11 @@ function AppInner() {
           The [view] reset effect above fires on review↔article swaps —
           desirable (drawer/count reset). */}
       {view.name === "list" ? (
-        <LibraryView />
+        <LibraryView
+          view={view.view}
+          onSwitchView={switchLibraryView}
+          warmMount={hasAppHistory}
+        />
       ) : view.name === "review" ? (
         <ReviewView hasAppHistory={hasAppHistory} />
       ) : (

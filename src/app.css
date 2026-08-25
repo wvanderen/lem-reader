@@ -2048,6 +2048,35 @@ dialog.annotations-drawer::backdrop {
   margin: var(--space-xs) 0 0 0;
 }
 
+/* ViewSwitcher (Plan 14-02 — D14-22/D14-23) — four real links inside a
+   labeled nav landmark. Joins the shared 1100px centered measure (the
+   .library-search precedent); mirrors .tag-filter's flex-wrap + gap.
+   Link color/underline ride the GLOBAL a rule (no color override); the
+   current-view state is weight 600 + 2px underline thickness scoped to
+   aria-current — never color alone (forced-colors safety, UI-SPEC
+   §Interaction 13). Zero transition/animation properties (§Interaction 12). */
+.view-switcher {
+  max-width: 1100px;
+  margin: var(--space-lg) auto 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+.view-switcher a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch);
+  padding-inline: var(--space-xs);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  /* :focus-visible inherits the global 2px ring rule (app.css). */
+}
+.view-switcher a[aria-current="page"] {
+  font-weight: 600;
+  text-decoration-thickness: 2px;
+}
+
 /* LibrarySearch — single text input, 44px touch target (UI-SPEC §LibrarySearch). */
 .library-search {
   max-width: 1100px;

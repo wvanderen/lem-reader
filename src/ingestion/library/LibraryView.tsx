@@ -39,10 +39,11 @@
 // (ingested-first, then fixtures — already the natural "recently-added first"
 // order from `compositeLibraryRepository.list()`). The original FixtureList
 // did not sort either; v1.0 e2e tests assert row COUNT, not order.
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { listArticles } from "../../content/repository";
 import type { CanonicalArticle } from "../../content/types";
 import type { Book, LocationRecord } from "../../content/schema";
+import { normalizeText, graphemeClusters } from "../../content/normalizeText";
 import { IngestControl } from "../IngestControl";
 import { LibrarySearch } from "./LibrarySearch";
 import { TagFilter } from "./TagFilter";
@@ -50,6 +51,12 @@ import { LibraryRow } from "./LibraryRow";
 import { BookRow } from "./BookRow";
 import { ContinueReadingStrip } from "./ContinueReadingStrip";
 import { filterLibrary, filterBooks } from "./libraryFilter";
+import {
+  articleReadingState,
+  bookReadingState,
+  countByState,
+} from "./readingState";
+import type { LibraryViewName } from "../../App";
 import { loadAllLocations } from "../../persistence/locationStore";
 import { listBooks } from "../../persistence/booksStore";
 import { loadAllTags } from "./tagsStore";
@@ -72,7 +79,61 @@ interface BookRemoveTarget {
   chapterIds: string[];
 }
 
-export function LibraryView() {
+interface LibraryViewProps {
+  /** The active reading-state view (Plan 14-02 D14-12 — real hash routes). */
+  view: LibraryViewName;
+  /** App-owned view switch (D14-13 — replaceState + direct router update). */
+  onSwitchView: (next: LibraryViewName) => void;
+  /** True only when this mount followed an in-app navigation (D14-03 —
+   * cold loads and reloads keep natural browser focus; threaded from
+   * App's hasAppHistory). */
+  warmMount: boolean;
+}
+
+// Plan 14-02 (D14-22) — the four switcher links, in order. hrefs stay the
+// template constants (same grammar parseHash allows); labels are sentence
+// case per the UI-SPEC voice rule ("In progress", lowercase p).
+const VIEW_LINKS: ReadonlyArray<{
+  view: LibraryViewName;
+  href: string;
+  label: string;
+}> = [
+  { view: "all", href: "#/", label: "All" },
+  { view: "unread", href: "#/unread", label: "Unread" },
+  { view: "in-progress", href: "#/in-progress", label: "In progress" },
+  { view: "finished", href: "#/finished", label: "Finished" },
+];
+
+// Plan 14-02 (D14-26) — per-view empty-state copy (calm D8-04 voice). All
+// keeps the byte-stable D8-04 pair; the previous filtered-empty copy render
+// is intentionally superseded (nothing pins that copy — verified by repo
+// grep): an empty view is membership-driven, a filtered-out view is not.
+const EMPTY_COPY: Record<
+  LibraryViewName,
+  { heading: string; body: string }
+> = {
+  all: {
+    heading: "Your library is empty",
+    body: "Paste a URL or upload a file to begin.",
+  },
+  unread: {
+    heading: "Nothing unread",
+    body: "Everything in your library has been started.",
+  },
+  "in-progress": {
+    heading: "Nothing in progress",
+    body: "Open something unread — it will show up here.",
+  },
+  finished: {
+    heading: "Nothing finished yet",
+    body: "Read to the end and finished items will collect here.",
+  },
+};
+
+// warmMount stays in the interface (App threads it — D14-03) but is
+// destructured only in Plan 14-02 Task 3, where the mount focus effect
+// consumes it.
+export function LibraryView({ view, onSwitchView }: LibraryViewProps) {
   const [items, setItems] = useState<CanonicalArticle[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [query, setQuery] = useState("");
@@ -100,6 +161,22 @@ export function LibraryView() {
   const [bookRemoveTarget, setBookRemoveTarget] =
     useState<BookRemoveTarget | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+
+  // Plan 14-02 — ONE totalsById Map for the whole render body (the BookRow
+  // L66-75 memo precedent): per article graphemeClusters(normalizeText(
+  // article), lang).length, keyed on items identity so the per-view state
+  // derivations below never recompute the Intl.Segmenter fold per row (the
+  // 260819-tld lesson).
+  const totalsById = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const article of items) {
+      totals.set(
+        article.id,
+        graphemeClusters(normalizeText(article), article.lang).length,
+      );
+    }
+    return totals;
+  }, [items]);
 
   useEffect(() => {
     let cancelled = false;
@@ -172,17 +249,59 @@ export function LibraryView() {
     }
   }
 
+  // Plan 14-02 (D14-20/23/24) — per-view membership from the ONE policy
+  // module, derived in the SAME render body as the switcher counts below
+  // (agreement is structural, never copy-synchronized). Standalone articles
+  // via articleReadingState; books via bookReadingState (ONE item per book —
+  // chapters never top-level, D12-01/D14-24). The state filter runs BEFORE
+  // the query/tag composition (filters narrow WITHIN the selected view).
+  const viewArticles =
+    view === "all"
+      ? standaloneArticles
+      : standaloneArticles.filter(
+          (a) =>
+            articleReadingState(
+              locationsByArticle.get(a.id),
+              totalsById.get(a.id) ?? 0,
+            ) === view,
+        );
+  const viewBooks =
+    view === "all"
+      ? books
+      : books.filter(
+          (book) => bookReadingState(book, allLocations, totalsById.get) === view,
+        );
+
+  // Plan 14-02 (D14-23/D14-24) — switcher counts fold through countByState
+  // (the same policy functions membership uses, in this same render body);
+  // All = standalone + book count (one item per book). Computed inline —
+  // the fold is cheap against the memoized totalsById map, and the
+  // in-render partition arrays are fresh each render anyway.
+  const stateCounts = countByState(
+    standaloneArticles.map((a) => ({
+      id: a.id,
+      location: locationsByArticle.get(a.id),
+      total: totalsById.get(a.id) ?? 0,
+    })),
+    books,
+    allLocations,
+    totalsById.get,
+  );
+  const allCount = standaloneArticles.length + books.length;
+
   // Filter the standalone half exactly as before (D8-06 + D8-07 — chapter
   // members are partitioned out above, and filterLibrary excludes any
-  // stragglers defensively).
-  const visibleItems = filterLibrary(standaloneArticles, { query, activeTag });
+  // stragglers defensively). The query/tag composition narrows WITHIN the
+  // selected view (the state filter already ran above — LIB-09 interplay
+  // keeps existing behavior).
+  const visibleItems = filterLibrary(viewArticles, { query, activeTag });
 
   // Books render addedAt-descending (the plan's addedAt default-sort
   // extended to books; the article half keeps the composite-library order
   // locked by the 08-03 deviation — CanonicalArticle carries no addedAt),
   // then the SAME filter composes over the book half (D12-04 — book/author/
   // chapter-title haystack + book.tags).
-  const sortedBooks = [...books].sort((a, b) =>
+  const sortedBooks = [...viewBooks].sort((a, b) =>
     a.addedAt < b.addedAt ? 1 : a.addedAt > b.addedAt ? -1 : 0,
   );
   const chapterTitlesByBook = new Map<string, string[]>();
@@ -248,21 +367,62 @@ export function LibraryView() {
           )}
         </div>
       </section>
-      {/* (3) The library list — D8-06 search + D8-07 tag filter always
-          mounted (the reader can type/click even before items finish
-          loading; the filter runs over whatever items are available),
-          then the rows. */}
+      {/* (3) The library list — Plan 14-02: the view switcher governs the
+          list, so it mounts as the section's FIRST child above LibrarySearch
+          (D14-22: real links — views ARE routes — inside a labeled nav
+          landmark; exactly one aria-current="page"). D8-06 search + D8-07
+          tag filter always mounted (the reader can type/click even before
+          items finish loading; the filter runs over whatever items are
+          available), then the rows. */}
       <section className="library-section library-section-list">
+        <nav className="view-switcher" aria-label="Library views">
+          {VIEW_LINKS.map(({ view: linkView, href, label }) => (
+            <a
+              key={linkView}
+              href={href}
+              aria-current={view === linkView ? "page" : undefined}
+              onClick={(e) => {
+                // Unmodified left clicks only (D14-13): middle/cmd/ctrl/
+                // shift/alt fall through to native fragment navigation
+                // (push + hashchange handled by the existing onHash path).
+                if (
+                  e.defaultPrevented ||
+                  e.button !== 0 ||
+                  e.metaKey ||
+                  e.ctrlKey ||
+                  e.shiftKey ||
+                  e.altKey
+                ) {
+                  return;
+                }
+                e.preventDefault();
+                onSwitchView(linkView);
+              }}
+            >
+              {/* D14-23 — counts live in the accessible names, rendered ONLY
+                  at status ready (loading shows bare labels — never a
+                  parenthetical zero lie). */}
+              {status === "ready"
+                ? `${label} (${
+                    linkView === "all" ? allCount : stateCounts[linkView]
+                  })`
+                : label}
+            </a>
+          ))}
+        </nav>
         <LibrarySearch query={query} onQueryChange={setQuery} />
         <TagFilter tags={allTags} activeTag={activeTag} onSelect={setActiveTag} />
-        {visibleItems.length === 0 && visibleBooks.length === 0 && status === "ready" ? (
-          // D8-04 empty state — calm voice pointing at Add (IngestControl above).
-          // Replaces FixtureList's "No articles yet" copy. Plan 12-05: a library
-          // holding ONLY book groups is not empty (and a filtered-out view is
-          // not empty either — the chips/query above explain the absence).
+        {viewArticles.length === 0 && viewBooks.length === 0 && status === "ready" ? (
+          // Plan 14-02 (D14-26) — per-view empty states keyed on VIEW
+          // MEMBERSHIP, not filtered visibility: a view whose membership is
+          // zero shows its own calm copy INSTEAD of the ul (All keeps the
+          // byte-stable D8-04 pair). A non-empty view whose query/tag
+          // filters hide every row still renders the ul with zero children —
+          // a filtered-out view is not an empty view. Plan 12-05: a library
+          // holding ONLY book groups is not empty either.
           <>
-            <h2>Your library is empty</h2>
-            <p>Paste a URL or upload a file to begin.</p>
+            <h2>{EMPTY_COPY[view].heading}</h2>
+            <p>{EMPTY_COPY[view].body}</p>
           </>
         ) : (
           <ul className="library-list">
