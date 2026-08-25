@@ -5,15 +5,15 @@ milestone_name: Reader Experience
 current_phase: 14
 current_phase_name: navigation-and-library-contracts
 status: executing
-stopped_at: Phase 14 UI-SPEC approved
-last_updated: "2026-08-25T18:06:42.538Z"
+stopped_at: Completed 14-02-PLAN.md
+last_updated: "2026-08-25T18:18:09.531Z"
 last_activity: 2026-08-25
 last_activity_desc: Phase 14 execution started
 progress:
   total_phases: 8
   completed_phases: 0
   total_plans: 4
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-23)
 ## Current Position
 
 Phase: 14 (navigation-and-library-contracts) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-08-25 — Phase 14 execution started
 
@@ -153,6 +153,7 @@ Last activity: 2026-08-25 — Phase 14 execution started
 | Phase 13 P12 | 6 min | 2 tasks | 3 files |
 | Phase 13 P13 | 4 min | 2 tasks | 2 files |
 | Phase 14 P01 | 6 min | 3 tasks | 8 files |
+| Phase 14 P02 | 8 min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -357,6 +358,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 14]: LIB-07 split: 14-01 ships the reading-state policy foundation only (readingState.ts + pageMeta.ts + unified consumers); the view switcher ships in 14-02 and agreement proof in 14-04 — requirements-completed is [] per the 10-01 RECV-01 precedent — Marking LIB-07 complete before views exist would be a false claim; the repo's documented split precedent (04-02/06-01/09-01/10-01) requires the end-to-end plan to close the requirement
 - [Phase ?]: Phase 14-01: articleReadingState keeps the ratio formula verbatim (Math.min(1, offset/total)) so the opened-zero-length edge stays byte-stable (finished on every surface today); bookReadingState wraps resolveResumeChapterId + deriveBookProgress, never re-implementing their algebra
 - [Phase ?]: Phase 14-01: bookProgress.latestLocationByArticle newly exported (single keyword, no behavior change) — the one owner of the latest-savedAt fold; readingState to ContinueReadingStrip import cycle kept (the bookProgress to strip precedent; constant import is side-effect free)
+- [Phase 14]: [Phase 14] View switch = replaceState + DIRECT setView(parseHash()) — replaceState fires no hashchange; the direct router call is load-bearing (D14-13/Pitfall 2). Destinations keep push semantics; hasAppHistory never flips on view switches. — LibraryView does not remount on view switches, so focus/title live in TWO effects: mount (warm-gated) + [view]-keyed with first-run skip (Pitfall 3). Counts/membership/empty states derive from readingState.ts in one render body — agreement structural (D14-20/23/24).
 
 ### Pending Todos
 
@@ -412,9 +414,9 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-25T18:06:38.634Z
-Stopped at: Phase 14 UI-SPEC approved
-Resume file: .planning/phases/14-navigation-and-library-contracts/14-UI-SPEC.md
+Last session: 2026-08-25T18:17:56.024Z
+Stopped at: Completed 14-02-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 
