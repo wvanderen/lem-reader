@@ -27,7 +27,14 @@
   1. Each destination exposes a coherent title, heading hierarchy, landmarks, history behavior, and route-change focus behavior.
   2. Reader can switch among All, Unread, In Progress, and Finished views whose membership follows one progress policy.
   3. Counts, progress indicators, and empty states agree with view membership for articles and EPUB books.
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+- [ ] 14-01-PLAN.md — readingState policy module + pageMeta title helper + consumer unification (LIB-07 foundation)
+- [ ] 14-02-PLAN.md — router view grammar + replaceState switch + ViewSwitcher + per-view counts/empty states + library title/focus
+- [ ] 14-03-PLAN.md — per-destination titles + route-change focus layering (ArticleView, ReviewView)
+- [ ] 14-04-PLAN.md — 3-engine e2e views/counts/focus/title/history matrix + honest full-suite gate
+
 **UI hint**: yes
 
 ### Phase 15: Application Shell and Destinations
@@ -126,7 +133,7 @@
 |-------|-----------|----------------|--------|-----------|
 | 1-6 | v1.0 | 35/35 | Complete | 2026-08-10 |
 | 7-13 | v2.0 | 53/53 | Complete | 2026-08-23 |
-| 14. Navigation and Library Contracts | v2.1 | 0/TBD | Not started | - |
+| 14. Navigation and Library Contracts | v2.1 | 0/4 | Not started | - |
 | 15. Application Shell and Destinations | v2.1 | 0/TBD | Not started | - |
 | 16. Organized Library and Focused Add Flow | v2.1 | 0/TBD | Not started | - |
 | 17. Reader-Owned Metadata | v2.1 | 0/TBD | Not started | - |
