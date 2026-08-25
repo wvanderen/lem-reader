@@ -133,10 +133,16 @@ const EMPTY_COPY: Record<
 
 export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps) {
   // Plan 14-02 Task 3 — the h1 focus target (tabindex=-1 pattern; text and
-  // level byte-stable per D14-25) + the first-run skip flag for the
+  // level byte-stable per D14-25) + the previous-view ref for the
   // view-switch effect below.
   const h1Ref = useRef<HTMLHeadingElement>(null);
-  const viewEffectFirstRun = useRef(true);
+  // Rule 1 fix (14-04): a boolean first-run flag is NOT StrictMode-safe —
+  // the double-invoked [view] effect's second pass saw firstRun already
+  // flipped and focused the h1 on every COLD load (D14-03 violation, real
+  // browsers only: jsdom tests never wrap in StrictMode). Compare the
+  // PREVIOUS view instead: null = the mount run, view-unchanged = the
+  // StrictMode twin — neither announces; only a genuine view change does.
+  const lastViewRef = useRef<LibraryViewName | null>(null);
   const [items, setItems] = useState<CanonicalArticle[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [query, setQuery] = useState("");
@@ -180,18 +186,20 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
   // Plan 14-02 Task 3 (D14-15) — the uniform h1 rule at its second trigger
   // point: every view switch announces via h1 focus. LibraryView does NOT
   // remount on view switches (Pitfall 3 — the direct setView path keeps the
-  // same component instance), so this MUST be a [view]-keyed effect with a
-  // first-run skip (the first run belongs to the mount effect above).
+  // same component instance), so this MUST be a [view]-keyed effect that
+  // skips the mount run (the mount effect above owns it). StrictMode-safe
+  // (Pitfall 9): the previous-view comparison treats the double-invoke's
+  // second pass as "no change" — no focus, cold loads stay calm (D14-03).
   // focus() is called WITHOUT preventScroll — its default scroll-into-view
   // delivers the reset-to-list-top behavior because the h1 sits at content
   // top (UI-SPEC Interaction 10; no scrollTo choreography). No live-region
   // announcement is added — the focused h1 IS the announcement (D14-09).
   // No cleanup function (idempotent, StrictMode-safe — Pitfall 9).
   useEffect(() => {
-    if (viewEffectFirstRun.current) {
-      viewEffectFirstRun.current = false;
-      return;
-    }
+    const prev = lastViewRef.current;
+    lastViewRef.current = view;
+    if (prev === null) return; // the mount run
+    if (prev === view) return; // StrictMode twin — same view, not a switch
     h1Ref.current?.focus();
   }, [view]);
 
