@@ -1290,6 +1290,16 @@ export function ArticleView({
     }
   }, [article, chapterContext, status]);
 
+  // Plan 14-03 Task 3 (D14-01/D14-06) — the two route-change h1 focus
+  // targets (tabindex=-1 pattern; texts and levels byte-stable).
+  // articleH1Ref serves the h1-default branch inside the restore effect's
+  // no-restore fall-through below; errorH1Ref serves the status-keyed
+  // error-parity effect. Both are read ONLY inside those two sites (Pitfall
+  // 1 — one decision point per destination truth, never a third competing
+  // mount effect).
+  const articleH1Ref = useRef<HTMLHeadingElement>(null);
+  const errorH1Ref = useRef<HTMLHeadingElement>(null);
+
   // Plan 10-03 (D10-03 / RECV-01.c + .i — deep-link jump): coordination
   // refs shared with the location-restore effect below.
   //   - jumpPendingRef: TRUE while a /h/<highlightId> param has neither
@@ -1456,7 +1466,25 @@ export function ArticleView({
         //   - no saved location (result.location === null) — first open or
         //     revision changed since save (D-06 key isolates)
         //   - findScrollTarget returns null — corpus has no blocks
-        if (!result.ok || !result.location) return;
+        //
+        // Plan 14-03 Task 3 (D14-01/D14-03/D14-10) — the h1-default focus
+        // branch lives HERE, at the restore pipeline's terminal
+        // fall-through (Pitfall 1: ONE decision point inside the existing
+        // effects — never a third competing mount effect). Reached only
+        // when no deep-link jump is pending (the jumpPendingRef early
+        // return above already exited — a pending /h/ jump can NEVER reach
+        // the h1 default, D14-05) AND there is nothing to restore: a warm
+        // in-app swap into a fresh article announces its destination via
+        // the article h1. Cold loads/reloads never move focus —
+        // hasAppHistory is false by construction on those arrivals
+        // (D14-03). A successful restore returns below and NEVER focuses
+        // the h1: the restored position is the orientation (D14-10 —
+        // never fight the restore scroll). No cleanup (focusing twice is
+        // idempotent — Pitfall 9).
+        if (!result.ok || !result.location) {
+          if (hasAppHistory) articleH1Ref.current?.focus();
+          return;
+        }
         const loc = result.location;
         // Wait one animation frame so the article body is committed to the
         // DOM before we query block elements. The effect already runs after
@@ -1490,7 +1518,27 @@ export function ArticleView({
     return () => {
       cancelled = true;
     };
+    // hasAppHistory is per-arrival truth: App flips it only on real
+    // destination hashchange, which coincides with the articleId change
+    // that re-runs this effect via [article]. Listing it would re-fire the
+    // restore (scroll + a dismissed ResumeBanner resurrecting) if it ever
+    // flipped with the article unchanged — a regression this effect must
+    // not gain.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [article]);
+
+  // Plan 14-03 Task 3 (D14-06) — error parity: a failed open is a truthful
+  // destination, so an in-app arrival at the error branch announces via its
+  // own h1 (title parity lives in the title effect above). Keyed on status
+  // only; hasAppHistory is read per-arrival (same per-mount-stable rationale
+  // as the restore effect — documented above). No cleanup (focusing twice is
+  // idempotent — Pitfall 9).
+  useEffect(() => {
+    if (status === "error" && hasAppHistory) {
+      errorH1Ref.current?.focus();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
 
   // Scroll-progress ratio for the hairline (READ-05). Registered once the
   // article is ready; re-registers on article swap. Computed on every scroll
@@ -1721,7 +1769,11 @@ export function ArticleView({
             <p>Opening article…</p>
           ) : (
             <>
-              <h1>Couldn't open this article.</h1>
+              {/* Plan 14-03 Task 3 (D14-06): gains ONLY tabIndex={-1} + the
+                  focus ref — text and level byte-stable (period kept). */}
+              <h1 ref={errorH1Ref} tabIndex={-1}>
+                Couldn't open this article.
+              </h1>
               <p>The article could not be loaded. Select it again from the list, or try a different article.</p>
             </>
           )}
@@ -1993,7 +2045,11 @@ export function ArticleView({
                 history.back() only when App's in-app flag is set, else the
                 "#/" fallback (Pitfall 7 — deep-link tabs never exit). */}
             <BackToLibrary hasAppHistory={hasAppHistory} />
-            <h1>{article.provenance.title}</h1>
+            {/* Plan 14-03 Task 3: gains ONLY tabIndex={-1} + the focus ref —
+                text and level byte-stable. */}
+            <h1 ref={articleH1Ref} tabIndex={-1}>
+              {article.provenance.title}
+            </h1>
           </header>
           {paginatedActive && trustedView && articleEl ? (
             <>
