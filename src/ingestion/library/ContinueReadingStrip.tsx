@@ -17,7 +17,9 @@
 //     (max savedAt per articleId — D8-10 "recently-read = opened").
 //   - `progress = location.graphemeOffset / total` where `total =
 //     graphemeClusters(normalizeText(article), article.lang).length`.
-//   - Filter: `lastOpened !== null && progress < FINISHED_THRESHOLD`.
+//   - Filter: membership is an in-progress check on the ONE policy module
+//     (readingState.ts — D14-20); entries keep `lastOpened !== null` and
+//     the entry's own progress ratio for the hairline.
 //   - Sort: `savedAt` descending (most-recently-opened first — D8-10).
 //   - Slice: cap 3 (D8-09 calm lower end).
 //
@@ -29,6 +31,11 @@
 // The mixed sort key stays `savedAt` descending — a book entry's key is its
 // resume chapter's location savedAt (the most recent reading activity in
 // the book), so books and articles interleave by genuine recency.
+//
+// Plan 14-01 Task 3 (D14-20): the membership DECISIONS (article + book)
+// now route through readingState.ts (articleReadingState/bookReadingState
+// !== "in-progress") — behavior identical to the old ratio gates; the
+// surface, copy, and DOM are untouched (Phase 16 owns the redesign).
 //
 // `FINISHED_THRESHOLD = 0.98` (RESEARCH §Pattern 4 L498) is EXPORTED so unit
 // + e2e tests can reference the same constant (not a magic number).
@@ -45,6 +52,10 @@ import {
   resolveResumeChapterId,
   chapterOrdinal,
 } from "./bookProgress";
+import {
+  articleReadingState,
+  bookReadingState,
+} from "./readingState";
 
 /**
  * FINISHED_THRESHOLD — D8-12 + RESEARCH §Pattern 4 L498 recommendation. At or
@@ -125,7 +136,12 @@ export function ContinueReadingStrip() {
             if (!location) return [];
             const total = totalsById.get(article.id) ?? 0;
             const progress = Math.min(1, location.graphemeOffset / total);
-            if (progress >= FINISHED_THRESHOLD) return [];
+            // D14-20 — the membership gate is a !== in-progress check on
+            // the ONE policy module (behavior identical to the old
+            // progress >= FINISHED_THRESHOLD gate; the ratio above still
+            // feeds the entry's hairline).
+            if (articleReadingState(location, total) !== "in-progress")
+              return [];
             return [
               {
                 kind: "article" as const,
@@ -143,12 +159,22 @@ export function ContinueReadingStrip() {
         const bookEntries: StripEntry[] = (
           booksResult.ok ? booksResult.books : []
         ).flatMap((book) => {
+          // D14-20 — the membership gate is a !== in-progress check on
+          // the ONE policy module (behavior identical to the old
+          // resumeChapterId === null + progress >= 1 gates). The entry
+          // construction below still needs the resume / ordinal /
+          // progress derivations, so only the membership decision swaps.
+          if (
+            bookReadingState(book, locations, (articleId) =>
+              totalsById.get(articleId),
+            ) !== "in-progress"
+          )
+            return [];
           const resumeChapterId = resolveResumeChapterId(book, locations);
-          if (resumeChapterId === null) return [];
+          if (resumeChapterId === null) return []; // defensive — in-progress implies a resume chapter
           const progress = deriveBookProgress(book, locations, (articleId) =>
             totalsById.get(articleId),
           );
-          if (progress >= 1) return [];
           const ordinal = chapterOrdinal(book, resumeChapterId);
           const total = book.chapterArticleIds.length;
           if (ordinal === 0 || total === 0) return []; // defensive — resume id outside the record

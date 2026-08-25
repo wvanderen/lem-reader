@@ -31,9 +31,7 @@ import type { LocationRecord } from "../../content/schema";
 import { normalizeText, graphemeClusters } from "../../content/normalizeText";
 import { ProgressHairline } from "../../reader/ProgressHairline";
 import { SourceBadge } from "./SourceBadge";
-
-/** D8-12 — articles at >= 98% grapheme-offset progress are "Finished". */
-const FINISHED_RATIO = 0.98;
+import { articleReadingState } from "./readingState";
 
 interface LibraryRowProps {
   /** The article this row represents. */
@@ -74,7 +72,10 @@ export function LibraryRow({
     [article],
   );
   const ratio = location ? Math.min(1, location.graphemeOffset / total) : 0;
-  const isFinished = ratio >= FINISHED_RATIO;
+  // D14-20 — the finished decision routes through the ONE policy module
+  // (readingState.ts); the ratio math above stays verbatim because the
+  // hairline (showHairline) still needs it.
+  const isFinished = articleReadingState(location, total) === "finished";
   const showHairline = ratio > 0 && !isFinished;
   const tags = article.tags ?? [];
   // Dynamic heading element (Plan 12-05): h2 (default — byte-stable for

@@ -39,6 +39,7 @@ import {
   deriveBookProgress,
   resolveResumeChapterId,
 } from "./bookProgress";
+import { bookReadingState } from "./readingState";
 import { LibraryRow } from "./LibraryRow";
 
 interface BookRowProps {
@@ -117,7 +118,13 @@ export function BookRow({
     return ordered;
   }, [book, chapters]);
 
-  const isFinished = progress >= 1;
+  // D14-20 — the finished decision routes through the ONE policy module
+  // (readingState.ts); the progress memo above stays untouched because
+  // the hairline ratio still needs it.
+  const isFinished =
+    bookReadingState(book, locations, (articleId) =>
+      totalsById.get(articleId),
+    ) === "finished";
   const showHairline = progress > 0 && !isFinished;
   const chaptersRegionId = `chapters-${book.id}`;
 
