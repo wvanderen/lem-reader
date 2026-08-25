@@ -302,7 +302,13 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
     view === "all"
       ? books
       : books.filter(
-          (book) => bookReadingState(book, allLocations, totalsById.get) === view,
+          // Rule 1 fix (14-04): NEVER pass totalsById.get detached —
+          // Map.prototype.get requires its receiver; a bare .get reference
+          // throws "called on incompatible receiver undefined" the moment a
+          // book row exists (the render crashed with any located book).
+          (book) =>
+            bookReadingState(book, allLocations, (id) => totalsById.get(id)) ===
+            view,
         );
 
   // Plan 14-02 (D14-23/D14-24) — switcher counts fold through countByState
@@ -318,7 +324,9 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
     })),
     books,
     allLocations,
-    totalsById.get,
+    // Rule 1 fix (14-04): arrow wrapper — same detached-Map.get hazard as
+    // viewBooks above (the count fold crashed identically).
+    (id) => totalsById.get(id),
   );
   const allCount = standaloneArticles.length + books.length;
 
