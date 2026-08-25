@@ -85,6 +85,10 @@ import { loadAllNotes } from "../persistence/notesStore";
 // reach either code path (the load effect gates on source "epub-chapter").
 import { getBook } from "../persistence/booksStore";
 import { chapterOrdinal } from "../ingestion/library/bookProgress";
+// Plan 14-03 Task 2 (D14-02) — the per-destination document.title via the
+// ONE shared helper (pageMeta owns the suffix, separator, and 64-char
+// truncation; ArticleView never string-builds its own title tail).
+import { setDocumentTitle } from "../ingestion/library/pageMeta";
 
 /** The D4-10 mode-toggle handler signature (App threads a ref of this shape). */
 type ModeToggleHandler = () => void;
@@ -1252,6 +1256,39 @@ export function ArticleView({
       cancelled = true;
     };
   }, [articleId]);
+
+  // Plan 14-03 Task 2 (D14-02/D14-06/D14-07 — Pitfall 8) — the
+  // per-destination title effect, keyed on ALL THREE truth inputs so
+  // every async truth change rewrites: the tolerant Book lookup
+  // upgrades an EPUB chapter's title when chapterContext resolves
+  // (standalone form first, combined chapter—book form after). Loading
+  // (article null) writes NOTHING — a transient state is never a stale
+  // lie (T-14-06); the previous destination's title (or the index.html
+  // static default on cold load) stands until real truth arrives. The
+  // error branch is a truthful destination of its own (D14-06):
+  // apostrophe, no trailing period — the visible h1 keeps its own
+  // period. Writes only — no cleanup/restore-on-unmount (every
+  // destination sets its own title; D14-11: overlays carry zero title
+  // code by construction).
+  useEffect(() => {
+    if (status === "error") {
+      setDocumentTitle("Couldn't open this article");
+      return;
+    }
+    if (!article) return; // loading transient — no write
+    if (chapterContext) {
+      // D14-07 — the combined content portion; the helper truncates the
+      // COMBINED chapter—book string at 64 chars and appends the suffix
+      // (mirrors the D12-08 reader context line's shape).
+      setDocumentTitle(
+        `${article.provenance.title} — ${chapterContext.book.title}`,
+      );
+    } else {
+      // Standalone article OR missing/corrupt book row (the tolerant
+      // lookup returned null) — the plain provenance title.
+      setDocumentTitle(article.provenance.title);
+    }
+  }, [article, chapterContext, status]);
 
   // Plan 10-03 (D10-03 / RECV-01.c + .i — deep-link jump): coordination
   // refs shared with the location-restore effect below.
