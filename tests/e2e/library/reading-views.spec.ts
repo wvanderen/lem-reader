@@ -60,6 +60,17 @@ import {
   bookReadingState,
   countByState,
 } from "../../../src/ingestion/library/readingState";
+// Plan 14-04 Task 2 — the DEEP LINK case reuses the jump-bidirectional
+// seeding machinery (REUSE-DO-NOT-FORK): makeArticle/confidentHighlightOn/
+// highlightRow/seedRows build the article + confident anchor through the
+// SHIPPED schemas + selector resolver, so the seeded row re-resolves
+// confident in the app.
+import {
+  confidentHighlightOn,
+  highlightRow,
+  makeArticle,
+  seedRows,
+} from "../portability/_portability";
 
 const BASE = "http://localhost:5173";
 
@@ -772,5 +783,276 @@ test.describe("LIB-07/LIB-08 — views/counts/rows/empty agreement (D14-20/23/24
         .locator(".library-list > li")
         .filter({ hasText: BOOK_MISSING_ROW.title }),
     ).toHaveCount(0);
+  });
+});
+
+// ── Plan 14-04 Task 2 — the NAV-04 focus/title/history matrix ────────────────
+// Each case pins one locked decision from 14-CONTEXT (D14-01..D14-17) in a
+// real browser; plain test() blocks inherit the 3-engine matrix. toBeFocused
+// auto-retries (absorbing engine focus-settle timing); toHaveTitle/toHaveURL
+// are the verified Playwright assertions (14-RESEARCH §Code Examples).
+const LIBRARY_TITLE = "Saved articles — Lem Reader";
+
+test.describe("NAV-04 — focus/title/history matrix", () => {
+  test("cold load on #/finished: view restored, title set, h1 NOT focused (D14-03/D14-17)", async ({
+    page,
+  }) => {
+    await seedCorpus(page);
+    // A TRUE cold boot: full document navigation (about:blank → the deep
+    // URL) — the app loads with the hash already #/finished, so no
+    // hashchange ever fires and hasAppHistory stays false. (openView's
+    // same-document goto + reload would warm-switch the already-mounted
+    // library first, and Chromium then restores the focused h1 across the
+    // reload — browser-native, not an app focus move.)
+    await page.goto("about:blank");
+    await page.goto(`${BASE}/#/finished`);
+    const h1 = page.getByRole("heading", { level: 1, name: "Saved articles" });
+    await expect(h1).toBeVisible({ timeout: 10_000 });
+    // Readiness: counts render only at status ready.
+    await expect(page.getByRole("link", { name: /^All \(\d+\)/ })).toBeVisible({
+      timeout: 10_000,
+    });
+    // D14-03 — cold loads keep natural browser focus (never yank).
+    await expect(h1).not.toBeFocused();
+    // D14-02/D14-17 — the title + the URL-restored view.
+    await expect(page).toHaveTitle(LIBRARY_TITLE);
+    await expect(
+      page.getByRole("link", { name: `Finished (${EXPECTED_COUNTS.finished})` }),
+    ).toHaveAttribute("aria-current", "page");
+  });
+
+  test("in-app swap: open article focuses its h1 + sets the article title; Back refocuses the library h1 (D14-01/D14-08)", async ({
+    page,
+  }) => {
+    await seedCorpus(page);
+    await openView(page, "#/");
+
+    // fixtures[0] has NO location in this corpus → the fresh-article path:
+    // the h1 default is the most specific focus target (D14-05 layering).
+    const fixtureTitle = fixtures[0]!.provenance.title;
+    await page
+      .locator(`.library-list a[href="#/article/${fixtures[0]!.id}"]`)
+      .click();
+    const articleH1 = page.getByRole("heading", { level: 1, name: fixtureTitle });
+    await expect(articleH1).toBeVisible({ timeout: 10_000 });
+    await expect(articleH1).toBeFocused();
+    await expect(page).toHaveTitle(`${fixtureTitle} — Lem Reader`);
+
+    // Back → the library remounts warm (hashchange) → uniform h1 rule
+    // (D14-08/D14-15) + the library title returns.
+    await page.goBack();
+    const libraryH1 = page.getByRole("heading", {
+      level: 1,
+      name: "Saved articles",
+    });
+    await expect(libraryH1).toBeVisible({ timeout: 10_000 });
+    await expect(libraryH1).toBeFocused();
+    await expect(page).toHaveTitle(LIBRARY_TITLE);
+  });
+
+  test("view switch: replaceState URL + aria-current move + library h1 focus + title unchanged (D14-13/D14-15/D14-25)", async ({
+    page,
+  }) => {
+    await seedCorpus(page);
+    await openView(page, "#/");
+    await expect(page).toHaveTitle(LIBRARY_TITLE);
+
+    // A real reader click on the Unread switcher link.
+    await page
+      .getByRole("link", { name: `Unread (${EXPECTED_COUNTS.unread})` })
+      .click();
+    // replaceState semantics: the URL changed in place…
+    await expect(page).toHaveURL(/#\/unread$/);
+    // …aria-current moved to Unread (exactly one)…
+    await expect(
+      page.getByRole("link", { name: `Unread (${EXPECTED_COUNTS.unread})` }),
+    ).toHaveAttribute("aria-current", "page");
+    await expect(page.locator(".view-switcher a[aria-current='page']")).toHaveCount(1);
+    // …the uniform h1 rule fired on the swap (D14-15)…
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Saved articles" }),
+    ).toBeFocused();
+    // …and the library title is CONSTANT across views (D14-25).
+    await expect(page).toHaveTitle(LIBRARY_TITLE);
+  });
+
+  test("history: Back from an article returns to the ORIGINATING view, never an intermediate switch (D14-13/D14-14)", async ({
+    page,
+    }) => {
+    await seedCorpus(page);
+    await openView(page, "#/");
+
+    // Two switches — each replaces the library's single history entry, so
+    // the entry now reads #/finished (the #/unread switch was never pushed).
+    await page
+      .getByRole("link", { name: `Unread (${EXPECTED_COUNTS.unread})` })
+      .click();
+    await expect(page).toHaveURL(/#\/unread$/);
+    await page
+      .getByRole("link", { name: `Finished (${EXPECTED_COUNTS.finished})` })
+      .click();
+    await expect(page).toHaveURL(/#\/finished$/);
+
+    // Open an article (a destination PUSH), then go Back.
+    await page.locator(".library-list a[href^='#/article/']").first().click();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Saved articles" }),
+    ).toBeHidden({ timeout: 10_000 });
+    await page.goBack();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Saved articles" }),
+    ).toBeVisible({ timeout: 10_000 });
+    // Back landed on the FINAL (#/finished) view — the intermediate #/unread
+    // entry never existed (replaceState — D14-13/D14-14).
+    await expect(page).toHaveURL(/#\/finished$/);
+    await expect(
+      page.getByRole("link", { name: /^Finished \(\d+\)/ }),
+    ).toHaveAttribute("aria-current", "page");
+  });
+
+  test("deep link: the hl mark is focused and the article h1 is NOT (D14-05)", async ({
+    page,
+  }) => {
+    // The jump-bidirectional seeding, minimized: a standalone article with a
+    // derived-and-verified CONFIDENT anchor (re-resolves confident in the
+    // app through the shipped resolver — never a forked offset).
+    const ARTICLE_ID = "rv-deep-link-corpus";
+    const HIGHLIGHT_ID = "hl-rv-deep-link-1";
+    const TITLE = "The Lantern Slack Survey";
+    const article = makeArticle({
+      id: ARTICLE_ID,
+      title: TITLE,
+      paragraphs: [
+        "The lantern survey began as a joke about the harbor's appetite for spare parts and ended as the only complete census of slack wire, spare glass, and unlit wicks ever taken on this coast.",
+        "Each keeper recorded the state of the lantern room in a margin notebook, and the margins slowly filled with weather, small repairs, and the occasional confession about a night the light burned fainter than the ledger admitted.",
+        "When the survey was finally collated, the inspectors found that the joke had become a mirror: the harbor, it turned out, had been keeping careful track of itself all along, and simply wanted someone to ask.",
+      ],
+    });
+    const anchor = confidentHighlightOn(article);
+    await seedRows(page, {
+      articles: [article],
+      highlights: [highlightRow(ARTICLE_ID, anchor, HIGHLIGHT_ID)],
+    });
+
+    // The deep link (in-app hash arrival): the jump pipeline owns focus.
+    await page.goto(`${BASE}/#/article/${ARTICLE_ID}/h/${HIGHLIGHT_ID}`);
+    await expect(
+      page.getByRole("heading", { level: 1, name: TITLE }),
+    ).toBeVisible({ timeout: 10_000 });
+    const mark = page.locator(
+      `mark.highlight[data-highlight-id="${HIGHLIGHT_ID}"]`,
+    );
+    await expect(mark.first()).toBeVisible({ timeout: 10_000 });
+    await expect(mark.first()).toBeFocused();
+    // Most-specific target wins — the h1 default never fired (D14-05).
+    await expect(
+      page.getByRole("heading", { level: 1, name: TITLE }),
+    ).not.toBeFocused();
+  });
+
+  test("restore beats h1: opening the mid-article standalone shows the resume banner and never focuses the h1 (D14-10)", async ({
+    page,
+  }) => {
+    await seedCorpus(page);
+    await openView(page, "#/");
+
+    // STANDALONE_PROGRESS is seeded at a mid fraction — the saved-location
+    // restore (scroll + banner) owns the arrival; the h1 default never runs.
+    await page
+      .locator(`.library-list a[href="#/article/${STANDALONE_PROGRESS.id}"]`)
+      .click();
+    const articleH1 = page.getByRole("heading", {
+      level: 1,
+      name: STANDALONE_PROGRESS.provenance.title,
+    });
+    await expect(articleH1).toBeVisible({ timeout: 10_000 });
+    const banner = page.locator(".resume-banner");
+    await expect(banner).toBeVisible({ timeout: 10_000 });
+    await expect(banner).toContainText("You left off here");
+    await expect(articleH1).not.toBeFocused();
+  });
+
+  test("overlay stability: opening + closing the settings panel never touches the title (D14-11)", async ({
+    page,
+  }) => {
+    await seedCorpus(page);
+    await openView(page, "#/");
+    await expect(page).toHaveTitle(LIBRARY_TITLE);
+
+    // The header trigger (accessible name "Reading settings" — Header.tsx).
+    await page.getByRole("button", { name: "Reading settings" }).click();
+    await expect(page.locator("dialog.settings-panel")).toBeVisible();
+    await expect(page).toHaveTitle(LIBRARY_TITLE);
+
+    // Native <dialog> Esc close — the title is unchanged after, too.
+    await page.keyboard.press("Escape");
+    await expect(page.locator("dialog.settings-panel")).toBeHidden();
+    await expect(page).toHaveTitle(LIBRARY_TITLE);
+  });
+
+  test("error parity: a nonexistent article id focuses the error h1 + sets the truthful title (D14-06)", async ({
+    page,
+  }) => {
+    await seedCorpus(page);
+    await openView(page, "#/");
+
+    // From an in-app surface: a plain hash assignment (push + hashchange →
+    // warm arrival) to an id no row will ever satisfy.
+    await page.evaluate(() => {
+      window.location.hash = "#/article/rv-article-that-does-not-exist";
+    });
+    const errorH1 = page.getByRole("heading", {
+      level: 1,
+      name: "Couldn't open this article.",
+    });
+    await expect(errorH1).toBeVisible({ timeout: 10_000 });
+    await expect(errorH1).toBeFocused();
+    await expect(page).toHaveTitle("Couldn't open this article — Lem Reader");
+  });
+
+  test("EPUB chapter title: opening a seeded chapter titles the tab Chapter — Book — Lem Reader (D14-07)", async ({
+    page,
+  }) => {
+    await seedCorpus(page);
+    await openView(page, "#/");
+
+    // Expand the all-done book row and open its first chapter through the
+    // real chapter link (a reader click — push + warm arrival).
+    const bookRow = page
+      .locator(".library-list > li")
+      .filter({ hasText: BOOK_ALL_DONE.title });
+    await bookRow.locator(".book-toggle").click();
+    await bookRow
+      .locator(`.book-chapter-list a[href="#/article/${DONE_C0.id}"]`)
+      .click();
+    await expect(
+      page.getByRole("heading", {
+        level: 1,
+        name: DONE_C0.provenance.title,
+      }),
+    ).toBeVisible({ timeout: 10_000 });
+    // D14-07 — the combined content portion (chapter — book) + the suffix;
+    // both titles are short, so no 64-char truncation applies.
+    await expect(page).toHaveTitle(
+      `${DONE_C0.provenance.title} — ${BOOK_ALL_DONE.title} — Lem Reader`,
+    );
+  });
+
+  test("review destination: the in-app Review highlights button sets the review title + focuses the review h1 (D14-01/D14-02)", async ({
+    page,
+  }) => {
+    await seedCorpus(page);
+    await openView(page, "#/");
+
+    // The library header's quiet button (LibraryView) — its hash assignment
+    // pushes + fires hashchange, so the ReviewView mount is WARM.
+    await page.getByRole("button", { name: "Review highlights" }).click();
+    const reviewH1 = page.getByRole("heading", {
+      level: 1,
+      name: "Review highlights",
+    });
+    await expect(reviewH1).toBeVisible({ timeout: 10_000 });
+    await expect(reviewH1).toBeFocused();
+    await expect(page).toHaveTitle("Review highlights — Lem Reader");
   });
 });

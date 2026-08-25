@@ -186,3 +186,33 @@ test("(d) keyboard: Back to library is Tab-reachable from the article top and En
   }
 });
 
+// Plan 14-04 Task 2 — strengthen-only addition (D14-13/D14-14): view
+// switches are replaceState, so the library's single history entry carries
+// the switched-to view URL. Back from an article must return to the
+// SWITCHED-TO view — never an intermediate view entry (views are
+// state-within-destination, not destinations).
+test("(e) view-route: library → switcher view → article → Back returns to the library at the switched-to view URL", async ({
+  page,
+}) => {
+  await page.goto(`${BASE}/#/`);
+  await expect(libraryHeading(page)).toBeVisible({ timeout: 10_000 });
+
+  // Switch views via the switcher (replaceState — the in-app gesture; the
+  // unmodified fixture corpus keeps Unread populated).
+  await page.getByRole("link", { name: /^Unread \(\d+\)/ }).click();
+  await expect(page).toHaveURL(/#\/unread$/);
+
+  // Open an article through its library row (a real destination PUSH).
+  await page.locator(".library-list a[href^='#/article/']").first().click();
+  await expect(backToLibrary(page)).toBeVisible({ timeout: 10_000 });
+
+  // Back → the library at #/unread (the entry the reader actually left),
+  // with the Unread view's aria-current in place.
+  await backToLibrary(page).click();
+  await expect(libraryHeading(page)).toBeVisible({ timeout: 10_000 });
+  await expect(page).toHaveURL(/#\/unread$/);
+  await expect(
+    page.locator(".view-switcher a[aria-current='page']"),
+  ).toHaveAttribute("href", "#/unread");
+});
+
