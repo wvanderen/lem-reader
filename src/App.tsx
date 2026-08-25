@@ -35,18 +35,26 @@ import { SettingsProvider, useSettings } from "./settings/SettingsContext";
 // and the article alternative gains the optional /h/<highlightId> deep-link
 // capture (consumed by ArticleView in Plan 10-03; parseHash captures it now
 // so the grammar is locked + unit-tested).
+//
+// Plan 14-02 (D14-12) — the list alternative gains the reading-state view
+// segment (All / Unread / In progress / Finished are REAL hash routes).
+// Exported alongside the View/parseHash surface below (same grammar
+// surface, declared at its definition site).
+export type LibraryViewName = "all" | "unread" | "in-progress" | "finished";
+
 type View =
-  | { name: "list" }
+  | { name: "list"; view: LibraryViewName }
   | { name: "article"; id: string; jumpHighlightId?: string }
   | { name: "review" };
 
 function parseHash(): View {
   // Grammar order matters (10-RESEARCH Pattern 1): the /h/ suffix form
-  // matches FIRST, then the exact #/review equality, then the byte-stable
-  // list fallback. The highlightId capture is [^/]+ — deliberately wider
-  // than the article-id charset because highlight ids arrive from imported
-  // bundles (foreign-controlled strings, T-10-02a). The value is used ONLY
-  // as a lookup key (Array.find / getElementById in Plan 10-03) — never
+  // matches FIRST, then the exact #/review equality, then the view-segment
+  // literal allowlist, then the byte-stable list fallback. The
+  // highlightId capture is [^/]+ — deliberately wider than the article-id
+  // charset because highlight ids arrive from imported bundles
+  // (foreign-controlled strings, T-10-02a). The value is used ONLY as a
+  // lookup key (Array.find / getElementById in Plan 10-03) — never
   // innerHTML, never dynamic property access.
   const m = /^#\/article\/([a-z0-9-]+)(?:\/h\/([^/]+))?$/.exec(
     window.location.hash,
@@ -57,7 +65,21 @@ function parseHash(): View {
   if (window.location.hash === "#/review") {
     return { name: "review" };
   }
-  return { name: "list" };
+  // Plan 14-02 (D14-12/D14-16) — view segments: a CLOSED literal allowlist
+  // (each hash is compared === against one of the four view constants;
+  // values are never interpolated into the DOM or URLs — the T-10-02c
+  // discipline). Unknown "#/" segments fall back to All, mirroring the
+  // existing unknown-route → list discipline; no new error surface.
+  if (window.location.hash === "#/unread") {
+    return { name: "list", view: "unread" };
+  }
+  if (window.location.hash === "#/in-progress") {
+    return { name: "list", view: "in-progress" };
+  }
+  if (window.location.hash === "#/finished") {
+    return { name: "list", view: "finished" };
+  }
+  return { name: "list", view: "all" };
 }
 
 /**

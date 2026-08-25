@@ -123,7 +123,7 @@ describe("parseHash — route parser (unit)", () => {
 
   it("maps '#/review/x' (unknown sub-route) to the list view", () => {
     window.location.hash = "#/review/x";
-    expect(parseHash()).toEqual({ name: "list" });
+    expect(parseHash()).toEqual({ name: "list", view: "all" });
   });
 });
 
