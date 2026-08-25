@@ -548,19 +548,23 @@ const onHash = () => { /* guard */; inAppNavRef.current = true; setView(parseHas
 
 **If this table is empty:** not the case — A1/A2 (naming/copy discretions) explicitly await planner confirmation; the rest are low-risk engineering choices with stated fallbacks.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Exact view-segment names + title convention + truncation cap + empty-state copy**
+> All four questions resolved during Phase 14 planning (finalized in the
+> 2026-08-25 revision pass). Each cites its adopting artifact.
+
+1. **Exact view-segment names + title convention + truncation cap + empty-state copy** — RESOLVED (adopted: 14-01/14-02/14-03 PLAN.md must_haves + approved 14-UI-SPEC.md)
    - What we know: grammar shape, helper design, and the calm-voice pattern (D8-04).
-   - What's unclear: the literal strings (A1/A2, planner-confirmed discretion; empty copy is UI-SPEC territory).
-   - Recommendation: planner locks them in PLAN.md must_haves as byte-stable test anchors.
-2. **Who owns the latest-savedAt fold — export `bookProgress.latestLocationByArticle` or keep LibraryView's fold?**
+   - What was unclear: the literal strings (A1/A2, planner-confirmed discretion; empty copy is UI-SPEC territory).
+   - Resolution: segments locked as `#/unread` / `#/in-progress` / `#/finished` (14-02-PLAN must_haves truths + Task 1 parseHash test cases); title convention locked as `<content> — Lem Reader` with a 64-char content-portion truncation (14-01-PLAN Task 2 pageMeta behavior rows + 14-UI-SPEC.md §Copywriting Contract); per-view empty-state copy locked verbatim in 14-02-PLAN Task 2 and 14-UI-SPEC.md §Copywriting empty-state table. All now serve as byte-stable test anchors per the recommendation.
+2. **Who owns the latest-savedAt fold — export `bookProgress.latestLocationByArticle` or keep LibraryView's fold?** — RESOLVED (adopted: 14-01-PLAN Task 1)
    - What we know: it exists in 3 places; the policy module is the natural 4th consumer; D14-20 says ONE module owns derivation.
-   - Recommendation: export it from `bookProgress.ts` (one-line change, no behavior risk) and have `readingState.ts` + LibraryView consume it — closes the "fourth fork" anti-pattern without a refactor.
-3. **Where the switcher mounts in the 13-03 library tidy structure**
+   - Resolution: the recommendation was taken — 14-01 Task 1 adds the `export` keyword to `latestLocationByArticle` in `bookProgress.ts` (single-line, no behavior change), making `bookProgress.ts` the one owner; `readingState.ts` consumes it via the bookProgress import (key_link pinned in 14-01 must_haves). No fourth fork.
+3. **Where the switcher mounts in the 13-03 library tidy structure** — RESOLVED (adopted: 14-02-PLAN Task 2)
    - What we know: three ordered sections (continue → add+status → list); switcher is list-scoped chrome.
-   - Recommendation: directly above the list section (inside `library-section-list`, before LibrarySearch), with `aria-label="Library views"` — planner confirms against POLISH-06 rhythm; UI hint says a UI-SPEC pass may refine.
-4. **Does Phase 14 run `/gsd-ui-phase`?** ROADMAP marks `**UI hint**: yes`. The switcher + empty states are new UI — recommend invoking the UI-SPEC skill at planning time (per workflow config `ui_phase: true`).
+   - Resolution: the recommendation was taken — the switcher mounts as the FIRST child of `section.library-section-list`, above LibrarySearch, with `aria-label="Library views"` (14-02 Task 2 action + `.view-switcher` CSS entry); the UI-SPEC pass (Q4) confirmed the placement and POLISH-06 rhythm.
+4. **Does Phase 14 run `/gsd-ui-phase`?** — RESOLVED (satisfied by approved 14-UI-SPEC.md)
+   - ROADMAP marks `**UI hint**: yes`. The pass ran at planning time (per workflow config `ui_phase: true`): the phase directory contains the approved `14-UI-SPEC.md` (Copywriting Contract, Component Inventory incl. ViewSwitcher + pageMeta.ts, Layout Contract, Interaction rules), referenced by the context sections of plans 14-01/14-02/14-03/14-04.
 
 ## Environment Availability
 
