@@ -14,15 +14,29 @@ vi.mock("../../src/content/repository", () => ({
   openArticle: vi.fn(),
 }));
 
+// Plan 14-03 Task 3 — deterministic restore-fall-through control. The real
+// loadLocation in this jsdom env classifies Dexie-unavailable into
+// {ok:false} (a silent fall-through); the mock pins the SAME branch shape
+// deterministically ({ok:true, location:null} — first open, nothing to
+// restore) so the h1-default focus wiring is observable without timing.
+// Everything else in the module (saveLocation for useScrollSave) stays real.
+vi.mock("../../src/persistence/locationStore", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../../src/persistence/locationStore")>();
+  return { ...actual, loadLocation: vi.fn() };
+});
+
 import { ArticleView } from "../../src/routes/ArticleView";
 import type { ArticleViewProps } from "../../src/routes/ArticleView";
 import { openArticle } from "../../src/content/repository";
+import { loadLocation } from "../../src/persistence/locationStore";
 import type { CanonicalArticle } from "../../src/content/types";
 import { SettingsProvider } from "../../src/settings/SettingsContext";
 import { DEFAULT_SETTINGS } from "../../src/settings/defaults";
 import { SETTINGS_MIRROR_KEY } from "../../src/settings/settingsMirror";
 
 const openArticleMock = vi.mocked(openArticle);
+const loadLocationMock = vi.mocked(loadLocation);
 
 /**
  * ArticleView now mounts useMeasurement (Phase 3), which calls useSettings —
@@ -79,6 +93,13 @@ const fullArticle = (): CanonicalArticle => ({
 
 beforeEach(() => {
   openArticleMock.mockReset();
+  // Plan 14-03 Task 3: default the restore to the first-open fall-through
+  // ({ok:true, location:null}) for EVERY test in this file — a mockReset
+  // vi.fn() would return undefined and crash the restore effect's .then.
+  // Both this and the real jsdom path ({ok:false}) take the same silent
+  // no-banner fall-through branch.
+  loadLocationMock.mockReset();
+  loadLocationMock.mockResolvedValue({ ok: true, location: null });
   // Plan 13-09 (G4): under the paginated default, jsdom's layout-less
   // measurement never settles, so ArticleView stays in the paginatedPending
   // branch (measurement clone + placeholder viewport — by design, the
@@ -196,5 +217,59 @@ describe("ArticleView document.title (Plan 14-03 Task 2)", () => {
     // previous/static title must stand until real truth arrives.
     await act(async () => {});
     expect(document.title).toBe("Unchanged sentinel");
+  });
+});
+
+// Plan 14-03 Task 3 (D14-01/D14-03/D14-06) — the route-change h1 focus
+// WIRING at jsdom level (Pitfall 7 boundary: focus timing/rAF machinery in
+// real engines is Plan 14-04 Task 2's browser scope — the deep-link-wins
+// (D14-05) and restore-wins (D14-10) orderings are proven there). These
+// three cases pin the wiring: warm fresh-article arrival focuses the h1,
+// cold arrival never does, and a warm error arrival focuses the error h1.
+describe("ArticleView route-change h1 focus (Plan 14-03 Task 3)", () => {
+  it("focuses the article h1 on a warm fresh-article arrival with nothing to restore (D14-01)", async () => {
+    openArticleMock.mockResolvedValue(fullArticle());
+    const props = { ...withProps("stub-article"), hasAppHistory: true };
+    renderWithProvider(<ArticleView {...props} />);
+    const h1 = await screen.findByRole("heading", {
+      level: 1,
+      name: "Stub Article",
+    });
+    // The restore effect's fall-through (loadLocation resolves null) is
+    // microtask-timed — poll for the focus call.
+    await waitFor(() => {
+      expect(document.activeElement).toBe(h1);
+    });
+  });
+
+  it("does NOT focus the article h1 on a cold load (D14-03 immunity)", async () => {
+    openArticleMock.mockResolvedValue(fullArticle());
+    // withProps defaults hasAppHistory to false — the cold-arrival shape.
+    renderWithProvider(<ArticleView {...withProps("stub-article")} />);
+    const h1 = await screen.findByRole("heading", {
+      level: 1,
+      name: "Stub Article",
+    });
+    // Wait for the restore fall-through to have actually RUN, then flush —
+    // otherwise the negative assertion could pass vacuously before the
+    // branch executes.
+    await waitFor(() => {
+      expect(loadLocationMock).toHaveBeenCalledWith("stub-article", 1);
+    });
+    await act(async () => {});
+    expect(document.activeElement).not.toBe(h1);
+  });
+
+  it("focuses the error h1 on a warm error arrival (D14-06 parity)", async () => {
+    openArticleMock.mockRejectedValue(new Error("boom"));
+    const props = { ...withProps("stub-article"), hasAppHistory: true };
+    renderWithProvider(<ArticleView {...props} />);
+    const errorH1 = await screen.findByRole("heading", {
+      level: 1,
+      name: "Couldn't open this article.",
+    });
+    await waitFor(() => {
+      expect(document.activeElement).toBe(errorH1);
+    });
   });
 });
