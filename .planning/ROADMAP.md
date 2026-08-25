@@ -30,12 +30,12 @@
   2. Reader can switch among All, Unread, In Progress, and Finished views whose membership follows one progress policy.
   3. Counts, progress indicators, and empty states agree with view membership for articles and EPUB books.
 
-**Plans**: 4 plans
+**Plans**: 1/4 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 14-01-PLAN.md — readingState policy module + pageMeta title helper + consumer unification (LIB-07 foundation)
+- [x] 14-01-PLAN.md — readingState policy module + pageMeta title helper + consumer unification (LIB-07 foundation)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -165,7 +165,7 @@ Plans:
 |-------|-----------|----------------|--------|-----------|
 | 1-6 | v1.0 | 35/35 | Complete | 2026-08-10 |
 | 7-13 | v2.0 | 53/53 | Complete | 2026-08-23 |
-| 14. Navigation and Library Contracts | v2.1 | 0/4 | Not started | - |
+| 14. Navigation and Library Contracts | v2.1 | 1/4 | In Progress|  |
 | 15. Application Shell and Destinations | v2.1 | 0/TBD | Not started | - |
 | 16. Organized Library and Focused Add Flow | v2.1 | 0/TBD | Not started | - |
 | 17. Reader-Owned Metadata | v2.1 | 0/TBD | Not started | - |

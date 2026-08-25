@@ -3,17 +3,17 @@ gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Reader Experience
 current_phase: 14
-current_phase_name: Navigation and Library Contracts
-status: planning
+current_phase_name: navigation-and-library-contracts
+status: executing
 stopped_at: Phase 14 UI-SPEC approved
-last_updated: "2026-08-25T13:21:46.961Z"
-last_activity: 2026-08-24
-last_activity_desc: v2.1 roadmap created with 40/40 requirements mapped
+last_updated: "2026-08-25T18:06:42.538Z"
+last_activity: 2026-08-25
+last_activity_desc: Phase 14 execution started
 progress:
   total_phases: 8
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 4
+  completed_plans: 1
   percent: 0
 ---
 
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-23)
 
 **Core value:** Readers can move through long-form web content with calm, stable orientation, and predictable navigation.
-**Current focus:** v2.1 Reader Experience — Phase 14 ready for planning
+**Current focus:** Phase 14 — navigation-and-library-contracts
 
 ## Current Position
 
-Phase: 14 of 21 (Navigation and Library Contracts)
-Plan: —
-Status: Roadmap drafted; awaiting approval
-Last activity: 2026-08-24 — v2.1 roadmap created with 40/40 requirements mapped
+Phase: 14 (navigation-and-library-contracts) — EXECUTING
+Plan: 2 of 4
+Status: Ready to execute
+Last activity: 2026-08-25 — Phase 14 execution started
 
 ## Recent Decisions (Phase 11)
 
@@ -152,6 +152,7 @@ Last activity: 2026-08-24 — v2.1 roadmap created with 40/40 requirements mappe
 | Phase 13 P11 | 10 min | 3 tasks | 5 files |
 | Phase 13 P12 | 6 min | 2 tasks | 3 files |
 | Phase 13 P13 | 4 min | 2 tasks | 2 files |
+| Phase 14 P01 | 6 min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -353,6 +354,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 13]: G7-D1: focus-mode-only SR reachability under NVDA accepted + documented (protocol v1.1); toolbar focus-on-appear REJECTED — Gecko/WebKit would collapse the selection on every settled selection (recorded harm), the debounce race can still lose to NVDA's Tab, and unsolicited focus moves disorient SR users; browse mode is out of the reachability contract, pinned as a documented boundary by toolbar-keydownless-focus.spec.ts — Live firefox Phase A proved the current build routes a real Tab keydown (focus mode) onto the Highlight button with the toolbar surviving; NVDA+Space is the platform convention for operating interactive widgets; zero product risk — pointer, sighted-keyboard, chromium, and VoiceOver paths byte-unchanged
 - [Phase 13]: ACPT-05 stays Pending after 13-12 (G7 closure) — it flips ONLY when the tester's NVDA+Firefox re-run of Flow C on the v1.1 protocol lands in 13-VERIFICATION.md §1.3/§1.4 with zero blocker/major (D13-06/D13-07); the re-run must confirm the C1 'Highlight actions available.' mount cue and the NVDA+Space-then-Tab focus-mode sequence — The 13-11 precedent: documentation + automation coverage do not substitute for the human SR acceptance run
 - [Phase ?]: [Phase 13]: 13-13 (G8 gap closure): G8-D1 FINAL — zero production source changes for the NVDA native-selection boundary; buffer-only browse-mode selections are unobservable by construction, so the fix is protocol v1.2 (C1 NVDA+shift+f10 precondition + F7 fallback + platform-boundary note) + the selection-gated mount/announce boundary spec (the C1 cue gains its first automated substrate; protocol-only rejected — a future announce-breaking refactor would restart the G6→G7→G8 diagnosis cascade) — No page-side fix can exist; the mount path is exonerated (3-engine e2e green; programmatic selections mount in firefox). ACPT-05 stays Pending the human NVDA re-run on v1.2 per D13-06/D13-07
+- [Phase 14]: LIB-07 split: 14-01 ships the reading-state policy foundation only (readingState.ts + pageMeta.ts + unified consumers); the view switcher ships in 14-02 and agreement proof in 14-04 — requirements-completed is [] per the 10-01 RECV-01 precedent — Marking LIB-07 complete before views exist would be a false claim; the repo's documented split precedent (04-02/06-01/09-01/10-01) requires the end-to-end plan to close the requirement
+- [Phase ?]: Phase 14-01: articleReadingState keeps the ratio formula verbatim (Math.min(1, offset/total)) so the opened-zero-length edge stays byte-stable (finished on every surface today); bookReadingState wraps resolveResumeChapterId + deriveBookProgress, never re-implementing their algebra
+- [Phase ?]: Phase 14-01: bookProgress.latestLocationByArticle newly exported (single keyword, no behavior change) — the one owner of the latest-savedAt fold; readingState to ContinueReadingStrip import cycle kept (the bookProgress to strip precedent; constant import is side-effect free)
 
 ### Pending Todos
 
@@ -408,7 +412,7 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-25T13:21:46.954Z
+Last session: 2026-08-25T18:06:38.634Z
 Stopped at: Phase 14 UI-SPEC approved
 Resume file: .planning/phases/14-navigation-and-library-contracts/14-UI-SPEC.md
 
