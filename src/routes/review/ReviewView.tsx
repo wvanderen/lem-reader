@@ -49,12 +49,16 @@
 //   - T-10-02c (tampering): the jump hash is template-built from validated
 //     record ids only; hashchange consumers re-parse through the same
 //     App.tsx regex grammar.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { listArticles } from "../../content/repository";
 import type { CanonicalArticle } from "../../content/types";
 import type { HighlightRecord, NoteRecord } from "../../content/schema";
 import { TagFilter } from "../../ingestion/library/TagFilter";
 import { loadAllTags } from "../../ingestion/library/tagsStore";
+// Plan 14-03 Task 1 (D14-02) — the review destination's document.title via
+// the ONE shared helper (never string-built here; the helper owns the
+// suffix, separator, and 64-char truncation).
+import { setDocumentTitle } from "../../ingestion/library/pageMeta";
 import { loadAllHighlights } from "../../persistence/highlightsStore";
 import { loadAllNotes } from "../../persistence/notesStore";
 import {
@@ -242,6 +246,10 @@ function ReviewRow({
  * plus the never-drop orphan tail.
  */
 export function ReviewView({ hasAppHistory }: { hasAppHistory: boolean }) {
+  // Plan 14-03 Task 1 — the h1 focus target (the tabindex=-1 pattern; text
+  // and level byte-stable per the UI-SPEC carried-forward anchor "Review
+  // highlights").
+  const h1Ref = useRef<HTMLHeadingElement>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">(
     "loading",
   );
@@ -271,6 +279,23 @@ export function ReviewView({ hasAppHistory }: { hasAppHistory: boolean }) {
   // region ("Highlight removed." / "Note saved."). Null = nothing to
   // announce (loading/error/empty states own the region then).
   const [announcement, setAnnouncement] = useState<string | null>(null);
+
+  // Plan 14-03 Task 1 (D14-02/D14-01/D14-03) — the review destination's
+  // title + warm-gated mount focus (the LibraryView 14-02 Task 3 twin).
+  // setDocumentTitle appends the suffix inside the ONE helper; the h1
+  // focus fires ONLY when this mount followed an in-app navigation —
+  // hasAppHistory is App's already-threaded flag doubling as the
+  // per-mount warm signal (false on cold loads and reloads by
+  // construction, so cold arrivals never move focus). No cleanup —
+  // focusing twice is idempotent and StrictMode-safe (Pitfall 9). No
+  // live region, no announcement code (D14-09 — the focused h1 IS the
+  // announcement). Overlays in this view (none today; dialogs are
+  // ArticleView/global) touch neither the title nor this focus.
+  useEffect(() => {
+    setDocumentTitle("Review highlights");
+    if (hasAppHistory) h1Ref.current?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount only
+  }, []);
 
   // Load effect — the LibraryView L66-97 twin: cancelled-flag +
   // Promise.all over the whole-library Zod-validated readers. NO new store
@@ -324,8 +349,12 @@ export function ReviewView({ hasAppHistory }: { hasAppHistory: boolean }) {
             mount (the same component). App's in-app flag drives
             history.back() vs the "#/" fallback (Pitfall 7). */}
         <BackToLibrary hasAppHistory={hasAppHistory} />
-        {/* One h1 per page (D10-01) — skip-link parity via main#main. */}
-        <h1>Review highlights</h1>
+        {/* One h1 per page (D10-01) — skip-link parity via main#main.
+            Plan 14-03 Task 1: gains ONLY tabIndex={-1} + the focus ref —
+            text and level byte-stable. */}
+        <h1 ref={h1Ref} tabIndex={-1}>
+          Review highlights
+        </h1>
       </header>
       {/* The .status live region (LibraryView L112-123 twin) carries the
           loading + error states, both D10-10 empty states, AND the D10-12
