@@ -56,19 +56,45 @@ describe("parseHash — route parser (unit)", () => {
 
   it("maps an empty hash to the list view", () => {
     window.location.hash = "";
-    expect(parseHash()).toEqual({ name: "list" });
+    expect(parseHash()).toEqual({ name: "list", view: "all" });
   });
 
   it("maps a bare '#/' to the list view", () => {
     window.location.hash = "#/";
-    expect(parseHash()).toEqual({ name: "list" });
+    expect(parseHash()).toEqual({ name: "list", view: "all" });
   });
 
   it("maps an unrecognized route hash to the list view", () => {
     window.location.hash = "#/article/"; // trailing slash — no id capture
-    expect(parseHash()).toEqual({ name: "list" });
+    expect(parseHash()).toEqual({ name: "list", view: "all" });
     window.location.hash = "#/unknown/route";
-    expect(parseHash()).toEqual({ name: "list" });
+    expect(parseHash()).toEqual({ name: "list", view: "all" });
+  });
+
+  // Plan 14-02 (D14-12/D14-16) — reading-state view segments are REAL hash
+  // routes. Strengthen-only: every case above stays the same grammar
+  // contract, extended with the view field; article /h/ and #/review cases
+  // stay byte-stable.
+  it("maps '#/unread' to the list view with view 'unread'", () => {
+    window.location.hash = "#/unread";
+    expect(parseHash()).toEqual({ name: "list", view: "unread" });
+  });
+
+  it("maps '#/in-progress' to the list view with view 'in-progress'", () => {
+    window.location.hash = "#/in-progress";
+    expect(parseHash()).toEqual({ name: "list", view: "in-progress" });
+  });
+
+  it("maps '#/finished' to the list view with view 'finished'", () => {
+    window.location.hash = "#/finished";
+    expect(parseHash()).toEqual({ name: "list", view: "finished" });
+  });
+
+  it("maps an unknown '#/…' view segment to the All view (D14-16 fallback)", () => {
+    // Unknown #/ segments fall back to All — the existing unknown-route →
+    // list discipline extended to the view field; no new error surface.
+    window.location.hash = "#/unknown-view";
+    expect(parseHash()).toEqual({ name: "list", view: "all" });
   });
 
   // Plan 10-02 (D10-03, RECV-01.h) — the /h/ deep-link grammar + the
@@ -87,7 +113,7 @@ describe("parseHash — route parser (unit)", () => {
     // group AND the $ anchor, so the whole regex misses and the parser
     // falls through to the list fallback. This documents that behavior.
     window.location.hash = "#/article/a-one/h/";
-    expect(parseHash()).toEqual({ name: "list" });
+    expect(parseHash()).toEqual({ name: "list", view: "all" });
   });
 
   it("maps '#/review' to the review view", () => {
