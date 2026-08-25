@@ -132,9 +132,10 @@ describe("bookReadingState (D14-19/D14-21 — honest book-level states)", () => 
     );
     const book = makeBook(ids);
     // Chapters 0..38 finished (offset = total); chapter 39 never opened.
+    // (savedAt is uniform — this row pins the RATIO edge, not recency.)
     const locations = ids
       .slice(0, 39)
-      .map((id, i) => loc(id, 100, `2026-01-${String(i + 1).padStart(2, "0")}T00:00:00.000Z`));
+      .map((id) => loc(id, 100, "2026-01-01T00:00:00.000Z"));
     const lengths = lengthsOf(Object.fromEntries(ids.map((id) => [id, 100])));
     expect(bookReadingState(book, locations, lengths)).toBe("in-progress");
   });

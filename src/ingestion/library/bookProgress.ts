@@ -40,7 +40,7 @@ import { FINISHED_THRESHOLD } from "./ContinueReadingStrip";
  * LibraryView folds — ISO-8601 strings from Date.prototype.toISOString()
  * compare correctly lexicographically).
  */
-function latestLocationByArticle(
+export function latestLocationByArticle(
   locations: LocationRecord[],
 ): Map<string, LocationRecord> {
   const latest = new Map<string, LocationRecord>();
