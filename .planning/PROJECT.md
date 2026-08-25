@@ -28,7 +28,9 @@ Readers can move through long-form web content with calm, stable orientation and
 
 **Final suite:** `npm run test` = 2284 passed / 0 failed / 19 skipped / exit 0 (13-10-OUTPUT.md record).
 
-**Known tech debt (non-blocking):** EPUB anchor-gate OOM on whole-novel chapters + unbounded per-chapter stage loop (backlog candidates); LibraryRow FINISHED_RATIO fork; dead LegacyFixtureList.tsx; 3 zipSlip.ts lint errors; stale debug-session ledgers (see v2.0-MILESTONE-AUDIT.md §5 and STATE.md Deferred Items).
+**Known tech debt (non-blocking):** EPUB anchor-gate OOM on whole-novel chapters + unbounded per-chapter stage loop (backlog candidates); dead LegacyFixtureList.tsx; 3 zipSlip.ts lint errors; stale debug-session ledgers (see v2.0-MILESTONE-AUDIT.md §5 and STATE.md Deferred Items). The LibraryRow FINISHED_RATIO fork was retired in v2.1 Phase 14 (single `readingState.ts` policy).
+
+**v2.1 progress:** Phase 14 Navigation and Library Contracts — SHIPPED 2026-08-25 (4 plans). One documented reading-state policy (`readingState.ts`) with truthful All/Unread/In Progress/Finished hash-routed views, counts/membership/empty agreement proven structurally across 3 engines, per-destination truthful titles, and uniform route-change h1 focus with cold-load immunity. NAV-04/LIB-07/LIB-08 verified 25/25. Full suite at gate: 2468 passed / 0 failed / exit 0.
 
 <details>
 <summary>Version history detail</summary>
@@ -160,4 +162,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-23 after starting v2.1 Reader Experience milestone*
+*Last updated: 2026-08-25 after completing Phase 14 (Navigation and Library Contracts) of the v2.1 Reader Experience milestone*
