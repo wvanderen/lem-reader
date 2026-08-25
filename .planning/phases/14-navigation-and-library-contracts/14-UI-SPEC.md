@@ -1,10 +1,11 @@
 ---
 phase: 14
 slug: navigation-and-library-contracts
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: 2026-08-25
+reviewed_at: 2026-08-25
 ---
 
 # Phase 14 — UI Design Contract
@@ -311,11 +312,11 @@ Test discipline: strengthen-only changes; honest full-suite gate (`npm run test`
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS — every title form, switcher label, count format, per-view empty state, and carried anchor declared verbatim; calm DOC-06 voice; sentence case; no `(0)` loading lies
-- [ ] Dimension 2 Visuals: PASS — switcher has explicit CSS class + geometry (1100px measure, 44px links, `--space-sm` gap, weight/underline current-state); empty states reuse the existing register; every other surface declared unchanged
-- [ ] Dimension 3 Color: PASS — no new color consumption; accent reserved-for list unchanged; current-view state never conveyed by color alone (weight + stroke + `aria-current`)
-- [ ] Dimension 4 Typography: PASS — two weights only (400 + 600); no new sizes; switcher at the 14px Label chrome register; `document.title` carries no font styling
-- [ ] Dimension 5 Spacing: PASS — multiples of 4 only; 44px touch minimum on every switcher link; no orphan spacing values
-- [ ] Dimension 6 Registry Safety: PASS — no shadcn, no third-party blocks, zero installs
+- [x] Dimension 1 Copywriting: PASS — every title form, switcher label, count format, per-view empty state, and carried anchor declared verbatim; calm DOC-06 voice; sentence case; no `(0)` loading lies
+- [x] Dimension 2 Visuals: PASS — switcher has explicit CSS class + geometry (1100px measure, 44px links, `--space-sm` gap, weight/underline current-state); empty states reuse the existing register; every other surface declared unchanged
+- [x] Dimension 3 Color: PASS — no new color consumption; accent reserved-for list unchanged; current-view state never conveyed by color alone (weight + stroke + `aria-current`)
+- [x] Dimension 4 Typography: PASS — two weights only (400 + 600); no new sizes; switcher at the 14px Label chrome register; `document.title` carries no font styling
+- [x] Dimension 5 Spacing: PASS — multiples of 4 only; 44px touch minimum on every switcher link; no orphan spacing values
+- [x] Dimension 6 Registry Safety: PASS — no shadcn, no third-party blocks, zero installs
 
-**Approval:** pending (checker upgrades to `approved YYYY-MM-DD` after verification)
+**Approval:** approved 2026-08-25
