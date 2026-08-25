@@ -39,7 +39,7 @@
 // (ingested-first, then fixtures — already the natural "recently-added first"
 // order from `compositeLibraryRepository.list()`). The original FixtureList
 // did not sort either; v1.0 e2e tests assert row COUNT, not order.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { listArticles } from "../../content/repository";
 import type { CanonicalArticle } from "../../content/types";
 import type { Book, LocationRecord } from "../../content/schema";
@@ -57,6 +57,7 @@ import {
   countByState,
 } from "./readingState";
 import type { LibraryViewName } from "../../App";
+import { setDocumentTitle } from "./pageMeta";
 import { loadAllLocations } from "../../persistence/locationStore";
 import { listBooks } from "../../persistence/booksStore";
 import { loadAllTags } from "./tagsStore";
@@ -130,10 +131,12 @@ const EMPTY_COPY: Record<
   },
 };
 
-// warmMount stays in the interface (App threads it — D14-03) but is
-// destructured only in Plan 14-02 Task 3, where the mount focus effect
-// consumes it.
-export function LibraryView({ view, onSwitchView }: LibraryViewProps) {
+export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps) {
+  // Plan 14-02 Task 3 — the h1 focus target (tabindex=-1 pattern; text and
+  // level byte-stable per D14-25) + the first-run skip flag for the
+  // view-switch effect below.
+  const h1Ref = useRef<HTMLHeadingElement>(null);
+  const viewEffectFirstRun = useRef(true);
   const [items, setItems] = useState<CanonicalArticle[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [query, setQuery] = useState("");
@@ -161,6 +164,36 @@ export function LibraryView({ view, onSwitchView }: LibraryViewProps) {
   const [bookRemoveTarget, setBookRemoveTarget] =
     useState<BookRemoveTarget | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+
+  // Plan 14-02 Task 3 (D14-02/D14-25/D14-03) — the library title, set once
+  // on mount and CONSTANT across views (the URL carries the view); h1 focus
+  // fires only when this mount followed an in-app navigation (warmMount —
+  // cold deep-links and reloads keep natural browser focus; D14-08:
+  // return-to-library uses this same uniform h1 rule). No cleanup function
+  // — focusing twice is idempotent and StrictMode-safe (Pitfall 9).
+  useEffect(() => {
+    setDocumentTitle("Saved articles");
+    if (warmMount) h1Ref.current?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount only
+  }, []);
+
+  // Plan 14-02 Task 3 (D14-15) — the uniform h1 rule at its second trigger
+  // point: every view switch announces via h1 focus. LibraryView does NOT
+  // remount on view switches (Pitfall 3 — the direct setView path keeps the
+  // same component instance), so this MUST be a [view]-keyed effect with a
+  // first-run skip (the first run belongs to the mount effect above).
+  // focus() is called WITHOUT preventScroll — its default scroll-into-view
+  // delivers the reset-to-list-top behavior because the h1 sits at content
+  // top (UI-SPEC Interaction 10; no scrollTo choreography). No live-region
+  // announcement is added — the focused h1 IS the announcement (D14-09).
+  // No cleanup function (idempotent, StrictMode-safe — Pitfall 9).
+  useEffect(() => {
+    if (viewEffectFirstRun.current) {
+      viewEffectFirstRun.current = false;
+      return;
+    }
+    h1Ref.current?.focus();
+  }, [view]);
 
   // Plan 14-02 — ONE totalsById Map for the whole render body (the BookRow
   // L66-75 memo precedent): per article graphemeClusters(normalizeText(
@@ -324,8 +357,12 @@ export function LibraryView({ view, onSwitchView }: LibraryViewProps) {
           exactly: main#main, the h1 text, the .status live region, the
           LibraryRow markup, and the hash-assignment fallbacks below. */}
       <header className="library-header">
-        {/* byte-stable page heading (SC#1 regression target — Pitfall 8-5) */}
-        <h1>Saved articles</h1>
+        {/* byte-stable page heading (SC#1 regression target — Pitfall 8-5).
+            Plan 14-02 Task 3: gains ONLY tabIndex={-1} + the focus ref —
+            text and level stay byte-stable across ALL views (D14-25). */}
+        <h1 ref={h1Ref} tabIndex={-1}>
+          Saved articles
+        </h1>
         {/* Plan 10-02 (D10-02) — the sole Phase-10 entry point into the
             cross-article review panel, now a quiet control BESIDE the h1
             (the same .article-export-highlights tokens: transparent bg,
