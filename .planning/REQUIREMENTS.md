@@ -11,13 +11,13 @@
 - [ ] **NAV-01**: Reader can navigate directly among first-class Library and Highlights destinations through a consistent application shell.
 - [ ] **NAV-02**: Reader can use the Lem Reader brand as a predictable link back to the Library.
 - [ ] **NAV-03**: Reader can return from an article or highlight review to the prior Library context without losing active filters or scroll position.
-- [ ] **NAV-04**: Each destination exposes a coherent page title, heading hierarchy, landmarks, browser-history behavior, and route-change focus policy.
+- [x] **NAV-04**: Each destination exposes a coherent page title, heading hierarchy, landmarks, browser-history behavior, and route-change focus policy.
 - [ ] **NAV-05**: Reading-only controls appear in reader context while globally meaningful preferences remain intentionally accessible outside an article.
 
 ### Library Organization
 
-- [ ] **LIB-07**: Reader can switch among All, Unread, In Progress, and Finished library views derived from one documented progress policy.
-- [ ] **LIB-08**: Reader can see accurate counts, progress, and empty states for each derived library view, including EPUB book-level aggregation.
+- [x] **LIB-07**: Reader can switch among All, Unread, In Progress, and Finished library views derived from one documented progress policy.
+- [x] **LIB-08**: Reader can see accurate counts, progress, and empty states for each derived library view, including EPUB book-level aggregation.
 - [ ] **LIB-09**: Reader can search and filter by tag within the selected library view without contradictory results or reading states.
 - [ ] **LIB-10**: Reader sees a calm Continue Reading treatment that complements rather than duplicates or displaces the main library organization.
 
@@ -110,10 +110,10 @@
 | NAV-01 | Phase 15 | Pending |
 | NAV-02 | Phase 15 | Pending |
 | NAV-03 | Phase 15 | Pending |
-| NAV-04 | Phase 14 | Pending |
+| NAV-04 | Phase 14 | Complete |
 | NAV-05 | Phase 15 | Pending |
-| LIB-07 | Phase 14 | Pending |
-| LIB-08 | Phase 14 | Pending |
+| LIB-07 | Phase 14 | Complete |
+| LIB-08 | Phase 14 | Complete |
 | LIB-09 | Phase 16 | Pending |
 | LIB-10 | Phase 16 | Pending |
 | ADD-01 | Phase 16 | Pending |
@@ -149,6 +149,7 @@
 | ACPT-08 | Phase 21 | Pending |
 
 **Coverage:**
+
 - v2.1 requirements: 40 total
 - Mapped to phases: 40
 - Unmapped: 0 ✓

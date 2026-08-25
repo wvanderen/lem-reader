@@ -4,17 +4,17 @@ milestone: v2.1
 milestone_name: Reader Experience
 current_phase: 14
 current_phase_name: navigation-and-library-contracts
-status: executing
-stopped_at: Completed 14-03-PLAN.md
-last_updated: "2026-08-25T18:28:43.176Z"
+status: verifying
+stopped_at: Completed 14-04-PLAN.md
+last_updated: "2026-08-25T19:02:17.958Z"
 last_activity: 2026-08-25
 last_activity_desc: Phase 14 execution started
 progress:
   total_phases: 8
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 4
-  completed_plans: 3
-  percent: 0
+  completed_plans: 4
+  percent: 13
 ---
 
 # Project State
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-08-23)
 
 Phase: 14 (navigation-and-library-contracts) — EXECUTING
 Plan: 4 of 4
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-08-25 — Phase 14 execution started
 
 ## Recent Decisions (Phase 11)
@@ -362,6 +362,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 14]: [Phase 14] View switch = replaceState + DIRECT setView(parseHash()) — replaceState fires no hashchange; the direct router call is load-bearing (D14-13/Pitfall 2). Destinations keep push semantics; hasAppHistory never flips on view switches. — LibraryView does not remount on view switches, so focus/title live in TWO effects: mount (warm-gated) + [view]-keyed with first-run skip (Pitfall 3). Counts/membership/empty states derive from readingState.ts in one render body — agreement structural (D14-20/23/24).
 - [Phase ?]: 14-03: NAV-04 stays open — title+focus wiring shipped, 3-engine browser proofs (D14-05/D14-10 ordering, EPUB title, review title/warm focus) are 14-04 Task 2's scope; requirements-completed [] (14-01/14-02 split precedent)
 - [Phase ?]: 14-03: hasAppHistory deliberately omitted from focus-effect deps (per-arrival truth — listing it would re-fire restore + resurrect a dismissed banner); rationale in eslint-disable comments at the deps arrays
+- [Phase ?]: 14-04 closes NAV-04/LIB-07/LIB-08 — the 3-engine e2e matrix proved routes, counts, rows, empty states, focus identity, history semantics, and per-destination titles against the IMPORTED readingState policy (structural agreement) — two Rule 1 jsdom-blind production fixes surfaced and closed: detached totalsById.get crashed the library with any located book (5 epub-intake cells pre-red), and the first-run focus flag was not StrictMode-safe (cold-load h1 focus in dev)
 
 ### Pending Todos
 
@@ -417,8 +418,8 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-25T18:28:33.757Z
-Stopped at: Completed 14-03-PLAN.md
+Last session: 2026-08-25T19:01:00.346Z
+Stopped at: Completed 14-04-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
