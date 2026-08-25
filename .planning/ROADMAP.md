@@ -20,110 +20,142 @@
 ## Phase Details
 
 ### Phase 14: Navigation and Library Contracts
+
 **Goal**: Readers encounter consistent destination behavior and truthful reading-state classification across articles and books.
 **Depends on**: Phase 13
 **Requirements**: NAV-04, LIB-07, LIB-08
 **Success Criteria** (what must be TRUE):
+
   1. Each destination exposes a coherent title, heading hierarchy, landmarks, history behavior, and route-change focus behavior.
   2. Reader can switch among All, Unread, In Progress, and Finished views whose membership follows one progress policy.
   3. Counts, progress indicators, and empty states agree with view membership for articles and EPUB books.
+
 **Plans**: 4 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 14-01-PLAN.md — readingState policy module + pageMeta title helper + consumer unification (LIB-07 foundation)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 14-02-PLAN.md — router view grammar + replaceState switch + ViewSwitcher + per-view counts/empty states + library title/focus
 - [ ] 14-03-PLAN.md — per-destination titles + route-change focus layering (ArticleView, ReviewView)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 14-04-PLAN.md — 3-engine e2e views/counts/focus/title/history matrix + honest full-suite gate
 
 **UI hint**: yes
 
 ### Phase 15: Application Shell and Destinations
+
 **Goal**: Readers move predictably among primary destinations without losing context or encountering irrelevant controls.
 **Depends on**: Phase 14
 **Requirements**: NAV-01, NAV-02, NAV-03, NAV-05, POLISH-07
 **Success Criteria** (what must be TRUE):
+
   1. Reader can navigate directly between first-class Library and Highlights destinations through a consistent shell.
   2. Activating the Lem Reader brand returns predictably to the Library.
   3. Returning from Reader or Highlights restores prior Library filters and scroll position.
   4. Reading-only controls appear only in reader context while globally meaningful preferences remain intentionally available elsewhere.
   5. Library, Highlights, Add, and Reader share coherent gutters, headers, spacing, responsive behavior, and visible focus.
+
 **Plans**: TBD
 **UI hint**: yes
 
 ### Phase 16: Organized Library and Focused Add Flow
+
 **Goal**: Readers find content by reading state and add material through a focused, recoverable workflow.
 **Depends on**: Phase 15
 **Requirements**: LIB-09, LIB-10, ADD-01, ADD-02, ADD-03, ADD-04
 **Success Criteria** (what must be TRUE):
+
   1. Search and tag filters narrow the selected reading-state view without contradictory results.
   2. Continue Reading complements rather than duplicates or displaces the main library organization.
   3. Add to Library opens a focused workflow where every existing source is available and only relevant inputs appear.
   4. Reader can cancel, retry, or recover from failure without losing useful input, creating duplicates, or hiding refusal reasons.
   5. Add manages focus, dismissal, success, narrow-width, and high-zoom behavior predictably.
+
 **Plans**: TBD
 **UI hint**: yes
 
 ### Phase 17: Reader-Owned Metadata
+
 **Goal**: Readers personalize saved titles and authors while canonical identity, anchors, and portability remain intact.
 **Depends on**: Phase 16
 **Requirements**: META-01, META-02, META-03, META-04
 **Success Criteria** (what must be TRUE):
+
   1. Reader can edit display title and author without changing identity, provenance, revision, position, or annotations.
   2. Edited metadata appears consistently in Library, Reader, Highlights, search, and exports.
   3. Clearing an override restores the canonical value, including an absent author.
   4. Overrides migrate and export/import with explicit conflicts, and cascade when their article is removed.
+
 **Plans**: TBD
 **UI hint**: yes
 
 ### Phase 18: Reader Orientation
+
 **Goal**: Readers navigate document structure without unstable page/DOM identities or intrusive restoration UI.
 **Depends on**: Phase 17
 **Requirements**: ORNT-01, ORNT-03, ORNT-04, ORNT-05, ORNT-06
 **Success Criteria** (what must be TRUE):
+
   1. Reader can open a labeled canonical-heading table of contents and jump to a structural location.
   2. The same destination lands correctly in scrolling and paginated modes.
   3. Skipped and duplicate heading levels remain semantic and usable by keyboard and screen reader.
   4. At narrow widths or high zoom, opening or closing the TOC neither obscures content, changes logical location, nor traps focus.
   5. Reopening communicates restored location without shifting content, blocking page turns, or requiring dismissal.
+
 **Plans**: TBD
 **UI hint**: yes
 
 ### Phase 19: Cross-Block Highlights
+
 **Goal**: Readers capture and manage a single honest annotation across multiple supported semantic blocks.
 **Depends on**: Phase 18
 **Requirements**: ANNO-08, ANNO-09, ANNO-10, ANNO-11, ANNO-12
 **Success Criteria** (what must be TRUE):
+
   1. Reader can create one highlight from a native selection spanning eligible mounted blocks.
   2. It renders across blocks but behaves as one identity, one global grapheme range, and one optional note.
   3. It stays attached through repagination, mode/typography changes, reopening, review navigation, and export/import.
   4. Reader can review, edit, export, and delete it atomically without leftover fragments or guessed attachment.
   5. Unsupported boundaries are rejected or narrowed with an explicit explanation from the supported-content matrix.
+
 **Plans**: TBD
 **UI hint**: yes
 
 ### Phase 20: Safe Local Image Fidelity
+
 **Goal**: Readers retain meaningful figures and captions as safe, offline, portable content stable in both reading modes.
 **Depends on**: Phase 19
 **Requirements**: IMG-01, IMG-02, IMG-03, IMG-04, IMG-05, IMG-06
 **Success Criteria** (what must be TRUE):
+
   1. Supported ingestion preserves reliably recoverable figures, alternative text, and captions canonically.
   2. Assets outside approved network, type, byte, pixel, count, animation, or decode limits are calmly refused without unsafe fetches.
   3. Reopening renders supported images from local assets and never contacts third-party image hosts.
   4. Figures render semantically with stable geometry and calm failures in both modes without content or location loss.
   5. Assets export/import with validation, limits, conflicts, and no broken references, and follow documented deletion lifecycle.
+
 **Plans**: TBD
 **UI hint**: yes
 
 ### Phase 21: Integrated Refinement and Acceptance
+
 **Goal**: Readers experience a cohesive, corrected application proven across the full browser and accessibility matrix.
 **Depends on**: Phase 20
 **Requirements**: POLISH-08, POLISH-09, POLISH-10, POLISH-11, ACPT-07, ACPT-08
 **Success Criteria** (what must be TRUE):
+
   1. Tag menus stay adjacent to their trigger and visible as geometry changes, then restore focus when closed.
   2. Reading width reaches a truthful 64-character maximum at the visual and programmatic far-right endpoint.
   3. Highlights respects the shared grid and offers clear Library and article-context navigation.
   4. The complete v2.1 core flow succeeds without loss in Chromium, Firefox, and WebKit.
   5. The Impeccable-informed audit and keyboard, NVDA, VoiceOver, reduced-motion, forced-colors, reflow, and zoom matrix finish with no blocker or major finding.
+
 **Plans**: TBD
 **UI hint**: yes
 
