@@ -61,7 +61,25 @@ Plans:
   4. Reading-only controls appear only in reader context while globally meaningful preferences remain intentionally available elsewhere.
   5. Library, Highlights, Add, and Reader share coherent gutters, headers, spacing, responsive behavior, and visible focus.
 
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 15-01-PLAN.md — Highlights rename + #/review legacy alias, commit-atomic with all pinned-spec updates (NAV-01 grammar)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 15-02-PLAN.md — shell destination nav + brand link + ModeToggle gating + ≤639px collapse + D10-02 button removal (NAV-01/02/05)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 15-03-PLAN.md — librarySession restore module + view-matched Library integration + restore matrix (NAV-03)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 15-04-PLAN.md — POLISH-07 token audit + 320px geometry hardening + 3-engine honest full-suite gate (POLISH-07)
+
 **UI hint**: yes
 
 ### Phase 16: Organized Library and Focused Add Flow
