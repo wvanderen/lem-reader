@@ -34,6 +34,13 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.describe("READ-05 progress hairline", () => {
+  // 15-04 honest-gate run: under full-suite parallel load a webkit context's
+  // beforeEach page.goto exceeded the default 30s test budget (first module
+  // fetch from the single Vite dev server, starved by sibling workers) —
+  // the 09-07 section-announce precedent. Assertions unchanged; the budget
+  // doubles so load contention cannot flake the spec.
+  test.setTimeout(60_000);
+
   test("the .progress-hairline element exists, is aria-hidden, and has an inner fill", async ({
     page,
   }) => {

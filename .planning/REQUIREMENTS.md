@@ -62,7 +62,7 @@
 
 ### Interface Refinement
 
-- [ ] **POLISH-07**: Library, Highlights, Add, and Reader surfaces share consistent gutters, headers, spacing, control hierarchy, responsive behavior, and visible focus treatment.
+- [x] **POLISH-07**: Library, Highlights, Add, and Reader surfaces share consistent gutters, headers, spacing, control hierarchy, responsive behavior, and visible focus treatment.
 - [ ] **POLISH-08**: The tag menu opens adjacent to its invoking control, remains within the viewport, follows the trigger as geometry changes, and restores focus predictably when closed.
 - [ ] **POLISH-09**: The reading-width control can reach its displayed 64-character maximum at the slider's far-right endpoint and exposes the same truthful range programmatically.
 - [ ] **POLISH-10**: The Highlights destination presents review content within the shared layout grid and provides direct, understandable navigation back to the Library and into article context.
@@ -140,7 +140,7 @@
 | IMG-04 | Phase 20 | Pending |
 | IMG-05 | Phase 20 | Pending |
 | IMG-06 | Phase 20 | Pending |
-| POLISH-07 | Phase 15 | Pending |
+| POLISH-07 | Phase 15 | Complete |
 | POLISH-08 | Phase 21 | Pending |
 | POLISH-09 | Phase 21 | Pending |
 | POLISH-10 | Phase 21 | Pending |

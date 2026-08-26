@@ -143,6 +143,13 @@ function noteTextarea(page: Page) {
 }
 
 test.describe("RECV-01.f review-panel curate (10-05 in-place edit + delete)", () => {
+  // 15-04 honest-gate run: under full-suite parallel load a webkit context's
+  // beforeEach page.goto exceeded the default 30s test budget (first module
+  // fetch from the single Vite dev server, starved by sibling workers) —
+  // the 09-07 section-announce precedent. Assertions unchanged; the budget
+  // doubles so load contention cannot flake the spec.
+  test.setTimeout(60_000);
+
   test("edit note in place: dialog seeds + focuses, Done commits, preview re-derives, reload persists", async ({
     page,
   }) => {

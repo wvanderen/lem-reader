@@ -287,8 +287,17 @@ test.describe("RECV-01.c review-panel jump bidirectional (10-06 click-from-row l
   /** The shared loop body: from a seeded #/highlights, click the confident
    * row's jump button (role + accessible name — a real reader click),
    * assert focused arrival + stripped URL, then browser Back returns to
-   * the #/highlights h1 with an operable panel. */
-  async function exerciseRowClickLoop(page: Page): Promise<void> {
+   * the #/highlights h1 with an operable panel.
+   *
+   * Plan 15-04: expectScrollingRenderer proves the seeded readingMode
+   * preference hydrated by asserting the LIVE renderer on the article
+   * surface (main#main without paginated-main) DURING the loop — strictly
+   * stronger than the pre-15-02 post-hoc ModeToggle label pin (D15-15 made
+   * the toggle reader-gated, so it no longer renders on #/highlights). */
+  async function exerciseRowClickLoop(
+    page: Page,
+    expectScrollingRenderer = false,
+  ): Promise<void> {
     await page.goto(`${BASE}/#/highlights`);
     await expect(
       page.getByRole("heading", { level: 1, name: "Highlights" }),
@@ -309,6 +318,15 @@ test.describe("RECV-01.c review-panel jump bidirectional (10-06 click-from-row l
       page.getByRole("heading", { level: 1, name: TITLE }),
     ).toBeVisible();
     await expectFocusedArrival(page);
+    if (expectScrollingRenderer) {
+      // The renderer proof on the LIVE surface: the seeded scrolling
+      // preference hydrated, so the article mounts the scrolling main
+      // (never the paginated viewport class) — 15-04 strengthen-only
+      // rewrite of the old ModeToggle-label pin (D15-15 reader gating).
+      await expect(page.locator("main#main")).not.toHaveClass(
+        /paginated-main/,
+      );
+    }
     // Back returned to #/highlights — SC#2 bidirectional, now proven through
     // the real UI path (row click → jump → Back).
     await page.goBack();
@@ -344,12 +362,12 @@ test.describe("RECV-01.c review-panel jump bidirectional (10-06 click-from-row l
     await expect(
       page.getByRole("heading", { name: "Saved articles" }),
     ).toBeVisible();
-    await exerciseRowClickLoop(page);
-    // The seeded preference actually hydrated — the loop above ran with
-    // the scrolling renderer. The header's ModeToggle reflects the live
-    // preference on every view, so pin it here (the 10-03 shape).
-    await expect(
-      page.getByRole("button", { name: /^Reading mode:/ }),
-    ).toHaveAttribute("aria-label", "Reading mode: scrolling");
+    // 15-04 (D15-15 citation): the loop asserts the LIVE renderer on the
+    // article surface (main#main without paginated-main) — the pre-15-02
+    // pin read the ModeToggle's aria-label from THIS panel surface, but
+    // 15-02 gated the toggle behind articleMounted so it no longer renders
+    // on #/highlights. The in-loop proof is strictly stronger: it pins the
+    // renderer the loop actually ran under, not a chrome label copy.
+    await exerciseRowClickLoop(page, true);
   });
 });

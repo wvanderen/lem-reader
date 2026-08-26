@@ -78,6 +78,13 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.describe("SC#1 + LIB-01 + LIB-05 — browse + open + source badge", () => {
+  // 15-04 honest-gate run: under full-suite parallel load a webkit context's
+  // beforeEach page.goto exceeded the default 30s test budget (first module
+  // fetch from the single Vite dev server, starved by sibling workers) —
+  // the 09-07 section-announce precedent. Assertions unchanged; the budget
+  // doubles so load contention cannot flake the spec.
+  test.setTimeout(60_000);
+
   test("#/ is the default route and renders the byte-stable Saved articles heading", async ({
     page,
   }) => {

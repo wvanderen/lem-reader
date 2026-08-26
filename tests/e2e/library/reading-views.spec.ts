@@ -630,6 +630,13 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.describe("LIB-07/LIB-08 — views/counts/rows/empty agreement (D14-20/23/24)", () => {
+  // 15-04 honest-gate run: under full-suite parallel load a webkit context's
+  // beforeEach page.goto exceeded the default 30s test budget (first module
+  // fetch from the single Vite dev server, starved by sibling workers) —
+  // the 09-07 section-announce precedent. Assertions unchanged; the budget
+  // doubles so load contention cannot flake the spec.
+  test.setTimeout(60_000);
+
   test("corpus sanity: the imported policy derives the designed corpus (the honesty rows are in-progress)", () => {
     // Pure-Node pin over the module-scope expectations — loud, named drift
     // detection for the corpus constants above (never a page test).
