@@ -821,7 +821,14 @@ test.describe("NAV-04 — focus/title/history matrix", () => {
     ).toHaveAttribute("aria-current", "page");
   });
 
-  test("in-app swap: open article focuses its h1 + sets the article title; Back refocuses the library h1 (D14-01/D14-08)", async ({
+  // Plan 15-03 (Pitfall 7 — deliberate supersession, D14-25 precedent):
+  // the "Back refocuses the library h1" block now holds ONLY when no
+  // captured+matched row exists. Back with a captured + view-matched row
+  // focuses the ROW's Open article link (D15-11 — most-specific target
+  // beats h1, extending the D14-05/D14-10 layering that D14-08 deferred
+  // to Phase 15). The h1 default survives the no-capture edge (below) and
+  // the view-mismatch edge (library-restore.spec (c), D15-14).
+  test("in-app swap: open article focuses its h1 + sets the article title; Back refocuses the LAUNCHED ROW link (D14-01/D14-08; D15-11 row focus beats h1)", async ({
     page,
   }) => {
     await seedCorpus(page);
@@ -830,22 +837,56 @@ test.describe("NAV-04 — focus/title/history matrix", () => {
     // fixtures[0] has NO location in this corpus → the fresh-article path:
     // the h1 default is the most specific focus target (D14-05 layering).
     const fixtureTitle = fixtures[0]!.provenance.title;
-    await page
-      .locator(`.library-list a[href="#/article/${fixtures[0]!.id}"]`)
-      .click();
+    const rowLink = page.locator(
+      `.library-list a[href="#/article/${fixtures[0]!.id}"]`,
+    );
+    await rowLink.click();
     const articleH1 = page.getByRole("heading", { level: 1, name: fixtureTitle });
     await expect(articleH1).toBeVisible({ timeout: 10_000 });
     await expect(articleH1).toBeFocused();
     await expect(page).toHaveTitle(`${fixtureTitle} — Lem Reader`);
 
-    // Back → the library remounts warm (hashchange) → uniform h1 rule
-    // (D14-08/D14-15) + the library title returns.
+    // Back → the library remounts warm → D15-11..14: the departure capture
+    // (view all, the departure scroll, the launched row id) restores — the
+    // row's Open article link is document.activeElement (scroll FIRST,
+    // then focus — Pitfall 5). The h1 is visible but NOT focused.
     await page.goBack();
     const libraryH1 = page.getByRole("heading", {
       level: 1,
       name: "Saved articles",
     });
     await expect(libraryH1).toBeVisible({ timeout: 10_000 });
+    await expect(rowLink).toBeFocused();
+    await expect(libraryH1).not.toBeFocused();
+    await expect(page).toHaveTitle(LIBRARY_TITLE);
+  });
+
+  test("Back with NO capture (cold boot into the article → Back to library): the uniform h1 rule still owns focus (D14-08/D14-03; D15-12 session-only)", async ({
+    page,
+  }) => {
+    await seedCorpus(page);
+    // A TRUE cold boot straight into the article: the library never mounted
+    // this session, so no departure capture exists (D15-12 — session state
+    // only). The library list still sees the seeded corpus on arrival.
+    await page.goto("about:blank");
+    await page.goto(`${BASE}/#/article/${fixtures[0]!.id}`);
+    await expect(
+      page.getByRole("heading", { level: 1, name: fixtures[0]!.provenance.title }),
+    ).toBeVisible({ timeout: 10_000 });
+
+    // hasAppHistory is false (no in-app hashchange yet) → the literal "#/"
+    // fallback; the warm hashchange mount finds NO snapshot → the mount
+    // effect's warmMount h1 focus fires, byte-unchanged (D14-08/D14-03 —
+    // the D15-11 deferral only applies when a snapshot exists).
+    await page.getByRole("button", { name: "Back to library" }).click();
+    const libraryH1 = page.getByRole("heading", {
+      level: 1,
+      name: "Saved articles",
+    });
+    await expect(libraryH1).toBeVisible({ timeout: 10_000 });
+    await expect(
+      page.getByRole("link", { name: /^All \(\d+\)/ }),
+    ).toBeVisible({ timeout: 10_000 });
     await expect(libraryH1).toBeFocused();
     await expect(page).toHaveTitle(LIBRARY_TITLE);
   });

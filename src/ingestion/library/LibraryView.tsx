@@ -61,6 +61,18 @@ import { setDocumentTitle } from "./pageMeta";
 import { loadAllLocations } from "../../persistence/locationStore";
 import { listBooks } from "../../persistence/booksStore";
 import { loadAllTags } from "./tagsStore";
+// Plan 15-03 (D15-11..14) — the session-scoped return-context seam. PURE
+// module (zero React, zero storage imports); this component owns the IO:
+// lazy-initializer reads at mount (filters always restore — D15-13), ONE
+// unmount-cleanup write at departure (live ref values + live scrollY +
+// the launched row id — StrictMode-idempotent, Pitfall 8), and the
+// ready-gated restore below (scroll + focus only on view match).
+import {
+  captureLibraryContext,
+  peekLibraryContext,
+  viewMatches,
+  clampScroll,
+} from "./librarySession";
 // Plan 08-04 (LIB-02 + D8-13/D8-14) — RemoveConfirm gates the cascade
 // dexieLibrarySource.remove(id) behind a native <dialog>/alertdialog.
 import { RemoveConfirm } from "./RemoveConfirm";
@@ -143,10 +155,56 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
   // PREVIOUS view instead: null = the mount run, view-unchanged = the
   // StrictMode twin — neither announces; only a genuine view change does.
   const lastViewRef = useRef<LibraryViewName | null>(null);
+  // Plan 15-03 (D15-11) — the library-list ul. Doubles as the restore
+  // row-lookup container (constant-template selector, ready-gated below)
+  // and the delegated launch-capture surface (onClick below).
+  const listRef = useRef<HTMLUListElement>(null);
+  // Plan 15-03 (Pitfall 8) — live-values refs so the unmount capture is
+  // byte-identical under a StrictMode twin pass. liveContextRef is
+  // rewritten EVERY render with the current { view, query, activeTag };
+  // lastLaunchedRef holds the article id whose Open-article link launched
+  // this visit's departure (null until a launch click — a Highlights
+  // round-trip captures null, the §Interaction 8 branch).
+  const liveContextRef = useRef<{ view: LibraryViewName; query: string; activeTag: string | null }>(
+    { view, query: "", activeTag: null },
+  );
+  const lastLaunchedRef = useRef<string | null>(null);
+  // Plan 15-03 (Pitfall 8) — StrictMode separation for the capture below.
+  // dev StrictMode simulates an unmount/remount on EVERY mount: effect →
+  // cleanup → effect, synchronously in the commit phase. A capture at that
+  // simulated cleanup would (a) poison a COLD load (peek turns non-null →
+  // the ready gate would restore/focus on a load that never had a prior
+  // library — D14-03 violation) and (b) clobber a REAL departure snapshot
+  // with fresh-mount values (a new lastLaunchedRef is null — the launched
+  // row id would be lost). The simulated cleanup can NEVER see this flag
+  // true: it runs before the async Promise.all resolves, and only the
+  // load's completion sets it. Real departures (post-ready hashchange
+  // swaps) always pass the gate. A pre-ready REAL departure (reader leaves
+  // before rows paint) also skips — the previous snapshot stays, which is
+  // the last fully-known context (truthful, D15-14).
+  const reachedReadyRef = useRef(false);
+  // Plan 15-03 (Rule 1 fix — the live-scroll truth) — the departure scroll
+  // CANNOT be read from window.scrollY at unmount: every in-page link
+  // departure (row open, shell link, brand) navigates to an unmatched
+  // fragment, and the browser's synchronous scroll-to-fragment resets
+  // scrollY to 0 BEFORE the hashchange handler runs (probed on chromium:
+  // ["hashchange:0","scroll:0"]). So this ref tracks the reader's real
+  // scroll via a PASSIVE listener (mounted below) and the capture reads
+  // the REF. The reset scroll EVENT fires only after the hashchange —
+  // after this component unmounted and removed its listener — so the
+  // poisoned 0 can never reach the ref. Non-click departures (browser
+  // Back from the library) do not fragment-scroll at all; their events
+  // keep the ref live too.
+  const scrollTopRef = useRef(0);
   const [items, setItems] = useState<CanonicalArticle[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
-  const [query, setQuery] = useState("");
-  const [activeTag, setActiveTag] = useState<string | null>(null);
+  // Plan 15-03 (D15-13) — filters restore on ALL return paths (view match
+  // gates ONLY scroll + row focus). Lazy initializers read the session
+  // snapshot ONCE at mount; cold loads (null peek) keep today's defaults.
+  const [query, setQuery] = useState(() => peekLibraryContext()?.query ?? "");
+  const [activeTag, setActiveTag] = useState<string | null>(
+    () => peekLibraryContext()?.activeTag ?? null,
+  );
   const [allTags, setAllTags] = useState<string[]>([]);
   const [locationsByArticle, setLocationsByArticle] = useState<
     Map<string, LocationRecord>
@@ -171,17 +229,118 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
     useState<BookRemoveTarget | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
+  // Plan 15-03 (Pitfall 8) — rewrite EVERY render so the unmount cleanup
+  // below always reads the CURRENT context. A StrictMode double render
+  // rewrites byte-identical values; the initial value above only exists
+  // for the very first render (before any assignment).
+  liveContextRef.current = { view, query, activeTag };
+
   // Plan 14-02 Task 3 (D14-02/D14-25/D14-03) — the library title, set once
   // on mount and CONSTANT across views (the URL carries the view); h1 focus
   // fires only when this mount followed an in-app navigation (warmMount —
   // cold deep-links and reloads keep natural browser focus; D14-08:
   // return-to-library uses this same uniform h1 rule). No cleanup function
   // — focusing twice is idempotent and StrictMode-safe (Pitfall 9).
+  //
+  // Plan 15-03 (D15-11; UI-SPEC §Interaction 7) — when a session snapshot
+  // EXISTS (an in-session return), skip the early warmMount h1 focus and
+  // defer the h1-vs-row decision to the ONE ready gate below (rows must
+  // paint before the row lookup — Pitfall 4). No snapshot (cold load, or
+  // the cold→article→Back edge where the library never mounted this
+  // session) → today's warmMount h1 behavior, byte-unchanged.
   useEffect(() => {
     setDocumentTitle("Saved articles");
-    if (warmMount) h1Ref.current?.focus();
+    if (warmMount && peekLibraryContext() === null) h1Ref.current?.focus();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount only
   }, []);
+
+  // Plan 15-03 (D15-12) — the ONE capture write point, unmount-only ([]),
+  // plus the passive scroll tracker that feeds it (see scrollTopRef — the
+  // live-ref discipline mirrors useScrollSave's articleRef pattern). Refs
+  // hold live values, so re-running against the same mounted instance
+  // captures a byte-identical snapshot (Pitfall 8). Gated on reachedReadyRef
+  // — see that ref's declaration comment for the StrictMode
+  // simulated-unmount discipline. Nothing is persisted; the snapshot is
+  // session-scoped in module state only.
+  useEffect(() => {
+    const onScroll = () => {
+      scrollTopRef.current = window.scrollY;
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (!reachedReadyRef.current) return; // simulated/pre-ready unmount
+      captureLibraryContext({
+        ...liveContextRef.current,
+        scrollTop: scrollTopRef.current,
+        lastArticleId: lastLaunchedRef.current,
+      });
+    };
+  }, []);
+
+  // Plan 15-03 (D15-11..14; UI-SPEC §Interaction 6-9) — the ONE restore
+  // decision point, gated on status === "ready" (rows painted — Pitfall 4:
+  // an earlier scrollTo would clamp against zero height and the row
+  // lookup would run against an unpainted list; T-15-09). [status]-keyed
+  // so it fires on the loading→ready transition only — an in-session
+  // refreshKey reload never re-enters "ready" from another value, so a
+  // mid-session remove cannot replay a stale restore. Idempotent: a
+  // StrictMode double-run re-restores identical values.
+  //
+  // Ordering (Pitfall 5): scroll FIRST (clamped to the CURRENT list
+  // height), THEN focus — never focus an off-screen row.
+  //   - view match + launched row found: row-link focus with
+  //     preventScroll IFF the row intersects the restored viewport (the
+  //     captured scroll stays authoritative); else default focus (the
+  //     row scrolls into view).
+  //   - view match + null launched row (departure was not an article
+  //     open — e.g. a Highlights round-trip): h1 focus with
+  //     preventScroll:true so the focus does not reset the just-restored
+  //     scroll (§Interaction 8).
+  //   - view match + row GONE (removed or filtered out): h1 focus with
+  //     DEFAULT scroll (reset-to-top) — the D14-05 fallback and the
+  //     truthful D15-14 degrade (the launched row is gone; holding the
+  //     old offset over unfamiliar rows would restore something untrue).
+  //   - view MISMATCH (D15-14): filters already applied via the lazy
+  //     initializers; the fresh warm-arrival default — plain h1 focus,
+  //     scroll stays at top. Never restore mismatched scroll.
+  //   - null peek (cold load): nothing — natural focus (D14-03).
+  //
+  // NO live-region announcement (D14-09 — focus landing IS the
+  // communication). Row lookup uses the constant-template selector over
+  // ids from validated records only (T-15-08) — used as a lookup key,
+  // never interpolated into URLs or DOM.
+  useEffect(() => {
+    if (status !== "ready") return;
+    const snapshot = peekLibraryContext();
+    if (snapshot === null) return; // cold load — natural focus (D14-03)
+    if (!viewMatches(view, snapshot.view)) {
+      // D15-14 mismatch degrade: fresh reset (h1 default, scroll at top).
+      h1Ref.current?.focus();
+      return;
+    }
+    const maxScroll =
+      document.documentElement.scrollHeight - window.innerHeight;
+    window.scrollTo(0, clampScroll(snapshot.scrollTop, maxScroll));
+    if (snapshot.lastArticleId === null) {
+      // §Interaction 8 — the restored scroll stays authoritative.
+      h1Ref.current?.focus({ preventScroll: true });
+      return;
+    }
+    const rowLink = listRef.current?.querySelector<HTMLAnchorElement>(
+      `a[href="#/article/${snapshot.lastArticleId}"]`,
+    );
+    if (rowLink) {
+      const rect = rowLink.getBoundingClientRect();
+      const intersectsViewport =
+        rect.bottom > 0 && rect.top < window.innerHeight;
+      rowLink.focus({ preventScroll: intersectsViewport });
+    } else {
+      // Row gone — the truthful degrade (D14-05/D15-14).
+      h1Ref.current?.focus();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- restore-on-ready arrival only; a mid-session view switch must not replay it (the [view] effect owns switches)
+  }, [status]);
 
   // Plan 14-02 Task 3 (D14-15) — the uniform h1 rule at its second trigger
   // point: every view switch announces via h1 focus. LibraryView does NOT
@@ -260,6 +419,10 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
         }
         setAllTags([...tagSet].sort((a, b) => a.localeCompare(b)));
         setBooks(loadedBooks);
+        // Plan 15-03 (Pitfall 8) — this mount's list is painted + known:
+        // from here on, an unmount is a REAL departure, so the capture
+        // cleanup above may write the session snapshot (see reachedReadyRef).
+        reachedReadyRef.current = true;
         setStatus("ready");
       })
       .catch(() => {
@@ -467,7 +630,31 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
             <p>{EMPTY_COPY[view].body}</p>
           </>
         ) : (
-          <ul className="library-list">
+          // Plan 15-03 (D15-11) — the delegated launch capture. ONE onClick
+          // on the list ul records the launched article id into
+          // lastLaunchedRef (consumed by the unmount capture above); the
+          // plain anchor still navigates NATIVELY — this handler only
+          // records, never preventDefaults (middle/cmd/ctrl-clicks and
+          // every other row control fall through untouched). The id parses
+          // from the constant-template href via the parseHash article
+          // charset — ids arrive from validated records (T-10-02c/T-15-08)
+          // and are used only as the restore lookup key. BookRow chapter
+          // links match the same template (a chapter open is a launch too;
+          // on return an unexpanded book row degrades to h1 — D15-14).
+          <ul
+            className="library-list"
+            ref={listRef}
+            onClick={(event) => {
+              const anchor = (event.target as HTMLElement).closest(
+                'a[href^="#/article/"]',
+              );
+              if (!anchor) return;
+              const m = /^#\/article\/([a-z0-9-]+)$/.exec(
+                anchor.getAttribute("href") ?? "",
+              );
+              if (m) lastLaunchedRef.current = m[1]!;
+            }}
+          >
             {visibleItems.map((a) => (
               <LibraryRow
                 key={a.id}
