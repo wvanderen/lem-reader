@@ -8,11 +8,11 @@
 
 ### Application Navigation
 
-- [ ] **NAV-01**: Reader can navigate directly among first-class Library and Highlights destinations through a consistent application shell.
-- [ ] **NAV-02**: Reader can use the Lem Reader brand as a predictable link back to the Library.
+- [x] **NAV-01**: Reader can navigate directly among first-class Library and Highlights destinations through a consistent application shell.
+- [x] **NAV-02**: Reader can use the Lem Reader brand as a predictable link back to the Library.
 - [ ] **NAV-03**: Reader can return from an article or highlight review to the prior Library context without losing active filters or scroll position.
 - [x] **NAV-04**: Each destination exposes a coherent page title, heading hierarchy, landmarks, browser-history behavior, and route-change focus policy.
-- [ ] **NAV-05**: Reading-only controls appear in reader context while globally meaningful preferences remain intentionally accessible outside an article.
+- [x] **NAV-05**: Reading-only controls appear in reader context while globally meaningful preferences remain intentionally accessible outside an article.
 
 ### Library Organization
 
@@ -107,11 +107,11 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| NAV-01 | Phase 15 | Pending |
-| NAV-02 | Phase 15 | Pending |
+| NAV-01 | Phase 15 | Complete |
+| NAV-02 | Phase 15 | Complete |
 | NAV-03 | Phase 15 | Pending |
 | NAV-04 | Phase 14 | Complete |
-| NAV-05 | Phase 15 | Pending |
+| NAV-05 | Phase 15 | Complete |
 | LIB-07 | Phase 14 | Complete |
 | LIB-08 | Phase 14 | Complete |
 | LIB-09 | Phase 16 | Pending |

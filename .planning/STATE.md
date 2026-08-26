@@ -5,15 +5,15 @@ milestone_name: Reader Experience
 current_phase: 15
 current_phase_name: Application Shell and Destinations
 status: executing
-stopped_at: Completed 15-01-PLAN.md
-last_updated: "2026-08-26T11:33:58.252Z"
+stopped_at: Completed 15-02-PLAN.md
+last_updated: "2026-08-26T15:59:19.238Z"
 last_activity: 2026-08-26
 last_activity_desc: Phase 15 execution started
 progress:
   total_phases: 8
   completed_phases: 1
   total_plans: 8
-  completed_plans: 5
+  completed_plans: 6
   percent: 13
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-23)
 ## Current Position
 
 Phase: 15 (Application Shell and Destinations) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-08-26 — Phase 15 execution started
 
@@ -157,6 +157,7 @@ Last activity: 2026-08-26 — Phase 15 execution started
 | Phase 14 P02 | 8 min | 3 tasks | 4 files |
 | Phase 14 P03 | 9 min | 3 tasks | 3 files |
 | Phase 15 P01 | 11 min | 2 tasks | 17 files |
+| Phase 15 P02 | 50min (two sessions; Task 3 resume ~22min) | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -368,6 +369,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 15]: 15-01 Highlights rename: internal View name stays "review" while user-facing vocabulary renames (OQ3) — #/highlights canonical arm ordered before the #/review alias arm returning legacyAlias: true — Avoids touching every view.name site; the marker drives replaceState normalization without a new view kind
 - [Phase 15]: 15-01 alias normalization = switchLibraryView shape: history.replaceState(null, "", "#/highlights") + direct setView(parseHash()) in onHash AND once at cold-load mount; never pushState (D14-14), never location.hash assignment (double hashchange) — replaceState fires no hashchange so the direct setView is load-bearing; e2e route-entry (f) proves normalized URL + single-entry Back end-to-end
 - [Phase 15]: 15-01 NAV-01 stays unchecked — destination grammar foundation only; the requirement closes with the shell (15-02) + phase gate (15-04) per the 04-02/06-01/10-01 split precedent — requirements-completed is [] in 15-01-SUMMARY frontmatter; requirement honestly requires the consistent application shell this plan does not ship
+- [Phase ?]: Shell destination links are plain href pushes with NO onClick interception — destination navigation pushes history (D14-14 Back semantics), the inverse of the view-switcher replaceState interception (15-02)
+- [Phase ?]: webkit collapse-reachability degrades to focusability + Enter activation (09-06 engine-divergence precedent); chromium/firefox carry the DOM-order Tab walk (15-02)
+- [Phase ?]: NAV-01/NAV-02/NAV-05 closed at 15-02 (proven in real browser per Task 3 done-criteria); 15-04 re-runs the 3-engine matrix as the phase gate (15-02)
 
 ### Pending Todos
 
@@ -423,8 +427,8 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-26T08:52:03.382Z
-Stopped at: Completed 15-01-PLAN.md
+Last session: 2026-08-26T15:59:10.226Z
+Stopped at: Completed 15-02-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
