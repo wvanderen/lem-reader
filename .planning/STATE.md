@@ -6,14 +6,14 @@ current_phase: 15
 current_phase_name: Application Shell and Destinations
 status: executing
 stopped_at: Completed 15-02-PLAN.md
-last_updated: "2026-08-26T15:59:19.238Z"
+last_updated: "2026-08-26T17:17:43.901Z"
 last_activity: 2026-08-26
 last_activity_desc: Phase 15 execution started
 progress:
   total_phases: 8
   completed_phases: 1
   total_plans: 8
-  completed_plans: 6
+  completed_plans: 7
   percent: 13
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-23)
 ## Current Position
 
 Phase: 15 (Application Shell and Destinations) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-08-26 — Phase 15 execution started
 
@@ -158,6 +158,7 @@ Last activity: 2026-08-26 — Phase 15 execution started
 | Phase 14 P03 | 9 min | 3 tasks | 3 files |
 | Phase 15 P01 | 11 min | 2 tasks | 17 files |
 | Phase 15 P02 | 50min (two sessions; Task 3 resume ~22min) | 3 tasks | 10 files |
+| Phase 15 P03 | 75min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -372,6 +373,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: Shell destination links are plain href pushes with NO onClick interception — destination navigation pushes history (D14-14 Back semantics), the inverse of the view-switcher replaceState interception (15-02)
 - [Phase ?]: webkit collapse-reachability degrades to focusability + Enter activation (09-06 engine-divergence precedent); chromium/firefox carry the DOM-order Tab walk (15-02)
 - [Phase ?]: NAV-01/NAV-02/NAV-05 closed at 15-02 (proven in real browser per Task 3 done-criteria); 15-04 re-runs the 3-engine matrix as the phase gate (15-02)
+- [Phase 15]: [Phase 15]: D15-12 session restore = module singleton (librarySession.ts) gated by reachedReadyRef — StrictMode simulated unmounts must never write the capture (cold loads stay cold; launched ids survive). Departure scroll lives in a ref fed by a passive listener: unmatched-fragment navigation resets scrollY synchronously BEFORE hashchange (probed ["hashchange:0","scroll:0"]) so live window.scrollY at cleanup is always 0 — Probed evidence, not retries: the plan matrix itself surfaced both traps (StrictMode capture poisoning = reading-views cold-load failure; fragment-scroll poison = matrix (d) scroll 0). D15-14 mismatch degrade = fresh warm h1 default resolved from matrix (c) + must-have truths over the literal ready-gate text
 
 ### Pending Todos
 
@@ -427,7 +429,7 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-26T15:59:10.226Z
+Last session: 2026-08-26T17:17:25.075Z
 Stopped at: Completed 15-02-PLAN.md
 Resume file: None
 

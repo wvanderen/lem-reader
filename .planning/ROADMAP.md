@@ -61,7 +61,7 @@ Plans:
   4. Reading-only controls appear only in reader context while globally meaningful preferences remain intentionally available elsewhere.
   5. Library, Highlights, Add, and Reader share coherent gutters, headers, spacing, responsive behavior, and visible focus.
 
-**Plans**: 2/4 plans executed
+**Plans**: 3/4 plans executed
 
 Plans:
 **Wave 1**
@@ -74,7 +74,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 15-03-PLAN.md — librarySession restore module + view-matched Library integration + restore matrix (NAV-03)
+- [x] 15-03-PLAN.md — librarySession restore module + view-matched Library integration + restore matrix (NAV-03)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -184,7 +184,7 @@ Plans:
 | 1-6 | v1.0 | 35/35 | Complete | 2026-08-10 |
 | 7-13 | v2.0 | 53/53 | Complete | 2026-08-23 |
 | 14. Navigation and Library Contracts | v2.1 | 4/4 | Complete    | 2026-08-25 |
-| 15. Application Shell and Destinations | v2.1 | 2/4 | In Progress|  |
+| 15. Application Shell and Destinations | v2.1 | 3/4 | In Progress|  |
 | 16. Organized Library and Focused Add Flow | v2.1 | 0/TBD | Not started | - |
 | 17. Reader-Owned Metadata | v2.1 | 0/TBD | Not started | - |
 | 18. Reader Orientation | v2.1 | 0/TBD | Not started | - |
