@@ -9,7 +9,7 @@
 ## Phases
 
 - [x] **Phase 14: Navigation and Library Contracts** - Establish truthful destination behavior and reading-state policy. (completed 2026-08-25)
-- [ ] **Phase 15: Application Shell and Destinations** - Make Library, Highlights, and Reader predictable first-class destinations.
+- [x] **Phase 15: Application Shell and Destinations** - Make Library, Highlights, and Reader predictable first-class destinations. (completed 2026-08-26)
 - [ ] **Phase 16: Organized Library and Focused Add Flow** - Browse by reading state and add content without permanent form clutter.
 - [ ] **Phase 17: Reader-Owned Metadata** - Edit display title and author without disturbing canonical identity.
 - [ ] **Phase 18: Reader Orientation** - Navigate canonical headings and receive non-intrusive restoration feedback.
@@ -61,7 +61,7 @@ Plans:
   4. Reading-only controls appear only in reader context while globally meaningful preferences remain intentionally available elsewhere.
   5. Library, Highlights, Add, and Reader share coherent gutters, headers, spacing, responsive behavior, and visible focus.
 
-**Plans**: 3/4 plans executed
+**Plans**: 4/4 plans complete
 
 Plans:
 **Wave 1**
@@ -78,7 +78,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 15-04-PLAN.md — POLISH-07 token audit + 320px geometry hardening + 3-engine honest full-suite gate (POLISH-07)
+- [x] 15-04-PLAN.md — POLISH-07 token audit + 320px geometry hardening + 3-engine honest full-suite gate (POLISH-07)
 
 **UI hint**: yes
 
@@ -184,7 +184,7 @@ Plans:
 | 1-6 | v1.0 | 35/35 | Complete | 2026-08-10 |
 | 7-13 | v2.0 | 53/53 | Complete | 2026-08-23 |
 | 14. Navigation and Library Contracts | v2.1 | 4/4 | Complete    | 2026-08-25 |
-| 15. Application Shell and Destinations | v2.1 | 3/4 | In Progress|  |
+| 15. Application Shell and Destinations | v2.1 | 4/4 | Complete   | 2026-08-26 |
 | 16. Organized Library and Focused Add Flow | v2.1 | 0/TBD | Not started | - |
 | 17. Reader-Owned Metadata | v2.1 | 0/TBD | Not started | - |
 | 18. Reader Orientation | v2.1 | 0/TBD | Not started | - |
