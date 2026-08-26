@@ -233,6 +233,15 @@ test.describe("shell nav (15-02 — NAV-01/NAV-02/NAV-05)", () => {
   // compete for one row) the header neither wraps nor overflows. The 48px
   // min-height is byte-stable regression surface; this asserts the row
   // holds via scrollHeight/scrollWidth (the header-geometry evaluate style).
+  //
+  // Plan 15-04 strengthening (strengthen-only — the audit's adjacent
+  // geometry, the 15-02 silent-overlap lesson): scrollWidth cannot see a
+  // deficit that manifests as the two flex groups OVERLAPPING each other
+  // (the 14.2px 15-02 trap — .header-start's min-width: 0 let it shrink
+  // below content). Pin the row's spatial truth directly: .header-controls
+  // fits within the row's content box, and the two groups never overlap
+  // (start's right edge ≤ controls' left edge). Measured slack at the
+  // tightest cell: 10px between groups on all three engines (15-04).
   test("(5) 320×640 reader header: one row — no wrap, no horizontal overflow", async ({
     page,
   }) => {
@@ -242,12 +251,19 @@ test.describe("shell nav (15-02 — NAV-01/NAV-02/NAV-05)", () => {
 
     const geom = await page.evaluate(() => {
       const header = document.querySelector<HTMLElement>(".app-header");
-      if (!header) return null;
+      const start = document.querySelector<HTMLElement>(".header-start");
+      const controls = document.querySelector<HTMLElement>(".header-controls");
+      if (!header || !start || !controls) return null;
       return {
         scrollHeight: header.scrollHeight,
         clientHeight: header.clientHeight,
         scrollWidth: header.scrollWidth,
         clientWidth: header.clientWidth,
+        rowLeft: header.getBoundingClientRect().left,
+        rowRight: header.getBoundingClientRect().right,
+        startRight: start.getBoundingClientRect().right,
+        controlsLeft: controls.getBoundingClientRect().left,
+        controlsRight: controls.getBoundingClientRect().right,
       };
     });
     expect(geom, ".app-header must be mounted").not.toBeNull();
@@ -259,6 +275,23 @@ test.describe("shell nav (15-02 — NAV-01/NAV-02/NAV-05)", () => {
       geom!.scrollWidth,
       `header must not overflow horizontally at 320×640 (scrollWidth ${geom!.scrollWidth} vs clientWidth ${geom!.clientWidth})`,
     ).toBeLessThanOrEqual(geom!.clientWidth + 1);
+    // Strengthened (15-04): the control cluster fits inside the row's
+    // content box — a deficit can no longer hide as silent overlap.
+    expect(
+      geom!.controlsRight,
+      `.header-controls must fit within the row at 320×640 (right ${geom!.controlsRight} vs row ${geom!.rowRight})`,
+    ).toBeLessThanOrEqual(geom!.rowRight + 0.5);
+    expect(
+      geom!.controlsLeft,
+      `.header-controls must start inside the row at 320×640 (left ${geom!.controlsLeft} vs row ${geom!.rowLeft})`,
+    ).toBeGreaterThanOrEqual(geom!.rowLeft - 0.5);
+    // Strengthened (15-04): the two flex groups never overlap (the 15-02
+    // silent-overlap trap — flex-shrink: 0 makes a deficit overflow visibly;
+    // this pins the spatial separation directly).
+    expect(
+      geom!.startRight,
+      `.header-start must not overlap .header-controls at 320×640 (start right ${geom!.startRight} vs controls left ${geom!.controlsLeft})`,
+    ).toBeLessThanOrEqual(geom!.controlsLeft + 0.5);
   });
 
   // (6) Collapse safety — Pitfall 9: the ≤639px wordmark is visually hidden
