@@ -1,10 +1,11 @@
 ---
 phase: 15
 slug: application-shell-and-destinations
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: 2026-08-25
+reviewed_at: 2026-08-25
 ---
 
 # Phase 15 — UI Design Contract
@@ -325,4 +326,4 @@ No interactive user questions were available. Each item below was resolved from 
 - [ ] Dimension 5 Spacing: PASS — multiples of 4 only (all values from the `--space` scale); 44px touch minimum everywhere including 320px; 48px header preserved
 - [ ] Dimension 6 Registry Safety: PASS — no shadcn, no third-party blocks, zero installs
 
-**Approval:** pending
+**Approval:** approved 2026-08-25
