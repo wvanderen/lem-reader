@@ -235,11 +235,15 @@ body:has(main.paginated-main) {
 
 /* ── Article body measure + rhythm (UI-SPEC §Layout + §Typography) ────── */
 /* Calm measure is invariant across breakpoints (Phase 2 lets the reader
-   widen it via --measure). Block rhythm uses em so Phase 2 size changes
-   preserve vertical calm. Inset now lives on main#main (above); this rule
-   keeps only the centered measure to avoid a double inset. The measure is
-   driven by the --measure custom property so applyTheme() can swap it live
-   (Phase 2 D2-03) — default is 64ch (D-07 warm-paper). */
+    widen it via --measure). Block rhythm uses em so Phase 2 size changes
+    preserve vertical calm. Inset now lives on main#main (above); this rule
+    keeps only the centered measure to avoid a double inset. The measure is
+    driven by the --measure custom property so applyTheme() can swap it live
+    (Phase 2 D2-03) — default is 64ch (D-07 warm-paper).
+    POLISH-07 (D15-03) intentional difference: the Reader's 64ch reading
+    measure is NOT drift from the 1100px chrome measure — the reading
+    surface is deliberately narrower than Library/Highlights chrome; do not
+    "fix" it to 1100px. */
 .article-body {
   max-width: var(--measure);
   margin-inline: auto;
@@ -405,6 +409,9 @@ a:hover {
   border-bottom: 1px solid var(--hairline);
 }
 .app-wordmark {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch);
   font-family: var(--font-ui);
   font-size: 14px;
   font-weight: 600;
@@ -413,7 +420,12 @@ a:hover {
      The color declaration is REMOVED so the global a rule (accent +
      underline) applies — the link-honesty invariant, same consumption
      class as the shell-nav links (D14-22 precedent). Font declarations
-     stay; the accessible name is the text (D15-10). */
+     stay; the accessible name is the text (D15-10).
+     Plan 15-04 (POLISH-07 audit — the one touch-target drift): the brand
+     link gains the .shell-nav a anatomy (inline-flex + min-height
+     var(--touch)) — UI-SPEC §Spacing requires the 44px hit area for the
+     brand link too. At ≤639px the clip treatment leaves the row geometry
+     untouched (position:absolute takes it out of flow). */
 }
 
 /* ── Shell destination nav (Plan 15-02 — D15-01/D15-02/D15-08) ──────────── */
@@ -2796,6 +2808,9 @@ dialog.import-preview::backdrop {
   border: 1px solid var(--hairline);
   border-radius: 4px;
   font-family: var(--font-ui);
+  /* POLISH-07 (D15-03) intentional difference: 16px form-control register
+     (the .settings-row / .import-preview select / dialog-button register) —
+     NOT drift from the 14px Label chrome register; do not "fix" to 14px. */
   font-size: 16px;
   color: var(--ink);
 }
