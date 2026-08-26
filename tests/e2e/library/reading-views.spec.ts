@@ -1038,16 +1038,20 @@ test.describe("NAV-04 — focus/title/history matrix", () => {
     );
   });
 
-  test("review destination: the in-app Highlights button sets the destination title + focuses the h1 (D14-01/D14-02; renamed D15-06)", async ({
+  test("review destination: the shell Highlights link sets the destination title + focuses the h1 (D14-01/D14-02; D15-06/D15-02)", async ({
     page,
   }) => {
     await seedCorpus(page);
     await openView(page, "#/");
 
-    // The library header's quiet button (LibraryView, "Highlights" since
-    // Plan 15-01 / D15-06) — its hash assignment
-    // pushes + fires hashchange, so the ReviewView mount is WARM.
-    await page.getByRole("button", { name: "Highlights" }).click();
+    // The shell's Highlights link (Plan 15-02 / OQ1 — nav Primary; the
+    // in-page D10-02 button is gone, this is the sole entry). A plain
+    // <a href> activation pushes + fires hashchange, so the ReviewView
+    // mount is WARM.
+    await page
+      .getByRole("navigation", { name: "Primary" })
+      .getByRole("link", { name: "Highlights" })
+      .click();
     const reviewH1 = page.getByRole("heading", {
       level: 1,
       name: "Highlights",

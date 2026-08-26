@@ -27,7 +27,7 @@ async function tidyOrder(page: Page): Promise<{
   ingestBeforeSearch: boolean;
   searchBeforeList: boolean;
   statusFollowsIngest: boolean;
-  headerHoldsH1AndReviewButton: boolean;
+  headerHoldsH1Only: boolean;
 }> {
   return page.evaluate(() => {
     const q = (sel: string): Element => {
@@ -52,10 +52,13 @@ async function tidyOrder(page: Page): Promise<{
         q(".ingest-control"),
         q(".library-section-add > .status"),
       ),
-      // The header row groups the h1 with the quiet Review-highlights button.
-      headerHoldsH1AndReviewButton:
+      // The header row is the calm h1 row POLISH-06 established — Plan
+      // 15-02 (OQ1) removed the in-page Highlights button, so the header
+      // holds ONLY the h1 (the shell link is the sole highlights entry).
+      headerHoldsH1Only:
         document.querySelector(".library-header h1") !== null &&
-        document.querySelector(".library-header .article-export-highlights") !== null,
+        document.querySelector(".library-header .article-export-highlights") ===
+          null,
     };
   });
 }
@@ -75,7 +78,7 @@ test("library home renders the header row plus three ordered regions (continue �
   expect(order.ingestBeforeSearch, "add-content control precedes the search input").toBe(true);
   expect(order.searchBeforeList, "search input precedes the library list").toBe(true);
   expect(order.statusFollowsIngest, "the .status live region follows the add-content controls").toBe(true);
-  expect(order.headerHoldsH1AndReviewButton, "header row holds the h1 + Review-highlights button").toBe(true);
+  expect(order.headerHoldsH1Only, "header row holds ONLY the h1 (D10-02 button removed — 15-02)").toBe(true);
 });
 
 test("byte-stable library anchors survive the tidy (Pitfall 8-5)", async ({ page }) => {

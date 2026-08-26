@@ -375,27 +375,14 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
       <header className="library-header">
         {/* byte-stable page heading (SC#1 regression target — Pitfall 8-5).
             Plan 14-02 Task 3: gains ONLY tabIndex={-1} + the focus ref —
-            text and level stay byte-stable across ALL views (D14-25). */}
+            text and level stay byte-stable across ALL views (D14-25).
+            Plan 15-02 (OQ1 / UI-SPEC auto-resolution #5): the in-page
+            Highlights button (D10-02) is REMOVED — the shell's Highlights
+            link (Header nav Primary) is the sole library→highlights entry,
+            and the header returns to the calm h1 row POLISH-06 established. */}
         <h1 ref={h1Ref} tabIndex={-1}>
           Saved articles
         </h1>
-        {/* Plan 10-02 (D10-02; label + href renamed by Plan 15-01 / D15-06)
-            — the interim entry point into the Highlights destination
-            (#/highlights), a quiet control BESIDE the h1 (the same
-            .article-export-highlights tokens: transparent bg, hairline
-            border, 44px touch, accent on hover). Navigation is a plain
-            hash assignment (the #/ fallback precedent below), which
-            pushes a history entry so browser-back returns to the library.
-            Plan 15-02 replaces this button with the shell nav link. */}
-        <button
-          type="button"
-          className="article-export-highlights"
-          onClick={() => {
-            window.location.hash = "#/highlights";
-          }}
-        >
-          Highlights
-        </button>
       </header>
       {/* (1) Continue reading — the strip returns null while loading OR when
           the unfinished set is empty (spare chrome per UI-SPEC); the section

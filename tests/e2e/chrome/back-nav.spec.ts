@@ -120,9 +120,12 @@ test("(c) in-app: library → review panel → Back to library returns to the li
   await page.goto(`${BASE}/#/`);
   await expect(libraryHeading(page)).toBeVisible({ timeout: 10_000 });
 
-  // The LibraryView quiet nav button (the D10-02 entry point, renamed
-  // "Highlights" by Plan 15-01 / D15-06).
-  await page.getByRole("button", { name: "Highlights" }).click();
+  // The shell Highlights link (Plan 15-02 / OQ1 — the D10-02 in-page button
+  // is gone; nav Primary holds the sole library→highlights entry).
+  await page
+    .getByRole("navigation", { name: "Primary" })
+    .getByRole("link", { name: "Highlights" })
+    .click();
   await expect(
     page.getByRole("heading", { level: 1, name: "Highlights" }),
   ).toBeVisible({ timeout: 10_000 });

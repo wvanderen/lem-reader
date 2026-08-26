@@ -5,12 +5,13 @@
 // fallback assertion is superseded by the three-view router).
 //
 // Verification-map rows owned by this file (10-VALIDATION.md):
-//   - RECV-01.a — route entry (#/highlights swap, LibraryView entry button)
+//   - RECV-01.a — route entry (#/highlights swap, shell nav link)
 //
 // Covers (Plan 10-02 Task 2 action; renamed atomically by Plan 15-01 /
 // D15-06 — #/highlights is the canonical route, #/review the D15-07
 // legacy alias exercised ONLY by case (f)):
-//   (a) LibraryView "Highlights" button → #/highlights + panel h1
+//   (a) shell "Highlights" link (nav Primary) → #/highlights + panel h1
+//       (Plan 15-02 / OQ1: the link replaced the in-page LibraryView button)
 //   (b) direct deep link BASE#/highlights → panel h1 (route is addressable)
 //   (c) browser-back from #/highlights → library h1 returns (history
 //       discipline — D10-01: a dedicated route, not a modal, so Back
@@ -37,7 +38,7 @@ test.describe("RECV-01.a review-panel route entry", () => {
     await wipeDatabase(page);
   });
 
-  test("(a) LibraryView 'Highlights' button navigates to #/highlights", async ({
+  test("(a) shell 'Highlights' link navigates to #/highlights", async ({
     page,
   }) => {
     await page.goto(`${BASE}/`);
@@ -45,7 +46,13 @@ test.describe("RECV-01.a review-panel route entry", () => {
       page.getByRole("heading", { level: 1, name: "Saved articles" }),
     ).toBeVisible();
 
-    await page.getByRole("button", { name: "Highlights" }).click();
+    // Plan 15-02 (OQ1) — the shell link inside the Primary nav replaced the
+    // in-page LibraryView button as the library→highlights entry. A plain
+    // <a href> activation pushes a history entry + fires hashchange.
+    await page
+      .getByRole("navigation", { name: "Primary" })
+      .getByRole("link", { name: "Highlights" })
+      .click();
 
     await expect(
       page.getByRole("heading", { level: 1, name: "Highlights" }),
@@ -84,7 +91,11 @@ test.describe("RECV-01.a review-panel route entry", () => {
     page,
   }) => {
     await page.goto(`${BASE}/`);
-    await page.getByRole("button", { name: "Highlights" }).click();
+    // Same entry as (a) — the shell link (the in-page button is gone).
+    await page
+      .getByRole("navigation", { name: "Primary" })
+      .getByRole("link", { name: "Highlights" })
+      .click();
     await expect(
       page.getByRole("heading", { level: 1, name: "Highlights" }),
     ).toBeVisible();
