@@ -4,9 +4,9 @@ milestone: v2.1
 milestone_name: Reader Experience
 current_phase: 15
 current_phase_name: Application Shell and Destinations
-status: verifying
-stopped_at: Phase 15 context gathered
-last_updated: "2026-08-26T00:12:05.361Z"
+status: executing
+stopped_at: Phase 15 UI-SPEC approved
+last_updated: "2026-08-26T01:08:24.508Z"
 last_activity: 2026-08-25
 last_activity_desc: Phase 14 complete, transitioned to Phase 15
 progress:
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-08-23)
 
 Phase: 15 — Application Shell and Destinations
 Plan: Not started
-Status: Phase complete — ready for verification
+Status: Ready to execute
 Last activity: 2026-08-25 — Phase 14 complete, transitioned to Phase 15
 
 ## Recent Decisions (Phase 11)
@@ -419,9 +419,9 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-26T00:12:05.352Z
-Stopped at: Phase 15 context gathered
-Resume file: .planning/phases/15-application-shell-and-destinations/15-CONTEXT.md
+Last session: 2026-08-26T00:33:39.486Z
+Stopped at: Phase 15 UI-SPEC approved
+Resume file: .planning/phases/15-application-shell-and-destinations/15-UI-SPEC.md
 
 ## Operator Next Steps
 
