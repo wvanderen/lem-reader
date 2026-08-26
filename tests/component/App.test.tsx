@@ -125,6 +125,30 @@ describe("parseHash — route parser (unit)", () => {
     window.location.hash = "#/review/x";
     expect(parseHash()).toEqual({ name: "list", view: "all" });
   });
+
+  // Plan 15-01 (D15-06/D15-07) — the Highlights rename: #/highlights is
+  // the CANONICAL route for the destination (the internal grammar name
+  // stays "review" — OQ3 resolution: user-facing vocabulary renames, the
+  // internal View name does not), and #/review becomes the legacy alias
+  // carrying the legacyAlias marker so App's onHash can normalize the URL
+  // via history.replaceState (D15-07 — old bookmarks keep working, the
+  // grammar keeps ONE canonical form).
+  it("maps '#/highlights' to the review view", () => {
+    window.location.hash = "#/highlights";
+    expect(parseHash()).toEqual({ name: "review" });
+  });
+
+  it("maps '#/review' to the review view with the legacy alias marker", () => {
+    window.location.hash = "#/review";
+    expect(parseHash()).toEqual({ name: "review", legacyAlias: true });
+  });
+
+  it("maps '#/highlights/x' (unknown sub-route) to the list view", () => {
+    // The D14-16 fallback discipline extended to the canonical literal:
+    // only the exact #/highlights equality routes to the destination.
+    window.location.hash = "#/highlights/x";
+    expect(parseHash()).toEqual({ name: "list", view: "all" });
+  });
 });
 
 describe("App — fragment hashes do not swap the view (Gap 3)", () => {
