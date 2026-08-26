@@ -5,8 +5,8 @@ milestone_name: Reader Experience
 current_phase: 15
 current_phase_name: Application Shell and Destinations
 status: verifying
-stopped_at: Completed 14-04-PLAN.md
-last_updated: "2026-08-25T19:07:49.044Z"
+stopped_at: Phase 15 context gathered
+last_updated: "2026-08-26T00:12:05.361Z"
 last_activity: 2026-08-25
 last_activity_desc: Phase 14 complete, transitioned to Phase 15
 progress:
@@ -419,9 +419,9 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-25T19:01:00.346Z
-Stopped at: Completed 14-04-PLAN.md
-Resume file: None
+Last session: 2026-08-26T00:12:05.352Z
+Stopped at: Phase 15 context gathered
+Resume file: .planning/phases/15-application-shell-and-destinations/15-CONTEXT.md
 
 ## Operator Next Steps
 
