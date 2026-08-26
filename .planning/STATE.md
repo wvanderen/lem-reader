@@ -5,15 +5,15 @@ milestone_name: Reader Experience
 current_phase: 15
 current_phase_name: Application Shell and Destinations
 status: executing
-stopped_at: Phase 15 UI-SPEC approved
-last_updated: "2026-08-26T01:08:24.508Z"
-last_activity: 2026-08-25
-last_activity_desc: Phase 14 complete, transitioned to Phase 15
+stopped_at: Completed 15-01-PLAN.md
+last_updated: "2026-08-26T11:33:58.252Z"
+last_activity: 2026-08-26
+last_activity_desc: Phase 15 execution started
 progress:
   total_phases: 8
   completed_phases: 1
-  total_plans: 4
-  completed_plans: 4
+  total_plans: 8
+  completed_plans: 5
   percent: 13
 ---
 
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-23)
 
 **Core value:** Readers can move through long-form web content with calm, stable orientation, and predictable navigation.
-**Current focus:** Phase 14 — navigation-and-library-contracts
+**Current focus:** Phase 15 — Application Shell and Destinations
 
 ## Current Position
 
-Phase: 15 — Application Shell and Destinations
-Plan: Not started
+Phase: 15 (Application Shell and Destinations) — EXECUTING
+Plan: 2 of 4
 Status: Ready to execute
-Last activity: 2026-08-25 — Phase 14 complete, transitioned to Phase 15
+Last activity: 2026-08-26 — Phase 15 execution started
 
 ## Recent Decisions (Phase 11)
 
@@ -156,6 +156,7 @@ Last activity: 2026-08-25 — Phase 14 complete, transitioned to Phase 15
 | Phase 14 P01 | 6 min | 3 tasks | 8 files |
 | Phase 14 P02 | 8 min | 3 tasks | 4 files |
 | Phase 14 P03 | 9 min | 3 tasks | 3 files |
+| Phase 15 P01 | 11 min | 2 tasks | 17 files |
 
 ## Accumulated Context
 
@@ -364,6 +365,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: 14-03: NAV-04 stays open — title+focus wiring shipped, 3-engine browser proofs (D14-05/D14-10 ordering, EPUB title, review title/warm focus) are 14-04 Task 2's scope; requirements-completed [] (14-01/14-02 split precedent)
 - [Phase ?]: 14-03: hasAppHistory deliberately omitted from focus-effect deps (per-arrival truth — listing it would re-fire restore + resurrect a dismissed banner); rationale in eslint-disable comments at the deps arrays
 - [Phase ?]: 14-04 closes NAV-04/LIB-07/LIB-08 — the 3-engine e2e matrix proved routes, counts, rows, empty states, focus identity, history semantics, and per-destination titles against the IMPORTED readingState policy (structural agreement) — two Rule 1 jsdom-blind production fixes surfaced and closed: detached totalsById.get crashed the library with any located book (5 epub-intake cells pre-red), and the first-run focus flag was not StrictMode-safe (cold-load h1 focus in dev)
+- [Phase 15]: 15-01 Highlights rename: internal View name stays "review" while user-facing vocabulary renames (OQ3) — #/highlights canonical arm ordered before the #/review alias arm returning legacyAlias: true — Avoids touching every view.name site; the marker drives replaceState normalization without a new view kind
+- [Phase 15]: 15-01 alias normalization = switchLibraryView shape: history.replaceState(null, "", "#/highlights") + direct setView(parseHash()) in onHash AND once at cold-load mount; never pushState (D14-14), never location.hash assignment (double hashchange) — replaceState fires no hashchange so the direct setView is load-bearing; e2e route-entry (f) proves normalized URL + single-entry Back end-to-end
+- [Phase 15]: 15-01 NAV-01 stays unchecked — destination grammar foundation only; the requirement closes with the shell (15-02) + phase gate (15-04) per the 04-02/06-01/10-01 split precedent — requirements-completed is [] in 15-01-SUMMARY frontmatter; requirement honestly requires the consistent application shell this plan does not ship
 
 ### Pending Todos
 
@@ -419,9 +423,9 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-26T00:33:39.486Z
-Stopped at: Phase 15 UI-SPEC approved
-Resume file: .planning/phases/15-application-shell-and-destinations/15-UI-SPEC.md
+Last session: 2026-08-26T08:52:03.382Z
+Stopped at: Completed 15-01-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 
