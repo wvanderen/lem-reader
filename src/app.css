@@ -387,8 +387,10 @@ a:hover {
 
 /* ── Persistent app header (D2-02, READ-04) ─────────────────────────────── */
 /* ~48px tall, full-width, sticky to the top of the viewport so focus has a
-   stable home across both views. --surface background, 1px --hairline bottom
-   rule (no shadow). Wordmark inline-start, gear inline-end. */
+   stable home across all destinations. --surface background, 1px --hairline
+   bottom rule (no shadow). Brand link + shell nav (inline-start, D15-01)
+   via .header-start; article-scoped triggers + gear (inline-end) via
+   .header-controls. */
 .app-header {
   position: sticky;
   top: 0;
@@ -407,8 +409,52 @@ a:hover {
   font-size: 14px;
   font-weight: 600;
   letter-spacing: 0.02em;
-  color: var(--ink-soft);
-  /* Wordmark is a <span>, NOT a link — UI-SPEC line 306 (no global Home route). */
+  /* Plan 15-02 (D15-05): the wordmark is now the brand <a href="#/"> link.
+     The color declaration is REMOVED so the global a rule (accent +
+     underline) applies — the link-honesty invariant, same consumption
+     class as the shell-nav links (D14-22 precedent). Font declarations
+     stay; the accessible name is the text (D15-10). */
+}
+
+/* ── Shell destination nav (Plan 15-02 — D15-01/D15-02/D15-08) ──────────── */
+/* Brand link + nav share ONE .header-start group — the single inline-start
+   child of .app-header — so justify-content: space-between keeps the group
+   left and .header-controls right with zero change to the 48px row.
+   min-width: 0 lets the group shrink inside the flex row. */
+.header-start {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+/* The persistent two-destination nav — mirrors .view-switcher link anatomy
+   verbatim: 44px touch targets, --font-ui 14px, inherited global focus
+   ring, no color override (links ride the global a rule). white-space:
+   nowrap keeps the row single-row at every width (D15-01/D15-17 — no
+   second nav row, no wrap). Current-destination state is weight 600 + 2px
+   underline thickness scoped to aria-current — the ONLY current-state
+   styling, never color alone (forced-colors safety, D14-22 promoted to
+   shell level). Zero transition/animation properties (§Interaction 12 /
+   A11Y-06 — the reduced-motion gate is trivially satisfied). */
+.shell-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  white-space: nowrap;
+}
+.shell-nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch);
+  padding-inline: var(--space-xs);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  /* :focus-visible inherits the global 2px ring rule (app.css). */
+}
+.shell-nav a[aria-current="page"] {
+  font-weight: 600;
+  text-decoration-thickness: 2px;
 }
 
 /* ── Gear button (D2-01, READ-04 quiet rule) ────────────────────────────── */
@@ -1293,9 +1339,11 @@ dialog.wipe-confirm::backdrop {
  * content change, not a transition.
  * ════════════════════════════════════════════════════════════════════════ */
 
-/* The two inline-end controls (mode-toggle + gear) share an inline-flex group
-   so they sit adjacent and the wordmark stays inline-start. The gap is calm
-   (--space-sm) so the controls read as one cluster without touching. */
+/* The inline-end controls share an inline-flex group so they sit adjacent
+   and .header-start stays inline-start (D15-01). In Reader the group reads
+   [tags][annotations][mode][gear] (all but the gear articleMounted-gated —
+   D15-15/16); elsewhere it is the gear alone. The gap is calm (--space-sm;
+   --space-xs ≤639px) so the controls read as one cluster without touching. */
 .header-controls {
   display: inline-flex;
   align-items: center;
@@ -3348,6 +3396,65 @@ dialog.book-remove-confirm::backdrop {
     top: var(--space-sm);
     right: var(--space-sm);
     margin: 0;
+  }
+}
+
+/* ── ≤639px shell collapse + narrow tuning (Plan 15-02 — D15-17, UI-SPEC
+      §Interaction 11 / Pitfalls 1 + 9) ────────────────────────────────────
+   At narrow widths the wordmark visually collapses so the two destination
+   links + the 44px icon buttons fit the SINGLE 48px row. The treatment is
+   the shipped .visually-hidden CLIP applied at the breakpoint (identical
+   declarations): the brand link is position:absolute (out of flex flow —
+   consumes zero row width) yet stays in the accessibility tree AND the tab
+   order — NEVER display:none or visibility:hidden (Pitfall 9; keyboard
+   reachability is e2e-asserted). One shell, one rule: the collapse applies
+   on ALL destinations (D15-02).
+
+   Measured 320px budget (chromium, Reader — the tightest cell): the
+   in-flow row is [shell-nav 118px] + [header gap] + [4×46px controls +
+   gaps] + [padding-inline]. The UI-SPEC base recipe (padding --space-sm,
+   controls/start gaps --space-xs, link padding 0) measured a 14.2px
+   silent OVERLAP of the Highlights link under the tags-trigger —
+   .header-start's min-width: 0 let the group shrink below its content,
+   so the deficit overlapped instead of overflowing where the e2e could
+   see it. Fixes (all within "padding/gap trims ONLY — touch targets stay
+   44px, the 48px height never changes"; the sanctioned relief ladder's
+   padding --space-xs step is included):
+     1. This block lives at the FILE END so the cascade beats every base
+        rule (the base .header-controls gap at ~L1379 defeated an earlier
+        same-specificity override placed before it).
+     2. .header-start flex-shrink: 0 at ≤639px — a deficit now shows as
+        REAL scrollWidth overflow the geometry e2e catches, never silent
+        overlap (Pitfall 1 honesty).
+     3. Header gap 0 (space-between alone separates the two groups — the
+        whole slack sits between them at 320px) + shell-nav gap --space-xs.
+   Result at 320×640: ~10px slack, no wrap, no overlap, no overflow.
+   Zero new transition/animation/scroll-behavior properties (A11Y-06). */
+@media (max-width: 639px) {
+  .app-wordmark {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .app-header {
+    padding-inline: var(--space-xs);
+    gap: 0;
+  }
+  .header-start {
+    gap: var(--space-xs);
+    flex-shrink: 0;
+  }
+  .shell-nav {
+    gap: var(--space-xs);
+  }
+  .shell-nav a {
+    padding-inline: 0;
+  }
+  .header-controls {
+    gap: var(--space-xs);
   }
 }
 /* Mechanism note (Option A): PaginatedSurface sets the PAGE-1 fragment's

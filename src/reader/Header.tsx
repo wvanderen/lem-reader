@@ -1,10 +1,12 @@
 // src/reader/Header.tsx
-// The app's first persistent chrome (D2-02, READ-04). Slim (~48px) quiet top
-// bar across BOTH existing views (FixtureList, ArticleView) hosting a wordmark
-// (inline-start), the reading-mode toggle (inline-start of the gear — D4-09),
-// and the settings gear (inline-end). NOT a <nav> — there are two controls.
-// The wordmark is a <span>, NOT a link (UI-SPEC line 306: there is no global
-// Home route; the fixture list lives at #/).
+// The app's persistent chrome (D2-02, READ-04). Slim (~48px) quiet top bar
+// across ALL three destinations (Library, Highlights, Reader — D15-02)
+// hosting the brand link + the shell destination nav (inline-start —
+// D15-01), the article-scoped triggers + reading-mode toggle (inline-start
+// of the gear — D4-09/D15-15), and the settings gear (inline-end).
+// The wordmark is an <a href="#/"> brand link (Plan 15-02 / D15-05: brand
+// always points to #/, the All view — same target as the cold fallback and
+// BackToLibrary's fallback; one predictable home, no view-tracking href).
 //
 // Phase 4 Plan 04-04 (D4-09): Header is now a useSettings() CONSUMER — it
 // reads settings.readingMode directly (no prop-drilling through App). The
@@ -21,9 +23,13 @@
 // (paginated active) — mirrors the gear's open/closed discipline. Copy is
 // verbatim UI-SPEC §Copywriting.
 //
-// Header geometry (READ-04): adding the toggle does NOT grow the header. The
-// toggle + gear share a .header-controls inline-flex group on the inline-end
-// so the wordmark stays inline-start and the row stays 48px.
+// Header geometry (READ-04 / D15-01): adding controls does NOT grow the
+// header. The article-scoped triggers + toggle + gear share a
+// .header-controls inline-flex group on the inline-end; the brand link +
+// shell nav share a .header-start group inline-start. The row stays 48px —
+// at ≤639px the wordmark visually collapses (the .visually-hidden clip —
+// D15-17) while staying keyboard/SR-reachable, so destination links + the
+// 44px icon buttons fit one row.
 //
 // Mirrors src/a11y/SkipLink.tsx minimal-component discipline (single
 // responsibility, verbatim UI-SPEC microcopy, class hook matches CSS).
@@ -73,6 +79,15 @@ interface HeaderProps {
    * caller (App) owns the tag-popover open state (the drawerOpen pattern).
    */
   onToggleTags: () => void;
+  /**
+   * Plan 15-02 (D15-01/D15-02): the active destination, derived in App from
+   * the view (list → "library", review → "highlights", article → "reader").
+   * Drives the shell-nav aria-current discipline (D15-09): the Library link
+   * carries aria-current="page" iff destination === "library", the
+   * Highlights link iff destination === "highlights", and the brand link
+   * NEVER carries it.
+   */
+  destination: "library" | "highlights" | "reader";
 }
 
 export function Header({
@@ -85,19 +100,68 @@ export function Header({
   onToggleAnnotations,
   tagsOpen,
   onToggleTags,
+  destination,
 }: HeaderProps) {
   // Header is a useSettings consumer so the toggle's aria-pressed + glyph
   // reflect the LIVE preference without App prop-drilling. App stays unchanged.
   const { settings } = useSettings();
   return (
     <header className="app-header">
-      <span className="app-wordmark">Lem Reader</span>
       {/*
-        The two inline-end controls share a .header-controls group so they sit
-        adjacent (toggle inline-start of gear) and the wordmark stays inline-
-        start. justify-content: space-between on .app-header puts the wordmark
-        left + the group right; the group's inline-flex keeps the two controls
-        touching with a calm --space-sm gap.
+        Plan 15-02 (D15-01): the brand link + the shell destination nav share
+        ONE .header-start group — the single inline-start child of .app-header
+        — so justify-content: space-between keeps the group left and
+        .header-controls right with zero change to the 48px row.
+      */}
+      <div className="header-start">
+        {/*
+          D15-05: the wordmark is the brand link. href is the FIXED literal
+          "#/" (never view-tracking) — activation lands the All view, the
+          same target as the cold fallback and BackToLibrary's fallback.
+          Accessible name is the text "Lem Reader" — NO aria-label, no
+          "home" suffix (D15-10). The brand NEVER carries aria-current
+          (D15-09); its semantic role is app-home, distinct from the Library
+          destination link even though the href matches.
+        */}
+        <a className="app-wordmark" href="#/">
+          Lem Reader
+        </a>
+        {/*
+          Plan 15-02 (D15-02/D15-08): the persistent shell destination nav —
+          present and identical on Library, Highlights, AND Reader (one
+          shell, one rule). Exactly TWO text links (no Add destination —
+          D15-08; no icon-only links at any width — D15-17). Plain <a href>
+          links with NO onClick interception: activation assigns the hash,
+          pushing a history entry (the desired Back semantics for
+          destination navigation — D14-14), and modified clicks
+          (middle/cmd/ctrl/shift/alt) fall through to native browser
+          behavior. hrefs are fixed literals (same-origin by construction —
+          T-14-04/T-15-04).
+          Landmark label "Primary" is distinct from "Library views"
+          (view-switcher) and "Book chapters" (chapter nav) so all three
+          nav landmarks stay distinguishable in the a11y tree.
+        */}
+        <nav className="shell-nav" aria-label="Primary">
+          <a
+            href="#/"
+            aria-current={destination === "library" ? "page" : undefined}
+          >
+            Library
+          </a>
+          <a
+            href="#/highlights"
+            aria-current={destination === "highlights" ? "page" : undefined}
+          >
+            Highlights
+          </a>
+        </nav>
+      </div>
+      {/*
+        The inline-end controls share a .header-controls group so they sit
+        adjacent (toggle inline-start of gear). justify-content:
+        space-between on .app-header puts .header-start left + the group
+        right; the group's inline-flex keeps the controls touching with a
+        calm --space-sm gap.
       */}
       <div className="header-controls">
         {/*
@@ -150,7 +214,19 @@ export function Header({
             )}
           </button>
         )}
-        <ModeToggle mode={settings.readingMode} onToggle={onToggleMode} />
+        {/*
+          Plan 15-02 (D15-15): ModeToggle joins the tags/annotations triggers
+          behind the articleMounted gate — "pages vs scrolling" only means
+          something with an article mounted. The Reader header reads
+          [tags][annotations][mode][gear]; Library/Highlights read shell nav
+          + gear only. The gear below stays UNGATED (D15-16: the settings
+          panel is THE global-prefs mechanism, reachable on every surface).
+          Article-scoped triggers stay in the shell header, NOT content
+          headers (D15-18).
+        */}
+        {articleMounted && (
+          <ModeToggle mode={settings.readingMode} onToggle={onToggleMode} />
+        )}
         <button
           type="button"
           className="gear-button"

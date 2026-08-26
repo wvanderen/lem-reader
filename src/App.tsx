@@ -303,6 +303,18 @@ function AppInner() {
     setView(parseHash());
   };
 
+  // Plan 15-02 (D15-01/D15-02): the shell destination derived from the view.
+  // ANY of the four list views is the Library destination (views are
+  // state-within-destination — D14-13); review is the Highlights
+  // destination (D15-06); article is Reader. Header stays presentational —
+  // it consumes this for the shell-nav aria-current discipline (D15-09).
+  const destination =
+    view.name === "list"
+      ? "library"
+      : view.name === "review"
+        ? "highlights"
+        : "reader";
+
   return (
     <>
       <SkipLink />
@@ -316,6 +328,7 @@ function AppInner() {
         onToggleAnnotations={() => setDrawerOpen((v) => !v)}
         tagsOpen={tagsOpen}
         onToggleTags={() => setTagsOpen((v) => !v)}
+        destination={destination}
       />
       <SettingsPanel
         open={settingsOpen}
