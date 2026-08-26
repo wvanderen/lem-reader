@@ -222,6 +222,15 @@ function AppInner() {
   const [hasAppHistory, setHasAppHistory] = useState(false);
 
   useEffect(() => {
+    // Plan 15-03 (D15-11..14 / Pitfall 3) — the app owns scroll on Back.
+    // Without this, the browser's native history scroll restore races the
+    // library's ready-gated scrollTo (Chromium would snap Back to the
+    // pre-departure offset before/equally with our restore), and the two
+    // scroll actors can never agree. Set once, early. Conscious trade:
+    // a RELOAD loses the browser's own scroll restore — accepted per
+    // D15-12/D14-17 (the view restores from the URL; session scroll does
+    // not survive reload by decision).
+    history.scrollRestoration = "manual";
     // Gap 3 / UAT test 10: only hashes prefixed with "#/" are app routes.
     // Bare fragment anchors are native in-page scroll targets and must NOT
     // swap the view — otherwise the scroll target element (e.g. the footnote
