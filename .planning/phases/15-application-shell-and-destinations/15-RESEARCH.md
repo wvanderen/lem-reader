@@ -383,15 +383,21 @@ LibraryView: initialize `query`/`activeTag` from the snapshot at first render (l
 
 All other claims in this research were verified against the codebase (direct file reads/greps) or cited from MDN/WAI-ARIA via Context7.
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+All four questions were closed during planning — resolutions are pinned in 15-UI-SPEC.md and the PLAN.md files. Per-question pointers:
 
 1. **The in-page "Review highlights" button (LibraryView L388-396) — remove or keep-renamed?**
    - What we know: D15-06's rename list covers route/h1/nav-link/title but NOT this button; the shell Highlights link makes it redundant; D15-04 deliberately kept BackToLibrary as "calm redundancy" but no such decision keeps this button; its label carries retired vocabulary.
    - What's unclear: whether the user wants the library header to retain a second Highlights entry.
    - Recommendation: REMOVE it (shell link replaces it; reduces the library header to the calm h1 row POLISH-06 established); rewrite `route-entry.spec.ts (a)` to drive navigation via the shell link. If kept, rename to "Highlights" and accept the duplication.
+   - **RESOLVED — removed:** UI-SPEC auto-resolution #5 + 15-02 Task 3 (the shell Highlights link replaces the in-page button).
 2. **Wordmark collapse breakpoint + treatment** — discretion. Recommend a `max-width` rule in the existing sub-640px family with the compact-mark treatment (keeps a visible brand cue); visually-hidden is the fallback if 320px arithmetic stays tight. Verify via the 320px e2e.
+   - **RESOLVED — `.visually-hidden` clip collapse at ≤639px:** UI-SPEC #3 + 15-02 Task 2 (applied on all destinations; the 320×640 collapse-safety test asserts keyboard/SR reachability).
 3. **Internal `View` union name** — keep `{ name: "review" }` or rename to `"highlights"`? Renaming is cleaner grammar but touches every `view.name ===` site (App + specs). Recommend keeping the internal name with a comment, OR renaming within the same commit as the grammar change — planner's call on diff-size vs clarity.
+   - **RESOLVED — internal view name `"review"` stays:** 15-01 Task 2 (user-facing vocabulary renames; the internal grammar name remains stable with a D15-06 citation; alias parses carry `legacyAlias: true`).
 4. **Restore + `warmMount` composition detail** — the h1-focus mount effect (`if (warmMount) h1Ref.current?.focus()`) gains a row-focus branch that preempts it (most-specific wins). Exact mechanism (ref map vs querySelector, preventScroll choice) is discretion — see Pitfall 5 for the ordering constraint the plan must pin.
+   - **RESOLVED — ready-gated scroll-then-focus ordering:** 15-03 Task 3 (restore runs at `status === "ready"`; clamped `window.scrollTo` first, then row focus via the constant-template querySelector with `preventScroll` iff the row intersects the restored viewport).
 
 ## Environment Availability
 
