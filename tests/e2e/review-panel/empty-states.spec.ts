@@ -65,7 +65,8 @@ test.beforeEach(async ({ page }) => {
 });
 
 /** The listing.spec.ts seed shape: schema-declaring reload after the wipe,
- * seed (articles only, or the full corpus), then hash-navigate #/review. */
+ * seed (articles only, or the full corpus), then hash-navigate
+ * #/highlights. */
 async function seedAndOpenReview(
   page: Page,
   rows: SeedRows,
@@ -79,9 +80,9 @@ async function seedAndOpenReview(
     page.getByText("The looting of science fiction").first(),
   ).toBeVisible();
   await seedRows(page, rows);
-  await page.goto(`${BASE}/#/review`);
+  await page.goto(`${BASE}/#/highlights`);
   await expect(
-    page.getByRole("heading", { level: 1, name: "Review highlights" }),
+    page.getByRole("heading", { level: 1, name: "Highlights" }),
   ).toBeVisible();
 }
 

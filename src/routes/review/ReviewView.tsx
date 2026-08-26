@@ -1,5 +1,8 @@
 // src/routes/review/ReviewView.tsx
-// Plan 10-02 Task 1 — the #/review route view (RECV-01.a surface, D10-01).
+// Plan 10-02 Task 1 — the Highlights destination route view (RECV-01.a
+// surface, D10-01; destination vocabulary renamed to "Highlights" in
+// Plan 15-01 — D15-06, canonical route #/highlights with the legacy
+// #/review alias handled in App.tsx).
 // The LibraryView twin: same page shape (<main id="main"> + one h1 + .status
 // live region + filter row + list), same cancelled-flag Promise.all load
 // effect keyed on refreshKey, same pure-derivation-in-the-render-body
@@ -8,8 +11,9 @@
 // rendering + control state.
 //
 // Locked decisions rendered here:
-//   - D10-01: dedicated route (not a modal) at #/review — one h1 per page
-//     ("Review highlights"), skip-link parity via main#main.
+//   - D10-01: dedicated route (not a modal) — one h1 per page
+//     ("Highlights" since the Plan 15-01 / D15-06 rename), skip-link
+//     parity via main#main.
 //   - D10-04/D10-06: grouped-by-article sections (h2 = provenance.title +
 //     a subtle source-host suffix when sourceUrl metadata exists — the
 //     ArticleView "Originally published at {domain}" vocabulary; fixture
@@ -239,16 +243,18 @@ function ReviewRow({
 }
 
 /**
- * ReviewView — the cross-article annotation review panel at #/review.
+ * ReviewView — the cross-article annotation review panel, the Highlights
+ * destination at #/highlights (D15-06 rename; the legacy #/review URL
+ * aliases here via App.tsx normalization).
  * Loads the whole library (articles + highlights + notes + tags) in one
  * parallel Promise.all, derives sections purely in the render body
  * (D10-09 — no effect chains), and renders grouped-by-article sections
  * plus the never-drop orphan tail.
  */
 export function ReviewView({ hasAppHistory }: { hasAppHistory: boolean }) {
-  // Plan 14-03 Task 1 — the h1 focus target (the tabindex=-1 pattern; text
-  // and level byte-stable per the UI-SPEC carried-forward anchor "Review
-  // highlights").
+  // Plan 14-03 Task 1 (renamed by Plan 15-01 / D15-06) — the h1 focus
+  // target (the tabindex=-1 pattern; text is the D15-06 "Highlights"
+  // anchor, level byte-stable).
   const h1Ref = useRef<HTMLHeadingElement>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">(
     "loading",
@@ -280,9 +286,10 @@ export function ReviewView({ hasAppHistory }: { hasAppHistory: boolean }) {
   // announce (loading/error/empty states own the region then).
   const [announcement, setAnnouncement] = useState<string | null>(null);
 
-  // Plan 14-03 Task 1 (D14-02/D14-01/D14-03) — the review destination's
-  // title + warm-gated mount focus (the LibraryView 14-02 Task 3 twin).
-  // setDocumentTitle appends the suffix inside the ONE helper; the h1
+  // Plan 14-03 Task 1 (D14-02/D14-01/D14-03; content renamed by Plan 15-01
+  // / D15-06) — the Highlights destination's title + warm-gated mount
+  // focus (the LibraryView 14-02 Task 3 twin). setDocumentTitle appends
+  // the suffix inside the ONE helper; the h1
   // focus fires ONLY when this mount followed an in-app navigation —
   // hasAppHistory is App's already-threaded flag doubling as the
   // per-mount warm signal (false on cold loads and reloads by
@@ -292,7 +299,7 @@ export function ReviewView({ hasAppHistory }: { hasAppHistory: boolean }) {
   // announcement). Overlays in this view (none today; dialogs are
   // ArticleView/global) touch neither the title nor this focus.
   useEffect(() => {
-    setDocumentTitle("Review highlights");
+    setDocumentTitle("Highlights");
     if (hasAppHistory) h1Ref.current?.focus();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount only
   }, []);
@@ -350,10 +357,11 @@ export function ReviewView({ hasAppHistory }: { hasAppHistory: boolean }) {
             history.back() vs the "#/" fallback (Pitfall 7). */}
         <BackToLibrary hasAppHistory={hasAppHistory} />
         {/* One h1 per page (D10-01) — skip-link parity via main#main.
-            Plan 14-03 Task 1: gains ONLY tabIndex={-1} + the focus ref —
-            text and level byte-stable. */}
+            Plan 14-03 Task 1: gains ONLY tabIndex={-1} + the focus ref;
+            Plan 15-01 (D15-06): text renamed to "Highlights", level
+            byte-stable. */}
         <h1 ref={h1Ref} tabIndex={-1}>
-          Review highlights
+          Highlights
         </h1>
       </header>
       {/* The .status live region (LibraryView L112-123 twin) carries the

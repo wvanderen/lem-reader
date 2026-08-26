@@ -379,20 +379,22 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
         <h1 ref={h1Ref} tabIndex={-1}>
           Saved articles
         </h1>
-        {/* Plan 10-02 (D10-02) — the sole Phase-10 entry point into the
-            cross-article review panel, now a quiet control BESIDE the h1
-            (the same .article-export-highlights tokens: transparent bg,
-            hairline border, 44px touch, accent on hover). Navigation is
-            a plain hash assignment (the #/ fallback precedent below), which
-            pushes a history entry so browser-back returns to the library. */}
+        {/* Plan 10-02 (D10-02; label + href renamed by Plan 15-01 / D15-06)
+            — the interim entry point into the Highlights destination
+            (#/highlights), a quiet control BESIDE the h1 (the same
+            .article-export-highlights tokens: transparent bg, hairline
+            border, 44px touch, accent on hover). Navigation is a plain
+            hash assignment (the #/ fallback precedent below), which
+            pushes a history entry so browser-back returns to the library.
+            Plan 15-02 replaces this button with the shell nav link. */}
         <button
           type="button"
           className="article-export-highlights"
           onClick={() => {
-            window.location.hash = "#/review";
+            window.location.hash = "#/highlights";
           }}
         >
-          Review highlights
+          Highlights
         </button>
       </header>
       {/* (1) Continue reading — the strip returns null while loading OR when

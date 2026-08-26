@@ -2,7 +2,8 @@
 // Hash-based three-view router (A2 recommendation, no router library —
 // STACK.md "no premature abstractions"). Subscribes to `hashchange` and swaps
 // between the LibraryView (default, Plan 08-03), ArticleView
-// (#/article/<id>[/h/<highlightId>]), and ReviewView (#/review, Plan 10-02).
+// (#/article/<id>[/h/<highlightId>]), and ReviewView (#/highlights,
+// Plan 10-02; renamed from #/review in Plan 15-01 — D15-06/D15-07).
 // The SkipLink is the first focusable element in DOM order
 // (UI-SPEC §Interaction 1).
 //
@@ -45,11 +46,19 @@ export type LibraryViewName = "all" | "unread" | "in-progress" | "finished";
 type View =
   | { name: "list"; view: LibraryViewName }
   | { name: "article"; id: string; jumpHighlightId?: string }
-  | { name: "review" };
+  // Plan 15-01 (D15-06, OQ3 resolution) — the destination renamed to
+  // "Highlights" user-facing (#/highlights route, h1, title), but the
+  // INTERNAL grammar name stays "review" so every view.name === "review"
+  // site stays byte-stable. The optional legacyAlias marker (D15-07) is
+  // set ONLY when parseHash matched the legacy #/review literal, so the
+  // onHash handler below can normalize the URL via replaceState.
+  | { name: "review"; legacyAlias?: true };
 
 function parseHash(): View {
   // Grammar order matters (10-RESEARCH Pattern 1): the /h/ suffix form
-  // matches FIRST, then the exact #/review equality, then the view-segment
+  // matches FIRST, then the exact #/highlights equality (D15-06 canonical
+  // route), then the exact #/review equality (D15-07 legacy alias — marked
+  // legacyAlias for the onHash normalization), then the view-segment
   // literal allowlist, then the byte-stable list fallback. The
   // highlightId capture is [^/]+ — deliberately wider than the article-id
   // charset because highlight ids arrive from imported bundles
@@ -62,8 +71,15 @@ function parseHash(): View {
   if (m) {
     return { name: "article", id: m[1] as string, jumpHighlightId: m[2] };
   }
-  if (window.location.hash === "#/review") {
+  // Closed literal allowlist (T-15-01): the route is compared === against
+  // a constant — no route value is ever interpolated into the DOM or URLs.
+  if (window.location.hash === "#/highlights") {
     return { name: "review" };
+  }
+  if (window.location.hash === "#/review") {
+    // D15-07 legacy alias — the caller (onHash / the mount effect)
+    // rewrites the URL to the canonical #/highlights via replaceState.
+    return { name: "review", legacyAlias: true };
   }
   // Plan 14-02 (D14-12/D14-16) — view segments: a CLOSED literal allowlist
   // (each hash is compared === against one of the four view constants;
@@ -222,9 +238,29 @@ function AppInner() {
       // fragment-only hop (e.g. #fn-1) returns above and must not fake
       // in-app history for the BackToLibrary guard.
       setHasAppHistory(true);
+      // Plan 15-01 (D15-07) — legacy #/review normalization, mirroring
+      // switchLibraryView EXACTLY: replaceState with the constant
+      // canonical href (same-origin by construction — T-14-04), then the
+      // DIRECT setView(parseHash()) update. replaceState fires NO
+      // hashchange, so the direct setView is load-bearing — without it
+      // the URL and the DOM desync. NEVER location.hash assignment (a
+      // second hashchange — double processing) and NEVER pushState (an
+      // extra history entry corrupts the D14-14 Back-count semantics).
+      const parsed = parseHash();
+      if (parsed.name === "review" && parsed.legacyAlias) {
+        history.replaceState(null, "", "#/highlights");
+      }
       setView(parseHash());
     };
     window.addEventListener("hashchange", onHash);
+    // Plan 15-01 (D15-07) — cold-load normalization: a fresh load (or
+    // reload) on the legacy literal rewrites the URL once at mount. The
+    // view state from the useState initializer above is already correct
+    // (parseHash maps #/review to the review view); only the URL needs
+    // the canonical form. replaceState, for the same reasons as onHash.
+    if (window.location.hash === "#/review") {
+      history.replaceState(null, "", "#/highlights");
+    }
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
 

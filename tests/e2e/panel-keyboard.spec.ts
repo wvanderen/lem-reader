@@ -128,7 +128,7 @@ test.describe("Settings panel keyboard (A11Y-01/02 — Pitfall 1)", () => {
 });
 
 // ───────────────────────────────────────────────────────────────────────
-// Plan 10-06 (RECV-01.i): keyboard reachability of the #/review panel.
+// Plan 10-06 (RECV-01.i): keyboard reachability of the #/highlights panel.
 // There is no modal on this route, so the contract is REACHABILITY +
 // OPERABILITY (not the dialog focus trap above): Tab order reaches the
 // filter controls (article select → confidence select → sort select) →
@@ -164,9 +164,9 @@ test.describe("Review panel keyboard reachability (RECV-01.i)", () => {
       articles: [article],
       highlights: [highlightRow("kb-review-corpus", anchor, "hl-kb-review-1")],
     });
-    await page.goto(`${BASE}/#/review`);
+    await page.goto(`${BASE}/#/highlights`);
     await expect(
-      page.getByRole("heading", { level: 1, name: "Review highlights" }),
+      page.getByRole("heading", { level: 1, name: "Highlights" }),
     ).toBeVisible();
     await expect(
       page.getByRole("button", { name: /^Go to highlight:/ }).first(),
@@ -247,7 +247,7 @@ test.describe("Review panel keyboard reachability (RECV-01.i)", () => {
     ).toBeVisible();
     await page.goBack();
     await expect(
-      page.getByRole("heading", { level: 1, name: "Review highlights" }),
+      page.getByRole("heading", { level: 1, name: "Highlights" }),
     ).toBeVisible();
   });
 });

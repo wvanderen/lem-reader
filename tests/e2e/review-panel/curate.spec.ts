@@ -113,7 +113,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 /** The listing.spec.ts seed shape: schema-declaring reload after the wipe,
- * seed the corpus, then hash-navigate to #/review and wait for the h1. */
+ * seed the corpus, then hash-navigate to #/highlights and wait for the h1. */
 async function seedAndOpenReview(page: Page): Promise<void> {
   await page.goto(`${BASE}/#/`);
   await page.reload();
@@ -124,9 +124,9 @@ async function seedAndOpenReview(page: Page): Promise<void> {
     page.getByText("The looting of science fiction").first(),
   ).toBeVisible();
   await seedRows(page, CORPUS_ROWS);
-  await page.goto(`${BASE}/#/review`);
+  await page.goto(`${BASE}/#/highlights`);
   await expect(
-    page.getByRole("heading", { level: 1, name: "Review highlights" }),
+    page.getByRole("heading", { level: 1, name: "Highlights" }),
   ).toBeVisible();
 }
 
@@ -181,7 +181,7 @@ test.describe("RECV-01.f review-panel curate (10-05 in-place edit + delete)", ()
     // update itself was already proven above without it).
     await page.reload();
     await expect(
-      page.getByRole("heading", { level: 1, name: "Review highlights" }),
+      page.getByRole("heading", { level: 1, name: "Highlights" }),
     ).toBeVisible();
     await expect(
       rowByExcerpt(page, EXCERPT_NOTED).locator(".review-note-preview"),
@@ -218,7 +218,7 @@ test.describe("RECV-01.f review-panel curate (10-05 in-place edit + delete)", ()
     // Persistence double-check.
     await page.reload();
     await expect(
-      page.getByRole("heading", { level: 1, name: "Review highlights" }),
+      page.getByRole("heading", { level: 1, name: "Highlights" }),
     ).toBeVisible();
     await expect(
       rowByExcerpt(page, EXCERPT_ORPHAN).locator(".review-note-preview"),
@@ -343,7 +343,7 @@ test.describe("RECV-01.f review-panel curate (10-05 in-place edit + delete)", ()
     // Dexie truth: the row stays gone after a reload.
     await page.reload();
     await expect(
-      page.getByRole("heading", { level: 1, name: "Review highlights" }),
+      page.getByRole("heading", { level: 1, name: "Highlights" }),
     ).toBeVisible();
     await expect(rowByExcerpt(page, EXCERPT_NOTED)).toHaveCount(0);
     await expect(rowByExcerpt(page, EXCERPT_ORPHAN)).toBeVisible();

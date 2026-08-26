@@ -39,7 +39,7 @@
 //     re-declares the v4 schema) before seedRows — otherwise seedRows'
 //     raw indexedDB.open recreates a store-less v1 DB whose open connection
 //     blocks Dexie's upgrade forever.
-//   - Rows seed AFTER the reload and BEFORE the hash-only #/review goto
+//   - Rows seed AFTER the reload and BEFORE the hash-only #/highlights goto
 //     (same-document navigation mounts ReviewView, whose load effect reads
 //     the seeded rows — the proven 10-03 shape).
 //
@@ -160,8 +160,8 @@ test.beforeEach(async ({ page }) => {
 });
 
 /** Reload-boot the app so Dexie re-declares the v4 schema after the wipe
- * (the 10-03 schema-declaring reload), seed the corpus, then open #/review
- * and wait for the panel h1. */
+ * (the 10-03 schema-declaring reload), seed the corpus, then open
+ * #/highlights and wait for the panel h1. */
 async function seedCorpusAndOpenReview(
   page: Page,
   rows: SeedRows = CORPUS_ROWS,
@@ -178,9 +178,9 @@ async function seedCorpusAndOpenReview(
     page.getByText("The looting of science fiction").first(),
   ).toBeVisible();
   await seedRows(page, rows);
-  await page.goto(`${BASE}/#/review`);
+  await page.goto(`${BASE}/#/highlights`);
   await expect(
-    page.getByRole("heading", { level: 1, name: "Review highlights" }),
+    page.getByRole("heading", { level: 1, name: "Highlights" }),
   ).toBeVisible();
 }
 

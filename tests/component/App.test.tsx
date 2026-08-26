@@ -98,7 +98,8 @@ describe("parseHash — route parser (unit)", () => {
   });
 
   // Plan 10-02 (D10-03, RECV-01.h) — the /h/ deep-link grammar + the
-  // #/review route. Strengthen-only: every case above stays byte-stable.
+  // destination route (see the Plan 15-01 Highlights cases below).
+  // Strengthen-only: every case above stays byte-stable.
   it("maps '#/article/<id>/h/<highlightId>' to the article view with jumpHighlightId", () => {
     window.location.hash = "#/article/a-one/h/hl-123";
     expect(parseHash()).toEqual({
@@ -116,11 +117,6 @@ describe("parseHash — route parser (unit)", () => {
     expect(parseHash()).toEqual({ name: "list", view: "all" });
   });
 
-  it("maps '#/review' to the review view", () => {
-    window.location.hash = "#/review";
-    expect(parseHash()).toEqual({ name: "review" });
-  });
-
   it("maps '#/review/x' (unknown sub-route) to the list view", () => {
     window.location.hash = "#/review/x";
     expect(parseHash()).toEqual({ name: "list", view: "all" });
@@ -132,7 +128,10 @@ describe("parseHash — route parser (unit)", () => {
   // internal View name does not), and #/review becomes the legacy alias
   // carrying the legacyAlias marker so App's onHash can normalize the URL
   // via history.replaceState (D15-07 — old bookmarks keep working, the
-  // grammar keeps ONE canonical form).
+  // grammar keeps ONE canonical form). The superseded 10-02 case
+  // ("maps '#/review' to the review view" asserting the plain shape) is
+  // folded into the strengthened alias case below — it asserted strictly
+  // less than the alias case pins now.
   it("maps '#/highlights' to the review view", () => {
     window.location.hash = "#/highlights";
     expect(parseHash()).toEqual({ name: "review" });

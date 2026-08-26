@@ -1038,21 +1038,22 @@ test.describe("NAV-04 — focus/title/history matrix", () => {
     );
   });
 
-  test("review destination: the in-app Review highlights button sets the review title + focuses the review h1 (D14-01/D14-02)", async ({
+  test("review destination: the in-app Highlights button sets the destination title + focuses the h1 (D14-01/D14-02; renamed D15-06)", async ({
     page,
   }) => {
     await seedCorpus(page);
     await openView(page, "#/");
 
-    // The library header's quiet button (LibraryView) — its hash assignment
+    // The library header's quiet button (LibraryView, "Highlights" since
+    // Plan 15-01 / D15-06) — its hash assignment
     // pushes + fires hashchange, so the ReviewView mount is WARM.
-    await page.getByRole("button", { name: "Review highlights" }).click();
+    await page.getByRole("button", { name: "Highlights" }).click();
     const reviewH1 = page.getByRole("heading", {
       level: 1,
-      name: "Review highlights",
+      name: "Highlights",
     });
     await expect(reviewH1).toBeVisible({ timeout: 10_000 });
     await expect(reviewH1).toBeFocused();
-    await expect(page).toHaveTitle("Review highlights — Lem Reader");
+    await expect(page).toHaveTitle("Highlights — Lem Reader");
   });
 });

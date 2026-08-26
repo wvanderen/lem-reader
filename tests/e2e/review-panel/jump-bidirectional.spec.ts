@@ -4,7 +4,7 @@
 // Verification-map rows owned by this file (10-VALIDATION.md):
 //   - RECV-01.c — jump bidirectional (both reading modes) + deep-link no re-jump
 //   - RECV-01.i — regression rows (forced-colors / reduced-motion / keyboard /
-//     a11y on #/review) extend this spec's route forms
+//     a11y on #/highlights) extend this spec's route forms
 //
 // Strengthens the 10-01 Wave-0 sentinel in place (file + describe base name
 // kept; content rewritten per the Phase-10-native strengthen-only rule).
@@ -17,14 +17,14 @@
 //      saved-location restore may run, never a jump),
 //   4. calm no-op for an unresolvable id — normal article open, stripped
 //      URL, no error surface (research Pitfall 4),
-//   5. browser Back from the deep-linked article returns to #/review (the
+//   5. browser Back from the deep-linked article returns to #/highlights (the
 //      SC#2 arrival half; the click-from-row loop closes in 10-06).
 //
 // Plan 10-06 Task 1 — the CLOSING half of RECV-01.c: two loop tests (one
 // per reading mode) that drive the jump from the panel row button itself
 // (a real reader click by role + accessible name — the assertion 10-03
 // could not make because the panel surface did not exist yet) and return
-// via page.goBack() to the #/review h1. After Back, panel OPERABILITY is
+// via page.goBack() to the #/highlights h1. After Back, panel OPERABILITY is
 // asserted (filter combobox visible/enabled + the row button focusable) —
 // NEVER origin-row focus, which is engine-variable (the manual-only feel
 // check lives in 10-VALIDATION.md). Pitfall 9: the panel remounts scrolled
@@ -252,7 +252,7 @@ test.describe("RECV-01.c review-panel jump bidirectional (10-03 deep-link arriva
     }).toPass({ timeout: 10_000 });
   });
 
-  test("browser Back from the deep-linked article returns to #/review", async ({
+  test("browser Back from the deep-linked article returns to #/highlights", async ({
     page,
   }) => {
     await seedCorpus(page);
@@ -260,9 +260,9 @@ test.describe("RECV-01.c review-panel jump bidirectional (10-03 deep-link arriva
     // have behind them), then push the deep link exactly the way the
     // panel row will in 10-06: a plain location.hash assignment (a
     // history PUSH, not a replace).
-    await page.goto(`${BASE}/#/review`);
+    await page.goto(`${BASE}/#/highlights`);
     await expect(
-      page.getByRole("heading", { level: 1, name: "Review highlights" }),
+      page.getByRole("heading", { level: 1, name: "Highlights" }),
     ).toBeVisible();
     await page.evaluate(
       (hash) => {
@@ -274,24 +274,24 @@ test.describe("RECV-01.c review-panel jump bidirectional (10-03 deep-link arriva
       page.getByRole("heading", { level: 1, name: TITLE }),
     ).toBeVisible();
     await expectFocusedArrival(page);
-    // Back lands on #/review — the deep link was a history push.
+    // Back lands on #/highlights — the deep link was a history push.
     await page.goBack();
     await expect(
-      page.getByRole("heading", { level: 1, name: "Review highlights" }),
+      page.getByRole("heading", { level: 1, name: "Highlights" }),
     ).toBeVisible();
-    await expect(page).toHaveURL(/#\/review$/);
+    await expect(page).toHaveURL(/#\/highlights$/);
   });
 });
 
 test.describe("RECV-01.c review-panel jump bidirectional (10-06 click-from-row loop)", () => {
-  /** The shared loop body: from a seeded #/review, click the confident
+  /** The shared loop body: from a seeded #/highlights, click the confident
    * row's jump button (role + accessible name — a real reader click),
    * assert focused arrival + stripped URL, then browser Back returns to
-   * the #/review h1 with an operable panel. */
+   * the #/highlights h1 with an operable panel. */
   async function exerciseRowClickLoop(page: Page): Promise<void> {
-    await page.goto(`${BASE}/#/review`);
+    await page.goto(`${BASE}/#/highlights`);
     await expect(
-      page.getByRole("heading", { level: 1, name: "Review highlights" }),
+      page.getByRole("heading", { level: 1, name: "Highlights" }),
     ).toBeVisible();
     // The confident row's jump button — enabled (D10-03: only confident
     // rows are jumpable; ambiguous/orphan render disabled + aria-disabled).
@@ -309,13 +309,13 @@ test.describe("RECV-01.c review-panel jump bidirectional (10-06 click-from-row l
       page.getByRole("heading", { level: 1, name: TITLE }),
     ).toBeVisible();
     await expectFocusedArrival(page);
-    // Back returned to #/review — SC#2 bidirectional, now proven through
+    // Back returned to #/highlights — SC#2 bidirectional, now proven through
     // the real UI path (row click → jump → Back).
     await page.goBack();
     await expect(
-      page.getByRole("heading", { level: 1, name: "Review highlights" }),
+      page.getByRole("heading", { level: 1, name: "Highlights" }),
     ).toBeVisible();
-    await expect(page).toHaveURL(/#\/review$/);
+    await expect(page).toHaveURL(/#\/highlights$/);
     // Focus-restore observation — panel OPERABILITY only, never
     // origin-row focus (engine-variable; 10-VALIDATION.md owns the feel
     // check). Pitfall 9: the remount-scrolled-to-top behavior is the
@@ -327,7 +327,7 @@ test.describe("RECV-01.c review-panel jump bidirectional (10-06 click-from-row l
     await expect(rowButton).toBeFocused();
   }
 
-  test("paginated loop: row-button click jumps to the focused mark; Back returns to #/review", async ({
+  test("paginated loop: row-button click jumps to the focused mark; Back returns to #/highlights", async ({
     page,
   }) => {
     await seedCorpus(page);

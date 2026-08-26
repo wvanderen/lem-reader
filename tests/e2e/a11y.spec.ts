@@ -180,17 +180,17 @@ test("a11y ACPT-02 #2: note popover open is a modal dialog + axe-clean + single-
   expect(isModal, "note popover is modal (:modal — showModal opened it)").toBe(true);
 });
 
-// ── Phase 10 (RECV-01.i): the #/review axe gate on a seeded non-empty panel ──
+// ── Phase 10 (RECV-01.i): the #/highlights axe gate on a seeded non-empty panel ──
 // Plan 10-06 Task 2 — the review panel route held to the SAME bar as the
 // fixture list + article views: zero serious/critical WCAG 2.2 AA
-// violations plus the Pitfall-8 guards (the one-h1 "Review highlights" +
+// violations plus the Pitfall-8 guards (the one-h1 "Highlights" +
 // h2 section structure must pass heading-order; the grouped
 // ul.review-section-list rows must pass the list rule). Seeded NON-EMPTY
 // (article + confident highlight + note) so axe samples the real row
 // structure — quote, note preview, date, curation cluster. The two
 // manual-only SR rows in 10-VALIDATION.md stay queued for
 // /gsd-verify-work (axe reports only automatable issues).
-test("review panel #/review: zero serious/critical WCAG 2.2 AA violations (seeded non-empty panel)", async ({
+test("review panel #/highlights: zero serious/critical WCAG 2.2 AA violations (seeded non-empty panel)", async ({
   page,
 }) => {
   // Deterministic first-run state (the shared e2e harness discipline).
@@ -231,9 +231,9 @@ test("review panel #/review: zero serious/critical WCAG 2.2 AA violations (seede
       },
     ],
   });
-  await page.goto(`${BASE}/#/review`);
+  await page.goto(`${BASE}/#/highlights`);
   await expect(
-    page.getByRole("heading", { level: 1, name: "Review highlights" }),
+    page.getByRole("heading", { level: 1, name: "Highlights" }),
   ).toBeVisible();
   // The seeded row rendered (the panel's load effect settled) before axe
   // samples the tree — an empty panel would silently weaken the gate.

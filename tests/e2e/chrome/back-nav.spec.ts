@@ -12,7 +12,7 @@
 //       deep-link tab would exit the app; the fallback makes that
 //       unreachable)
 //   (c) review panel — both the in-app return (library → review → Back)
-//       and the deep-link fallback (fresh #/review → Back → #/)
+//       and the deep-link fallback (fresh #/highlights → Back → #/)
 //   (d) keyboard — the control is a role=button with accessible name
 //       "Back to library", Tab-reachable from the page top in DOM order
 //       (chromium + firefox; webkit skips links/buttons in sequential
@@ -120,10 +120,11 @@ test("(c) in-app: library → review panel → Back to library returns to the li
   await page.goto(`${BASE}/#/`);
   await expect(libraryHeading(page)).toBeVisible({ timeout: 10_000 });
 
-  // The LibraryView quiet nav button (the D10-02 entry point).
-  await page.getByRole("button", { name: "Review highlights" }).click();
+  // The LibraryView quiet nav button (the D10-02 entry point, renamed
+  // "Highlights" by Plan 15-01 / D15-06).
+  await page.getByRole("button", { name: "Highlights" }).click();
   await expect(
-    page.getByRole("heading", { level: 1, name: "Review highlights" }),
+    page.getByRole("heading", { level: 1, name: "Highlights" }),
   ).toBeVisible({ timeout: 10_000 });
   await expect(backToLibrary(page)).toBeVisible();
 
@@ -133,13 +134,13 @@ test("(c) in-app: library → review panel → Back to library returns to the li
   await expect(page).toHaveURL(/#\/$/);
 });
 
-test("(c) deep link: fresh #/review → Back to library falls back to #/ (Enter activation)", async ({
+test("(c) deep link: fresh #/highlights → Back to library falls back to #/ (Enter activation)", async ({
   page,
 }) => {
   // Fresh context direct goto — the review mount's deep-link fallback, and
   // keyboard activation (focused button + Enter) covers the review mount's
   // operability without a pointer.
-  await page.goto(`${BASE}/#/review`);
+  await page.goto(`${BASE}/#/highlights`);
   await expect(backToLibrary(page)).toBeVisible({ timeout: 10_000 });
 
   await backToLibrary(page).focus();

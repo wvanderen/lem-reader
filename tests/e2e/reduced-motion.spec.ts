@@ -109,7 +109,7 @@ test.describe("Reduced motion (A11Y-06)", () => {
   });
 
   // ───────────────────────────────────────────────────────────────────────
-  // Plan 10-06 (RECV-01.i): the #/review route under reduced motion. The
+  // Plan 10-06 (RECV-01.i): the #/highlights route under reduced motion. The
   // review block ships NO transition/animation properties (the 10-02/10-05
   // additive CSS is tokens-only), so the global gate is trivially
   // satisfied — assert it in this spec's own idiom (no element on the
@@ -142,9 +142,9 @@ test.describe("Reduced motion (A11Y-06)", () => {
       articles: [article],
       highlights: [highlightRow("rm-review-corpus", anchor, "hl-rm-review-1")],
     });
-    await page.goto(`${BASE}/#/review`);
+    await page.goto(`${BASE}/#/highlights`);
     await expect(
-      page.getByRole("heading", { level: 1, name: "Review highlights" }),
+      page.getByRole("heading", { level: 1, name: "Highlights" }),
     ).toBeVisible();
     await expect(
       page.getByRole("button", { name: /^Go to highlight:/ }).first(),
@@ -158,7 +158,7 @@ test.describe("Reduced motion (A11Y-06)", () => {
     );
     expect(
       animated,
-      "no element on #/review should declare an animation under reduced-motion",
+      "no element on #/highlights should declare an animation under reduced-motion",
     ).toBe(false);
     // Operable: the confident row's jump button opens the article.
     const rowButton = page
