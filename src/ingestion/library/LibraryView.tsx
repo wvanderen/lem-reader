@@ -96,6 +96,11 @@ import { BookRemoveConfirm } from "./BookRemoveConfirm";
 // open state + the book-success refresh (article success navigates inside
 // the dialog per D16-12).
 import { AddDialog } from "../AddDialog";
+// Plan 17-02 (D17-01..D17-04) — the reader-owned metadata edit dialog: a
+// structural RemoveConfirm/AddDialog clone (Pitfall 8 — no shared dialog
+// abstraction) hosting the single override write (the Dexie articles-table
+// put).
+import { EditMetadataDialog } from "./EditMetadataDialog";
 
 /** A book pending destructive confirmation (Plan 12-05 — BookRow's Remove
  * book trigger is the only setter caller; BookRemoveConfirm consumes it). */
@@ -242,6 +247,11 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
   const [removeTarget, setRemoveTarget] = useState<
     { id: string; title: string } | null
   >(null);
+  // Plan 17-02 — the captured article row whose metadata the reader is
+  // editing (D17-01). Non-null ⇒ EditMetadataDialog is open; onSaved closes
+  // it and bumps refreshKey (the removeTarget onConfirm precedent) so the
+  // list re-derives the row with the effective values.
+  const [editTarget, setEditTarget] = useState<CanonicalArticle | null>(null);
   // Plan 12-05 — book-level Remove trigger state. BookRemoveConfirm consumes
   // it (the BookRow onRemove callback below is its sole setter caller).
   const [bookRemoveTarget, setBookRemoveTarget] =
@@ -706,6 +716,16 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
                     title: effectiveTitle(a),
                   })
                 }
+                // Plan 17-02 (D17-01) — the edit affordance is gated to
+                // Dexie-persisted rows ONLY (the SourceBadge fixture
+                // inference: bundled Sample rows have nowhere to persist an
+                // override — OQ1 resolved via gate). Book rows, chapter
+                // sub-rows, and fixture rows get NO onEdit (D17-05/D17-06).
+                onEdit={
+                  a.ingestionMeta !== undefined
+                    ? () => setEditTarget(a)
+                    : undefined
+                }
               />
             ))}
             {/* Plan 12-05 — one expandable BookRow per VISIBLE Book (chapters
@@ -801,6 +821,21 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
           }
         }}
         onCancel={() => setRemoveTarget(null)}
+      />
+      {/* Plan 17-02 — the reader-owned metadata edit dialog (D17-01..D17-04).
+          open mirrors editTarget; the dialog's Save handler owns the ONE
+          override write on the articles table (Pitfall 8). onSaved closes the
+          dialog and bumps refreshKey so the row re-derives with the
+          effective values (the removeTarget onConfirm precedent); every
+          calm close path (Cancel, Esc) routes through onCancel. */}
+      <EditMetadataDialog
+        open={editTarget !== null}
+        article={editTarget}
+        onSaved={() => {
+          setEditTarget(null);
+          setRefreshKey((k) => k + 1);
+        }}
+        onCancel={() => setEditTarget(null)}
       />
       {/* Plan 12-05 — book-level cascade-remove confirmation. The Proceed
           onClick inside BookRemoveConfirm is the SOLE executable

@@ -2107,6 +2107,28 @@ dialog.annotations-drawer::backdrop {
   color: var(--destructive);
   border-color: var(--destructive);
 }
+/* Plan 17-02 (D17-01) — quiet edit-metadata icon button for the row,
+   cloning the .library-row-remove discipline above with the ACCENT (not
+   destructive) on hover: transparent rest state, 44px touch box,
+   --ink-soft at rest, --accent on hover so the affordance reads as
+   non-destructive. Zero motion properties (POLISH-07). */
+.library-row-edit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--touch);
+  min-width: var(--touch);
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.library-row-edit:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
 
 /* SourceBadge — .meta typography; no border, no fill (UI-SPEC §SourceBadge).
    The link variant inherits the global `a { color: var(--accent) }` rule. */
@@ -2538,6 +2560,141 @@ dialog.library-remove-confirm::backdrop {
   color: var(--ink);
 }
 .library-remove-cancel:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* ── EditMetadataDialog (Plan 17-02 — reader-owned metadata edit) ────────── */
+/* Structural clone of .library-remove-confirm + .add-dialog geometry (the
+   clone-lineage rule: own .edit-metadata* hooks so dialog.<class> locators
+   stay strict). A non-destructive PLAIN dialog (no alertdialog role — the
+   AddDialog precedent). Centered modal geometry on POLISH-07 tokens, zero
+   motion properties (A11Y-06 discipline). The backdrop scrim alpha matches
+   the shipped remove-confirm/add-dialog value. */
+dialog.edit-metadata {
+  margin: auto; /* UA dialog:modal centering (D13-14 — the POLISH-04 fix) */
+  padding: 0;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: var(--surface-raised);
+  color: var(--ink);
+  width: calc(100vw - var(--space-xl)); /* safe at 320px */
+  max-width: 480px;
+  overflow: auto;
+}
+dialog.edit-metadata::backdrop {
+  background: rgba(31, 27, 22, 0.5);
+}
+.edit-metadata-inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+}
+.edit-metadata-inner h2 {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 22px;
+  line-height: 1.3;
+  font-weight: 600;
+}
+.edit-metadata-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+/* One label + input + quiet Reset per field (D17-03). */
+.edit-metadata-field {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-xs);
+}
+.edit-metadata-field label {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  font-weight: 600;
+  color: var(--ink);
+}
+.edit-metadata-field input[type="text"] {
+  width: 100%;
+  min-height: var(--touch);
+  padding: var(--space-sm);
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink);
+  /* :focus-visible inherits the global 2px ring rule (app.css). */
+}
+/* Quiet per-field Reset — the .library-clear-filters token treatment:
+   transparent rest, hairline border, --ink-soft at rest, --accent on
+   hover, 44px --touch minimum. */
+.edit-metadata-reset {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch);
+  padding-inline: var(--space-xs);
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.edit-metadata-reset:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+/* The calm blank-title explanation line (D17-04). */
+.edit-metadata-hint {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+.edit-metadata-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  justify-content: flex-end;
+  margin-top: var(--space-sm);
+}
+.edit-metadata-save,
+.edit-metadata-cancel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--touch);
+  padding-inline: var(--space-md);
+  border-radius: 4px;
+  font-family: var(--font-ui);
+  font-size: 16px;
+  cursor: pointer;
+}
+/* Save: --accent border conveys the committing affordance (the deliberate
+   anti-.library-remove-destructive — edit is not destructive). */
+.edit-metadata-save {
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+}
+.edit-metadata-save:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.edit-metadata-cancel {
+  background: transparent;
+  border: 1px solid var(--hairline);
+  color: var(--ink);
+}
+.edit-metadata-cancel:hover:not(:disabled) {
   color: var(--accent);
   border-color: var(--accent);
 }

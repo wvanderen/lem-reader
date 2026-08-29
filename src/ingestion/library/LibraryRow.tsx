@@ -50,6 +50,14 @@ interface LibraryRowProps {
    */
   onRemove?: () => void;
   /**
+   * Optional edit-metadata trigger handler (Plan 17-02 — D17-01). When
+   * present, the row renders a quiet pencil-glyph button immediately before
+   * the remove button; LibraryView passes it ONLY on top-level article rows
+   * that are Dexie-persisted (`ingestionMeta !== undefined` — bundled Sample
+   * fixtures and book/chapter rows never do; D17-05/D17-06).
+   */
+  onEdit?: () => void;
+  /**
    * Heading level for the row title (Plan 12-05 — BookRow chapter sub-rows).
    * Default 2 keeps the standalone-row markup byte-stable (Pitfall 8-5);
    * 3 nests chapter sub-rows inside an expanded book group (h2 book title →
@@ -62,6 +70,7 @@ export function LibraryRow({
   article,
   location,
   onRemove,
+  onEdit,
   headingLevel = 2,
 }: LibraryRowProps) {
   const id = article.id;
@@ -121,6 +130,21 @@ export function LibraryRow({
         <a href={`#/article/${id}`} aria-labelledby={`title-${id}`}>
           Open article
         </a>
+        {/* Edit-metadata affordance — Plan 17-02 (D17-01). Only when
+            onEdit is wired (Dexie-persisted top-level rows only). Sits
+            immediately before the remove button in the same actions
+            cluster; the aria-label template names the action + the
+            EFFECTIVE title (the one name the reader sees). */}
+        {onEdit && (
+          <button
+            type="button"
+            className="library-row-edit"
+            aria-label={`Edit title and author for ${effectiveTitle(article)}`}
+            onClick={onEdit}
+          >
+            <EditIcon aria-hidden="true" />
+          </button>
+        )}
         {/* Remove affordance — only when onRemove is wired (Plan 04). The
             glyph is the inline-SVG waste-bin below (Phase 13 G3 — real icon,
             not an emoji character); aria-label carries the accessible name
@@ -171,6 +195,34 @@ function TrashIcon({ ariaHidden }: { ariaHidden?: "true" }) {
       {/* inner lines */}
       <path d="M10 11v6" />
       <path d="M14 11v6" />
+    </svg>
+  );
+}
+
+/**
+ * Plan 17-02 (D17-01) — pencil glyph for the row edit-metadata affordance.
+ * Clones the TrashIcon anatomy exactly (20×20, 24-unit viewBox, currentColor
+ * stroke, round caps/joins, aria-hidden + focusable=false): decorative, so
+ * the button's aria-label carries the full accessible name.
+ */
+function EditIcon({ ariaHidden }: { ariaHidden?: "true" }) {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden={ariaHidden}
+      focusable="false"
+    >
+      {/* baseline */}
+      <path d="M12 20h9" />
+      {/* pencil body */}
+      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
     </svg>
   );
 }
