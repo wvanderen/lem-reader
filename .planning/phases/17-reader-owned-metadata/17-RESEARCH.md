@@ -818,9 +818,12 @@ favor of in-record fields — the same reasoning D17-12 applies to overrides.)
 | A4 | The per-article markdown EXPORT FILENAME (ArticleView L1827) should use the effective title as part of "export presentation surfaces" (META-02) | Pattern 2 table, OQ5 | Low — canonical filename would be a consistency wart, not a failure |
 | A5 | Review/article SORT keys should use effective title (one-name principle extends to ordering) | Pattern 2 table | Low — planner may keep canonical sort for stability; must decide explicitly |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Fixture-row editability (Pattern 7 gate vs materialize-on-edit)**
+> All five questions resolved during planning and pinned in 17-01..17-05 PLAN.md.
+> Per-question resolutions follow each heading.
+
+1. **Fixture-row editability (Pattern 7 gate vs materialize-on-edit) — (RESOLVED: gate, 17-02 Task 2)**
    - What we know: bundled fixtures are not Dexie rows; an override has nowhere to
      persist on them; remove-on-fixture is already a silent no-op; the composite
      union's ingested-wins rule WOULD make a materialized shadow row display correctly.
@@ -829,8 +832,11 @@ favor of in-record fields — the same reasoning D17-12 applies to overrides.)
    - Recommendation: gate edit on `ingestionMeta !== undefined` (samples not
      reader-owned; consistent with the remove no-op; keeps every fixture-pinned spec
      byte-stable). Planner surfaces as a checkpoint or notes the boundary in the plan.
+   - Resolution: the gate is pinned — 17-02 Task 2 passes `onEdit` only on top-level
+     article rows with `a.ingestionMeta !== undefined`; the fixture-gate e2e cell in
+     17-02 Task 3 proves Sample rows render no edit affordance.
 
-2. **Per-item conflict choice UI shape (D17-11 requires per-item)**
+2. **Per-item conflict choice UI shape (D17-11 requires per-item) — (RESOLVED: disclosure list, 17-04 Task 3)**
    - What we know: shipped dialog is bulk-per-kind with one select per kind;
      D17-11 verbatim requires "a per-item choice to take the incoming one".
    - What's unclear: exact UI (disclosure list of conflicted articles? per-article
@@ -838,8 +844,12 @@ favor of in-record fields — the same reasoning D17-12 applies to overrides.)
    - Recommendation: keep the per-kind summary row (count + samples) carrying the
      keep-local default, plus an expandable per-article list with keep-mine/use-
      imported toggles; `sampleIds` cap (5) suggests the existing preview shape.
+   - Resolution: the recommended shape is pinned — 17-04 Task 2 adds the
+     `metadataConflicts` detail array (uncapped) and 17-04 Task 3 renders it behind a
+     disclosure control with per-article Keep mine / Use imported choices; copy pinned
+     in the 17-04 artifacts list.
 
-3. **Dexie version bump: none (A) vs no-op v6 anchor (B)**
+3. **Dexie version bump: none (A) vs no-op v6 anchor (B) — (RESOLVED: Option A, 17-01 Task 1)**
    - What we know: non-indexed fields need no declaration [CITED: dexie.org];
      ingestionMeta precedent landed bumpless; v2 precedent shows the no-op anchor;
      CONTEXT frames META-04 as "migrate via Dexie additive versioning".
@@ -847,17 +857,27 @@ favor of in-record fields — the same reasoning D17-12 applies to overrides.)
    - Recommendation: Option A (no bump + explicit hydration proof + db.ts comment
      documenting why), because it is the safest and matches the strongest precedent;
      fall back to B if plan-review reads META-04 as requiring a block.
+   - Resolution: Option A pinned — 17-01 Task 1 widens the row type with a no-bump
+     rationale comment (v1..v5 blocks byte-unchanged); 17-05 Task 1 proves the
+     hydration-without-write-back migration end-to-end.
 
-4. **Dialog title-input edge: cleared title on an already-overridden article**
+4. **Dialog title-input edge: cleared title on an already-overridden article — (RESOLVED: disabled Save, 17-02 Task 2)**
    - What we know: D17-04 refuses blank title overrides; D17-03 gives per-field Reset.
    - What's unclear: is a cleared title input + Save = Reset-to-canonical, or
      disabled-Save until non-empty? (Both are calm; they differ in keystroke cost.)
    - Recommendation: treat empty title + Save as invalid (disabled Save with inline
      explanation) — Reset is the explicit clear affordance; two mechanisms for one
      meaning violates one-way-to-do-it.
+   - Resolution: the recommendation is pinned — 17-02 Task 2 disables Save on a
+     blank non-reset title with the inline explanation line; Reset title is the only
+     clear-to-canonical path; the blank-refusal cell in 17-02 Task 3 proves it.
 
-5. **Export filename + sort keys on effective values (A4/A5)**
+5. **Export filename + sort keys on effective values (A4/A5) — (RESOLVED: effective, 17-03)**
    - Recommendation: effective for both (one-name principle); planner pins.
+   - Resolution: pinned — 17-03 Task 1 swaps the per-article export filename to
+     `effectiveTitle` and Task 2 swaps every article sort key (reviewFilter,
+     ReviewView options, markdown sections) to effective values; the cross-surface
+     cells in 17-05 Task 3 prove filename + content carry the one name.
 
 ## Environment Availability
 
