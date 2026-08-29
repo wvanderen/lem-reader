@@ -8,6 +8,14 @@
 //   3. every refusal clears the pick so re-picking the SAME file re-fires
 //      the picker (the import-input reset discipline applied to intake).
 //
+// Plan 16-03 migration: every drive opens the Add dialog on the file
+// source first (openAddDialog/pickSource — the forms live behind the
+// header button, ADD-01). Book success now CLOSES the dialog (D16-12) —
+// the G2 reset assertions below read the always-mounted picker through
+// the closed dialog (attached DOM), and the success signal is the book
+// row appearing via refreshKey. Refusals keep the dialog OPEN (consecutive
+// drives skip the trigger click — the helper is idempotent).
+//
 // Harness (cloned from tests/e2e/epub-intake.spec.ts + the library-suite
 // markdown-upload.spec.ts conventions):
 //   - BASE URL:    http://localhost:5173 (Vite dev server; /api/ingest
@@ -32,6 +40,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { BASE, wipeDatabase } from "../annotations/_fixtures";
 import { validBookEpub3, corruptNotEpub } from "../../unit/server/epub-fixtures";
+import { openAddDialog, pickSource } from "./add-dialog";
 
 /** A small .md pick for the remove-before-upload case. Never submitted —
  * the content only needs to be a valid picker selection. */
@@ -41,22 +50,26 @@ This small markdown buffer exercises the Remove file control before any
 upload. The control must return to its empty, disabled resting state.
 `;
 
-/** The calm status line inside the ingest control's live region. */
+/** The calm status line inside the Add dialog's live region. */
 function ingestStatus(
   page: Page,
   text: string,
 ): import("@playwright/test").Locator {
-  return page.locator(".ingest-control .status").filter({ hasText: text });
+  return page.locator("dialog.add-dialog .status").filter({ hasText: text });
 }
 
-/** Attach an EPUB to the picker and submit via the Add file button
- * (the epub-intake.spec.ts helper shape — every upload drives the REAL
- * input#ingest-file + Add file button, never a direct API POST). */
+/** Open the Add dialog on the file source, attach an EPUB to the picker,
+ * and submit via the Add file button (the epub-intake.spec.ts helper
+ * shape — every upload drives the REAL input#ingest-file + Add file
+ * button, never a direct API POST). Idempotent open: a refusal leaves the
+ * dialog open, so consecutive drives skip the trigger click. */
 async function uploadEpub(
   page: Page,
   name: string,
   bytes: Uint8Array,
 ): Promise<void> {
+  await openAddDialog(page);
+  await pickSource(page, "file");
   await page.locator("input#ingest-file").setInputFiles({
     name,
     mimeType: "application/epub+zip",
@@ -79,6 +92,8 @@ test.beforeEach(async ({ page }) => {
 
 test("Remove file clears a queued pick before upload", async ({ page }) => {
   await openLibrary(page);
+  await openAddDialog(page);
+  await pickSource(page, "file");
 
   const fileInput = page.locator("input#ingest-file");
   const addFile = page.getByRole("button", { name: /add file/i });
@@ -92,15 +107,15 @@ test("Remove file clears a queued pick before upload", async ({ page }) => {
   });
   await expect(addFile).toBeEnabled();
 
-  // Remove file (located via the ingest-remove-file hook class) clears
+  // Remove file (located via the add-remove-file hook class) clears
   // the queued pick: the raw input value reads as the empty string and
   // Add file is disabled again.
-  await page.locator("button.ingest-remove-file").click();
+  await page.locator("button.add-remove-file").click();
   expect(await fileInput.evaluate((el) => (el as HTMLInputElement).value)).toBe("");
   await expect(addFile).toBeDisabled();
   // The Remove control unmounts with the pick (rendered only when
   // hasFile).
-  await expect(page.locator("button.ingest-remove-file")).toHaveCount(0);
+  await expect(page.locator("button.add-remove-file")).toHaveCount(0);
 
   // Re-picking the SAME name+buffer re-fires onChange — Add file is
   // enabled again (the reset cleared the picker, not just the visual).
@@ -110,7 +125,7 @@ test("Remove file clears a queued pick before upload", async ({ page }) => {
     buffer: Buffer.from(SMALL_MARKDOWN, "utf-8"),
   });
   await expect(addFile).toBeEnabled();
-  await expect(page.locator("button.ingest-remove-file")).toBeVisible();
+  await expect(page.locator("button.add-remove-file")).toBeVisible();
 });
 
 test("a completed book upload resets the picker without a page refresh", async ({
@@ -119,31 +134,39 @@ test("a completed book upload resets the picker without a page refresh", async (
   await openLibrary(page);
 
   // The canonical 4-chapter book through the REAL pipeline (epub-intake
-  // uploadEpub shape). The calm success copy lands in the live region.
+  // uploadEpub shape). Plan 16-03 (D16-12): book success CLOSES the
+  // dialog and the book row appears via refreshKey — the row IS the
+  // success signal now.
   await uploadEpub(page, "the-synthetic-book.epub", validBookEpub3());
-  await expect(
-    ingestStatus(page, "Book added to your library."),
-  ).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator("li.book-row")).toBeVisible({ timeout: 15_000 });
 
   // The exact user-reported G2 path: the book success STAYS on the
   // library view — NO reload. The picker must already be empty and the
-  // Add file button back to disabled.
+  // Add file button back to disabled (read through the always-mounted
+  // picker inside the closed dialog — attached DOM, no remount; CSS
+  // locators, not role queries, because a closed dialog's subtree is
+  // display:none and excluded from the accessibility tree).
   const fileInput = page.locator("input#ingest-file");
   expect(await fileInput.evaluate((el) => (el as HTMLInputElement).value)).toBe("");
-  await expect(page.getByRole("button", { name: /add file/i })).toBeDisabled();
-  await expect(page.locator("button.ingest-remove-file")).toHaveCount(0);
+  await expect(
+    page.locator(".add-file-form button[type='submit']"),
+  ).toBeDisabled();
+  await expect(page.locator("button.add-remove-file")).toHaveCount(0);
 });
 
 test("a refusal clears the pick so re-picking the same file re-fires the picker", async ({
   page,
 }) => {
   await openLibrary(page);
+  await openAddDialog(page);
+  await pickSource(page, "file");
 
   const fileInput = page.locator("input#ingest-file");
   const addFile = page.getByRole("button", { name: /add file/i });
   const bytes = corruptNotEpub();
 
-  // A corrupt not-a-zip buffer named .epub → the calm unreadable copy.
+  // A corrupt not-a-zip buffer named .epub → the calm unreadable copy
+  // (the refusal keeps the dialog open — the copy is visible inside it).
   await fileInput.setInputFiles({
     name: "broken.epub",
     mimeType: "application/epub+zip",

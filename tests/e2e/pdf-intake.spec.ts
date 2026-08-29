@@ -66,6 +66,9 @@ import {
   totalPages,
   turnToPage,
 } from "./annotations/_fixtures";
+// Plan 16-03 — the shared dialog-opening helper (the forms live behind the
+// header Add button's modal since the add-section dissolution).
+import { openAddDialog, pickSource } from "./library/add-dialog";
 
 /** Load a committed synthetic PDF fixture's bytes (11-01 corpus). */
 function pdfFixture(name: string): Buffer {
@@ -90,16 +93,20 @@ function pdfLibraryRows(page: Page): import("@playwright/test").Locator {
   });
 }
 
-/** The calm-refusal status line inside the ingest control's live region. */
+/** The calm-refusal status line inside the Add dialog's live region. */
 function ingestStatus(
   page: Page,
   text: string,
 ): import("@playwright/test").Locator {
-  return page.locator(".ingest-control .status").filter({ hasText: text });
+  return page.locator("dialog.add-dialog .status").filter({ hasText: text });
 }
 
-/** Attach a PDF to the picker and submit via the Add file button. */
+/** Open the Add dialog on the file source, attach a PDF to the picker, and
+ * submit via the Add file button (every drive goes through the real header
+ * button — ADD-01). */
 async function uploadPdf(page: Page, name: string, bytes: Buffer): Promise<void> {
+  await openAddDialog(page);
+  await pickSource(page, "file");
   await page.locator("input#ingest-file").setInputFiles({
     name,
     mimeType: "application/pdf",
@@ -170,7 +177,7 @@ test.describe("ING-04 — PDF upload intake (SC#1–SC#3 + D7-07)", () => {
     // The submitting state announces "Reading file…" while the binary read +
     // base64 + POST + server-side parse run (markdown-upload L168-171 shape).
     await expect(
-      page.locator(".ingest-control .status").filter({ hasText: "Reading file…" }),
+      page.locator("dialog.add-dialog .status").filter({ hasText: "Reading file…" }),
     ).toBeVisible();
 
     // Navigation lands at #/article/pdf-<shortHash> (content-hash id).

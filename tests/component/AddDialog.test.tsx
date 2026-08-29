@@ -1,7 +1,8 @@
 // tests/component/AddDialog.test.tsx
 // Plan 16-02 Task 2 — RED gate, then component truth for the focused Add
 // dialog (D16-01): a native <dialog> (showModal) structural clone of the
-// BookRemoveConfirm lineage hosting IngestControl's four-state submission
+// BookRemoveConfirm lineage hosting the original three-form control's
+// four-state submission
 // spine behind a controlled 3-way source picker (D16-05).
 //
 // Per the SettingsPanel.test.tsx / import-preview-dialog.test.tsx
@@ -9,7 +10,7 @@
 // focus-trap / inert-backdrop / Esc BEHAVIOR or geometry — those are
 // proven by the Plan 16-04 e2e across Chromium/Firefox/WebKit. Here we
 // assert the application-level contracts:
-//   - the migrated IngestControl state-machine + copy + dedupe coverage
+//   - the migrated state-machine + copy + dedupe coverage
 //     ("Fetching article…", ingestUrl→has→save ordering, dedupe-refuse
 //     no-write, calm DOC-06 copy, catch-all server-error, no jargon),
 //   - the picker semantics (fieldset/legend "Add from", exactly 3
@@ -27,7 +28,7 @@ import userEvent from "@testing-library/user-event";
 
 // Mock IngestionClient so the test never hits the network. The factory
 // exposes all five ingest functions + the class (migrated from
-// IngestControl.test.tsx L25-54, extended with the file arms).
+// the original control's suite (L25-54), extended with the file arms).
 vi.mock("../../src/ingestion/IngestionClient", () => ({
   ingestUrl: vi.fn(),
   ingestHtml: vi.fn(),
@@ -98,7 +99,7 @@ beforeEach(() => {
 
 // Navigation + callback ordering recorder. The hash setter stub records
 // every write (jsdom doesn't implement location.hash navigation — the
-// IngestControl.test.tsx L81-90 precedent), and tests push "cancel" /
+// the original control's suite L81-90 precedent), and tests push "cancel" /
 // "bookAdded" markers from their onCancel/onBookAdded spies so the
 // D16-12 ordering (close FIRST, then navigate/callback) is assertable as
 // one ordered array.
@@ -190,7 +191,7 @@ function fileInput(): HTMLInputElement {
 }
 
 describe("AddDialog (16-02 Task 2)", () => {
-  // ── Migrated from IngestControl.test.tsx (submission spine) ────────────
+  // ── Migrated from the original control's suite (submission spine) ─────
 
   it("announces 'Fetching article…' in the dialog status region while submitting", async () => {
     const user = userEvent.setup();

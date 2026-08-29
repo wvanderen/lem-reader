@@ -9,7 +9,7 @@
 // A "close enough" match would let a refactor silently drift the reader-
 // facing voice, so the test pins the plan's four strings byte-for-byte
 // against the LIVE exported mapReasonToCopy surface (imported from
-// IngestControl, not a fixture copy).
+// the ingest UI, not a fixture copy).
 import { describe, expect, it } from "vitest";
 import { mapReasonToCopy } from "../../src/ingestion/ingestCopy";
 import {

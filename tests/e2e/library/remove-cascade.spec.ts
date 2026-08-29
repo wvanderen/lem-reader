@@ -34,6 +34,9 @@
 //     uses readRow/countRows against the live IndexedDB to assert the rows
 //     are physically gone, not just absent from the rendered list.
 import { test, expect, type Page } from "@playwright/test";
+// Plan 16-03 — the shared dialog-opening helper (ADD-01: the intake forms
+// live behind the header Add button's modal).
+import { openAddDialog, pickSource } from "./add-dialog";
 
 const BASE = "http://localhost:5173";
 
@@ -134,7 +137,7 @@ async function countRows(page: Page, storeName: string): Promise<number> {
  * directly into Dexie via raw IndexedDB. Mirrors the seedRows discipline
  * from dexie-migration.spec.ts L143-156. The articleId is the freshly-
  * ingested paste-HTML article's id (caller discovers it by reading the
- * articles store after the IngestControl save).
+ * articles store after the Add dialog's save).
  */
 async function seedCascadeRows(
   page: Page,
@@ -272,6 +275,8 @@ test.describe("SC#2 + LIB-02 — cascade-remove + confirmation", () => {
     await expect(
       page.getByRole("heading", { level: 1, name: "Saved articles" }),
     ).toBeVisible();
+    await openAddDialog(page);
+    await pickSource(page, "paste");
     await page
       .getByRole("textbox", { name: /paste html/i })
       .fill(PASTE_HTML);
@@ -390,6 +395,8 @@ test.describe("SC#2 + LIB-02 — cascade-remove + confirmation", () => {
     await expect(
       page.getByRole("heading", { level: 1, name: "Saved articles" }),
     ).toBeVisible();
+    await openAddDialog(page);
+    await pickSource(page, "paste");
     await page
       .getByRole("textbox", { name: /paste html/i })
       .fill(PASTE_HTML);

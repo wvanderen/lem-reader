@@ -23,6 +23,10 @@ import {
 // EPUB corpus builder (the generator IS the fixture source; 12-01
 // discipline).
 import { validBookEpub3 } from "../unit/server/epub-fixtures";
+// Plan 16-03 — the shared dialog-opening helper (ADD-01: the intake forms
+// live behind the header Add button's modal; the axe scan below targets
+// the OPEN dialog surface).
+import { openAddDialog, pickSource } from "./library/add-dialog";
 // The D-05 substrate — the SAME normalizeText + graphemeClusters the
 // in-browser derivations use (the 08-05/12-05 deterministic-seed
 // precedent: compute the location offset in Node, never in-page).
@@ -60,6 +64,23 @@ test("fixture list: zero serious/critical WCAG 2.2 AA violations", async ({ page
   expect(ids, JSON.stringify(serious, null, 2)).not.toContain("heading-order");
   expect(ids).not.toContain("list");
   expect(serious).toEqual([]);
+
+  // Plan 16-03 — the intake forms left the page surface (ADD-01); the
+  // ingest-form axe scan now targets the OPEN Add dialog. With the modal
+  // shown via showModal, the rest of the document is inert — scanning the
+  // dialog region proves the picker + inputs surface is axe-clean where
+  // the reader actually interacts with it.
+  await openAddDialog(page);
+  await expect(page.getByRole("radio", { name: "Web address" })).toBeVisible();
+  const dialogResults = await new AxeBuilder({ page })
+    .withTags([...WCAG_TAGS])
+    .include("dialog.add-dialog")
+    .analyze();
+  const dialogSerious = seriousViolations(dialogResults);
+  const dialogIds = dialogSerious.map((v) => v.id);
+  expect(dialogIds, JSON.stringify(dialogSerious, null, 2)).not.toContain("heading-order");
+  expect(dialogIds).not.toContain("list");
+  expect(dialogSerious).toEqual([]);
 });
 
 for (const article of fixtures) {
@@ -263,8 +284,11 @@ test("review panel #/highlights: zero serious/critical WCAG 2.2 AA violations (s
 
 const BOOK_BASE = "http://localhost:5173";
 
-/** Attach an EPUB to the picker + submit (the epub-intake harness clone). */
+/** Attach an EPUB to the picker + submit (the epub-intake harness clone,
+ * routed through the Add dialog per Plan 16-03). */
 async function uploadEbook(page: Page): Promise<void> {
+  await openAddDialog(page);
+  await pickSource(page, "file");
   await page.locator("input#ingest-file").setInputFiles({
     name: "the-synthetic-book.epub",
     mimeType: "application/epub+zip",
@@ -278,9 +302,9 @@ async function seedBookLibrary(page: Page): Promise<void> {
   await wipeDatabase(page);
   await page.goto(`${BOOK_BASE}/#/`);
   await uploadEbook(page);
-  await expect(
-    page.locator(".ingest-control .status").filter({ hasText: "Book added" }),
-  ).toBeVisible({ timeout: 15_000 });
+  // Plan 16-03 (D16-12): book success closes the dialog and the book row
+  // appears via refreshKey — the row is the durable success signal.
+  await expect(page.locator("li.book-row")).toBeVisible({ timeout: 15_000 });
   await page.reload();
   await expect(
     page.getByRole("heading", { level: 1, name: "Saved articles" }),

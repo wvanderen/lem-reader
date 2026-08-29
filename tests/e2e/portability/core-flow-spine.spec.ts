@@ -7,7 +7,7 @@
 //
 // THE V2.0 CORE FLOW (every step is the real reader flow — no DEV hooks, no
 // direct storage writes for flow steps):
-//   machine A: upload the proven .md payload through IngestControl → the
+//   machine A: upload the proven .md payload through the Add dialog → the
 //              article opens (md-<contentHash> id) → pagination settles →
 //              create one highlight via the real selection UI (toolbar →
 //              "Highlight saved.") → switch to scrolling through the mode
@@ -62,6 +62,9 @@ import type {
 // The helper extraction exceeds the plan's original one-line export-keyword
 // fence — sanctioned by the user as a Rule 4 architectural decision.
 import { MARKDOWN_WITH_FRONTMATTER } from "../library/markdown-payload";
+// Plan 16-03 — the shared dialog-opening helper (ADD-01: the intake
+// forms live behind the header Add button's modal).
+import { openAddDialog, pickSource } from "../library/add-dialog";
 import {
   announcementRegion,
   countHighlightsInDexie,
@@ -106,6 +109,8 @@ test("ACPT-06 — ingest .md, read, highlight, export, re-import: nothing lost a
     const pageA = await machineA.newPage();
     await prepareFreshPage(pageA);
 
+    await openAddDialog(pageA);
+    await pickSource(pageA, "file");
     await pageA.locator("input#ingest-file").setInputFiles({
       name: "calm-reading.md",
       mimeType: "text/markdown",

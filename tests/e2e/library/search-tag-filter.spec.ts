@@ -8,7 +8,7 @@
 // Harness (cloned from happy-path.spec.ts):
 //   - BASE URL:    http://localhost:5173
 //   - beforeEach:  image-stub + IndexedDB wipe
-//   - article ingest: paste-HTML via IngestControl (real Vite Node middleware)
+//   - article ingest: paste-HTML via the Add dialog (real Vite Node middleware)
 //
 // Test corpus: 3 ingested paste-HTML articles with distinct titles:
 //   - "Plato Essay" (no tags initially)
@@ -25,6 +25,9 @@
 //     composition assertion checks the INTERSECTION (both filters apply),
 //     not just one. Empty-results test asserts no crash + no rows.
 import { test, expect } from "@playwright/test";
+// Plan 16-03 — the shared dialog-opening helper (ADD-01: the intake
+// forms live behind the header Add button's modal).
+import { openAddDialog, pickSource } from "./add-dialog";
 
 const BASE = "http://localhost:5173";
 
@@ -68,11 +71,13 @@ without distinguishing its origin except via the quiet source badge.</p>
 }
 
 /**
- * Ingest a paste-HTML article via IngestControl. Returns after navigation
- * to #/article/<id> completes. Caller is responsible for navigating back
- * to #/ when needed.
+ * Ingest a paste-HTML article via the Add dialog (opened on the paste
+ * source — Plan 16-03). Returns after navigation to #/article/<id>
+ * completes. Caller is responsible for navigating back to #/ when needed.
  */
 async function ingestPaste(page: import("@playwright/test").Page, html: string) {
+  await openAddDialog(page);
+  await pickSource(page, "paste");
   await page
     .getByRole("textbox", { name: /paste html/i })
     .fill(html);

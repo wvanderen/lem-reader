@@ -22,6 +22,9 @@
 //     not a hardcoded number. Adding/removing a fixture flips the assertion.
 import { test, expect } from "@playwright/test";
 import { fixtures } from "../../../src/fixtures";
+// Plan 16-03 — the shared dialog-opening helper (ADD-01: the intake forms
+// live behind the header Add button's modal).
+import { openAddDialog, pickSource } from "./add-dialog";
 
 const BASE = "http://localhost:5173";
 
@@ -201,17 +204,20 @@ test.describe("SC#1 + LIB-01 + LIB-05 — browse + open + source badge", () => {
     ).toHaveCount(fixtures.length);
     const baselineRows = fixtures.length;
 
-    // Ingest a paste-HTML article through the real Vite Node middleware.
+    // Open the Add dialog on the paste source, then ingest a paste-HTML
+    // article through the real Vite Node middleware.
     // This exercises the full pipeline (extractAndNormalize → htmlToBlocks
     // → ArticleSchema.parse → assertRoundTripAnchor → Dexie save). The
     // PASTE_HTML carries a <link rel="canonical"> so the extractor stamps
     // a sourceUrl, which makes the SourceBadge render as a link (LIB-05).
+    await openAddDialog(page);
+    await pickSource(page, "paste");
     await page
       .getByRole("textbox", { name: /paste html/i })
       .fill(PASTE_HTML_WITH_SOURCE);
     await page.getByRole("button", { name: /add pasted article/i }).click();
 
-    // The IngestControl navigates to #/article/<id> on success; navigate
+    // The Add dialog navigates to #/article/<id> on success; navigate
     // back to #/ to inspect the library row.
     await page.waitForURL(/#\/article\//, { timeout: 15_000 });
     await page.evaluate(() => {

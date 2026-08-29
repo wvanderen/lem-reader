@@ -37,6 +37,9 @@ import type { CanonicalArticle } from "../../../src/content/types";
 import { ExportBundleSchema } from "../../../src/portability/bundle";
 import { computeManifest } from "../../../src/portability/manifest";
 import { validBookEpub3 } from "../../unit/server/epub-fixtures";
+// Plan 16-03 — the shared dialog-opening helper (ADD-01: the intake
+// forms live behind the header Add button's modal).
+import { openAddDialog, pickSource } from "../library/add-dialog";
 import {
   BASE,
   buildBundleZip,
@@ -302,17 +305,17 @@ test("SC#4 books — a book travels machines with its chapters + highlight intac
     // ── Machine A: upload the book through the REAL picker + pipeline ─────
     const pageA = await machineA.newPage();
     await prepareFreshPage(pageA);
+    await openAddDialog(pageA);
+    await pickSource(pageA, "file");
     await pageA.locator("input#ingest-file").setInputFiles({
       name: "the-synthetic-book.epub",
       mimeType: "application/epub+zip",
       buffer: Buffer.from(validBookEpub3()),
     });
     await pageA.getByRole("button", { name: /add file/i }).click();
-    await expect(
-      pageA.locator(".ingest-control .status").filter({
-        hasText: "Book added to your library.",
-      }),
-    ).toBeVisible({ timeout: 15_000 });
+    // Plan 16-03 (D16-12): book success closes the dialog and the row
+    // appears via refreshKey — the durable success signal.
+    await expect(pageA.locator("li.book-row")).toBeVisible({ timeout: 15_000 });
 
     // ── Machine A: read the saved chapters, highlight chapter 2 ───────────
     // The chapter rows are raw Dexie rows; parse the chapter-2 row through

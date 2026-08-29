@@ -1,8 +1,9 @@
 // tests/e2e/ingestion/happy-path.spec.ts
 // Plan 07-07 Task 1 — the ingestion happy-path e2e (SC#1 phase-exit gate).
 // Replaces the Wave-0 stub (07-01) with a REAL end-to-end flow that proves
-// the load-bearing invariant: an article ingested via IngestControl opens in
-// ArticleView and renders + paginates + annotates identically to a fixture.
+// the load-bearing invariant: an article ingested via the Add dialog opens
+// in ArticleView and renders + paginates + annotates identically to a
+// fixture.
 //
 // RUNTIME TARGET (07-06 RUNTIME_GUARDRAIL adaptation): the test targets
 // http://localhost:5173 — the Vite Node dev server serving BOTH the SPA
@@ -11,15 +12,20 @@
 // verdict). No proxy, no wrangler dependency for this flow.
 //
 // SC#1 contract (RESEARCH.md §Validation Architecture L943 + §Gate 4 L975-979
-// + 07-VALIDATION.md §Gate happy-path): submit content via IngestControl,
+// + 07-VALIDATION.md §Gate happy-path): submit content via the Add dialog,
 // wait for the article to land in Dexie, open it via the existing
 // #/article/:id route, and assert it renders blocks + paragraphs + headings
 // identically to a fixture. The reading engines cannot tell an ingested
 // article from a fixture — that is the load-bearing invariant of Phase 7.
 //
+// Plan 16-03 migration: every drive opens the dialog first via the shared
+// openAddDialog/pickSource helper (tests/e2e/library/add-dialog.ts) — the
+// forms are reachable only through the header button (ADD-01). The input
+// and button accessible names are UNCHANGED; only the open step is new.
+//
 // Two test cases:
 //   1. PASTE path (real middleware): pastes a representative HTML article
-//      into IngestControl's textarea, submits, and asserts the resulting
+//      into the dialog's textarea, submits, and asserts the resulting
 //      ArticleView renders the extracted content. This exercises the FULL
 //      pipeline (extractAndNormalize → htmlToBlocks → ArticleSchema.parse →
 //      assertRoundTripAnchor → deriveConfidence → DexieLibrarySource.save →
@@ -27,12 +33,13 @@
 //      dependency.
 //   2. URL path (page.route mock): fills the URL input with a known URL and
 //      intercepts the POST /api/ingest with a fixture CanonicalArticle. This
-//      proves the IngestControl URL-input → submit → ArticleView plumbing
+//      proves the dialog's URL-input → submit → ArticleView plumbing
 //      without coupling CI to external publisher availability. The URL-path
 //      pipeline (safeFetch + extract) is exercised structurally by the SSRF
 //      matrix + the paste-path test; this case proves the UI plumbing.
 import { test, expect } from "@playwright/test";
 import { fixtures } from "../../../src/fixtures";
+import { openAddDialog, pickSource } from "../library/add-dialog";
 
 const BASE = "http://localhost:5173";
 
@@ -46,7 +53,7 @@ const PASTE_HTML = `<!DOCTYPE html>
 <article>
 <h1>Ingested Article Happy-Path Fixture</h1>
 <p>This is the first paragraph of a representative article pasted into the
-IngestControl during the 07-07 happy-path e2e. It is long enough to clear
+Add dialog during the 07-07 happy-path e2e. It is long enough to clear
 the ING-06 confidence threshold (textLength >= 500 characters across the
 whole article) and varied enough that the round-trip anchor gate samples
 five grapheme offsets that all resolve to confident via the shipped
@@ -87,17 +94,20 @@ test.describe("ingestion happy-path (07-07 SC#1)", () => {
   test("paste HTML → article opens in reader (real middleware pipeline)", async ({
     page,
   }) => {
-    // Navigate to the fixture list (which mounts IngestControl above the
-    // article <ul> per 07-06 Task 2).
+    // Navigate to the library (the header Add button opens the intake
+    // dialog per 16-03 — ADD-01).
     await page.goto(`${BASE}/#/`);
     await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible();
 
-    // Fill the paste textarea and submit. This exercises the FULL pipeline:
-    // IngestControl → IngestionClient.ingestHtml → /api/ingest (Vite Node
+    // Open the dialog on the paste source, then fill the textarea and
+    // submit. This exercises the FULL pipeline: AddDialog →
+    // IngestionClient.ingestHtml → /api/ingest (Vite Node
     // middleware) → server/ingestAdapter → server/ingest → extractAndNormalize
     // (Readability + DOMPurify + htmlToBlocks) → ArticleSchema.parse →
     // assertRoundTripAnchor → deriveConfidence → DexieLibrarySource.save →
     // navigation to #/article/<id>.
+    await openAddDialog(page);
+    await pickSource(page, "paste");
     await page.getByRole("textbox", { name: /paste html/i }).fill(PASTE_HTML);
     await page.getByRole("button", { name: /add pasted article/i }).click();
 
@@ -143,7 +153,9 @@ test.describe("ingestion happy-path (07-07 SC#1)", () => {
     await page.goto(`${BASE}/#/`);
     await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible();
 
-    // Fill the URL input — the load-bearing action of the IngestControl.
+    // Open the dialog (Web address is the default source — D16-08) and
+    // fill the URL input — the load-bearing drive of the Add dialog.
+    await openAddDialog(page);
     await page.getByRole("textbox", { name: /url/i }).first().fill("https://example.com/article");
     await page.getByRole("button", { name: /^add$/i }).click();
 

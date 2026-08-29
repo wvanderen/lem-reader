@@ -33,7 +33,12 @@
 //   - T-8-19 (Repudiation, false-positive verification) → the dedupe-refuse
 //     test asserts BOTH the .status copy ("Already in your library.") AND
 //     the row count (no new row appeared).
+//
+// Plan 16-03 migration: every drive opens the Add dialog on the file
+// source first via the shared openAddDialog/pickSource helper (the forms
+// live behind the header button — ADD-01); names/ids are unchanged.
 import { test, expect } from "@playwright/test";
+import { openAddDialog, pickSource } from "./add-dialog";
 // Plan 13-06 (Option A): the representative .md payload now lives in the
 // non-spec helper ./markdown-payload.ts so the ACPT-06 core-flow spine
 // reuses the PROVEN bytes without re-registering this spec's cells
@@ -115,9 +120,12 @@ test.describe("SC#4 + ING-03 — markdown + html upload intake", () => {
       page.getByRole("heading", { level: 1, name: "Saved articles" }),
     ).toBeVisible();
 
-    // Attach the .md file via setInputFiles (the only Playwright-native way
-    // to attach in-memory file content).
+    // Open the Add dialog on the file source, then attach the .md via
+    // setInputFiles (the only Playwright-native way to attach in-memory
+    // file content).
     const fileInput = page.locator("input#ingest-file");
+    await openAddDialog(page);
+    await pickSource(page, "file");
     await fileInput.setInputFiles({
       name: "calm-reading.md",
       mimeType: "text/markdown",
@@ -128,7 +136,7 @@ test.describe("SC#4 + ING-03 — markdown + html upload intake", () => {
     // (UI-SPEC §Copywriting — verb + object, mirrors "Fetching article…").
     await page.getByRole("button", { name: /add file/i }).click();
     await expect(
-      page.locator(".ingest-control .status").filter({ hasText: "Reading file…" }),
+      page.locator("dialog.add-dialog .status").filter({ hasText: "Reading file…" }),
     ).toBeVisible();
 
     // Navigation lands at #/article/<id> where <id> starts with "md-"
@@ -180,7 +188,10 @@ test.describe("SC#4 + ING-03 — markdown + html upload intake", () => {
 
     const fileInput = page.locator("input#ingest-file");
 
-    // First upload — succeeds, navigates to #/article/md-<id>.
+    // First upload — open the dialog on the file source; succeeds,
+    // navigates to #/article/md-<id>.
+    await openAddDialog(page);
+    await pickSource(page, "file");
     await fileInput.setInputFiles({
       name: "calm-reading.md",
       mimeType: "text/markdown",
@@ -204,8 +215,12 @@ test.describe("SC#4 + ING-03 — markdown + html upload intake", () => {
       expectedRowsAfterFirst,
     );
 
-    // Second upload — same content (D8-18 produces the same id; D7-07
-    // dedupe-refuse kicks in via DexieLibrarySource.has(id) BEFORE save).
+    // Second upload — reopen the dialog (article success closed it) and
+    // re-pick the file source. Same content (D8-18 produces the same id;
+    // D7-07 dedupe-refuse kicks in via DexieLibrarySource.has(id) BEFORE
+    // save).
+    await openAddDialog(page);
+    await pickSource(page, "file");
     await fileInput.setInputFiles({
       name: "different-filename.md",
       mimeType: "text/markdown",
@@ -214,9 +229,10 @@ test.describe("SC#4 + ING-03 — markdown + html upload intake", () => {
     await page.getByRole("button", { name: /add file/i }).click();
 
     // The .status region announces the dedupe-refuse copy (D7-04 — calm
-    // voice; mirrors the paste-path dedupe-refuse).
+    // voice; mirrors the paste-path dedupe-refuse). The refusal keeps the
+    // dialog OPEN — the copy is visible in the dialog's live region.
     await expect(
-      page.locator(".ingest-control .status").filter({
+      page.locator("dialog.add-dialog .status").filter({
         hasText: "Already in your library.",
       }),
     ).toBeVisible({ timeout: 15_000 });
@@ -242,6 +258,8 @@ test.describe("SC#4 + ING-03 — markdown + html upload intake", () => {
     // Extension(filename) → "A Plain Markdown Document" (the H1 in the
     // body is NOT used as title; the fallback chain is filename-only).
     const fileInput = page.locator("input#ingest-file");
+    await openAddDialog(page);
+    await pickSource(page, "file");
     await fileInput.setInputFiles({
       name: "plain-doc.md",
       mimeType: "text/markdown",
@@ -281,14 +299,16 @@ test.describe("SC#4 + ING-03 — markdown + html upload intake", () => {
       page.getByRole("heading", { level: 1, name: "Saved articles" }),
     ).toBeVisible();
 
-    // Upload a small .html file. The IngestControl dispatch detects the
-    // .html extension and calls ingestHtml(text) — the SAME {html} path
-    // the paste textarea uses. Per the Plan 08-04 design ("There is no
+    // Open the dialog on the file source, then upload a small .html file.
+    // The Add dialog's dispatch detects the .html extension and calls
+    // ingestHtml(text) — the SAME {html} path the paste textarea uses. Per the Plan 08-04 design ("There is no
     // filename channel on the {html} variant by design"), the server stamps
     // source="paste" for both; the html-upload source variant in
     // ArticleSourceSchema is reserved for a future filename-channel widening.
     // The badge therefore reads "Pasted" — this is the shipped behavior.
     const fileInput = page.locator("input#ingest-file");
+    await openAddDialog(page);
+    await pickSource(page, "file");
     await fileInput.setInputFiles({
       name: "small.html",
       mimeType: "text/html",

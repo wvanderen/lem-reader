@@ -1,7 +1,7 @@
 // tests/unit/library/book-row.test.tsx
 // Plan 12-05 Task 1 — component coverage for the expandable BookRow (D12-01
 // + D12-06 + D12-11 + T-12-15). The persistence seams are mocked per-test
-// (the IngestControl.test.tsx discipline) so the assertions exercise the
+// (the AddDialog.test.tsx discipline) so the assertions exercise the
 // disclosure semantics, resume targeting, skip disclosure, heading order,
 // and the book TagEntry — never Dexie itself.
 //

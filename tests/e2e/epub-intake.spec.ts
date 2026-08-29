@@ -51,6 +51,9 @@ import {
   corruptNotEpub,
   emptyBook,
 } from "../unit/server/epub-fixtures";
+// Plan 16-03 — the shared dialog-opening helper (the forms live behind the
+// header Add button's modal since the add-section dissolution).
+import { openAddDialog, pickSource } from "./library/add-dialog";
 // The client-side cap for the over-cap refusal gate (the 11-04 earliest-
 // enforcement proof: the picker refuses on file.size BEFORE any read).
 import { EPUB_MAX_BYTES } from "../../src/ingestion/types";
@@ -68,20 +71,25 @@ import type { CanonicalArticle } from "../../src/content/types";
 /** Baseline top-level rows after the wipe: the bundled fixture corpus. */
 const BASELINE_ROWS = FIXTURES.length;
 
-/** The calm status line inside the ingest control's live region. */
+/** The calm status line inside the Add dialog's live region. */
 function ingestStatus(
   page: Page,
   text: string,
 ): import("@playwright/test").Locator {
-  return page.locator(".ingest-control .status").filter({ hasText: text });
+  return page.locator("dialog.add-dialog .status").filter({ hasText: text });
 }
 
-/** Attach an EPUB to the picker and submit via the Add file button. */
+/** Open the Add dialog on the file source, attach an EPUB to the picker,
+ * and submit via the Add file button (every drive goes through the real
+ * header button — ADD-01). Idempotent open: after a REFUSAL the dialog
+ * stays open, so consecutive drives in one test skip the trigger click. */
 async function uploadEpub(
   page: Page,
   name: string,
   bytes: Uint8Array,
 ): Promise<void> {
+  await openAddDialog(page);
+  await pickSource(page, "file");
   await page.locator("input#ingest-file").setInputFiles({
     name,
     mimeType: "application/epub+zip",
@@ -90,18 +98,22 @@ async function uploadEpub(
   await page.getByRole("button", { name: /add file/i }).click();
 }
 
-/** Upload the canonical 4-chapter book and wait for the calm success copy. */
+/** Upload the canonical 4-chapter book and wait for the durable book
+ * success signal. Plan 16-03 (D16-12): a book success CLOSES the dialog
+ * and lands on the Library where the new book row now is (onBookAdded →
+ * refreshKey) — the in-dialog success copy is transient by design, so the
+ * row itself is the success anchor. */
 async function uploadValidBook(page: Page): Promise<void> {
   await uploadEpub(page, "the-synthetic-book.epub", validBookEpub3());
-  await expect(
-    ingestStatus(page, "Book added to your library."),
-  ).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator("li.book-row")).toBeVisible({ timeout: 15_000 });
 }
 
 /**
- * Remount LibraryView so the freshly-saved book renders (08-05 precedent:
- * the load effect runs ONCE per mount; the book success path never bumps
- * refreshKey — navigation is 12-06's concern).
+ * Remount LibraryView so the freshly-saved book renders. Plan 16-03: the
+ * book success path now bumps refreshKey via onBookAdded (the row appears
+ * without a remount — uploadValidBook waits on it), so the reload is a
+ * belt-and-suspenders remount for the derivations below (the 08-05
+ * precedent, kept for the deterministic one-load-per-mount discipline).
  */
 async function reloadLibrary(page: Page): Promise<void> {
   await page.reload();
@@ -309,11 +321,11 @@ test.describe("ING-05 — EPUB book intake (SC#1)", () => {
     ).toBeVisible();
 
     // mixedAdmissionBook: 2 readerable chapters + 1 pure-image plate →
-    // skippedCount 1. The upload copy discloses it…
+    // skippedCount 1. Plan 16-03 (D16-12): the book success closes the
+    // dialog and the row appears via refreshKey — the durable skip
+    // disclosure is asserted on the ROW below (never silently missing).
     await uploadEpub(page, "mixed-book.epub", mixedAdmissionBook());
-    await expect(
-      ingestStatus(page, "Book added to your library. 1 chapter could not be read."),
-    ).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator("li.book-row")).toBeVisible({ timeout: 15_000 });
 
     // …and the LIBRARY grouping discloses it again (D12-11 — never silently
     // missing): 2 admitted chapter sub-rows + the calm note.
