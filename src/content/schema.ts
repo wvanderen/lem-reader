@@ -264,6 +264,16 @@ export const ArticleSchema = z.object({
   // Plan 02 builds the tag store + the `*tags` Dexie multi-entry index on top
   // of this field; Plan 01 only lands the schema field so Plan 02 is additive.
   tags: z.array(z.string().min(1)).default([]).optional(),
+  // Phase 17 (META-01..04, D17-12/D17-04) — reader-owned display overrides.
+  // Additive-optional so existing rows parse unchanged (Pitfall 9 hydration,
+  // the same mechanism as ingestionMeta above + tags); overrides travel
+  // INSIDE the article record (D17-12), never a separate table or bundle
+  // block. min(1) makes the empty-string override UNREPRESENTABLE (D17-04):
+  // no override can ever produce an untitled article (canonical
+  // provenance.title is min(1)), and an empty author field means
+  // no-author-override, not an empty-string override.
+  readerTitle: z.string().min(1).optional(),
+  readerAuthor: z.string().min(1).optional(),
 });
 
 // Inferred types — also re-exported from types.ts. Schemas are the single

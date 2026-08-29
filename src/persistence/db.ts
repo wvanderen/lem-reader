@@ -80,6 +80,16 @@ export class LemReaderDB extends Dexie {
     // Phase 12 (ING-05): the bookId FK → books.id powers grouping reads
     // (D12-01). Additive-optional — existing rows parse unchanged (Pitfall 9).
     bookId?: string;
+    // Phase 17 (META-01, D17-12): reader-owned display overrides stored as
+    // plain row fields. NO Dexie version bump: only INDEXED properties
+    // require a version-block declaration (Dexie design — object stores
+    // accept any row properties), and no Phase 17 query keys on overrides
+    // (search is the in-memory haystack). The ingestionMeta precedent
+    // landed bumpless the same way; the v1..v5 blocks below stay
+    // byte-unchanged and there is NO upgrade callback (Pitfall 9;
+    // 17-RESEARCH OQ3 Option A).
+    readerTitle?: string;
+    readerAuthor?: string;
   }, string>;
   // Phase 5: real row types replace the Phase 1 placeholder annotations
   // (LOW risk — runtime-unaffected; Dexie resolves stores by name from the
