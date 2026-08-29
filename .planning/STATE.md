@@ -6,14 +6,14 @@ current_phase: 17
 current_phase_name: Reader-Owned Metadata
 status: executing
 stopped_at: Completed 17-01-PLAN.md (reader-owned metadata substrate)
-last_updated: "2026-08-29T23:39:02.762Z"
+last_updated: "2026-08-29T23:52:36.997Z"
 last_activity: 2026-08-29
 last_activity_desc: Phase 17 execution started
 progress:
   total_phases: 8
   completed_phases: 3
   total_plans: 17
-  completed_plans: 13
+  completed_plans: 14
   percent: 38
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-29)
 ## Current Position
 
 Phase: 17 (Reader-Owned Metadata) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 Status: Ready to execute
 Last activity: 2026-08-29 — Phase 17 execution started
 
@@ -167,6 +167,7 @@ Last activity: 2026-08-29 — Phase 17 execution started
 | Phase 16 P03 | 23 min | 2 tasks | 30 files |
 | Phase 16 P04 | 48 min | 3 tasks | 4 files |
 | Phase 17 P01 | 5 min | 2 tasks | 5 files |
+| Phase 17 P02 | 11 min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -394,6 +395,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 17]: Phase 17-01: readerTitle/readerAuthor overrides are ArticleSchema-declared optional min(1) fields (NOT bookId strip-mode — Zod strip mode makes undeclared keys invisible on every read; declaring also makes the D17-12 ride-inside-bundle automatic).
 - [Phase 17]: Phase 17-01: no Dexie version bump for override fields — non-indexed row fields need no version-block declaration (ingestionMeta bumpless precedent, OQ3 Option A); db.ts comment documents the rationale; v1..v5 blocks byte-unchanged.
 - [Phase 17]: Phase 17-01: effectiveMetadata.ts is the ONE effectiveTitle/effectiveAuthor derivation (D14-20 precedent) — every 17-02..17-05 surface imports it; forking the ?? chain is the phase anti-pattern. META-01/META-03 stay unchecked until the end-to-end plans (substrate-only split precedent).
+- [Phase ?]: Destructure-out override row build: a bare {...article} spread re-carries existing readerTitle/readerAuthor, so conditional-spread omission never deletes a cleared key — the base must exclude both override keys first (17-02 Rule 1 fix, e2e-caught)
+- [Phase ?]: WebKit click-focus quirk: dialog-open e2e cells asserting focus restore must open via focus+Enter and assert toBeFocused (focused-add precedent) — WebKit does not focus buttons on mouse click; htmlToBlocks extracts authors ONLY from meta[name=author], never <address>
+- [Phase ?]: META-02 split: 17-02 closes the library half (row/strip/search effective values); Reader/Highlights/export halves close in 17-03 — META-01/META-03 closed at 17-02 with end-to-end row-truth proof
 
 ### Pending Todos
 
@@ -449,7 +453,7 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-29T23:38:57.018Z
+Last session: 2026-08-29T23:52:21.971Z
 Stopped at: Completed 17-01-PLAN.md (reader-owned metadata substrate)
 Resume file: None
 

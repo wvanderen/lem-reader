@@ -30,9 +30,9 @@
 
 ### Editable Metadata
 
-- [ ] **META-01**: Reader can edit a saved article's display title and author as reader-owned metadata without changing canonical article identity, provenance, revision, reading position, or annotations.
+- [x] **META-01**: Reader can edit a saved article's display title and author as reader-owned metadata without changing canonical article identity, provenance, revision, reading position, or annotations.
 - [ ] **META-02**: Edited title and author appear consistently in the Library, Reader, Highlights, search, and exported presentation surfaces.
-- [ ] **META-03**: Reader can clear an override to restore the canonical extracted value, including when the canonical author is absent.
+- [x] **META-03**: Reader can clear an override to restore the canonical extracted value, including when the canonical author is absent.
 - [ ] **META-04**: Metadata overrides migrate safely, cascade on article removal, and round-trip through versioned export/import with explicit conflict reporting.
 
 ### Reader Orientation
@@ -120,9 +120,9 @@
 | ADD-02 | Phase 16 | Complete |
 | ADD-03 | Phase 16 | Complete |
 | ADD-04 | Phase 16 | Complete |
-| META-01 | Phase 17 | Pending |
+| META-01 | Phase 17 | Complete |
 | META-02 | Phase 17 | Pending |
-| META-03 | Phase 17 | Pending |
+| META-03 | Phase 17 | Complete |
 | META-04 | Phase 17 | Pending |
 | ORNT-01 | Phase 18 | Pending |
 | ORNT-03 | Phase 18 | Pending |
