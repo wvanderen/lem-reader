@@ -32,6 +32,7 @@ import { normalizeText, graphemeClusters } from "../../content/normalizeText";
 import { ProgressHairline } from "../../reader/ProgressHairline";
 import { SourceBadge } from "./SourceBadge";
 import { articleReadingState } from "./readingState";
+import { effectiveTitle, effectiveAuthor } from "./effectiveMetadata";
 
 interface LibraryRowProps {
   /** The article this row represents. */
@@ -86,11 +87,15 @@ export function LibraryRow({
   return (
     <li className="library-row" key={id}>
       <article>
-        {/* byte-stable title heading (Pitfall 8-5; h3 inside book groups) */}
-        <Title id={`title-${id}`}>{article.provenance.title}</Title>
-        {/* byte-stable author meta (omitted when absent) */}
-        {article.provenance.author && (
-          <p className="meta">{article.provenance.author}</p>
+        {/* byte-stable title heading (Pitfall 8-5; h3 inside book groups).
+            Plan 17-02 (D17-09): the VALUE SOURCE is the effectiveTitle
+            derivation — markup shape + heading id stay byte-stable. */}
+        <Title id={`title-${id}`}>{effectiveTitle(article)}</Title>
+        {/* byte-stable author meta (omitted when absent). Plan 17-02
+            (D17-09): effectiveAuthor inside the existing truthy guard —
+            an absent canonical author restored via Reset renders nothing. */}
+        {effectiveAuthor(article) && (
+          <p className="meta">{effectiveAuthor(article)}</p>
         )}
         {/* D8-02 source indicator + LIB-05 source link */}
         <SourceBadge article={article} />
@@ -125,7 +130,7 @@ export function LibraryRow({
           <button
             type="button"
             className="library-row-remove"
-            aria-label={`Remove ${article.provenance.title} from library`}
+            aria-label={`Remove ${effectiveTitle(article)} from library`}
             onClick={onRemove}
           >
             <TrashIcon aria-hidden="true" />

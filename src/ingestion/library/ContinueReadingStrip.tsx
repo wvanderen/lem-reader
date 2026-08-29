@@ -56,6 +56,7 @@ import {
   articleReadingState,
   bookReadingState,
 } from "./readingState";
+import { effectiveTitle, effectiveAuthor } from "./effectiveMetadata";
 
 /**
  * FINISHED_THRESHOLD — D8-12 + RESEARCH §Pattern 4 L498 recommendation. At or
@@ -226,11 +227,14 @@ export function ContinueReadingStrip() {
         {entries.map((entry) =>
           entry.kind === "article" ? (
             <li key={`a-${entry.article.id}`} className="continue-reading-row">
+              {/* Plan 17-02 (D17-09) — the strip shows the ONE effective
+                  name (effectiveTitle/effectiveAuthor inside the truthy
+                  guard); book entries below stay canonical (D17-05). */}
               <a href={`#/article/${entry.article.id}`}>
-                {entry.article.provenance.title}
+                {effectiveTitle(entry.article)}
               </a>
-              {entry.article.provenance.author && (
-                <p className="meta">{entry.article.provenance.author}</p>
+              {effectiveAuthor(entry.article) && (
+                <p className="meta">{effectiveAuthor(entry.article)}</p>
               )}
               <ProgressHairline progress={entry.progress} />
             </li>

@@ -60,6 +60,7 @@ import { LibraryRow } from "./LibraryRow";
 import { BookRow } from "./BookRow";
 import { ContinueReadingStrip } from "./ContinueReadingStrip";
 import { filterLibrary, filterBooks } from "./libraryFilter";
+import { effectiveTitle } from "./effectiveMetadata";
 import {
   articleReadingState,
   bookReadingState,
@@ -699,7 +700,10 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
                 onRemove={() =>
                   setRemoveTarget({
                     id: a.id,
-                    title: a.provenance.title,
+                    // Plan 17-02 (D17-09) — the remove-dialog copy shows the
+                    // ONE effective name (effectiveTitle), never a second
+                    // canonical identity the reader no longer sees.
+                    title: effectiveTitle(a),
                   })
                 }
               />
