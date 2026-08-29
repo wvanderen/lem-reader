@@ -5,15 +5,15 @@ milestone_name: Reader Experience
 current_phase: 16
 current_phase_name: Organized Library and Focused Add Flow
 status: executing
-stopped_at: Phase 16 context gathered
-last_updated: "2026-08-29T18:06:28.935Z"
+stopped_at: Completed 16-01-PLAN.md
+last_updated: "2026-08-29T19:01:19.862Z"
 last_activity: 2026-08-29
-last_activity_desc: Phase 15 complete, transitioned to Phase 16
+last_activity_desc: Phase 16 execution started
 progress:
   total_phases: 8
   completed_phases: 2
-  total_plans: 8
-  completed_plans: 8
+  total_plans: 12
+  completed_plans: 9
   percent: 25
 ---
 
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-08-29)
 
 ## Current Position
 
-Phase: 16 — Organized Library and Focused Add Flow
-Plan: Not started
+Phase: 16 (Organized Library and Focused Add Flow) — EXECUTING
+Plan: 2 of 4
 Status: Ready to execute
-Last activity: 2026-08-29 — Phase 15 complete, transitioned to Phase 16
+Last activity: 2026-08-29 — Phase 16 execution started
 
 ## Recent Decisions (Phase 15)
 
@@ -161,6 +161,7 @@ Last activity: 2026-08-29 — Phase 15 complete, transitioned to Phase 16
 | Phase 15 P02 | 50min (two sessions; Task 3 resume ~22min) | 3 tasks | 10 files |
 | Phase 15 P03 | 75min | 3 tasks | 6 files |
 | Phase 15 P04 | 61min | 3 tasks | 9 files |
+| Phase 16 P01 | 7 min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -378,6 +379,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 15]: [Phase 15]: D15-12 session restore = module singleton (librarySession.ts) gated by reachedReadyRef — StrictMode simulated unmounts must never write the capture (cold loads stay cold; launched ids survive). Departure scroll lives in a ref fed by a passive listener: unmatched-fragment navigation resets scrollY synchronously BEFORE hashchange (probed ["hashchange:0","scroll:0"]) so live window.scrollY at cleanup is always 0 — Probed evidence, not retries: the plan matrix itself surfaced both traps (StrictMode capture poisoning = reading-views cold-load failure; fragment-scroll poison = matrix (d) scroll 0). D15-14 mismatch degrade = fresh warm h1 default resolved from matrix (c) + must-have truths over the literal ready-gate text
 - [Phase 15]: 15-04 POLISH-07 audit: exactly one drift (brand link missing the 44px --touch minimum) — fixed by mirroring the .shell-nav a anatomy; the three intentional differences (paginated-main --space-2xl, Reader 64ch measure, .review-select 16px) citation-commented and byte-unchanged; relief ladder NOT applied (15-02 --space-xs step already held: zero overflow on 3 engines at 320x640, 10px between groups) — UI-SPEC token checklist names the brand link in the 44px contract; the ladder is measurement-gated by the plan itself
 - [Phase 15]: 15-04 honest gate exit 0 (2529 passed / 0 failed / 23 documented skips, one invocation). Run 2 exit 1 was six webkit beforeEach starvations root-caused to a 4-HOUR-OLD reused Vite dev server (reuseExistingServer) — environment, not specs; 5 precedent 09-07 setTimeout(60_000) budgets + a fresh server produced the permanent green record — Identical-cell failure across engines = regression; webkit-only + isolation-green = harness/environment — check the reused dev server age first
+- [Phase 16]: 16-01: No-matches branch keys on ready + membership-non-empty + post-filter zero; Clear search and filters resets BOTH query and tag; strip gated to All view only (ContinueReadingStrip byte-unchanged) — D16-13/D16-14/D16-15/D16-16 implementation shape — membership-empty arm (D14-26) and counts derivation untouched by construction
 
 ### Pending Todos
 
@@ -433,9 +435,9 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-29T17:16:35.071Z
-Stopped at: Phase 16 context gathered
-Resume file: .planning/phases/16-organized-library-and-focused-add-flow/16-CONTEXT.md
+Last session: 2026-08-29T19:01:19.851Z
+Stopped at: Completed 16-01-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 

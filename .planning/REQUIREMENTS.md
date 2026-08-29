@@ -18,8 +18,8 @@
 
 - [x] **LIB-07**: Reader can switch among All, Unread, In Progress, and Finished library views derived from one documented progress policy.
 - [x] **LIB-08**: Reader can see accurate counts, progress, and empty states for each derived library view, including EPUB book-level aggregation.
-- [ ] **LIB-09**: Reader can search and filter by tag within the selected library view without contradictory results or reading states.
-- [ ] **LIB-10**: Reader sees a calm Continue Reading treatment that complements rather than duplicates or displaces the main library organization.
+- [x] **LIB-09**: Reader can search and filter by tag within the selected library view without contradictory results or reading states.
+- [x] **LIB-10**: Reader sees a calm Continue Reading treatment that complements rather than duplicates or displaces the main library organization.
 
 ### Add Workflow
 
@@ -114,8 +114,8 @@
 | NAV-05 | Phase 15 | Complete |
 | LIB-07 | Phase 14 | Complete |
 | LIB-08 | Phase 14 | Complete |
-| LIB-09 | Phase 16 | Pending |
-| LIB-10 | Phase 16 | Pending |
+| LIB-09 | Phase 16 | Complete |
+| LIB-10 | Phase 16 | Complete |
 | ADD-01 | Phase 16 | Pending |
 | ADD-02 | Phase 16 | Pending |
 | ADD-03 | Phase 16 | Pending |

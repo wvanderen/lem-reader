@@ -95,12 +95,12 @@ Plans:
   4. Reader can cancel, retry, or recover from failure without losing useful input, creating duplicates, or hiding refusal reasons.
   5. Add manages focus, dismissal, success, narrow-width, and high-zoom behavior predictably.
 
-**Plans**: 4 plans
+**Plans**: 1/4 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 16-01-PLAN.md — LIB-09/LIB-10 no-matches feedback + clear-filters + All-only Continue Reading gate (LIB-09, LIB-10)
+- [x] 16-01-PLAN.md — LIB-09/LIB-10 no-matches feedback + clear-filters + All-only Continue Reading gate (LIB-09, LIB-10)
 - [ ] 16-02-PLAN.md — ingestCopy extraction + AddDialog component: 3-way picker, submission spine, component tests (ADD-02, ADD-03)
 
 **Wave 2** *(blocked on Wave 1 completion)*
@@ -200,7 +200,7 @@ Plans:
 | 7-13 | v2.0 | 53/53 | Complete | 2026-08-23 |
 | 14. Navigation and Library Contracts | v2.1 | 4/4 | Complete    | 2026-08-25 |
 | 15. Application Shell and Destinations | v2.1 | 4/4 | Complete    | 2026-08-26 |
-| 16. Organized Library and Focused Add Flow | v2.1 | 0/4 | Planned | - |
+| 16. Organized Library and Focused Add Flow | v2.1 | 1/4 | In Progress|  |
 | 17. Reader-Owned Metadata | v2.1 | 0/TBD | Not started | - |
 | 18. Reader Orientation | v2.1 | 0/TBD | Not started | - |
 | 19. Cross-Block Highlights | v2.1 | 0/TBD | Not started | - |
