@@ -4,17 +4,17 @@ milestone: v2.1
 milestone_name: Reader Experience
 current_phase: 16
 current_phase_name: Organized Library and Focused Add Flow
-status: executing
+status: verifying
 stopped_at: Completed 16-02-PLAN.md
-last_updated: "2026-08-29T19:37:15.743Z"
+last_updated: "2026-08-29T20:27:31.399Z"
 last_activity: 2026-08-29
 last_activity_desc: Phase 16 execution started
 progress:
   total_phases: 8
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 12
-  completed_plans: 11
-  percent: 25
+  completed_plans: 12
+  percent: 38
 ---
 
 # Project State
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-08-29)
 
 Phase: 16 (Organized Library and Focused Add Flow) — EXECUTING
 Plan: 4 of 4
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-08-29 — Phase 16 execution started
 
 ## Recent Decisions (Phase 15)
@@ -164,6 +164,7 @@ Last activity: 2026-08-29 — Phase 16 execution started
 | Phase 16 P01 | 7 min | 2 tasks | 4 files |
 | Phase 16 P02 | 8 min | 2 tasks | 6 files |
 | Phase 16 P03 | 23 min | 2 tasks | 30 files |
+| Phase 16 P04 | 48 min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -387,6 +388,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 16]: 16-02: AddDialog cancel listener gated on live submittingRef mirror rewritten every render (Pitfall 3/LibraryView L236) — Esc blocked + controls disabled while submitting (D16-10); success arms close FIRST then navigate/onBookAdded (D16-12)
 - [Phase ?]: 16-03: openAddDialog e2e helper is idempotent (isVisible guard) — refusal ladders drive consecutive uploads inside the still-open modal without re-clicking the inert trigger; book-success anchors are li.book-row via refreshKey (D16-12 closes the dialog, making in-dialog success copy transient)
 - [Phase ?]: 16-03: closed-dialog assertions need CSS locators — a closed native dialog subtree is display:none and excluded from the accessibility tree, so getByRole cannot resolve inside it (upload-queue G2 reads the always-mounted picker through the closed dialog)
+- [Phase 16-04]: Phase 16-04: Real-browser close-then-navigate is transition-level — React commits the route swap at the microtask checkpoint between hashchange listeners, unmounting the dialog before the close event/aria-expanded settle; the e2e asserts dialog-torn-down-by-transition and the 16-02 component proof owns the code-level onCancel-before-hash ordering (reader-visible behavior correct, no production change) — Honest Pitfall-6 proof beats a failing idealized one: asserting unobservable event order produces false regressions; assert the strongest honest browser-level contract instead
 
 ### Pending Todos
 
@@ -442,7 +444,7 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-29T19:36:59.620Z
+Last session: 2026-08-29T20:27:15.150Z
 Stopped at: Completed 16-02-PLAN.md
 Resume file: None
 

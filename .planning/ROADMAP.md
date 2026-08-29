@@ -10,7 +10,7 @@
 
 - [x] **Phase 14: Navigation and Library Contracts** - Establish truthful destination behavior and reading-state policy. (completed 2026-08-25)
 - [x] **Phase 15: Application Shell and Destinations** - Make Library, Highlights, and Reader predictable first-class destinations. (completed 2026-08-26)
-- [ ] **Phase 16: Organized Library and Focused Add Flow** - Browse by reading state and add content without permanent form clutter.
+- [x] **Phase 16: Organized Library and Focused Add Flow** - Browse by reading state and add content without permanent form clutter. (completed 2026-08-29)
 - [ ] **Phase 17: Reader-Owned Metadata** - Edit display title and author without disturbing canonical identity.
 - [ ] **Phase 18: Reader Orientation** - Navigate canonical headings and receive non-intrusive restoration feedback.
 - [ ] **Phase 19: Cross-Block Highlights** - Manage one durable highlight across multiple semantic blocks.
@@ -95,7 +95,7 @@ Plans:
   4. Reader can cancel, retry, or recover from failure without losing useful input, creating duplicates, or hiding refusal reasons.
   5. Add manages focus, dismissal, success, narrow-width, and high-zoom behavior predictably.
 
-**Plans**: 3/4 plans executed
+**Plans**: 4/4 plans complete
 
 Plans:
 **Wave 1**
@@ -109,7 +109,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 16-04-PLAN.md — focused-add 3-engine e2e + a11y/reflow/high-zoom strengthens + honest full-suite gate (ADD-04, ADD-01, ADD-02)
+- [x] 16-04-PLAN.md — focused-add 3-engine e2e + a11y/reflow/high-zoom strengthens + honest full-suite gate (ADD-04, ADD-01, ADD-02)
 
 **UI hint**: yes
 
@@ -200,7 +200,7 @@ Plans:
 | 7-13 | v2.0 | 53/53 | Complete | 2026-08-23 |
 | 14. Navigation and Library Contracts | v2.1 | 4/4 | Complete    | 2026-08-25 |
 | 15. Application Shell and Destinations | v2.1 | 4/4 | Complete    | 2026-08-26 |
-| 16. Organized Library and Focused Add Flow | v2.1 | 3/4 | In Progress|  |
+| 16. Organized Library and Focused Add Flow | v2.1 | 4/4 | Complete   | 2026-08-29 |
 | 17. Reader-Owned Metadata | v2.1 | 0/TBD | Not started | - |
 | 18. Reader Orientation | v2.1 | 0/TBD | Not started | - |
 | 19. Cross-Block Highlights | v2.1 | 0/TBD | Not started | - |
