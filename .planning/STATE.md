@@ -5,15 +5,15 @@ milestone_name: Reader Experience
 current_phase: 16
 current_phase_name: Organized Library and Focused Add Flow
 status: executing
-stopped_at: Completed 16-01-PLAN.md
-last_updated: "2026-08-29T19:01:19.862Z"
+stopped_at: Completed 16-02-PLAN.md
+last_updated: "2026-08-29T19:12:17.509Z"
 last_activity: 2026-08-29
 last_activity_desc: Phase 16 execution started
 progress:
   total_phases: 8
   completed_phases: 2
   total_plans: 12
-  completed_plans: 9
+  completed_plans: 10
   percent: 25
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-29)
 ## Current Position
 
 Phase: 16 (Organized Library and Focused Add Flow) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-08-29 — Phase 16 execution started
 
@@ -162,6 +162,7 @@ Last activity: 2026-08-29 — Phase 16 execution started
 | Phase 15 P03 | 75min | 3 tasks | 6 files |
 | Phase 15 P04 | 61min | 3 tasks | 9 files |
 | Phase 16 P01 | 7 min | 2 tasks | 4 files |
+| Phase 16 P02 | 8 min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -380,6 +381,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 15]: 15-04 POLISH-07 audit: exactly one drift (brand link missing the 44px --touch minimum) — fixed by mirroring the .shell-nav a anatomy; the three intentional differences (paginated-main --space-2xl, Reader 64ch measure, .review-select 16px) citation-commented and byte-unchanged; relief ladder NOT applied (15-02 --space-xs step already held: zero overflow on 3 engines at 320x640, 10px between groups) — UI-SPEC token checklist names the brand link in the 44px contract; the ladder is measurement-gated by the plan itself
 - [Phase 15]: 15-04 honest gate exit 0 (2529 passed / 0 failed / 23 documented skips, one invocation). Run 2 exit 1 was six webkit beforeEach starvations root-caused to a 4-HOUR-OLD reused Vite dev server (reuseExistingServer) — environment, not specs; 5 precedent 09-07 setTimeout(60_000) budgets + a fresh server produced the permanent green record — Identical-cell failure across engines = regression; webkit-only + isolation-green = harness/environment — check the reused dev server age first
 - [Phase 16]: 16-01: No-matches branch keys on ready + membership-non-empty + post-filter zero; Clear search and filters resets BOTH query and tag; strip gated to All view only (ContinueReadingStrip byte-unchanged) — D16-13/D16-14/D16-15/D16-16 implementation shape — membership-empty arm (D14-26) and counts derivation untouched by construction
+- [Phase 16]: 16-02: File group hidden via hidden attribute on BOTH form and input (never unmounting) — unmounting clears read-only input.files, so only hiding preserves a picked File across source switches (D16-07); URL/paste groups unmount freely behind lifted state
+- [Phase 16]: 16-02: ingestCopy.ts extraction proven byte-identical by brace-matched text comparison against the pre-extraction git blob (T-16-03) — mapReasonToCopy + exported bytesToBase64 now single-homed; AddDialog consumes the same exports, no fork
+- [Phase 16]: 16-02: AddDialog cancel listener gated on live submittingRef mirror rewritten every render (Pitfall 3/LibraryView L236) — Esc blocked + controls disabled while submitting (D16-10); success arms close FIRST then navigate/onBookAdded (D16-12)
 
 ### Pending Todos
 
@@ -435,8 +439,8 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-29T19:01:19.851Z
-Stopped at: Completed 16-01-PLAN.md
+Last session: 2026-08-29T19:12:12.948Z
+Stopped at: Completed 16-02-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
