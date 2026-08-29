@@ -5,8 +5,8 @@ milestone_name: Reader Experience
 current_phase: 17
 current_phase_name: Reader-Owned Metadata
 status: verifying
-stopped_at: Completed 16-02-PLAN.md
-last_updated: "2026-08-29T20:35:22.626Z"
+stopped_at: Phase 17 context gathered
+last_updated: "2026-08-29T21:51:45.205Z"
 last_activity: 2026-08-29
 last_activity_desc: Phase 16 complete, transitioned to Phase 17
 progress:
@@ -445,9 +445,9 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-29T20:27:15.150Z
-Stopped at: Completed 16-02-PLAN.md
-Resume file: None
+Last session: 2026-08-29T21:51:45.194Z
+Stopped at: Phase 17 context gathered
+Resume file: .planning/phases/17-reader-owned-metadata/17-CONTEXT.md
 
 ## Operator Next Steps
 
