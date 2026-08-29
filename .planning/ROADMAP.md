@@ -200,7 +200,7 @@ Plans:
 | 7-13 | v2.0 | 53/53 | Complete | 2026-08-23 |
 | 14. Navigation and Library Contracts | v2.1 | 4/4 | Complete    | 2026-08-25 |
 | 15. Application Shell and Destinations | v2.1 | 4/4 | Complete    | 2026-08-26 |
-| 16. Organized Library and Focused Add Flow | v2.1 | 4/4 | Complete   | 2026-08-29 |
+| 16. Organized Library and Focused Add Flow | v2.1 | 4/4 | Complete    | 2026-08-29 |
 | 17. Reader-Owned Metadata | v2.1 | 0/TBD | Not started | - |
 | 18. Reader Orientation | v2.1 | 0/TBD | Not started | - |
 | 19. Cross-Block Highlights | v2.1 | 0/TBD | Not started | - |

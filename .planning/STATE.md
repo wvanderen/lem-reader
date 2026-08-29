@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Reader Experience
-current_phase: 16
-current_phase_name: Organized Library and Focused Add Flow
+current_phase: 17
+current_phase_name: Reader-Owned Metadata
 status: verifying
 stopped_at: Completed 16-02-PLAN.md
-last_updated: "2026-08-29T20:27:31.399Z"
+last_updated: "2026-08-29T20:35:22.626Z"
 last_activity: 2026-08-29
-last_activity_desc: Phase 16 execution started
+last_activity_desc: Phase 16 complete, transitioned to Phase 17
 progress:
   total_phases: 8
   completed_phases: 3
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-08-29)
 
 ## Current Position
 
-Phase: 16 (Organized Library and Focused Add Flow) — EXECUTING
-Plan: 4 of 4
+Phase: 17 — Reader-Owned Metadata
+Plan: Not started
 Status: Phase complete — ready for verification
-Last activity: 2026-08-29 — Phase 16 execution started
+Last activity: 2026-08-29 — Phase 16 complete, transitioned to Phase 17
 
 ## Recent Decisions (Phase 15)
 
@@ -44,7 +44,7 @@ Last activity: 2026-08-29 — Phase 16 execution started
 
 **Velocity:**
 
-- Total plans completed: 78 (this phase, incl. gap closure)
+- Total plans completed: 82 (this phase, incl. gap closure)
 - Average duration: 25 min
 - Total execution time: 1.5 hours
 
@@ -64,6 +64,7 @@ Last activity: 2026-08-29 — Phase 16 execution started
 | 13 | 13 | - | - |
 | 14 | 4 | - | - |
 | 15 | 4 | - | - |
+| 16 | 4 | - | - |
 
 **Recent Trend:**
 
