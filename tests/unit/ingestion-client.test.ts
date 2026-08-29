@@ -571,16 +571,31 @@ describe("ingestEpub (12-03 Task 2)", () => {
   });
 });
 
-// ── IngestControl .epub picker arm (Phase 12 Plan 03 Task 2) ─────────────────
-// No 11-04 picker test exists (tests/component/IngestControl.test.tsx has no
-// file-upload case), so per the plan's fallback these assertions live HERE:
-// the over-cap pick performs ZERO fetch calls and never materializes an
-// ArrayBuffer; the book save path dedupe-refuses at book level and writes
-// through saveBook in one transaction.
-
-describe("IngestControl .epub picker arm (12-03 Task 2)", () => {
+// ── AddDialog .epub picker arm (Phase 12 Plan 03 Task 2; Plan 16-03 mount) ──
+// Per the plan's fallback these assertions live HERE (component suites mock
+// the client + store seams): the over-cap pick performs ZERO fetch calls and
+// never materializes an ArrayBuffer; the book save path dedupe-refuses at
+// book level and writes through saveBook in one transaction. Plan 16-03
+// re-homed the render target from the retired three-form control to the
+// AddDialog (open via the open prop + the Upload file radio; same
+// accessible names — "Upload a file" / "Add file").
+describe("AddDialog .epub picker arm (12-03 Task 2)", () => {
   beforeEach(async () => {
     vi.restoreAllMocks();
+    // jsdom implements HTMLDialogElement but NOT showModal/close behavior —
+    // stub the two methods at the prototype level (the AddDialog.test.tsx
+    // precedent) so the dialog shell's open-prop sync runs its real path.
+    HTMLDialogElement.prototype.showModal = vi.fn(function (
+      this: HTMLDialogElement,
+    ) {
+      this.open = true;
+    });
+    HTMLDialogElement.prototype.close = vi.fn(function (
+      this: HTMLDialogElement,
+    ) {
+      this.open = false;
+      this.dispatchEvent(new Event("close"));
+    });
     await wipeDatabase();
   });
 
@@ -589,7 +604,7 @@ describe("IngestControl .epub picker arm (12-03 Task 2)", () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValue(new Response("{}", { status: 200 }));
-    const { IngestControl } = await import("../../src/ingestion/IngestControl");
+    const { AddDialog } = await import("../../src/ingestion/AddDialog");
 
     // A .epub File stub whose size is patched over the cap — no 10MB
     // allocation needed; the component only reads .name/.size when the
@@ -602,7 +617,16 @@ describe("IngestControl .epub picker arm (12-03 Task 2)", () => {
 
     const { render } = await import("@testing-library/react");
     const { createElement } = await import("react");
-    render(createElement(IngestControl));
+    render(
+      createElement(AddDialog, {
+        open: true,
+        onCancel: () => {},
+        onBookAdded: () => {},
+      }),
+    );
+    // The dialog always opens on Web address (D16-08) — switch to the
+    // file source so the always-mounted picker is visible.
+    await user.click(screen.getByRole("radio", { name: "Upload file" }));
     const input = screen.getByLabelText("Upload a file") as HTMLInputElement;
     await user.upload(input, file);
     await user.click(screen.getByRole("button", { name: /add file/i }));
@@ -644,23 +668,27 @@ describe("IngestControl .epub picker arm (12-03 Task 2)", () => {
       ),
     );
 
-    const { IngestControl } = await import("../../src/ingestion/IngestControl");
+    const { AddDialog } = await import("../../src/ingestion/AddDialog");
     const { render } = await import("@testing-library/react");
     const { createElement } = await import("react");
-    render(createElement(IngestControl));
+    render(
+      createElement(AddDialog, {
+        open: true,
+        onCancel: () => {},
+        onBookAdded: () => {},
+      }),
+    );
+    await user.click(screen.getByRole("radio", { name: "Upload file" }));
     const input = screen.getByLabelText("Upload a file") as HTMLInputElement;
     await user.upload(input, new File(["PK"], "sample.epub"));
     await user.click(screen.getByRole("button", { name: /add file/i }));
 
-    // Success copy + the skip disclosure (D12-11 — same phrasing the
-    // library disclosure will use).
-    await screen.findByText(
-      "Book added to your library. 2 chapters could not be read.",
-    );
-
-    // The book + both chapters landed (saveBook's one-transaction write).
+    // The skip disclosure computation still runs for spine parity, but the
+    // dialog CLOSES on book success (D16-12) — the durable skip disclosure
+    // lives on the library BookRow. The save itself is what lands here:
+    // the book + both chapters via saveBook's one-transaction write.
     const { db } = await loadDb();
-    expect(await db.books.count()).toBe(1);
+    await vi.waitFor(() => expect(db.books.count()).resolves.toBe(1));
     expect(await db.articles.count()).toBe(2);
   });
 
@@ -685,10 +713,17 @@ describe("IngestControl .epub picker arm (12-03 Task 2)", () => {
       ),
     );
 
-    const { IngestControl } = await import("../../src/ingestion/IngestControl");
+    const { AddDialog } = await import("../../src/ingestion/AddDialog");
     const { render } = await import("@testing-library/react");
     const { createElement } = await import("react");
-    render(createElement(IngestControl));
+    render(
+      createElement(AddDialog, {
+        open: true,
+        onCancel: () => {},
+        onBookAdded: () => {},
+      }),
+    );
+    await user.click(screen.getByRole("radio", { name: "Upload file" }));
     const input = screen.getByLabelText("Upload a file") as HTMLInputElement;
     await user.upload(input, new File(["PK"], "same-book.epub"));
     await user.click(screen.getByRole("button", { name: /add file/i }));

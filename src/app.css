@@ -805,53 +805,97 @@ dialog.wipe-confirm::backdrop {
   border-color: var(--accent);
 }
 
-/* ── IngestControl — Plan 07-06 + Plan 08-04 ──────────────────────────────── */
-/* Three stacked forms (URL / paste HTML / file upload). The .ingest-control
-   <section> wraps all three; .ingest-submit is the shared submit-button
-   geometry (neutral hairline border + accent-on-hover, mirroring the
-   .resume-banner-secondary quiet-chrome discipline). */
-.ingest-control {
-  margin-block: var(--space-xl);
-  padding: var(--space-lg);
-  background: var(--surface-raised);
+/* ── AddDialog — the focused Add-to-library modal (Plan 16-02/16-03) ──────── */
+/* Structural clone of dialog.library-remove-confirm (the clone-lineage rule:
+   own .add-dialog* hooks — RemoveConfirm, BookRemoveConfirm, and AddDialog
+   all three mount in LibraryView, so a shared class would break strict-mode
+   dialog.<class> locators). Centered modal geometry on POLISH-07 tokens:
+   margin:auto UA centering, 320px-safe width (calc(100vw - --space-xl)),
+   overflow:auto so tall content / high zoom scrolls instead of clipping.
+   Zero motion properties by design (A11Y-06 discipline). The retiring
+   three-form control's input/label/button geometry is re-homed here under
+   the dialog's own hooks (Plan 16-03 — ADD-01). */
+dialog.add-dialog {
+  margin: auto;
+  padding: 0;
   border: 1px solid var(--hairline);
-  border-radius: 4px;
+  border-radius: 8px;
+  background: var(--surface-raised);
+  color: var(--ink);
+  width: calc(100vw - var(--space-xl)); /* safe at 320px */
+  max-width: 560px;
+  overflow: auto; /* tall content / high zoom scrolls */
 }
-.ingest-control > h2 {
-  margin: 0 0 var(--space-md) 0;
+dialog.add-dialog::backdrop {
+  background: rgba(31, 27, 22, 0.5);
+}
+.add-dialog-inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+}
+.add-dialog-inner h2 {
+  margin: 0;
   font-family: var(--font-ui);
   font-size: 22px;
   line-height: 1.3;
   font-weight: 600;
-  color: var(--ink);
 }
-/* Each form stacks vertically inside the section. */
-.ingest-control form {
+/* D16-05 — the visible 3-way source-first picker: native fieldset/legend/
+   radio semantics (the .tag-entry discipline). Each row is a label-wrapped
+   radio with a 44px interactive row height (A11Y-07). */
+.add-source-picker {
   display: flex;
   flex-direction: column;
-  gap: var(--space-md);
-  margin-block: 0 var(--space-md);
+  gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
 }
-.ingest-control form:last-of-type {
-  margin-block-end: 0;
-}
-.ingest-control label {
+.add-source-picker legend {
+  padding-inline: var(--space-xs);
   font-family: var(--font-ui);
   font-size: 14px;
   line-height: 1.45;
   font-weight: 600;
   color: var(--ink);
 }
-.ingest-control .meta {
+.add-source-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-height: var(--touch);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink);
+  cursor: pointer;
+}
+/* Each source form stacks vertically inside the dialog (the retired
+   three-form control's geometry, re-homed). */
+.add-dialog-inner form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+.add-dialog-inner label {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  font-weight: 600;
+  color: var(--ink);
+}
+.add-dialog-inner .meta {
   margin: 0;
   font-family: var(--font-ui);
   font-size: 14px;
   line-height: 1.45;
   color: var(--ink-soft);
 }
-.ingest-control input[type="url"],
-.ingest-control input[type="file"],
-.ingest-control textarea {
+.add-dialog-inner input[type="url"],
+.add-dialog-inner input[type="file"],
+.add-dialog-inner textarea {
   width: 100%;
   min-height: var(--touch);
   padding: var(--space-sm);
@@ -864,15 +908,16 @@ dialog.wipe-confirm::backdrop {
   color: var(--ink);
   /* :focus-visible inherits the global 2px ring rule (app.css). */
 }
-.ingest-control textarea {
+.add-dialog-inner textarea {
   min-height: calc(var(--touch) * 2);
   resize: vertical;
 }
-/* Shared submit-button geometry (A11Y-07 — 44px touch target). The neutral
-   hairline border mirrors .resume-banner-secondary; :hover flips to --accent
-   (border + text) so the affordance reads as quiet until activated. */
-.ingest-submit,
-.ingest-control form button[type="submit"] {
+/* Shared quiet-button geometry (A11Y-07 — 44px touch target): neutral
+   hairline border, --accent on hover — the retired submit-button treatment
+   re-homed, extended to the dialog's own Cancel + Remove file controls. */
+.add-dialog-inner form button[type="submit"],
+.add-remove-file,
+.add-dialog-cancel {
   align-self: flex-start;
   display: inline-flex;
   align-items: center;
@@ -887,13 +932,22 @@ dialog.wipe-confirm::backdrop {
   color: var(--ink);
   cursor: pointer;
 }
-.ingest-control form button[type="submit"]:hover:not(:disabled) {
+.add-dialog-inner form button[type="submit"]:hover:not(:disabled),
+.add-remove-file:hover:not(:disabled),
+.add-dialog-cancel:hover:not(:disabled) {
   color: var(--accent);
   border-color: var(--accent);
 }
-.ingest-control form button[type="submit"]:disabled {
+.add-dialog-inner form button[type="submit"]:disabled,
+.add-remove-file:disabled,
+.add-dialog-cancel:disabled {
   opacity: 0.5;
   cursor: default;
+}
+/* The dialog's .status live region reuses the global .status card rules
+   (Plan 02 — polite/atomic), scoped quietly inside the dialog. */
+.add-dialog-inner .status {
+  margin-block: 0;
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -2240,15 +2294,17 @@ dialog.annotations-drawer::backdrop {
 }
 
 /* ── LibraryView tidy sections (Plan 13-03 — POLISH-06 / D13-16) ────────── */
-/* The library home reads as a header row plus three calm ordered regions:
-   continue reading, then add content, then the library list. Structure-only
-   grouping (no labels added — the D13-16 audit names ordering/density/weight,
-   not missing copy). Token-only spacing: the section wrappers carry NO
-   padding/border, so the children's own margins collapse straight through —
-   one consistent --space-xl region rhythm without doubled gaps. Zero motion
-   properties by design (A11Y-06 discipline — the global reduced-motion gate
-   stays trivially satisfied; wording kept free of greppable property names
-   per the 13-01 comment discipline). */
+/* The library home reads as a header row plus calm ordered regions:
+   continue reading, then the library list. (Plan 16-03 — the add-content
+   region dissolved; its forms live behind the header Add button's dialog.)
+   Structure-only grouping (no labels added — the D13-16 audit names
+   ordering/density/weight, not missing copy). Token-only spacing: the
+   section wrappers carry NO padding/border, so the children's own margins
+   collapse straight through — one consistent --space-xl region rhythm
+   without doubled gaps. Zero motion properties by design (A11Y-06
+   discipline — the global reduced-motion gate stays trivially satisfied;
+   wording kept free of greppable property names per the 13-01 comment
+   discipline). */
 .library-header {
   max-width: 1100px;
   margin-inline: auto;
@@ -2263,16 +2319,42 @@ dialog.annotations-drawer::backdrop {
 .library-header h1 {
   margin-block: 0;
 }
+/* Plan 16-03 (D16-03) — the Add to Library trigger, BESIDE the h1 in the
+   header row: the sole entry into the focused Add dialog (D16-02 — never
+   a shell-header trigger). Secondary-button treatment (the quiet-chrome
+   discipline: hairline border, --ink at rest, --accent on hover, 44px
+   --touch minimum, inherited global focus-visible ring). Token-only;
+   zero motion properties. */
+.library-add-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--touch);
+  padding-inline: var(--space-md);
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  font-family: var(--font-ui);
+  font-size: 16px;
+  color: var(--ink);
+  cursor: pointer;
+  /* :focus-visible inherits the global 2px ring rule (app.css). */
+}
+.library-add-button:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
 .library-section {
   margin-block: var(--space-xl) 0;
 }
-/* G1 (Phase 13 user review) — the add-content section joins the shared
-   centered measure its siblings already carry (.library-header, the
-   continue-reading strip, the search field, the tag filter, and the
-   library list all cap at the same width and center identically); the
-   wrapper stays padding/border-free so the 13-03 collapsing rhythm is
-   preserved. Zero motion properties by design. */
-.library-section-add {
+/* Plan 16-03 (G1 discipline holds) — the re-homed library-load .status
+   card (a direct child of main after the add-section dissolution) joins
+   the shared 1100px centered measure its dissolved wrapper section used
+   to carry: .library-header, the continue-reading strip, the search
+   field, the tag filter, and the library list all cap + center
+   identically. Scoped to the direct-child position the library-tidy
+   spec pins. */
+main#main > .status {
   max-width: 1100px;
   margin-inline: auto;
 }
@@ -2349,8 +2431,8 @@ dialog.annotations-drawer::backdrop {
   color: var(--ink);
   /* :focus-visible inherits the global 2px ring. */
 }
-/* Add button — neutral hairline border, accent on hover (mirrors .ingest-submit
-   geometry — quiet chrome until activated). */
+/* Add button — neutral hairline border, accent on hover (the quiet-button
+   token discipline shared with .tag-entry-add). */
 .tag-entry-add {
   display: inline-flex;
   align-items: center;

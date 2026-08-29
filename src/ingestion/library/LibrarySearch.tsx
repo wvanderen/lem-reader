@@ -10,7 +10,7 @@
 // `--touch` minimum is enforced via CSS (min-height on `.library-search
 // input`); `:focus-visible` inherits the global 2px ring (app.css L73-77).
 //
-// Mirrors the IngestControl controlled-input discipline (L143-159): parent
+// Mirrors the add-dialog controlled-input discipline (L143-159): parent
 // owns the value via `query` + `onQueryChange`; this component is stateless.
 // No Dexie, no React state of its own.
 interface LibrarySearchProps {

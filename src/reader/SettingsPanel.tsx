@@ -174,7 +174,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   // while importPreview !== null.
   const [importBundle, setImportBundle] = useState<ExportBundle | null>(null);
   const [importPreview, setImportPreview] = useState<ImportPreviewData | null>(null);
-  // Ref-based file picker (IngestControl discipline) triggered by the
+  // Ref-based file picker (the add-dialog discipline) triggered by the
   // "Import bundle" button.
   const importFileRef = useRef<HTMLInputElement>(null);
   // Computed ONCE per mount (Pitfall 6 / T-9-18 — see hasWebCrypto above).
@@ -553,7 +553,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                 Export all highlights
               </button>
             </div>
-            {/* Visually-hidden file picker (IngestControl ref discipline) —
+            {/* Visually-hidden file picker (the add-dialog ref discipline) —
               triggered by the Import bundle button; disabled together with
               it. tabIndex -1 keeps the hidden input off the Tab ring (the
               button is the keyboard path). */}

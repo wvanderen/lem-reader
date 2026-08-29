@@ -24,7 +24,7 @@
 //      locationStore loadAllLocations precedent — a single corrupt row never
 //      blocks the rest of the library). Dexie-level throws route through
 //      classifyStorageError (the shared errors.ts classifier).
-//   4. hasBook is the dedupe-refuse primitive IngestControl calls BEFORE any
+//   4. hasBook is the dedupe-refuse primitive the add dialog calls BEFORE any
 //      save (the D7-07 precedent, applied at book level: re-uploading
 //      identical bytes produces the same content-hash book id and surfaces
 //      the calm already-in-library copy instead of a second save).
@@ -59,7 +59,7 @@ export type BooksLoadResult =
 
 /**
  * A Book with `addedAt` optional — the saveBook parameter shape. Callers
- * that parsed a full Book (IngestControl via ingestEpub) pass it through
+ * that parsed a full Book (the add dialog via ingestEpub) pass it through
  * unchanged; callers that hand-build a record may omit `addedAt` and
  * saveBook stamps it (see saveBook).
  */
@@ -104,7 +104,7 @@ export async function getBook(id: string): Promise<Book | null> {
 
 /**
  * hasBook — the book-level dedupe-refuse check (D7-07 precedent). The
- * IngestControl calls this BEFORE saveBook; if it returns true, the control
+ * the add dialog calls this BEFORE saveBook; if it returns true, the control
  * surfaces "Already in your library." and never calls saveBook (no
  * overwrite, no orphaned chapter annotations).
  */
@@ -118,7 +118,7 @@ export async function hasBook(id: string): Promise<boolean> {
  *
  * The closure is puts-only: no Zod, no crypto, no network inside the
  * transaction (the 09-04 applyImport closure rule). `book` and `articles`
- * are validated by construction (IngestControl's only producer is
+ * are validated by construction (the add dialog's only producer is
  * ingestEpub, which runs IngestionResponseSchema.parse + the per-article
  * ArticleSchema.parse loop on the network read — STATE-04
  * defense-in-depth).
@@ -132,7 +132,7 @@ export async function hasBook(id: string): Promise<boolean> {
  * (index fodder for the v5 Dexie index; the canonical field remains
  * `ingestionMeta.bookId` — see the inline comment in the closure).
  *
- * A throw (e.g. QuotaExceeded) propagates to the caller (IngestControl),
+ * A throw (e.g. QuotaExceeded) propagates to the caller (the add dialog),
  * which surfaces the calm catch-all copy; the transaction guarantees NO
  * partial write ever landed.
  */

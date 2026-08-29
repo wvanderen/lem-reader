@@ -47,7 +47,7 @@ interface TagEntryProps {
  * The input is controlled local state; add/remove writes through to
  * setArticleTags (Plan 02's idempotent Dexie update + empty-string filter).
  * Errors (Dexie write failure) surface in a small .status live region inside
- * the fieldset (mirrors IngestControl's discipline — A11Y-08).
+ * the fieldset (mirrors the add dialog's discipline — A11Y-08).
  */
 export function TagEntry({ articleId, tags, saveTags }: TagEntryProps) {
   const [draft, setDraft] = useState("");
@@ -143,7 +143,7 @@ export function TagEntry({ articleId, tags, saveTags }: TagEntryProps) {
           Add tag
         </button>
       </div>
-      {/* .status live region mirrors IngestControl's discipline (A11Y-08 —
+      {/* .status live region mirrors the add dialog's discipline (A11Y-08 —
           readers using AT hear about save failures). aria-atomic so the SR
           re-announces the whole phrase on every change. */}
       {errorCopy !== null && (

@@ -52,7 +52,7 @@ export type IngestionRequest = z.infer<typeof IngestionRequestSchema>;
 /**
  * PDF_MAX_BYTES — the decoded-byte cap for the Phase 11 PDF upload path
  * (ING-04), shared by THREE enforcement points: the client file picker
- * (IngestControl refuses file.size > PDF_MAX_BYTES before reading), the
+ * (the add dialog refuses file.size > PDF_MAX_BYTES before reading), the
  * middleware content-length guard (MAX_INGEST_BODY_BYTES derives from it), and
  * the orchestrator re-check after base64 decode (defense-in-depth). Lives HERE
  * (not in /server) because the /src→/server import direction is forbidden —
@@ -65,7 +65,7 @@ export const PDF_MAX_BYTES = 10 * 1024 * 1024;
 /**
  * EPUB_MAX_BYTES — the decoded-byte cap for the Phase 12 EPUB upload path
  * (ING-05), shared by the SAME three enforcement points as PDF_MAX_BYTES:
- * the client file picker (IngestControl refuses file.size > EPUB_MAX_BYTES
+ * the client file picker (the add dialog refuses file.size > EPUB_MAX_BYTES
  * before reading — the 11-04 earliest-enforcement pattern), the middleware
  * content-length guard (MAX_INGEST_BODY_BYTES derives from
  * max(PDF_MAX_BYTES, EPUB_MAX_BYTES)), and the orchestrator re-check after

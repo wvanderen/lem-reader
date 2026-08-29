@@ -5,7 +5,6 @@
 //
 //   - `<main id="main">`                        (byte-stable — skip-link target)
 //   - `<h1>Saved articles</h1>`                 (byte-stable — SC#1, happy-path.spec L93)
-//   - `<IngestControl />`                       (byte-stable)
 //   - `.status` live region                     (byte-stable copy — FixtureList L45-53)
 //   - `<ContinueReadingStrip />`                (NEW — returns null when empty)
 //   - `<LibrarySearch />` + `<TagFilter />`     (NEW — D8-06 + D8-07)
@@ -14,11 +13,22 @@
 //   - Empty-state block (D8-04 — calm voice)
 //
 // Plan 13-03 (POLISH-06 / D13-16) bounded tidy — the same components,
-// regrouped into a header row plus three calm ordered sections: (1) the h1
-// with the Review-highlights button beside it, (2) continue reading, (3) add
-// content (IngestControl + the .status live region directly following it),
-// (4) the library list (search, tag filter, rows). Structure-only reorg: no
-// new features, no new data loading, every byte-stable anchor preserved.
+// regrouped into a header row plus calm ordered regions: (1) the h1 row,
+// (2) continue reading, (3) the library list (search, tag filter, rows).
+// Structure-only reorg: no new features, no new data loading, every
+// byte-stable anchor preserved.
+//
+// Plan 16-03 (D16-02/D16-03/D16-04/D16-12) — the focused Add workflow:
+// the three permanently-mounted ingestion forms LEAVE this page (the
+// retiring three-form control is deleted); an "Add to Library" button
+// BESIDE the h1 opens the AddDialog modal (the shell header stays exactly
+// two destinations). The `.status` load live region SURVIVES the add-
+// section dissolution byte-stable (Pitfall 7 — it is the list's
+// "Opening article…" / "Couldn't open this article" surface, not an
+// ingest surface), re-homed as a direct child of main after the list
+// region. Article success navigates from INSIDE the dialog (D16-12);
+// book success bumps refreshKey via onBookAdded so the new book row
+// appears (the RemoveConfirm onConfirm precedent).
 //
 // The hash router (App.tsx) is unchanged — only the list-view component
 // import swaps (`FixtureList` → `LibraryView`). parseHash + hashchange + the
@@ -44,7 +54,6 @@ import { listArticles } from "../../content/repository";
 import type { CanonicalArticle } from "../../content/types";
 import type { Book, LocationRecord } from "../../content/schema";
 import { normalizeText, graphemeClusters } from "../../content/normalizeText";
-import { IngestControl } from "../IngestControl";
 import { LibrarySearch } from "./LibrarySearch";
 import { TagFilter } from "./TagFilter";
 import { LibraryRow } from "./LibraryRow";
@@ -80,6 +89,12 @@ import { RemoveConfirm } from "./RemoveConfirm";
 // behind its own structural clone (Pitfall 8 isolation — two dialogs, two
 // call sites, no shared ConfirmDialog).
 import { BookRemoveConfirm } from "./BookRemoveConfirm";
+// Plan 16-03 (D16-01/D16-02/D16-03) — the focused Add-to-library dialog
+// (built in Plan 16-02): native <dialog>/showModal hosting the ingestion
+// submission spine behind a 3-way source picker. LibraryView owns ONLY the
+// open state + the book-success refresh (article success navigates inside
+// the dialog per D16-12).
+import { AddDialog } from "../AddDialog";
 
 /** A book pending destructive confirmation (Plan 12-05 — BookRow's Remove
  * book trigger is the only setter caller; BookRemoveConfirm consumes it). */
@@ -127,7 +142,10 @@ const EMPTY_COPY: Record<
 > = {
   all: {
     heading: "Your library is empty",
-    body: "Paste a URL or upload a file to begin.",
+    // Plan 16-03 (D16-04) — the empty All view routes readers to Add via
+    // COPY ONLY: the words point at the header-row button; no second
+    // inline button is added (one trigger, one behavior).
+    body: "Nothing saved yet. Use the Add to Library button to begin.",
   },
   unread: {
     heading: "Nothing unread",
@@ -227,6 +245,12 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
   // it (the BookRow onRemove callback below is its sole setter caller).
   const [bookRemoveTarget, setBookRemoveTarget] =
     useState<BookRemoveTarget | null>(null);
+  // Plan 16-03 (D16-03) — the Add dialog's open state, LibraryView-LOCAL
+  // (the trigger is in-page; settingsOpen is App-level only because the
+  // shell header triggers it). The header-row Add button is its sole
+  // opener; every close path (Cancel, Esc, success) mirrors back through
+  // AddDialog's onCancel.
+  const [addOpen, setAddOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
   // Plan 15-03 (Pitfall 8) — rewrite EVERY render so the unmount cleanup
@@ -529,11 +553,11 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
   return (
     <main id="main">
       {/* Plan 13-03 (POLISH-06 / D13-16) bounded tidy — the library home
-          reads as a header row plus three calm ordered regions: continue
-          reading first, then add content, then the library list. Section
-          wrappers are structure-only (app.css token spacing; no new
-          features, no new data loading). Byte-stable anchors are preserved
-          exactly: main#main, the h1 text, the .status live region, the
+          reads as a header row plus calm ordered regions: continue
+          reading first, then the library list. Section wrappers are
+          structure-only (app.css token spacing; no new features, no new
+          data loading). Byte-stable anchors are preserved exactly:
+          main#main, the h1 text, the .status live region, the
           LibraryRow markup, and the hash-assignment fallbacks below. */}
       <header className="library-header">
         {/* byte-stable page heading (SC#1 regression target — Pitfall 8-5).
@@ -541,11 +565,25 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
             text and level stay byte-stable across ALL views (D14-25).
             Plan 15-02 (OQ1 / UI-SPEC auto-resolution #5): the in-page
             Highlights button (D10-02) is REMOVED — the shell's Highlights
-            link (Header nav Primary) is the sole library→highlights entry,
-            and the header returns to the calm h1 row POLISH-06 established. */}
+            link (Header nav Primary) is the sole library→highlights entry.
+            Plan 16-03 (D16-02/D16-03): the header row gains the Add to
+            Library trigger BESIDE the h1 (the old Review-highlights button
+            position) — the ONLY way into the focused Add dialog. The
+            shell header is untouched (two destinations, D15-08). The
+            trigger mirrors the Header gear-button shape: aria-haspopup
+            dialog + an aria-expanded reflection of the open state. */}
         <h1 ref={h1Ref} tabIndex={-1}>
           Saved articles
         </h1>
+        <button
+          type="button"
+          className="library-add-button"
+          onClick={() => setAddOpen(true)}
+          aria-haspopup="dialog"
+          aria-expanded={addOpen}
+        >
+          Add to Library
+        </button>
       </header>
       {/* (1) Continue reading — the strip returns null while loading OR when
           the unfinished set is empty (spare chrome per UI-SPEC); the section
@@ -560,26 +598,16 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
           <ContinueReadingStrip />
         </section>
       )}
-      {/* (2) Add content — 07-06 (D7-01 + D7-02) minimal ingest control
-          (extended in Plan 04 with the file upload form), with the
-          byte-stable .status live region directly following it (FixtureList
-          L45-53 copy verbatim). */}
-      <section className="library-section library-section-add">
-        <IngestControl />
-        <div className="status" role="status" aria-live="polite" aria-atomic="true">
-          {status === "loading" && <p>Opening article…</p>}
-          {status === "error" && (
-            <>
-              <h2>Couldn't open this article.</h2>
-              <p>
-                The article could not be loaded. Select it again from the list, or
-                try a different article.
-              </p>
-            </>
-          )}
-        </div>
-      </section>
-      {/* (3) The library list — Plan 14-02: the view switcher governs the
+      {/* Plan 16-03 (D16-03) — the permanently-mounted add-content section
+          DISSOLVES: the three ingestion forms now live behind the header
+          Add button's dialog (ADD-01). The library-load .status live
+          region below SURVIVES the dissolution byte-stable (Pitfall 7):
+          same classes, role, aria attributes, and copy strings — it is
+          the LIST's "Opening article…" / "Couldn't open this article"
+          surface, never an ingest surface. Re-homed as a DIRECT child of
+          main, after the list region (the position the old section's
+          wrapper occupied). */}
+      {/* (2) The library list — Plan 14-02: the view switcher governs the
           list, so it mounts as the section's FIRST child above LibrarySearch
           (D14-22: real links — views ARE routes — inside a labeled nav
           landmark; exactly one aria-current="page"). D8-06 search + D8-07
@@ -727,6 +755,23 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
           </>
         )}
       </section>
+      {/* Plan 16-03 (D16-03, Pitfall 7) — the re-homed library-load .status
+          live region: byte-stable classes, role, aria attributes, and copy
+          ("Opening article…" / the couldn't-open error copy — FixtureList
+          L45-53 verbatim), now a DIRECT child of main following the list
+          region after the add-section dissolution. */}
+      <div className="status" role="status" aria-live="polite" aria-atomic="true">
+        {status === "loading" && <p>Opening article…</p>}
+        {status === "error" && (
+          <>
+            <h2>Couldn't open this article.</h2>
+            <p>
+              The article could not be loaded. Select it again from the list, or
+              try a different article.
+            </p>
+          </>
+        )}
+      </div>
       {/* Plan 08-04 — row-level trash → cascade-remove confirmation (LIB-02).
           D8-13: the destructive onClick calls dexieLibrarySource.remove(id)
           which atomically removes the article + highlights + notes + location
@@ -777,6 +822,19 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
           }
         }}
         onCancel={() => setBookRemoveTarget(null)}
+      />
+      {/* Plan 16-03 (D16-12) — the focused Add dialog mount. Article success
+          needs NO LibraryView involvement (the dialog closes itself via
+          onCancel then navigates to #/article/<id> internally); book success
+          fires onBookAdded AFTER onCancel, bumping refreshKey so the load
+          effect re-derives the list and the new book row appears (the
+          RemoveConfirm onConfirm wiring precedent). The dialog never
+          unmounts the Library, so the librarySession capture/restore seam
+          above is structurally unaffected (D15-11..14) — do NOT touch it. */}
+      <AddDialog
+        open={addOpen}
+        onCancel={() => setAddOpen(false)}
+        onBookAdded={() => setRefreshKey((k) => k + 1)}
       />
     </main>
   );

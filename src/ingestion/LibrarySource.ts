@@ -21,7 +21,7 @@
 //
 // Threat register (07-06-PLAN.md `<threat_model>`):
 //   - T-7-28 (Tampering, re-ingest overwrites article + orphans highlights)
-//     → IngestControl calls has(id) BEFORE save; if has returns true, the
+//     → the add dialog calls has(id) BEFORE save; if has returns true, the
 //     control surfaces "Already in your library." and never calls save.
 //   - T-7-29 (Info Disclosure, cascade-delete misses highlights/notes/
 //     locations) → remove(id) runs a Dexie transaction across all four
@@ -36,7 +36,7 @@ import type { ArticleRepository } from "../content/repository";
  *
  * list/open implement the read interface (Zod-at-boundary on read; corrupt
  * rows are dropped, never silently coerced). save/has/remove are the write
- * surface used by the IngestControl (07-06 Task 2):
+ * surface used by the add dialog (07-06 Task 2):
  *   - save(article): `db.articles.put(article)` — idempotent upsert by id.
  *   - has(id): the D7-07 dedupe-refuse check.
  *   - remove(id): D5-12 cascade-delete across articles + highlights + notes
@@ -77,14 +77,14 @@ export class DexieLibrarySource implements ArticleRepository {
    * save — upsert an article by id. `article` is validated by construction
    * (the only producer is IngestionClient.ingestUrl/ingestHtml, which runs
    * ArticleSchema.parse on the network response). Throws propagate to the
-   * caller (IngestControl), which surfaces them as "Something went wrong."
+   * caller (the add dialog), which surfaces them as "Something went wrong."
    */
   async save(article: CanonicalArticle): Promise<void> {
     await db.articles.put(article);
   }
 
   /**
-   * has — the D7-07 dedupe-refuse check. The IngestControl calls this
+   * has — the D7-07 dedupe-refuse check. The add dialog calls this
    * BEFORE save; if has returns true, the control surfaces
    * "Already in your library." and refuses the re-ingest.
    */
@@ -152,7 +152,7 @@ export class DexieLibrarySource implements ArticleRepository {
 }
 
 /**
- * dexieLibrarySource — the module-level singleton. IngestControl (Task 2)
+ * dexieLibrarySource — the module-level singleton. The add dialog (Task 2)
  * imports this directly to call has/save; compositeLibraryRepository uses
  * it internally for list/open.
  */

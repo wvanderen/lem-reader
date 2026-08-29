@@ -2,10 +2,10 @@
 // Plan 16-02 Task 2 — the focused Add-to-library dialog (D16-01): a native
 // <dialog> (showModal) STRUCTURAL CLONE of the BookRemoveConfirm lineage
 // (open-prop sync + explicit initial focus + close/cancel listeners —
-// Pitfall 1/8 discipline) hosting IngestControl's four-state submission
-// spine verbatim behind a controlled 3-way source picker (D16-05).
-// IngestControl retires in Plan 16-03; this component mounts in its place
-// from the Library header row (D16-03).
+// Pitfall 1/8 discipline) hosting the original three-form control's
+// four-state submission spine verbatim behind a controlled 3-way source
+// picker (D16-05). Plan 16-03 deleted that control; this dialog mounts in
+// its place from the Library header row (D16-03).
 //
 // Decision map (16-CONTEXT.md):
 //   - D16-05: visible 3-way source-first picker (Web address / Paste text /
@@ -38,7 +38,7 @@
 //
 // Threat register (16-02-PLAN.md `<threat_model>`):
 //   - T-16-04 (dedupe-refuse regression) → has()/hasBook() BEFORE
-//     save/saveBook, verbatim from IngestControl (D7-07).
+//     save/saveBook, verbatim from the original three-form control (D7-07).
 //   - T-16-05 (size-cap bypass) → extension-aware caps refuse BEFORE any
 //     read (PDF_MAX_BYTES / EPUB_MAX_BYTES / 5MB).
 //   - T-16-06 (XSS in refusal/echo copy) → all copy renders as React text
@@ -59,7 +59,7 @@ import { dexieLibrarySource } from "./LibrarySource";
 import { hasBook, saveBook } from "../persistence/booksStore";
 import { EPUB_MAX_BYTES, PDF_MAX_BYTES } from "./types";
 // Plan 16-02 Task 1 — the refusal-copy map + chunked base64 live in
-// ./ingestCopy; this dialog consumes the same exports IngestControl does
+// ./ingestCopy; this dialog consumes the same exports the retired control did
 // (no fork — the byte-pinned DOC-06 catalog is load-bearing surface).
 import { mapReasonToCopy, bytesToBase64 } from "./ingestCopy";
 
@@ -117,7 +117,7 @@ export function AddDialog({ open, onCancel, onBookAdded }: AddDialogProps) {
 
   /**
    * resetFilePick — the single reset seam for the upload picker (Plan
-   * 13-08, gap G2; carried verbatim from IngestControl L148-151). Clears
+   * 13-08, gap G2; carried verbatim from the original control's L148-151). Clears
    * the input's value so re-picking the SAME file re-fires onChange (a
    * stale value would make same-file retry a silent no-op) and drops the
    * hasFile mirror so Add file returns to disabled. Every terminal
@@ -197,7 +197,7 @@ export function AddDialog({ open, onCancel, onBookAdded }: AddDialogProps) {
 
   /**
    * handleSubmit — the url/paste submission spine, carried verbatim from
-   * IngestControl L161-197 with the D16-12 close-first adaptation. Every
+   * the original control's L161-197 with the D16-12 close-first adaptation. Every
    * failure routes to a calm DOC-06 phrase via mapReasonToCopy; the
    * D7-07 dedupe-refuse check runs has() BEFORE save (refusal-only —
    * D16-09); URL/paste text is NEVER cleared by an error (D16-11).
@@ -255,7 +255,7 @@ export function AddDialog({ open, onCancel, onBookAdded }: AddDialogProps) {
 
   /**
    * handleFileSubmit — the file-upload arm, carried verbatim from
-   * IngestControl L231-351 with the D16-12 close-first adaptation.
+   * the original control's L231-351 with the D16-12 close-first adaptation.
    * Dispatch by extension: `.md` → ingestMarkdown (forwards file.name for
    * the D8-17 title fallback); `.pdf` → binary read + chunked base64 →
    * ingestPdf; `.epub` → binary read + chunked base64 → ingestEpub (the
@@ -537,7 +537,7 @@ export function AddDialog({ open, onCancel, onBookAdded }: AddDialogProps) {
           </button>
         </div>
 
-        {/* The .status live region (the IngestControl L450-459 shape —
+        {/* The .status live region (the original control's L450-459 shape —
             role=status / aria-live=polite / aria-atomic=true). Refusals
             + the submitting state announce here; article success closes
             and navigates away, book success closes onto the Library.

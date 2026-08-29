@@ -1,15 +1,16 @@
 // src/ingestion/ingestCopy.ts
 // Plan 16-02 Task 1 — the single home of the ingest refusal-copy map and
-// the chunked base64 helper, extracted BYTE-IDENTICALLY from
-// src/ingestion/IngestControl.tsx (their home since Plan 07-06): same
+// the chunked base64 helper, extracted BYTE-IDENTICALLY from the original
+// three-form ingest control (their home since Plan 07-06): same
 // signatures, same doc comments, same string table. The 20-reason calm
 // DOC-06 catalog is load-bearing product surface pinned byte-for-byte by
 // tests/unit/pdf-copy.test.ts + tests/unit/epub-copy.test.ts — those tests
 // changed ONLY their import path (T-16-03); the EXPECTED_* tables stayed
 // untouched, so the extraction is provably behavior-neutral.
 //
-// IngestControl imports both from here until Plan 16-03 retires it;
-// AddDialog (Plan 16-02 Task 2) imports the same pair — no fork.
+// Plan 16-03 deleted the original three-form control along with its
+// LibraryView mount; AddDialog (Plan 16-02 Task 2) is the sole consumer
+// of this pair — no fork.
 import type { IngestionFailureReason } from "./types";
 
 /**

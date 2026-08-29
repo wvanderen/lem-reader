@@ -1,6 +1,6 @@
 // src/ingestion/IngestionClient.ts
 // Plan 07-06 — the reader-facing half of the ingestion pipeline. This module
-// is the client glue between the IngestControl UI (07-06 Task 2) and the
+// is the client glue between the add-dialog UI (07-06 Task 2) and the
 // /api/ingest endpoint (served by the Vite Node dev middleware for Phase 7;
 // the future-production Cloudflare Pages Function shape is preserved in
 // functions/api/ingest.ts per D7-05 + the 07-01 HYBRID CONTINGENCY spike).
@@ -22,7 +22,7 @@
 //   - T-7-25 (Tampering, malformed IngestionResponse) → ArticleSchema.parse
 //     refuses a malformed server response on the read path.
 //   - T-7-26 (Tampering, refusal copy leaks jargon) → this module throws the
-//     typed `reason`; mapReasonToCopy (lives in IngestControl) is the only
+//     typed `reason`; mapReasonToCopy (lives in ./ingestCopy) is the only
 //     place reason → reader-facing phrase.
 import { ArticleSchema, type CanonicalArticle } from "../content/schema";
 import type { Book } from "../content/schema";
@@ -96,7 +96,7 @@ export async function ingestMarkdown(
 /**
  * ingestPdf — POST {pdf, filename?} to /api/ingest and re-validate the
  * response. The Phase 11 PDF upload path (ING-04 + D11): the browser
- * base64-encodes the picked file's bytes (IngestControl's chunked
+ * base64-encodes the picked file's bytes (the add dialog's chunked
  * bytesToBase64 helper — multi-MB files must not hit the
  * String.fromCharCode call-stack limit) and posts base64-in-JSON so the
  * middleware body path stays byte-identical (locked decision). The optional
@@ -132,7 +132,7 @@ export interface EpubIngestionSuccess {
 /**
  * ingestEpub — POST {epub, filename?} to /api/ingest?format=epub and
  * re-validate the book envelope (Phase 12 ING-05). The base64 encoding
- * mirrors ingestPdf (IngestControl's chunked bytesToBase64); `filename`
+ * mirrors ingestPdf (the add dialog's chunked bytesToBase64); `filename`
  * is a title-fallback hint ONLY — the book + chapter ids are content-hash
  * (D7-07 discipline), so identical bytes dedupe-refuse at the book level.
  *
