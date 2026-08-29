@@ -769,3 +769,85 @@ test.describe("a11y 12-06 — chapter reading (both modes)", () => {
     await page.waitForURL(/#\/article\/epub-[a-z0-9]+-c01$/, { timeout: 10_000 });
   });
 });
+
+// ── Plan 16-04 (ADD-04): the OPEN Add dialog — dedicated axe scan + the
+// picker keyboard walkthrough ──────────────────────────────────────────────
+// The 16-03 migration embedded a dialog-region scan inside the fixture-list
+// case; this dedicated case makes the open-dialog bar independently
+// runnable and extends it with the keyboard walkthrough the focused-add
+// spec claims at the geometry level: arrow keys move the checked source
+// (native radio-group semantics, check + focus together) and a
+// Tab-originated focus on a dialog control carries the visible focus ring
+// (UI-SPEC §4 — the :focus-visible token ring). Strengthen-only — no
+// existing assertion above changed.
+test("a11y 16-04: open Add dialog is axe-clean; picker arrow-key walkthrough; visible focus ring on dialog controls", async ({
+  page,
+}) => {
+  await page.goto(`${BASE}/#/`);
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Saved articles" }),
+  ).toBeVisible();
+
+  // Open the focused Add dialog (the shared helper — ADD-01).
+  await openAddDialog(page);
+  await expect(
+    page.getByRole("radio", { name: "Web address" }),
+  ).toBeVisible();
+
+  // Zero serious/critical WCAG 2.2 AA violations on the OPEN dialog
+  // surface (the same bar + explicit Pitfall-8 guards as every scan).
+  const results = await new AxeBuilder({ page })
+    .withTags([...WCAG_TAGS])
+    .include("dialog.add-dialog")
+    .analyze();
+  const serious = seriousViolations(results);
+  const ids = serious.map((v) => v.id);
+  expect(ids, JSON.stringify(serious, null, 2)).not.toContain("heading-order");
+  expect(ids).not.toContain("list");
+  expect(serious).toEqual([]);
+
+  // Keyboard walkthrough of the picker: ArrowDown checks + focuses the
+  // next source; only the selected source's input is visible after each
+  // move (D16-05 — the focused-add arrow claim, walked here at the a11y
+  // layer). Universal progressive moves (engine wrap divergence is
+  // owned by focused-add.spec.ts, not re-asserted here).
+  await page.keyboard.press("ArrowDown");
+  await expect(page.getByRole("radio", { name: "Paste text" })).toBeChecked();
+  await expect(page.locator("textarea#ingest-paste")).toBeVisible();
+  await expect(page.locator("input#ingest-url")).toHaveCount(0);
+  await page.keyboard.press("ArrowDown");
+  await expect(page.getByRole("radio", { name: "Upload file" })).toBeChecked();
+  await expect(page.locator("input#ingest-file")).toBeVisible();
+  await expect(page.locator("textarea#ingest-paste")).toHaveCount(0);
+  await page.keyboard.press("ArrowUp");
+  await expect(page.getByRole("radio", { name: "Paste text" })).toBeChecked();
+  await expect(page.locator("textarea#ingest-paste")).toBeVisible();
+
+  // Visible focus-ring presence on dialog controls: from the focused
+  // paste radio, one REAL Tab lands keyboard-originated focus on the next
+  // dialog control — a focus that matches :focus-visible, so the computed
+  // outline carries the 2px token ring. Chromium + firefox (the
+  // tabOrderFollowsDom engine-honest precedent); webkit's sequential nav
+  // skips to form controls only and its :focus-visible heuristic on
+  // radios is not cross-engine stable — the programmatic-focus contract
+  // is already asserted for all engines in focused-add.spec.ts.
+  if (tabOrderFollowsDom()) {
+    await page.keyboard.press("Tab");
+    const focusRing = await page.evaluate(() => {
+      const el = document.activeElement as HTMLElement | null;
+      if (!el) return { style: "none", width: "0", visible: false };
+      const cs = getComputedStyle(el);
+      return {
+        style: cs.outlineStyle,
+        width: cs.outlineWidth,
+        visible: el.matches(":focus-visible"),
+      };
+    });
+    expect(focusRing.style, "dialog controls must show the focus ring").not.toBe(
+      "none",
+    );
+    expect(focusRing.visible, "Tab-originated focus matches :focus-visible").toBe(
+      true,
+    );
+  }
+});

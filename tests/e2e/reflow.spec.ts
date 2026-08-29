@@ -6,6 +6,9 @@
 import { test, expect } from "@playwright/test";
 import { assertEdgeInvariant } from "./_edge-invariant";
 import { FIXTURES, wipeDatabase, openArticle } from "./annotations/_fixtures";
+// Plan 16-04 — the shared dialog-opening helper (the dialog-open reflow
+// case below; ADD-04 geometry proof).
+import { openAddDialog, pickSource } from "./library/add-dialog";
 
 const BASE = "http://localhost:5173";
 const FIRST_FIXTURE = "essay-long-form";
@@ -86,6 +89,69 @@ test.describe("Reflow at 320px (A11Y-04)", () => {
       return document.body.scrollWidth - document.body.clientWidth;
     });
     expect(bodyOverflow).toBeLessThanOrEqual(1);
+  });
+
+  // ───────────────────────────────────────────────────────────────────────
+  // Plan 16-04 (ADD-04): the OPEN Add dialog at the 320px WCAG reflow
+  // target. Strengthen-only — the invariant walks above stay authoritative
+  // for their surfaces; this case owns the dialog's geometry: no
+  // horizontal overflow of the page under the open modal, the dialog
+  // surface sits within the viewport horizontally (its own overflow:auto
+  // is the tall-content/high-zoom mechanism — never page-level
+  // horizontal scrolling), and the picker + submit stay operable.
+  test("Add dialog opens at 320px with no horizontal overflow; picker + submit operable", async ({
+    page,
+  }) => {
+    await page.goto(`${BASE}/#/`);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Saved articles" }),
+    ).toBeVisible();
+
+    await openAddDialog(page);
+    const dlg = page.locator("dialog.add-dialog");
+    await expect(dlg).toBeVisible();
+
+    // The (c) overflow clause at 320px: the page does not scroll
+    // horizontally under the open modal.
+    const bodyOverflow = await page.evaluate(
+      () => document.body.scrollWidth - document.body.clientWidth,
+    );
+    expect(bodyOverflow).toBeLessThanOrEqual(1);
+
+    // The dialog surface is inside the viewport horizontally, and its
+    // tall-content escape hatch is its own overflow:auto (computed style
+    // contract — the CSS declares the scroll container).
+    const geometry = await dlg.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      const cs = getComputedStyle(el);
+      return {
+        left: r.left,
+        right: r.right,
+        innerWidth: window.innerWidth,
+        overflowY: cs.overflowY,
+      };
+    });
+    expect(geometry.left).toBeGreaterThanOrEqual(-1);
+    expect(
+      geometry.right,
+      `dialog right edge ${geometry.right} overflows the ${geometry.innerWidth}px viewport`,
+    ).toBeLessThanOrEqual(geometry.innerWidth + 1);
+    expect(
+      geometry.overflowY,
+      "the dialog scrolls its own tall content (overflow:auto)",
+    ).toBe("auto");
+
+    // Operability at 320px: every radio responds, the selected source's
+    // input renders, and the submit control reflects typed input.
+    await pickSource(page, "paste");
+    await expect(page.locator("textarea#ingest-paste")).toBeVisible();
+    await pickSource(page, "file");
+    await expect(page.locator("input#ingest-file")).toBeVisible();
+    await pickSource(page, "url");
+    await page
+      .getByRole("textbox", { name: /add by url/i })
+      .fill("https://example.com/reflow-320");
+    await expect(page.getByRole("button", { name: /^add$/i })).toBeEnabled();
   });
 
   // ───────────────────────────────────────────────────────────────────────

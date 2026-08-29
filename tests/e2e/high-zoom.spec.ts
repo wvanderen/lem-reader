@@ -29,6 +29,9 @@
 import { test, expect } from "@playwright/test";
 import { assertEdgeInvariant } from "./_edge-invariant";
 import { FIXTURES, wipeDatabase, openArticle } from "./annotations/_fixtures";
+// Plan 16-04 — the shared dialog-opening helper (the dialog-open 400%
+// zoom case below; ADD-04 geometry proof).
+import { openAddDialog, pickSource } from "./library/add-dialog";
 
 // 320 CSS px is the WCAG 1.4.10 reflow breakpoint; 800px height gives the
 // pinned paginated-surface + any full-height sheet room to lay out.
@@ -136,4 +139,78 @@ test("320px reflow: body has no horizontal overflow (WCAG 1.4.10)", async ({
     overflow.scrollW,
     `body scrolls horizontally at 320px (scrollW ${overflow.scrollW} > clientW ${overflow.clientW})`,
   ).toBeLessThanOrEqual(overflow.clientW + 1);
+});
+
+// ── Plan 16-04 (ADD-04): the OPEN Add dialog under the high-zoom bar ───────
+// Same discipline as the corpus cases above: the LOAD-BEARING assertion is
+// the 320 CSS px reflow condition (setViewportSize — the beforeEach
+// viewport), where the open dialog must introduce no horizontal overflow
+// and stay operable; the SECONDARY document.body.style.zoom = "4" pass
+// asserts SURVIVAL ONLY (engine-variable — chromium yes, firefox 126+,
+// webkit partial — Pitfall 3): the dialog stays rendered and its controls
+// stay operable, never exact pixel layout. Strengthen-only.
+test("Add dialog at 400% zoom + 320px reflow: no overflow at 320px; dialog survives zoom operable", async ({
+  page,
+}) => {
+  await page.goto(`http://localhost:5173/#/`);
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Saved articles" }),
+  ).toBeVisible();
+
+  await openAddDialog(page);
+  const dlg = page.locator("dialog.add-dialog");
+  await expect(dlg).toBeVisible();
+
+  // LOAD-BEARING (the 320px reflow condition): no page-level horizontal
+  // overflow under the open modal, and the dialog surface sits within the
+  // viewport horizontally (its own overflow:auto owns tall content).
+  const overflow = await page.evaluate(() => ({
+    scrollW: document.body.scrollWidth,
+    clientW: document.body.clientWidth,
+  }));
+  expect(
+    overflow.scrollW,
+    `body scrolls horizontally at 320px with the dialog open (scrollW ${overflow.scrollW} > clientW ${overflow.clientW})`,
+  ).toBeLessThanOrEqual(overflow.clientW + 1);
+  const geometry = await dlg.evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    return { left: r.left, right: r.right, innerWidth: window.innerWidth };
+  });
+  expect(geometry.left).toBeGreaterThanOrEqual(-1);
+  expect(
+    geometry.right,
+    `dialog right edge ${geometry.right} overflows the ${geometry.innerWidth}px viewport`,
+  ).toBeLessThanOrEqual(geometry.innerWidth + 1);
+
+  // Operability at the 320px reflow target: the picker responds and the
+  // submit control reflects typed input.
+  await pickSource(page, "paste");
+  await expect(page.locator("textarea#ingest-paste")).toBeVisible();
+  await pickSource(page, "url");
+  await page
+    .getByRole("textbox", { name: /add by url/i })
+    .fill("https://example.com/high-zoom");
+  await expect(page.getByRole("button", { name: /^add$/i })).toBeEnabled();
+
+  // SECONDARY: apply 400% CSS zoom — survival only (no content lost, the
+  // dialog stays rendered, its controls stay operable).
+  await page.evaluate(() => {
+    (document.body.style as unknown as { zoom: string }).zoom = "4";
+  });
+  await page.waitForTimeout(500);
+
+  await expect(
+    dlg,
+    "the dialog is still rendered after 400% zoom",
+  ).toBeVisible();
+  await expect(
+    page.getByRole("radio", { name: "Web address" }),
+    "no picker content lost after 400% zoom",
+  ).toBeVisible();
+  // Operability under zoom: the URL field still accepts input and the
+  // submit control still reflects it.
+  await page
+    .getByRole("textbox", { name: /add by url/i })
+    .fill("https://example.com/high-zoom-4x");
+  await expect(page.getByRole("button", { name: /^add$/i })).toBeEnabled();
 });
