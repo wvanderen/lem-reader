@@ -156,8 +156,18 @@ export function EditMetadataDialog({
     if (trimmedTitle.length === 0 && !titleReset) return; // blank-and-not-reset: the disabled rule, defensively
     setSaving(true);
     try {
+      // Rule 1 fix: the captured article may ALREADY carry override keys
+      // (this dialog reopens on overridden rows) — destructure them OUT of
+      // the base spread first, or `...article` would re-carry them and the
+      // conditional spreads below could never omit a cleared field. Only
+      // the freshly-trimmed values re-enter the row.
+      const {
+        readerTitle: _previousTitle,
+        readerAuthor: _previousAuthor,
+        ...base
+      } = article;
       const row = {
-        ...article,
+        ...base,
         ...(trimmedTitle ? { readerTitle: trimmedTitle } : {}),
         ...(trimmedAuthor ? { readerAuthor: trimmedAuthor } : {}),
       };
