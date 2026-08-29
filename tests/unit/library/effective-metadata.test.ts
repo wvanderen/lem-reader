@@ -83,9 +83,21 @@ describe("effectiveTitle/effectiveAuthor (META-02 — one derivation; META-03 �
     expect(effectiveTitle(article)).toBe("My Chosen Name");
   });
 
+  it("override present → effectiveAuthor returns the override (reader-owned wins)", () => {
+    const article = ArticleSchema.parse(
+      makeRow({ readerAuthor: "Renamed Author" }),
+    );
+    expect(effectiveAuthor(article)).toBe("Renamed Author");
+  });
+
   it("override absent → effectiveTitle falls back to the canonical provenance.title", () => {
     const article = ArticleSchema.parse(makeRow());
     expect(effectiveTitle(article)).toBe("Canonical Title");
+  });
+
+  it("override absent → effectiveAuthor falls back to the canonical provenance.author", () => {
+    const article = ArticleSchema.parse(makeRow());
+    expect(effectiveAuthor(article)).toBe("Canonical Author");
   });
 
   it("absent override + absent canonical author → effectiveAuthor is undefined (META-03 absent-author restore)", () => {

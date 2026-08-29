@@ -281,6 +281,44 @@ describe("ArticleSchema.ingestionMeta (additive optional — Pitfall 9)", () => 
   });
 });
 
+// ── ArticleSchema.readerTitle/readerAuthor (Phase 17 — META-01/META-03) ──────
+
+describe("ArticleSchema.readerTitle/readerAuthor (Phase 17 — additive override fields)", () => {
+  // Strengthen-only extension (Plan 17-01 Task 2): every case builds on the
+  // existing validV1Article row builder — no existing case is touched.
+  it("parses a row carrying BOTH overrides with the fields intact (META-01 — overrides ride the article record, D17-12)", () => {
+    const parsed = ArticleSchema.parse(
+      validV1Article({ readerTitle: "My Chosen Name", readerAuthor: "Renamed Author" }),
+    );
+    expect(parsed.readerTitle).toBe("My Chosen Name");
+    expect(parsed.readerAuthor).toBe("Renamed Author");
+  });
+
+  it("a v5-shaped row WITHOUT override keys parses with readerTitle/readerAuthor undefined (Pitfall 9 hydration — additive-only migration)", () => {
+    // The fullest pre-Phase-17 row shape (ingestionMeta + tags, as written
+    // under Dexie v5): absent override keys must hydrate to undefined so
+    // every existing library parses unchanged with NO write-back.
+    const parsed = ArticleSchema.parse(
+      validV1Article({
+        tags: ["news"],
+        ingestionMeta: validIngestionMeta,
+      }),
+    );
+    expect(parsed.readerTitle).toBeUndefined();
+    expect(parsed.readerAuthor).toBeUndefined();
+  });
+
+  it("rejects an empty-string readerTitle (D17-04 — blank override unrepresentable; Pitfall 2 row-poison guard)", () => {
+    const result = ArticleSchema.safeParse(validV1Article({ readerTitle: "" }));
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects an empty-string readerAuthor (D17-04 — an empty author field is the no-author-override state, never an empty-string override)", () => {
+    const result = ArticleSchema.safeParse(validV1Article({ readerAuthor: "" }));
+    expect(result.success).toBe(false);
+  });
+});
+
 // ── src/ingestion/types.ts envelope schemas ──────────────────────────────────
 
 describe("IngestionRequestSchema (D7-03 — {url} | {html} | {markdown} | {pdf} | {epub})", () => {
