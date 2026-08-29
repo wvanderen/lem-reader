@@ -14,7 +14,7 @@
 //   - D10-01: dedicated route (not a modal) — one h1 per page
 //     ("Highlights" since the Plan 15-01 / D15-06 rename), skip-link
 //     parity via main#main.
-//   - D10-04/D10-06: grouped-by-article sections (h2 = provenance.title +
+//   - D10-04/D10-06: grouped-by-article sections (h2 = effective title +
 //     a subtle source-host suffix when sourceUrl metadata exists — the
 //     ArticleView "Originally published at {domain}" vocabulary; fixture
 //     articles carry no sourceUrl so they show no host).
@@ -63,6 +63,10 @@ import { loadAllTags } from "../../ingestion/library/tagsStore";
 // the ONE shared helper (never string-built here; the helper owns the
 // suffix, separator, and 64-char truncation).
 import { setDocumentTitle } from "../../ingestion/library/pageMeta";
+// Plan 17-03 (META-02/D17-09) — the review surfaces (select option labels,
+// options sort, section h2) carry the ONE effective title: the reader-owned
+// override when present, canonical as fallback. One name, one order.
+import { effectiveTitle } from "../../ingestion/library/effectiveMetadata";
 import { loadAllHighlights } from "../../persistence/highlightsStore";
 import { loadAllNotes } from "../../persistence/notesStore";
 import {
@@ -336,10 +340,11 @@ export function ReviewView({ hasAppHistory }: { hasAppHistory: boolean }) {
   // pattern): join → classify → filter → group → sort, no effect chains.
   const derivation = deriveReviewSections(articles, highlights, notes, filters, sort);
 
-  // Article-filter options ordered by provenance.title (markdown.ts L253
-  // localeCompare precedent). Fresh array — inputs are never mutated.
+  // Article-filter options ordered by the EFFECTIVE title (Plan 17-03
+  // OQ5 — sort keys use effective values; markdown.ts L253 localeCompare
+  // precedent). Fresh array — inputs are never mutated.
   const articlesByTitle = [...articles].sort((a, b) =>
-    a.provenance.title.localeCompare(b.provenance.title),
+    effectiveTitle(a).localeCompare(effectiveTitle(b)),
   );
 
   // D10-10: the filters-matched-zero case is "both derived lists empty
@@ -414,7 +419,7 @@ export function ReviewView({ hasAppHistory }: { hasAppHistory: boolean }) {
           <option value="">All articles</option>
           {articlesByTitle.map((a) => (
             <option key={a.id} value={a.id}>
-              {a.provenance.title}
+              {effectiveTitle(a)}
             </option>
           ))}
         </select>
@@ -460,7 +465,7 @@ export function ReviewView({ hasAppHistory }: { hasAppHistory: boolean }) {
         return (
           <section className="review-section" key={section.key}>
             <h2>
-              {section.article.provenance.title}
+              {effectiveTitle(section.article)}
               {host !== null && (
                 <span className="review-section-host"> · {host}</span>
               )}

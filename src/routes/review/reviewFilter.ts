@@ -36,6 +36,7 @@
 //     HTML (react/no-danger + lint:no-danger enforced repo-wide).
 import { resolveQuoteSelectorInText } from "../../annotations/resolution";
 import { MemoizedArticleText } from "../../portability/conflicts";
+import { effectiveTitle } from "../../ingestion/library/effectiveMetadata";
 import type {
   CanonicalArticle,
   HighlightRecord,
@@ -225,7 +226,7 @@ export function deriveReviewSections(
     }
   } else if (sort === "article") {
     sections.sort((a, b) =>
-      a.article.provenance.title.localeCompare(b.article.provenance.title),
+      effectiveTitle(a.article).localeCompare(effectiveTitle(b.article)),
     );
     for (const section of sections) {
       section.entries.sort(byPositionStart);

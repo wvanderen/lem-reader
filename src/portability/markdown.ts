@@ -23,6 +23,13 @@
 import { resolveQuoteSelector } from "../content/normalizeText";
 import type { CanonicalArticle } from "../content/types";
 import type { HighlightRecord, LocationRecord, NoteRecord } from "../content/schema";
+// Plan 17-03 (META-02/D17-09) — export presentation consumes the ONE
+// effective-value derivation: citations, headings, and section sort keys
+// carry the reader-owned override when present (canonical is the fallback).
+import {
+  effectiveTitle,
+  effectiveAuthor,
+} from "../ingestion/library/effectiveMetadata";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -135,12 +142,13 @@ function markerFor(status: HighlightEntry["status"]): string {
 }
 
 /** The citation line: author + italic title, plus a source link when the
- * article has one. The author (and its comma) is omitted when absent. */
+ * article has one. The author (and its comma) is omitted when absent.
+ * Plan 17-03 (D17-09): both slots read the EFFECTIVE (reader-owned) values. */
 function citationLine(article: CanonicalArticle): string {
-  const author = article.provenance.author;
+  const author = effectiveAuthor(article);
   const core = author
-    ? `${author}, *${article.provenance.title}*`
-    : `*${article.provenance.title}*`;
+    ? `${author}, *${effectiveTitle(article)}*`
+    : `*${effectiveTitle(article)}*`;
   const source = article.provenance.sourceUrl ? ` ([source](${article.provenance.sourceUrl}))` : "";
   return `> — ${core}${source}`;
 }
@@ -175,7 +183,7 @@ export function renderArticleHighlights(
   article: CanonicalArticle,
   entries: readonly HighlightEntry[],
 ): string {
-  const lines: string[] = [`# Highlights — ${article.provenance.title}`];
+  const lines: string[] = [`# Highlights — ${effectiveTitle(article)}`];
   for (const e of entries) {
     lines.push("", ...blockLines(article, e));
   }
@@ -201,7 +209,7 @@ export function renderLibraryHighlights(
 ): string {
   const lines: string[] = ["# Highlights"];
   for (const section of sections) {
-    lines.push("", `## ${section.article.provenance.title}`);
+    lines.push("", `## ${effectiveTitle(section.article)}`);
     for (const e of section.entries) {
       lines.push("", ...blockLines(section.article, e));
     }
@@ -226,8 +234,9 @@ export function renderLibraryHighlights(
  * sections whose article has a location row (matched by articleId across the
  * provided LocationRecords — any revision) sort by savedAt descending (most
  * recently read first, latest row winning when several revisions exist);
- * sections without locations follow, sorted by provenance.title ascending
- * (localeCompare). The input array is not mutated.
+ * sections without locations follow, sorted by effective title ascending
+ * (localeCompare — Plan 17-03/OQ5: sort keys use the reader-owned override
+ * when present). The input array is not mutated.
  */
 export function orderSectionsByRecency(
   sections: readonly HighlightSection[],
@@ -250,6 +259,6 @@ export function orderSectionsByRecency(
     );
   const unlocated = sections
     .filter((s) => !latestByArticle.has(s.article.id))
-    .sort((a, b) => a.article.provenance.title.localeCompare(b.article.provenance.title));
+    .sort((a, b) => effectiveTitle(a.article).localeCompare(effectiveTitle(b.article)));
   return [...located, ...unlocated];
 }
