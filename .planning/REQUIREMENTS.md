@@ -23,10 +23,10 @@
 
 ### Add Workflow
 
-- [ ] **ADD-01**: Reader can open Add to Library as a focused workflow instead of encountering all ingestion controls permanently on the Library page.
+- [x] **ADD-01**: Reader can open Add to Library as a focused workflow instead of encountering all ingestion controls permanently on the Library page.
 - [ ] **ADD-02**: Reader can choose among every existing ingestion source and sees only the inputs relevant to that source.
-- [ ] **ADD-03**: Reader can cancel, retry, or recover from ingestion failures without losing useful input, receiving duplicate submissions, or losing the existing honest refusal reason.
-- [ ] **ADD-04**: The focused Add workflow manages keyboard focus, dismissal, and post-success navigation predictably at narrow widths and high zoom.
+- [x] **ADD-03**: Reader can cancel, retry, or recover from ingestion failures without losing useful input, receiving duplicate submissions, or losing the existing honest refusal reason.
+- [x] **ADD-04**: The focused Add workflow manages keyboard focus, dismissal, and post-success navigation predictably at narrow widths and high zoom.
 
 ### Editable Metadata
 
@@ -116,10 +116,10 @@
 | LIB-08 | Phase 14 | Complete |
 | LIB-09 | Phase 16 | Complete |
 | LIB-10 | Phase 16 | Complete |
-| ADD-01 | Phase 16 | Pending |
+| ADD-01 | Phase 16 | Complete |
 | ADD-02 | Phase 16 | Pending |
-| ADD-03 | Phase 16 | Pending |
-| ADD-04 | Phase 16 | Pending |
+| ADD-03 | Phase 16 | Complete |
+| ADD-04 | Phase 16 | Complete |
 | META-01 | Phase 17 | Pending |
 | META-02 | Phase 17 | Pending |
 | META-03 | Phase 17 | Pending |

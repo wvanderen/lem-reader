@@ -6,14 +6,14 @@ current_phase: 16
 current_phase_name: Organized Library and Focused Add Flow
 status: executing
 stopped_at: Completed 16-02-PLAN.md
-last_updated: "2026-08-29T19:12:17.509Z"
+last_updated: "2026-08-29T19:37:15.743Z"
 last_activity: 2026-08-29
 last_activity_desc: Phase 16 execution started
 progress:
   total_phases: 8
   completed_phases: 2
   total_plans: 12
-  completed_plans: 10
+  completed_plans: 11
   percent: 25
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-29)
 ## Current Position
 
 Phase: 16 (Organized Library and Focused Add Flow) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-08-29 — Phase 16 execution started
 
@@ -163,6 +163,7 @@ Last activity: 2026-08-29 — Phase 16 execution started
 | Phase 15 P04 | 61min | 3 tasks | 9 files |
 | Phase 16 P01 | 7 min | 2 tasks | 4 files |
 | Phase 16 P02 | 8 min | 2 tasks | 6 files |
+| Phase 16 P03 | 23 min | 2 tasks | 30 files |
 
 ## Accumulated Context
 
@@ -384,6 +385,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 16]: 16-02: File group hidden via hidden attribute on BOTH form and input (never unmounting) — unmounting clears read-only input.files, so only hiding preserves a picked File across source switches (D16-07); URL/paste groups unmount freely behind lifted state
 - [Phase 16]: 16-02: ingestCopy.ts extraction proven byte-identical by brace-matched text comparison against the pre-extraction git blob (T-16-03) — mapReasonToCopy + exported bytesToBase64 now single-homed; AddDialog consumes the same exports, no fork
 - [Phase 16]: 16-02: AddDialog cancel listener gated on live submittingRef mirror rewritten every render (Pitfall 3/LibraryView L236) — Esc blocked + controls disabled while submitting (D16-10); success arms close FIRST then navigate/onBookAdded (D16-12)
+- [Phase ?]: 16-03: openAddDialog e2e helper is idempotent (isVisible guard) — refusal ladders drive consecutive uploads inside the still-open modal without re-clicking the inert trigger; book-success anchors are li.book-row via refreshKey (D16-12 closes the dialog, making in-dialog success copy transient)
+- [Phase ?]: 16-03: closed-dialog assertions need CSS locators — a closed native dialog subtree is display:none and excluded from the accessibility tree, so getByRole cannot resolve inside it (upload-queue G2 reads the always-mounted picker through the closed dialog)
 
 ### Pending Todos
 
@@ -439,7 +442,7 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-29T19:12:12.948Z
+Last session: 2026-08-29T19:36:59.620Z
 Stopped at: Completed 16-02-PLAN.md
 Resume file: None
 

@@ -95,7 +95,7 @@ Plans:
   4. Reader can cancel, retry, or recover from failure without losing useful input, creating duplicates, or hiding refusal reasons.
   5. Add manages focus, dismissal, success, narrow-width, and high-zoom behavior predictably.
 
-**Plans**: 2/4 plans executed
+**Plans**: 3/4 plans executed
 
 Plans:
 **Wave 1**
@@ -105,7 +105,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 16-03-PLAN.md — LibraryView integration: header Add button, add-section dissolution, IngestControl retirement + atomic 12-spec migration (ADD-01, ADD-03, ADD-04)
+- [x] 16-03-PLAN.md — LibraryView integration: header Add button, add-section dissolution, IngestControl retirement + atomic 12-spec migration (ADD-01, ADD-03, ADD-04)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -200,7 +200,7 @@ Plans:
 | 7-13 | v2.0 | 53/53 | Complete | 2026-08-23 |
 | 14. Navigation and Library Contracts | v2.1 | 4/4 | Complete    | 2026-08-25 |
 | 15. Application Shell and Destinations | v2.1 | 4/4 | Complete    | 2026-08-26 |
-| 16. Organized Library and Focused Add Flow | v2.1 | 2/4 | In Progress|  |
+| 16. Organized Library and Focused Add Flow | v2.1 | 3/4 | In Progress|  |
 | 17. Reader-Owned Metadata | v2.1 | 0/TBD | Not started | - |
 | 18. Reader Orientation | v2.1 | 0/TBD | Not started | - |
 | 19. Cross-Block Highlights | v2.1 | 0/TBD | Not started | - |
