@@ -89,6 +89,16 @@ import { chapterOrdinal } from "../ingestion/library/bookProgress";
 // ONE shared helper (pageMeta owns the suffix, separator, and 64-char
 // truncation; ArticleView never string-builds its own title tail).
 import { setDocumentTitle } from "../ingestion/library/pageMeta";
+// Plan 17-03 (META-02 downstream / D17-09) — the ONE effective-value
+// derivation feeds every article-owned reader display site: document.title
+// (standalone + the ARTICLE half of the chapter combo), byline, h1, and the
+// per-article export filename (OQ5 pinned effective). The chapter-nav
+// NEIGHBOR titles and the chapter-combo's BOOK half stay canonical
+// (D17-06/D17-05 — chapters and books are not overridable this phase).
+import {
+  effectiveTitle,
+  effectiveAuthor,
+} from "../ingestion/library/effectiveMetadata";
 
 /** The D4-10 mode-toggle handler signature (App threads a ref of this shape). */
 type ModeToggleHandler = () => void;
@@ -1279,14 +1289,18 @@ export function ArticleView({
     if (chapterContext) {
       // D14-07 — the combined content portion; the helper truncates the
       // COMBINED chapter—book string at 64 chars and appends the suffix
-      // (mirrors the D12-08 reader context line's shape).
+      // (mirrors the D12-08 reader context line's shape). Plan 17-03: the
+      // ARTICLE half is the effective (reader-owned) title; the BOOK half
+      // stays chapterContext.book.title byte-identical (books are not
+      // overridable — D17-05).
       setDocumentTitle(
-        `${article.provenance.title} — ${chapterContext.book.title}`,
+        `${effectiveTitle(article)} — ${chapterContext.book.title}`,
       );
     } else {
       // Standalone article OR missing/corrupt book row (the tolerant
-      // lookup returned null) — the plain provenance title.
-      setDocumentTitle(article.provenance.title);
+      // lookup returned null) — the effective title (Plan 17-03: the
+      // override is the one name; canonical is the fallback).
+      setDocumentTitle(effectiveTitle(article));
     }
   }, [article, chapterContext, status]);
 
@@ -1824,7 +1838,10 @@ export function ArticleView({
         articleNotes,
       );
       const md = renderArticleHighlights(article, entries);
-      const filename = `highlights-${sanitizeFilename(article.provenance.title, article.id)}.md`;
+      // Plan 17-03 (OQ5 pinned effective): the download filename carries the
+      // effective title — the exported file is named what the reader calls
+      // the article (id unchanged; sanitizeFilename still guards the text).
+      const filename = `highlights-${sanitizeFilename(effectiveTitle(article), article.id)}.md`;
       downloadBlob([md], filename, "text/markdown");
       const noun = articleHighlights.length === 1 ? "highlight" : "highlights";
       setExportAnnouncement(
@@ -1874,10 +1891,14 @@ export function ArticleView({
   //     2026-08-18).
   const articleTopMeta = (
     <div className="article-top-meta">
-      {(article.provenance.author || article.provenance.publishedAt) && (
+      {/* Plan 17-03 (META-02/D17-09): the byline reads the effective author
+          (override ?? canonical) at all three expressions so the guard, the
+          rendered text, and the " · " separator condition stay one truth;
+          the publishedAt branch logic is byte-unchanged. */}
+      {(effectiveAuthor(article) || article.provenance.publishedAt) && (
         <p className="meta">
-          {article.provenance.author}
-          {article.provenance.author && article.provenance.publishedAt && " · "}
+          {effectiveAuthor(article)}
+          {effectiveAuthor(article) && article.provenance.publishedAt && " · "}
           {article.provenance.publishedAt && formatDate(article.provenance.publishedAt)}
         </p>
       )}
@@ -2046,9 +2067,10 @@ export function ArticleView({
                 "#/" fallback (Pitfall 7 — deep-link tabs never exit). */}
             <BackToLibrary hasAppHistory={hasAppHistory} />
             {/* Plan 14-03 Task 3: gains ONLY tabIndex={-1} + the focus ref —
-                text and level byte-stable. */}
+                text and level byte-stable. Plan 17-03: the text VALUE source
+                is now the effective title (ref + tabIndex untouched). */}
             <h1 ref={articleH1Ref} tabIndex={-1}>
-              {article.provenance.title}
+              {effectiveTitle(article)}
             </h1>
           </header>
           {paginatedActive && trustedView && articleEl ? (
