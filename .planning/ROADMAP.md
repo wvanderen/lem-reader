@@ -124,13 +124,22 @@ Plans:
   2. Edited metadata appears consistently in Library, Reader, Highlights, search, and exports.
   3. Clearing an override restores the canonical value, including an absent author.
   4. Overrides migrate and export/import with explicit conflicts, and cascade when their article is removed.
+
 **Plans**: 5 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 17-01-PLAN.md — ArticleSchema readerTitle/readerAuthor + effectiveMetadata derivation module + unit truth table (META-01, META-03)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 17-02-PLAN.md — Library edit surface: EditMetadataDialog + row affordance + reset/blank-refusal + library/search/strip consistency e2e (META-01, META-02, META-03)
 - [ ] 17-03-PLAN.md — Reader/Highlights/export presentation surfaces on effective values (META-02)
 - [ ] 17-04-PLAN.md — Bundle v3 + article-metadata-override conflict kind + merge-on-win + per-item import choice (META-04)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 17-05-PLAN.md — migration/round-trip/conflict/cascade e2e + cross-surface consistency + honest full-suite gate (META-02, META-04)
 
 **UI hint**: yes

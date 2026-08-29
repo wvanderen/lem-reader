@@ -4,9 +4,9 @@ milestone: v2.1
 milestone_name: Reader Experience
 current_phase: 17
 current_phase_name: Reader-Owned Metadata
-status: verifying
+status: executing
 stopped_at: Phase 17 context gathered
-last_updated: "2026-08-29T21:51:45.205Z"
+last_updated: "2026-08-29T22:51:26.876Z"
 last_activity: 2026-08-29
 last_activity_desc: Phase 16 complete, transitioned to Phase 17
 progress:
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-08-29)
 
 Phase: 17 — Reader-Owned Metadata
 Plan: Not started
-Status: Phase complete — ready for verification
+Status: Ready to execute
 Last activity: 2026-08-29 — Phase 16 complete, transitioned to Phase 17
 
 ## Recent Decisions (Phase 15)
