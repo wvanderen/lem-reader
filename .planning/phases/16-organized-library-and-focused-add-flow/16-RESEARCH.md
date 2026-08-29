@@ -313,7 +313,7 @@ useEffect(() => {
 
 **What:** Three independent state values (`urlValue`, `htmlValue`, picked `File`) live in dialog state; switching the radio only changes WHICH input renders. Typed text trivially survives (state persists when the input unmounts). A picked `File` survives in state, but the native `<input type="file">` loses its `files` FileList when unmounted — and `input.files` is NOT programmatically re-assignable.
 
-**Two honest implementations (planner picks — see Open Questions):**
+**Two honest implementations (planner picks — resolved as (a); see Open Questions (RESOLVED)):**
 
 - **(a) Hidden-but-mounted file input** — keep the file input mounted at all times; when `source !== "file"` hide it (`hidden`/display). The DOM value AND `fileInputRef` survive switches; `handleFileSubmit` and the G2 `resetFilePick` seam work byte-unchanged. "Only the selected source's input renders" is satisfied visually (hidden ≠ visible) but the element stays in the a11y tree unless `hidden` is used (use the `hidden` attribute — removes from tree AND keeps value). [VERIFIED: codebase — the always-mounted measurement ArticleBody precedent, Plan 04-08, is the same keep-it-mounted solution for the same unmount-loses-state problem]
 - **(b) State-held File** — store the `File` object in state on change; render a retained-file affordance ("Selected: name.pdf" + Remove file) when re-entering Upload; submit reads the state File, not `input.files`. More code; the ref-read in `handleFileSubmit` changes.
@@ -548,23 +548,30 @@ dialog.add-dialog::backdrop { background: rgba(31, 27, 22, 0.5); }
 
 All other claims were verified against the codebase this session or cited from MDN.
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> All five questions below were settled by concrete phase-16 plan tasks. Resolutions reference the deciding task.
 
 1. **File-pick preservation mechanism (D16-07 × D16-05 tension)**
    - What we know: FileList is lost on input unmount; `input.files` is read-only; D16-07 demands the pick survives switches; D16-05 says only the selected source's input renders.
    - What's unclear: whether "renders" means visually-present (hidden-but-mounted input OK) or strictly mounted-only-when-selected (state-held File required).
    - Recommendation: hidden-but-mounted (`hidden` attribute removes it from the a11y tree AND keeps value + ref + G2 seam verbatim) — Pattern 3(a). Planner decides; a UI-SPEC sketch would settle it.
+   - **RESOLVED — Pattern 3(a) hidden-but-mounted file input (`hidden` attribute when source ≠ "file", G2 seam byte-unchanged): 16-02 Task 2.**
 2. **Where `mapReasonToCopy` lives after IngestControl retires**
    - What we know: two byte-pinning tests import it from `IngestControl.tsx`; the component retires (CONTEXT discretion).
    - What's unclear: new module vs. file-as-export-host.
    - Recommendation: new `src/ingestion/ingestCopy.ts` + import-path updates in the 2 copy tests (strings byte-identical, pins hold).
+   - **RESOLVED — new module `src/ingestion/ingestCopy.ts`, import-path-only test edits, byte pins held: 16-02 Task 1.**
 3. **Book-success focus landing (discretion item)**
    - What we know: refreshKey reload is async; the new row exists only after the load resolves; D14-05 layering gives the uniform h1 rule.
    - Recommendation: h1 focus (default scroll) — row-targeted focus would need a ready-gated lookup (extra machinery for one path). Planner may prefer row focus; then gate on the loading→ready transition.
+   - **RESOLVED — no extra landing machinery: the dialog close listener restores the Add-to-Library trigger focus (clone-lineage triggerRef) and refreshKey reload keeps the uniform layering; no row-targeted lookup, no h1 focus change: 16-02 Task 2.**
 4. **Exact copy set (UI hint: yes)**
    - Dialog title/labels, radio labels + helper hints, initial-focus choice, no-matches line + clear-filters label, empty-All pointer copy, book-success landing announcement (in-dialog vs on-list) — all UI-SPEC decisions this research intentionally does not fix.
+   - **RESOLVED — no-matches line + clear-filters label (16-01 Task 1); dialog title, radio labels, input labels/helper hint, Web-address initial focus, and skip disclosure staying durable on the BookRow (16-02 Task 2); empty-All pointer copy (16-03 Task 1).**
 5. **Dialog max-width**
    - 480px is the confirm-dialog precedent; the AddDialog hosts a radio group + input + status — possibly wants 560-640px. Geometry at 320px + 400% zoom is the constraint that matters (reflow spec extension).
+   - **RESOLVED — 560px max-width with `overflow: auto` (320px-safe, high-zoom scrolls): 16-03 Task 1; 320px/400% geometry proven by 16-04 Task 2.**
 
 ## Environment Availability
 
