@@ -440,3 +440,79 @@ describe("orderSectionsByRecency", () => {
     expect(input.map((s) => s.article.id)).toEqual(["article-z", "article-c"]);
   });
 });
+
+// ── Plan 17-03 (META-02 / D17-09) — effective (reader-owned) values in export ─
+
+describe("Plan 17-03: markdown export on effective (reader-owned) metadata", () => {
+  it("D17-09 override present: citation + headings carry the override values; the canonical title does NOT appear in the export (one name)", () => {
+    const article = sampleArticle({
+      readerTitle: "My Renamed Piece",
+      readerAuthor: "Reader-Chosen Name",
+    });
+    const out = renderArticleHighlights(article, [
+      entry(confidentHighlight, "confident"),
+    ]);
+    expect(out).toContain("# Highlights — My Renamed Piece");
+    expect(out).toContain(
+      "> — Reader-Chosen Name, *My Renamed Piece* ([source](https://example.com/article-a))",
+    );
+    // The canonical strings are absent entirely — the override is the ONE
+    // name/identity the exported artifact carries (D17-09/D17-08).
+    expect(out).not.toContain("Article A");
+    expect(out).not.toContain("An Author");
+
+    // The library-wide file's `## {article title}` section heading too.
+    const combined = renderLibraryHighlights([
+      { article, entries: [entry(confidentHighlight, "confident")] },
+    ]);
+    expect(combined).toContain("## My Renamed Piece");
+    expect(combined).not.toContain("## Article A");
+  });
+
+  it("regression: an article without overrides renders canonical values exactly as before (byte-stable)", () => {
+    const out = renderArticleHighlights(sampleArticle(), [
+      entry(confidentHighlight, "confident", sampleNote()),
+    ]);
+    expect(out).toBe(
+      [
+        "# Highlights — Article A",
+        "",
+        "> epsilon zeta eta",
+        "> — An Author, *Article A* ([source](https://example.com/article-a))",
+        "> Note: a reader note",
+        "",
+        "_1 highlights · 0 ambiguous · 0 orphan_",
+      ].join("\n"),
+    );
+  });
+
+  it("OQ5/A5 pinned: unlocated sections order by the EFFECTIVE title (sort keys use effective values)", () => {
+    // Canonical titles would order article-a ("Article A") BEFORE
+    // article-ovr ("Zebra Canonical"). The override "Aardvark Renamed"
+    // must pull article-ovr to the FRONT — the sort key is the effective
+    // title, not the canonical one.
+    const overriddenSection = {
+      article: sampleArticle({
+        id: "article-ovr",
+        provenance: {
+          sourceUrl: "https://example.com/article-ovr",
+          title: "Zebra Canonical",
+          author: "Canonical Author",
+          retrievedAt: "2026-08-15T00:00:00.000Z",
+          originalHtmlHash: "sha256:" + "1".repeat(64),
+        },
+        readerTitle: "Aardvark Renamed",
+      }),
+      entries: [],
+    };
+    const canonicalSection = { article: sampleArticle(), entries: [] };
+    const ordered = orderSectionsByRecency(
+      [overriddenSection, canonicalSection],
+      [],
+    );
+    expect(ordered.map((s) => s.article.id)).toEqual([
+      "article-ovr", // effective "Aardvark Renamed"
+      "article-a", // effective "Article A"
+    ]);
+  });
+});
