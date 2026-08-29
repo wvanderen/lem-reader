@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Reader Experience
-current_phase: 15
-current_phase_name: Application Shell and Destinations
-status: verifying
-stopped_at: Completed 15-04-PLAN.md (Phase 15 complete — all 5 requirements green)
-last_updated: "2026-08-26T18:21:09.186Z"
-last_activity: 2026-08-26
-last_activity_desc: Phase 15 execution started
+current_phase: 16
+current_phase_name: Organized Library and Focused Add Flow
+status: Ready to plan
+stopped_at: Phase 15 complete (UAT + verification passed), ready to plan Phase 16
+last_updated: "2026-08-29T16:20:00.000Z"
+last_activity: 2026-08-29
+last_activity_desc: Phase 15 complete, transitioned to Phase 16
 progress:
   total_phases: 8
   completed_phases: 2
@@ -21,30 +21,30 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-08-23)
+See: .planning/PROJECT.md (updated 2026-08-29)
 
 **Core value:** Readers can move through long-form web content with calm, stable orientation, and predictable navigation.
-**Current focus:** Phase 15 — Application Shell and Destinations
+**Current focus:** Phase 16 — Organized Library and Focused Add Flow
 
 ## Current Position
 
-Phase: 15 (Application Shell and Destinations) — EXECUTING
-Plan: 4 of 4
-Status: Phase complete — ready for verification
-Last activity: 2026-08-26 — Phase 15 execution started
+Phase: 16 — Organized Library and Focused Add Flow
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-08-29 — Phase 15 complete, transitioned to Phase 16
 
-## Recent Decisions (Phase 11)
+## Recent Decisions (Phase 15)
 
-- **PDF honesty over best-effort.** Scanned/image-only and unrecoverably multi-column PDFs are refused calmly before assembly with zero library side effects; thresholds are corpus-calibrated (6 real PDFs) and CI-replay-pinned so admission changes can't silently loosen detection (11-06).
-- **11-07 gap closure: isReaderable admission algebra relaxed to `blocks.length >= 3 && (textBearingPages >= 1 || nearEmptyPages === 0)`** — the old text-bearing conjunct double-guarded and false-refused legitimately sparse structured docs (outline/title-page shapes); all PDF_THRESHOLDS stayed frozen (commit 6f8c655, UAT Test 2 re-verified).
-- **unpdf pinned exactly at 1.8.1** (user-approved blocking-human gate, supersedes STACK.md 1.8.0; legitimacy evidence recorded in 11-01-unpdf-approval.md); server-side only — dist/ greps prove zero PDF code reaches the client bundle.
-- **Acknowledged gap: the 30 s extraction-timeout firing path (withPdfDocument race) has no automated coverage** — race is wired and code-read present; user acknowledged at UAT completion; closure path is a fake-timers unit test with zero production changes (11-VERIFICATION.md § Acknowledged Gaps).
+- **Session-scoped Library context restore (D15-11..14)**: `librarySession.ts` keeps an in-memory snapshot (filters + scroll + launched row); no Dexie writes, no keep-alive mount, no false restore on degradation — proven across all return paths × 3 engines.
+- **Shell nav grammar (D15-01..D15-10)**: exactly two text-link destinations in a persistent 48px header; brand link is the sole Library reset (never aria-current); `#/review` alias normalizes to canonical `#/highlights` via replaceState; ModeToggle gated behind article mount.
+- **POLISH-07 disposition-table discipline**: surface × invariant audit recorded BEFORE editing; every fix is a var() token alignment (the one drift: `.app-wordmark` 44px touch target); the three intentional differences are citation-commented in app.css.
+- **WebKit starvation lesson**: identical-cell failure across engines = regression; webkit-only + isolation-green = harness/environment — check the reused dev server's age before touching specs (fresh server turned exit-1 into the green exit-0 gate).
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 74 (this phase, incl. gap closure)
+- Total plans completed: 78 (this phase, incl. gap closure)
 - Average duration: 25 min
 - Total execution time: 1.5 hours
 
@@ -63,6 +63,7 @@ Last activity: 2026-08-26 — Phase 15 execution started
 | 12 | 8 | - | - |
 | 13 | 13 | - | - |
 | 14 | 4 | - | - |
+| 15 | 4 | - | - |
 
 **Recent Trend:**
 
@@ -432,8 +433,8 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-26T18:21:09.177Z
-Stopped at: Completed 15-04-PLAN.md (Phase 15 complete — all 5 requirements green)
+Last session: 2026-08-29
+Stopped at: Phase 15 complete, ready to plan Phase 16
 Resume file: None
 
 ## Operator Next Steps

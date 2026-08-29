@@ -32,6 +32,8 @@ Readers can move through long-form web content with calm, stable orientation and
 
 **v2.1 progress:** Phase 14 Navigation and Library Contracts — SHIPPED 2026-08-25 (4 plans). One documented reading-state policy (`readingState.ts`) with truthful All/Unread/In Progress/Finished hash-routed views, counts/membership/empty agreement proven structurally across 3 engines, per-destination truthful titles, and uniform route-change h1 focus with cold-load immunity. NAV-04/LIB-07/LIB-08 verified 25/25. Full suite at gate: 2468 passed / 0 failed / exit 0.
 
+**v2.1 progress:** Phase 15 Application Shell and Destinations — SHIPPED 2026-08-29 (4 plans + UAT). Canonical `#/highlights` route with legacy `#/review` alias normalization; persistent 48px shell header with two-destination Primary nav (aria-current, never on the brand), brand link as predictable Library return, session-scoped Library context restore (filters + clamped scroll + launched-row/h1 focus, in-memory only), reader-only controls gated behind article mount, and the POLISH-07 four-surface token-coherence audit with citation-commented intentional differences. NAV-01/02/03/05 + POLISH-07 verified 18/18; UAT 2/2 (visual coherence + SR pass). Full suite at gate: 2529 passed / 0 failed / 23 documented skips / exit 0.
+
 <details>
 <summary>Version history detail</summary>
 
@@ -78,10 +80,10 @@ Readers can move through long-form web content with calm, stable orientation and
 - ✓ EPUB intake (ING-05) — DRM-free EPUBs as per-chapter articles under book groupings; books ride the export/import loop (bundle v2). — v2.0
 - ✓ Polish (POLISH-01..06) — first-paint mirror, offset-anchored progress, slim header + tag popover, centered modals, Back-to-library, organized library home. — v2.0
 - ✓ Acceptance (ACPT-05/06) — NVDA+Firefox protocol v1.2 passed zero-blocker; core flow green across the 3-engine matrix with full-suite exit 0. — v2.0
+- ✓ Predictable movement among structured Library, Highlights, and Reader (NAV-01/02/03/05 + POLISH-07) — shell nav in a persistent 48px header, brand as Library return, session-scoped context restore, coherent gutters/tokens across all four surfaces; verified 18/18 + UAT 2/2. — v2.1 (Phase 15)
 
 ### Active
 
-- [ ] Readers can move predictably among a structured Library, Highlights review, and Reader without dead-end or misaligned navigation.
 - [ ] Readers can browse content by unread, in-progress, and finished state and add content through a focused workflow.
 - [ ] Readers can edit saved article titles and authors without changing canonical content identity or losing annotations.
 - [ ] Reader orientation aids do not shift or obstruct content and include a navigable heading-derived table of contents.
@@ -143,6 +145,8 @@ Accessibility validation now spans the full matrix: keyboard, VoiceOver+Safari (
 | Portability = versioned zip bundles with skip-by-default conflict resolution, not accounts | Cross-device highlights without auth/sync infrastructure; never silently overwrite reader data | ✓ Good — two-context round-trip e2e proves byte-equal offsets |
 | SR platform boundaries resolved in protocol, not production hacks (G7-D1/G8-D1) | NVDA browse-mode/native-selection behaviors are unobservable by construction; production focus moves would harm Gecko/WebKit users | ✓ Good — protocol v1.2 passed zero-blocker with zero production changes |
 | Reduced-gate acceptance honesty | When part of the matrix can't be run, record it as a coverage boundary rather than claiming full coverage | ✓ Good — v1.0 A4 boundary closed by the v2.0 NVDA run |
+| Session-scoped Library context restore (in-memory snapshot; no persistence, no keep-alive) | Returning from Reader/Highlights restores filters, clamped scroll, and launched-row focus without schema changes or cross-reload surprises | ✓ Good — Phase 15: restore proven across all return paths and degradation cases × 3 engines |
+| ≤639px wordmark collapse uses clip, not removal | Pointer-invisible but keyboard/screen-reader reachable — honors the a11y floor while holding the 48px single-row header | ✓ Good — Phase 15: e2e-proven on all three engines |
 
 ## Evolution
 
@@ -162,4 +166,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-25 after completing Phase 14 (Navigation and Library Contracts) of the v2.1 Reader Experience milestone*
+*Last updated: 2026-08-29 after completing Phase 15 (Application Shell and Destinations) of the v2.1 Reader Experience milestone*
