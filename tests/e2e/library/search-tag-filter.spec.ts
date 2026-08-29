@@ -98,6 +98,49 @@ async function openLibrary(page: import("@playwright/test").Page) {
   });
 }
 
+/**
+ * seedLocation — cloned from progress-recent.spec.ts (the raw-put seeding
+ * discipline; REUSE-DO-NOT-FORK). Plan 16-01 Task 2 uses it to push a tagged
+ * article out of the Unread membership: ANY location (even a small offset)
+ * flips the article to in-progress per the D14-18 policy
+ * (articleReadingState), deterministically and without driving the reader
+ * UI to the end of the article.
+ */
+async function seedLocation(
+  page: import("@playwright/test").Page,
+  articleId: string,
+  graphemeOffset: number,
+  savedAt: string,
+): Promise<void> {
+  await page.evaluate(
+    async ({ articleId, graphemeOffset, savedAt }) => {
+      const location = {
+        schemaVersion: 1 as const,
+        articleId,
+        revision: 1,
+        graphemeOffset,
+        savedAt,
+      };
+      await new Promise<void>((resolve, reject) => {
+        const req = indexedDB.open("lem-reader");
+        req.onsuccess = () => {
+          const db = req.result;
+          if (!db.objectStoreNames.contains("location")) {
+            resolve();
+            return;
+          }
+          const tx = db.transaction("location", "readwrite");
+          tx.objectStore("location").put(location);
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        };
+        req.onerror = () => reject(req.error);
+      });
+    },
+    { articleId, graphemeOffset, savedAt },
+  );
+}
+
 test.beforeEach(async ({ page }) => {
   // Stub remote images so figure-heavy fixtures don't couple to network.
   await page.route(/\.(png|jpe?g|gif|webp|svg)(\?|$)/, (route) =>
@@ -356,5 +399,207 @@ test.describe("SC#3 + LIB-03 + LIB-04 — search + tag filter + auto-prune", () 
     await expect(
       page.getByRole("heading", { level: 1, name: "Saved articles" }),
     ).toBeVisible();
+  });
+});
+
+// ── Plan 16-01 Task 2 — LIB-09: the honest filtered-to-zero feedback layer
+// (D16-13/D14-26). A membership-non-empty view whose query/tag composition
+// hides every row shows the calm no-matches line + a Clear search and
+// filters control — NEVER the membership empty state. Strengthen-only: no
+// existing test above was modified or removed.
+test.describe("LIB-09 — filtered-to-zero no-matches feedback (D16-13)", () => {
+  test("query-only filtered-to-zero: no-matches line visible, membership empty state absent (D16-13)", async ({
+    page,
+  }) => {
+    await page.goto(`${BASE}/#/`);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Saved articles" }),
+    ).toBeVisible();
+    await ingestPaste(page, PLATO_HTML);
+    await openLibrary(page);
+
+    // A zero-match query narrows the (non-empty) All view to zero rows.
+    await page.locator("input#library-search").fill("zzzz-not-a-real-query");
+    await expect(page.locator(".library-list > li")).toHaveCount(0);
+
+    // The calm no-matches line + clear-filters affordance render.
+    const noMatches = page.locator(".library-no-matches");
+    await expect(noMatches).toBeVisible();
+    await expect(noMatches).toContainText(
+      "Nothing in this view matches your filters.",
+    );
+    await expect(
+      page.getByRole("button", { name: "Clear search and filters" }),
+    ).toBeVisible();
+
+    // Filtered-out is NOT an empty view (D14-26) — the All membership empty
+    // heading must stay absent while the no-matches line shows.
+    await expect(
+      page.getByRole("heading", { name: "Your library is empty" }),
+    ).toHaveCount(0);
+  });
+
+  test("tag-only filtered-to-zero on a non-All view: same no-matches treatment (D16-13)", async ({
+    page,
+  }) => {
+    // The tag carrier is pushed out of the Unread membership by a seeded
+    // mid-article location (ANY location ⇒ in-progress, D14-18); the chip
+    // strip still derives from the WHOLE library (loadAllTags), so
+    // activating "stoic" on #/unread narrows a non-empty view to zero.
+    await page.goto(`${BASE}/#/`);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Saved articles" }),
+    ).toBeVisible();
+    await ingestPaste(page, PLATO_HTML);
+    await openLibrary(page);
+
+    // Tag Plato "stoic" via the top-bar tag popover (the D8-05 pattern).
+    const platoRow = page
+      .locator(".library-list > li")
+      .filter({ hasText: "Plato Essay" });
+    const platoHref = await platoRow
+      .locator('a[href^="#/article/"]')
+      .getAttribute("href");
+    const platoId = /^#\/article\/([a-z0-9-]+)$/.exec(platoHref ?? "")?.[1];
+    expect(platoId).toBeTruthy();
+    await platoRow.locator('a[href^="#/article/"]').click();
+    await page.waitForURL(/#\/article\//, { timeout: 10_000 });
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Plato Essay" }).first(),
+    ).toBeVisible({ timeout: 10_000 });
+    await page.getByRole("button", { name: "Article tags" }).click();
+    await expect(page.locator(".tag-popover")).toBeVisible();
+    await page.locator("input#tag-entry-new").fill("stoic");
+    await page.getByRole("button", { name: /add tag/i }).click();
+    await expect(
+      page.locator(".tag-entry-list .tag-chip-readonly").filter({ hasText: "stoic" }),
+    ).toBeVisible();
+
+    // Seed the mid-article location AFTER the tag round-trip so the
+    // article-open visit cannot race the seed (offset 10 of a >500-
+    // grapheme article ⇒ ratio well under the finished threshold).
+    await seedLocation(page, platoId!, 10, "2026-08-28T10:00:00.000Z");
+
+    // Cold-load #/unread (goto + reload — the reading-views openView
+    // discipline; the LibraryView load effect runs once per mount and the
+    // seed happened after the previous mount). Readiness = parenthetical
+    // All count (counts render only at status ready).
+    await page.goto(`${BASE}/#/unread`);
+    await page.reload();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Saved articles" }),
+    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("link", { name: /^All \(\d+\)/ })).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // Tag-only filtered-to-zero: the chip exists (Plato carries it) but NO
+    // unread member does (Plato is in-progress; fixtures are untagged).
+    const stoicChip = page
+      .locator(".tag-filter .tag-chip")
+      .filter({ hasText: "stoic" });
+    await expect(stoicChip).toBeVisible();
+    await stoicChip.click();
+    await expect(stoicChip).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator(".library-list > li")).toHaveCount(0);
+    await expect(page.locator(".library-no-matches")).toBeVisible();
+    await expect(page.locator(".library-no-matches")).toContainText(
+      "Nothing in this view matches your filters.",
+    );
+
+    // Membership is non-empty (the bundled fixtures are unread) — the
+    // unread membership empty state never renders (D14-26).
+    await expect(
+      page.getByRole("heading", { name: "Nothing unread" }),
+    ).toHaveCount(0);
+  });
+
+  test("combined filtered-to-zero + Clear search and filters resets BOTH query and tag, restoring rows (D16-13)", async ({
+    page,
+  }) => {
+    await page.goto(`${BASE}/#/`);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Saved articles" }),
+    ).toBeVisible();
+    await ingestPaste(page, PLATO_HTML);
+    await openLibrary(page);
+    await ingestPaste(page, MARCUS_HTML);
+    await openLibrary(page);
+
+    // Tag Plato "stoic" (the D8-05 pattern above).
+    const platoRow = page
+      .locator(".library-list > li")
+      .filter({ hasText: "Plato Essay" });
+    await platoRow.locator('a[href^="#/article/"]').click();
+    await page.waitForURL(/#\/article\//, { timeout: 10_000 });
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Plato Essay" }).first(),
+    ).toBeVisible({ timeout: 10_000 });
+    await page.getByRole("button", { name: "Article tags" }).click();
+    await expect(page.locator(".tag-popover")).toBeVisible();
+    await page.locator("input#tag-entry-new").fill("stoic");
+    await page.getByRole("button", { name: /add tag/i }).click();
+    await expect(
+      page.locator(".tag-entry-list .tag-chip-readonly").filter({ hasText: "stoic" }),
+    ).toBeVisible();
+    await openLibrary(page);
+
+    // COMBINED filtered-to-zero: tag=stoic AND a query only Marcus's title
+    // could satisfy — Marcus is untagged, Plato doesn't match "marcus".
+    const stoicChip = page
+      .locator(".tag-filter .tag-chip")
+      .filter({ hasText: "stoic" });
+    await stoicChip.click();
+    await expect(stoicChip).toHaveAttribute("aria-pressed", "true");
+    await page.locator("input#library-search").fill("marcus");
+    await expect(page.locator(".library-list > li")).toHaveCount(0);
+    await expect(page.locator(".library-no-matches")).toBeVisible();
+
+    // Clear search and filters resets BOTH: query "" AND tag null.
+    await page
+      .getByRole("button", { name: "Clear search and filters" })
+      .click();
+
+    // The no-matches line is gone…
+    await expect(page.locator(".library-no-matches")).toHaveCount(0);
+    // …the view's rows are restored (fixtures + both ingested articles)…
+    const { fixtures } = await import("../../../src/fixtures");
+    await expect(page.locator(".library-list > li")).toHaveCount(
+      fixtures.length + 2,
+    );
+    // …the search input is empty…
+    await expect(page.locator("input#library-search")).toHaveValue("");
+    // …and the tag chip is unselected again.
+    await expect(stoicChip).toHaveAttribute("aria-pressed", "false");
+  });
+
+  test("membership-empty view keeps its EMPTY_COPY state under a query — no no-matches line (D14-26 regression guard)", async ({
+    page,
+  }) => {
+    // NO ingested articles and no locations: the six bundled fixtures are
+    // all unread, so #/finished has EMPTY membership. The membership-empty
+    // branch owns the region regardless of any query typed.
+    await page.goto(`${BASE}/#/`);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Saved articles" }),
+    ).toBeVisible();
+    await page.evaluate(() => {
+      window.location.hash = "#/finished";
+    });
+    await expect(
+      page.getByRole("heading", { name: "Nothing finished yet" }),
+    ).toBeVisible();
+
+    // Type a query into the always-mounted search field (LibrarySearch
+    // mounts above the membership/no-matches ternary).
+    await page.locator("input#library-search").fill("zzzz-not-a-real-query");
+
+    // The membership empty state STILL owns the region (D14-26)…
+    await expect(
+      page.getByRole("heading", { name: "Nothing finished yet" }),
+    ).toBeVisible();
+    await expect(page.getByRole("link", { name: /^Finished \(0\)/ })).toBeVisible();
+    // …and the filtered-to-zero line never renders for an empty view.
+    await expect(page.locator(".library-no-matches")).toHaveCount(0);
   });
 });

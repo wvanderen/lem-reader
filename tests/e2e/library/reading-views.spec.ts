@@ -1109,3 +1109,60 @@ test.describe("NAV-04 — focus/title/history matrix", () => {
     await expect(page).toHaveTitle("Highlights — Lem Reader");
   });
 });
+
+// ── Plan 16-01 Task 2 — LIB-09/LIB-10: strip view-gating (D16-14/D16-15)
+// and membership-pure switcher counts mid-search (D16-16). Strengthen-only:
+// no existing test above was modified or removed.
+test.describe("LIB-09/LIB-10 — no-matches era: strip gating + counts-pure mid-search", () => {
+  test("Continue Reading strip: visible on #/ only — absent from unread, in-progress, and finished (D16-14/D16-15)", async ({
+    page,
+  }) => {
+    await seedCorpus(page);
+
+    // All: the section renders and the strip shows the in-progress corpus
+    // (STANDALONE_PROGRESS has a mid-article location ⇒ strip cards exist).
+    await openView(page, "#/");
+    await expect(page.locator(".library-section-continue")).toBeVisible();
+    await expect(page.locator(".continue-reading-strip")).toBeVisible();
+    await expect(page.locator(".continue-reading-strip")).toContainText(
+      "Continue reading",
+    );
+
+    // Non-All views: the whole section is conditionally mounted — ABSENT
+    // from the DOM (not merely hidden by CSS).
+    await openView(page, "#/unread");
+    await expect(page.locator(".library-section-continue")).toHaveCount(0);
+    await openView(page, "#/in-progress");
+    await expect(page.locator(".library-section-continue")).toHaveCount(0);
+    await openView(page, "#/finished");
+    await expect(page.locator(".library-section-continue")).toHaveCount(0);
+  });
+
+  test("view-switcher counts stay membership-pure while a zero-match search narrows the list (D16-16)", async ({
+    page,
+  }) => {
+    await seedCorpus(page);
+    await openView(page, "#/");
+
+    // Capture a switcher link's accessible name BEFORE the search. Counts
+    // live in the accessible names (D14-23) — the rendered text content IS
+    // the accessible name for these links.
+    const unreadLink = page.getByRole("link", { name: /^Unread \(\d+\)$/ });
+    const unreadNameBefore = (await unreadLink.textContent())?.trim();
+    expect(unreadNameBefore).toContain("Unread (");
+
+    // A zero-match query narrows the All view to zero rows — the
+    // no-matches line renders (D16-13)…
+    await page.locator("input#library-search").fill("zzzz-no-matches-query");
+    await expect(page.locator(".library-no-matches")).toBeVisible();
+    await expect(page.locator(".library-list > li")).toHaveCount(0);
+
+    // …and the captured accessible name is IDENTICAL after the list
+    // narrows — a search never rewrites what "Unread (N)" means (D16-16).
+    await expect(unreadLink).toHaveAccessibleName(unreadNameBefore!);
+
+    // ALL four switcher names still carry the policy-expected membership
+    // totals mid-search (the exact EXPECTED_* names — structural lock).
+    await expectSwitcherCounts(page);
+  });
+});
