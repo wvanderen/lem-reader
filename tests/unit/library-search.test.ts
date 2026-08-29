@@ -146,6 +146,75 @@ describe("filterLibrary (D8-06 + D8-07)", () => {
   });
 });
 
+// Plan 17-02 Task 1 — D17-07 override-only matching cells. The article
+// haystack reads the EFFECTIVE title/author (effectiveMetadata), so what you
+// see is what matches: a renamed article surfaces for its new name and NOT
+// for its old canonical one. Builders stay on the 17-01 discipline: articles
+// are constructed via ArticleSchema.parse (never hand-written rows).
+describe("filterLibrary × reader-owned overrides (D17-07)", () => {
+  // An article whose reader renamed the title away from its canonical one.
+  const renamed = makeArticle({
+    id: "renamed-essay",
+    provenance: {
+      title: "Old Canonical Title",
+      author: "Canonical Author",
+      retrievedAt: "2026-01-01T00:00:00.000Z",
+      originalHtmlHash:
+        "0000000000000000000000000000000000000000000000000000000000000000",
+    },
+    readerTitle: "My Renamed Essay",
+  });
+
+  // An article whose reader overrode only the author.
+  const reauthored = makeArticle({
+    id: "reauthored-essay",
+    provenance: {
+      title: "Reauthored Essay",
+      author: "Original Author",
+      retrievedAt: "2026-01-01T00:00:00.000Z",
+      originalHtmlHash:
+        "0000000000000000000000000000000000000000000000000000000000000000",
+    },
+    readerAuthor: "New Author",
+  });
+
+  it("an article with readerTitle set is found by the override text and NOT by its old canonical title (D17-07)", () => {
+    const corpus = [renamed, ...sampleArticles];
+    // Found by the override text.
+    expect(
+      filterLibrary(corpus, { query: "my renamed essay", activeTag: null }),
+    ).toEqual([renamed]);
+    // NOT found by the old canonical title — the override is the ONE name.
+    expect(
+      filterLibrary(corpus, { query: "old canonical title", activeTag: null }),
+    ).toEqual([]);
+  });
+
+  it("an article with readerAuthor set matches the override author; the canonical author text no longer matches once overridden (D17-07)", () => {
+    const corpus = [reauthored, ...sampleArticles];
+    // The override author matches.
+    expect(
+      filterLibrary(corpus, { query: "new author", activeTag: null }),
+    ).toEqual([reauthored]);
+    // The canonical author no longer matches once overridden.
+    expect(
+      filterLibrary(corpus, { query: "original author", activeTag: null }),
+    ).toEqual([]);
+  });
+
+  it("an article without overrides matches canonical title/author exactly as before (regression)", () => {
+    // The pre-override corpus behavior is byte-stable: plato by title,
+    // marcus by author, and the full-set no-filter pass all hold unchanged.
+    expect(filterLibrary(sampleArticles, noFilter)).toEqual(sampleArticles);
+    expect(filterLibrary(sampleArticles, { query: "plato", activeTag: null })).toEqual([
+      plato,
+    ]);
+    expect(filterLibrary(sampleArticles, { query: "marcus", activeTag: null })).toEqual([
+      marcus,
+    ]);
+  });
+});
+
 describe("domainOf", () => {
   it("returns '' for undefined input", () => {
     expect(domainOf(undefined)).toBe("");
