@@ -131,3 +131,7 @@ None - no external service configuration required.
 ---
 *Phase: 17-reader-owned-metadata*
 *Completed: 2026-08-29*
+
+## Self-Check: PASSED
+
+All key-files exist on disk; all four task/metadata commits verified in git log (2d52fb2, 5b67891, f1cb25d, 1945157); all acceptance criteria and plan-level verification gates recorded above with honest results.

@@ -125,12 +125,12 @@ Plans:
   3. Clearing an override restores the canonical value, including an absent author.
   4. Overrides migrate and export/import with explicit conflicts, and cascade when their article is removed.
 
-**Plans**: 5 plans
+**Plans**: 1/5 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 17-01-PLAN.md — ArticleSchema readerTitle/readerAuthor + effectiveMetadata derivation module + unit truth table (META-01, META-03)
+- [x] 17-01-PLAN.md — ArticleSchema readerTitle/readerAuthor + effectiveMetadata derivation module + unit truth table (META-01, META-03)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -217,7 +217,7 @@ Plans:
 | 14. Navigation and Library Contracts | v2.1 | 4/4 | Complete    | 2026-08-25 |
 | 15. Application Shell and Destinations | v2.1 | 4/4 | Complete    | 2026-08-26 |
 | 16. Organized Library and Focused Add Flow | v2.1 | 4/4 | Complete    | 2026-08-29 |
-| 17. Reader-Owned Metadata | v2.1 | 0/TBD | Not started | - |
+| 17. Reader-Owned Metadata | v2.1 | 1/5 | In Progress|  |
 | 18. Reader Orientation | v2.1 | 0/TBD | Not started | - |
 | 19. Cross-Block Highlights | v2.1 | 0/TBD | Not started | - |
 | 20. Safe Local Image Fidelity | v2.1 | 0/TBD | Not started | - |

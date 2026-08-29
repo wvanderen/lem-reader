@@ -5,15 +5,15 @@ milestone_name: Reader Experience
 current_phase: 17
 current_phase_name: Reader-Owned Metadata
 status: executing
-stopped_at: Phase 17 context gathered
-last_updated: "2026-08-29T22:51:26.876Z"
+stopped_at: Completed 17-01-PLAN.md (reader-owned metadata substrate)
+last_updated: "2026-08-29T23:39:02.762Z"
 last_activity: 2026-08-29
-last_activity_desc: Phase 16 complete, transitioned to Phase 17
+last_activity_desc: Phase 17 execution started
 progress:
   total_phases: 8
   completed_phases: 3
-  total_plans: 12
-  completed_plans: 12
+  total_plans: 17
+  completed_plans: 13
   percent: 38
 ---
 
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-29)
 
 **Core value:** Readers can move through long-form web content with calm, stable orientation, and predictable navigation.
-**Current focus:** Phase 16 — Organized Library and Focused Add Flow
+**Current focus:** Phase 17 — Reader-Owned Metadata
 
 ## Current Position
 
-Phase: 17 — Reader-Owned Metadata
-Plan: Not started
+Phase: 17 (Reader-Owned Metadata) — EXECUTING
+Plan: 2 of 5
 Status: Ready to execute
-Last activity: 2026-08-29 — Phase 16 complete, transitioned to Phase 17
+Last activity: 2026-08-29 — Phase 17 execution started
 
 ## Recent Decisions (Phase 15)
 
@@ -166,6 +166,7 @@ Last activity: 2026-08-29 — Phase 16 complete, transitioned to Phase 17
 | Phase 16 P02 | 8 min | 2 tasks | 6 files |
 | Phase 16 P03 | 23 min | 2 tasks | 30 files |
 | Phase 16 P04 | 48 min | 3 tasks | 4 files |
+| Phase 17 P01 | 5 min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -390,6 +391,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: 16-03: openAddDialog e2e helper is idempotent (isVisible guard) — refusal ladders drive consecutive uploads inside the still-open modal without re-clicking the inert trigger; book-success anchors are li.book-row via refreshKey (D16-12 closes the dialog, making in-dialog success copy transient)
 - [Phase ?]: 16-03: closed-dialog assertions need CSS locators — a closed native dialog subtree is display:none and excluded from the accessibility tree, so getByRole cannot resolve inside it (upload-queue G2 reads the always-mounted picker through the closed dialog)
 - [Phase 16-04]: Phase 16-04: Real-browser close-then-navigate is transition-level — React commits the route swap at the microtask checkpoint between hashchange listeners, unmounting the dialog before the close event/aria-expanded settle; the e2e asserts dialog-torn-down-by-transition and the 16-02 component proof owns the code-level onCancel-before-hash ordering (reader-visible behavior correct, no production change) — Honest Pitfall-6 proof beats a failing idealized one: asserting unobservable event order produces false regressions; assert the strongest honest browser-level contract instead
+- [Phase 17]: Phase 17-01: readerTitle/readerAuthor overrides are ArticleSchema-declared optional min(1) fields (NOT bookId strip-mode — Zod strip mode makes undeclared keys invisible on every read; declaring also makes the D17-12 ride-inside-bundle automatic).
+- [Phase 17]: Phase 17-01: no Dexie version bump for override fields — non-indexed row fields need no version-block declaration (ingestionMeta bumpless precedent, OQ3 Option A); db.ts comment documents the rationale; v1..v5 blocks byte-unchanged.
+- [Phase 17]: Phase 17-01: effectiveMetadata.ts is the ONE effectiveTitle/effectiveAuthor derivation (D14-20 precedent) — every 17-02..17-05 surface imports it; forking the ?? chain is the phase anti-pattern. META-01/META-03 stay unchecked until the end-to-end plans (substrate-only split precedent).
 
 ### Pending Todos
 
@@ -445,9 +449,9 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-29T21:51:45.194Z
-Stopped at: Phase 17 context gathered
-Resume file: .planning/phases/17-reader-owned-metadata/17-CONTEXT.md
+Last session: 2026-08-29T23:38:57.018Z
+Stopped at: Completed 17-01-PLAN.md (reader-owned metadata substrate)
+Resume file: None
 
 ## Operator Next Steps
 
