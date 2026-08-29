@@ -11,7 +11,7 @@
 // against the LIVE exported mapReasonToCopy surface (imported from
 // IngestControl, not a fixture copy).
 import { describe, expect, it } from "vitest";
-import { mapReasonToCopy } from "../../src/ingestion/IngestControl";
+import { mapReasonToCopy } from "../../src/ingestion/ingestCopy";
 import {
   IngestionFailureReasonEnum,
   type IngestionFailureReason,

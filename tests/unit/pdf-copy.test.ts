@@ -9,7 +9,7 @@
 // A "close enough" match would let a refactor silently drift the reader-
 // facing voice, so the test pins the Pattern-7 table byte-for-byte.
 import { describe, expect, it } from "vitest";
-import { mapReasonToCopy } from "../../src/ingestion/IngestControl";
+import { mapReasonToCopy } from "../../src/ingestion/ingestCopy";
 import {
   IngestionFailureReasonEnum,
   type IngestionFailureReason,
