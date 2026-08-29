@@ -342,7 +342,7 @@ test.describe("focused Add dialog (ADD-04 — 16-04 Task 1)", () => {
     // Success payload: a real fixture CanonicalArticle (the happy-path
     // route-fixture pattern — the fixture re-uses the v1.0 canonical shape
     // so the reader treats it identically to a bundled article).
-    const fixtureArticle = fixtures[0];
+    const fixtureArticle = fixtures[0]!;
     await page.route("**/api/ingest", (route) =>
       route.fulfill({
         status: 200,
