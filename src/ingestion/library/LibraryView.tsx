@@ -549,10 +549,17 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
       </header>
       {/* (1) Continue reading — the strip returns null while loading OR when
           the unfinished set is empty (spare chrome per UI-SPEC); the section
-          wrapper keeps the region's place in the order regardless. */}
-      <section className="library-section library-section-continue">
-        <ContinueReadingStrip />
-      </section>
+          wrapper keeps the region's place in the order regardless.
+          Plan 16-01 (D16-14) — the whole section renders on the All view
+          ONLY: on In-progress it duplicated the first rows; on Unread/
+          Finished it showed items absent from the view. All is the
+          "everything" overview where recency belongs. The strip component
+          itself is byte-unchanged (D16-15) — the gate lives here alone. */}
+      {view === "all" && (
+        <section className="library-section library-section-continue">
+          <ContinueReadingStrip />
+        </section>
+      )}
       {/* (2) Add content — 07-06 (D7-01 + D7-02) minimal ingest control
           (extended in Plan 04 with the file upload form), with the
           byte-stable .status live region directly following it (FixtureList
@@ -630,17 +637,18 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
             <p>{EMPTY_COPY[view].body}</p>
           </>
         ) : (
-          // Plan 15-03 (D15-11) — the delegated launch capture. ONE onClick
-          // on the list ul records the launched article id into
-          // lastLaunchedRef (consumed by the unmount capture above); the
-          // plain anchor still navigates NATIVELY — this handler only
-          // records, never preventDefaults (middle/cmd/ctrl-clicks and
-          // every other row control fall through untouched). The id parses
-          // from the constant-template href via the parseHash article
-          // charset — ids arrive from validated records (T-10-02c/T-15-08)
-          // and are used only as the restore lookup key. BookRow chapter
-          // links match the same template (a chapter open is a launch too;
-          // on return an unexpanded book row degrades to h1 — D15-14).
+          <>
+          {/* Plan 15-03 (D15-11) — the delegated launch capture. ONE onClick
+              on the list ul records the launched article id into
+              lastLaunchedRef (consumed by the unmount capture above); the
+              plain anchor still navigates NATIVELY — this handler only
+              records, never preventDefaults (middle/cmd/ctrl-clicks and
+              every other row control fall through untouched). The id parses
+              from the constant-template href via the parseHash article
+              charset — ids arrive from validated records (T-10-02c/T-15-08)
+              and are used only as the restore lookup key. BookRow chapter
+              links match the same template (a chapter open is a launch too;
+              on return an unexpanded book row degrades to h1 — D15-14). */}
           <ul
             className="library-list"
             ref={listRef}
@@ -688,6 +696,35 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
               />
             ))}
           </ul>
+          {/* Plan 16-01 (D16-13) — the filtered-to-zero feedback branch.
+              Rendered ONLY when the view's MEMBERSHIP is non-empty (the
+              membership-empty ternary arm above owns the EMPTY_COPY render
+              — D14-26: filtered-out is not an empty view), the load has
+              settled (status ready), and the query/tag composition has
+              hidden every row of the view. The calm line + clear-filters
+              affordance stay copy/visually distinct from EMPTY_COPY; the
+              button resets BOTH filters (query + tag — simpler and honest).
+              All strings are static React text children (T-16-01 — escaped
+              by construction, no HTML injection to render the line). */}
+          {status === "ready" &&
+            (viewArticles.length > 0 || viewBooks.length > 0) &&
+            visibleItems.length === 0 &&
+            visibleBooks.length === 0 && (
+              <p className="library-no-matches">
+                Nothing in this view matches your filters.{" "}
+                <button
+                  type="button"
+                  className="library-clear-filters"
+                  onClick={() => {
+                    setQuery("");
+                    setActiveTag(null);
+                  }}
+                >
+                  Clear search and filters
+                </button>
+              </p>
+            )}
+          </>
         )}
       </section>
       {/* Plan 08-04 — row-level trash → cascade-remove confirmation (LIB-02).
