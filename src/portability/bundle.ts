@@ -23,6 +23,14 @@
 //     shape is never re-declared here — and their chapters ride `articles`
 //     as ordinary articles (ingestionMeta.bookId survives serialization;
 //     book tags travel inside BookSchema.tags exactly as article tags do).
+//   - Phase 17 (Plan 17-04) — the union widens again on the same 12-07
+//     discipline: schemaVersion is the 1|2|3 UNION. A v3 bundle carries
+//     reader-owned metadata overrides (readerTitle/readerAuthor) inside
+//     each article record via ArticleSchema composition — no separate
+//     block (D17-12). v1/v2 bundles parse exactly as before; a v4+ bundle
+//     forward-rejects (D9-04 preserved; the validateBundle peek threshold
+//     moved to > 3), and writers emit schemaVersion 3
+//     (ExportImportService.buildBundleBytes).
 //
 // This module COMPOSES the existing record schemas — no record shape is
 // re-declared here (REUSE-DO-NOT-FORK; the schemas are the STATE-04 trust
@@ -38,9 +46,11 @@ import {
 } from "../content/schema";
 
 export const ExportBundleSchema = z.object({
-  // PORT-01/02 versioning hook — the 1|2 union reads both generations;
-  // v3+ forward-rejects (D9-04).
-  schemaVersion: z.union([z.literal(1), z.literal(2)]),
+  // PORT-01/02 versioning hook — the 1|2|3 union reads all three
+  // generations; v4+ forward-rejects (D9-04). Phase 17 (17-04): v3 carries
+  // reader-owned metadata overrides (readerTitle/readerAuthor) inside each
+  // article row via ArticleSchema composition (D17-12).
+  schemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   exportedAt: z.string().datetime(), // ISO-8601
   appVersion: z.string(), // diagnostic only (D9-04)
   articles: z.array(ArticleSchema), // Dexie articles ONLY — fixtures never serialize

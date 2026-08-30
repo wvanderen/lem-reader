@@ -110,9 +110,11 @@ export async function buildBundleBytes(): Promise<Uint8Array<ArrayBuffer>> {
     .map((f) => f.id);
 
   const bundle = ExportBundleSchema.parse({
-    // Phase 12 (12-07): writers emit v2 — the 1|2 union read stays in
-    // bundle.ts; a v3+ bundle is refused by the peek below (D9-04).
-    schemaVersion: 2 as const,
+    // Phase 12 (12-07) + Phase 17 (17-04): writers emit v3 — reader-owned
+    // metadata overrides ride each article row via ArticleSchema
+    // composition (D17-12); the 1|2|3 union read stays in bundle.ts; a v4+
+    // bundle is refused by the peek below (D9-04).
+    schemaVersion: 3 as const,
     exportedAt: new Date().toISOString(),
     appVersion: resolveAppVersion(),
     articles,
@@ -170,10 +172,10 @@ const MAX_ENTRY_ORIGINAL_SIZE = 200_000_000;
  *   2. isSafeEntryName on EVERY entry key — one bad name refuses the WHOLE
  *      bundle (SC#2 hard gate; fflate exposes names unsanitized, D9-02).
  *   3. Required entries bundle.json + manifest.json → missing-entry.
- *   4. JSON.parse + PEEK schemaVersion: a number > 2 → newer-schema-version
+ *   4. JSON.parse + PEEK schemaVersion: a number > 3 → newer-schema-version
  *      BEFORE the full schema parse (the calm refusal instead of a Zod
- *      error wall — 09-RESEARCH anti-pattern; v2 bundles parse normally
- *      since Phase 12 — books ride them).
+ *      error wall — 09-RESEARCH anti-pattern; v3 bundles parse normally
+ *      since Phase 17 17-04 — overrides ride them; v2 since Phase 12).
  *   5. ExportBundleSchema.safeParse → invalid with ALL issues mapped to
  *      "path: message" strings.
  *   6. computeManifest over the parsed bundle, compared block-by-block
@@ -225,7 +227,8 @@ export async function validateBundle(
   //    refusal. A bundle.json that is not valid JSON at all is an invalid
   //    bundle (the issues list carries it); it can never reach Zod.
   //    Phase 12 (12-07): the threshold moved from > 1 to > 2 — v2 bundles
-  //    (books-capable) now parse; v3+ still refuses loudly (D9-04).
+  //    (books-capable) parse. Phase 17 (17-04): > 2 → > 3 — v3 bundles
+  //    (metadata-override-capable) parse; v4+ still refuses loudly (D9-04).
   let raw: unknown;
   try {
     raw = JSON.parse(strFromU8(bundleBytes));
@@ -236,7 +239,7 @@ export async function validateBundle(
     };
   }
   const peeked = (raw as { schemaVersion?: unknown }).schemaVersion;
-  if (typeof peeked === "number" && peeked > 2) {
+  if (typeof peeked === "number" && peeked > 3) {
     return {
       ok: false,
       refusal: { kind: "newer-schema-version", bundleVersion: peeked },
