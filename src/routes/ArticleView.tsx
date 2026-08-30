@@ -63,6 +63,11 @@ import { fragmentContainingOffset } from "../pagination/anchor";
 // the article body).
 import { TagEntry } from "../reader/TagEntry";
 import { BackToLibrary } from "../reader/BackToLibrary";
+// Phase 18 Plan 18-02 (ORNT-01/03/04/05): the non-modal TOC panel + the
+// derived-entry type consumed by the mode-aware jump handler (the D5-11
+// tail — canonical D-05 offsets, never page numbers or DOM identity).
+import { TocPanel } from "../reader/TocPanel";
+import type { TocEntry } from "../content/toc";
 // Plan 09-05 (D9-06, PORT-03) — per-article "Export highlights": the fixed
 // markdown template over this article's highlights+notes (collectHighlight
 // Entries re-resolves the honest tri-state through the SHIPPED resolver —
@@ -155,6 +160,17 @@ export interface ArticleViewProps {
   /** Plan 13-10: close the tag popover (App's setter). */
   onCloseTags: () => void;
   /**
+   * Phase 18 Plan 18-02 (D18-02 — the tagsOpen pattern): TOC panel open
+   * state, owned by App so Header (the toc-trigger) and this component
+   * (which mounts the TocPanel + owns the controlled popover seam) share one
+   * source of truth. Every close path routes through the ONE toggle-event
+   * seam below → onCloseToc (rule 18: view swaps close the panel through
+   * the same seam via App's [view] reset).
+   */
+  tocOpen: boolean;
+  /** Plan 18-02: close the TOC panel (App's setter). */
+  onCloseToc: () => void;
+  /**
    * Phase 5 Plan 05-03: push the resolved-highlight count up to App so the
    * Header badge stays in sync.
    */
@@ -234,6 +250,8 @@ export function ArticleView({
   onCloseDrawer,
   tagsOpen,
   onCloseTags,
+  tocOpen,
+  onCloseToc,
   onAnnotationCountChange,
   hasAppHistory,
 }: ArticleViewProps) {
@@ -373,6 +391,96 @@ export function ArticleView({
     el.addEventListener("toggle", handleToggle);
     return () => el.removeEventListener("toggle", handleToggle);
   }, [onCloseTags]);
+
+  // ── Phase 18 Plan 18-02: the TOC controlled seam (Pattern 1, adapted
+  // from the tag popover above for popover="manual" — the first non-dialog
+  // overlay; D18-01). Three coordinated pieces, and only these:
+  //   (a) prop ↔ shown-state sync (captures the trigger BEFORE showPopover),
+  //   (b) the ONE toggle-event close seam (state reset + focus restore),
+  //   (c) the width-scoped outside-pointerdown policy (sheet mode only).
+  // TocPanel owns its own manual-Esc keydown (routes into hidePopover, so
+  // Esc lands in the same seam) and the entry-activation onActivate below.
+  const tocPanelRef = useRef<HTMLDivElement>(null);
+  const tocTriggerRef = useRef<HTMLElement | null>(null);
+
+  // (a) Sync the tocOpen prop with the popover's shown state. When opening,
+  // capture document.activeElement as the trigger BEFORE showPopover() so
+  // the close seam can restore it (Pitfall 1). StrictMode-safe via the
+  // :popover-open checks (rule 17 — twin-mount runs are idempotent).
+  useEffect(() => {
+    const el = tocPanelRef.current;
+    if (!el) return;
+    if (tocOpen && !el.matches(":popover-open")) {
+      tocTriggerRef.current = document.activeElement as HTMLElement | null;
+      el.showPopover();
+    } else if (!tocOpen && el.matches(":popover-open")) {
+      el.hidePopover(); // fires the same toggle event as every other path
+    }
+  }, [tocOpen]);
+
+  // (b) The ONE close seam: trigger toggle, Esc (via TocPanel's keydown),
+  // entry activation (handleTocJump), the sheet-mode outside pointerdown
+  // below, and view swaps (App's [view] reset → prop false → (a)'s
+  // hidePopover) ALL funnel through this single toggle listener — state
+  // reset + focus-restore-to-trigger fire exactly once per close. There is
+  // deliberately NO second focus-restore path (the Pattern 1 anti-pattern).
+  useEffect(() => {
+    const el = tocPanelRef.current;
+    if (!el) return;
+    const handleToggle = (event: Event) => {
+      if ((event as ToggleEvent).newState === "closed") {
+        onCloseToc();
+        tocTriggerRef.current?.focus();
+      }
+    };
+    el.addEventListener("toggle", handleToggle);
+    return () => el.removeEventListener("toggle", handleToggle);
+  }, [onCloseToc]);
+
+  // (c) Width-scoped outside dismissal (UI-SPEC rule 4): at ≥640px the rail
+  // is a persistent reading companion — outside clicks NEVER dismiss; at
+  // ≤639px the full-width sheet covers the page, so a pointerdown outside
+  // the panel (and outside the trigger) closes it through the seam. The
+  // width check runs at EVENT time (a resized viewport needs no re-render).
+  useEffect(() => {
+    if (!tocOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!window.matchMedia("(max-width: 639px)").matches) return;
+      const el = tocPanelRef.current;
+      const target = event.target;
+      if (!el || !(target instanceof Node)) return;
+      if (el.contains(target)) return;
+      if (tocTriggerRef.current?.contains(target)) return;
+      el.hidePopover(); // routes through the one toggle seam
+    };
+    window.addEventListener("pointerdown", onPointerDown, { passive: true });
+    return () => window.removeEventListener("pointerdown", onPointerDown);
+  }, [tocOpen]);
+
+  // (d) Manual Esc, the trigger half (UI-SPEC rule 3: "a keydown handler on
+  // the open panel (and the trigger) routes Esc through hidePopover()").
+  // TocPanel's own onKeyDown covers focus-inside-the-panel; this seam covers
+  // focus on the TRIGGER — which is exactly where focus rests when Esc
+  // arrives before the panel's open-focus rAF lands (the click that opened
+  // the panel focused the trigger first). Scoped to those two targets only:
+  // never a page-wide Esc hijack. preventDefault + hidePopover route into
+  // the ONE close seam like every other path.
+  useEffect(() => {
+    if (!tocOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      const el = tocPanelRef.current;
+      const target = event.target;
+      if (!el || !(target instanceof Node)) return;
+      const inPanel = el.contains(target);
+      const onTrigger = tocTriggerRef.current?.contains(target) ?? false;
+      if (!inPanel && !onTrigger) return;
+      event.preventDefault();
+      el.hidePopover(); // routes through the one toggle seam
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [tocOpen]);
 
   // Phase 5 Plan 05-03: push the resolved-highlight count up to App so the
   // Header badge stays in sync. Runs whenever the apiRef bridge updates (which
@@ -1775,6 +1883,106 @@ export function ArticleView({
     [article, isPaginated, onCloseDrawer],
   );
 
+  // ── Phase 18 Plan 18-02: TOC entry activation (ORNT-01/03, D18-03) ──
+
+  /**
+   * Resolve a TOC destination to its VISIBLE rendered element via
+   * [data-block-index] (Shared Pattern 7). NEVER by invented DOM ids
+   * (T-18-02 — the schema carries none; a string id would be a clobbering
+   * surface), and never the hidden measurement clone (Pitfall 7: in
+   * paginated mode .article-body-measurement carries the same
+   * [data-block-index] set — it is filtered out here so the focus lands on
+   * the page fragment the reader actually sees).
+   */
+  const resolveTocDestination = useCallback(
+    (blockIndex: number): HTMLElement | null => {
+      const root = articleRef.current;
+      if (!root) return null;
+      const candidates = root.querySelectorAll<HTMLElement>(
+        `[data-block-index="${blockIndex}"]`,
+      );
+      for (const el of candidates) {
+        if (el.closest(".article-body-measurement")) continue;
+        return el;
+      }
+      return null;
+    },
+    [],
+  );
+
+  /**
+   * Phase 18 Plan 18-02 (D18-03 + the D5-11 tail VERBATIM from
+   * handleNavigateBack above): close the panel through the ONE seam, then
+   * jump to the entry's canonical D-05 grapheme offset —
+   *   - PAGINATED: fragmentContainingOffset(pages, offset, article) →
+   *     surfaceRef.turnToPage(pageIdx) (anchor.ts machinery in reverse).
+   *   - SCROLLING: findScrollTarget(article, queryBlocks(el), offset) →
+   *     scrollIntoView({ block: "start" }) (the Phase 2 helper EXACTLY —
+   *     never a fork).
+   * Then focus the destination heading: resolve via [data-block-index] on
+   * the visible surface, set tabIndex -1, focus through the rAF + 120ms
+   * double-call (the D4-07 firefox-settle guard). The same entry lands on
+   * the same structural destination in BOTH modes because the currency is
+   * the canonical offset — never a page number, never DOM identity
+   * (ORNT-03). The Top entry (blockIndex -1, offset 0) scrolls to the
+   * article start / page 1 with focus on the article h1 (the D14-03
+   * articleH1Ref precedent). The hash router is NEVER touched — activations
+   * were intercepted in the panel (preventDefault; Pitfall 4), and this
+   * handler never assigns the hash (no re-parse, no remount).
+   */
+  const handleTocJump = useCallback(
+    (entry: TocEntry) => {
+      // Close FIRST, through the seam: hidePopover fires the toggle event →
+      // state reset + focus restore to the trigger; the destination focus
+      // below (rAF + 120ms) then wins the final focus position.
+      const panel = tocPanelRef.current;
+      if (panel?.matches(":popover-open")) panel.hidePopover();
+      if (!article) return;
+
+      if (entry.blockIndex === -1) {
+        // Top of article: offset 0 → scroll-to-top / page 1; focus the h1.
+        if (isPaginated) {
+          surfaceRef.current?.turnToPage(0);
+        } else {
+          window.scrollTo({ top: 0 });
+        }
+        const focusH1 = () => articleH1Ref.current?.focus();
+        requestAnimationFrame(focusH1);
+        window.setTimeout(focusH1, 120);
+        return;
+      }
+
+      const offset = entry.offset;
+      if (isPaginated) {
+        const surface = surfaceRef.current;
+        const pages = surface?.getPages();
+        if (surface && pages && pages.length > 0) {
+          const pageIdx = fragmentContainingOffset(pages, offset, article);
+          surface.turnToPage(pageIdx);
+        }
+      } else {
+        if (articleRef.current) {
+          const blocks = queryBlocks(articleRef.current);
+          const target = findScrollTarget(article, blocks, offset);
+          target?.scrollIntoView({ block: "start" });
+        }
+      }
+
+      // Focus the destination heading after the turn/scroll commits (the
+      // D4-07 double-call guard — verbatim from handleNavigateBack).
+      const focusDestination = () => {
+        const el = resolveTocDestination(entry.blockIndex);
+        if (!el) return;
+        el.tabIndex = -1;
+        el.classList.add("toc-destination"); // the :focus-visible ring hook
+        el.focus();
+      };
+      requestAnimationFrame(focusDestination);
+      window.setTimeout(focusDestination, 120);
+    },
+    [article, isPaginated, resolveTocDestination],
+  );
+
   if (status !== "ready" || !article) {
     return (
       <main id="main">
@@ -2332,6 +2540,21 @@ export function ArticleView({
         >
           <TagEntry articleId={article.id} tags={article.tags ?? []} />
         </div>
+        {/* Phase 18 Plan 18-02: the TOC panel — popover="manual", NON-modal
+            (no dialog role, no modal state, no popup hint — Pitfall 3; the
+            first non-dialog overlay, D18-01). The controlled seam above owns
+            open/close + focus restore; the panel owns rendering, the shared
+            sectionSpy aria-current mapping, open-time focus/scroll, manual
+            Esc, and intercepted entry activation (onActivate →
+            handleTocJump). The UA hides the closed panel (display:none) so
+            it never leaks into the reading flow. */}
+        <TocPanel
+          ref={tocPanelRef}
+          article={article}
+          articleEl={articleEl}
+          open={tocOpen}
+          onActivate={handleTocJump}
+        />
         {/* Phase 5 Plan 05-03 Task 2: AnnotationsDrawer — native <dialog>
             reading-order list + empty-state + navigate-back. Reads highlights
             from useHighlightOverlay(); the onNavigate handler runs D5-11

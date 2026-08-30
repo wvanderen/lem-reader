@@ -204,6 +204,14 @@ function AppInner() {
   // The popover's native light-dismiss/Esc close routes back through
   // onCloseTags so App state never desyncs from the top layer.
   const [tagsOpen, setTagsOpen] = useState(false);
+  // Phase 18 Plan 18-02 (D18-02 — the tagsOpen pattern): TOC panel open
+  // state, lifted so Header (the toc-trigger) and ArticleView (which mounts
+  // the TocPanel + owns the controlled popover seam) share one source of
+  // truth. Every close path — trigger toggle, manual Esc, entry activation,
+  // narrow-sheet outside pointerdown, view swap — routes through the panel's
+  // ONE toggle-event seam → onCloseToc, so App state never desyncs from the
+  // top layer (rule 18: the panel never persists across destinations).
+  const [tocOpen, setTocOpen] = useState(false);
   // Phase 5 Plan 05-03: annotation count for the header badge. ArticleView
   // pushes the resolved-highlight count up via onAnnotationCountChange so the
   // Header badge stays in sync without Header needing to consume the provider.
@@ -277,10 +285,14 @@ function AppInner() {
   // swaps (back to list or article change) so stale state doesn't carry over.
   // Plan 13-10: the tag popover resets the same way (a closed-surface carry
   // across an article swap would re-show against the wrong article's tags).
+  // Plan 18-02: the TOC panel resets the same way — rule 18's view-change
+  // close routes through ArticleView's seam (hidePopover → toggle event →
+  // onCloseToc), so this reset IS the seam path, never a second one.
   useEffect(() => {
     setDrawerOpen(false);
     setAnnotationCount(0);
     setTagsOpen(false);
+    setTocOpen(false);
   }, [view]);
 
   // D4-09/D4-10: when ArticleView has registered an anchor-capturing handler,
@@ -337,6 +349,8 @@ function AppInner() {
         onToggleAnnotations={() => setDrawerOpen((v) => !v)}
         tagsOpen={tagsOpen}
         onToggleTags={() => setTagsOpen((v) => !v)}
+        tocOpen={tocOpen}
+        onToggleToc={() => setTocOpen((v) => !v)}
         destination={destination}
       />
       <SettingsPanel
@@ -368,6 +382,8 @@ function AppInner() {
           onCloseDrawer={() => setDrawerOpen(false)}
           tagsOpen={tagsOpen}
           onCloseTags={() => setTagsOpen(false)}
+          tocOpen={tocOpen}
+          onCloseToc={() => setTocOpen(false)}
           onAnnotationCountChange={setAnnotationCount}
           hasAppHistory={hasAppHistory}
         />

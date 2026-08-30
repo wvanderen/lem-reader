@@ -80,12 +80,27 @@ interface HeaderProps {
    */
   onToggleTags: () => void;
   /**
+   * Phase 18 Plan 18-02 (D18-02): whether the TOC panel is open. Drives the
+   * toc-trigger's aria-expanded (the tags-trigger discipline — but with NO
+   * popup-hint attribute: the TOC panel is a non-modal popover, not a
+   * dialog, and must never claim dialog semantics; Pitfall 3).
+   */
+  tocOpen: boolean;
+  /**
+   * Phase 18 Plan 18-02 (D18-02): invoked when the reader clicks the
+   * toc-trigger. The caller (App) owns the TOC open state (the tagsOpen
+   * pattern); ArticleView's toggle-event seam routes every close path back
+   * through onCloseToc.
+   */
+  onToggleToc: () => void;
+  /**
    * Plan 15-02 (D15-01/D15-02): the active destination, derived in App from
    * the view (list → "library", review → "highlights", article → "reader").
    * Drives the shell-nav aria-current discipline (D15-09): the Library link
    * carries aria-current="page" iff destination === "library", the
    * Highlights link iff destination === "highlights", and the brand link
-   * NEVER carries it.
+   * NEVER carries it. Phase 18 also renders it as the data-destination
+   * styling hook on .app-header (the ≤420px staged Reader collapse).
    */
   destination: "library" | "highlights" | "reader";
 }
@@ -100,13 +115,15 @@ export function Header({
   onToggleAnnotations,
   tagsOpen,
   onToggleTags,
+  tocOpen,
+  onToggleToc,
   destination,
 }: HeaderProps) {
   // Header is a useSettings consumer so the toggle's aria-pressed + glyph
   // reflect the LIVE preference without App prop-drilling. App stays unchanged.
   const { settings } = useSettings();
   return (
-    <header className="app-header">
+    <header className="app-header" data-destination={destination}>
       {/*
         Plan 15-02 (D15-01): the brand link + the shell destination nav share
         ONE .header-start group — the single inline-start child of .app-header
@@ -165,6 +182,29 @@ export function Header({
       */}
       <div className="header-controls">
         {/*
+          Phase 18 Plan 18-02 (D18-02 — the 5th article-scoped trigger): the
+          contents trigger, FIRST in the group so Reader reads
+          [contents][tags][annotations][mode][gear]. Mirrors the tags-trigger
+          anatomy exactly (44×44 quiet geometry, --ink-soft rest, --accent on
+          hover and only when open) — but carries NO popup-hint attribute:
+          the TOC panel is a non-modal popover, never a dialog (Pitfall 3 —
+          the NotePopover VoiceOver blocker history). Gated by the same
+          articleMounted condition as the tags trigger (the TOC is
+          article-scoped; it never plays peekaboo — headingless articles
+          open it too, D18-13).
+        */}
+        {articleMounted && (
+          <button
+            type="button"
+            className="toc-trigger"
+            onClick={onToggleToc}
+            aria-label="Table of contents"
+            aria-expanded={tocOpen}
+          >
+            <ContentsIcon aria-hidden="true" />
+          </button>
+        )}
+        {/*
           Plan 13-10 (G5 — the recorded user-direction change): tags-trigger
           button, inline-START of the annotations trigger so the group reads
           [tags] [annotations] [mode] [gear] — the tag affordance lives beside
@@ -218,7 +258,7 @@ export function Header({
           Plan 15-02 (D15-15): ModeToggle joins the tags/annotations triggers
           behind the articleMounted gate — "pages vs scrolling" only means
           something with an article mounted. The Reader header reads
-          [tags][annotations][mode][gear]; Library/Highlights read shell nav
+          [contents][tags][annotations][mode][gear]; Library/Highlights read shell nav
           + gear only. The gear below stays UNGATED (D15-16: the settings
           panel is THE global-prefs mechanism, reachable on every surface).
           Article-scoped triggers stay in the shell header, NOT content
@@ -314,6 +354,33 @@ function TagIcon({ ariaHidden }: { ariaHidden?: "true" }) {
     >
       <path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z" />
       <circle cx="7.5" cy="7.5" r="0.5" fill="currentColor" />
+    </svg>
+  );
+}
+
+/**
+ * Phase 18 Plan 18-02 (D18-02) — contents glyph for the toc-trigger button.
+ * The standard three-line list glyph; aria-hidden because aria-label carries
+ * the accessible name. Mirrors the GearIcon/HighlighterIcon/TagIcon anatomy
+ * exactly (same 20px box, viewBox 24, stroke, caps, joins).
+ */
+function ContentsIcon({ ariaHidden }: { ariaHidden?: "true" }) {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden={ariaHidden}
+      focusable="false"
+    >
+      <path d="M4 6h16" />
+      <path d="M4 12h16" />
+      <path d="M4 18h16" />
     </svg>
   );
 }
