@@ -311,6 +311,16 @@ test.describe("TOC geometry (18-04 — ORNT-05 edge matrix)", () => {
       undefined,
       { timeout: 10_000 },
     );
+    // Settle the D4-10 mode-swap re-anchor's deferred scroll (double-rAF —
+    // deterministic, not a sleep; the 18-02 webkit lesson: a test that
+    // positions the page before the re-anchor lands captures a stale
+    // offset, and the anchor then moves it mid-assertion).
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        ),
+    );
     await page.evaluate(() => window.scrollTo(0, 400));
     await expect
       .poll(() => page.evaluate(() => window.scrollY))
