@@ -695,6 +695,7 @@ test.describe("v5 rows hydrate overrides without a write-back (17-05 META-04 + 1
       id: string;
       readerTitle?: string;
       readerAuthor?: string;
+      provenance?: { title?: string; author?: string };
     } | null;
     expect(articleRow, "v5 article row must survive the app open").not.toBeNull();
     expect(articleRow?.id).toBe("v5-article-seed");
