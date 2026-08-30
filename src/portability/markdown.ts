@@ -6,6 +6,11 @@
 //     variable contract (title/author/source/highlights[]/notes[])
 //   - D9-08: highlight rendering = blockquote + citation line + optional
 //     Note line
+//   - D19-12 (Plan 19-02): a multi-block highlight's quote renders as ONE
+//     entry whose block breaks are preserved as blockquote continuation
+//     lines, with escapeMarkdownLine applied PER LINE (the V5 structure-
+//     injection guard); status marker on the first line only; never
+//     truncated
 //   - D9-09: honest inclusion — ambiguous and orphan highlights are NEVER
 //     silently dropped (ANNO-07 extended to the external-tool surface); they
 //     render with italic *[approx]* / *[orphan]* markers and a footer reports
@@ -20,7 +25,7 @@
 // resolveQuoteSelector is imported from src/content/normalizeText (the
 // contract re-export site of src/annotations/resolution.ts) —
 // REUSE-DO-NOT-FORK. Any divergence would shift every anchor.
-import { resolveQuoteSelector } from "../content/normalizeText";
+import { BLOCK_SEPARATOR, resolveQuoteSelector } from "../content/normalizeText";
 import type { CanonicalArticle } from "../content/types";
 import type { HighlightRecord, LocationRecord, NoteRecord } from "../content/schema";
 // Plan 17-03 (META-02/D17-09) — export presentation consumes the ONE
@@ -153,10 +158,27 @@ function citationLine(article: CanonicalArticle): string {
   return `> — ${core}${source}`;
 }
 
-/** One entry's block: quote line, citation line (only when the article is
- * known — a vanished article has no citation to build), optional Note line. */
+/** One entry's block: quote lines, citation line (only when the article is
+ * known — a vanished article has no citation to build), optional Note line.
+ *
+ * Plan 19-02 (D19-12): a highlight's quote renders as ONE entry over
+ * multiple lines — block breaks in quote.exact (BLOCK_SEPARATOR between a
+ * span's fragments; verbatim newlines inside code-block sources) become
+ * `> `-prefixed continuation lines. escapeMarkdownLine applies PER LINE so
+ * a continuation block beginning with `#`, `-`, or an ordered-list
+ * digit-period form cannot forge structure outside the blockquote
+ * (T-19-04 / the V5 structure-injection guard). The status marker
+ * (markerFor) prefixes ONLY the first line; empty fragments (consecutive
+ * separators) keep their own escaped continuation line — never collapsed,
+ * so the block-break count round-trips verbatim. Export NEVER truncates
+ * (the full span exports; the ellipsis is a review-surface behavior
+ * only). */
 function blockLines(article: CanonicalArticle | null, e: HighlightEntry): string[] {
-  const lines = [`> ${markerFor(e.status)}${escapeMarkdownLine(e.highlight.quote.exact)}`];
+  const quoteLines = e.highlight.quote.exact.split(BLOCK_SEPARATOR).map(
+    (fragment, index) =>
+      `> ${index === 0 ? markerFor(e.status) : ""}${escapeMarkdownLine(fragment)}`,
+  );
+  const lines = [...quoteLines];
   if (article !== null) {
     lines.push(citationLine(article));
   }

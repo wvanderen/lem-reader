@@ -6,6 +6,9 @@
 //   - the per-article footer + library totals footer count lines (D9-09)
 //   - escapeMarkdownLine's leading-run-only escaping (T-9-05 structure
 //     injection guard) with mid-text punctuation untouched
+//   - Plan 19-02 (D19-12): multi-line quote.exact renders as ONE entry —
+//     `> ` continuation lines, per-line escaping, marker on line 1 only,
+//     empty fragments never collapsed, full-span round-trip (no truncation)
 //   - collectHighlightEntries' live tri-state via the SHIPPED resolver
 //     (resolveQuoteSelector re-export — REUSE-DO-NOT-FORK)
 //   - orderSectionsByRecency (location savedAt desc, then title asc)
@@ -251,6 +254,86 @@ describe("escapeMarkdownLine", () => {
     const out = renderArticleHighlights(sampleArticle(), [entry(h, "confident")]);
     expect(out).toContain("> \\# not a heading inside the quote");
     expect(out).not.toContain("\n> # ");
+  });
+});
+
+// ── Plan 19-02 (D19-12): multi-line quote.exact export ───────────────────────
+
+describe("Plan 19-02 (D19-12): multi-line quote.exact renders as ONE entry", () => {
+  it("renders a two-block span as two `> ` continuation lines in ONE entry, with the status marker on line 1 only", () => {
+    const span = sampleHighlight({
+      id: "hl-span",
+      quote: { prefix: "", exact: "opening paragraph text\nsecond block text", suffix: "" },
+    });
+    const out = renderArticleHighlights(sampleArticle(), [entry(span, "ambiguous")]);
+    expect(out).toContain("\n> *[approx]* opening paragraph text\n> second block text\n");
+    // The marker prefixes ONLY the first line — continuation lines are bare
+    // blockquote lines (one entry, not one entry per block).
+    expect(out).not.toContain("\n> *[approx]* second block text");
+    expect(out).not.toContain("\n> *[orphan]* ");
+  });
+
+  it("escapes structure-forging continuation lines per line (V5 guard — no unescaped # or list marker can leave the blockquote)", () => {
+    const hostile = sampleHighlight({
+      id: "hl-hostile",
+      quote: {
+        prefix: "",
+        exact: "innocent opening\n# Forged heading\n1974. Event\n- forged list item",
+        suffix: "",
+      },
+    });
+    const out = renderArticleHighlights(sampleArticle(), [entry(hostile, "confident")]);
+    // Each continuation line carries escapeMarkdownLine's actual contract:
+    // per-char backslash escapes for a leading symbol run, period-only
+    // escape for a leading ordered-list marker.
+    expect(out).toContain("\n> \\# Forged heading");
+    expect(out).toContain("\n> 1974\\. Event");
+    expect(out).toContain("\n> \\- forged list item");
+    // No unescaped structure-forging exported line exists anywhere.
+    expect(out).not.toContain("\n> # ");
+    expect(out).not.toContain("\n> 1974. ");
+    expect(out).not.toContain("\n> - ");
+  });
+
+  it("round-trips a code-block highlight's verbatim multi-line source in full (no truncation)", () => {
+    const code = "const a = 1;\nconst b = 2;\nreturn a + b;";
+    const codeHighlight = sampleHighlight({
+      id: "hl-code",
+      quote: { prefix: "", exact: code, suffix: "" },
+    });
+    const out = renderArticleHighlights(sampleArticle(), [entry(codeHighlight, "confident")]);
+    // Export completeness (D19-12): every source line survives as its own
+    // `> ` continuation line — the ellipsis is a review-surface behavior
+    // only and never appears in export.
+    expect(out).toContain("> const a = 1;\n> const b = 2;\n> return a + b;");
+    for (const line of code.split("\n")) {
+      expect(out).toContain(`> ${line}`);
+    }
+    expect(out).not.toContain("…");
+  });
+
+  it("preserves empty continuation fragments (consecutive block breaks round-trip verbatim — never collapsed)", () => {
+    const gapped = sampleHighlight({
+      id: "hl-gap",
+      quote: { prefix: "", exact: "para one\n\npara three", suffix: "" },
+    });
+    const out = renderArticleHighlights(sampleArticle(), [entry(gapped, "confident")]);
+    // The middle empty fragment yields its own "> " continuation line, so
+    // the block-break count is preserved verbatim.
+    expect(out).toContain("\n> para one\n> \n> para three\n");
+  });
+
+  it("keeps the citation and Note lines after the quote block in their existing single-line shapes and positions", () => {
+    const span = sampleHighlight({
+      id: "hl-span-note",
+      quote: { prefix: "", exact: "first fragment\nsecond fragment", suffix: "" },
+    });
+    const out = renderArticleHighlights(sampleArticle(), [
+      entry(span, "confident", sampleNote()),
+    ]);
+    expect(out).toContain(
+      "\n> first fragment\n> second fragment\n> — An Author, *Article A* ([source](https://example.com/article-a))\n> Note: a reader note\n",
+    );
   });
 });
 
