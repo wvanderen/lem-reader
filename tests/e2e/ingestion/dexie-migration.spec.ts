@@ -570,3 +570,217 @@ test.describe("v3 → v4 Dexie migration snapshot (08-02 SC#5 + Pitfall 9)", () 
     ).toBeVisible({ timeout: 10_000 });
   });
 });
+
+// ── Plan 17-05 Task 1 — v5 rows hydrate override fields without a write-back ──
+// The Phase 17 migration proof (META-04's migration clause): 17-01 landed
+// readerTitle/readerAuthor as NON-INDEXED article row fields under Option A —
+// NO Dexie version bump, the v1..v5 blocks byte-unchanged, no upgrade
+// callback (Pitfall 9; 17-RESEARCH OQ3 Option A). A pre-Phase-17 library (v5
+// rows without override keys) therefore "migrates" by hydration alone:
+//
+//   - every row opens intact — the app renders it in the library through the
+//     Zod-validated read path (ArticleSchema.safeParse hydrates the absent
+//     override fields to undefined, exactly the `.default([])` tags
+//     mechanism proven above), and
+//   - the on-disk row stays byte-unchanged — nothing is written back (there
+//     is no upgrade pass; hydration happens on read, never on disk).
+//
+// The forward-shape cell proves the same read path carries override keys
+// when they exist (the post-Phase-17 row shape) and renders the EFFECTIVE
+// values (META-02's one derivation — effectiveTitle/effectiveAuthor).
+test.describe("v5 rows hydrate overrides without a write-back (17-05 META-04 + 17-01 Option A)", () => {
+  // A representative v5-era article row — the shape the Phase 12+ pipeline
+  // writes (tags field present since Phase 8; addedAt/source since Phase 7).
+  // NOTably this row has NO readerTitle/readerAuthor keys — the pre-Phase-17
+  // shape. Opening the app must NOT alter this row; the ArticleSchema
+  // optional fields hydrate to undefined on Zod read, not on disk.
+  const SEEDED_V5_ARTICLE = {
+    id: "v5-article-seed",
+    revision: 1,
+    lang: "en",
+    source: "url",
+    addedAt: "2026-08-20T12:00:00.000Z",
+    provenance: {
+      sourceUrl: "https://example.com/v5-article",
+      title: "V5 Seeded Article",
+      author: "V5 Canonical Author",
+      retrievedAt: "2026-08-20T12:00:00.000Z",
+      originalHtmlHash: "sha256:" + "1".repeat(64),
+    },
+    blocks: [
+      {
+        kind: "heading",
+        level: 2,
+        content: [{ text: "V5 Heading", marks: [] }],
+      },
+      {
+        kind: "paragraph",
+        content: [{ text: "V5 body text.", marks: [] }],
+      },
+    ],
+    footnotes: [],
+    tags: [],
+    ingestionMeta: {
+      source: "url",
+      origin: "url",
+      sourceUrl: "https://example.com/v5-article",
+      originalHtmlHash: "sha256:" + "1".repeat(64),
+      fetchedAt: "2026-08-20T12:00:00.000Z",
+      extractionConfidence: "high",
+      extractionWarnings: [],
+    },
+    // NO readerTitle / readerAuthor — the pre-Phase-17 v5 shape. The app's
+    // open + read + render cycle must leave BOTH keys absent on disk while
+    // the parsed surface hydrates them to undefined (canonical values shown).
+  };
+
+  test("pre-Phase-17 v5 row opens intact: renders canonical values, raw row carries NO override keys (no write-back)", async ({
+    page,
+  }) => {
+    // 1. Seed the v5-shape row (no override keys) directly into the articles
+    //    store — the raw IndexedDB put pattern from the v3→v4 describe above.
+    await page.evaluate(async (article) => {
+      await new Promise<void>((resolve, reject) => {
+        const req = indexedDB.open("lem-reader");
+        req.onsuccess = () => {
+          const db = req.result;
+          const tx = db.transaction("articles", "readwrite");
+          tx.objectStore("articles").put(article);
+          tx.oncomplete = () => {
+            db.close();
+            resolve();
+          };
+          tx.onerror = () => {
+            db.close();
+            reject(tx.error);
+          };
+        };
+        req.onerror = () => reject(req.error);
+      });
+    }, SEEDED_V5_ARTICLE);
+
+    // 2. Re-open the app (full reload so the SPA re-mounts + Dexie re-opens
+    //    + LibraryView re-reads against the externally-seeded row — the
+    //    v3→v4 describe's seed-then-read pattern). Phase 17 added NO version
+    //    block, so Dexie opens at v5 exactly as before; the only Phase 17
+    //    change is the ArticleSchema optional fields on the read path.
+    await page.goto(`${BASE}/#/`);
+    await page.reload();
+    await expect(
+      page.getByRole("heading", { name: "Saved articles" }),
+    ).toBeVisible({ timeout: 10_000 });
+    await page.waitForTimeout(500);
+
+    // 3. The parsed surface hydrates both override fields to UNDEFINED: the
+    //    row renders through ArticleSchema.safeParse (a row that failed the
+    //    Zod boundary would be dropped by the dexieLibrarySource read path)
+    //    and shows the CANONICAL values — the title heading and the author
+    //    byline — because effectiveTitle/effectiveAuthor fall back to
+    //    provenance when the overrides hydrate absent.
+    const seededRow = page.locator(".library-list > li").filter({
+      hasText: "V5 Seeded Article",
+    });
+    await expect(seededRow.locator("#title-v5-article-seed")).toHaveText(
+      "V5 Seeded Article",
+    );
+    await expect(
+      seededRow.locator("p.meta:not(.source-badge):not(.finished-mark)"),
+    ).toHaveText("V5 Canonical Author");
+
+    // 4. NO WRITE-BACK (META-04): the app opened, read, Zod-parsed, and
+    //    rendered the row — and the raw stored row STILL carries neither
+    //    override key. Hydration happened on read, never on disk; there is
+    //    no upgrade callback and no row re-put (17-01 Option A).
+    const articleRow = (await readRow(page, "articles", "v5-article-seed")) as {
+      id: string;
+      readerTitle?: string;
+      readerAuthor?: string;
+    } | null;
+    expect(articleRow, "v5 article row must survive the app open").not.toBeNull();
+    expect(articleRow?.id).toBe("v5-article-seed");
+    expect(
+      Object.prototype.hasOwnProperty.call(articleRow, "readerTitle"),
+      "raw row must gain NO readerTitle key (no write-back)",
+    ).toBe(false);
+    expect(
+      Object.prototype.hasOwnProperty.call(articleRow, "readerAuthor"),
+      "raw row must gain NO readerAuthor key (no write-back)",
+    ).toBe(false);
+    // The parsed-surface hydration claim made concrete: the raw values the
+    // schema would hydrate are absent on disk (undefined ≠ empty string — a
+    // bogus "" would violate ArticleSchema min(1) and drop the row).
+    expect(articleRow?.readerTitle).toBeUndefined();
+    expect(articleRow?.readerAuthor).toBeUndefined();
+    // Canonical bytes untouched.
+    const provenance = (articleRow?.provenance ?? {}) as {
+      title?: string;
+      author?: string;
+    };
+    expect(provenance.title).toBe("V5 Seeded Article");
+    expect(provenance.author).toBe("V5 Canonical Author");
+  });
+
+  test("forward shape: a v5 row WITH override keys renders the effective values", async ({
+    page,
+  }) => {
+    // The post-Phase-17 row shape: same v5 row, both override keys present.
+    // Non-indexed fields persist through the Dexie open/read cycle and the
+    // one derivation (effectiveTitle/effectiveAuthor) renders them.
+    const FORWARD_ROW = {
+      ...SEEDED_V5_ARTICLE,
+      readerTitle: "Reader Renamed V5",
+      readerAuthor: "Reader-Owned Author",
+    };
+    await page.evaluate(async (article) => {
+      await new Promise<void>((resolve, reject) => {
+        const req = indexedDB.open("lem-reader");
+        req.onsuccess = () => {
+          const db = req.result;
+          const tx = db.transaction("articles", "readwrite");
+          tx.objectStore("articles").put(article);
+          tx.oncomplete = () => {
+            db.close();
+            resolve();
+          };
+          tx.onerror = () => {
+            db.close();
+            reject(tx.error);
+          };
+        };
+        req.onerror = () => reject(req.error);
+      });
+    }, FORWARD_ROW);
+
+    await page.goto(`${BASE}/#/`);
+    await page.reload();
+    await expect(
+      page.getByRole("heading", { name: "Saved articles" }),
+    ).toBeVisible({ timeout: 10_000 });
+    await page.waitForTimeout(500);
+
+    // The EFFECTIVE values render (META-02): the row heading + byline read
+    // the overrides, not the canonical provenance.
+    const forwardRow = page.locator(".library-list > li").filter({
+      hasText: "Reader Renamed V5",
+    });
+    await expect(forwardRow.locator("#title-v5-article-seed")).toHaveText(
+      "Reader Renamed V5",
+    );
+    await expect(
+      forwardRow.locator("p.meta:not(.source-badge):not(.finished-mark)"),
+    ).toHaveText("Reader-Owned Author");
+
+    // Row truth: both keys persisted through the open/read cycle and the
+    // canonical bytes stay canonical underneath (META-01's layering).
+    const articleRow = (await readRow(page, "articles", "v5-article-seed")) as {
+      readerTitle?: string;
+      readerAuthor?: string;
+      provenance?: { title?: string; author?: string };
+    } | null;
+    expect(articleRow).not.toBeNull();
+    expect(articleRow?.readerTitle).toBe("Reader Renamed V5");
+    expect(articleRow?.readerAuthor).toBe("Reader-Owned Author");
+    expect(articleRow?.provenance?.title).toBe("V5 Seeded Article");
+    expect(articleRow?.provenance?.author).toBe("V5 Canonical Author");
+  });
+});
