@@ -4,17 +4,17 @@ milestone: v2.1
 milestone_name: Reader Experience
 current_phase: 17
 current_phase_name: Reader-Owned Metadata
-status: executing
-stopped_at: Completed 17-04-PLAN.md
-last_updated: "2026-08-30T01:17:22.830Z"
+status: verifying
+stopped_at: Completed 17-05-PLAN.md — Phase 17 complete (honest gate green)
+last_updated: "2026-08-30T03:17:09.803Z"
 last_activity: 2026-08-29
 last_activity_desc: Phase 17 execution started
 progress:
   total_phases: 8
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 17
-  completed_plans: 16
-  percent: 38
+  completed_plans: 17
+  percent: 50
 ---
 
 # Project State
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-08-29)
 
 Phase: 17 (Reader-Owned Metadata) — EXECUTING
 Plan: 5 of 5
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-08-29 — Phase 17 execution started
 
 ## Recent Decisions (Phase 15)
@@ -170,6 +170,7 @@ Last activity: 2026-08-29 — Phase 17 execution started
 | Phase 17 P02 | 11 min | 3 tasks | 7 files |
 | Phase 17 P03 | 4 min | 2 tasks | 5 files |
 | Phase 17 P04 | 18 min | 3 tasks | 11 files |
+| Phase 17 P05 | 33 min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -402,6 +403,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: META-02 split: 17-02 closes the library half (row/strip/search effective values); Reader/Highlights/export halves close in 17-03 — META-01/META-03 closed at 17-02 with end-to-end row-truth proof
 - [Phase 17]: Plan 17-03: All reader/review/export presentation surfaces (ArticleView x5, ReviewView x3, reviewFilter x1, markdown.ts x4) consume the ONE effectiveTitle/effectiveAuthor derivation — chapter neighbors and book halves stay canonical (D17-05/D17-06); export filename + all sort keys pinned effective (OQ5) — META-02 downstream half: one name follows the reader everywhere; fixture-pinned regressions byte-stable because fixtures carry no overrides; cross-surface e2e proof lands in 17-05
 - [Phase 17]: [Phase 17 17-04]: Per-kind overwrite on article-metadata-override is the honest bulk take-incoming (union with the per-item set) — a no-op offered select would violate the honesty constraint; merge-on-win keeps LOCAL overrides on every incoming-wins branch (D17-10), applyImport byte-unchanged. — The dialog must render the local EFFECTIVE name; the four pinned override-value fields cannot display one-side-only conflicts, so MetadataConflictDetail carries localName/incomingName computed via effectiveTitle (the ONE derivation — META-02, never forked in the dialog).
+- [Phase 17]: 17-05: Version-bump assertion sweeps must be exhaustive — the honest full-suite gate is the backstop that surfaced the third v2-emit site (core-flow-spine L231) outside the plan's file list; cross-surface consistency cells assert canonical strings ABSENT (one name is a negative assertion, not just a positive one). — Identical-cell failure across engines = regression class (the 15-04 lesson); a positive effective-name assertion alone cannot prove one-name-everywhere.
 
 ### Pending Todos
 
@@ -457,8 +459,8 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-30T01:17:11.816Z
-Stopped at: Completed 17-04-PLAN.md
+Last session: 2026-08-30T03:17:04.023Z
+Stopped at: Completed 17-05-PLAN.md — Phase 17 complete (honest gate green)
 Resume file: None
 
 ## Operator Next Steps

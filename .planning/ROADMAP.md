@@ -11,7 +11,7 @@
 - [x] **Phase 14: Navigation and Library Contracts** - Establish truthful destination behavior and reading-state policy. (completed 2026-08-25)
 - [x] **Phase 15: Application Shell and Destinations** - Make Library, Highlights, and Reader predictable first-class destinations. (completed 2026-08-26)
 - [x] **Phase 16: Organized Library and Focused Add Flow** - Browse by reading state and add content without permanent form clutter. (completed 2026-08-29)
-- [ ] **Phase 17: Reader-Owned Metadata** - Edit display title and author without disturbing canonical identity.
+- [x] **Phase 17: Reader-Owned Metadata** - Edit display title and author without disturbing canonical identity. (completed 2026-08-30)
 - [ ] **Phase 18: Reader Orientation** - Navigate canonical headings and receive non-intrusive restoration feedback.
 - [ ] **Phase 19: Cross-Block Highlights** - Manage one durable highlight across multiple semantic blocks.
 - [ ] **Phase 20: Safe Local Image Fidelity** - Preserve figures and captions as safe, portable local assets.
@@ -125,7 +125,7 @@ Plans:
   3. Clearing an override restores the canonical value, including an absent author.
   4. Overrides migrate and export/import with explicit conflicts, and cascade when their article is removed.
 
-**Plans**: 4/5 plans executed
+**Plans**: 5/5 plans complete
 
 Plans:
 **Wave 1**
@@ -140,7 +140,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 17-05-PLAN.md — migration/round-trip/conflict/cascade e2e + cross-surface consistency + honest full-suite gate (META-02, META-04)
+- [x] 17-05-PLAN.md — migration/round-trip/conflict/cascade e2e + cross-surface consistency + honest full-suite gate (META-02, META-04)
 
 **UI hint**: yes
 
@@ -217,7 +217,7 @@ Plans:
 | 14. Navigation and Library Contracts | v2.1 | 4/4 | Complete    | 2026-08-25 |
 | 15. Application Shell and Destinations | v2.1 | 4/4 | Complete    | 2026-08-26 |
 | 16. Organized Library and Focused Add Flow | v2.1 | 4/4 | Complete    | 2026-08-29 |
-| 17. Reader-Owned Metadata | v2.1 | 4/5 | In Progress|  |
+| 17. Reader-Owned Metadata | v2.1 | 5/5 | Complete   | 2026-08-30 |
 | 18. Reader Orientation | v2.1 | 0/TBD | Not started | - |
 | 19. Cross-Block Highlights | v2.1 | 0/TBD | Not started | - |
 | 20. Safe Local Image Fidelity | v2.1 | 0/TBD | Not started | - |
