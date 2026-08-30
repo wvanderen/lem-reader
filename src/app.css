@@ -247,6 +247,13 @@ body:has(main.paginated-main) {
 .article-body {
   max-width: var(--measure);
   margin-inline: auto;
+  /* Phase 18 Plan 18-03: the restoration marker's absolute-positioning
+     anchor. Layout-neutral by construction — relative-without-offsets never
+     moves in-flow content, and no existing absolute descendant inside the
+     article sets insets against a different ancestor (.visually-hidden
+     spans keep their static position; the paginated modifier below already
+     declares relative for the measurement wrapper). */
+  position: relative;
 }
 .article-body p {
   margin-block: 1em 1em;
@@ -3958,5 +3965,45 @@ dialog.book-remove-confirm::backdrop {
     overflow: visible;
     clip: auto;
     white-space: normal;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+ * Phase 18 Plan 18-03 — RestorationMarker (ORNT-06, D18-05/06/07)
+ *
+ * The passive transient restoration cue that replaces the retired
+ * .resume-banner blocks (D18-06). 4px solid var(--accent) bar — the ONE new
+ * sanctioned accent consumption (UI-SPEC §Color reserved-for list: transient,
+ * reopen-restore only, auto-clears ≤4s, never a persistent accent surface).
+ * Absolutely positioned (zero layout impact — ORNT-06 forbids content shift)
+ * with pointer-events: none (never blocks a page turn or intercepts a
+ * pointer). Geometry (top/height/inset-inline-start) is computed by the
+ * component relative to the <article> box (its positioned anchor — see the
+ * .article-body position:relative note above) so the bar scrolls with the
+ * content; the class owns the static anatomy only.
+ *
+ * Motion (D18-07 / Pitfall 8): the fade is a CSS transition ONLY — the
+ * global prefers-reduced-motion gate (L84-92) kills it, so under reduced
+ * motion the bar clears as an instant step. ZERO JS animation code.
+ * Forced colors (A11Y-05): the bar maps to CanvasText — shape-based
+ * survival; the polite announce carries the semantics redundantly.
+ * ════════════════════════════════════════════════════════════════════════ */
+.restoration-marker {
+  position: absolute;
+  width: 4px;
+  border-radius: 2px;
+  background: var(--accent);
+  pointer-events: none;
+}
+/* D18-07: the fade window — the class lands at 3400ms and the transition
+ * (declared on the after-change style, per the CSS Transitions spec) fades
+ * the bar to transparent over 600ms; the component unmounts at 4000ms. */
+.restoration-marker.is-fading {
+  opacity: 0;
+  transition: opacity 600ms;
+}
+@media (forced-colors: active) {
+  .restoration-marker {
+    background-color: CanvasText;
   }
 }

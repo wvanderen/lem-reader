@@ -12,17 +12,19 @@
 // Phase 2 Plan 02-03 (STATE-01 + READ-05 + A11Y-08): wires four new surfaces
 // after the article loads:
 //   1. Location-restore effect (mirror of the cancelled-flag load pattern):
-//      loadLocation → findScrollTarget → silent scrollIntoView → show banner.
+//      loadLocation → findScrollTarget → silent scrollIntoView → marker.
 //   2. useScrollSave(article, articleRef) — debounced ~1200ms save + dual
-//      bfcache-safe flush (visibilitychange-hidden + pagehide).
+//      bfcache-safe flush (visibilitychange-hidden + pagehide); Plan 18-03
+//      additionally feeds paginated page-turn offsets through its scheduler.
 //   3. ProgressHairline + scroll-progress ratio tracking (READ-05).
 //   4. SectionAnnouncer (IntersectionObserver scroll-spy, debounced) +
-//      ResumeBanner (dismissible, non-modal — auto-dismisses on first scroll
-//      or pointer activity OR explicit Resume/Start-from-top/×).
+//      RestorationMarker (Plan 18-03 — the passive transient cue that
+//      replaced the retired ResumeBanner, D18-06: reopen-restore only,
+//      never blocks or shifts content, auto-clears at 4s).
 import { useCallback, useEffect, useRef, useState } from "react";
 import { openArticle } from "../content/repository";
 import type { CanonicalArticle } from "../content/types";
-import type { LocationRecord, Book } from "../content/schema";
+import type { Book } from "../content/schema";
 import { ArticleBody } from "../content/render/BlockRenderer";
 import type { ArticleBodyHighlight } from "../content/render/BlockRenderer";
 import { loadLocation } from "../persistence/locationStore";
@@ -37,7 +39,10 @@ import { ProgressHairline } from "../reader/ProgressHairline";
 import { SectionAnnouncer } from "../reader/SectionAnnouncer";
 import { blockGraphemeLength } from "../pagination/anchor";
 import { BLOCK_SEPARATOR } from "../content/normalizeText";
-import { ResumeBanner } from "../reader/ResumeBanner";
+// Phase 18 Plan 18-03 (ORNT-06, D18-05/06): the passive transient
+// restoration marker replaces the retired ResumeBanner — the banner's
+// announce discipline survives verbatim INSIDE the marker.
+import { RestorationMarker } from "../reader/RestorationMarker";
 import { PaginationFallbackBanner } from "../reader/PaginationFallbackBanner";
 // Phase 5 Plan 05-02: annotation state seam (ANNO-01/05/06). The provider
 // wraps the article body; the apiRef bridge lets this component's H/N handler
@@ -257,11 +262,23 @@ export function ArticleView({
 }: ArticleViewProps) {
   const [article, setArticle] = useState<CanonicalArticle | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
-  // The restored location (STATE-01). Null when no saved location was found
-  // OR after the reader dismisses the banner. Used by the Resume handler to
-  // re-scroll to the saved offset if the reader clicked Resume.
-  const [restoredOffset, setRestoredOffset] = useState<LocationRecord | null>(null);
-  const [showResumeBanner, setShowResumeBanner] = useState(false);
+  // Phase 18 Plan 18-03 (ORNT-06, D18-05/08): the restoration marker mount
+  // state — replaces the retired ResumeBanner's showResumeBanner flag. The
+  // marker mounts ONLY when a reopen-restore genuinely landed (a saved
+  // LocationRecord existed AND the restore resolved this mount); the offset
+  // is the saved record's value and the mode is the mode the restore landed
+  // in. Never on first open with no location, never on TOC jumps (their cue
+  // is focus-on-heading), never on Highlights deep-links (jumpPendingRef
+  // suppresses the restore effect entirely).
+  const [restorationMarker, setRestorationMarker] = useState<{
+    offset: number;
+    mode: "scrolling" | "paginated";
+  } | null>(null);
+  // One-shot guard (the shipped previous-value comparison pattern): the
+  // restore effect may re-run (StrictMode twin-mount, effect re-entry) —
+  // only the FIRST resolution per article mounts the marker, keeping twin
+  // runs idempotent (rule 17).
+  const restorationMarkerArticleRef = useRef<CanonicalArticle | null>(null);
   const [progress, setProgress] = useState(0);
 
   // Plan 12-06 (D12-08 + D12-05): epub-chapter context. chapterContext holds
@@ -1290,10 +1307,10 @@ export function ArticleView({
     let cancelled = false;
     setStatus("loading");
     setArticle(null);
-    // Reset restore state on article swap so a stale banner from the previous
-    // article doesn't flash before the new article's restore runs.
-    setRestoredOffset(null);
-    setShowResumeBanner(false);
+    // Reset restore state on article swap so a stale marker from the
+    // previous article doesn't flash before the new article's restore runs.
+    setRestorationMarker(null);
+    restorationMarkerArticleRef.current = null;
     setProgress(0);
     // Phase 4 Plan 04-05: reset the fallback banner + session-mode override
     // on article swap so a fallback from the previous article doesn't carry
@@ -1668,8 +1685,15 @@ export function ArticleView({
               article,
             );
             surface.turnToPage(pageIdx);
-            setRestoredOffset(loc);
-            setShowResumeBanner(true);
+            // Plan 18-03: the passive marker replaces the retired banner —
+            // gated on genuine restore-landing (one-shot per article).
+            if (restorationMarkerArticleRef.current !== article) {
+              restorationMarkerArticleRef.current = article;
+              setRestorationMarker({
+                offset: loc.graphemeOffset,
+                mode: "paginated",
+              });
+            }
           };
           requestAnimationFrame(attemptPaginatedRestore);
           return;
@@ -1691,8 +1715,15 @@ export function ArticleView({
             // instant (no scroll-behavior: smooth declared anywhere).
             target.scrollIntoView({ block: "start" });
           }
-          setRestoredOffset(loc);
-          setShowResumeBanner(true);
+          // Plan 18-03: the passive marker replaces the retired banner —
+          // gated on genuine restore-landing (one-shot per article).
+          if (restorationMarkerArticleRef.current !== article) {
+            restorationMarkerArticleRef.current = article;
+            setRestorationMarker({
+              offset: loc.graphemeOffset,
+              mode: "scrolling",
+            });
+          }
         });
         // rAF cleanup on unmount/re-render — if the article swaps before the
         // frame fires, we cancel it so we don't scroll a stale article.
@@ -1709,9 +1740,9 @@ export function ArticleView({
     // hasAppHistory is per-arrival truth: App flips it only on real
     // destination hashchange, which coincides with the articleId change
     // that re-runs this effect via [article]. Listing it would re-fire the
-    // restore (scroll + a dismissed ResumeBanner resurrecting) if it ever
-    // flipped with the article unchanged — a regression this effect must
-    // not gain.
+    // restore (scroll + a cleared restoration marker resurrecting) if it
+    // ever flipped with the article unchanged — a regression this effect
+    // must not gain.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [article]);
 
@@ -1764,25 +1795,6 @@ export function ArticleView({
       if (rafId !== null) cancelAnimationFrame(rafId);
     };
   }, [article]);
-
-  // Auto-dismiss the resume banner on the reader's first scroll or pointer
-  // activity (UI-SPEC §Interaction 10). Registered ONLY while the banner is
-  // shown — so the restore-scroll cannot trigger the dismiss (the listener
-  // is added after setShowResumeBanner(true) commits). Uses { once: true }
-  // so a single event dismisses; cleanup removes both listeners on dismiss.
-  useEffect(() => {
-    if (!showResumeBanner) return;
-    const dismiss = () => setShowResumeBanner(false);
-    window.addEventListener("scroll", dismiss, { passive: true, once: true });
-    window.addEventListener("pointerdown", dismiss, {
-      passive: true,
-      once: true,
-    });
-    return () => {
-      window.removeEventListener("scroll", dismiss);
-      window.removeEventListener("pointerdown", dismiss);
-    };
-  }, [showResumeBanner]);
 
   // Phase 4 Plan 04-05 (PAGE-09): auto-dismiss the fallback banner on the
   // reader's first scroll or pointer activity (UI-SPEC §Interaction 23 —
@@ -1867,26 +1879,6 @@ export function ArticleView({
       window.removeEventListener("pointerdown", onPointerDown);
     };
   }, [showFallbackBanner]);
-
-  /** Resume reading — re-trigger the silent scroll to the saved offset. */
-  const handleResume = () => {
-    if (article && restoredOffset && articleRef.current) {
-      const blocks = queryBlocks(articleRef.current);
-      const target = findScrollTarget(
-        article,
-        blocks,
-        restoredOffset.graphemeOffset,
-      );
-      target?.scrollIntoView({ block: "start" });
-    }
-    setShowResumeBanner(false);
-  };
-
-  /** Start from top — scroll to the article <h1> (provenance title). */
-  const handleStartFromTop = () => {
-    articleRef.current?.querySelector("h1")?.scrollIntoView({ block: "start" });
-    setShowResumeBanner(false);
-  };
 
   /**
    * Phase 5 Plan 05-03 (D5-11 navigate-back): drawer entry → passage.
@@ -2270,13 +2262,13 @@ export function ArticleView({
         >
           {exportAnnouncement}
         </div>
-        {showResumeBanner && (
-          <ResumeBanner
-            onResume={handleResume}
-            onStartFromTop={handleStartFromTop}
-            onDismiss={() => setShowResumeBanner(false)}
-          />
-        )}
+        {/* Phase 18 Plan 18-03 (ORNT-06, D18-05/08): the passive restoration
+            marker mounts ONLY when a reopen-restore genuinely landed (the
+            restorationMarker state above is set exclusively inside the
+            restore effect's two landed branches — never on first-open-no-
+            location, never on TOC jumps, never on deep-link arrivals). It
+            lives INSIDE the shared <article> so its absolute geometry
+            anchors to the article box and scrolls with the content. */}
         {showFallbackBanner && (
           <PaginationFallbackBanner
             // Switch to pages reuses the SAME toggle path as the header
@@ -2559,6 +2551,18 @@ export function ArticleView({
                 </nav>
               )}
             </>
+          )}
+          {/* Phase 18 Plan 18-03 (ORNT-06): the passive marker — rendered as
+              the LAST child of the shared <article> so it never disturbs the
+              mode branches; absolutely positioned (zero layout impact) with
+              pointer-events none; transient (unmounts itself at 4s). */}
+          {restorationMarker && articleEl && (
+            <RestorationMarker
+              article={article}
+              articleEl={articleEl}
+              offset={restorationMarker.offset}
+              mode={restorationMarker.mode}
+            />
           )}
         </article>
         {/* Phase 5 Plan 05-02 Task 2: SelectionToolbar mounts as a sibling of
