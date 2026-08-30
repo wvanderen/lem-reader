@@ -36,6 +36,8 @@ Readers can move through long-form web content with calm, stable orientation and
 
 **v2.1 progress:** Phase 16 Organized Library and Focused Add Flow — SHIPPED 2026-08-29 (4 plans). Honest filtered-to-zero feedback (calm no-matches line + clear-filters, distinct from membership empty states), Continue Reading gated to the All view, and a focused Add workflow: header-row Add trigger, native showModal AddDialog with the controlled 3-way source picker hosting IngestControl's four-state submission spine verbatim, IngestControl retired with byte-stable `.status` survival, eleven ingestion e2e specs migrated atomically through a shared dialog helper, and ADD-04 focus/dismissal/reopen/success-ordering/narrow-width/high-zoom proven in 3-engine e2e (manual SR pass deferred to Phase 21 ACPT-08). LIB-09/LIB-10 + ADD-01..04 verified 24/24. Full suite at gate: 2578 passed / 0 failed / 23 documented skips / exit 0 (reproduced twice).
 
+**v2.1 progress:** Phase 17 Reader-Owned Metadata — SHIPPED 2026-08-30 (5 plans). `readerTitle`/`readerAuthor` override fields on ArticleSchema (additive, no Dexie version bump — v5 rows hydrate with zeroed defaults), one pure `effectiveMetadata` derivation module behind every title/author consumer (library row/remove/strip/search, reader surfaces, review panel, markdown export; book/chapter surfaces stay canonical by decision), EditMetadataDialog with calm validation and per-field Reset (override-key deletion restores the canonical value, including absent author), and bundle v3 portability: union 1|2|3 read, writer emits 3, article-metadata-override conflict kind with keep-local default + per-item take-incoming + merge-on-win, removal cascade via the existing 4-store transaction. META-01..04 verified 15/15; migration/round-trip/conflict/cascade + cross-surface consistency proven in 3-engine e2e. Full suite at gate: 2670 passed / 0 failed / 23 documented skips / exit 0 (17-05-SUMMARY honest record; first RED run recorded, fixed forward).
+
 <details>
 <summary>Version history detail</summary>
 
@@ -84,10 +86,10 @@ Readers can move through long-form web content with calm, stable orientation and
 - ✓ Acceptance (ACPT-05/06) — NVDA+Firefox protocol v1.2 passed zero-blocker; core flow green across the 3-engine matrix with full-suite exit 0. — v2.0
 - ✓ Predictable movement among structured Library, Highlights, and Reader (NAV-01/02/03/05 + POLISH-07) — shell nav in a persistent 48px header, brand as Library return, session-scoped context restore, coherent gutters/tokens across all four surfaces; verified 18/18 + UAT 2/2. — v2.1 (Phase 15)
 - ✓ Reading-state browsing with honest filter feedback and a focused, recoverable Add workflow (LIB-09/LIB-10 + ADD-01..04) — filtered-to-zero surfaces a calm no-matches line + clear-filters (never confused with membership empties), Continue Reading lives only in the All view, and Add opens a native showModal dialog (3-way source picker, four-state submission spine, dedupe/caps/refusals intact) proven for focus, dismissal, reopen, success ordering, and narrow-width/high-zoom in 3-engine e2e; verified 24/24. — v2.1 (Phase 16)
+- ✓ Reader-owned editable titles and authors (META-01..04) — `readerTitle`/`readerAuthor` overrides travel inside the article record (never a separate table), one `effectiveMetadata` derivation feeds every consumer surface (library, reader, review, search haystack, strip, markdown export), Reset deletes the key to restore the canonical value (blank overrides schema-unrepresentable), and bundle v3 carries overrides with an article-metadata-override conflict kind (keep-local default, per-item/bulk take-incoming, merge-on-win, removal cascade); verified 15/15 with the honest full-suite gate exit 0. — v2.1 (Phase 17)
 
 ### Active
 
-- [ ] Readers can edit saved article titles and authors without changing canonical content identity or losing annotations.
 - [ ] Reader orientation aids do not shift or obstruct content and include a navigable heading-derived table of contents.
 - [ ] Safely ingested source images and captions retain their semantic relationship and render consistently in both reading modes.
 - [ ] A highlight can span multiple semantic blocks while retaining durable, honest anchors across layout and persistence changes.
@@ -168,4 +170,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-29 after completing Phase 16 (Organized Library and Focused Add Flow) of the v2.1 Reader Experience milestone*
+*Last updated: 2026-08-30 after completing Phase 17 (Reader-Owned Metadata) of the v2.1 Reader Experience milestone*
