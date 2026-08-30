@@ -41,7 +41,7 @@
 - [x] **ORNT-03**: Table-of-contents destinations use stable canonical locations and work equivalently in scrolling and paginated reading modes without persisting page numbers or rendered DOM identity.
 - [x] **ORNT-04**: The table of contents preserves source heading levels, tolerates skipped levels and duplicate headings, and exposes semantic list/link navigation to keyboard and screen-reader users.
 - [x] **ORNT-05**: The table of contents adapts to narrow widths and high zoom without obscuring content, trapping focus, or changing the reader's logical location merely by opening or closing.
-- [ ] **ORNT-06**: Reopening an article communicates the restored location through a non-intrusive cue that does not shift content, block page turns, or require dismissal.
+- [x] **ORNT-06**: Reopening an article communicates the restored location through a non-intrusive cue that does not shift content, block page turns, or require dismissal.
 
 ### Cross-Block Annotations
 
@@ -128,7 +128,7 @@
 | ORNT-03 | Phase 18 | Complete |
 | ORNT-04 | Phase 18 | Complete |
 | ORNT-05 | Phase 18 | Complete |
-| ORNT-06 | Phase 18 | Pending |
+| ORNT-06 | Phase 18 | Complete |
 | ANNO-08 | Phase 19 | Pending |
 | ANNO-09 | Phase 19 | Pending |
 | ANNO-10 | Phase 19 | Pending |

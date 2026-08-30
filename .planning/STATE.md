@@ -6,14 +6,14 @@ current_phase: 18
 current_phase_name: Reader Orientation
 status: executing
 stopped_at: Completed 18-02-PLAN.md
-last_updated: "2026-08-30T16:25:05.081Z"
+last_updated: "2026-08-30T16:52:38.716Z"
 last_activity: 2026-08-30
 last_activity_desc: Phase 18 execution started
 progress:
   total_phases: 8
   completed_phases: 4
   total_plans: 21
-  completed_plans: 19
+  completed_plans: 20
   percent: 50
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-29)
 ## Current Position
 
 Phase: 18 (Reader Orientation) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-08-30 — Phase 18 execution started
 
@@ -174,6 +174,7 @@ Last activity: 2026-08-30 — Phase 18 execution started
 | Phase 17 P05 | 33 min | 3 tasks | 5 files |
 | Phase 18 P01 | 8 min | 2 tasks | 4 files |
 | Phase 18 P02 | 24min | 3 tasks | 8 files |
+| Phase 18 P03 | 22min | 3 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -412,6 +413,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: [18-01] ORNT-04 stays unchecked until 18-02 ships TocPanel — this plan proves derivation invariants only (04-02 PAGE-01 / 10-01 RECV-01 split precedent); section-announce.spec.ts 12/12 green with zero diff after the extraction
 - [Phase ?]: 18-02: Esc is a TWO-target contract (UI-SPEC rule 3: panel AND trigger) — a document-level listener scoped to the two targets covers Esc racing the open-focus rAF (the webkit/firefox (f)-cell race); never a page-wide hijack — Plan Task 2 named only the panel; UI-SPEC rule 3 names both targets and the e2e race proved the trigger half load-bearing
 - [Phase ?]: 18-02: TOC indent lives on li[data-depth] not a ul class — mixed-depth siblings (h2→h5 then h3) share one child ul, so ul-level indent cannot express exact depths; calc(depth × --space-md) keeps D18-10 skips-nest-deeper exact — Plan said ul-level indent class per depth; per-entry scaling preserves the same tokens and the locked no-invention structure
+- [Phase ?]: [Phase 18-03]: Paginated save/restore closed with existing machinery — useScrollSave RETURNS scheduleLocationSave(offset) (one LocationRecord construction site, ONE saveLocation call-site family, no schema change); the paginated restore branch reuses the deep-link readiness template (RETRY_CAP_MS 5000 → fragmentContainingOffset → turnToPage) with the mode read from isPaginatedRef at async-resolution time
+- [Phase ?]: [Phase 18-03]: RestorationMarker honesty is structural — mount gated on genuine restore-landing via a one-shot per-article ref; first-open silence e2e-asserted (rule 11); lifecycle CSS-transition-only (3400ms fade + 4000ms unmount) with the unit suite asserting ZERO rAF calls (Pitfall 8)
+- [Phase ?]: [Phase 18-03]: .article-body is position:relative (layout-neutral) — the marker's absolute anchor; marker geometry is article-relative inline style (bar scrolls with content in both modes); the CSS class owns anatomy + fade + forced-colors CanvasText
 
 ### Pending Todos
 
@@ -467,7 +471,7 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-30T16:25:05.071Z
+Last session: 2026-08-30T16:52:32.634Z
 Stopped at: Completed 18-02-PLAN.md
 Resume file: None
 

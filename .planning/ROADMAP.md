@@ -157,7 +157,7 @@ Plans:
   4. At narrow widths or high zoom, opening or closing the TOC neither obscures content, changes logical location, nor traps focus.
   5. Reopening communicates restored location without shifting content, blocking page turns, or requiring dismissal.
 
-**Plans**: 2/4 plans executed
+**Plans**: 3/4 plans executed
 
 Plans:
 **Wave 1**
@@ -170,7 +170,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 18-03-PLAN.md — paginated save/restore closure + RestorationMarker + banner retirement sweep (ORNT-06)
+- [x] 18-03-PLAN.md — paginated save/restore closure + RestorationMarker + banner retirement sweep (ORNT-06)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -236,7 +236,7 @@ Plans:
 | 15. Application Shell and Destinations | v2.1 | 4/4 | Complete    | 2026-08-26 |
 | 16. Organized Library and Focused Add Flow | v2.1 | 4/4 | Complete    | 2026-08-29 |
 | 17. Reader-Owned Metadata | v2.1 | 5/5 | Complete    | 2026-08-30 |
-| 18. Reader Orientation | v2.1 | 2/4 | In Progress|  |
+| 18. Reader Orientation | v2.1 | 3/4 | In Progress|  |
 | 19. Cross-Block Highlights | v2.1 | 0/TBD | Not started | - |
 | 20. Safe Local Image Fidelity | v2.1 | 0/TBD | Not started | - |
 | 21. Integrated Refinement and Acceptance | v2.1 | 0/TBD | Not started | - |
