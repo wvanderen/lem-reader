@@ -191,14 +191,14 @@ Plans:
   4. Reader can review, edit, export, and delete it atomically without leftover fragments or guessed attachment.
   5. Unsupported boundaries are rejected or narrowed with an explicit explanation from the supported-content matrix.
 
-**Plans**: 1/5 plans executed
+**Plans**: 2/5 plans executed
 **UI hint**: yes
 
 Plans:
 **Wave 1**
 
 - [x] 19-01-PLAN.md — span capture core: endpoint-composed global ranges, reason taxonomy retirement/addition, Pitfall 1 figure-caption fix, moved e2e success cell (ANNO-08, ANNO-12)
-- [ ] 19-02-PLAN.md — first-fragment excerpt helper adopted at all quote.exact surfaces + multi-line Markdown export with per-line escaping (ANNO-10, ANNO-11)
+- [x] 19-02-PLAN.md — first-fragment excerpt helper adopted at all quote.exact surfaces + multi-line Markdown export with per-line escaping (ANNO-10, ANNO-11)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -255,6 +255,6 @@ Plans:
 | 16. Organized Library and Focused Add Flow | v2.1 | 4/4 | Complete    | 2026-08-29 |
 | 17. Reader-Owned Metadata | v2.1 | 5/5 | Complete    | 2026-08-30 |
 | 18. Reader Orientation | v2.1 | 4/4 | Complete    | 2026-08-30 |
-| 19. Cross-Block Highlights | v2.1 | 1/5 | In Progress|  |
+| 19. Cross-Block Highlights | v2.1 | 2/5 | In Progress|  |
 | 20. Safe Local Image Fidelity | v2.1 | 0/TBD | Not started | - |
 | 21. Integrated Refinement and Acceptance | v2.1 | 0/TBD | Not started | - |
