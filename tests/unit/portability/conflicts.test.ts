@@ -715,11 +715,13 @@ describe("detectImportPreview — preferences + zero writes (09-03 Task 1)", () 
 
 // ── Task 2: resolveImportPlan — bulk per-kind override matrix (D9-14) ───────
 
-/** The D9-14 default: skip every kind (the book row included — 12-07). */
+/** The D9-14 default: skip every kind (the book row — 12-07; the metadata
+ * kind — 17-04). */
 const ALL_SKIP: Overrides = {
   book: "skip",
   "article-revision": "skip",
   "article-content-divergence": "skip",
+  "article-metadata-override": "skip",
   "highlight-id": "skip",
   "note-id": "skip",
   location: "skip",
@@ -1238,19 +1240,13 @@ describe("detectImportPreview + resolveImportPlan — book conflicts (12-07)", (
 
 // ── Phase 17 (17-04 Task 2): article-metadata-override — the 7th kind ───────
 
-/** Phase 17 (17-04): the widened seventh kind is referenced by these tests
- * BEFORE conflicts.ts declares it (TDD RED). Typing the widened record as
- * Record<string, PerKindOverride> keeps this file typecheck-clean at RED;
- * once the kind lands, the helper is an ordinary Overrides literal. */
+/** Phase 17 (17-04): set the seventh kind's bulk override on a base
+ * Overrides record (the bulk take-incoming when "overwrite"). */
 function withMetadataOverride(
   base: Overrides,
   value: PerKindOverride,
 ): Overrides {
-  const widened: Record<string, PerKindOverride> = {
-    ...base,
-    "article-metadata-override": value,
-  };
-  return widened;
+  return { ...base, "article-metadata-override": value };
 }
 
 describe("detectImportPreview — article-metadata-override classification (17-04, D17-11)", () => {

@@ -242,11 +242,13 @@ async function countAllStores(): Promise<Record<string, number>> {
   };
 }
 
-/** The D9-14 default: skip every kind (the book row included — 12-07). */
+/** The D9-14 default: skip every kind (the book row included — 12-07; the
+ * metadata kind included — 17-04). */
 const ALL_SKIP: Overrides = {
   book: "skip",
   "article-revision": "skip",
   "article-content-divergence": "skip",
+  "article-metadata-override": "skip",
   "highlight-id": "skip",
   "note-id": "skip",
   location: "skip",

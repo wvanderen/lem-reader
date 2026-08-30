@@ -54,6 +54,7 @@ function samplePreview(applyPreferencesDefault: boolean): ImportPreviewData {
     ],
     resolution: { confident: 5, ambiguous: 1, orphan: 0 },
     fixtureBackedHighlights: 1,
+    metadataConflicts: [], // Phase 17 17-04 — no metadata conflicts in this base preview
     applyPreferencesDefault,
   };
 }
@@ -62,6 +63,7 @@ const DEFAULTS: Overrides = {
   book: "skip",
   "article-revision": "skip",
   "article-content-divergence": "skip",
+  "article-metadata-override": "skip",
   "highlight-id": "skip",
   "note-id": "skip",
   location: "skip",

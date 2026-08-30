@@ -50,11 +50,14 @@ interface ImportPreviewDialogProps {
 }
 
 /** Skip is the default override for EVERY kind (D9-14 skip-by-default).
- * The `book` entry (Phase 12 12-07) widens the table additively. */
+ * The `book` entry (Phase 12 12-07) and the `article-metadata-override`
+ * entry (Phase 17 17-04 — keep-LOCAL default, D17-11) widened the table
+ * additively. */
 const DEFAULT_OVERRIDES: Overrides = {
   book: "skip",
   "article-revision": "skip",
   "article-content-divergence": "skip",
+  "article-metadata-override": "skip",
   "highlight-id": "skip",
   "note-id": "skip",
   location: "skip",
@@ -71,6 +74,12 @@ const KIND_LABELS: Record<ConflictKind, { one: string; other: string }> = {
   "article-content-divergence": {
     one: "article with different content",
     other: "articles with different content",
+  },
+  // Phase 17 17-04 (D17-11) — same id, a different readerTitle/readerAuthor
+  // (incl. one-side-only).
+  "article-metadata-override": {
+    one: "article with a different title or author",
+    other: "articles with a different title or author",
   },
   "highlight-id": { one: "highlight", other: "highlights" },
   "note-id": { one: "note", other: "notes" },
