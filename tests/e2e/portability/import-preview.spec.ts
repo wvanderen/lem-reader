@@ -16,6 +16,7 @@
 import { test, expect } from "@playwright/test";
 import { DEFAULT_SETTINGS } from "../../../src/settings/defaults";
 import {
+  BASE,
   buildBundleZip,
   confidentHighlightOn,
   countRows,
@@ -195,5 +196,309 @@ test.describe("PORT-02 — import preview dialog flow", () => {
     );
     expect(minted, "keep-both must mint a new id for the bundle's highlight").toBeDefined();
     expect((minted!.position as { start: number }).start).toBe(ANCHOR_CONFLICT.position.start);
+  });
+});
+
+// ── Phase 17 (17-05 Task 2) — the article-metadata-override conflict flow ────
+//
+// Proves D17-11 end-to-end through the real ImportPreviewDialog: a same-id
+// article with differing overrides surfaces the article-metadata-override
+// conflict row (both-sides-differ AND one-side-only), the per-article
+// disclosure shows both names with Keep mine / Use imported selects, the
+// keep-LOCAL default preserves the local name on Proceed, and the per-item
+// take-incoming choice applies the incoming row whole (a key-less incoming
+// row REMOVES the local override — explicit reader choice). Then D17-10's
+// merge-on-win (a revision+1 refresh never renames the library) and D17-13's
+// cascade (removing an overridden article removes its override with it).
+//
+// All bundles are hand-built v3 envelopes (buildBundleZip — the shipped
+// ExportBundleSchema self-check), mirroring what real Phase 17 exports carry.
+
+/** Base article both sides of a metadata conflict share: same id, revision,
+ * and originalHtmlHash (so classification reaches the metadata branch, not
+ * revision/divergence). */
+function metadataConflictBase(id: string, title: string, paragraphs: string[]) {
+  return makeArticle({ id, title, author: "Canonical Conflict Author", paragraphs });
+}
+
+const CONFLICT_PARAGRAPHS = [
+  "The first paragraph of the metadata conflict corpus. Both machines hold this article at the same revision and content hash, so the only difference the importer may report is the reader-owned name.",
+  "A second paragraph supplies the unique material every seeded article carries so no anchored passage can ever collide across articles in the normalized stream.",
+  "A third paragraph keeps the corpus comfortably past every confidence threshold without coupling to any threshold value.",
+];
+
+test.describe("PORT-02 metadata overrides (17-05 — D17-10/D17-11/D17-13)", () => {
+  test("conflict row + both names + one-side-only; keep-local default preserves the local name (D17-11)", async ({
+    page,
+  }) => {
+    await prepareFreshPage(page);
+
+    // LOCAL: both-sides-differ article (override on both machines, different
+    // values) + one-side-only article (LOCAL has none, bundle carries one).
+    const bothBase = metadataConflictBase(
+      "md-metaconf001",
+      "Both Sides Conflict Article",
+      CONFLICT_PARAGRAPHS,
+    );
+    const oneSideBase = metadataConflictBase(
+      "md-metaconf002",
+      "One Side Conflict Article",
+      CONFLICT_PARAGRAPHS,
+    );
+    await seedRows(page, {
+      articles: [
+        { ...bothBase, readerTitle: "Local Kept Name" },
+        oneSideBase, // NO local override
+      ],
+    });
+
+    // BUNDLE (v3): differing title on the first; an author override the
+    // local side lacks on the second (one-side-only — D17-11 verbatim).
+    const bundleBuffer = await buildBundleZip({
+      schemaVersion: 3,
+      exportedAt: "2026-08-20T00:00:00.000Z",
+      appVersion: "test",
+      articles: [
+        { ...bothBase, readerTitle: "Incoming Machine Name" },
+        { ...oneSideBase, readerAuthor: "Incoming Only Author" },
+      ],
+      locations: [],
+      highlights: [],
+      notes: [],
+      preferences: { ...DEFAULT_SETTINGS },
+      fixtureIds: [],
+    });
+
+    const panel = await openSettings(page);
+    await panel.locator('input[type="file"][accept=".zip"]').setInputFiles({
+      name: "metadata-conflict-bundle.zip",
+      mimeType: "application/zip",
+      buffer: bundleBuffer,
+    });
+
+    // The preview surfaces the article-metadata-override conflict row with
+    // the plain-word label, and the disclosure lists BOTH conflicted
+    // articles with their local → incoming names.
+    const preview = page.locator("dialog.import-preview");
+    await expect(preview).toBeVisible({ timeout: 15_000 });
+    await expect(preview).toContainText(
+      "2 conflicting articles with a different title or author",
+    );
+    await preview.getByRole("button", { name: "Show articles" }).click();
+    const metadataList = preview.locator("#import-preview-metadata-list");
+    await expect(metadataList).toBeVisible();
+    await expect(metadataList).toContainText("Local Kept Name");
+    await expect(metadataList).toContainText("Incoming Machine Name");
+    await expect(metadataList).toContainText("One Side Conflict Article");
+    // Every per-item select defaults to Keep mine (keep-LOCAL, D17-11).
+    await expect(
+      metadataList.getByRole("combobox", { name: "Import choice for Local Kept Name" }),
+    ).toHaveValue("keep-mine");
+
+    // KEEP-LOCAL DEFAULT: Proceed without touching any choice.
+    await preview.getByRole("button", { name: "Import", exact: true }).click();
+    await expect(settingsStatus(page)).toContainText(
+      "Imported 0 articles, 0 highlights, 0 notes, and 0 reading positions.",
+      { timeout: 15_000 },
+    );
+    await expect(settingsStatus(page)).toContainText("2 items were skipped.");
+
+    // Row truth: the local overrides stand; the incoming names did NOT
+    // silently replace them, and the one-side-only incoming author never
+    // landed.
+    const bothRow = await readRow(page, "articles", "md-metaconf001");
+    expect(bothRow?.readerTitle).toBe("Local Kept Name");
+    const oneSideRow = await readRow(page, "articles", "md-metaconf002");
+    expect(
+      Object.prototype.hasOwnProperty.call(oneSideRow, "readerAuthor"),
+      "one-side-only incoming override must NOT land under the keep-local default",
+    ).toBe(false);
+  });
+
+  test("per-item Use imported applies the incoming name AND removes the local override the bundle lacked (D17-11)", async ({
+    page,
+  }) => {
+    await prepareFreshPage(page);
+
+    const base = metadataConflictBase(
+      "md-metatake01",
+      "Take Incoming Article",
+      CONFLICT_PARAGRAPHS,
+    );
+    await seedRows(page, {
+      articles: [
+        { ...base, readerTitle: "Local Kept Name", readerAuthor: "Local Author" },
+      ],
+    });
+
+    // Incoming: a DIFFERENT title and NO author override — taking it whole
+    // must remove the local readerAuthor (a key-less incoming row deletes
+    // the override: the explicit reader choice).
+    const bundleBuffer = await buildBundleZip({
+      schemaVersion: 3,
+      exportedAt: "2026-08-20T00:00:00.000Z",
+      appVersion: "test",
+      articles: [{ ...base, readerTitle: "Incoming Machine Name" }],
+      locations: [],
+      highlights: [],
+      notes: [],
+      preferences: { ...DEFAULT_SETTINGS },
+      fixtureIds: [],
+    });
+
+    const panel = await openSettings(page);
+    await panel.locator('input[type="file"][accept=".zip"]').setInputFiles({
+      name: "take-incoming-bundle.zip",
+      mimeType: "application/zip",
+      buffer: bundleBuffer,
+    });
+
+    const preview = page.locator("dialog.import-preview");
+    await expect(preview).toBeVisible({ timeout: 15_000 });
+    await expect(preview).toContainText(
+      "1 conflicting article with a different title or author",
+    );
+
+    // Toggle THIS article to Use imported (the per-item choice).
+    await preview.getByRole("button", { name: "Show articles" }).click();
+    await preview
+      .getByRole("combobox", { name: "Import choice for Local Kept Name" })
+      .selectOption("use-imported");
+    await preview.getByRole("button", { name: "Import", exact: true }).click();
+    await expect(settingsStatus(page)).toContainText(
+      "Imported 1 article, 0 highlights, 0 notes, and 0 reading positions.",
+      { timeout: 15_000 },
+    );
+
+    // Row truth: the incoming row won WHOLE — new title, and the local
+    // author override is gone because the incoming record had none.
+    const row = await readRow(page, "articles", "md-metatake01");
+    expect(row?.readerTitle).toBe("Incoming Machine Name");
+    expect(
+      Object.prototype.hasOwnProperty.call(row, "readerAuthor"),
+      "a key-less incoming row must REMOVE the local override on take-incoming",
+    ).toBe(false);
+    const provenance = (row?.provenance ?? {}) as { title?: string };
+    expect(provenance.title).toBe("Take Incoming Article");
+
+    // The library row shows the incoming name (the one effective name).
+    await page.keyboard.press("Escape");
+    await expect(panel).not.toBeVisible();
+    await page.reload();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Saved articles" }),
+    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator("#title-md-metatake01")).toHaveText(
+      "Incoming Machine Name",
+    );
+  });
+
+  test("merge-on-win: a revision+1 refresh overwrites content but keeps the LOCAL title override (D17-10)", async ({
+    page,
+  }) => {
+    await prepareFreshPage(page);
+
+    const base = metadataConflictBase(
+      "md-metamerge01",
+      "Merge On Win Article",
+      CONFLICT_PARAGRAPHS,
+    );
+    await seedRows(page, {
+      articles: [{ ...base, readerTitle: "Local Kept Title" }],
+    });
+
+    // Incoming: SAME id at revision 2 with refreshed content — the article-
+    // revision conflict, NOT a metadata conflict (else-if exclusivity), so
+    // the override protection must come from merge-on-win.
+    const refreshed = {
+      ...base,
+      revision: 2,
+      provenance: {
+        ...base.provenance,
+        originalHtmlHash: `sha256:${"3".repeat(64)}`,
+      },
+    };
+    const bundleBuffer = await buildBundleZip({
+      schemaVersion: 3,
+      exportedAt: "2026-08-20T00:00:00.000Z",
+      appVersion: "test",
+      articles: [refreshed],
+      locations: [],
+      highlights: [],
+      notes: [],
+      preferences: { ...DEFAULT_SETTINGS },
+      fixtureIds: [],
+    });
+
+    const panel = await openSettings(page);
+    await panel.locator('input[type="file"][accept=".zip"]').setInputFiles({
+      name: "revision-refresh-bundle.zip",
+      mimeType: "application/zip",
+      buffer: bundleBuffer,
+    });
+
+    const preview = page.locator("dialog.import-preview");
+    await expect(preview).toBeVisible({ timeout: 15_000 });
+    await expect(preview).toContainText(
+      "1 conflicting article with a different version",
+    );
+
+    // Overwrite the version conflict; metadata stays keep-mine (no
+    // take-incoming choice — the reader keeps their name).
+    await preview
+      .getByRole("combobox", { name: "Import choice for articles with a different version" })
+      .selectOption("overwrite");
+    await preview.getByRole("button", { name: "Import", exact: true }).click();
+    await expect(settingsStatus(page)).toContainText(
+      "Imported 1 article, 0 highlights, 0 notes, and 0 reading positions.",
+      { timeout: 15_000 },
+    );
+
+    // Row truth: the NEW revision + NEW content hash landed, and the LOCAL
+    // title override survived the refresh — a refresh never renames the
+    // library back (D17-10).
+    const row = await readRow(page, "articles", "md-metamerge01");
+    expect(row?.revision).toBe(2);
+    const provenance = (row?.provenance ?? {}) as { originalHtmlHash?: string };
+    expect(provenance.originalHtmlHash).toBe(`sha256:${"3".repeat(64)}`);
+    expect(row?.readerTitle).toBe("Local Kept Title");
+  });
+
+  test("cascade: removing an overridden article removes its override with it — no residue (D17-13)", async ({
+    page,
+  }) => {
+    await prepareFreshPage(page);
+
+    const base = metadataConflictBase(
+      "md-metacascade1",
+      "Cascade Removal Article",
+      CONFLICT_PARAGRAPHS,
+    );
+    await seedRows(page, {
+      articles: [{ ...base, readerTitle: "Doomed Renamed Title" }],
+    });
+
+    // The row renders under the effective name; remove it through the real
+    // library Remove flow (row trash → RemoveConfirm → Remove article).
+    await page.goto(`${BASE}/#/`);
+    await page.reload();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Saved articles" }),
+    ).toBeVisible({ timeout: 10_000 });
+    const row = page
+      .locator(".library-list > li")
+      .filter({ hasText: "Doomed Renamed Title" });
+    await expect(row).toBeVisible();
+    await row.locator(".library-row-remove").click();
+    const confirm = page.locator("dialog.library-remove-confirm");
+    await expect(confirm).toBeVisible();
+    await confirm.locator(".library-remove-destructive").click();
+    await expect(confirm).not.toBeVisible();
+
+    // Row truth: the articles row is GONE — the override lived ON the row,
+    // so the atomic row deletion IS the cascade (no residue, no orphan
+    // window, nothing left to sweep).
+    expect(await readRow(page, "articles", "md-metacascade1")).toBeNull();
+    expect(await countRows(page, "articles")).toBe(0);
   });
 });

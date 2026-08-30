@@ -164,9 +164,10 @@ test("SC#4 — export on machine A re-imports on machine B with offsets intact",
     // Both required entries exist.
     expect(entries["manifest.json"]).toBeDefined();
 
-    // Versioned envelope (PORT-01) — writers emit v2 since Phase 12 (12-07),
-    // always carrying the books field (empty on a book-free library).
-    expect(bundleJson.schemaVersion).toBe(2);
+    // Versioned envelope (PORT-01) — writers emit v3 since Phase 17 (17-04,
+    // the 12-07 version-bump assertion-update precedent), always carrying
+    // the books field (empty on a book-free library).
+    expect(bundleJson.schemaVersion).toBe(3);
     expect(bundleJson.books).toEqual([]);
 
     // Both articles ride; the fixture does NOT (fixtures are bundled code —
@@ -360,9 +361,11 @@ test("SC#4 books — a book travels machines with its chapters + highlight intac
     const bundlePathA = await downloadA.path();
     expect(bundlePathA, "download must be persisted to disk").toBeTruthy();
 
-    // ── Node-side bundle inspection: books ride v2 ────────────────────────
+    // ── Node-side bundle inspection: books ride v3 ────────────────────────
+    // (writers emit 3 since Phase 17 — 17-04; the same version-bump
+    // assertion-update precedent as the base flow's envelope check above.)
     const { bundle: bundleA } = readBundleJson(bundlePathA!);
-    expect(bundleA.schemaVersion).toBe(2);
+    expect(bundleA.schemaVersion).toBe(3);
     const booksA = bundleA.books as Array<Record<string, unknown>>;
     expect(booksA).toHaveLength(1);
     expect(booksA[0]?.title).toBe("The Synthetic Book");
@@ -575,5 +578,183 @@ test("SC#4 v1-compat — a v1 bundle (no books) imports exactly as before with z
     expect(await countRows(page, "books")).toBe(0);
   } finally {
     await machine.close();
+  }
+});
+
+// ── Phase 17 (17-05 Task 2): the OVERRIDE round trip inside a v3 bundle ───────
+//
+// Machine A edits an article's title + author through the REAL edit dialog
+// (the single override write path), exports, and machine B imports: the
+// bundle's bundle.json carries schemaVersion 3 with the article's
+// readerTitle/readerAuthor riding the article record (D17-12), and B's raw
+// IndexedDB row equals A's override values byte-for-byte with the library
+// row showing the one effective name (META-04 round-trip). A second article
+// WITHOUT overrides round-trips unchanged — neither override key ever
+// appears on its exported record or its imported row (the regression cell).
+
+/** The article machine A renames. Carries ingestionMeta so the library row
+ * renders the edit affordance (the 17-02 ingestionMeta gate). */
+const OVERRIDE_RT_ARTICLE = {
+  ...makeArticle({
+    id: "paste-rt17meta01",
+    title: "Round Trip Override Article",
+    author: "Original RT Author",
+    paragraphs: [
+      "The first paragraph of the override round trip article. Machine A renames this piece through the edit dialog and the reader-owned name must travel to machine B inside the versioned bundle without a single byte of drift.",
+      "The second paragraph provides unique material so no anchored passage can ever collide with another article in the normalized stream during any future resolution pass.",
+      "The third paragraph closes the corpus with the reminder that overrides ride the article record itself — there is no separate override block in the bundle.",
+    ],
+  }),
+  ingestionMeta: {
+    source: "paste",
+    origin: "paste",
+    originalHtmlHash: `sha256:${"2".repeat(64)}`,
+    extractionConfidence: "high",
+    extractionWarnings: [],
+  },
+};
+
+/** The article NOBODY renames — the no-override regression companion. */
+const PLAIN_RT_ARTICLE = makeArticle({
+  id: "md-rt17plain02",
+  title: "Round Trip Plain Article",
+  sourceUrl: "https://example.org/rt-plain",
+  author: "Plain RT Author",
+  paragraphs: [
+    "The first paragraph of the plain round trip companion. It is never renamed; its exported record must carry neither override key and its imported row must stay override-free.",
+    "A second paragraph supplies the unique material every seeded article carries so resolution machinery never confuses passages across articles.",
+  ],
+});
+
+const A_RENAMED_TITLE = "Machine A Renamed Title";
+const A_RENAMED_AUTHOR = "Machine A Author";
+
+test("SC#4 overrides — an edited title/author travels machines byte-equal inside a v3 bundle", async ({
+  browser,
+}) => {
+  const machineA = await browser.newContext();
+  const machineB = await browser.newContext();
+  try {
+    // ── Machine A: seed, then rename through the REAL edit dialog ──────────
+    const pageA = await machineA.newPage();
+    await prepareFreshPage(pageA);
+    await seedRows(pageA, {
+      articles: [OVERRIDE_RT_ARTICLE, PLAIN_RT_ARTICLE],
+    });
+    // LibraryView loads once per mount (08-05) — reload so the seeded rows
+    // render before the dialog drive.
+    await pageA.goto(`${BASE}/#/`);
+    await pageA.reload();
+    await expect(
+      pageA.getByRole("heading", { level: 1, name: "Saved articles" }),
+    ).toBeVisible({ timeout: 10_000 });
+    await expect(
+      pageA.locator(`#title-${OVERRIDE_RT_ARTICLE.id}`),
+    ).toHaveText("Round Trip Override Article");
+
+    const editRow = pageA
+      .locator(".library-list > li")
+      .filter({ hasText: "Round Trip Override Article" });
+    await editRow.locator(".library-row-edit").click();
+    const editDialog = pageA.locator("dialog.edit-metadata");
+    await expect(editDialog).toBeVisible();
+    await editDialog.getByRole("textbox", { name: /^Title$/ }).fill(A_RENAMED_TITLE);
+    await editDialog.getByRole("textbox", { name: /^Author$/ }).fill(A_RENAMED_AUTHOR);
+    await editDialog.getByRole("button", { name: "Save" }).click();
+    await expect(editDialog).not.toBeVisible();
+    // The row immediately re-derives on save (the 17-02 refreshKey).
+    await expect(pageA.locator(`#title-${OVERRIDE_RT_ARTICLE.id}`)).toHaveText(
+      A_RENAMED_TITLE,
+    );
+
+    // ── Machine A: export through the real UI ──────────────────────────────
+    const panelA = await openSettings(pageA);
+    await expect(panelA.getByRole("button", { name: "Export library bundle" })).toBeEnabled();
+    const downloadPromise = pageA.waitForEvent("download", { timeout: 20_000 });
+    await panelA.getByRole("button", { name: "Export library bundle" }).click();
+    const download = await downloadPromise;
+    const bundlePath = await download.path();
+    expect(bundlePath, "download must be persisted to disk").toBeTruthy();
+
+    // ── Node-side bundle inspection: the overrides ride the v3 record ──────
+    const { bundle: bundleJson } = readBundleJson(bundlePath!);
+    expect(bundleJson.schemaVersion).toBe(3);
+    const exportedArticles = bundleJson.articles as Array<Record<string, unknown>>;
+    expect(exportedArticles.map((a) => a.id).sort()).toEqual(
+      [OVERRIDE_RT_ARTICLE.id, PLAIN_RT_ARTICLE.id].sort(),
+    );
+    const overrideExported = exportedArticles.find(
+      (a) => a.id === OVERRIDE_RT_ARTICLE.id,
+    );
+    expect(overrideExported?.readerTitle).toBe(A_RENAMED_TITLE);
+    expect(overrideExported?.readerAuthor).toBe(A_RENAMED_AUTHOR);
+    // The no-override companion carries NEITHER key (regression cell).
+    const plainExported = exportedArticles.find(
+      (a) => a.id === PLAIN_RT_ARTICLE.id,
+    );
+    expect(
+      Object.prototype.hasOwnProperty.call(plainExported, "readerTitle"),
+      "plain article must export without a readerTitle key",
+    ).toBe(false);
+    expect(
+      Object.prototype.hasOwnProperty.call(plainExported, "readerAuthor"),
+      "plain article must export without a readerAuthor key",
+    ).toBe(false);
+
+    // ── Machine B: import through the real UI ──────────────────────────────
+    const pageB = await machineB.newPage();
+    await prepareFreshPage(pageB);
+    const panelB = await openSettings(pageB);
+    await panelB.locator('input[type="file"][accept=".zip"]').setInputFiles(bundlePath!);
+
+    const preview = pageB.locator("dialog.import-preview");
+    await expect(preview).toBeVisible({ timeout: 15_000 });
+    await expect(preview).toContainText(
+      "This bundle contains 2 articles, 0 highlights, 0 notes, and 0 reading positions.",
+    );
+    await preview.getByRole("button", { name: "Import", exact: true }).click();
+    await expect(settingsStatus(pageB)).toContainText(
+      "Imported 2 articles, 0 highlights, 0 notes, and 0 reading positions.",
+      { timeout: 15_000 },
+    );
+
+    // ── Machine B: raw IndexedDB truth — byte-equal override carriage ──────
+    const bOverrideRow = await readRow(pageB, "articles", OVERRIDE_RT_ARTICLE.id);
+    expect(bOverrideRow, "the renamed article must land on machine B").not.toBeNull();
+    expect(bOverrideRow!.readerTitle).toBe(A_RENAMED_TITLE);
+    expect(bOverrideRow!.readerAuthor).toBe(A_RENAMED_AUTHOR);
+    // The canonical provenance stays canonical underneath (META-01 layering).
+    const bProvenance = (bOverrideRow!.provenance ?? {}) as {
+      title?: string;
+      author?: string;
+    };
+    expect(bProvenance.title).toBe("Round Trip Override Article");
+    expect(bProvenance.author).toBe("Original RT Author");
+    // The plain companion imported with NO override keys.
+    const bPlainRow = await readRow(pageB, "articles", PLAIN_RT_ARTICLE.id);
+    expect(bPlainRow).not.toBeNull();
+    expect(
+      Object.prototype.hasOwnProperty.call(bPlainRow, "readerTitle"),
+    ).toBe(false);
+    expect(
+      Object.prototype.hasOwnProperty.call(bPlainRow, "readerAuthor"),
+    ).toBe(false);
+
+    // ── Machine B: the library row shows the one effective name ────────────
+    await pageB.keyboard.press("Escape"); // close the settings panel
+    await expect(panelB).not.toBeVisible();
+    await pageB.reload(); // LibraryView loads once per mount (08-05)
+    await expect(
+      pageB.getByRole("heading", { level: 1, name: "Saved articles" }),
+    ).toBeVisible({ timeout: 10_000 });
+    await expect(pageB.locator(`#title-${OVERRIDE_RT_ARTICLE.id}`)).toHaveText(
+      A_RENAMED_TITLE,
+    );
+    await expect(pageB.locator(`#title-${PLAIN_RT_ARTICLE.id}`)).toHaveText(
+      "Round Trip Plain Article",
+    );
+  } finally {
+    await machineA.close();
+    await machineB.close();
   }
 });
