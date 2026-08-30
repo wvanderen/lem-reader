@@ -191,8 +191,26 @@ Plans:
   4. Reader can review, edit, export, and delete it atomically without leftover fragments or guessed attachment.
   5. Unsupported boundaries are rejected or narrowed with an explicit explanation from the supported-content matrix.
 
-**Plans**: TBD
+**Plans**: 5 plans
 **UI hint**: yes
+
+Plans:
+**Wave 1**
+
+- [ ] 19-01-PLAN.md — span capture core: endpoint-composed global ranges, reason taxonomy retirement/addition, Pitfall 1 figure-caption fix, moved e2e success cell (ANNO-08, ANNO-12)
+- [ ] 19-02-PLAN.md — first-fragment excerpt helper adopted at all quote.exact surfaces + multi-line Markdown export with per-line escaping (ANNO-10, ANNO-11)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 19-03-PLAN.md — scrolling render coverage: list per-item threading (D19-13/15), caption + code marks, first-slice-only DOM id, nested-list fixture (ANNO-09, ANNO-12)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 19-04-PLAN.md — paginated twin: entry-local list threading + per-page first-occurrence id pass + multi-page span cells (ANNO-09, ANNO-10)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 19-05-PLAN.md — eligibility-matrix e2e (kind × crossing × gap + refusals), durability/atomicity span cells, honest full-suite gate (ANNO-08, ANNO-10, ANNO-11, ANNO-12)
 
 ### Phase 20: Safe Local Image Fidelity
 
@@ -236,7 +254,7 @@ Plans:
 | 15. Application Shell and Destinations | v2.1 | 4/4 | Complete    | 2026-08-26 |
 | 16. Organized Library and Focused Add Flow | v2.1 | 4/4 | Complete    | 2026-08-29 |
 | 17. Reader-Owned Metadata | v2.1 | 5/5 | Complete    | 2026-08-30 |
-| 18. Reader Orientation | v2.1 | 4/4 | Complete   | 2026-08-30 |
+| 18. Reader Orientation | v2.1 | 4/4 | Complete    | 2026-08-30 |
 | 19. Cross-Block Highlights | v2.1 | 0/TBD | Not started | - |
 | 20. Safe Local Image Fidelity | v2.1 | 0/TBD | Not started | - |
 | 21. Integrated Refinement and Acceptance | v2.1 | 0/TBD | Not started | - |
