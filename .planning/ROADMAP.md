@@ -191,7 +191,7 @@ Plans:
   4. Reader can review, edit, export, and delete it atomically without leftover fragments or guessed attachment.
   5. Unsupported boundaries are rejected or narrowed with an explicit explanation from the supported-content matrix.
 
-**Plans**: 2/5 plans executed
+**Plans**: 3/5 plans executed
 **UI hint**: yes
 
 Plans:
@@ -202,7 +202,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 19-03-PLAN.md — scrolling render coverage: list per-item threading (D19-13/15), caption + code marks, first-slice-only DOM id, nested-list fixture (ANNO-09, ANNO-12)
+- [x] 19-03-PLAN.md — scrolling render coverage: list per-item threading (D19-13/15), caption + code marks, first-slice-only DOM id, nested-list fixture (ANNO-09, ANNO-12)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -255,6 +255,6 @@ Plans:
 | 16. Organized Library and Focused Add Flow | v2.1 | 4/4 | Complete    | 2026-08-29 |
 | 17. Reader-Owned Metadata | v2.1 | 5/5 | Complete    | 2026-08-30 |
 | 18. Reader Orientation | v2.1 | 4/4 | Complete    | 2026-08-30 |
-| 19. Cross-Block Highlights | v2.1 | 2/5 | In Progress|  |
+| 19. Cross-Block Highlights | v2.1 | 3/5 | In Progress|  |
 | 20. Safe Local Image Fidelity | v2.1 | 0/TBD | Not started | - |
 | 21. Integrated Refinement and Acceptance | v2.1 | 0/TBD | Not started | - |
