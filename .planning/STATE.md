@@ -5,15 +5,15 @@ milestone_name: Reader Experience
 current_phase: 19
 current_phase_name: Cross-Block Highlights
 status: executing
-stopped_at: Phase 19 UI-SPEC approved
-last_updated: "2026-08-30T22:55:23.901Z"
+stopped_at: Completed 19-01-PLAN.md
+last_updated: "2026-08-30T23:22:59.638Z"
 last_activity: 2026-08-30
-last_activity_desc: Phase 18 complete, transitioned to Phase 19
+last_activity_desc: Phase 19 execution started
 progress:
   total_phases: 8
   completed_phases: 5
-  total_plans: 21
-  completed_plans: 21
+  total_plans: 26
+  completed_plans: 22
   percent: 63
 ---
 
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-08-30)
 
 ## Current Position
 
-Phase: 19 — Cross-Block Highlights
-Plan: Not started
+Phase: 19 (Cross-Block Highlights) — EXECUTING
+Plan: 2 of 5
 Status: Ready to execute
-Last activity: 2026-08-30 — Phase 18 complete, transitioned to Phase 19
+Last activity: 2026-08-30 — Phase 19 execution started
 
 ## Recent Decisions (Phase 18)
 
@@ -178,6 +178,7 @@ Last activity: 2026-08-30 — Phase 18 complete, transitioned to Phase 19
 | Phase 18 P02 | 24min | 3 tasks | 8 files |
 | Phase 18 P03 | 22min | 3 tasks | 11 files |
 | Phase 18 P04 | 104min | 3 tasks | 7 files |
+| Phase 19 P01 | 13 min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -422,6 +423,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: [Phase 18-04] useSectionSpy paginated mode (Rule 2): the scroll-past-sentinel rule is scrolling geometry — on the pinned paginated surface the current heading is the FIRST connected heading on the visible fragment (childList MutationObserver catches swaps; page turns fire no scroll). Scrolling branch byte-identical; announcer untouched (section-announce 12/12 zero diff).
 - [Phase ?]: [Phase 18-04] Top-layer focus divergence (probed): Tab from inside the popover=manual TOC panel flows into the page on chromium, leaves to body on webkit, and scopes within the popover on firefox — Esc-close + focus-restore is the universal keyboard escape; specs assert the honest per-engine shapes. WebKit also skips clipped targets in sequential nav (staged collapse uses the back-nav programmatic-focusability precedent).
 - [Phase ?]: [Phase 18-04] Honest gate: five recorded invocations — runs 1-4 at default workers exited 1 with rotating isolation-green webkit-only sets under machine load ~11/10 CPUs (plus one real D4-10 settle fix, b3fce75); the green gate ran the FULL matrix with --workers=4 as the documented contention control (unit 1373/0/13 + e2e 1431/0/10, exit 0).
+- [Phase 19]: D19 Plan 19-01: captureSelection is ENDPOINT-COMPOSED — the global range derives from the two endpoints alone (findBlockAncestor → index → eligibility → caption/slice window → point map); no intermediate-block DOM walk; single-block is the degenerate same-code case. The D5-08 measurement-body defense now checks BOTH Range endpoints (the retired element-equality gate caught visible→hidden pairs incidentally); cross-page refusal preserved — ANNO-13 stays Future. — Endpoint-only composition is the D19 span contract (19-RESEARCH Pattern 1); the both-endpoint measurement-body check is compile- and e2e-verified (cross-page test byte-stable, green on 3 engines). Reason union changes are compile-atomic across the capture.ts → HighlightOverlay → SelectionToolbar chain (TS2367 enforces the one-commit key_link).
+- [Phase 19]: D19 Plan 19-01: figure captionLocalStart alignment fixes Pitfall 1 — caption endpoints store true article-global offsets (alt graphemes + BLOCK_SEPARATOR when alt non-empty; 0 via the filter(Boolean) join when empty), layered additively with the D5-08 sliceStart window (figures are pagination-atomic so the windows never overlap). empty-span is REACHABLE, not just defensive: a whitespace-only non-collapsed selection composes start === end. ANNO-12 stays open until 19-05's eligibility matrix (04-02 PAGE-01 split precedent); ANNO-08 closes at 19-01. — The alt-divergence silently corrupted caption capture offsets (stored highlights addressed the wrong passage); unit cells c1/c2 prove the corrected global offsets. The requirements split follows the repo's established foundation-vs-proof precedent.
 
 ### Pending Todos
 
@@ -477,9 +480,9 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-30T22:35:34.695Z
-Stopped at: Phase 19 UI-SPEC approved
-Resume file: .planning/phases/19-cross-block-highlights/19-UI-SPEC.md
+Last session: 2026-08-30T23:22:36.160Z
+Stopped at: Completed 19-01-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 
