@@ -59,7 +59,11 @@ const heading = (level: number, text: string) => ({
 });
 
 /** The default mount: a well-formed article, articleEl null (no spy), panel
- *  open state irrelevant to structure (the panel div always renders). */
+ *  VISIBLE for role queries — jsdom 30 applies the UA popover rule
+ *  ([popover] → display:none when not open) but does NOT implement
+ *  showPopover/hidePopover, so the suite lifts the surface with an inline
+ *  display override (inline beats UA in the cascade; test-only — the real
+ *  open/close lifecycle is the parent seam + Playwright, Plan 18-04). */
 function mountPanel(
   article: CanonicalArticle,
   overrides: Partial<Parameters<typeof TocPanel>[0]> = {},
@@ -74,6 +78,8 @@ function mountPanel(
       {...overrides}
     />,
   );
+  const panel = utils.container.querySelector(".toc-panel") as HTMLElement;
+  if (panel) panel.style.display = "block";
   return { onActivate, ...utils };
 }
 
@@ -139,20 +145,21 @@ describe("TocPanel: skipped-level nesting (D18-10)", () => {
     mountPanel(article);
     const outerLi = screen.getByRole("link", { name: "Outer" }).closest("li");
     expect(outerLi).not.toBeNull();
-    // The h2's li opens exactly ONE child ul — the depth-2 container.
+    // The h2's li opens exactly ONE child ul (the skip adds depth, never
+    // invented intermediate entries — D18-10)…
     const nested = outerLi!.querySelector(":scope > ul");
     expect(nested).not.toBeNull();
-    expect(nested!.getAttribute("data-depth")).toBe("2");
-    // …whose direct li children are exactly the h5 entry — no invented
-    // intermediate li entries (D18-10).
+    // …whose direct li children are exactly the h5 entry — no intermediates.
     const nestedLis = nested!.querySelectorAll(":scope > li");
     expect(nestedLis).toHaveLength(1);
     expect(nestedLis[0]!.textContent).toContain("Skipped deep heading");
-    // A direct h3 child nests at data-depth 1 (shallower than the skip).
-    const directLi = screen
+    // The h5's li carries its true depth (2 — the indent hook): visibly
+    // deeper than a direct h3 child (depth 1) would sit.
+    const deepLi = screen
       .getByRole("link", { name: "Skipped deep heading" })
       .closest("li");
-    expect(directLi!.closest('ul[data-depth="2"]')).toBe(nested);
+    expect(deepLi!.getAttribute("data-depth")).toBe("2");
+    expect(deepLi!.closest("ul")).toBe(nested);
   });
 });
 
@@ -291,8 +298,7 @@ describe("TocPanel: Escape routing", () => {
     const keyEvent = fireEvent.keyDown(panel, { key: "Escape" });
     expect(keyEvent).toBe(false);
     expect(hidePopover).toHaveBeenCalledTimes(1);
-  });
-});
+  });});
 
 afterEach(() => {
   document.body.innerHTML = "";

@@ -3754,3 +3754,147 @@ dialog.book-remove-confirm::backdrop {
  * measured value the engine receives as page 1's content budget — so no
  * CSS rule is needed for the reserve. Pages 2+ and every legacy caller
  * keep the full .page-fragment { height: 100% } rule, byte-unchanged. */
+
+/* ════════════════════════════════════════════════════════════════════════
+ * Phase 18 Plan 18-02 — TOC panel + trigger styles (ORNT-01/04/05)
+ *
+ * Placed at FILE END (the L3715-3717 cascade lesson: an earlier
+ * same-specificity rule loses to the base declarations above). Every
+ * selector consumes EXISTING custom properties only — zero new tokens
+ * (POLISH-07). Zero transition/animation/scroll-behavior properties
+ * anywhere in this block: panel open/close is an instant state change
+ * (A11Y-06; UI-SPEC rule 15 — the UA popover layer hides the closed panel
+ * via display:none, which comes free and is never hand-rolled).
+ * ════════════════════════════════════════════════════════════════════════ */
+
+/* .toc-panel — the non-modal popover="manual" TOC surface (the FIRST
+ * non-dialog overlay — D18-01). Fixed rail geometry mirrors .tag-popover:
+ * anchored under the 48px header on the inline end. The panel OWNS its
+ * scrolling (overflow-y: auto); it is a pure overlay — never resizes the
+ * article column (Pitfall 7: no ResizeObserver-triggered repagination). */
+.toc-panel {
+  position: fixed;
+  top: calc(48px + var(--space-xs));
+  inset-inline-end: var(--space-md);
+  width: min(320px, calc(100vw - 2 * var(--space-md)));
+  max-height: calc(100dvh - 48px - 2 * var(--space-xs));
+  overflow-y: auto;
+  margin: 0;
+  padding: var(--space-lg) var(--space-md);
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  font-family: var(--font-ui);
+  color: var(--ink);
+}
+/* ≤639px full-width sheet (the sub-640 family — one shell, one rule). Still
+ * non-inert: the page behind stays keyboard-escapable (D18-04); the
+ * parent's width-scoped outside-pointerdown policy owns dismissal. */
+@media (max-width: 639px) {
+  .toc-panel {
+    inset-inline: 0;
+  }
+}
+
+/* Panel title — the 16px status-h2 chrome register (UI-SPEC §Typography). */
+.toc-title {
+  margin: 0;
+  margin-block-end: var(--space-md);
+  font-family: var(--font-ui);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+/* The nested entry list. Entries are real <a> links riding the global a
+ * rule (accent + underline — no color override); each row is a 44px
+ * --touch target (A11Y-07, including at 320px) and WRAPS naturally — never
+ * ellipsis/line-clamp (hidden destination text would be silent garbage). */
+.toc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.toc-list a {
+  display: flex;
+  align-items: center;
+  min-height: var(--touch);
+  padding-inline: var(--space-xs);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+/* Per-depth indent: each li carries its entry's depth (data-depth) and the
+ * entry link's inline-start padding scales by it — a skipped level (h2→h5,
+ * depth 2) nests visibly deeper than a direct child (h3, depth 1) with NO
+ * invented intermediate entries (D18-10); mixed-depth siblings under one
+ * parent each keep their exact depth. */
+.toc-list li[data-depth="1"] > a {
+  padding-inline-start: var(--space-md);
+}
+.toc-list li[data-depth="2"] > a {
+  padding-inline-start: calc(2 * var(--space-md));
+}
+.toc-list li[data-depth="3"] > a {
+  padding-inline-start: calc(3 * var(--space-md));
+}
+.toc-list li[data-depth="4"] > a {
+  padding-inline-start: calc(4 * var(--space-md));
+}
+/* The current entry: weight 600 + 2px stroke — emphasis by weight and
+ * stroke, NEVER color alone (forced-colors safe; aria-current carries the
+ * semantic state — D18-12, the shipped shell-nav discipline). Token is
+ * "true", never "page". */
+.toc-list a[aria-current="true"] {
+  font-weight: 600;
+  text-decoration-thickness: 2px;
+}
+
+/* D18-13 headingless note — the honest empty state, Label register. */
+.toc-empty {
+  margin: 0;
+  margin-block-end: var(--space-md);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+/* .toc-trigger — the 5th article-scoped header button (D18-02). Mirrors
+ * .tags-trigger geometry EXACTLY: 44×44 hit area, transparent bg + 1px
+ * transparent border, 4px radius, --ink-soft rest, --accent on hover and
+ * ONLY when [aria-expanded="true"] (the quiet-chrome open-state
+ * discipline). NO aria-haspopup — the panel is not a dialog (Pitfall 3). */
+.toc-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--touch);
+  min-width: var(--touch);
+  padding: var(--space-sm);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.toc-trigger:hover {
+  color: var(--accent);
+}
+.toc-trigger[aria-expanded="true"] {
+  color: var(--accent);
+}
+.toc-trigger:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* .toc-destination — the jump destination heading/block element (the class
+ * is applied imperatively by ArticleView's handleTocJump alongside
+ * tabIndex=-1). Restates the global ring so the programmatic-focus landing
+ * always carries a visible focus cue (UI-SPEC rule 6 / §Auto-Resolved 15). */
+.toc-destination:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
