@@ -553,8 +553,12 @@ export function ArticleView({
   // useScrollSave must be called unconditionally (rules of hooks). It no-ops
   // while article is null (the hook early-returns its scroll listener when
   // article is null). The dual-flush listeners stay registered across the
-  // loading → ready transition.
-  useScrollSave(article, articleRef);
+  // loading → ready transition. Phase 18 Plan 18-03 (Pitfall 2 closure):
+  // the returned scheduler feeds paginated per-turn offsets
+  // (handleAnchorChange) through the SAME debounced save + dual flush —
+  // page turns fire no window scroll, so without this a pure-paginated
+  // reader never persists a location at all.
+  const scheduleLocationSave = useScrollSave(article, articleRef);
 
   // Phase 3 (PAGE-06 + PAGE-07): mount the staleness-safe measurement
   // pipeline. The hook no-ops during article loading (rules of hooks). The
@@ -585,6 +589,14 @@ export function ArticleView({
   // the persisted readingMode stays byte-unchanged (T-04-15).
   const effectiveMode = sessionModeOverride ?? settings.readingMode;
   const isPaginated = effectiveMode === "paginated";
+  // Phase 18 Plan 18-03: mode mirror for ASYNC-RESOLUTION-time reads. The
+  // restore effect's loadLocation promise resolves after the render that
+  // scheduled it — a closure capture would freeze the pre-hydration mode
+  // (cold loads hydrate settings asynchronously; a scrolling-preferring
+  // reader's article can settle while the default paginated value still
+  // stands). The ref read at resolution time always sees the current mode.
+  const isPaginatedRef = useRef(isPaginated);
+  isPaginatedRef.current = isPaginated;
 
   // Phase 4 Plan 04-04: imperative handle to the paginated surface. Drives
   // keyboard + swipe (PageTurnControls) and reads the current page's anchor
@@ -617,6 +629,14 @@ export function ArticleView({
     // Track the latest precise offset (only updated in paginated mode where
     // PaginatedSurface reports via onAnchorChange).
     lastPreciseAnchorRef.current = offset;
+    // Phase 18 Plan 18-03 (Pitfall 2 closure — D18-06/UI-SPEC §Auto-Resolved
+    // #8): persist the per-turn offset through the SHARED debounced save +
+    // dual-flush discipline in useScrollSave (SAVE_DEBOUNCE_MS 1200; the
+    // saveLocation call-site family stays singular there — never a direct
+    // call here). Latest-wins: the initial page-1 commit's offset-0 save is
+    // replaced by the restore turn's offset before the debounce fires, so a
+    // reopen-restore never overwrites the reader's saved location with 0.
+    scheduleLocationSave(offset);
     // Plan 12-06 (D12-05): mirror the committed page state (the handle reads
     // from refs, so by the time this effect-scoped callback runs the values
     // are post-commit) so the chapter nav's first/last-page gating reacts to
@@ -637,7 +657,10 @@ export function ArticleView({
       }
       return next;
     });
-  }, []);
+    // scheduleLocationSave is a stable useCallback (empty deps in
+    // useScrollSave) — listing it keeps the exhaustive-deps rule satisfied
+    // without changing this callback's identity.
+  }, [scheduleLocationSave]);
 
   // Phase 4 Plan 04-04 (D4-09 + D4-10): the mode-toggle handler. Captures the
   // anchor SYNCHRONOUSLY before calling update() so the post-swap render can
@@ -1608,6 +1631,49 @@ export function ArticleView({
           return;
         }
         const loc = result.location;
+        // Phase 18 Plan 18-03 (Pitfall 1 closure — D18-06/UI-SPEC
+        // §Auto-Resolved #8): the PAGINATED reopen-restore branch. The mode
+        // is read from isPaginatedRef at RESOLUTION time (never the stale
+        // closure — see the ref's declaration comment). The readiness gate
+        // reuses the deep-link effect's bounded rAF retry template VERBATIM
+        // in shape: wait for the first pagination commit
+        // (surfaceRef.getPages() non-empty) under RETRY_CAP_MS, then
+        // resolve the saved offset to its page via
+        // fragmentContainingOffset (anchor.ts — the D5-11 machinery in
+        // reverse) and surfaceRef.turnToPage(pageIdx). Failure degrades to
+        // the calm page-1 landing with NO marker claim (T-18-08 — honest
+        // absence, never an unbounded loop).
+        if (isPaginatedRef.current) {
+          const RETRY_CAP_MS = 5000; // the deep-link template's cap
+          const startedAt = performance.now();
+          const attemptPaginatedRestore = () => {
+            if (cancelled) return;
+            // The mode flipped mid-retry (settings hydration landed on
+            // scrolling, or the reader toggled): stop — the D4-10 mode-swap
+            // anchor already owns the passage, and a marker here would
+            // claim a restore that did not land this way.
+            if (!isPaginatedRef.current) return;
+            const surface = surfaceRef.current;
+            const pages = surface?.getPages() ?? null;
+            if (!surface || !pages || pages.length === 0) {
+              if (performance.now() - startedAt >= RETRY_CAP_MS) {
+                return; // bounded — never-committing surface degrades to page 1
+              }
+              requestAnimationFrame(attemptPaginatedRestore);
+              return;
+            }
+            const pageIdx = fragmentContainingOffset(
+              pages,
+              loc.graphemeOffset,
+              article,
+            );
+            surface.turnToPage(pageIdx);
+            setRestoredOffset(loc);
+            setShowResumeBanner(true);
+          };
+          requestAnimationFrame(attemptPaginatedRestore);
+          return;
+        }
         // Wait one animation frame so the article body is committed to the
         // DOM before we query block elements. The effect already runs after
         // React's commit, but the browser layout pass may not have positioned

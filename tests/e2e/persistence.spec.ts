@@ -55,13 +55,18 @@ async function expectDataTheme(page: import("@playwright/test").Page, expected: 
 /**
  * Seed the Dexie `settings` store with a reader-prefs record carrying
  * `readingMode: "scrolling"` so a SUBSEQUENT reload hydrates scrolling mode.
- * Plan 04-06 Task 5: the STATE-01 location-restore tests below were written
- * in Phase 2 (before readingMode existed) and assume the article opens in
- * scrolling mode — `window.scrollTo(0, 500)` only scrolls the scrolling
- * ArticleBody, not the overflow:hidden .paginated-surface (the default
- * since D4-12). Seeding scrolling mode explicitly tests the STATE-01
- * contract as written; the alternative (asserting location-restore in
- * paginated mode via page-index) is documented as option (b) deferred.
+ * Plan 04-06 Task 5: the scrolling location-restore tests below were written
+ * in Phase 2 (before readingMode existed) and assert scrollY — window
+ * .scrollTo only scrolls the scrolling ArticleBody, not the overflow:hidden
+ * .paginated-surface (the default since D4-12), so scrolling mode is seeded
+ * explicitly to test the scrolling contract as written.
+ *
+ * Plan 18-03 (D18-06/UI-SPEC §Auto-Resolved #8) RETIRED the former
+ * "option (b)" deferral recorded here: paginated reopen-restore now lands
+ * on the saved page (readiness-gated via fragmentContainingOffset →
+ * turnToPage) and page turns persist location — both proven by the
+ * paginated cells in the describe below (no page-index restore deferral
+ * remains).
  *
  * MUST run AFTER the IndexedDB wipe AND AFTER the app has loaded once on
  * the test page (so Dexie has declared its schema — a raw indexedDB.open
@@ -398,5 +403,168 @@ test.describe("STATE-01 location restore", () => {
       scrollY,
       `expected scrollY near 0 (no cross-article restore), got ${scrollY}`,
     ).toBeLessThan(100);
+  });
+});
+
+// ── STATE-01 paginated save/restore (Plan 18-03 — D18-06/UI-SPEC
+//    §Auto-Resolved #8; retires the former "option (b)" deferral) ──────────
+// Proves in a REAL browser that the two RESEARCH-verified paginated gaps
+// closed with existing machinery:
+//   1. RESTORE (Pitfall 1): a seeded LocationRecord opens the article on
+//      the page CONTAINING the saved offset (readiness-gated restore via
+//      fragmentContainingOffset → turnToPage) — not page 1.
+//   2. SAVES (Pitfall 2): page turns persist the location (debounced
+//      anchor-change save through useScrollSave's scheduler + dual flush);
+//      reload reopens on the last-turned page.
+// Default mode is paginated (D4-12) and the beforeEach wiped the settings
+// store, so NO scrolling seed is needed — these cells exercise the default.
+test.describe("STATE-01 paginated save/restore (Plan 18-03)", () => {
+  test.setTimeout(60_000);
+
+  /** Wait for the DEV-only pagination hook (published on the first
+   *  pagination commit; currentPageIdx is kept fresh on every turn). */
+  async function paginationReady(page: import("@playwright/test").Page) {
+    await page.waitForFunction(
+      () =>
+        (window as unknown as Record<string, unknown>).__lemPagination !==
+        undefined,
+      undefined,
+      { timeout: 10_000 },
+    );
+  }
+
+  /** Read {currentPageIdx, pagesLength} from the DEV pagination hook. */
+  async function paginationState(
+    page: import("@playwright/test").Page,
+  ): Promise<{ currentPageIdx: number; pagesLength: number }> {
+    return page.evaluate(() => {
+      const dev = (window as unknown as Record<string, unknown>)
+        .__lemPagination as {
+        currentPageIdx: number;
+        pagesLength: number;
+      };
+      return { currentPageIdx: dev.currentPageIdx, pagesLength: dev.pagesLength };
+    });
+  }
+
+  /** Seed a raw LocationRecord (the mobile-first-page-chrome shape). */
+  async function seedLocation(
+    page: import("@playwright/test").Page,
+    graphemeOffset: number,
+  ): Promise<void> {
+    await page.evaluate(async (offset) => {
+      await new Promise<void>((resolve, reject) => {
+        const request = indexedDB.open("lem-reader");
+        request.onsuccess = () => {
+          const database = request.result;
+          const transaction = database.transaction("location", "readwrite");
+          transaction.objectStore("location").put({
+            schemaVersion: 1,
+            articleId: "essay-long-form",
+            revision: 1,
+            graphemeOffset: offset,
+            savedAt: new Date().toISOString(),
+          });
+          transaction.oncomplete = () => resolve();
+          transaction.onerror = () => reject(transaction.error);
+        };
+        request.onerror = () => reject(request.error);
+      });
+    }, graphemeOffset);
+  }
+
+  test("a seeded location reopens the article on the page containing the saved offset (Pitfall 1)", async ({
+    page,
+  }) => {
+    // First open: read the article's grapheme length from the DEV hook so
+    // the seeded offset is deterministically DEEP (60% — never page 1 on a
+    // multi-page pagination).
+    await page.goto(`${BASE}/#/article/${FIRST_FIXTURE}`);
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await paginationReady(page);
+    const total = await page.evaluate(() => {
+      const dev = (window as unknown as Record<string, unknown>)
+        .__lemPagination as { articleGraphemeLength: number };
+      return dev.articleGraphemeLength;
+    });
+    expect(total).toBeGreaterThan(0);
+    const deepOffset = Math.floor(total * 0.6);
+
+    // Seed the saved location, then reopen — the readiness-gated paginated
+    // restore must land on the page CONTAINING the offset (page index > 0;
+    // the initial pagination pass always anchors page 0, so any index > 0
+    // proves the restore turn happened). D18-06/UI-SPEC-#8 citation: this
+    // cell replaces the retired "option (b) deferral" assertion.
+    await seedLocation(page, deepOffset);
+    await page.reload();
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await paginationReady(page);
+    await page.waitForFunction(
+      () => {
+        const dev = (window as unknown as Record<string, unknown>)
+          .__lemPagination as { currentPageIdx: number; pagesLength: number };
+        return dev.pagesLength >= 2 && dev.currentPageIdx >= 1;
+      },
+      undefined,
+      { timeout: 10_000 },
+    );
+    const state = await paginationState(page);
+    expect(state.pagesLength, "expected a multi-page pagination").toBeGreaterThanOrEqual(2);
+    expect(
+      state.currentPageIdx,
+      "expected the restore to land past page 1 (saved offset is deep)",
+    ).toBeGreaterThanOrEqual(1);
+  });
+
+  test("page turns persist the location; reload reopens on the last-turned page (Pitfall 2)", async ({
+    page,
+  }) => {
+    await page.goto(`${BASE}/#/article/${FIRST_FIXTURE}`);
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await paginationReady(page);
+    await page.waitForFunction(
+      () => {
+        const dev = (window as unknown as Record<string, unknown>)
+          .__lemPagination as { currentPageIdx: number; pagesLength: number };
+        return dev.pagesLength >= 3;
+      },
+      undefined,
+      { timeout: 10_000 },
+    );
+    const before = await paginationState(page);
+    expect(before.currentPageIdx).toBe(0);
+
+    // Turn two pages via the keyboard bundle (PageTurnControls — window
+    // keydown). Each turn fires onAnchorChange → the debounced save
+    // scheduler (SAVE_DEBOUNCE_MS 1200).
+    await page.keyboard.press("PageDown");
+    await page.waitForTimeout(150);
+    await page.keyboard.press("PageDown");
+    await page.waitForTimeout(150);
+    const turned = await paginationState(page);
+    expect(turned.currentPageIdx, "expected two turns to move the page").toBe(2);
+
+    // Wait out the ~1200ms debounce so the save lands in Dexie.
+    await page.waitForTimeout(1400);
+
+    // Reload — the paginated reopen-restore must land on the LAST-TURNED
+    // page (the saved offset is that page's start; the same pagination
+    // geometry rederives the same boundaries). D18-06/UI-SPEC-#8 citation:
+    // pure-paginated readers previously persisted NOTHING (no window scroll
+    // on turns) — this cell proves the save-on-turn closure.
+    await page.reload();
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await paginationReady(page);
+    await page.waitForFunction(
+      () => {
+        const dev = (window as unknown as Record<string, unknown>)
+          .__lemPagination as { currentPageIdx: number };
+        return dev.currentPageIdx === 2;
+      },
+      undefined,
+      { timeout: 10_000 },
+    );
+    const reopened = await paginationState(page);
+    expect(reopened.currentPageIdx).toBe(2);
   });
 });

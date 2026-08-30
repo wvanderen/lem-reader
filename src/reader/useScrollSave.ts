@@ -21,9 +21,9 @@
 // inverse of findScrollTarget and reuses the SAME per-block rules via
 // normalizeElText so the saved offset round-trips with the restored target.
 //
-// Side-effect hook — returns nothing. Mounted by ArticleView with the
-// rendered <article> element.
-import { useEffect, useRef } from "react";
+// Side-effect hook — returns a stable external-save scheduler (below).
+// Mounted by ArticleView with the rendered <article> element.
+import { useCallback, useEffect, useRef } from "react";
 import type { CanonicalArticle } from "../content/types";
 import type { LocationRecord } from "../content/schema";
 import { computeTopVisibleOffset } from "./restoreLocation";
@@ -32,6 +32,19 @@ import { classifyStorageError } from "../persistence/errors";
 
 /** Debounce window for location writes (02-RESEARCH Open Question #2). */
 const SAVE_DEBOUNCE_MS = 1200;
+
+/**
+ * Phase 18 Plan 18-03 (Pitfall 2 closure — D18-06/UI-SPEC §Auto-Resolved
+ * #8): the external offset-source scheduler this hook now RETURNS. The
+ * paginated path (ArticleView's handleAnchorChange, fed per page turn by
+ * PaginatedSurface's onAnchorChange) shares the scroll path's discipline
+ * EXACTLY — same SAVE_DEBOUNCE_MS debounce, same pendingRef stash, same
+ * visibilitychange-hidden + pagehide dual flush, same LocationRecord shape
+ * {schemaVersion, articleId, revision, graphemeOffset, savedAt}. The
+ * saveLocation call-site FAMILY stays singular (this file — rg saveLocation
+ * src/ shows calls only here); no Dexie schema/version change (Pitfall 9).
+ */
+export type ScheduleLocationSave = (graphemeOffset: number) => void;
 
 /**
  * Approximate header height in CSS pixels — used to identify the "topmost
@@ -53,7 +66,13 @@ interface UseScrollSaveOptions {
 /**
  * useScrollSave(article, articleElRef, options?) — schedules a debounced
  * location save on every scroll and flushes pending on
- * visibilitychange-hidden + pagehide.
+ * visibilitychange-hidden + pagehide. Returns a stable
+ * `scheduleLocationSave(graphemeOffset)` scheduler so the paginated path
+ * (page turns, which fire NO window scroll — the 18-03 Pitfall 2 gap) can
+ * feed precise per-turn offsets through the SAME debounced save + dual
+ * flush. Latest-wins semantics: a scheduled save replaces any pending one
+ * (the debounce timer resets), so an initial page-1 commit followed by a
+ * restore turn persists only the restored offset.
  *
  * @param article The canonical article (id + revision + lang Drive the key
  *   and the Intl.Segmenter locale; the saved offset is into
@@ -68,7 +87,7 @@ export function useScrollSave(
   article: CanonicalArticle | null,
   articleElRef: React.RefObject<HTMLElement | null>,
   options?: UseScrollSaveOptions,
-): void {
+): ScheduleLocationSave {
   // Stash the latest options + article in refs so the listener closures stay
   // stable across re-renders without re-registering (mirrors the pendingRef
   // pattern in SettingsContext). The article ref lets computeOffset read the
@@ -132,22 +151,39 @@ export function useScrollSave(
     }, SAVE_DEBOUNCE_MS);
   }
 
+  /**
+   * Phase 18 Plan 18-03 (Pitfall 2 closure): schedule a save for an
+   * externally-computed offset (the paginated per-turn anchor). Stable
+   * identity across renders (empty deps — the captured scheduleSave only
+   * touches refs, so the first-render closure stays correct forever, the
+   * same discipline as the listeners below). No-ops while the article is
+   * null (loading state).
+   */
+  const scheduleSaveAtOffset = useCallback<ScheduleLocationSave>(
+    (graphemeOffset: number) => {
+      const currentArticle = articleRef.current;
+      if (!currentArticle) return;
+      scheduleSave({
+        schemaVersion: 1,
+        articleId: currentArticle.id,
+        revision: currentArticle.revision,
+        graphemeOffset,
+        savedAt: new Date().toISOString(),
+      });
+    },
+    // scheduleSave reads/writes refs only (saveTimer, pendingRef) — a
+    // first-render capture remains valid for the hook's lifetime.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
   // Scroll listener — register on mount, cleanup on unmount. Re-registers
   // only if the article identity changes (article swap). No-ops while article
   // is null (loading state) — the hook is safe to call unconditionally.
   useEffect(() => {
     if (!article) return; // loading state — no scroll listener
     const onScroll = () => {
-      const currentArticle = articleRef.current;
-      if (!currentArticle) return;
-      const offset = computeOffset();
-      scheduleSave({
-        schemaVersion: 1,
-        articleId: currentArticle.id,
-        revision: currentArticle.revision,
-        graphemeOffset: offset,
-        savedAt: new Date().toISOString(),
-      });
+      scheduleSaveAtOffset(computeOffset());
     };
     // Passive scroll listener — we never preventDefault; just observe.
     window.addEventListener("scroll", onScroll, { passive: true });
@@ -155,8 +191,8 @@ export function useScrollSave(
       window.removeEventListener("scroll", onScroll);
     };
     // article is captured by closure; re-register only if identity changes
-    // (which happens on article swap). scheduleSave/computeOffset/flush are
-    // stable closures that read the latest refs.
+    // (which happens on article swap). scheduleSaveAtOffset/computeOffset/
+    // flush are stable closures that read the latest refs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [article]);
 
@@ -194,4 +230,6 @@ export function useScrollSave(
       pendingRef.current = null;
     };
   }, []);
+
+  return scheduleSaveAtOffset;
 }
