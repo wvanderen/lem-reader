@@ -3898,3 +3898,65 @@ dialog.book-remove-confirm::backdrop {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+ * Phase 18 Plan 18-02 Task 3 — ≤420px staged destination collapse (UI-SPEC
+ * §Layout "The ≤639px five-button geometry decision", SANCTIONED)
+ *
+ * The 5th article-scoped button (D18-02) makes the Reader header row
+ * arithmetically impossible below ≈378px (controls ≈254px + shell-nav
+ * ≈122px + padding). The sanctioned relief: at ≤420px AND Reader only, the
+ * shell-nav links receive the SAME visually-hidden clip treatment the
+ * ≤639px wordmark collapse uses (identical declarations read from that
+ * block) — position:absolute out of flex flow (zero row width), still in
+ * the a11y tree AND the tab order. NEVER display:none (which would remove
+ * the destinations from layout/a11y — the D15-17/D18-02 no-vanishing
+ * intent bends ONLY here, with reachability + focus-visibility preserved).
+ * The visible Library affordance at extreme narrow is redundant by design:
+ * Back to library sits at the content head (D15-04).
+ *
+ * Every load-bearing constant is preserved: the SINGLE 48px row (no wrap,
+ * no height change — main.paginated-main calc, banner offsets, headerPx
+ * 48, SectionAnnouncer sentinel), all five 44px article-scoped targets,
+ * .header-start flex-shrink: 0 (deficits stay visible — the 15-04 honesty
+ * fix). No gap/padding changes (the Phase 15 relief ladder is exhausted).
+ * Zero transition/animation properties (A11Y-06).
+ * ════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 420px) {
+  .app-header[data-destination="reader"] .shell-nav a {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+}
+/* Strengthen-only companion (closes the latent Phase 15 gap in passing,
+ * UI-SPEC §Layout): a :focus-visible rule UN-CLIPS every collapsed
+ * destination link — the ≤639px wordmark AND the ≤420px Reader shell-nav
+ * links — restoring the visible box (static position, auto box, visible
+ * overflow, auto clip) so a focused destination is never an invisible
+ * focus target for sighted keyboard users. The restored box re-enters the
+ * flex flow: at extreme widths the (sanctioned) deficit shows as real
+ * visible overflow, never silent overlap. */
+@media (max-width: 639px) {
+  .app-header .app-wordmark:focus-visible {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip: auto;
+    white-space: normal;
+  }
+}
+@media (max-width: 420px) {
+  .app-header[data-destination="reader"] .shell-nav a:focus-visible {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip: auto;
+    white-space: normal;
+  }
+}
