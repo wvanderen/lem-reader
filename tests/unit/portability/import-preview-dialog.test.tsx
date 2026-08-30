@@ -363,13 +363,15 @@ describe("ImportPreviewDialog — per-item metadata choice (17-04, D17-11)", () 
       />,
     );
     expect(container.querySelector("dialog.import-preview")).not.toBeNull();
+    // The disclosure ALSO reset — reopen starts collapsed; re-expand to
+    // reach the per-item controls, then the toggled choice must be gone.
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "Show articles" }));
+    });
     const third = screen.getByLabelText(
       "Import choice for Local Name 3",
     ) as HTMLSelectElement;
     expect(third.value).toBe("keep-mine");
-    act(() => {
-      fireEvent.click(screen.getByRole("button", { name: "Show articles" }));
-    });
     act(() => {
       fireEvent.click(screen.getByRole("button", { name: "Import" }));
     });

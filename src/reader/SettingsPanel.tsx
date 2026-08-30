@@ -304,7 +304,14 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   // preview dialog's Proceed handler — never in a catch block, effect, or
   // the file-pick handler above. The reader must click "Import" in the
   // ImportPreviewDialog to fire this; nothing else triggers it.
-  const handleImportProceed = async (overrides: Overrides, applyPreferences: boolean) => {
+  // Phase 17 (17-04, D17-11): the dialog's per-item take-incoming id set
+  // rides the third argument and threads into resolveImportPlan as
+  // itemChoices (keep-local default when the set is empty).
+  const handleImportProceed = async (
+    overrides: Overrides,
+    applyPreferences: boolean,
+    metadataTakeIncoming: ReadonlySet<string>,
+  ) => {
     if (importBundle === null || importPreview === null) return;
     setDataBusy("import");
     setDataMessage("Importing…");
@@ -314,6 +321,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
         importPreview,
         overrides,
         applyPreferences,
+        { metadataTakeIncoming },
       );
       await applyImport(plan); // atomic 5-store transaction — rolls back on throw
       const skipped =

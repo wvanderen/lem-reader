@@ -26,6 +26,13 @@
 // Import button's onClick handler in THIS file. Never in a catch block,
 // never in an effect, never in the file-pick handler. The reader must click
 // "Import" to cross the destructive-write trust boundary.
+//
+// Phase 17 (17-04, D17-11): the dialog gains the per-article metadata
+// choice — a disclosure list under the article-metadata-override conflict
+// row offering Keep mine (default) / Use imported per conflicted article.
+// The per-item id set rides onProceed's THIRD argument; SettingsPanel
+// threads it into resolveImportPlan as itemChoices. The single-invocation
+// discipline is preserved — still exactly one onProceed call.
 import { useEffect, useRef, useState } from "react";
 import type {
   ConflictKind,
@@ -40,11 +47,16 @@ interface ImportPreviewDialogProps {
   /** The detectImportPreview result rendered in the body. Null when closed. */
   preview: ImportPreviewData | null;
   /**
-   * Invoked by the Import button with the collected bulk per-kind overrides
-   * and the preferences choice. The parent owns resolveImportPlan +
-   * applyImport (the atomic write).
+   * Invoked by the Import button with the collected bulk per-kind overrides,
+   * the preferences choice, and the per-item take-incoming id set (Phase 17
+   * 17-04 — D17-11; empty when no metadata choice was toggled). The parent
+   * owns resolveImportPlan + applyImport (the atomic write).
    */
-  onProceed: (overrides: Overrides, applyPreferences: boolean) => void;
+  onProceed: (
+    overrides: Overrides,
+    applyPreferences: boolean,
+    metadataTakeIncoming: ReadonlySet<string>,
+  ) => void;
   /** Invoked by the cancel button (or Esc / scrim). Nothing is written. */
   onCancel: () => void;
 }
@@ -143,6 +155,15 @@ export function ImportPreviewDialog({
   // The D9-14 bulk per-kind override choices + the D9-12 preferences choice.
   const [overrides, setOverrides] = useState<Overrides>(DEFAULT_OVERRIDES);
   const [applyPreferences, setApplyPreferences] = useState(false);
+  // Phase 17 (17-04, D17-11): the per-article take-incoming choices (article
+  // ids toggled to "Use imported") + the disclosure state of the per-item
+  // list. Default empty/collapsed; reset on EVERY open alongside the other
+  // choices (the 09-06 close-path lesson — a prior canceled import never
+  // leaks into the next one).
+  const [metadataTakeIncoming, setMetadataTakeIncoming] = useState<
+    ReadonlySet<string>
+  >(new Set());
+  const [metadataExpanded, setMetadataExpanded] = useState(false);
 
   // Sync the `open` prop with the underlying <dialog> state.
   useEffect(() => {
@@ -165,11 +186,14 @@ export function ImportPreviewDialog({
         ) ??
         dlg;
       initial.focus();
-      // Fresh choices on every open: skip-by-default overrides (D9-14) and
-      // the preview's D9-12 fresh-device preferences default. A prior
+      // Fresh choices on every open: skip-by-default overrides (D9-14), the
+      // preview's D9-12 fresh-device preferences default, and the Phase 17
+      // per-item metadata state (empty set, collapsed disclosure). A prior
       // canceled import never leaks into the next one.
       setOverrides({ ...DEFAULT_OVERRIDES });
       setApplyPreferences(preview?.applyPreferencesDefault ?? false);
+      setMetadataTakeIncoming(new Set());
+      setMetadataExpanded(false);
     } else if (!open && dlg.open) {
       dlg.close();
     }
@@ -198,8 +222,9 @@ export function ImportPreviewDialog({
   // resolveImportPlan + applyImport). It lives in the Import button's
   // onClick — never in a catch block, effect, or the file-pick handler.
   // The reader must click "Import" to fire this; nothing else triggers it.
+  // The per-item take-incoming set rides the third argument (17-04, D17-11).
   const onImportClick = () => {
-    onProceed(overrides, applyPreferences);
+    onProceed(overrides, applyPreferences, metadataTakeIncoming);
   };
 
   return (
@@ -240,6 +265,68 @@ export function ImportPreviewDialog({
                         <option value="keep-both">{OVERRIDE_LABELS["keep-both"]}</option>
                       )}
                     </select>
+                    {/* Phase 17 (17-04, D17-11): the per-article choice — a
+                      disclosure list under the metadata conflict row. EVERY
+                      conflicted article renders here (the summarize
+                      sampleIds cap of 5 is display-only), each showing the
+                      local effective name → the incoming name with a
+                      Keep mine / Use imported pair (keep-LOCAL default). */}
+                    {c.kind === "article-metadata-override" && (
+                      <div className="import-preview-metadata">
+                        <button
+                          type="button"
+                          className="import-preview-metadata-toggle"
+                          aria-expanded={metadataExpanded}
+                          aria-controls="import-preview-metadata-list"
+                          onClick={() => setMetadataExpanded(!metadataExpanded)}
+                        >
+                          {metadataExpanded ? "Hide articles" : "Show articles"}
+                        </button>
+                        {metadataExpanded && (
+                          <ul
+                            id="import-preview-metadata-list"
+                            className="import-preview-metadata-list"
+                          >
+                            {preview.metadataConflicts.map((d) => (
+                              <li
+                                key={d.id}
+                                className="import-preview-metadata-item"
+                              >
+                                <span className="import-preview-metadata-names">
+                                  <span className="import-preview-metadata-local">
+                                    {d.localName}
+                                  </span>
+                                  <span aria-hidden="true"> → </span>
+                                  <span className="import-preview-metadata-incoming">
+                                    {d.incomingName}
+                                  </span>
+                                </span>
+                                <select
+                                  aria-label={`Import choice for ${d.localName}`}
+                                  value={
+                                    metadataTakeIncoming.has(d.id)
+                                      ? "use-imported"
+                                      : "keep-mine"
+                                  }
+                                  onChange={(e) => {
+                                    const next = new Set(metadataTakeIncoming);
+                                    if (e.target.value === "use-imported") {
+                                      next.add(d.id);
+                                    } else {
+                                      next.delete(d.id);
+                                    }
+                                    setMetadataTakeIncoming(next);
+                                  }}
+                                >
+                                  <option value="keep-mine">Keep mine</option>
+                                  <option value="use-imported">Use imported</option>
+                                </select>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    )}
                   </li>
                 ))}
               </ul>
