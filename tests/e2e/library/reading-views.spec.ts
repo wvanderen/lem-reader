@@ -998,14 +998,18 @@ test.describe("NAV-04 — focus/title/history matrix", () => {
     ).not.toBeFocused();
   });
 
-  test("restore beats h1: opening the mid-article standalone shows the resume banner and never focuses the h1 (D14-10)", async ({
+  test("restore beats h1: opening the mid-article standalone shows the restoration marker and never focuses the h1 (D14-10)", async ({
     page,
   }) => {
     await seedCorpus(page);
     await openView(page, "#/");
 
     // STANDALONE_PROGRESS is seeded at a mid fraction — the saved-location
-    // restore (scroll + banner) owns the arrival; the h1 default never runs.
+    // restore (scroll/turn + marker) owns the arrival; the h1 default never
+    // runs. Plan 18-03 (D18-06 — deliberate retirement): the passive
+    // restoration marker + polite announce replace the retired resume
+    // banner and its "You left off here" copy; the restore-beats-h1
+    // invariant below is preserved unchanged.
     await page
       .locator(`.library-list a[href="#/article/${STANDALONE_PROGRESS.id}"]`)
       .click();
@@ -1014,9 +1018,13 @@ test.describe("NAV-04 — focus/title/history matrix", () => {
       name: STANDALONE_PROGRESS.provenance.title,
     });
     await expect(articleH1).toBeVisible({ timeout: 10_000 });
-    const banner = page.locator(".resume-banner");
-    await expect(banner).toBeVisible({ timeout: 10_000 });
-    await expect(banner).toContainText("You left off here");
+    const marker = page.locator(".restoration-marker");
+    await expect(marker).toHaveCount(1, { timeout: 10_000 });
+    await expect(
+      page
+        .getByRole("status")
+        .filter({ hasText: "Returned to where you left off." }),
+    ).toHaveCount(1, { timeout: 10_000 });
     await expect(articleH1).not.toBeFocused();
   });
 

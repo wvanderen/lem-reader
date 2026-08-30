@@ -25,7 +25,10 @@ async function geometry(page: Page) {
     };
     return {
       appHeader: rect(".app-header"),
-      resume: rect(".resume-banner"),
+      // Plan 18-03 (D18-06): the restore-surface assertion target is the
+      // restoration marker (the resume banner's replacement — the retired
+      // `.resume` box is gone).
+      marker: rect(".restoration-marker"),
       article: rect("article.paginated-surface"),
       articleHeader: rect("article.paginated-surface > header"),
       back: rect(".back-to-library"),
@@ -76,18 +79,40 @@ for (const width of [320, 360] as const) {
       });
     });
     await page.reload();
-    await expect(page.getByRole("status").filter({ hasText: "You left off here" })).toBeVisible();
+    // Plan 18-03 (D18-06 — deliberate retirement): the restore surface is
+    // now the passive restoration marker + its polite announce (the resume
+    // banner and its "You left off here" copy are retired). The paginated
+    // reopen lands on the page containing the saved offset (Plan 18-03's
+    // readiness-gated restore) and the marker attaches to that page
+    // fragment's edge.
+    await expect(
+      page
+        .getByRole("status")
+        .filter({ hasText: "Returned to where you left off." }),
+    ).toHaveCount(1, { timeout: 10_000 });
+    await expect(page.locator(".restoration-marker")).toHaveCount(1, {
+      timeout: 10_000,
+    });
     await page.waitForFunction(
       () => (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
     );
     await page.waitForTimeout(600);
+    // The marker is transient (4s lifecycle) — geometry must be read while
+    // it is still mounted; the assertions below therefore run immediately.
     const resumed = await geometry(page);
-    expect(resumed.resume).not.toBeNull();
+    expect(resumed.marker).not.toBeNull();
     expect(resumed.article).not.toBeNull();
-    expect(resumed.resume!.top).toBeGreaterThanOrEqual(resumed.appHeader!.bottom);
-    expect(resumed.resume!.bottom).toBeLessThanOrEqual(640);
+    // Overlay-only: the marker never shifts the pinned paginated geometry.
     expect(Math.abs(resumed.article!.top - fresh.article!.top)).toBeLessThanOrEqual(1);
     expect(Math.abs(resumed.article!.bottom - fresh.article!.bottom)).toBeLessThanOrEqual(1);
     expect(resumed.article!.bottom).toBeLessThanOrEqual(resumed.main!.bottom);
+    // The marker bar rides the restored page fragment's inline-start edge
+    // for the fragment's FULL height — the fragment's box can extend a few
+    // px past the article's overflow:clip bottom, so the honest bounds are
+    // the header line above and the viewport below (the retired banner's
+    // bounds), plus visibility through the article's clip box.
+    expect(resumed.marker!.top).toBeGreaterThanOrEqual(resumed.appHeader!.bottom - 1);
+    expect(resumed.marker!.bottom).toBeLessThanOrEqual(640);
+    expect(resumed.marker!.top).toBeLessThan(resumed.article!.bottom);
   });
 }

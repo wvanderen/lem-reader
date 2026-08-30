@@ -11,8 +11,9 @@
 //     (page height — D18-05's "restored page edge").
 // Plus the polite announce — the retiring banner's announce discipline
 // VERBATIM (D18-05): a visually-hidden role=status / aria-live=polite /
-// aria-atomic=true region whose freshly-inserted content announces
-// "Returned to where you left off." on mount.
+// aria-atomic=true region whose freshly-inserted content announces the
+// ANNOUNCE_COPY constant (below) on mount — the one sanctioned
+// carry-forward string in src/.
 //
 // Lifecycle (D18-07): at 3400ms the bar gains .is-fading (a 600ms CSS
 // opacity transition); at 4000ms the component renders null. Timers are

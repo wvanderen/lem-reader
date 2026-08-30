@@ -1798,7 +1798,8 @@ export function ArticleView({
 
   // Phase 4 Plan 04-05 (PAGE-09): auto-dismiss the fallback banner on the
   // reader's first scroll or pointer activity (UI-SPEC §Interaction 23 —
-  // mirrors the ResumeBanner pattern above). Registered ONLY while the banner
+  // mirrors the retired resume banner's original pattern, D18-06).
+  // Registered ONLY while the banner
   // is shown. The banner reappears if fallback re-triggers on a later
   // repagination (it is NOT one-per-session — the subscription re-shows it).
   // Auto-dismiss hides the banner only; the session-mode override stays so

@@ -998,95 +998,14 @@ dialog.add-dialog::backdrop {
 /* The fill is a 100%-width inner div whose scaleX transform is driven by an
    inline style. NO transition, NO animation declared here — the inline style
    write on every scroll is the only thing that moves it. */
-.progress-hairline-fill {
-  height: 100%;
-  width: 100%;
-  background: var(--accent);
-  transform-origin: left;
-  /* Intentionally NO transition/animation property. The inline scaleX value
-     tracks scroll position immediately (UI-SPEC §Interaction 12 + RESEARCH
-     anti-pattern #6). */
-}
-
-/* ── Resume banner (non-modal, dismissible status card) ──────────────────── */
-/* Extends .status (lines 247–261) — adds the actions row layout. Sits inline
-   at the top of <main>, NOT sticky (READ-04 quiet-chrome rule). Sits above
-   the article header in DOM order so it's the first thing the reader sees
-   after restore. Copy verbatim from UI-SPEC §Copywriting lines 318–323. */
-.resume-banner {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-md);
-  /* Inset matches main#main so the banner aligns with the article edge. */
-  margin-block-end: var(--space-lg);
-}
-.resume-banner-main h2 {
-  /* Reuses .status h2 baseline (lines 258–261). */
-  margin-block: 0 var(--space-sm);
-  font-family: var(--font-ui);
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--ink);
-}
-.resume-banner-main p {
-  margin-block: 0;
-  color: var(--ink-soft);
-}
-.resume-banner-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-sm);
-}
-/* Primary button — accent border conveys the primary affordance. */
-.resume-banner-primary,
-.resume-banner-secondary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--touch);
-  padding-inline: var(--space-md);
-  border-radius: 4px;
-  font-family: var(--font-ui);
-  font-size: 16px;
-  cursor: pointer;
-}
-.resume-banner-primary {
-  background: var(--accent);
-  border: 1px solid var(--accent);
-  color: var(--surface);
-}
-.resume-banner-primary:hover {
-  background: var(--accent-hover);
-  border-color: var(--accent-hover);
-}
-/* Secondary button — neutral border (UI-SPEC §Copywriting line 321). */
-.resume-banner-secondary {
-  background: transparent;
-  border: 1px solid var(--hairline);
-  color: var(--ink);
-}
-.resume-banner-secondary:hover {
-  color: var(--accent);
-  border-color: var(--accent);
-}
-/* Dismiss × button — reuses the StorageBanner dismiss geometry. */
-.resume-banner-dismiss {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--touch);
-  min-width: var(--touch);
-  padding: var(--space-sm);
-  margin-inline-start: auto; /* push to the inline-end of the actions row */
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  color: var(--ink-soft);
-  cursor: pointer;
-}
-.resume-banner-dismiss:hover {
-  color: var(--accent);
+ .progress-hairline-fill {
+   height: 100%;
+   width: 100%;
+   background: var(--accent);
+   transform-origin: left;
+   /* Intentionally NO transition/animation property. The inline scaleX value
+      tracks scroll position immediately (UI-SPEC §Interaction 12 + RESEARCH
+      anti-pattern #6). */
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -1250,14 +1169,15 @@ dialog.add-dialog::backdrop {
   min-width: var(--touch);
   min-height: var(--touch); /* A11Y-07 REAL 44×44 box — no ::after hit-area shim */
   padding: 0; /* label flush at the left inset, mirroring the indicator's right */
-  border: 0; /* quiet TEXT register — .page-indicator/.resume-banner-dismiss are unboxed */
+  border: 0; /* quiet TEXT register — .page-indicator/the retired dismiss button are unboxed */
   font-family: var(--font-ui);
   font-size: 14px;
   line-height: 1.45;
   color: var(--ink-soft);
   align-items: flex-start; /* label rides the indicator line; the transparent lower half is the hit zone (.page-turn precedent) */
 }
-/* The .resume-banner-dismiss text-button discipline: quiet ink, accent on
+/* The retired resume banner's dismiss text-button discipline (D18-06 — the
+   class is gone, the discipline stays): quiet ink, accent on
    engagement. The base hover's border-color declaration is inert once
    border-width is 0 above. :focus-visible keeps the global 2px ring around
    the real 44px box. */
@@ -1488,7 +1408,7 @@ dialog.add-dialog::backdrop {
   flex-direction: column;
   gap: var(--space-md);
   /* Inset matches main#main so the banner aligns with the article edge
-     (mirrors .resume-banner / .storage-banner). */
+     (mirrors .storage-banner — and the retired resume banner's discipline). */
   margin-block-end: var(--space-lg);
 }
 .pagination-fallback-main h2 {
@@ -1510,8 +1430,10 @@ dialog.add-dialog::backdrop {
   gap: var(--space-sm);
 }
 /* Switch-to-pages secondary button — neutral border (UI-SPEC §Copywriting
-   line 355: reversible, NOT destructive — mirrors .resume-banner-secondary
-   discipline so the consequence reads as a recovery, not a confirmation). */
+   line 355: reversible, NOT destructive — mirrors the retired resume
+   banner's secondary-button discipline (D18-06: the class is gone, the
+   consequence register stays) so it reads as a recovery, not a
+   confirmation). */
 .pagination-fallback-switch {
   display: inline-flex;
   align-items: center;
@@ -3649,53 +3571,6 @@ dialog.book-remove-confirm::backdrop {
   .page-indicator {
     top: calc(48px + var(--space-sm) + (var(--touch) - 1.45em) / 2);
   }
-
-  /* A resume prompt is transient page chrome. Keeping it out of main flow
-   * prevents it from displacing the independently height-budgeted reader.
-   * The compact bottom sheet preserves both 44px actions and leaves the
-   * article as the primary surface behind it. */
-  .resume-banner {
-    position: fixed;
-    inset-inline: var(--space-md);
-    bottom: calc(var(--space-md) + env(safe-area-inset-bottom, 0px));
-    z-index: 8;
-    max-height: calc(100dvh - 48px - 2 * var(--space-md));
-    margin: 0;
-    padding: var(--space-md);
-    gap: var(--space-sm);
-    overflow-y: auto;
-  }
-
-  .resume-banner-main {
-    padding-inline-end: var(--touch);
-  }
-
-  .resume-banner-main h2 {
-    margin-block-end: var(--space-xs);
-  }
-
-  .resume-banner-main p {
-    font-size: 14px;
-  }
-
-  .resume-banner-actions {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  }
-
-  .resume-banner-primary,
-  .resume-banner-secondary {
-    min-width: 0;
-    padding-inline: var(--space-sm);
-    font-size: 14px;
-  }
-
-  .resume-banner-dismiss {
-    position: absolute;
-    top: var(--space-sm);
-    right: var(--space-sm);
-    margin: 0;
-  }
 }
 
 /* ── ≤639px shell collapse + narrow tuning (Plan 15-02 — D15-17, UI-SPEC
@@ -3971,8 +3846,9 @@ dialog.book-remove-confirm::backdrop {
 /* ════════════════════════════════════════════════════════════════════════
  * Phase 18 Plan 18-03 — RestorationMarker (ORNT-06, D18-05/06/07)
  *
- * The passive transient restoration cue that replaces the retired
- * .resume-banner blocks (D18-06). 4px solid var(--accent) bar — the ONE new
+ * The passive transient restoration cue that replaces the retired resume
+ * banner (D18-06 — its rule blocks deleted this phase). 4px solid
+ * var(--accent) bar — the ONE new
  * sanctioned accent consumption (UI-SPEC §Color reserved-for list: transient,
  * reopen-restore only, auto-clears ≤4s, never a persistent accent surface).
  * Absolutely positioned (zero layout impact — ORNT-06 forbids content shift)
