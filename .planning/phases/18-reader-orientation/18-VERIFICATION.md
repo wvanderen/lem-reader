@@ -1,7 +1,7 @@
 ---
 phase: 18-reader-orientation
 verified: 2026-08-30T19:12:13Z
-status: human_needed
+status: verified
 score: 5/5 must-haves verified
 behavior_unverified: 0
 overrides_applied: 0
@@ -15,13 +15,15 @@ human_verification:
   - test: "On Firefox and WebKit with a physical keyboard, Tab from inside the open TOC panel and press Escape."
     expected: "Esc always closes the panel and restores focus to the trigger (the universal escape). Confirm the documented per-engine Tab shapes are acceptable in practice: Firefox keeps sequential focus on visible panel entries; WebKit's first Tab leaves the panel to body."
     why_human: "Top-layer popover sequential-focus semantics diverge per engine (deferred-items.md finding #1, probed on Playwright 1.61.1). The e2e cells assert the honest per-engine shapes, but whether the divergence creates real keyboard-user friction needs human judgment."
+human_verification_completed: 2026-08-30T19:50:00Z
+human_verification_result: "3/3 pass — UAT 18-UAT.md Tests 1-3 (SR TOC navigation, SR restoration announce, real-keyboard Tab/Esc Firefox+WebKit) all confirmed by the developer. No code changes were required."
 ---
 
 # Phase 18: Reader Orientation Verification Report
 
 **Phase Goal:** Readers navigate document structure without unstable page/DOM identities or intrusive restoration UI.
 **Verified:** 2026-08-30T19:12:13Z
-**Status:** human_needed
+**Status:** verified (human verification completed 2026-08-30T19:50:00Z — 3/3 pass via 18-UAT.md)
 **Re-verification:** No — initial verification
 
 ## Goal Achievement
@@ -146,9 +148,10 @@ Orphan check: ORNT-02 (line-focus aid) is listed under **Future Requirements** i
 
 No gaps. All 5 roadmap success criteria are verified with codebase evidence at every level (existence, substance, wiring, data flow) and direct behavioral test executions in this verification (33 e2e cells + 29 unit tests on chromium, all green; tsc clean; all grep gates clean; announcer spec byte-stable across the phase). The three 18-04 deferred findings are documented browser-platform/process constraints with honest in-spec assertions — none contradicts a success criterion given the universal Esc escape — and the pre-existing Phase 17 TS error was resolved by orchestrator commit 4a3969f (verified: `npx tsc --noEmit` exit 0).
 
-Status is `human_needed` solely for the three screen-reader/real-keyboard items above (SC3 names screen readers explicitly; SC4's engine-divergent Tab flavor benefits from human judgment). No code changes are required to proceed.
+Status was `human_needed` solely for the three screen-reader/real-keyboard items above (SC3 names screen readers explicitly; SC4's engine-divergent Tab flavor benefits from human judgment). **Resolved 2026-08-30T19:50:00Z:** the developer completed all three human checks via UAT (18-UAT.md Tests 1-3, 3/3 pass, zero issues) — SR TOC navigation, SR restoration announce, and real-keyboard Tab/Esc on Firefox+WebKit all confirmed as specified. No code changes were required.
 
 ---
 
 _Verified: 2026-08-30T19:12:13Z_
 _Verifier: the agent (gsd-verifier)_
+_Human verification: developer UAT — 18-UAT.md, 2026-08-30T19:50:00Z_
