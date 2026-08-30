@@ -4,17 +4,17 @@ milestone: v2.1
 milestone_name: Reader Experience
 current_phase: 18
 current_phase_name: Reader Orientation
-status: executing
+status: verifying
 stopped_at: Completed 18-02-PLAN.md
-last_updated: "2026-08-30T16:52:38.716Z"
+last_updated: "2026-08-30T18:39:42.541Z"
 last_activity: 2026-08-30
 last_activity_desc: Phase 18 execution started
 progress:
   total_phases: 8
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 21
-  completed_plans: 20
-  percent: 50
+  completed_plans: 21
+  percent: 63
 ---
 
 # Project State
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-08-29)
 
 Phase: 18 (Reader Orientation) — EXECUTING
 Plan: 4 of 4
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-08-30 — Phase 18 execution started
 
 ## Recent Decisions (Phase 15)
@@ -175,6 +175,7 @@ Last activity: 2026-08-30 — Phase 18 execution started
 | Phase 18 P01 | 8 min | 2 tasks | 4 files |
 | Phase 18 P02 | 24min | 3 tasks | 8 files |
 | Phase 18 P03 | 22min | 3 tasks | 11 files |
+| Phase 18 P04 | 104min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -416,6 +417,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: [Phase 18-03]: Paginated save/restore closed with existing machinery — useScrollSave RETURNS scheduleLocationSave(offset) (one LocationRecord construction site, ONE saveLocation call-site family, no schema change); the paginated restore branch reuses the deep-link readiness template (RETRY_CAP_MS 5000 → fragmentContainingOffset → turnToPage) with the mode read from isPaginatedRef at async-resolution time
 - [Phase ?]: [Phase 18-03]: RestorationMarker honesty is structural — mount gated on genuine restore-landing via a one-shot per-article ref; first-open silence e2e-asserted (rule 11); lifecycle CSS-transition-only (3400ms fade + 4000ms unmount) with the unit suite asserting ZERO rAF calls (Pitfall 8)
 - [Phase ?]: [Phase 18-03]: .article-body is position:relative (layout-neutral) — the marker's absolute anchor; marker geometry is article-relative inline style (bar scrolls with content in both modes); the CSS class owns anatomy + fade + forced-colors CanvasText
+- [Phase ?]: [Phase 18-04] useSectionSpy paginated mode (Rule 2): the scroll-past-sentinel rule is scrolling geometry — on the pinned paginated surface the current heading is the FIRST connected heading on the visible fragment (childList MutationObserver catches swaps; page turns fire no scroll). Scrolling branch byte-identical; announcer untouched (section-announce 12/12 zero diff).
+- [Phase ?]: [Phase 18-04] Top-layer focus divergence (probed): Tab from inside the popover=manual TOC panel flows into the page on chromium, leaves to body on webkit, and scopes within the popover on firefox — Esc-close + focus-restore is the universal keyboard escape; specs assert the honest per-engine shapes. WebKit also skips clipped targets in sequential nav (staged collapse uses the back-nav programmatic-focusability precedent).
+- [Phase ?]: [Phase 18-04] Honest gate: five recorded invocations — runs 1-4 at default workers exited 1 with rotating isolation-green webkit-only sets under machine load ~11/10 CPUs (plus one real D4-10 settle fix, b3fce75); the green gate ran the FULL matrix with --workers=4 as the documented contention control (unit 1373/0/13 + e2e 1431/0/10, exit 0).
 
 ### Pending Todos
 
@@ -471,7 +475,7 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-30T16:52:32.634Z
+Last session: 2026-08-30T18:39:26.754Z
 Stopped at: Completed 18-02-PLAN.md
 Resume file: None
 

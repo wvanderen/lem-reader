@@ -12,7 +12,7 @@
 - [x] **Phase 15: Application Shell and Destinations** - Make Library, Highlights, and Reader predictable first-class destinations. (completed 2026-08-26)
 - [x] **Phase 16: Organized Library and Focused Add Flow** - Browse by reading state and add content without permanent form clutter. (completed 2026-08-29)
 - [x] **Phase 17: Reader-Owned Metadata** - Edit display title and author without disturbing canonical identity. (completed 2026-08-30)
-- [ ] **Phase 18: Reader Orientation** - Navigate canonical headings and receive non-intrusive restoration feedback.
+- [x] **Phase 18: Reader Orientation** - Navigate canonical headings and receive non-intrusive restoration feedback. (completed 2026-08-30)
 - [ ] **Phase 19: Cross-Block Highlights** - Manage one durable highlight across multiple semantic blocks.
 - [ ] **Phase 20: Safe Local Image Fidelity** - Preserve figures and captions as safe, portable local assets.
 - [ ] **Phase 21: Integrated Refinement and Acceptance** - Correct remaining UI issues and prove the complete milestone.
@@ -157,7 +157,7 @@ Plans:
   4. At narrow widths or high zoom, opening or closing the TOC neither obscures content, changes logical location, nor traps focus.
   5. Reopening communicates restored location without shifting content, blocking page turns, or requiring dismissal.
 
-**Plans**: 3/4 plans executed
+**Plans**: 4/4 plans complete
 
 Plans:
 **Wave 1**
@@ -174,7 +174,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 18-04-PLAN.md — seeded TOC corpus + 3-engine e2e matrix + honest full-suite gate + requirements completion (ORNT-01, ORNT-03, ORNT-04, ORNT-05, ORNT-06)
+- [x] 18-04-PLAN.md — seeded TOC corpus + 3-engine e2e matrix + honest full-suite gate + requirements completion (ORNT-01, ORNT-03, ORNT-04, ORNT-05, ORNT-06)
 
 **UI hint**: yes
 
@@ -236,7 +236,7 @@ Plans:
 | 15. Application Shell and Destinations | v2.1 | 4/4 | Complete    | 2026-08-26 |
 | 16. Organized Library and Focused Add Flow | v2.1 | 4/4 | Complete    | 2026-08-29 |
 | 17. Reader-Owned Metadata | v2.1 | 5/5 | Complete    | 2026-08-30 |
-| 18. Reader Orientation | v2.1 | 3/4 | In Progress|  |
+| 18. Reader Orientation | v2.1 | 4/4 | Complete   | 2026-08-30 |
 | 19. Cross-Block Highlights | v2.1 | 0/TBD | Not started | - |
 | 20. Safe Local Image Fidelity | v2.1 | 0/TBD | Not started | - |
 | 21. Integrated Refinement and Acceptance | v2.1 | 0/TBD | Not started | - |
