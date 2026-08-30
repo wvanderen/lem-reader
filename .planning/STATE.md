@@ -4,9 +4,9 @@ milestone: v2.1
 milestone_name: Reader Experience
 current_phase: 19
 current_phase_name: Cross-Block Highlights
-status: ready to plan
-stopped_at: Phase 19 context gathered
-last_updated: "2026-08-30T22:20:35.169Z"
+status: executing
+stopped_at: Phase 19 UI-SPEC approved
+last_updated: "2026-08-30T22:55:23.901Z"
 last_activity: 2026-08-30
 last_activity_desc: Phase 18 complete, transitioned to Phase 19
 progress:
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-08-30)
 
 Phase: 19 — Cross-Block Highlights
 Plan: Not started
-Status: Ready to plan
+Status: Ready to execute
 Last activity: 2026-08-30 — Phase 18 complete, transitioned to Phase 19
 
 ## Recent Decisions (Phase 18)
@@ -477,9 +477,9 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-30T22:20:35.157Z
-Stopped at: Phase 19 context gathered
-Resume file: .planning/phases/19-cross-block-highlights/19-CONTEXT.md
+Last session: 2026-08-30T22:35:34.695Z
+Stopped at: Phase 19 UI-SPEC approved
+Resume file: .planning/phases/19-cross-block-highlights/19-UI-SPEC.md
 
 ## Operator Next Steps
 
