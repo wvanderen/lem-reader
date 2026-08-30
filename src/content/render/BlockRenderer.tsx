@@ -24,12 +24,15 @@
 // absent or empty, ArticleBody renders exactly as before (existing tests
 // regress nothing).
 import type { Block, CanonicalArticle } from "../types";
-import { memo, useMemo } from "react";
+import { Fragment, memo, useMemo } from "react";
 import { InlineList } from "./InlineRenderer";
+import { highlightAriaLabelForText } from "./InlineRenderer";
 import type { TextPositionSelector } from "../normalizeText";
 import { BLOCK_SEPARATOR, blockNormalizedText, graphemeClusters } from "../normalizeText";
 import { sliceRunsForHighlights } from "../../annotations/highlightRanges";
+import { sliceCodeForHighlights } from "../../annotations/highlightRanges";
 import type { HighlightSliceEntry } from "../../annotations/highlightRanges";
+import type { CodeSegment } from "../../annotations/highlightRanges";
 // Phase 5 Plan 05-02: ArticleBody reads from the highlight overlay context
 // when no explicit highlights prop is passed, so the scrolling ArticleBody
 // renders <mark> overlays from the provider state. The measurement body
@@ -118,6 +121,24 @@ type BlockViewProps = {
    * Absent for non-list kinds + the measurement body.
    */
   itemHighlightSlices?: ListItemSlices;
+  /**
+   * Phase 19 Plan 19-03 (D19-01): highlight slices for a figure's CAPTION
+   * runs (computed against the Pitfall 1 symmetric captionGlobalStart —
+   * see ArticleBody's figure branch). Consumed ONLY by the figure case to
+   * feed the figcaption InlineList. The <img>/alt surface renders no marks
+   * ever (alt is an attribute — the interior-gap visual is plain surface
+   * per D19-02/UI-SPEC). Absent for non-figure kinds + the measurement body.
+   */
+  captionHighlightSlices?: ReturnType<typeof sliceRunsForHighlights>;
+  /**
+   * Phase 19 Plan 19-03 (D19-01): verbatim-source segments for a code block
+   * (from sliceCodeForHighlights). Consumed ONLY by the code-block case:
+   * plain segments render as React text children, highlighted segments wrap
+   * in <mark class="highlight"> with the InlineRenderer mark discipline.
+   * Absent for non-code kinds + the measurement body → byte-unchanged
+   * `<code>{block.source}</code>`.
+   */
+  codeSegments?: CodeSegment[];
 } & {
   [K in `data-${string}`]?: string | number | undefined;
 };
@@ -127,6 +148,8 @@ export function BlockView({
   highlightSlices,
   childHighlightSlices,
   itemHighlightSlices,
+  captionHighlightSlices,
+  codeSegments,
   tabIndex,
   ...rest
 }: BlockViewProps) {
@@ -209,18 +232,71 @@ export function BlockView({
           <img src={block.src} alt={block.alt} />
           {block.caption.length > 0 && (
             <figcaption>
-              <InlineList runs={block.caption} />
+              {/* Plan 19-03 (D19-01): caption marks — the figcaption
+                  InlineList consumes slices computed against the Pitfall 1
+                  symmetric offset (ArticleBody's figure branch). Mark
+                  anatomy identical to prose. The img/alt surface renders no
+                  marks ever (alt is an attribute — D19-02 gap by
+                  construction). */}
+              <InlineList
+                runs={block.caption}
+                highlightSlices={captionHighlightSlices}
+              />
             </figcaption>
           )}
         </figure>
       );
-    case "code-block":
+    case "code-block": {
       // NEVER inject raw HTML (Pitfall 6); React escapes source text.
+      // Plan 19-03 (D19-01): when codeSegments are present (verbatim-source
+      // segmentation via sliceCodeForHighlights), highlighted segments wrap
+      // in <mark class="highlight"> carrying the SAME discipline as
+      // InlineRenderer's marks — data-highlight-id, tabIndex, aria-haspopup,
+      // per-segment aria-label, hasNote/unresolved modifiers, and the DOM id
+      // only on the highlight's first segment (Pitfall 2). Segments
+      // concatenate to EXACTLY the source (whitespace/newlines preserved);
+      // plain segments render as bare text children via keyed Fragments (no
+      // wrapper DOM node — pre/code geometry byte-stable, UI-SPEC
+      // Interaction 7).
+      if (!codeSegments) {
+        return (
+          <pre {...elementProps}>
+            <code>{block.source}</code>
+          </pre>
+        );
+      }
       return (
         <pre {...elementProps}>
-          <code>{block.source}</code>
+          <code>
+            {codeSegments.map((seg, i) => {
+              if (seg.entry === null) {
+                return <Fragment key={i}>{seg.text}</Fragment>;
+              }
+              const status = seg.entry.status ?? "confident";
+              const unresolved = status !== "confident";
+              const className = `highlight${seg.entry.hasNote ? " has-note" : ""}${unresolved ? " unresolved" : ""}`;
+              return (
+                <mark
+                  key={i}
+                  id={seg.isFirst === true ? `hl-${seg.entry.id}` : undefined}
+                  className={className}
+                  data-highlight-id={seg.entry.id}
+                  tabIndex={0}
+                  aria-label={highlightAriaLabelForText(
+                    seg.text,
+                    seg.entry.hasNote,
+                    status,
+                  )}
+                  aria-haspopup="dialog"
+                >
+                  {seg.text}
+                </mark>
+              );
+            })}
+          </code>
         </pre>
       );
+    }
     case "footnote-reference": {
       // footnoteId matches /^fn-\d+$/ (Plan 01 Task 2). Extract N and derive
       // distinct ids: anchor gets "fn-ref-N", body <li> keeps "fn-N"
@@ -506,13 +582,15 @@ export const ArticleBody = memo(
           // Compute highlight slices for the paragraph/heading path (direct)
           // AND the container paths: blockquote (per-child, Plan 05-07) and
           // lists (per-item with nested-list recursion, Plan 19-03 — the
-          // 05-07 items-shape deferral paid down per D19-13/D19-15). Atomic
-          // kinds (figure/code-block/footnote-reference/unsupported) do not
-          // carry inline highlight overlays in this slice. Code-block +
-          // figure-caption remain deferred: a figure's blockNormalizedText
-          // includes alt + separator + caption, which diverges from the DOM
-          // textContent the capture map walks — handling that divergence is
-          // deferred to keep the D-05 substrate stable.
+          // 05-07 items-shape deferral paid down per D19-13/D19-15), AND the
+          // two readable atomic surfaces: figure CAPTIONS + code interiors
+          // (Plan 19-03 — D19-01 render coverage). The figure alt-divergence
+          // that once deferred caption rendering is now PAID DOWN ON BOTH
+          // SIDES: Plan 19-01 fixed the capture-side offset
+          // (captionLocalStart alignment) and the render side below computes
+          // the SYMMETRIC offset (Pitfall 1's pair). Footnote-reference and
+          // unsupported remain unmarked (footnote bodies are ineligible
+          // boundaries; unsupported interiors are D19-02 gaps).
           //
           // D5-07 capture eligibility is independent of inline rendering: every
           // CAPTURABLE kind persists + re-resolves; inline <mark> coverage is
@@ -530,6 +608,10 @@ export const ArticleBody = memo(
           // non-list kinds + when no highlight intersects any item at any
           // nesting depth).
           let itemHighlightSlices: ListItemSlices | undefined;
+          // Plan 19-03 (D19-01): caption slices for figures + verbatim-source
+          // segments for code blocks (undefined when no highlight intersects).
+          let captionHighlightSlices: ReturnType<typeof sliceRunsForHighlights> | undefined;
+          let codeSegments: CodeSegment[] | undefined;
           if (highlightIndex) {
           if (block.kind === "paragraph" || block.kind === "heading") {
             const blockLen = highlightIndex.lens[i]!;
@@ -541,6 +623,57 @@ export const ArticleBody = memo(
             if (entries.length > 0) {
               highlightSlices = sliceRunsForHighlights(
                 block.content,
+                blockGlobalStart,
+                entries,
+                article.lang,
+              );
+            }
+          } else if (block.kind === "figure") {
+            // Caption marks (Plan 19-03 — the Pitfall 1 RENDER-side
+            // symmetric offset to 19-01's capture fix). blockText joins
+            // [alt, inlineText(caption)].filter(Boolean) with
+            // BLOCK_SEPARATOR, so figure-local caption coordinates start
+            // after alt + separator when alt is non-empty, 0 otherwise
+            // (empty alt drops out of the filter(Boolean) join). The gate
+            // length follows the shipped run-sum discipline (the same
+            // accounting sliceRunsForHighlights uses internally).
+            const captionRunLen = block.caption.reduce(
+              (sum, r) => sum + graphemeClusters(r.text, article.lang).length,
+              0,
+            );
+            if (captionRunLen > 0) {
+              const captionLocalStart =
+                block.alt.length > 0
+                  ? graphemeClusters(block.alt, article.lang).length +
+                    BLOCK_SEPARATOR.length
+                  : 0;
+              const captionGlobalStart = blockGlobalStart + captionLocalStart;
+              const entries = highlightsForBlock(
+                effectiveHighlights,
+                captionGlobalStart,
+                captionRunLen,
+              );
+              if (entries.length > 0) {
+                captionHighlightSlices = sliceRunsForHighlights(
+                  block.caption,
+                  captionGlobalStart,
+                  entries,
+                  article.lang,
+                );
+              }
+            }
+          } else if (block.kind === "code-block") {
+            // Code marks (Plan 19-03 — verbatim-source segmentation; raw ==
+            // norm in the D-05 substrate, so grapheme offsets over the
+            // source address the block's global range directly).
+            const entries = highlightsForBlock(
+              effectiveHighlights,
+              blockGlobalStart,
+              highlightIndex.lens[i]!,
+            );
+            if (entries.length > 0) {
+              codeSegments = sliceCodeForHighlights(
+                block.source,
                 blockGlobalStart,
                 entries,
                 article.lang,
@@ -626,6 +759,8 @@ export const ArticleBody = memo(
             highlightSlices={highlightSlices}
             childHighlightSlices={childHighlightSlices}
             itemHighlightSlices={itemHighlightSlices}
+            captionHighlightSlices={captionHighlightSlices}
+            codeSegments={codeSegments}
           />
         );
       })}

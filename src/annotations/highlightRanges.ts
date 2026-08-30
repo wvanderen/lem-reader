@@ -197,3 +197,91 @@ export function sliceRunsForHighlights(
 
   return slices;
 }
+
+// ── Code-block interiors (Plan 19-03 — D19-01 render coverage) ───────────────
+
+/** A verbatim-source segment produced by sliceCodeForHighlights. */
+export interface CodeSegment {
+  /** The verbatim source text of this segment (grapheme-cluster-sliced). */
+  text: string;
+  /** The owning highlight entry, or null for an un-highlighted gap segment. */
+  entry: HighlightSliceEntry | null;
+  /**
+   * Pitfall 2 (first-slice-only DOM id): true only on the segment that is
+   * the highlight's first in document order — the DOM id carrier, exactly
+   * the HighlightSlice.isFirst rule (`h.position.start >= blockGlobalStart`).
+   * Absent on gap segments.
+   */
+  isFirst?: boolean;
+}
+
+/**
+ * Segment a code-block's VERBATIM source at every highlight boundary
+ * intersecting the block's article-global range (Plan 19-03 — the code
+ * companion to sliceRunsForHighlights).
+ *
+ * Coordinate note (D-05 substrate): code text is verbatim in blockText
+ * (whitespace NOT collapsed — it IS readable text), so the raw source string
+ * equals its normalized contribution: raw == norm and NO whitespace-collapse
+ * alignment is needed. Offsets are grapheme-cluster ordinals over the
+ * source, intersected per highlight against
+ * `[blockGlobalStart, blockGlobalStart + graphemes(source).length)`.
+ *
+ * Pure segmentation: an ordered array of `{ text, entry }` segments whose
+ * texts concatenate to EXACTLY the source (whitespace/newlines preserved —
+ * the caller renders them as React text children). Gap segments carry
+ * `entry: null`; highlighted segments carry the owning HighlightSliceEntry
+ * plus the Pitfall 2 isFirst flag on the highlight's first segment.
+ *
+ * Pure domain logic — no DOM, no React, no side effects. jsdom-safe.
+ */
+export function sliceCodeForHighlights(
+  source: string,
+  blockGlobalStart: number,
+  highlights: readonly HighlightSliceEntry[],
+  lang: string,
+): CodeSegment[] {
+  // Fast path: no highlights at all → one whole-source segment (byte-
+  // identical text — zero clustering work).
+  if (highlights.length === 0) {
+    return [{ text: source, entry: null }];
+  }
+  const clusters = graphemeClusters(source, lang);
+  const total = clusters.length;
+
+  const intersections: {
+    start: number;
+    end: number;
+    entry: HighlightSliceEntry;
+  }[] = [];
+  for (const h of highlights) {
+    const interStart = Math.max(0, h.position.start - blockGlobalStart);
+    const interEnd = Math.min(total, h.position.end - blockGlobalStart);
+    if (interStart < interEnd) {
+      intersections.push({ start: interStart, end: interEnd, entry: h });
+    }
+  }
+  if (intersections.length === 0) {
+    return [{ text: source, entry: null }];
+  }
+  intersections.sort((a, b) => a.start - b.start);
+
+  const segments: CodeSegment[] = [];
+  let cursor = 0;
+  for (const inter of intersections) {
+    if (inter.start > cursor) {
+      segments.push({ text: clusters.slice(cursor, inter.start).join(""), entry: null });
+      cursor = inter.start;
+    }
+    segments.push({
+      text: clusters.slice(inter.start, inter.end).join(""),
+      entry: inter.entry,
+      isFirst: inter.entry.position.start >= blockGlobalStart,
+    });
+    cursor = inter.end;
+  }
+  if (cursor < total) {
+    segments.push({ text: clusters.slice(cursor, total).join(""), entry: null });
+  }
+  return segments;
+}

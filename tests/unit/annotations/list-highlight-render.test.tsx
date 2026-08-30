@@ -20,7 +20,10 @@ import { describe, expect, it } from "vitest";
 import { render } from "@testing-library/react";
 import { ArticleBody } from "../../../src/content/render/BlockRenderer";
 import type { ArticleBodyHighlight } from "../../../src/content/render/BlockRenderer";
-import { sliceRunsForHighlights } from "../../../src/annotations/highlightRanges";
+import {
+  sliceRunsForHighlights,
+  sliceCodeForHighlights,
+} from "../../../src/annotations/highlightRanges";
 import type { HighlightSliceEntry } from "../../../src/annotations/highlightRanges";
 import type {
   Block,
@@ -43,6 +46,18 @@ const paragraphRuns = (runs: InlineRun[]): Block => ({
 const bulletedList = (items: Block[][]): Block => ({
   kind: "bulleted-list",
   items: items.map((content) => ({ content })),
+});
+
+const figure = (alt: string, caption: string): Block => ({
+  kind: "figure",
+  alt,
+  src: "https://example.com/picture.png",
+  caption: caption.length > 0 ? [{ text: caption, marks: [] }] : [],
+});
+
+const codeBlock = (source: string): Block => ({
+  kind: "code-block",
+  source,
 });
 
 const article = (blocks: Block[]): CanonicalArticle => ({
@@ -342,5 +357,173 @@ describe("multi-run list item alignment (19-03 Task 2, Pitfall 4)", () => {
     expect(anchor).not.toBeNull();
     expect(anchor!.getAttribute("href")).toBe("https://example.com/x");
     expect(anchor!.textContent).toBe("linked");
+  });
+});
+
+// ── Task 3: caption marks + code marks (D19-01 render coverage) ─────────────
+
+describe("figure caption highlight rendering (19-03 Task 3, Pitfall 1 symmetric offset)", () => {
+  // Caption article. D-05 offsets:
+  //   block 0 "Intro text."                       → [0, 11)
+  //   block 1 figure alt="A diagram" (9)          → starts 12
+  //            blockText = "A diagram\nChart caption words" (28) → [12, 40)
+  //            captionLocalStart = 9 + 1 = 10 → captionGlobalStart = 22;
+  //            caption text "Chart caption words" (18) → [22, 40)
+  //   block 2 "Closing text."                     → starts 41
+  const captionArticle = article([
+    paragraph("Intro text."),
+    figure("A diagram", "Chart caption words"),
+    paragraph("Closing text."),
+  ]);
+
+  it("(a) a caption endpoint highlight renders a mark inside figcaption with the correct extent (non-empty alt)", () => {
+    // [22, 27) = caption intra [0, 5) = "Chart" — the Pitfall 1 symmetric
+    // pair: WITHOUT the alt offset this would mis-slice into the alt's tail.
+    const hl = makeEntry("hl-cap", 22, 27);
+    const { container } = render(
+      <ArticleBody article={captionArticle} highlights={[hl]} />,
+    );
+
+    const figcaption = container.querySelector("figcaption");
+    expect(figcaption).not.toBeNull();
+    const mark = figcaption!.querySelector("mark.highlight");
+    expect(mark).not.toBeNull();
+    expect(mark!.textContent).toBe("Chart");
+    expect(mark!.getAttribute("data-highlight-id")).toBe("hl-cap");
+    // Exactly one mark in the whole document — the img/alt surface is plain.
+    expect(container.querySelectorAll("mark.highlight").length).toBe(1);
+  });
+
+  it("(b) a span from a paragraph through the caption marks BOTH text surfaces, never the img (gap by construction)", () => {
+    // [8, 25): paragraph tail [8, 11) = "xt."; figure fully crossed — the
+    // alt portion [12, 22) renders UNMARKED (an attribute, not text), the
+    // caption head [22, 25) = "Cha" is marked. The fill continues on both
+    // sides of the textless gap (D19-02).
+    const hl = makeEntry("hl-gap", 8, 25);
+    const { container } = render(
+      <ArticleBody article={captionArticle} highlights={[hl]} />,
+    );
+
+    const marks = container.querySelectorAll("mark.highlight");
+    expect(marks.length).toBe(2);
+    const paraMark = container.querySelector("p mark.highlight");
+    expect(paraMark).not.toBeNull();
+    expect(paraMark!.textContent).toBe("xt.");
+    const capMark = container.querySelector("figcaption mark.highlight");
+    expect(capMark).not.toBeNull();
+    expect(capMark!.textContent).toBe("Cha");
+    for (const m of marks) {
+      expect(m.getAttribute("data-highlight-id")).toBe("hl-gap");
+    }
+    // The img exists and carries no marks (alt is an attribute surface).
+    const img = container.querySelector("figure img");
+    expect(img).not.toBeNull();
+    expect(img!.querySelectorAll("mark").length).toBe(0);
+    // Every figure mark lives inside the figcaption (the gap surface is plain).
+    const figcaption = container.querySelector("figcaption")!;
+    const figureMarks = container.querySelectorAll("figure mark.highlight");
+    expect(figureMarks.length).toBe(1);
+    expect(figcaption.contains(figureMarks[0]!)).toBe(true);
+  });
+});
+
+describe("code-block highlight rendering (19-03 Task 3, verbatim segmentation)", () => {
+  const source = "line one\nline two\n  indented";
+
+  it("(c) segments round-trip byte-exact incl. embedded newlines; a mid-source highlight wraps only its extent; whole-block wraps everything", () => {
+    // Block at article-global [5, 33) (source is 28 graphemes; raw == norm —
+    // code text is verbatim in the D-05 substrate).
+    const blockGlobalStart = 5;
+
+    // No highlights → single whole-source segment.
+    const whole = sliceCodeForHighlights(source, blockGlobalStart, [], "en");
+    expect(whole).toEqual([{ text: source, entry: null }]);
+
+    // Mid-source highlight [12, 20) → source chars [7, 15) = "e\nline t".
+    const mid = sliceCodeForHighlights(
+      source,
+      blockGlobalStart,
+      [slicerEntry("hl-mid", 12, 20)],
+      "en",
+    );
+    expect(mid.map((s) => s.text).join("")).toBe(source);
+    const marked = mid.filter((s) => s.entry !== null);
+    expect(marked).toHaveLength(1);
+    expect(marked[0]!.text).toBe("e\nline t");
+    expect(marked[0]!.entry!.id).toBe("hl-mid");
+    expect(marked[0]!.isFirst).toBe(true);
+    // Newlines survive verbatim inside AND around the segment.
+    expect(mid[0]!.text.endsWith("line on")).toBe(true);
+    expect(mid[2]!.text.startsWith("wo\n")).toBe(true);
+
+    // Whole-code-block highlight [5, 33) → one segment covering everything.
+    const all = sliceCodeForHighlights(
+      source,
+      blockGlobalStart,
+      [slicerEntry("hl-all", 5, 33)],
+      "en",
+    );
+    expect(all.map((s) => s.text).join("")).toBe(source);
+    expect(all.filter((s) => s.entry !== null)).toHaveLength(1);
+    expect(all.find((s) => s.entry !== null)!.text).toBe(source);
+  });
+
+  it("(c-render) a mid-code highlight renders a disciplined mark inside <pre><code> with the source intact", () => {
+    // Article: paragraph "Intro text." [0, 11); code block starts 12
+    // (source is verbatim → blockLen 28; block = [12, 40)).
+    const art = article([paragraph("Intro text."), codeBlock(source)]);
+    // Highlight [19, 27) = code intra [7, 15) = "e\nline t".
+    const hl = makeEntry("hl-code", 19, 27);
+    const { container } = render(<ArticleBody article={art} highlights={[hl]} />);
+
+    const code = container.querySelector("pre code");
+    expect(code).not.toBeNull();
+    // Verbatim fidelity: the rendered code text is EXACTLY the source.
+    expect(code!.textContent).toBe(source);
+    const mark = code!.querySelector("mark.highlight");
+    expect(mark).not.toBeNull();
+    expect(mark!.textContent).toBe("e\nline t");
+    expect(mark!.getAttribute("data-highlight-id")).toBe("hl-code");
+    expect(mark!.getAttribute("tabindex")).toBe("0");
+    expect(mark!.getAttribute("aria-haspopup")).toBe("dialog");
+    expect(mark!.getAttribute("aria-label")).toContain("e\nline t".slice(0, 80));
+    expect(mark!.id).toBe("hl-hl-code");
+  });
+});
+
+describe("one id across a paragraph→caption→code span (19-03 Task 3, Pitfall 2)", () => {
+  it("(d) a span crossing paragraph, figure gap+caption, and code renders marks on every readable fragment with exactly ONE id", () => {
+    // D-05 offsets:
+    //   block 0 paragraph "Lead text here." (15)       → [0, 15)
+    //   block 1 figure alt="Pic" caption "Cap words."  → starts 16
+    //            blockText "Pic\nCap words." (14)      → [16, 30)
+    //            captionGlobalStart = 16 + 3 + 1 = 20 → caption [20, 30)
+    //   block 2 code "ab\ncd" (5)                      → [31, 36)
+    const art = article([
+      paragraph("Lead text here."),
+      figure("Pic", "Cap words."),
+      codeBlock("ab\ncd"),
+    ]);
+    // Span [13, 35): paragraph tail "e.", figure fully crossed (alt
+    // unmarked + caption marked in full), code head "ab\nc".
+    const hl = makeEntry("hl-mix", 13, 35);
+    const { container } = render(<ArticleBody article={art} highlights={[hl]} />);
+
+    const marks = container.querySelectorAll("mark.highlight");
+    expect(marks.length).toBe(3);
+    for (const m of marks) {
+      expect(m.getAttribute("data-highlight-id")).toBe("hl-mix");
+    }
+    expect(container.querySelector("p mark.highlight")!.textContent).toBe("e.");
+    expect(
+      container.querySelector("figcaption mark.highlight")!.textContent,
+    ).toBe("Cap words.");
+    expect(container.querySelector("pre code mark.highlight")!.textContent).toBe(
+      "ab\nc",
+    );
+    // Exactly ONE DOM id, on the span-start slice inside the paragraph.
+    const idCarriers = container.querySelectorAll('[id="hl-hl-mix"]');
+    expect(idCarriers.length).toBe(1);
+    expect(container.querySelector("p")!.contains(idCarriers[0]!)).toBe(true);
   });
 });

@@ -52,15 +52,31 @@ function Inline({ run }: { run: InlineRun }) {
  * Orphan: "Highlight that couldn't be relocated: {excerpt}".
  */
 function highlightAriaLabel(slice: HighlightSlice): string {
-  const text = slice.runs.map((r) => r.text).join("");
+  return highlightAriaLabelForText(
+    slice.runs.map((r) => r.text).join(""),
+    slice.hasNote,
+    slice.status,
+  );
+}
+
+/**
+ * The text-based form of the per-slice aria-label derivation, shared with
+ * the code-segment mark path (Plan 19-03 — one copy site for the §Copywriting
+ * contract; the excerpt is slice/segment-local text capped at 80 chars).
+ */
+export function highlightAriaLabelForText(
+  text: string,
+  hasNote: boolean,
+  status: "confident" | "ambiguous" | "orphan",
+): string {
   const excerpt = text.slice(0, 80);
-  if (slice.status === "ambiguous") {
+  if (status === "ambiguous") {
     return `Highlight that couldn't be matched: ${excerpt}`;
   }
-  if (slice.status === "orphan") {
+  if (status === "orphan") {
     return `Highlight that couldn't be relocated: ${excerpt}`;
   }
-  const prefix = slice.hasNote ? "Highlight with note:" : "Highlight:";
+  const prefix = hasNote ? "Highlight with note:" : "Highlight:";
   return `${prefix} ${excerpt}`;
 }
 
