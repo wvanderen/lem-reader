@@ -38,6 +38,8 @@ Readers can move through long-form web content with calm, stable orientation and
 
 **v2.1 progress:** Phase 17 Reader-Owned Metadata — SHIPPED 2026-08-30 (5 plans). `readerTitle`/`readerAuthor` override fields on ArticleSchema (additive, no Dexie version bump — v5 rows hydrate with zeroed defaults), one pure `effectiveMetadata` derivation module behind every title/author consumer (library row/remove/strip/search, reader surfaces, review panel, markdown export; book/chapter surfaces stay canonical by decision), EditMetadataDialog with calm validation and per-field Reset (override-key deletion restores the canonical value, including absent author), and bundle v3 portability: union 1|2|3 read, writer emits 3, article-metadata-override conflict kind with keep-local default + per-item take-incoming + merge-on-win, removal cascade via the existing 4-store transaction. META-01..04 verified 15/15; migration/round-trip/conflict/cascade + cross-surface consistency proven in 3-engine e2e. Full suite at gate: 2670 passed / 0 failed / 23 documented skips / exit 0 (17-05-SUMMARY honest record; first RED run recorded, fixed forward).
 
+**v2.1 progress:** Phase 18 Reader Orientation — SHIPPED 2026-08-30 (4 plans). Heading-derived table of contents: one pure `deriveToc` over the D-05 grapheme substrate (destinations are canonical offsets, never persisted page numbers or DOM ids) with skip-tolerant depth nesting and duplicate headings passed through AS-IS; TocPanel as the first non-modal `popover="manual"` overlay (labeled nav, nested semantic list, aria-current via the shared `useSectionSpy`, panel-owned scroll, universal Esc-close + focus-restore across engines); mode-aware jumps reuse the D5-11 tail in both reading modes; paginated location persistence closed the deferred restore gap (per-turn saves through the scroll-save scheduler + readiness-gated reopen-restore); ResumeBanner retired in favor of a passive transient RestorationMarker (4px bar, CSS-transition-only fade, polite announce exactly once, reduced-motion safe). ORNT-01/03/04/05/06 verified 5/5; SR/real-keyboard human verification passed 3/3 via UAT. Full suite at gate: unit 1373 + e2e 1431 passed / 0 failed / 23 documented skips / exit 0 (--workers=4 contention control, five invocations honestly recorded).
+
 <details>
 <summary>Version history detail</summary>
 
@@ -87,10 +89,10 @@ Readers can move through long-form web content with calm, stable orientation and
 - ✓ Predictable movement among structured Library, Highlights, and Reader (NAV-01/02/03/05 + POLISH-07) — shell nav in a persistent 48px header, brand as Library return, session-scoped context restore, coherent gutters/tokens across all four surfaces; verified 18/18 + UAT 2/2. — v2.1 (Phase 15)
 - ✓ Reading-state browsing with honest filter feedback and a focused, recoverable Add workflow (LIB-09/LIB-10 + ADD-01..04) — filtered-to-zero surfaces a calm no-matches line + clear-filters (never confused with membership empties), Continue Reading lives only in the All view, and Add opens a native showModal dialog (3-way source picker, four-state submission spine, dedupe/caps/refusals intact) proven for focus, dismissal, reopen, success ordering, and narrow-width/high-zoom in 3-engine e2e; verified 24/24. — v2.1 (Phase 16)
 - ✓ Reader-owned editable titles and authors (META-01..04) — `readerTitle`/`readerAuthor` overrides travel inside the article record (never a separate table), one `effectiveMetadata` derivation feeds every consumer surface (library, reader, review, search haystack, strip, markdown export), Reset deletes the key to restore the canonical value (blank overrides schema-unrepresentable), and bundle v3 carries overrides with an article-metadata-override conflict kind (keep-local default, per-item/bulk take-incoming, merge-on-win, removal cascade); verified 15/15 with the honest full-suite gate exit 0. — v2.1 (Phase 17)
+- ✓ Reader orientation aids that never shift or obstruct content (ORNT-01/03/04/05/06) — heading-derived TOC as a non-modal popover (semantic nested list, skip/duplicate tolerant, aria-current, universal Esc + focus-restore), canonical-offset destinations working identically in both modes, narrow-width/high-zoom geometry proven (no obscuring, no traps, location byte-stability), and reopening communicates restored location through a passive transient marker (no shift, no dismissal, page turns unblocked); verified 5/5 + 3/3 human SR/keyboard UAT. — v2.1 (Phase 18)
 
 ### Active
 
-- [ ] Reader orientation aids do not shift or obstruct content and include a navigable heading-derived table of contents.
 - [ ] Safely ingested source images and captions retain their semantic relationship and render consistently in both reading modes.
 - [ ] A highlight can span multiple semantic blocks while retaining durable, honest anchors across layout and persistence changes.
 - [ ] Existing interface inconsistencies and known control bugs are corrected without regressing accessibility or reading-engine guarantees.
@@ -151,6 +153,9 @@ Accessibility validation now spans the full matrix: keyboard, VoiceOver+Safari (
 | Reduced-gate acceptance honesty | When part of the matrix can't be run, record it as a coverage boundary rather than claiming full coverage | ✓ Good — v1.0 A4 boundary closed by the v2.0 NVDA run |
 | Session-scoped Library context restore (in-memory snapshot; no persistence, no keep-alive) | Returning from Reader/Highlights restores filters, clamped scroll, and launched-row focus without schema changes or cross-reload surprises | ✓ Good — Phase 15: restore proven across all return paths and degradation cases × 3 engines |
 | ≤639px wordmark collapse uses clip, not removal | Pointer-invisible but keyboard/screen-reader reachable — honors the a11y floor while holding the 48px single-row header | ✓ Good — Phase 15: e2e-proven on all three engines |
+| TOC destinations are canonical grapheme offsets over the D-05 substrate — never persisted page numbers or DOM ids | Page numbers change with every relayout; offsets survive mode switches, repagination, and persistence (the annotation-anchor discipline applied to navigation) | ✓ Good — Phase 18: cross-mode equivalence e2e, zero schema changes |
+| Esc-close + focus-restore is the universal keyboard escape for top-layer overlays | Sequential-focus semantics inside top-layer popovers diverge per engine (chromium/firefox/webkit); one guaranteed escape beats per-engine focus choreography | ✓ Good — Phase 18: probed, asserted honestly per engine, human-confirmed on Firefox+WebKit |
+| Restoration cues are passive and transient, never content-shifting banners | A banner that pushes content or demands dismissal violates the calm-reading promise at the exact moment of re-entry; CSS-transition-only fade + polite announce once covers SR users without blocking turns | ✓ Good — Phase 18: banner retired, 9/9 restoration-cue cells + SR UAT pass |
 
 ## Evolution
 
@@ -170,4 +175,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-30 after completing Phase 17 (Reader-Owned Metadata) of the v2.1 Reader Experience milestone*
+*Last updated: 2026-08-30 after completing Phase 18 (Reader Orientation) of the v2.1 Reader Experience milestone*

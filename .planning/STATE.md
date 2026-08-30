@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Reader Experience
-current_phase: 18
-current_phase_name: Reader Orientation
-status: verifying
-stopped_at: Completed 18-02-PLAN.md
-last_updated: "2026-08-30T18:39:42.541Z"
+current_phase: 19
+current_phase_name: Cross-Block Highlights
+status: ready to plan
+stopped_at: Phase 18 complete, ready to plan Phase 19
+last_updated: "2026-08-30T20:28:24.382Z"
 last_activity: 2026-08-30
-last_activity_desc: Phase 18 execution started
+last_activity_desc: Phase 18 complete, transitioned to Phase 19
 progress:
   total_phases: 8
   completed_phases: 5
@@ -21,30 +21,31 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-08-29)
+See: .planning/PROJECT.md (updated 2026-08-30)
 
-**Core value:** Readers can move through long-form web content with calm, stable orientation, and predictable navigation.
-**Current focus:** Phase 18 — Reader Orientation
+**Core value:** Readers can move through long-form content with calm, stable orientation, and predictable navigation.
+**Current focus:** Phase 19 — Cross-Block Highlights
 
 ## Current Position
 
-Phase: 18 (Reader Orientation) — EXECUTING
-Plan: 4 of 4
-Status: Phase complete — ready for verification
-Last activity: 2026-08-30 — Phase 18 execution started
+Phase: 19 — Cross-Block Highlights
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-08-30 — Phase 18 complete, transitioned to Phase 19
 
-## Recent Decisions (Phase 15)
+## Recent Decisions (Phase 18)
 
-- **Session-scoped Library context restore (D15-11..14)**: `librarySession.ts` keeps an in-memory snapshot (filters + scroll + launched row); no Dexie writes, no keep-alive mount, no false restore on degradation — proven across all return paths × 3 engines.
-- **Shell nav grammar (D15-01..D15-10)**: exactly two text-link destinations in a persistent 48px header; brand link is the sole Library reset (never aria-current); `#/review` alias normalizes to canonical `#/highlights` via replaceState; ModeToggle gated behind article mount.
-- **POLISH-07 disposition-table discipline**: surface × invariant audit recorded BEFORE editing; every fix is a var() token alignment (the one drift: `.app-wordmark` 44px touch target); the three intentional differences are citation-commented in app.css.
+- **D18-09/10/11 TOC derivation**: one pure `deriveToc` over the D-05 grapheme substrate — destinations are canonical blockStartOffsets (never page numbers/DOM ids); skip = parent+2 depth (gap size never spelled per level), duplicates pass through AS-IS, `entry.level` carries the true source level.
+- **D18-02/04 panel shape**: TocPanel is the first non-modal `popover="manual"` overlay — labeled nav, nested semantic ul, aria-current via the shared `useSectionSpy`, panel-owned internal scroll; Esc-close + focus-restore is the universal keyboard escape (top-layer sequential focus diverges per engine — honest per-engine shapes asserted).
+- **D18-06 restoration cue**: ResumeBanner fully retired; RestorationMarker is a passive transient 4px bar (CSS-transition-only fade, polite announce exactly once, reduced-motion instant clear) mounted only on genuine restore-landing.
+- **Paginated location persistence**: per-turn saves through `useScrollSave`'s returned scheduler + readiness-gated reopen-restore (bounded rAF retry → fragmentContainingOffset → turnToPage) — the deferred "option (b)" gap closed with existing machinery, zero schema changes.
 - **WebKit starvation lesson**: identical-cell failure across engines = regression; webkit-only + isolation-green = harness/environment — check the reused dev server's age before touching specs (fresh server turned exit-1 into the green exit-0 gate).
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 87 (this phase, incl. gap closure)
+- Total plans completed: 91 (this phase, incl. gap closure)
 - Average duration: 25 min
 - Total execution time: 1.5 hours
 
@@ -66,6 +67,7 @@ Last activity: 2026-08-30 — Phase 18 execution started
 | 15 | 4 | - | - |
 | 16 | 4 | - | - |
 | 17 | 5 | - | - |
+| 18 | 4 | - | - |
 
 **Recent Trend:**
 
@@ -475,8 +477,8 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-30T18:39:26.754Z
-Stopped at: Completed 18-02-PLAN.md
+Last session: 2026-08-30
+Stopped at: Phase 18 complete, ready to plan Phase 19
 Resume file: None
 
 ## Operator Next Steps
