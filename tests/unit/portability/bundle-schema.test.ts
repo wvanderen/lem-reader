@@ -1,9 +1,11 @@
 // tests/unit/portability/bundle-schema.test.ts
-// Plan 09-01 Task 2 (TDD RED → GREEN), extended by Plan 12-07 Task 1 —
-// PORT-01/02 versioning hook truth. Locks the D9-04 envelope shape:
-// schemaVersion is the 1|2 UNION (the ReaderSettingsSchema precedent —
-// v1 rows hydrate, v3+ forward-rejects per D9-04), books compose BookSchema
-// optionally (absent on v1, always present on v2 writes), all five record
+// Plan 09-01 Task 2 (TDD RED → GREEN), extended by Plan 12-07 Task 1 and
+// Plan 17-04 Task 1 — PORT-01/02 versioning hook truth. Locks the D9-04
+// envelope shape: schemaVersion is the 1|2|3 UNION (the
+// ReaderSettingsSchema precedent — v1/v2 rows hydrate, v4+ forward-rejects
+// per D9-04; v3 carries reader-owned metadata overrides inside each
+// article record since Phase 17, D17-12), books compose BookSchema
+// optionally (absent on v1, always present on v2+ writes), all five record
 // blocks compose the EXISTING schemas from src/content/schema.ts (no
 // record shape re-declared), preferences are always present (D9-12), and
 // fixtureIds carries only fixture ids (fixtures never serialize).
@@ -160,10 +162,55 @@ describe("ExportBundleSchema (D9-04 envelope)", () => {
     expect(result.success).toBe(true);
   });
 
-  it("rejects schemaVersion 3 (forward-compat gate — no silent partial import)", () => {
+  it("v1 and v2 bundle fixtures parse exactly as before (union read — regression)", () => {
+    const v1 = ExportBundleSchema.safeParse(sampleBundle());
+    expect(v1.success).toBe(true);
+    if (v1.success) {
+      expect(v1.data.schemaVersion).toBe(1); // a v1 INPUT hydrates as v1
+      expect("books" in v1.data).toBe(false);
+    }
+    const v2 = ExportBundleSchema.safeParse({
+      ...sampleBundle(),
+      schemaVersion: 2,
+      books: [],
+    });
+    expect(v2.success).toBe(true);
+    if (v2.success) {
+      expect(v2.data.schemaVersion).toBe(2); // a v2 INPUT hydrates as v2
+    }
+  });
+
+  it("rejects schemaVersion 4 (forward-compat gate — no silent partial import)", () => {
+    const result = ExportBundleSchema.safeParse({
+      ...sampleBundle(),
+      schemaVersion: 4,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  // ── Phase 17 (17-04 Task 1): v3 — overrides ride ArticleSchema ──────────
+
+  it("parses a v3 bundle with an article carrying readerTitle/readerAuthor, retaining both (D17-12 — inside ArticleSchema, no separate block)", () => {
     const result = ExportBundleSchema.safeParse({
       ...sampleBundle(),
       schemaVersion: 3,
+      articles: [
+        { ...sampleArticle(), readerTitle: "My Title", readerAuthor: "My Author" },
+      ],
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.schemaVersion).toBe(3);
+      expect(result.data.articles[0]?.readerTitle).toBe("My Title");
+      expect(result.data.articles[0]?.readerAuthor).toBe("My Author");
+    }
+  });
+
+  it("rejects a v3 bundle whose article has an empty-string readerTitle (schema min(1) holds at the bundle boundary)", () => {
+    const result = ExportBundleSchema.safeParse({
+      ...sampleBundle(),
+      schemaVersion: 3,
+      articles: [{ ...sampleArticle(), readerTitle: "" }],
     });
     expect(result.success).toBe(false);
   });

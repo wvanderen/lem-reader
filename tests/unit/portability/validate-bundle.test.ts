@@ -9,9 +9,9 @@
 //   2. unsafe-entry       — ../../evil.sh alongside valid entries; AND the
 //                           URL-encoded traversal form ..%2F..%2Fevil.sh
 //   3. missing-entry      — zip without manifest.json (and without bundle.json)
-//   4. newer-schema-version — schemaVersion 3 (v2 is readable since Phase
-//                           12 12-07) peeked BEFORE the full schema parse
-//                           (a v3 bundle with OTHER invalid fields still
+//   4. newer-schema-version — schemaVersion 4 (v3 is readable since Phase
+//                           17 17-04) peeked BEFORE the full schema parse
+//                           (a v4 bundle with OTHER invalid fields still
 //                           refuses newer-schema-version, not invalid)
 //   5. invalid            — safeParse issues as a LIST (multiple problems at
 //                           once — Pitfall 11 #2), each a path+message string
@@ -244,15 +244,15 @@ describe("validateBundle — refusal kinds (09-04 Task 2)", () => {
     }
   });
 
-  it("peeks schemaVersion BEFORE the full parse: a v3 bundle with OTHER invalid fields still refuses newer-schema-version", async () => {
+  it("peeks schemaVersion BEFORE the full parse: a v4 bundle with OTHER invalid fields still refuses newer-schema-version", async () => {
     const { validateBundle } = await loadService();
     const { bundle, manifest } = await validRawBundle();
-    // schemaVersion 3 (v2 is now readable — Phase 12 12-07) AND other damage
+    // schemaVersion 4 (v3 is now readable — Phase 17 17-04) AND other damage
     // (articles not an array; fixtureIds dropped entirely) — the calm
     // newer-version refusal must win.
     const damaged: Record<string, unknown> = {
       ...bundle,
-      schemaVersion: 3,
+      schemaVersion: 4,
       articles: "not-an-array",
     };
     delete damaged.fixtureIds;
@@ -265,7 +265,58 @@ describe("validateBundle — refusal kinds (09-04 Task 2)", () => {
     if (!result.ok) {
       expect(result.refusal).toEqual({
         kind: "newer-schema-version",
-        bundleVersion: 3,
+        bundleVersion: 4,
+      });
+    }
+  });
+
+  it("refuses a schemaVersion 4 bundle with newer-schema-version; a schemaVersion 3 bundle passes the peek (Phase 17 17-04 threshold bump)", async () => {
+    const { validateBundle } = await loadService();
+    const { bundle } = await validRawBundle();
+
+    // A FULLY valid v3 bundle — articles carrying reader-owned metadata
+    // overrides (D17-12) — parses through the peek and the full schema.
+    const overridden = ArticleSchema.parse({
+      ...sampleArticle(),
+      id: "example-overridden",
+      readerTitle: "My Chosen Title",
+      readerAuthor: "My Chosen Author",
+    });
+    const v3 = {
+      ...bundle,
+      schemaVersion: 3 as const,
+      articles: [sampleArticle(), overridden],
+    };
+    const v3Manifest = await computeManifest(ExportBundleSchema.parse(v3));
+    const v3Result = await validateBundle(
+      zipFileOf({
+        "bundle.json": bundleJsonOf(v3),
+        "manifest.json": bundleJsonOf(v3Manifest),
+      }),
+    );
+    expect(v3Result.ok).toBe(true);
+    if (v3Result.ok) {
+      expect(v3Result.bundle.schemaVersion).toBe(3);
+      expect(v3Result.bundle.articles[1]?.readerTitle).toBe("My Chosen Title");
+      expect(v3Result.bundle.articles[1]?.readerAuthor).toBe(
+        "My Chosen Author",
+      );
+    }
+
+    // The same envelope at schemaVersion 4 calm-refuses at the peek —
+    // before any schema parse, manifest check, or transaction.
+    const v4 = { ...bundle, schemaVersion: 4 };
+    const v4Result = await validateBundle(
+      zipFileOf({
+        "bundle.json": bundleJsonOf(v4),
+        "manifest.json": bundleJsonOf(v3Manifest),
+      }),
+    );
+    expect(v4Result.ok).toBe(false);
+    if (!v4Result.ok) {
+      expect(v4Result.refusal).toEqual({
+        kind: "newer-schema-version",
+        bundleVersion: 4,
       });
     }
   });
@@ -429,7 +480,7 @@ describe("validateBundle — round trip (09-04 Task 2)", () => {
 
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.bundle.schemaVersion).toBe(2); // writers emit v2 (12-07)
+      expect(result.bundle.schemaVersion).toBe(3); // writers emit v3 (17-04)
       expect(result.bundle.articles.map((a) => a.id)).toEqual([
         "example-article",
       ]);
