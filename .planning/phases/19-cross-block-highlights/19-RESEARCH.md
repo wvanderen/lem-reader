@@ -438,19 +438,24 @@ const lines = quoteLines.map((ln, i) =>
 
 **All other claims were verified directly against source this session** (file + line cited inline).
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+*All three were decided during Phase 19 planning; the deciding plan task is inline with each question.*
 
 1. **Caption + code mark rendering coverage — matrix scope decision**
+   **(RESOLVED → 19-01-T1 + 19-03-T3):** the recommendation was taken in full — Pitfall 1 capture alignment ships in 19-01-T1, caption marks (figcaption InlineList slices) AND the code-source slicer (`sliceCodeForHighlights`, verbatim-segment `<mark>` path) both land in 19-03-T3. No per-kind render fallback is shipped; D19-02 gap semantics apply only to textless figures/unsupported interiors. The paginated twin (entry-local forwarding where the fragment renderer bypasses BlockView) is pinned by 19-04-T1/T2.
    - What we know: capture-side eligibility for figure/code blocks already exists (D5-07); render-side marks do not (documented deferral, BlockRenderer L358-363). D19-01 makes captions/code spannable; success criterion 2 says the span "renders across blocks."
    - What's unclear: whether Phase 19 must RENDER marks inside captions/code (requiring the Pitfall 1 alt-offset fix + a code-source slicer) or whether the honest fallback is "eligible as endpoints/interior, marks render on the text kinds that carry InlineList today" with the matrix documenting per-kind RENDER coverage.
    - Recommendation: solve the Pitfall 1 capture alignment regardless (it corrupts stored offsets); land caption marks (figcaption already renders `InlineList` — adding slices is small once offsets are right); treat code-block interior rendering as the one judgment call to surface in PLAN (a `<pre><code>` mark path means splitting verbatim source into run-like segments — new render shape). Keep D19-02's gap semantics as the honest fallback for any kind left unmarked.
 
 2. **Which excerpt surfaces switch to first-fragment derivation**
+   **(RESOLVED → 19-02-T2):** helper adopted at ALL excerpt surfaces — ReviewView (visible + aria), AnnotationsDrawer, NotePopover, and the DeleteHighlightConfirm excerpt prop (derived once upstream); per-surface caps unchanged.
    - What we know: D19-10 names the review panel. Drawer (`AnnotationsDrawer` L181+), NotePopover (L92), and DeleteHighlightConfirm excerpts read `quote.exact` today.
    - What's unclear: whether they all adopt the helper.
    - Recommendation: one shared helper, adopted everywhere an excerpt renders (consistency is cheap; the aria-label truncations stay length-capped as today).
 
 3. **`id="hl-<id>"` first-occurrence mechanism**
+   **(RESOLVED → 19-03-T1 + 19-04-T2):** hybrid of the two pass options — the slicer sets `HighlightSlice.isFirst` from global coordinates (scrolling mode), and a per-page first-occurrence pass overrides it in entry-local paginated coordinates (one mounted page at a time). The `hl-` consumers (ArticleView focusMark getElementById sites) were re-verified untouched in 19-03-T1's read-first scope; the id is not dropped.
    - What we know: the id must exist exactly once per highlight per document; first-in-document-order equals span start.
    - What's unclear: cleanest implementation (renderer-level first-occurrence pass vs slice-start-equals-highlight-start check vs dropping the id and switching `focusMark` to `querySelector`).
    - Recommendation: planner picks with a grep of `hl-` consumers (verified consumers this session: ArticleView focusMark L1590; likely NotePopover anchor query — re-grep at plan time).
