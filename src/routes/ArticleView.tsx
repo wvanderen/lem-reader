@@ -322,10 +322,11 @@ export function ArticleView({
   // selection exists within the reading surface. rAF-throttled via the
   // selectionchange listener below so rapid selection shaping doesn't thrash.
   const [selectionRect, setSelectionRect] = useState<DOMRect | null>(null);
-  // The enriched capture result for the current selection (multi-block /
-  // overlap / empty / ineligible / ok). Computed in the selectionchange
-  // listener via the provider's captureCurrentSelection (no highlight created).
-  // Drives the toolbar's buttons-vs-hint rendering.
+  // The enriched capture result for the current selection (ok / overlap /
+  // empty / empty-span / ineligible / boundary-ineligible / measurement-body
+  // — Phase 19 vocabulary). Computed in the selectionchange listener via the
+  // provider's captureCurrentSelection (no highlight created). Drives the
+  // toolbar's buttons-vs-hint rendering.
   const [captureResult, setCaptureResult] =
     useState<ToolbarCaptureResult | null>(null);
   // Plan 13-11 (G6 — ACPT-05 Flow C2/C3): the saved live Range from the

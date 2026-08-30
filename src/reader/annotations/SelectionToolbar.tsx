@@ -7,7 +7,8 @@
 // on the mouseup that finalizes the selection; <dialog> is too heavy). The
 // toolbar appears near a VALID non-collapsed selection and offers "Highlight"
 // + "Highlight + note". It shows a calm hint replacing the buttons when the
-// selection is invalid (multi-block / overlap / empty / ineligible).
+// selection is invalid (boundary-ineligible / overlap / empty / ineligible —
+// Phase 19 vocabulary; spans themselves are valid selections, D19-09).
 //
 // Geometry (UI-SPEC §Interaction 25): centered on the selection midpoint,
 // placed --space-sm above the top edge; edge-clamped horizontally to

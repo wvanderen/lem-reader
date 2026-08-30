@@ -71,7 +71,7 @@ export type ToolbarCaptureResult =
  * invalid reason on failure (so the toolbar shows the right hint).
  *
  * Phase 19: kept aligned with CaptureResult's reason union in ONE commit
- * with capture.ts (the D5-06 "multi-block" literal retired; the span-era
+ * with capture.ts (the D5-06 multi-block literal retired; the span-era
  * "boundary-ineligible" + defensive "empty-span" added).
  */
 export type CreateFromSelectionResult =
@@ -97,8 +97,8 @@ export interface HighlightOverlayValue {
   /**
    * Capture the current selection + optionally create a highlight. Returns
    * the capture result WITHOUT creating a record for invalid selections
-   * (multi-block / overlap / empty / ineligible / measurement-body) so the
-   * toolbar can show the right hint.
+   * (overlap / empty / empty-span / ineligible / boundary-ineligible /
+   * measurement-body) so the toolbar can show the right hint.
    */
   createHighlightFromSelection: (
     readingRoot: HTMLElement,
