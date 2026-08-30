@@ -236,3 +236,235 @@ test.describe("RestorationMarker — scrolling mode (ORNT-06)", () => {
     expect(Math.abs(withoutMarker.firstBottom! - withMarker.firstBottom!)).toBeLessThanOrEqual(1);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 18 Plan 18-04 Task 2 — the PAGINATED cells + cross-engine presence
+// (strengthen-only: the scrolling describe above is byte-stable; everything
+// below is additive). Default mode is paginated (D4-12) and the beforeEach
+// wiped the settings store — NO scrolling seed runs here. The DEV
+// __lemPagination hook (persistence.spec shapes) supplies readiness + the
+// article's grapheme length so the seeded offset is deterministically DEEP
+// (60% — never page 1 on a multi-page pagination).
+// ═══════════════════════════════════════════════════════════════════════════
+test.describe("RestorationMarker — paginated mode (18-04)", () => {
+  test.setTimeout(60_000);
+
+  /** Wait for the DEV-only pagination hook (first commit). */
+  async function paginationReady(page: import("@playwright/test").Page) {
+    await page.waitForFunction(
+      () =>
+        (window as unknown as Record<string, unknown>).__lemPagination !==
+        undefined,
+      undefined,
+      { timeout: 10_000 },
+    );
+  }
+
+  /** Seed a raw LocationRecord with an arbitrary offset (the seedLocation
+   *  put shape, parameterized — the scrolling describe's helper is
+   *  hardwired to the shallow SAVED_OFFSET constant). */
+  async function seedLocationOffset(
+    page: import("@playwright/test").Page,
+    graphemeOffset: number,
+  ): Promise<void> {
+    await page.evaluate(async (seed) => {
+      await new Promise<void>((resolve, reject) => {
+        const request = indexedDB.open("lem-reader");
+        request.onsuccess = () => {
+          const database = request.result;
+          const transaction = database.transaction("location", "readwrite");
+          transaction.objectStore("location").put({
+            schemaVersion: 1,
+            articleId: seed.articleId,
+            revision: 1,
+            graphemeOffset: seed.graphemeOffset,
+            savedAt: new Date().toISOString(),
+          });
+          transaction.oncomplete = () => resolve();
+          transaction.onerror = () => reject(transaction.error);
+        };
+        request.onerror = () => reject(request.error);
+      });
+    }, { articleId: FIXTURE, graphemeOffset });
+  }
+
+  /** Open once, read the article's total grapheme length (DEV hook), seed a
+   *  DEEP location, and reload onto the restore. Resolves after the reopen
+   *  has landed past page 1 (the readiness-gated paginated restore). */
+  async function reopenOnDeepRestore(page: import("@playwright/test").Page): Promise<void> {
+    await page.goto(`${BASE}/#/article/${FIXTURE}`);
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await paginationReady(page);
+    const total = await page.evaluate(
+      () =>
+        (window as unknown as { __lemPagination?: { articleGraphemeLength: number } })
+          .__lemPagination?.articleGraphemeLength ?? 0,
+    );
+    expect(total).toBeGreaterThan(0);
+    await seedLocationOffset(page, Math.floor(total * 0.6));
+
+    await page.reload();
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await paginationReady(page);
+    await page.waitForFunction(
+      () => {
+        const dev = (window as unknown as Record<string, unknown>)
+          .__lemPagination as { currentPageIdx: number };
+        return dev.currentPageIdx >= 1;
+      },
+      undefined,
+      { timeout: 10_000 },
+    );
+  }
+
+  test("paginated reopen-restore lands on the saved page with the marker at its inline-start edge + the announce (D18-05)", async ({
+    page,
+  }) => {
+    await reopenOnDeepRestore(page);
+
+    // The polite announce (the D18-05 verbatim carry-forward) AND the bar.
+    await expect(
+      page
+        .getByRole("status")
+        .filter({ hasText: "Returned to where you left off." }),
+    ).toHaveCount(1, { timeout: 8_000 });
+    const marker = page.locator(".restoration-marker");
+    await expect(marker).toHaveCount(1, { timeout: 8_000 });
+
+    // Geometry (D18-05 "restored page edge"): the bar sits in the gutter at
+    // the restored page fragment's inline-start edge (bar.right ≈ fragment
+    // .left), spans page height, and intersects the viewport. Bounds are
+    // honest against the header line + viewport (the fragment's full box
+    // can extend a few px past the article's overflow:clip bottom — the
+    // 18-03 decision).
+    const near = await page.evaluate(() => {
+      const bar = document.querySelector<HTMLElement>(".restoration-marker");
+      const fragment = document.querySelector<HTMLElement>(".page-fragment");
+      if (!bar || !fragment) return null;
+      const b = bar.getBoundingClientRect();
+      const f = fragment.getBoundingClientRect();
+      return {
+        atInlineStartEdge: Math.abs(b.right - f.left) <= 2,
+        pageHeightBar: b.height >= f.height * 0.5,
+        intersectsViewport: b.top < window.innerHeight && b.bottom > 0,
+        belowHeaderLine: b.top >= 40,
+        withinViewportBottom: b.bottom <= window.innerHeight + 8,
+      };
+    });
+    expect(near).not.toBeNull();
+    expect(near!.atInlineStartEdge, "the bar must sit at the restored page's inline-start edge").toBe(true);
+    expect(near!.pageHeightBar, "the bar must span the restored page's height").toBe(true);
+    expect(near!.intersectsViewport, "the bar must be visible at the restored page").toBe(true);
+    expect(near!.belowHeaderLine).toBe(true);
+    expect(near!.withinViewportBottom).toBe(true);
+  });
+
+  test("no dismissal exists — no interactive element inside the marker and the bar never intercepts pointers (ORNT-06)", async ({
+    page,
+  }) => {
+    await reopenOnDeepRestore(page);
+    const marker = page.locator(".restoration-marker");
+    await expect(marker).toHaveCount(1, { timeout: 8_000 });
+
+    // No button/link/focusable inside the marker — there is nothing to
+    // dismiss (the cue IS the location; it retires on its own).
+    const interactive = await marker.evaluate((el) =>
+      el.querySelectorAll("button, a, input, select, textarea, [tabindex]").length,
+    );
+    expect(interactive).toBe(0);
+
+    // pointer-events: none — the bar can never intercept a click or a page
+    // turn gesture (ORNT-06 "does not block").
+    const pointerEvents = await marker.evaluate(
+      (el) => getComputedStyle(el).pointerEvents,
+    );
+    expect(pointerEvents).toBe("none");
+  });
+
+  test("page turns still work while the marker is visible (pointer-events none — ORNT-06)", async ({
+    page,
+  }) => {
+    await reopenOnDeepRestore(page);
+    const marker = page.locator(".restoration-marker");
+    await expect(marker).toHaveCount(1, { timeout: 8_000 });
+
+    const readIdx = () =>
+      page.evaluate(
+        () =>
+          (window as unknown as { __lemPagination?: { currentPageIdx: number } })
+            .__lemPagination?.currentPageIdx ?? -1,
+      );
+    const before = await readIdx();
+    await page.keyboard.press("PageDown");
+    await expect
+      .poll(readIdx, { timeout: 5_000 })
+      .toBe(before + 1);
+    // The marker is still mounted (well within its 4s window) — reading
+    // continued past it without dismissal.
+    await expect(marker).toHaveCount(1);
+  });
+
+  test("content geometry is unchanged by the marker mount — overlay-only (ORNT-06)", async ({
+    page,
+  }) => {
+    await reopenOnDeepRestore(page);
+    const marker = page.locator(".restoration-marker");
+    await expect(marker).toHaveCount(1, { timeout: 8_000 });
+
+    // Fragment + article geometry WITH the marker mounted…
+    const readGeometry = () =>
+      page.evaluate(() => {
+        const article = document.querySelector("article.article-body");
+        const fragment = document.querySelector<HTMLElement>(".page-fragment");
+        const articleRect = article?.getBoundingClientRect();
+        const fragmentRect = fragment?.getBoundingClientRect();
+        return {
+          articleTop: articleRect?.top ?? null,
+          articleBottom: articleRect?.bottom ?? null,
+          fragmentTop: fragmentRect?.top ?? null,
+          fragmentLeft: fragmentRect?.left ?? null,
+        };
+      });
+    const withMarker = await readGeometry();
+    // …and after the 4s lifecycle unmounts it (generous fade window).
+    await expect(marker).toHaveCount(0, { timeout: 10_000 });
+    const withoutMarker = await readGeometry();
+
+    // The ≤1px convention (the scrolling describe's calibration note).
+    expect(Math.abs(withoutMarker.articleTop! - withMarker.articleTop!)).toBeLessThanOrEqual(1);
+    expect(Math.abs(withoutMarker.articleBottom! - withMarker.articleBottom!)).toBeLessThanOrEqual(1);
+    expect(Math.abs(withoutMarker.fragmentTop! - withMarker.fragmentTop!)).toBeLessThanOrEqual(1);
+    expect(Math.abs(withoutMarker.fragmentLeft! - withMarker.fragmentLeft!)).toBeLessThanOrEqual(1);
+  });
+
+  test("reduced motion: the marker clears as an instant state change — the global gate kills the fade transition (D18-07, Pitfall 8)", async ({
+    page,
+  }) => {
+    // Emulate BEFORE navigation so the gate applies from first paint.
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await reopenOnDeepRestore(page);
+    const marker = page.locator(".restoration-marker");
+    await expect(marker).toHaveCount(1, { timeout: 8_000 });
+
+    // The fade class still lands at 3400ms (the lifecycle is timer-driven)
+    // — but the global prefers-reduced-motion gate kills the transition, so
+    // the opacity change is an instant step (computed transition-duration
+    // 0s). Poll generously: the class arrives mid-window.
+    await expect
+      .poll(
+        () => marker.evaluate((el) => el.classList.contains("is-fading")),
+        { timeout: 6_000 },
+      )
+      .toBe(true);
+    const duration = await marker.evaluate((el) =>
+      getComputedStyle(el).transitionDuration,
+    );
+    expect(
+      duration,
+      "the reduced-motion gate must kill the fade (0s duration — no JS animation exists)",
+    ).toBe("0s");
+
+    // And the bar is gone by the lifecycle deadline.
+    await expect(marker).toHaveCount(0, { timeout: 10_000 });
+  });
+});
