@@ -51,18 +51,15 @@
 // forbids the raw-HTML prop.
 import { useEffect, useRef, useState } from "react";
 import { useHighlightOverlay } from "./HighlightOverlay";
+// Plan 19-02 (D19-10) — the excerpt derivation routes through the ONE
+// shared pure helper (first fragment + calm ellipsis for spans).
+import { firstFragmentExcerpt } from "../../annotations/excerpt";
 
-/** Truncation limits for the excerpt context (UI-SPEC §Interaction 29). */
+/** Excerpt cap for the popover context block (UI-SPEC §Interaction 29) —
+ * Plan 19-02: the cap parameter feeding the shared firstFragmentExcerpt
+ * derivation (per-surface caps stay EXACTLY as shipped; the dialog's
+ * accessible description IS this excerpt block via aria-describedby). */
 const EXCERPT_MAX_CHARS = 200;
-
-/**
- * Truncate text to `max` chars + an ellipsis if it exceeds the limit.
- * Plain string operation — the result is rendered as a React text child.
- */
-function truncate(text: string, max: number): string {
-  if (text.length <= max) return text;
-  return text.slice(0, max) + "\u2026";
-}
 
 export function NotePopover(): React.ReactElement | null {
   const {
@@ -89,7 +86,11 @@ export function NotePopover(): React.ReactElement | null {
     : null;
 
   const noteText = resolved?.note?.text ?? "";
-  const excerpt = resolved?.record.quote.exact ?? "";
+  // Plan 19-02 (D19-10): the excerpt derives from the FIRST FRAGMENT of the
+  // stored quote via the shared pure helper — cap unchanged (200). The same
+  // derived value feeds both the confirm-path and edit-path context blocks
+  // (and therefore the dialog's accessible description).
+  const excerpt = firstFragmentExcerpt(resolved?.record.quote.exact ?? "", EXCERPT_MAX_CHARS);
   const isUnresolved = resolved?.status === "ambiguous" || resolved?.status === "orphan";
 
   // Sync the popover's visibility with the openPopoverFor state. Native
@@ -225,7 +226,7 @@ export function NotePopover(): React.ReactElement | null {
             {excerpt.length > 0 && (
               <p className="highlight-popover-excerpt" id="highlight-popover-excerpt">
                 <span className="visually-hidden">Highlighted text:</span>{" "}
-                {truncate(excerpt, EXCERPT_MAX_CHARS)}
+                {excerpt}
               </p>
             )}
             <div className="highlight-popover-actions">
@@ -261,7 +262,7 @@ export function NotePopover(): React.ReactElement | null {
                   readers see only the italic excerpt (the prefix is clipped). */}
               <p className="highlight-popover-excerpt" id="highlight-popover-excerpt">
                 <span className="visually-hidden">Highlighted text:</span>{" "}
-                {truncate(excerpt, EXCERPT_MAX_CHARS)}
+                {excerpt}
               </p>
             </div>
             <div className="highlight-popover-note">

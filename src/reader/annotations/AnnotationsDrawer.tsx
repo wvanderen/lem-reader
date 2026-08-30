@@ -26,11 +26,16 @@
 // Pitfall 8: excerpts + notes render as React text children. NEVER raw HTML.
 import { useEffect, useRef } from "react";
 import { useHighlightOverlay } from "./HighlightOverlay";
+// Plan 19-02 (D19-10) — the excerpt derivation routes through the ONE
+// shared pure helper (first fragment + calm ellipsis for spans).
+import { firstFragmentExcerpt } from "../../annotations/excerpt";
 
 /** Truncation limits for drawer entries (UI-SPEC §Interaction 30). */
 const EXCERPT_MAX_CHARS = 120;
 const NOTE_MAX_CHARS = 200;
 
+/** Plan 19-02 — serves NOTE previews only (every quote.exact excerpt site
+ * derives through the shared firstFragmentExcerpt helper instead). */
 function truncate(text: string, max: number): string {
   if (text.length <= max) return text;
   return text.slice(0, max) + "\u2026";
@@ -178,7 +183,12 @@ export function AnnotationsDrawer({
         ) : (
           <ol className="drawer-list">
             {sorted.map((h) => {
-              const excerpt = h.record.quote.exact;
+              // Plan 19-02 (D19-10): excerpts derive from the FIRST FRAGMENT
+              // of the stored quote via the shared pure helper — per-surface
+              // caps unchanged (visible 120 / jump aria 60). Honesty rule: no
+              // ellipsis on a complete single-fragment highlight.
+              const excerpt = firstFragmentExcerpt(h.record.quote.exact, EXCERPT_MAX_CHARS);
+              const ariaExcerpt = firstFragmentExcerpt(h.record.quote.exact, 60);
               const noteText = h.note?.text ?? "";
               const isUnresolved = h.status === "ambiguous" || h.status === "orphan";
               const flagText =
@@ -200,8 +210,8 @@ export function AnnotationsDrawer({
 
               // Build the aria-label for the jump button (UI-SPEC §Copywriting).
               const ariaLabel = isUnresolved
-                ? `Go to highlight: ${truncate(excerpt, 60)}. This highlight can't be located, so jumping is disabled.`
-                : `Go to highlight: ${truncate(excerpt, 60)}${noteText ? `; ${truncate(noteText, 60)}` : ""}`;
+                ? `Go to highlight: ${ariaExcerpt}. This highlight can't be located, so jumping is disabled.`
+                : `Go to highlight: ${ariaExcerpt}${noteText ? `; ${truncate(noteText, 60)}` : ""}`;
 
               return (
                 <li key={h.record.id}>
@@ -216,9 +226,7 @@ export function AnnotationsDrawer({
                       }
                     }}
                   >
-                    <span className="drawer-entry-excerpt">
-                      {truncate(excerpt, EXCERPT_MAX_CHARS)}
-                    </span>
+                    <span className="drawer-entry-excerpt">{excerpt}</span>
                     {flagText && (
                       <span className="drawer-entry-flag">{flagText}</span>
                     )}

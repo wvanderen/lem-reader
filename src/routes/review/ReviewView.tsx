@@ -69,6 +69,10 @@ import { setDocumentTitle } from "../../ingestion/library/pageMeta";
 import { effectiveTitle } from "../../ingestion/library/effectiveMetadata";
 import { loadAllHighlights } from "../../persistence/highlightsStore";
 import { loadAllNotes } from "../../persistence/notesStore";
+// Plan 19-02 (D19-10) — every stored-quote excerpt derivation routes through
+// the ONE shared pure helper: a cross-block span describes itself as its
+// first fragment + a calm ellipsis, never a truncated multi-block blob.
+import { firstFragmentExcerpt } from "../../annotations/excerpt";
 import {
   deriveReviewSections,
   type ConfidenceFilter,
@@ -84,7 +88,13 @@ import { BackToLibrary } from "../../reader/BackToLibrary";
 const EXCERPT_MAX_CHARS = 120;
 const NOTE_MAX_CHARS = 200;
 const ARIA_MAX_CHARS = 60;
+/** Plan 19-02 (D19-10) — the DeleteHighlightConfirm excerpt prop derives
+ * ONCE here (single derivation site) at the confirm surface's shipped cap
+ * (the DeleteHighlightConfirm EXCERPT_MAX_CHARS=200 precedent — unchanged). */
+const CONFIRM_EXCERPT_MAX_CHARS = 200;
 
+/** Plan 19-02 — serves NOTE previews only (every stored-quote excerpt site
+ * derives through the shared firstFragmentExcerpt helper instead). */
 function truncate(text: string, max: number): string {
   if (text.length <= max) return text;
   return text.slice(0, max) + "…";
@@ -150,7 +160,13 @@ function ReviewRow({
   onEditNote: (entry: ReviewEntry) => void;
   onRemove: (entry: ReviewEntry) => void;
 }) {
-  const excerpt = entry.highlight.quote.exact;
+  // Plan 19-02 (D19-10): excerpts derive from the FIRST FRAGMENT of the
+  // stored quote via the shared pure helper — per-surface caps unchanged
+  // (visible 120 / aria 60). A complete single-fragment highlight gets NO
+  // ellipsis; the ellipsis appears only on genuine continuation or length
+  // truncation (excerpt honesty rule).
+  const excerpt = firstFragmentExcerpt(entry.highlight.quote.exact, EXCERPT_MAX_CHARS);
+  const ariaExcerpt = firstFragmentExcerpt(entry.highlight.quote.exact, ARIA_MAX_CHARS);
   const noteText = entry.note?.text ?? "";
   const isUnresolved = entry.status !== "confident";
   const jumpable = entry.status === "confident" && entry.article !== undefined;
@@ -166,7 +182,7 @@ function ReviewRow({
 
   const content = (
     <>
-      <span className="review-quote">{truncate(excerpt, EXCERPT_MAX_CHARS)}</span>
+      <span className="review-quote">{excerpt}</span>
       {noteText.length > 0 && (
         <span className="review-note-preview">
           {truncate(noteText, NOTE_MAX_CHARS)}
@@ -189,7 +205,7 @@ function ReviewRow({
       <button
         type="button"
         className="review-row-action review-row-action-note"
-        aria-label={`Edit note: ${truncate(excerpt, ARIA_MAX_CHARS)}`}
+        aria-label={`Edit note: ${ariaExcerpt}`}
         onClick={() => onEditNote(entry)}
       >
         Edit note
@@ -197,7 +213,7 @@ function ReviewRow({
       <button
         type="button"
         className="review-row-action review-row-action-remove"
-        aria-label={`Remove highlight: ${truncate(excerpt, ARIA_MAX_CHARS)}`}
+        aria-label={`Remove highlight: ${ariaExcerpt}`}
         onClick={() => onRemove(entry)}
       >
         Remove highlight
@@ -218,8 +234,8 @@ function ReviewRow({
 
   // The jump button's aria-label mirrors the drawer-entry pattern.
   const ariaLabel = isUnresolved
-    ? `Go to highlight: ${truncate(excerpt, ARIA_MAX_CHARS)}. This highlight can't be located, so jumping is disabled.`
-    : `Go to highlight: ${truncate(excerpt, ARIA_MAX_CHARS)}${
+    ? `Go to highlight: ${ariaExcerpt}. This highlight can't be located, so jumping is disabled.`
+    : `Go to highlight: ${ariaExcerpt}${
         noteText ? `; ${truncate(noteText, ARIA_MAX_CHARS)}` : ""
       }`;
 
@@ -524,7 +540,11 @@ export function ReviewView({ hasAppHistory }: { hasAppHistory: boolean }) {
       <DeleteHighlightConfirm
         open={removeTarget !== null}
         highlightId={removeTarget?.highlight.id ?? ""}
-        excerpt={removeTarget?.highlight.quote.exact ?? ""}
+        excerpt={
+          removeTarget
+            ? firstFragmentExcerpt(removeTarget.highlight.quote.exact, CONFIRM_EXCERPT_MAX_CHARS)
+            : ""
+        }
         onConfirm={() => {
           setRemoveTarget(null);
           setRefreshKey((k) => k + 1);
