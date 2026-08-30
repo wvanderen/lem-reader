@@ -53,6 +53,25 @@ export interface HighlightSlice {
    * mark.highlight.unresolved. "confident" for gap slices (no modifier).
    */
   status: "confident" | "ambiguous" | "orphan";
+  /**
+   * Phase 19 Plan 19-03 (Pitfall 2 — first-slice-only DOM id): true only on
+   * the highlight's FIRST slice in document order — the one slice allowed to
+   * carry `id="hl-<highlightId>"` (InlineRenderer stamps the id exactly when
+   * this is true; `data-highlight-id` stays on EVERY slice). Set by the
+   * slicer as `h.position.start >= blockGlobalStart`: a highlight's global
+   * start lies within this block exactly when this block is the first it
+   * touches (blocks are contiguous under the D-05 prefix-sum join, so a
+   * start before this block implies an earlier block also intersects).
+   *
+   * PAGINATED entry-local callers must OVERRIDE this flag via a per-page
+   * first-occurrence pass (Plan 19-04): entry-local coordinates start at 0,
+   * so the slicer's comparison would mark EVERY fully-covered entry. Until
+   * 19-04 lands, the paginated path keeps ids on every mounted-page slice —
+   * behavior identical to the pre-19-03 renderer (only one PageFragmentView
+   * is mounted at a time; the residual duplicate case is a multi-block span
+   * within one page, spec-green and documented in 19-03-SUMMARY).
+   */
+  isFirst?: boolean;
 }
 
 /**
@@ -86,13 +105,17 @@ export function sliceRunsForHighlights(
     0,
   );
 
-  // Compute intra-block intersections (D5-16 intersection math).
+  // Compute intra-block intersections (D5-16 intersection math). hlStart
+  // carries the highlight's article-global start so the emitted slice can
+  // flag isFirst (Pitfall 2 — the block containing the highlight's global
+  // start is the block it first touches in document order).
   const intersections: {
     start: number;
     end: number;
     id: string;
     hasNote: boolean;
     status: "confident" | "ambiguous" | "orphan";
+    hlStart: number;
   }[] = [];
   for (const h of highlights) {
     const interStart = Math.max(0, h.position.start - blockGlobalStart);
@@ -104,6 +127,7 @@ export function sliceRunsForHighlights(
         id: h.id,
         hasNote: h.hasNote,
         status: h.status ?? "confident",
+        hlStart: h.position.start,
       });
     }
   }
@@ -141,6 +165,11 @@ export function sliceRunsForHighlights(
       cursor = inter.start;
     }
     // The intersection itself: [inter.start, inter.end) → highlighted slice.
+    // isFirst (Pitfall 2): the highlight's global start lies within this
+    // block exactly when it is >= this block's global start — the single,
+    // contiguous intersection slice carrying the flag becomes the DOM id
+    // carrier (InlineRenderer). See HighlightSlice.isFirst for the paginated
+    // entry-local caveat (Plan 19-04).
     const interLen = inter.end - inter.start;
     const split = splitParagraphRuns(currentRuns, interLen, lang);
     if (split.before.length > 0) {
@@ -149,6 +178,7 @@ export function sliceRunsForHighlights(
         highlightId: inter.id,
         hasNote: inter.hasNote,
         status: inter.status,
+        isFirst: inter.hlStart >= blockGlobalStart,
       });
     }
     currentRuns = split.after;
