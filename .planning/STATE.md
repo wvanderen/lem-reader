@@ -6,14 +6,14 @@ current_phase: 18
 current_phase_name: Reader Orientation
 status: executing
 stopped_at: Phase 18 UI-SPEC approved
-last_updated: "2026-08-30T15:43:42.010Z"
+last_updated: "2026-08-30T15:58:32.054Z"
 last_activity: 2026-08-30
-last_activity_desc: Phase 17 complete, transitioned to Phase 18
+last_activity_desc: Phase 18 execution started
 progress:
   total_phases: 8
   completed_phases: 4
-  total_plans: 17
-  completed_plans: 17
+  total_plans: 21
+  completed_plans: 18
   percent: 50
 ---
 
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-29)
 
 **Core value:** Readers can move through long-form web content with calm, stable orientation, and predictable navigation.
-**Current focus:** Phase 17 — Reader-Owned Metadata
+**Current focus:** Phase 18 — Reader Orientation
 
 ## Current Position
 
-Phase: 18 — Reader Orientation
-Plan: Not started
+Phase: 18 (Reader Orientation) — EXECUTING
+Plan: 2 of 4
 Status: Ready to execute
-Last activity: 2026-08-30 — Phase 17 complete, transitioned to Phase 18
+Last activity: 2026-08-30 — Phase 18 execution started
 
 ## Recent Decisions (Phase 15)
 
@@ -172,6 +172,7 @@ Last activity: 2026-08-30 — Phase 17 complete, transitioned to Phase 18
 | Phase 17 P03 | 4 min | 2 tasks | 5 files |
 | Phase 17 P04 | 18 min | 3 tasks | 11 files |
 | Phase 17 P05 | 33 min | 3 tasks | 5 files |
+| Phase 18 P01 | 8 min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -405,6 +406,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 17]: Plan 17-03: All reader/review/export presentation surfaces (ArticleView x5, ReviewView x3, reviewFilter x1, markdown.ts x4) consume the ONE effectiveTitle/effectiveAuthor derivation — chapter neighbors and book halves stay canonical (D17-05/D17-06); export filename + all sort keys pinned effective (OQ5) — META-02 downstream half: one name follows the reader everywhere; fixture-pinned regressions byte-stable because fixtures carry no overrides; cross-surface e2e proof lands in 17-05
 - [Phase 17]: [Phase 17 17-04]: Per-kind overwrite on article-metadata-override is the honest bulk take-incoming (union with the per-item set) — a no-op offered select would violate the honesty constraint; merge-on-win keeps LOCAL overrides on every incoming-wins branch (D17-10), applyImport byte-unchanged. — The dialog must render the local EFFECTIVE name; the four pinned override-value fields cannot display one-side-only conflicts, so MetadataConflictDetail carries localName/incomingName computed via effectiveTitle (the ONE derivation — META-02, never forked in the dialog).
 - [Phase 17]: 17-05: Version-bump assertion sweeps must be exhaustive — the honest full-suite gate is the backstop that surfaced the third v2-emit site (core-flow-spine L231) outside the plan's file list; cross-surface consistency cells assert canonical strings ABSENT (one name is a negative assertion, not just a positive one). — Identical-cell failure across engines = regression class (the 15-04 lesson); a positive effective-name assertion alone cannot prove one-name-everywhere.
+- [Phase ?]: [18-01] TOC depth rule: direct child = parent+1, skipped level = parent+2 — the skip is one structural signal; gap size never spelled per level (entry.level carries the true source level verbatim per ORNT-04)
+- [Phase ?]: [18-01] useSectionSpy keeps text-based change tracking (byte-identical announcer semantics) and invokes onCurrent(headingElement, detectTimeText) — element-first for D18-12 data-block-index mapping; latest-callback ref keeps effect deps [articleEl, selector]
+- [Phase ?]: [18-01] ORNT-04 stays unchecked until 18-02 ships TocPanel — this plan proves derivation invariants only (04-02 PAGE-01 / 10-01 RECV-01 split precedent); section-announce.spec.ts 12/12 green with zero diff after the extraction
 
 ### Pending Todos
 
@@ -460,7 +464,7 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-30T15:07:00.748Z
+Last session: 2026-08-30T15:58:32.045Z
 Stopped at: Phase 18 UI-SPEC approved
 Resume file: .planning/phases/18-reader-orientation/18-UI-SPEC.md
 
