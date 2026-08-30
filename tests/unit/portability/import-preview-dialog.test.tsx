@@ -30,7 +30,11 @@ beforeEach(() => {
 });
 
 import { ImportPreviewDialog } from "../../../src/reader/ImportPreviewDialog";
-import type { ImportPreviewData, Overrides } from "../../../src/portability/conflicts";
+import type {
+  ImportPreviewData,
+  MetadataConflictDetail,
+  Overrides,
+} from "../../../src/portability/conflicts";
 
 /** A synthetic preview with every conflict kind present so the whole
  * grouped list renders, including the id-kind three-option selects.
@@ -196,5 +200,180 @@ describe("ImportPreviewDialog — preview copy + override plumbing (D9-11)", () 
       dlg!.dispatchEvent(new Event("close", { bubbles: false }));
     });
     expect(onCancel).toHaveBeenCalledTimes(1); // still exactly the ESC call
+  });
+});
+
+// ── Phase 17 (17-04 Task 3): per-item metadata choice (D17-11) ───────────────
+
+/** A preview whose ONLY conflict is the metadata kind — SIX conflicted
+ * articles (one past the sampleIds cap of 5) so the per-item list must
+ * render beyond the cap. Article 1 carries explicit override values; the
+ * rest exercise the effective-name-only display. */
+function sampleMetadataPreview(): ImportPreviewData {
+  const details: MetadataConflictDetail[] = [1, 2, 3, 4, 5, 6].map((n) => ({
+    id: `art-meta-${n}`,
+    localName: `Local Name ${n}`,
+    incomingName: `Incoming Name ${n}`,
+    ...(n === 1
+      ? {
+          localReaderTitle: `Local Name ${n}`,
+          incomingReaderTitle: `Incoming Name ${n}`,
+        }
+      : {}),
+  }));
+  return {
+    incoming: { books: 0, articles: 6, highlights: 0, notes: 0, locations: 0 },
+    added: { books: 0, articles: 0, highlights: 0, notes: 0, locations: 0 },
+    conflicts: [
+      {
+        kind: "article-metadata-override",
+        count: 6,
+        sampleIds: details.slice(0, 5).map((d) => d.id),
+      },
+    ],
+    metadataConflicts: details,
+    resolution: { confident: 0, ambiguous: 0, orphan: 0 },
+    fixtureBackedHighlights: 0,
+    applyPreferencesDefault: false,
+  };
+}
+
+describe("ImportPreviewDialog — per-item metadata choice (17-04, D17-11)", () => {
+  it("renders the metadata conflict summary row with the pinned KIND_LABELS copy", () => {
+    renderDialog({ preview: sampleMetadataPreview() });
+    expect(
+      screen.getByText(/6 conflicting articles with a different title or author/),
+    ).toBeTruthy();
+  });
+
+  it("expands to list EVERY conflicted article beyond the cap-5 samples, local and incoming names visible", () => {
+    renderDialog({ preview: sampleMetadataPreview() });
+    // Collapsed by default: the per-item rows are hidden until disclosed.
+    expect(screen.queryByLabelText("Import choice for Local Name 6")).toBeNull();
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "Show articles" }));
+    });
+    // ALL SIX rows render (sampleIds caps at 5 — the per-item choice must
+    // not), each showing the local effective name and the incoming name.
+    for (const n of [1, 2, 3, 4, 5, 6]) {
+      expect(screen.getByLabelText(`Import choice for Local Name ${n}`)).toBeTruthy();
+      expect(screen.getByText(`Incoming Name ${n}`)).toBeTruthy();
+    }
+    expect(screen.getByText("Local Name 6")).toBeTruthy();
+  });
+
+  it("defaults every per-item choice to Keep mine; Proceed carries an EMPTY take-incoming set", () => {
+    const onProceed = vi.fn().mockResolvedValue(undefined);
+    renderDialog({ preview: sampleMetadataPreview(), onProceed });
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "Show articles" }));
+    });
+    const first = screen.getByLabelText(
+      "Import choice for Local Name 1",
+    ) as HTMLSelectElement;
+    expect(first.value).toBe("keep-mine");
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "Import" }));
+    });
+    expect(onProceed).toHaveBeenCalledTimes(1);
+    const [overrides, applyPreferences, takeIncoming] = onProceed.mock.calls[0] as [
+      Overrides,
+      boolean,
+      Set<string>,
+    ];
+    expect(overrides["article-metadata-override"]).toBe("skip");
+    expect(applyPreferences).toBe(false);
+    expect(takeIncoming.size).toBe(0);
+  });
+
+  it("toggling an article to Use imported adds the id to the payload; toggling back removes it", () => {
+    const onProceed = vi.fn().mockResolvedValue(undefined);
+    renderDialog({ preview: sampleMetadataPreview(), onProceed });
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "Show articles" }));
+    });
+    const second = screen.getByLabelText("Import choice for Local Name 2");
+    act(() => {
+      fireEvent.change(second, { target: { value: "use-imported" } });
+    });
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "Import" }));
+    });
+    let takeIncoming = (onProceed.mock.calls[0] as unknown[])[2] as Set<string>;
+    expect(takeIncoming.has("art-meta-2")).toBe(true);
+    expect(takeIncoming.size).toBe(1);
+
+    // Toggle back to Keep mine → the id leaves the payload.
+    act(() => {
+      fireEvent.change(second, { target: { value: "keep-mine" } });
+    });
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "Import" }));
+    });
+    takeIncoming = (onProceed.mock.calls[1] as unknown[])[2] as Set<string>;
+    expect(takeIncoming.size).toBe(0);
+  });
+
+  it("offers keep-both nowhere on the metadata kind select (skip/overwrite only — KEEP_BOTH_KINDS narrowing)", () => {
+    renderDialog({ preview: sampleMetadataPreview() });
+    const kindSelect = screen.getByLabelText(
+      "Import choice for articles with a different title or author",
+    ) as HTMLSelectElement;
+    expect(kindSelect.value).toBe("skip");
+    expect(Array.from(kindSelect.options).map((o) => o.value)).toEqual([
+      "skip",
+      "overwrite",
+    ]);
+  });
+
+  it("resets per-item state when the dialog reopens (the open-transition reset path mirrors)", () => {
+    const onProceed = vi.fn().mockResolvedValue(undefined);
+    const { container, rerender } = render(
+      <ImportPreviewDialog
+        open={true}
+        preview={sampleMetadataPreview()}
+        onProceed={onProceed}
+        onCancel={vi.fn()}
+      />,
+    );
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "Show articles" }));
+    });
+    act(() => {
+      fireEvent.change(screen.getByLabelText("Import choice for Local Name 3"), {
+        target: { value: "use-imported" },
+      });
+    });
+    // Controlled close (parent flips open), then reopen — fresh choices on
+    // every open, per-item state included (the 09-06 close-path lesson).
+    rerender(
+      <ImportPreviewDialog
+        open={false}
+        preview={sampleMetadataPreview()}
+        onProceed={onProceed}
+        onCancel={vi.fn()}
+      />,
+    );
+    rerender(
+      <ImportPreviewDialog
+        open={true}
+        preview={sampleMetadataPreview()}
+        onProceed={onProceed}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(container.querySelector("dialog.import-preview")).not.toBeNull();
+    const third = screen.getByLabelText(
+      "Import choice for Local Name 3",
+    ) as HTMLSelectElement;
+    expect(third.value).toBe("keep-mine");
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "Show articles" }));
+    });
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "Import" }));
+    });
+    const takeIncoming = (onProceed.mock.calls[0] as unknown[])[2] as Set<string>;
+    expect(takeIncoming.size).toBe(0);
   });
 });
