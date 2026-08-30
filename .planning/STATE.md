@@ -5,15 +5,15 @@ milestone_name: Reader Experience
 current_phase: 17
 current_phase_name: Reader-Owned Metadata
 status: executing
-stopped_at: Completed 17-01-PLAN.md (reader-owned metadata substrate)
-last_updated: "2026-08-29T23:52:36.997Z"
+stopped_at: Completed 17-03-PLAN.md
+last_updated: "2026-08-30T00:03:14.281Z"
 last_activity: 2026-08-29
 last_activity_desc: Phase 17 execution started
 progress:
   total_phases: 8
   completed_phases: 3
   total_plans: 17
-  completed_plans: 14
+  completed_plans: 15
   percent: 38
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-29)
 ## Current Position
 
 Phase: 17 (Reader-Owned Metadata) — EXECUTING
-Plan: 3 of 5
+Plan: 4 of 5
 Status: Ready to execute
 Last activity: 2026-08-29 — Phase 17 execution started
 
@@ -168,6 +168,7 @@ Last activity: 2026-08-29 — Phase 17 execution started
 | Phase 16 P04 | 48 min | 3 tasks | 4 files |
 | Phase 17 P01 | 5 min | 2 tasks | 5 files |
 | Phase 17 P02 | 11 min | 3 tasks | 7 files |
+| Phase 17 P03 | 4 min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -398,6 +399,7 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: Destructure-out override row build: a bare {...article} spread re-carries existing readerTitle/readerAuthor, so conditional-spread omission never deletes a cleared key — the base must exclude both override keys first (17-02 Rule 1 fix, e2e-caught)
 - [Phase ?]: WebKit click-focus quirk: dialog-open e2e cells asserting focus restore must open via focus+Enter and assert toBeFocused (focused-add precedent) — WebKit does not focus buttons on mouse click; htmlToBlocks extracts authors ONLY from meta[name=author], never <address>
 - [Phase ?]: META-02 split: 17-02 closes the library half (row/strip/search effective values); Reader/Highlights/export halves close in 17-03 — META-01/META-03 closed at 17-02 with end-to-end row-truth proof
+- [Phase 17]: Plan 17-03: All reader/review/export presentation surfaces (ArticleView x5, ReviewView x3, reviewFilter x1, markdown.ts x4) consume the ONE effectiveTitle/effectiveAuthor derivation — chapter neighbors and book halves stay canonical (D17-05/D17-06); export filename + all sort keys pinned effective (OQ5) — META-02 downstream half: one name follows the reader everywhere; fixture-pinned regressions byte-stable because fixtures carry no overrides; cross-surface e2e proof lands in 17-05
 
 ### Pending Todos
 
@@ -453,8 +455,8 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-29T23:52:21.971Z
-Stopped at: Completed 17-01-PLAN.md (reader-owned metadata substrate)
+Last session: 2026-08-29T23:58:02.539Z
+Stopped at: Completed 17-03-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
