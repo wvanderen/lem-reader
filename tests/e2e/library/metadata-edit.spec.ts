@@ -21,6 +21,16 @@
 //     seed overrides on bundled fixtures — Pitfall 8 spec discipline;
 //     fixture-pinned anchors elsewhere stay byte-stable by construction)
 import { test, expect, type Page } from "@playwright/test";
+import { readFileSync } from "node:fs";
+import { ArticleSchema } from "../../../src/content/schema";
+// Plan 17-05 — the shared portability helpers for the cross-surface cell's
+// seeded highlight (confidentHighlightOn + highlightRow + seedRows: the
+// Node-side anchor derivation over the SAVED row, the 12-07 chapter pattern).
+import {
+  confidentHighlightOn,
+  highlightRow,
+  seedRows,
+} from "../portability/_portability";
 // Plan 16-03 — the shared dialog-opening helper (ADD-01: the intake forms
 // live behind the header Add button's modal).
 import { openAddDialog, pickSource } from "./add-dialog";
@@ -658,5 +668,136 @@ test.describe("D17-07 + D17-09 — search + strip consistency", () => {
     await expect(
       strip.locator("a", { hasText: STRIP_OLD_TITLE }),
     ).toHaveCount(0);
+  });
+});
+
+// ── Plan 17-05 Task 3 — the META-02 cross-surface consistency proof ───────────
+//
+// One describe drives the REAL UI through every remaining META-02 surface
+// after a single library edit (D17-09's one-name-everywhere inventory):
+// the Reader (document.title, article h1, byline), the Highlights review
+// (article select option + section h2), the per-article highlights export
+// (downloaded filename + markdown citation/heading — the CANONICAL title
+// asserted ABSENT: one name, D17-08/D17-09), and the Continue Reading
+// strip. The 17-02 cells above stay byte-unchanged (strengthen-only).
+const CROSS_CANONICAL_TITLE = "Cross Surface Canonical Title";
+const CROSS_CANONICAL_AUTHOR = "Canonical Byline";
+const CROSS_EFFECTIVE_TITLE = "Cross Surface Renamed Title";
+const CROSS_EFFECTIVE_AUTHOR = "Cross Surface Renamed Author";
+
+test.describe("META-02 cross-surface — one effective name everywhere (17-05, D17-08/D17-09)", () => {
+  test("after a library edit, reader/review/export/strip all show the one effective name", async ({
+    page,
+  }) => {
+    // 1. Ingest a paste article (canonical title + author), then seed one
+    //    confident highlight over the SAVED row (the 12-07 chapter pattern:
+    //    parse the raw Dexie row through ArticleSchema in Node so the
+    //    anchor derives over EXACTLY the text the surfaces hold) and an
+    //    in-progress reading location for the strip.
+    await page.goto(`${BASE}/#/`);
+    await ingestPaste(
+      page,
+      pasteHtml(CROSS_CANONICAL_TITLE, CROSS_CANONICAL_AUTHOR),
+    );
+    const articleId = await discoverIngestedArticleId(page);
+    expect(articleId).not.toBe("");
+
+    const rawRow = await readRow(page, "articles", articleId);
+    expect(rawRow).not.toBeNull();
+    const savedArticle = ArticleSchema.parse(rawRow);
+    const anchor = confidentHighlightOn(savedArticle);
+    await seedRows(page, {
+      highlights: [highlightRow(articleId, anchor, "hl-cross-surface")],
+    });
+    await seedLocation(page, articleId, 20, "2026-08-29T00:00:00.000Z");
+
+    // 2. Edit title + author through the real dialog (the single write).
+    await openLibrary(page);
+    const dialog = await openEditDialog(page, CROSS_CANONICAL_TITLE);
+    await dialog.getByRole("textbox", { name: /^Title$/ }).fill(CROSS_EFFECTIVE_TITLE);
+    await dialog.getByRole("textbox", { name: /^Author$/ }).fill(CROSS_EFFECTIVE_AUTHOR);
+    await dialog.getByRole("button", { name: "Save" }).click();
+    await expect(dialog).not.toBeVisible();
+
+    // 3. STRIP: reload (the strip derives on LibraryView mount — the D8-03
+    //    contract) and the saved-location entry carries the effective name.
+    await page.reload();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Saved articles" }),
+    ).toBeVisible();
+    const strip = page.locator(".continue-reading-strip");
+    await expect(strip.locator("a", { hasText: CROSS_EFFECTIVE_TITLE })).toBeVisible();
+    await expect(strip.locator("a", { hasText: CROSS_CANONICAL_TITLE })).toHaveCount(0);
+
+    // 4. READER: document.title, the article h1, and the byline all read
+    //    the effective values (D14-02's per-destination title contract fed
+    //    by the one derivation).
+    await page.goto(`${BASE}/#/article/${articleId}`);
+    await expect(
+      page.getByRole("heading", { level: 1, name: CROSS_EFFECTIVE_TITLE }),
+    ).toBeVisible({ timeout: 15_000 });
+    await expect(page).toHaveTitle(`${CROSS_EFFECTIVE_TITLE} — Lem Reader`);
+    await expect(
+      page.locator(".article-top-meta p.meta"),
+    ).toHaveText(CROSS_EFFECTIVE_AUTHOR);
+
+    // 5. REVIEW: the Highlights view's article select option AND the
+    //    section h2 carry the effective title (the 17-03 surface swaps).
+    await page.goto(`${BASE}/#/highlights`);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Highlights" }),
+    ).toBeVisible({ timeout: 15_000 });
+    await expect(
+      page.locator("#review-article-filter option", {
+        hasText: CROSS_EFFECTIVE_TITLE,
+      }),
+    ).toHaveCount(1);
+    await expect(
+      page.locator("#review-article-filter option", {
+        hasText: CROSS_CANONICAL_TITLE,
+      }),
+    ).toHaveCount(0);
+    await expect(
+      page.locator(".review-section h2", { hasText: CROSS_EFFECTIVE_TITLE }),
+    ).toBeVisible();
+    await expect(
+      page.locator(".review-section h2", { hasText: CROSS_CANONICAL_TITLE }),
+    ).toHaveCount(0);
+
+    // 6. EXPORT: the per-article highlights export (annotations drawer —
+    //    the 13-10 G5 surface) names the FILE with the effective title and
+    //    cites/heads the markdown with it; the CANONICAL title is asserted
+    //    ABSENT from the content (one name — D17-08/D17-09).
+    await page.goto(`${BASE}/#/article/${articleId}`);
+    await expect(
+      page.getByRole("heading", { level: 1, name: CROSS_EFFECTIVE_TITLE }),
+    ).toBeVisible({ timeout: 15_000 });
+    await page
+      .getByRole("button", { name: /^Highlights and notes/ })
+      .click();
+    await expect(page.locator("dialog.annotations-drawer")).toBeVisible({
+      timeout: 15_000,
+    });
+    const exportButton = page.getByRole("button", { name: "Export highlights" });
+    await expect(exportButton).toBeVisible({ timeout: 15_000 });
+    const downloadPromise = page.waitForEvent("download", { timeout: 20_000 });
+    await exportButton.click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toBe(
+      `highlights-${CROSS_EFFECTIVE_TITLE}.md`,
+    );
+    const path = await download.path();
+    expect(path).toBeTruthy();
+    const md = readFileSync(path!, "utf8");
+    // Heading + citation carry the effective values (17-03's markdown swaps).
+    expect(md).toContain(`# Highlights — ${CROSS_EFFECTIVE_TITLE}`);
+    expect(md).toContain(
+      `> — ${CROSS_EFFECTIVE_AUTHOR}, *${CROSS_EFFECTIVE_TITLE}*`,
+    );
+    // ONE NAME: the canonical title/author never surface in the export.
+    expect(md).not.toContain(CROSS_CANONICAL_TITLE);
+    expect(md).not.toContain(CROSS_CANONICAL_AUTHOR);
+    // The anchored passage rode the file (the export is real, not empty).
+    expect(md).toContain(`> ${anchor.quote.exact}`);
   });
 });
