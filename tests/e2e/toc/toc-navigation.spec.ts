@@ -446,3 +446,367 @@ test.describe("TOC navigation (18-02 — core cells)", () => {
       .toBe(scrollBefore);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 18 Plan 18-04 Task 1 — the CORPUS EXTENSION (strengthen-only: every
+// cell above is byte-stable; everything below is additive). The seeded TOC
+// corpus (_corpus.ts) closes the RESEARCH Wave-0 gap — NO shipped fixture
+// contains h4/h5/h6, skipped levels, or duplicate headings. Cells prove the
+// full ORNT-04 honesty matrix plus D18-12 aria-current in BOTH geometries:
+//   (g) skips: the h4 under an h2 renders inside a deeper nested ul with NO
+//       intermediate li (list-structure depth, not visual indent — D18-10)
+//   (h) duplicates: two identical accessible names, both navigable, each
+//       landing on its OWN heading (position disambiguates — D18-11)
+//   (i) levels: h5/h6 entries exist and the rendered article preserves the
+//       heading level (an h5 jump focuses a real <h5> — ORNT-04)
+//   (j) chapter: the EPUB chapter row gets the identical trigger + panel
+//       machinery from its own heading hierarchy (D18-14)
+//   (k) headingless: on the SHIPPED headingless fixture (essay-long-form)
+//       the panel shows Top + the honest note; the trigger never peekaboos
+//       (D18-13)
+//   (l) aria-current follows scroll (scrolling) and page turns (paginated);
+//       above the first heading the Top entry carries it (D18-12)
+//   (m) Enter activation on a CORPUS entry jumps without re-routing
+//       (hash unchanged, article not remounted — Pitfall 4)
+//   (n) both-modes equivalence on the skip corpus: the same entry focuses
+//       the same heading text across a mode toggle (ORNT-03)
+// ═══════════════════════════════════════════════════════════════════════════
+import {
+  seedTocCorpus,
+  SKIP_ARTICLE,
+  DUPLICATE_ARTICLE,
+  DUPLICATE_TEXT,
+  DEEP_ARTICLE,
+  CHAPTER_ARTICLE,
+} from "./_corpus";
+
+test.describe("TOC navigation (18-04 — corpus extension)", () => {
+  test.beforeEach(async ({ page }) => {
+    // The outer beforeEach already ran prepareFreshPage (clear-stores) and
+    // seeded the base articles; the corpus rows join them in the SAME
+    // stores (distinct ids — no interference with the core cells' corpus).
+    await seedTocCorpus(page);
+  });
+
+  test("(g) skipped levels nest deeper with NO intermediate li (D18-10)", async ({
+    page,
+  }) => {
+    await openArticle(page, SKIP_ARTICLE.id);
+
+    await openToc(page);
+    const nav = page.getByRole("navigation", { name: "Table of contents" });
+
+    // The h4 entry exists and its li carries depth 2 (parent.depth + 2 —
+    // one extra nesting level for the skipped level 3). Scoped to the
+    // depth-2 li so the hasText filter cannot match the wrapping ancestor.
+    const h4Li = nav
+      .locator('li[data-depth="2"]')
+      .filter({ hasText: "Sunken cathedral" });
+    await expect(h4Li).toHaveCount(1);
+
+    // LIST-STRUCTURE depth (never visual indent): the h4's li lives inside
+    // a ul nested TWO ul levels deep within the panel's nav…
+    const nested = await h4Li.evaluate((el) => {
+      const ownUl = el.closest("ul");
+      const parentLi = ownUl?.closest("li");
+      const grandUl = parentLi?.closest("ul");
+      return {
+        insideNestedUl: grandUl !== null && grandUl !== ownUl,
+        parentLiText: parentLi?.textContent ?? "",
+      };
+    });
+    expect(nested.insideNestedUl, "the h4 li must sit in a ul-in-ul").toBe(true);
+    expect(nested.parentLiText).toContain("Open waters");
+
+    // …and NO intermediate entry was invented: this article's only depths
+    // are 0 (Top, the two h2s) and 2 (the h4) — a depth-1 li would BE an
+    // invented intermediate (D18-10's exact prohibition).
+    await expect(nav.locator('li[data-depth="1"]')).toHaveCount(0);
+  });
+
+  test("(h) duplicate heading texts render AS-IS and each lands on its own heading (D18-11)", async ({
+    page,
+  }) => {
+    await openArticle(page, DUPLICATE_ARTICLE.id);
+
+    // Two entries with the IDENTICAL accessible name — no "(2 of 2)" suffix,
+    // no parent prefix (D18-11). getByRole needs the panel OPEN (closed =
+    // UA popover display:none, outside the a11y tree).
+    await openToc(page);
+    const entries = page
+      .getByRole("navigation", { name: "Table of contents" })
+      .getByRole("link", { name: DUPLICATE_TEXT });
+    await expect(entries).toHaveCount(2);
+
+    // The jump's destination focus lands via the D4-07 rAF/120ms guard —
+    // poll until the focused element carries a block index, then read it.
+    const readLandingBlockIndex = () =>
+      page.evaluate(() => {
+        const el = document.activeElement;
+        return el && el.getAttribute("data-block-index") !== null
+          ? Number(el.getAttribute("data-block-index"))
+          : null;
+      });
+
+    // First entry → the FIRST heading in the article (position disambiguates).
+    await entries.first().click();
+    await expect(page.locator(".toc-panel")).toBeHidden();
+    await expect
+      .poll(readLandingBlockIndex, { timeout: 5_000 })
+      .not.toBeNull();
+    const firstLanding = await readLandingBlockIndex();
+
+    // Second entry → the SECOND heading (a strictly later block).
+    await openToc(page);
+    await entries.nth(1).click();
+    await expect(page.locator(".toc-panel")).toBeHidden();
+    await expect
+      .poll(readLandingBlockIndex, { timeout: 5_000 })
+      .not.toBeNull();
+    const secondLanding = await readLandingBlockIndex();
+
+    expect(firstLanding).not.toBeNull();
+    expect(secondLanding).not.toBeNull();
+    expect(
+      secondLanding!,
+      "the duplicate entry must land on ITS OWN heading (a later block)",
+    ).toBeGreaterThan(firstLanding!);
+  });
+
+  test("(i) h5/h6 entries exist and the rendered article preserves the heading level (ORNT-04)", async ({
+    page,
+  }) => {
+    await openArticle(page, DEEP_ARTICLE.id);
+
+    // The panel carries h5 + h6 entries with their texts AS-IS.
+    await openToc(page);
+    const nav = page.getByRole("navigation", { name: "Table of contents" });
+    await expect(nav.getByRole("link", { name: "Quiet depths" })).toBeVisible();
+    await expect(nav.getByRole("link", { name: "Floor" })).toBeVisible();
+
+    // And the ARTICLE renders the true levels: jump to the h5 entry in
+    // scrolling mode and the focused destination IS an <h5> (never coerced
+    // to h2/h3 for styling convenience). Close the panel BEFORE the mode
+    // toggle — the ≥640px rail is a persistent companion (no outside
+    // dismiss), and a second trigger click would TOGGLE it closed.
+    await page.keyboard.press("Escape");
+    await expect(page.locator(".toc-panel")).toBeHidden();
+    await toggleMode(page); // default paginated → scrolling
+    await openToc(page);
+    await nav.getByRole("link", { name: "Quiet depths" }).click();
+    await expect(page.locator(".toc-panel")).toBeHidden();
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const el = document.activeElement;
+          return el && el.getAttribute("data-block-index") !== null
+            ? el.tagName.toLowerCase()
+            : null;
+        }),
+      )
+      .toBe("h5");
+  });
+
+  test("(j) an EPUB chapter gets the identical trigger + panel machinery (D18-14)", async ({
+    page,
+  }) => {
+    // The chapter row carries the denormalized top-level bookId (the
+    // booksStore.saveBook write shape) — chapters ARE articles; zero extra
+    // machinery is the contract being proven.
+    await openArticle(page, CHAPTER_ARTICLE.id);
+
+    await expect(tocTrigger(page)).toHaveAttribute("aria-expanded", "false");
+    await openToc(page);
+    const nav = page.getByRole("navigation", { name: "Table of contents" });
+    await expect(
+      nav.getByRole("link", { name: "Top of article" }),
+    ).toBeVisible();
+    await expect(
+      nav.getByRole("link", { name: "Moorings" }),
+    ).toBeVisible();
+    await expect(
+      nav.getByRole("link", { name: "The ferry at dawn" }),
+    ).toBeVisible();
+
+    // The jump machinery is identical too: activation closes the panel and
+    // focuses the chapter's own destination heading.
+    await nav.getByRole("link", { name: "The ferry at dawn" }).click();
+    await expect(page.locator(".toc-panel")).toBeHidden();
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const el = document.activeElement;
+          return el && el.getAttribute("data-block-index") !== null
+            ? (el as HTMLElement).textContent
+            : null;
+        }),
+      )
+      .toContain("The ferry at dawn");
+  });
+
+  test("(k) the headingless FIXTURE opens the panel with Top + the honest note (D18-13)", async ({
+    page,
+  }) => {
+    // essay-long-form is the shipped headingless corpus fixture (RESEARCH
+    // §Wave 0) — distinct from the core cells' seeded headingless article,
+    // this proves the contract on the real fixture set.
+    await openArticle(page, "essay-long-form");
+
+    // The trigger never plays peekaboo…
+    await expect(tocTrigger(page)).toBeVisible();
+    await tocTrigger(page).click();
+    // …and the panel shows the Top entry + the calm note (same chrome).
+    await expect(
+      page.getByText("This article has no headings."),
+    ).toBeVisible();
+    const nav = page.getByRole("navigation", { name: "Table of contents" });
+    await expect(
+      nav.getByRole("link", { name: "Top of article" }),
+    ).toBeVisible();
+    // Top is the ONLY entry — nothing was invented (D18-13 + D18-10).
+    await expect(nav.getByRole("link")).toHaveCount(1);
+  });
+
+  test("(l) aria-current follows scroll and page turns; Top carries it above the first heading (D18-12)", async ({
+    page,
+  }) => {
+    const currentEntryText = () =>
+      page
+        .getByRole("navigation", { name: "Table of contents" })
+        .locator('[aria-current="true"]')
+        .textContent();
+
+    // ── SCROLLING half ─────────────────────────────────────────────────────
+    await openArticle(page, TOC_ARTICLE.id);
+    await expect(page.locator(".page-fragment").first()).toBeVisible();
+    await toggleMode(page); // → scrolling
+
+    // Above the first heading: the Top entry carries aria-current.
+    await openToc(page);
+    await expect
+      .poll(currentEntryText, { timeout: 3_000 })
+      .toContain("Top of article");
+
+    // Scroll down past "Beta section": the current entry FOLLOWS the spy
+    // (the panel stays open — the rail is a persistent companion at this
+    // viewport, so the change is observable live). Block-start alignment
+    // puts the heading ABOVE the 48px sentinel the spy measures against.
+    const beta = articleHeading(page, "Beta section");
+    await beta.evaluate((el) => el.scrollIntoView({ block: "start" }));
+    await expect
+      .poll(currentEntryText, { timeout: 3_000 })
+      .toContain("Beta section");
+    await page.keyboard.press("Escape");
+    await expect(page.locator(".toc-panel")).toBeHidden();
+
+    // ── PAGINATED half ─────────────────────────────────────────────────────
+    // Page turns move the current entry to the section the reader opened
+    // onto (the first heading on the newly-turned page — the pinned surface
+    // never scrolls, so the spy's page-turn rule applies). Toggle back on
+    // the SAME article (handleToggleMode persists the preference — a fresh
+    // reload would hydrate scrolling again) and wait for the surface swap.
+    // One turn per step with a bounded poll between turns (the spy's chain
+    // is turn → fragment commit → MutationObserver → 250ms debounce →
+    // render; a poll WITHOUT settle could skip past Gamma's page before
+    // the debounce lands).
+    await toggleMode(page); // scrolling → paginated
+    await expect(page.locator(".page-fragment").first()).toBeVisible({
+      timeout: 10_000,
+    });
+    await openToc(page);
+
+    let reachedGamma = false;
+    for (let turn = 0; turn < 12 && !reachedGamma; turn++) {
+      await page.keyboard.press("ArrowRight");
+      const matched = await expect
+        .poll(currentEntryText, { timeout: 1_500 })
+        .toContain("Gamma section")
+        .then(
+          () => true,
+          () => false,
+        );
+      reachedGamma = matched;
+    }
+    expect(
+      reachedGamma,
+      "aria-current must follow page turns onto the Gamma section page (D18-12)",
+    ).toBe(true);
+  });
+
+  test("(m) Enter activation on a corpus entry jumps without re-routing (Pitfall 4)", async ({
+    page,
+  }) => {
+    await openArticle(page, SKIP_ARTICLE.id);
+    await expect(page.locator(".page-fragment").first()).toBeVisible();
+
+    const h1 = page.getByRole("heading", { level: 1 }).first();
+    await h1.evaluate((el) => {
+      el.setAttribute("data-toc-probe", "alive");
+    });
+    const hashBefore = await page.evaluate(() => window.location.hash);
+
+    await openToc(page);
+    const entry = page
+      .getByRole("navigation", { name: "Table of contents" })
+      .getByRole("link", { name: "Sunken cathedral" });
+    await entry.focus();
+    await page.keyboard.press("Enter");
+
+    await expect(page.locator(".toc-panel")).toBeHidden();
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const el = document.activeElement;
+          return el && el.getAttribute("data-block-index") !== null
+            ? (el as HTMLElement).textContent
+            : null;
+        }),
+      )
+      .toContain("Sunken cathedral");
+    const hashAfter = await page.evaluate(() => window.location.hash);
+    expect(hashAfter).toBe(hashBefore);
+    await expect(h1).toHaveAttribute("data-toc-probe", "alive");
+  });
+
+  test("(n) the same corpus entry lands on the same heading in both modes (ORNT-03)", async ({
+    page,
+  }) => {
+    await openArticle(page, SKIP_ARTICLE.id);
+    await expect(page.locator(".page-fragment").first()).toBeVisible();
+
+    const focusedHeadingText = () =>
+      page.evaluate(() => {
+        const el = document.activeElement;
+        if (!el || el.getAttribute("data-block-index") === null) return null;
+        return { text: (el as HTMLElement).textContent, tag: el.tagName.toLowerCase() };
+      });
+
+    // PAGINATED jump to the skipped-level h4 first.
+    await openToc(page);
+    await page
+      .getByRole("navigation", { name: "Table of contents" })
+      .getByRole("link", { name: "Sunken cathedral" })
+      .click();
+    await expect(page.locator(".toc-panel")).toBeHidden();
+    await expect
+      .poll(focusedHeadingText, { timeout: 5_000 })
+      .not.toBeNull();
+    const paginatedLanding = await focusedHeadingText();
+
+    // Toggle to scrolling and jump through the SAME entry.
+    await toggleMode(page);
+    await openToc(page);
+    await page
+      .getByRole("navigation", { name: "Table of contents" })
+      .getByRole("link", { name: "Sunken cathedral" })
+      .click();
+    await expect(page.locator(".toc-panel")).toBeHidden();
+    await expect
+      .poll(focusedHeadingText, { timeout: 5_000 })
+      .not.toBeNull();
+    const scrollingLanding = await focusedHeadingText();
+
+    expect(scrollingLanding).toEqual(paginatedLanding);
+    expect(paginatedLanding!.tag).toBe("h4");
+  });
+});

@@ -2624,6 +2624,7 @@ export function ArticleView({
           article={article}
           articleEl={articleEl}
           open={tocOpen}
+          mode={isPaginated ? "paginated" : "scrolling"}
           onActivate={handleTocJump}
         />
         {/* Phase 5 Plan 05-03 Task 2: AnnotationsDrawer — native <dialog>

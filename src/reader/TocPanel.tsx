@@ -56,8 +56,16 @@ export interface TocPanelProps {
    * the article mounts; the spy re-runs when it transitions to non-null.
    */
   articleEl: HTMLElement | null;
-  /** Controlled open state (the parent's seam syncs showPopover/hidePopover). */
+  /**
+   * Controlled open state (the parent's seam syncs showPopover/hidePopover). */
   open: boolean;
+  /**
+   * Plan 18-04 (D18-12 page-turn half): the reading geometry the shared spy
+   * derives aria-current from. OPTIONAL — defaults to "scrolling" (the
+   * original sentinel rule) so existing mounts (the RTL suite) are
+   * unchanged. The parent passes its live effective mode.
+   */
+  mode?: "scrolling" | "paginated";
   /**
    * Entry activation (click or Enter). The parent closes the panel through
    * its seam and runs the mode-aware D5-11 jump — the panel itself never
@@ -103,7 +111,7 @@ function buildTocTree(entries: TocEntry[]): TocNode[] {
  * ownership split against the parent's controlled seam.
  */
 export const TocPanel = forwardRef<HTMLDivElement, TocPanelProps>(
-  function TocPanel({ article, articleEl, open, onActivate }, ref) {
+  function TocPanel({ article, articleEl, open, mode = "scrolling", onActivate }, ref) {
     // Derived entries are computed, never persisted (Pitfall 9 — zero
     // Dexie/schema involvement; the D-05 substrate read is render-time).
     const entries = useMemo(() => deriveToc(article), [article]);
@@ -120,6 +128,7 @@ export const TocPanel = forwardRef<HTMLDivElement, TocPanelProps>(
     useSectionSpy({
       articleEl,
       selector: "h2, h3, h4, h5, h6",
+      mode,
       onCurrent: (heading) => {
         const idx = Number(heading.dataset.blockIndex);
         if (Number.isFinite(idx)) setCurrentBlockIndex(idx);

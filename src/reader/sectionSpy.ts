@@ -39,11 +39,27 @@ export interface UseSectionSpyOptions {
    */
   selector: string;
   /**
+   * Plan 18-04 (Rule 2 — D18-12's page-turn half was unreachable with the
+   * scroll-only rule): the reading geometry. "scrolling" (DEFAULT) keeps the
+   * original most-recently-passed-sentinel rule byte-identical —
+   * SectionAnnouncer passes nothing and its contract is untouched. On a
+   * PINNED paginated surface nothing ever scrolls past the 48px sentinel
+   * (page fragments sit below the pinned header), so "paginated" derives
+   * the current heading from the page instead: the FIRST connected heading
+   * on the visible .page-fragment (the section the reader opened onto);
+   * a fragment with no headings keeps the previous current (the section
+   * continuing across the page break). Fragment swaps are detected by a
+   * childList MutationObserver — page turns fire no window scroll and
+   * IntersectionObserver removal callbacks are not guaranteed for elements
+   * that were outside the sentinel band.
+   */
+  mode?: "scrolling" | "paginated";
+  /**
    * Invoked (debounced) when the current heading CHANGES, receiving the
    * current heading ELEMENT — not just text — so consumers can map
    * data-block-index → their own entry model (the TOC's aria-current), plus
    * the detect-time trimmed text (so the announcer rebuilds its exact
-   * `Section: {text}.` string from the value the change was measured on).
+   * `Section: {text}.` string from the value the detection measured on).
    */
   onCurrent: (heading: HTMLHeadingElement, text: string) => void;
 }
@@ -62,6 +78,7 @@ const NOTIFY_DEBOUNCE_MS = 250;
 export function useSectionSpy({
   articleEl,
   selector,
+  mode = "scrolling",
   onCurrent,
 }: UseSectionSpyOptions): void {
   // Ref-tracked current section text so we notify only on CHANGE (Pitfall 6
@@ -78,13 +95,70 @@ export function useSectionSpy({
 
   useEffect(() => {
     if (!articleEl) return;
+
+    // Debounce timer — cleared on cleanup so it cannot fire after unmount.
+    let timer: number | null = null;
+
+    /**
+     * Shared notify: debounced, on CHANGE only (Pitfall 6 anti-flood) —
+     * identical for both geometries so consumers cannot tell the rules
+     * apart by timing.
+     */
+    const notify = (current: HTMLHeadingElement) => {
+      const text = current.textContent?.trim() ?? "";
+      if (!text || text === currentRef.current) return;
+      currentRef.current = text;
+      if (timer !== null) {
+        window.clearTimeout(timer);
+      }
+      timer = window.setTimeout(() => {
+        timer = null;
+        onCurrentRef.current(current, text);
+      }, NOTIFY_DEBOUNCE_MS);
+    };
+
+    if (mode === "paginated") {
+      // ── PAGINATED geometry (Plan 18-04) ────────────────────────────────
+      // The pinned surface never scrolls: the sentinel rule cannot fire, and
+      // an effect-time heading SNAPSHOT goes stale on every page turn (the
+      // fragment's headings are swapped for new, never-observed elements).
+      // Rule: the FIRST connected heading on the visible .page-fragment is
+      // the section the reader opened onto; no heading on the fragment keeps
+      // the previous current (the section continuing across the break). The
+      // hidden .article-body-measurement clone is never INSIDE a fragment,
+      // so the query cannot see it (Pitfall 7 discipline by construction).
+      const detectPaginated = () => {
+        const fragment = articleEl.querySelector(".page-fragment");
+        if (!fragment) return;
+        const first = Array.from(
+          fragment.querySelectorAll<HTMLHeadingElement>(selector),
+        ).find((h) => h.isConnected);
+        if (first) notify(first);
+      };
+      detectPaginated();
+      // Fragment swaps are childList mutations under the article (one
+      // .page-fragment is mounted at a time). The observer re-runs detection
+      // on every swap — IO cannot (removal callbacks only fire for elements
+      // that were intersecting the band).
+      const mo = new MutationObserver(detectPaginated);
+      mo.observe(articleEl, { childList: true, subtree: true });
+      return () => {
+        mo.disconnect();
+        if (timer !== null) {
+          window.clearTimeout(timer);
+          timer = null;
+        }
+      };
+    }
+
+    // ── SCROLLING geometry — the ORIGINAL rule, byte-identical (the
+    // SectionAnnouncer contract; section-announce.spec.ts must stay green
+    // with zero diff). Snapshot at effect setup, IO + rAF-throttled scroll
+    // fallback, most-recently-passed-heading sentinel. ────────────────────
     const headings = Array.from(
       articleEl.querySelectorAll<HTMLHeadingElement>(selector),
     );
     if (headings.length === 0) return;
-
-    // Debounce timer — cleared on cleanup so it cannot fire after unmount.
-    let timer: number | null = null;
 
     /**
      * Shared detection logic: find the most-recently-passed heading (the
@@ -145,5 +219,5 @@ export function useSectionSpy({
         timer = null;
       }
     };
-  }, [articleEl, selector]);
+  }, [articleEl, selector, mode]);
 }
