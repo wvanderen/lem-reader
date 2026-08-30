@@ -1,15 +1,17 @@
 // tests/e2e/annotations/capture-rejects.spec.ts
-// ANNO-01 (D5-06 single-block rule + D5-13 disjoint-ranges rule) — the
-// selection toolbar rejects invalid selections without creating a record.
+// ANNO-01 (D5-13 disjoint-ranges rule + D5-08 measurement-body binding) —
+// the selection toolbar rejects invalid selections without creating a record.
 //
 // SCENARIO:
-//   1. Multi-block selection (D5-06): a selection spanning two
-//      [data-block-index] blocks surfaces "Select within a single block to
-//      highlight it." H does nothing.
-//   2. Overlap (D5-13): create a highlight, then select a range intersecting
+//   1. Overlap (D5-13): create a highlight, then select a range intersecting
 //      it → "This overlaps an existing highlight." Create does not fire.
-//   3. Cross-page (paginated): a selection spanning a page boundary is
-//      rejected (single-block rule + visible-fragment binding, D5-08).
+//   2. Cross-page (paginated): a selection spanning a page boundary is
+//      rejected (visible-fragment binding, D5-08; ANNO-13 is Future).
+//
+// D19: the former test 1 (D5-06 multi-block refusal) MOVED to
+// span-capture.spec.ts and flipped to a SUCCESS cell — multi-block
+// selections now create ONE highlight (sanctioned churn #1, 19-RESEARCH
+// Pitfall 7). The overlap + cross-page refusals above are unchanged.
 //
 // No test.skip / test.fixme — the plan's anti-pattern guard: a red suite
 // must stay red; never silently skip a failing spec to make a gate green.
@@ -20,9 +22,6 @@ import {
   openArticle,
   selectRangeInBlock,
   findFirstBlockWithText,
-  totalPages,
-  turnToPage,
-  currentPageIdx,
 } from "./_fixtures";
 
 const FIXTURE = FIXTURES[0]!; // essay-long-form
@@ -31,87 +30,7 @@ test.beforeEach(async ({ page }) => {
   await wipeDatabase(page);
 });
 
-test.describe("ANNO-01 capture rejects (D5-06 + D5-13) — 05-05", () => {
-  test("D5-06 multi-block selection surfaces the 'single block' hint + H does nothing", async ({
-    page,
-  }) => {
-    await openArticle(page, FIXTURE);
-    // Plan 13-06 repair: under the Option A page-1 budget (viewport − the
-    // metadata spot's reserve), essay page 1 carries a single long paragraph
-    // — two CONSECUTIVE text blocks live on a later page. Walk pages until
-    // the visible fragment carries such a pair (the D13-09 walk-pages
-    // precedent), then span the selection across them. The D5-06 contract
-    // (multi-block selection → hint, no action buttons, H is a no-op) is
-    // unchanged.
-    const total = await totalPages(page);
-    let spannedPage = -1;
-    for (let target = await currentPageIdx(page); target < total; target++) {
-      await turnToPage(page, target);
-      const hasPair = await page.evaluate(() => {
-        const blocks = Array.from(
-          document.querySelectorAll(
-            '.page-fragment [data-block-index], .article-body:not(.article-body-measurement) [data-block-index]',
-          ),
-        ).filter((el) => !el.closest(".article-body-measurement"));
-        for (let i = 0; i + 1 < blocks.length; i++) {
-          const a = blocks[i]!;
-          const b = blocks[i + 1]!;
-          if ((a.textContent?.length ?? 0) < 4) continue;
-          if ((b.textContent?.length ?? 0) < 4) continue;
-          return true;
-        }
-        return false;
-      });
-      if (hasPair) {
-        spannedPage = target;
-        break;
-      }
-    }
-    expect(spannedPage, "some page must carry two consecutive text blocks").toBeGreaterThanOrEqual(0);
-    // Find two adjacent visible blocks + span a selection across them.
-    const spanned = await page.evaluate(() => {
-      const blocks = Array.from(
-        document.querySelectorAll(
-          '.page-fragment [data-block-index], .article-body:not(.article-body-measurement) [data-block-index]',
-        ),
-      ).filter((el) => !el.closest(".article-body-measurement"));
-      // Pick two consecutive blocks that both have text.
-      for (let i = 0; i + 1 < blocks.length; i++) {
-        const a = blocks[i]!;
-        const b = blocks[i + 1]!;
-        if ((a.textContent?.length ?? 0) < 4) continue;
-        if ((b.textContent?.length ?? 0) < 4) continue;
-        const aWalker = document.createTreeWalker(a, NodeFilter.SHOW_TEXT);
-        const aNode = aWalker.nextNode() as Text | null;
-        const bWalker = document.createTreeWalker(b, NodeFilter.SHOW_TEXT);
-        const bNode = bWalker.nextNode() as Text | null;
-        if (!aNode || !bNode) continue;
-        try {
-          const range = document.createRange();
-          range.setStart(aNode, 0);
-          range.setEnd(bNode, Math.min(4, bNode.nodeValue!.length));
-          const sel = window.getSelection();
-          if (!sel) return false;
-          sel.removeAllRanges();
-          sel.addRange(range);
-          return true;
-        } catch {
-          continue;
-        }
-      }
-      return false;
-    });
-    expect(spanned, "multi-block selection set").toBeTruthy();
-    // The toolbar shows the multi-block hint (NOT the action buttons).
-    const toolbar = page.locator(".selection-toolbar");
-    await expect(toolbar).toBeVisible();
-    await expect(toolbar).toContainText(/Select within a single block/i);
-    await expect(toolbar.getByRole("button", { name: "Highlight", exact: true })).toHaveCount(0);
-    // H does nothing (the shortcut is a no-op on an invalid selection).
-    await page.keyboard.press("h");
-    await expect(page.locator("mark.highlight")).toHaveCount(0);
-  });
-
+test.describe("ANNO-01 capture rejects (D5-13 + D5-08) — 05-05", () => {
   test("D5-13 overlap selection surfaces 'overlaps an existing highlight' + Create does not fire", async ({
     page,
   }) => {

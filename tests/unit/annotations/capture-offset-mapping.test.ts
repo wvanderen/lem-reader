@@ -253,6 +253,288 @@ describe("captureSelection — cross-block span success (D19-01; D5-06 retired)"
   });
 });
 
+// ── Span composition cells (Phase 19 / D19 — ANNO-08 + ANNO-12) ──────────────
+
+describe("captureSelection — span composition (D19)", () => {
+  it("(a) backwards Range construction composes identically to forwards", () => {
+    // D19 / 19-RESEARCH Pitfall 9: DOM Range normalizes start/end to document
+    // order regardless of drag direction. jsdom proves the mechanism: setting
+    // the END boundary first (the later block — where a backwards drag
+    // anchors) then the START boundary yields the identical normalized
+    // boundary points, so capture composes the same global range with NO
+    // swap step.
+    const article = parseArticle({
+      ...baseArticle,
+      blocks: [
+        { kind: "paragraph", content: [{ text: "first block" }] },
+        { kind: "paragraph", content: [{ text: "second block" }] },
+      ],
+    });
+    const b0 = makeParagraphBlock("first block", 0);
+    const b1 = makeParagraphBlock("second block", 1);
+    document.body.appendChild(b0);
+    document.body.appendChild(b1);
+
+    // Reverse CONSTRUCTION order: end boundary (later block) first.
+    const range = document.createRange();
+    range.setEnd(b1.firstChild!, 5);
+    range.setStart(b0.firstChild!, 2);
+    const sel = window.getSelection()!;
+    sel.removeAllRanges();
+    sel.addRange(range);
+    expect(range.startContainer).toBe(b0.firstChild!);
+    expect(range.endContainer).toBe(b1.firstChild!);
+
+    const result = captureSelection(article, document.body);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      // Same composed selector as the forwards cell above.
+      expect(result.position).toEqual({ start: 2, end: 17 } as TextPositionSelector);
+    }
+  });
+
+  it("(b1) both endpoints carrying data-block-grapheme-start compose (paginated within-page)", () => {
+    // D19 / D5-08: a paginated page fragment may mount SLICES of two
+    // consecutive blocks (block 0's tail + block 1's head). Both endpoint
+    // elements carry the slice attribute; per-endpoint window math composes.
+    const article = parseArticle({
+      ...baseArticle,
+      blocks: [
+        { kind: "paragraph", content: [{ text: "first block" }] },
+        { kind: "paragraph", content: [{ text: "second block" }] },
+      ],
+    });
+    // Block 0's tail slice: "first block" from grapheme 6 = "block".
+    const b0Slice = makeParagraphBlock("block", 0);
+    b0Slice.setAttribute("data-block-grapheme-start", "6");
+    // Block 1's head slice: "second block" from grapheme 0 = "secon".
+    const b1Slice = makeParagraphBlock("secon", 1);
+    b1Slice.setAttribute("data-block-grapheme-start", "0");
+    document.body.appendChild(b0Slice);
+    document.body.appendChild(b1Slice);
+
+    // Select from offset 1 in block 0's slice to offset 3 in block 1's slice.
+    const range = document.createRange();
+    range.setStart(b0Slice.firstChild!, 1);
+    range.setEnd(b1Slice.firstChild!, 3);
+    const sel = window.getSelection()!;
+    sel.removeAllRanges();
+    sel.addRange(range);
+
+    const result = captureSelection(article, document.body);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      // A: 0 + (1 + 6) = 7. B: (11 + 1) + 3 = 15. Over
+      // "first block\nsecond block", [7,15) = "lock\nsec" — exactly the
+      // visible selection ("lock" + "sec").
+      expect(result.position).toEqual({ start: 7, end: 15 } as TextPositionSelector);
+    }
+  });
+
+  it("(b2) whole-block start endpoint + non-zero tail-slice end endpoint compose", () => {
+    // D19: the slice attribute may sit on EITHER endpoint — here the END
+    // endpoint is block 1's tail slice ("second block" from grapheme 7).
+    const article = parseArticle({
+      ...baseArticle,
+      blocks: [
+        { kind: "paragraph", content: [{ text: "first block" }] },
+        { kind: "paragraph", content: [{ text: "second block" }] },
+      ],
+    });
+    const b0 = makeParagraphBlock("first block", 0);
+    const b1Tail = makeParagraphBlock("block", 1);
+    b1Tail.setAttribute("data-block-grapheme-start", "7");
+    document.body.appendChild(b0);
+    document.body.appendChild(b1Tail);
+
+    const range = document.createRange();
+    range.setStart(b0.firstChild!, 2);
+    range.setEnd(b1Tail.firstChild!, 3);
+    const sel = window.getSelection()!;
+    sel.removeAllRanges();
+    sel.addRange(range);
+
+    const result = captureSelection(article, document.body);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      // A: 0 + 2 = 2. B: 12 + (3 + 7) = 22. [2,22) = "rst block\nsecond blo".
+      expect(result.position).toEqual({ start: 2, end: 22 } as TextPositionSelector);
+    }
+  });
+
+  it("(c1) figure caption endpoint with non-empty alt lands at the caption's true global offset (Pitfall 1)", () => {
+    // D19 / 19-RESEARCH Pitfall 1: blockNormalizedText(figure) =
+    // [alt, caption].filter(Boolean).join("\n") but the <figure> element's
+    // textContent is caption-only. The captionLocalStart alignment makes the
+    // stored offset address the true normalized passage (previously it was
+    // silently wrong by alt.length + separator).
+    const article = parseArticle({
+      ...baseArticle,
+      blocks: [
+        {
+          kind: "figure",
+          alt: "A chart",
+          src: "https://example.com/chart.png",
+          caption: [{ text: "Quarterly data" }],
+        },
+      ],
+    });
+    const figure = document.createElement("figure");
+    figure.setAttribute("data-block-index", "0");
+    const img = document.createElement("img");
+    img.setAttribute("alt", "A chart");
+    const figcaption = document.createElement("figcaption");
+    figcaption.textContent = "Quarterly data";
+    figure.appendChild(img);
+    figure.appendChild(figcaption);
+    document.body.appendChild(figure);
+
+    // Select the caption's first 9 chars ("Quarterly"). The figure's
+    // textContent is "Quarterly data" (img alt is NOT a text node).
+    selectFirstTextNode(figcaption, 0, 9);
+    const result = captureSelection(article, document.body);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      // captionLocalStart = graphemes("A chart") + BLOCK_SEPARATOR = 7 + 1
+      // = 8. Position [8,17) over "A chart\nQuarterly data" = "Quarterly"
+      // — the TRUE passage (the pre-fix capture stored [0,9) = "A chart\nQ").
+      expect(result.position).toEqual({ start: 8, end: 17 } as TextPositionSelector);
+    }
+  });
+
+  it("(c2) figure caption endpoint with EMPTY alt lands at caption-local 0", () => {
+    // The filter(Boolean) join drops an empty alt entirely — the caption IS
+    // the whole normalized text, captionLocalStart = 0.
+    const article = parseArticle({
+      ...baseArticle,
+      blocks: [
+        {
+          kind: "figure",
+          alt: "",
+          src: "https://example.com/chart.png",
+          caption: [{ text: "Quarterly data" }],
+        },
+      ],
+    });
+    const figure = document.createElement("figure");
+    figure.setAttribute("data-block-index", "0");
+    const img = document.createElement("img");
+    img.setAttribute("alt", "");
+    const figcaption = document.createElement("figcaption");
+    figcaption.textContent = "Quarterly data";
+    figure.appendChild(img);
+    figure.appendChild(figcaption);
+    document.body.appendChild(figure);
+
+    selectFirstTextNode(figcaption, 0, 9);
+    const result = captureSelection(article, document.body);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.position).toEqual({ start: 0, end: 9 } as TextPositionSelector);
+    }
+  });
+
+  it("(d) cross-block span with an unsupported END block refuses whole (boundary-ineligible, no position)", () => {
+    // D19-05/D19-08: one eligible endpoint does not rescue an ineligible
+    // boundary — the WHOLE selection is refused (never narrowed).
+    const article = parseArticle({
+      ...baseArticle,
+      blocks: [
+        { kind: "paragraph", content: [{ text: "readable text" }] },
+        {
+          kind: "unsupported",
+          originalKind: "table",
+          plainDescription: "a table we cannot render",
+        },
+      ],
+    });
+    const b0 = makeParagraphBlock("readable text", 0);
+    const b1 = document.createElement("div");
+    b1.setAttribute("data-block-index", "1");
+    b1.textContent = "a table we cannot render";
+    document.body.appendChild(b0);
+    document.body.appendChild(b1);
+
+    const range = document.createRange();
+    range.setStart(b0.firstChild!, 0);
+    range.setEnd(b1.firstChild!, 5);
+    const sel = window.getSelection()!;
+    sel.removeAllRanges();
+    sel.addRange(range);
+
+    const result = captureSelection(article, document.body);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toBe("boundary-ineligible");
+      // Reason-only refusal — NO position (no range-shrinking machinery).
+      expect("position" in result).toBe(false);
+    }
+  });
+
+  it("(e) footnote-body endpoint refuses as ineligible (no data-block-index ancestor)", () => {
+    // 19-RESEARCH Pitfall 6: footnote BODIES render without data-block-index
+    // (only the reference markers are eligible blocks) — the ancestor walk
+    // terminates at readingRoot → the existing "ineligible" reason.
+    const article = parseArticle({
+      ...baseArticle,
+      blocks: [{ kind: "paragraph", content: [{ text: "body text" }] }],
+      footnotes: [
+        { id: "fn-1", content: [{ text: "footnote body text" }] },
+      ],
+    });
+    const p = makeParagraphBlock("body text", 0);
+    const section = document.createElement("section");
+    const li = document.createElement("li");
+    li.id = "fn-1";
+    li.textContent = "footnote body text";
+    section.appendChild(li);
+    document.body.appendChild(p);
+    document.body.appendChild(section);
+
+    // Span from the readable block INTO the footnote body.
+    const range = document.createRange();
+    range.setStart(p.firstChild!, 0);
+    range.setEnd(li.firstChild!, 6);
+    const sel = window.getSelection()!;
+    sel.removeAllRanges();
+    sel.addRange(range);
+
+    const result = captureSelection(article, document.body);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toBe("ineligible");
+      expect("position" in result).toBe(false);
+    }
+  });
+
+  it("(f) whitespace-only selection composes empty → defensive empty-span", () => {
+    // D19: a NON-collapsed DOM selection can cover only whitespace that
+    // normalizeRunText collapses (raw [6,7) selects the middle space of the
+    // 3-space run) — both endpoints map to norm offset 6, so the composed
+    // range collapses and capture refuses with "empty-span" (mirrors the
+    // TextPositionSelectorSchema end > start refine). No position returned.
+    const article = parseArticle({
+      ...baseArticle,
+      blocks: [
+        {
+          kind: "paragraph",
+          content: [{ text: "hello   world" }],
+        },
+      ],
+    });
+    const el = makeParagraphBlock("hello   world", 0);
+    document.body.appendChild(el);
+
+    selectFirstTextNode(el, 6, 7); // one raw space among "   "
+    const result = captureSelection(article, document.body);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toBe("empty-span");
+      expect("position" in result).toBe(false);
+    }
+  });
+});
+
 // ── Empty / collapsed rejection ──────────────────────────────────────────────
 
 describe("captureSelection — empty / collapsed rejection", () => {
