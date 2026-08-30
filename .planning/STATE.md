@@ -5,15 +5,15 @@ milestone_name: Reader Experience
 current_phase: 18
 current_phase_name: Reader Orientation
 status: executing
-stopped_at: Phase 18 UI-SPEC approved
-last_updated: "2026-08-30T15:58:32.054Z"
+stopped_at: Completed 18-02-PLAN.md
+last_updated: "2026-08-30T16:25:05.081Z"
 last_activity: 2026-08-30
 last_activity_desc: Phase 18 execution started
 progress:
   total_phases: 8
   completed_phases: 4
   total_plans: 21
-  completed_plans: 18
+  completed_plans: 19
   percent: 50
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-29)
 ## Current Position
 
 Phase: 18 (Reader Orientation) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-08-30 — Phase 18 execution started
 
@@ -173,6 +173,7 @@ Last activity: 2026-08-30 — Phase 18 execution started
 | Phase 17 P04 | 18 min | 3 tasks | 11 files |
 | Phase 17 P05 | 33 min | 3 tasks | 5 files |
 | Phase 18 P01 | 8 min | 2 tasks | 4 files |
+| Phase 18 P02 | 24min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -409,6 +410,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: [18-01] TOC depth rule: direct child = parent+1, skipped level = parent+2 — the skip is one structural signal; gap size never spelled per level (entry.level carries the true source level verbatim per ORNT-04)
 - [Phase ?]: [18-01] useSectionSpy keeps text-based change tracking (byte-identical announcer semantics) and invokes onCurrent(headingElement, detectTimeText) — element-first for D18-12 data-block-index mapping; latest-callback ref keeps effect deps [articleEl, selector]
 - [Phase ?]: [18-01] ORNT-04 stays unchecked until 18-02 ships TocPanel — this plan proves derivation invariants only (04-02 PAGE-01 / 10-01 RECV-01 split precedent); section-announce.spec.ts 12/12 green with zero diff after the extraction
+- [Phase ?]: 18-02: Esc is a TWO-target contract (UI-SPEC rule 3: panel AND trigger) — a document-level listener scoped to the two targets covers Esc racing the open-focus rAF (the webkit/firefox (f)-cell race); never a page-wide hijack — Plan Task 2 named only the panel; UI-SPEC rule 3 names both targets and the e2e race proved the trigger half load-bearing
+- [Phase ?]: 18-02: TOC indent lives on li[data-depth] not a ul class — mixed-depth siblings (h2→h5 then h3) share one child ul, so ul-level indent cannot express exact depths; calc(depth × --space-md) keeps D18-10 skips-nest-deeper exact — Plan said ul-level indent class per depth; per-entry scaling preserves the same tokens and the locked no-invention structure
 
 ### Pending Todos
 
@@ -464,9 +467,9 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-30T15:58:32.045Z
-Stopped at: Phase 18 UI-SPEC approved
-Resume file: .planning/phases/18-reader-orientation/18-UI-SPEC.md
+Last session: 2026-08-30T16:25:05.071Z
+Stopped at: Completed 18-02-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 
