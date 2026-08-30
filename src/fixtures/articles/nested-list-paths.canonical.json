@@ -1,0 +1,146 @@
+{
+  "id": "nested-list-paths",
+  "revision": 1,
+  "lang": "en",
+  "provenance": {
+    "sourceUrl": "https://developer.mozilla.org/en-US/docs/Web/HTML/Element/ul",
+    "title": "Nested list structures",
+    "author": "MDN Contributors",
+    "retrievedAt": "2026-08-30T00:00:00Z",
+    "originalHtmlHash": "7c1e4a9f0b3d2856e1fa9c04b7d2e8f13a6c5b09d4e7f2a8c1b3d5e9f0a2c4d6e",
+    "license": "CC BY-SA 2.5"
+  },
+  "blocks": [
+    {
+      "kind": "paragraph",
+      "content": [
+        {
+          "text": "Lists are among the most common structures in long-form technical and reference writing, and they rarely stay flat. A single outline can mix bulleted groups with numbered sequences, nest one inside the other, and carry links partway through an item. This fixture exercises those shapes: a bulleted list whose second item contains a nested bulleted list, whose first item in turn contains a nested numbered list, three levels deep in total.",
+          "marks": []
+        }
+      ]
+    },
+    {
+      "kind": "heading",
+      "level": 2,
+      "content": [{ "text": "Outline", "marks": [] }]
+    },
+    {
+      "kind": "bulleted-list",
+      "items": [
+        {
+          "content": [
+            {
+              "kind": "paragraph",
+              "content": [
+                { "text": "Flat items with a link mid-item: the ", "marks": [] },
+                { "text": "HTML specification", "marks": [{ "type": "link", "href": "https://html.spec.whatwg.org/multipage/grouping-content.html#the-ul-element" }] },
+                { "text": " permits both ordered and unordered nesting to arbitrary depth.", "marks": [] }
+              ]
+            }
+          ]
+        },
+        {
+          "content": [
+            {
+              "kind": "paragraph",
+              "content": [
+                { "text": "A second item that opens a nested bulleted list:", "marks": [] }
+              ]
+            },
+            {
+              "kind": "bulleted-list",
+              "items": [
+                {
+                  "content": [
+                    {
+                      "kind": "paragraph",
+                      "content": [
+                        { "text": "The first nested item, which itself opens a numbered sequence:", "marks": [] }
+                      ]
+                    },
+                    {
+                      "kind": "numbered-list",
+                      "start": 1,
+                      "items": [
+                        {
+                          "content": [
+                            {
+                              "kind": "paragraph",
+                              "content": [
+                                { "text": "Read the parent item to establish context.", "marks": [] }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "content": [
+                            {
+                              "kind": "paragraph",
+                              "content": [
+                                { "text": "Descend into the numbered sub-step.", "marks": [] }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "content": [
+                            {
+                              "kind": "paragraph",
+                              "content": [
+                                { "text": "Return to the enclosing bullet without losing your place.", "marks": [] }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "content": [
+                    {
+                      "kind": "paragraph",
+                      "content": [
+                        { "text": "A sibling nested item with no deeper children, so the recursion has a base case at every level.", "marks": [] }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "content": [
+            {
+              "kind": "paragraph",
+              "content": [
+                { "text": "A final flat item closing the outer list.", "marks": [] }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "paragraph",
+      "content": [
+        {
+          "text": "Reading-order guarantees hold at every depth: the normalized text substrate joins items and their content blocks in document order, so a selection that begins in an outer item and ends inside a nested sub-step addresses one contiguous passage, and the markers themselves stay purely presentational.",
+          "marks": []
+        }
+      ]
+    },
+    {
+      "kind": "paragraph",
+      "content": [
+        {
+          "text": "Use this article to verify that highlighting threads through each level: a span that crosses from the outer bullet into the numbered sub-step renders marks on both levels while sharing one highlight identity.",
+          "marks": []
+        }
+      ]
+    }
+  ],
+  "footnotes": []
+}

@@ -7,7 +7,7 @@
 // Mirrors the typography-variant pattern in tests/e2e/calibration/fixtures-matrix.ts
 // (TypographyVariant type + SAMPLED_MATRIX discipline), then adds the two
 // pagination-specific axes:
-//   - FIXTURES: the 6 canonical corpus articles bundled by src/fixtures/index.ts
+//   - FIXTURES: the canonical corpus articles bundled by src/fixtures/index.ts
 //   - VIEWPORTS: 3 responsive cells covering small touch, tablet, and desktop
 //
 // Per 04-VALIDATION.md §Sampling Rate:
@@ -29,10 +29,10 @@
 import type { TypographyVariant } from "../calibration/fixtures-matrix";
 
 /**
- * The 6 canonical corpus fixture IDs (D-01 genre matrix). Verified against
- * src/fixtures/index.ts — these are the slugs that #/article/<id> resolves.
- * Adding a fixture requires updating this array AND the e2e open-every-fixture
- * spec.
+ * The canonical corpus fixture IDs (D-01 genre matrix + the Phase 19
+ * nested-list recursion member). Verified against src/fixtures/index.ts —
+ * these are the slugs that #/article/<id> resolves. Adding a fixture
+ * requires updating this array AND the e2e open-every-fixture spec.
  */
 export const FIXTURES: readonly string[] = [
   "essay-long-form",
@@ -41,6 +41,7 @@ export const FIXTURES: readonly string[] = [
   "list-reference",
   "technical-post",
   "unsupported-case",
+  "nested-list-paths",
 ] as const;
 
 /** A single responsive viewport cell. height pairs with width for setViewportSize. */
@@ -87,9 +88,9 @@ export interface CorpusCell {
 }
 
 /**
- * The full corpus matrix enumeration: 6 fixtures × 3 viewports × 3 typography
- * cells = 54 cells. Each cell is one Playwright test execution across all 3
- * engines (chromium + firefox + webkit) — 162 engine-cell runs per invariant
+ * The full corpus matrix enumeration: 7 fixtures × 3 viewports × 3 typography
+ * cells = 63 cells. Each cell is one Playwright test execution across all 3
+ * engines (chromium + firefox + webkit) — 189 engine-cell runs per invariant
  * spec. This is the PAGE-03 contract surface.
  *
  * Plan 04-05 iterates CORPUS_MATRIX inside the e2e scaffolds created by this

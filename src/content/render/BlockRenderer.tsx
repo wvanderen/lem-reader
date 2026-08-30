@@ -63,6 +63,32 @@ export interface ArticleBodyHighlight {
  * emits them. React does NOT auto-forward arbitrary props from a function
  * component to the underlying DOM intrinsic, so we destructure + spread.
  */
+/**
+ * Phase 19 Plan 19-03 (D19-13/D19-15): precomputed highlight slices for a
+ * list block's items — the items-shape twin of the blockquote
+ * childHighlightSlices walk. `perItem[i][j]` addresses
+ * `block.items[i].content[j]`:
+ *   - HighlightSlice[] for leaf paragraph/heading children (forwarded as
+ *     that child BlockView's `highlightSlices`),
+ *   - a nested ListItemSlices for nested bulleted/numbered-list children
+ *     (D19-15 recursion — forwarded as the child's `itemHighlightSlices`),
+ *   - undefined when no highlight intersects that child.
+ * Self-contained recursion via props: each nested list BlockView receives
+ * its OWN precomputed structure, so no global-start plumbing leaks through
+ * BlockView (the helper computed everything against article-global offsets
+ * up front).
+ */
+export interface ListItemSlices {
+  /** items[i] → content[j] → child slices (dense, positional). */
+  perItem: ListChildSlices[][];
+}
+
+/** One child's entry inside ListItemSlices.perItem (see the interface). */
+type ListChildSlices =
+  | ReturnType<typeof sliceRunsForHighlights> // leaf paragraph/heading child
+  | ListItemSlices // nested list child (D19-15)
+  | undefined; // no intersecting highlight / non-readable kind
+
 type BlockViewProps = {
   block: Block;
   /** Allow paginated mode to expose one semantic block as a programmatic-only
@@ -84,6 +110,14 @@ type BlockViewProps = {
    * measurement body.
    */
   childHighlightSlices?: (ReturnType<typeof sliceRunsForHighlights> | undefined)[];
+  /**
+   * Phase 19 Plan 19-03 (D19-13/D19-15): per-item highlight slices for a
+   * bulleted/numbered-list block (from computeListItemSlices). Consumed ONLY
+   * by the list cases to thread each item's content children — leaf children
+   * get highlightSlices, nested-list children get their own itemHighlightSlices.
+   * Absent for non-list kinds + the measurement body.
+   */
+  itemHighlightSlices?: ListItemSlices;
 } & {
   [K in `data-${string}`]?: string | number | undefined;
 };
@@ -92,6 +126,7 @@ export function BlockView({
   block,
   highlightSlices,
   childHighlightSlices,
+  itemHighlightSlices,
   tabIndex,
   ...rest
 }: BlockViewProps) {
@@ -134,7 +169,18 @@ export function BlockView({
           {block.items.map((item, i) => (
             <li key={i}>
               {item.content.map((c, j) => (
-                <BlockView key={j} block={c} />
+                // Plan 19-03 (D19-13/D19-15): forward the per-child slice
+                // computed by computeListItemSlices — leaf paragraph/heading
+                // children consume highlightSlices; nested list children
+                // consume itemHighlightSlices (self-contained recursion via
+                // props). Optional lookups keep absent/undefined as "no
+                // slices" (byte-unchanged when no highlight intersects).
+                <BlockView
+                  key={j}
+                  block={c}
+                  highlightSlices={leafSlicesFor(itemHighlightSlices, i, j)}
+                  itemHighlightSlices={nestedSlicesFor(itemHighlightSlices, i, j)}
+                />
               ))}
             </li>
           ))}
@@ -146,7 +192,12 @@ export function BlockView({
           {block.items.map((item, i) => (
             <li key={i}>
               {item.content.map((c, j) => (
-                <BlockView key={j} block={c} />
+                <BlockView
+                  key={j}
+                  block={c}
+                  highlightSlices={leafSlicesFor(itemHighlightSlices, i, j)}
+                  itemHighlightSlices={nestedSlicesFor(itemHighlightSlices, i, j)}
+                />
               ))}
             </li>
           ))}
@@ -275,6 +326,106 @@ function blockGraphemeLen(block: Block, lang: string): number {
   return graphemeClusters(blockNormalizedText(block), lang).length;
 }
 
+/** Leaf-slice lookup for the list cases: perItem[i][j] when it is a run-slice array. */
+function leafSlicesFor(
+  slices: ListItemSlices | undefined,
+  i: number,
+  j: number,
+): ReturnType<typeof sliceRunsForHighlights> | undefined {
+  const child = slices?.perItem[i]?.[j];
+  return Array.isArray(child) ? child : undefined;
+}
+
+/** Nested-list lookup for the list cases: perItem[i][j] when it is a ListItemSlices. */
+function nestedSlicesFor(
+  slices: ListItemSlices | undefined,
+  i: number,
+  j: number,
+): ListItemSlices | undefined {
+  const child = slices?.perItem[i]?.[j];
+  return child != null && !Array.isArray(child) ? child : undefined;
+}
+
+/**
+ * Per-item highlight-slice computation for bulleted/numbered lists (Plan
+ * 19-03 — D19-13/D19-15). The items-shape mirror of the 05-07 blockquote
+ * walk: a list-local accumulator walks items (joined by BLOCK_SEPARATOR per
+ * normalizeText.ts L48-52); within each item an item-local accumulator walks
+ * `item.content` (content blocks joined by BLOCK_SEPARATOR). For each child,
+ * `childGlobalStart = blockGlobalStart + itemLocalOffset` and paragraph/
+ * heading children get highlightsForBlock + sliceRunsForHighlights EXACTLY
+ * as the blockquote path does (no forked slicer). Nested bulleted/numbered
+ * children RECURSE (D19-15), producing the same nested shape at every depth.
+ * Kinds without slices (figure/code/etc. inside items) simply produce none —
+ * interior gaps render unmarked by construction (D19-02).
+ *
+ * List markers are CSS ::marker/start-attribute chrome and never render as
+ * DOM text (D19-14) — this helper computes offsets over item CONTENT only,
+ * exactly matching the D-05 substrate's blockText join.
+ *
+ * Returns null when no child at any depth produced slices (the list cases
+ * then thread nothing — byte-unchanged rendering, mirroring the blockquote
+ * path's anyChildSlices discipline).
+ */
+function computeListItemSlices(
+  block:
+    | Extract<Block, { kind: "bulleted-list" }>
+    | Extract<Block, { kind: "numbered-list" }>,
+  blockGlobalStart: number,
+  effectiveHighlights: readonly ArticleBodyHighlight[],
+  article: CanonicalArticle,
+): ListItemSlices | null {
+  let itemLocalOffset = 0; // list-local: items joined by BLOCK_SEPARATOR
+  const perItem: ListChildSlices[][] = [];
+  let anySlices = false;
+  for (const item of block.items) {
+    let childLocalOffset = itemLocalOffset; // item-local: content blocks joined by BLOCK_SEPARATOR
+    const perChild: ListChildSlices[] = [];
+    for (const child of item.content) {
+      const childLen = blockGraphemeLen(child, article.lang);
+      const childGlobalStart = blockGlobalStart + childLocalOffset;
+      if (child.kind === "paragraph" || child.kind === "heading") {
+        const entries = highlightsForBlock(
+          effectiveHighlights,
+          childGlobalStart,
+          childLen,
+        );
+        if (entries.length > 0) {
+          perChild.push(
+            sliceRunsForHighlights(child.content, childGlobalStart, entries, article.lang),
+          );
+          anySlices = true;
+        } else {
+          perChild.push(undefined);
+        }
+      } else if (child.kind === "bulleted-list" || child.kind === "numbered-list") {
+        // D19-15: recurse — sub-list items are readable children with the
+        // same mark anatomy, addressed in the same D-05 coordinate stream.
+        const nested = computeListItemSlices(
+          child,
+          childGlobalStart,
+          effectiveHighlights,
+          article,
+        );
+        perChild.push(nested ?? undefined);
+        anySlices = anySlices || nested !== null;
+      } else {
+        perChild.push(undefined);
+      }
+      childLocalOffset += childLen + BLOCK_SEPARATOR.length;
+    }
+    perItem.push(perChild);
+    // After the child loop, childLocalOffset sits at itemStart + Σ(childLen)
+    // + n·SEPARATOR — which equals itemStart + itemLen + SEP for n > 0
+    // (the trailing per-child separator coincides with the inter-item
+    // separator). An EMPTY item still consumes its inter-item separator.
+    itemLocalOffset =
+      childLocalOffset +
+      (item.content.length === 0 ? BLOCK_SEPARATOR.length : 0);
+  }
+  return anySlices ? { perItem } : null;
+}
+
 /**
  * ArticleBody — memoized on (article identity, explicit highlights identity)
  * so sibling state changes in the owner (ArticleView's per-scroll-event
@@ -353,26 +504,32 @@ export const ArticleBody = memo(
           // highlights — the value is consumed only by highlight filtering).
           const blockGlobalStart = highlightIndex?.starts[i] ?? 0;
           // Compute highlight slices for the paragraph/heading path (direct)
-          // AND the blockquote container path (per-child). Other container kinds
-          // (lists — different items-shape, no failing UAT case) and atomic kinds
-          // (figure/code-block/footnote-reference/unsupported) do not carry inline
-          // highlight overlays in this MVP slice. Code-block + figure-caption
-          // remain deferred: a figure's blockNormalizedText includes alt +
-          // separator + caption, which diverges from the DOM textContent the
-          // capture map walks — handling that divergence is deferred to keep the
-          // D-05 substrate stable.
+          // AND the container paths: blockquote (per-child, Plan 05-07) and
+          // lists (per-item with nested-list recursion, Plan 19-03 — the
+          // 05-07 items-shape deferral paid down per D19-13/D19-15). Atomic
+          // kinds (figure/code-block/footnote-reference/unsupported) do not
+          // carry inline highlight overlays in this slice. Code-block +
+          // figure-caption remain deferred: a figure's blockNormalizedText
+          // includes alt + separator + caption, which diverges from the DOM
+          // textContent the capture map walks — handling that divergence is
+          // deferred to keep the D-05 substrate stable.
           //
           // D5-07 capture eligibility is independent of inline rendering: every
           // CAPTURABLE kind persists + re-resolves; inline <mark> coverage is
           // per-kind. For paragraph/heading, sliceRunsForHighlights wraps the
           // highlighted runs directly. For blockquote, Plan 05-07 threads slices
-          // per child (mirrors the paragraph path per child paragraph).
+          // per child (mirrors the paragraph path per child paragraph). For
+          // lists, Plan 19-03 threads slices per item content child.
           let highlightSlices: ReturnType<typeof sliceRunsForHighlights> | undefined;
           // Plan 05-07: per-child slices for a blockquote block (undefined for
           // non-blockquote kinds + when no highlight intersects any child).
           let childHighlightSlices:
             | (ReturnType<typeof sliceRunsForHighlights> | undefined)[]
             | undefined;
+          // Plan 19-03: per-item slices for list blocks (undefined for
+          // non-list kinds + when no highlight intersects any item at any
+          // nesting depth).
+          let itemHighlightSlices: ListItemSlices | undefined;
           if (highlightIndex) {
           if (block.kind === "paragraph" || block.kind === "heading") {
             const blockLen = highlightIndex.lens[i]!;
@@ -389,6 +546,23 @@ export const ArticleBody = memo(
                 article.lang,
               );
             }
+          } else if (block.kind === "bulleted-list" || block.kind === "numbered-list") {
+            // Per-item slice threading (Plan 19-03 — D19-13/D19-15). The
+            // items-shape mirror of the blockquote walk below: a list-local
+            // accumulator walks items, an item-local accumulator walks each
+            // item's content blocks (both joined by BLOCK_SEPARATOR per
+            // normalizeText's blockText rule), and each paragraph/heading
+            // child reuses highlightsForBlock + sliceRunsForHighlights
+            // exactly as the paragraph path does. Nested lists recurse
+            // (D19-15). Returns null when nothing intersects — thread
+            // nothing (byte-unchanged rendering).
+            itemHighlightSlices =
+              computeListItemSlices(
+                block,
+                blockGlobalStart,
+                effectiveHighlights,
+                article,
+              ) ?? undefined;
           } else if (block.kind === "blockquote") {
             // Per-child slice threading (Plan 05-07). Walk block.children
             // accumulating each child's intra-blockquote grapheme offset
@@ -451,6 +625,7 @@ export const ArticleBody = memo(
             data-block-index={i}
             highlightSlices={highlightSlices}
             childHighlightSlices={childHighlightSlices}
+            itemHighlightSlices={itemHighlightSlices}
           />
         );
       })}
