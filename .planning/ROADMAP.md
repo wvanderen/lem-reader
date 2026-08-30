@@ -157,7 +157,25 @@ Plans:
   4. At narrow widths or high zoom, opening or closing the TOC neither obscures content, changes logical location, nor traps focus.
   5. Reopening communicates restored location without shifting content, blocking page turns, or requiring dismissal.
 
-**Plans**: TBD
+**Plans**: 4/4 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 18-01-PLAN.md — deriveToc pure module + blockStartOffsets destinations + sectionSpy extraction (ORNT-04 foundation, byte-stable announcer)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 18-02-PLAN.md — TocPanel popover=manual + header trigger + mode-aware D5-11 jumps + ≤420px staged collapse (ORNT-01, ORNT-03, ORNT-04, ORNT-05)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 18-03-PLAN.md — paginated save/restore closure + RestorationMarker + banner retirement sweep (ORNT-06)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 18-04-PLAN.md — seeded TOC corpus + 3-engine e2e matrix + honest full-suite gate + requirements completion (ORNT-01, ORNT-03, ORNT-04, ORNT-05, ORNT-06)
+
 **UI hint**: yes
 
 ### Phase 19: Cross-Block Highlights
@@ -218,7 +236,7 @@ Plans:
 | 15. Application Shell and Destinations | v2.1 | 4/4 | Complete    | 2026-08-26 |
 | 16. Organized Library and Focused Add Flow | v2.1 | 4/4 | Complete    | 2026-08-29 |
 | 17. Reader-Owned Metadata | v2.1 | 5/5 | Complete    | 2026-08-30 |
-| 18. Reader Orientation | v2.1 | 0/TBD | Not started | - |
+| 18. Reader Orientation | v2.1 | 0/4 | Not started | - |
 | 19. Cross-Block Highlights | v2.1 | 0/TBD | Not started | - |
 | 20. Safe Local Image Fidelity | v2.1 | 0/TBD | Not started | - |
 | 21. Integrated Refinement and Acceptance | v2.1 | 0/TBD | Not started | - |
