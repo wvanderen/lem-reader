@@ -24,6 +24,11 @@
 // tests/unit/ingestion-tags.test.ts): fake-indexeddb via Dexie.dependencies at
 // module top-level, wipeDatabase beforeEach, lazy module imports so the
 // module under test sees a populated Dexie.dependencies.
+//
+// Phase 17 (17-04 Task 2) extends this file with the seventh conflict kind:
+// article-metadata-override classification (D17-11, incl. one-side-only and
+// the Pitfall 4 identical-duplicate override-state fix) + resolution with the
+// per-item take-incoming choice and merge-on-win (D17-10).
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   ArticleSchema,
@@ -48,7 +53,7 @@ import {
 import { fixtures } from "../../../src/fixtures";
 import { ExportBundleSchema } from "../../../src/portability/bundle";
 import type { ExportBundle } from "../../../src/portability/bundle";
-import type { Overrides } from "../../../src/portability/conflicts";
+import type { Overrides, PerKindOverride } from "../../../src/portability/conflicts";
 import type { z } from "zod";
 import fakeIndexedDB, { IDBKeyRange } from "fake-indexeddb";
 import { Dexie } from "dexie";
@@ -1228,5 +1233,329 @@ describe("detectImportPreview + resolveImportPlan — book conflicts (12-07)", (
     const plan = await resolveImportPlan(bundle, preview, ALL_SKIP, false);
     expect(plan.booksToWrite).toEqual([]); // the book is skipped…
     expect(plan.articlesToWrite).toEqual([chapter]); // …but the chapter still rides
+  });
+});
+
+// ── Phase 17 (17-04 Task 2): article-metadata-override — the 7th kind ───────
+
+/** Phase 17 (17-04): the widened seventh kind is referenced by these tests
+ * BEFORE conflicts.ts declares it (TDD RED). Typing the widened record as
+ * Record<string, PerKindOverride> keeps this file typecheck-clean at RED;
+ * once the kind lands, the helper is an ordinary Overrides literal. */
+function withMetadataOverride(
+  base: Overrides,
+  value: PerKindOverride,
+): Overrides {
+  const widened: Record<string, PerKindOverride> = {
+    ...base,
+    "article-metadata-override": value,
+  };
+  return widened;
+}
+
+describe("detectImportPreview — article-metadata-override classification (17-04, D17-11)", () => {
+  beforeEach(async () => {
+    await wipeDatabase();
+  });
+
+  it("same id+revision+hash with a differing readerTitle (both sides set) → exactly one article-metadata-override conflict, zero writes", async () => {
+    const { detectImportPreview } = await loadConflicts();
+    const { db } = await loadDb();
+    await db.articles.put(
+      sampleArticle({ id: "art-meta", readerTitle: "Local Name" }),
+    );
+
+    const preview = await detectImportPreview(
+      sampleBundle({
+        articles: [
+          sampleArticle({ id: "art-meta", readerTitle: "Incoming Name" }),
+        ],
+      }),
+    );
+
+    expect(preview.added.articles).toBe(0);
+    expect(preview.conflicts).toHaveLength(1);
+    expect(preview.conflicts[0]?.kind).toBe("article-metadata-override");
+    expect(preview.conflicts[0]?.count).toBe(1);
+    expect(preview.conflicts[0]?.sampleIds).toContain("art-meta");
+    // The per-article detail array carries BOTH sides' override values and
+    // the effective names the dialog renders (sampleIds cap-5 is display-only).
+    expect(preview.metadataConflicts).toHaveLength(1);
+    expect(preview.metadataConflicts[0]?.id).toBe("art-meta");
+    expect(preview.metadataConflicts[0]?.localReaderTitle).toBe("Local Name");
+    expect(preview.metadataConflicts[0]?.incomingReaderTitle).toBe(
+      "Incoming Name",
+    );
+    expect(preview.metadataConflicts[0]?.localName).toBe("Local Name");
+    expect(preview.metadataConflicts[0]?.incomingName).toBe("Incoming Name");
+    // Zero writes: the local row is byte-unchanged.
+    expect((await db.articles.get("art-meta"))?.readerTitle).toBe("Local Name");
+  });
+
+  it("one-side-only differences (incoming-only AND local-only) each surface the kind (D17-11 verbatim — Pitfall 4 fix)", async () => {
+    const { detectImportPreview } = await loadConflicts();
+    const { db } = await loadDb();
+    // art-incoming-only: the INCOMING article has the override, local does not.
+    await db.articles.put(sampleArticle({ id: "art-incoming-only" }));
+    // art-local-only: the LOCAL article has the override, incoming does not.
+    await db.articles.put(
+      sampleArticle({ id: "art-local-only", readerAuthor: "Local Author" }),
+    );
+
+    const preview = await detectImportPreview(
+      sampleBundle({
+        articles: [
+          sampleArticle({ id: "art-incoming-only", readerTitle: "Their Name" }),
+          sampleArticle({ id: "art-local-only" }),
+        ],
+      }),
+    );
+
+    const conflict = preview.conflicts.find(
+      (c) => c.kind === "article-metadata-override",
+    );
+    expect(conflict).toBeDefined();
+    expect(conflict?.count).toBe(2);
+    expect(conflict?.sampleIds).toEqual(
+      expect.arrayContaining(["art-incoming-only", "art-local-only"]),
+    );
+    expect(preview.metadataConflicts).toHaveLength(2);
+    const incomingOnly = preview.metadataConflicts.find(
+      (d) => d.id === "art-incoming-only",
+    );
+    expect(incomingOnly?.localReaderTitle).toBeUndefined();
+    expect(incomingOnly?.incomingReaderTitle).toBe("Their Name");
+    expect(incomingOnly?.localName).toBe("Sample Article"); // canonical fallback
+    expect(incomingOnly?.incomingName).toBe("Their Name");
+    const localOnly = preview.metadataConflicts.find(
+      (d) => d.id === "art-local-only",
+    );
+    expect(localOnly?.localReaderAuthor).toBe("Local Author");
+    expect(localOnly?.incomingReaderAuthor).toBeUndefined();
+  });
+
+  it("identical id+revision+hash AND override state → still a calm no-op (zero conflicts — regression)", async () => {
+    const { detectImportPreview } = await loadConflicts();
+    const { db } = await loadDb();
+    await db.articles.put(
+      sampleArticle({
+        id: "art-twin",
+        readerTitle: "Same Name",
+        readerAuthor: "Same Author",
+      }),
+    );
+
+    const preview = await detectImportPreview(
+      sampleBundle({
+        articles: [
+          sampleArticle({
+            id: "art-twin",
+            readerTitle: "Same Name",
+            readerAuthor: "Same Author",
+          }),
+        ],
+      }),
+    );
+
+    expect(preview.added.articles).toBe(0);
+    expect(preview.conflicts).toEqual([]);
+    expect(preview.metadataConflicts).toEqual([]);
+    expect((await db.articles.get("art-twin"))?.readerTitle).toBe("Same Name");
+  });
+
+  it("revision differs AND metadata differs → classified article-revision ONLY (else-if order: revision → divergence → metadata)", async () => {
+    const { detectImportPreview } = await loadConflicts();
+    const { db } = await loadDb();
+    await db.articles.put(
+      sampleArticle({ id: "art-both", readerTitle: "Local Name" }),
+    );
+
+    const preview = await detectImportPreview(
+      sampleBundle({
+        articles: [
+          sampleArticle({
+            id: "art-both",
+            revision: 2,
+            readerTitle: "Incoming Name",
+          }),
+        ],
+      }),
+    );
+
+    // The revision branch owns the classification — metadata protection on
+    // that path comes from merge-on-win (resolveImportPlan), never a second
+    // conflict row.
+    expect(preview.conflicts).toHaveLength(1);
+    expect(preview.conflicts[0]?.kind).toBe("article-revision");
+    expect(
+      preview.conflicts.find((c) => c.kind === "article-metadata-override"),
+    ).toBeUndefined();
+    expect(preview.metadataConflicts).toEqual([]);
+  });
+});
+
+describe("resolveImportPlan — metadata conflicts + merge-on-win (17-04, D17-10/D17-11)", () => {
+  beforeEach(async () => {
+    await wipeDatabase();
+  });
+
+  it("metadata-only conflict + default skip → nothing written, local override intact, counted skipped (keep-LOCAL default, D17-11)", async () => {
+    const { detectImportPreview, resolveImportPlan } = await loadConflicts();
+    const { db } = await loadDb();
+    await db.articles.put(
+      sampleArticle({ id: "art-meta", readerTitle: "Local Name" }),
+    );
+
+    const bundle = sampleBundle({
+      articles: [
+        sampleArticle({ id: "art-meta", readerTitle: "Incoming Name" }),
+      ],
+    });
+    const preview = await detectImportPreview(bundle);
+
+    const plan = await resolveImportPlan(bundle, preview, ALL_SKIP, false);
+
+    expect(plan.articlesToWrite).toEqual([]);
+    expect(plan.skipped.articles).toBe(1);
+    expect((await db.articles.get("art-meta"))?.readerTitle).toBe("Local Name");
+  });
+
+  it("metadata-only conflict + the id in metadataTakeIncoming → the incoming row is written whole (its overrides win; a key-less incoming row REMOVES the local override — explicit reader choice)", async () => {
+    const { detectImportPreview, resolveImportPlan } = await loadConflicts();
+    const { db } = await loadDb();
+    await db.articles.put(
+      sampleArticle({ id: "art-meta", readerTitle: "Local Name" }),
+    );
+
+    const incoming = sampleArticle({ id: "art-meta" }); // NO override keys
+    const bundle = sampleBundle({ articles: [incoming] });
+    const preview = await detectImportPreview(bundle);
+
+    const plan = await resolveImportPlan(bundle, preview, ALL_SKIP, false, {
+      metadataTakeIncoming: new Set(["art-meta"]),
+    });
+
+    expect(plan.articlesToWrite).toEqual([incoming]);
+    expect(plan.articlesToWrite[0]?.readerTitle).toBeUndefined();
+    expect(plan.skipped.articles).toBe(0);
+  });
+
+  it("incoming revision+1 wins under article-revision overwrite + keep-local → the written row carries incoming revision/content with the LOCAL overrides merged on (D17-10 — a refresh never renames the library back)", async () => {
+    const { detectImportPreview, resolveImportPlan } = await loadConflicts();
+    const { db } = await loadDb();
+    await db.articles.put(
+      sampleArticle({
+        id: "art-meta",
+        readerTitle: "Local Name",
+        readerAuthor: "Local Author",
+      }),
+    );
+
+    const bundle = sampleBundle({
+      articles: [sampleArticle({ id: "art-meta", revision: 2 })],
+    });
+    const preview = await detectImportPreview(bundle);
+
+    const plan = await resolveImportPlan(
+      bundle,
+      preview,
+      { ...ALL_SKIP, "article-revision": "overwrite" },
+      false,
+    );
+
+    expect(plan.articlesToWrite).toHaveLength(1);
+    const winner = plan.articlesToWrite[0]!;
+    expect(winner.revision).toBe(2); // incoming content won…
+    expect(winner.readerTitle).toBe("Local Name"); // …but the reader's name survives
+    expect(winner.readerAuthor).toBe("Local Author");
+    // Zero writes: the local row is untouched until applyImport.
+    expect((await db.articles.get("art-meta"))?.revision).toBe(1);
+  });
+
+  it("incoming revision+1 wins + the id in metadataTakeIncoming → the incoming row wins whole (no merge)", async () => {
+    const { detectImportPreview, resolveImportPlan } = await loadConflicts();
+    const { db } = await loadDb();
+    await db.articles.put(
+      sampleArticle({ id: "art-meta", readerTitle: "Local Name" }),
+    );
+
+    const incoming = sampleArticle({
+      id: "art-meta",
+      revision: 2,
+      readerTitle: "Incoming Name",
+    });
+    const bundle = sampleBundle({ articles: [incoming] });
+    const preview = await detectImportPreview(bundle);
+
+    const plan = await resolveImportPlan(
+      bundle,
+      preview,
+      { ...ALL_SKIP, "article-revision": "overwrite" },
+      false,
+      { metadataTakeIncoming: new Set(["art-meta"]) },
+    );
+
+    expect(plan.articlesToWrite).toEqual([incoming]);
+  });
+
+  it("divergence overwrite + keep-local → the same merge rule: local overrides survive the content replacement (D17-10)", async () => {
+    const { detectImportPreview, resolveImportPlan } = await loadConflicts();
+    const { db } = await loadDb();
+    await db.articles.put(
+      sampleArticle({ id: "art-meta", readerTitle: "Local Name" }),
+    );
+
+    const incoming = sampleArticle({
+      id: "art-meta",
+      revision: 1,
+      provenance: {
+        sourceUrl: "https://example.com/article",
+        title: "Sample Article",
+        author: "An Author",
+        retrievedAt: "2026-08-11T00:00:00.000Z",
+        originalHtmlHash: "sha256:" + "b".repeat(64), // diverged content
+      },
+      readerTitle: "Incoming Name",
+    });
+    const bundle = sampleBundle({ articles: [incoming] });
+    const preview = await detectImportPreview(bundle);
+
+    const plan = await resolveImportPlan(
+      bundle,
+      preview,
+      { ...ALL_SKIP, "article-content-divergence": "overwrite" },
+      false,
+    );
+
+    expect(plan.articlesToWrite).toHaveLength(1);
+    const winner = plan.articlesToWrite[0]!;
+    expect(winner.provenance.originalHtmlHash).toBe(incoming.provenance.originalHtmlHash);
+    expect(winner.readerTitle).toBe("Local Name"); // keep-local merge, not incoming's
+  });
+
+  it("per-kind overwrite on article-metadata-override is the honest bulk take-incoming: every metadata-conflicted article is taken (Rule 2 — the offered select must do what it says)", async () => {
+    const { detectImportPreview, resolveImportPlan } = await loadConflicts();
+    const { db } = await loadDb();
+    await db.articles.put(
+      sampleArticle({ id: "art-a", readerTitle: "Local A" }),
+    );
+    await db.articles.put(
+      sampleArticle({ id: "art-b", readerTitle: "Local B" }),
+    );
+
+    const incomingA = sampleArticle({ id: "art-a", readerTitle: "New A" });
+    const incomingB = sampleArticle({ id: "art-b", readerTitle: "New B" });
+    const bundle = sampleBundle({ articles: [incomingA, incomingB] });
+    const preview = await detectImportPreview(bundle);
+
+    const plan = await resolveImportPlan(
+      bundle,
+      preview,
+      withMetadataOverride(ALL_SKIP, "overwrite"),
+      false,
+    );
+
+    expect(plan.articlesToWrite).toEqual([incomingA, incomingB]);
+    expect(plan.skipped.articles).toBe(0);
   });
 });
