@@ -241,11 +241,18 @@ export function SelectionToolbar({
         </>
       ) : (
         <p className="selection-toolbar-hint">
-          {captureResult.reason === "multi-block"
-            ? "Select within a single block to highlight it."
+          {/* Phase 19 (D19-05/D19-06): an endpoint inside ineligible content
+              refuses the WHOLE selection — the ONE new reader-facing string
+              (19-UI-SPEC §Copywriting, verbatim e2e anchor). The retired
+              D5-06 multi-block branch + its copy are gone; the defensive
+              empty-span composes reader-indistinguishably from empty (zero
+              new strings). */}
+          {captureResult.reason === "boundary-ineligible"
+            ? "This selection includes content that can't be highlighted."
             : captureResult.reason === "overlap"
               ? "This overlaps an existing highlight."
-              : captureResult.reason === "empty"
+              : captureResult.reason === "empty" ||
+                  captureResult.reason === "empty-span"
                 ? "Select text to highlight it."
                 : "Select readable text to highlight it."}
         </p>

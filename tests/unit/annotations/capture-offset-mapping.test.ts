@@ -212,10 +212,14 @@ describe("captureSelection — article-global offset accumulation", () => {
   });
 });
 
-// ── Multi-block rejection (D5-06) ────────────────────────────────────────────
+// ── Span capture (Phase 19 / D19-01 — the retired D5-06 case flips to success) ──
 
-describe("captureSelection — multi-block rejection (D5-06)", () => {
-  it("returns { ok:false, reason:'multi-block' } when endpoints fall in different blocks", () => {
+describe("captureSelection — cross-block span success (D19-01; D5-06 retired)", () => {
+  it("composes ONE global range from two blocks' endpoints (was: D5-06 rejection)", () => {
+    // D19: the D5-06 single-block rule is retired — a selection spanning two
+    // eligible mounted blocks captures ONE highlight. Expected offsets derive
+    // from the blockText join rule: block 0's full norm length + ONE
+    // BLOCK_SEPARATOR + the per-endpoint intra offsets.
     const article = parseArticle({
       ...baseArticle,
       blocks: [
@@ -237,9 +241,14 @@ describe("captureSelection — multi-block rejection (D5-06)", () => {
     sel.addRange(range);
 
     const result = captureSelection(article, document.body);
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.reason).toBe("multi-block");
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      // b0 norm = "first block" (11 graphemes) + BLOCK_SEPARATOR(1) ⇒ b1's
+      // global start = 12. start = 0 + 2; end = 12 + 5 = 17. The composed
+      // range [2,17) over "first block\nsecond block" = "rst block\nseco".
+      expect(result.position).toEqual({ start: 2, end: 17 } as TextPositionSelector);
+      // blockIndex carries the START endpoint's index (span vocabulary).
+      expect(result.blockIndex).toBe(0);
     }
   });
 });
@@ -286,7 +295,10 @@ describe("captureSelection — empty / collapsed rejection", () => {
 // ── Ineligible rejection (D5-07 — unsupported block) ─────────────────────────
 
 describe("captureSelection — ineligible rejection (D5-07)", () => {
-  it("returns { ok:false, reason:'ineligible' } when the block is unsupported", () => {
+  it("returns { ok:false, reason:'boundary-ineligible' } when the block is unsupported", () => {
+    // D19: an endpoint that RESOLVES to unsupported content now returns the
+    // boundary-ineligible reason (D19-05/D19-08 — reject whole) with NO
+    // position on the refusal.
     const article = parseArticle({
       ...baseArticle,
       blocks: [
@@ -305,7 +317,9 @@ describe("captureSelection — ineligible rejection (D5-07)", () => {
     const result = captureSelection(article, document.body);
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.reason).toBe("ineligible");
+      expect(result.reason).toBe("boundary-ineligible");
+      // Refusals carry NO position (no range-shrinking machinery — D19-05).
+      expect("position" in result).toBe(false);
     }
   });
 

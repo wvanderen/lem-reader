@@ -33,6 +33,16 @@
 // blockquote, an item inside a list) is handled by the renderer mounting each
 // readable child with its own data-block-index in Plan 05-02; capture simply
 // resolves whatever data-block-index the selection's ancestor carries.
+//
+// Phase 19 (ANNO-08, D19-01..08): capture is ENDPOINT-COMPOSED. A selection
+// spanning multiple eligible mounted blocks captures ONE highlight — the
+// global range derives from the TWO endpoints alone (19-RESEARCH Pattern 1);
+// intermediate blocks are NEVER walked (their text is interior to the global
+// range by construction, and interior non-text gaps cross calmly per D19-02).
+// The former D5-06 single-block rule (its multi-block refusal reason) is
+// retired: the
+// shipped single-block path is the degenerate case blockIndexA === blockIndexB
+// on the SAME code path.
 import type { Block, CanonicalArticle } from "../content/types";
 import {
   BLOCK_SEPARATOR,
@@ -42,15 +52,27 @@ import {
 import type { TextPositionSelector } from "../content/normalizeText";
 
 /**
- * The result of attempting to capture a selection. INVALID selections
- * (multi-block, empty, outside eligible blocks) return a discriminated reason
- * so the toolbar can show the right hint (D5-06/D5-13).
+ * The result of attempting to capture a selection. INVALID selections (empty,
+ * ineligible boundaries, overlap-adjacent refusals) return a discriminated
+ * reason — with NO position field — so the toolbar can show the right hint
+ * (D5-13 + the Phase 19 refusal taxonomy).
+ *
+ * The ok-variant's `blockIndex` carries the START endpoint's resolved block
+ * index (Phase 19 span vocabulary). Consumers are grep-verified to read only
+ * `.ok` + `.position` (HighlightOverlay's captureCurrentSelection /
+ * createHighlightFromSelection); the field is retained for debuggability and
+ * is NOT a span descriptor.
  */
 export type CaptureResult =
   | { ok: true; blockIndex: number; position: TextPositionSelector }
   | {
       ok: false;
-      reason: "empty" | "multi-block" | "ineligible" | "measurement-body";
+      reason:
+        | "empty"
+        | "ineligible"
+        | "measurement-body"
+        | "boundary-ineligible"
+        | "empty-span";
     };
 
 /**
@@ -178,41 +200,36 @@ function absoluteRawGraphemeOffset(
 }
 
 /**
- * Map a DOM Range's (startContainer, startOffset) / (endContainer, endOffset)
- * to an intra-block grapheme range over blockNormalizedText(block), accounting
+ * Map ONE DOM point `(node, offset)` to an intra-block grapheme offset over
+ * the given norm-cluster window of the block's normalized text, accounting
  * for the whitespace-collapse divergence between DOM textContent and the
  * normalized text (Pitfall 1).
  *
- * Returns `{ start, end }` grapheme offsets into the block's normalized text
- * (NOT yet article-global — the caller adds the block's global start offset).
+ * Phase 19: the former pair-mapper (domRangeToIntraBlockGraphemeRange)
+ * became this single-point form so each selection endpoint resolves
+ * independently against its OWN block element + window — the shape span
+ * composition requires (a cross-block Range's two endpoints live in
+ * different elements, so one shared map cannot serve both).
+ *
+ * Returns a grapheme offset into the block's normalized text RELATIVE TO the
+ * passed `normClusters` window (the caller adds the window's start offset
+ * back — the D5-08 slice math below).
  */
-function domRangeToIntraBlockGraphemeRange(
+function domPointToIntraBlockGraphemeOffset(
   blockEl: HTMLElement,
-  range: Range,
+  node: Node,
+  offset: number,
   lang: string,
   normClusters: readonly string[],
-): { start: number; end: number } {
+): number {
   const rawText = blockEl.textContent ?? "";
   const rawClusters = graphemeClusters(rawText, lang);
   const map = buildRawToNormMap(rawClusters, normClusters);
-
-  const rawStart = absoluteRawGraphemeOffset(
-    blockEl,
-    range.startContainer,
-    range.startOffset,
-    lang,
-  );
-  const rawEnd = absoluteRawGraphemeOffset(
-    blockEl,
-    range.endContainer,
-    range.endOffset,
-    lang,
-  );
-  // Clamp to the map's domain (defensive against Ranges extending past the
-  // block's text — should not happen for an in-block selection).
-  const clampedStart = Math.max(0, Math.min(rawStart, map.length - 1));
-  const clampedEnd = Math.max(clampedStart, Math.min(rawEnd, map.length - 1));
-  return { start: map[clampedStart]!, end: map[clampedEnd]! };
+  const rawOffset = absoluteRawGraphemeOffset(blockEl, node, offset, lang);
+  // Clamp to the map's domain (defensive against points extending past the
+  // block's text — should not happen for an in-block selection endpoint).
+  const clamped = Math.max(0, Math.min(rawOffset, map.length - 1));
+  return map[clamped]!;
 }
 
 /**
@@ -287,6 +304,140 @@ function computeBlockGlobalStart(
 }
 
 /**
+ * True when the node sits inside the hidden `.article-body-measurement`
+ * wrapper (Plan 04-08). Phase 19: checked for BOTH Range endpoints — the
+ * retired `startBlock !== endBlock` element-equality gate used to incidentally
+ * refuse visible→hidden-body pairs (the hidden body renders a SECOND element
+ * with the same data-block-index); with that gate gone the explicit D5-08
+ * defense is the load-bearing refusal for cross-page selections
+ * (ANNO-13 stays Future).
+ */
+function isInsideMeasurementBody(node: Node): boolean {
+  const el =
+    node.nodeType === Node.ELEMENT_NODE
+      ? (node as HTMLElement)
+      : node.parentElement;
+  return el !== null && el.closest(".article-body-measurement") !== null;
+}
+
+/** One endpoint's successful resolution (Phase 19 span capture). */
+interface EndpointResolution {
+  ok: true;
+  /** The article block index resolved from the endpoint's block ancestor. */
+  blockIndex: number;
+  /** The endpoint's INTRA-BLOCK grapheme offset (window-corrected). */
+  intraOffset: number;
+}
+
+/**
+ * Resolve ONE selection endpoint `(container, offset)` independently to its
+ * block index + intra-block grapheme offset (19-RESEARCH Pattern 1 — the
+ * per-endpoint half of span composition; the single-block case is the
+ * degenerate both-endpoints-same-block pass through this same code).
+ *
+ * Refusal taxonomy (D19-05/D19-08 — reject whole, never narrow; no position
+ * is returned on any refusal):
+ *   - "ineligible"          → no data-block-index ancestor within the reading
+ *                             root (footnote BODIES land here — they carry no
+ *                             data-block-index; 19-RESEARCH Pitfall 6), a bad
+ *                             index, or the ancestor outside readingRoot.
+ *   - "boundary-ineligible" → the endpoint RESOLVED to a block that fails
+ *                             isEligibleBlock (unsupported content).
+ */
+function resolveSelectionEndpoint(
+  article: CanonicalArticle,
+  readingRoot: HTMLElement,
+  container: Node,
+  offset: number,
+): EndpointResolution | { ok: false; reason: "ineligible" | "boundary-ineligible" } {
+  // 1. The [data-block-index] ancestor (footnote bodies have none → the walk
+  //    terminates at readingRoot → "ineligible").
+  const blockEl = findBlockAncestor(container, readingRoot);
+  if (!blockEl) {
+    return { ok: false, reason: "ineligible" };
+  }
+  // Defensive containment: findBlockAncestor's walk stops at readingRoot for
+  // in-root nodes, but a node OUTSIDE the reading surface (a sibling surface)
+  // can still find a data-block-index ancestor past root — refuse those.
+  if (!readingRoot.contains(blockEl)) {
+    return { ok: false, reason: "ineligible" };
+  }
+  const blockIndexAttr = blockEl.getAttribute("data-block-index");
+  const blockIndex =
+    blockIndexAttr === null ? Number.NaN : Number(blockIndexAttr);
+  if (!Number.isInteger(blockIndex) || blockIndex < 0) {
+    return { ok: false, reason: "ineligible" };
+  }
+  const block = article.blocks[blockIndex];
+  if (!block) {
+    // Bad index (out of range) — structural, not content eligibility.
+    return { ok: false, reason: "ineligible" };
+  }
+  if (!isEligibleBlock(block)) {
+    // D19-05/D19-08: the endpoint resolved to INELIGIBLE CONTENT — reject
+    // the WHOLE selection (the toolbar's boundary hint; no narrowing).
+    return { ok: false, reason: "boundary-ineligible" };
+  }
+
+  // 2. FIGURE CAPTION ALIGNMENT (19-RESEARCH Pitfall 1 — fixed in Phase 19):
+  //    blockNormalizedText(figure) = [alt, caption].filter(Boolean).join
+  //    (BLOCK_SEPARATOR), but the rendered <figure> element's textContent is
+  //    CAPTION-ONLY (alt is an <img> attribute, not a text node). Align the
+  //    raw→norm map against the caption portion of the norm clusters, then
+  //    add the caption-local start back — capture is now aligned with the
+  //    D-05 substrate for caption endpoints. The filter(Boolean) join means
+  //    an EMPTY alt contributes nothing (captionLocalStart = 0). The old
+  //    divergence note (rendering-side caption marks staying deferred) is a
+  //    Plan 19-03 concern; the CAPTURE side is aligned here.
+  const captionLocalStart =
+    block.kind === "figure" && block.alt.length > 0
+      ? graphemeClusters(block.alt, article.lang).length +
+        BLOCK_SEPARATOR.length
+      : 0;
+
+  // 3. D5-08 paginated-mode slicing: the block element may carry
+  //    data-block-grapheme-start when it is a SLICE of a split block (the
+  //    page fragment renders slices, not whole blocks, when D4-01 booklike
+  //    splitting divides a block across a page boundary). The slice's
+  //    textContent is a substring of the full block's text starting at
+  //    startGrapheme; the raw→norm map must align against the slice's portion
+  //    of the normalized text, and the result is offset back by startGrapheme
+  //    to yield the true intra-block range. Figures are ATOMIC in pagination
+  //    (D4-02 — never sliced), so the figure + slice windows never overlap
+  //    in practice; layering them additively keeps each correction exact.
+  const sliceStartAttr = blockEl.getAttribute("data-block-grapheme-start");
+  const sliceStart =
+    sliceStartAttr !== null && Number.isInteger(Number(sliceStartAttr))
+      ? Number(sliceStartAttr)
+      : 0;
+  const windowStart = captionLocalStart + sliceStart;
+  const fullNormClusters = graphemeClusters(
+    blockNormalizedText(block),
+    article.lang,
+  );
+  // The element's normalized text ≈ the full normalized text from
+  // windowStart on. For whole blocks (windowStart = 0) this is the entire
+  // array. We align the map against the element's portion so the raw→norm
+  // indices match its textContent (Pitfall 1).
+  const windowEnd = Math.min(
+    fullNormClusters.length,
+    windowStart + fullNormClusters.length,
+  );
+  const normClusters =
+    windowStart > 0
+      ? fullNormClusters.slice(windowStart, windowEnd)
+      : fullNormClusters;
+  const windowedOffset = domPointToIntraBlockGraphemeOffset(
+    blockEl,
+    container,
+    offset,
+    article.lang,
+    normClusters,
+  );
+  return { ok: true, blockIndex, intraOffset: windowedOffset + windowStart };
+}
+
+/**
  * Capture the current window.getSelection() as a durable TextPositionSelector
  * over the D-05 grapheme substrate.
  *
@@ -294,19 +445,33 @@ function computeBlockGlobalStart(
  * root (the scrolling .article-body OR the visible .page-fragment). The hidden
  * .article-body-measurement is excluded by user-select:none (D5-08 / Pitfall 3)
  * so the browser never produces a selection inside it; this function
- * additionally defends by requiring the selection's block ancestor to live
- * inside `readingRoot`.
+ * additionally defends by checking BOTH endpoints against the measurement
+ * wrapper and requiring each endpoint's block ancestor to live inside
+ * `readingRoot`.
  *
- * INVALID selections return a typed reason:
- *   - "empty"            → collapsed or no selection
- *   - "multi-block"      → endpoints resolve to different data-block-index
- *                          ancestors (D5-06 single-block rule)
- *   - "ineligible"       → ancestor missing data-block-index, outside
- *                          readingRoot, or the resolved block is unsupported
- *   - "measurement-body" → reserved for the paginated-mode hidden measurement
- *                          body (defensive — user-select:none should already
- *                          prevent this; kept distinct so a future regression
- *                          is identifiable)
+ * Phase 19 (ANNO-08): the global range composes from the TWO endpoints alone
+ * (19-RESEARCH Pattern 1) — no intermediate-block DOM walk. The DOM Range
+ * normalizes start/end to document order regardless of drag direction
+ * (backwards drags included), so no swap step exists (Pitfall 9 validated).
+ * The single-block highlight is the degenerate case of the same code path.
+ *
+ * INVALID selections return a typed reason (NO position on any refusal):
+ *   - "empty"               → collapsed or no selection
+ *   - "ineligible"          → an endpoint has no data-block-index ancestor
+ *                             within readingRoot (footnote bodies — Pitfall 6),
+ *                             a bad index, or an ancestor outside readingRoot
+ *   - "measurement-body"    → an endpoint sits inside the hidden measurement
+ *                             body (D5-08; checked on BOTH endpoints in
+ *                             Phase 19 — cross-page selections still refuse,
+ *                             ANNO-13 is Future)
+ *   - "boundary-ineligible" → an endpoint resolved to a block failing
+ *                             isEligibleBlock (unsupported content — D19-05
+ *                             reject-whole; the whole selection is refused)
+ *   - "empty-span"          → defensive: the composed global range collapsed
+ *                             to start === end (reachable when a non-collapsed
+ *                             DOM selection covers only whitespace that
+ *                             normalizeRunText collapses; matches the schema's
+ *                             end > start refine)
  */
 export function captureSelection(
   article: CanonicalArticle,
@@ -319,82 +484,55 @@ export function captureSelection(
   const range = selection.getRangeAt(0);
 
   // Defensive: the measurement body is excluded by user-select:none. If a
-  // Range somehow landed inside an element marked `.article-body-measurement`,
-  // reject explicitly (D5-08 / Pitfall 3).
-  const startContainerEl =
-    range.startContainer.nodeType === Node.ELEMENT_NODE
-      ? (range.startContainer as HTMLElement)
-      : range.startContainer.parentElement;
-  if (startContainerEl?.closest(".article-body-measurement")) {
+  // Range endpoint somehow landed inside an element marked
+  // .article-body-measurement, reject explicitly (D5-08 / Pitfall 3). BOTH
+  // endpoints are checked in Phase 19 — see isInsideMeasurementBody.
+  if (
+    isInsideMeasurementBody(range.startContainer) ||
+    isInsideMeasurementBody(range.endContainer)
+  ) {
     return { ok: false, reason: "measurement-body" };
   }
 
-  // 1. Find the [data-block-index] ancestor of BOTH endpoints.
-  const startBlock = findBlockAncestor(range.startContainer, readingRoot);
-  const endBlock = findBlockAncestor(range.endContainer, readingRoot);
-  if (!startBlock || !endBlock) {
-    return { ok: false, reason: "ineligible" };
+  // 1. Resolve EACH endpoint independently to { blockIndex, intraOffset }.
+  //    (Endpoint-only composition — intermediate blocks are never walked.)
+  const startEndpoint = resolveSelectionEndpoint(
+    article,
+    readingRoot,
+    range.startContainer,
+    range.startOffset,
+  );
+  if (!startEndpoint.ok) {
+    return { ok: false, reason: startEndpoint.reason };
   }
-  if (startBlock !== endBlock) {
-    return { ok: false, reason: "multi-block" };
-  }
-  const blockIndexAttr = startBlock.getAttribute("data-block-index");
-  if (blockIndexAttr === null) {
-    return { ok: false, reason: "ineligible" };
-  }
-  const blockIndex = Number(blockIndexAttr);
-  if (!Number.isInteger(blockIndex) || blockIndex < 0) {
-    return { ok: false, reason: "ineligible" };
-  }
-  const block = article.blocks[blockIndex];
-  if (!block || !isEligibleBlock(block)) {
-    return { ok: false, reason: "ineligible" };
+  const endEndpoint = resolveSelectionEndpoint(
+    article,
+    readingRoot,
+    range.endContainer,
+    range.endOffset,
+  );
+  if (!endEndpoint.ok) {
+    return { ok: false, reason: endEndpoint.reason };
   }
 
-  // 2. Map the DOM Range to intra-block grapheme offsets (whitespace-collapse
-  //    correction via the explicit raw-cluster → norm-cluster map).
-  //
-  //    D5-08 paginated-mode slicing: the block element may carry
-  //    data-block-grapheme-start when it is a SLICE of a split block (the
-  //    page fragment renders slices, not whole blocks, when D4-01 booklike
-  //    splitting divides a block across a page boundary). The slice's
-  //    textContent is a substring of the full block's text starting at
-  //    startGrapheme; the raw→norm map must align against the slice's portion
-  //    of the normalized text, and the result is offset back by startGrapheme
-  //    to yield the true intra-block range. Without this offset a highlight
-  //    captured on a page-2 slice would be stored at the wrong passage.
-  const sliceStartAttr = startBlock.getAttribute("data-block-grapheme-start");
-  const sliceStart =
-    sliceStartAttr !== null && Number.isInteger(Number(sliceStartAttr))
-      ? Number(sliceStartAttr)
-      : 0;
-  const fullNormClusters = graphemeClusters(
-    blockNormalizedText(block),
-    article.lang,
-  );
-  // The slice's normalized text ≈ the full normalized text from sliceStart to
-  // sliceStart + (slice length). For whole blocks (sliceStart = 0) this is
-  // the entire array. We align the map against the slice's portion so the
-  // raw→norm indices match the slice's textContent (Pitfall 1).
-  const sliceEnd = Math.min(fullNormClusters.length, sliceStart + fullNormClusters.length);
-  const normClusters =
-    sliceStart > 0 ? fullNormClusters.slice(sliceStart, sliceEnd) : fullNormClusters;
-  const intraRange = domRangeToIntraBlockGraphemeRange(
-    startBlock,
-    range,
-    article.lang,
-    normClusters,
-  );
-  const intraOffsetRange = {
-    start: intraRange.start + sliceStart,
-    end: intraRange.end + sliceStart,
+  // 2. Compose ONE global TextPositionSelector (D-05 substrate coordinates):
+  //    each endpoint's block-global start + its intra-block offset. The DOM
+  //    Range is already in document order — no swap step (Pitfall 9).
+  const start =
+    computeBlockGlobalStart(article, startEndpoint.blockIndex) +
+    startEndpoint.intraOffset;
+  const end =
+    computeBlockGlobalStart(article, endEndpoint.blockIndex) +
+    endEndpoint.intraOffset;
+  if (start === end) {
+    // Defensive — never reachable from an ordinary non-collapsed Range, but
+    // a whitespace-only selection over text normalizeRunText collapses can
+    // compose empty (mirrors TextPositionSelectorSchema's end > start).
+    return { ok: false, reason: "empty-span" };
+  }
+  return {
+    ok: true,
+    blockIndex: startEndpoint.blockIndex,
+    position: { start, end },
   };
-
-  // 3. Add the block's article-global start offset (D-05 substrate coordinate).
-  const blockGlobalStart = computeBlockGlobalStart(article, blockIndex);
-  const position: TextPositionSelector = {
-    start: blockGlobalStart + intraOffsetRange.start,
-    end: blockGlobalStart + intraOffsetRange.end,
-  };
-  return { ok: true, blockIndex, position };
 }

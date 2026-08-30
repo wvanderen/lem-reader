@@ -69,6 +69,10 @@ export type ToolbarCaptureResult =
  * Result of creating a highlight from a selection. Carries the new id on
  * success (so the N shortcut can set openPopoverFor(newId)) and the typed
  * invalid reason on failure (so the toolbar shows the right hint).
+ *
+ * Phase 19: kept aligned with CaptureResult's reason union in ONE commit
+ * with capture.ts (the D5-06 "multi-block" literal retired; the span-era
+ * "boundary-ineligible" + defensive "empty-span" added).
  */
 export type CreateFromSelectionResult =
   | {
@@ -80,9 +84,10 @@ export type CreateFromSelectionResult =
       ok: false;
       reason:
         | "empty"
-        | "multi-block"
         | "ineligible"
         | "measurement-body"
+        | "boundary-ineligible"
+        | "empty-span"
         | "overlap";
     };
 
