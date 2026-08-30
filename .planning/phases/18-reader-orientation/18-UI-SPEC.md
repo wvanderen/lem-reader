@@ -1,10 +1,11 @@
 ---
 phase: 18
 slug: reader-orientation
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: 2026-08-30
+reviewed_at: 2026-08-30
 ---
 
 # Phase 18 — UI Design Contract
