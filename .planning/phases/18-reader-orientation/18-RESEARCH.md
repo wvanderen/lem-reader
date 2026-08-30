@@ -515,26 +515,33 @@ const onKeyDown = (e: React.KeyboardEvent) => {
 
 **Codebase claims carry [VERIFIED: codebase] and were confirmed by direct file reads this session** (schema.ts, restoreLocation.ts, anchor.ts, normalizeText.ts, ArticleView.tsx, SectionAnnouncer.tsx, ResumeBanner.tsx, Header.tsx, BlockRenderer.tsx, InlineRenderer.tsx, PaginatedSurface.tsx, useScrollSave.ts, app.css, persistence.spec.ts, panel-keyboard.spec.ts, fixtures corpus).
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> All five OQs are resolved downstream — see the RESOLVED line on each. The inline "Recommendation" text is the research-time record; where a RESOLVED line differs from it, the RESOLVED line carries the sanctioned outcome (notably OQ3, whose inline default proposal was rejected).
 
 1. **Paginated reopen-restore (option b) — in phase 18 or descope the paginated marker?**
    - What we know: restore is scrolling-only today (verified); D18-05's paginated marker presumes it works; machinery (fragmentContainingOffset, turnToPage, initialAnchorOffset, deep-link readiness template) all ships.
    - What's unclear: whether the planner should wire restore-through-initialAnchorOffset (before first commit) vs post-commit turnToPage (deep-link template) — a timing/ownership choice.
    - Recommendation: implement in-phase (ORNT-06 says "reopening an article", unqualified by mode; paginated is the DEFAULT mode). Use the deep-link readiness-gate pattern; it is the newest, most defensive template.
+   - **RESOLVED (UI-SPEC §Auto-Resolved #8 → Plan 18-03 Task 1):** closed in-phase exactly per this recommendation — readiness-gated paginated restore via the deep-link template (bounded rAF retry → `fragmentContainingOffset` → `turnToPage`), deep-link precedence preserved via the jumpPendingRef guard.
 
 2. **Paginated location saves — adopt anchor-change persistence?**
    - What we know: no saves on page turns today (verified single call-site family); without saves the paginated marker never fires; `onAnchorChange` already surfaces precise per-turn offsets; LocationRecord shape suffices.
    - What's unclear: debounce window (mirror 1200ms?), flush wiring (reuse useScrollSave's dual-flush or a sibling), and whether this is Phase-18 scope or a flagged pre-existing gap.
    - Recommendation: treat as in-phase enablement for ORNT-06 (small, reuses existing store); if descoped, the marker must fire ONLY on real restores (scrolling-mode readers) and the phase must say so honestly.
+   - **RESOLVED (UI-SPEC §Auto-Resolved #8 → Plan 18-03 Task 1):** adopted in-phase per this recommendation — save-on-turn via handleAnchorChange feeding the debounced saveLocation scheduler (SAVE_DEBOUNCE_MS 1200) + the existing visibilitychange/pagehide dual flush, same LocationRecord shape, singular call-site family in useScrollSave, no schema change.
 
 3. **≤639px five-button geometry — which relief?**
    - What we know: measured ~40px deficit at 320px; ladder exhausted; candidate strategies (a)-(d) in Pitfall 6.
    - What's unclear: which strategy the UI-SPEC sanctions.
    - Recommendation: route to the UI-SPEC step with the measured numbers; default proposal = two-row wrap at the deficit breakpoint with 48px rows retained per-row (honest, keeps 44px targets, keeps text links visible).
+   - **RESOLVED (UI-SPEC §Layout "The ≤639px five-button geometry decision" SANCTIONED block / §Auto-Resolved #9 → Plan 18-02 Task 3):** the sanctioned relief is the STAGED SHELL-NAV COLLAPSE at `max-width: 420px` scoped to Reader (`data-destination`) with a `:focus-visible` un-clip companion rule — single 48px row and all load-bearing constants preserved. The inline default proposal above (two-row wrap) was explicitly REJECTED: a 96px wrap breakpoint breaks the load-bearing 48px constants (paginated-main calc, `headerPx = 48`, SectionAnnouncer 48+8px sentinel) and the Phase 15 "48px height NEVER changes" rule.
 
 4. **Outside-click dismissal policy for the panel (agent discretion)** — recommended: pointer-down outside the panel (and outside the trigger) closes it, EXCEPT it should NOT close when clicking into the article to *read while the panel is open beside it*? D18-01's "slides beside the article content" suggests persistence; D18-04's sheet covers at narrow. Recommendation: do NOT dismiss on outside click at wide widths (panel is a persistent companion); in narrow sheet mode, outside-click close is the calm escape (page is covered). Planner picks; both route through the one toggle seam.
+   - **RESOLVED (UI-SPEC §Auto-Resolved #5 → Plan 18-02 Task 2):** per this recommendation — at ≥640px NO outside dismissal (persistent companion); at ≤639px (full-width sheet) pointerdown outside panel+trigger closes; both paths route through the single `hidePopover()` toggle seam.
 
 5. **Marker duration** — "a few calm seconds" (D18-07). Recommendation: ~4s fade start + ~600ms opacity transition (reduced-motion: instant clear), e2e asserts presence-then-absence with generous timeouts; exact value = UI-SPEC.
+   - **RESOLVED (UI-SPEC §Auto-Resolved #10 → Plan 18-03 Task 2):** 4000ms total — `is-fading` class at 3400ms + 600ms CSS opacity transition; reduced-motion → instant clear; CSS-transition only (Pitfall 8), unit-tested with fake timers at the 3400/4000ms boundaries.
 
 ## Environment Availability
 
