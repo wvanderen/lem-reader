@@ -6,19 +6,26 @@
 // article body region renders, and no JS-level console errors were emitted
 // during load. Also asserts the fixture-list route exposes one row per fixture.
 //
-// External images are stubbed to a 1×1 GIF so the suite is deterministic and
-// not at the mercy of network availability (figure-heavy loads remote
-// Wikimedia images). We assert against JS errors / uncaught exceptions, not
-// resource-load noise.
+// External images are stubbed to a 1×1 SVG so the suite is deterministic and
+// not at the mercy of network availability. We assert against JS errors /
+// uncaught exceptions, not resource-load noise.
+//
+// [D20-12 realignment, 20-08] figure-heavy's figures no longer load remote
+// Wikimedia images — the 20-04 regeneration rewrote them to local asset:
+// refs backed by the bundled fixtureAssetRegistry (the stub route below is
+// now belt-and-suspenders for this fixture; blob: object URLs never match
+// it). The figure-heavy cell below is STRENGTHENED accordingly (local imgs,
+// naturalWidth > 0 — the new model admits the stronger pin; nothing was
+// deleted or weakened).
 import { test, expect } from "@playwright/test";
 import { fixtures } from "../../src/fixtures";
 import { DEFAULT_SETTINGS } from "../../src/settings/defaults";
 import { seedRows, prepareFreshPage } from "./portability/_portability";
 
 const BASE = "http://localhost:5173";
-// Pure-string SVG stub so remote <img> elements (figure-heavy's Wikimedia
-// figures) load deterministically without network dependence. SVG is text, so
-// no Buffer / @types/node is needed.
+// Pure-string SVG stub so remote <img> elements load deterministically
+// without network dependence. SVG is text, so no Buffer / @types/node is
+// needed.
 const PIXEL_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>';
 
 test.beforeEach(async ({ page }) => {
@@ -58,6 +65,37 @@ for (const article of fixtures) {
       // DOC-02: article body region present
       await expect(page.getByRole("article")).toBeVisible();
 
+      // [D20-12 strengthening, 20-08] figure-heavy's regenerated model
+      // (20-04 T1) carries local asset: refs with stored dims — the corpus
+      // pin strengthens from "body renders" to "the two figures render as
+      // LOCAL decoded imgs" (blob: object URLs, naturalWidth > 0 —
+      // offline by construction, IMG-03). Strengthen-only: every assertion
+      // above is unchanged; the old pin never asserted remote <img> loads,
+      // so nothing is deleted. Scrolling mode mounts BOTH figures in the
+      // visible body at once (the walk-pages discipline would work too;
+      // the mode swap is the lighter corpus-cell shape — the M-key swap
+      // persists readingMode, and each corpus test runs in its own fresh
+      // context so nothing downstream observes the flip).
+      if (article.id === "figure-heavy") {
+        await page.keyboard.press("m");
+        await page.waitForTimeout(600); // the mode-swap settle (switchMode shape)
+        const imgs = page.locator(
+          ".article-body:not(.article-body-measurement) figure img",
+        );
+        await expect.poll(async () => await imgs.count(), { timeout: 10_000 }).toBe(2);
+        for (let i = 0; i < 2; i++) {
+          await expect(imgs.nth(i)).toHaveAttribute("src", /^blob:/);
+          await imgs.nth(i).scrollIntoViewIfNeeded();
+          await expect
+            .poll(
+              async () =>
+                await imgs.nth(i).evaluate((el) => (el as HTMLImageElement).naturalWidth),
+              { timeout: 10_000 },
+            )
+            .toBeGreaterThan(0);
+        }
+      }
+
       // No app-level console errors / uncaught exceptions during load
       expect(errors, errors.join("\n")).toEqual([]);
     });
@@ -77,7 +115,9 @@ test("fixture list exposes one row per curated fixture (DOC-01)", async ({ page 
 // the same way. figure-heavy carries three footnote-reference blocks and
 // three matching footnote bodies (per 01-03 SUMMARY). Scoped to figure-heavy
 // (outside the per-fixture loop). Image stubbing from the top-level
-// beforeEach still applies (figure-heavy loads remote Wikimedia images).
+// beforeEach still applies ([D20-12 realignment, 20-08]: figure-heavy's
+// figures are registry-backed local blobs since the 20-04 regeneration —
+// the stub is belt-and-suspenders, never a load-bearing dependency).
 //
 // Plan 13-09 (G4): the round-trip is a scrolling-flow interaction — native
 // fragment scrolling to the footnote body and back. Before G4 it ran under
