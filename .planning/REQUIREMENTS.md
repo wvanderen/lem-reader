@@ -55,10 +55,10 @@
 
 - [x] **IMG-01**: URL and supported document ingestion preserve meaningful source figures, alternative text, and captions in the canonical sanitized document model when they can be recovered reliably.
 - [x] **IMG-02**: Lem Reader fetches secondary image assets through controlled SSRF-safe handling with redirect, address, media-type, byte, pixel, count, animation, and decode limits determined from a representative corpus.
-- [ ] **IMG-03**: Saved articles never need to contact third-party image hosts when reopened; supported images are stored as controlled local assets with explicit lifecycle and deletion behavior.
+- [x] **IMG-03**: Saved articles never need to contact third-party image hosts when reopened; supported images are stored as controlled local assets with explicit lifecycle and deletion behavior.
 - [x] **IMG-04**: Controlled image assets round-trip through versioned library export/import with validation, conflict handling, bundle limits, and no broken record references.
-- [ ] **IMG-05**: Figures render semantically with stable intrinsic geometry and calm broken/unsupported fallbacks in both reading modes.
-- [ ] **IMG-06**: Image loading, decoding, failure, and size changes cannot silently clip, duplicate, omit, reorder, or indefinitely destabilize paginated content; the reader preserves its canonical location during required repagination.
+- [x] **IMG-05**: Figures render semantically with stable intrinsic geometry and calm broken/unsupported fallbacks in both reading modes.
+- [x] **IMG-06**: Image loading, decoding, failure, and size changes cannot silently clip, duplicate, omit, reorder, or indefinitely destabilize paginated content; the reader preserves its canonical location during required repagination.
 
 ### Interface Refinement
 
@@ -136,10 +136,10 @@
 | ANNO-12 | Phase 19 | Complete |
 | IMG-01 | Phase 20 | Complete |
 | IMG-02 | Phase 20 | Complete |
-| IMG-03 | Phase 20 | Pending |
+| IMG-03 | Phase 20 | Complete |
 | IMG-04 | Phase 20 | Complete |
-| IMG-05 | Phase 20 | Pending |
-| IMG-06 | Phase 20 | Pending |
+| IMG-05 | Phase 20 | Complete |
+| IMG-06 | Phase 20 | Complete |
 | POLISH-07 | Phase 15 | Complete |
 | POLISH-08 | Phase 21 | Pending |
 | POLISH-09 | Phase 21 | Pending |

@@ -225,7 +225,7 @@ Plans:
   4. Figures render semantically with stable geometry and calm failures in both modes without content or location loss.
   5. Assets export/import with validation, limits, conflicts, and no broken references, and follow documented deletion lifecycle.
 
-**Plans**: 6/8 plans executed
+**Plans**: 7/8 plans executed
 
 **Wave 1** *(foundation)*
 
@@ -247,7 +247,7 @@ Plans:
 
 **Wave 5** *(blocked on Waves 3-4 completion)*
 
-- [ ] 20-08-PLAN.md — 3-engine imagery e2e matrix (offline/geometry/decode/refusal) + strengthen-only corpus pin realignment (IMG-03, IMG-05, IMG-06)
+- [x] 20-08-PLAN.md — 3-engine imagery e2e matrix (offline/geometry/decode/refusal) + strengthen-only corpus pin realignment (IMG-03, IMG-05, IMG-06)
 
 **Wave 6** *(blocked on Waves 3-5 completion)*
 
@@ -283,5 +283,5 @@ Plans:
 | 17. Reader-Owned Metadata | v2.1 | 5/5 | Complete    | 2026-08-30 |
 | 18. Reader Orientation | v2.1 | 4/4 | Complete    | 2026-08-30 |
 | 19. Cross-Block Highlights | v2.1 | 5/5 | Complete    | 2026-08-31 |
-| 20. Safe Local Image Fidelity | v2.1 | 6/8 | In Progress|  |
+| 20. Safe Local Image Fidelity | v2.1 | 7/8 | In Progress|  |
 | 21. Integrated Refinement and Acceptance | v2.1 | 0/TBD | Not started | - |

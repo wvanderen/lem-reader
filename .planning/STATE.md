@@ -5,15 +5,15 @@ milestone_name: Reader Experience
 current_phase: 20
 current_phase_name: safe-local-image-fidelity
 status: executing
-stopped_at: Completed 20-06-PLAN.md
-last_updated: "2026-08-31T19:50:08.258Z"
+stopped_at: Completed 20-08-PLAN.md
+last_updated: "2026-08-31T20:22:44.531Z"
 last_activity: 2026-08-31
 last_activity_desc: Phase 20 execution started
 progress:
   total_phases: 8
   completed_phases: 6
   total_plans: 34
-  completed_plans: 32
+  completed_plans: 33
   percent: 75
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-30)
 ## Current Position
 
 Phase: 20 (safe-local-image-fidelity) — EXECUTING
-Plan: 7 of 8
+Plan: 8 of 8
 Status: Ready to execute
 Last activity: 2026-08-31 — Phase 20 execution started
 
@@ -190,6 +190,7 @@ Last activity: 2026-08-31 — Phase 20 execution started
 | Phase 20 P04 | 12min | 2 tasks | 14 files |
 | Phase 20 P05 | 11min (resume session) | 3 tasks | 12 files |
 | Phase 20 P06 | 31 min | 2 tasks | 7 files |
+| Phase 20 P08 | 27min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -455,6 +456,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 20]: 20-05: Bundle v4 asset round-trip shipped (union widening, manifest sha256 block, writer entries, import gates, D9-14 ride); WebKit Playwright cannot store Blob values in IDB — two asset e2e cells carry documented engine skips, chromium/firefox prove the round-trip — Plan acceptance gate is chromium; the 3-engine run surfaced the engine boundary honestly. Rule 4 option (Uint8Array storage) recorded in deferred-items.md for the human; locked D20-15 Blob shape unchanged
 - [Phase 20]: Phase 20-06: rewriteFiguresWithAssets generalized via an optional claimedSrc predicate (default byte-stable http(s) filter) instead of a forked EPUB rewrite — the shipped helper's http-only gate made the plan-mandated reuse a no-op for container-relative markers; the safeFetchCore parameterize-not-fork discipline, assetStage.spec untouched — The shipped helper's default behavior is the pinned network-path contract; the predicate is the ONLY new surface, with the http-only originalSrc rule enforced inside so no caller can force a non-URL into the httpUrl-typed field (a forced path would fail ArticleSchema.parse and silently kill chapters)
 - [Phase 20]: Phase 20-06: EPUB remote-src figures refuse "fetch" (zero-network — the container is the only read source) keeping originalSrc provenance; container-relative markers omit originalSrc entirely (provenance lives in the refusal disclosure); per-doc resolution maps + per-unit count caps + per-book MAX_ARTICLE_ASSET_BYTES budget with byte-identical twin reuse; extraction runs AFTER chapter admission (D20-03) — Anti-beacon guarantee moved from "downgrade everything" (D12-16) to "local assets only": admitted figures are asset:img refs, refused ones are disclosed placeholders, and no code path can render a remote URL (composes with 20-04's img-only-on-resolved-branch guarantee)
+- [Phase ?]: D20-08 imagery proof (20-08): decode-matrix runs engine-complete via registry-backed-id seeding — a plain Dexie article row under id figure-heavy (ingested wins) resolves assets from the in-memory registry, so codec truth is proven on webkit too; Dexie-blob transport proven separately on chromium+firefox
+- [Phase ?]: Refused-figure captions were NOT highlightable (20-08 Rule 1): Phase 19 caption alignment assumed alt is an img attribute; the 20-04 placeholder renders alt as DOM text → every caption capture clamped to empty-span. capture.ts now aligns caption endpoints against the state-independent figcaption element; the empty-alt note refuses ineligible
+- [Phase ?]: Geometry cap semantics pinned (20-08): under --figure-media-max-h the width/height attrs pin width and the cap clamps height (box ratio diverges; object-fit: contain keeps the paint undistorted) — the aspect-identity cell pins UNCAPPED equality at a raised viewport; the tall cell pins the clamp. Design-honest, not a 20-04 regression
 
 ### Pending Todos
 
@@ -510,8 +514,8 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-31T19:50:00.645Z
-Stopped at: Completed 20-06-PLAN.md
+Last session: 2026-08-31T20:22:34.928Z
+Stopped at: Completed 20-08-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
