@@ -745,3 +745,104 @@ describe("LemReaderDB Dexie version chain (v1 → v2 → v3 additive)", () => {
     db.close();
   });
 });
+
+// ── Phase 20 (Plan 20-02 Task 3) — the asset envelope widening ───────────────
+// AssetEnvelopeSchema mirrors the server wire shape (server/ingest.ts
+// AssetEnvelope): base64-in-JSON assets on BOTH ok-variants, defaulting to []
+// so pre-update server responses (and the refusal variant) stay back-compat.
+
+describe("AssetEnvelopeSchema + IngestionResponseSchema.assets (20-02 Task 3)", () => {
+  const validAsset = {
+    assetId: "img-0123456789ab",
+    contentType: "image/png",
+    byteLength: 64,
+    dataBase64: "AAECAwQFBgcICQ==",
+  };
+
+  it("single-article ok-variant parses with an assets array", () => {
+    const parsed = IngestionResponseSchema.parse({
+      ok: true,
+      article: validV1Article({ ingestionMeta: validIngestionMeta }),
+      confidence: { state: "confident" },
+      assets: [validAsset],
+    });
+    if (!parsed.ok || !("article" in parsed)) throw new Error("expected article envelope");
+    expect(parsed.assets).toHaveLength(1);
+    expect(parsed.assets[0]?.assetId).toBe("img-0123456789ab");
+    expect(parsed.assets[0]?.contentType).toBe("image/png");
+    expect(parsed.assets[0]?.byteLength).toBe(64);
+  });
+
+  it("assets default to [] when absent (back-compat with pre-update servers)", () => {
+    const parsed = IngestionResponseSchema.parse({
+      ok: true,
+      article: validV1Article({ ingestionMeta: validIngestionMeta }),
+      confidence: { state: "confident" },
+    });
+    if (!parsed.ok || !("article" in parsed)) throw new Error("expected article envelope");
+    expect(parsed.assets).toEqual([]);
+  });
+
+  it("book ok-variant carries assets too (20-06 EPUB container path)", () => {
+    const chapterArticle = validV1Article({
+      ingestionMeta: {
+        source: "epub-chapter",
+        originalHtmlHash: "sha256:epub",
+        extractionConfidence: "high",
+        bookId: "epub-abc123def456",
+        chapterIndex: 0,
+      },
+    });
+    const parsed = IngestionResponseSchema.parse({
+      ok: true,
+      book: validBook,
+      articles: [chapterArticle],
+      skippedCount: 0,
+      assets: [validAsset],
+    });
+    if (!parsed.ok || !("book" in parsed)) throw new Error("expected book envelope");
+    expect(parsed.assets).toHaveLength(1);
+  });
+
+  it("rejects malformed asset entries (bad assetId shape)", () => {
+    expect(() =>
+      IngestionResponseSchema.parse({
+        ok: true,
+        article: validV1Article({ ingestionMeta: validIngestionMeta }),
+        confidence: { state: "confident" },
+        assets: [{ ...validAsset, assetId: "not-an-asset-id" }],
+      }),
+    ).toThrow();
+  });
+
+  it("rejects malformed asset entries (unknown contentType)", () => {
+    expect(() =>
+      IngestionResponseSchema.parse({
+        ok: true,
+        article: validV1Article({ ingestionMeta: validIngestionMeta }),
+        confidence: { state: "confident" },
+        assets: [{ ...validAsset, contentType: "image/svg+xml" }],
+      }),
+    ).toThrow();
+  });
+
+  it("rejects malformed asset entries (zero byteLength / empty dataBase64)", () => {
+    const base = {
+      ok: true as const,
+      article: validV1Article({ ingestionMeta: validIngestionMeta }),
+      confidence: { state: "confident" as const },
+    };
+    expect(() =>
+      IngestionResponseSchema.parse({
+        ...base,
+        assets: [{ ...validAsset, byteLength: 0 }],
+      }),
+    ).toThrow();
+    expect(() =>
+      IngestionResponseSchema.parse({
+        ...base,
+        assets: [{ ...validAsset, dataBase64: "" }],
+      }),
+    ).toThrow();
+  });
+});

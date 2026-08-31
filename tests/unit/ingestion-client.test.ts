@@ -12,6 +12,7 @@
 // fake-indexeddb so save/has/list/remove assert real IndexedDB semantics
 // without a browser.
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createHash } from "node:crypto";
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ArticleSchema, BookSchema } from "../../src/content/schema";
@@ -320,6 +321,99 @@ describe("IngestionClient (07-06 Task 1)", () => {
     await expect(
       ingestUrl("https://example.com/article"),
     ).rejects.toThrow();
+  });
+});
+
+// ── Asset envelope transport re-validation (Phase 20 Plan 20-02 Task 3) ─────
+// Pitfall 10 / T-20-06: the server is NOT trusted. Every envelope asset is
+// re-validated on the client read path BEFORE anything reaches exposure:
+// Zod parse → decode → byteLength re-check → assetId re-hash. Any mismatch
+// fails the whole ingest calmly as a typed refusal.
+
+describe("ingest asset envelope re-validation (20-02 Task 3)", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** 64 deterministic bytes + the matching img-<12hex> id + wire envelope. */
+  function sampleEnvelope(bytes = sampleAssetBytes()) {
+    return {
+      assetId:
+        "img-" + createHash("sha256").update(bytes).digest("hex").slice(0, 12),
+      contentType: "image/png" as const,
+      byteLength: bytes.byteLength,
+      dataBase64: Buffer.from(bytes).toString("base64"),
+    };
+  }
+
+  function sampleAssetBytes(): Uint8Array {
+    const bytes = new Uint8Array(64);
+    for (let i = 0; i < 64; i += 1) bytes[i] = i;
+    return bytes;
+  }
+
+  function okResponse(assets: unknown[] | undefined): Response {
+    const body: Record<string, unknown> = {
+      ok: true,
+      article: sampleArticle(),
+      confidence: { state: "confident" },
+    };
+    if (assets !== undefined) body.assets = assets;
+    return new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  it("a valid envelope asset → success carries a ValidatedAsset with equal byteLength + matching bytes", async () => {
+    const bytes = sampleAssetBytes();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(okResponse([sampleEnvelope(bytes)]));
+
+    const { ingestUrl } = await loadClient();
+    const result = await ingestUrl("https://example.com/article");
+
+    expect(result.assets).toHaveLength(1);
+    const asset = result.assets[0];
+    if (!asset) throw new Error("expected one validated asset");
+    expect(asset.byteLength).toBe(64);
+    expect(asset.assetId).toBe(sampleEnvelope(bytes).assetId);
+    expect(asset.contentType).toBe("image/png");
+    expect(Array.from(asset.bytes)).toEqual(Array.from(bytes));
+  });
+
+  it("a tampered byteLength → calm typed refusal (whole ingest fails, nothing exposed)", async () => {
+    const env = sampleEnvelope();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      okResponse([{ ...env, byteLength: env.byteLength + 1 }]),
+    );
+
+    const { ingestUrl } = await loadClient();
+    await expect(ingestUrl("https://example.com/article")).rejects.toMatchObject({
+      name: "IngestionError",
+      reason: "server-error",
+    });
+  });
+
+  it("valid bytes under a WRONG assetId (hash mismatch) → calm typed refusal", async () => {
+    const env = sampleEnvelope();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      okResponse([{ ...env, assetId: "img-000000000000" }]),
+    );
+
+    const { ingestUrl } = await loadClient();
+    await expect(ingestUrl("https://example.com/article")).rejects.toMatchObject({
+      name: "IngestionError",
+      reason: "server-error",
+    });
+  });
+
+  it("assets absent → success with an empty array (back-compat with pre-update server responses)", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(okResponse(undefined));
+
+    const { ingestUrl } = await loadClient();
+    const result = await ingestUrl("https://example.com/article");
+    expect(result.assets).toEqual([]);
+    expect(result.article.id).toBe("test-article-slug");
   });
 });
 
