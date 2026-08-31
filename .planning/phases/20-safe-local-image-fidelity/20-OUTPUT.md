@@ -102,5 +102,70 @@ failure classified as environment or pre-existing documented boundary.
 
 ---
 
-## Task 2 — IMG Closure Ledger (see next section)
+## Task 2 — IMG Closure Ledger
+
+Every requirement maps to the plan(s) + spec(s) that prove it end-to-end.
+REQUIREMENTS.md rows are all `[x] Complete` — flipped by the **proving**
+plans, never by the substrate plans (the 04-02 PAGE-01 / 19-01 honest-split
+precedent; 20-01/20-02/20-03/20-04 shipped machinery with
+`requirements-completed: []` and stay that way in their SUMMARYs).
+
+| Req | Requirement (abridged) | Closed by | Evidence (plan · spec · counts) |
+|-----|------------------------|-----------|----------------------------------|
+| **IMG-01** | Figures/alt/captions preserved in the canonical sanitized model when reliably recoverable | **20-06** (with 20-02 substrate) | 20-02: URL/paste/Markdown rewrite to `asset:img-<12hex>` refs with alt+caption substrate byte-identity asserted against the real `splittingBlockText` (assetStage.spec 13/13; 87 cells across the four server specs). 20-06: EPUB container extraction, D12-16 retired (epub-to-books.spec 36/36 incl. the 8-cell 20-06 describe; epub-intake e2e 41 passed/1 documented skip/0 failed across 3 engines; happy-path asset cell chromium+firefox) |
+| **IMG-02** | Secondary assets fetch SSRF-safe with redirect/address/media-type/byte/pixel/count/animation/decode limits | **20-06** (with 20-01 substrate) | 20-01: same 9-measure pipeline via `safeFetchCore` — ssrf-matrix 19 vectors byte-stable + 6 new image-profile safeFetchCore cells; fetchImageAsset.spec 30/30 (5 valid formats, animated GIF/WebP/APNG, SVG-under-lying-header, pixel bomb, byte-cap boundary, EXIF). 20-02: stage caps count/budget/deadline (assetStage.spec). 20-06: sniff caps minus fetch over container bytes incl. the IHDR-patched 65536² bomb + 126-figure count-cap corpus |
+| **IMG-03** | Saved articles never contact third-party image hosts; local assets with explicit lifecycle + deletion | **20-08** (with 20-03/20-04 substrate) | 20-03: one-transaction save/upsert + article/book delete cascades, rollback-proven (assets-cascade.spec 15/15 + library-source 3/3). 20-04: `img` emitted ONLY on the resolved object-URL branch (asset-provider 12/12). 20-08: offline-reopen — probe-verified route-abort guard + external-request array asserted empty across three reopen shapes; imagery 50 passed/1 documented skip/0 failed across 3 engines |
+| **IMG-04** | Assets round-trip through versioned export/import with validation, conflicts, bundle limits, no broken refs | **20-05** | bundle-v4.spec + validate-bundle 47/47 (v4 union, manifest sha256 block, bomb/integrity gates, dangling skip, D9-14 ride, rollback); portability e2e 61 passed/2 documented skips/0 failed across 3 engines with raw-row byte-equality + local `naturalWidth > 0` render on machine B; the two verbatim preview warnings |
+| **IMG-05** | Figures render semantically with stable intrinsic geometry + calm fallbacks in both reading modes | **20-08** (on 20-04's renderer) | geometry.spec: reserved-vs-rendered aspect identity at uncapped viewport (incl. EXIF-rotated fixture), placeholder in BOTH modes with captions visible, tall-figure clamp; refusal-matrix: identical one-surface placeholder, visible alt, D19-01 caption-mark cell, IMG-05 AxeBuilder scan zero serious/critical on all 3 engines |
+| **IMG-06** | Image load/decode/failure/size cannot silently clip/duplicate/omit/reorder/destabilize pagination; canonical location preserved | **20-08** (on 20-04's renderer) | geometry.spec: page-count identity across a full walk decoding both fixture imgs + no PaginationFallbackBanner + tall-figure clamp with pagination intact; decode-matrix: 15/15 cells (5 formats × 3 engines, blob: src + naturalWidth > 0 + D20-13 attribute round-trip); decode is paint never layout (D20-13 — reserved boxes are model-determined pre-decode) |
+
+**20-04's render-half truths are closed only by 20-08's e2e proofs** — 20-04
+shipped the structural renderer guarantees (img-on-resolved-branch-only,
+reserved boxes, one placeholder surface) with `requirements-completed: []`;
+IMG-03/05/06 flipped at 20-08, the plan whose specs prove them in real
+browsers. All six REQUIREMENTS.md rows trace to green automated runs in this
+gate (T-20-28: claims trace to the green invocation above, not summaries).
+
+## Cap sanity re-check (D20-11 — generous bomb-stoppers, not reading-police)
+
+Constants verified in code (`src/ingestion/types.ts`, re-exported from
+`server/limits.ts`; geometry in `src/app.css`) against the corpus evidence
+the phase produced:
+
+| Constant | Value | A3 reference | Phase corpus evidence | Verdict |
+|----------|-------|--------------|----------------------|---------|
+| `MAX_ASSET_BYTES` | 16 MB | per-asset ≈ 8–16 MB | refusal boundary exercised by the byte-cap unit cell; no corpus case near it | keep |
+| `MAX_ASSET_PIXELS` | 16,777,216 | = pdf.js `MAX_IMAGE_PIXELS` (one family) | 20-06 IHDR-patched 65536² (≈4.3 Gpx) bomb refuses `"pixels"` | keep |
+| `ASSET_FETCH_TIMEOUT_MS` | 15 s | — | mirrors `REQUEST_TIMEOUT_MS`; no evidence argues | keep |
+| `ASSET_STAGE_DEADLINE_MS` | 60 s | D20-04 per-article budget | deadline unit cells (pre-expired + mid-flight) | keep |
+| `ASSET_FETCH_CONCURRENCY` | 4 | A6 | bounded-pool peak unit cell | keep |
+| `MAX_FIGURES_PER_ARTICLE` | 120 | count ≈ 100–150 | 20-06 126-figure corpus: exactly 120 admissions + per-figure `"count"` refusal + twin dedupe | keep |
+| `MAX_ARTICLE_ASSET_BYTES` | 150 MB | total ≈ 100–150 MB | per-book running-guard unit cells (Pitfall 6) | keep |
+| `MAX_ASSET_RESPONSE_BYTES` | 3 MB | OQ1 resolution | base64 ≈ 4 MB keeps the Vercel 4.5 MB ceiling honest; running-budget unit cells | keep |
+| `--figure-media-max-h` | `calc((100dvh - 48px - 2 * 48px) * 0.5)` (half the paginated content box) | A7 | 20-08 tall-figure clamp + page-count identity cells | keep |
+| `--figure-placeholder-ratio` | `3 / 2` | A7 | both-mode placeholder cells | keep |
+
+**Verdict: no cap number's phase-produced evidence argues for tuning.** All
+constants stay named + commented where they live; any future tuning is a
+follow-up commit, never a silent edit (D20-11). Honest boundary note: the
+corpus the phase produced is fixture/synthetic (authentic-format registry
+samples, spam corpora, patched bombs) — it proves the caps fire as
+bomb-stoppers, which is the bar D20-11 sets; true in-the-wild photo-essay
+measurement (A3's "measure, then lock" at full fidelity) remains available as
+backlog if any reading-police symptom ever appears against real content.
+
+## Residuals (recorded honestly — T-20-29)
+
+1. **Animated AVIF passes the animation gate** — `is-animated` covers
+   GIF/APNG/WebP only (20-RESEARCH Pitfall 8, VERIFIED against the official
+   README). Accepted per Assumption A4: rare in longform publishing; revisit
+   on corpus evidence. → `deferred-items.md` (entry added by this plan).
+2. **Playwright-WebKit Blob→IndexedDB boundary** — 5 documented e2e skips
+   (2× 20-05, 1× 20-06, 1× 20-08, 1× surfaced by this gate), all one root
+   cause; the open Rule-4 row-shape alternative stays with the human. →
+   `deferred-items.md` (probe evidence + option recorded since 20-05).
+3. **Cap tuning** — none argued by corpus evidence; see the table above.
+
+Phase 20 closes: every IMG-01..06 requirement traced to green automated
+evidence in this gate's invocation; the honest record is permanent above.
 

@@ -1,5 +1,25 @@
 # Phase 20 Deferred Items
 
+## Animated AVIF passes the animation gate (accepted residual — A4 / Pitfall 8)
+
+**Recorded by:** 20-07 (phase gate), per the plan's T-20-29 mandate.
+
+`is-animated@2.0.2` covers animated GIF / APNG / animated WebP only
+[VERIFIED: official README, 20-RESEARCH §Pitfall 8]. An animated AVIF
+sequence therefore passes the D20-09 animation gate and would enter the
+reader as an accepted asset — violating D20-09's spirit (nothing in the calm
+reader moves on its own), though its letter lists GIF/WebP/APNG.
+
+**Why accepted (Assumption A4):** animated AVIF is rare in longform
+publishing (the phase's representative corpus class); hand-rolling an AVIF
+sequence sniffer is the Don't-Hand-Roll anti-pattern the research warns
+against.
+
+**Warning sign for reopening (Pitfall 8):** corpus containing animated AVIF.
+If real-world ingestion starts admitting animated AVIFs, the options are a
+hand-rolled AVIF-box sniffer or an upstream `is-animated` capability gain —
+either way it is a deliberate follow-up, never a silent pass.
+
 ## WebKit engine boundary: IndexedDB refuses ALL Blob values (surfaced 20-05)
 
 **Found during:** 20-05 Task 3 (3-engine run of the new asset e2e cells)
