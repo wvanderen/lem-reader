@@ -38,7 +38,11 @@ import { ImportPreviewDialog } from "./ImportPreviewDialog";
 import { applyImport, buildBundleBytes, validateBundle } from "../portability/ExportImportService";
 import type { ImportRefusal } from "../portability/ExportImportService";
 import { detectImportPreview, resolveImportPlan } from "../portability/conflicts";
-import type { ImportPreviewData, Overrides } from "../portability/conflicts";
+import type {
+  ImportPreviewData,
+  Overrides,
+  ValidatedImportAsset,
+} from "../portability/conflicts";
 import { BUNDLE_FILENAME } from "../portability/bundle";
 import type { ExportBundle } from "../portability/bundle";
 import { downloadBlob } from "../portability/download";
@@ -174,6 +178,11 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   // while importPreview !== null.
   const [importBundle, setImportBundle] = useState<ExportBundle | null>(null);
   const [importPreview, setImportPreview] = useState<ImportPreviewData | null>(null);
+  // Phase 20 (20-05): the per-asset rows validateBundle verified against
+  // their zip entries — carried from the file-pick stage to the Proceed
+  // handler so resolveImportPlan can run the no-broken-refs gate + attach
+  // the riding assets (the same set-then-clear trio discipline).
+  const [importAssets, setImportAssets] = useState<readonly ValidatedImportAsset[] | null>(null);
   // Ref-based file picker (the add-dialog discipline) triggered by the
   // "Import bundle" button.
   const importFileRef = useRef<HTMLInputElement>(null);
@@ -285,9 +294,10 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
         e.target.value = "";
         return;
       }
-      const preview = await detectImportPreview(result.bundle);
+      const preview = await detectImportPreview(result.bundle, result.assets);
       setImportBundle(result.bundle);
       setImportPreview(preview);
+      setImportAssets(result.assets);
       setDataMessage(null);
     } catch {
       // validateBundle never throws by contract (09-04); this guards the
@@ -322,8 +332,12 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
         overrides,
         applyPreferences,
         { metadataTakeIncoming },
+        // Phase 20 (20-05): the validated asset rows from the file-pick
+        // stage — the no-broken-refs gate + assetsToWrite attach consume
+        // exactly what validateBundle verified (never re-derived).
+        importAssets ?? [],
       );
-      await applyImport(plan); // atomic 5-store transaction — rolls back on throw
+      await applyImport(plan); // atomic 7-store transaction — rolls back on throw
       const skipped =
         plan.skipped.articles +
         plan.skipped.highlights +
@@ -340,6 +354,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     } finally {
       setImportPreview(null);
       setImportBundle(null);
+      setImportAssets(null);
       // Reset so re-picking the same bundle file re-fires onChange.
       if (importFileRef.current !== null) importFileRef.current.value = "";
       setDataBusy("idle");
@@ -350,6 +365,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   const handleImportCancel = () => {
     setImportPreview(null);
     setImportBundle(null);
+    setImportAssets(null);
     if (importFileRef.current !== null) importFileRef.current.value = "";
     setDataMessage(null);
   };

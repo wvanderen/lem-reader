@@ -36,19 +36,20 @@ import { zipSync, unzipSync, strToU8, strFromU8 } from "fflate";
 import { fixtures } from "../fixtures";
 import { dexieLibrarySource } from "../ingestion/LibrarySource";
 import { db } from "../persistence/db";
-import type { LocationRecordRow } from "../persistence/db";
+import type { AssetRecordRow, LocationRecordRow } from "../persistence/db";
 import { listBooks } from "../persistence/booksStore";
 import { loadAllHighlights } from "../persistence/highlightsStore";
 import { loadAllNotes } from "../persistence/notesStore";
 import { loadAllLocations } from "../persistence/locationStore";
 import { loadSettings } from "../persistence/settingsStore";
+import { MAX_ARTICLE_ASSET_BYTES, MAX_ASSET_BYTES } from "../ingestion/types";
 import { DEFAULT_SETTINGS } from "../settings/defaults";
 import { ExportBundleSchema, resolveAppVersion } from "./bundle";
 import type { ExportBundle, AssetExportMeta } from "./bundle";
 import { computeManifest, sha256Hex } from "./manifest";
 import type { Manifest } from "./manifest";
 import { isSafeEntryName } from "./zipSlip";
-import type { ResolvedImportPlan } from "./conflicts";
+import type { ResolvedImportPlan, ValidatedImportAsset } from "./conflicts";
 import { loadAllAssets } from "../persistence/assetsStore";
 
 // ── Export side (PORT-01) ────────────────────────────────────────────────────
@@ -190,12 +191,16 @@ export type ImportRefusal =
   | { kind: "invalid"; issues: string[] } // ALL Zod issues, never just the first (Pitfall 11 #2)
   | { kind: "corrupted"; failedBlocks: string[] }; // manifest mismatches, by block name
 
-/** validateBundle's result: the validated bundle + recomputed manifest, or
- * a specific refusal. The `{ ok, … } | { ok, refusal }` shape follows the
- * settingsStore/locationStore discriminated-result convention (never throw
- * to the reader). */
+/** validateBundle's result: the validated bundle + recomputed manifest + the
+ * per-asset rows that verified against their zip entries (Phase 20 20-05 —
+ * entry bytes included; rows whose entry was missing or bomb-filtered are
+ * simply absent, and the no-broken-refs gate in conflicts.ts turns that
+ * absence into the honest per-article skip), or a specific refusal. The
+ * `{ ok, … } | { ok, refusal }` shape follows the settingsStore/
+ * locationStore discriminated-result convention (never throw to the
+ * reader). */
 export type BundleValidationResult =
-  | { ok: true; bundle: ExportBundle; manifest: Manifest }
+  | { ok: true; bundle: ExportBundle; manifest: Manifest; assets: ValidatedImportAsset[] }
   | { ok: false; refusal: ImportRefusal };
 
 /** Decompression-bomb cap (T-9-02): an entry DECLARING an uncompressed
@@ -332,7 +337,56 @@ export async function validateBundle(
     return { ok: false, refusal: { kind: "corrupted", failedBlocks } };
   }
 
-  return { ok: true, bundle: parsed.data, manifest: recomputed };
+  // 7. Per-asset validation (Phase 20 20-05, IMG-04 — T-20-18/T-20-19/
+  //    T-20-20): the metadata array passed the schema parse + the manifest
+  //    hash; now each row is verified against its zip ENTRY. Damage routes
+  //    to the corrupted refusal channel (never-throw); a MISSING entry
+  //    (never present, or filtered by the MAX_ENTRY_ORIGINAL_SIZE bomb
+  //    guard) is NOT bundle-level corruption — the row is simply absent
+  //    from the validated set and conflicts.ts's no-broken-refs gate turns
+  //    that absence into the honest per-article skip with the preview
+  //    warning. Order: canonical-name → per-asset cap → per-article budget
+  //    → presence → byteLength → sha256 (metadata-level checks first, so
+  //    lying metadata refuses without reading a byte).
+  const assets: ValidatedImportAsset[] = [];
+  const budgetByArticle = new Map<string, number>();
+  for (const meta of parsed.data.assets ?? []) {
+    // Entry names are service-generated from the row's OWN validated ids —
+    // a free-text meta.entry is damage, never a lookup key (T-20-20; the
+    // every-key isSafeEntryName guard in step 2 already covered the raw
+    // zip side).
+    if (meta.entry !== `assets/${meta.articleId}/${meta.assetId}`) {
+      return { ok: false, refusal: { kind: "corrupted", failedBlocks: ["assets"] } };
+    }
+    if (meta.byteLength > MAX_ASSET_BYTES) {
+      return { ok: false, refusal: { kind: "corrupted", failedBlocks: ["assets"] } };
+    }
+    const budget = (budgetByArticle.get(meta.articleId) ?? 0) + meta.byteLength;
+    if (budget > MAX_ARTICLE_ASSET_BYTES) {
+      return { ok: false, refusal: { kind: "corrupted", failedBlocks: ["assets"] } };
+    }
+    budgetByArticle.set(meta.articleId, budget);
+    const entryBytes = entries[meta.entry];
+    if (entryBytes === undefined) continue; // missing/bomb-filtered — dangling gate owns it
+    // ArrayBuffer-backed copy (TS 7 BufferSource): one copy serves both the
+    // hash and the row that rides into applyImport.
+    const bytes = new Uint8Array(entryBytes);
+    if (bytes.byteLength !== meta.byteLength) {
+      return { ok: false, refusal: { kind: "corrupted", failedBlocks: ["assets"] } };
+    }
+    if ((await sha256Hex(bytes)) !== meta.sha256) {
+      return { ok: false, refusal: { kind: "corrupted", failedBlocks: ["assets"] } };
+    }
+    assets.push({
+      articleId: meta.articleId,
+      assetId: meta.assetId,
+      contentType: meta.contentType,
+      byteLength: meta.byteLength,
+      bytes,
+    });
+  }
+
+  return { ok: true, bundle: parsed.data, manifest: recomputed, assets };
 }
 
 // ── Import apply side (PORT-02, atomic) ──────────────────────────────────────
@@ -381,14 +435,44 @@ const READER_PREFS_KEY = "reader-prefs";
  * there is no literal bracketed field name anywhere.
  */
 export async function applyImport(plan: ResolvedImportPlan): Promise<void> {
+  // Phase 20 (20-05): asset ROWS build BEFORE the transaction opens — the
+  // stamp-before-transaction discipline (assetsStore.putAssets): createdAt
+  // stamping + Blob construction are synchronous pure data shaping, but
+  // keeping them outside the closure preserves the puts-only rule's
+  // plain-reading (the closure inspects ONLY plan-shaped puts/deletes).
+  const assetCreatedAt = new Date().toISOString();
+  const assetRows: AssetRecordRow[] = plan.assetsToWrite.map((asset) => ({
+    articleId: asset.articleId,
+    assetId: asset.assetId,
+    contentType: asset.contentType,
+    byteLength: asset.byteLength,
+    // TS 7 BlobPart strictness (the 20-03 save-time-copy lesson): a view
+    // over generic ArrayBufferLike is not assignable — copy into a fresh
+    // ArrayBuffer-backed Uint8Array (the Blob constructor copies anyway).
+    data: new Blob([new Uint8Array(asset.bytes)], {
+      type: asset.contentType,
+    }),
+    createdAt: assetCreatedAt,
+  }));
+  // The per-article replacement set: every article this plan WRITES gets
+  // its old asset rows range-deleted before the new puts — the 20-03
+  // upsert-replacement discipline (a winning article's superseded rows
+  // never linger, and an incoming asset-free winner clears stale local
+  // rows exactly like re-ingest does).
+  const assetArticleIds = [
+    ...new Set(plan.articlesToWrite.map((a) => a.id)),
+  ];
+
   // The puts-only closure, defined once. It is passed to whichever explicit
   // db.transaction overload matches the plan's touched-store set: db.settings
   // joins ONLY when plan.applyPreferences is true (the
   // DexieLibrarySource.remove cascade precedent, extended with db.settings);
-  // db.books always joins (Phase 12 — books are record data). The two-call
-  // explicit-arity shape is preserved (tsc rejects a union-of-tuples
-  // spread); the six-table branch uses Dexie's readonly-array overload
-  // because the tuple overloads stop at five tables.
+  // db.books always joins (Phase 12 — books are record data); db.assets
+  // always joins (Phase 20 — assets are record data, riding their
+  // articles). BOTH branches use the readonly-ARRAY overload — adding
+  // db.assets makes SEVEN tables on the settings branch and SIX on the
+  // other, and the tuple overloads stop at five (the STATE 12-07 lesson;
+  // the saveBook/removeBook array-form standardization).
   const applyPuts = async (): Promise<void> => {
     for (const book of plan.booksToWrite) {
       await db.books.put(book);
@@ -405,6 +489,15 @@ export async function applyImport(plan: ResolvedImportPlan): Promise<void> {
       await db.articles.put(
         bookId !== undefined ? { ...article, bookId } : article,
       );
+    }
+    // Phase 20 (20-05): assets ride their winning articles — the per-range
+    // delete of superseded rows FIRST, then the puts (puts/deletes only;
+    // rollback covers both — T-20-22).
+    for (const articleId of assetArticleIds) {
+      await db.assets.where("articleId").equals(articleId).delete();
+    }
+    for (const row of assetRows) {
+      await db.assets.put(row);
     }
     for (const highlight of plan.highlightsToWrite) {
       await db.highlights.put(highlight);
@@ -429,23 +522,19 @@ export async function applyImport(plan: ResolvedImportPlan): Promise<void> {
   };
 
   if (plan.applyPreferences) {
-    // Dexie's tuple overloads stop at FIVE tables (dexie.d.ts L859-863);
-    // this branch locks SIX (articles/highlights/notes/location/settings/
-    // books since 12-07), so it uses the readonly-array overload (L858) —
-    // the same explicit-table-set discipline, the tsc-required arity form.
+    // SEVEN tables (articles/highlights/notes/location/settings/books/
+    // assets) — the readonly-array overload (the tuple overloads stop at
+    // FIVE; the 12-07 lesson, now on both branches).
     await db.transaction(
       "rw",
-      [db.articles, db.highlights, db.notes, db.location, db.settings, db.books],
+      [db.articles, db.highlights, db.notes, db.location, db.settings, db.books, db.assets],
       applyPuts,
     );
   } else {
+    // SIX tables without settings — the same array-overload form.
     await db.transaction(
       "rw",
-      db.articles,
-      db.highlights,
-      db.notes,
-      db.location,
-      db.books,
+      [db.articles, db.highlights, db.notes, db.location, db.books, db.assets],
       applyPuts,
     );
   }

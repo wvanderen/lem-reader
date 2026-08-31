@@ -31,6 +31,7 @@ import { loadAllLocations } from "../persistence/locationStore";
 import { listBooks } from "../persistence/booksStore";
 import { db } from "../persistence/db";
 import { fixtures } from "../fixtures";
+import { figureAssetIds } from "../content/assets/AssetProvider";
 import {
   graphemeClusters,
   normalizeText,
@@ -45,7 +46,55 @@ import type {
   NoteRecord,
   ReaderSettings,
 } from "../content/schema";
-import type { ExportBundle } from "./bundle";
+import type { AssetExportMeta, ExportBundle } from "./bundle";
+
+// ── Phase 20 (Plan 20-05) — validated import assets + the no-broken-refs
+//    gate (IMG-04). Assets ride their article's D9-14 resolution; there is
+//    NO new ConflictKind and no new reader choice ──────────────────────────
+
+/**
+ * ValidatedImportAsset — one asset row validateBundle verified against its
+ * zip entry (entry bytes included). Declared here — the CONSUMER side — so
+ * this module stays import-cycle-free (ExportImportService already imports
+ * from here; its ok-result carries structurally-identical rows, and the
+ * structural match is locked by the bundle-v4 spec driving both sides).
+ */
+export interface ValidatedImportAsset {
+  articleId: string;
+  assetId: string;
+  contentType: AssetExportMeta["contentType"];
+  byteLength: number;
+  bytes: Uint8Array<ArrayBuffer>;
+}
+
+/**
+ * The no-broken-refs gate's pure core: the set of incoming article ids
+ * holding at least one `asset:` figure ref that cannot resolve against the
+ * VALIDATED asset rows (no meta entry, or the zip entry was missing or
+ * bomb-filtered). Such articles skip import with the explicit preview
+ * warning — never a silent placeholder rewrite (honesty constraint, the
+ * D12-11 chapter-skip mirror). The block walk reuses AssetProvider's
+ * exported figureAssetIds exactly (the one container-recursing walk shape
+ * — the AddDialog attribution twin discipline, no fork).
+ */
+function danglingAssetArticleIds(
+  bundle: ExportBundle,
+  importAssets: readonly ValidatedImportAsset[],
+): Set<string> {
+  const available = new Set(
+    importAssets.map((row) => `${row.articleId}\u0000${row.assetId}`),
+  );
+  const dangling = new Set<string>();
+  for (const article of bundle.articles) {
+    for (const assetId of figureAssetIds(article)) {
+      if (!available.has(`${article.id}\u0000${assetId}`)) {
+        dangling.add(article.id);
+        break;
+      }
+    }
+  }
+  return dangling;
+}
 
 // ── Conflict taxonomy (D9-14 table, extended by Phase 12 Plan 12-07 and
 //    Phase 17 Plan 17-04) ──────────────────────────────────────────────────
@@ -106,7 +155,12 @@ export interface MetadataConflictDetail {
  * `applyPreferencesDefault` is the D9-12 fresh-device default for the
  * "apply imported reading preferences?" choice. `metadataConflicts`
  * (Phase 17 17-04) is the per-article detail array behind every
- * article-metadata-override conflict — one entry per conflicted id. */
+ * article-metadata-override conflict — one entry per conflicted id.
+ * `danglingAssetArticles` (Phase 20 20-05) counts incoming articles the
+ * no-broken-refs gate will SKIP because a figure's image bytes are not
+ * included in the bundle — the count behind the verbatim preview warning
+ * (never a silent placeholder rewrite; assets never conflict
+ * independently of their article, so there is no new ConflictKind). */
 export interface ImportPreviewData {
   incoming: {
     books: number;
@@ -131,6 +185,7 @@ export interface ImportPreviewData {
   };
   fixtureBackedHighlights: number;
   applyPreferencesDefault: boolean;
+  danglingAssetArticles: number;
 }
 
 /** The fully-computed import plan (RESEARCH Pattern 3's apply-step contract).
@@ -143,13 +198,18 @@ export interface ImportPreviewData {
  * winning Book rows; their chapters ride `articlesToWrite` as ordinary
  * articles — a chapter whose book was skipped or absent from the bundle
  * STILL rides (orphan-tolerant: it imports as a standalone epub-chapter
- * article the library renders ungrouped). */
+ * article the library renders ungrouped). `assetsToWrite` (Phase 20
+ * 20-05) carries the VALIDATED asset rows riding every winning article —
+ * incoming-wins = article + its assets upsert together; an identical or
+ * skipped article contributes nothing (its assets are untouched or
+ * absent); orphan rows for articles that never ride drop inertly. */
 export interface ResolvedImportPlan {
   booksToWrite: Book[];
   articlesToWrite: CanonicalArticle[];
   highlightsToWrite: HighlightRecord[];
   notesToWrite: NoteRecord[];
   locationsToWrite: LocationRecord[];
+  assetsToWrite: ValidatedImportAsset[];
   preferences?: ReaderSettings;
   applyPreferences: boolean;
   idRewrites: Map<string, string>;
@@ -305,6 +365,7 @@ function resolveHighlightStatus(
  */
 export async function detectImportPreview(
   bundle: ExportBundle,
+  importAssets: readonly ValidatedImportAsset[] = [],
 ): Promise<ImportPreviewData> {
   const [localArticles, localHighlights, localNotes, localLocations, localBooksResult] =
     await Promise.all([
@@ -358,7 +419,14 @@ export async function detectImportPreview(
     // make: not a conflict, not added (a calm no-op).
   }
 
+  // ── Phase 20 (20-05): the no-broken-refs gate's skip set. A dangling
+  // article is neither "added" nor "conflicting" — it will not import, so
+  // the preview must not promise it; the explicit warning count carries
+  // the honest reason instead (never a silent placeholder rewrite).
+  const dangling = danglingAssetArticleIds(bundle, importAssets);
+
   for (const a of bundle.articles) {
+    if (dangling.has(a.id)) continue; // skipped with the preview warning
     const local = localArticleById.get(a.id);
     if (!local) {
       added.articles++;
@@ -476,6 +544,7 @@ export async function detectImportPreview(
     resolution,
     fixtureBackedHighlights,
     applyPreferencesDefault,
+    danglingAssetArticles: dangling.size,
   };
 }
 
@@ -599,6 +668,7 @@ export async function resolveImportPlan(
   overrides: Overrides,
   applyPreferences: boolean,
   itemChoices?: ImportItemChoices,
+  importAssets: readonly ValidatedImportAsset[] = [],
 ): Promise<ResolvedImportPlan> {
   // Same loaders as detectImportPreview — the write-free re-read.
   const [localArticles, localHighlights, localNotes, localLocations, localBooksResult] =
@@ -625,6 +695,7 @@ export async function resolveImportPlan(
     highlightsToWrite: [],
     notesToWrite: [],
     locationsToWrite: [],
+    assetsToWrite: [],
     applyPreferences,
     idRewrites: new Map<string, string>(),
     skipped: { books: 0, articles: 0, highlights: 0, notes: 0, locations: 0 },
@@ -657,7 +728,17 @@ export async function resolveImportPlan(
   const takeIncomingMetadata = (id: string): boolean =>
     overrides["article-metadata-override"] === "overwrite" ||
     metadataTakeIncoming.has(id);
+  // Phase 20 (20-05): the no-broken-refs gate — re-derived exactly as the
+  // preview derived it (the determinism note above covers the window). A
+  // dangling article skips BEFORE any conflict classification: no honest
+  // import of it exists under ANY override (its images are not in the
+  // bundle), and the preview already said so with the warning string.
+  const dangling = danglingAssetArticleIds(bundle, importAssets);
   for (const a of bundle.articles) {
+    if (dangling.has(a.id)) {
+      plan.skipped.articles++; // the explicit dangling-assets skip reason
+      continue;
+    }
     const local = localArticleById.get(a.id);
     if (!local) {
       plan.articlesToWrite.push(a); // new — always written (overrides ride)
@@ -750,6 +831,20 @@ export async function resolveImportPlan(
       plan.locationsToWrite.push(l);
     } else {
       plan.skipped.locations++; // skip | keep-both(as skip) | older incoming
+    }
+  }
+
+  // ── Phase 20 (20-05): assets ride their article's resolution. Only the
+  // WINNING articles' validated rows attach — an identical article is a
+  // calm no-op (its local assets untouched), a skipped article writes
+  // nothing, and rows belonging to no riding article drop inertly
+  // (orphan-tolerant, the chapter precedent). applyImport consumes
+  // assetsToWrite with per-article range-delete + puts inside the SAME
+  // puts-only transaction (the 20-03 upsert-replacement discipline).
+  const ridingArticleIds = new Set(plan.articlesToWrite.map((a) => a.id));
+  for (const asset of importAssets) {
+    if (ridingArticleIds.has(asset.articleId)) {
+      plan.assetsToWrite.push(asset);
     }
   }
 

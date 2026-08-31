@@ -35,13 +35,7 @@ import {
 } from "../../../src/content/schema";
 import type { CanonicalArticle } from "../../../src/content/schema";
 import { ExportBundleSchema } from "../../../src/portability/bundle";
-import type { ExportBundle } from "../../../src/portability/bundle";
-import type {
-  ImportPreviewData,
-  Overrides,
-  ResolvedImportPlan,
-} from "../../../src/portability/conflicts";
-import type { ImportRefusal } from "../../../src/portability/ExportImportService";
+import type { Overrides } from "../../../src/portability/conflicts";
 import { computeManifest, sha256Hex } from "../../../src/portability/manifest";
 import { sampleBundle } from "./bundle-schema.test";
 import fakeIndexedDB, { IDBKeyRange } from "fake-indexeddb";
@@ -394,54 +388,17 @@ describe("union read + forward refusal (20-05 Task 1)", () => {
 // Task 2 — Import gates: caps, sha256, no-broken-refs, conflict ride, apply
 // ════════════════════════════════════════════════════════════════════════════
 
-// ── RED scaffolding (the 20-03 wider-call-signature precedent) ──────────────
-// The Task-2 cells call the import gates through shapes that only exist
-// after GREEN: the validateBundle ok-variant's `assets` rows, the preview's
-// danglingAssetArticles count, and the detect/resolve importAssets
-// parameters. These aliases keep the RED commit tsc-clean and are REMOVED
-// once the real signatures land (GREEN).
-type ValidatedAssetRow = {
-  articleId: string;
-  assetId: string;
-  contentType: "image/png";
-  byteLength: number;
-  bytes: Uint8Array<ArrayBuffer>;
-};
-type PreviewWithDangling = ImportPreviewData & { danglingAssetArticles: number };
-type PlanWithAssets = ResolvedImportPlan & { assetsToWrite: ValidatedAssetRow[] };
-type ValidateScaffold = (
-  file: File,
-) => Promise<
-  | { ok: true; bundle: ExportBundle; assets: ValidatedAssetRow[] }
-  | { ok: false; refusal: ImportRefusal }
->;
-type DetectScaffold = (
-  bundle: ExportBundle,
-  assets?: ValidatedAssetRow[],
-) => Promise<PreviewWithDangling>;
-type ResolveScaffold = (
-  bundle: ExportBundle,
-  preview: ImportPreviewData,
-  overrides: Overrides,
-  applyPreferences: boolean,
-  itemChoices?: unknown,
-  assets?: ValidatedAssetRow[],
-) => Promise<PlanWithAssets>;
-
-/** Scaffolded gate accessors (GREEN replaces these with the real calls). */
-async function loadGates(): Promise<{
-  validate: ValidateScaffold;
-  detect: DetectScaffold;
-  resolve: ResolveScaffold;
-  apply: (plan: PlanWithAssets) => Promise<void>;
-}> {
+/** Gate accessors over the REAL signatures (the RED-phase wider-call-shape
+ * scaffolding was removed once the importAssets parameters landed — the
+ * 20-03 GREEN-cleanup precedent). */
+async function loadGates() {
   const { validateBundle, applyImport } = await loadService();
   const { detectImportPreview, resolveImportPlan } = await loadConflicts();
   return {
-    validate: validateBundle as ValidateScaffold,
-    detect: detectImportPreview as unknown as DetectScaffold,
-    resolve: resolveImportPlan as unknown as ResolveScaffold,
-    apply: applyImport as (plan: PlanWithAssets) => Promise<void>,
+    validate: validateBundle,
+    detect: detectImportPreview,
+    resolve: resolveImportPlan,
+    apply: applyImport,
   };
 }
 

@@ -60,6 +60,7 @@ function samplePreview(applyPreferencesDefault: boolean): ImportPreviewData {
     fixtureBackedHighlights: 1,
     metadataConflicts: [], // Phase 17 17-04 — no metadata conflicts in this base preview
     applyPreferencesDefault,
+    danglingAssetArticles: 0, // Phase 20 20-05 — no dangling skips in this base preview
   };
 }
 
@@ -235,6 +236,7 @@ function sampleMetadataPreview(): ImportPreviewData {
     resolution: { confident: 0, ambiguous: 0, orphan: 0 },
     fixtureBackedHighlights: 0,
     applyPreferencesDefault: false,
+    danglingAssetArticles: 0, // Phase 20 20-05
   };
 }
 
