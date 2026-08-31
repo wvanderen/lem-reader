@@ -6,14 +6,14 @@ current_phase: 20
 current_phase_name: safe-local-image-fidelity
 status: executing
 stopped_at: Completed 20-03-PLAN.md
-last_updated: "2026-08-31T15:40:49.459Z"
+last_updated: "2026-08-31T16:04:06.333Z"
 last_activity: 2026-08-31
 last_activity_desc: Phase 20 execution started
 progress:
   total_phases: 8
   completed_phases: 6
   total_plans: 34
-  completed_plans: 29
+  completed_plans: 30
   percent: 75
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-30)
 ## Current Position
 
 Phase: 20 (safe-local-image-fidelity) — EXECUTING
-Plan: 4 of 8
+Plan: 5 of 8
 Status: Ready to execute
 Last activity: 2026-08-31 — Phase 20 execution started
 
@@ -187,6 +187,7 @@ Last activity: 2026-08-31 — Phase 20 execution started
 | Phase 20 P01 | 14 min | 3 tasks | 11 files |
 | Phase 20 P02 | 18min | 3 tasks | 14 files |
 | Phase 20 P03 | 20 min | 2 tasks | 7 files |
+| Phase 20 P04 | 12min | 2 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -446,6 +447,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 20]: 20-02: envelope tamper failures reuse the calm server-error reason (no enum churn); client transport re-validation = Zod parse + chunked 0x8000 decode + byteLength re-check + sha256 assetId re-hash (Pitfall 10 — server never trusted); byte-identical twins reuse the first budget admission (D7-07)
 - [Phase ?]: 20-03: Asset rows are article-owned (D20-15) — lifecycle = the owning article's: save(article, assets?)/saveBook upserts range-delete old rows FIRST inside the SAME transaction (D20-07: a refused figure leaves no orphan blob); remove/removeBook cascade via the v6 articleId index in the existing single transactions; putAssets/deleteAssetsForArticle stay never-throw seams while transactional paths propagate throws (swallowing would break Dexie rollback = D20-04 atomicity)
 - [Phase ?]: 20-03: Dexie v6 assets store APPENDS "[articleId+assetId], articleId" (compound PK + FK index), v1..v5 byte-unchanged, no upgrade callback (Pitfall 9); saveBook/removeBook standardize the readonly-ARRAY transaction overload (tuple overloads stop at five — 20-05's seven-table import follows the 12-07 lesson); loadAllAssets = plain-array whole-library read (loadAllHighlights precedent), bulkGetAssets = per-article discriminated union (20-04 AssetProvider routes ok:false); jsdom Blobs degrade through fake-indexeddb's structuredClone — specs install Node's Blob as the faithful round-trippable global
+- [Phase ?]: [Phase 20 20-04]: originalSrc on the regenerated figure-heavy fixture keeps the wikimedia URLs (D20-12 provenance, mirrors rewriteFiguresWithAssets' accepted-figure output) — the task's rg-returns-0 acceptance was over-broad; the verified security property is zero remote src keys.
+- [Phase ?]: [Phase 20 20-04]: EpubIngestionSuccess.assets is the flat ValidatedAsset[] validated through the 20-02-exported validateEnvelopeAssets (empty until 20-06 fills the book envelope); the AddDialog book arm attributes chapters via its own model-driven block walk → BookAsset flat list — the envelope never carries articleId.
+- [Phase ?]: [Phase 20 20-04]: FigureMedia is a dedicated child component (rules-of-hooks forbids useState/useAssetUrl inside BlockView's kind switch); extracting only the media box keeps the figcaption branch literally byte-identical. Fixture bytes embed as base64 with sync byte-magic self-verification — async Web Crypto forbids load-time hash re-checks browser-side; the hash linkage is proven by the client re-hash chain in e2e.
 
 ### Pending Todos
 
@@ -501,7 +505,7 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-31T15:40:22.717Z
+Last session: 2026-08-31T16:03:47.794Z
 Stopped at: Completed 20-03-PLAN.md
 Resume file: None
 
