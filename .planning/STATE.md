@@ -3,17 +3,17 @@ gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Reader Experience
 current_phase: 20
-current_phase_name: Safe Local Image Fidelity
+current_phase_name: safe-local-image-fidelity
 status: executing
-stopped_at: Phase 20 UI-SPEC approved
-last_updated: "2026-08-31T14:13:16.255Z"
+stopped_at: Completed 20-01-PLAN.md
+last_updated: "2026-08-31T14:54:40.417Z"
 last_activity: 2026-08-31
-last_activity_desc: Phase 19 complete, transitioned to Phase 20
+last_activity_desc: Phase 20 execution started
 progress:
   total_phases: 8
   completed_phases: 6
-  total_plans: 26
-  completed_plans: 26
+  total_plans: 34
+  completed_plans: 27
   percent: 75
 ---
 
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-30)
 
 **Core value:** Readers can move through long-form content with calm, stable orientation, and predictable navigation.
-**Current focus:** Phase 19 — Cross-Block Highlights
+**Current focus:** Phase 20 — safe-local-image-fidelity
 
 ## Current Position
 
-Phase: 20 — Safe Local Image Fidelity
-Plan: Not started
+Phase: 20 (safe-local-image-fidelity) — EXECUTING
+Plan: 2 of 8
 Status: Ready to execute
-Last activity: 2026-08-31 — Phase 19 complete, transitioned to Phase 20
+Last activity: 2026-08-31 — Phase 20 execution started
 
 ## Recent Decisions (Phase 18)
 
@@ -184,6 +184,7 @@ Last activity: 2026-08-31 — Phase 19 complete, transitioned to Phase 20
 | Phase 19 P03 | 14 min | 3 tasks | 7 files |
 | Phase 19 P04 | 13 min | 2 tasks | 3 files |
 | Phase 19 P05 | 55 min | 3 tasks | 11 files |
+| Phase 20 P01 | 14 min | 3 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -436,6 +437,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: Phase 19 P04: Per-page first-occurrence pass owns isFirst in paginated mode — per-render Set == per-mounted-page; claim-by-mutation in render order across all five slice shapes; one id=hl-x per highlight per mounted page (T-19-10 closed)
 - [Phase ?]: 19-05 closes ANNO-12 as a TESTED matrix (21 cells × 3 engines: all 8 kinds, crossings, 3 gap classes, 3 refusals, D19-14, backwards, D19-11) — corpus-honest adaptations: textless-gap proof rides fn-ref+unsupported interiors; fn-ref endpoints capture but render unmarked (19-03 boundary)
 - [Phase ?]: 19-05 honest gate GREEN: npm run test exit 0, one invocation (unit 1416/0/13 + e2e 1581/0/10, 3 engines, fresh server); first run surfaced 9 engine-identical failures = library corpus pins stale since 19-03's 7th fixture, realigned in-plan (13-06 precedent)
+- [Phase ?]: [Phase 20-01] image-size@2.0.2 reports JPEG as 'jpg' — sniff gate normalizes onto the jpeg arm (contentType stays canonical image/jpeg); is-animated@2.0.2 requires a Node Buffer (zero-copy view over Uint8Array — plain bytes silently disable GIF/PNG animation detection and would make D20-09 vacuous; locked by spec cells)
+- [Phase ?]: [Phase 20-01] ImageAssetRefusal closed at fetch-level arms (fetch/type/bytes/pixels/animated) — stage arms count/budget/deadline live ONLY on 20-02's AssetResolution supertype; every fetch-layer failure maps to typed 'fetch', never a throw (D20-05)
+- [Phase ?]: [Phase 20-01] IMG-02 stays unchecked — foundation plan ships the fetch/sniff substrate only; requirement closes at the end-to-end asset-stage plans 20-02+ (04-02 PAGE-01 / 10-01 RECV-01 split precedent)
 
 ### Pending Todos
 
@@ -491,9 +495,9 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-31T13:19:19.058Z
-Stopped at: Phase 20 UI-SPEC approved
-Resume file: .planning/phases/20-safe-local-image-fidelity/20-UI-SPEC.md
+Last session: 2026-08-31T14:54:40.408Z
+Stopped at: Completed 20-01-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 

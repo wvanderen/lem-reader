@@ -225,11 +225,11 @@ Plans:
   4. Figures render semantically with stable geometry and calm failures in both modes without content or location loss.
   5. Assets export/import with validation, limits, conflicts, and no broken references, and follow documented deletion lifecycle.
 
-**Plans**: 8 plans
+**Plans**: 1/8 plans executed
 
 **Wave 1** *(foundation)*
 
-- [ ] 20-01-PLAN.md — guarded asset-fetch substrate: sniff packages, FigureBlock additive schema, image caps, safeFetch two-profile core, typed-refusal sniff module (IMG-02)
+- [x] 20-01-PLAN.md — guarded asset-fetch substrate: sniff packages, FigureBlock additive schema, image caps, safeFetch two-profile core, typed-refusal sniff module (IMG-02)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -283,5 +283,5 @@ Plans:
 | 17. Reader-Owned Metadata | v2.1 | 5/5 | Complete    | 2026-08-30 |
 | 18. Reader Orientation | v2.1 | 4/4 | Complete    | 2026-08-30 |
 | 19. Cross-Block Highlights | v2.1 | 5/5 | Complete    | 2026-08-31 |
-| 20. Safe Local Image Fidelity | v2.1 | 0/7 | In progress | - |
+| 20. Safe Local Image Fidelity | v2.1 | 1/8 | In Progress|  |
 | 21. Integrated Refinement and Acceptance | v2.1 | 0/TBD | Not started | - |
