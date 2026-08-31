@@ -95,11 +95,11 @@ status: complete
 Each task was committed atomically (Task 2 TDD: RED test commit → GREEN feat commit):
 
 1. **Task 1: Fixture asset corpus + save-call wiring** — `c70e8d1` (feat)
-2. **Task 2: AssetProvider + BlockRenderer figure case + geometry CSS** — `5b98d25` (test/RED) + `53984bc` (feat/GREEN)
+2. **Task 2: AssetProvider + BlockRenderer figure case + geometry CSS** — `5b98d25` (test/RED) + `53984bc` (feat/GREEN) + `4da1f3b` (test/GREEN spec-cell corrections — the two cells fixed while making the suite green; initially left unstaged, caught by the post-close-out worktree check)
 
 ## TDD Gate Compliance
 
-- Task 2: RED `5b98d25` (10 failing cells against the tsc-clean placeholder stub; 2 vacuously-green regression locks — the outside-provider + registry-blob cells) → GREEN `53984bc` (12/12) ✓
+- Task 2: RED `5b98d25` (10 failing cells against the tsc-clean placeholder stub; 2 vacuously-green regression locks — the outside-provider + registry-blob cells) → GREEN `53984bc` (12/12) ✓ — two spec cells were corrected en route (`4da1f3b`: a waitFor asserted the wrong call on the no-refs path, and a duplicate-testid query)
 - Task 1 is not TDD-flagged: behavior-locked by the e2e cell (green at Task 2's gate — see deviation 2) + the full unit suite
 
 ## Files Created/Modified
