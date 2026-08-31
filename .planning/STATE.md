@@ -5,15 +5,15 @@ milestone_name: Reader Experience
 current_phase: 19
 current_phase_name: Cross-Block Highlights
 status: executing
-stopped_at: Completed 19-03-PLAN.md
-last_updated: "2026-08-30T23:53:46.313Z"
+stopped_at: Completed 19-04-PLAN.md
+last_updated: "2026-08-31T00:08:22.220Z"
 last_activity: 2026-08-30
 last_activity_desc: Phase 19 execution started
 progress:
   total_phases: 8
   completed_phases: 5
   total_plans: 26
-  completed_plans: 24
+  completed_plans: 25
   percent: 63
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-30)
 ## Current Position
 
 Phase: 19 (Cross-Block Highlights) — EXECUTING
-Plan: 4 of 5
+Plan: 5 of 5
 Status: Ready to execute
 Last activity: 2026-08-30 — Phase 19 execution started
 
@@ -181,6 +181,7 @@ Last activity: 2026-08-30 — Phase 19 execution started
 | Phase 19 P01 | 13 min | 3 tasks | 7 files |
 | Phase 19 P02 | 10 min | 3 tasks | 7 files |
 | Phase 19 P03 | 14 min | 3 tasks | 7 files |
+| Phase 19 P04 | 13 min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -429,6 +430,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 19]: D19 Plan 19-01: figure captionLocalStart alignment fixes Pitfall 1 — caption endpoints store true article-global offsets (alt graphemes + BLOCK_SEPARATOR when alt non-empty; 0 via the filter(Boolean) join when empty), layered additively with the D5-08 sliceStart window (figures are pagination-atomic so the windows never overlap). empty-span is REACHABLE, not just defensive: a whitespace-only non-collapsed selection composes start === end. ANNO-12 stays open until 19-05's eligibility matrix (04-02 PAGE-01 split precedent); ANNO-08 closes at 19-01. — The alt-divergence silently corrupted caption capture offsets (stored highlights addressed the wrong passage); unit cells c1/c2 prove the corrected global offsets. The requirements split follows the repo's established foundation-vs-proof precedent.
 - [Phase ?]: 19-02: one shared pure firstFragmentExcerpt (truncate-then-conditional-ellipsis, structural booleans never content-sniffing) at every quote.exact surface with caps EXACTLY as shipped; export consumes the FULL raw exact — truncation is review-surface only
 - [Phase ?]: 19-02 D19-12: blockLines splits exact on BLOCK_SEPARATOR, escapeMarkdownLine PER LINE (V5 structure-injection guard), marker on first line only, empty fragments never collapsed, export never truncates — single-line output byte-identical
+- [Phase ?]: Phase 19 P04: Paginated caption/code routing = ENTRY-LOCAL FORWARDING — BlockView's captionHighlightSlices/codeSegments are caller-computed props, so fragmentRenderer forwards them itself in entry-local coords; pinned by e2e cell (d)
+- [Phase ?]: Phase 19 P04: Per-page first-occurrence pass owns isFirst in paginated mode — per-render Set == per-mounted-page; claim-by-mutation in render order across all five slice shapes; one id=hl-x per highlight per mounted page (T-19-10 closed)
 
 ### Pending Todos
 
@@ -484,8 +487,8 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-30T23:53:46.303Z
-Stopped at: Completed 19-03-PLAN.md
+Last session: 2026-08-31T00:08:22.210Z
+Stopped at: Completed 19-04-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

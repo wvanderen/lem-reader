@@ -46,8 +46,8 @@
 ### Cross-Block Annotations
 
 - [x] **ANNO-08**: Reader can create one highlight from a native selection spanning multiple supported semantic text blocks that are present in the mounted reading surface.
-- [ ] **ANNO-09**: A cross-block highlight persists as one article-global half-open grapheme range with one identity and optional note, while rendering as the required block-local fragments.
-- [ ] **ANNO-10**: Cross-block highlights remain attached to the same text across repagination, mode changes, typography changes, reopening, export/import, and review-to-reader navigation.
+- [x] **ANNO-09**: A cross-block highlight persists as one article-global half-open grapheme range with one identity and optional note, while rendering as the required block-local fragments.
+- [x] **ANNO-10**: Cross-block highlights remain attached to the same text across repagination, mode changes, typography changes, reopening, export/import, and review-to-reader navigation.
 - [ ] **ANNO-11**: Reader can review, edit the note for, export, and delete a cross-block highlight atomically without leaving partial fragments or silently guessing at an unresolved anchor.
 - [ ] **ANNO-12**: Unsupported selection boundaries are rejected or narrowed with an explicit explanation according to a tested eligibility matrix for paragraphs, headings, lists, quotations, code, captions, footnotes, and non-text gaps.
 
@@ -130,8 +130,8 @@
 | ORNT-05 | Phase 18 | Complete |
 | ORNT-06 | Phase 18 | Complete |
 | ANNO-08 | Phase 19 | Complete |
-| ANNO-09 | Phase 19 | Pending |
-| ANNO-10 | Phase 19 | Pending |
+| ANNO-09 | Phase 19 | Complete |
+| ANNO-10 | Phase 19 | Complete |
 | ANNO-11 | Phase 19 | Pending |
 | ANNO-12 | Phase 19 | Pending |
 | IMG-01 | Phase 20 | Pending |
