@@ -255,6 +255,6 @@ Plans:
 | 16. Organized Library and Focused Add Flow | v2.1 | 4/4 | Complete    | 2026-08-29 |
 | 17. Reader-Owned Metadata | v2.1 | 5/5 | Complete    | 2026-08-30 |
 | 18. Reader Orientation | v2.1 | 4/4 | Complete    | 2026-08-30 |
-| 19. Cross-Block Highlights | v2.1 | 5/5 | Complete   | 2026-08-31 |
+| 19. Cross-Block Highlights | v2.1 | 5/5 | Complete    | 2026-08-31 |
 | 20. Safe Local Image Fidelity | v2.1 | 0/TBD | Not started | - |
 | 21. Integrated Refinement and Acceptance | v2.1 | 0/TBD | Not started | - |
