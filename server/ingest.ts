@@ -42,6 +42,8 @@ import { pdfToBlocks } from "./pdfToBlocks";
 import { epubToBooks } from "./epubToBooks";
 import { deriveConfidence, type ConfidenceResult } from "./confidence";
 import { slugifyUrl } from "./slugify";
+import { runAssetStage } from "./assetStage";
+import type { ImageAsset } from "./fetchImageAsset";
 import { IngestionError } from "./errors";
 import { EPUB_MAX_BYTES, PDF_MAX_BYTES } from "./limits";
 import {
@@ -413,6 +415,38 @@ async function ingestEpubBook(input: {
   };
 }
 
+// ── Phase 20 (Plan 20-02 Task 2) — the inline asset stage wiring ─────────────
+
+/** AssetEnvelope — the wire shape of one accepted image asset on the ingest
+ * response (base64-in-JSON, mirroring the pdf/epub upload transport
+ * decision). Task 3's AssetEnvelopeSchema in src/ingestion/types.ts is the
+ * client-side Zod mirror of this shape; the MAX_ASSET_RESPONSE_BYTES budget
+ * is already enforced inside the stage, so the envelope can never exceed the
+ * base64 transport ceiling (20-RESEARCH Pitfall 1). */
+export interface AssetEnvelope {
+  assetId: string;
+  contentType: "image/jpeg" | "image/png" | "image/webp" | "image/gif" | "image/avif";
+  byteLength: number;
+  dataBase64: string;
+}
+
+/** Envelope-encode one accepted asset. Buffer.toString("base64") runs
+ * C++-side in Node — no String.fromCharCode call-stack limit (the 11-04
+ * lesson that produced the chunked client-side bytesToBase64; the plan
+ * explicitly allows Buffer base64 server-side). */
+function toAssetEnvelope(asset: ImageAsset): AssetEnvelope {
+  return {
+    assetId: asset.assetId,
+    contentType: asset.contentType,
+    byteLength: asset.bytes.byteLength,
+    dataBase64: Buffer.from(
+      asset.bytes.buffer,
+      asset.bytes.byteOffset,
+      asset.bytes.byteLength,
+    ).toString("base64"),
+  };
+}
+
 /**
  * ingest — the 7-stage stateless pipeline orchestrator (RESEARCH.md §Pattern 1
  * L249-279). Runs safeFetch → extractAndNormalize → slugifyUrl →
@@ -643,6 +677,32 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
       return { ok: false, reason: "extraction-unsupported" };
     }
 
+    // Phase 20 (Plan 20-02 Task 2) — the INLINE ASSET STAGE (IMG-01/IMG-02):
+    // post-extract, pre-BUILD/parse/stamp, every accepted figure rewrites to
+    // a self-contained asset:img-<12hex> ref with provenance + stored dims
+    // (D20-04 — a saved article is always complete). Runs on the three
+    // network-path sources (url / paste+html-upload / markdown); the PDF
+    // path stays text-only (D20-01 — no pdfToBlocks change, nothing new
+    // called) and the EPUB path diverges in its own flow (20-06 wires the
+    // container extraction). Per-figure refusals never block the article
+    // (D20-05); refusedCount is disclosed via extractionWarnings below
+    // (T-20-10 — never silent).
+    let imageRefusalWarnings: string[] = [];
+    let assetEnvelopes: AssetEnvelope[] = [];
+    if (!hasPdf) {
+      const stage = await runAssetStage(blocks);
+      blocks = stage.blocks;
+      if (stage.refusedCount > 0) {
+        // Count-first disclosure, matching the extractionWarnings tone
+        // ("3 unsupported blocks omitted" — schema.ts L260 example).
+        const n = stage.refusedCount;
+        imageRefusalWarnings = [
+          `${n} image${n === 1 ? "" : "s"} could not be included`,
+        ];
+      }
+      assetEnvelopes = stage.assets.map(toAssetEnvelope);
+    }
+
     // Stage 6a: BUILD the article object.
     // - id: per-source (url slug / paste hash / md hash) — set above.
     // - originalHtmlHash: SHA-256 of the source bytes (url HTML / paste HTML /
@@ -700,7 +760,7 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
         originalHtmlHash,
         fetchedAt,
         extractionConfidence: "high" as const, // placeholder — stamped post-gate
-        extractionWarnings: [],
+        extractionWarnings: imageRefusalWarnings,
       },
     };
 
@@ -741,7 +801,13 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
       confidence: {
         state: confidence.state === "confident" ? "confident" : "low",
       },
-    };
+      assets: assetEnvelopes,
+      // NOTE(20-02): the `assets` envelope field lands in
+      // IngestionResponseSchema's ok-variant with Task 3's AssetEnvelopeSchema
+      // widening; until then this assertion is the scaffolding that lets the
+      // server emit the field one task ahead of the schema (Task 3 removes
+      // the cast).
+    } as IngestionResponse;
   } catch (e) {
     // T-7-23 (Repudiation): every refusal path produces a typed
     // IngestionResponse. IngestionError carries the typed reason verbatim;

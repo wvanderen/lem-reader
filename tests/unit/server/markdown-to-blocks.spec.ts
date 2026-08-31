@@ -17,7 +17,7 @@ import {
   stripMarkdownExtension,
   SCHEMA_KINDS,
 } from "../../../server/markdownToBlocks";
-import { ArticleSchema, type CanonicalArticle, type Block } from "../../../src/content/schema";
+import { ArticleSchema, type CanonicalArticle } from "../../../src/content/schema";
 import { assertRoundTripAnchor } from "../../../server/ingest";
 
 // The 9 schema-allowed block kinds (src/content/schema.ts BlockSchema). Every
@@ -225,13 +225,46 @@ describe("markdownToBlocks — mdast → Block mapping (RESEARCH §Pattern 1)", 
     }
   });
 
-  it("demotes non-http image → UnsupportedBlock", async () => {
+  it("promotes a non-http image to a REFUSED FigureBlock — alt preserved, src absent, no UnsupportedBlock (OQ2/D20-06)", async () => {
     const { blocks } = await markdownToBlocks("![alt](data:image/png;base64,xx)\n");
-    const unsupported = blocks.find(
-      (b): b is Extract<Block, { kind: "unsupported" }> =>
-        b.kind === "unsupported" && (b as { originalKind: string }).originalKind === "image",
-    );
-    expect(unsupported).toBeDefined();
+    // Exactly one figure block; the unsupported arm is gone (one placeholder
+    // surface everywhere — D20-06).
+    expect(blocks).toHaveLength(1);
+    const fig = blocks[0];
+    if (!fig || fig.kind !== "figure") {
+      throw new Error(`expected figure, got ${JSON.stringify(blocks)}`);
+    }
+    expect(fig.alt).toBe("alt");
+    expect(fig.src).toBeUndefined();
+    expect("src" in fig).toBe(false);
+    expect(fig.caption).toEqual([]);
+    expect(blocks.find((b) => b.kind === "unsupported")).toBeUndefined();
+  });
+
+  it("promotes a RELATIVE-src standalone image to a refused FigureBlock with alt (20-02 Task 2)", async () => {
+    const { blocks } = await markdownToBlocks("![a local diagram](./figures/diagram.png)\n");
+    expect(blocks).toHaveLength(1);
+    const fig = blocks[0];
+    if (!fig || fig.kind !== "figure") {
+      throw new Error(`expected figure, got ${JSON.stringify(blocks)}`);
+    }
+    expect(fig.alt).toBe("a local diagram");
+    expect(fig.src).toBeUndefined();
+    expect("src" in fig).toBe(false);
+    // No unsupported block — the D20-06 one-surface rule.
+    expect(blocks.find((b) => b.kind === "unsupported")).toBeUndefined();
+  });
+
+  it("https standalone image stays an unchanged remote-src FigureBlock", async () => {
+    const { blocks } = await markdownToBlocks("![alt caption](https://example.com/img.png)\n");
+    const fig = blocks.find((b) => b.kind === "figure");
+    expect(fig).toBeDefined();
+    if (fig && fig.kind === "figure") {
+      expect(fig.src).toBe("https://example.com/img.png");
+      expect(fig.originalSrc).toBeUndefined(); // rewritten only by the asset stage
+      expect(fig.alt).toBe("alt caption");
+      expect(fig.caption).toEqual([]);
+    }
   });
 
   it("skips thematicBreak (decorative; no Block kind)", async () => {

@@ -285,20 +285,21 @@ function visit(node: MdastNode): Block[] {
   }];
 }
 
-/** Build a FigureBlock from an mdast image node; UnsupportedBlock if src is
- * not a valid http(s) URL (T-8-02 — mirrors htmlToBlocks L223-231 link/image
- * scheme discipline; ArticleSchema.httpUrl re-validates at parse time). */
+/** Build a FigureBlock from an mdast image node. http(s) srcs produce the
+ * accepted-remote form (the 20-02 asset stage rewrites them inline); every
+ * non-http src (relative paths, data: URIs, bare words) produces a REFUSED
+ * FigureBlock — alt preserved as content, src omitted (20-RESEARCH OQ2
+ * resolution; D20-06 one-placeholder-surface rule) — NOT an
+ * UnsupportedBlock. T-8-02's scheme discipline holds: ArticleSchema.httpUrl
+ * re-validates at parse time and the FigureBlock src union has no arm for
+ * any non-http scheme (D20-02). */
 function figureFromImage(node: MdastNode): Block[] {
   const src = node.url ?? "";
+  const alt = node.alt ?? "";
   if (/^https?:/i.test(src)) {
-    const alt = node.alt ?? "";
     return [{ kind: "figure", alt, src, caption: [] }];
   }
-  return [{
-    kind: "unsupported",
-    originalKind: "image",
-    plainDescription: "An image whose source could not be normalized to a valid URL.",
-  }];
+  return [{ kind: "figure", alt, caption: [] }];
 }
 
 // ── Public adapter shape (identical to ExtractAndNormalizeResult) ────────────

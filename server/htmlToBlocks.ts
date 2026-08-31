@@ -196,9 +196,18 @@ function headingLevel(tag: string): 1 | 2 | 3 | 4 | 5 | 6 | null {
   return m ? (Number(m[1]) as 1 | 2 | 3 | 4 | 5 | 6) : null;
 }
 
+/** Phase 20 (Plan 20-02 Task 2) — the figure-src resolver hook (20-RESEARCH
+ * Pattern 5, option (a)). Given a figure's extracted NON-http src, the
+ * resolver answers whether it CLAIMS it (true = emit a FigureBlock carrying
+ * that raw src string for later container resolution). The EPUB path
+ * (20-06) passes a container-marker resolver; the url/paste default path
+ * passes NOTHING and stays byte-stable — non-http srcs keep producing the
+ * existing unsupported fallback below. */
+export type FigureSrcResolver = (src: string) => boolean;
+
 /** Build a FigureBlock from a <figure> or bare <img>; UnsupportedBlock if src
  * is not a valid http(s) URL (T-7-17 — ArticleSchema.httpUrl re-validates). */
-function figureBlock(el: Element): Block[] {
+function figureBlock(el: Element, figureSrcResolver?: FigureSrcResolver): Block[] {
   const tag = el.tagName.toLowerCase();
   const img = tag === "img" ? el : el.querySelector("img");
   const figcaption = tag === "figure" ? el.querySelector("figcaption") : null;
@@ -221,6 +230,14 @@ function figureBlock(el: Element): Block[] {
     /* keep rawSrc */
   }
   if (/^https?:/i.test(src)) {
+    const caption = figcaption ? tidyRuns(extractInline(figcaption, [])) : [];
+    return [{ kind: "figure", alt: alt || "", src, caption }];
+  }
+  // 20-02 Task 2 — a non-http src CLAIMED by the resolver (the EPUB
+  // container-marker path, wired by 20-06) becomes a FigureBlock carrying
+  // the raw src for container resolution downstream. Never consulted for
+  // http(s) srcs, and absent by default (byte-stable url/paste path).
+  if (figureSrcResolver !== undefined && figureSrcResolver(src)) {
     const caption = figcaption ? tidyRuns(extractInline(figcaption, [])) : [];
     return [{ kind: "figure", alt: alt || "", src, caption }];
   }
@@ -269,7 +286,11 @@ export interface HtmlToBlocksResult {
  * Returns Block[] (rather than pushing into a shared closure) so nested
  * containers (blockquote children, list-item content) compose cleanly.
  */
-function visit(el: Element, footnoteCounter: { n: number }): Block[] {
+function visit(
+  el: Element,
+  footnoteCounter: { n: number },
+  figureSrcResolver?: FigureSrcResolver,
+): Block[] {
   const tag = el.tagName.toLowerCase();
 
   // Skip obvious chrome / non-content decoration.
@@ -308,7 +329,7 @@ function visit(el: Element, footnoteCounter: { n: number }): Block[] {
   }
 
   if (tag === "blockquote") {
-    const children = Array.from(el.children).flatMap((c) => visit(c, footnoteCounter));
+    const children = Array.from(el.children).flatMap((c) => visit(c, footnoteCounter, figureSrcResolver));
     if (children.length) return [{ kind: "blockquote", children }];
     // Fallback: capture the blockquote's own inline text as a paragraph.
     const content = tidyRuns(extractInline(el, []));
@@ -319,7 +340,7 @@ function visit(el: Element, footnoteCounter: { n: number }): Block[] {
     const items: { content: Block[] }[] = [];
     for (const li of Array.from(el.children)) {
       if (li.tagName.toLowerCase() !== "li") continue;
-      const liContent = Array.from(li.children).flatMap((c) => visit(c, footnoteCounter));
+      const liContent = Array.from(li.children).flatMap((c) => visit(c, footnoteCounter, figureSrcResolver));
       if (liContent.length) items.push({ content: liContent });
     }
     if (!items.length) return [];
@@ -329,7 +350,7 @@ function visit(el: Element, footnoteCounter: { n: number }): Block[] {
   }
 
   if (tag === "figure" || tag === "img") {
-    return figureBlock(el);
+    return figureBlock(el, figureSrcResolver);
   }
 
   if (tag === "pre") {
@@ -354,7 +375,7 @@ function visit(el: Element, footnoteCounter: { n: number }): Block[] {
   // Container-ish elements (div, section, aside, main, article, span, dl):
   // recurse into children to find nested block content.
   if (!BLOCK_TAGS.has(tag)) {
-    return Array.from(el.children).flatMap((c) => visit(c, footnoteCounter));
+    return Array.from(el.children).flatMap((c) => visit(c, footnoteCounter, figureSrcResolver));
   }
 
   // Catch-all (no `default:` clause — the unsupported branch IS the default).
@@ -377,10 +398,13 @@ function visit(el: Element, footnoteCounter: { n: number }): Block[] {
 export function htmlToBlocks(
   sanitizedDom: Document,
   sourceUrl: string | undefined,
+  figureSrcResolver?: FigureSrcResolver,
 ): HtmlToBlocksResult {
   const footnoteCounter = { n: 0 };
   const root = findContentRoot(sanitizedDom);
-  const blocks = Array.from(root.children).flatMap((child) => visit(child, footnoteCounter));
+  const blocks = Array.from(root.children).flatMap((child) =>
+    visit(child, footnoteCounter, figureSrcResolver),
+  );
 
   return {
     blocks,

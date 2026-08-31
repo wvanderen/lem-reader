@@ -8,9 +8,11 @@
 // (input-source-agnostic pipeline, D7-03); Readability output maps onto the 9
 // block kinds via the exhaustive switch (Pattern F); anything unmappable →
 // UnsupportedBlock with a DOC-06 plainDescription.
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { JSDOM } from "jsdom";
 import {
   extractAndNormalize,
+  htmlToBlocks,
   sanitizeExtractedHtml,
   type HtmlToBlocksResult,
 } from "../../../server/htmlToBlocks";
@@ -159,5 +161,60 @@ describe("extractAndNormalize — Readability → DOMPurify → DOM walk", () =>
     // thin result — both are acceptable; the orchestrator (07-05) + confidence
     // model (07-03) decide refusal. We only assert the pipeline doesn't throw.
     expect(Array.isArray(result.blocks)).toBe(true);
+  });
+});
+
+// ── figureSrcResolver hook (Phase 20 Plan 20-02 Task 2) ─────────────────────
+// The url/paste default path passes NO resolver and stays byte-stable: a
+// non-http img src keeps producing the existing unsupported fallback. A
+// resolver that CLAIMS a non-http src (the EPUB container-marker path,
+// wired by 20-06) promotes it to a FigureBlock carrying the raw src string
+// for later container resolution.
+
+describe("htmlToBlocks — figureSrcResolver hook (20-02 Task 2)", () => {
+  const RELATIVE_IMG_HTML =
+    '<!doctype html><html><body><main><img src="images/pic.png" alt="A local picture"></main></body></html>';
+
+  it("default-absent path is byte-stable: a relative img src still yields the unsupported fallback", () => {
+    const dom = new JSDOM(RELATIVE_IMG_HTML);
+    const { blocks } = htmlToBlocks(dom.window.document, undefined);
+    const unsupported = blocks.find(
+      (b): b is HtmlToBlocksResult["blocks"][number] & { originalKind: string } =>
+        b.kind === "unsupported" &&
+        (b as { originalKind: string }).originalKind === "figure",
+    );
+    expect(unsupported).toBeDefined();
+    expect(blocks.find((b) => b.kind === "figure")).toBeUndefined();
+  });
+
+  it("a resolver-claimed non-http src becomes a FigureBlock carrying the raw src (EPUB marker path)", () => {
+    const dom = new JSDOM(RELATIVE_IMG_HTML);
+    const resolver = vi.fn((src: string) => src.startsWith("images/"));
+    const { blocks } = htmlToBlocks(dom.window.document, undefined, resolver);
+
+    expect(resolver).toHaveBeenCalledWith("images/pic.png");
+    const fig = blocks.find((b) => b.kind === "figure");
+    expect(fig).toBeDefined();
+    if (fig && fig.kind === "figure") {
+      expect(fig.src).toBe("images/pic.png");
+      expect(fig.alt).toBe("A local picture");
+      expect(fig.caption).toEqual([]);
+    }
+    expect(blocks.find((b) => b.kind === "unsupported")).toBeUndefined();
+  });
+
+  it("the resolver is never consulted for http(s) srcs", () => {
+    const dom = new JSDOM(
+      '<!doctype html><html><body><main><img src="https://example.com/pic.png" alt="Remote"></main></body></html>',
+    );
+    const resolver = vi.fn(() => true);
+    const { blocks } = htmlToBlocks(dom.window.document, undefined, resolver);
+
+    expect(resolver).not.toHaveBeenCalled();
+    const fig = blocks.find((b) => b.kind === "figure");
+    expect(fig).toBeDefined();
+    if (fig && fig.kind === "figure") {
+      expect(fig.src).toBe("https://example.com/pic.png");
+    }
   });
 });
