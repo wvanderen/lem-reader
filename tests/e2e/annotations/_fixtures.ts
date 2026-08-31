@@ -589,3 +589,117 @@ export async function findDisjointBlockWalkingPages(
   }
   return { blockIndex: -1, pageIndex: -1 };
 }
+
+// ── Phase 19 (Plan 19-05): cross-block span selection helper ──────────────────
+// The Task 2 durability/atomicity cells need the same cross-block Range the
+// eligibility matrix drives. Homed HERE (the shared harness) so the five
+// strengthened specs import one implementation instead of forking five
+// copies (the REUSE-DO-NOT-FORK discipline; selectRangeInBlock's two-block
+// generalization). Endpoint offsets are CHARACTER offsets into the endpoint
+// scope's concatenated text nodes; `li` narrows the scope to the block's
+// li[li] descendant in document order (nested items included). Both scopes
+// scrollIntoView FIRST — the toolbar is position:fixed off the selection's
+// viewport rect, so an off-screen selection mounts an unclickable toolbar.
+
+/** One endpoint of a cross-block span selection. */
+export interface BlockPoint {
+  /** The top-level block index (data-block-index). */
+  blockIndex: number;
+  /** CHARACTER offset into the scope's concatenated text-node text. */
+  offset: number;
+  /** Optional: narrow the scope to blockEl.querySelectorAll("li")[li]. */
+  li?: number;
+}
+
+/**
+ * Select a cross-block span via a native selection between two block
+ * points (forward anchor→focus order). Returns false when an endpoint
+ * could not be placed (callers treat that as setup failure, never a skip).
+ */
+export async function selectRangeBetweenBlocks(
+  page: import("@playwright/test").Page,
+  a: BlockPoint,
+  b: BlockPoint,
+): Promise<boolean> {
+  return page.evaluate(
+    ({ a, b }) => {
+      const scopeFor = (ep: {
+        blockIndex: number;
+        li?: number;
+      }): HTMLElement | null => {
+        const candidates = Array.from(
+          document.querySelectorAll(`[data-block-index="${ep.blockIndex}"]`),
+        );
+        const blockEl = candidates.find(
+          (c) => (c as HTMLElement).closest(".article-body-measurement") === null,
+        );
+        if (!blockEl) return null;
+        if (ep.li !== undefined) {
+          const li = blockEl.querySelectorAll("li")[ep.li];
+          if (!li) return null;
+          return li as HTMLElement;
+        }
+        return blockEl as HTMLElement;
+      };
+      const resolvePoint = (
+        scope: HTMLElement,
+        ep: { offset: number },
+      ): { node: Text; offset: number } | null => {
+        const walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT);
+        const texts: { node: Text; start: number; end: number }[] = [];
+        let cursor = 0;
+        let n = walker.nextNode() as Text | null;
+        while (n) {
+          const len = n.nodeValue?.length ?? 0;
+          texts.push({ node: n, start: cursor, end: cursor + len });
+          cursor += len;
+          n = walker.nextNode() as Text | null;
+        }
+        if (texts.length === 0) return null;
+        const hit =
+          texts.find((t) => ep.offset >= t.start && ep.offset < t.end) ??
+          texts[texts.length - 1]!;
+        const local = Math.max(
+          0,
+          Math.min(ep.offset - hit.start, hit.end - hit.start),
+        );
+        return { node: hit.node, offset: local };
+      };
+      const scopeA = scopeFor(a);
+      const scopeB = scopeFor(b);
+      if (!scopeA || !scopeB) return false;
+      // Keep the position:fixed toolbar clickable for mid-article spans.
+      scopeA.scrollIntoView({ block: "center" });
+      scopeB.scrollIntoView({ block: "center" });
+      const pa = resolvePoint(scopeA, a);
+      const pb = resolvePoint(scopeB, b);
+      if (!pa || !pb) return false;
+      const sel = window.getSelection();
+      if (!sel) return false;
+      sel.setBaseAndExtent(pa.node, pa.offset, pb.node, pb.offset);
+      return sel.rangeCount > 0 && !sel.isCollapsed;
+    },
+    { a, b },
+  );
+}
+
+/**
+ * Read the textContent of every visible mark sharing a highlight id, in
+ * document order (the span-extent snapshot the durability cells compare
+ * before/after a relayout or a note edit). Excludes nothing — marks render
+ * only on visible surfaces (the measurement body is fed highlights: []).
+ */
+export async function markTextsForHighlight(
+  page: import("@playwright/test").Page,
+  highlightId: string,
+): Promise<string[]> {
+  return page.evaluate(
+    (id) =>
+      Array.from(
+        document.querySelectorAll(
+          `mark.highlight[data-highlight-id="${id}"]`,
+        ),
+      ).map((m) => m.textContent ?? ""),
+    highlightId,
+  );
+}

@@ -11,6 +11,10 @@ import {
   selectRangeInBlock,
   findFirstBlockWithText,
   switchMode,
+  selectRangeBetweenBlocks,
+  markTextsForHighlight,
+  totalPages,
+  turnToPage,
 } from "./_fixtures";
 
 const FIXTURE = FIXTURES[0]!; // essay-long-form
@@ -108,5 +112,85 @@ test.describe("ANNO-05 / STATE-03 survive relayout (05-05)", () => {
     await expect(mark.first()).toBeVisible();
     // The note survives (has-note modifier present after reload).
     await expect(mark.first()).toHaveClass(/has-note/);
+  });
+
+  test("Phase 19 span: a multi-block highlight survives typography change + mode switches with the same extents in BOTH modes (ANNO-10)", async ({
+    page,
+  }) => {
+    // Strengthen-only Phase 19 cell: the SPAN variant of the two triggers
+    // above — one cross-block highlight, re-derived from the same global
+    // range after a typography change (repagination) and after M mode
+    // switches, with byte-stable extents in scrolling and one first-slice
+    // DOM id per document/mounted page (19-04 per-page pass).
+    await openArticle(page, FIXTURE);
+    await switchMode(page); // scrolling — the whole body mounts
+    const ok = await selectRangeBetweenBlocks(
+      page,
+      { blockIndex: 0, offset: 5 },
+      { blockIndex: 1, offset: 14 },
+    );
+    expect(ok, "cross-block span selection placed").toBeTruthy();
+    await page
+      .locator(".selection-toolbar")
+      .getByRole("button", { name: "Highlight", exact: true })
+      .click();
+    const mark = page.locator("mark.highlight").first();
+    await expect(mark).toBeVisible();
+    const hlId = await mark.getAttribute("data-highlight-id");
+    expect(hlId).toBeTruthy();
+    const extentsBefore = await markTextsForHighlight(page, hlId!);
+    expect(extentsBefore.length, "marks render in BOTH blocks").toBeGreaterThanOrEqual(2);
+
+    // Typography change (this spec's existing trigger shape): the engine
+    // repaginates; the span re-derives from the global range.
+    await page.getByRole("button", { name: "Reading settings" }).click();
+    const slider = page.getByRole("slider", { name: "Text size" });
+    await slider.focus();
+    await slider.press("ArrowUp");
+    await slider.press("ArrowUp");
+    await slider.press("ArrowUp"); // 18 -> 24
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(1500);
+
+    // Scrolling: same id, same extents, exactly ONE first-slice DOM id.
+    await expect(
+      page.locator(`mark.highlight[data-highlight-id="${hlId}"]`).first(),
+    ).toBeVisible();
+    expect(await markTextsForHighlight(page, hlId!)).toEqual(extentsBefore);
+    await expect(page.locator(`#hl-${hlId}`)).toHaveCount(1);
+
+    // Paginated: the span re-derives on the mounted pages (walk to the
+    // passage — the D13-09 walk-pages precedent) with one #hl- id per
+    // mounted page (19-04 first-occurrence pass).
+    await switchMode(page);
+    await page.waitForTimeout(500);
+    let foundPaginated = false;
+    const total = await totalPages(page);
+    for (let target = 0; target < total; target++) {
+      await turnToPage(page, target);
+      const count = await page
+        .locator(`mark.highlight[data-highlight-id="${hlId}"]`)
+        .count();
+      if (count > 0) {
+        await expect(
+          page
+            .locator(`mark.highlight[data-highlight-id="${hlId}"]`)
+            .first(),
+        ).toBeVisible();
+        await expect(page.locator(`#hl-${hlId}`)).toHaveCount(1);
+        foundPaginated = true;
+        break;
+      }
+    }
+    expect(foundPaginated, "span marks re-derive in paginated mode").toBe(true);
+
+    // Back to scrolling: the extents are STILL byte-stable (the round trip
+    // through paginated mode never mutated the stored range).
+    await switchMode(page);
+    await expect(
+      page.locator(`mark.highlight[data-highlight-id="${hlId}"]`).first(),
+    ).toBeVisible();
+    expect(await markTextsForHighlight(page, hlId!)).toEqual(extentsBefore);
+    await expect(page.locator(`#hl-${hlId}`)).toHaveCount(1);
   });
 });

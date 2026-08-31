@@ -34,6 +34,17 @@ import { test, expect } from "@playwright/test";
 import { fixtures } from "../../../src/fixtures";
 import { ArticleSchema } from "../../../src/content/schema";
 import type { CanonicalArticle } from "../../../src/content/types";
+import {
+  BLOCK_SEPARATOR,
+  deriveQuoteSelector,
+  graphemeLength,
+  normalizeText,
+  resolveQuoteSelector,
+} from "../../../src/content/normalizeText";
+import type {
+  TextPositionSelector,
+  TextQuoteSelector,
+} from "../../../src/content/normalizeText";
 import { ExportBundleSchema } from "../../../src/portability/bundle";
 import { computeManifest } from "../../../src/portability/manifest";
 import { validBookEpub3 } from "../../unit/server/epub-fixtures";
@@ -753,6 +764,159 @@ test("SC#4 overrides — an edited title/author travels machines byte-equal insi
     await expect(pageB.locator(`#title-${PLAIN_RT_ARTICLE.id}`)).toHaveText(
       "Round Trip Plain Article",
     );
+  } finally {
+    await machineA.close();
+    await machineB.close();
+  }
+});
+
+// ── Phase 19 (Plan 19-05 Task 2 item 7): the SPAN round trip (ANNO-10 import
+// leg + D19-12 multi-line carriage). A cross-block highlight — whose
+// quote.exact genuinely contains BLOCK_SEPARATOR newlines — exports inside
+// the library bundle and imports into a clean profile as ONE record with
+// the embedded separators preserved byte-for-byte, re-anchoring confident
+// (marks at the same text in BOTH blocks, no .unresolved modifier).
+
+/** The article machine A's span crosses (short paragraphs so the anchored
+ * window provably spans a block boundary). */
+const SPAN_RT_ARTICLE = makeArticle({
+  id: "paste-rt19span01",
+  title: "Round Trip Span Article",
+  paragraphs: [
+    "The first paragraph opens the span article with prose that no other paragraph repeats anywhere in the corpus stream.",
+    "The second paragraph receives the crossing end of the anchored span so the stored quote genuinely carries a block break.",
+    "A third paragraph supplies trailing uniqueness material so the resolver never confuses the anchored passage with another.",
+  ],
+});
+
+/**
+ * A derived-and-verified confident CROSS-BLOCK anchor: the window spans a
+ * BLOCK_SEPARATOR, so quote.exact is genuinely multi-line. Derives through
+ * the SHIPPED deriveQuoteSelector + resolveQuoteSelector machinery (the
+ * confidentHighlightOn discipline — never a forked offset computation).
+ */
+function confidentSpanOn(
+  article: CanonicalArticle,
+): { position: TextPositionSelector; quote: TextQuoteSelector } {
+  const normalized = normalizeText(article);
+  const total = graphemeLength(article);
+  let sep = normalized.indexOf(BLOCK_SEPARATOR);
+  while (sep !== -1) {
+    const start = Math.max(0, sep - 24);
+    const end = Math.min(total, sep + 24);
+    if (end > start + 8) {
+      const position = { start, end };
+      const quote = deriveQuoteSelector(article, position);
+      const resolved = resolveQuoteSelector(article, quote, position);
+      if (
+        typeof resolved === "object" &&
+        quote.exact.includes(BLOCK_SEPARATOR)
+      ) {
+        return { position, quote };
+      }
+    }
+    sep = normalized.indexOf(BLOCK_SEPARATOR, sep + 1);
+  }
+  throw new Error(`no confident cross-block passage found for ${article.id}`);
+}
+
+test("SC#4 spans — a cross-block highlight travels machines as ONE record with multi-line quote.exact intact", async ({
+  browser,
+}) => {
+  const machineA = await browser.newContext();
+  const machineB = await browser.newContext();
+  try {
+    // ── Machine A: seed the article + the cross-block span ──────────────
+    const pageA = await machineA.newPage();
+    await prepareFreshPage(pageA);
+    const anchorSpan = confidentSpanOn(SPAN_RT_ARTICLE);
+    // The anchor is honest about being multi-line before it ever travels.
+    expect(anchorSpan.quote.exact.includes(BLOCK_SEPARATOR)).toBe(true);
+    await seedRows(pageA, {
+      articles: [SPAN_RT_ARTICLE],
+      highlights: [highlightRow(SPAN_RT_ARTICLE.id, anchorSpan, "hl-rt-span")],
+    });
+
+    // ── Machine A: export through the real UI ──────────────────────────
+    const panelA = await openSettings(pageA);
+    await expect(panelA.getByRole("button", { name: "Export library bundle" })).toBeEnabled();
+    const downloadPromise = pageA.waitForEvent("download", { timeout: 20_000 });
+    await panelA.getByRole("button", { name: "Export library bundle" }).click();
+    const download = await downloadPromise;
+    const bundlePath = await download.path();
+    expect(bundlePath, "download must be persisted to disk").toBeTruthy();
+
+    // ── Node-side bundle inspection: the multi-line exact rides verbatim ─
+    const { bundle: bundleJson } = readBundleJson(bundlePath!);
+    const highlightsOut = bundleJson.highlights as Array<{
+      id: string;
+      quote: { exact: string };
+    }>;
+    expect(highlightsOut).toHaveLength(1);
+    expect(highlightsOut[0]?.id).toBe("hl-rt-span");
+    expect(
+      highlightsOut[0]?.quote.exact.includes(BLOCK_SEPARATOR),
+      "the exported quote.exact preserves the embedded block separator (D19-12 carriage)",
+    ).toBe(true);
+    expect(highlightsOut[0]?.quote.exact).toBe(anchorSpan.quote.exact);
+
+    // ── Machine B: import through the real UI (clean profile) ───────────
+    const pageB = await machineB.newPage();
+    await prepareFreshPage(pageB);
+    const panelB = await openSettings(pageB);
+    await panelB.locator('input[type="file"][accept=".zip"]').setInputFiles(bundlePath!);
+    const preview = pageB.locator("dialog.import-preview");
+    await expect(preview).toBeVisible({ timeout: 15_000 });
+    await expect(preview).toContainText(
+      "This bundle contains 1 article, 1 highlight",
+    );
+    await preview.getByRole("button", { name: "Import", exact: true }).click();
+    await expect(settingsStatus(pageB)).toContainText(
+      "Imported 1 article, 1 highlight",
+      { timeout: 15_000 },
+    );
+
+    // ── Machine B: raw IndexedDB truth — ONE record, separators intact ──
+    expect(await countRows(pageB, "highlights")).toBe(1);
+    const spanRow = await readRow(pageB, "highlights", "hl-rt-span");
+    expect(spanRow).not.toBeNull();
+    expect((spanRow!.quote as { exact: string }).exact).toBe(
+      anchorSpan.quote.exact,
+    );
+    expect(
+      (spanRow!.quote as { exact: string }).exact.includes(BLOCK_SEPARATOR),
+      "the imported quote.exact still carries the block separators",
+    ).toBe(true);
+    expect((spanRow!.position as { start: number }).start).toBe(
+      anchorSpan.position.start,
+    );
+    expect((spanRow!.position as { end: number }).end).toBe(
+      anchorSpan.position.end,
+    );
+
+    // ── Machine B: the span re-anchors CONFIDENT and renders in BOTH ────
+    // blocks. Marks render only for resolvedPosition !== null; the ABSENCE
+    // of the .unresolved modifier is the confident proof (ambiguous/orphan
+    // render the dashed outline — ANNO-07, never silent).
+    await pageB.keyboard.press("Escape"); // close the settings panel
+    await expect(panelB).not.toBeVisible();
+    await pageB.goto(`${BASE}/#/article/${SPAN_RT_ARTICLE.id}`);
+    await expect(pageB.getByRole("heading", { level: 1 })).toBeVisible({
+      timeout: 15_000,
+    });
+    const modeToggle = pageB.getByRole("button", { name: /^Reading mode:/ });
+    await modeToggle.click(); // paginated → scrolling (whole body mounts)
+    await expect(modeToggle).toHaveAttribute("aria-label", "Reading mode: scrolling");
+    const spanMarks = pageB.locator('mark.highlight[data-highlight-id="hl-rt-span"]');
+    await expect(spanMarks.first()).toBeVisible({ timeout: 15_000 });
+    expect(
+      await spanMarks.count(),
+      "the cross-block span renders marks in BOTH blocks",
+    ).toBeGreaterThanOrEqual(2);
+    expect(
+      await spanMarks.first().getAttribute("class"),
+      "re-anchored confident — no unresolved modifier",
+    ).not.toContain("unresolved");
   } finally {
     await machineA.close();
     await machineB.close();

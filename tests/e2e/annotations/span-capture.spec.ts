@@ -19,6 +19,7 @@
 import { test, expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import {
+  BASE,
   FIXTURES,
   wipeDatabase,
   openArticle,
@@ -219,5 +220,73 @@ test.describe("ANNO-08 span capture (D19) — 19-01", () => {
       await countHighlightsInDexie(page, FIXTURE),
       "no second highlight created on overlapping span",
     ).toBe(1);
+  });
+
+  test("D10-03 review jump: Go-to-highlight on a span row focuses the span's FIRST slice (span start) and turns the reader to it", async ({
+    page,
+  }) => {
+    // Plan 19-05 Task 2 item 4 — the review-jump cell. The jump lands at
+    // the span's START (position.start via the D10-03 machinery): the
+    // focused element is the hl- id carrier (the per-page first-occurrence
+    // slice on the mounted page — 19-04) and the reader TURNED to it (the
+    // focused slice lives in the live .page-fragment, not off-screen).
+    await openArticle(page, FIXTURE);
+    await switchMode(page); // scrolling — easy whole-body capture
+    const spanned = await spanSelectionAcrossConsecutiveBlocks(page);
+    expect(spanned, "two consecutive text blocks in scrolling mode").not.toBeNull();
+    await page
+      .locator(".selection-toolbar")
+      .getByRole("button", { name: "Highlight", exact: true })
+      .click();
+    await expect(announcementRegion(page)).toContainText(/Highlight saved/i);
+    const hlId = await page
+      .locator("mark.highlight")
+      .first()
+      .getAttribute("data-highlight-id");
+    expect(hlId, "span mark carries a highlight id").toBeTruthy();
+    // Switch back to paginated BEFORE the jump — the harder geometry: the
+    // deep-link must TURN the reader to the page holding the span start.
+    await switchMode(page);
+    await page.waitForTimeout(500);
+
+    // The Highlights review: click the row's jump affordance.
+    await page.goto(`${BASE}/#/highlights`);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Highlights" }),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: /^Go to highlight:/ })
+      .first()
+      .click();
+
+    // The reader opens + the readiness-gated jump resolves: focus lands
+    // on #hl-<id> (the span's FIRST slice).
+    await expect(
+      page.getByRole("heading", { level: 1 }),
+    ).toBeVisible({ timeout: 15_000 });
+    await page.waitForFunction(
+      (want) => document.activeElement?.id === want,
+      `hl-${hlId}`,
+      { timeout: 15_000 },
+    );
+    // The focused first slice lives on the VISIBLE paginated surface —
+    // never the hidden measurement body — proving the reader TURNED to
+    // the span start's page (the focusMark target mounts only there).
+    const placement = await page.evaluate((want) => {
+      const el = document.activeElement;
+      return {
+        isTarget: el !== null && el.id === want,
+        inFragment: el !== null && el.closest(".page-fragment") !== null,
+        inMeasurement:
+          el !== null && el.closest(".article-body-measurement") !== null,
+      };
+    }, `hl-${hlId}`);
+    expect(placement.isTarget, "focus is on the hl- first-slice carrier").toBeTruthy();
+    expect(placement.inFragment, "the reader turned to the span start's page").toBeTruthy();
+    expect(placement.inMeasurement, "never the hidden measurement body").toBeFalsy();
+    // The span's marks render on the mounted page sharing the one id.
+    await expect(
+      page.locator(`mark.highlight[data-highlight-id="${hlId}"]`).first(),
+    ).toBeVisible();
   });
 });

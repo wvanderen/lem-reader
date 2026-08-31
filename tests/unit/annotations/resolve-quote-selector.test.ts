@@ -15,7 +15,9 @@
 import { describe, expect, it } from "vitest";
 import { ArticleSchema } from "../../../src/content/schema";
 import {
+  BLOCK_SEPARATOR,
   deriveQuoteSelector,
+  graphemeLength,
   normalizeText,
   resolveQuoteSelector,
 } from "../../../src/content/normalizeText";
@@ -221,6 +223,88 @@ describe("resolveQuoteSelector — same-revision resolves at the original offset
       end: start + needle.length,
     };
     const selector = deriveQuoteSelector(article, position);
+    const resolved = resolveQuoteSelector(article, selector, position);
+    expect(resolved as TextPositionSelector).toEqual(position);
+  });
+});
+
+// ── Phase 19 (Plan 19-05 / D19-04): long-span + whole-article honesty ─────────
+// No cap exists on span length (D19-04 — trust the reader; overlap is the
+// natural limiter). These cells pin the re-anchor honesty at the extremes:
+// same-revision round-trips stay on the confident fast path (exact matches
+// uniquely at the stored location), while cross-revision drift of a giant
+// span degrades to the explicit tri-state — never a silent re-attach
+// (D5-02/ANNO-07, 19-RESEARCH Pitfall 8).
+
+describe("resolveQuoteSelector — Phase 19 long spans (D19-04 no cap)", () => {
+  /** Multi-paragraph article (ASCII — char offsets === grapheme offsets). */
+  function multiParagraphArticle(texts: string[]): CanonicalArticle {
+    return parseArticle({
+      ...baseArticle,
+      blocks: texts.map((text) => ({
+        kind: "paragraph",
+        content: [{ text }],
+      })),
+    });
+  }
+
+  const paras = [
+    "The opening paragraph establishes distinctive prose no other paragraph repeats.",
+    "The middle paragraph carries its own unique material for the span to cross.",
+    "The closing paragraph ends the article with one final unique sentence.",
+  ];
+
+  it("a WHOLE-ARTICLE-length span round-trips confident within the same revision", () => {
+    const article = multiParagraphArticle(paras);
+    const total = graphemeLength(article);
+    const position: TextPositionSelector = { start: 0, end: total };
+    const selector = deriveQuoteSelector(article, position);
+    // A whole-article span stores empty prefix/suffix (capture at the very
+    // start AND end — legal wildcards per matchesContext) + an exact that
+    // IS the entire normalized text, block separators included.
+    expect(selector.prefix).toBe("");
+    expect(selector.suffix).toBe("");
+    expect(selector.exact.includes(BLOCK_SEPARATOR)).toBe(true);
+    // Same revision: the fast path — unique exact at offset 0, hint IGNORED.
+    const resolved = resolveQuoteSelector(article, selector, position);
+    expect(resolved as TextPositionSelector).toEqual(position);
+  });
+
+  it("a whole-article span degrades to orphan (or ambiguous) after a mid-span edit — never silent re-attach", () => {
+    const article = multiParagraphArticle(paras);
+    const total = graphemeLength(article);
+    const position: TextPositionSelector = { start: 0, end: total };
+    const selector = deriveQuoteSelector(article, position);
+    // The edited revision replaces the MIDDLE paragraph: the whole-text
+    // exact no longer occurs anywhere, and the empty prefix/suffix
+    // wildcards leave no fallback substrate — the explicit tri-state.
+    const edited = multiParagraphArticle([
+      paras[0]!,
+      "A completely rewritten middle paragraph that shares no contiguous passage with the original text.",
+      paras[2]!,
+    ]);
+    const resolved = resolveQuoteSelector(edited, selector, position);
+    expect(
+      typeof resolved === "string",
+      `cross-revision giant span must degrade honestly (got ${JSON.stringify(resolved)})`,
+    ).toBe(true);
+    expect(["ambiguous", "orphan"]).toContain(resolved);
+  });
+
+  it("a multi-line exact (block separators inside) resolves confident on the unchanged article", () => {
+    const article = multiParagraphArticle(paras);
+    const normalized = normalizeText(article);
+    // Span from inside paragraph 1 across the first TWO separators into
+    // paragraph 3 — exact carries embedded block separators (multi-line).
+    const firstSep = normalized.indexOf(BLOCK_SEPARATOR);
+    const secondSep = normalized.indexOf(BLOCK_SEPARATOR, firstSep + 1);
+    const position: TextPositionSelector = {
+      start: 8,
+      end: secondSep + 12,
+    };
+    const selector = deriveQuoteSelector(article, position);
+    expect(selector.exact.includes(BLOCK_SEPARATOR)).toBe(true);
+    expect(selector.exact.split(BLOCK_SEPARATOR).length).toBe(3);
     const resolved = resolveQuoteSelector(article, selector, position);
     expect(resolved as TextPositionSelector).toEqual(position);
   });

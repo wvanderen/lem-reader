@@ -11,6 +11,10 @@ import {
   findDisjointBlockWalkingPages,
   turnToPage,
   totalPages,
+  switchMode,
+  selectRangeBetweenBlocks,
+  markTextsForHighlight,
+  drawerTrigger,
 } from "./_fixtures";
 
 const FIXTURE = FIXTURES[0]!; // essay-long-form
@@ -118,5 +122,59 @@ test.describe("STATE-03 persist + reload (05-05)", () => {
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     await page.waitForTimeout(800);
     await expect(page.locator(`mark.highlight[data-highlight-id="${hlId}"]`)).toHaveCount(1);
+  });
+
+  test("Phase 19 span: a multi-block highlight reloads from Dexie restored at the same text (STATE-03/ANNO-10)", async ({
+    page,
+  }) => {
+    // Strengthen-only Phase 19 cell: the SPAN variant of the reload path.
+    // Capture a cross-block highlight in scrolling mode (the persisted
+    // readingMode flips with the switch), reload, and prove the marks
+    // restore at the SAME text (byte-stable extents) with the saved-mode
+    // behavior unchanged for span-containing articles (no location/reset
+    // side effects — the drawer reflects exactly the one span record).
+    await openArticle(page, FIXTURE);
+    await switchMode(page); // scrolling — persists across the reload
+    const ok = await selectRangeBetweenBlocks(
+      page,
+      { blockIndex: 0, offset: 5 },
+      { blockIndex: 1, offset: 14 },
+    );
+    expect(ok, "cross-block span selection placed").toBeTruthy();
+    await page
+      .locator(".selection-toolbar")
+      .getByRole("button", { name: "Highlight", exact: true })
+      .click();
+    const mark = page.locator("mark.highlight").first();
+    await expect(mark).toBeVisible();
+    const hlId = await mark.getAttribute("data-highlight-id");
+    expect(hlId).toBeTruthy();
+    const extentsBefore = await markTextsForHighlight(page, hlId!);
+    expect(extentsBefore.length, "marks render in BOTH blocks").toBeGreaterThanOrEqual(2);
+
+    // Full reload — the span restores from Dexie in the persisted mode.
+    await page.reload();
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await page.waitForTimeout(800);
+    // Scrolling mode restored (the persisted mode survived the reload) —
+    // note __lemPagination is NOT awaited here: the engine's DEV hook is
+    // committed by the paginated pipeline; the scrolling surface mounts
+    // without it (the mark assertions below auto-retry until mounted).
+    await expect(page.getByRole("button", { name: /^Reading mode:/ })).toHaveAttribute(
+      "aria-label",
+      "Reading mode: scrolling",
+    );
+    // The span marks restore at the SAME text (both blocks, one id).
+    await expect(
+      page.locator(`mark.highlight[data-highlight-id="${hlId}"]`).first(),
+    ).toBeVisible();
+    expect(await markTextsForHighlight(page, hlId!)).toEqual(extentsBefore);
+    // Exactly one first-slice DOM id in the document (scrolling mode).
+    await expect(page.locator(`#hl-${hlId}`)).toHaveCount(1);
+    // The drawer reflects exactly the one span record — the saved-location
+    // behavior is unchanged for span-containing articles.
+    await drawerTrigger(page).click();
+    const entries = page.locator("dialog.annotations-drawer .drawer-list li");
+    await expect(entries).toHaveCount(1);
   });
 });
