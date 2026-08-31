@@ -5,15 +5,15 @@ milestone_name: Reader Experience
 current_phase: 20
 current_phase_name: safe-local-image-fidelity
 status: executing
-stopped_at: Completed 20-03-PLAN.md
-last_updated: "2026-08-31T19:16:26.530Z"
+stopped_at: Completed 20-06-PLAN.md
+last_updated: "2026-08-31T19:50:08.258Z"
 last_activity: 2026-08-31
 last_activity_desc: Phase 20 execution started
 progress:
   total_phases: 8
   completed_phases: 6
   total_plans: 34
-  completed_plans: 31
+  completed_plans: 32
   percent: 75
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-30)
 ## Current Position
 
 Phase: 20 (safe-local-image-fidelity) — EXECUTING
-Plan: 6 of 8
+Plan: 7 of 8
 Status: Ready to execute
 Last activity: 2026-08-31 — Phase 20 execution started
 
@@ -189,6 +189,7 @@ Last activity: 2026-08-31 — Phase 20 execution started
 | Phase 20 P03 | 20 min | 2 tasks | 7 files |
 | Phase 20 P04 | 12min | 2 tasks | 14 files |
 | Phase 20 P05 | 11min (resume session) | 3 tasks | 12 files |
+| Phase 20 P06 | 31 min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -452,6 +453,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: [Phase 20 20-04]: EpubIngestionSuccess.assets is the flat ValidatedAsset[] validated through the 20-02-exported validateEnvelopeAssets (empty until 20-06 fills the book envelope); the AddDialog book arm attributes chapters via its own model-driven block walk → BookAsset flat list — the envelope never carries articleId.
 - [Phase ?]: [Phase 20 20-04]: FigureMedia is a dedicated child component (rules-of-hooks forbids useState/useAssetUrl inside BlockView's kind switch); extracting only the media box keeps the figcaption branch literally byte-identical. Fixture bytes embed as base64 with sync byte-magic self-verification — async Web Crypto forbids load-time hash re-checks browser-side; the hash linkage is proven by the client re-hash chain in e2e.
 - [Phase 20]: 20-05: Bundle v4 asset round-trip shipped (union widening, manifest sha256 block, writer entries, import gates, D9-14 ride); WebKit Playwright cannot store Blob values in IDB — two asset e2e cells carry documented engine skips, chromium/firefox prove the round-trip — Plan acceptance gate is chromium; the 3-engine run surfaced the engine boundary honestly. Rule 4 option (Uint8Array storage) recorded in deferred-items.md for the human; locked D20-15 Blob shape unchanged
+- [Phase 20]: Phase 20-06: rewriteFiguresWithAssets generalized via an optional claimedSrc predicate (default byte-stable http(s) filter) instead of a forked EPUB rewrite — the shipped helper's http-only gate made the plan-mandated reuse a no-op for container-relative markers; the safeFetchCore parameterize-not-fork discipline, assetStage.spec untouched — The shipped helper's default behavior is the pinned network-path contract; the predicate is the ONLY new surface, with the http-only originalSrc rule enforced inside so no caller can force a non-URL into the httpUrl-typed field (a forced path would fail ArticleSchema.parse and silently kill chapters)
+- [Phase 20]: Phase 20-06: EPUB remote-src figures refuse "fetch" (zero-network — the container is the only read source) keeping originalSrc provenance; container-relative markers omit originalSrc entirely (provenance lives in the refusal disclosure); per-doc resolution maps + per-unit count caps + per-book MAX_ARTICLE_ASSET_BYTES budget with byte-identical twin reuse; extraction runs AFTER chapter admission (D20-03) — Anti-beacon guarantee moved from "downgrade everything" (D12-16) to "local assets only": admitted figures are asset:img refs, refused ones are disclosed placeholders, and no code path can render a remote URL (composes with 20-04's img-only-on-resolved-branch guarantee)
 
 ### Pending Todos
 
@@ -507,8 +510,8 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-31T19:14:36.849Z
-Stopped at: Completed 20-03-PLAN.md
+Last session: 2026-08-31T19:50:00.645Z
+Stopped at: Completed 20-06-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
