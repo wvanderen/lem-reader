@@ -225,7 +225,7 @@ Plans:
   4. Figures render semantically with stable geometry and calm failures in both modes without content or location loss.
   5. Assets export/import with validation, limits, conflicts, and no broken references, and follow documented deletion lifecycle.
 
-**Plans**: 4/8 plans executed
+**Plans**: 5/8 plans executed
 
 **Wave 1** *(foundation)*
 
@@ -239,7 +239,7 @@ Plans:
 **Wave 3** *(blocked on Wave 2 completion)*
 
 - [x] 20-04-PLAN.md — reserved-geometry rendering, one placeholder surface, fixture asset corpus, save-call wiring (IMG-03, IMG-05, IMG-06)
-- [ ] 20-05-PLAN.md — bundle v4 asset round-trip: manifest assets block, import gates, conflict ride, preview warnings (IMG-04)
+- [x] 20-05-PLAN.md — bundle v4 asset round-trip: manifest assets block, import gates, conflict ride, preview warnings (IMG-04)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -283,5 +283,5 @@ Plans:
 | 17. Reader-Owned Metadata | v2.1 | 5/5 | Complete    | 2026-08-30 |
 | 18. Reader Orientation | v2.1 | 4/4 | Complete    | 2026-08-30 |
 | 19. Cross-Block Highlights | v2.1 | 5/5 | Complete    | 2026-08-31 |
-| 20. Safe Local Image Fidelity | v2.1 | 4/8 | In Progress|  |
+| 20. Safe Local Image Fidelity | v2.1 | 5/8 | In Progress|  |
 | 21. Integrated Refinement and Acceptance | v2.1 | 0/TBD | Not started | - |
