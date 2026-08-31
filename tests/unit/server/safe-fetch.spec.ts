@@ -23,7 +23,12 @@ vi.mock("node:dns", () => ({
 }));
 
 import dns from "node:dns";
-import { safeFetch, type FetchedContent } from "../../../server/safeFetch";
+import {
+  safeFetch,
+  safeFetchCore,
+  type FetchedContent,
+  type SafeFetchProfile,
+} from "../../../server/safeFetch";
 
 const resolve4Mock = dns.promises.resolve4 as unknown as ReturnType<typeof vi.fn>;
 const resolve6Mock = dns.promises.resolve6 as unknown as ReturnType<typeof vi.fn>;
@@ -34,6 +39,9 @@ function fakeResponse(opts: {
   url?: string;
   headers?: Record<string, string>;
   body?: string;
+  /** Phase 20 (Plan 20-01 Task 2) — byte body for the image-profile read
+   * path. Additive: existing text-profile cells never supply it. */
+  byteBody?: Uint8Array;
 }): Response {
   const status = opts.status ?? 200;
   const headers = new Headers(opts.headers ?? {});
@@ -46,16 +54,22 @@ function fakeResponse(opts: {
       textCallCount++;
       return opts.body ?? "";
     },
+    arrayBuffer: async () => {
+      arrayBufferCallCount++;
+      return (opts.byteBody ?? new Uint8Array(0)).slice().buffer;
+    },
   } as Response;
 }
 
 let textCallCount = 0;
+let arrayBufferCallCount = 0;
 let fetchMock: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   resolve4Mock.mockReset();
   resolve6Mock.mockReset();
   textCallCount = 0;
+  arrayBufferCallCount = 0;
   fetchMock = vi.fn();
   vi.stubGlobal("fetch", fetchMock);
 });
@@ -273,5 +287,148 @@ describe("safeFetch SSRF guard (07-03 Task 1)", () => {
       reason: "fetch-failed",
     });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+// ── Phase 20 (Plan 20-01 Task 2) — the two-profile seam ─────────────────────
+// Strengthen-only extension: NO existing cell above is modified. These cells
+// pin the parameterized core's image-profile behavior (the seam
+// server/fetchImageAsset.ts wraps in Task 3): byte body read, the post-read
+// byteLength re-check (12-04 header-lie discipline — content-length can lie /
+// be absent / be chunked), the advisory image/ content-type gate, and the
+// Measure-7 body-never-read guarantee on the bytes path.
+describe("safeFetchCore image profile (20-01 Task 2 — Pitfall 4)", () => {
+  /** A small-budget image profile — the byteLength re-check cells exercise
+   * the post-read guard without materializing MAX_ASSET_BYTES (16MB) of body:
+   * the CORE checks profile.maxBytes, so a 10-byte cap proves the mechanism. */
+  const tinyImageProfile: SafeFetchProfile = {
+    allowedContentTypes: ["image/"],
+    timeoutMs: 15_000,
+    maxBytes: 10,
+    bodyKind: "bytes",
+  };
+
+  it("returns bytes (Uint8Array) with finalUrl + contentType on the image profile", async () => {
+    resolve4Mock.mockResolvedValue(["93.184.216.34"]);
+    resolve6Mock.mockResolvedValue([]);
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    fetchMock.mockResolvedValueOnce(
+      fakeResponse({
+        status: 200,
+        url: "https://cdn.example.com/pic.png",
+        headers: { "content-type": "image/png", "content-length": String(png.byteLength) },
+        byteBody: png,
+      }),
+    );
+    const result = await safeFetchCore("https://cdn.example.com/pic.png", tinyImageProfile);
+    expect(result.body).toBeInstanceOf(Uint8Array);
+    expect(Array.from(result.body as Uint8Array)).toEqual(Array.from(png));
+    expect(result.finalUrl).toBe("https://cdn.example.com/pic.png");
+    expect(result.contentType).toContain("image/png");
+    expect(arrayBufferCallCount).toBe(1);
+    expect(textCallCount).toBe(0); // bytes profile NEVER reads text
+  });
+
+  it("post-read byteLength re-check: body over cap refuses response-too-large EVEN when content-length header lies (12-04)", async () => {
+    resolve4Mock.mockResolvedValue(["93.184.216.34"]);
+    resolve6Mock.mockResolvedValue([]);
+    const lyingBody = new Uint8Array(20).fill(0xff); // 20 bytes > maxBytes 10
+    fetchMock.mockResolvedValueOnce(
+      fakeResponse({
+        status: 200,
+        url: "https://cdn.example.com/huge.png",
+        // Header says 5 (under cap); the actual body is 20 (over cap). The
+        // pre-read content-length gate passes; the post-read re-check refuses.
+        headers: { "content-type": "image/png", "content-length": "5" },
+        byteBody: lyingBody,
+      }),
+    );
+    await expect(
+      safeFetchCore("https://cdn.example.com/huge.png", tinyImageProfile),
+    ).rejects.toMatchObject({ reason: "response-too-large" });
+    expect(arrayBufferCallCount).toBe(1); // the read happened — that is the point
+  });
+
+  it("post-read byteLength re-check: chunked/absent content-length body over cap refuses too", async () => {
+    resolve4Mock.mockResolvedValue(["93.184.216.34"]);
+    resolve6Mock.mockResolvedValue([]);
+    fetchMock.mockResolvedValueOnce(
+      fakeResponse({
+        status: 200,
+        url: "https://cdn.example.com/chunked.png",
+        headers: { "content-type": "image/png" }, // no content-length at all
+        byteBody: new Uint8Array(11),
+      }),
+    );
+    await expect(
+      safeFetchCore("https://cdn.example.com/chunked.png", tinyImageProfile),
+    ).rejects.toMatchObject({ reason: "response-too-large" });
+  });
+
+  it("image profile content-type gate refuses a non-image header BEFORE any body read (advisory gate, calm early refusal)", async () => {
+    resolve4Mock.mockResolvedValue(["93.184.216.34"]);
+    resolve6Mock.mockResolvedValue([]);
+    fetchMock.mockResolvedValueOnce(
+      fakeResponse({
+        status: 200,
+        url: "https://example.com/page.html",
+        headers: { "content-type": "text/html; charset=utf-8", "content-length": "3" },
+        byteBody: new Uint8Array([1, 2, 3]),
+      }),
+    );
+    await expect(
+      safeFetchCore("https://example.com/page.html", tinyImageProfile),
+    ).rejects.toMatchObject({ reason: "unsupported-content-type" });
+    expect(arrayBufferCallCount).toBe(0); // Measure 7 — no body read on refusal
+  });
+
+  it("per-hop redirect re-validation runs under the SAME profile (image bytes follow the hop)", async () => {
+    resolve4Mock.mockResolvedValue(["93.184.216.34"]);
+    resolve6Mock.mockResolvedValue([]);
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+    fetchMock
+      .mockResolvedValueOnce(
+        fakeResponse({
+          status: 302,
+          url: "https://cdn.example.com/old.png",
+          headers: { location: "https://cdn.example.com/new.png" },
+        }),
+      )
+      .mockResolvedValueOnce(
+        fakeResponse({
+          status: 200,
+          url: "https://cdn.example.com/new.png",
+          headers: { "content-type": "image/png" },
+          byteBody: png,
+        }),
+      );
+    const result = await safeFetchCore("https://cdn.example.com/old.png", tinyImageProfile);
+    expect(result.finalUrl).toBe("https://cdn.example.com/new.png");
+    expect(Array.from(result.body as Uint8Array)).toEqual(Array.from(png));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("document profile via the core returns text and never touches arrayBuffer (byte-stable seam)", async () => {
+    resolve4Mock.mockResolvedValue(["93.184.216.34"]);
+    resolve6Mock.mockResolvedValue([]);
+    const html = "<p>doc</p>";
+    fetchMock.mockResolvedValueOnce(
+      fakeResponse({
+        status: 200,
+        url: "https://example.com/a",
+        headers: { "content-type": "text/html" },
+        body: html,
+        byteBody: new Uint8Array([9, 9, 9]),
+      }),
+    );
+    const result = await safeFetchCore("https://example.com/a", {
+      allowedContentTypes: ["text/html", "application/xhtml+xml"],
+      timeoutMs: 30_000,
+      maxBytes: 5 * 1024 * 1024,
+      bodyKind: "text",
+    });
+    expect(result.body).toBe(html);
+    expect(arrayBufferCallCount).toBe(0);
+    expect(textCallCount).toBe(1);
   });
 });

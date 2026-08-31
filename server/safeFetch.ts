@@ -2,22 +2,35 @@
 // Plan 07-03 Task 1 — the SSRF guard. Implements the 9 OWASP measures from
 // 07-RESEARCH.md §SSRF Guard Implementation L396-465:
 //   1. Scheme allowlist (http/https only)
-//   2. Disable auto-redirect; re-validate every hop (recursive safeFetch)
+//   2. Disable auto-redirect; re-validate every hop (recursive fetch)
 //   3. DNS resolve via dns.promises.resolve4/6 + pin resolved IP via cf.resolveOverride
 //   4. ip-address library checks every resolved IP (NOT exposed to encoding bypasses)
 //   5. Cloud-metadata hostname blocklist (169.254.169.254 et al.)
 //   6. (Egress allowlist owned by Cloudflare's network — application deny-list is the suspenders)
-//   7. NO res.text() on validation refusal — IngestionError thrown, never upstream bytes
-//   8. AbortSignal.timeout + content-length cap (5 MB)
+//   7. NO body read on validation refusal — IngestionError thrown, never upstream bytes
+//   8. AbortSignal.timeout + content-length cap
 //   9. (SSRF regression suite — tests/e2e/ingestion/ssrf-matrix.spec.ts, 07-07)
 //
 // DNS-PINNING DECISION (07-01 spike outcome, A1 PASS): Workers `fetch()`
 // accepts the `cf: { resolveOverride }` option (verified against real workerd
-// in the 07-01 jsdom-on-Workers spike). safeFetch pins the FIRST validated
+// in the 07-01 jsdom-on-Workers spike). The pipeline pins the FIRST validated
 // resolved IP via `cf.resolveOverride`, closing the DNS-rebinding TOCTOU
 // window (T-7-10). In the Node unit-test runtime the standard fetch ignores
 // the `cf` key, but the resolve+validate path still runs — the guard is
 // faithful in both runtimes.
+//
+// Phase 20 (Plan 20-01 Task 2 — Pitfall 4): the 9-measure pre-body pipeline
+// is extracted into the exported `safeFetchCore(rawUrl, profile)` — ONE
+// pipeline, parameterized by a `{allowedContentTypes, timeoutMs, maxBytes,
+// bodyKind}` profile, NEVER forked (D20-12 substrate). The document profile
+// passes today's EXACT constants (ALLOWED_CONTENT_TYPES / REQUEST_TIMEOUT_MS /
+// MAX_RESPONSE_BYTES) and reads text — its observable behavior is
+// byte-identical to the pre-refactor single-profile safeFetch (same
+// IngestionError reasons, same redirect recursion, same headers; the 19-vector
+// tests/e2e/ingestion/ssrf-matrix.spec.ts is the pin). The image profile
+// (server/fetchImageAsset.ts, 20-01 Task 3) reads arrayBuffer() and performs
+// the post-read bytes.byteLength re-check — the 12-04 header-lie discipline
+// (content-length can lie / be absent / be chunked).
 //
 // This module is platform-agnostic /server code (D7-05 adapter boundary).
 import dns from "node:dns";
@@ -40,6 +53,27 @@ export interface FetchedContent {
   finalUrl: string;
   contentType: string;
   hash: string;
+}
+
+/** SafeFetchProfile — the parameterization seam (20-RESEARCH Pattern 1).
+ * `allowedContentTypes` is matched as a substring against the declared
+ * content-type header (the image profile passes ["image/"] — advisory only;
+ * the byte sniff in fetchImageAsset decides admission). `bodyKind` selects
+ * the read: "text" → res.text() (document profile, byte-stable); "bytes" →
+ * res.arrayBuffer() + post-read byteLength re-check against maxBytes. */
+export interface SafeFetchProfile {
+  allowedContentTypes: string[];
+  timeoutMs: number;
+  maxBytes: number;
+  bodyKind: "text" | "bytes";
+}
+
+/** The validated-response shape returned by safeFetchCore. `body` is a string
+ * for the "text" profile and a Uint8Array for the "bytes" profile. */
+export interface SafeFetchResult {
+  finalUrl: string;
+  contentType: string;
+  body: string | Uint8Array;
 }
 
 // Pre-build the Address4/Address6 subnet matchers once (module-load time).
@@ -99,15 +133,20 @@ async function sha256Hex(text: string): Promise<string> {
 }
 
 /**
- * safeFetch — the SSRF-safe document fetcher. Runs the full 9-measure pipeline
- * (scheme → metadata-hostname → DNS-resolve → ip-address deny-list → manual-
- * redirect-per-hop → size-cap → content-type allowlist → body). Throws
- * IngestionError BEFORE res.text() on any validation failure (Measure 7 — no
- * upstream body leaks). Recurses through redirects, re-validating DNS + IP
- * on every hop (Measure 2). The `hopDepth` parameter is internal; callers
- * pass only the URL.
+ * safeFetchCore — the parameterized 9-measure SSRF-safe pipeline. Runs
+ * scheme → metadata-hostname → DNS-resolve → ip-address deny-list →
+ * pinning/timeout → manual-redirect-per-hop → content-length cap →
+ * content-type gate → body read, then returns the profile-shaped result.
+ * Throws IngestionError BEFORE any body read on validation failure (Measure
+ * 7 — no upstream body leaks). Recurses through redirects, re-validating
+ * DNS + IP on every hop (Measure 2) under the SAME profile. The `hopDepth`
+ * parameter is internal; callers pass only the URL + profile.
  */
-export async function safeFetch(rawUrl: string, hopDepth = 0): Promise<FetchedContent> {
+export async function safeFetchCore(
+  rawUrl: string,
+  profile: SafeFetchProfile,
+  hopDepth = 0,
+): Promise<SafeFetchResult> {
   // Measure 1 — SCHEME allowlist (http/https only; rejects file/gopher/data/
   // dict/ftp/smb). The URL constructor ALSO normalizes IPv4 encoding bypasses
   // (0x7f000001 / dword / octal → dotted-decimal), so hostname is canonical
@@ -156,7 +195,7 @@ export async function safeFetch(rawUrl: string, hopDepth = 0): Promise<FetchedCo
   const pinnedIp = v4[0] ?? v6[0];
   const fetchOptions: RequestInit & { cf?: { resolveOverride: string } } = {
     redirect: "manual",
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    signal: AbortSignal.timeout(profile.timeoutMs),
     headers: { "User-Agent": "LemReader/2.0 (+https://lem-reader.app)" },
   };
   if (pinnedIp) {
@@ -178,30 +217,67 @@ export async function safeFetch(rawUrl: string, hopDepth = 0): Promise<FetchedCo
     }
     // Resolve relative redirects against the response URL (RFC 7231 §7.1.2).
     const absoluteLocation = new URL(location, res.url).toString();
-    return safeFetch(absoluteLocation, hopDepth + 1);
+    return safeFetchCore(absoluteLocation, profile, hopDepth + 1);
   }
 
-  // Measure 7+8 — size cap BEFORE res.text(). Refuses huge responses without
-  // ever reading the upstream body (T-7-12 — no body leak on refusal).
+  // Measure 7+8 — size cap BEFORE the body read. Refuses huge responses
+  // without ever reading the upstream body (T-7-12 — no body leak on refusal).
   const contentLength = Number(res.headers.get("content-length") ?? 0);
-  if (contentLength > MAX_RESPONSE_BYTES) {
+  if (contentLength > profile.maxBytes) {
     throw new IngestionError("response-too-large");
   }
 
-  // Measure 12 — content-type allowlist. Only (text|application)/(xhtml+)html
-  // is article-shaped; everything else (PDF, image, plain-text, JSON) refused.
+  // Measure 12 — content-type gate, profile-parameterized. The document
+  // profile passes ALLOWED_CONTENT_TYPES (only (text|application)/(xhtml+)html
+  // is article-shaped); the image profile passes ["image/"] — advisory only,
+  // the sniff in fetchImageAsset decides actual admission (D20-10: headers
+  // lie; bytes do not).
   const contentType = res.headers.get("content-type") ?? "";
-  if (!ALLOWED_CONTENT_TYPES.some((t) => contentType.includes(t))) {
+  if (!profile.allowedContentTypes.some((t) => contentType.includes(t))) {
     throw new IngestionError("unsupported-content-type");
   }
 
-  // All validation passed — read the body (the ONLY call to res.text()).
+  // All validation passed — read the body (the ONLY body read).
+  if (profile.bodyKind === "bytes") {
+    // Image profile (Phase 20): read bytes, then RE-CHECK the actual length —
+    // the 12-04 discipline. The content-length header can lie, be absent, or
+    // arrive chunked; bytes.byteLength is the truth. T-20-04 mitigation.
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    if (bytes.byteLength > profile.maxBytes) {
+      throw new IngestionError("response-too-large");
+    }
+    return { finalUrl: res.url, contentType, body: bytes };
+  }
+  // Document profile — byte-stable with the pre-refactor single-profile path.
   const html = await res.text();
+  return { finalUrl: res.url, contentType, body: html };
+}
+
+/**
+ * safeFetch — the SSRF-safe DOCUMENT fetcher (the document profile wrapper
+ * over safeFetchCore). Observable behavior is byte-identical to the
+ * pre-Phase-20 single-profile implementation (Pitfall 4): same constants
+ * (ALLOWED_CONTENT_TYPES / REQUEST_TIMEOUT_MS / MAX_RESPONSE_BYTES), same
+ * IngestionError reasons, same redirect recursion, same headers, text body.
+ */
+export async function safeFetch(rawUrl: string, hopDepth = 0): Promise<FetchedContent> {
+  const result = await safeFetchCore(
+    rawUrl,
+    {
+      allowedContentTypes: ALLOWED_CONTENT_TYPES,
+      timeoutMs: REQUEST_TIMEOUT_MS,
+      maxBytes: MAX_RESPONSE_BYTES,
+      bodyKind: "text",
+    },
+    hopDepth,
+  );
+  // Document profile invariant: the core returns a string body for "text".
+  const html = result.body as string;
   const hash = await sha256Hex(html);
   return {
     html,
-    finalUrl: res.url,
-    contentType,
+    finalUrl: result.finalUrl,
+    contentType: result.contentType,
     hash,
   };
 }
