@@ -434,6 +434,118 @@ describe("captureSelection — span composition (D19)", () => {
     }
   });
 
+  it("(c3) PLACEHOLDER figure caption endpoint lands at the caption's true offset (D20-14 + D19-01)", () => {
+    // Phase 20 (20-08 Rule 1 fix): the 20-04 placeholder renders the alt as
+    // VISIBLE DOM TEXT (D20-06), so the figure's textContent is
+    // alt+caption concatenated — the Phase 19 caption-only window misaligned
+    // every caption offset (both endpoints clamped equal → "empty-span").
+    // Caption endpoints now align against the figcaption ELEMENT (its text
+    // is byte-identical in every media state) with the caption window.
+    const article = parseArticle({
+      ...baseArticle,
+      blocks: [
+        {
+          kind: "figure",
+          alt: "A chart",
+          caption: [{ text: "Quarterly data" }],
+        },
+      ],
+    });
+    const figure = document.createElement("figure");
+    figure.setAttribute("data-block-index", "0");
+    const placeholder = document.createElement("span");
+    placeholder.className = "figure-placeholder";
+    placeholder.textContent = "A chart"; // the visible alt (D20-06)
+    const figcaption = document.createElement("figcaption");
+    figcaption.textContent = "Quarterly data";
+    figure.appendChild(placeholder);
+    figure.appendChild(figcaption);
+    document.body.appendChild(figure);
+
+    selectFirstTextNode(figcaption, 0, 9);
+    const result = captureSelection(article, document.body);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      // Identical to the img-surface cell (c1): [8,17) = "Quarterly" over
+      // "A chart\nQuarterly data" — the TRUE passage in every media state.
+      expect(result.position).toEqual({ start: 8, end: 17 } as TextPositionSelector);
+    }
+  });
+
+  it("(c4) placeholder FALLBACK NOTE endpoint (empty alt) refuses whole — ineligible, no position", () => {
+    // The visible "Image unavailable." note is placeholder chrome, not
+    // substrate text (the empty alt contributes nothing to
+    // blockNormalizedText). D19-02's gap rule extends to the media surface:
+    // no silently-wrong anchor — a typed refusal with NO position.
+    const article = parseArticle({
+      ...baseArticle,
+      blocks: [
+        {
+          kind: "figure",
+          alt: "",
+          caption: [{ text: "Quarterly data" }],
+        },
+      ],
+    });
+    const figure = document.createElement("figure");
+    figure.setAttribute("data-block-index", "0");
+    const placeholder = document.createElement("span");
+    placeholder.className = "figure-placeholder";
+    placeholder.textContent = "Image unavailable.";
+    const figcaption = document.createElement("figcaption");
+    figcaption.textContent = "Quarterly data";
+    figure.appendChild(placeholder);
+    figure.appendChild(figcaption);
+    document.body.appendChild(figure);
+
+    selectFirstTextNode(placeholder, 0, 7);
+    const result = captureSelection(article, document.body);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toBe("ineligible");
+    }
+  });
+
+  it("(c5) placeholder VISIBLE-ALT endpoint (non-empty alt) anchors at its true substrate offset", () => {
+    // The placeholder's visible alt IS substrate text (blockNormalizedText
+    // includes the alt) — a selection over it anchors honestly at [0, len)
+    // via the windowStart-0 + separator-skip alignment.
+    const article = parseArticle({
+      ...baseArticle,
+      blocks: [
+        {
+          kind: "figure",
+          alt: "A chart",
+          caption: [{ text: "Quarterly data" }],
+        },
+      ],
+    });
+    const figure = document.createElement("figure");
+    figure.setAttribute("data-block-index", "0");
+    const placeholder = document.createElement("span");
+    placeholder.className = "figure-placeholder";
+    placeholder.textContent = "A chart";
+    const figcaption = document.createElement("figcaption");
+    figcaption.textContent = "Quarterly data";
+    figure.appendChild(placeholder);
+    figure.appendChild(figcaption);
+    document.body.appendChild(figure);
+
+    selectFirstTextNode(placeholder, 0, 7);
+    const result = captureSelection(article, document.body);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      // Boundary granularity: raw offset 7 (end of alt) is ALSO the caption's
+      // raw start — the substrate separates the two with BLOCK_SEPARATOR,
+      // which the DOM does not render, so the end maps past it (8 = the
+      // caption's first substrate cluster). The separator grapheme belongs
+      // to no rendered surface (media surfaces render no marks — D19-02), so
+      // the anchor round-trips via the quote selector and renders no
+      // phantom mark anywhere.
+      expect(result.position).toEqual({ start: 0, end: 8 } as TextPositionSelector);
+    }
+  });
+
   it("(d) cross-block span with an unsupported END block refuses whole (boundary-ineligible, no position)", () => {
     // D19-05/D19-08: one eligible endpoint does not rescue an ineligible
     // boundary — the WHOLE selection is refused (never narrowed).

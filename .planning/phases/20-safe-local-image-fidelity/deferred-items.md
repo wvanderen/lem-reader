@@ -24,8 +24,18 @@
   chapter's asset row in the D20-15 Blob shape; re-probed and re-confirmed
   during 20-06 Task 2: plain `new Blob(["hello"])` puts fail identically).
   The refused-figure cell needs NO skip (zero asset rows — green on webkit).
-- The 20-07 full-suite gate MUST count these 3 e2e skips (2 from 20-05 + 1
-  from 20-06) in its documented residual set (never silently green).
+- **20-08 update (2026-08-31):** the boundary skips ONE imagery cell —
+  offline-reopen's "ingested article + Dexie asset rows reopen" cell (its
+  seeding writes Blob rows through raw IndexedDB). Everything else in
+  tests/e2e/imagery/ is engine-complete: decode-matrix + the tall-geometry
+  cell seed plain article rows under the registry-backed figure-heavy id so
+  the AssetProvider resolves in-memory registry blobs (createObjectURL never
+  touches IndexedDB), and the offline guarantee itself is proven on webkit by
+  the fixture-corpus + legacy-remote cells. Residual count for the 20-07
+  gate: **4 e2e skips** (2 from 20-05 + 1 from 20-06 + 1 from 20-08).
+- The 20-07 full-suite gate MUST count these 4 e2e skips (2 from 20-05 + 1
+  from 20-06 + 1 from 20-08) in its documented residual set (never silently
+  green).
 
 **Open option (human decision — Rule 4 architectural, NOT auto-applied):**
 switch `AssetRecordRow.data` from `Blob` to `Uint8Array`/`ArrayBuffer`

@@ -379,21 +379,68 @@ function resolveSelectionEndpoint(
     return { ok: false, reason: "boundary-ineligible" };
   }
 
-  // 2. FIGURE CAPTION ALIGNMENT (19-RESEARCH Pitfall 1 — fixed in Phase 19):
-  //    blockNormalizedText(figure) = [alt, caption].filter(Boolean).join
-  //    (BLOCK_SEPARATOR), but the rendered <figure> element's textContent is
-  //    CAPTION-ONLY (alt is an <img> attribute, not a text node). Align the
-  //    raw→norm map against the caption portion of the norm clusters, then
-  //    add the caption-local start back — capture is now aligned with the
-  //    D-05 substrate for caption endpoints. The filter(Boolean) join means
-  //    an EMPTY alt contributes nothing (captionLocalStart = 0). The old
-  //    divergence note (rendering-side caption marks staying deferred) is a
-  //    Plan 19-03 concern; the CAPTURE side is aligned here.
-  const captionLocalStart =
-    block.kind === "figure" && block.alt.length > 0
-      ? graphemeClusters(block.alt, article.lang).length +
-        BLOCK_SEPARATOR.length
-      : 0;
+  // 2. FIGURE ALIGNMENT (19-RESEARCH Pitfall 1 — fixed in Phase 19; extended
+  //    for the 20-04 placeholder surface). blockNormalizedText(figure) =
+  //    [alt, caption].filter(Boolean).join(BLOCK_SEPARATOR), but what the
+  //    rendered <figure> exposes as TEXT depends on the media state:
+  //      - img surface: alt is an ATTRIBUTE — the figure's text nodes are
+  //        caption-only (the Phase 19 assumption).
+  //      - placeholder surface (D20-14 refused/legacy/broken): the alt is
+  //        VISIBLE DOM text (D20-06), so the figure's textContent is
+  //        alt+caption concatenated — the caption-only window would
+  //        misalign every caption offset (the refusal-matrix D19-01 cell).
+  //    Caption endpoints therefore align against the figcaption ELEMENT
+  //    (its text is byte-identical in every media state — D19-01) with the
+  //    caption window; a placeholder alt endpoint aligns from windowStart 0
+  //    (the alt IS substrate text; buildRawToNormMap's separator-skip branch
+  //    absorbs the DOM's missing BLOCK_SEPARATOR); the empty-alt fallback
+  //    note ("Image unavailable.") is placeholder chrome with NO substrate
+  //    coordinates and refuses whole (D19-02's gap rule extends to the
+  //    media surface — never a silently-wrong anchor).
+  if (block.kind === "figure") {
+    const captionEl = blockEl.querySelector("figcaption");
+    if (captionEl !== null && captionEl.contains(container)) {
+      const captionLocalStart =
+        block.alt.length > 0
+          ? graphemeClusters(block.alt, article.lang).length +
+            BLOCK_SEPARATOR.length
+          : 0;
+      const fullNorm = graphemeClusters(
+        blockNormalizedText(block),
+        article.lang,
+      );
+      const captionWindowEnd = Math.min(
+        fullNorm.length,
+        captionLocalStart + fullNorm.length,
+      );
+      const normWindow =
+        captionLocalStart > 0
+          ? fullNorm.slice(captionLocalStart, captionWindowEnd)
+          : fullNorm;
+      const inCaption = domPointToIntraBlockGraphemeOffset(
+        captionEl as HTMLElement,
+        container,
+        offset,
+        article.lang,
+        normWindow,
+      );
+      return {
+        ok: true,
+        blockIndex,
+        intraOffset: inCaption + captionLocalStart,
+      };
+    }
+    const placeholderEl = blockEl.querySelector(".figure-placeholder");
+    if (
+      placeholderEl !== null &&
+      placeholderEl.contains(container) &&
+      block.alt.length === 0
+    ) {
+      // The visible "Image unavailable." note is not substrate text — there
+      // is nothing honest to anchor ("no silent garbage").
+      return { ok: false, reason: "ineligible" };
+    }
+  }
 
   // 3. D5-08 paginated-mode slicing: the block element may carry
   //    data-block-grapheme-start when it is a SLICE of a split block (the
@@ -409,6 +456,17 @@ function resolveSelectionEndpoint(
   const sliceStart =
     sliceStartAttr !== null && Number.isInteger(Number(sliceStartAttr))
       ? Number(sliceStartAttr)
+      : 0;
+  // The Phase 19 caption-skip applies ONLY to the img surface (alt as an
+  // attribute). A placeholder figure's raw text already includes the alt —
+  // skipping the caption window here would misalign; windowStart 0 lets the
+  // separator-skip branch align alt→alt and caption→caption.
+  const captionLocalStart =
+    block.kind === "figure" &&
+    block.alt.length > 0 &&
+    blockEl.querySelector(".figure-placeholder") === null
+      ? graphemeClusters(block.alt, article.lang).length +
+        BLOCK_SEPARATOR.length
       : 0;
   const windowStart = captionLocalStart + sliceStart;
   const fullNormClusters = graphemeClusters(
