@@ -5,8 +5,8 @@ milestone_name: Reader Experience
 current_phase: 20
 current_phase_name: Safe Local Image Fidelity
 status: verifying
-stopped_at: Phase 20 context gathered
-last_updated: "2026-08-31T12:45:41.255Z"
+stopped_at: Phase 20 UI-SPEC approved
+last_updated: "2026-08-31T13:19:19.069Z"
 last_activity: 2026-08-31
 last_activity_desc: Phase 19 complete, transitioned to Phase 20
 progress:
@@ -491,9 +491,9 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-31T12:45:41.236Z
-Stopped at: Phase 20 context gathered
-Resume file: .planning/phases/20-safe-local-image-fidelity/20-CONTEXT.md
+Last session: 2026-08-31T13:19:19.058Z
+Stopped at: Phase 20 UI-SPEC approved
+Resume file: .planning/phases/20-safe-local-image-fidelity/20-UI-SPEC.md
 
 ## Operator Next Steps
 
