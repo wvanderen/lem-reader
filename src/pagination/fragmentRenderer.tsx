@@ -38,11 +38,15 @@
 import type { Block, CanonicalArticle } from "../content/types";
 import { BlockView } from "../content/render/BlockRenderer";
 import type { ArticleBodyHighlight } from "../content/render/BlockRenderer";
+import type { ListItemSlices } from "../content/render/BlockRenderer";
 import { splitParagraphRuns } from "./splitBlock";
 import { BLOCK_SEPARATOR, graphemeClusters } from "../content/normalizeText";
 import { blockGraphemeLength } from "./anchor";
 import { sliceRunsForHighlights } from "../annotations/highlightRanges";
+import { sliceCodeForHighlights } from "../annotations/highlightRanges";
 import type { HighlightSliceEntry } from "../annotations/highlightRanges";
+import type { HighlightSlice } from "../annotations/highlightRanges";
+import type { CodeSegment } from "../annotations/highlightRanges";
 import type { PageFragment } from "./types";
 
 /**
@@ -64,6 +68,14 @@ import type { PageFragment } from "./types";
  * fragment containing part of its range — both fragments share the same
  * data-highlight-id (D5-16: no silent gaps at a page turn; the popover/note
  * is reachable from either page).
+ *
+ * Phase 19 Plan 19-04 (D5-16 extension over SPANS + the items-shape): the
+ * per-entry threading now covers EVERY readable kind — list entries thread
+ * per-item/per-child slices in entry-local coordinates (the paginated twin
+ * of BlockRenderer's computeListItemSlices, nested-list recursion included),
+ * figure entries forward caption slices (Pitfall 1 symmetric offset), and
+ * code-block entries forward verbatim-source segments. Both reading modes
+ * render identical span coverage.
  *
  * @param fragment   The PageFragment to render (entries are {blockIndex, startGrapheme, endGrapheme}).
  * @param pageIndex  0-based page ordinal — used for the aria-label (rendered as Page N+1).
@@ -122,6 +134,16 @@ export function PageFragmentView({
         let childHighlightSlices:
           | (ReturnType<typeof sliceRunsForHighlights> | undefined)[]
           | undefined;
+        // Plan 19-04 (D19-13/D19-15): per-item slices for list entries
+        // (undefined for non-list kinds + when no highlight intersects any
+        // item child at any nesting depth).
+        let itemHighlightSlices: ListItemSlices | undefined;
+        // Plan 19-04 (D19-01 paginated parity): caption slices for figure
+        // entries + verbatim-source segments for code-block entries.
+        let captionHighlightSlices:
+          | ReturnType<typeof sliceRunsForHighlights>
+          | undefined;
+        let codeSegments: CodeSegment[] | undefined;
         if (highlights && highlights.length > 0) {
           const entrySlices = sliceHighlightsForEntry(
             highlights,
@@ -137,9 +159,17 @@ export function PageFragmentView({
             // child paragraph). resolveBlockSlice returns these kinds verbatim
             // for whole-block entries and as sliced blocks for sub-block
             // entries; paragraph/heading expose `.content`, blockquote exposes
-            // `.children`. Lists (different items-shape, no failing UAT case)
-            // and atomic kinds remain deferred; code-block + figure-caption
-            // divergence is deferred to keep the D-05 substrate stable.
+            // `.children`. Lists thread per-item over the items-shape
+            // (Plan 19-04 — the paginated twin of BlockRenderer's
+            // computeListItemSlices); figure captions forward entry-local
+            // slices into the shared BlockView figcaption InlineList and
+            // code-blocks forward entry-local verbatim-source segments
+            // (Plan 19-04 — D19-01 parity; the RENDER ROUTING is explicit:
+            // every entry renders through the SHARED BlockView, whose
+            // captionHighlightSlices/codeSegments props are CALLER-computed,
+            // so this renderer forwards them itself — no silent bypass).
+            // Footnote-reference/unsupported entries render no marks by
+            // construction (D19-02).
             if (resolved.kind === "paragraph" || resolved.kind === "heading") {
               // The resolved block is already the intra-entry slice, so its
               // runs start at entry-relative offset 0. Pass blockGlobalStart
@@ -202,6 +232,79 @@ export function PageFragmentView({
               if (anyChildSlices) {
                 childHighlightSlices = perChild;
               }
+            } else if (
+              resolved.kind === "bulleted-list" ||
+              resolved.kind === "numbered-list"
+            ) {
+              // Entry-local per-item threading (Plan 19-04 — D19-13/D19-15,
+              // the paginated twin of BlockRenderer's computeListItemSlices).
+              // resolved is the SLICED list (sliceList → sliceChildBlocks),
+              // so resolved.items[i].content[j] is the threading substrate
+              // and the accumulator walks ENTRY-LOCAL offsets with child
+              // lengths from splittingBlockGraphemeLength (Pitfall 4).
+              itemHighlightSlices =
+                computeEntryListItemSlices(resolved, entrySlices, lang) ??
+                undefined;
+            } else if (resolved.kind === "figure") {
+              // Caption marks (Plan 19-04 — D19-01 paginated parity). The
+              // entry renders through the SHARED BlockView figure case
+              // (figures are D4-02 atomic — resolved is the verbatim block),
+              // and BlockView's figcaption InlineList consumes
+              // captionHighlightSlices computed by the CALLER — so the
+              // fragment renderer forwards entry-local slices itself (the
+              // scrolling twin is ArticleBody's figure branch; there is no
+              // BlockView-internal computation path to delegate to).
+              // Atomic entries are whole-block by engine contract, so
+              // entry-local offset 0 == figure-local 0. The caption's
+              // entry-local start is the Pitfall 1 SYMMETRIC offset (alt
+              // graphemes + BLOCK_SEPARATOR when alt is non-empty — the
+              // blockText [alt, caption].filter(Boolean) join); the img/alt
+              // surface renders no marks ever (D19-02 gap by construction).
+              const captionRunLen = resolved.caption.reduce(
+                (sum, r) => sum + graphemeClusters(r.text, lang).length,
+                0,
+              );
+              if (captionRunLen > 0) {
+                const captionIntraStart =
+                  resolved.alt.length > 0
+                    ? graphemeClusters(resolved.alt, lang).length +
+                      BLOCK_SEPARATOR.length
+                    : 0;
+                const filtered = entrySlices.filter((e) => {
+                  const intersectStart = Math.max(
+                    e.position.start,
+                    captionIntraStart,
+                  );
+                  const intersectEnd = Math.min(
+                    e.position.end,
+                    captionIntraStart + captionRunLen,
+                  );
+                  return intersectStart < intersectEnd;
+                });
+                if (filtered.length > 0) {
+                  captionHighlightSlices = sliceRunsForHighlights(
+                    resolved.caption,
+                    captionIntraStart,
+                    filtered,
+                    lang,
+                  );
+                }
+              }
+            } else if (resolved.kind === "code-block") {
+              // Code marks (Plan 19-04 — D19-01 paginated parity). Same
+              // routing story as figures: the entry renders through the
+              // shared BlockView code case, whose codeSegments are
+              // caller-computed — the fragment renderer forwards them in
+              // ENTRY-LOCAL coordinates. Atomic whole-block entry: the
+              // verbatim source starts at entry-local 0 (raw == norm in
+              // the D-05 substrate, so entry-local offsets address the
+              // source directly — no whitespace-collapse alignment).
+              codeSegments = sliceCodeForHighlights(
+                resolved.source,
+                0,
+                entrySlices,
+                lang,
+              );
             }
           }
         }
@@ -221,6 +324,9 @@ export function PageFragmentView({
             data-block-grapheme-start={entry.startGrapheme}
             highlightSlices={highlightSlices}
             childHighlightSlices={childHighlightSlices}
+            itemHighlightSlices={itemHighlightSlices}
+            captionHighlightSlices={captionHighlightSlices}
+            codeSegments={codeSegments}
           />
         );
       })}
@@ -296,6 +402,104 @@ function sliceHighlightsForEntry(
 // render proof is Plan 05-05's Playwright suite). The function is otherwise
 // internal to PageFragmentView's render path.
 export { sliceHighlightsForEntry as _test_sliceHighlightsForEntry };
+
+/**
+ * Entry-local per-item highlight-slice computation for bulleted/numbered
+ * LIST entries (Plan 19-04 — D19-13/D19-15, the paginated twin of
+ * BlockRenderer's scrolling computeListItemSlices).
+ *
+ * Mirrors the shipped blockquote entry path over the items-shape (the only
+ * structural difference): a list-local accumulator walks `resolved.items`
+ * (items joined by BLOCK_SEPARATOR per the splitting-coordinate join rule —
+ * sliceList/splittingBlockText); within each item an item-local accumulator
+ * walks `item.content` (content blocks joined by BLOCK_SEPARATOR). Child
+ * lengths come from splittingBlockGraphemeLength (Pitfall 4 — the pagination
+ * splitting coordinate, NEVER the D-05 run text), and each leaf
+ * paragraph/heading child filters the entry's already-computed slices via
+ * the same intersectStart/intersectEnd clamp the blockquote path uses before
+ * calling sliceRunsForHighlights(child.content, childIntraStart, filtered,
+ * lang) — ENTRY-LOCAL coordinates throughout.
+ *
+ * Nested bulleted/numbered children RECURSE (D19-15) with `origin` set to
+ * the child's entry-local content start, producing the same nested
+ * ListItemSlices shape BlockView's list cases consume (self-contained
+ * recursion via props — no coordinate plumbing leaks past this helper).
+ * Kinds without readable inline content (figure/code/etc. inside items)
+ * produce no slices — interior gaps render unmarked by construction
+ * (D19-02). List markers stay CSS chrome and never enter the coordinates
+ * (D19-14 — offsets run over item CONTENT only).
+ *
+ * Returns null when no child at any depth produced slices (the entry then
+ * threads nothing — byte-unchanged rendering, the blockquote path's
+ * anyChildSlices discipline).
+ */
+function computeEntryListItemSlices(
+  block:
+    | Extract<Block, { kind: "bulleted-list" }>
+    | Extract<Block, { kind: "numbered-list" }>,
+  entrySlices: readonly HighlightSliceEntry[],
+  lang: string,
+  origin = 0,
+): ListItemSlices | null {
+  let itemIntraStart = origin; // list-local: items joined by BLOCK_SEPARATOR
+  const perItem: (HighlightSlice[] | ListItemSlices | undefined)[][] = [];
+  let anySlices = false;
+  for (const item of block.items) {
+    let childIntraStart = itemIntraStart; // item-local content accumulator
+    const perChild: (HighlightSlice[] | ListItemSlices | undefined)[] = [];
+    for (const child of item.content) {
+      const childLen = splittingBlockGraphemeLength(child, lang);
+      let childSlices: HighlightSlice[] | ListItemSlices | undefined;
+      if (child.kind === "paragraph" || child.kind === "heading") {
+        const filtered = entrySlices.filter((e) => {
+          const intersectStart = Math.max(e.position.start, childIntraStart);
+          const intersectEnd = Math.min(
+            e.position.end,
+            childIntraStart + childLen,
+          );
+          return intersectStart < intersectEnd;
+        });
+        if (filtered.length > 0) {
+          childSlices = sliceRunsForHighlights(
+            child.content,
+            childIntraStart,
+            filtered,
+            lang,
+          );
+          anySlices = true;
+        }
+      } else if (
+        child.kind === "bulleted-list" ||
+        child.kind === "numbered-list"
+      ) {
+        // D19-15: recurse — sub-list items are readable children in the
+        // same entry-local coordinate stream (origin = the nested list's
+        // content start).
+        const nested = computeEntryListItemSlices(
+          child,
+          entrySlices,
+          lang,
+          childIntraStart,
+        );
+        if (nested !== null) {
+          childSlices = nested;
+          anySlices = true;
+        }
+      }
+      perChild.push(childSlices);
+      childIntraStart += childLen + BLOCK_SEPARATOR.length;
+    }
+    perItem.push(perChild);
+    // Empty-item separator accounting (mirrors the scrolling twin): after
+    // the child loop childIntraStart sits at itemStart + itemLen + SEP for
+    // non-empty items (the trailing per-child separator coincides with the
+    // inter-item separator); an EMPTY item still consumes its separator.
+    itemIntraStart =
+      childIntraStart +
+      (item.content.length === 0 ? BLOCK_SEPARATOR.length : 0);
+  }
+  return anySlices ? { perItem } : null;
+}
 
 /**
  * Resolve a fragment entry to the Block that should be rendered.
