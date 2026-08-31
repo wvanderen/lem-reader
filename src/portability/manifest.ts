@@ -29,7 +29,12 @@ export async function sha256Hex(bytes: Uint8Array<ArrayBuffer>): Promise<string>
 export type Manifest = {
   algorithm: "sha256";
   blocks: Record<
-    "articles" | "highlights" | "notes" | "locations" | "preferences",
+    | "articles"
+    | "highlights"
+    | "notes"
+    | "locations"
+    | "preferences"
+    | "assets",
     string
   >;
 };
@@ -41,6 +46,14 @@ export type Manifest = {
 // string-key insertion order, so the hashed byte stream is a function of
 // the schema alone. Hashing anything else (exporter-object order vs
 // parse-order) would false-positive a valid bundle as "corrupted".
+//
+// Phase 20 (Plan 20-05): the `assets` block hashes
+// JSON.stringify(bundle.assets ?? []) — the metadata array ONLY (raw bytes
+// ride the zip and carry their own per-asset sha256 inside that array).
+// v1/v2/v3 claimed manifests predate the key: validateBundle reads an
+// absent claimed assets key as the empty-array hash so old bundles never
+// false-positive as corrupted (a v4 bundle with actual assets still
+// mismatches — tampering stays detected).
 export async function computeManifest(bundle: ExportBundle): Promise<Manifest> {
   const entry = async (block: unknown): Promise<string> =>
     await sha256Hex(new TextEncoder().encode(JSON.stringify(block)));
@@ -52,6 +65,7 @@ export async function computeManifest(bundle: ExportBundle): Promise<Manifest> {
       notes: await entry(bundle.notes),
       locations: await entry(bundle.locations),
       preferences: await entry(bundle.preferences),
+      assets: await entry(bundle.assets ?? []),
     },
   };
 }

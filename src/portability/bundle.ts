@@ -31,6 +31,17 @@
 //     forward-rejects (D9-04 preserved; the validateBundle peek threshold
 //     moved to > 3), and writers emit schemaVersion 3
 //     (ExportImportService.buildBundleBytes).
+//   - Phase 20 (Plan 20-05) — the fourth application of the union
+//     discipline: schemaVersion is the 1|2|3|4 UNION. A v4 bundle carries
+//     image assets as raw zip entries at assets/<articleId>/<assetId> with
+//     per-asset sha256 in the assets metadata array (IMG-04). v1/v2/v3
+//     bundles parse exactly as before (assets hydrates to undefined); a
+//     v5+ bundle forward-rejects (D9-04 preserved; the validateBundle peek
+//     threshold moved to > 4), and writers emit schemaVersion 4 with an
+//     ALWAYS-present assets array (empty on an asset-free library — the
+//     field's presence is the v4 write contract, the books precedent).
+//     The zip FILENAME stays lem-reader-bundle-v1.zip (D9-01 — the
+//     filename is not the version contract).
 //
 // This module COMPOSES the existing record schemas — no record shape is
 // re-declared here (REUSE-DO-NOT-FORK; the schemas are the STATE-04 trust
@@ -45,12 +56,47 @@ import {
   ReaderSettingsSchema,
 } from "../content/schema";
 
+/**
+ * AssetExportMeta — one exported image asset's metadata row (IMG-04 /
+ * 20-RESEARCH Pattern 6). The RAW bytes never live in bundle.json — they
+ * ride the zip as the `entry` named here, and the importer re-verifies
+ * byteLength + sha256 against this metadata (mismatch → corrupted, the
+ * never-throw refusal channel). Field notes:
+ *   - assetId is the assetRef BODY (img-<12 lowercase hex> — the shared
+ *     img-<12hex> contract with src/content/schema.ts assetRef and
+ *     assetsStore's AssetRecordSchema; duplicated here as a VALUE-level
+ *     regex because bundle.ts must stay free of persistence/db imports).
+ *   - contentType is the closed five-type sniff gate (D20-08/D20-10) —
+ *     the same set AssetRecordSchema locks.
+ *   - sha256 is hex-64 lowercase of the entry's raw bytes.
+ *   - entry is the canonical SERVICE-GENERATED zip path
+ *     assets/<articleId>/<assetId>; the importer requires the exact
+ *     canonical construction from the row's own ids (never trusts a
+ *     bundle-supplied free-text path — T-20-20).
+ */
+export const AssetExportMetaSchema = z.object({
+  articleId: z.string().min(1),
+  assetId: z.string().regex(/^img-[a-z0-9]{12}$/),
+  contentType: z.enum([
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/gif",
+    "image/avif",
+  ]),
+  byteLength: z.number().int().min(1),
+  sha256: z.string().regex(/^[a-f0-9]{64}$/),
+  entry: z.string().regex(/^assets\/[^/]+\/img-[a-z0-9]{12}$/),
+});
+export type AssetExportMeta = z.infer<typeof AssetExportMetaSchema>;
+
 export const ExportBundleSchema = z.object({
-  // PORT-01/02 versioning hook — the 1|2|3 union reads all three
-  // generations; v4+ forward-rejects (D9-04). Phase 17 (17-04): v3 carries
+  // PORT-01/02 versioning hook — the 1|2|3|4 union reads all four
+  // generations; v5+ forward-rejects (D9-04). Phase 17 (17-04): v3 carries
   // reader-owned metadata overrides (readerTitle/readerAuthor) inside each
-  // article row via ArticleSchema composition (D17-12).
-  schemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+  // article row via ArticleSchema composition (D17-12). Phase 20 (20-05):
+  // v4 carries the assets metadata array (raw bytes ride the zip).
+  schemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
   exportedAt: z.string().datetime(), // ISO-8601
   appVersion: z.string(), // diagnostic only (D9-04)
   articles: z.array(ArticleSchema), // Dexie articles ONLY — fixtures never serialize
@@ -62,6 +108,10 @@ export const ExportBundleSchema = z.object({
   // Phase 12 (Plan 12-07) — absent on v1 bundles (hydrates to undefined);
   // ALWAYS present on v2 writes (empty array on book-free libraries).
   books: z.array(BookSchema).optional(),
+  // Phase 20 (Plan 20-05) — absent on v1/v2/v3 bundles (hydrates to
+  // undefined); ALWAYS present on v4 writes (empty array on asset-free
+  // libraries — the presence-is-the-contract books precedent).
+  assets: z.array(AssetExportMetaSchema).optional(),
 });
 export type ExportBundle = z.infer<typeof ExportBundleSchema>;
 

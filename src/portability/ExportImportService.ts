@@ -44,11 +44,12 @@ import { loadAllLocations } from "../persistence/locationStore";
 import { loadSettings } from "../persistence/settingsStore";
 import { DEFAULT_SETTINGS } from "../settings/defaults";
 import { ExportBundleSchema, resolveAppVersion } from "./bundle";
-import type { ExportBundle } from "./bundle";
-import { computeManifest } from "./manifest";
+import type { ExportBundle, AssetExportMeta } from "./bundle";
+import { computeManifest, sha256Hex } from "./manifest";
 import type { Manifest } from "./manifest";
 import { isSafeEntryName } from "./zipSlip";
 import type { ResolvedImportPlan } from "./conflicts";
+import { loadAllAssets } from "../persistence/assetsStore";
 
 // ── Export side (PORT-01) ────────────────────────────────────────────────────
 
@@ -72,7 +73,7 @@ import type { ResolvedImportPlan } from "./conflicts";
  * it can never produce a half-valid bundle.
  */
 export async function buildBundleBytes(): Promise<Uint8Array<ArrayBuffer>> {
-  const [articles, highlights, notes, locations, settingsResult, booksResult] =
+  const [articles, highlights, notes, locations, settingsResult, booksResult, assetRows] =
     await Promise.all([
       dexieLibrarySource.list(), // Dexie articles ONLY — fixtures never ride
       loadAllHighlights(),
@@ -88,6 +89,10 @@ export async function buildBundleBytes(): Promise<Uint8Array<ArrayBuffer>> {
       // riding articles with ingestionMeta.bookId, so machine B re-groups
       // them only if the book row also traveled — the never-silent ethos is
       // served by refusing to hostage the whole export to one store read).
+      loadAllAssets(), // Phase 20 (20-05) — asset blobs ride the v4 bundle.
+      // Plain-array whole-library read with calm corrupt-row drops (the
+      // loadAllHighlights precedent): one drifted row never blocks the
+      // reader's export.
     ]);
   const preferences = settingsResult.ok
     ? settingsResult.settings
@@ -95,6 +100,37 @@ export async function buildBundleBytes(): Promise<Uint8Array<ArrayBuffer>> {
   // Writers ALWAYS emit the books field on v2 (empty array on a book-free
   // library) — the field's presence is the v2 write contract (bundle.ts).
   const books = booksResult.ok ? booksResult.books : [];
+
+  // Phase 20 (20-05, IMG-04): the asset export set — only rows whose owning
+  // article rides the bundle. Fixtures never serialize and a stray row for
+  // a removed article drops here (minimization — it would only become an
+  // inert orphan entry on import). Blob → bytes → sha256 all happen HERE,
+  // outside any transaction (there is none on the export path; the note
+  // keeps the 09-04 no-crypto-in-closures rule explicit for future edits).
+  const articleIds = new Set(articles.map((a) => a.id));
+  const exportAssetRows = assetRows.filter((row) =>
+    articleIds.has(row.articleId),
+  );
+  const assetEntries: Record<string, Uint8Array> = {};
+  const assets: AssetExportMeta[] = [];
+  for (const row of exportAssetRows) {
+    // ArrayBuffer-backed view (TS 7 BufferSource — the 09-01 lesson); a
+    // fresh copy so the hashed bytes are exactly the zipped bytes.
+    const bytes = new Uint8Array(await row.data.arrayBuffer());
+    // Entry names are SERVICE-GENERATED from validated id fields only —
+    // never bundle-supplied free text (T-20-20; both ids are regex-locked
+    // by the store seam + AssetExportMetaSchema).
+    const entry = `assets/${row.articleId}/${row.assetId}`;
+    assetEntries[entry] = bytes;
+    assets.push({
+      articleId: row.articleId,
+      assetId: row.assetId,
+      contentType: row.contentType,
+      byteLength: bytes.byteLength,
+      sha256: await sha256Hex(bytes),
+      entry,
+    });
+  }
 
   // fixtureIds: referenced article ids ∩ bundled fixture ids.
   const highlightById = new Map(highlights.map((h) => [h.id, h]));
@@ -110,11 +146,12 @@ export async function buildBundleBytes(): Promise<Uint8Array<ArrayBuffer>> {
     .map((f) => f.id);
 
   const bundle = ExportBundleSchema.parse({
-    // Phase 12 (12-07) + Phase 17 (17-04): writers emit v3 — reader-owned
-    // metadata overrides ride each article row via ArticleSchema
-    // composition (D17-12); the 1|2|3 union read stays in bundle.ts; a v4+
-    // bundle is refused by the peek below (D9-04).
-    schemaVersion: 3 as const,
+    // Phase 12 (12-07) + Phase 17 (17-04) + Phase 20 (20-05): writers emit
+    // v4 — reader-owned metadata overrides ride each article row via
+    // ArticleSchema composition (D17-12) and image assets ride the assets
+    // metadata array + raw zip entries (IMG-04); the 1|2|3|4 union read
+    // stays in bundle.ts; a v5+ bundle is refused by the peek below (D9-04).
+    schemaVersion: 4 as const,
     exportedAt: new Date().toISOString(),
     appVersion: resolveAppVersion(),
     articles,
@@ -124,12 +161,19 @@ export async function buildBundleBytes(): Promise<Uint8Array<ArrayBuffer>> {
     preferences,
     fixtureIds,
     books,
+    // ALWAYS present on v4 writes (empty array on an asset-free library) —
+    // the field's presence is the v4 write contract (the books precedent).
+    assets,
   });
 
   const manifest = await computeManifest(bundle);
+  // The SAME zipSync call carries the text entries (strToU8 values) and the
+  // raw asset entries (Uint8Array values) — the A5 Wave-0 proof in
+  // bundle-v4.spec.ts locks fflate's mixed-value behavior byte-exact.
   return zipSync({
     "bundle.json": strToU8(JSON.stringify(bundle, null, 2)),
     "manifest.json": strToU8(JSON.stringify(manifest)),
+    ...assetEntries,
   });
 }
 
@@ -228,7 +272,8 @@ export async function validateBundle(
   //    bundle (the issues list carries it); it can never reach Zod.
   //    Phase 12 (12-07): the threshold moved from > 1 to > 2 — v2 bundles
   //    (books-capable) parse. Phase 17 (17-04): > 2 → > 3 — v3 bundles
-  //    (metadata-override-capable) parse; v4+ still refuses loudly (D9-04).
+  //    (metadata-override-capable) parse. Phase 20 (20-05): > 3 → > 4 — v4
+  //    bundles (asset-capable) parse; v5+ still refuses loudly (D9-04).
   let raw: unknown;
   try {
     raw = JSON.parse(strFromU8(bundleBytes));
@@ -239,7 +284,7 @@ export async function validateBundle(
     };
   }
   const peeked = (raw as { schemaVersion?: unknown }).schemaVersion;
-  if (typeof peeked === "number" && peeked > 3) {
+  if (typeof peeked === "number" && peeked > 4) {
     return {
       ok: false,
       refusal: { kind: "newer-schema-version", bundleVersion: peeked },
@@ -261,6 +306,10 @@ export async function validateBundle(
   // 6. Manifest recompute — per-block SHA-256 over the Zod-PARSED bundle
   //    (determinism contract, manifest.ts). An unusable claimed manifest
   //    fails every block. No transaction has started at any point above.
+  //    Phase 20 (20-05): v1/v2/v3 claimed manifests predate the assets
+  //    block — an absent claimed assets key is read as the empty-array hash
+  //    so old bundles never false-positive as corrupted; a v4 bundle with
+  //    actual assets still mismatches (tampering stays detected).
   const recomputed = await computeManifest(parsed.data);
   let claimed: Manifest | undefined;
   try {
@@ -268,9 +317,17 @@ export async function validateBundle(
   } catch {
     claimed = undefined; // every block fails verification below
   }
+  const claimedBlocks: Record<string, string | undefined> = {
+    ...claimed?.blocks,
+  };
+  if (claimedBlocks.assets === undefined) {
+    claimedBlocks.assets = await sha256Hex(
+      new TextEncoder().encode(JSON.stringify([])),
+    );
+  }
   const failedBlocks = (Object.keys(recomputed.blocks) as Array<
     keyof Manifest["blocks"]
-  >).filter((b) => recomputed.blocks[b] !== claimed?.blocks?.[b]);
+  >).filter((b) => recomputed.blocks[b] !== claimedBlocks[b]);
   if (failedBlocks.length > 0) {
     return { ok: false, refusal: { kind: "corrupted", failedBlocks } };
   }

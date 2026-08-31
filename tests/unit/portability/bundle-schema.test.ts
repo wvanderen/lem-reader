@@ -180,12 +180,20 @@ describe("ExportBundleSchema (D9-04 envelope)", () => {
     }
   });
 
-  it("rejects schemaVersion 4 (forward-compat gate — no silent partial import)", () => {
-    const result = ExportBundleSchema.safeParse({
+  it("rejects schemaVersion 5 (forward-compat gate — no silent partial import); v4 parses since Phase 20 (20-05)", () => {
+    // Phase 20 (20-05): the union widened to 1|2|3|4 — the forward-compat
+    // gate moved to v5 (the 12-07/17-04 version-bump assertion-update
+    // precedent).
+    const v4 = ExportBundleSchema.safeParse({
       ...sampleBundle(),
       schemaVersion: 4,
     });
-    expect(result.success).toBe(false);
+    expect(v4.success).toBe(true);
+    const v5 = ExportBundleSchema.safeParse({
+      ...sampleBundle(),
+      schemaVersion: 5,
+    });
+    expect(v5.success).toBe(false);
   });
 
   // ── Phase 17 (17-04 Task 1): v3 — overrides ride ArticleSchema ──────────

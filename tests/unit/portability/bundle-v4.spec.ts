@@ -32,9 +32,8 @@ import { zipSync, unzipSync, strToU8, strFromU8 } from "fflate";
 import {
   ArticleSchema,
   BookSchema,
-  ReaderSettingsSchema,
 } from "../../../src/content/schema";
-import type { CanonicalArticle, ReaderSettings } from "../../../src/content/schema";
+import type { CanonicalArticle } from "../../../src/content/schema";
 import { ExportBundleSchema } from "../../../src/portability/bundle";
 import { computeManifest, sha256Hex } from "../../../src/portability/manifest";
 import { sampleBundle } from "./bundle-schema.test";
@@ -75,18 +74,6 @@ async function loadDb() {
 }
 
 // ── Sample builders (schema-validated at construction) ──────────────────────
-
-function samplePrefs(): ReaderSettings {
-  return ReaderSettingsSchema.parse({
-    schemaVersion: 2,
-    font: "serif",
-    size: 18,
-    measure: 64,
-    spacing: "comfortable",
-    theme: "sepia",
-    readingMode: "paginated",
-  });
-}
 
 /** A 1x1 transparent PNG — real decoder-valid bytes (Task 3's e2e renders
  * them); portability itself only hashes, so any bytes would do, but sharing

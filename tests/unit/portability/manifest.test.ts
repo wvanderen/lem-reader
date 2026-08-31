@@ -31,12 +31,13 @@ describe("computeManifest (determinism contract — Pitfall 2 / A4)", () => {
     expect(second.blocks).toEqual(first.blocks);
   });
 
-  it("returns algorithm sha256 and exactly the five block keys", async () => {
+  it("returns algorithm sha256 and exactly the six block keys (assets since 20-05)", async () => {
     const bundle = ExportBundleSchema.parse(sampleBundle());
     const manifest = await computeManifest(bundle);
     expect(manifest.algorithm).toBe("sha256");
     expect(Object.keys(manifest.blocks).sort()).toEqual([
       "articles",
+      "assets",
       "highlights",
       "locations",
       "notes",

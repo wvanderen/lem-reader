@@ -313,7 +313,7 @@ describe("buildBundleBytes (09-04 Task 1)", () => {
     const entries = await buildEntries();
 
     const bundle = ExportBundleSchema.parse(JSON.parse(strFromU8(entries["bundle.json"]!)));
-    expect(bundle.schemaVersion).toBe(3);
+    expect(bundle.schemaVersion).toBe(4); // writers emit v4 (20-05)
     expect(bundle.articles).toHaveLength(2);
     expect(bundle.articles.map((a) => a.id).sort()).toEqual([
       "art-plain",
@@ -404,8 +404,9 @@ describe("buildBundleBytes (09-04 Task 1)", () => {
     const entries = await buildEntries();
     const bundle = ExportBundleSchema.parse(JSON.parse(strFromU8(entries["bundle.json"]!)));
 
-    // Writers emit v3 with the FULL book record.
-    expect(bundle.schemaVersion).toBe(3);
+    // Writers emit v4 with the FULL book record (books ride unchanged
+    // since 12-07; the version bumped to 4 for assets — 20-05).
+    expect(bundle.schemaVersion).toBe(4);
     expect(bundle.books).toEqual([book]);
 
     // Chapters ride articles as ordinary articles — ingestionMeta.bookId
@@ -420,12 +421,12 @@ describe("buildBundleBytes (09-04 Task 1)", () => {
     expect(bundle.articles[0]?.ingestionMeta?.chapterIndex).toBe(0);
   });
 
-  it("an empty-books library still emits v3 with books: [] (writers always emit the field)", async () => {
+  it("an empty-books library still emits v4 with books: [] (writers always emit the field)", async () => {
     await seedExportSurface(true);
     const entries = await buildEntries();
 
     const bundle = ExportBundleSchema.parse(JSON.parse(strFromU8(entries["bundle.json"]!)));
-    expect(bundle.schemaVersion).toBe(3);
+    expect(bundle.schemaVersion).toBe(4); // writers emit v4 (20-05)
     expect(bundle.books).toEqual([]);
   });
 
