@@ -50,6 +50,7 @@ function okArticle(): IngestionResponse {
       },
     },
     confidence: { state: "confident" },
+    assets: [], // Phase 20 (20-02): ok-variant field (Zod default output)
   } as IngestionResponse;
 }
 

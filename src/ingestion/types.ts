@@ -129,6 +129,33 @@ export const MAX_ARTICLE_ASSET_BYTES = 150 * 1024 * 1024;
  * dev/prod behavior uniform. */
 export const MAX_ASSET_RESPONSE_BYTES = 3 * 1024 * 1024;
 
+// ── Phase 20 (Plan 20-02 Task 3) — the asset response envelope ──────────────
+
+/** AssetEnvelopeSchema — the wire shape of ONE accepted image asset on the
+ * ingest response (base64-in-JSON, mirroring the pdf/epub upload transport
+ * decision; the server-side twin is server/ingest.ts AssetEnvelope).
+ * `assetId` is the assetRef BODY — `img-<12 lowercase hex>`, i.e. exactly the
+ * FigureBlock `asset:img-…` reference minus the scheme prefix (the schema
+ * module's assetRef regex carries the prefixed form; this dedicated chain
+ * keeps the envelope field self-describing at the network boundary).
+ * `dataBase64` is validated by the CLIENT re-validation pipeline
+ * (IngestionClient: decode + byteLength re-check + assetId re-hash —
+ * Pitfall 10: the server is not trusted), not by length here — Zod's job is
+ * shape, the crypto check is the load-bearing integrity gate. */
+export const AssetEnvelopeSchema = z.object({
+  assetId: z.string().regex(/^img-[a-z0-9]{12}$/),
+  contentType: z.enum([
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/gif",
+    "image/avif",
+  ]),
+  byteLength: z.number().int().min(1),
+  dataBase64: z.string().min(1),
+});
+export type AssetEnvelope = z.infer<typeof AssetEnvelopeSchema>;
+
 /** IngestionFailureReasonEnum — the 20 honest-failure reasons surfaced to the
  * reader. Cataloged at 07-RESEARCH.md §Code Examples Example 1 L793-795 (the 9
  * pipeline reasons) plus `already-in-library` (D7-07 dedupe-refuse) plus
@@ -187,6 +214,10 @@ export const IngestionResponseSchema = z.union([
     confidence: z.object({
       state: z.enum(["confident", "low"]),
     }),
+    // Phase 20 (20-02 Task 3) — accepted image assets on the response
+    // (default [] keeps pre-update server responses + every refusal
+    // back-compat; the client re-validates each entry before exposure).
+    assets: z.array(AssetEnvelopeSchema).default([]),
   }),
   // Phase 12 ING-05 — the multi-article book ok-variant. Planner resolution
   // of 12-RESEARCH Pitfall 3: NO top-level confidence field — each article
@@ -201,6 +232,10 @@ export const IngestionResponseSchema = z.union([
     book: BookSchema,
     articles: z.array(ArticleSchema).min(1),
     skippedCount: z.number().int().min(0),
+    // Phase 20 (20-02 Task 3) — the book ok-variant carries assets the same
+    // way (the 20-06 EPUB container path emits chapter assets on this
+    // envelope; default [] until then).
+    assets: z.array(AssetEnvelopeSchema).default([]),
   }),
   z.object({
     ok: z.literal(false),

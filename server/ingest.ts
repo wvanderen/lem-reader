@@ -406,12 +406,15 @@ async function ingestEpubBook(input: {
   });
 
   // The book ok-variant envelope (12-03's IngestionClient.ingestEpub
-  // consumes exactly this shape).
+  // consumes exactly this shape). assets stays empty until 20-06 wires the
+  // EPUB container extraction (the schema field's Zod default makes it
+  // required on the parsed output).
   return {
     ok: true,
     book,
     articles: admitted,
     skippedCount: book.skippedChapterCount,
+    assets: [],
   };
 }
 
@@ -802,12 +805,7 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
         state: confidence.state === "confident" ? "confident" : "low",
       },
       assets: assetEnvelopes,
-      // NOTE(20-02): the `assets` envelope field lands in
-      // IngestionResponseSchema's ok-variant with Task 3's AssetEnvelopeSchema
-      // widening; until then this assertion is the scaffolding that lets the
-      // server emit the field one task ahead of the schema (Task 3 removes
-      // the cast).
-    } as IngestionResponse;
+    };
   } catch (e) {
     // T-7-23 (Repudiation): every refusal path produces a typed
     // IngestionResponse. IngestionError carries the typed reason verbatim;

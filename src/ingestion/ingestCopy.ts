@@ -89,3 +89,24 @@ export function bytesToBase64(bytes: Uint8Array): string {
   }
   return btoa(binary);
 }
+
+/**
+ * base64ToBytes — the decode sibling of bytesToBase64, for the Phase 20
+ * asset response envelope (20-02 Task 3). atob returns the full binary
+ * string C++-side (no spread, no apply — the encode-side stack limit does
+ * not apply), and the fill loop walks 0x8000-char chunks mirroring the
+ * encoder's shape so the pair reads as one discipline. The result is
+ * ArrayBuffer-backed (sha256Hex's Uint8Array<ArrayBuffer> contract).
+ */
+export function base64ToBytes(b64: string): Uint8Array<ArrayBuffer> {
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  const CHUNK_SIZE = 0x8000;
+  for (let start = 0; start < binary.length; start += CHUNK_SIZE) {
+    const end = Math.min(start + CHUNK_SIZE, binary.length);
+    for (let i = start; i < end; i += 1) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+  }
+  return bytes;
+}

@@ -217,6 +217,7 @@ describe("AddDialog (16-02 Task 2)", () => {
     ingestUrlMock.mockResolvedValue({
       article: sampleArticle(),
       confidence: { state: "confident" },
+      assets: [], // Phase 20 (20-02): envelope re-validation exposes the validated array
     });
     renderDialog();
 
@@ -236,6 +237,7 @@ describe("AddDialog (16-02 Task 2)", () => {
     ingestUrlMock.mockResolvedValue({
       article: sampleArticle(),
       confidence: { state: "confident" },
+      assets: [], // Phase 20 (20-02): envelope re-validation exposes the validated array
     });
     renderDialog();
 
@@ -507,6 +509,7 @@ describe("AddDialog (16-02 Task 2)", () => {
     ingestUrlMock.mockResolvedValue({
       article: sampleArticle(),
       confidence: { state: "confident" },
+      assets: [], // Phase 20 (20-02): envelope re-validation exposes the validated array
     });
     renderDialog({
       onCancel: vi.fn(() => navEvents.push("cancel")),

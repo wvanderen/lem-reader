@@ -24,10 +24,17 @@
 //   - T-7-26 (Tampering, refusal copy leaks jargon) → this module throws the
 //     typed `reason`; mapReasonToCopy (lives in ./ingestCopy) is the only
 //     place reason → reader-facing phrase.
+import { z } from "zod";
 import { ArticleSchema, type CanonicalArticle } from "../content/schema";
 import type { Book } from "../content/schema";
-import { IngestionResponseSchema } from "./types";
-import type { IngestionFailureReason, IngestionResponse } from "./types";
+import { sha256Hex } from "../portability/manifest";
+import { AssetEnvelopeSchema, IngestionResponseSchema } from "./types";
+import type {
+  AssetEnvelope,
+  IngestionFailureReason,
+  IngestionResponse,
+} from "./types";
+import { base64ToBytes } from "./ingestCopy";
 
 /**
  * IngestionError — the client-side mirror of server/errors.ts. Carries the
@@ -49,10 +56,62 @@ export class IngestionError extends Error {
  * The success shape returned by ingestUrl/ingestHtml. The article is
  * ArticleSchema-validated; confidence carries the reader-facing two-state
  * signal (the "unsupported" three-state outcome is refused upstream).
+ *
+ * Phase 20 (20-02 Task 3): `assets` carries the envelope's image assets
+ * AFTER full transport re-validation (decode + byteLength re-check +
+ * assetId re-hash — Pitfall 10: the server is not trusted). Consumption/
+ * persistence wiring is 20-03/20-04 scope; this module only exposes the
+ * validated array.
  */
 export interface IngestionSuccess {
   article: CanonicalArticle;
   confidence: { state: "confident" | "low" };
+  assets: ValidatedAsset[];
+}
+
+/** ValidatedAsset — one envelope asset that crossed the network boundary and
+ * passed the full re-validation chain. `bytes` are the decoded pixels keyed
+ * by the content-hash assetId (identical bytes self-identify — D7-07). */
+export interface ValidatedAsset {
+  assetId: string;
+  contentType: AssetEnvelope["contentType"];
+  byteLength: number;
+  bytes: Uint8Array;
+}
+
+/**
+ * validateEnvelopeAssets — the Pitfall 10 / T-20-06 transport gate. For each
+ * envelope asset: decode dataBase64 (chunked — the 11-04 stack-limit
+ * lesson), re-check the decoded byteLength against the declared one, and
+ * re-hash sha256(bytes).slice(0,12) requiring it to equal assetId. ANY
+ * mismatch fails the WHOLE ingest calmly as a typed refusal
+ * (IngestionError "server-error" — a tampered/buggy asset envelope is
+ * indistinguishable from any other server malfunction for the reader, the
+ * same calm catch-all surface a malformed article gets). Never silently
+ * drops a bad asset: the article + its assets save together or not at all.
+ * Exported for the 20-06 book path (ingestEpub reuses this exact chain).
+ */
+export async function validateEnvelopeAssets(
+  envelopes: AssetEnvelope[],
+): Promise<ValidatedAsset[]> {
+  const out: ValidatedAsset[] = [];
+  for (const env of envelopes) {
+    const bytes = base64ToBytes(env.dataBase64);
+    if (bytes.byteLength !== env.byteLength) {
+      throw new IngestionError("server-error");
+    }
+    const computedId = "img-" + ((await sha256Hex(bytes)).slice(0, 12));
+    if (computedId !== env.assetId) {
+      throw new IngestionError("server-error");
+    }
+    out.push({
+      assetId: env.assetId,
+      contentType: env.contentType,
+      byteLength: env.byteLength,
+      bytes,
+    });
+  }
+  return out;
 }
 
 /**
@@ -265,9 +324,17 @@ async function ingest(
 
   // STATE-04 re-validation. ArticleSchema.parse throws ZodError on a
   // malformed article; the caller's catch-all surfaces "Something went
-  // wrong. Try again." (server-error copy). This is the load-bearing
+  // went wrong. Try again." (server-error copy). This is the load-bearing
   // defense against a tampered or buggy server response.
   const article = ArticleSchema.parse(json.article);
 
-  return { article, confidence: json.confidence };
+  // Phase 20 (20-02 Task 3) — the SAME discipline for the asset envelope:
+  // the single-article path narrows by key (it never runs the full
+  // IngestionResponseSchema parse), so the assets field gets its own
+  // Zod-at-network-boundary parse here, then the crypto re-validation
+  // (decode + byteLength + assetId re-hash — Pitfall 10) before exposure.
+  const envelopeAssets = z.array(AssetEnvelopeSchema).parse(json.assets ?? []);
+  const assets = await validateEnvelopeAssets(envelopeAssets);
+
+  return { article, confidence: json.confidence, assets };
 }
