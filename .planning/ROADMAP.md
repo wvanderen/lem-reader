@@ -225,7 +225,30 @@ Plans:
   4. Figures render semantically with stable geometry and calm failures in both modes without content or location loss.
   5. Assets export/import with validation, limits, conflicts, and no broken references, and follow documented deletion lifecycle.
 
-**Plans**: TBD
+**Plans**: 7 plans
+
+**Wave 1** *(foundation)*
+
+- [ ] 20-01-PLAN.md — guarded asset-fetch substrate: sniff packages, FigureBlock additive schema, image caps, safeFetch two-profile core, typed-refusal sniff module (IMG-02)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 20-02-PLAN.md — inline asset stage + URL/paste/Markdown src rewrite + envelope assets + client transport re-validation (IMG-01, IMG-02)
+- [ ] 20-03-PLAN.md — Dexie v6 assets store + atomic save/upsert/article/book cascade lifecycle (IMG-03, IMG-04)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 20-04-PLAN.md — reserved-geometry rendering, one placeholder surface, fixture asset corpus, imagery e2e matrix + corpus realignment (IMG-03, IMG-05, IMG-06)
+- [ ] 20-05-PLAN.md — bundle v4 asset round-trip: manifest assets block, import gates, conflict ride, preview warnings (IMG-04)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 20-06-PLAN.md — EPUB container extraction retiring the D12-16 downgrade (IMG-01, IMG-02)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 20-07-PLAN.md — phase gate: honest full-suite run, IMG closure ledger, residual recording (IMG-01..06)
+
 **UI hint**: yes
 
 ### Phase 21: Integrated Refinement and Acceptance
@@ -256,5 +279,5 @@ Plans:
 | 17. Reader-Owned Metadata | v2.1 | 5/5 | Complete    | 2026-08-30 |
 | 18. Reader Orientation | v2.1 | 4/4 | Complete    | 2026-08-30 |
 | 19. Cross-Block Highlights | v2.1 | 5/5 | Complete    | 2026-08-31 |
-| 20. Safe Local Image Fidelity | v2.1 | 0/TBD | Not started | - |
+| 20. Safe Local Image Fidelity | v2.1 | 0/7 | In progress | - |
 | 21. Integrated Refinement and Acceptance | v2.1 | 0/TBD | Not started | - |
