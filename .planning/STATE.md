@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Reader Experience
-current_phase: 20
-current_phase_name: safe-local-image-fidelity
+current_phase: 21
+current_phase_name: Integrated Refinement and Acceptance
 status: verifying
 stopped_at: Completed 20-07-PLAN.md — Phase 20 complete (all 8 plans)
-last_updated: "2026-08-31T21:36:12.504Z"
+last_updated: "2026-08-31T21:44:04.361Z"
 last_activity: 2026-08-31
-last_activity_desc: Phase 20 execution started
+last_activity_desc: Phase 20 complete, transitioned to Phase 21
 progress:
   total_phases: 8
   completed_phases: 7
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-08-30)
 
 ## Current Position
 
-Phase: 20 (safe-local-image-fidelity) — EXECUTING
-Plan: 8 of 8
+Phase: 21 — Integrated Refinement and Acceptance
+Plan: Not started
 Status: Phase complete — ready for verification
-Last activity: 2026-08-31 — Phase 20 execution started
+Last activity: 2026-08-31 — Phase 20 complete, transitioned to Phase 21
 
 ## Recent Decisions (Phase 18)
 
@@ -45,7 +45,7 @@ Last activity: 2026-08-31 — Phase 20 execution started
 
 **Velocity:**
 
-- Total plans completed: 96 (this phase, incl. gap closure)
+- Total plans completed: 104 (this phase, incl. gap closure)
 - Average duration: 25 min
 - Total execution time: 1.5 hours
 
@@ -69,6 +69,7 @@ Last activity: 2026-08-31 — Phase 20 execution started
 | 17 | 5 | - | - |
 | 18 | 4 | - | - |
 | 19 | 5 | - | - |
+| 20 | 8 | - | - |
 
 **Recent Trend:**
 
