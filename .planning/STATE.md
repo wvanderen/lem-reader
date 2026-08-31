@@ -5,15 +5,15 @@ milestone_name: Reader Experience
 current_phase: 20
 current_phase_name: safe-local-image-fidelity
 status: executing
-stopped_at: Completed 20-01-PLAN.md
-last_updated: "2026-08-31T14:54:40.417Z"
+stopped_at: Completed 20-02-PLAN.md
+last_updated: "2026-08-31T15:14:34.807Z"
 last_activity: 2026-08-31
 last_activity_desc: Phase 20 execution started
 progress:
   total_phases: 8
   completed_phases: 6
   total_plans: 34
-  completed_plans: 27
+  completed_plans: 28
   percent: 75
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-30)
 ## Current Position
 
 Phase: 20 (safe-local-image-fidelity) — EXECUTING
-Plan: 2 of 8
+Plan: 3 of 8
 Status: Ready to execute
 Last activity: 2026-08-31 — Phase 20 execution started
 
@@ -185,6 +185,7 @@ Last activity: 2026-08-31 — Phase 20 execution started
 | Phase 19 P04 | 13 min | 2 tasks | 3 files |
 | Phase 19 P05 | 55 min | 3 tasks | 11 files |
 | Phase 20 P01 | 14 min | 3 tasks | 11 files |
+| Phase 20 P02 | 18min | 3 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -440,6 +441,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: [Phase 20-01] image-size@2.0.2 reports JPEG as 'jpg' — sniff gate normalizes onto the jpeg arm (contentType stays canonical image/jpeg); is-animated@2.0.2 requires a Node Buffer (zero-copy view over Uint8Array — plain bytes silently disable GIF/PNG animation detection and would make D20-09 vacuous; locked by spec cells)
 - [Phase ?]: [Phase 20-01] ImageAssetRefusal closed at fetch-level arms (fetch/type/bytes/pixels/animated) — stage arms count/budget/deadline live ONLY on 20-02's AssetResolution supertype; every fetch-layer failure maps to typed 'fetch', never a throw (D20-05)
 - [Phase ?]: [Phase 20-01] IMG-02 stays unchecked — foundation plan ships the fetch/sniff substrate only; requirement closes at the end-to-end asset-stage plans 20-02+ (04-02 PAGE-01 / 10-01 RECV-01 split precedent)
+- [Phase 20]: 20-02: stage-level budget arms (count/budget/deadline) live ONLY on AssetResolution; fetch-level refusals stay closed in 20-01's union; refused figures omit src but keep originalSrc provenance; refusedCount is per-figure (pre-existing no-src figures disclose via the D20-06 placeholder surface)
+- [Phase 20]: 20-02: envelope tamper failures reuse the calm server-error reason (no enum churn); client transport re-validation = Zod parse + chunked 0x8000 decode + byteLength re-check + sha256 assetId re-hash (Pitfall 10 — server never trusted); byte-identical twins reuse the first budget admission (D7-07)
 
 ### Pending Todos
 
@@ -495,8 +498,8 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-31T14:54:40.408Z
-Stopped at: Completed 20-01-PLAN.md
+Last session: 2026-08-31T15:14:34.799Z
+Stopped at: Completed 20-02-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

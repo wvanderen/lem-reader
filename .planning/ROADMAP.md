@@ -225,7 +225,7 @@ Plans:
   4. Figures render semantically with stable geometry and calm failures in both modes without content or location loss.
   5. Assets export/import with validation, limits, conflicts, and no broken references, and follow documented deletion lifecycle.
 
-**Plans**: 1/8 plans executed
+**Plans**: 2/8 plans executed
 
 **Wave 1** *(foundation)*
 
@@ -233,7 +233,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 20-02-PLAN.md — inline asset stage + URL/paste/Markdown src rewrite + envelope assets + client transport re-validation (IMG-01, IMG-02)
+- [x] 20-02-PLAN.md — inline asset stage + URL/paste/Markdown src rewrite + envelope assets + client transport re-validation (IMG-01, IMG-02)
 - [ ] 20-03-PLAN.md — Dexie v6 assets store + atomic save/upsert/article/book cascade lifecycle (IMG-03, IMG-04)
 
 **Wave 3** *(blocked on Wave 2 completion)*
@@ -283,5 +283,5 @@ Plans:
 | 17. Reader-Owned Metadata | v2.1 | 5/5 | Complete    | 2026-08-30 |
 | 18. Reader Orientation | v2.1 | 4/4 | Complete    | 2026-08-30 |
 | 19. Cross-Block Highlights | v2.1 | 5/5 | Complete    | 2026-08-31 |
-| 20. Safe Local Image Fidelity | v2.1 | 1/8 | In Progress|  |
+| 20. Safe Local Image Fidelity | v2.1 | 2/8 | In Progress|  |
 | 21. Integrated Refinement and Acceptance | v2.1 | 0/TBD | Not started | - |
