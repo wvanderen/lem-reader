@@ -144,3 +144,31 @@ export const EPUB_MAX_ENTRY_BYTES = 64 * 1024 * 1024;
  * is never refused by the transport guard. */
 export const MAX_INGEST_BODY_BYTES =
   Math.ceil((Math.max(PDF_MAX_BYTES, EPUB_MAX_BYTES) * 4) / 3) + 2048;
+
+// ── Phase 20 — image asset caps (Plan 20-01 Task 1; IMG-02) ──────────────────
+// The eight shared image caps live in src/ingestion/types.ts for the same
+// /src→/server import-direction reason as PDF_MAX_BYTES/EPUB_MAX_BYTES above —
+// the client asset surfaces need the same constants. Imported + re-exported
+// here so server modules keep importing every cap from ONE module (the
+// three-enforcement-point pattern). MAX_ASSET_PIXELS deliberately equals the
+// MAX_IMAGE_PIXELS pdf.js cap above — one auditable bomb-cap family.
+import {
+  MAX_ASSET_BYTES,
+  MAX_ASSET_PIXELS,
+  ASSET_FETCH_TIMEOUT_MS,
+  ASSET_STAGE_DEADLINE_MS,
+  ASSET_FETCH_CONCURRENCY,
+  MAX_FIGURES_PER_ARTICLE,
+  MAX_ARTICLE_ASSET_BYTES,
+  MAX_ASSET_RESPONSE_BYTES,
+} from "../src/ingestion/types";
+export {
+  MAX_ASSET_BYTES,
+  MAX_ASSET_PIXELS,
+  ASSET_FETCH_TIMEOUT_MS,
+  ASSET_STAGE_DEADLINE_MS,
+  ASSET_FETCH_CONCURRENCY,
+  MAX_FIGURES_PER_ARTICLE,
+  MAX_ARTICLE_ASSET_BYTES,
+  MAX_ASSET_RESPONSE_BYTES,
+};

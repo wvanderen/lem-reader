@@ -97,10 +97,33 @@ export const NumberedListBlock = z.object({
   start: z.number().int().min(1).default(1),
 });
 
+/** Phase 20 (D20-12) — the local-asset reference arm of FigureBlock.src.
+ * `asset:img-<12 lowercase hex>`: the img- prefix is the D7-07 shortHash
+ * locality precedent; the regex-locked shape means the union can never
+ * smuggle a javascript:/data: URI through this arm (Pitfall 5 discipline
+ * survives at parse time). Exported for the asset-id construction contract
+ * (server/fetchImageAsset.ts) and renderer discrimination. */
+export const assetRef = z.string().regex(/^asset:img-[a-z0-9]{12}$/);
+
+/** Phase 20 (20-RESEARCH Pattern 2) — the three figure states, all ONE block
+ * kind (D20-06 — no new block kinds):
+ *   - legacy row:  src = remote httpUrl (hydration-only; the renderer NEVER
+ *     fetches it — IMG-03 for pre-v2.1 articles)
+ *   - accepted:    src = asset:img-… (+ optional originalSrc/width/height)
+ *   - refused:     src omitted (alt + caption render with the placeholder)
+ * `width`/`height` are the D20-13 orientation-corrected intrinsic pixels the
+ * pagination reserved box consumes; `originalSrc` is provenance/diagnostic
+ * (D20-12) — where the bytes came from, never a fetch target. alt + caption
+ * are byte-identical in every state (D-05 substrate; D19-01 caption marks). */
 export const FigureBlock = z.object({
   kind: z.literal("figure"),
   alt: z.string(), // required for accessibility
-  src: httpUrl, // local /public or remote https — no data: URIs (Pitfall 5)
+  // D20-12 + D20-02: union has NO arm for data: URIs (one no-exceptions
+  // media boundary, Pitfall 5) and no arm for javascript:/file:/vbscript:.
+  src: z.union([httpUrl, assetRef]).optional(), // refused figures omit src
+  originalSrc: httpUrl.optional(), // provenance only (D20-12)
+  width: z.number().int().min(1).optional(), // D20-13 intrinsic px
+  height: z.number().int().min(1).optional(), // D20-13 intrinsic px
   caption: z.array(InlineRun).default([]),
 });
 

@@ -75,6 +75,60 @@ export const PDF_MAX_BYTES = 10 * 1024 * 1024;
  */
 export const EPUB_MAX_BYTES = 10 * 1024 * 1024;
 
+// ── Phase 20 — image asset caps (Plan 20-01 Task 1; IMG-02; T-20-03/T-20-04) ─
+// D20-11: these numbers are GENEROUS bomb-stoppers, corpus-tunable — they stop
+// decode bombs, huge originals, and image-spam pages, NOT ordinary reading
+// (photo essays + wikimedia articles save whole). 20-07 re-checks every value
+// against the corpus evidence this phase produces (tuning is a named follow-up,
+// never a silent edit). Lives HERE (not /server) for the same /src→/server
+// import-direction reason as PDF_MAX_BYTES/EPUB_MAX_BYTES — the client asset
+// surfaces (20-02 picker guards, 20-03 renderer) need the same constants;
+// server/limits.ts re-exports them so server modules import every cap from
+// ONE module (the PDF_MAX_BYTES three-enforcement-point pattern).
+
+/** Per-asset decoded-byte cap (fetch + EPUB container paths share it). 16MB
+ * covers full-resolution editorial photography with headroom while bounding
+ * per-asset memory; enforced post-read via bytes.byteLength (the 12-04
+ * header-lie discipline — content-length can lie/absent/chunked). */
+export const MAX_ASSET_BYTES = 16 * 1024 * 1024;
+
+/** Per-asset pixel cap (sniffed width×height, checked BEFORE any store).
+ * Deliberately the SAME value as server/limits.ts MAX_IMAGE_PIXELS — one
+ * auditable bomb-cap family (a tiny PNG declaring a 65,000×65,000 canvas
+ * refuses here exactly like pdf.js decompression would). */
+export const MAX_ASSET_PIXELS = 16_777_216;
+
+/** Per-asset fetch timeout (AbortSignal cap for the image profile). Tighter
+ * than the 30s document REQUEST_TIMEOUT_MS: an asset is a secondary resource
+ * inline-fetched at ingest (D20-04) — one slow image must not eat the whole
+ * per-article stage deadline. */
+export const ASSET_FETCH_TIMEOUT_MS = 15_000;
+
+/** Overall per-article inline image budget (D20-04: assets fetch INLINE at
+ * ingest — a saved article is ALWAYS complete). The stage refuses further
+ * per-figure fetches beyond this wall-clock budget. */
+export const ASSET_STAGE_DEADLINE_MS = 60_000;
+
+/** Bounded-concurrency parallel asset fetching (A6: ≈4 keeps inline ingest
+ * latency acceptable; the stage is sequential-safe fallback). */
+export const ASSET_FETCH_CONCURRENCY = 4;
+
+/** Per-article figure count cap (image-spam page stopper; D20-11). 120 covers
+ * the most figure-dense longform (photo essays run 20-60). */
+export const MAX_FIGURES_PER_ARTICLE = 120;
+
+/** Model-level per-article total asset bytes (the D20-15 article-owned budget
+ * upper bound — dev/persistence side; the transport-side number is the tighter
+ * MAX_ASSET_RESPONSE_BYTES below). */
+export const MAX_ARTICLE_ASSET_BYTES = 150 * 1024 * 1024;
+
+/** Decoded asset total allowed in the single-article JSON transport path.
+ * Base64 inflation (~4/3) puts a 3MB decoded budget at ≈4MB on the wire —
+ * keeping the Vercel 4.5MB response ceiling honest; assets beyond it refuse
+ * per-figure (D20-05). Dev middleware is uncapped but the constant keeps
+ * dev/prod behavior uniform. */
+export const MAX_ASSET_RESPONSE_BYTES = 3 * 1024 * 1024;
+
 /** IngestionFailureReasonEnum — the 20 honest-failure reasons surfaced to the
  * reader. Cataloged at 07-RESEARCH.md §Code Examples Example 1 L793-795 (the 9
  * pipeline reasons) plus `already-in-library` (D7-07 dedupe-refuse) plus
