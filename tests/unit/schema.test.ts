@@ -149,6 +149,107 @@ describe("BlockSchema discriminates exactly 9 kinds", () => {
   });
 });
 
+// ── FigureBlock asset evolution (Phase 20 — D20-02/D20-06/D20-12/D20-13) ─────
+
+describe("FigureBlock asset evolution (Phase 20 — IMG-01/IMG-02 substrate)", () => {
+  // The three figure states of 20-RESEARCH Pattern 2, asserted at parse time:
+  // legacy remote-src rows hydrate unchanged (D-05 substrate byte-identity),
+  // refused figures omit src entirely (D20-06), accepted figures carry the
+  // local asset:img-<12hex> reference (D20-12) + optional originalSrc +
+  // orientation-corrected intrinsic dims (D20-13). A data: URI src has NO arm
+  // in the union (D20-02 — one no-exceptions media boundary, Pitfall 5).
+  it("parses a LEGACY row with a remote httpUrl src unchanged", () => {
+    const parsed = BlockSchema.parse({
+      kind: "figure",
+      alt: "A photo",
+      src: "https://example.com/photo.jpg",
+    });
+    if (parsed.kind !== "figure") throw new Error("expected figure");
+    expect(parsed.src).toBe("https://example.com/photo.jpg");
+    expect(parsed.alt).toBe("A photo");
+    expect(parsed.caption).toEqual([]);
+  });
+
+  it("parses a REFUSED figure with src omitted (D20-06 — alt+caption survive, image surface is the placeholder)", () => {
+    const parsed = BlockSchema.parse({ kind: "figure", alt: "A broken image" });
+    if (parsed.kind !== "figure") throw new Error("expected figure");
+    expect(parsed.src).toBeUndefined();
+    expect(parsed.alt).toBe("A broken image");
+  });
+
+  it("parses an accepted figure with an asset:img-<12hex> ref src (D20-12)", () => {
+    const parsed = BlockSchema.parse({
+      kind: "figure",
+      alt: "A local image",
+      src: "asset:img-0123456789ab",
+    });
+    if (parsed.kind !== "figure") throw new Error("expected figure");
+    expect(parsed.src).toBe("asset:img-0123456789ab");
+  });
+
+  it("parses originalSrc + width/height alongside the asset ref (D20-12 provenance + D20-13 dims)", () => {
+    const parsed = BlockSchema.parse({
+      kind: "figure",
+      alt: "An image",
+      src: "asset:img-0123456789ab",
+      originalSrc: "https://example.com/photo.jpg",
+      width: 640,
+      height: 480,
+    });
+    if (parsed.kind !== "figure") throw new Error("expected figure");
+    expect(parsed.originalSrc).toBe("https://example.com/photo.jpg");
+    expect(parsed.width).toBe(640);
+    expect(parsed.height).toBe(480);
+  });
+
+  it.each([
+    ["data: URI (D20-02 — the union simply has no arm for it)", "data:image/png;base64,iVBORw0KGgo="],
+    ["javascript: URI (Pitfall 5 survives at parse time)", "javascript:alert(1)"],
+  ])("rejects a banned-scheme src: %s", (_label, src) => {
+    expect(() =>
+      BlockSchema.parse({ kind: "figure", alt: "x", src }),
+    ).toThrow();
+  });
+
+  it.each([
+    ["wrong prefix", "asset:pic-0123456789ab"],
+    ["11 hex chars (too short)", "asset:img-0123456789a"],
+    ["13 hex chars (too long)", "asset:img-0123456789abc"],
+    ["uppercase hex (regex is [a-z0-9])", "asset:img-0123456789AB"],
+  ])("rejects a malformed asset ref: %s", (_label, src) => {
+    expect(() =>
+      BlockSchema.parse({ kind: "figure", alt: "x", src }),
+    ).toThrow();
+  });
+
+  it.each([
+    ["width 0", { width: 0, height: 10 }],
+    ["height 0", { width: 10, height: 0 }],
+    ["width -3", { width: -3, height: 10 }],
+    ["non-integer width", { width: 1.5, height: 10 }],
+  ])("rejects %s (D20-13 — intrinsic dims are positive ints)", (_label, dims) => {
+    expect(() =>
+      BlockSchema.parse({
+        kind: "figure",
+        alt: "x",
+        src: "asset:img-0123456789ab",
+        ...dims,
+      }),
+    ).toThrow();
+  });
+
+  it("rejects a non-http originalSrc (originalSrc is httpUrl-refined — provenance only)", () => {
+    expect(() =>
+      BlockSchema.parse({
+        kind: "figure",
+        alt: "x",
+        src: "asset:img-0123456789ab",
+        originalSrc: "data:text/html,<script>",
+      }),
+    ).toThrow();
+  });
+});
+
 // ── Inline marks — locked set of 4 (D-04) ────────────────────────────────────
 
 describe("Mark union is locked to exactly 4 marks (D-04)", () => {

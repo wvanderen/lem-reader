@@ -10,6 +10,10 @@ import {
   IngestionRequestSchema,
   IngestionResponseSchema,
 } from "../../src/ingestion/types";
+// Phase 20 (Plan 20-01 Task 1) — namespace import so the RED-phase run fails
+// on ASSERTIONS (undefined !== pinned value) rather than a module-resolution
+// error that would take the whole file down with it.
+import * as ingestionTypes from "../../src/ingestion/types";
 import { LemReaderDB } from "../../src/persistence/db";
 
 // fake-indexeddb gives Dexie a synthetic IndexedDB implementation in Node so
@@ -541,6 +545,62 @@ describe("IngestionFailureReasonEnum (the 20 cataloged reasons)", () => {
     expect(IngestionFailureReasonEnum.parse("epub-unreadable")).toBe("epub-unreadable");
     expect(IngestionFailureReasonEnum.parse("epub-empty")).toBe("epub-empty");
     expect(IngestionFailureReasonEnum.parse("epub-too-large")).toBe("epub-too-large");
+  });
+});
+
+// ── Phase 20 image cap constants (IMG-02 — three-enforcement-point pattern) ──
+
+describe("image asset cap constants (Phase 20 — Plan 20-01 Task 1)", () => {
+  // The eight shared image caps live in src/ingestion/types.ts following the
+  // PDF_MAX_BYTES three-enforcement-point pattern (client picker, middleware,
+  // orchestrator share ONE constant; /src→/server import direction forbids a
+  // /server home). D20-11: numbers are generous bomb-stoppers, corpus-tunable
+  // (20-07 re-checks against evidence). MAX_ASSET_PIXELS deliberately equals
+  // server MAX_IMAGE_PIXELS — one auditable bomb-cap family.
+  it("pins MAX_ASSET_BYTES = 16MB (per-asset decoded bytes)", () => {
+    expect(ingestionTypes.MAX_ASSET_BYTES).toBe(16 * 1024 * 1024);
+  });
+
+  it("pins MAX_ASSET_PIXELS = 16,777,216 (same value as server MAX_IMAGE_PIXELS — one bomb-cap family)", async () => {
+    expect(ingestionTypes.MAX_ASSET_PIXELS).toBe(16_777_216);
+    const limits = await import("../../server/limits");
+    expect(limits.MAX_IMAGE_PIXELS).toBe(ingestionTypes.MAX_ASSET_PIXELS);
+  });
+
+  it("pins ASSET_FETCH_TIMEOUT_MS = 15s (per-asset fetch timeout — D20-04 inline budget member)", () => {
+    expect(ingestionTypes.ASSET_FETCH_TIMEOUT_MS).toBe(15_000);
+  });
+
+  it("pins ASSET_STAGE_DEADLINE_MS = 60s (overall per-article inline budget — D20-04)", () => {
+    expect(ingestionTypes.ASSET_STAGE_DEADLINE_MS).toBe(60_000);
+  });
+
+  it("pins ASSET_FETCH_CONCURRENCY = 4 (bounded parallel asset fetches)", () => {
+    expect(ingestionTypes.ASSET_FETCH_CONCURRENCY).toBe(4);
+  });
+
+  it("pins MAX_FIGURES_PER_ARTICLE = 120 (image-spam page cap)", () => {
+    expect(ingestionTypes.MAX_FIGURES_PER_ARTICLE).toBe(120);
+  });
+
+  it("pins MAX_ARTICLE_ASSET_BYTES = 150MB (model-level per-article total)", () => {
+    expect(ingestionTypes.MAX_ARTICLE_ASSET_BYTES).toBe(150 * 1024 * 1024);
+  });
+
+  it("pins MAX_ASSET_RESPONSE_BYTES = 3MB (base64 ≈4MB keeps the Vercel 4.5MB response ceiling honest — D20-05 per-figure refusal)", () => {
+    expect(ingestionTypes.MAX_ASSET_RESPONSE_BYTES).toBe(3 * 1024 * 1024);
+  });
+
+  it("server/limits re-exports ALL eight caps (single import surface for server modules — PDF_MAX_BYTES precedent)", async () => {
+    const limits = await import("../../server/limits");
+    expect(limits.MAX_ASSET_BYTES).toBe(ingestionTypes.MAX_ASSET_BYTES);
+    expect(limits.MAX_ASSET_PIXELS).toBe(ingestionTypes.MAX_ASSET_PIXELS);
+    expect(limits.ASSET_FETCH_TIMEOUT_MS).toBe(ingestionTypes.ASSET_FETCH_TIMEOUT_MS);
+    expect(limits.ASSET_STAGE_DEADLINE_MS).toBe(ingestionTypes.ASSET_STAGE_DEADLINE_MS);
+    expect(limits.ASSET_FETCH_CONCURRENCY).toBe(ingestionTypes.ASSET_FETCH_CONCURRENCY);
+    expect(limits.MAX_FIGURES_PER_ARTICLE).toBe(ingestionTypes.MAX_FIGURES_PER_ARTICLE);
+    expect(limits.MAX_ARTICLE_ASSET_BYTES).toBe(ingestionTypes.MAX_ARTICLE_ASSET_BYTES);
+    expect(limits.MAX_ASSET_RESPONSE_BYTES).toBe(ingestionTypes.MAX_ASSET_RESPONSE_BYTES);
   });
 });
 
