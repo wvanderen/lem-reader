@@ -361,6 +361,42 @@ function copyrightPageXhtml(): string {
 `;
 }
 
+// ── Chapter-figure image bytes (Plan 20-06 — the container-extraction corpus) ─
+//
+// Hand-assembled deterministic constants, each verified against the EXACT
+// dependency versions the server sniffs with (image-size@2.0.2 + is-animated@
+// 2.0.2 — the 20-01 seam's pinned libs) at authoring time:
+//   sample          bytes  image-size reports        animated
+//   figurePng        74    {width:8, height:6} png    false
+//   animatedGif      79    {width:1, height:1} gif    true (2 frames + NETSCAPE2.0)
+//   pixelBombPng     74    {width:65536, height:65536} png → 4.29B px > MAX_ASSET_PIXELS
+//   figureSvg        —     image-size parses it as svg → OUTSIDE the D20-08 raster set
+// The pixel bomb is figurePng with the IHDR width/height fields (PNG bytes
+// 16..23, big-endian) patched to 65536×65536 — a real structural lie a
+// hostile container can carry, sniffed at header time exactly like the
+// network path's decode bombs (T-20-25).
+
+/** A real 8×6 truecolor PNG (admitted-figure fixture bytes). */
+export const FIGURE_PNG_B64 =
+  "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAGCAIAAABxZ0isAAAAEUlEQVR4nGMwTpuJFTEMpAQAvYY5Yflxl7kAAAAASUVORK5CYII=";
+
+/** A real 2-frame animated GIF89a with the NETSCAPE2.0 loop extension. */
+export const ANIMATED_GIF_B64 =
+  "R0lGODlhAQABAAAAACH/C05FVFNDQVBFMi4wAwEAAAAh+QQACgAAACwAAAAAAQABAAACAkQBACH5BAAKAAAALAAAAAABAAEAAAICRAEAOw==";
+
+/** figurePng with IHDR dims patched to 65536×65536 (the pixel-bomb lie). */
+export const PIXEL_BOMB_PNG_B64 =
+  "iVBORw0KGgoAAAANSUhEUgABAAAAAQAACAIAAABxZ0isAAAAEUlEQVR4nGNgZGLGihgGUgIAVJYBIUMYD1gAAAAASUVORK5CYII=";
+
+/** An SVG document — sniffed type outside the D20-08 raster set → refuses. */
+export const FIGURE_SVG_TEXT =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="8" height="6"><rect width="8" height="6"/></svg>';
+
+/** Binary (raw-byte) STORED entry — the 20-06 container-asset shape. */
+function binaryStored(bytes: Uint8Array): EpubEntry {
+  return [bytes, { level: 0, mtime: ZIP_EPOCH }];
+}
+
 // ── DRM marker documents (12-RESEARCH Pattern 3 verified signatures) ────────
 
 function adeptRightsXml(): string {
@@ -1074,6 +1110,274 @@ function anchorGateFailBookSpec(): FixtureSpec {
   return { entries, tocXml: nav, tocKind: "nav", topLevelCount: 2 };
 }
 
+/** 22. figureChapterBook — one readerable chapter whose content embeds SIX
+ * figures covering the whole 20-06 resolution matrix: an admissible PNG
+ * (../images/fig-ok.png — chapter-RELATIVE, resolved through the OPF-dir
+ * path math off the archive entries map), an animated GIF (refuses "animated"), an SVG entry
+ * (refuses "type" — D20-08 raster-only), a pixel-bomb PNG (refuses
+ * "pixels"), a dangling relative src (no entry — refuses), and a REMOTE
+ * https src (refuses zero-network — D20-01/T-12-05: the container is the
+ * only read source). */
+function figureChapterBookSpec(): FixtureSpec {
+  const ps = chapterParagraphs("Chapter 1. Illustrated", 0)
+    .map((p) => `    <p>${p}</p>`)
+    .join("\n");
+  const fig = (src: string, alt: string, caption: string): string =>
+    `      <figure><img src="${src}" alt="${alt}"/><figcaption>${caption}</figcaption></figure>`;
+  const doc = `<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
+  <head>
+    <title>Chapter 1. Illustrated</title>
+  </head>
+  <body>
+    <section>
+      <h2>Chapter 1. Illustrated</h2>
+${ps}
+${fig("../images/fig-ok.png", "A calm in-book figure admitted from the container.", "The admitted figure caption.")}
+${fig("../images/fig-anim.gif", "An animated illustration plate.", "The animated figure caption stays.")}
+${fig("../images/fig-svg.svg", "A vector diagram the reader refuses.", "The SVG figure caption stays.")}
+${fig("../images/fig-bomb.png", "An oversized canvas declaration.", "The pixel-bomb figure caption stays.")}
+${fig("../images/missing.png", "A figure whose entry is missing.", "The dangling figure caption stays.")}
+${fig("https://attacker.example/track.png", "A remote tracking image.", "The remote figure caption stays.")}
+    </section>
+  </body>
+</html>
+`;
+  const toc: TocEntry[] = [{ label: "Chapter 1. Illustrated", href: "text/ch1.xhtml" }];
+  const manifest: ManifestItem[] = [
+    { id: "nav", href: "nav.xhtml", mediaType: "application/xhtml+xml", properties: "nav" },
+    { id: "c1", href: "text/ch1.xhtml", mediaType: "application/xhtml+xml" },
+    { id: "fig-ok", href: "images/fig-ok.png", mediaType: "image/png" },
+    { id: "fig-anim", href: "images/fig-anim.gif", mediaType: "image/gif" },
+    { id: "fig-svg", href: "images/fig-svg.svg", mediaType: "image/svg+xml" },
+    { id: "fig-bomb", href: "images/fig-bomb.png", mediaType: "image/png" },
+  ];
+  const nav = navDocXml("Contents", toc);
+  const opf = opfXml({
+    version: "3.0",
+    title: "The Synthetic Book",
+    authors: ["Ada Author"],
+    language: "en",
+    identifier: "urn:uuid:synthetic-book-figures",
+    manifest,
+    spine: [{ idref: "nav", linear: "no" }, { idref: "c1" }],
+  });
+  const entries: EpubEntries = {
+    mimetype: mimetypeEntry(),
+    "META-INF/container.xml": deflated(containerXml("content.opf")),
+    "content.opf": deflated(opf),
+    "nav.xhtml": deflated(nav),
+    // STORED: this document IS the marker carrier (all six figure srcs must
+    // stay byte-visible to the self-check). The chapter lives at text/ so
+    // every marker resolves through the ../ path math.
+    "text/ch1.xhtml": stored(doc),
+    "images/fig-ok.png": binaryStored(Buffer.from(FIGURE_PNG_B64, "base64")),
+    "images/fig-anim.gif": binaryStored(Buffer.from(ANIMATED_GIF_B64, "base64")),
+    "images/fig-svg.svg": binaryStored(strToU8(FIGURE_SVG_TEXT)),
+    "images/fig-bomb.png": binaryStored(Buffer.from(PIXEL_BOMB_PNG_B64, "base64")),
+    // images/missing.png deliberately has NO entry (the dangling src), and
+    // the remote https src never touches the container.
+  };
+  return { entries, tocXml: nav, tocKind: "nav", topLevelCount: 1 };
+}
+
+/** 23. coverMetaBook — a valid one-chapter book whose OPF declares the
+ * classic cover-image meta + manifest item backed by a REAL admissible PNG
+ * entry that NO chapter references. D20-03: covers are never extracted —
+ * only chapter-content figures produce assets — so the book must emit zero
+ * assets despite the perfectly-sniffable cover bytes sitting in the
+ * container. */
+function coverMetaBookSpec(): FixtureSpec {
+  const toc: TocEntry[] = [{ label: "Chapter 1. Loomings", href: "ch1.xhtml" }];
+  const manifest: ManifestItem[] = [
+    { id: "nav", href: "nav.xhtml", mediaType: "application/xhtml+xml", properties: "nav" },
+    { id: "c1", href: "ch1.xhtml", mediaType: "application/xhtml+xml" },
+    { id: "cover-image", href: "images/cover.png", mediaType: "image/png" },
+  ];
+  const nav = navDocXml("Contents", toc);
+  const opf = opfXml({
+    version: "3.0",
+    title: "The Synthetic Book",
+    authors: ["Ada Author"],
+    language: "en",
+    identifier: "urn:uuid:synthetic-book-cover",
+    manifest,
+    spine: [{ idref: "nav", linear: "no" }, { idref: "c1" }],
+    metadataExtra: '<meta name="cover" content="cover-image"/>',
+  });
+  const entries: EpubEntries = {
+    mimetype: mimetypeEntry(),
+    "META-INF/container.xml": deflated(containerXml("content.opf")),
+    // STORED: this OPF IS the marker carrier (the cover meta must stay
+    // byte-visible to the self-check).
+    "content.opf": stored(opf),
+    "nav.xhtml": deflated(nav),
+    "ch1.xhtml": deflated(chapterXhtml("Chapter 1. Loomings", 0)),
+    "images/cover.png": binaryStored(Buffer.from(FIGURE_PNG_B64, "base64")),
+  };
+  return { entries, tocXml: nav, tocKind: "nav", topLevelCount: 1 };
+}
+
+/** 24. renderedFigureBook — one readerable chapter with exactly ONE
+ * admissible PNG figure (the 20-06 e2e render cell's book: the figure must
+ * render as a semantic figure element with a local blob img). */
+function renderedFigureBookSpec(): FixtureSpec {
+  const ps = chapterParagraphs("Chapter 1. Rendered", 0)
+    .map((p) => `    <p>${p}</p>`)
+    .join("\n");
+  const doc = `<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
+  <head>
+    <title>Chapter 1. Rendered</title>
+  </head>
+  <body>
+    <section>
+      <h2>Chapter 1. Rendered</h2>
+${ps}
+      <figure><img src="images/render-ok.png" alt="A rendered in-book figure."/><figcaption>The rendered figure caption.</figcaption></figure>
+    </section>
+  </body>
+</html>
+`;
+  const toc: TocEntry[] = [{ label: "Chapter 1. Rendered", href: "ch1.xhtml" }];
+  const manifest: ManifestItem[] = [
+    { id: "nav", href: "nav.xhtml", mediaType: "application/xhtml+xml", properties: "nav" },
+    { id: "c1", href: "ch1.xhtml", mediaType: "application/xhtml+xml" },
+    { id: "render-ok", href: "images/render-ok.png", mediaType: "image/png" },
+  ];
+  const nav = navDocXml("Contents", toc);
+  const opf = opfXml({
+    version: "3.0",
+    title: "The Synthetic Book",
+    authors: ["Ada Author"],
+    language: "en",
+    identifier: "urn:uuid:synthetic-book-rendered",
+    manifest,
+    spine: [{ idref: "nav", linear: "no" }, { idref: "c1" }],
+  });
+  const entries: EpubEntries = {
+    mimetype: mimetypeEntry(),
+    "META-INF/container.xml": deflated(containerXml("content.opf")),
+    "content.opf": deflated(opf),
+    "nav.xhtml": deflated(nav),
+    "ch1.xhtml": deflated(doc),
+    "images/render-ok.png": binaryStored(Buffer.from(FIGURE_PNG_B64, "base64")),
+  };
+  return { entries, tocXml: nav, tocKind: "nav", topLevelCount: 1 };
+}
+
+/** 25. refusedFigureBook — one readerable chapter with exactly ONE
+ * animated-GIF figure (the 20-06 e2e refusal cell's book: the figure must
+ * render the calm placeholder surface with the caption surviving). */
+function refusedFigureBookSpec(): FixtureSpec {
+  const ps = chapterParagraphs("Chapter 1. Refused", 0)
+    .map((p) => `    <p>${p}</p>`)
+    .join("\n");
+  const doc = `<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
+  <head>
+    <title>Chapter 1. Refused</title>
+  </head>
+  <body>
+    <section>
+      <h2>Chapter 1. Refused</h2>
+${ps}
+      <figure><img src="images/still-anim.gif" alt="An animated illustration the reader refuses."/><figcaption>The refused figure caption survives.</figcaption></figure>
+    </section>
+  </body>
+</html>
+`;
+  const toc: TocEntry[] = [{ label: "Chapter 1. Refused", href: "ch1.xhtml" }];
+  const manifest: ManifestItem[] = [
+    { id: "nav", href: "nav.xhtml", mediaType: "application/xhtml+xml", properties: "nav" },
+    { id: "c1", href: "ch1.xhtml", mediaType: "application/xhtml+xml" },
+    { id: "still-anim", href: "images/still-anim.gif", mediaType: "image/gif" },
+  ];
+  const nav = navDocXml("Contents", toc);
+  const opf = opfXml({
+    version: "3.0",
+    title: "The Synthetic Book",
+    authors: ["Ada Author"],
+    language: "en",
+    identifier: "urn:uuid:synthetic-book-refused",
+    manifest,
+    spine: [{ idref: "nav", linear: "no" }, { idref: "c1" }],
+  });
+  const entries: EpubEntries = {
+    mimetype: mimetypeEntry(),
+    "META-INF/container.xml": deflated(containerXml("content.opf")),
+    "content.opf": deflated(opf),
+    "nav.xhtml": deflated(nav),
+    "ch1.xhtml": deflated(doc),
+    "images/still-anim.gif": binaryStored(Buffer.from(ANIMATED_GIF_B64, "base64")),
+  };
+  return { entries, tocXml: nav, tocKind: "nav", topLevelCount: 1 };
+}
+
+/** The 20-06 count-cap corpus size: unique figure srcs in figureSpamBook.
+ * Deliberately exceeds MAX_FIGURES_PER_ARTICLE (the network-path constant
+ * in src/ingestion/types.ts); restated here (not imported) per this
+ * module's dependency-light discipline — the 20-06 spec asserts
+ * FIGURE_SPAM_COUNT > MAX_FIGURES_PER_ARTICLE as the loud coupling point. */
+export const FIGURE_SPAM_COUNT = 126;
+
+/** 26. figureSpamBook — one readerable chapter embedding FIGURE_SPAM_COUNT
+ * unique-src figures over FIGURE_SPAM_COUNT distinct container entries
+ * carrying IDENTICAL PNG bytes (byte-identical twins self-identify — D7-07:
+ * one accepted asset, one budget charge). The first MAX_FIGURES_PER_ARTICLE
+ * unique srcs admit; the rest refuse "count" per-figure (the network-path
+ * count cap, chapter-unit edition). */
+function figureSpamBookSpec(): FixtureSpec {
+  const ps = chapterParagraphs("Chapter 1. Spam", 0)
+    .map((p) => `    <p>${p}</p>`)
+    .join("\n");
+  const figs = Array.from({ length: FIGURE_SPAM_COUNT }, (_, i) => {
+    const n = i + 1;
+    return `      <img src="images/spam-${n}.png" alt="Spam figure ${n} of the count-cap corpus."/>`;
+  }).join("\n");
+  const doc = `<?xml version="1.0" encoding="UTF-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
+  <head>
+    <title>Chapter 1. Spam</title>
+  </head>
+  <body>
+    <section>
+      <h2>Chapter 1. Spam</h2>
+${ps}
+${figs}
+    </section>
+  </body>
+</html>
+`;
+  const toc: TocEntry[] = [{ label: "Chapter 1. Spam", href: "ch1.xhtml" }];
+  const png = Buffer.from(FIGURE_PNG_B64, "base64");
+  const manifest: ManifestItem[] = [
+    { id: "nav", href: "nav.xhtml", mediaType: "application/xhtml+xml", properties: "nav" },
+    { id: "c1", href: "ch1.xhtml", mediaType: "application/xhtml+xml" },
+  ];
+  const nav = navDocXml("Contents", toc);
+  const opf = opfXml({
+    version: "3.0",
+    title: "The Synthetic Book",
+    authors: ["Ada Author"],
+    language: "en",
+    identifier: "urn:uuid:synthetic-book-spam",
+    manifest,
+    spine: [{ idref: "nav", linear: "no" }, { idref: "c1" }],
+  });
+  const entries: EpubEntries = {
+    mimetype: mimetypeEntry(),
+    "META-INF/container.xml": deflated(containerXml("content.opf")),
+    "content.opf": deflated(opf),
+    "nav.xhtml": deflated(nav),
+    "ch1.xhtml": deflated(doc),
+  };
+  for (let i = 1; i <= FIGURE_SPAM_COUNT; i++) {
+    entries[`images/spam-${i}.png`] = binaryStored(png);
+  }
+  return { entries, tocXml: nav, tocKind: "nav", topLevelCount: 1 };
+}
+
 // ── Declared-size patch (the 09-04 technique — never materialize bytes) ─────
 
 /** Patch the zip CENTRAL DIRECTORY's declared uncompressed size for one
@@ -1261,6 +1565,32 @@ export function anchorGateFailBook(): Uint8Array {
   return zipBook(anchorGateFailBookSpec());
 }
 
+/** 22. Chapter embedding the full 20-06 resolution matrix (admitted PNG,
+ * animated GIF, SVG, pixel bomb, dangling src, remote src). */
+export function figureChapterBook(): Uint8Array {
+  return zipBook(figureChapterBookSpec());
+}
+
+/** 23. Cover meta + real unreferenced cover image → zero assets (D20-03). */
+export function coverMetaBook(): Uint8Array {
+  return zipBook(coverMetaBookSpec());
+}
+
+/** 24. One admissible PNG figure (the e2e render cell's book). */
+export function renderedFigureBook(): Uint8Array {
+  return zipBook(renderedFigureBookSpec());
+}
+
+/** 25. One animated-GIF figure (the e2e refusal cell's book). */
+export function refusedFigureBook(): Uint8Array {
+  return zipBook(refusedFigureBookSpec());
+}
+
+/** 26. FIGURE_SPAM_COUNT unique-src identical-byte figures (the count cap). */
+export function figureSpamBook(): Uint8Array {
+  return zipBook(figureSpamBookSpec());
+}
+
 // ── Self-check helpers ───────────────────────────────────────────────────────
 
 function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
@@ -1352,6 +1682,11 @@ const FIXTURES: NamedFixture[] = [
   { name: "emptyBook", build: emptyBook, spec: emptyBookSpec },
   { name: "mixedAdmissionBook", build: mixedAdmissionBook, spec: mixedAdmissionBookSpec },
   { name: "anchorGateFailBook", build: anchorGateFailBook, spec: anchorGateFailBookSpec },
+  { name: "figureChapterBook", build: figureChapterBook, spec: figureChapterBookSpec },
+  { name: "coverMetaBook", build: coverMetaBook, spec: coverMetaBookSpec },
+  { name: "renderedFigureBook", build: renderedFigureBook, spec: renderedFigureBookSpec },
+  { name: "refusedFigureBook", build: refusedFigureBook, spec: refusedFigureBookSpec },
+  { name: "figureSpamBook", build: figureSpamBook, spec: figureSpamBookSpec },
 ];
 
 function selfCheck(): void {
@@ -1405,6 +1740,24 @@ function selfCheck(): void {
   disc("imageChapterBook", "https://attacker.example/track.png", true);
   disc("imageChapterBook", "images/figure-1.png", true);
   disc("anchorGateFailBook", "* * * * * * * * * * * * * * * * * *", true);
+  // 20-06 corpus discriminators — every figure src + the cover meta must be
+  // byte-present in the built books (stored marker-carrier documents).
+  disc("figureChapterBook", "../images/fig-ok.png", true);
+  disc("figureChapterBook", "../images/fig-anim.gif", true);
+  disc("figureChapterBook", "../images/fig-svg.svg", true);
+  disc("figureChapterBook", "../images/fig-bomb.png", true);
+  disc("figureChapterBook", "../images/missing.png", true);
+  disc("figureChapterBook", "https://attacker.example/track.png", true);
+  disc("coverMetaBook", 'name="cover"', true);
+  disc("coverMetaBook", "images/cover.png", true);
+  disc("renderedFigureBook", "images/render-ok.png", true);
+  disc("refusedFigureBook", "images/still-anim.gif", true);
+  disc("figureSpamBook", "images/spam-1.png", true);
+  disc(
+    "figureSpamBook",
+    `images/spam-${FIGURE_SPAM_COUNT}.png`,
+    true,
+  );
 
   // bombEntryBook: the DECLARED central-directory size must equal the
   // exported lie (the 12-02 spec asserts it exceeds the REAL

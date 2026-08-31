@@ -5,11 +5,16 @@
 // 12-01 synthetic fixture matrix. Task 2 (same file) adds describe 2: the
 // TOC→spine-range chapter merge, admission, and the output contract.
 import { createHash } from "node:crypto";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+/** The figure arm of Block (the schema exports the Zod value; the inferred
+ * type derives locally — Extract, never a fork). */
+type FigureBlockT = Extract<Block, { kind: "figure" }>;
 import {
   BOMB_ENTRY_DECLARED_SIZE,
   bombEntryBook,
   corruptNotEpub,
+  coverMetaBook,
   deepNavBook,
   degenerateTocBook,
   drmAdeptBook,
@@ -17,6 +22,10 @@ import {
   drmUnknownAlgBook,
   emptyBook,
   entityBombOpf,
+  FIGURE_PNG_B64,
+  FIGURE_SPAM_COUNT,
+  figureChapterBook,
+  figureSpamBook,
   fontObfuscatedBook,
   frontMatterBook,
   imageChapterBook,
@@ -38,8 +47,11 @@ import {
   type ChapterDraft,
 } from "../../../server/epubToBooks";
 import { IngestionError } from "../../../server/errors";
-import { EPUB_MAX_ENTRY_BYTES } from "../../../server/limits";
-import { BlockSchema } from "../../../src/content/schema";
+import {
+  EPUB_MAX_ENTRY_BYTES,
+  MAX_FIGURES_PER_ARTICLE,
+} from "../../../server/limits";
+import { BlockSchema, type Block } from "../../../src/content/schema";
 
 /** Rejects with an IngestionError carrying exactly `reason`; returns the
  * error so per-test message assertions can chain. */
@@ -251,21 +263,38 @@ describe("epubToBooks — TOC-merge + chapters", () => {
     expect(ch2.title).toBe("Chapter 2. The Carpet-Bag");
   });
 
-  it("imageChapterBook → zero figure-kind blocks survive; remote URL absent from all payloads (T-12-05)", async () => {
+  // D20-01/D20-03 (D12-16 retirement, 20-06): figures in EPUB chapters no
+  // longer downgrade to unsupported blocks — every figure is a FigureBlock
+  // that either admits as a local asset ref or refuses calmly (src omitted,
+  // alt + caption intact, disclosed via the chapter's refused count). The
+  // old expectation ("zero figure-kind blocks survive") retired WITH the
+  // downgrade pass; the zero-beacon property it guarded lives on below as
+  // "no src key carries a remote URL".
+  it("imageChapterBook → figures stay FigureBlocks; remote src refuses calmly, zero remote srcs (T-12-05/D20-01)", async () => {
     const result = await epubToBooks(imageChapterBook());
     expect(result.chapters.length).toBe(1);
-    const blocks = (result.chapters[0] as ChapterDraft).blocks;
-    // The acceptance scan: NO block of kind figure survives anywhere.
-    expect(blocks.every((b) => b.kind !== "figure")).toBe(true);
-    const downgraded = blocks.filter(
-      (b) => b.kind === "unsupported" && b.originalKind === "figure",
+    const draft = result.chapters[0] as ChapterDraft;
+    // The walk no longer downgrades: BOTH figures survive as figure blocks.
+    const figures = draft.blocks.filter(
+      (b): b is FigureBlockT => b.kind === "figure",
     );
-    expect(downgraded.length).toBeGreaterThanOrEqual(1);
-    for (const b of downgraded) {
-      expect(b.kind === "unsupported" && b.plainDescription.length > 0).toBe(true);
+    expect(figures.length).toBe(2);
+    // Zero-network (D20-01): neither figure admits — the remote src refuses
+    // (the container is the only read source) and the relative src dangles
+    // (imageChapterBook ships no images/ entries).
+    expect(draft.assets.length).toBe(0);
+    expect(draft.figureRefusedCount).toBe(2);
+    for (const f of figures) {
+      expect("src" in f && f.src !== undefined).toBe(false); // src omitted
+      expect(f.alt.length > 0).toBe(true); // alt preserved
     }
-    // The tracking URL must not leak into any block payload.
-    expect(JSON.stringify(blocks)).not.toContain("attacker.example");
+    // The remote figure keeps its URL as originalSrc PROVENANCE (httpUrl-
+    // typed — the D20-12 "where the bytes would have come from" discipline,
+    // exactly what the network path writes); no src KEY carries it, so no
+    // renderer can ever load it (T-12-05 anti-beacon holds structurally).
+    const remote = figures.find((f) => f.originalSrc === "https://attacker.example/track.png");
+    expect(remote).toBeDefined();
+    expect(JSON.stringify(draft.blocks.filter((b) => b.kind === "figure").map((f) => (f as FigureBlockT).src))).not.toContain("attacker.example");
   });
 
   it("emptyBook → epub-empty (zero readerable documents — whole-book refusal, D12-11)", async () => {
@@ -330,5 +359,191 @@ describe("epubToBooks — TOC-merge + chapters", () => {
     const a = await epubToBooks(validBookEpub3());
     const b = await epubToBooks(validBookEpub3());
     expect(a).toEqual(b);
+  });
+});
+
+// ── Plan 20-06 — container extraction: resolve, sniff-cap, rewrite, disclose ──
+//
+// The D12-16 retirement suite: chapter figures extract from the ALREADY-OPEN
+// container with zero network (D20-01), run the shared sniff caps minus fetch
+// (D20-08/09/10/11 — sniffImageAsset, the same seam, never a fork), rewrite
+// through the shared stage helper (rewriteFiguresWithAssets), and refuse
+// calmly per-figure with disclosure (D12-11 honesty mirror). figureChapterBook
+// nests its chapter at text/ with ../-relative markers so every cell proves
+// the chapter-relative → OPF-dir-relative path math off the entries map.
+
+/** The expected assetId of the corpus PNG (identical bytes self-identify). */
+const EXPECTED_PNG_ASSET_ID =
+  "img-" +
+  createHash("sha256").update(Buffer.from(FIGURE_PNG_B64, "base64")).digest("hex").slice(0, 12);
+
+/** figure blocks of a draft, document order. */
+function figuresOf(draft: ChapterDraft): FigureBlockT[] {
+  const out: FigureBlockT[] = [];
+  const walk = (bs: ChapterDraft["blocks"]): void => {
+    for (const b of bs) {
+      if (b.kind === "figure") out.push(b);
+      else if (b.kind === "blockquote") walk(b.children);
+      else if (b.kind === "bulleted-list" || b.kind === "numbered-list")
+        for (const item of b.items) walk(item.content);
+    }
+  };
+  walk(draft.blocks);
+  return out;
+}
+
+/** The plain text of a figure's caption runs (substrate identity pin). */
+function captionText(f: FigureBlockT): string {
+  return f.caption.map((r) => r.text).join("");
+}
+
+describe("epubToBooks — 20-06 container extraction", () => {
+  it("admits a chapter figure from the container with stored dims + the asset on the draft (D20-01)", async () => {
+    const result = await epubToBooks(figureChapterBook());
+    expect(result.chapters.length).toBe(1);
+    const draft = result.chapters[0] as ChapterDraft;
+    const figures = figuresOf(draft);
+    expect(figures.length).toBe(6);
+
+    // Exactly the PNG admits: src rewrites to the asset ref, dims stored.
+    const admitted = figures.find((f) => f.src === `asset:${EXPECTED_PNG_ASSET_ID}`);
+    expect(admitted).toBeDefined();
+    expect(admitted?.width).toBe(8);
+    expect(admitted?.height).toBe(6);
+    // No originalSrc on the EPUB path — the marker src is chapter-relative,
+    // not URL-shaped (originalSrc is httpUrl-typed; provenance for refused
+    // markers lives in the disclosure, not a forced non-URL).
+    expect(admitted?.originalSrc).toBeUndefined();
+
+    // The draft carries the accepted asset: same bytes, sniffed content
+    // type, and the content-hash assetId the block references.
+    expect(draft.assets.length).toBe(1);
+    const asset = draft.assets[0] as unknown as {
+      assetId: string;
+      contentType: string;
+      width: number;
+      height: number;
+      bytes: Uint8Array;
+    };
+    expect(asset.assetId).toBe(EXPECTED_PNG_ASSET_ID);
+    expect(asset.contentType).toBe("image/png");
+    expect(asset.width).toBe(8);
+    expect(asset.height).toBe(6);
+    expect(Buffer.from(asset.bytes).equals(Buffer.from(FIGURE_PNG_B64, "base64"))).toBe(true);
+  });
+
+  it("refuses animated / SVG / pixel-bomb container figures calmly — alt + caption intact (D20-08/09, T-20-24/25)", async () => {
+    const result = await epubToBooks(figureChapterBook());
+    const draft = result.chapters[0] as ChapterDraft;
+    const byAlt = new Map(figuresOf(draft).map((f) => [f.alt, f] as const));
+    for (const alt of [
+      "An animated illustration plate.",
+      "A vector diagram the reader refuses.",
+      "An oversized canvas declaration.",
+    ]) {
+      const f = byAlt.get(alt);
+      expect(f, alt).toBeDefined();
+      expect("src" in (f as FigureBlockT) && (f as FigureBlockT).src !== undefined).toBe(false);
+      expect((f as FigureBlockT).originalSrc).toBeUndefined(); // marker provenance: no non-URL forced
+    }
+    // Captions survive verbatim (substrate identity, D19-01).
+    expect(captionText(byAlt.get("An animated illustration plate.") as FigureBlockT)).toBe(
+      "The animated figure caption stays.",
+    );
+    expect(captionText(byAlt.get("A vector diagram the reader refuses.") as FigureBlockT)).toBe(
+      "The SVG figure caption stays.",
+    );
+    expect(captionText(byAlt.get("An oversized canvas declaration.") as FigureBlockT)).toBe(
+      "The pixel-bomb figure caption stays.",
+    );
+    // Only the PNG admitted; 5 of 6 figures refused (animated + svg + bomb +
+    // dangling + remote) and are DISCLOSED, never silently dropped.
+    expect(draft.assets.length).toBe(1);
+    expect(draft.figureRefusedCount).toBe(5);
+  });
+
+  it("refuses a dangling marker (no archive entry) calmly with alt + caption intact", async () => {
+    const result = await epubToBooks(figureChapterBook());
+    const draft = result.chapters[0] as ChapterDraft;
+    const dangling = figuresOf(draft).find(
+      (f) => f.alt === "A figure whose entry is missing.",
+    );
+    expect(dangling).toBeDefined();
+    expect("src" in (dangling as FigureBlockT) && (dangling as FigureBlockT).src !== undefined).toBe(false);
+    expect(captionText(dangling as FigureBlockT)).toBe("The dangling figure caption stays.");
+  });
+
+  it("ZERO network: extraction succeeds with fetch stubbed to throw (D20-01, T-20-27)", async () => {
+    vi.stubGlobal("fetch", () => {
+      throw new Error("network egress attempted on the EPUB container path");
+    });
+    try {
+      const result = await epubToBooks(figureChapterBook());
+      const draft = result.chapters[0] as ChapterDraft;
+      // The container figure STILL admits — bytes came from the entries map.
+      expect(figuresOf(draft).some((f) => f.src === `asset:${EXPECTED_PNG_ASSET_ID}`)).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("covers are NEVER extracted — a cover meta + real unreferenced cover image yields zero assets (D20-03)", async () => {
+    const result = await epubToBooks(coverMetaBook());
+    expect(result.chapters.length).toBe(1);
+    for (const draft of result.chapters) {
+      expect((draft as ChapterDraft).assets.length).toBe(0);
+      expect((draft as ChapterDraft).figureRefusedCount).toBe(0);
+      // And no figure block ever references the cover bytes.
+      for (const f of figuresOf(draft as ChapterDraft)) {
+        expect(f.src).not.toBe(`asset:${EXPECTED_PNG_ASSET_ID}`);
+      }
+    }
+  });
+
+  it("substrate identity: every figure's alt + caption are byte-identical to the fixture text (D-05/D19-01)", async () => {
+    const result = await epubToBooks(figureChapterBook());
+    const figures = figuresOf(result.chapters[0] as ChapterDraft);
+    expect(figures.map((f) => f.alt)).toEqual([
+      "A calm in-book figure admitted from the container.",
+      "An animated illustration plate.",
+      "A vector diagram the reader refuses.",
+      "An oversized canvas declaration.",
+      "A figure whose entry is missing.",
+      "A remote tracking image.",
+    ]);
+    expect(figures.map(captionText)).toEqual([
+      "The admitted figure caption.",
+      "The animated figure caption stays.",
+      "The SVG figure caption stays.",
+      "The pixel-bomb figure caption stays.",
+      "The dangling figure caption stays.",
+      "The remote figure caption stays.",
+    ]);
+    // Every rewritten block parses against the Block schema (the assetRef
+    // arm + omitted-src arm both hold at the boundary).
+    for (const b of (result.chapters[0] as ChapterDraft).blocks) {
+      expect(() => BlockSchema.parse(b)).not.toThrow();
+    }
+  });
+
+  it("count cap: beyond MAX_FIGURES_PER_ARTICLE unique srcs refuse per-figure; byte-identical twins dedupe (D20-11/D7-07)", async () => {
+    // The coupling point: the corpus must exceed the REAL network-path cap.
+    expect(FIGURE_SPAM_COUNT).toBeGreaterThan(MAX_FIGURES_PER_ARTICLE);
+    const result = await epubToBooks(figureSpamBook());
+    expect(result.chapters.length).toBe(1);
+    const draft = result.chapters[0] as ChapterDraft;
+    const figures = figuresOf(draft);
+    expect(figures.length).toBe(FIGURE_SPAM_COUNT);
+    // The first MAX_FIGURES_PER_ARTICLE unique srcs admit (all byte-identical
+    // twins of the one PNG — ONE accepted asset, ONE budget charge); the
+    // remainder refuse "count" per-figure.
+    const admitted = figures.filter((f) => f.src === `asset:${EXPECTED_PNG_ASSET_ID}`);
+    const refused = figures.filter((f) => f.src === undefined);
+    expect(admitted.length).toBe(MAX_FIGURES_PER_ARTICLE);
+    expect(refused.length).toBe(FIGURE_SPAM_COUNT - MAX_FIGURES_PER_ARTICLE);
+    expect(draft.assets.length).toBe(1); // twins self-identify by content hash
+    expect(draft.figureRefusedCount).toBe(FIGURE_SPAM_COUNT - MAX_FIGURES_PER_ARTICLE);
+    // The beyond-cap figures keep alt + caption-free placeholders with alt intact.
+    expect(refused.every((f) => f.alt.length > 0)).toBe(true);
   });
 });

@@ -832,6 +832,12 @@ export interface ChapterDraft {
   /** First spine position of the chapter's content (debug/traceability). */
   spineIndex: number;
   sourceHtmlHash: string;
+  /** 20-06 scaffold (RED): accepted chapter-figure assets ride the draft to
+   * the book envelope. Placeholder until the container extraction lands. */
+  assets: never[];
+  /** 20-06 scaffold (RED): per-figure refusal count disclosed through
+   * extractionWarnings. Placeholder until the container extraction lands. */
+  figureRefusedCount: number;
 }
 
 /** The adapter output (12-RESEARCH Pattern 1 — planner-confirmed shape). */
@@ -996,6 +1002,10 @@ function emitChapter(
     title: chapterTitle(unit, unitDocs, number),
     spineIndex: first !== undefined ? first.pos : unit.startPos,
     sourceHtmlHash: hasher.digest("hex"),
+    // 20-06 scaffold (RED): placeholders — populated by the container
+    // extraction in the GREEN commit (tests fail against these constants).
+    assets: [],
+    figureRefusedCount: 0,
   };
 }
 
