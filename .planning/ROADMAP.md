@@ -225,7 +225,7 @@ Plans:
   4. Figures render semantically with stable geometry and calm failures in both modes without content or location loss.
   5. Assets export/import with validation, limits, conflicts, and no broken references, and follow documented deletion lifecycle.
 
-**Plans**: 7 plans
+**Plans**: 8 plans
 
 **Wave 1** *(foundation)*
 
@@ -238,14 +238,18 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 20-04-PLAN.md — reserved-geometry rendering, one placeholder surface, fixture asset corpus, imagery e2e matrix + corpus realignment (IMG-03, IMG-05, IMG-06)
+- [ ] 20-04-PLAN.md — reserved-geometry rendering, one placeholder surface, fixture asset corpus, save-call wiring (IMG-03, IMG-05, IMG-06)
 - [ ] 20-05-PLAN.md — bundle v4 asset round-trip: manifest assets block, import gates, conflict ride, preview warnings (IMG-04)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
 - [ ] 20-06-PLAN.md — EPUB container extraction retiring the D12-16 downgrade (IMG-01, IMG-02)
 
-**Wave 5** *(blocked on Wave 4 completion)*
+**Wave 5** *(blocked on Waves 3-4 completion)*
+
+- [ ] 20-08-PLAN.md — 3-engine imagery e2e matrix (offline/geometry/decode/refusal) + strengthen-only corpus pin realignment (IMG-03, IMG-05, IMG-06)
+
+**Wave 6** *(blocked on Waves 3-5 completion)*
 
 - [ ] 20-07-PLAN.md — phase gate: honest full-suite run, IMG closure ledger, residual recording (IMG-01..06)
 

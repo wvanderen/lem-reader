@@ -848,9 +848,21 @@ than a silent pass — non-vacuous by construction (the 06-04 Pitfall-1 guard).
 | A6 | Bounded-concurrency parallel asset fetching (≈4) keeps inline ingest latency acceptable | Pattern 1 | Low — stage is sequential-safe fallback; number is tunable constant |
 | A7 | Placeholder default box ratio/height cap (≈3:2, page-relative cap) suits the corpus | Pattern 4 | Low — D20-13 defers exact dimensions to corpus/planner |
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+*All five were decided during Phase 20 planning; the deciding plan task is inline with each question.*
 
 1. **Transport budget arithmetic (dev generosity vs prod 4.5MB)**
+   **(RESOLVED → 20-01-T1 + 20-02-T2):** the recommendation was taken in full —
+   `MAX_ASSET_RESPONSE_BYTES = 3 * 1024 * 1024` ships as a shared constant in
+   20-01-T1 (base64 inflation ≈4MB keeps the Vercel 4.5MB response ceiling
+   honest; dev middleware is uncapped but the constant keeps dev/prod uniform),
+   and 20-02-T2 enforces it as a running in-stage decoded-byte budget with
+   per-figure refusal in deterministic document order (first-come). Streamed/
+   chunked transport is recorded as backlog, not this phase. 20-07-T2 re-checks
+   the number against the corpus evidence the phase produced, per D20-11's
+   corpus-determined lock (cap stays named + commented; tuning is a follow-up,
+   never a silent edit).
    - What we know: Vercel response payload cap 4.5MB [VERIFIED]; dev
      middleware uncapped; D20-11 demands generous caps.
    - What's unclear: whether prod parity matters enough this phase for a
@@ -860,6 +872,11 @@ than a silent pass — non-vacuous by construction (the 06-04 Pitfall-1 guard).
      backlog. Planner should surface the number choice to the user with the
      corpus data (human gate, per D20-11's "corpus-determined" lock).
 2. **Markdown relative-src figures: UnsupportedBlock (today) or refused FigureBlock?**
+   **(RESOLVED → 20-02-T2):** recommendation taken in full — `figureFromImage`
+   promotes non-http srcs (relative paths, data: URIs, bare words) to refused
+   FigureBlocks with alt preserved and src omitted (OQ2 confirmed in plan);
+   one placeholder surface everywhere; https srcs stay unchanged FigureBlocks.
+   The unit cell lands in markdown-to-blocks.spec.ts.
    - What we know: `figureFromImage` maps non-http srcs to UnsupportedBlock
      [VERIFIED: codebase]; D20-06 says failed figures stay FigureBlocks; the
      discretion note expects "calm per-figure refusals".
@@ -867,8 +884,15 @@ than a silent pass — non-vacuous by construction (the 06-04 Pitfall-1 guard).
      one placeholder surface everywhere; small markdownToBlocks change. Planner
      confirms.
 3. **Very tall/wide figures vs page height**
+   **(RESOLVED → 20-04-T2):** clamp adopted — `--figure-media-max-h:
+   calc((100dvh - 48px - 2 * 48px) * 0.5)` page-relative cap + `object-fit:
+   contain` letterbox so no figure box exceeds a page; `--figure-placeholder-ratio:
+   3 / 2` is the placeholder default. Constants are owned by 20-UI-SPEC §Layout
+   and shipped in app.css by 20-04-T2; the tall-figure letterbox e2e cell and
+   page-count-identity proofs land in 20-08-T1 (geometry.spec). No zoom-image
+   lightbox this phase — the a11y tradeoff stands as documented.
    - What we know: atomic-oversize guard fires honest fallback when a block
-     exceeds 0.75 page [VERIFIED: codebase, Phase 04 decisions].
+      exceeds 0.75 page [VERIFIED: codebase, Phase 04 decisions].
    - What's unclear: clamp policy (max-height + object-fit letterbox vs no
      clamp) and the number.
    - Recommendation: clamp with `object-fit: contain` so no figure box exceeds
@@ -876,6 +900,11 @@ than a silent pass — non-vacuous by construction (the 06-04 Pitfall-1 guard).
      letterboxed high-detail images lose inspectability at narrow widths —
      acceptable for a reader (no zoom-image lightbox this phase).
 4. **Per-book asset disclosure surface**
+   **(RESOLVED → 20-02-T2):** figure refusals ride the existing additive
+   `ingestionMeta.extractionWarnings` array — refusal-count entries shaped "N
+   image(s) could not be included" (zero schema change, existing surfaced
+   channel). The EPUB path reuses the same channel per book in 20-06-T1; no new
+   field, no new ConflictKind.
    - What we know: EPUB path may refuse over-budget chapter figures; D12-11
      disclosed chapter skips via `skippedChapterCount`.
    - What's unclear: whether figure refusals ride
@@ -884,6 +913,11 @@ than a silent pass — non-vacuous by construction (the 06-04 Pitfall-1 guard).
    - Recommendation: `extractionWarnings` entries (e.g. "2 figures could not be
      included") — zero schema change, existing surfaced channel.
 5. **image-size maintenance continuity (repo archived to Codeberg)**
+   **(RESOLVED → audit-accepted):** accepted per the §Package Legitimacy Audit
+   verdict (npm package current/stable, zero deps, no install scripts,
+   exact-pinned 2.0.2) — a finished utility behind a single-seam module
+   (server/fetchImageAsset.ts) that keeps it swappable; Codeberg is noted as
+   the follow-source in the audit comment. No further gate.
    - What we know: npm package current/stable; repo archived 2026-06
      [VERIFIED: official README banner].
    - Recommendation: accept (finished utility, zero deps, single-seam module);
