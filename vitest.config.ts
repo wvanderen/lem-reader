@@ -30,6 +30,12 @@ export default defineConfig({
           include: [
             "tests/unit/**/*.test.ts",
             "tests/unit/**/*.test.tsx",
+            // Phase 20 (20-03): the `*.spec.ts` arm picks up
+            // tests/unit/persistence/assets-cascade.spec.ts — the `unit`
+            // project excluded tests/unit/server/** wholesale below, so
+            // without this arm the spec would match NEITHER project and
+            // silently never run (the 11-06 harness precedent).
+            "tests/unit/**/*.spec.ts",
             "tests/component/**/*.test.tsx",
           ],
           exclude: ["tests/unit/server/**", "tests/e2e", "node_modules"],
