@@ -109,6 +109,18 @@ export function PageFragmentView({
    */
   style?: React.CSSProperties;
 }): React.ReactElement {
+  // Plan 19-04 (Pitfall 2 / T-19-10 — per-page first-occurrence id pass):
+  // ONE PageFragmentView is mounted at a time (PaginatedSurface), so a
+  // per-render Set of highlight ids == per-MOUNTED-PAGE firstness. While
+  // mapping entries in document order, the first slice encountered per
+  // highlight id claims isFirst = true; every later slice for the same id
+  // on THIS page is isFirst = false — OVERRIDING whatever the entry-local
+  // slicer produced (entry-local coordinates cannot know document
+  // firstness; see HighlightSlice.isFirst). This guarantees exactly one
+  // id="hl-<highlightId>" per highlight per mounted page, and it precedes
+  // sibling slices in document order so the D10-03 jump focus lands at the
+  // page-local span start.
+  const seenHighlightIds = new Set<string>();
   return (
     <section className="page-fragment" aria-label={`Page ${pageIndex + 1}`} style={style}>
       {fragment.blocks.map((entry, i) => {
@@ -308,6 +320,31 @@ export function PageFragmentView({
             }
           }
         }
+        // Per-page first-occurrence pass (Plan 19-04): claim isFirst in
+        // DOCUMENT order across every slice shape this entry produced —
+        // blockquote children walk in render order, list items recurse
+        // depth-first in render order, caption slices and code segments
+        // walk their ordered arrays. Exactly one slice per highlight id
+        // keeps the DOM id on this mounted page.
+        if (childHighlightSlices) {
+          for (const childSlices of childHighlightSlices) {
+            if (childSlices) {
+              claimSlicesFirstOccurrence(childSlices, seenHighlightIds);
+            }
+          }
+        }
+        if (highlightSlices) {
+          claimSlicesFirstOccurrence(highlightSlices, seenHighlightIds);
+        }
+        if (itemHighlightSlices) {
+          claimItemSlicesFirstOccurrence(itemHighlightSlices, seenHighlightIds);
+        }
+        if (captionHighlightSlices) {
+          claimSlicesFirstOccurrence(captionHighlightSlices, seenHighlightIds);
+        }
+        if (codeSegments) {
+          claimCodeSegmentsFirstOccurrence(codeSegments, seenHighlightIds);
+        }
         return (
           <BlockView
             key={i}
@@ -402,6 +439,22 @@ function sliceHighlightsForEntry(
 // render proof is Plan 05-05's Playwright suite). The function is otherwise
 // internal to PageFragmentView's render path.
 export { sliceHighlightsForEntry as _test_sliceHighlightsForEntry };
+
+// Test-only exports (Plan 19-04): the per-page first-occurrence claim
+// primitives + the entry-local items-shape threading are pure (no DOM, no
+// React), so cross-fragment-slicing.test.ts proves the flag arithmetic with
+// synthetic slice arrays (jsdom-safe; the real multi-page render proof is
+// the cross-fragment-render.spec.ts Playwright cells).
+export { claimSlicesFirstOccurrence as _test_claimSlicesFirstOccurrence };
+export {
+  claimItemSlicesFirstOccurrence as _test_claimItemSlicesFirstOccurrence,
+};
+export {
+  claimCodeSegmentsFirstOccurrence as _test_claimCodeSegmentsFirstOccurrence,
+};
+export {
+  computeEntryListItemSlices as _test_computeEntryListItemSlices,
+};
 
 /**
  * Entry-local per-item highlight-slice computation for bulleted/numbered
@@ -499,6 +552,78 @@ function computeEntryListItemSlices(
       (item.content.length === 0 ? BLOCK_SEPARATOR.length : 0);
   }
   return anySlices ? { perItem } : null;
+}
+
+// ── Per-page first-occurrence id pass (Plan 19-04 — Pitfall 2 / T-19-10) ──────
+
+/**
+ * Claim isFirst over an ordered HighlightSlice[] for ONE mounted page.
+ *
+ * Mutates slice.isFirst in place: the first slice carrying a given
+ * highlightId (in walk order = document order) claims isFirst = true; every
+ * later slice for the same id on THIS mounted page is isFirst = false. The
+ * slicer-produced flags are entry-local-blind (see HighlightSlice.isFirst)
+ * and are ALWAYS overridden here — the pass, not the slicer, owns the flag
+ * in paginated mode. Exactly one isFirst per id per page means exactly one
+ * id="hl-<id>" element per mounted document (InlineRenderer stamps the id
+ * only when isFirst === true; data-highlight-id stays on EVERY slice).
+ */
+function claimSlicesFirstOccurrence(
+  slices: readonly HighlightSlice[],
+  seen: Set<string>,
+): void {
+  for (const slice of slices) {
+    if (slice.highlightId === null) continue;
+    if (seen.has(slice.highlightId)) {
+      slice.isFirst = false;
+    } else {
+      seen.add(slice.highlightId);
+      slice.isFirst = true;
+    }
+  }
+}
+
+/**
+ * Claim isFirst over a ListItemSlices structure — depth-first in RENDER
+ * order (items in order, each item's content children in order, nested
+ * lists recursing between surrounding siblings), sharing ONE seen-set with
+ * the rest of the mounted page.
+ */
+function claimItemSlicesFirstOccurrence(
+  item: ListItemSlices,
+  seen: Set<string>,
+): void {
+  for (const perChild of item.perItem) {
+    for (const child of perChild) {
+      if (child == null) continue;
+      if (Array.isArray(child)) {
+        claimSlicesFirstOccurrence(child, seen);
+      } else {
+        claimItemSlicesFirstOccurrence(child, seen);
+      }
+    }
+  }
+}
+
+/**
+ * Claim isFirst over sliceCodeForHighlights output — the same first-
+ * occurrence rule for code segments (CodeSegment.isFirst gates the
+ * id="hl-<id>" stamp in BlockView's code case exactly as HighlightSlice
+ * .isFirst gates InlineRenderer's).
+ */
+function claimCodeSegmentsFirstOccurrence(
+  segments: readonly CodeSegment[],
+  seen: Set<string>,
+): void {
+  for (const segment of segments) {
+    if (segment.entry === null) continue;
+    if (seen.has(segment.entry.id)) {
+      segment.isFirst = false;
+    } else {
+      seen.add(segment.entry.id);
+      segment.isFirst = true;
+    }
+  }
 }
 
 /**
