@@ -415,10 +415,12 @@ describe("figure caption highlight rendering (19-03 Task 3, Pitfall 1 symmetric 
     for (const m of marks) {
       expect(m.getAttribute("data-highlight-id")).toBe("hl-gap");
     }
-    // The img exists and carries no marks (alt is an attribute surface).
-    const img = container.querySelector("figure img");
-    expect(img).not.toBeNull();
-    expect(img!.querySelectorAll("mark").length).toBe(0);
+    // The media surface carries no marks (Phase 20: a remote src renders
+    // the .figure-placeholder — D20-02 gap rule on the new surface; alt is
+    // attribute/visible-media text, never a mark target).
+    const media = container.querySelector("figure .figure-placeholder");
+    expect(media).not.toBeNull();
+    expect(media!.querySelectorAll("mark").length).toBe(0);
     // Every figure mark lives inside the figcaption (the gap surface is plain).
     const figcaption = container.querySelector("figcaption")!;
     const figureMarks = container.querySelectorAll("figure mark.highlight");

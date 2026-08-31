@@ -55,6 +55,14 @@ import {
 } from "../reader/annotations/HighlightOverlay";
 import type { HighlightOverlayValue } from "../reader/annotations/HighlightOverlay";
 import type { CreateFromSelectionResult, ToolbarCaptureResult } from "../reader/annotations/HighlightOverlay";
+// Phase 20 Plan 20-04 (IMG-03/IMG-06): per-article figure-asset resolution.
+// The provider wraps the <article> element so BOTH the visible body
+// (scrolling ArticleBody / paginated page fragments) and the hidden
+// measurement body render from the ONE stable object-URL map — per-article
+// resolution means deterministic geometry with no per-turn create/revoke
+// churn, and measurement sees the same reserved figure boxes the visible
+// pages will (decode is paint, never layout — D20-13).
+import { AssetProvider } from "../content/assets/AssetProvider";
 import { SelectionToolbar } from "../reader/annotations/SelectionToolbar";
 // Phase 5 Plan 05-03: NotePopover (Popover API manual + debounced save +
 // two-step delete) + AnnotationsDrawer (native <dialog> reading-order list +
@@ -2316,6 +2324,12 @@ export function ArticleView({
             reverts the class in the same render that mounts the scrolling
             body (disclosed by the banner), so the clip never traps a
             scrolling rendering. */}
+        {/* Phase 20 Plan 20-04: AssetProvider wraps the whole <article>
+            element — every figure-rendering subtree (both reading bodies)
+            resolves through the one per-article object-URL map. Siblings
+            outside (toolbar/popovers/drawer) render no figures and stay
+            outside the provider. */}
+        <AssetProvider article={article}>
         <article
           ref={articleCallbackRef}
           className={isPaginated ? "article-body paginated-surface" : "article-body"}
@@ -2567,6 +2581,7 @@ export function ArticleView({
             />
           )}
         </article>
+        </AssetProvider>
         {/* Phase 5 Plan 05-02 Task 2: SelectionToolbar mounts as a sibling of
             the article body, INSIDE the provider so it can consume
             useHighlightOverlay() for createHighlightFromSelection. Passes

@@ -24,7 +24,7 @@
 // absent or empty, ArticleBody renders exactly as before (existing tests
 // regress nothing).
 import type { Block, CanonicalArticle } from "../types";
-import { Fragment, memo, useMemo } from "react";
+import { Fragment, memo, useMemo, useState } from "react";
 import { InlineList } from "./InlineRenderer";
 import { highlightAriaLabelForText } from "./InlineRenderer";
 import type { TextPositionSelector } from "../normalizeText";
@@ -40,6 +40,10 @@ import type { CodeSegment } from "../../annotations/highlightRanges";
 // hook returns null outside a provider, so legacy callers (component tests
 // without a provider) render without marks — byte-unchanged behavior.
 import { useOptionalHighlightOverlay } from "../../reader/annotations/HighlightOverlay";
+// Phase 20 Plan 20-04 (IMG-03/IMG-05/IMG-06 render-half): figure media
+// resolution through the per-article object-URL provider. The hook is
+// optional-context (null outside a provider), consumed ONLY by FigureMedia.
+import { useAssetUrl } from "../assets/AssetProvider";
 
 /**
  * The subset of a ResolvedHighlight the renderer needs. Defined locally so
@@ -229,7 +233,7 @@ export function BlockView({
     case "figure":
       return (
         <figure {...elementProps}>
-          <img src={block.src} alt={block.alt} />
+          <FigureMedia block={block} />
           {block.caption.length > 0 && (
             <figcaption>
               {/* Plan 19-03 (D19-01): caption marks — the figcaption
@@ -323,6 +327,86 @@ export function BlockView({
         </details>
       );
   }
+}
+
+/**
+ * FigureMedia — Phase 20 Plan 20-04 (D20-13/D20-14, UI-SPEC §Component
+ * Inventory): the ONE media surface for the figure block's four states.
+ * A dedicated component because the broken-state swap needs local state
+ * (onError → placeholder INSIDE the same reserved box) and the resolution
+ * hook — both would violate rules-of-hooks inside BlockView's per-kind
+ * switch (the same reason ArticleBody calls its context hook at the top).
+ *
+ * States → surfaces (exactly two):
+ *   - accepted + resolvable → `<img>` on the resolved-object-URL branch
+ *     ONLY: width/height attributes + inline aspect-ratio from the STORED
+ *     dims (the model is the geometry authority — decode is paint, never
+ *     layout, D20-13/IMG-06), loading="lazy" decoding="async" (UI-SPEC
+ *     Interaction 8), onError → the broken swap below.
+ *   - refused (no src) / legacy (remote httpUrl src — NEVER fetched,
+ *     IMG-03 by construction: the img element is emitted only on this
+ *     resolved branch) / broken (onError, or an unresolved/missing row) →
+ *     the `.figure-placeholder` span: framed box + 20px image glyph
+ *     (aria-hidden, header-icon stroke anatomy) + the VISIBLE alt text,
+ *     or the verbatim "Image unavailable." note when alt is empty (never
+ *     both — the note never replaces non-empty alt; alt is the
+ *     recoverable content, D20-06). One identical surface for every
+ *     non-asset state (D20-14) — geometry from the model never changes
+ *     (Pitfall 5): stored dims when present, the
+ *     --figure-placeholder-ratio default when absent.
+ *
+ * The figcaption branch in the figure case above is byte-identical in
+ * every state (D19-01); this component renders ONLY the media box. The
+ * placeholder's visible alt text is media-box text — unmarkable (D19-02
+ * gap rule extends to visible alt, UI-SPEC Auto-Resolved #13).
+ */
+function FigureMedia({ block }: { block: Extract<Block, { kind: "figure" }> }) {
+  const objectUrl = useAssetUrl(block.src);
+  const [broken, setBroken] = useState(false);
+  const hasDims = block.width !== undefined && block.height !== undefined;
+  const aspectRatio = hasDims
+    ? `${block.width} / ${block.height}`
+    : "var(--figure-placeholder-ratio)";
+
+  if (objectUrl !== undefined && !broken) {
+    return (
+      <img
+        src={objectUrl}
+        alt={block.alt}
+        width={block.width}
+        height={block.height}
+        loading="lazy"
+        decoding="async"
+        style={{ aspectRatio }}
+        onError={() => setBroken(true)}
+      />
+    );
+  }
+  return (
+    <span className="figure-placeholder" style={{ aspectRatio }}>
+      {/* The 20px image glyph — aria-hidden decorative, mirroring the
+          header-icon stroke anatomy (viewBox 24, 1.75 stroke, round
+          joins). Color inherits the span's --ink-soft via currentColor. */}
+      <svg
+        width="20"
+        height="20"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <rect x="3" y="3" width="18" height="18" rx="2" />
+        <circle cx="9" cy="9" r="1.5" />
+        <path d="m21 15-3.5-3.5-9 9" />
+      </svg>
+      <span>
+        {block.alt.length > 0 ? block.alt : "Image unavailable."}
+      </span>
+    </span>
+  );
 }
 
 /**

@@ -125,17 +125,35 @@ describe("BlockView — per-kind native element (DOC-02)", () => {
     expect(ol?.querySelectorAll("li").length).toBe(2);
   });
 
-  it("renders a figure with an <img alt> and <figcaption>", () => {
+  // Phase 20 (20-04, UI-SPEC §Regression Targets deliberate change #1):
+  // a legacy remote-src figure renders the PLACEHOLDER — never a live
+  // remote <img> fetch (IMG-03 by construction; D20-14 one surface).
+  it("renders a legacy remote-src figure as the placeholder with visible alt + figcaption (no img element)", () => {
     const { container } = render(
       <BlockView block={figure("alt text", "https://example.com/i.png", "A caption")} />,
     );
     const fig = container.querySelector("figure");
     expect(fig).not.toBeNull();
-    const img = fig?.querySelector("img");
-    expect(img).not.toBeNull();
-    expect(img?.getAttribute("alt")).toBe("alt text");
-    expect(img?.getAttribute("src")).toBe("https://example.com/i.png");
+    // NO img is emitted for a non-asset src — the render branch is gated on
+    // the resolved object URL only.
+    expect(fig?.querySelector("img")).toBeNull();
+    const placeholder = fig?.querySelector(".figure-placeholder");
+    expect(placeholder).not.toBeNull();
+    // Alt text is the VISIBLE recoverable content in placeholder states
+    // (D20-06); the glyph is aria-hidden decoration.
+    expect(placeholder).toHaveTextContent("alt text");
+    expect(placeholder?.querySelector("svg")?.getAttribute("aria-hidden")).toBe("true");
     expect(fig?.querySelector("figcaption")).toHaveTextContent("A caption");
+  });
+
+  it("renders the Image unavailable. note when a placeholder figure has empty alt", () => {
+    const { container } = render(
+      <BlockView block={figure("", "https://example.com/i.png")} />,
+    );
+    const placeholder = container.querySelector(".figure-placeholder");
+    expect(placeholder).not.toBeNull();
+    // Verbatim UI-SPEC copy — the note NEVER replaces non-empty alt.
+    expect(placeholder).toHaveTextContent("Image unavailable.");
   });
 
   it("renders a figure without a figcaption when caption is empty", () => {

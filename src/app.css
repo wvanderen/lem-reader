@@ -38,6 +38,21 @@
 
   /* Reading measure (Phase 2 D-07 default; applyTheme writes here live) */
   --measure: 64ch;
+
+  /* Phase 20 (20-UI-SPEC §Layout) — the only Phase 20 custom properties,
+     both GEOMETRY (zero new color/font/spacing tokens; Auto-Resolved #14).
+     --figure-media-max-h: the media box may occupy at most HALF the
+     paginated page content box — 48px is the load-bearing header height,
+     2 * 48px the paginated page block insets (--space-2xl) — leaving ≥ 25%
+     headroom under the Phase-04 0.75 atomic-oversize threshold for caption
+     + margins at the smallest supported viewport (320 × 640: cap = 248px;
+     a 3:2 box at the 288px column = 192px — the ratio binds before the
+     cap). In scrolling mode the same value is a calm viewport-relative
+     ceiling (Pitfall 3). Corpus-tunable DOWNWARD only (20-07).
+     --figure-placeholder-ratio: the default reserved box for refused /
+     legacy / no-dims figures (A7 starting point promoted to contract). */
+  --figure-media-max-h: calc((100dvh - 48px - 2 * 48px) * 0.5);
+  --figure-placeholder-ratio: 3 / 2;
 }
 
 /* ── Theme overrides via [data-theme] on <html> (Phase 2 D2-09) ────────── */
@@ -273,6 +288,53 @@ body:has(main.paginated-main) {
 }
 .article-body figure {
   margin-block: var(--space-lg);
+}
+/* Phase 20 (20-04, UI-SPEC §Component Inventory "figure media geometry") —
+   the first img rule in the stylesheet: reserved-box rendering for accepted
+   local images. Inline aspect-ratio per figure comes from the STORED model
+   dims (BlockRenderer's FigureMedia — the primary mechanism; the
+   width/height attributes are belt-and-suspenders), so decode can never
+   change layout (D20-13). max-height + object-fit: contain letterboxing
+   keeps every figure box under the atomic-oversize threshold (Pitfall 3);
+   letterbox areas show plain surface — NO background rule here
+   (Auto-Resolved #8). No transition/animation properties (D20-09 —
+   reduced motion trivially satisfied; state changes are instant swaps). */
+.article-body figure > img {
+  display: block;
+  max-width: 100%;
+  margin-inline: auto;
+  max-height: var(--figure-media-max-h);
+  object-fit: contain;
+}
+/* Phase 20 (20-04, D20-14) — the ONE placeholder surface for every
+   non-asset figure state (refused-at-ingest / legacy remote-src /
+   broken-at-read): the existing quiet-chrome consumption class
+   (.disclosure/.status anatomy — Auto-Resolved #2), zero new tokens. The
+   reserved box's aspect-ratio comes from FigureMedia's inline style
+   (stored dims when present, the --figure-placeholder-ratio default
+   otherwise); the height cap keeps a placeholder from ever exceeding a
+   page (Pattern 4). Plain <span> semantics: the visible text IS the
+   accessible content — no role="img"/aria-label duplication
+   (Auto-Resolved #7); not focusable, not a touch target (Interaction 5).
+   Note/alt register: 14px/400/1.45 --font-ui --ink-soft, NOT italic
+   (it is not a caption). Forced colors: the frame maps to CanvasText
+   (A11Y-05) via the standard border treatment; state reads by shape. */
+.figure-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  text-align: center;
+  max-height: var(--figure-media-max-h);
+  padding: var(--space-md);
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
 }
 .article-body figcaption {
   font-family: var(--font-ui);
