@@ -39,7 +39,7 @@ import {
   sniffImageAsset,
   type ImageAsset,
 } from "../../../server/fetchImageAsset";
-import { MAX_ASSET_BYTES, MAX_ASSET_PIXELS } from "../../../src/ingestion/types";
+import { MAX_ASSET_BYTES } from "../../../src/ingestion/types";
 
 const resolve4Mock = dns.promises.resolve4 as unknown as ReturnType<typeof vi.fn>;
 const resolve6Mock = dns.promises.resolve6 as unknown as ReturnType<typeof vi.fn>;
@@ -159,7 +159,7 @@ const AVIF = u8(
 const jpegSof = (w: number, h: number) =>
   u8(
     ...fromHex("ffd8"), // SOI
-    ...fromHex("ffe000104a46494600"), 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, // APP0 JFIF
+    ...fromHex("ffe000104a46494600"), 1, 1, 0, 0, 0, 0, 0, 0, 0, // APP0 JFIF (version, units, densities, no thumbnail)
     ...fromHex("ffc0000b08"), // SOF0 len 11 precision 8
     (h >> 8) & 0xff, h & 0xff, (w >> 8) & 0xff, w & 0xff,
     0x01, 0x01, 0x11, 0x00, // 1 component
@@ -208,7 +208,7 @@ function fakeImageResponse(opts: {
       arrayBufferCallCount++;
       return opts.byteBody.slice().buffer;
     },
-    text: async () => {
+    text: async (): Promise<string> => {
       throw new Error("image profile must never read text()");
     },
   } as Response;
