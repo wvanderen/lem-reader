@@ -30,9 +30,13 @@ import type { ImageAsset } from "../../../server/fetchImageAsset";
 import {
   runAssetStage,
   rewriteFiguresWithAssets,
+  type AssetResolution,
 } from "../../../server/assetStage";
-import type { Block, FigureBlock } from "../../../src/content/schema";
+import type { Block } from "../../../src/content/schema";
 import { splittingBlockText } from "../../../src/pagination/splitBlock";
+
+/** The figure arm of Block (schema.ts exports the zod schema, not the type). */
+type FigureT = Extract<Block, { kind: "figure" }>;
 import {
   MAX_FIGURES_PER_ARTICLE,
   MAX_ASSET_RESPONSE_BYTES,
@@ -60,21 +64,21 @@ function fig(
   src: string | undefined,
   alt = "A figure",
   caption: { text: string; marks: [] }[] = [{ text: "A caption", marks: [] }],
-): FigureBlock {
+): FigureT {
   return { kind: "figure", alt, ...(src !== undefined ? { src } : {}), caption };
 }
 
 /** The four-field omit — everything EXCEPT src/originalSrc/width/height must
  * deep-equal the pre-rewrite figure (the D-05 substrate). */
 function omitFigureFields(
-  b: FigureBlock,
+  b: FigureT,
 ): Record<string, unknown> {
   const { src: _s, originalSrc: _o, width: _w, height: _h, ...rest } = b;
   return rest;
 }
 
-function findFigures(blocks: Block[]): FigureBlock[] {
-  const out: FigureBlock[] = [];
+function findFigures(blocks: Block[]): FigureT[] {
+  const out: FigureT[] = [];
   const walk = (bs: Block[]) => {
     for (const b of bs) {
       if (b.kind === "figure") out.push(b);
@@ -165,7 +169,7 @@ describe("rewriteFiguresWithAssets", () => {
     ];
     const out = rewriteFiguresWithAssets(
       blocks,
-      new Map([
+      new Map<string, AssetResolution>([
         ["https://example.com/nested.png", fakeAsset("https://example.com/nested.png")],
         ["https://example.com/quote.png", "type"],
       ]),
@@ -385,7 +389,10 @@ describe("runAssetStage", () => {
     const accepted = figs.filter((f) => f.src?.startsWith("asset:"));
     const refused = figs.filter((f) => f.src === undefined);
     expect(accepted).toHaveLength(3);
+    // 4 placeholder figures, but refusedCount covers only the figures THIS
+    // stage refused — the pre-existing no-src figure is disclosed by its
+    // placeholder surface (D20-06), not the stage's warning count.
     expect(refused).toHaveLength(4);
-    expect(result.refusedCount).toBe(4);
+    expect(result.refusedCount).toBe(3);
   });
 });
