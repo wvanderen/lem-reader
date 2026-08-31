@@ -640,10 +640,14 @@ test.describe("LIB-07/LIB-08 — views/counts/rows/empty agreement (D14-20/23/24
   test("corpus sanity: the imported policy derives the designed corpus (the honesty rows are in-progress)", () => {
     // Pure-Node pin over the module-scope expectations — loud, named drift
     // detection for the corpus constants above (never a page test).
-    expect(EXPECTED_COUNTS.unread).toBe(8); // 6 fixtures + unread standalone + unread book
+    // Phase 19 (19-05 gate): the corpus gained its 7th bundled fixture
+    // (nested-list-paths, 19-03) — unread by definition — so unread and
+    // the All count each gained one. Realignment to the new corpus truth
+    // (the 13-06 stale-expectation precedent), not a weakened assertion.
+    expect(EXPECTED_COUNTS.unread).toBe(9); // 7 fixtures + unread standalone + unread book
     expect(EXPECTED_COUNTS["in-progress"]).toBe(3); // mid standalone + 3-of-4 book + missing-row book
     expect(EXPECTED_COUNTS.finished).toBe(2); // full-total standalone + all-done book
-    expect(EXPECTED_ALL_COUNT).toBe(13); // 9 standalone + 4 books (one item per book — D14-24)
+    expect(EXPECTED_ALL_COUNT).toBe(14); // 10 standalone + 4 books (one item per book — D14-24)
     expect(EMPTY_COUNTS["in-progress"]).toBe(0);
     expect(EMPTY_COUNTS.finished).toBe(0);
     // The honesty rows themselves, held out against the seeded raw rows:

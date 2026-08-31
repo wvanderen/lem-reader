@@ -283,7 +283,7 @@ async function lastRowLink(page: Page): Promise<string> {
 }
 
 test.describe("NAV-03 — library return-context restore matrix", () => {
-  test("harness sentinel: seeded corpus renders 12 + 6 fixture rows and the list overflows the viewport", async ({
+  test("harness sentinel: seeded corpus renders 12 + 7 fixture rows and the list overflows the viewport", async ({
     page,
   }) => {
     await seedCorpus(page);
@@ -516,11 +516,11 @@ test.describe("NAV-03 — library return-context restore matrix", () => {
     });
     await expect(libraryH1).toBeVisible({ timeout: 10_000 });
     await expect(
-      page.getByRole("link", { name: /^All \(17\)/ }),
+      page.getByRole("link", { name: /^All \(18\)/ }),
     ).toBeVisible({ timeout: 10_000 });
 
     // The truthful degrade: h1 focused with DEFAULT scroll (reset to
-    // top), the row is gone (17 rows — 12 corpus − 1 + 6 fixtures), and
+    // top), the row is gone (18 rows — 12 corpus − 1 + 7 fixtures), and
     // nothing false is focused or restored. No crash: the library loaded
     // (the All count rendered) and every assertion below runs against it.
     await expect(
@@ -536,7 +536,7 @@ test.describe("NAV-03 — library return-context restore matrix", () => {
     await seedCorpus(page);
     await openView(page, "#/");
 
-    // Deep capture: scroll to the 18-row document bottom, then launch the
+    // Deep capture: scroll to the 19-row document bottom, then launch the
     // LAST row (a bundled fixture row — fixtures render after Dexie rows,
     // and they survive the corpus deletion below while staying last).
     await scrollToOffset(page, 1_000_000);
@@ -559,7 +559,7 @@ test.describe("NAV-03 — library return-context restore matrix", () => {
       page.getByRole("heading", { level: 1, name: "Saved articles" }),
     ).toBeVisible({ timeout: 10_000 });
     await expect(
-      page.getByRole("link", { name: /^All \(6\)/ }),
+      page.getByRole("link", { name: /^All \(7\)/ }),
     ).toBeVisible({ timeout: 10_000 });
 
     // The launched row's link focused FIRST (toBeFocused retries through
@@ -570,7 +570,7 @@ test.describe("NAV-03 — library return-context restore matrix", () => {
       page.locator(`.library-list a[href="${launchHref}"]`),
     ).toBeFocused();
 
-    // Short list (6 fixture rows), captured offset overshoots it → the
+    // Short list (7 fixture rows), captured offset overshoots it → the
     // restore CLAMPS to the new bottom: within tolerance of the live
     // maxScroll AND > 0 (clamped, not reset — the row stays visible at
     // the bottom, so preventScroll keeps the clamp authoritative).
