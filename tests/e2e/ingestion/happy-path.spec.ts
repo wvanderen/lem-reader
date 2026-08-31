@@ -38,7 +38,7 @@
 //      pipeline (safeFetch + extract) is exercised structurally by the SSRF
 //      matrix + the paste-path test; this case proves the UI plumbing.
 import { test, expect } from "@playwright/test";
-import { fixtures } from "../../../src/fixtures";
+import { fixtures, fixtureAssetRegistry } from "../../../src/fixtures";
 import { openAddDialog, pickSource } from "../library/add-dialog";
 
 const BASE = "http://localhost:5173";
@@ -171,5 +171,95 @@ test.describe("ingestion happy-path (07-07 SC#1)", () => {
 
     const paragraphCount = await page.locator("p").count();
     expect(paragraphCount, "expected at least one paragraph").toBeGreaterThan(0);
+  });
+
+  // Phase 20 (20-04 Task 1) — the asset-envelope happy-path cell: a URL
+  // ingest whose mocked response carries ONE valid base64 asset. Proves the
+  // full client chain end-to-end: envelope Zod parse → chunked decode →
+  // byteLength re-check → sha256 assetId RE-HASH (the registry bytes must
+  // genuinely match their ids or validateEnvelopeAssets refuses the whole
+  // ingest) → AddDialog threads result.assets into save(article, assets) →
+  // the Dexie-saved article reopens in ArticleView and its figures render
+  // LOCAL imgs decoded from the persisted blobs (naturalWidth > 0 — decode,
+  // not layout). The article is figure-heavy CLONED under a NON-fixture id
+  // so resolution goes through Dexie, not the fixture registry — this is
+  // the save-wiring proof, not the registry proof.
+  test("URL input with asset envelope → saved article renders the local img (naturalWidth > 0)", async ({
+    page,
+  }) => {
+    const fixtureArticle = fixtures.find((a) => a.id === "figure-heavy")!;
+    const article = structuredClone(fixtureArticle) as typeof fixtureArticle;
+    article.id = "figure-heavy-asset-e2e";
+
+    // Build the envelope from the REAL registry rows: every asset: ref the
+    // article's figures carry, base64'd from the bundled bytes.
+    const referenced = new Set(
+      article.blocks.flatMap((block) =>
+        block.kind === "figure" && block.src?.startsWith("asset:")
+          ? [block.src.slice("asset:".length)]
+          : [],
+      ),
+    );
+    const registryRows = fixtureAssetRegistry.get("figure-heavy")!;
+    const assets: Array<{
+      assetId: string;
+      contentType: string;
+      byteLength: number;
+      dataBase64: string;
+    }> = [];
+    for (const row of registryRows) {
+      if (!referenced.has(row.assetId)) continue; // unreferenced samples stay inert
+      assets.push({
+        assetId: row.assetId,
+        contentType: row.contentType,
+        byteLength: row.byteLength,
+        dataBase64: Buffer.from(await row.data.arrayBuffer()).toString("base64"),
+      });
+    }
+    expect(assets.length, "expected the two referenced figure assets").toBe(2);
+
+    await page.route("**/api/ingest", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          article,
+          confidence: { state: "confident" as const },
+          assets,
+        }),
+      });
+    });
+
+    await page.goto(`${BASE}/#/`);
+    await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible();
+
+    await openAddDialog(page);
+    await page.getByRole("textbox", { name: /url/i }).first().fill("https://example.com/photo-essay");
+    await page.getByRole("button", { name: /^add$/i }).click();
+
+    await page.waitForURL(/#\/article\//, { timeout: 15_000 });
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // The saved article renders local imgs (paginated page fragments and/or
+    // the hidden measurement body — both render inside the provider). The
+    // object URL loads from the persisted blob; naturalWidth > 0 proves the
+    // bytes decoded (IMG-03's reader-visible half).
+    const imgs = page.locator("figure img");
+    await expect.poll(async () => await imgs.count(), { timeout: 10_000 }).toBeGreaterThan(0);
+    await expect
+      .poll(
+        async () =>
+          await imgs.first().evaluate((el) => (el as HTMLImageElement).naturalWidth),
+        { timeout: 10_000 },
+      )
+      .toBeGreaterThan(0);
+
+    // The figure sources are LOCAL object URLs — never the original remote
+    // addresses (IMG-03 by construction).
+    const src = await imgs.first().getAttribute("src");
+    expect(src?.startsWith("blob:") ?? false).toBe(true);
   });
 });

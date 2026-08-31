@@ -181,11 +181,21 @@ export async function ingestPdf(
  * envelope refuses zero-chapter books as epub-empty server-side, D12-11);
  * `skippedCount` is the D12-11 skip-disclosure count surfaced additively
  * by the success copy.
+ *
+ * Phase 20 (20-04 Task 1): `assets` carries the book envelope's image
+ * assets AFTER the SAME re-validation chain as the single-article path
+ * (validateEnvelopeAssets — decode + byteLength re-check + assetId
+ * re-hash). The server emits zero book assets until 20-06's container
+ * extraction lands (the envelope field defaults to []), so today this is
+ * always an empty array — the wiring exists NOW so the AddDialog book arm
+ * threads validated assets into saveBook the moment 20-06 fills the
+ * envelope (D20-04: a saved book is always complete).
  */
 export interface EpubIngestionSuccess {
   book: Book;
   articles: CanonicalArticle[];
   skippedCount: number;
+  assets: ValidatedAsset[];
 }
 
 /**
@@ -263,7 +273,18 @@ export async function ingestEpub(
     articles.push(ArticleSchema.parse(article));
   }
 
-  return { book: parsed.book, articles, skippedCount: parsed.skippedCount };
+  // Phase 20 (20-04 Task 1): the book envelope's assets ride the SAME
+  // re-validation chain as the single-article path (the function was
+  // exported in 20-02 exactly for this reuse). Empty until 20-06's
+  // container extraction emits chapter assets.
+  const assets = await validateEnvelopeAssets(parsed.assets);
+
+  return {
+    book: parsed.book,
+    articles,
+    skippedCount: parsed.skippedCount,
+    assets,
+  };
 }
 
 /**

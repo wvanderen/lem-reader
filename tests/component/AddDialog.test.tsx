@@ -159,6 +159,9 @@ function sampleBookResult(): EpubIngestionSuccess {
     } as unknown as EpubIngestionSuccess["book"],
     articles: [sampleArticle("epub-c01")],
     skippedCount: 2,
+    // Phase 20 (20-04): EpubIngestionSuccess carries the (re-validated)
+    // book envelope assets — zero until 20-06's container extraction.
+    assets: [],
   };
 }
 

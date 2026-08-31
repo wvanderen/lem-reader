@@ -57,6 +57,9 @@ import {
 } from "./IngestionClient";
 import { dexieLibrarySource } from "./LibrarySource";
 import { hasBook, saveBook } from "../persistence/booksStore";
+import type { BookAsset } from "../persistence/booksStore";
+import type { ValidatedAsset } from "./IngestionClient";
+import type { Block } from "../content/types";
 import { EPUB_MAX_BYTES, PDF_MAX_BYTES } from "./types";
 // Plan 16-02 Task 1 — the refusal-copy map + chunked base64 live in
 // ./ingestCopy; this dialog consumes the same exports the retired control did
@@ -64,6 +67,62 @@ import { EPUB_MAX_BYTES, PDF_MAX_BYTES } from "./types";
 import { mapReasonToCopy, bytesToBase64 } from "./ingestCopy";
 
 type IngestStatus = "idle" | "submitting" | "success" | "error";
+
+/**
+ * assetRefBodiesInBlocks — collect the `asset:img-<12hex>` reference BODIES
+ * (the scheme-stripped assetIds) from every figure in a block tree,
+ * recursing through containers (blockquote children + list item content —
+ * figures nest per the assetStage rewrite recursion). Phase 20 (20-04
+ * Task 1): the book arm attributes envelope assets to their OWNING chapter
+ * articles by walking each chapter's blocks — the envelope itself carries
+ * no articleId, so the model's refs are the only attribution source
+ * (D20-15 article-owned rows).
+ */
+function assetRefBodiesInBlocks(blocks: readonly Block[]): string[] {
+  const ids: string[] = [];
+  const visit = (nodes: readonly Block[]) => {
+    for (const block of nodes) {
+      if (block.kind === "figure") {
+        if (block.src !== undefined && block.src.startsWith("asset:")) {
+          ids.push(block.src.slice("asset:".length));
+        }
+      } else if (block.kind === "blockquote") {
+        visit(block.children);
+      } else if (block.kind === "bulleted-list" || block.kind === "numbered-list") {
+        for (const item of block.items) {
+          visit(item.content);
+        }
+      }
+    }
+  };
+  visit(blocks);
+  return ids;
+}
+
+/**
+ * bookAssetsForChapters — attribute validated envelope assets to chapter
+ * articles, producing the flat BookAsset list saveBook persists (the
+ * 20-03 contract). An asset referenced by TWO chapters produces TWO rows
+ * (the [articleId+assetId] compound key makes rows article-owned — D20-15);
+ * an envelope asset no chapter references is dropped (the attribution is
+ * model-driven, never envelope-driven).
+ */
+function bookAssetsForChapters(
+  chapters: readonly { id: string; blocks: readonly Block[] }[],
+  assets: readonly ValidatedAsset[],
+): BookAsset[] {
+  const byId = new Map(assets.map((asset) => [asset.assetId, asset]));
+  const out: BookAsset[] = [];
+  for (const chapter of chapters) {
+    for (const assetId of new Set(assetRefBodiesInBlocks(chapter.blocks))) {
+      const asset = byId.get(assetId);
+      if (asset) {
+        out.push({ articleId: chapter.id, ...asset });
+      }
+    }
+  }
+  return out;
+}
 
 /** The selected intake source (D16-05). Reset to "url" on every open. */
 export type AddDialogSource = "url" | "paste" | "file";
@@ -221,7 +280,12 @@ export function AddDialog({ open, onCancel, onBookAdded }: AddDialogProps) {
         return;
       }
 
-      await dexieLibrarySource.save(result.article);
+      // Phase 20 (20-04 Task 1 — D20-04/D20-15): the article AND its
+      // validated envelope assets save together in ONE Dexie transaction
+      // (LibrarySource.save's atomic upsert). A saved article is always
+      // complete — refused figures never reached the envelope, and every
+      // accepted asset lands with its owning article or not at all.
+      await dexieLibrarySource.save(result.article, result.assets);
       setStatus("success");
       setMessage(null);
       // D16-12 article arm: close the dialog FIRST (the parent's open-prop
@@ -318,7 +382,17 @@ export function AddDialog({ open, onCancel, onBookAdded }: AddDialogProps) {
           return;
         }
 
-        await saveBook(result.book, result.articles);
+        // Phase 20 (20-04 Task 1 — D20-04/D20-15): the book arm threads
+        // the SAME validated assets into saveBook's one-transaction
+        // chapter upsert. The envelope carries no articleId, so each
+        // chapter's blocks attribute its owned rows (bookAssetsForChapters
+        // above). Zero chapter assets until 20-06's container extraction
+        // fills the book envelope — the wiring is complete NOW.
+        await saveBook(
+          result.book,
+          result.articles,
+          bookAssetsForChapters(result.articles, result.assets),
+        );
         setStatus("success");
         let successCopy = "Book added to your library.";
         if (result.skippedCount > 0) {
@@ -362,7 +436,10 @@ export function AddDialog({ open, onCancel, onBookAdded }: AddDialogProps) {
         return;
       }
 
-      await dexieLibrarySource.save(result.article);
+      // Phase 20 (20-04 Task 1): the file arm mirrors the url/paste arm —
+      // validated envelope assets ride the article into the ONE Dexie
+      // save transaction (markdown/html uploads can carry figures).
+      await dexieLibrarySource.save(result.article, result.assets);
       setStatus("success");
       setMessage(null);
       // Uniform reset contract (G2) — keeps every terminal outcome

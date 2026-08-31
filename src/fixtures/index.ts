@@ -31,3 +31,10 @@ export const fixtures: readonly CanonicalArticle[] = [
   unsupportedCase,
   nestedListPaths,
 ].map((raw) => ArticleSchema.parse(raw));
+
+// Phase 20 (20-04 Task 1): the bundled per-format fixture ASSET corpus for
+// figure-heavy (local asset: refs + stored dims in the canonical JSON
+// above). Re-exported here so `src/fixtures` stays the one import surface —
+// the AssetProvider consults it FIRST for fixture article ids (fixtures
+// never touch Dexie), and e2e specs build asset envelopes from its rows.
+export { fixtureAssetRegistry } from "./figure-assets";

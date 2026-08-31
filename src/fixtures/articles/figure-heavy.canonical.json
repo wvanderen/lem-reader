@@ -36,7 +36,10 @@
     {
       "kind": "figure",
       "alt": "Adult male bee hummingbird (Mellisuga helenae), the world\u2019s smallest bird, photographed in Cuba.",
-      "src": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/75/Bee_hummingbird_%28Mellisuga_helenae%29_adult_male_non-breeding.jpg/250px-Bee_hummingbird_%28Mellisuga_helenae%29_adult_male_non-breeding.jpg",
+      "src": "asset:img-e191d5d4e581",
+      "originalSrc": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/75/Bee_hummingbird_%28Mellisuga_helenae%29_adult_male_non-breeding.jpg/250px-Bee_hummingbird_%28Mellisuga_helenae%29_adult_male_non-breeding.jpg",
+      "width": 200,
+      "height": 320,
       "caption": [
         { "text": "Adult male bee hummingbird, Cuba.", "marks": [] }
       ]
@@ -66,7 +69,10 @@
     {
       "kind": "figure",
       "alt": "Close-up of a ruby-throated hummingbird\u2019s foot showing three forward-pointing toes and one backward-pointing hallux.",
-      "src": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/92/Ruby_Throated_Hummingbird%2C_F%2C_leg%2C_430_ESt._NW%2C_8.22.12_2013-04-12-14.49.36_ZS_PMax_%288644622066%29.jpg/250px-Ruby_Throated_Hummingbird%2C_F%2C_leg%2C_430_ESt._NW%2C_8.22.12_2013-04-12-14.49.36_ZS_PMax_%288644622066%29.jpg",
+      "src": "asset:img-357de6805bda",
+      "originalSrc": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/92/Ruby_Throated_Hummingbird%2C_F%2C_leg%2C_430_ESt._NW%2C_8.22.12_2013-04-12-14.49.36_ZS_PMax_%288644622066%29.jpg/250px-Ruby_Throated_Hummingbird%2C_F%2C_leg%2C_430_ESt._NW%2C_8.22.12_2013-04-12-14.49.36_ZS_PMax_%288644622066%29.jpg",
+      "width": 240,
+      "height": 180,
       "caption": [
         { "text": "Close-up of toe arrangement in a ruby-throated hummingbird foot.", "marks": [] }
       ]
