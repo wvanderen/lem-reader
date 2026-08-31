@@ -153,13 +153,15 @@ describe("useAssetUrl — optional context (legacy callers byte-unchanged)", () 
   });
 
   it("returns undefined for a non-asset src even inside a populated provider", async () => {
-    bulkGetAssetsMock.mockResolvedValue({
-      ok: true,
-      assets: [dexRow("a1", "img-aaaaaaaaaaaa")],
+    const art = article("a1", [figure("legacy", "https://upload.wikimedia.org/x.png")]);
+    render(prov(art, "https://upload.wikimedia.org/x.png"));
+    // No asset refs → no resolution work at all (bulkGet never consulted),
+    // and the legacy remote src NEVER resolves (IMG-03 by construction).
+    await act(async () => {
+      await Promise.resolve();
     });
-    render(prov(article("a1", [figure("legacy", "https://upload.wikimedia.org/x.png")]), "https://upload.wikimedia.org/x.png"));
-    // Resolution settles (no refs → nothing to do), legacy src stays unresolved.
-    await waitFor(() => expect(bulkGetAssetsMock).toHaveBeenCalled());
+    expect(bulkGetAssetsMock).not.toHaveBeenCalled();
+    expect(createObjectURL).not.toHaveBeenCalled();
     expect(screen.getByTestId("probe")).toHaveTextContent("none");
   });
 });
@@ -180,7 +182,7 @@ describe("AssetProvider — fixture registry consult FIRST (fixtures never touch
       )),
     );
     await waitFor(() =>
-      expect(screen.getByTestId("probe")).not.toHaveTextContent("none"),
+      expect(screen.getAllByTestId("probe")[1]).not.toHaveTextContent("none"),
     );
     // The registry carries 7 samples; the article references exactly 2.
     expect(createObjectURL).toHaveBeenCalledTimes(2);
