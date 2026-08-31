@@ -13,7 +13,7 @@
 - [x] **Phase 16: Organized Library and Focused Add Flow** - Browse by reading state and add content without permanent form clutter. (completed 2026-08-29)
 - [x] **Phase 17: Reader-Owned Metadata** - Edit display title and author without disturbing canonical identity. (completed 2026-08-30)
 - [x] **Phase 18: Reader Orientation** - Navigate canonical headings and receive non-intrusive restoration feedback. (completed 2026-08-30)
-- [ ] **Phase 19: Cross-Block Highlights** - Manage one durable highlight across multiple semantic blocks.
+- [x] **Phase 19: Cross-Block Highlights** - Manage one durable highlight across multiple semantic blocks. (completed 2026-08-31)
 - [ ] **Phase 20: Safe Local Image Fidelity** - Preserve figures and captions as safe, portable local assets.
 - [ ] **Phase 21: Integrated Refinement and Acceptance** - Correct remaining UI issues and prove the complete milestone.
 
@@ -191,7 +191,7 @@ Plans:
   4. Reader can review, edit, export, and delete it atomically without leftover fragments or guessed attachment.
   5. Unsupported boundaries are rejected or narrowed with an explicit explanation from the supported-content matrix.
 
-**Plans**: 4/5 plans executed
+**Plans**: 5/5 plans complete
 **UI hint**: yes
 
 Plans:
@@ -210,7 +210,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 19-05-PLAN.md — eligibility-matrix e2e (kind × crossing × gap + refusals), durability/atomicity span cells, honest full-suite gate (ANNO-08, ANNO-10, ANNO-11, ANNO-12)
+- [x] 19-05-PLAN.md — eligibility-matrix e2e (kind × crossing × gap + refusals), durability/atomicity span cells, honest full-suite gate (ANNO-08, ANNO-10, ANNO-11, ANNO-12)
 
 ### Phase 20: Safe Local Image Fidelity
 
@@ -255,6 +255,6 @@ Plans:
 | 16. Organized Library and Focused Add Flow | v2.1 | 4/4 | Complete    | 2026-08-29 |
 | 17. Reader-Owned Metadata | v2.1 | 5/5 | Complete    | 2026-08-30 |
 | 18. Reader Orientation | v2.1 | 4/4 | Complete    | 2026-08-30 |
-| 19. Cross-Block Highlights | v2.1 | 4/5 | In Progress|  |
+| 19. Cross-Block Highlights | v2.1 | 5/5 | Complete   | 2026-08-31 |
 | 20. Safe Local Image Fidelity | v2.1 | 0/TBD | Not started | - |
 | 21. Integrated Refinement and Acceptance | v2.1 | 0/TBD | Not started | - |

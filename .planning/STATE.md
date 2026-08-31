@@ -4,17 +4,17 @@ milestone: v2.1
 milestone_name: Reader Experience
 current_phase: 19
 current_phase_name: Cross-Block Highlights
-status: executing
+status: verifying
 stopped_at: Completed 19-04-PLAN.md
-last_updated: "2026-08-31T00:08:22.220Z"
+last_updated: "2026-08-31T01:07:49.636Z"
 last_activity: 2026-08-30
 last_activity_desc: Phase 19 execution started
 progress:
   total_phases: 8
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 26
-  completed_plans: 25
-  percent: 63
+  completed_plans: 26
+  percent: 75
 ---
 
 # Project State
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-08-30)
 
 Phase: 19 (Cross-Block Highlights) — EXECUTING
 Plan: 5 of 5
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-08-30 — Phase 19 execution started
 
 ## Recent Decisions (Phase 18)
@@ -182,6 +182,7 @@ Last activity: 2026-08-30 — Phase 19 execution started
 | Phase 19 P02 | 10 min | 3 tasks | 7 files |
 | Phase 19 P03 | 14 min | 3 tasks | 7 files |
 | Phase 19 P04 | 13 min | 2 tasks | 3 files |
+| Phase 19 P05 | 55 min | 3 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -432,6 +433,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: 19-02 D19-12: blockLines splits exact on BLOCK_SEPARATOR, escapeMarkdownLine PER LINE (V5 structure-injection guard), marker on first line only, empty fragments never collapsed, export never truncates — single-line output byte-identical
 - [Phase ?]: Phase 19 P04: Paginated caption/code routing = ENTRY-LOCAL FORWARDING — BlockView's captionHighlightSlices/codeSegments are caller-computed props, so fragmentRenderer forwards them itself in entry-local coords; pinned by e2e cell (d)
 - [Phase ?]: Phase 19 P04: Per-page first-occurrence pass owns isFirst in paginated mode — per-render Set == per-mounted-page; claim-by-mutation in render order across all five slice shapes; one id=hl-x per highlight per mounted page (T-19-10 closed)
+- [Phase ?]: 19-05 closes ANNO-12 as a TESTED matrix (21 cells × 3 engines: all 8 kinds, crossings, 3 gap classes, 3 refusals, D19-14, backwards, D19-11) — corpus-honest adaptations: textless-gap proof rides fn-ref+unsupported interiors; fn-ref endpoints capture but render unmarked (19-03 boundary)
+- [Phase ?]: 19-05 honest gate GREEN: npm run test exit 0, one invocation (unit 1416/0/13 + e2e 1581/0/10, 3 engines, fresh server); first run surfaced 9 engine-identical failures = library corpus pins stale since 19-03's 7th fixture, realigned in-plan (13-06 precedent)
 
 ### Pending Todos
 
@@ -487,7 +490,7 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-31T00:08:22.210Z
+Last session: 2026-08-31T01:07:34.369Z
 Stopped at: Completed 19-04-PLAN.md
 Resume file: None
 
