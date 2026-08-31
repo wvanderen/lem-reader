@@ -119,6 +119,44 @@ describe("ImportPreviewDialog — preview copy + override plumbing (D9-11)", () 
     expect(screen.getByRole("button", { name: "Import" })).toBeTruthy();
   });
 
+  // ── Phase 20 (20-05, IMG-04): the dangling-asset warning entries — the
+  // 20-UI-SPEC §Copywriting verbatim strings, singular + plural (the
+  // no-broken-refs gate's honest disclosure; anatomy otherwise byte-stable).
+  it("renders the verbatim singular dangling-asset warning for one skipped article", () => {
+    renderDialog({
+      preview: {
+        ...samplePreview(false),
+        danglingAssetArticles: 1,
+      },
+    });
+    expect(
+      screen.getByText(
+        "1 article will be skipped because its images aren't included in the bundle.",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("renders the verbatim plural dangling-asset warning with the honest count", () => {
+    renderDialog({
+      preview: {
+        ...samplePreview(false),
+        danglingAssetArticles: 3,
+      },
+    });
+    expect(
+      screen.getByText(
+        "3 articles will be skipped because their images aren't included in the bundle.",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("renders no dangling-asset warning when the gate skipped nothing", () => {
+    renderDialog(); // samplePreview: danglingAssetArticles 0
+    expect(
+      screen.queryByText(/will be skipped because (its|their) images aren't included/),
+    ).toBeNull();
+  });
+
   it("defaults every override select to Skip and offers Keep both only for the id kinds", () => {
     renderDialog();
     const articleSelect = screen.getByLabelText(

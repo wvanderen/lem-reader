@@ -46,7 +46,7 @@ import type {
   TextQuoteSelector,
 } from "../../../src/content/normalizeText";
 import { ExportBundleSchema } from "../../../src/portability/bundle";
-import { computeManifest } from "../../../src/portability/manifest";
+import { computeManifest, sha256Hex } from "../../../src/portability/manifest";
 import { validBookEpub3 } from "../../unit/server/epub-fixtures";
 // Plan 16-03 — the shared dialog-opening helper (ADD-01: the intake
 // forms live behind the header Add button's modal).
@@ -175,10 +175,11 @@ test("SC#4 — export on machine A re-imports on machine B with offsets intact",
     // Both required entries exist.
     expect(entries["manifest.json"]).toBeDefined();
 
-    // Versioned envelope (PORT-01) — writers emit v3 since Phase 17 (17-04,
-    // the 12-07 version-bump assertion-update precedent), always carrying
-    // the books field (empty on a book-free library).
-    expect(bundleJson.schemaVersion).toBe(3);
+    // Versioned envelope (PORT-01) — writers emit v4 since Phase 20 (20-05,
+    // the 12-07/17-04 version-bump assertion-update precedent), always
+    // carrying the books + assets fields (empty arrays on book-free /
+    // asset-free libraries).
+    expect(bundleJson.schemaVersion).toBe(4);
     expect(bundleJson.books).toEqual([]);
 
     // Both articles ride; the fixture does NOT (fixtures are bundled code —
@@ -372,11 +373,11 @@ test("SC#4 books — a book travels machines with its chapters + highlight intac
     const bundlePathA = await downloadA.path();
     expect(bundlePathA, "download must be persisted to disk").toBeTruthy();
 
-    // ── Node-side bundle inspection: books ride v3 ────────────────────────
-    // (writers emit 3 since Phase 17 — 17-04; the same version-bump
+    // ── Node-side bundle inspection: books ride v4 ────────────────────────
+    // (writers emit 4 since Phase 20 — 20-05; the same version-bump
     // assertion-update precedent as the base flow's envelope check above.)
     const { bundle: bundleA } = readBundleJson(bundlePathA!);
-    expect(bundleA.schemaVersion).toBe(3);
+    expect(bundleA.schemaVersion).toBe(4);
     const booksA = bundleA.books as Array<Record<string, unknown>>;
     expect(booksA).toHaveLength(1);
     expect(booksA[0]?.title).toBe("The Synthetic Book");
@@ -640,7 +641,7 @@ const PLAIN_RT_ARTICLE = makeArticle({
 const A_RENAMED_TITLE = "Machine A Renamed Title";
 const A_RENAMED_AUTHOR = "Machine A Author";
 
-test("SC#4 overrides — an edited title/author travels machines byte-equal inside a v3 bundle", async ({
+test("SC#4 overrides — an edited title/author travels machines byte-equal inside a v4 bundle", async ({
   browser,
 }) => {
   const machineA = await browser.newContext();
@@ -687,9 +688,10 @@ test("SC#4 overrides — an edited title/author travels machines byte-equal insi
     const bundlePath = await download.path();
     expect(bundlePath, "download must be persisted to disk").toBeTruthy();
 
-    // ── Node-side bundle inspection: the overrides ride the v3 record ──────
+    // ── Node-side bundle inspection: the overrides ride the record (v4
+    // envelope since 20-05 — the version-bump assertion-update precedent).
     const { bundle: bundleJson } = readBundleJson(bundlePath!);
-    expect(bundleJson.schemaVersion).toBe(3);
+    expect(bundleJson.schemaVersion).toBe(4);
     const exportedArticles = bundleJson.articles as Array<Record<string, unknown>>;
     expect(exportedArticles.map((a) => a.id).sort()).toEqual(
       [OVERRIDE_RT_ARTICLE.id, PLAIN_RT_ARTICLE.id].sort(),
@@ -917,6 +919,212 @@ test("SC#4 spans — a cross-block highlight travels machines as ONE record with
       await spanMarks.first().getAttribute("class"),
       "re-anchored confident — no unresolved modifier",
     ).not.toContain("unresolved");
+  } finally {
+    await machineA.close();
+    await machineB.close();
+  }
+});
+
+// ── Phase 20 (20-05): the ASSET round trip (IMG-04) ──────────────────────────
+//
+// Machine A seeds an article whose figure carries a local asset ref PLUS the
+// matching Dexie asset row (raw IndexedDB put of a real browser Blob — the
+// 09-06 raw-row seeding precedent, extended to the v6 assets store), then
+// exports through the real UI. Node-side inspection proves the v4 envelope:
+// honest per-asset sha256/byteLength metadata + the RAW zip entry
+// byte-equal. Machine B imports through the real UI; the raw-row truth
+// asserts B's Dexie holds the asset with byte-equal blob bytes (read
+// browser-side — Blobs never cross the evaluate channel), and the reader
+// renders the figure from the LOCAL object URL (naturalWidth > 0 — decode,
+// not layout; the 20-04 happy-path precedent).
+
+/** A 1x1 transparent PNG — real decoder-valid bytes shared with the unit
+ * corpus (bundle-v4.spec.ts pins the same base64). */
+const TINY_PNG_BASE64 =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+
+const ASSET_RT_ARTICLE_ID = "paste-rt20asset1";
+const ASSET_RT_ASSET_ID = "img-0123456789ab";
+const ASSET_RT_ENTRY = `assets/${ASSET_RT_ARTICLE_ID}/${ASSET_RT_ASSET_ID}`;
+
+const ASSET_RT_ARTICLE = ArticleSchema.parse({
+  id: ASSET_RT_ARTICLE_ID,
+  revision: 1,
+  lang: "en",
+  provenance: {
+    sourceUrl: "https://example.org/asset-round-trip",
+    title: "Asset Round Trip Article",
+    author: "Ada Asset",
+    retrievedAt: "2026-08-31T00:00:00.000Z",
+    originalHtmlHash: `sha256:${"7".repeat(64)}`,
+  },
+  blocks: [
+    {
+      kind: "paragraph",
+      content: [
+        {
+          text: "A paragraph precedes the figure so the article reads as prose before its image.",
+          marks: [],
+        },
+      ],
+    },
+    {
+      kind: "figure",
+      alt: "A tiny transparent square riding the bundle",
+      src: `asset:${ASSET_RT_ASSET_ID}`,
+      originalSrc: "https://example.org/tiny.png",
+      width: 1,
+      height: 1,
+    },
+  ],
+  footnotes: [],
+});
+
+test("SC#4 assets — an article's images travel machines byte-equal and render locally (IMG-04)", async ({
+  browser,
+  browserName,
+}) => {
+  // Phase 20 (20-05): engine-boundary skip, honestly documented (the
+  // ssrf-matrix residual-skip precedent). The Playwright WebKit build
+  // cannot store ANY Blob VALUE in IndexedDB — every construction variant
+  // (view/ArrayBuffer/string/fetch-body) fails the put with UnknownError
+  // "Error preparing Blob/File data to be stored in object store", while
+  // raw Uint8Array/ArrayBuffer values put fine (probe-verified
+  // 2026-08-31). Both this cell's seed AND its import require the D20-15
+  // `data: Blob` row shape, so webkit cannot exercise the flow. Chromium
+  // + firefox prove the full asset round-trip; real Safari supports IDB
+  // Blob storage (Safari 10+) — deferred-items.md records the open
+  // option for the 20-07 gate owner.
+  test.skip(
+    browserName === "webkit",
+    "WebKit engine boundary: Playwright's WebKit cannot put Blob values into IndexedDB (UnknownError) — chromium/firefox carry the proof",
+  );
+  const machineA = await browser.newContext();
+  const machineB = await browser.newContext();
+  try {
+    const pngBytes = new Uint8Array(Buffer.from(TINY_PNG_BASE64, "base64"));
+
+    // ── Machine A: seed the article + its asset row, then export ─────────
+    const pageA = await machineA.newPage();
+    await prepareFreshPage(pageA);
+    await seedRows(pageA, {
+      articles: [ASSET_RT_ARTICLE as unknown as Record<string, unknown>],
+      assets: [
+        {
+          articleId: ASSET_RT_ARTICLE_ID,
+          assetId: ASSET_RT_ASSET_ID,
+          contentType: "image/png",
+          byteLength: pngBytes.byteLength,
+          dataBytes: Array.from(pngBytes),
+          createdAt: "2026-08-31T00:00:00.000Z",
+        },
+      ],
+    });
+
+    const panelA = await openSettings(pageA);
+    await expect(panelA.getByRole("button", { name: "Export library bundle" })).toBeEnabled();
+    const downloadPromise = pageA.waitForEvent("download", { timeout: 20_000 });
+    await panelA.getByRole("button", { name: "Export library bundle" }).click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toBe("lem-reader-bundle-v1.zip");
+    const bundlePath = await download.path();
+    expect(bundlePath, "download must be persisted to disk").toBeTruthy();
+
+    // ── Node-side bundle inspection: the v4 asset envelope ───────────────
+    const { bundle: bundleJson, entries } = readBundleJson(bundlePath!);
+    expect(bundleJson.schemaVersion).toBe(4);
+    const meta = bundleJson.assets as Array<Record<string, unknown>>;
+    expect(meta).toHaveLength(1);
+    expect(meta[0]).toMatchObject({
+      articleId: ASSET_RT_ARTICLE_ID,
+      assetId: ASSET_RT_ASSET_ID,
+      contentType: "image/png",
+      byteLength: pngBytes.byteLength,
+      entry: ASSET_RT_ENTRY,
+    });
+    expect(meta[0]!.sha256).toBe(await sha256Hex(pngBytes));
+    // The raw entry rode the SAME zipSync call, byte-equal.
+    const entryBytes = entries[ASSET_RT_ENTRY];
+    expect(entryBytes, "the asset zip entry must exist").toBeDefined();
+    expect(Array.from(entryBytes!)).toEqual(Array.from(pngBytes));
+
+    // ── Machine B: import through the real UI ────────────────────────────
+    const pageB = await machineB.newPage();
+    await prepareFreshPage(pageB);
+    const panelB = await openSettings(pageB);
+    await panelB.locator('input[type="file"][accept=".zip"]').setInputFiles(bundlePath!);
+
+    const preview = pageB.locator("dialog.import-preview");
+    await expect(preview).toBeVisible({ timeout: 15_000 });
+    await expect(preview).toContainText(
+      "This bundle contains 1 article, 0 highlights, 0 notes, and 0 reading positions.",
+    );
+    // The asset rode — no dangling warning on this bundle.
+    await expect(preview).not.toContainText("will be skipped because");
+    await preview.getByRole("button", { name: "Import", exact: true }).click();
+    await expect(settingsStatus(pageB)).toContainText(
+      "Imported 1 article, 0 highlights, 0 notes, and 0 reading positions.",
+      { timeout: 15_000 },
+    );
+
+    // ── Machine B: raw IndexedDB truth — byte-equal blob bytes ───────────
+    const rowField = await readRow(pageB, "assets", [ASSET_RT_ARTICLE_ID, ASSET_RT_ASSET_ID]);
+    expect(rowField, "the asset row must exist on machine B").not.toBeNull();
+    expect(rowField!.byteLength).toBe(pngBytes.byteLength);
+    expect(rowField!.contentType).toBe("image/png");
+    // Blobs never cross the evaluate channel — read the bytes browser-side
+    // and compare as number arrays (the 09-06 raw-row byte-equality
+    // precedent, extended to assets).
+    const storedBytes = await pageB.evaluate(
+      async ({ articleId, assetId }) => {
+        return new Promise<number[] | null>((resolve) => {
+          const req = indexedDB.open("lem-reader");
+          req.onsuccess = () => {
+            const db = req.result;
+            if (!db.objectStoreNames.contains("assets")) {
+              resolve(null);
+              return;
+            }
+            const tx = db.transaction("assets", "readonly");
+            const getReq = tx.objectStore("assets").get([articleId, assetId]);
+            getReq.onsuccess = async () => {
+              const row = getReq.result as { data?: Blob } | undefined;
+              if (!row?.data) {
+                resolve(null);
+                return;
+              }
+              const buf = await row.data.arrayBuffer();
+              resolve(Array.from(new Uint8Array(buf)));
+            };
+            getReq.onerror = () => resolve(null);
+          };
+          req.onerror = () => resolve(null);
+        });
+      },
+      { articleId: ASSET_RT_ARTICLE_ID, assetId: ASSET_RT_ASSET_ID },
+    );
+    expect(storedBytes).toEqual(Array.from(pngBytes));
+
+    // ── Machine B: the figure renders the LOCAL img ──────────────────────
+    await pageB.keyboard.press("Escape"); // close the settings panel
+    await expect(panelB).not.toBeVisible();
+    await pageB.goto(`${BASE}/#/article/${ASSET_RT_ARTICLE_ID}`);
+    await expect(pageB.getByRole("heading", { level: 1 })).toBeVisible({
+      timeout: 15_000,
+    });
+    const modeToggle = pageB.getByRole("button", { name: /^Reading mode:/ });
+    await modeToggle.click(); // paginated → scrolling so the whole body mounts
+    await expect(modeToggle).toHaveAttribute("aria-label", "Reading mode: scrolling");
+    const img = pageB.locator("figure img");
+    await expect(img).toBeVisible({ timeout: 15_000 });
+    await expect
+      .poll(
+        async () =>
+          await img.evaluate((el) => (el as HTMLImageElement).naturalWidth),
+        { timeout: 10_000 },
+      )
+      .toBeGreaterThan(0);
+    expect(await img.getAttribute("src")).toMatch(/^blob:/);
   } finally {
     await machineA.close();
     await machineB.close();

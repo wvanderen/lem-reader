@@ -58,7 +58,16 @@ export async function prepareFreshPage(page: Page): Promise<void> {
       const req = indexedDB.open("lem-reader");
       req.onsuccess = () => {
         const db = req.result;
-        const stores = ["articles", "settings", "location", "highlights", "notes"];
+        // Phase 20 (20-05): assets joins the cleared stores so asset-row
+        // assertions stay deterministic (strengthen-only helper change).
+        const stores = [
+          "articles",
+          "settings",
+          "location",
+          "highlights",
+          "notes",
+          "assets",
+        ];
         const existing = stores.filter((s) => db.objectStoreNames.contains(s));
         if (existing.length === 0) {
           resolve();
@@ -178,16 +187,28 @@ export async function readAllRows(
 // ── Seeding (raw IndexedDB puts — remove-cascade seedCascadeRows style) ──────
 
 /** Serializable row payloads for seedRows (raw shapes, schema-valid by
- * construction because callers build them through the shipped schemas). */
+ * construction because callers build them through the shipped schemas).
+ * Phase 20 (20-05): the assets arm carries image bytes as a plain number
+ * array — Playwright's argument channel is JSON-only, so the Blob is
+ * constructed browser-side inside the evaluate (the AssetRecordRow shape
+ * 20-03 shipped). */
 export interface SeedRows {
   articles?: Record<string, unknown>[];
   highlights?: Record<string, unknown>[];
   notes?: Record<string, unknown>[];
   locations?: Record<string, unknown>[];
   settings?: Record<string, unknown>[];
+  assets?: Array<{
+    articleId: string;
+    assetId: string;
+    contentType: string;
+    byteLength: number;
+    dataBytes: number[];
+    createdAt: string;
+  }>;
 }
 
-/** Write the given rows across the five stores in ONE IndexedDB transaction. */
+/** Write the given rows across the stores in ONE IndexedDB transaction. */
 export async function seedRows(page: Page, rows: SeedRows): Promise<void> {
   await page.evaluate(
     async (rows) => {
@@ -195,9 +216,14 @@ export async function seedRows(page: Page, rows: SeedRows): Promise<void> {
         const req = indexedDB.open("lem-reader");
         req.onsuccess = () => {
           const db = req.result;
-          const wanted = ["articles", "highlights", "notes", "location", "settings"].filter((s) =>
-            db.objectStoreNames.contains(s),
-          );
+          const wanted = [
+            "articles",
+            "highlights",
+            "notes",
+            "location",
+            "settings",
+            "assets",
+          ].filter((s) => db.objectStoreNames.contains(s));
           if (wanted.length === 0) {
             resolve();
             return;
@@ -208,6 +234,18 @@ export async function seedRows(page: Page, rows: SeedRows): Promise<void> {
           for (const n of rows.notes ?? []) tx.objectStore("notes").put(n);
           for (const l of rows.locations ?? []) tx.objectStore("location").put(l);
           for (const s of rows.settings ?? []) tx.objectStore("settings").put(s);
+          for (const row of rows.assets ?? []) {
+            tx.objectStore("assets").put({
+              articleId: row.articleId,
+              assetId: row.assetId,
+              contentType: row.contentType,
+              byteLength: row.byteLength,
+              data: new Blob([new Uint8Array(row.dataBytes)], {
+                type: row.contentType,
+              }),
+              createdAt: row.createdAt,
+            });
+          }
           tx.oncomplete = () => resolve();
           tx.onerror = () => reject(tx.error);
         };
@@ -220,6 +258,14 @@ export async function seedRows(page: Page, rows: SeedRows): Promise<void> {
       notes?: Record<string, unknown>[];
       locations?: Record<string, unknown>[];
       settings?: Record<string, unknown>[];
+      assets?: Array<{
+        articleId: string;
+        assetId: string;
+        contentType: string;
+        byteLength: number;
+        dataBytes: number[];
+        createdAt: string;
+      }>;
     },
   );
 }
@@ -300,16 +346,24 @@ export function highlightRow(
  * bundle.json (pretty) / manifest.json (minified) layout buildBundleBytes
  * produces. The input is `unknown` on purpose — the parse IS the self-check,
  * so callers construct plain objects and invalid shapes throw here, in Node.
+ * Phase 20 (20-05): `assetEntries` carries raw asset zip entries
+ * (assets/<articleId>/<assetId> → bytes) merged into the same zipSync call
+ * — omitting an entry the bundle's assets meta declares is exactly how the
+ * specs craft the dangling-ref vector.
  * Returns a Buffer for setInputFiles' { name, mimeType, buffer }
  * payload, or callers may write it to disk for the path payload.
  */
-export async function buildBundleZip(bundle: unknown): Promise<Buffer> {
+export async function buildBundleZip(
+  bundle: unknown,
+  assetEntries: Record<string, Uint8Array> = {},
+): Promise<Buffer> {
   const parsed = ExportBundleSchema.parse(bundle);
   const manifest = await computeManifest(parsed);
   return Buffer.from(
     zipSync({
       "bundle.json": strToU8(JSON.stringify(parsed, null, 2)),
       "manifest.json": strToU8(JSON.stringify(manifest)),
+      ...assetEntries,
     }),
   );
 }

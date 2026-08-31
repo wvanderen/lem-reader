@@ -333,8 +333,21 @@ export function ImportPreviewDialog({
             )}
             {(preview.resolution.ambiguous > 0 ||
               preview.resolution.orphan > 0 ||
-              preview.fixtureBackedHighlights > 0) && (
+              preview.fixtureBackedHighlights > 0 ||
+              preview.danglingAssetArticles > 0) && (
               <ul className="import-preview-warnings">
+                {preview.danglingAssetArticles > 0 && (
+                  <li>
+                    {/* Phase 20 (20-05, IMG-04): the no-broken-refs gate's
+                     * honest disclosure — 20-UI-SPEC §Copywriting verbatim
+                     * (singular + plural templates). Assets ride article
+                     * records (D9-14), so this is a WARNING entry only —
+                     * no new row/choice/ConflictKind. */}
+                    {preview.danglingAssetArticles === 1
+                      ? "1 article will be skipped because its images aren't included in the bundle."
+                      : `${preview.danglingAssetArticles} articles will be skipped because their images aren't included in the bundle.`}
+                  </li>
+                )}
                 {preview.resolution.ambiguous > 0 && (
                   <li>
                     {countWithLabel(preview.resolution.ambiguous, {

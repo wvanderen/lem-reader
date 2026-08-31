@@ -15,6 +15,7 @@
 //     keep-both e2e proof.
 import { test, expect } from "@playwright/test";
 import { DEFAULT_SETTINGS } from "../../../src/settings/defaults";
+import { sha256Hex } from "../../../src/portability/manifest";
 import {
   BASE,
   buildBundleZip,
@@ -501,4 +502,161 @@ test.describe("PORT-02 metadata overrides (17-05 — D17-10/D17-11/D17-13)", () 
     expect(await readRow(page, "articles", "md-metacascade1")).toBeNull();
     expect(await countRows(page, "articles")).toBe(0);
   });
+});
+
+// ── Phase 20 (20-05): the dangling-asset import disclosure (IMG-04) ──────────
+//
+// A crafted v4 bundle declares assets metadata for TWO figure articles but
+// ships the raw zip entry for only ONE (buildBundleZip's assetEntries arm
+// deliberately omits the second — the exact missing-entry vector the
+// no-broken-refs gate exists for). The preview must disclose the skip with
+// the UI-SPEC §Copywriting VERBATIM singular warning, and the OTHER article
+// (with its asset) imports — never a silent placeholder rewrite.
+
+const DANGLING_PNG_BASE64 =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+
+test("a bundle missing one asset entry warns verbatim and imports the OTHER articles", async ({
+  page,
+  browserName,
+}) => {
+  // Phase 20 (20-05): engine-boundary skip, honestly documented (the
+  // ssrf-matrix residual-skip precedent). The Playwright WebKit build
+  // cannot store ANY Blob VALUE in IndexedDB (probe-verified 2026-08-31 —
+  // UnknownError "Error preparing Blob/File data" on every Blob
+  // construction variant; raw Uint8Array/ArrayBuffer values put fine).
+  // This cell's COMPLETE article must land its `data: Blob` asset row
+  // (D20-15 row shape), so webkit cannot exercise the flow. Chromium +
+  // firefox prove the verbatim warning + partial import; deferred-items.md
+  // records the open option for the 20-07 gate owner.
+  test.skip(
+    browserName === "webkit",
+    "WebKit engine boundary: Playwright's WebKit cannot put Blob values into IndexedDB (UnknownError) — chromium/firefox carry the proof",
+  );
+  await prepareFreshPage(page);
+
+  const pngBytes = new Uint8Array(Buffer.from(DANGLING_PNG_BASE64, "base64"));
+  const sha = await sha256Hex(pngBytes);
+
+  /** The COMPLETE article — its asset meta AND its zip entry both ride. */
+  const COMPLETE_ARTICLE = {
+    ...makeArticle({
+      id: "md-previewasset1",
+      title: "Complete Asset Article",
+      paragraphs: [
+        "The complete article carries a figure whose image bytes genuinely ride the bundle, so it must import together with its asset row.",
+      ],
+    }),
+    blocks: [
+      {
+        kind: "paragraph",
+        content: [
+          {
+            text: "The complete article carries a figure whose image bytes genuinely ride the bundle, so it must import together with its asset row.",
+            marks: [],
+          },
+        ],
+      },
+      {
+        kind: "figure",
+        alt: "A tiny square that travels",
+        src: "asset:img-0123456789ab",
+        width: 1,
+        height: 1,
+      },
+    ],
+  };
+
+  /** The DANGLING article — its asset meta rides but the zip entry does not. */
+  const DANGLING_ARTICLE = {
+    ...makeArticle({
+      id: "md-previewasset2",
+      title: "Dangling Asset Article",
+      paragraphs: [
+        "The dangling article references an image whose bytes are absent from the bundle; the importer must skip it with the explicit warning rather than silently rewriting its figure.",
+      ],
+    }),
+    blocks: [
+      {
+        kind: "paragraph",
+        content: [
+          {
+            text: "The dangling article references an image whose bytes are absent from the bundle; the importer must skip it with the explicit warning rather than silently rewriting its figure.",
+            marks: [],
+          },
+        ],
+      },
+      {
+        kind: "figure",
+        alt: "A tiny square that never boarded",
+        src: "asset:img-fedcba987654",
+        width: 1,
+        height: 1,
+      },
+    ],
+  };
+
+  const assetMeta = (articleId: string, assetId: string) => ({
+    articleId,
+    assetId,
+    contentType: "image/png" as const,
+    byteLength: pngBytes.byteLength,
+    sha256: sha,
+    entry: `assets/${articleId}/${assetId}`,
+  });
+
+  // The crafted zip: meta for BOTH, the raw entry for ONLY the first.
+  const bundleBuffer = await buildBundleZip(
+    {
+      schemaVersion: 4 as const,
+      exportedAt: "2026-08-31T00:00:00.000Z",
+      appVersion: "test",
+      articles: [COMPLETE_ARTICLE, DANGLING_ARTICLE],
+      locations: [],
+      highlights: [],
+      notes: [],
+      preferences: { ...DEFAULT_SETTINGS },
+      fixtureIds: [],
+      books: [],
+      assets: [
+        assetMeta("md-previewasset1", "img-0123456789ab"),
+        assetMeta("md-previewasset2", "img-fedcba987654"),
+      ],
+    },
+    { "assets/md-previewasset1/img-0123456789ab": pngBytes },
+  );
+
+  const panel = await openSettings(page);
+  await panel.locator('input[type="file"][accept=".zip"]').setInputFiles({
+    name: "dangling-asset-bundle.zip",
+    mimeType: "application/zip",
+    buffer: bundleBuffer,
+  });
+
+  // The preview: honest counts (the dangling article is NOT "new" — it will
+  // not import) + the VERBATIM singular warning string.
+  const preview = page.locator("dialog.import-preview");
+  await expect(preview).toBeVisible({ timeout: 15_000 });
+  await expect(preview).toContainText(
+    "This bundle contains 2 articles (1 new), 0 highlights, 0 notes, and 0 reading positions.",
+  );
+  await expect(preview).toContainText(
+    "1 article will be skipped because its images aren't included in the bundle.",
+  );
+
+  await preview.getByRole("button", { name: "Import", exact: true }).click();
+  await expect(settingsStatus(page)).toContainText(
+    "Imported 1 article, 0 highlights, 0 notes, and 0 reading positions.",
+    { timeout: 15_000 },
+  );
+  await expect(settingsStatus(page)).toContainText("1 item was skipped.");
+
+  // Row truth: the COMPLETE article + its asset row landed; the dangling
+  // article did NOT; exactly one asset row exists.
+  expect(await readRow(page, "articles", "md-previewasset1")).not.toBeNull();
+  expect(
+    await readRow(page, "assets", ["md-previewasset1", "img-0123456789ab"]),
+  ).not.toBeNull();
+  expect(await readRow(page, "articles", "md-previewasset2")).toBeNull();
+  expect(await countRows(page, "assets")).toBe(1);
 });
