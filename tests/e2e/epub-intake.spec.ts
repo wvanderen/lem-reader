@@ -50,6 +50,8 @@ import {
   drmAdeptBook,
   corruptNotEpub,
   emptyBook,
+  renderedFigureBook,
+  refusedFigureBook,
 } from "../unit/server/epub-fixtures";
 // Plan 16-03 — the shared dialog-opening helper (the forms live behind the
 // header Add button's modal since the add-section dissolution).
@@ -1277,5 +1279,138 @@ test.describe("ING-05 — refusal no-side-effect gates", () => {
     await expect(bookRow(page)).toHaveCount(0);
     expect(await countRows(page, "articles")).toBe(0);
     expect(await countRows(page, "books")).toBe(0);
+  });
+});
+
+// ── Plan 20-06 Task 2 — chapter figures from the container (IMG-01/02) ───────
+//
+// D20-01 + D12-16-retirement realignment note: the D12-16 downgrade pass is
+// RETIRED — EPUB chapter figures now extract from the already-open container
+// with zero network and either admit as local asset:img refs or refuse
+// calmly per-figure (placeholder surface, disclosed). No pre-existing cell
+// in this spec pinned the downgrade behavior (the retirement is unit-pinned
+// in epub-to-books.spec.ts); the DOC-06 unsupported-content disclosure
+// expectation is untouched and stays for GENUINELY unsupported content
+// (20-UI-SPEC §Regression Targets — deliberate change #2's scope is the
+// EPUB figure path only). Both new cells go through the REAL upload →
+// server container-extraction → envelope → saveBook pipeline (no API mock).
+test.describe("20-06 — chapter figures (container extraction)", () => {
+  test("an admitted chapter figure renders as a semantic figure with a local blob img (D20-01)", async ({
+    page,
+    browserName,
+  }) => {
+    // WebKit engine boundary (surfaced 20-05, probe-verified again for this
+    // plan 2026-08-31): Playwright's WebKit refuses ALL Blob values at the
+    // IndexedDB put ("UnknownError: Error preparing Blob/File data to be
+    // stored in object store") while raw Uint8Array/ArrayBuffer values put
+    // fine. This cell's saveBook writes the chapter's asset row in the
+    // D20-15 `data: Blob` shape, so webkit cannot exercise the save;
+    // chromium + firefox prove the full container-extraction → envelope →
+    // Dexie → blob-img flow. Real Safari supports IDB Blob storage
+    // (Safari 10+) — deferred-items.md records the open Rule-4 option for
+    // the 20-07 gate owner.
+    test.skip(
+      browserName === "webkit",
+      "WebKit engine boundary: Playwright's WebKit cannot put Blob values into IndexedDB (UnknownError) — chromium/firefox carry the proof",
+    );
+    await page.goto(`${BASE}/#/`);
+    await uploadEpub(page, "figure-book.epub", renderedFigureBook());
+    await expect(page.locator("li.book-row")).toBeVisible({ timeout: 15_000 });
+    await reloadLibrary(page);
+
+    // The book envelope carried the chapter asset: one Dexie assets row
+    // attributed to the chapter article (the AddDialog block-walk
+    // attribution — model-driven, never envelope-driven).
+    await expandBook(page);
+    const chapterHref = await bookRow(page)
+      .locator(".book-chapter-list > li")
+      .filter({ hasText: "Chapter 1. Rendered" })
+      .locator('a[href^="#/article/"]')
+      .getAttribute("href");
+    const chapterId = (chapterHref ?? "").replace("#/article/", "");
+    expect(chapterId).toMatch(/-c00$/);
+    expect(await countRows(page, "assets")).toBe(1);
+
+    // Open the chapter → the figure renders as a semantic figure element
+    // whose img resolves through the per-article AssetProvider (Dexie row →
+    // object URL — naturalWidth > 0 proves the local bytes DECODE in the
+    // real browser; the stored dims drive the reserved geometry, D20-13).
+    // Selector discipline (the 20-04 happy-path precedent): the visible
+    // paginated fragment AND the always-mounted hidden measurement body
+    // both render inside the provider — assert on the first img, never a
+    // strict whole-DOM count.
+    await bookRow(page)
+      .locator(".book-chapter-list > li")
+      .filter({ hasText: "Chapter 1. Rendered" })
+      .locator('a[href^="#/article/"]')
+      .click();
+    await page.waitForURL(/#\/article\/epub-[a-z0-9]+-c00$/, { timeout: 10_000 });
+    await waitForOpenedChapter(page);
+    const imgs = page.locator("figure img");
+    await expect.poll(async () => await imgs.count(), { timeout: 10_000 }).toBeGreaterThan(0);
+    await expect(imgs.first()).toHaveAttribute("src", /^blob:/);
+    await expect
+      .poll(
+        async () =>
+          await imgs.first().evaluate((el) => (el as HTMLImageElement).naturalWidth),
+        { timeout: 10_000 },
+      )
+      .toBeGreaterThan(0);
+    await expect(imgs.first()).toHaveAttribute("width", "8");
+    await expect(imgs.first()).toHaveAttribute("height", "6");
+    // The caption survives byte-identically (D19-01 — never touched by the
+    // src/dims rewrite).
+    await expect(page.locator("figure figcaption").first()).toHaveText(
+      "The rendered figure caption.",
+    );
+  });
+
+  test("a refused chapter figure renders the calm placeholder with the caption surviving (D20-09/D20-14)", async ({
+    page,
+  }) => {
+    await page.goto(`${BASE}/#/`);
+    // refusedFigureBook: the chapter's single figure is an animated GIF —
+    // sniffed "animated" inside the container (nothing in the calm reader
+    // moves on its own), refused per-figure with disclosure.
+    await uploadEpub(page, "refused-figure-book.epub", refusedFigureBook());
+    await expect(page.locator("li.book-row")).toBeVisible({ timeout: 15_000 });
+    await reloadLibrary(page);
+
+    await expandBook(page);
+    await bookRow(page)
+      .locator(".book-chapter-list > li")
+      .filter({ hasText: "Chapter 1. Refused" })
+      .locator('a[href^="#/article/"]')
+      .click();
+    await page.waitForURL(/#\/article\/epub-[a-z0-9]+-c00$/, { timeout: 10_000 });
+    await waitForOpenedChapter(page);
+
+    // ONE calm surface (D20-14): the refused figure emits the placeholder —
+    // NEVER an <img> anywhere in the DOM (a refused figure has no code path
+    // to a network fetch, and no asset row exists to resolve; the hidden
+    // measurement body renders the same placeholder).
+    await expect
+      .poll(async () => await page.locator("figure").count(), { timeout: 10_000 })
+      .toBeGreaterThan(0);
+    await expect(page.locator("figure img")).toHaveCount(0);
+    const placeholder = page.locator("figure .figure-placeholder");
+    await expect
+      .poll(async () => await placeholder.count(), { timeout: 10_000 })
+      .toBeGreaterThan(0);
+    await expect(placeholder.first()).toContainText(
+      "An animated illustration the reader refuses.",
+    );
+    // The caption survives verbatim inside the reserved box.
+    await expect(page.locator("figure figcaption").first()).toHaveText(
+      "The refused figure caption survives.",
+    );
+    // The refusal is DISCLOSED, never silent (D12-11 mirror): the chapter
+    // article carries the extractionWarnings count.
+    const articleRow = await readArticleRow(page, chapterIdFromUrl(page.url()));
+    expect(articleRow.ingestionMeta?.extractionWarnings).toEqual([
+      "1 image could not be included",
+    ]);
+    // And zero asset rows ride the refused book's save.
+    expect(await countRows(page, "assets")).toBe(0);
   });
 });
