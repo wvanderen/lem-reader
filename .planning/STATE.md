@@ -4,17 +4,17 @@ milestone: v2.1
 milestone_name: Reader Experience
 current_phase: 20
 current_phase_name: safe-local-image-fidelity
-status: executing
-stopped_at: Completed 20-08-PLAN.md
-last_updated: "2026-08-31T20:22:44.531Z"
+status: verifying
+stopped_at: Completed 20-07-PLAN.md — Phase 20 complete (all 8 plans)
+last_updated: "2026-08-31T21:36:12.504Z"
 last_activity: 2026-08-31
 last_activity_desc: Phase 20 execution started
 progress:
   total_phases: 8
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 34
-  completed_plans: 33
-  percent: 75
+  completed_plans: 34
+  percent: 88
 ---
 
 # Project State
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-08-30)
 
 Phase: 20 (safe-local-image-fidelity) — EXECUTING
 Plan: 8 of 8
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-08-31 — Phase 20 execution started
 
 ## Recent Decisions (Phase 18)
@@ -191,6 +191,7 @@ Last activity: 2026-08-31 — Phase 20 execution started
 | Phase 20 P05 | 11min (resume session) | 3 tasks | 12 files |
 | Phase 20 P06 | 31 min | 2 tasks | 7 files |
 | Phase 20 P08 | 27min | 2 tasks | 9 files |
+| Phase 20 P07 | 70 min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -459,6 +460,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: D20-08 imagery proof (20-08): decode-matrix runs engine-complete via registry-backed-id seeding — a plain Dexie article row under id figure-heavy (ingested wins) resolves assets from the in-memory registry, so codec truth is proven on webkit too; Dexie-blob transport proven separately on chromium+firefox
 - [Phase ?]: Refused-figure captions were NOT highlightable (20-08 Rule 1): Phase 19 caption alignment assumed alt is an img attribute; the 20-04 placeholder renders alt as DOM text → every caption capture clamped to empty-span. capture.ts now aligns caption endpoints against the state-independent figcaption element; the empty-alt note refuses ineligible
 - [Phase ?]: Geometry cap semantics pinned (20-08): under --figure-media-max-h the width/height attrs pin width and the cap clamps height (box ratio diverges; object-fit: contain keeps the paint undistorted) — the aspect-identity cell pins UNCAPPED equality at a raised viewport; the tall cell pins the clamp. Design-honest, not a 20-04 regression
+- [Phase Phase 20]: Phase 20-07 gate: honest gate = every invocation recorded (2 starvation-classified reds, each proven isolation-green, then one green run); --workers=2 is the documented 18-04/13-10 contention control under load 6-14, recorded as the command — Two plain runs produced different isolation-green tail flakes (the moving-tail starvation signature); the plan pre-authorizes the bounded workers control; assertions/engines/specs byte-unchanged
+- [Phase Phase 20]: Phase 20-07: all six IMG requirements closed via the evidence-pointing ledger (IMG-01/02 at 20-06, IMG-03/05/06 at 20-08, IMG-04 at 20-05); animated-AVIF residual accepted per A4; cap sanity verdict = no tuning argued, real-corpus calibration stays backlog per D20-11 — Substrate plans 20-01..04 keep requirements-completed [] (the 04-02/19-01 honest-split precedent); every ledger row points into the same green invocation the gate records
 
 ### Pending Todos
 
@@ -514,8 +517,8 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-31T20:22:34.928Z
-Stopped at: Completed 20-08-PLAN.md
+Last session: 2026-08-31T21:36:12.495Z
+Stopped at: Completed 20-07-PLAN.md — Phase 20 complete (all 8 plans)
 Resume file: None
 
 ## Operator Next Steps

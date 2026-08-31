@@ -14,7 +14,7 @@
 - [x] **Phase 17: Reader-Owned Metadata** - Edit display title and author without disturbing canonical identity. (completed 2026-08-30)
 - [x] **Phase 18: Reader Orientation** - Navigate canonical headings and receive non-intrusive restoration feedback. (completed 2026-08-30)
 - [x] **Phase 19: Cross-Block Highlights** - Manage one durable highlight across multiple semantic blocks. (completed 2026-08-31)
-- [ ] **Phase 20: Safe Local Image Fidelity** - Preserve figures and captions as safe, portable local assets.
+- [x] **Phase 20: Safe Local Image Fidelity** - Preserve figures and captions as safe, portable local assets. (completed 2026-08-31)
 - [ ] **Phase 21: Integrated Refinement and Acceptance** - Correct remaining UI issues and prove the complete milestone.
 
 ## Phase Details
@@ -225,7 +225,7 @@ Plans:
   4. Figures render semantically with stable geometry and calm failures in both modes without content or location loss.
   5. Assets export/import with validation, limits, conflicts, and no broken references, and follow documented deletion lifecycle.
 
-**Plans**: 7/8 plans executed
+**Plans**: 8/8 plans complete
 
 **Wave 1** *(foundation)*
 
@@ -251,7 +251,7 @@ Plans:
 
 **Wave 6** *(blocked on Waves 3-5 completion)*
 
-- [ ] 20-07-PLAN.md — phase gate: honest full-suite run, IMG closure ledger, residual recording (IMG-01..06)
+- [x] 20-07-PLAN.md — phase gate: honest full-suite run, IMG closure ledger, residual recording (IMG-01..06)
 
 **UI hint**: yes
 
@@ -283,5 +283,5 @@ Plans:
 | 17. Reader-Owned Metadata | v2.1 | 5/5 | Complete    | 2026-08-30 |
 | 18. Reader Orientation | v2.1 | 4/4 | Complete    | 2026-08-30 |
 | 19. Cross-Block Highlights | v2.1 | 5/5 | Complete    | 2026-08-31 |
-| 20. Safe Local Image Fidelity | v2.1 | 7/8 | In Progress|  |
+| 20. Safe Local Image Fidelity | v2.1 | 8/8 | Complete   | 2026-08-31 |
 | 21. Integrated Refinement and Acceptance | v2.1 | 0/TBD | Not started | - |
