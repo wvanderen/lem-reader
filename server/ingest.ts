@@ -303,6 +303,13 @@ async function ingestEpubBook(input: {
   const bookBase = `epub-${shortHash(b64)}`;
   const admitted: CanonicalArticle[] = [];
   const chapterArticleIds: string[] = [];
+  // 20-06: the envelope carries ONLY admitted chapters' container-extracted
+  // assets, deduped by assetId (identical bytes self-identify — a figure
+  // shared by two chapters ships once; the AddDialog attribution walk
+  // re-fans rows out per chapter). A chapter that fails a stage below takes
+  // its assets with it — no orphan bytes ride the response.
+  const admittedAssets: ImageAsset[] = [];
+  const seenAssetIds = new Set<string>();
   let skipped = adapterSkipped;
 
   for (const draft of chapters) {
@@ -321,7 +328,9 @@ async function ingestEpubBook(input: {
       // Stage 6a: BUILD the chapter article (the five per-article fields
       // ride the same contract as every other Stage-1 adapter; provenance
       // carries the BOOK's authors/publishedDate and the chapter's own
-      // TOC-derived title).
+      // TOC-derived title). extractionWarnings discloses the 20-06
+      // per-figure refusals (count form matching the single-article stage's
+      // tone — T-20-10, never silent).
       const assembled = {
         id,
         revision: 1,
@@ -340,7 +349,14 @@ async function ingestEpubBook(input: {
           origin: "upload" as const,
           originalHtmlHash,
           extractionConfidence: "high" as const, // placeholder — stamped post-gate
-          extractionWarnings: [],
+          extractionWarnings:
+            draft.figureRefusedCount > 0
+              ? [
+                  `${draft.figureRefusedCount} image${
+                    draft.figureRefusedCount === 1 ? "" : "s"
+                  } could not be included`,
+                ]
+              : [],
           bookId: bookBase,
           chapterIndex: i,
         },
@@ -373,6 +389,14 @@ async function ingestEpubBook(input: {
 
       chapterArticleIds.push(id);
       admitted.push(article);
+      // 20-06: the admitted chapter's container assets join the envelope
+      // (deduped — a twin admitted by an earlier chapter ships once).
+      for (const asset of draft.assets) {
+        if (!seenAssetIds.has(asset.assetId)) {
+          seenAssetIds.add(asset.assetId);
+          admittedAssets.push(asset);
+        }
+      }
     } catch {
       // A chapter failing parse / the anchor gate / any stage is SKIPPED
       // and disclosed — never a whole-book failure (D12-11).
@@ -406,15 +430,16 @@ async function ingestEpubBook(input: {
   });
 
   // The book ok-variant envelope (12-03's IngestionClient.ingestEpub
-  // consumes exactly this shape). assets stays empty until 20-06 wires the
-  // EPUB container extraction (the schema field's Zod default makes it
-  // required on the parsed output).
+  // consumes exactly this shape). 20-06: assets carries the admitted
+  // chapters' container-extracted figures (base64 envelope; the client
+  // re-validates + re-hashes before exposure — the same transport chain as
+  // the single-article path).
   return {
     ok: true,
     book,
     articles: admitted,
     skippedCount: book.skippedChapterCount,
-    assets: [],
+    assets: admittedAssets.map(toAssetEnvelope),
   };
 }
 

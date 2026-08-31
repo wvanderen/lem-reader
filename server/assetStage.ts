@@ -62,38 +62,55 @@ const HTTP_SRC = /^https?:/i;
 
 /**
  * rewriteFiguresWithAssets — the pure recursive rewrite over the block tree.
- * For each figure carrying an http(s) src present in the resolution map:
+ * For each figure carrying a src CLAIMED by `claimedSrc` (default: http(s) —
+ * the network-path collect filter, byte-stable for every existing caller)
+ * and present in the resolution map:
  *   - accepted (ImageAsset) → src becomes "asset:" + assetId, originalSrc the
  *     provenance URL, width/height the stored intrinsic px (ONLY these four
  *     fields differ — the spec asserts deep-equality on the rest)
  *   - refused (any string arm) → src omitted, originalSrc kept as the
  *     provenance of where the bytes would have come from
- * Figures with no src, non-http srcs, or srcs absent from the map are
+ * Figures with no src, unclaimed srcs, or srcs absent from the map are
  * returned unchanged. alt + caption are never touched (D-05 byte-identity).
+ *
+ * Provenance discipline (20-06): originalSrc is httpUrl-typed in the schema,
+ * so it is written ONLY for http(s) srcs — the EPUB container path reuses
+ * this function with a marker-claiming predicate whose chapter-relative srcs
+ * are not URL-shaped; those figures carry their provenance in the refusal
+ * disclosure instead, never a forced non-URL originalSrc.
  */
 export function rewriteFiguresWithAssets(
   blocks: Block[],
   resolution: Map<string, AssetResolution>,
+  claimedSrc: (src: string) => boolean = (src) => HTTP_SRC.test(src),
 ): Block[] {
   return blocks.map((b) => {
     if (b.kind === "figure") {
       const src = b.src;
-      if (typeof src !== "string" || !HTTP_SRC.test(src)) return b;
+      if (typeof src !== "string" || !claimedSrc(src)) return b;
       const res = resolution.get(src);
       if (res === undefined) return b;
       if (typeof res === "string") {
         // Refused — omit the src key entirely (schema .optional(); no stale
-        // remote URL survives into the canonical model), keep provenance.
+        // remote URL survives into the canonical model), keep provenance
+        // where it is URL-shaped (see the doc comment's http-only rule).
         const { src: _omit, ...rest } = b;
-        return { ...rest, originalSrc: src };
+        return HTTP_SRC.test(src) ? { ...rest, originalSrc: src } : rest;
       }
-      return {
-        ...b,
-        src: "asset:" + res.assetId,
-        originalSrc: src,
-        width: res.width,
-        height: res.height,
-      };
+      return HTTP_SRC.test(src)
+        ? {
+            ...b,
+            src: "asset:" + res.assetId,
+            originalSrc: src,
+            width: res.width,
+            height: res.height,
+          }
+        : {
+            ...b,
+            src: "asset:" + res.assetId,
+            width: res.width,
+            height: res.height,
+          };
     }
     if (b.kind === "blockquote") {
       return { ...b, children: rewriteFiguresWithAssets(b.children, resolution) };

@@ -12,8 +12,11 @@
 // in-tree since Phase 9), D12-14 (fast-xml-parser for XML manifests;
 // chapters ride the EXISTING sanitize + walk path — never an article-
 // extraction pass, chapters are already content; Pitfall 6 renderer
-// rejection is why this adapter exists at all), D12-16 (text-first: every
-// figure downgrades to an unsupported block).
+// rejection is why this adapter exists at all), D12-16 RETIRED by 20-06
+// (the text-first "every figure downgrades to an unsupported block" pass is
+// gone — chapter figures now extract from the ALREADY-OPEN container with
+// zero network and either admit as local asset:img refs or refuse calmly
+// per-figure with disclosure, per D20-01/D20-03).
 //
 // ──────────────────────────────────────────────────────────────────────────
 // SECURITY BOUNDARY (the doc model IS the boundary — D8-16 precedent):
@@ -35,8 +38,14 @@
 //     __proto__-shaped names) + a DTD refusal + the whole-parse try
 //     envelope → calm `epub-unreadable`; EPUB_MAX_CHAPTERS and the
 //     EPUB_EXTRACTION_TIMEOUT_MS race bound the work.
-//   - IP-leak closure (T-12-05): the reader never fetches EPUB-embedded
-//     resources — the figure downgrade pass removes every remote-src figure.
+//   - IP-leak closure (T-12-05, evolved by 20-06/D20-01): the reader never
+//     fetches EPUB-embedded resources. The D12-16 blanket downgrade retired —
+//     chapter figures now resolve against the ALREADY-OPEN entries map only
+//     (zero network by construction; the unit suite proves it with fetch
+//     stubbed to throw), and remote-src figures refuse calmly per-figure.
+//     Every ADMITTED figure is a local asset:img ref (the 20-04 renderer
+//     emits <img> only on the resolved object-URL branch — a remote URL has
+//     no code path to an <img src>).
 //
 // ⚠️ Future maintainer: do NOT add an article-extraction pass to chapter
 // documents; do NOT parse XML with regex; do NOT reorder the DRM gate after
@@ -52,12 +61,16 @@ import { unzipSync } from "fflate";
 import { JSDOM } from "jsdom";
 import type { Block, InlineRun } from "../src/content/schema";
 import { isSafeEntryName } from "../src/portability/zipSlip";
+import { rewriteFiguresWithAssets, type AssetResolution } from "./assetStage";
 import { IngestionError } from "./errors";
-import { htmlToBlocks, sanitizeExtractedHtml } from "./htmlToBlocks";
+import { sniffImageAsset, type ImageAsset } from "./fetchImageAsset";
+import { htmlToBlocks, sanitizeExtractedHtml, type FigureSrcResolver } from "./htmlToBlocks";
 import {
   EPUB_EXTRACTION_TIMEOUT_MS,
   EPUB_MAX_CHAPTERS,
   EPUB_MAX_ENTRY_BYTES,
+  MAX_ARTICLE_ASSET_BYTES,
+  MAX_FIGURES_PER_ARTICLE,
 } from "./limits";
 
 // ── EPUB_THRESHOLDS — every detection/assembly number lives HERE ────────────
@@ -429,6 +442,10 @@ export interface EpubArchive {
   ncxItem: EpubManifestItem | undefined;
   /** Decoded UTF-8 text of a zip entry by root-relative path. */
   entryText(href: string): string | undefined;
+  /** Raw bytes of a zip entry by root-relative path — the 20-06 container
+   * extraction's ONLY read source (zero network by construction; the key
+   * was slip-gated in unzipEpub before any entry byte exists). */
+  entryBytes(href: string): Uint8Array | undefined;
 }
 
 /**
@@ -553,8 +570,9 @@ export function parseEpubArchive(bytes: Uint8Array): EpubArchive {
     const entry = entries[href];
     return entry === undefined ? undefined : UTF8.decode(entry);
   };
+  const entryBytes = (href: string): Uint8Array | undefined => entries[href];
 
-  return { bookMeta, opfDir, manifestItems, spine, navItem, ncxItem, entryText };
+  return { bookMeta, opfDir, manifestItems, spine, navItem, ncxItem, entryText, entryBytes };
 }
 
 // ── Navigation resolution — nav (EPUB 3) preferred, NCX (EPUB 2) fallback ────
@@ -677,40 +695,20 @@ function blockText(b: Block): string {
   return "";
 }
 
-const FIGURE_DOWNGRADE_DESCRIPTION =
-  "An image from this book that the reader does not display.";
+/** http(s) predicate — the remote-src arm of the container extraction
+ * (auto-refused: the container is the only read source, D20-01). */
+const HTTP_SRC = /^https?:/i;
 
 /**
- * downgradeFigures — D12-16 + T-12-05: EVERY figure block in an EPUB chapter
- * downgrades to an unsupported block carrying the figure's alt text where
- * available. Relative-src figures already failed the http(s) gate inside
- * htmlToBlocks and arrived as unsupported; remote-src figures are downgraded
- * HERE — the reader never fetches EPUB-embedded resources (a hostile book
- * embedding a remote image must not fire a tracking beacon on open).
- * Recurses through container blocks.
+ * figureSrcResolver — the container-marker claim (20-RESEARCH Pattern 5,
+ * option (a)): htmlToBlocks consults it ONLY for non-http figure srcs, so
+ * claiming every non-empty src turns each chapter-relative marker into a
+ * FigureBlock carrying the RAW src string for container resolution below
+ * (data: URIs included — they never match an archive key and refuse calmly,
+ * one placeholder surface everywhere per D20-06). The url/paste path passes
+ * nothing and stays byte-stable (locked by extraction.spec.ts).
  */
-function downgradeFigures(blocks: Block[]): Block[] {
-  return blocks.map((b) => {
-    if (b.kind === "figure") {
-      const alt = b.alt.trim();
-      return {
-        kind: "unsupported",
-        originalKind: "figure",
-        plainDescription: alt.length > 0 ? alt : FIGURE_DOWNGRADE_DESCRIPTION,
-      };
-    }
-    if (b.kind === "blockquote") {
-      return { ...b, children: downgradeFigures(b.children) };
-    }
-    if (b.kind === "bulleted-list") {
-      return { ...b, items: b.items.map((i) => ({ content: downgradeFigures(i.content) })) };
-    }
-    if (b.kind === "numbered-list") {
-      return { ...b, items: b.items.map((i) => ({ content: downgradeFigures(i.content) })) };
-    }
-    return b;
-  });
-}
+const figureSrcResolver: FigureSrcResolver = (src) => src.length > 0;
 
 /** One walked spine document. */
 interface WalkedDocument {
@@ -728,8 +726,9 @@ interface WalkedDocument {
  * 07-04 mXSS suite's exact coverage) → a fresh JSDOM → htmlToBlocks. The
  * article-extraction pass is intentionally NOT applied — chapters are
  * already content documents and extraction would strip heading structure
- * and footnote lists (the 12-RESEARCH anti-pattern). The figure downgrade
- * runs on the walked blocks before anything else sees them.
+ * and footnote lists (the 12-RESEARCH anti-pattern). Figure srcs survive as
+ * container markers (figureSrcResolver above); resolution happens per
+ * chapter unit in extractUnitFigures, AFTER the D12-10 admission gate.
  */
 function walkChapterDocument(xhtml: string): WalkedDocument {
   const rawDom = new JSDOM(xhtml);
@@ -740,12 +739,157 @@ function walkChapterDocument(xhtml: string): WalkedDocument {
 
   const sanitized = sanitizeExtractedHtml(xhtml);
   const dom = new JSDOM(sanitized);
-  const walked = htmlToBlocks(dom.window.document, undefined);
+  const walked = htmlToBlocks(dom.window.document, undefined, figureSrcResolver);
   return {
-    blocks: downgradeFigures(walked.blocks),
+    blocks: walked.blocks,
     footnotes: walked.footnotes,
     docTitle,
   };
+}
+
+// ── Container figure extraction (20-06 — the D12-16 retirement) ──────────────
+
+/** The per-book asset budget tracker shared across chapter units in
+ * admission order (first-come deterministic — the runAssetStage algebra). */
+interface BookAssetBudget {
+  usedBytes: number;
+  /** Byte-identical twins self-identify by content hash (D7-07): a known
+   * admission is REUSED without re-charging the budget. */
+  byAssetId: Map<string, ImageAsset>;
+}
+
+/** One chapter unit's figure outcome. */
+interface FigureExtraction {
+  /** The unit's documents with walked.blocks replaced by the rewritten
+   * blocks (marker srcs → asset refs or refused src-less figures). */
+  docs: SpineDoc[];
+  /** Accepted unique assets in document order, deduped by assetId. */
+  assets: ImageAsset[];
+  /** Per-FIGURE refusal occurrences (the placeholders the reader sees) —
+   * the disclosure the orchestrator stamps into extractionWarnings. */
+  refusedCount: number;
+}
+
+/**
+ * extractUnitFigures — resolve one ADMITTED chapter unit's figure srcs
+ * against the already-open archive (zero network — D20-01):
+ *   1. Collect per-document unique srcs with occurrence counts (document
+ *      order; the same src string in two documents at different depths is
+ *      TWO resolutions, so maps are per-doc and keyed by the raw src).
+ *   2. Remote http(s) srcs auto-refuse "fetch" — the container is the only
+ *      read source (T-12-05 anti-beacon; the refusal keeps originalSrc
+ *      provenance, exactly what the network path writes).
+ *   3. Markers resolve chapter-relative → zip-root-relative through the ONE
+ *      shared normalizeEpubHref against dirOf(the document's href); the
+ *      composed key passes isSafeEntryName BEFORE any byte use (T-20-23 —
+ *      the existing discipline), then the entry bytes run through
+ *      sniffImageAsset — the same seam and caps as the network path minus
+ *      fetch (type/SVG, bytes, pixels, animated — D20-08/09/10/11).
+ *   4. Caps identical to the network-path constants: MAX_FIGURES_PER_ARTICLE
+ *      unique srcs per chapter unit (beyond-cap refuse "count", never
+ *      sniffed) + the MAX_ARTICLE_ASSET_BYTES per-book running byte budget
+ *      (over-budget figures refuse "budget" per-figure — Pitfall 6; the
+ *      container's own 10MB cap bounds it naturally).
+ *   5. Rewrite each document's blocks through the SHARED
+ *      rewriteFiguresWithAssets (never a forked EPUB rewrite) claiming every
+ *      figure src — refused markers omit src with alt + caption intact
+ *      (D20-05 composure; provenance stays http-only inside the helper).
+ * Never throws for per-figure problems; one bad figure never blocks the
+ * chapter (or the book).
+ */
+function extractUnitFigures(
+  unitDocs: SpineDoc[],
+  archive: EpubArchive,
+  budget: BookAssetBudget,
+): FigureExtraction {
+  // ── Collect: per-doc unique srcs + occurrence counts, document order ──
+  const perDocCounts: Array<Map<string, number>> = [];
+  const collect = (bs: Block[], counts: Map<string, number>): void => {
+    for (const b of bs) {
+      if (b.kind === "figure") {
+        const src = b.src;
+        if (typeof src === "string" && src.length > 0) {
+          counts.set(src, (counts.get(src) ?? 0) + 1);
+        }
+      } else if (b.kind === "blockquote") {
+        collect(b.children, counts);
+      } else if (b.kind === "bulleted-list" || b.kind === "numbered-list") {
+        for (const item of b.items) collect(item.content, counts);
+      }
+    }
+  };
+  for (const d of unitDocs) {
+    const counts = new Map<string, number>();
+    collect(d.walked.blocks, counts);
+    perDocCounts.push(counts);
+  }
+  const hasFigures = perDocCounts.some((c) => c.size > 0);
+  if (!hasFigures) return { docs: unitDocs, assets: [], refusedCount: 0 };
+
+  // ── Resolve: per-doc maps (same src in two documents = two entries) ────
+  const perDocMaps: Array<Map<string, AssetResolution>> = perDocCounts.map(
+    () => new Map<string, AssetResolution>(),
+  );
+  const assets: ImageAsset[] = [];
+  let refusedCount = 0;
+  let capSlotsUsed = 0; // unique srcs across the UNIT (the article, D20-11)
+  unitDocs.forEach((doc, docIdx) => {
+    const counts = perDocCounts[docIdx] as Map<string, number>;
+    const resolution = perDocMaps[docIdx] as Map<string, AssetResolution>;
+    const chapterDir = dirOf(doc.item.href);
+    for (const src of counts.keys()) {
+      if (capSlotsUsed >= MAX_FIGURES_PER_ARTICLE) {
+        resolution.set(src, "count"); // image-spam stopper — never sniffed
+        continue;
+      }
+      capSlotsUsed += 1;
+      let res: AssetResolution;
+      if (HTTP_SRC.test(src)) {
+        res = "fetch"; // zero-network: remote srcs refuse, never fetched
+      } else {
+        const entryKey = normalizeEpubHref(src, chapterDir);
+        const entry = isSafeEntryName(entryKey)
+          ? archive.entryBytes(entryKey)
+          : undefined;
+        res = entry === undefined ? "fetch" : sniffImageAsset(entry);
+      }
+      if (typeof res !== "string") {
+        const known = budget.byAssetId.get(res.assetId);
+        if (known !== undefined) {
+          res = known; // byte-identical twin — reuse, no double charge
+        } else if (budget.usedBytes + res.bytes.byteLength > MAX_ARTICLE_ASSET_BYTES) {
+          res = "budget"; // per-book guard — Pitfall 6 response inflation
+        } else {
+          budget.usedBytes += res.bytes.byteLength;
+          budget.byAssetId.set(res.assetId, res);
+          assets.push(res);
+        }
+      }
+      resolution.set(src, res);
+    }
+  });
+
+  // ── Rewrite through the SHARED stage helper (claim every figure src) ───
+  const docs = unitDocs.map((doc, docIdx) => {
+    const counts = perDocCounts[docIdx] as Map<string, number>;
+    if (counts.size === 0) return doc;
+    const rewritten = rewriteFiguresWithAssets(
+      doc.walked.blocks,
+      perDocMaps[docIdx] as Map<string, AssetResolution>,
+      () => true,
+    );
+    return { ...doc, walked: { ...doc.walked, blocks: rewritten } };
+  });
+
+  // ── Disclosure: per-FIGURE occurrences of refused resolutions ──────────
+  unitDocs.forEach((_, docIdx) => {
+    const counts = perDocCounts[docIdx] as Map<string, number>;
+    const resolution = perDocMaps[docIdx] as Map<string, AssetResolution>;
+    for (const [src, occurrences] of counts) {
+      if (typeof resolution.get(src) === "string") refusedCount += occurrences;
+    }
+  });
+  return { docs, assets, refusedCount };
 }
 
 /**
@@ -823,7 +967,8 @@ interface ChapterUnit {
  * SAME five per-article fields the other Stage-1 adapters emit, plus
  * sourceHtmlHash (sha256 of the chapter's concatenated spine-item XHTML —
  * the IngestionMeta.originalHtmlHash input, so the orchestrator never
- * re-reads bytes). */
+ * re-reads bytes) and the 20-06 container-extraction outputs: accepted
+ * chapter-figure assets + the per-figure refusal count for disclosure. */
 export interface ChapterDraft {
   blocks: Block[];
   footnotes: { id: string; content: InlineRun[] }[];
@@ -832,11 +977,11 @@ export interface ChapterDraft {
   /** First spine position of the chapter's content (debug/traceability). */
   spineIndex: number;
   sourceHtmlHash: string;
-  /** 20-06 scaffold (RED): accepted chapter-figure assets ride the draft to
-   * the book envelope. Placeholder until the container extraction lands. */
-  assets: never[];
-  /** 20-06 scaffold (RED): per-figure refusal count disclosed through
-   * extractionWarnings. Placeholder until the container extraction lands. */
+  /** 20-06: accepted chapter-figure assets (document order, deduped by
+   * assetId) — ride the draft onto the book envelope. */
+  assets: ImageAsset[];
+  /** 20-06: per-figure refusals, disclosed through extractionWarnings
+   * (D12-11 honesty mirror — refused figures are never silently dropped). */
   figureRefusedCount: number;
 }
 
@@ -985,6 +1130,8 @@ function emitChapter(
   unitDocs: SpineDoc[],
   number: number,
   lang: string,
+  assets: ImageAsset[],
+  figureRefusedCount: number,
 ): ChapterDraft {
   const blocks: Block[] = [];
   const footnotes: { id: string; content: InlineRun[] }[] = [];
@@ -1002,10 +1149,8 @@ function emitChapter(
     title: chapterTitle(unit, unitDocs, number),
     spineIndex: first !== undefined ? first.pos : unit.startPos,
     sourceHtmlHash: hasher.digest("hex"),
-    // 20-06 scaffold (RED): placeholders — populated by the container
-    // extraction in the GREEN commit (tests fail against these constants).
-    assets: [],
-    figureRefusedCount: 0,
+    assets,
+    figureRefusedCount,
   };
 }
 
@@ -1025,6 +1170,9 @@ function assembleChapters(archive: EpubArchive): {
   const { units, fallbackUsed } = partitionChapters(archive, docs);
   const chapters: ChapterDraft[] = [];
   let skippedCount = 0;
+  // The per-book asset budget, charged in admission order across chapter
+  // units (first-come deterministic; byte-identical twins reuse admissions).
+  const budget: BookAssetBudget = { usedBytes: 0, byAssetId: new Map() };
   for (const unit of units) {
     const unitDocs = docs.filter(
       (d) => d.pos >= unit.startPos && d.pos < unit.endPos,
@@ -1037,7 +1185,16 @@ function assembleChapters(archive: EpubArchive): {
       skippedCount += 1; // cover plates / pure-image pages — disclosed
       continue;
     }
-    chapters.push(emitChapter(unit, unitDocs, chapters.length + 1, archive.bookMeta.language));
+    // 20-06: figures resolve ONLY after admission — skipped plates never
+    // spend sniff work and never contribute assets (D20-03 scope).
+    const { docs: resolvedDocs, assets, refusedCount } = extractUnitFigures(
+      unitDocs,
+      archive,
+      budget,
+    );
+    chapters.push(
+      emitChapter(unit, resolvedDocs, chapters.length + 1, archive.bookMeta.language, assets, refusedCount),
+    );
   }
   return { chapters, skippedCount, fallbackUsed };
 }
