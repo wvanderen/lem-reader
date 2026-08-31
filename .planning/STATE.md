@@ -6,7 +6,7 @@ current_phase: 20
 current_phase_name: safe-local-image-fidelity
 status: executing
 stopped_at: Completed 20-03-PLAN.md
-last_updated: "2026-08-31T15:40:22.727Z"
+last_updated: "2026-08-31T15:40:49.459Z"
 last_activity: 2026-08-31
 last_activity_desc: Phase 20 execution started
 progress:
@@ -444,6 +444,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: [Phase 20-01] IMG-02 stays unchecked — foundation plan ships the fetch/sniff substrate only; requirement closes at the end-to-end asset-stage plans 20-02+ (04-02 PAGE-01 / 10-01 RECV-01 split precedent)
 - [Phase 20]: 20-02: stage-level budget arms (count/budget/deadline) live ONLY on AssetResolution; fetch-level refusals stay closed in 20-01's union; refused figures omit src but keep originalSrc provenance; refusedCount is per-figure (pre-existing no-src figures disclose via the D20-06 placeholder surface)
 - [Phase 20]: 20-02: envelope tamper failures reuse the calm server-error reason (no enum churn); client transport re-validation = Zod parse + chunked 0x8000 decode + byteLength re-check + sha256 assetId re-hash (Pitfall 10 — server never trusted); byte-identical twins reuse the first budget admission (D7-07)
+- [Phase ?]: 20-03: Asset rows are article-owned (D20-15) — lifecycle = the owning article's: save(article, assets?)/saveBook upserts range-delete old rows FIRST inside the SAME transaction (D20-07: a refused figure leaves no orphan blob); remove/removeBook cascade via the v6 articleId index in the existing single transactions; putAssets/deleteAssetsForArticle stay never-throw seams while transactional paths propagate throws (swallowing would break Dexie rollback = D20-04 atomicity)
+- [Phase ?]: 20-03: Dexie v6 assets store APPENDS "[articleId+assetId], articleId" (compound PK + FK index), v1..v5 byte-unchanged, no upgrade callback (Pitfall 9); saveBook/removeBook standardize the readonly-ARRAY transaction overload (tuple overloads stop at five — 20-05's seven-table import follows the 12-07 lesson); loadAllAssets = plain-array whole-library read (loadAllHighlights precedent), bulkGetAssets = per-article discriminated union (20-04 AssetProvider routes ok:false); jsdom Blobs degrade through fake-indexeddb's structuredClone — specs install Node's Blob as the faithful round-trippable global
 
 ### Pending Todos
 
