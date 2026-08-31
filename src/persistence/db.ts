@@ -57,6 +57,31 @@ export interface NoteRecordRow {
   updatedAt: string;
 }
 
+/** Shape of a row in the `assets` store (Phase 20 — IMG-03/IMG-04, D20-15).
+ * Article-owned image blobs whose lifecycle is exactly the owning article's:
+ * saved together (one transaction), replaced together on re-ingest, deleted
+ * together. Mirrors AssetRecordSchema (src/persistence/assetsStore.ts — the
+ * HighlightRecordRow/HighlightRecordSchema twin discipline). The compound
+ * primary key `[articleId+assetId]` is queried as the array
+ * `[articleId, assetId]` via db.assets.bulkGet (the v1 location
+ * [articleId+revision] precedent — NOT a field literally named
+ * "[articleId+assetId]"), and the `articleId` index powers the
+ * single-transaction range deletes in DexieLibrarySource.remove / removeBook
+ * / the re-ingest upsert replacement (D20-07 — no orphan blobs). */
+export interface AssetRecordRow {
+  articleId: string; // FK → articles.id
+  assetId: string; // img-<12hex> content-hash (the assetRef body)
+  contentType:
+    | "image/jpeg"
+    | "image/png"
+    | "image/webp"
+    | "image/gif"
+    | "image/avif";
+  byteLength: number;
+  data: Blob; // IndexedDB-native blob storage → createObjectURL-direct
+  createdAt: string; // ISO-8601
+}
+
 export class LemReaderDB extends Dexie {
   // Declared table properties give TypeScript a handle on the stores reserved
   // by the version blocks below. Without these, `db.settings.get(...)` would
@@ -106,6 +131,12 @@ export class LemReaderDB extends Dexie {
   // precedent; runtime-unaffected (Dexie resolves stores by name from the
   // version declarations below).
   books!: Table<Book, string>;
+  // Phase 20 (IMG-03/IMG-04, Plan 20-03): the assets table stores article-
+  // owned image blobs keyed by the compound [articleId+assetId] primary key
+  // (the location [articleId+revision] precedent). Definite-assignment
+  // annotation mirrors the books! precedent above; runtime-unaffected
+  // (Dexie resolves the store by name from the v6 declaration below).
+  assets!: Table<AssetRecordRow, [string, string]>;
 
   constructor() {
     super("lem-reader");
@@ -203,6 +234,28 @@ export class LemReaderDB extends Dexie {
       highlights: "id, [articleId+revision]",
       notes: "id, highlightId",
       books: "id, title, *tags",
+    });
+    // ── Phase 20 (D20-15 + Pitfall 9): the sixth version block is an
+    // APPEND. ──
+    // v1..v5 byte-unchanged. v6 adds the NEW `assets` store — article-owned
+    // image blobs (IMG-03/IMG-04): compound primary key [articleId+assetId]
+    // (the v1 location [articleId+revision] precedent) + the `articleId`
+    // index powering the one-transaction range deletes in
+    // DexieLibrarySource.remove / removeBook / the re-ingest upsert
+    // replacement (D20-07 — a figure that now refuses leaves no orphan
+    // blob). NO `.upgrade()` callback — a new store that starts EMPTY; Dexie
+    // creates it on next open without row migration (the v3/v4/v5 additive
+    // precedent). The remaining stores are re-declared at their existing
+    // shapes because Dexie requires the full stores object at each version;
+    // their values match v5 verbatim.
+    this.version(6).stores({
+      articles: "id, revision, source, addedAt, *tags, bookId",
+      settings: "key",
+      location: "[articleId+revision]",
+      highlights: "id, [articleId+revision]",
+      notes: "id, highlightId",
+      books: "id, title, *tags",
+      assets: "[articleId+assetId], articleId",
     });
   }
 }

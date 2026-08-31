@@ -20,8 +20,7 @@
 // throw rolls it back — the hook is deregistered in afterEach (hooks persist
 // across tests; cross-test bleed would poison sibling specs).
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { ArticleSchema } from "../../../src/content/schema";
-import type { CanonicalArticle } from "../../../src/content/schema";
+import { Blob as NodeBlob } from "node:buffer";
 import type { ValidatedAsset } from "../../../src/ingestion/IngestionClient";
 import fakeIndexedDB, { IDBKeyRange } from "fake-indexeddb";
 import { Dexie } from "dexie";
@@ -35,6 +34,20 @@ Dexie.dependencies.indexedDB = fakeIndexedDB;
 Dexie.dependencies.IDBKeyRange = IDBKeyRange;
 (globalThis as { indexedDB?: typeof fakeIndexedDB }).indexedDB = fakeIndexedDB;
 (globalThis as { IDBKeyRange?: typeof IDBKeyRange }).IDBKeyRange = IDBKeyRange;
+
+// Blob-fidelity harness note (20-03): fake-indexeddb clones values with the
+// GLOBAL structuredClone — Node's native V8 serializer under vitest. jsdom's
+// Blob is NOT a host object to that serializer, so a jsdom Blob degrades to
+// a plain Object on read and AssetRecordSchema's z.instanceof(Blob) would
+// then (correctly!) drop every row as corrupt. Node's own Blob IS a host
+// object and round-trips byte-identically through structuredClone — the
+// faithful analogue of the production contract (browser Blobs are host
+// objects to the browser's structured clone; the real-browser proof is
+// 20-04's Playwright imagery specs). Install Node's Blob as this spec
+// file's global BEFORE the lazy module imports so both the `new Blob(...)`
+// row construction and the schema's instanceof capture see the
+// round-trippable class.
+(globalThis as { Blob?: unknown }).Blob = NodeBlob;
 
 async function wipeDatabase(): Promise<void> {
   await new Promise<void>((resolve) => {
@@ -53,56 +66,8 @@ async function wipeDatabase(): Promise<void> {
 async function loadAssetsStore() {
   return await import("../../../src/persistence/assetsStore");
 }
-async function loadLibrarySource() {
-  return await import("../../../src/ingestion/LibrarySource");
-}
-async function loadBooksStore() {
-  return await import("../../../src/persistence/booksStore");
-}
 async function loadDb() {
   return await import("../../../src/persistence/db");
-}
-
-// ── Sample builders (schema-validated at construction) ──────────────────────
-
-/** A schema-valid standalone article (ArticleSchema.parse — the
- * ingestion-client.test.ts sampleArticle shape). */
-function sampleArticle(overrides: Partial<CanonicalArticle> = {}): CanonicalArticle {
-  return ArticleSchema.parse({
-    id: "asset-article-slug",
-    revision: 1,
-    lang: "en",
-    provenance: {
-      sourceUrl: "https://example.com/article",
-      title: "Sample Article",
-      author: "An Author",
-      retrievedAt: "2026-08-31T00:00:00.000Z",
-      originalHtmlHash: "sha256:" + "0".repeat(64),
-    },
-    blocks: [
-      {
-        kind: "figure",
-        alt: "A test figure",
-        src: "asset:img-aaaaaaaaaaaa",
-        caption: [],
-      },
-      {
-        kind: "paragraph",
-        content: [{ text: "Body text here.", marks: [] }],
-      },
-    ],
-    footnotes: [],
-    ingestionMeta: {
-      source: "url",
-      origin: "url",
-      sourceUrl: "https://example.com/article",
-      originalHtmlHash: "sha256:" + "0".repeat(64),
-      fetchedAt: "2026-08-31T00:00:00.000Z",
-      extractionConfidence: "high",
-      extractionWarnings: [],
-    },
-    ...overrides,
-  });
 }
 
 /** A ValidatedAsset literal — the exact shape IngestionSuccess.assets
