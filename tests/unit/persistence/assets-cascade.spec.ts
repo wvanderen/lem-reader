@@ -179,22 +179,15 @@ function sampleBookFixture(): { book: Book; chapters: CanonicalArticle[] } {
   return { book, chapters: [chapter(0, "c"), chapter(1, "d")] };
 }
 
-// ── RED-gate scaffolding (removed in GREEN — the 20-02 scaffolding-cast
-// precedent): the assets parameters land with this task's implementation;
-// route the calls through the widened signatures so tsc stays clean at the
-// RED commit. ─────────────────────────────────────────────────────────────────
-
-type LibrarySourceWithAssets = {
-  save(article: CanonicalArticle, assets?: ValidatedAsset[]): Promise<void>;
-  remove(id: string): Promise<void>;
-};
+// ── Call helpers (the real save/saveBook signatures — the RED-gate
+// scaffolding casts were removed once the assets parameters shipped). ────────
 
 async function saveArticleWithAssets(
   article: CanonicalArticle,
   assets: ValidatedAsset[],
 ): Promise<void> {
   const { DexieLibrarySource } = await loadLibrarySource();
-  const source = new DexieLibrarySource() as unknown as LibrarySourceWithAssets;
+  const source = new DexieLibrarySource();
   await source.save(article, assets);
 }
 
@@ -204,11 +197,7 @@ async function saveBookWithAssets(
   assets: Array<ValidatedAsset & { articleId: string }>,
 ): Promise<void> {
   const { saveBook } = await loadBooksStore();
-  await (saveBook as (
-    b: Book,
-    ch: CanonicalArticle[],
-    as?: Array<ValidatedAsset & { articleId: string }>,
-  ) => Promise<void>)(book, chapters, assets);
+  await saveBook(book, chapters, assets);
 }
 
 // Dexie creating hooks persist across tests — the SAME function reference

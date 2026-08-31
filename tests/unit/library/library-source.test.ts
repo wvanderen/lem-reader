@@ -103,15 +103,7 @@ describe("DexieLibrarySource.save — assets default-parameter back-compat (20-0
     const source = new DexieLibrarySource();
     const article = sampleArticle();
 
-    // RED-gate scaffolding cast (removed in GREEN): the assets parameter
-    // lands with this task's implementation; widen the call so tsc stays
-    // clean at the RED commit (the 20-02 scaffolding-cast precedent).
-    await (
-      source.save as (
-        a: CanonicalArticle,
-        assets?: unknown[],
-      ) => Promise<void>
-    )(article, []);
+    await source.save(article, []);
 
     expect(await source.has(article.id)).toBe(true);
     expect(await db.assets.count()).toBe(0);

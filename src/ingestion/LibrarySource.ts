@@ -27,9 +27,11 @@
 //     locations) → remove(id) runs a Dexie transaction across all four
 //     stores; commits atomically or rolls back.
 import { db } from "../persistence/db";
+import type { AssetRecordRow } from "../persistence/db";
 import { ArticleSchema, type CanonicalArticle } from "../content/schema";
 import { fixtures } from "../fixtures";
 import type { ArticleRepository } from "../content/repository";
+import type { ValidatedAsset } from "./IngestionClient";
 
 /**
  * DexieLibrarySource — Dexie-backed ArticleRepository + write surface.
@@ -74,13 +76,54 @@ export class DexieLibrarySource implements ArticleRepository {
   }
 
   /**
-   * save — upsert an article by id. `article` is validated by construction
-   * (the only producer is IngestionClient.ingestUrl/ingestHtml, which runs
-   * ArticleSchema.parse on the network response). Throws propagate to the
+   * save — atomic article+assets upsert by id (Phase 20 — D20-04/D20-15:
+   * a saved article is always complete). The article row AND its asset rows
+   * land in ONE Dexie read-write transaction over articles + assets; an
+   * asset-put failure (e.g. QuotaExceeded) rolls back the article put too.
+   * `article` and `assets` are validated by construction (the only producer
+   * is IngestionClient's re-validation chain). Throws propagate to the
    * caller (the add dialog), which surfaces them as "Something went wrong."
+   *
+   * Upsert replacement (D20-07): the article's OLD asset rows are
+   * range-deleted inside the SAME transaction before the new puts — a
+   * re-ingest where a previously-accepted figure now refuses leaves no
+   * orphan blob. The default `assets = []` keeps every existing call site
+   * (url/paste/markdown/pdf paths — real asset wiring is 20-04 scope)
+   * compiling and behaving unchanged.
+   *
+   * The `createdAt` stamp and every Blob are built BEFORE the transaction
+   * opens (the saveBook stamp-before-transaction discipline — the closure
+   * stays a pure put/delete sequence: no Zod, no crypto, no network inside,
+   * the 09-04 rule).
    */
-  async save(article: CanonicalArticle): Promise<void> {
-    await db.articles.put(article);
+  async save(
+    article: CanonicalArticle,
+    assets: ValidatedAsset[] = [],
+  ): Promise<void> {
+    const createdAt = new Date().toISOString();
+    const rows: AssetRecordRow[] = assets.map((asset) => ({
+      articleId: article.id,
+      assetId: asset.assetId,
+      contentType: asset.contentType,
+      byteLength: asset.byteLength,
+      // TS 7 BlobPart strictness (the 09-01 BufferSource lesson): copy
+      // into a fresh ArrayBuffer-backed Uint8Array (the Blob constructor
+      // copies the bytes anyway).
+      data: new Blob([new Uint8Array(asset.bytes)], {
+        type: asset.contentType,
+      }),
+      createdAt,
+    }));
+    await db.transaction("rw", db.articles, db.assets, async () => {
+      // Upsert replacement FIRST (D20-07): re-ingest replaces the asset
+      // set wholesale — the articleId index exists exactly for this range
+      // delete.
+      await db.assets.where("articleId").equals(article.id).delete();
+      await db.articles.put(article);
+      for (const row of rows) {
+        await db.assets.put(row);
+      }
+    });
   }
 
   /**
@@ -94,16 +137,20 @@ export class DexieLibrarySource implements ArticleRepository {
 
   /**
    * remove — D5-12 cascade-delete: removes the article AND every highlight,
-   * note, and location row keyed to it, in a single Dexie transaction. The
-   * transaction guarantees atomicity — either every related row commits the
-   * delete, or all roll back (Pitfall 10 — no orphaned highlights/notes).
+   * note, location, and asset row keyed to it, in a single Dexie
+   * transaction. The transaction guarantees atomicity — either every
+   * related row commits the delete, or all roll back (Pitfall 10 — no
+   * orphaned highlights/notes; Phase 20 extends the same guarantee to
+   * article-owned asset blobs — D20-15: an asset's lifecycle is exactly its
+   * article's).
    *
    * The compound-index range queries (highlights/location) mirror
    * highlightsStore.ts L66-69 and locationStore.ts: the `[articleId+revision]`
    * compound index is queried as an array range covering every revision of
    * the article. Notes cascade through their `highlightId` FK: collect the
    * to-be-deleted highlight ids, then delete every note whose highlightId
-   * is in that set.
+   * is in that set. Assets cascade through the v6 `articleId` index — ONE
+   * range delete line inside this same transaction (D17-13 shape).
    */
   async remove(id: string): Promise<void> {
     await db.transaction(
@@ -112,6 +159,7 @@ export class DexieLibrarySource implements ArticleRepository {
       db.highlights,
       db.notes,
       db.location,
+      db.assets,
       async () => {
         // Collect the to-be-deleted highlight ids BEFORE deleting them so
         // the notes cascade has the FK set. Within a Dexie transaction,
@@ -146,6 +194,10 @@ export class DexieLibrarySource implements ArticleRepository {
           .where("[articleId+revision]")
           .between([id, 0], [id, Number.MAX_SAFE_INTEGER])
           .delete();
+
+        // Assets: every article-owned blob goes with the article (D20-15) —
+        // the v6 articleId index range delete, same transaction.
+        await db.assets.where("articleId").equals(id).delete();
       },
     );
   }

@@ -37,9 +37,11 @@
 //     removeBook's single-transaction cascade is proven by the zero-rows
 //     test (tests/unit/persistence/books-store.test.ts).
 import { db } from "./db";
+import type { AssetRecordRow } from "./db";
 import { BookSchema } from "../content/schema";
 import type { Book } from "../content/schema";
 import type { CanonicalArticle } from "../content/schema";
+import type { ValidatedAsset } from "../ingestion/IngestionClient";
 import { classifyStorageError } from "./errors";
 
 /**
@@ -64,6 +66,14 @@ export type BooksLoadResult =
  * saveBook stamps it (see saveBook).
  */
 export type BookInput = Omit<Book, "addedAt"> & { addedAt?: string };
+
+/**
+ * BookAsset — one chapter-owned asset for the saveBook path: a
+ * ValidatedAsset with the owning chapter's articleId attached (the flat
+ * list keyed by articleId, consistent with the 20-06 book envelope shape —
+ * assets span multiple chapter articles, so each entry carries its owner).
+ */
+export type BookAsset = ValidatedAsset & { articleId: string };
 
 /**
  * listBooks — load every Book row, Zod-validated (STATE-04). Corrupt rows
@@ -113,24 +123,32 @@ export async function hasBook(id: string): Promise<boolean> {
 }
 
 /**
- * saveBook — write a book + ALL its chapter articles in ONE Dexie
- * transaction (atomicity discipline — a half-saved book is impossible).
+ * saveBook — write a book + ALL its chapter articles (+ chapter-owned asset
+ * rows) in ONE Dexie transaction (atomicity discipline — a half-saved book
+ * is impossible; Phase 20 extends it to assets — a chapter's blobs land
+ * with the chapter or not at all, D20-04/D20-15).
  *
  * The closure is puts-only: no Zod, no crypto, no network inside the
- * transaction (the 09-04 applyImport closure rule). `book` and `articles`
- * are validated by construction (the add dialog's only producer is
- * ingestEpub, which runs IngestionResponseSchema.parse + the per-article
- * ArticleSchema.parse loop on the network read — STATE-04
- * defense-in-depth).
+ * transaction (the 09-04 applyImport closure rule). `book`, `articles`, and
+ * `assets` are validated by construction (the add dialog's only producer is
+ * ingestEpub, which runs the IngestionResponseSchema + per-article
+ * ArticleSchema.parse loop + the asset re-validation chain on the network
+ * read — STATE-04 defense-in-depth).
  *
- * `addedAt` is stamped `new Date().toISOString()` ONLY when the caller
- * passed none — the stamp happens BEFORE the transaction opens so the
- * closure stays a pure put sequence (library default-sort + continue-strip
- * ordering, D12-02).
+ * `addedAt` and every asset `createdAt` are stamped BEFORE the transaction
+ * opens (the stamp-before-transaction discipline) so the closure stays a
+ * pure put/delete sequence.
  *
- * Each chapter row is written with a denormalized top-level `bookId`
- * (index fodder for the v5 Dexie index; the canonical field remains
- * `ingestionMeta.bookId` — see the inline comment in the closure).
+ * Per-chapter asset upsert (D20-07, mirroring the article upsert): each
+ * chapter's OLD asset rows are range-deleted inside the SAME transaction
+ * before the new puts — a re-upload leaves no orphan blob. The default
+ * `assets = []` keeps every existing call site compiling and behaving
+ * unchanged (real book-asset wiring is 20-06 scope).
+ *
+ * The transaction uses Dexie's readonly-ARRAY overload (not the tuple
+ * form): the 20-05 import path will grow to SEVEN tables — beyond the tuple
+ * overloads, which stop at five — so the array form is the standardized
+ * shape here (the applyImport 12-07 precedent).
  *
  * A throw (e.g. QuotaExceeded) propagates to the caller (the add dialog),
  * which surfaces the calm catch-all copy; the transaction guarantees NO
@@ -139,11 +157,33 @@ export async function hasBook(id: string): Promise<boolean> {
 export async function saveBook(
   book: BookInput,
   articles: CanonicalArticle[],
+  assets: BookAsset[] = [],
 ): Promise<void> {
   const stamped: Book = book.addedAt
     ? (book as Book)
     : { ...book, addedAt: new Date().toISOString() };
-  await db.transaction("rw", db.books, db.articles, async () => {
+  // Stamp + row-build BEFORE the transaction (puts-only closure rule);
+  // group the flat asset list per owning chapter article.
+  const createdAt = new Date().toISOString();
+  const rowsByArticle = new Map<string, AssetRecordRow[]>();
+  for (const asset of assets) {
+    const list = rowsByArticle.get(asset.articleId) ?? [];
+    list.push({
+      articleId: asset.articleId,
+      assetId: asset.assetId,
+      contentType: asset.contentType,
+      byteLength: asset.byteLength,
+      // TS 7 BlobPart strictness (the 09-01 BufferSource lesson): copy
+      // into a fresh ArrayBuffer-backed Uint8Array (the Blob constructor
+      // copies the bytes anyway).
+      data: new Blob([new Uint8Array(asset.bytes)], {
+        type: asset.contentType,
+      }),
+      createdAt,
+    });
+    rowsByArticle.set(asset.articleId, list);
+  }
+  await db.transaction("rw", [db.books, db.articles, db.assets], async () => {
     await db.books.put(stamped);
     for (const article of articles) {
       // Denormalize the top-level `bookId` onto the stored row so the v5
@@ -153,14 +193,20 @@ export async function saveBook(
       // unknown top-level key on every read, so the stored row parses
       // byte-identically through the Zod-at-boundary discipline.
       await db.articles.put({ ...article, bookId: stamped.id });
+      // Per-chapter asset upsert replacement (D20-07) — same transaction.
+      await db.assets.where("articleId").equals(article.id).delete();
+      for (const row of rowsByArticle.get(article.id) ?? []) {
+        await db.assets.put(row);
+      }
     }
   });
 }
 
 /**
  * removeBook — full cascade in ONE Dexie transaction over books + articles
- * + highlights + notes + location (12-RESEARCH Pitfall 7 — no stranded
- * annotations). Deletes, in order:
+ * + highlights + notes + location + assets (12-RESEARCH Pitfall 7 — no
+ * stranded annotations; Phase 20 adds the chapter-owned asset blobs to the
+ * same single transaction — D20-15/D17-13). Deletes, in order:
  *
  *   1. reads the book row (its chapterArticleIds are the declared TOC) and
  *      UNIONS it with every live article row carrying bookId === id — live
@@ -170,8 +216,13 @@ export async function saveBook(
  *      delete (in-transaction reads see pre-delete state — the
  *      collect-before-delete discipline from DexieLibrarySource.remove);
  *   3. deletes highlights, notes (by collected highlightId), locations
- *      (compound [articleId+revision] range), the chapter article rows,
- *      and finally the book row.
+ *      (compound [articleId+revision] range), assets (the v6 articleId
+ *      index range delete — one line per chapter in the same loop), the
+ *      chapter article rows, and finally the book row.
+ *
+ * The transaction uses Dexie's readonly-ARRAY overload: SIX tables exceed
+ * the tuple overloads, which stop at five (the applyImport 12-07 precedent
+ * — the standardized form saveBook also adopted in Phase 20).
  *
  * Removing a book id that does not exist is a calm no-op (the transaction
  * simply deletes nothing).
@@ -179,11 +230,7 @@ export async function saveBook(
 export async function removeBook(id: string): Promise<void> {
   await db.transaction(
     "rw",
-    db.books,
-    db.articles,
-    db.highlights,
-    db.notes,
-    db.location,
+    [db.books, db.articles, db.highlights, db.notes, db.location, db.assets],
     async () => {
       const book = await db.books.get(id);
 
@@ -213,8 +260,9 @@ export async function removeBook(id: string): Promise<void> {
         }
       }
 
-      // Highlights + locations: every row for each chapter across ALL
-      // revisions (compound-index array range).
+      // Highlights + locations + assets: every row for each chapter across
+      // ALL revisions (compound-index array ranges; the assets articleId
+      // index range delete rides the same loop — D20-15).
       for (const chapterId of chapterIds) {
         await db.highlights
           .where("[articleId+revision]")
@@ -224,6 +272,7 @@ export async function removeBook(id: string): Promise<void> {
           .where("[articleId+revision]")
           .between([chapterId, 0], [chapterId, Number.MAX_SAFE_INTEGER])
           .delete();
+        await db.assets.where("articleId").equals(chapterId).delete();
       }
 
       // Notes: cascade through the collected highlight ids.
