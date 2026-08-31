@@ -186,7 +186,22 @@ test.describe("ingestion happy-path (07-07 SC#1)", () => {
   // the save-wiring proof, not the registry proof.
   test("URL input with asset envelope → saved article renders the local img (naturalWidth > 0)", async ({
     page,
+    browserName,
   }) => {
+    // 20-07 gate (2026-08-31): surfaced by the first honest 3-engine
+    // full-suite run since 20-04 added this cell (the interim gates ran
+    // chromium-only). The save path writes D20-15 `data: Blob` asset rows
+    // through Dexie — Playwright's WebKit refuses ALL Blob puts into
+    // IndexedDB (UnknownError; probe-verified in 20-05, re-probed 20-06 and
+    // 20-08 — deferred-items.md). 20-06-SUMMARY already named this cell as
+    // failing on webkit. The 20-05/20-06/20-08 documented-skip pattern
+    // applies; chromium + firefox carry the save-wiring proof. Real Safari
+    // supports IDB Blob storage (Safari 10+) — the open Rule-4 row-shape
+    // option stays recorded in deferred-items.md for the human.
+    test.skip(
+      browserName === "webkit",
+      "WebKit engine boundary: Playwright's WebKit cannot put Blob values into IndexedDB (UnknownError) — chromium/firefox carry the proof",
+    );
     const fixtureArticle = fixtures.find((a) => a.id === "figure-heavy")!;
     const article = structuredClone(fixtureArticle) as typeof fixtureArticle;
     article.id = "figure-heavy-asset-e2e";

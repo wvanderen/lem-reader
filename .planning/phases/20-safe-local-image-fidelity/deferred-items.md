@@ -31,11 +31,19 @@
   cell seed plain article rows under the registry-backed figure-heavy id so
   the AssetProvider resolves in-memory registry blobs (createObjectURL never
   touches IndexedDB), and the offline guarantee itself is proven on webkit by
-  the fixture-corpus + legacy-remote cells. Residual count for the 20-07
-  gate: **4 e2e skips** (2 from 20-05 + 1 from 20-06 + 1 from 20-08).
-- The 20-07 full-suite gate MUST count these 4 e2e skips (2 from 20-05 + 1
-  from 20-06 + 1 from 20-08) in its documented residual set (never silently
-  green).
+  the fixture-corpus + legacy-remote cells.
+- **20-07 gate update (2026-08-31):** the first honest 3-engine full-suite
+  run since 20-04 (the interim gates ran chromium-only) surfaced the
+  already-named 20-04 happy-path asset-envelope cell as failing on webkit —
+  its `save(article, assets)` path writes the D20-15 Blob rows through Dexie,
+  so the add never navigates (waitForURL timeout). Carried with the same
+  documented `test.skip` pattern as 20-05/20-06/20-08; chromium + firefox
+  prove the save-wiring chain. Residual count for the permanent record:
+  **5 e2e skips** (2 from 20-05 + 1 from 20-06 + 1 from 20-08 + 1 from
+  20-04 via this gate).
+- The 20-07 full-suite gate counts these 5 e2e skips (2 from 20-05 + 1 from
+  20-06 + 1 from 20-08 + 1 from 20-04 surfaced by the gate itself) in its
+  documented residual set (never silently green).
 
 **Open option (human decision — Rule 4 architectural, NOT auto-applied):**
 switch `AssetRecordRow.data` from `Blob` to `Uint8Array`/`ArrayBuffer`
