@@ -4,17 +4,17 @@ milestone: v2.1
 milestone_name: Reader Experience
 current_phase: 21
 current_phase_name: integrated-refinement-and-acceptance
-status: executing
-stopped_at: Completed 21-05-PLAN.md
-last_updated: "2026-09-01T14:53:10.204Z"
+status: verifying
+stopped_at: Completed 21-06-PLAN.md
+last_updated: "2026-09-01T17:02:17.681Z"
 last_activity: 2026-09-01
 last_activity_desc: Phase 21 execution started
 progress:
   total_phases: 8
-  completed_phases: 7
+  completed_phases: 8
   total_plans: 40
-  completed_plans: 39
-  percent: 88
+  completed_plans: 40
+  percent: 100
 ---
 
 # Project State
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-08-30)
 
 Phase: 21 (integrated-refinement-and-acceptance) — EXECUTING
 Plan: 6 of 6
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-09-01 — Phase 21 execution started
 
 ## Recent Decisions (Phase 18)
@@ -198,6 +198,7 @@ Last activity: 2026-09-01 — Phase 21 execution started
 | Phase 21 P03 | 14min | 2 tasks | 4 files |
 | Phase 21 P04 | 15min | 2 tasks | 3 files |
 | Phase 21 P05 | 31min | 2 tasks | 3 files |
+| Phase 21 P06 | 118min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -479,6 +480,10 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase Phase 21]: [Phase 21]: D21-13 spine shape (21-05): ONE unbroken two-context journey; the whole cell is an image-save cell on webkit (the Blob-writing EPUB ingestion is inseparable from the journey) carrying a single documented test.skip citing the Phase 20 deferred-items ledger — chromium/firefox prove every affected flow, non-image arms stay webkit-proven by the existing engine-complete suites.
 - [Phase Phase 21]: [Phase 21]: Asset-row equality bar (21-05): every bundle-carried field + byte-equal Blob bytes read browser-side on both machines; the D20-15 createdAt never travels (applyImport re-stamps by design) so it is asserted fresh, never compared — true full-row equality would need an export-schema change (Rule 4 territory). Books joined the equality set (the corpus has one).
 - [Phase Phase 21]: [Phase 21]: D21-15 lint closure (21-05): two line-scoped justified no-control-regex disables (control-char escapes ARE the guards' payload) + one redundant-escape removal in zipSlip.ts; the directive line must sit DIRECTLY above the offending line (a wrapped justification breaks adjacency and reports unused); the one other repo-wide error (eligibility-matrix no-unexpected-multiline) fixed behavior-identically — npm run lint exits 0.
+- [Phase ?]: D6-09 extension shipped (21-06): assertDestinationInvariant asserts the destination-neutral (b) required-functions + (c) no-overflow clauses at Library/Highlights/Add-dialog through ONE helper module (openEdgeDestination owns real-UI navigation + reload-before-seed/post-seed-remount discipline); the (a) article clause stays reader-scoped in the untouched assertEdgeInvariant — five edge specs extended by pure-addition destination loops (D6-12 held, 0 removed lines).
+- [Phase ?]: [Rule 1] (21-06): WebKit ignores min-height (and padding-block) on native <select> — .review-select rendered a 23px hit area on Highlights (probed: min-height 23px, height 44px); the fix height: var(--touch) + the UA form-control border-box default restores the 44px A11Y-07/WCAG-2.5.5 target cross-engine with chromium/firefox boxes unchanged. Destination touch-target measurements carry ±0.5px sub-pixel tolerance (firefox reports 43.99999px on an exact 44px row).
+- [Phase ?]: Protocol v1.3 (D21-14) shipped: 12 scripted flows (A–F + G–L capability flows — the per-capability mandate sets the count above the soft ~8-10 guidance); every new outcome role+accessible name+state (Pitfall 7); the Add-dialog flow retires the Phase 16 manual-SR deferral; D21-12 Safari image slot + evidence row in the VO+Safari results sheet; results location 21-VERIFICATION.md. ACPT-08 does NOT flip in-plan (requirements-completed []): zero-blocker/major on BOTH human v1.3 runs via verify-work flips it (D13-06/D13-07); REQUIREMENTS.md untouched.
+- [Phase ?]: 21-06 honest gate: lint exit 0; full suite green in ONE invocation (unit 1605/0/13 + e2e 1722/0/16 across 3 engines + throttled, exit 0) via the 20-07 --workers=2 contention control — two prior plain runs exited 1 with moving webkit goto-timeout sets (8 each) under loadavg up to 20, all isolation-green: starvation-classified per the 18-04/15-04/20-07 lesson; every invocation recorded in the 21-06-SUMMARY ledger.
 
 ### Pending Todos
 
@@ -534,8 +539,8 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-09-01T14:53:10.195Z
-Stopped at: Completed 21-05-PLAN.md
+Last session: 2026-09-01T17:02:17.670Z
+Stopped at: Completed 21-06-PLAN.md
 Resume file: None
 
 ## Operator Next Steps

@@ -15,7 +15,7 @@
 - [x] **Phase 18: Reader Orientation** - Navigate canonical headings and receive non-intrusive restoration feedback. (completed 2026-08-30)
 - [x] **Phase 19: Cross-Block Highlights** - Manage one durable highlight across multiple semantic blocks. (completed 2026-08-31)
 - [x] **Phase 20: Safe Local Image Fidelity** - Preserve figures and captions as safe, portable local assets. (completed 2026-08-31)
-- [ ] **Phase 21: Integrated Refinement and Acceptance** - Correct remaining UI issues and prove the complete milestone.
+- [x] **Phase 21: Integrated Refinement and Acceptance** - Correct remaining UI issues and prove the complete milestone. (completed 2026-09-01)
 
 ## Phase Details
 
@@ -268,7 +268,7 @@ Plans:
   4. The complete v2.1 core flow succeeds without loss in Chromium, Firefox, and WebKit.
   5. The Impeccable-informed audit and keyboard, NVDA, VoiceOver, reduced-motion, forced-colors, reflow, and zoom matrix finish with no blocker or major finding.
 
-**Plans**: 5/6 plans executed
+**Plans**: 6/6 plans complete
 
 Plans:
 
@@ -291,7 +291,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 21-06-PLAN.md — ACPT-08 destination edge-matrix + ACCEPTANCE-PROTOCOL v1.3 + phase honest lint/test gate (ACPT-08)
+- [x] 21-06-PLAN.md — ACPT-08 destination edge-matrix + ACCEPTANCE-PROTOCOL v1.3 + phase honest lint/test gate (ACPT-08)
 
 **UI hint**: yes
 
@@ -308,4 +308,4 @@ Plans:
 | 18. Reader Orientation | v2.1 | 4/4 | Complete    | 2026-08-30 |
 | 19. Cross-Block Highlights | v2.1 | 5/5 | Complete    | 2026-08-31 |
 | 20. Safe Local Image Fidelity | v2.1 | 8/8 | Complete    | 2026-08-31 |
-| 21. Integrated Refinement and Acceptance | v2.1 | 5/6 | In Progress|  |
+| 21. Integrated Refinement and Acceptance | v2.1 | 6/6 | Complete   | 2026-09-01 |
