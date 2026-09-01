@@ -149,6 +149,22 @@ body {
 }
 /* outline: 0/none FORBIDDEN unless an equivalent replacement is supplied */
 
+/* Plan 21-04 (POLISH-11 audit finding F-1, D21-10): UA-default placeholder
+   rendering (engine ink at ~54% opacity) measured 3.66:1 sepia / 3.74:1
+   light — below the 4.5:1 AA text minimum, acute on the Library search
+   field whose placeholder is its only VISIBLE label (the real label is
+   .visually-hidden). Token-only remediation: every placeholder renders at
+   --ink-soft (7.02 / 7.26 / 8.06:1 across the three themes; inputs paint
+   --surface backgrounds in both page and dialog contexts). opacity: 1
+   keeps engines from re-fading the declared color. Color declarations
+   ONLY — no semantic/geometry/motion impact (the audit remediation gate);
+   forced-colors mode continues to map placeholders to GrayText (no
+   forced-colors-adjust is set). */
+::placeholder {
+  color: var(--ink-soft);
+  opacity: 1;
+}
+
 /* ── Skip link (UI-SPEC §Component Inventory + §Interaction 1) ─────────── */
 /* Visually hidden until focused, then visible on the top-left. */
 .skip-link {

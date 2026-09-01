@@ -52,13 +52,13 @@ The re-anchored tag popover stays fully in-viewport at 240px via native flip fal
 
 | ID | Sev | Dimension | Location | Impact | Standard | Recommendation | Status |
 |----|-----|-----------|----------|--------|----------|----------------|--------|
-| F-1 | **P1** | Accessibility | UA-default `::placeholder` rendering, all text inputs; acute on `.library-search input` (placeholder = the only VISIBLE label; SR label is visually-hidden) | Placeholder text renders at UA-default ink@~54%: **3.66:1 sepia / 3.74:1 light** — low-vision readers cannot read the search field's purpose at AA (dark passes at 4.95:1) | WCAG 1.4.3 (4.5:1) | `::placeholder { color: var(--ink-soft); opacity: 1 }` — token-only, passes at **7.02 / 7.26 / 8.06:1** across the three themes; zero semantic/geometry/motion impact | **open → Task 2 fixes in-phase** |
+| F-1 | **P1** | Accessibility | UA-default `::placeholder` rendering, all text inputs; acute on `.library-search input` (placeholder = the only VISIBLE label; SR label is visually-hidden) | Placeholder text renders at UA-default ink@~54%: **3.66:1 sepia / 3.74:1 light** — low-vision readers cannot read the search field's purpose at AA (dark passes at 4.95:1) | WCAG 1.4.3 (4.5:1) | `::placeholder { color: var(--ink-soft); opacity: 1 }` — token-only, passes at **7.02 / 7.26 / 8.06:1** across the three themes; zero semantic/geometry/motion impact | **fixed in-phase** (Task 2 — src/app.css `::placeholder` rule) |
 | F-2 | P2 | Accessibility | `--hairline` chrome across themes: card borders 1.27–1.43:1, input boundary borders ~1.3:1 vs page | Decorative card/boundary hairlines sit below the 3:1 non-text bar under a strict reading; mitigations: load-bearing boundaries all pass (focus ring ~8:1, accent/destructive borders 5.5–7.7:1), forced-colors mode restores CanvasText boundaries, inputs carry label/placeholder text and 44px shapes | WCAG 1.4.11 (strict reading; decorative-element exception arguably applies) | Future token pass: deepen `--hairline` per-theme toward ≥3:1 where boundaries are load-bearing (inputs), or scope an input-border token; token VALUES are byte-stable this phase (UI-SPEC §6) | **logged-minor** |
 | F-3 | P3 | Theming | `.page-indicator` (app.css L1324) — `font: 400 14px/1.45 system-ui, -apple-system, sans-serif` | Token drift: the shorthand bypasses `var(--font-ui)`; rendering identical in practice (both resolve system-ui first) | Project token-conformance bar (POLISH-07) | Rewrite as `font: 400 14px/1.45 var(--font-ui)` | **logged-minor** |
 | F-4 | P3 | Theming | 8 × `rgba(31, 27, 22, 0.4/0.5)` dialog/panel backdrops | Hard-coded ink-equivalent literals instead of token-derived values; scrims are deliberately theme-independent, visual result correct | Project token-conformance bar | Express as `color-mix(in srgb, var(--ink) 50%, transparent)` (the `.progress-hairline` precedent) in a future pass | **logged-minor** |
 | F-5 | P3 | Performance | Vite build output — single JS chunk | 782.05 kB min / 204.22 kB gzip in one chunk; Vite warns >500 kB; no route/code splitting (2 routes, local-first app; leakage check clean) | Perf hygiene (no WCAG violation) | Consider manualChunks or dynamic import for the ingestion settings cluster in a future phase | **logged-minor** |
 
-**Counts:** P0: 0 · P1: 1 (open — remediation below per D21-10) · P2: 1 · P3: 3 (to be logged to `deferred-items.md`).
+**Counts:** P0: 0 · P1: 1 (**fixed in-phase** — Task 2) · P2: 1 · P3: 3 (all logged to `deferred-items.md`). **Zero blocker/major rows remain open (D21-10).**
 
 ## Patterns & Systemic Issues
 
@@ -75,6 +75,8 @@ None adverse. The systemic observations are positive: one quiet-button grammar s
 ## Remediation Gate (hard constraint — D21-08 / RESEARCH Pitfall 6)
 
 Every remediation from this audit **preserves native semantics** (no role, aria, or DOM-structure changes) and **never weakens reduced-motion, forced-colors, zoom, or screen-reader behavior**: remediation is geometry/style/token/doc work only; any diff touching roles/semantics/motion properties is a DEFECT and must be redesigned or surfaced for human decision. After remediation: full unit suite + `a11y.spec.ts` + `forced-colors.spec.ts` + `reduced-motion.spec.ts` re-run green (strengthen-only — no assertion removed), and `node scripts/check-no-danger.js` exits clean (no dangerous HTML introduced).
+
+**Remediation record (Task 2):** the single P0/P1 finding (F-1) was fixed by one additive color-only rule (`::placeholder { color: var(--ink-soft); opacity: 1 }`, citation-commented) — the remediation diff touches no role, no aria, no DOM structure, and no motion property; no assertion was removed; all four gate suites re-ran green (results in 21-04-SUMMARY.md). The four P2/P3 findings are ledgered in `deferred-items.md`.
 
 ## Recommended Actions (outside this phase's scope)
 
