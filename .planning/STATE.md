@@ -5,15 +5,15 @@ milestone_name: Reader Experience
 current_phase: 21
 current_phase_name: integrated-refinement-and-acceptance
 status: executing
-stopped_at: Completed 21-02-PLAN.md
-last_updated: "2026-09-01T13:42:01.209Z"
+stopped_at: Completed 21-03-PLAN.md
+last_updated: "2026-09-01T13:59:42.025Z"
 last_activity: 2026-09-01
 last_activity_desc: Phase 21 execution started
 progress:
   total_phases: 8
   completed_phases: 7
   total_plans: 40
-  completed_plans: 36
+  completed_plans: 37
   percent: 88
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-30)
 ## Current Position
 
 Phase: 21 (integrated-refinement-and-acceptance) — EXECUTING
-Plan: 3 of 6
+Plan: 4 of 6
 Status: Ready to execute
 Last activity: 2026-09-01 — Phase 21 execution started
 
@@ -195,6 +195,7 @@ Last activity: 2026-09-01 — Phase 21 execution started
 | Phase 20 P07 | 70 min | 2 tasks | 3 files |
 | Phase 21 P01 | 22min | 2 tasks | 18 files |
 | Phase 21 P02 | 16min | 2 tasks | 3 files |
+| Phase 21 P03 | 14min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -471,6 +472,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: Pinned-cell destinations (21-01): 58 where the cell intent is non-default (unit/component/polish seeds), 64 where it is max-measure wrap-math stress (pagination cell); pathological below-range reject row moved 40 → 34
 - [Phase 21]: D21-05 (21-02): tag popover re-anchored to its trigger via CSS anchor positioning — anchor-name on .tags-trigger + position-anchor/position-area block-end span-inline-end/position-try-fallbacks on .tag-popover; old header-fixed insets DELETED (not zeroed); popover=auto contract byte-stable; zero JS listeners, zero motion properties
 - [Phase 21]: [Rule 1] (21-02): .tag-popover width cap was content-box — 2x16px padding + 2px border made the rendered box 100vw+2px (unfittable at narrow widths by ANY fallback); box-sizing: border-box keeps the min(420px, 100vw-2*md) declaration byte-identical while the cap finally governs the outer box (420px outer at desktop, the cap's intent, vs the accidental 454)
+- [Phase 21]: D21-06 glyph: decorative JumpToArticleIcon (LibraryRow anatomy) inside exactly the jump-capable row buttons, placed at a space-between foot line's inline end; foot renders only when jumpable so orphan/disabled shapes stay byte-stable; glyph inherits ink-soft via the foot's color and takes accent through ONE hover selector — zero motion. — The whole-row jump had no visible affordance; an inline SVG is legal non-interactive button content, so role/name/state stay byte-stable while the destination becomes understandable at a glance.
+- [Phase 21]: D21-07 conformance landed per the UI-SPEC §3 ledger: .review-row padding md->lg (primary row register), .review-section h2 20px override DELETED (inherits global 22px/600/1.3 — RESEARCH A5 resolves as conform), 2 citation comments (single-column anatomy + no @media re-grid), .review-select D15-03 untouched. — Shared layout grammar via token conformance, not a literal shared grid; every measurement conforms or carries a POLISH-07-shaped citation.
 
 ### Pending Todos
 
@@ -526,8 +529,8 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-09-01T13:41:51.555Z
-Stopped at: Completed 21-02-PLAN.md
+Last session: 2026-09-01T13:59:42.014Z
+Stopped at: Completed 21-03-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
