@@ -268,7 +268,31 @@ Plans:
   4. The complete v2.1 core flow succeeds without loss in Chromium, Firefox, and WebKit.
   5. The Impeccable-informed audit and keyboard, NVDA, VoiceOver, reduced-motion, forced-colors, reflow, and zoom matrix finish with no blocker or major finding.
 
-**Plans**: TBD
+**Plans**: 6 plans
+
+Plans:
+
+**Wave 1**
+
+- [ ] 21-01-PLAN.md — truthful reading width: five-step range + bounded 72→64 clamp at every settings seam + truthful-64 e2e proof (POLISH-09)
+- [ ] 21-02-PLAN.md — tag-menu CSS anchor positioning + cross-engine geometry spec (POLISH-08)
+
+**Wave 2** *(blocked on Wave 1 completion — shares app.css with 21-02)*
+
+- [ ] 21-03-PLAN.md — Highlights visible jump affordance + shared-token conformance with citation comments (POLISH-10)
+
+**Wave 3** *(blocked on Wave 2 completion — D21-09 audit order)*
+
+- [ ] 21-04-PLAN.md — impeccable-informed five-dimension audit + blocker/major remediation + minors ledger (POLISH-11)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 21-05-PLAN.md — v2.1 core-flow spine spec (one unbroken journey, 3 engines, documented webkit image skips) + zipSlip lint closure (ACPT-07, D21-15)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 21-06-PLAN.md — ACPT-08 destination edge-matrix + ACCEPTANCE-PROTOCOL v1.3 + phase honest lint/test gate (ACPT-08)
+
 **UI hint**: yes
 
 ## Progress
