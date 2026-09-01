@@ -268,14 +268,14 @@ Plans:
   4. The complete v2.1 core flow succeeds without loss in Chromium, Firefox, and WebKit.
   5. The Impeccable-informed audit and keyboard, NVDA, VoiceOver, reduced-motion, forced-colors, reflow, and zoom matrix finish with no blocker or major finding.
 
-**Plans**: 1/6 plans executed
+**Plans**: 2/6 plans executed
 
 Plans:
 
 **Wave 1**
 
 - [x] 21-01-PLAN.md — truthful reading width: five-step range + bounded 72→64 clamp at every settings seam + truthful-64 e2e proof (POLISH-09)
-- [ ] 21-02-PLAN.md — tag-menu CSS anchor positioning + cross-engine geometry spec (POLISH-08)
+- [x] 21-02-PLAN.md — tag-menu CSS anchor positioning + cross-engine geometry spec (POLISH-08)
 
 **Wave 2** *(blocked on Wave 1 completion — shares app.css with 21-02)*
 
@@ -308,4 +308,4 @@ Plans:
 | 18. Reader Orientation | v2.1 | 4/4 | Complete    | 2026-08-30 |
 | 19. Cross-Block Highlights | v2.1 | 5/5 | Complete    | 2026-08-31 |
 | 20. Safe Local Image Fidelity | v2.1 | 8/8 | Complete    | 2026-08-31 |
-| 21. Integrated Refinement and Acceptance | v2.1 | 1/6 | In Progress|  |
+| 21. Integrated Refinement and Acceptance | v2.1 | 2/6 | In Progress|  |

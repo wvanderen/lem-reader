@@ -5,15 +5,15 @@ milestone_name: Reader Experience
 current_phase: 21
 current_phase_name: integrated-refinement-and-acceptance
 status: executing
-stopped_at: Completed 21-01-PLAN.md
-last_updated: "2026-09-01T13:23:00.361Z"
+stopped_at: Completed 21-02-PLAN.md
+last_updated: "2026-09-01T13:42:01.209Z"
 last_activity: 2026-09-01
 last_activity_desc: Phase 21 execution started
 progress:
   total_phases: 8
   completed_phases: 7
   total_plans: 40
-  completed_plans: 35
+  completed_plans: 36
   percent: 88
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-30)
 ## Current Position
 
 Phase: 21 (integrated-refinement-and-acceptance) — EXECUTING
-Plan: 2 of 6
+Plan: 3 of 6
 Status: Ready to execute
 Last activity: 2026-09-01 — Phase 21 execution started
 
@@ -194,6 +194,7 @@ Last activity: 2026-09-01 — Phase 21 execution started
 | Phase 20 P08 | 27min | 2 tasks | 9 files |
 | Phase 20 P07 | 70 min | 2 tasks | 3 files |
 | Phase 21 P01 | 22min | 2 tasks | 18 files |
+| Phase 21 P02 | 16min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -468,6 +469,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: Import-seam manifest legacy-value tolerance (21-01 Rule 1): a v2.1-era claimed preferences hash was computed over the block WITH measure 72, so the recomputed clamped hash never matches — the seam accepts the back-mapped export-era hash for the preferences block only; every other block/modification still mismatches (tamper-locked)
 - [Phase ?]: Schema-union narrowing compiled-blocked three files outside the 21-01 plan list (measurement/types.ts ConstraintsSchema, calibration + pagination measure axes derive from ReaderSettings["measure"]) — each follows the evolved union with a D21 citation (Rule 3)
 - [Phase ?]: Pinned-cell destinations (21-01): 58 where the cell intent is non-default (unit/component/polish seeds), 64 where it is max-measure wrap-math stress (pagination cell); pathological below-range reject row moved 40 → 34
+- [Phase 21]: D21-05 (21-02): tag popover re-anchored to its trigger via CSS anchor positioning — anchor-name on .tags-trigger + position-anchor/position-area block-end span-inline-end/position-try-fallbacks on .tag-popover; old header-fixed insets DELETED (not zeroed); popover=auto contract byte-stable; zero JS listeners, zero motion properties
+- [Phase 21]: [Rule 1] (21-02): .tag-popover width cap was content-box — 2x16px padding + 2px border made the rendered box 100vw+2px (unfittable at narrow widths by ANY fallback); box-sizing: border-box keeps the min(420px, 100vw-2*md) declaration byte-identical while the cap finally governs the outer box (420px outer at desktop, the cap's intent, vs the accidental 454)
 
 ### Pending Todos
 
@@ -523,8 +526,8 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-09-01T13:22:24.247Z
-Stopped at: Completed 21-01-PLAN.md
+Last session: 2026-09-01T13:41:51.555Z
+Stopped at: Completed 21-02-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
