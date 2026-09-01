@@ -1,10 +1,11 @@
 ---
 phase: 21
 slug: integrated-refinement-and-acceptance
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: 2026-08-31
+reviewed_at: 2026-08-31
 ---
 
 # Phase 21 — UI Design Contract
