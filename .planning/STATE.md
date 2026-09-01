@@ -5,8 +5,8 @@ milestone_name: Reader Experience
 current_phase: 21
 current_phase_name: Integrated Refinement and Acceptance
 status: verifying
-stopped_at: Completed 20-07-PLAN.md — Phase 20 complete (all 8 plans)
-last_updated: "2026-08-31T21:44:04.361Z"
+stopped_at: Phase 21 context gathered
+last_updated: "2026-09-01T00:21:35.018Z"
 last_activity: 2026-08-31
 last_activity_desc: Phase 20 complete, transitioned to Phase 21
 progress:
@@ -518,9 +518,9 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-08-31T21:36:12.495Z
-Stopped at: Completed 20-07-PLAN.md — Phase 20 complete (all 8 plans)
-Resume file: None
+Last session: 2026-09-01T00:21:35.006Z
+Stopped at: Phase 21 context gathered
+Resume file: .planning/phases/21-integrated-refinement-and-acceptance/21-CONTEXT.md
 
 ## Operator Next Steps
 
