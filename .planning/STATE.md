@@ -3,17 +3,17 @@ gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Reader Experience
 current_phase: 21
-current_phase_name: Integrated Refinement and Acceptance
+current_phase_name: integrated-refinement-and-acceptance
 status: executing
-stopped_at: Phase 21 UI-SPEC approved
-last_updated: "2026-09-01T04:49:42.687Z"
-last_activity: 2026-08-31
-last_activity_desc: Phase 20 complete, transitioned to Phase 21
+stopped_at: Completed 21-01-PLAN.md
+last_updated: "2026-09-01T13:23:00.361Z"
+last_activity: 2026-09-01
+last_activity_desc: Phase 21 execution started
 progress:
   total_phases: 8
   completed_phases: 7
-  total_plans: 34
-  completed_plans: 34
+  total_plans: 40
+  completed_plans: 35
   percent: 88
 ---
 
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-08-30)
 
 **Core value:** Readers can move through long-form content with calm, stable orientation, and predictable navigation.
-**Current focus:** Phase 20 — safe-local-image-fidelity
+**Current focus:** Phase 21 — integrated-refinement-and-acceptance
 
 ## Current Position
 
-Phase: 21 — Integrated Refinement and Acceptance
-Plan: Not started
+Phase: 21 (integrated-refinement-and-acceptance) — EXECUTING
+Plan: 2 of 6
 Status: Ready to execute
-Last activity: 2026-08-31 — Phase 20 complete, transitioned to Phase 21
+Last activity: 2026-09-01 — Phase 21 execution started
 
 ## Recent Decisions (Phase 18)
 
@@ -193,6 +193,7 @@ Last activity: 2026-08-31 — Phase 20 complete, transitioned to Phase 21
 | Phase 20 P06 | 31 min | 2 tasks | 7 files |
 | Phase 20 P08 | 27min | 2 tasks | 9 files |
 | Phase 20 P07 | 70 min | 2 tasks | 3 files |
+| Phase 21 P01 | 22min | 2 tasks | 18 files |
 
 ## Accumulated Context
 
@@ -463,6 +464,10 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: Geometry cap semantics pinned (20-08): under --figure-media-max-h the width/height attrs pin width and the cap clamps height (box ratio diverges; object-fit: contain keeps the paint undistorted) — the aspect-identity cell pins UNCAPPED equality at a raised viewport; the tall cell pins the clamp. Design-honest, not a 20-04 regression
 - [Phase Phase 20]: Phase 20-07 gate: honest gate = every invocation recorded (2 starvation-classified reds, each proven isolation-green, then one green run); --workers=2 is the documented 18-04/13-10 contention control under load 6-14, recorded as the command — Two plain runs produced different isolation-green tail flakes (the moving-tail starvation signature); the plan pre-authorizes the bounded workers control; assertions/engines/specs byte-unchanged
 - [Phase Phase 20]: Phase 20-07: all six IMG requirements closed via the evidence-pointing ledger (IMG-01/02 at 20-06, IMG-03/05/06 at 20-08, IMG-04 at 20-05); animated-AVIF residual accepted per A4; cap sanity verdict = no tuning argued, real-corpus calibration stays backlog per D20-11 — Substrate plans 20-01..04 keep requirements-completed [] (the 04-02/19-01 honest-split precedent); every ledger row points into the same green invocation the gate records
+- [Phase ?]: D21-03 mechanism (21-01): pre-parse bounded map clampLegacyMeasure {72:64} at the three settings-entry seams (Dexie row, mirror, import preferences) + the paint hint — never a widened union, never post-parse coercion; garbage (71/string/null) still surfaces corrupt/null (T-21-02)
+- [Phase ?]: Import-seam manifest legacy-value tolerance (21-01 Rule 1): a v2.1-era claimed preferences hash was computed over the block WITH measure 72, so the recomputed clamped hash never matches — the seam accepts the back-mapped export-era hash for the preferences block only; every other block/modification still mismatches (tamper-locked)
+- [Phase ?]: Schema-union narrowing compiled-blocked three files outside the 21-01 plan list (measurement/types.ts ConstraintsSchema, calibration + pagination measure axes derive from ReaderSettings["measure"]) — each follows the evolved union with a D21 citation (Rule 3)
+- [Phase ?]: Pinned-cell destinations (21-01): 58 where the cell intent is non-default (unit/component/polish seeds), 64 where it is max-measure wrap-math stress (pagination cell); pathological below-range reject row moved 40 → 34
 
 ### Pending Todos
 
@@ -518,9 +523,9 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-09-01T01:30:16.548Z
-Stopped at: Phase 21 UI-SPEC approved
-Resume file: .planning/phases/21-integrated-refinement-and-acceptance/21-UI-SPEC.md
+Last session: 2026-09-01T13:22:24.247Z
+Stopped at: Completed 21-01-PLAN.md
+Resume file: None
 
 ## Operator Next Steps
 
