@@ -520,25 +520,31 @@ if (/[\0-\x1f]/.test(rawName)) return false;
 | A4 | The figure-heavy regenerated fixture's registry assets don't travel through export (export reads Dexie rows only) — the images arm needs real ingestion | Pattern 5 | Low — verified against 20-VERIFICATION data-flow (loadAllAssets → zip entries); composition fact, not assumption, but planner should confirm seeding choice |
 | A5 | `.review-section h2` 20px register needs a Library-side comparison during implementation (continue-reading h2) | Pattern 3 | Trivial — one-line check during the conformance task |
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+All four questions are substantively resolved and adopted by the phase plan set (adoption pointers per question; annotated 2026-08-31):
 
 1. **Exact measure floor (D21-02)**
    - What we know: uniform step 6 required; `[40,46,52,58,64]` fits D21-02's example.
    - What's unclear: whether 40 or 46 is the better floor for 400%-zoom readability.
    - Recommendation: adopt `[40,46,52,58,64]`; the 320px-reflow + 400%-zoom matrix cells will empirically confirm the floor is usable.
+   - **Adopted (OQ1 → 21-01 Task 1 step 2):** `MEASURE_STEPS = [40, 46, 52, 58, 64]` ships; the 320px-reflow + 400%-zoom matrix cells (21-06 Task 1) empirically confirm the floor.
 
 2. **Edge-invariant extension shape**
    - What we know: D6-09 helper is article-surface-scoped ((a) clause); (b)/(c) clauses are destination-neutral.
    - What's unclear: destination-agnostic wrapper vs per-destination cell families.
    - Recommendation: wrapper asserting (b)+(c) at all four destinations + keep (a) reader-scoped — least new surface, strengthen-only trivially satisfied.
+   - **Adopted (OQ2 → 21-06 Task 1):** the destination-agnostic `assertDestinationInvariant` wrapper asserts (b)+(c) at all four destinations; (a) stays reader-scoped.
 
 3. **Safari sighted-pass evidence home (D21-12 discretion)**
    - What we know: protocol results sheet vs 21-VERIFICATION.md are the candidates.
    - Recommendation: record in the protocol results sheet (it IS a protocol run) with a pointer from 21-VERIFICATION.md — mirrors the ACPT-05 ledger discipline.
+   - **Adopted (OQ3 → 21-06 Task 2 step 3):** evidence records in the protocol v1.3 results sheet with a pointer from 21-VERIFICATION.md.
 
 4. **Audit findings artifact name**
    - What we know: D21-08/10 require a durable findings doc; name is free.
    - Recommendation: `21-AUDIT-FINDINGS.md` in the phase dir, referenced from VERIFICATION.
+   - **Adopted (OQ4 → 21-04 Task 1):** the artifact ships as `21-AUDIT-FINDINGS.md` in the phase dir; the verification ledger references it at verify-work time.
 
 ## Environment Availability
 
