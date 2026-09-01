@@ -418,12 +418,16 @@ test.describe("ANNO-12 eligibility matrix — crossings (D19-01/D19-03)", () => 
     expect(await countHighlightsInDexie(page, NESTED)).toBe(1);
     const placement = await visibleBlock(page, 2).evaluate(
       (listEl, hlId) => {
-        const inLi = (i: number) =>
-          listEl
-            .querySelectorAll("li")
-            [i]!.querySelector(
+        const inLi = (i: number) => {
+          // D21-15: the item is extracted to its own line — a member
+          // access split across lines trips no-unexpected-multiline.
+          const item = listEl.querySelectorAll("li")[i]!;
+          return (
+            item.querySelector(
               `mark.highlight[data-highlight-id="${hlId}"]`,
-            ) !== null;
+            ) !== null
+          );
+        };
         return { first: inLi(0), sibling: inLi(1) };
       },
       id,

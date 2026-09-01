@@ -31,6 +31,7 @@ const OS_RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\.|$)/i;
  */
 export function isSafeEntryName(rawName: string): boolean {
   // NUL bytes and control chars — refuse outright (Pitfall 11 #6)
+  // eslint-disable-next-line no-control-regex -- the control-character escapes ARE this guard's payload: detecting control characters in archive entry names is its function (Pitfall 11 #6), not an accident
   if (/[\0-\x1f]/.test(rawName)) return false;
   // Backslash = Windows separator smuggled into a POSIX-style name
   if (rawName.includes("\\")) return false;
@@ -73,8 +74,9 @@ export function isSafeEntryName(rawName: string): boolean {
  */
 export function sanitizeFilename(title: string, fallback: string): string {
   const cleaned = title
+    // eslint-disable-next-line no-control-regex -- the control-character escapes ARE this sanitizer's payload: stripping control characters from reader-facing download filenames is its function (Pitfall 11 #6), not an accident
     .replace(/[\0-\x1f]/g, "")
-    .replace(/[\/\\<>:"|?*]/g, "")
+    .replace(/[/\\<>:"|?*]/g, "")
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 120);
