@@ -1916,8 +1916,12 @@ dialog.highlight-popover::backdrop {
    transparent bg + transparent border, 4px radius, --ink-soft default,
    --accent on hover and ONLY when [aria-expanded="true"] (the quiet-chrome
    open-state discipline). The header does NOT grow — the four controls share
-   the same 44×44 geometry; .header-controls gap stays --space-sm. */
+   the same 44×44 geometry; .header-controls gap stays --space-sm.
+   D21-05 (POLISH-08): this button is the NAMED ANCHOR for .tag-popover —
+   anchor-name is document-scoped, so the DOM split (trigger in Header,
+   popover mounted in ArticleView) is a non-issue. */
 .tags-trigger {
+  anchor-name: --tags-trigger;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1941,16 +1945,32 @@ dialog.highlight-popover::backdrop {
   outline-offset: 2px;
 }
 /* .tag-popover — the ArticleView-owned surface wrapping the byte-unchanged
-   TagEntry. popover="auto" puts it in the top layer (above everything — no
-   stacking-index needed) with free light-dismiss + Esc; the UA hides the
-   closed panel. Anchored visually under the header's inline-end control
-   cluster (the 48px bar). Zero motion properties by design (A11Y-06 — the
-   global reduced-motion gate stays trivially satisfied). */
+   TagEntry. The popover="auto" interaction contract is RETAINED byte-stable
+   (D21-05): top layer (above everything — no stacking-index needed) with
+   free light-dismiss + Esc; the UA hides the closed panel; role="dialog" +
+   aria-label shape unchanged. D21-05 (POLISH-08) re-anchors the GEOMETRY to
+   the trigger itself via CSS anchor positioning: the menu hugs .tags-trigger
+   (adjacent below through position-area, separated by the calm --space-xs
+   gap) instead of the old header-corner insets, stays viewport-kept through
+   position-try-fallbacks (native flips — no manual clamp math), and
+   re-resolves under the trigger on resize/reflow/zoom with ZERO JS
+   reposition listeners — the browser owns geometry. Probe-verified
+   2026-08-31 on this project's pinned Playwright 1.61.1 engines
+   (chromium/firefox/webkit: anchor-name/position-anchor/position-area/
+   position-try-fallbacks all supported; adjacency, resize-follow, and
+   240px viewport-keep behaviorally proven). inset: auto kills the UA
+   popover insets (the MDN author-vs-UA popover conflict note); the old
+   header-anchored top/inset-inline-end declarations are DELETED, not
+   zeroed — author insets fight position-area resolution. Zero motion
+   properties by design (A11Y-06 — static repositioning only; the global
+   reduced-motion gate stays trivially satisfied). */
 .tag-popover {
   position: fixed;
-  top: calc(48px + var(--space-xs));
-  inset-inline-end: var(--space-md);
-  margin: 0;
+  position-anchor: --tags-trigger;
+  position-area: block-end span-inline-end;
+  position-try-fallbacks: flip-block, flip-inline;
+  inset: auto;
+  margin: var(--space-xs);
   padding: var(--space-md);
   background: var(--surface-raised);
   border: 1px solid var(--hairline);
