@@ -38,12 +38,14 @@ const FIXTURE = "essay-long-form";
 const MIRROR_KEY = "lem-settings-mirror-v1";
 
 /** The persisted non-default record BOTH truths carry (theme dark, font
- * sans, size 22, readingMode scrolling — the plan's SC#1 seed). */
+ * sans, size 22, readingMode scrolling — the plan's SC#1 seed).
+ * D21-01 (POLISH-09): measure 58 — 72 left the union; the seed stays a
+ * non-default step. */
 const PERSISTED = {
   schemaVersion: 2,
   font: "sans",
   size: 22,
-  measure: 72,
+  measure: 58,
   spacing: "spacious",
   theme: "dark",
   readingMode: "scrolling",

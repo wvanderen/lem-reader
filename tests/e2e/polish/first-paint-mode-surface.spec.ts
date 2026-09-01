@@ -49,12 +49,14 @@ const MIRROR_KEY = "lem-settings-mirror-v1";
 
 /** The persisted scrolling record BOTH truths carry (the cold-load-no-snap
  * SC#1 seed shape — readingMode scrolling is the variant under test; the
- * other fields ride along so the record stays the proven shape). */
+ * other fields ride along so the record stays the proven shape).
+ * D21-01 (POLISH-09): measure 58 — 72 left the union; the seed stays a
+ * non-default step. */
 const PERSISTED = {
   schemaVersion: 2,
   font: "sans",
   size: 22,
-  measure: 72,
+  measure: 58,
   spacing: "spacious",
   theme: "dark",
   readingMode: "scrolling",
