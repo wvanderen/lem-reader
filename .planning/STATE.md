@@ -5,15 +5,15 @@ milestone_name: Reader Experience
 current_phase: 21
 current_phase_name: integrated-refinement-and-acceptance
 status: executing
-stopped_at: Completed 21-03-PLAN.md
-last_updated: "2026-09-01T14:17:59.550Z"
+stopped_at: Completed 21-05-PLAN.md
+last_updated: "2026-09-01T14:53:10.204Z"
 last_activity: 2026-09-01
 last_activity_desc: Phase 21 execution started
 progress:
   total_phases: 8
   completed_phases: 7
   total_plans: 40
-  completed_plans: 38
+  completed_plans: 39
   percent: 88
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-08-30)
 ## Current Position
 
 Phase: 21 (integrated-refinement-and-acceptance) — EXECUTING
-Plan: 5 of 6
+Plan: 6 of 6
 Status: Ready to execute
 Last activity: 2026-09-01 — Phase 21 execution started
 
@@ -197,6 +197,7 @@ Last activity: 2026-09-01 — Phase 21 execution started
 | Phase 21 P02 | 16min | 2 tasks | 3 files |
 | Phase 21 P03 | 14min | 2 tasks | 4 files |
 | Phase 21 P04 | 15min | 2 tasks | 3 files |
+| Phase 21 P05 | 31min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -475,6 +476,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase 21]: [Rule 1] (21-02): .tag-popover width cap was content-box — 2x16px padding + 2px border made the rendered box 100vw+2px (unfittable at narrow widths by ANY fallback); box-sizing: border-box keeps the min(420px, 100vw-2*md) declaration byte-identical while the cap finally governs the outer box (420px outer at desktop, the cap's intent, vs the accidental 454)
 - [Phase 21]: D21-06 glyph: decorative JumpToArticleIcon (LibraryRow anatomy) inside exactly the jump-capable row buttons, placed at a space-between foot line's inline end; foot renders only when jumpable so orphan/disabled shapes stay byte-stable; glyph inherits ink-soft via the foot's color and takes accent through ONE hover selector — zero motion. — The whole-row jump had no visible affordance; an inline SVG is legal non-interactive button content, so role/name/state stay byte-stable while the destination becomes understandable at a glance.
 - [Phase 21]: D21-07 conformance landed per the UI-SPEC §3 ledger: .review-row padding md->lg (primary row register), .review-section h2 20px override DELETED (inherits global 22px/600/1.3 — RESEARCH A5 resolves as conform), 2 citation comments (single-column anatomy + no @media re-grid), .review-select D15-03 untouched. — Shared layout grammar via token conformance, not a literal shared grid; every measurement conforms or carries a POLISH-07-shaped citation.
+- [Phase Phase 21]: [Phase 21]: D21-13 spine shape (21-05): ONE unbroken two-context journey; the whole cell is an image-save cell on webkit (the Blob-writing EPUB ingestion is inseparable from the journey) carrying a single documented test.skip citing the Phase 20 deferred-items ledger — chromium/firefox prove every affected flow, non-image arms stay webkit-proven by the existing engine-complete suites.
+- [Phase Phase 21]: [Phase 21]: Asset-row equality bar (21-05): every bundle-carried field + byte-equal Blob bytes read browser-side on both machines; the D20-15 createdAt never travels (applyImport re-stamps by design) so it is asserted fresh, never compared — true full-row equality would need an export-schema change (Rule 4 territory). Books joined the equality set (the corpus has one).
+- [Phase Phase 21]: [Phase 21]: D21-15 lint closure (21-05): two line-scoped justified no-control-regex disables (control-char escapes ARE the guards' payload) + one redundant-escape removal in zipSlip.ts; the directive line must sit DIRECTLY above the offending line (a wrapped justification breaks adjacency and reports unused); the one other repo-wide error (eligibility-matrix no-unexpected-multiline) fixed behavior-identically — npm run lint exits 0.
 
 ### Pending Todos
 
@@ -530,8 +534,8 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-09-01T14:17:46.131Z
-Stopped at: Completed 21-03-PLAN.md
+Last session: 2026-09-01T14:53:10.195Z
+Stopped at: Completed 21-05-PLAN.md
 Resume file: None
 
 ## Operator Next Steps
