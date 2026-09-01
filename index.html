@@ -42,6 +42,13 @@
             spacious: { lineHeight: 1.8, letterSpacing: "0.01em", wordSpacing: "0.05em" }
           };
           // tokens:SPACING_PRESETS:end
+          // D21-03 (POLISH-09): inline copy of src/settings/legacyMeasure.ts
+          // LEGACY_MEASURE — the ONE legacy-value map (exactly one entry) so
+          // the --measure write never paints the dead legacy width; first
+          // paint matches hydration (no 72ch flash-then-clamp).
+          // tokens:LEGACY_MEASURE:start
+          var LEGACY_MEASURE = { 72: 64 };
+          // tokens:LEGACY_MEASURE:end
           var THEMES = { sepia: true, light: true, dark: true };
           var own = Object.prototype.hasOwnProperty;
 
@@ -81,7 +88,12 @@
             r.style.setProperty("--word-spacing", p.wordSpacing);
           }
           if (typeof s.measure === "number" && isFinite(s.measure)) {
-            r.style.setProperty("--measure", s.measure + "ch");
+            // D21-03: route through the inline legacy map so the paint hint
+            // matches the clamped hydration value.
+            var m = own.call(LEGACY_MEASURE, s.measure)
+              ? LEGACY_MEASURE[s.measure]
+              : s.measure;
+            r.style.setProperty("--measure", m + "ch");
           }
         } catch (e) {
           // The mirror is a hint — never route recovery UI (D13-03).

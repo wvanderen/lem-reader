@@ -41,8 +41,8 @@ function validLocation(overrides: Record<string, unknown> = {}): unknown {
   };
 }
 
-// ── ReaderSettingsSchema — accept matrix (3 fonts × 5 sizes × 4 measures ─────
-//   × 3 spacings × 3 themes = 540 combos; assert a representative slice plus
+// ── ReaderSettingsSchema — accept matrix (3 fonts × 5 sizes × 5 measures ─────
+//   × 3 spacings × 3 themes; assert a representative slice plus
 //   the full single-axis variation for each knob) ─────────────────────────────
 
 describe("ReaderSettingsSchema accepts valid combinations", () => {
@@ -74,10 +74,15 @@ describe("ReaderSettingsSchema accepts valid combinations", () => {
   });
 
   it.each([
+    // D21-01/D21-02 (POLISH-09): the five-step uniform-6 truthful range —
+    // 40/46 are the new lower steps; 72 is REMOVED from the union (a
+    // stored legacy 72 clamps calmly pre-parse at the read seams per
+    // D21-03 — see tests/unit/settings/measure-clamp.test.ts).
+    [40, { measure: 40 }],
+    [46, { measure: 46 }],
     [52, { measure: 52 }],
     [58, { measure: 58 }],
     [64, { measure: 64 }],
-    [72, { measure: 72 }],
   ])("accepts measure=%i", (measure, override) => {
     expect(ReaderSettingsSchema.parse(validSettings(override)).measure).toBe(
       measure,
@@ -120,7 +125,12 @@ describe("ReaderSettingsSchema.parse rejects out-of-contract records", () => {
     ["size below the step range (12)", { size: 12 }],
     ["size above the step range (28)", { size: 28 }],
     ["out-of-step measure (60 — between steps)", { measure: 60 }],
-    ["measure below the step range (40)", { measure: 40 }],
+    // D21-01/D21-02 (POLISH-09): the range extends downward to 40 — a
+    // below-range value must now be under 40 (34); and the legacy maximum
+    // 72 is NO LONGER in the union: raw 72 fails parse here while the
+    // enumerated-seam clamp (D21-03) maps it pre-parse for calm loads.
+    ["measure below the step range (34)", { measure: 34 }],
+    ["the legacy maximum 72 (D21-01 — removed from the union; D21-03 clamps pre-parse at the seams)", { measure: 72 }],
     ["unknown spacing value", { spacing: "snug" }],
     ["unknown theme value", { theme: "solarized" }],
     ["missing font field", { font: undefined }],
@@ -246,7 +256,8 @@ describe("applyTheme writes :root tokens from validated settings", () => {
       schemaVersion: 2,
       font: "sans",
       size: 22,
-      measure: 72,
+      // D21-01 (POLISH-09): 58 — a valid non-default step (72 left the union).
+      measure: 58,
       spacing: "spacious",
       theme: "dark",
       readingMode: "paginated",
@@ -258,6 +269,6 @@ describe("applyTheme writes :root tokens from validated settings", () => {
     expect(root.style.getPropertyValue("--line-height")).toBe("1.8");
     expect(root.style.getPropertyValue("--letter-spacing")).toBe("0.01em");
     expect(root.style.getPropertyValue("--word-spacing")).toBe("0.05em");
-    expect(root.style.getPropertyValue("--measure")).toBe("72ch");
+    expect(root.style.getPropertyValue("--measure")).toBe("58ch");
   });
 });

@@ -66,8 +66,11 @@ export const VIEWPORTS: readonly Viewport[] = [
  * Three typography cells balancing coverage and CI runtime. Default is the
  * D-07 baseline; the two stress cells exercise drift drivers and edge cases:
  *   - serif/18/64/comfortable — D-07 default (baseline)
- *   - sans/22/72/spacious     — stress (system-ui Pitfall 5 + wordSpacing
- *                               Pitfall 6 + larger measure pushes wrap math)
+ *   - sans/22/64/spacious     — stress (system-ui Pitfall 5 + wordSpacing
+ *                               Pitfall 6 + the truthful maximum measure
+ *                               pushes wrap math — D21-01: the 72 cell moved
+ *                               to the now-maximum 64 when the lying step
+ *                               left the union)
  *   - dyslexic/16/52/compact  — stress (smallest size + narrowest measure +
  *                               tightest line-height; hardest wrapping case)
  *
@@ -76,7 +79,7 @@ export const VIEWPORTS: readonly Viewport[] = [
  */
 export const SAMPLED_TYPOGRAPHY: readonly TypographyVariant[] = [
   { font: "serif", size: 18, measure: 64, spacing: "comfortable" },
-  { font: "sans", size: 22, measure: 72, spacing: "spacious" },
+  { font: "sans", size: 22, measure: 64, spacing: "spacious" },
   { font: "dyslexic", size: 16, measure: 52, spacing: "compact" },
 ] as const;
 

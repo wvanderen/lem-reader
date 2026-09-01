@@ -25,6 +25,7 @@ import { db } from "./db";
 import { ReaderSettingsSchema } from "../content/schema";
 import type { ReaderSettings } from "../content/schema";
 import { DEFAULT_SETTINGS } from "../settings/defaults";
+import { clampLegacyMeasure } from "../settings/legacyMeasure";
 import { classifyStorageError } from "./errors";
 
 /** The composite-record key in the Dexie `settings` store (D2 discretion). */
@@ -60,7 +61,11 @@ export async function loadSettings(): Promise<SettingsLoadResult> {
       // first time. This is NOT an error state.
       return { ok: true, settings: DEFAULT_SETTINGS };
     }
-    const parsed = ReaderSettingsSchema.safeParse(raw.value);
+    // D21-03 (POLISH-09): clamp the enumerated legacy measure value (72 → 64)
+    // on the raw row BEFORE safeParse so a stored legacy maximum loads calmly
+    // — never the corrupt path. The map contains exactly {72: 64}; every
+    // other invalid value still fails parse below (STATE-04 holds).
+    const parsed = ReaderSettingsSchema.safeParse(clampLegacyMeasure(raw.value));
     if (parsed.success) {
       return { ok: true, settings: parsed.data };
     }

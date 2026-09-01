@@ -23,6 +23,7 @@
 // for settings.
 import { ReaderSettingsSchema } from "../content/schema";
 import type { ReaderSettings } from "../content/schema";
+import { clampLegacyMeasure } from "./legacyMeasure";
 
 /** The localStorage key carrying the mirrored ReaderSettings record.
  * Versioned so a future mirror shape change can migrate or invalidate
@@ -41,7 +42,12 @@ export function readSettingsMirror(): ReaderSettings | null {
     const raw = window.localStorage.getItem(SETTINGS_MIRROR_KEY);
     if (!raw) return null;
     const value: unknown = JSON.parse(raw);
-    const parsed = ReaderSettingsSchema.safeParse(value);
+    // D21-03 (POLISH-09): clamp the enumerated legacy measure value (72 → 64)
+    // on the parsed JSON BEFORE safeParse so a mirror painted with the legacy
+    // maximum stays a useful hint at 64 (not null → Dexie double-work, and a
+    // dead 72ch first paint). Null-on-doubt holds for every other invalid
+    // value (the map contains exactly {72: 64}).
+    const parsed = ReaderSettingsSchema.safeParse(clampLegacyMeasure(value));
     return parsed.success ? parsed.data : null;
   } catch {
     // Corrupt JSON, blocked storage — anything. The mirror is a hint;

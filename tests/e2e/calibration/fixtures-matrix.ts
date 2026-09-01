@@ -34,13 +34,19 @@ export interface TypographyVariant {
 
 const FONTS: readonly FontKey[] = ["serif", "sans", "dyslexic"];
 const SIZES_FULL: readonly SizeStep[] = [16, 18, 20, 22, 24];
-const MEASURES_FULL: readonly MeasureStep[] = [52, 58, 64, 72];
+// D21-01/D21-02 (POLISH-09): the truthful five-step uniform-6 range — 72
+// left the ReaderSettingsSchema union, so the measure axis follows it
+// (MeasureStep derives from the schema type; a 72 here would not compile).
+const MEASURES_FULL: readonly MeasureStep[] = [40, 46, 52, 58, 64];
 const SPACINGS: readonly SpacingKey[] = ["compact", "comfortable", "spacious"];
 
 // CI-friendly sampled steps (RESEARCH Open Question A2 — full matrix may be
 // too slow for CI; sampled steps retain representativeness).
 const SIZES_SAMPLED: readonly SizeStep[] = [18, 22];
-const MEASURES_SAMPLED: readonly MeasureStep[] = [58, 72];
+// D21-02: sample the new narrow floor (46) and the truthful maximum (64) —
+// the widest spread across the evolved range (the old [58, 72] sampled the
+// then-max; 72 no longer parses).
+const MEASURES_SAMPLED: readonly MeasureStep[] = [46, 64];
 
 /** Cartesian product helper. */
 function cartesian<F, S, T, U>(
@@ -55,8 +61,8 @@ function cartesian<F, S, T, U>(
 }
 
 /**
- * The full typography matrix: 3 fonts × 5 sizes × 3 spacings × 4 measures
- * = 180 variants. Used for the comprehensive (slow) calibration run.
+ * The full typography matrix: 3 fonts × 5 sizes × 3 spacings × 5 measures
+ * = 225 variants. Used for the comprehensive (slow) calibration run.
  */
 export const TYPOGRAPHY_MATRIX: readonly TypographyVariant[] = cartesian(
   FONTS,

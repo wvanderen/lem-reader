@@ -46,7 +46,7 @@ const validSettings: ReaderSettings = {
   schemaVersion: 1,
   font: "sans",
   size: 20,
-  measure: 72,
+  measure: 58, // D21-01 (POLISH-09): 72 left the union — 58 is the non-default step
   spacing: "spacious",
   theme: "dark",
   readingMode: "paginated",

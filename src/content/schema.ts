@@ -357,11 +357,20 @@ export const ReaderSettingsSchema = z.object({
     z.literal(22),
     z.literal(24),
   ]),
+  // D21-01/D21-02 (POLISH-09): the union drops the lying 72 literal and
+  // gains the two lower truthful steps — a five-step uniform-6 enumeration
+  // mirroring MEASURE_STEPS in src/settings/tokens.ts. A stored legacy-72
+  // value is mapped calmly to 64 PRE-parse by clampLegacyMeasure at every
+  // settings-entry seam (D21-03 — settingsStore / settingsMirror / the
+  // import preferences block); it never widens this union (T-21-02), and
+  // every other out-of-range value still fails parse → STATE-04 corrupt
+  // routing.
   measure: z.union([
+    z.literal(40),
+    z.literal(46),
     z.literal(52),
     z.literal(58),
     z.literal(64),
-    z.literal(72),
   ]),
   spacing: z.enum(["compact", "comfortable", "spacious"]),
   theme: z.enum(["sepia", "light", "dark"]),

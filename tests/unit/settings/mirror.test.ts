@@ -31,7 +31,7 @@ const NON_DEFAULT: ReaderSettings = {
   schemaVersion: 2,
   font: "sans",
   size: 22,
-  measure: 72,
+  measure: 58, // D21-01 (POLISH-09): 72 left the union — 58 is the non-default step
   spacing: "spacious",
   theme: "dark",
   readingMode: "scrolling",

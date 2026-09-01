@@ -141,11 +141,12 @@ describe("SettingsContext (D2-03 live-apply)", () => {
       </SettingsProvider>,
     );
     act(() =>
-      latest?.update({ size: 24, measure: 72, spacing: "spacious" }),
+      // D21-01 (POLISH-09): 58 — a valid non-default step (72 left the union).
+      latest?.update({ size: 24, measure: 58, spacing: "spacious" }),
     );
     const tokens = readTokens();
     expect(tokens.fontSizeToken).toBe("24px");
-    expect(tokens.measure).toBe("72ch");
+    expect(tokens.measure).toBe("58ch");
     expect(document.documentElement.style.getPropertyValue("--line-height")).toBe(
       "1.8",
     );

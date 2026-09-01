@@ -44,6 +44,7 @@ import { loadAllLocations } from "../persistence/locationStore";
 import { loadSettings } from "../persistence/settingsStore";
 import { MAX_ARTICLE_ASSET_BYTES, MAX_ASSET_BYTES } from "../ingestion/types";
 import { DEFAULT_SETTINGS } from "../settings/defaults";
+import { clampLegacyMeasure } from "../settings/legacyMeasure";
 import { ExportBundleSchema, resolveAppVersion } from "./bundle";
 import type { ExportBundle, AssetExportMeta } from "./bundle";
 import { computeManifest, sha256Hex } from "./manifest";
@@ -296,6 +297,30 @@ export async function validateBundle(
     };
   }
 
+  // 4.5 D21-03 (POLISH-09): clamp the enumerated legacy measure value
+  //     (72 → 64) on the RAW preferences block BEFORE the full schema
+  //     parse — a v2.1-era bundle whose preferences carry the
+  //     pre-truthful-range maximum re-imports calmly instead of failing
+  //     the measure union (which would refuse the whole bundle). Bounded
+  //     map: only the known legacy value maps; garbage still fails parse
+  //     → the invalid refusal below (STATE-04 / V5 / T-21-01).
+  const rawPrefs =
+    raw !== null && typeof raw === "object"
+      ? (raw as { preferences?: unknown }).preferences
+      : undefined;
+  const legacyMeasurePreferences =
+    rawPrefs !== null &&
+    typeof rawPrefs === "object" &&
+    (rawPrefs as { measure?: unknown }).measure === 72
+      ? rawPrefs
+      : undefined;
+  if (legacyMeasurePreferences !== undefined) {
+    raw = {
+      ...(raw as object),
+      preferences: clampLegacyMeasure(legacyMeasurePreferences),
+    };
+  }
+
   // 5. Full schema parse — ALL issues, not just the first (Pitfall 11 #2).
   const parsed = ExportBundleSchema.safeParse(raw);
   if (!parsed.success) {
@@ -329,6 +354,29 @@ export async function validateBundle(
     claimedBlocks.assets = await sha256Hex(
       new TextEncoder().encode(JSON.stringify([])),
     );
+  }
+  // D21-03 (POLISH-09) manifest legacy-value tolerance: when the pre-parse
+  // clamp mapped the enumerated legacy value (72 → 64), a v2.1-era
+  // exporter's claimed preferences hash was computed over the block WITH
+  // the legacy value (it was in-union at export time) — it can never equal
+  // the recomputed (clamped) hash. Accept the export-era hash as the
+  // preferences-block match: recompute it from the parsed block with
+  // measure back-mapped to 72 (same schema key order per the determinism
+  // contract above). Every other block — and every other preferences
+  // modification — still mismatches (T-9-03; the manifest is a corruption
+  // DETECTION surface, not a security boundary — manifest.ts).
+  if (
+    legacyMeasurePreferences !== undefined &&
+    claimedBlocks.preferences !== recomputed.blocks.preferences
+  ) {
+    const legacyHash = await sha256Hex(
+      new TextEncoder().encode(
+        JSON.stringify({ ...parsed.data.preferences, measure: 72 }),
+      ),
+    );
+    if (claimedBlocks.preferences === legacyHash) {
+      claimedBlocks.preferences = recomputed.blocks.preferences;
+    }
   }
   const failedBlocks = (Object.keys(recomputed.blocks) as Array<
     keyof Manifest["blocks"]

@@ -262,7 +262,7 @@ async function legacyBundle(manifestPreferencesOverride?: Manifest["blocks"]) {
       preferences: await computeManifest({
         ...parsed,
         preferences: { ...parsed.preferences, measure: 72 },
-      } as ExportBundle).then((m) => m.blocks.preferences),
+      } as unknown as ExportBundle).then((m) => m.blocks.preferences),
     },
   };
   const finalManifest: Manifest =

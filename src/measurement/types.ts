@@ -28,11 +28,16 @@ export const ConstraintsSchema = z.object({
     z.literal(22),
     z.literal(24),
   ]),
+  // D21-01/D21-02 (POLISH-09): mirrors the truthful five-step measure range
+  // in src/settings/tokens.ts MEASURE_STEPS / ReaderSettingsSchema — this
+  // closed set must never drift from the settings union (the module-header
+  // contract). 72 left the range; 40/46 are the new lower steps.
   measure: z.union([
+    z.literal(40),
+    z.literal(46),
     z.literal(52),
     z.literal(58),
     z.literal(64),
-    z.literal(72),
   ]),
   spacing: z.enum(["compact", "comfortable", "spacious"]),
   viewportWidthPx: z.number().positive(),
