@@ -3124,9 +3124,12 @@ dialog.import-preview::backdrop {
   margin-block: var(--space-lg);
   margin-inline: auto;
 }
+/* Plan 21-03 (POLISH-10 / D21-07): the 20px font-size override is DELETED —
+   the heading conforms to the global h2 register (22px/600/1.3), the same
+   shared Library section-heading register .continue-reading-strip h2
+   inherits with no override (resolves RESEARCH A5 as conform, not cite). */
 .review-section h2 {
   margin-block: 0 var(--space-sm);
-  font-size: 20px;
 }
 /* Subtle source-host suffix inside the section h2 (the ArticleView
    "Originally published at {domain}" vocabulary — quiet, never a link). */
@@ -3136,6 +3139,14 @@ dialog.import-preview::backdrop {
   font-size: 14px;
   color: var(--ink-soft);
 }
+/* POLISH-10 (D21-07) intentional difference: .review-section-list keeps its
+   single-column row anatomy (grid, gap sm) — NOT drift from .library-list's
+   2/3-column responsive grid; a review row is a tall quote card whose width
+   must not compress. Do not "fix" it to the Library grid template. */
+/* POLISH-10 (D21-07) intentional difference: this block declares no @media
+   re-grid rules — NOT drift from Library's 640/1024 re-grids; the
+   single-column anatomy needs no breakpoint switching, and the 1100px cap +
+   main#main insets carry narrow widths. Do not add re-grid breakpoints. */
 .review-section-list {
   list-style: none;
   margin: 0;
@@ -3145,7 +3156,10 @@ dialog.import-preview::backdrop {
 }
 
 /* Row (D10-03) — the whole-row jump button (the .drawer-entry pattern) and
-   the static orphan-tail twin (identical anatomy, no jump affordance). */
+   the static orphan-tail twin (identical anatomy, no jump affordance).
+   Plan 21-03 (POLISH-10 / D21-07): padding conforms to the PRIMARY row
+   register — var(--space-lg), matching .library-row / .book-row (the
+   enumerated deviation candidate resolves as conform). */
 .review-row {
   display: flex;
   flex-direction: column;
@@ -3154,7 +3168,7 @@ dialog.import-preview::backdrop {
   width: 100%;
   box-sizing: border-box;
   min-height: var(--touch);
-  padding: var(--space-md);
+  padding: var(--space-lg);
   text-align: start;
   background: var(--surface-raised);
   border: 1px solid var(--hairline);
@@ -3190,6 +3204,27 @@ dialog.import-preview::backdrop {
   font-family: var(--font-ui);
   font-size: 14px;
   color: var(--ink-soft);
+}
+/* Plan 21-03 (POLISH-10 / D21-06) — the confident row's foot line: date at
+   inline-start, the quiet open-in-reader glyph at the date line's inline
+   end. Renders ONLY inside jump-capable rows (never orphan-tail or
+   disabled/unresolved rows — ReviewView keeps those rows byte-stable).
+   color: --ink-soft is the glyph's REST state (inherited via currentColor);
+   tokens only, zero motion properties. */
+.review-row-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-xs);
+  width: 100%;
+  color: var(--ink-soft);
+}
+/* The glyph takes the accent on row hover — the .tags-trigger /
+   .library-row-edit rest/hover grammar (the glyph signals the jump; shape +
+   the Go-to-highlight name carry the meaning, so color is never
+   load-bearing). One additive tokens-only selector; color only. */
+.review-row:hover .review-jump-glyph {
+  color: var(--accent);
 }
 
 /* Tri-state badge (D10-07) — renders ONLY on ambiguous/orphan rows. A

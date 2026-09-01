@@ -134,12 +134,49 @@ function sourceHost(article: CanonicalArticle): string | null {
 }
 
 /**
+ * Plan 21-03 (POLISH-10 / D21-06) — north-east "open in article context"
+ * glyph for jump-capable rows, so the whole-row jump's destination is
+ * understandable at a glance. Clones the LibraryRow TrashIcon/EditIcon
+ * anatomy exactly (20×20, 24-unit viewBox, currentColor stroke, round
+ * caps/joins, aria-hidden + focusable=false): decorative — the row
+ * button's "Go to highlight: …" aria-label stays the whole accessible
+ * name (the SVG adds nothing to it).
+ */
+function JumpToArticleIcon({ ariaHidden }: { ariaHidden?: "true" }) {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden={ariaHidden}
+      focusable="false"
+      className="review-jump-glyph"
+    >
+      {/* shaft — south-west to north-east */}
+      <path d="M7 17L17 7" />
+      {/* arrowhead — the north-east corner */}
+      <path d="M8 7h9v9" />
+    </svg>
+  );
+}
+
+/**
  * One review row. Section rows (entry.article defined) render the
  * whole-row jump button — enabled ONLY when status is "confident"
  * (D10-03; ambiguous/orphan render it disabled with aria-disabled, the
  * AnnotationsDrawer L184-189 rule). Orphan-tail rows (no article) render
  * a static div — no jump affordance at all, but the same first-class row
  * anatomy.
+ *
+ * Plan 21-03 (POLISH-10 / D21-06): confident (jump-capable) rows carry a
+ * quiet open-in-reader glyph at the foot line's inline end — decorative
+ * (aria-hidden), never rendered on orphan-tail or disabled/unresolved
+ * rows, and never part of the accessible name.
  *
  * Plan 10-05 (D10-11): EVERY row — section or orphan, any tri-state —
  * carries the two curation affordances as siblings of the row body (never
@@ -180,6 +217,19 @@ function ReviewRow({
         ? "Article missing"
         : null;
 
+  // Plan 21-03 (POLISH-10 / D21-06) — the row-foot line. ONLY jump-capable
+  // (confident + article-backed) rows carry the quiet open-in-reader glyph
+  // at the date line's inline end; every other row — orphan-tail, ambiguous,
+  // orphan — keeps the bare date span so those row shapes stay byte-stable.
+  const foot = jumpable ? (
+    <span className="review-row-foot">
+      <span className="review-date">{formatDate(entry.highlight.createdAt)}</span>
+      <JumpToArticleIcon aria-hidden="true" />
+    </span>
+  ) : (
+    <span className="review-date">{formatDate(entry.highlight.createdAt)}</span>
+  );
+
   const content = (
     <>
       <span className="review-quote">{excerpt}</span>
@@ -193,7 +243,7 @@ function ReviewRow({
           {badgeText}
         </span>
       )}
-      <span className="review-date">{formatDate(entry.highlight.createdAt)}</span>
+      {foot}
     </>
   );
 
