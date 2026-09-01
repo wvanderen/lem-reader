@@ -351,3 +351,49 @@ test.describe("RECV-01.b review-panel listing (10-04 cross-article + filters + s
     ]);
   });
 });
+
+// Plan 21-03 (POLISH-10 / D21-07) — token-conformance cells: computed-style
+// truth that the review block now measures through the SHARED registers
+// (strengthen-only; no existing assertion above changed).
+test.describe("POLISH-10 (D21-07) review-block token conformance (21-03)", () => {
+  test("section h2 computes the shared 22px/600/1.3 register; rows compute the lg padding register", async ({
+    page,
+  }) => {
+    await seedCorpusAndOpenReview(page);
+
+    // Section heading: the global h2 register — the 20px override was
+    // deleted (conform; the .continue-reading-strip h2 no-override
+    // precedent, resolves RESEARCH A5). Computed-style assertions,
+    // sub-pixel tolerance only.
+    const h2 = await page
+      .locator("section.review-section > h2")
+      .first()
+      .evaluate((el) => {
+        const cs = getComputedStyle(el);
+        return {
+          fontSize: cs.fontSize,
+          fontWeight: cs.fontWeight,
+          lineHeight: cs.lineHeight,
+        };
+      });
+    expect(parseFloat(h2.fontSize)).toBeCloseTo(22, 1);
+    expect(h2.fontWeight).toBe("600");
+    expect(parseFloat(h2.lineHeight)).toBeCloseTo(22 * 1.3, 1);
+
+    // Row padding: the PRIMARY row register (24px = --space-lg, matching
+    // .library-row / .book-row) on the block + inline axes.
+    const pad = await page.locator(".review-row").first().evaluate((el) => {
+      const cs = getComputedStyle(el);
+      return {
+        top: cs.paddingTop,
+        bottom: cs.paddingBottom,
+        inline:
+          cs.getPropertyValue("padding-inline-start") ||
+          cs.getPropertyValue("padding-left"),
+      };
+    });
+    expect(parseFloat(pad.top)).toBeCloseTo(24, 1);
+    expect(parseFloat(pad.bottom)).toBeCloseTo(24, 1);
+    expect(parseFloat(pad.inline)).toBeCloseTo(24, 1);
+  });
+});

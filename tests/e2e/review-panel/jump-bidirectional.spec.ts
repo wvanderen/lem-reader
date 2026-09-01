@@ -43,6 +43,14 @@
 //   - The focus assertion reuses the navigate-back.spec.ts L51–59
 //     retry-assert shape (expect(async …).toPass) — never fixed sleeps for
 //     arrival checks.
+//
+// Plan 21-03 (POLISH-10 / D21-06) — the glyph-visibility cells: the corpus
+// gains an AMBIGUOUS row + a ghost-article ORPHAN row (tri-state.spec.ts's
+// seed shapes, verified through the SHIPPED resolver at module load) so this
+// spec asserts the visible open-in-reader glyph on EXACTLY the jump-capable
+// rows: present + named-by-template on the confident row, absent on the
+// disabled ambiguous row (aria-disabled intact) and the static orphan row.
+// Existing jump assertions are untouched and re-run green (strengthen-only).
 import { test, expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import { BASE, wipeDatabase } from "../annotations/_fixtures";
@@ -52,11 +60,22 @@ import {
   makeArticle,
   seedRows,
 } from "../portability/_portability";
-import { graphemeLength } from "../../../src/content/normalizeText";
+import {
+  graphemeLength,
+  resolveQuoteSelector,
+} from "../../../src/content/normalizeText";
 
 const ARTICLE_ID = "deep-link-jump-corpus";
 const HIGHLIGHT_ID = "hl-deep-link-jump-1";
 const TITLE = "The Shifting Sandbanks Survey";
+
+// Plan 21-03 (POLISH-10 / D21-06) — a sentence appended VERBATIM to
+// paragraphs 3 and 9 (both far from the ~60% confident-anchor zone, so the
+// excerpts stay distinct): with empty prefix/suffix context, N>1 exact
+// occurrences can never disambiguate — the ambiguity trigger (the
+// tri-state.spec.ts corpus shape).
+const AMBIG_SENTENCE =
+  "The harbor bell counts the fog, not the hours.";
 
 // Ten distinctive paragraphs (~430 chars each ≈ 4 paginated pages at the
 // default viewport) so a ~60%-deep anchor provably requires a page turn
@@ -64,13 +83,13 @@ const TITLE = "The Shifting Sandbanks Survey";
 const PARAGRAPHS = [
   "The cartographer arrived in the harbor town with nothing but a satchel of blank vellum and a brass astrolabe that had survived two shipwrecks. She had been commissioned to map the shifting sandbanks north of the mole, a task that had quietly defeated three surveyors before her, and she intended to succeed by patience rather than by instruments alone, walking the tidal flats at every low water for a full cycle of the moon.",
   "Her landlady at the anchorage inn insisted the banks were haunted by a choir of drowned bell-ringers, and that any chart drawn on a Tuesday would lie by the following spring tide. The cartographer thanked her for the warning, wrote the folklore down in the margins of her field book, and noted with some satisfaction that superstition, unlike sediment, keeps a perfectly stable position from one season to the next.",
-  "On the fourth morning she met the eel fisherman who worked the channel at dawn. He showed her how a particular ripple over the middle bank meant firm sand beneath, while a certain slack brown water meant soft silt that would swallow a boot to the knee. This was exactly the kind of knowledge no instrument carried, and she traded him a hand-drawn sketch of the harbor mouth for three more afternoons of his memory.",
+  `On the fourth morning she met the eel fisherman who worked the channel at dawn. He showed her how a particular ripple over the middle bank meant firm sand beneath, while a certain slack brown water meant soft silt that would swallow a boot to the knee. This was exactly the kind of knowledge no instrument carried, and she traded him a hand-drawn sketch of the harbor mouth for three more afternoons of his memory. ${AMBIG_SENTENCE}`,
   "The survey method she settled on was deliberately slow. At each low water she drove a numbered willow stake into the flats, measured its distance from two fixed points on shore by triangulation, and recorded the time to the minute. On the following tide she would find the stake again, or not find it, and the difference between those two outcomes was itself data about how the bank had moved overnight.",
   "Winter storms erased a third of her stakes in a single October week, and a lesser surveyor might have abandoned the work. Instead she wrote to the harbormaster requesting the salvage logs of every vessel grounded on the banks in the previous forty years, reasoning that a ship that struck sand where none had been charted was a measuring instrument of a brutal but undeniable accuracy.",
   "The salvage logs arrived in March, tea-stained and incomplete, and she spent three weeks cross-referencing them against the tide tables. Slowly a pattern emerged that no single observation had suggested: the banks were not wandering randomly but rotating slowly around a submerged wreck, the way a compass needle swings back after a knock, and the rotation completed itself roughly every eleven years.",
   "She presented her finished chart to the harbor commission in June. It showed the banks as they stood, the banks as they would stand in five years, and the drowned wreck at the center of the rotation marked with a small careful cross. The commissioners argued for an hour about whether a chart of the future was science or prophecy, and then voted unanimously to pay for a hundred printed copies.",
   "The fisherman claimed his share of the credit for years afterward, telling anyone who would listen that the great rotating banks had been discovered by an eel, a boot, and a borrowed pencil. The cartographer never contradicted him. In her private notebook she wrote that the chart had three authors, and that the third one was the tide, which never once submitted its measurements on time.",
-  "Decades later, when the harbor was dredged and the wreck pulled up and sold for scrap iron, the rotation stopped within a season, exactly as the chart had predicted it might. The sandbanks settled into a new and permanent shape, the channel became safe for the larger steamers, and the town grew rich enough to commission a statue of the cartographer holding a willow stake.",
+  `Decades later, when the harbor was dredged and the wreck pulled up and sold for scrap iron, the rotation stopped within a season, exactly as the chart had predicted it might. The sandbanks settled into a new and permanent shape, the channel became safe for the larger steamers, and the town grew rich enough to commission a statue of the cartographer holding a willow stake. ${AMBIG_SENTENCE}`,
   "The statue's plaque quotes her only surviving remark about the work: the sea keeps perfect records, she said, but files them under a language nobody reads twice the same way. Surveyors still leave a pencil stub at her pedestal before long commissions, and the eel fisherman's great-granddaughter still works the channel at dawn, reading ripples her grandmother taught her grandmother to read.",
 ];
 
@@ -88,6 +107,48 @@ const ANCHOR = confidentHighlightOn(ARTICLE, {
   start: Math.floor(graphemeLength(ARTICLE) * 0.6),
 });
 const HIGHLIGHT_ROW = highlightRow(ARTICLE_ID, ANCHOR, HIGHLIGHT_ID);
+
+// Plan 21-03 (POLISH-10 / D21-06) — the glyph-proof corpus additions.
+// AMBIGUOUS: the duplicated sentence with wildcard (empty) context;
+// seed-time verification through the SHIPPED resolver (the tri-state.spec.ts
+// module-load guard shape — the corpus is only usable if this actually
+// classifies ambiguous). ORPHAN: a valid row whose articleId joins nothing
+// (the ghost article never exists), landing in the never-drop tail.
+const AMBIG_QUOTE = { prefix: "", exact: AMBIG_SENTENCE, suffix: "" };
+const AMBIG_POSITION = {
+  start: 120,
+  end: 120 + AMBIG_SENTENCE.length,
+};
+if (resolveQuoteSelector(ARTICLE, AMBIG_QUOTE, AMBIG_POSITION) !== "ambiguous") {
+  throw new Error(
+    "corpus invariant: the duplicated sentence must resolve ambiguous",
+  );
+}
+if (ANCHOR.quote.exact === AMBIG_SENTENCE) {
+  throw new Error(
+    "corpus invariant: the confident anchor must not sit on the ambiguous sentence",
+  );
+}
+const ANCHOR_AMBIG = { position: AMBIG_POSITION, quote: AMBIG_QUOTE };
+const ANCHOR_GHOST = confidentHighlightOn(ARTICLE, { start: 96 });
+const EXCERPT_GHOST = ANCHOR_GHOST.quote.exact;
+
+// Explicit createdAts keep the CONFIDENT row (default 08-15) the section's
+// NEWEST entry, so the default Date sort renders it first — the 10-06 loop's
+// /^Go to highlight:/.first() stays the confident row with the corpus grown.
+const HIGHLIGHT_ROW_AMBIG = {
+  ...highlightRow(ARTICLE_ID, ANCHOR_AMBIG, "hl-jump-ambiguous"),
+  createdAt: "2026-08-14T00:00:00.000Z",
+};
+const HIGHLIGHT_ROW_ORPHAN = {
+  ...highlightRow("ghost-article", ANCHOR_GHOST, "hl-jump-orphan"),
+  createdAt: "2026-08-13T00:00:00.000Z",
+};
+const HIGHLIGHT_ROWS = [
+  HIGHLIGHT_ROW,
+  HIGHLIGHT_ROW_AMBIG,
+  HIGHLIGHT_ROW_ORPHAN,
+];
 
 // The persisted scrolling preference (the Plan 04-06 Task 5 seed shape —
 // ReaderSettingsSchema-valid, readingMode "scrolling"). Seeding this row
@@ -138,7 +199,7 @@ async function seedCorpus(
   ).toBeVisible();
   await seedRows(page, {
     articles: [ARTICLE],
-    highlights: [HIGHLIGHT_ROW],
+    highlights: HIGHLIGHT_ROWS,
     ...(extra.settings ? { settings: extra.settings } : {}),
   });
 }
@@ -369,5 +430,58 @@ test.describe("RECV-01.c review-panel jump bidirectional (10-06 click-from-row l
     // on #/highlights. The in-loop proof is strictly stronger: it pins the
     // renderer the loop actually ran under, not a chrome label copy.
     await exerciseRowClickLoop(page, true);
+  });
+});
+
+test.describe("POLISH-10 (D21-06) glyph visibility — jump affordance on exactly the jump-capable rows", () => {
+  test("confident row carries the visible glyph + template name; ambiguous/orphan rows carry none and keep their disabled shape", async ({
+    page,
+  }) => {
+    await seedCorpus(page);
+    await page.goto(`${BASE}/#/highlights`);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Highlights" }),
+    ).toBeVisible();
+
+    // The CONFIDENT row: still located by role + the Go-to-highlight name
+    // template (the glyph is decorative — aria-hidden — so the accessible
+    // name is byte-stable)…
+    const confidentRow = page.getByRole("button", {
+      name: /^Go to highlight: /,
+    }).first();
+    await expect(confidentRow).toBeVisible();
+    await expect(confidentRow).toBeEnabled();
+    // …and it contains exactly one VISIBLE open-in-reader glyph (svg
+    // descendant of the row button).
+    const glyph = confidentRow.locator("svg.review-jump-glyph");
+    await expect(glyph).toHaveCount(1);
+    await expect(glyph).toBeVisible();
+
+    // The AMBIGUOUS row: disabled + aria-disabled byte-stable (D10-03) and
+    // NO glyph (unresolved rows never render the affordance).
+    const ambiguousRow = page.locator("button.review-row", {
+      hasText: AMBIG_SENTENCE,
+    });
+    await expect(ambiguousRow).toHaveCount(1);
+    await expect(ambiguousRow).toBeDisabled();
+    await expect(ambiguousRow).toHaveAttribute("aria-disabled", "true");
+    await expect(
+      ambiguousRow.locator("svg.review-jump-glyph"),
+    ).toHaveCount(0);
+
+    // The ORPHAN-TAIL row: a static div (no button in the orphan section,
+    // the tri-state shape) and NO glyph (no destination to signal).
+    const orphanSection = page.locator("section.review-section-orphan");
+    await expect(orphanSection).toBeVisible();
+    await expect(
+      orphanSection.locator("button.review-row"),
+    ).toHaveCount(0);
+    const orphanRow = orphanSection.locator(".review-row", {
+      hasText: EXCERPT_GHOST,
+    });
+    await expect(orphanRow).toBeVisible();
+    await expect(
+      orphanRow.locator("svg.review-jump-glyph"),
+    ).toHaveCount(0);
   });
 });
