@@ -1961,9 +1961,13 @@ dialog.highlight-popover::backdrop {
    240px viewport-keep behaviorally proven). inset: auto kills the UA
    popover insets (the MDN author-vs-UA popover conflict note); the old
    header-anchored top/inset-inline-end declarations are DELETED, not
-   zeroed — author insets fight position-area resolution. Zero motion
-   properties by design (A11Y-06 — static repositioning only; the global
-   reduced-motion gate stays trivially satisfied). */
+   zeroed — author insets fight position-area resolution. box-sizing:
+   border-box makes the width cap govern the OUTER box (content-box caps
+   only the content, so 2×--space-md padding + 2px border pushed the
+   rendered box to 100vw+2px at narrow widths — unfittable by any
+   fallback; probe-found 2026-09-01, all three engines agree with the
+   fix). Zero motion properties by design (A11Y-06 — static repositioning
+   only; the global reduced-motion gate stays trivially satisfied). */
 .tag-popover {
   position: fixed;
   position-anchor: --tags-trigger;
@@ -1975,6 +1979,7 @@ dialog.highlight-popover::backdrop {
   background: var(--surface-raised);
   border: 1px solid var(--hairline);
   border-radius: 4px;
+  box-sizing: border-box;
   width: min(420px, calc(100vw - 2 * var(--space-md)));
 }
 

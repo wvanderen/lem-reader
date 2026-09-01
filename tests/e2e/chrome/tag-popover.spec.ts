@@ -191,10 +191,11 @@ test.describe("tag popover (13-10 — G5)", () => {
 
     // Light-dismiss: click the article surface outside the popover → the
     // popover hides, focus rests on the trigger, aria-expanded flips false.
-    // The point is computed from the popover's box: the fixed top-right
-    // popover overlays the article top at this viewport (its .tag-entry
-    // subtree intercepts the h1's top-left), so a hardcoded element offset
-    // is not a stable outside point.
+    // The point is computed from the popover's box (D21-05: the popover is
+    // now trigger-anchored, not header-corner-fixed, but the same rule
+    // holds — the anchored popover overlays article content near the
+    // header at this viewport), so a hardcoded element offset is not a
+    // stable outside point.
     const popBox = await page.locator(".tag-popover").boundingBox();
     expect(popBox, "popover box measurable before light-dismiss").toBeTruthy();
     const vp = page.viewportSize() ?? { width: 1280, height: 720 };
