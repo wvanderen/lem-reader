@@ -4,9 +4,9 @@ milestone: v2.1
 milestone_name: Reader Experience
 current_phase: 21
 current_phase_name: Integrated Refinement and Acceptance
-status: verifying
-stopped_at: Phase 21 context gathered
-last_updated: "2026-09-01T00:21:35.018Z"
+status: executing
+stopped_at: Phase 21 UI-SPEC approved
+last_updated: "2026-09-01T04:49:42.687Z"
 last_activity: 2026-08-31
 last_activity_desc: Phase 20 complete, transitioned to Phase 21
 progress:
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-08-30)
 
 Phase: 21 — Integrated Refinement and Acceptance
 Plan: Not started
-Status: Phase complete — ready for verification
+Status: Ready to execute
 Last activity: 2026-08-31 — Phase 20 complete, transitioned to Phase 21
 
 ## Recent Decisions (Phase 18)
@@ -518,9 +518,9 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-09-01T00:21:35.006Z
-Stopped at: Phase 21 context gathered
-Resume file: .planning/phases/21-integrated-refinement-and-acceptance/21-CONTEXT.md
+Last session: 2026-09-01T01:30:16.548Z
+Stopped at: Phase 21 UI-SPEC approved
+Resume file: .planning/phases/21-integrated-refinement-and-acceptance/21-UI-SPEC.md
 
 ## Operator Next Steps
 
