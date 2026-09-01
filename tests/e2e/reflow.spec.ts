@@ -5,6 +5,13 @@
 // and all five fieldsets + Reset + close remain operable at this size.
 import { test, expect } from "@playwright/test";
 import { assertEdgeInvariant } from "./_edge-invariant";
+// Plan 21-06 (D21-14 / ACPT-08) — the four-destination matrix cells below
+// (additive import; the cells are additive to the reader cells above).
+import {
+  DESTINATIONS,
+  assertDestinationInvariant,
+  openEdgeDestination,
+} from "./_edge-invariant";
 import { FIXTURES, wipeDatabase, openArticle } from "./annotations/_fixtures";
 // Plan 16-04 — the shared dialog-opening helper (the dialog-open reflow
 // case below; ADD-04 geometry proof).
@@ -174,6 +181,29 @@ test.describe("Reflow at 320px (A11Y-04)", () => {
       await openArticle(page, fixture);
       await assertEdgeInvariant(page, {
         fixture,
+        condition: "reflow-320",
+      });
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Plan 21-06 (D21-14 / ACPT-08): destination cells. The four-destination
+  // matrix extends this spec's 320 CSS px WCAG 1.4.10 reflow target to
+  // Library, the open Add dialog, and Highlights via the shared destination
+  // machinery (assertDestinationInvariant — the destination-neutral (b)
+  // required functions + (c) no-overflow clauses, where (c) is this spec's
+  // OWN origin clause applied to body + main#main; the (a) article clause
+  // stays reader-scoped in the corpus cells above). The Add-dialog geometry
+  // at 320px (dialog box within viewport + overflow:auto + operability)
+  // stays owned by the ADD-04 cell above. Strengthen-only — additive cells;
+  // the reader corpus cells above stay byte-stable (D6-12).
+  for (const destination of DESTINATIONS) {
+    test(`destination invariant holds at 320px reflow @ ${destination} (D21-14)`, async ({
+      page,
+    }) => {
+      await openEdgeDestination(page, destination);
+      await assertDestinationInvariant(page, {
+        destination,
         condition: "reflow-320",
       });
     });

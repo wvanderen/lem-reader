@@ -32,6 +32,13 @@ import { FIXTURES, wipeDatabase, openArticle } from "./annotations/_fixtures";
 // Plan 16-04 — the shared dialog-opening helper (the dialog-open 400%
 // zoom case below; ADD-04 geometry proof).
 import { openAddDialog, pickSource } from "./library/add-dialog";
+// Plan 21-06 (D21-14 / ACPT-08) — the four-destination matrix cells below
+// (additive import; the cells are additive to the reader cells above).
+import {
+  DESTINATIONS,
+  assertDestinationInvariant,
+  openEdgeDestination,
+} from "./_edge-invariant";
 
 // 320 CSS px is the WCAG 1.4.10 reflow breakpoint; 800px height gives the
 // pinned paginated-surface + any full-height sheet room to lay out.
@@ -214,3 +221,26 @@ test("Add dialog at 400% zoom + 320px reflow: no overflow at 320px; dialog survi
     .fill("https://example.com/high-zoom-4x");
   await expect(page.getByRole("button", { name: /^add$/i })).toBeEnabled();
 });
+
+// ── Plan 21-06 (D21-14 / ACPT-08): destination cells ────────────────────────
+// The four-destination matrix extends this spec's LOAD-BEARING 320 CSS px
+// reflow condition (the beforeEach viewport — setViewportSize is the
+// cross-engine mechanism per the header comment) to Library, the open Add
+// dialog, and Highlights via the shared destination machinery
+// (assertDestinationInvariant — the destination-neutral (b) required
+// functions + (c) no-overflow clauses; the (a) article clause stays
+// reader-scoped in the corpus cells above). The SECONDARY 400% CSS-zoom
+// survival pass stays owned by the cells above (reader corpus + the open
+// Add dialog). Strengthen-only — additive cells; the reader corpus cells
+// above stay byte-stable (D6-12).
+for (const destination of DESTINATIONS) {
+  test(`destination invariant holds at high-zoom 320px reflow @ ${destination} (D21-14)`, async ({
+    page,
+  }) => {
+    await openEdgeDestination(page, destination);
+    await assertDestinationInvariant(page, {
+      destination,
+      condition: ZOOM_LABEL,
+    });
+  });
+}

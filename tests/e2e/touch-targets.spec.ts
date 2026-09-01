@@ -7,6 +7,14 @@
 // are also asserted.
 import { test, expect } from "@playwright/test";
 import { assertEdgeInvariant } from "./_edge-invariant";
+// Plan 21-06 (D21-14 / ACPT-08) — the four-destination matrix cells below
+// (additive import; the cells are additive to the reader cells above).
+import {
+  DESTINATIONS,
+  assertDestinationInvariant,
+  openEdgeDestination,
+  type EdgeDestination,
+} from "./_edge-invariant";
 import { FIXTURES, wipeDatabase, openArticle } from "./annotations/_fixtures";
 
 const BASE = "http://localhost:5173";
@@ -143,6 +151,143 @@ test.describe("Touch targets ≥ 44×44px (A11Y-07)", () => {
         fixture,
         condition: "touch-targets",
       });
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Plan 21-06 (D21-14 / ACPT-08): destination cells. The four-destination
+  // matrix extends this spec's A11Y-07 target-size contract to Library,
+  // the open Add dialog, and Highlights: the shared invariant
+  // (assertDestinationInvariant — (b) required functions + (c) no overflow)
+  // PLUS this spec's own idiom — every canonical destination control's
+  // bounding box meets the 44px --touch minimum. Height is the load-
+  // bearing assertion (min-height: var(--touch) in app.css — the ranges
+  // precedent above); width is additionally asserted where it is
+  // structurally guaranteed (full-width rows / inline-flex buttons with
+  // padding-inline: var(--space-md)). The Add-dialog radio hit area is the
+  // label row (.add-source-row), never the 13px input — the panel radio
+  // precedent above. Strengthen-only — additive cells; the reader corpus
+  // cells above stay byte-stable (D6-12).
+  const MEASURED: Record<
+    EdgeDestination,
+    Array<{ desc: string; locator: (page: import("@playwright/test").Page) => import("@playwright/test").Locator; width?: boolean }>
+  > = {
+    library: [
+      {
+        desc: "Add to Library trigger",
+        locator: (page) => page.getByRole("button", { name: "Add to Library" }),
+        width: true,
+      },
+      {
+        desc: "All view link",
+        locator: (page) => page.getByRole("link", { name: /^All \(\d+\)$/ }),
+      },
+      {
+        desc: "library searchbox",
+        locator: (page) =>
+          page.getByRole("searchbox", { name: "Search your library" }),
+      },
+      {
+        desc: "tag filter chip",
+        locator: (page) => page.locator(".tag-filter .tag-chip").first(),
+        width: true,
+      },
+      {
+        desc: "shell-nav Library link",
+        locator: (page) =>
+          page
+            .getByRole("navigation", { name: "Primary" })
+            .getByRole("link", { name: "Library" }),
+      },
+      {
+        desc: "shell-nav Highlights link",
+        locator: (page) =>
+          page
+            .getByRole("navigation", { name: "Primary" })
+            .getByRole("link", { name: "Highlights" }),
+      },
+    ],
+    highlights: [
+      {
+        desc: "article filter combobox",
+        locator: (page) => page.getByRole("combobox", { name: "Article" }),
+      },
+      {
+        desc: "anchor-confidence filter combobox",
+        locator: (page) =>
+          page.getByRole("combobox", { name: "Anchor confidence" }),
+      },
+      {
+        desc: "sort select",
+        locator: (page) => page.getByRole("combobox", { name: "Sort" }),
+      },
+      {
+        desc: "row jump button",
+        locator: (page) =>
+          page.getByRole("button", { name: /^Go to highlight:/ }).first(),
+        width: true,
+      },
+    ],
+    "add-dialog": [
+      {
+        desc: "Web address radio label row",
+        locator: (page) =>
+          page.locator("label.add-source-row", { hasText: "Web address" }),
+        width: true,
+      },
+      {
+        desc: "Paste text radio label row",
+        locator: (page) =>
+          page.locator("label.add-source-row", { hasText: "Paste text" }),
+        width: true,
+      },
+      {
+        desc: "Upload file radio label row",
+        locator: (page) =>
+          page.locator("label.add-source-row", { hasText: "Upload file" }),
+        width: true,
+      },
+      {
+        desc: "Cancel button",
+        locator: (page) =>
+          page.getByRole("button", { name: "Cancel", exact: true }),
+        width: true,
+      },
+    ],
+  };
+
+  for (const destination of DESTINATIONS) {
+    test(`destination invariant + 44px touch targets hold @ ${destination} (D21-14)`, async ({
+      page,
+    }) => {
+      await openEdgeDestination(page, destination);
+      await assertDestinationInvariant(page, {
+        destination,
+        condition: "touch-targets",
+      });
+
+      // The A11Y-07 measurement at the destination — this spec's own
+      // idiom (failures collected, then one assertion names them all).
+      // Sub-pixel tolerance: getBoundingClientRect can report the token
+      // minus a rendering fraction (firefox measured 43.99999px on an
+      // exactly-44px min-height row) — the 21-02 sub-pixel-precise
+      // readBoxes discipline tolerates ±0.5px; the existing cells above
+      // keep their exact bar byte-stable.
+      const SUB_PIXEL = 0.5;
+      const failures: string[] = [];
+      for (const { desc, locator, width } of MEASURED[destination]) {
+        const b = await bbox(locator(page));
+        if (b.height < MIN - SUB_PIXEL) {
+          failures.push(`${desc}: height ${b.height}px < ${MIN}px`);
+        }
+        if (width && b.width < MIN - SUB_PIXEL) {
+          failures.push(`${desc}: width ${b.width}px < ${MIN}px`);
+        }
+      }
+      expect(
+        failures,
+        `destination controls failing the 44×44px touch-target contract on ${destination}:\n${failures.join("\n")}`,
+      ).toEqual([]);
     });
   }
 });

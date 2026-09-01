@@ -6,6 +6,13 @@
 // test guards against a regression that adds a transition.
 import { test, expect } from "@playwright/test";
 import { assertEdgeInvariant } from "./_edge-invariant";
+// Plan 21-06 (D21-14 / ACPT-08) — the four-destination matrix cells below
+// (additive import; the cells are additive to the reader cells above).
+import {
+  DESTINATIONS,
+  assertDestinationInvariant,
+  openEdgeDestination,
+} from "./_edge-invariant";
 import { FIXTURES, wipeDatabase, openArticle } from "./annotations/_fixtures";
 import {
   confidentHighlightOn,
@@ -189,6 +196,28 @@ test.describe("Reduced motion (A11Y-06)", () => {
       await openArticle(page, fixture);
       await assertEdgeInvariant(page, {
         fixture,
+        condition: "reduced-motion",
+      });
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Plan 21-06 (D21-14 / ACPT-08): destination cells. The four-destination
+  // matrix extends this spec's reduced-motion emulation to Library, the
+  // open Add dialog, and Highlights via the shared destination machinery
+  // (assertDestinationInvariant — the destination-neutral (b) required
+  // functions + (c) no-overflow clauses; the (a) article clause stays
+  // reader-scoped in the corpus cells above). The reduced-motion substrate
+  // itself (zero transition/animation under the gate) is asserted by the
+  // cells above + the RECV-01.i review-panel cell. Strengthen-only —
+  // additive cells; the reader corpus cells above stay byte-stable (D6-12).
+  for (const destination of DESTINATIONS) {
+    test(`destination invariant holds under reduced-motion @ ${destination} (D21-14)`, async ({
+      page,
+    }) => {
+      await openEdgeDestination(page, destination);
+      await assertDestinationInvariant(page, {
+        destination,
         condition: "reduced-motion",
       });
     });

@@ -251,3 +251,125 @@ test.describe("Review panel keyboard reachability (RECV-01.i)", () => {
     ).toBeVisible();
   });
 });
+
+// ───────────────────────────────────────────────────────────────────────
+// Plan 21-06 (D21-14 / ACPT-08): the four-destination keyboard arm. The
+// settings-panel trap + the RECV-01.i review-panel Tab walk above own
+// their substrates; these cells extend the keyboard bar to the remaining
+// destination surfaces — Esc + focus-restore on the open Add dialog (the
+// ADD-04 substrate re-asserted in this spec's own idiom) and the
+// Highlights surface's Esc calm-no-op + keyboard operability. Engine
+// focus divergence asserted honestly per engine (D18-04): both cells open
+// via focus+Enter so the webkit click-focus quirk cannot mask a restore
+// (the focused-add precedent), and neither cell walks Tab — the webkit
+// selects-only Tab divergence stays the RECV-01.i cell's contract above.
+test.describe("Destination keyboard arm (ACPT-08 — D21-14)", () => {
+  test("Add dialog: keyboard open → focus inside → Escape closes → focus restores to the trigger", async ({
+    page,
+  }) => {
+    await wipeDatabase(page);
+    await page.goto(`${BASE}/#/`);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Saved articles" }),
+    ).toBeVisible();
+
+    // Keyboard-open from a predictable starting point (the panel-keyboard
+    // precedent): focus the trigger, activate with Enter.
+    const trigger = page.getByRole("button", { name: "Add to Library" });
+    await trigger.focus();
+    await expect(trigger).toBeFocused();
+    await page.keyboard.press("Enter");
+
+    const dlg = page.locator("dialog.add-dialog");
+    await expect(dlg).toBeVisible();
+    // Focus moved INTO the dialog on open — the [data-initial-focus]
+    // Web-address radio (the 02-01 webkit no-auto-focus lesson; asserted
+    // on every engine).
+    await expect(
+      page.getByRole("radio", { name: "Web address" }),
+    ).toBeFocused();
+
+    // Escape closes the dialog…
+    await page.keyboard.press("Escape");
+    await expect(dlg).not.toBeVisible();
+    // …and focus RESTORES to the trigger (the close-listener
+    // triggerRef.current?.focus() — showModal does NOT auto-restore; the
+    // Pitfall 1 contract, cloned for the add surface).
+    await expect(trigger).toBeFocused();
+  });
+
+  test("Highlights: Escape is a calm no-op (no hijack, no focus loss); row Enter jumps to the article", async ({
+    page,
+  }) => {
+    const TITLE = "The Night Cartographer's Notes";
+    await wipeDatabase(page);
+    // Re-mount so Dexie re-declares its schema before seeding (10-03 fix),
+    // then wait for the composite list's readiness sentinel.
+    await page.goto(`${BASE}/#/`);
+    await page.reload();
+    await expect(
+      page.getByRole("heading", { name: "Saved articles" }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("The looting of science fiction").first(),
+    ).toBeVisible();
+    const article = makeArticle({
+      id: "kb-dest-review",
+      title: TITLE,
+      paragraphs: [
+        "The night cartographer drew only what she could hear, which is why the eastern districts are a series of small confident circles and the harbor is one long unbroken shrug.",
+        "Her notes explain that bells map themselves, that dogs are unreliable landmarks, and that a streetlamp argues with its neighbors in a dialect of flickers no daylight surveyor has ever recorded.",
+      ],
+    });
+    const anchor = confidentHighlightOn(article);
+    await seedRows(page, {
+      articles: [article],
+      highlights: [highlightRow("kb-dest-review", anchor, "hl-kb-dest-1")],
+    });
+    // Navigate via the REAL shell-nav link (never a bare deep link).
+    await page
+      .getByRole("navigation", { name: "Primary" })
+      .getByRole("link", { name: "Highlights" })
+      .click();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Highlights" }),
+    ).toBeVisible();
+
+    // Highlights is a plain route — no modal, so Esc has NO close target
+    // here. The honest contract (the D18-04 two-target lesson, inverted):
+    // Esc must be a CALM NO-OP — focus stays on the focused control, the
+    // route does not change, no page-wide Esc hijack.
+    const articleFilter = page.locator("#review-article-filter");
+    await articleFilter.focus();
+    await expect(articleFilter).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(
+      articleFilter,
+      "focus must stay on the article filter after Escape",
+    ).toBeFocused();
+    await expect(page).toHaveURL(/#\/highlights$/);
+
+    const rowButton = page
+      .getByRole("button", { name: /^Go to highlight:/ })
+      .first();
+    await rowButton.focus();
+    await expect(rowButton).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(
+      rowButton,
+      "focus must stay on the row button after Escape",
+    ).toBeFocused();
+    await expect(page).toHaveURL(/#\/highlights$/);
+
+    // Full keyboard operability: Enter on the focused row button jumps to
+    // the article (the row's whole purpose), then Back returns.
+    await page.keyboard.press("Enter");
+    await expect(
+      page.getByRole("heading", { level: 1, name: TITLE }),
+    ).toBeVisible();
+    await page.goBack();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Highlights" }),
+    ).toBeVisible();
+  });
+});

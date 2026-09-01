@@ -6,6 +6,13 @@
 // Chromium/Firefox/WebKit (forced-colors emulation is supported in all three).
 import { test, expect } from "@playwright/test";
 import { assertEdgeInvariant } from "./_edge-invariant";
+// Plan 21-06 (D21-14 / ACPT-08) — the four-destination matrix cells below
+// (additive import; the cells are additive to the reader cells above).
+import {
+  DESTINATIONS,
+  assertDestinationInvariant,
+  openEdgeDestination,
+} from "./_edge-invariant";
 import { FIXTURES, wipeDatabase, openArticle } from "./annotations/_fixtures";
 import {
   confidentHighlightOn,
@@ -254,6 +261,26 @@ test.describe("Forced colors (A11Y-05)", () => {
       await openArticle(page, fixture);
       await assertEdgeInvariant(page, {
         fixture,
+        condition: "forced-colors",
+      });
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Plan 21-06 (D21-14 / ACPT-08): destination cells. The four-destination
+  // matrix extends this spec's forced-colors emulation to Library, the
+  // open Add dialog, and Highlights via the shared destination machinery
+  // (assertDestinationInvariant — the destination-neutral (b) required
+  // functions + (c) no-overflow clauses; the (a) article clause stays
+  // reader-scoped in the corpus cells above). Strengthen-only — additive
+  // cells; the reader corpus cells above stay byte-stable (D6-12).
+  for (const destination of DESTINATIONS) {
+    test(`destination invariant holds under forced-colors @ ${destination} (D21-14)`, async ({
+      page,
+    }) => {
+      await openEdgeDestination(page, destination);
+      await assertDestinationInvariant(page, {
+        destination,
         condition: "forced-colors",
       });
     });

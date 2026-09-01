@@ -27,8 +27,18 @@
 // 1.4.10 contract: body + article-body scrollWidth ≤ clientWidth + 1px sub-
 // pixel tolerance). reflow.spec.ts is the ORIGIN of the (c) clause; Plan 06-05
 // points reflow.spec.ts at this helper so it consumes (a)/(b) too.
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { expect } from "@playwright/test";
+// Plan 21-06 (D21-14) — the destination-cell machinery below composes the
+// shipped seeding/navigation helpers (REUSE-DO-NOT-FORK): the two-context
+// portability seeding primitives + the shared Add-dialog driver.
+import { openAddDialog } from "./library/add-dialog";
+import {
+  confidentHighlightOn,
+  highlightRow,
+  makeArticle,
+  seedRows,
+} from "./portability/_portability";
 
 // Re-export the reusable harness so every edge spec imports from ONE place
 // (mirrors annotations/_fixtures.ts re-exporting FIXTURES). These are the
@@ -188,4 +198,283 @@ export async function assertEdgeInvariant(
     (sampleAfter ?? "").length,
     `${label}: first visible block lost text after mode toggle`,
   ).toBeGreaterThan(0);
+}
+
+// ───────────────────────────────────────────────────────────────────────
+// Plan 21-06 (D21-14 / ACPT-08): the four-destination matrix arms.
+//
+// assertEdgeInvariant above stays the READER cell owner — its (a) clause
+// (full content reachable via keyboard in BOTH reading modes) is article-
+// scoped by construction. The NON-reader destinations (Library, Highlights,
+// Add dialog) get assertDestinationInvariant below, which asserts the
+// destination-NEUTRAL clauses of the same D6-09 bar:
+//   (b) required functions reachable — each destination's canonical
+//       controls are present and visible (all are native focusable
+//       controls; deep keyboard traversal is exercised by
+//       panel-keyboard.spec.ts + focused-add.spec.ts);
+//   (c) no layout overflow clips or overlaps content — body + main#main
+//       (the non-reader content container; the .article-body variant is
+//       reader-scoped inside assertEdgeInvariant).
+// Research Open Question 2 (21-RESEARCH.md, adopted): one destination-
+// agnostic wrapper asserting (b)+(c) at every destination, (a) stays
+// reader-scoped — least new surface, strengthen-only trivially satisfied.
+// ONE helper file owns the invariant — extended, never forked (D6-09).
+
+/** The non-reader destinations every edge spec's destination cells cover. */
+export type EdgeDestination = "library" | "highlights" | "add-dialog";
+
+/** The destination list edge specs iterate for their destination cells. */
+export const DESTINATIONS: readonly EdgeDestination[] = [
+  "library",
+  "highlights",
+  "add-dialog",
+];
+
+/**
+ * Navigate to a non-reader destination through the REAL UI and settle it,
+ * seeding through the existing harness discipline (wipeDatabase ran in the
+ * spec's beforeEach; the reload re-mounts so Dexie re-declares its schema
+ * against the just-deleted DB before seeding — the 10-03 fix, mirrored from
+ * the forced-colors/reduced-motion RECV-01.i cells).
+ *
+ *  - "library": the #/ surface with one seeded TAGGED article, so the
+ *    destination genuinely covers list + views/filters (the tag-filter
+ *    chips render only when tags exist — TagFilter returns null on an
+ *    empty tag set).
+ *  - "highlights": one seeded confident highlight (article + row), then the
+ *    shell-nav "Highlights" link (the real navigation path — never a bare
+ *    deep link).
+ *  - "add-dialog": the library surface, then the "Add to Library" trigger
+ *    via the shared idempotent openAddDialog helper (16-03).
+ */
+export async function openEdgeDestination(
+  page: Page,
+  destination: EdgeDestination,
+): Promise<void> {
+  // wipeDatabase's own goto left the app mounted against the deleted DB —
+  // reload so Dexie re-declares the schema before any seeding (10-03).
+  await page.reload();
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Saved articles" }),
+  ).toBeVisible();
+  // Library readiness gate before seeding (the RECV-01.i discipline): the
+  // composite list must have actually loaded its rows — the first bundled
+  // fixture's title is the deterministic sentinel.
+  await expect(
+    page.getByText("The looting of science fiction").first(),
+  ).toBeVisible();
+
+  if (destination === "library") {
+    const article = makeArticle({
+      id: "edge-dest-library",
+      title: "The Harbor Master's Ledger",
+      paragraphs: [
+        "The harbor master kept one ledger for the boats and one for the weather, and the pilots' favorite game was guessing which column a fog would be filed under.",
+        "She maintained the game was rigged: the weather never signed anything, so every entry in its column was hearsay, and hearsay does not sink.",
+      ],
+    });
+    await seedRows(page, {
+      articles: [{ ...article, tags: ["edge-matrix"] }],
+    });
+    // LibraryView's load effect runs ONCE per mount — reload so the seeded
+    // row joins the composite list (the 08-05 openLibrary discipline:
+    // page.reload() forces the remount after a Dexie seed).
+    await page.reload();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Saved articles" }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("The Harbor Master's Ledger").first(),
+    ).toBeVisible();
+    return;
+  }
+
+  if (destination === "highlights") {
+    const article = makeArticle({
+      id: "edge-dest-review",
+      title: "The Night Cartographer's Notes",
+      paragraphs: [
+        "The night cartographer drew only what she could hear, which is why the eastern districts are a series of small confident circles and the harbor is one long unbroken shrug.",
+        "Her notes explain that bells map themselves, that dogs are unreliable landmarks, and that a streetlamp argues with its neighbors in a dialect of flickers no daylight surveyor has ever recorded.",
+      ],
+    });
+    const anchor = confidentHighlightOn(article);
+    await seedRows(page, {
+      articles: [article],
+      highlights: [
+        highlightRow("edge-dest-review", anchor, "hl-edge-dest-review-1"),
+      ],
+    });
+    await page
+      .getByRole("navigation", { name: "Primary" })
+      .getByRole("link", { name: "Highlights" })
+      .click();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Highlights" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /^Go to highlight:/ }).first(),
+    ).toBeVisible();
+    return;
+  }
+
+  // "add-dialog" — the shared idempotent trigger click (16-03); the dialog
+  // always opens on Web address (D16-08).
+  await openAddDialog(page);
+}
+
+/** Arguments to {@link assertDestinationInvariant}. */
+export interface DestinationInvariantOptions {
+  /** The non-reader destination under test (used in assertion messages). */
+  destination: EdgeDestination;
+  /** The edge-condition label, e.g. "forced-colors" (used in messages). */
+  condition: string;
+}
+
+/**
+ * Assert the destination-neutral clauses of the shared D6-09 invariant on
+ * the current page (Plan 21-06, D21-14): (b) the destination's canonical
+ * required functions are reachable + (c) no layout overflow clips content.
+ *
+ * MUST be called AFTER openEdgeDestination (or equivalent real-UI
+ * navigation) settled the destination. Clause (a) — full article content
+ * reachable in both reading modes — is reader-scoped and stays owned by
+ * assertEdgeInvariant; it is deliberately NOT asserted here.
+ */
+export async function assertDestinationInvariant(
+  page: Page,
+  { destination, condition }: DestinationInvariantOptions,
+): Promise<void> {
+  const label = `${condition} ${destination}`;
+
+  // Destination identity sentinel — prove the wrapper is asserting on the
+  // intended destination before clause (b) means anything.
+  const required: Array<{ desc: string; locator: Locator }> = [];
+  if (destination === "library") {
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Saved articles" }),
+      `${label}: library h1 missing`,
+    ).toBeVisible();
+    required.push(
+      {
+        desc: "Add to Library trigger",
+        locator: page.getByRole("button", { name: "Add to Library" }),
+      },
+      {
+        desc: "Library views navigation",
+        locator: page.getByRole("navigation", { name: "Library views" }),
+      },
+      {
+        desc: "All view link",
+        // The view-switcher links carry live counts ("All (9)") — match by
+        // counted-name regex, never exact strings (the 21-05 lesson).
+        locator: page.getByRole("link", { name: /^All \(\d+\)$/ }),
+      },
+      {
+        desc: "library searchbox",
+        locator: page.getByRole("searchbox", {
+          name: "Search your library",
+        }),
+      },
+      {
+        desc: "tag filter chip",
+        locator: page.locator(".tag-filter .tag-chip").first(),
+      },
+      {
+        desc: "shell-nav Highlights link",
+        locator: page
+          .getByRole("navigation", { name: "Primary" })
+          .getByRole("link", { name: "Highlights" }),
+      },
+    );
+  } else if (destination === "highlights") {
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Highlights" }),
+      `${label}: highlights h1 missing`,
+    ).toBeVisible();
+    required.push(
+      {
+        desc: "article filter combobox",
+        locator: page.getByRole("combobox", { name: "Article" }),
+      },
+      {
+        desc: "anchor-confidence filter combobox",
+        locator: page.getByRole("combobox", { name: "Anchor confidence" }),
+      },
+      {
+        desc: "sort select",
+        locator: page.getByRole("combobox", { name: "Sort" }),
+      },
+      {
+        desc: "row jump button",
+        locator: page
+          .getByRole("button", { name: /^Go to highlight:/ })
+          .first(),
+      },
+      {
+        desc: "shell-nav Library link",
+        locator: page
+          .getByRole("navigation", { name: "Primary" })
+          .getByRole("link", { name: "Library" }),
+      },
+    );
+  } else {
+    const dlg = page.locator("dialog.add-dialog");
+    await expect(dlg, `${label}: add dialog not open`).toBeVisible();
+    required.push(
+      {
+        desc: "Web address radio",
+        locator: page.getByRole("radio", { name: "Web address" }),
+      },
+      {
+        desc: "Paste text radio",
+        locator: page.getByRole("radio", { name: "Paste text" }),
+      },
+      {
+        desc: "Upload file radio",
+        locator: page.getByRole("radio", { name: "Upload file" }),
+      },
+      {
+        desc: "Cancel button",
+        locator: page.getByRole("button", { name: "Cancel", exact: true }),
+      },
+    );
+  }
+
+  // (b) Required functions reachable — every canonical control is present
+  // and visible (native focusable controls; A11Y-01/02 substrate).
+  for (const { desc, locator } of required) {
+    await expect(
+      locator,
+      `${label}: required function unreachable — ${desc}`,
+    ).toBeVisible();
+  }
+
+  // (c) No layout overflow clips or overlaps content — the WCAG 1.4.10
+  // contract lifted from the reader clause, scoped to the destination's
+  // content containers: body + main#main (the .article-body variant is
+  // reader-scoped inside assertEdgeInvariant). Null-tolerant on main the
+  // same way the reader clause is on article.
+  const overflow = await page.evaluate(() => {
+    const main = document.querySelector("main#main");
+    return {
+      body: {
+        scrollW: document.body.scrollWidth,
+        clientW: document.body.clientWidth,
+      },
+      main: main
+        ? { scrollW: main.scrollWidth, clientW: main.clientWidth }
+        : null,
+    };
+  });
+  expect(
+    overflow.body.scrollW,
+    `${label}: body horizontal overflow (scrollW ${overflow.body.scrollW} > clientW ${overflow.body.clientW})`,
+  ).toBeLessThanOrEqual(overflow.body.clientW + 1);
+  if (overflow.main) {
+    expect(
+      overflow.main.scrollW,
+      `${label}: main#main horizontal overflow (scrollW ${overflow.main.scrollW} > clientW ${overflow.main.clientW})`,
+    ).toBeLessThanOrEqual(overflow.main.clientW + 1);
+  }
 }

@@ -3112,6 +3112,15 @@ dialog.import-preview::backdrop {
 }
 .review-select {
   min-height: var(--touch);
+  /* Plan 21-06 (D21-14, Rule 1 — A11Y-07 on WebKit): WebKit ignores
+     min-height on a native-appearance <select> — the rendered control
+     collapses to the option line-height (~23px at the 16px register;
+     padding-block is ignored too; height IS honored — probed on the
+     pinned engines). height + the UA form-control border-box default
+     make the hit area exactly 44px on every engine; chromium/firefox
+     already render 44 via the min-height they honor, so their box is
+     unchanged. Tokens-only, no motion, native semantics untouched. */
+  height: var(--touch);
   padding-inline: var(--space-sm);
   background: var(--surface);
   border: 1px solid var(--hairline);
