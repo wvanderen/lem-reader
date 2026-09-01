@@ -66,7 +66,7 @@
 - [x] **POLISH-08**: The tag menu opens adjacent to its invoking control, remains within the viewport, follows the trigger as geometry changes, and restores focus predictably when closed.
 - [x] **POLISH-09**: The reading-width control can reach its displayed 64-character maximum at the slider's far-right endpoint and exposes the same truthful range programmatically.
 - [x] **POLISH-10**: The Highlights destination presents review content within the shared layout grid and provides direct, understandable navigation back to the Library and into article context.
-- [ ] **POLISH-11**: An Impeccable-informed visual and interaction audit resolves milestone-scope anti-patterns without replacing native semantics or weakening reduced-motion, forced-colors, zoom, or screen-reader behavior.
+- [x] **POLISH-11**: An Impeccable-informed visual and interaction audit resolves milestone-scope anti-patterns without replacing native semantics or weakening reduced-motion, forced-colors, zoom, or screen-reader behavior.
 
 ### Acceptance
 
@@ -144,7 +144,7 @@
 | POLISH-08 | Phase 21 | Complete |
 | POLISH-09 | Phase 21 | Complete |
 | POLISH-10 | Phase 21 | Complete |
-| POLISH-11 | Phase 21 | Pending |
+| POLISH-11 | Phase 21 | Complete |
 | ACPT-07 | Phase 21 | Pending |
 | ACPT-08 | Phase 21 | Pending |
 
