@@ -129,12 +129,35 @@ function tocTrigger(page: Page) {
 }
 
 /** Open the TOC panel from the header and await the labeled surface. */
+// 21-08 (UAT Test 7): also await the panel's OPEN-FOCUS settle — visibility
+// alone races TocPanel's open effect (TocPanel.tsx L168-184): one rAF after
+// open it focuses the aria-current entry (deterministically "Top of
+// article" in paginated mode — the section spy lags via MutationObserver +
+// 250ms debounce). Under a starved renderer that rAF can fire AFTER the
+// caller's entry.focus(), yanking focus to "Top of article"; Enter then
+// activates the WRONG entry (h1 focus, page 1, poll null — the exact
+// .planning/debug/webkit-e2e-timeouts-toc-null.md reproduction). Awaiting
+// the settle here means the caller's focus can never be yanked afterward:
+// the (d)/(m) Enter-activation cells close the race by construction
+// instead of by frame-timing luck. Click cells re-target focus with an
+// actual click and settle harmlessly.
 async function openToc(page: Page): Promise<void> {
   await tocTrigger(page).click();
   await expect(
     page.getByRole("heading", { level: 2, name: "Contents" }),
   ).toBeVisible();
   await expect(page.locator(".toc-panel")).toBeVisible();
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const panel = document.querySelector(".toc-panel");
+          const el = document.activeElement;
+          return !!(panel && el && el.tagName === "A" && panel.contains(el));
+        }),
+      { timeout: 3_000 },
+    )
+    .toBe(true);
 }
 
 /** Assert focus rests on the toc-trigger (the toggle-seam restore).
