@@ -160,7 +160,7 @@ async function openToc(page: Page): Promise<void> {
     w.__lemTocOpenFocusSettled = false;
     const panel = document.querySelector(".toc-panel");
     if (!panel) return;
-    const witnessOpenFocus = (event: FocusEvent) => {
+    const witnessOpenFocus = (event: Event) => {
       const target = event.target;
       if (target instanceof HTMLAnchorElement && panel.contains(target)) {
         w.__lemTocOpenFocusSettled = true;
