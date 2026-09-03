@@ -268,7 +268,7 @@ Plans:
   4. The complete v2.1 core flow succeeds without loss in Chromium, Firefox, and WebKit.
   5. The Impeccable-informed audit and keyboard, NVDA, VoiceOver, reduced-motion, forced-colors, reflow, and zoom matrix finish with no blocker or major finding.
 
-**Plans**: 6/6 plans complete
+**Plans**: 8 plans (6 complete + 2 gap closure)
 
 Plans:
 
@@ -292,6 +292,11 @@ Plans:
 **Wave 5** *(blocked on Wave 4 completion)*
 
 - [x] 21-06-PLAN.md — ACPT-08 destination edge-matrix + ACCEPTANCE-PROTOCOL v1.3 + phase honest lint/test gate (ACPT-08)
+
+**Wave 6** *(gap closure — blocked on Wave 5; 21-08 also blocked on 21-07)*
+
+- [ ] 21-07-PLAN.md — WebKit button-turn focus-handoff self-heal + regression lock + live VoiceOver+Safari confirmation (ACPT-08 gap, UAT test 2)
+- [ ] 21-08-PLAN.md — openToc open-focus settle hardening + stale dev-server CPU investigation + fresh-server honest gate re-run (ACPT-08 gap, UAT test 7)
 
 **UI hint**: yes
 
