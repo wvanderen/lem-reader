@@ -14,8 +14,13 @@
 //
 // D4-07 (A11Y-02/03): context-aware focus restoration after a turn.
 //   - Turn triggered while focus was on a control (chevron, toggle, gear):
-//     focus STAYS on the control. The reader used the control; they expect
-//     to remain on it.
+//     focus STAYS on the control — but only where the engine actually keeps
+//     focus there. Safari/WebKit does NOT focus an activated button (focus
+//     silently falls to body), so when activation lost focus (the WebKit
+//     body case) the turn falls back to the same boundary-heading handoff
+//     as content-originated turns — both in this keyboard gate
+//     (isFocusInContent treats body as content-origin, Plan 21-07) and in
+//     PaginatedSurface's chevron path (handleChevronTurn's guard).
 //   - Turn triggered while focus was inside the article content (a link, a
 //     paragraph via SR virtual cursor): focus moves to the TOP of the new
 //     page — first heading, else first focusable, else first paragraph.
@@ -272,6 +277,13 @@ export function isFormField(target: EventTarget | null): boolean {
  */
 function isFocusInContent(active: Element | null, articleEl: HTMLElement | null): boolean {
   if (!active || !articleEl) return false;
+  // Safari/WebKit does not focus an activated button — focus silently falls
+  // to body (probe-verified 2026-09-02, see
+  // .planning/debug/vo-safari-image-page-focus.md). The old gate turned that
+  // one-time loss into a permanent skip of the boundary handoff for every
+  // later turn; body (or documentElement) now counts as content-origin so
+  // the cascade self-heals on the next keyboard turn.
+  if (active === document.body || active === document.documentElement) return true;
   if (!articleEl.contains(active)) return false;
   // Controls that live inside the article element: the page-turn chevrons
   // (.page-turn) and the mode toggle (.mode-toggle). If focus was on one of
@@ -289,8 +301,12 @@ function isFocusInContent(active: Element | null, articleEl: HTMLElement | null)
  *
  * Callers rAF-defer this so the new page fragment is committed to the DOM
  * before the query runs.
+ *
+ * Exported (Plan 21-07) so PaginatedSurface's chevron path reuses this ONE
+ * handoff implementation — never forked (the Plan 04-09 isFormField export
+ * precedent).
  */
-function focusNewPageTop(articleEl: HTMLElement | null): void {
+export function focusNewPageTop(articleEl: HTMLElement | null): void {
   if (!articleEl) return;
   const pageFragment =
     articleEl.querySelector<HTMLElement>(".page-fragment");

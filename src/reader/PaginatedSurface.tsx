@@ -60,6 +60,12 @@ import type { ArticleBodyHighlight } from "../content/render/BlockRenderer";
 import { ProgressHairline } from "./ProgressHairline";
 import { PageIndicator } from "./PageIndicator";
 import { BLOCK_SEPARATOR } from "../content/normalizeText";
+// Plan 21-07 (D4-07 WebKit amendment): the chevron path reuses PageTurnControls'
+// ONE focusNewPageTop implementation (the Plan 04-09 isFormField export
+// precedent — never forked). PageTurnControls imports only the TYPE
+// PaginatedSurfaceHandle from this module (erased at compile time), so this
+// reverse RUNTIME import creates no runtime cycle.
+import { focusNewPageTop } from "./PageTurnControls";
 // Phase 5 Plan 05-04 (D5-16 cross-fragment slicing): PaginatedSurface reads
 // the resolved highlights from the HighlightOverlay context (the same
 // provider ArticleView mounts around both the scrolling + paginated
@@ -557,6 +563,34 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
     }
 
     /**
+     * Plan 21-07 (D4-07 WebKit amendment): the chevron buttons' shared click
+     * path. WebKit/Safari does NOT focus an activated button — after a click,
+     * document.activeElement is body (probe-verified 2026-09-02, see
+     * .planning/debug/vo-safari-image-page-focus.md) — so the D4-07
+     * "focus stays on the control" premise failed there and the button turn
+     * silently skipped the boundary handoff entirely. This wrapper commits
+     * the turn, then (rAF-deferred, the same discipline as the keyboard path
+     * — the new page fragment must commit first) falls back to the SAME
+     * "Page N begins" boundary-heading handoff whenever the engine did NOT
+     * keep focus on a control (the exact .page-turn/.mode-toggle/.gear-button
+     * set isFocusInContent classifies) — precisely the top-of-page reset
+     * VoiceOver users expect off an image-only page. Where the engine DID
+     * keep focus on the button (chromium/firefox click, Tab+Enter
+     * everywhere), the guard matches and nothing changes.
+     */
+    function handleChevronTurn(direction: "next" | "previous"): void {
+      const result = commitTurn(direction);
+      if (!result || !result.moved) return;
+      requestAnimationFrame(() => {
+        const active = document.activeElement;
+        const onControl =
+          active instanceof Element &&
+          active.closest(".page-turn,.mode-toggle,.gear-button") !== null;
+        if (!onControl) focusNewPageTop(articleEl);
+      });
+    }
+
+    /**
      * Turn to a specific page index (D5-11 navigate-back). Shares the same
      * ref-update + re-anchor discipline as commitTurn so the overflow guard
      * + onAnchorChange stay in lockstep. Bounds-checked (clamps to valid range).
@@ -675,7 +709,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
           className="page-turn page-turn-previous"
           aria-label="Previous page"
           aria-disabled={isFirst}
-          onClick={() => commitTurn("previous")}
+          onClick={() => handleChevronTurn("previous")}
         >
           <ChevronLeftIcon aria-hidden="true" />
         </button>
@@ -684,7 +718,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
           className="page-turn page-turn-next"
           aria-label="Next page"
           aria-disabled={isLast}
-          onClick={() => commitTurn("next")}
+          onClick={() => handleChevronTurn("next")}
         >
           <ChevronRightIcon aria-hidden="true" />
         </button>
