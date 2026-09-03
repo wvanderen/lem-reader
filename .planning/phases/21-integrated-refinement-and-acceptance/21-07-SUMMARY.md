@@ -42,19 +42,19 @@ requirements-completed: []  # ACPT-08 deliberately NOT marked — gated on the p
 # Metrics
 duration: 16min
 completed: 2026-09-03
-status: human-gate-pending
+status: complete  # human-verify checkpoint APPROVED 2026-09-03 (user-confirmed VoiceOver+Safari); ACPT-08 flip owned by verify-work (D13-06/D21-14)
 ---
 
 # Phase 21 Plan 07: WebKit Page-Turn Focus Handoff (UAT Test 2 Gap Closure) Summary
 
-**Self-healing D4-07 focus handoff: WebKit button-originated page turns now route through the "Page N begins" boundary heading (never body), locked by a 15-cell three-engine regression spec with recorded RED/GREEN evidence — pending live VoiceOver+Safari sign-off.**
+**Self-healing D4-07 focus handoff: WebKit button-originated page turns now route through the "Page N begins" boundary heading (never body), locked by a 15-cell three-engine regression spec with recorded RED/GREEN evidence — live VoiceOver+Safari sign-off APPROVED 2026-09-03.**
 
 ## Performance
 
 - **Duration:** 16 min
 - **Started:** 2026-09-03T01:20:38Z
-- **Completed:** 2026-09-03T01:37:06Z (Tasks 1-2; human checkpoint pending)
-- **Tasks:** 2 auto tasks complete + 1 human-verify checkpoint pending
+- **Completed:** 2026-09-03T01:37:06Z (Tasks 1-2; human checkpoint approved same day)
+- **Tasks:** 3/3 complete (2 auto + 1 human-verify checkpoint APPROVED 2026-09-03)
 - **Files modified:** 3
 
 ## Accomplishments
@@ -147,14 +147,13 @@ None — no placeholder logic shipped; all assertions run against real committed
 ## User Setup Required
 None — no external service configuration. The pending human checkpoint needs only a running dev server (see below).
 
-## Pending Human Checkpoint (Task 3 — blocking, NOT executed)
+## Human Checkpoint (Task 3 — APPROVED 2026-09-03)
 
-`checkpoint:human-verify` — live VoiceOver + Safari confirmation, the UAT Test-2 sign-off the diagnosis requires. **ACPT-08 is deliberately not marked complete** until this passes (mirrors the 06-04/13-05 instrument-ships-now / requirement-closes-at-proof precedent). Steps: kill stale server (`lsof -ti :5173 | xargs kill`), `npm run dev`, open http://localhost:5173 in Safari with VoiceOver (Cmd+F5), open the image-bearing EPUB article in paginated mode, then verify (1) from an image-only page, VO+Space on "Next page" announces the new boundary and resumes at the TOP of the new page; (2) an image-leading page reads the image then the FIRST text line under it; (3) a subsequent PageDown still resets to the top (cascade healed). Resume signal: "approved" or a description of what VoiceOver did instead.
+`checkpoint:human-verify` — live VoiceOver + Safari confirmation, the UAT Test-2 sign-off. **APPROVED by the user on 2026-09-03**: all three expectations held — (1) from an image-only page, VO+Space on "Next page" announced the new boundary and resumed at the TOP of the new page; (2) an image-leading page read the image then the FIRST text line under it; (3) a subsequent PageDown still reset to the top (cascade healed). UAT Test-2 human evidence complete; ACPT-08 flips via verify-work (D13-06/D21-14), not in-plan.
 
 ## Next Phase Readiness
-- Tasks 1-2 complete and committed; the automated half of ACPT-08's UAT Test-2 truth is locked cross-engine.
-- Blocker: the live VoiceOver+Safari checkpoint above (recorded in STATE.md) — 21-08 (the remaining gap plan) is unaffected and can proceed; ACPT-08 closes only on human approval.
-- If the human veto occurs, the debug + spec harness here (classification helper, figure-run seeding, RED reproduction procedure) is the direct re-entry point for a follow-up fix.
+- Tasks 1-2 complete and committed; the automated half of ACPT-08's UAT-Test-2 truth is locked cross-engine, and the human half is now APPROVED (above).
+- Blocker cleared: the live VoiceOver+Safari checkpoint was approved 2026-09-03 — 21-08 proceeds with 21-07's regression spec in the honest-gate suite.
 
 ## Self-Check: PASSED
 
@@ -165,4 +164,4 @@ None — no external service configuration. The pending human checkpoint needs o
 
 ---
 *Phase: 21-integrated-refinement-and-acceptance*
-*Completed: 2026-09-03 (human gate pending)*
+*Completed: 2026-09-03 (human checkpoint approved same day)*

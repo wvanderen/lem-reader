@@ -295,7 +295,7 @@ Plans:
 
 **Wave 6** *(gap closure — blocked on Wave 5; 21-08 also blocked on 21-07)*
 
-- [ ] 21-07-PLAN.md — WebKit button-turn focus-handoff self-heal + regression lock + live VoiceOver+Safari confirmation (ACPT-08 gap, UAT test 2)
+- [x] 21-07-PLAN.md — WebKit button-turn focus-handoff self-heal + regression lock + live VoiceOver+Safari confirmation (ACPT-08 gap, UAT test 2 — checkpoint APPROVED 2026-09-03)
 - [ ] 21-08-PLAN.md — openToc open-focus settle hardening + stale dev-server CPU investigation + fresh-server honest gate re-run (ACPT-08 gap, UAT test 7)
 
 **UI hint**: yes

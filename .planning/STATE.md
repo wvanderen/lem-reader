@@ -5,7 +5,7 @@ milestone_name: Reader Experience
 current_phase: 21
 current_phase_name: integrated-refinement-and-acceptance
 status: executing
-stopped_at: Completed 21-07-PLAN.md (Tasks 1-2; human-verify checkpoint pending)
+stopped_at: 21-07 checkpoint APPROVED; executing 21-08
 last_updated: "2026-09-03T01:38:01.696Z"
 last_activity: 2026-09-03
 last_activity_desc: Phase 21 execution started
@@ -30,8 +30,8 @@ See: .planning/PROJECT.md (updated 2026-08-30)
 
 Phase: 21 (integrated-refinement-and-acceptance) — EXECUTING
 Plan: 8 of 8 (21-01..07 complete on disk; 21-08 is next)
-Status: Executing Phase 21 — 21-07 human-verify checkpoint pending
-Last activity: 2026-09-03 — 21-07 Tasks 1-2 executed; live VoiceOver+Safari sign-off pending
+Status: Executing Phase 21 — 21-07 human-verify checkpoint APPROVED; 21-08 executing
+Last activity: 2026-09-03 — 21-07 Task 3 live VoiceOver+Safari sign-off approved by user (all three expectations held); 21-08 gap closure started
 
 ## Recent Decisions (Phase 18)
 
@@ -501,7 +501,7 @@ None yet. (2026-08-21-fix-prod-ui-paste-ingest-flow resolved by quick task 26082
 - [Phase 4 → RESOLVED by 04-07/04-08/04-09/04-10/04-11]: gsd-verifier caught 76 hidden e2e failures misreported as "269 passed / 0 failed" across every Phase 4 SUMMARY + STATE + ROADMAP + REQUIREMENTS + the Plan 04-05 Task 3 gate-approval commit. Reality was 76 failed / 269 passed. Gap-closure plans 04-07 (PAGE-03b overflow guard), 04-08 (PAGE-06/07 always-mounted ArticleBody), 04-09 (PAGE-01/02 M-toggle + keyboard/chevron), 04-10 (PAGE-09 banner race) closed all 6 structural gaps. Plan 04-11 re-ran the FULL `npm run test` suite end-to-end: 753 passed / 0 failed / 0 skipped, exit 0. 04-VERIFICATION.md upgraded gaps_found (3/7) → verified (7/7). The Plan 04-05 Task 3 human-verify gate now has a genuinely-green automated prerequisite.
 - Phase 08 honest-suite gate RED → RESOLVED by Phase 9 Plan 09-07 (2026-08-15): 24 pre-existing e2e failures in unrelated specs (18 pagination Phase 4 PAGE-03a/b/c + PAGE-04, 3 capture-highlight Phase 5 ANNO-01, 3 dexie-migration Phase 8-02 v3->v4; the pagination deficit had silently grown to 33 cells). Root cause was GEOMETRY, not the suspected Vite 8/Rolldown timing: the Phase 8-04 TagEntry + 9-05 Export button grew the pinned paginated article's uncapped header row past the page viewport. One src/app.css fix (header row capped minmax(auto,25%) + scrollable header) closed all 39 affected cells; pagination specs byte-unchanged. FULL npm run test now exits 0 (1674 passed / 0 failed / 13 intentional skips) — 09-07-OUTPUT.md is the permanent record; deferred-items.md carries the closure note.
 - [Phase 13 → RESOLVED by the 13-06 post-merge repair (2026-08-19)]: the 13-04 commit `12cf39d` (Option A page-1 spot reserve) broke 55 pre-existing e2e cells that encoded the old page-1 geometry — pinned by git bisect with fresh dev servers, recorded in 13-06-OUTPUT.md. Repair: 27 cells were stale expectations (spec-side realignment, strengthen-only); 28 were two production regressions resolved by the HUMAN-SANCTIONED Option A fixes (engine whole-fitting escape `d89300b`; firefox reflow CSS `8d7b558`+`f7b5734`); the epub/a11y 15 additionally required the 360×480→360×640 geometry realignment (`14b99f4`) — at 480 the spot physics make paginated page 1 impossible (honest guard fallback). Honest gate `npm run test` exit 0 (run 6: 2257 passed / 0 failed / 19 skipped). 13-06-OUTPUT.md §Repair is the permanent record.
-- 21-07 human-verify checkpoint PENDING: live VoiceOver+Safari confirmation required (image-only page resets to top; image-leading page reads the first text line; post-button keyboard turn still resets). ACPT-08 stays unchecked until approved.
+- 21-07 human-verify checkpoint → APPROVED 2026-09-03 (user-confirmed live VoiceOver+Safari: image-only page resets to top; image-leading page reads the first text line; post-button keyboard turn still resets). UAT Test-2 human evidence complete; ACPT-08 flip owned by verify-work (D13-06/D21-14).
 
 ### Quick Tasks Completed
 
