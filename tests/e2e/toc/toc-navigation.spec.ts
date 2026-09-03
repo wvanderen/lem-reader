@@ -141,7 +141,34 @@ function tocTrigger(page: Page) {
 // the (d)/(m) Enter-activation cells close the race by construction
 // instead of by frame-timing luck. Click cells re-target focus with an
 // actual click and settle harmlessly.
+//
+// The settle witnesses the open-focus FIRING (a one-shot page-side focusin
+// listener on .toc-panel, armed before the trigger click) — NOT where
+// activeElement currently rests. On re-opens that follow a jump, the
+// PREVIOUS jump's D4-07 settle guard (rAF + 120ms double-call —
+// ArticleView handleTocJump) can fire its second focus() AFTER the new
+// open-focus already landed, yanking focus back to the article heading
+// (observed 1-in-4 on webkit in the 21-08 investigation: panel open,
+// activeElement pinned on the destination heading — a pure activeElement
+// poll would never become true). The open-focus never re-fires while the
+// panel stays open, so once the witness trips, nothing can still precede
+// the caller's entry.focus() — the (d)/(m) guarantee — and click cells
+// never falsely fail on the guard's tail.
 async function openToc(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const w = window as unknown as { __lemTocOpenFocusSettled?: boolean };
+    w.__lemTocOpenFocusSettled = false;
+    const panel = document.querySelector(".toc-panel");
+    if (!panel) return;
+    const witnessOpenFocus = (event: FocusEvent) => {
+      const target = event.target;
+      if (target instanceof HTMLAnchorElement && panel.contains(target)) {
+        w.__lemTocOpenFocusSettled = true;
+        panel.removeEventListener("focusin", witnessOpenFocus);
+      }
+    };
+    panel.addEventListener("focusin", witnessOpenFocus);
+  });
   await tocTrigger(page).click();
   await expect(
     page.getByRole("heading", { level: 2, name: "Contents" }),
@@ -150,11 +177,11 @@ async function openToc(page: Page): Promise<void> {
   await expect
     .poll(
       () =>
-        page.evaluate(() => {
-          const panel = document.querySelector(".toc-panel");
-          const el = document.activeElement;
-          return !!(panel && el && el.tagName === "A" && panel.contains(el));
-        }),
+        page.evaluate(
+          () =>
+            (window as unknown as { __lemTocOpenFocusSettled?: boolean })
+              .__lemTocOpenFocusSettled === true,
+        ),
       { timeout: 3_000 },
     )
     .toBe(true);
