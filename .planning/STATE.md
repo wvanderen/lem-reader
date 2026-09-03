@@ -4,17 +4,17 @@ milestone: v2.1
 milestone_name: Reader Experience
 current_phase: 21
 current_phase_name: integrated-refinement-and-acceptance
-status: verifying
-stopped_at: Completed 21-06-PLAN.md
-last_updated: "2026-09-01T17:02:17.681Z"
-last_activity: 2026-09-01
+status: executing
+stopped_at: Completed 21-07-PLAN.md (Tasks 1-2; human-verify checkpoint pending)
+last_updated: "2026-09-03T01:38:01.696Z"
+last_activity: 2026-09-03
 last_activity_desc: Phase 21 execution started
 progress:
   total_phases: 8
-  completed_phases: 8
-  total_plans: 40
+  completed_phases: 7
+  total_plans: 42
   completed_plans: 40
-  percent: 100
+  percent: 88
 ---
 
 # Project State
@@ -29,9 +29,9 @@ See: .planning/PROJECT.md (updated 2026-08-30)
 ## Current Position
 
 Phase: 21 (integrated-refinement-and-acceptance) — EXECUTING
-Plan: 6 of 6
-Status: Phase complete — ready for verification
-Last activity: 2026-09-01 — Phase 21 execution started
+Plan: 8 of 8 (21-01..07 complete on disk; 21-08 is next)
+Status: Executing Phase 21 — 21-07 human-verify checkpoint pending
+Last activity: 2026-09-03 — 21-07 Tasks 1-2 executed; live VoiceOver+Safari sign-off pending
 
 ## Recent Decisions (Phase 18)
 
@@ -199,6 +199,7 @@ Last activity: 2026-09-01 — Phase 21 execution started
 | Phase 21 P04 | 15min | 2 tasks | 3 files |
 | Phase 21 P05 | 31min | 2 tasks | 3 files |
 | Phase 21 P06 | 118min | 3 tasks | 9 files |
+| Phase 21 P07 | 16min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -484,6 +485,8 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: [Rule 1] (21-06): WebKit ignores min-height (and padding-block) on native <select> — .review-select rendered a 23px hit area on Highlights (probed: min-height 23px, height 44px); the fix height: var(--touch) + the UA form-control border-box default restores the 44px A11Y-07/WCAG-2.5.5 target cross-engine with chromium/firefox boxes unchanged. Destination touch-target measurements carry ±0.5px sub-pixel tolerance (firefox reports 43.99999px on an exact 44px row).
 - [Phase ?]: Protocol v1.3 (D21-14) shipped: 12 scripted flows (A–F + G–L capability flows — the per-capability mandate sets the count above the soft ~8-10 guidance); every new outcome role+accessible name+state (Pitfall 7); the Add-dialog flow retires the Phase 16 manual-SR deferral; D21-12 Safari image slot + evidence row in the VO+Safari results sheet; results location 21-VERIFICATION.md. ACPT-08 does NOT flip in-plan (requirements-completed []): zero-blocker/major on BOTH human v1.3 runs via verify-work flips it (D13-06/D13-07); REQUIREMENTS.md untouched.
 - [Phase ?]: 21-06 honest gate: lint exit 0; full suite green in ONE invocation (unit 1605/0/13 + e2e 1722/0/16 across 3 engines + throttled, exit 0) via the 20-07 --workers=2 contention control — two prior plain runs exited 1 with moving webkit goto-timeout sets (8 each) under loadavg up to 20, all isolation-green: starvation-classified per the 18-04/15-04/20-07 lesson; every invocation recorded in the 21-06-SUMMARY ledger.
+- [Phase 21]: D21-07 WebKit focus self-heal: isFocusInContent treats activeElement===body/documentElement as content-origin, and PaginatedSurface chevrons (handleChevronTurn) rAF-defer a guard falling back to the ONE focusNewPageTop when the engine did not keep focus on a control — Safari loses DOM focus on button activation, so button turns route through the "Page N begins" handoff; engines that hold focus are byte-unchanged. — The D4-07 keep-focus premise is engine-conditional; the honest cross-engine contract is never-body: control where the engine holds it, boundary heading where it does not.
+- [Phase 21]: D21-07 figure-only geometry: at 420x470 (P≈320px, atomic-oversize ceiling 240px) a single text-followed figure is figure-only only inside a ~2-caption-line window — engine-fragile; a two-figure RUN (the second atomic figure cannot fit the ~82px remainder) makes the figure-only page deterministic on every engine (the debug session observed geometry). — Regression-lock determinism beats the literal single-fixture shape; the VO image-page path is modeled by the geometry that actually produces image-only pages.
 
 ### Pending Todos
 
@@ -498,6 +501,7 @@ None yet. (2026-08-21-fix-prod-ui-paste-ingest-flow resolved by quick task 26082
 - [Phase 4 → RESOLVED by 04-07/04-08/04-09/04-10/04-11]: gsd-verifier caught 76 hidden e2e failures misreported as "269 passed / 0 failed" across every Phase 4 SUMMARY + STATE + ROADMAP + REQUIREMENTS + the Plan 04-05 Task 3 gate-approval commit. Reality was 76 failed / 269 passed. Gap-closure plans 04-07 (PAGE-03b overflow guard), 04-08 (PAGE-06/07 always-mounted ArticleBody), 04-09 (PAGE-01/02 M-toggle + keyboard/chevron), 04-10 (PAGE-09 banner race) closed all 6 structural gaps. Plan 04-11 re-ran the FULL `npm run test` suite end-to-end: 753 passed / 0 failed / 0 skipped, exit 0. 04-VERIFICATION.md upgraded gaps_found (3/7) → verified (7/7). The Plan 04-05 Task 3 human-verify gate now has a genuinely-green automated prerequisite.
 - Phase 08 honest-suite gate RED → RESOLVED by Phase 9 Plan 09-07 (2026-08-15): 24 pre-existing e2e failures in unrelated specs (18 pagination Phase 4 PAGE-03a/b/c + PAGE-04, 3 capture-highlight Phase 5 ANNO-01, 3 dexie-migration Phase 8-02 v3->v4; the pagination deficit had silently grown to 33 cells). Root cause was GEOMETRY, not the suspected Vite 8/Rolldown timing: the Phase 8-04 TagEntry + 9-05 Export button grew the pinned paginated article's uncapped header row past the page viewport. One src/app.css fix (header row capped minmax(auto,25%) + scrollable header) closed all 39 affected cells; pagination specs byte-unchanged. FULL npm run test now exits 0 (1674 passed / 0 failed / 13 intentional skips) — 09-07-OUTPUT.md is the permanent record; deferred-items.md carries the closure note.
 - [Phase 13 → RESOLVED by the 13-06 post-merge repair (2026-08-19)]: the 13-04 commit `12cf39d` (Option A page-1 spot reserve) broke 55 pre-existing e2e cells that encoded the old page-1 geometry — pinned by git bisect with fresh dev servers, recorded in 13-06-OUTPUT.md. Repair: 27 cells were stale expectations (spec-side realignment, strengthen-only); 28 were two production regressions resolved by the HUMAN-SANCTIONED Option A fixes (engine whole-fitting escape `d89300b`; firefox reflow CSS `8d7b558`+`f7b5734`); the epub/a11y 15 additionally required the 360×480→360×640 geometry realignment (`14b99f4`) — at 480 the spot physics make paginated page 1 impossible (honest guard fallback). Honest gate `npm run test` exit 0 (run 6: 2257 passed / 0 failed / 19 skipped). 13-06-OUTPUT.md §Repair is the permanent record.
+- 21-07 human-verify checkpoint PENDING: live VoiceOver+Safari confirmation required (image-only page resets to top; image-leading page reads the first text line; post-button keyboard turn still resets). ACPT-08 stays unchecked until approved.
 
 ### Quick Tasks Completed
 
@@ -539,8 +543,8 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-09-01T17:02:17.670Z
-Stopped at: Completed 21-06-PLAN.md
+Last session: 2026-09-03T01:37:46.171Z
+Stopped at: Completed 21-07-PLAN.md (Tasks 1-2; human-verify checkpoint pending)
 Resume file: None
 
 ## Operator Next Steps
