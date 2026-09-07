@@ -126,40 +126,42 @@ export function LibraryRow({
             ))}
           </ul>
         )}
-        {/* byte-stable Open-article link (Pitfall 8-5) */}
-        <a href={`#/article/${id}`} aria-labelledby={`title-${id}`}>
-          Open article
-        </a>
-        {/* Edit-metadata affordance — Plan 17-02 (D17-01). Only when
+        <div className="library-row-actions">
+          {/* Open article and curation share a bottom-aligned action row. */}
+          <a href={`#/article/${id}`} aria-labelledby={`title-${id}`}>
+            Open article
+          </a>
+          {/* Edit-metadata affordance — Plan 17-02 (D17-01). Only when
             onEdit is wired (Dexie-persisted top-level rows only). Sits
             immediately before the remove button in the same actions
             cluster; the aria-label template names the action + the
             EFFECTIVE title (the one name the reader sees). */}
-        {onEdit && (
-          <button
-            type="button"
-            className="library-row-edit"
-            aria-label={`Edit title and author for ${effectiveTitle(article)}`}
-            onClick={onEdit}
-          >
-            <EditIcon aria-hidden="true" />
-          </button>
-        )}
-        {/* Remove affordance — only when onRemove is wired (Plan 04). The
+          {onEdit && (
+            <button
+              type="button"
+              className="library-row-edit"
+              aria-label={`Edit title and author for ${effectiveTitle(article)}`}
+              onClick={onEdit}
+            >
+              <EditIcon aria-hidden="true" />
+            </button>
+          )}
+          {/* Remove affordance — only when onRemove is wired (Plan 04). The
             glyph is the inline-SVG waste-bin below (Phase 13 G3 — real icon,
             not an emoji character); aria-label carries the accessible name
             and locates this button for the remove-cascade + dialog-centering
             specs, so its template stays byte-stable. */}
-        {onRemove && (
-          <button
-            type="button"
-            className="library-row-remove"
-            aria-label={`Remove ${effectiveTitle(article)} from library`}
-            onClick={onRemove}
-          >
-            <TrashIcon aria-hidden="true" />
-          </button>
-        )}
+          {onRemove && (
+            <button
+              type="button"
+              className="library-row-remove"
+              aria-label={`Remove ${effectiveTitle(article)} from library`}
+              onClick={onRemove}
+            >
+              <TrashIcon aria-hidden="true" />
+            </button>
+          )}
+        </div>
       </article>
     </li>
   );

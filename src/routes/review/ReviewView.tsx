@@ -468,59 +468,65 @@ export function ReviewView({ hasAppHistory }: { hasAppHistory: boolean }) {
           activeTag={filters.tag}
           onSelect={(tag) => setFilters((f) => ({ ...f, tag }))}
         />
-        <label className="review-filter-label" htmlFor="review-article-filter">
-          Article
-        </label>
-        <select
-          id="review-article-filter"
-          className="review-select"
-          value={filters.articleId ?? ""}
-          onChange={(e) =>
-            setFilters((f) => ({
-              ...f,
-              articleId: e.target.value === "" ? null : e.target.value,
-            }))
-          }
-        >
-          <option value="">All articles</option>
-          {articlesByTitle.map((a) => (
-            <option key={a.id} value={a.id}>
-              {effectiveTitle(a)}
-            </option>
-          ))}
-        </select>
-        <label className="review-filter-label" htmlFor="review-confidence-filter">
-          Anchor confidence
-        </label>
-        <select
-          id="review-confidence-filter"
-          className="review-select"
-          value={filters.confidence}
-          onChange={(e) =>
-            setFilters((f) => ({
-              ...f,
-              confidence: e.target.value as ConfidenceFilter,
-            }))
-          }
-        >
-          <option value="all">All</option>
-          <option value="confident">Confident</option>
-          <option value="ambiguous">Ambiguous</option>
-          <option value="orphan">Orphan</option>
-        </select>
-        <label className="review-filter-label" htmlFor="review-sort">
-          Sort
-        </label>
-        <select
-          id="review-sort"
-          className="review-select"
-          value={sort}
-          onChange={(e) => setSort(e.target.value as ReviewSort)}
-        >
-          <option value="date">Date</option>
-          <option value="article">Article</option>
-          <option value="position">Position</option>
-        </select>
+        <div className="review-filter-group">
+          <label className="review-filter-label" htmlFor="review-article-filter">
+            Article
+          </label>
+          <select
+            id="review-article-filter"
+            className="review-select"
+            value={filters.articleId ?? ""}
+            onChange={(e) =>
+              setFilters((f) => ({
+                ...f,
+                articleId: e.target.value === "" ? null : e.target.value,
+              }))
+            }
+          >
+            <option value="">All articles</option>
+            {articlesByTitle.map((a) => (
+              <option key={a.id} value={a.id}>
+                {effectiveTitle(a)}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="review-filter-group">
+          <label className="review-filter-label" htmlFor="review-confidence-filter">
+            Anchor confidence
+          </label>
+          <select
+            id="review-confidence-filter"
+            className="review-select"
+            value={filters.confidence}
+            onChange={(e) =>
+              setFilters((f) => ({
+                ...f,
+                confidence: e.target.value as ConfidenceFilter,
+              }))
+            }
+          >
+            <option value="all">All</option>
+            <option value="confident">Confident</option>
+            <option value="ambiguous">Ambiguous</option>
+            <option value="orphan">Orphan</option>
+          </select>
+        </div>
+        <div className="review-filter-group">
+          <label className="review-filter-label" htmlFor="review-sort">
+            Sort
+          </label>
+          <select
+            id="review-sort"
+            className="review-select"
+            value={sort}
+            onChange={(e) => setSort(e.target.value as ReviewSort)}
+          >
+            <option value="date">Date</option>
+            <option value="article">Article</option>
+            <option value="position">Position</option>
+          </select>
+        </div>
       </div>
       {/* D10-07 legend — explains the badge vocabulary quietly. */}
       <p className="review-legend">No badge means anchored confidently.</p>

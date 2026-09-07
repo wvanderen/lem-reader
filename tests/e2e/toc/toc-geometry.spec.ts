@@ -151,6 +151,23 @@ async function currentPageIdx(page: Page): Promise<number> {
 }
 
 test.describe("TOC geometry (18-04 — ORNT-05 edge matrix)", () => {
+  test("panel aligns with the right-side trigger and fits narrow screens", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await openArticle(page, FIXTURE);
+    await openToc(page);
+    const panel = page.locator(".toc-panel");
+    const desktop = await panel.boundingBox();
+    expect(desktop).not.toBeNull();
+    expect(desktop!.x).toBeGreaterThan(900);
+    expect(desktop!.x + desktop!.width).toBeLessThanOrEqual(1280);
+
+    await page.setViewportSize({ width: 320, height: 640 });
+    const mobile = await panel.boundingBox();
+    expect(mobile).not.toBeNull();
+    expect(mobile!.x).toBeGreaterThanOrEqual(0);
+    expect(mobile!.x + mobile!.width).toBeLessThanOrEqual(320);
+  });
+
   test("320×640: the shared D6-09 invariant holds with the panel OPEN and CLOSED", async ({
     page,
   }) => {

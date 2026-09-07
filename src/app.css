@@ -2110,13 +2110,6 @@ dialog.annotations-drawer::backdrop {
   border: 1px solid var(--hairline);
   border-radius: 4px;
 }
-/* The byte-stable title link from FixtureList (Pitfall 8-5 — 44px touch). */
-.library-row > article > a[href^="#/article/"] {
-  display: inline-block;
-  min-height: var(--touch);
-  min-width: var(--touch);
-  line-height: var(--touch);
-}
 /* G3 (Phase 13 user review) — quiet destructive icon button for the row
    remove affordance, mirroring the × chip-remove discipline: transparent
    rest state, 44px touch box, --ink-soft at rest, --destructive on hover
@@ -3802,7 +3795,10 @@ dialog.book-remove-confirm::backdrop {
  * scrolling (overflow-y: auto); it is a pure overlay — never resizes the
  * article column (Pitfall 7: no ResizeObserver-triggered repagination). */
 .toc-panel {
+  box-sizing: border-box;
   position: fixed;
+  inset-inline-start: auto;
+  bottom: auto;
   top: calc(48px + var(--space-xs));
   inset-inline-end: var(--space-md);
   width: min(320px, calc(100vw - 2 * var(--space-md)));
@@ -3821,6 +3817,7 @@ dialog.book-remove-confirm::backdrop {
  * parent's width-scoped outside-pointerdown policy owns dismissal. */
 @media (max-width: 639px) {
   .toc-panel {
+    width: 100%;
     inset-inline: 0;
   }
 }
@@ -4028,5 +4025,176 @@ dialog.book-remove-confirm::backdrop {
 @media (forced-colors: active) {
   .restoration-marker {
     background-color: CanvasText;
+  }
+}
+
+/* UI cohesion: navigation has its own chrome vocabulary; prose links retain
+   their underlines. Geometry of the 48px reader header stays unchanged. */
+.app-wordmark,
+.shell-nav a,
+.view-switcher a,
+.toc-list a {
+  color: var(--ink-soft);
+  text-decoration: none;
+}
+.app-wordmark {
+  color: var(--ink);
+}
+.shell-nav a,
+.view-switcher a {
+  border-block-end: 2px solid transparent;
+  box-sizing: border-box;
+}
+.shell-nav a[aria-current="page"],
+.view-switcher a[aria-current="page"] {
+  color: var(--ink);
+  border-block-end-color: currentColor;
+}
+.app-wordmark:hover,
+.shell-nav a:hover,
+.view-switcher a:hover {
+  color: var(--accent);
+}
+.view-switcher a {
+  padding-inline: var(--space-sm);
+}
+.toc-list a {
+  box-sizing: border-box;
+  padding-block: var(--space-sm);
+  border-radius: 4px;
+  overflow-wrap: anywhere;
+}
+.toc-list a:hover,
+.toc-list a[aria-current="true"] {
+  color: var(--ink);
+  background: var(--surface);
+}
+.toc-list a[aria-current="true"] {
+  outline: 1px solid var(--hairline);
+  outline-offset: -1px;
+}
+.toc-list a:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Keep empty live regions mounted for announcements, with no visible box. */
+main#main > .status:empty {
+  margin-block: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+/* Library entries keep an editorial title and a consistent utility footer. */
+.library-row > article {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+}
+.library-row h2,
+.library-row h3 {
+  margin-block: 0 var(--space-md);
+  overflow-wrap: anywhere;
+}
+.library-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-block-start: auto;
+  padding-block-start: var(--space-md);
+}
+.library-row-actions > a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch);
+  margin-inline-end: auto;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.library-row-actions > a:hover {
+  text-decoration: underline;
+}
+.continue-reading-row {
+  background: transparent;
+}
+.continue-reading-row a {
+  display: flex;
+  align-items: center;
+  line-height: 1.4;
+  font-weight: 600;
+  color: var(--ink);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.continue-reading-row a:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+/* Highlights: shared page measure, paired fields, one container per quote. */
+.review-header {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-md);
+  margin-block-end: var(--space-xl);
+}
+.review-filter-row {
+  align-items: flex-end;
+  gap: var(--space-md) var(--space-lg);
+}
+.review-filter-row > .tag-filter {
+  flex-basis: 100%;
+  margin: 0;
+}
+.review-filter-group {
+  display: flex;
+  flex: 1 1 180px;
+  flex-direction: column;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+.review-filter-group:first-of-type {
+  flex-grow: 2;
+}
+.review-select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+.review-section {
+  margin-block: var(--space-xl);
+}
+.review-section-list {
+  gap: var(--space-md);
+}
+.review-item {
+  gap: 0;
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+}
+.review-item > .review-row {
+  border: 0;
+  background: transparent;
+  gap: var(--space-sm);
+}
+.review-row-actions {
+  padding: var(--space-sm) var(--space-lg);
+  border-block-start: 1px solid var(--hairline);
+  gap: var(--space-sm);
+}
+.review-row-action {
+  background: transparent;
+  border-color: transparent;
+}
+@media (max-width: 639px) {
+  .review-row-actions {
+    padding-inline: var(--space-sm);
   }
 }
