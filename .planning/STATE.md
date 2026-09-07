@@ -3,18 +3,18 @@ gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Reader Experience
 current_phase: 21
-current_phase_name: integrated-refinement-and-acceptance
 status: verifying
 stopped_at: Completed 21-08-PLAN.md (phase 21 ready for verification)
-last_updated: "2026-09-07T14:56:04.975Z"
-last_activity: 2026-09-03
-last_activity_desc: 21-07 Task 3 live VoiceOver+Safari sign-off approved by user (all three expectations held); 21-08 gap closure started
+last_updated: "2026-09-07T15:05:07.082Z"
+last_activity: 2026-09-07
+last_activity_desc: Phase 21 complete
 progress:
   total_phases: 8
   completed_phases: 8
   total_plans: 42
   completed_plans: 42
   percent: 100
+current_phase_name: integrated-refinement-and-acceptance
 ---
 
 # Project State
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-08-30)
 
 ## Current Position
 
-Phase: 21 (integrated-refinement-and-acceptance) — EXECUTING
-Plan: 8 of 8 (21-01..07 complete on disk; 21-08 is next)
+Phase: 21
+Plan: Not started
 Status: Phase complete — ready for verification
-Last activity: 2026-09-03 — 21-07 Task 3 live VoiceOver+Safari sign-off approved by user (all three expectations held); 21-08 gap closure started
+Last activity: 2026-09-07 — Phase 21 complete
 
 ## Recent Decisions (Phase 18)
 
@@ -45,7 +45,7 @@ Last activity: 2026-09-03 — 21-07 Task 3 live VoiceOver+Safari sign-off approv
 
 **Velocity:**
 
-- Total plans completed: 104 (this phase, incl. gap closure)
+- Total plans completed: 112 (this phase, incl. gap closure)
 - Average duration: 25 min
 - Total execution time: 1.5 hours
 
@@ -70,6 +70,7 @@ Last activity: 2026-09-03 — 21-07 Task 3 live VoiceOver+Safari sign-off approv
 | 18 | 4 | - | - |
 | 19 | 5 | - | - |
 | 20 | 8 | - | - |
+| 21 | 8 | - | - |
 
 **Recent Trend:**
 

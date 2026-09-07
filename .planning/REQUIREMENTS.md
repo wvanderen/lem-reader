@@ -71,7 +71,7 @@
 ### Acceptance
 
 - [x] **ACPT-07**: Reader can complete the v2.1 core flow—organize library, add content, edit metadata, navigate by table of contents, create a cross-block highlight, review it, and export/import controlled images—across Chromium, Firefox, and WebKit without data or content loss.
-- [ ] **ACPT-08**: Library, Highlights, Add, and Reader flows pass the documented keyboard, NVDA+Firefox, VoiceOver+Safari, reduced-motion, forced-colors, 320 CSS-pixel reflow, and 400% zoom acceptance matrix with no blocker or major finding.
+- [x] **ACPT-08**: Library, Highlights, Add, and Reader flows pass the documented keyboard, NVDA+Firefox, VoiceOver+Safari, reduced-motion, forced-colors, 320 CSS-pixel reflow, and 400% zoom acceptance matrix with no blocker or major finding.
 
 ## Future Requirements
 
@@ -146,7 +146,7 @@
 | POLISH-10 | Phase 21 | Complete |
 | POLISH-11 | Phase 21 | Complete |
 | ACPT-07 | Phase 21 | Complete |
-| ACPT-08 | Phase 21 | Pending |
+| ACPT-08 | Phase 21 | Complete |
 
 **Coverage:**
 
