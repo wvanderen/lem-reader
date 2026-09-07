@@ -268,7 +268,7 @@ Plans:
   4. The complete v2.1 core flow succeeds without loss in Chromium, Firefox, and WebKit.
   5. The Impeccable-informed audit and keyboard, NVDA, VoiceOver, reduced-motion, forced-colors, reflow, and zoom matrix finish with no blocker or major finding.
 
-**Plans**: 6/8 plans executed
+**Plans**: 8/8 plans complete
 
 Plans:
 
@@ -296,7 +296,7 @@ Plans:
 **Wave 6** *(gap closure — blocked on Wave 5; 21-08 also blocked on 21-07)*
 
 - [x] 21-07-PLAN.md — WebKit button-turn focus-handoff self-heal + regression lock + live VoiceOver+Safari confirmation (ACPT-08 gap, UAT test 2 — checkpoint APPROVED 2026-09-03)
-- [ ] 21-08-PLAN.md — openToc open-focus settle hardening + stale dev-server CPU investigation + fresh-server honest gate re-run (ACPT-08 gap, UAT test 7)
+- [x] 21-08-PLAN.md — openToc open-focus settle hardening + stale dev-server CPU investigation + fresh-server honest gate re-run (ACPT-08 gap, UAT test 7)
 
 **UI hint**: yes
 
@@ -313,4 +313,4 @@ Plans:
 | 18. Reader Orientation | v2.1 | 4/4 | Complete    | 2026-08-30 |
 | 19. Cross-Block Highlights | v2.1 | 5/5 | Complete    | 2026-08-31 |
 | 20. Safe Local Image Fidelity | v2.1 | 8/8 | Complete    | 2026-08-31 |
-| 21. Integrated Refinement and Acceptance | v2.1 | 6/8 | In Progress|  |
+| 21. Integrated Refinement and Acceptance | v2.1 | 8/8 | Complete   | 2026-09-07 |

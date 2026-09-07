@@ -4,17 +4,17 @@ milestone: v2.1
 milestone_name: Reader Experience
 current_phase: 21
 current_phase_name: integrated-refinement-and-acceptance
-status: executing
-stopped_at: 21-07 checkpoint APPROVED; executing 21-08
-last_updated: "2026-09-03T01:38:01.696Z"
+status: verifying
+stopped_at: Completed 21-08-PLAN.md (phase 21 ready for verification)
+last_updated: "2026-09-07T14:56:04.975Z"
 last_activity: 2026-09-03
-last_activity_desc: Phase 21 execution started
+last_activity_desc: 21-07 Task 3 live VoiceOver+Safari sign-off approved by user (all three expectations held); 21-08 gap closure started
 progress:
   total_phases: 8
-  completed_phases: 7
+  completed_phases: 8
   total_plans: 42
-  completed_plans: 40
-  percent: 88
+  completed_plans: 42
+  percent: 100
 ---
 
 # Project State
@@ -30,7 +30,7 @@ See: .planning/PROJECT.md (updated 2026-08-30)
 
 Phase: 21 (integrated-refinement-and-acceptance) — EXECUTING
 Plan: 8 of 8 (21-01..07 complete on disk; 21-08 is next)
-Status: Executing Phase 21 — 21-07 human-verify checkpoint APPROVED; 21-08 executing
+Status: Phase complete — ready for verification
 Last activity: 2026-09-03 — 21-07 Task 3 live VoiceOver+Safari sign-off approved by user (all three expectations held); 21-08 gap closure started
 
 ## Recent Decisions (Phase 18)
@@ -200,6 +200,7 @@ Last activity: 2026-09-03 — 21-07 Task 3 live VoiceOver+Safari sign-off approv
 | Phase 21 P05 | 31min | 2 tasks | 3 files |
 | Phase 21 P06 | 118min | 3 tasks | 9 files |
 | Phase 21 P07 | 16min | 3 tasks | 3 files |
+| Phase 21 P08 | 34min | 3 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -487,6 +488,9 @@ Decisions are logged in PROJECT.md Key Decisions table.
 - [Phase ?]: 21-06 honest gate: lint exit 0; full suite green in ONE invocation (unit 1605/0/13 + e2e 1722/0/16 across 3 engines + throttled, exit 0) via the 20-07 --workers=2 contention control — two prior plain runs exited 1 with moving webkit goto-timeout sets (8 each) under loadavg up to 20, all isolation-green: starvation-classified per the 18-04/15-04/20-07 lesson; every invocation recorded in the 21-06-SUMMARY ledger.
 - [Phase 21]: D21-07 WebKit focus self-heal: isFocusInContent treats activeElement===body/documentElement as content-origin, and PaginatedSurface chevrons (handleChevronTurn) rAF-defer a guard falling back to the ONE focusNewPageTop when the engine did not keep focus on a control — Safari loses DOM focus on button activation, so button turns route through the "Page N begins" handoff; engines that hold focus are byte-unchanged. — The D4-07 keep-focus premise is engine-conditional; the honest cross-engine contract is never-body: control where the engine holds it, boundary heading where it does not.
 - [Phase 21]: D21-07 figure-only geometry: at 420x470 (P≈320px, atomic-oversize ceiling 240px) a single text-followed figure is figure-only only inside a ~2-caption-line window — engine-fragile; a two-figure RUN (the second atomic figure cannot fit the ~82px remainder) makes the figure-only page deterministic on every engine (the debug session observed geometry). — Regression-lock determinism beats the literal single-fixture shape; the VO image-page path is modeled by the geometry that actually produces image-only pages.
+- [Phase ?]: 21-08: openToc settle witnesses the open-focus FIRING (one-shot focusin listener armed pre-click), not activeElement rest — the D4-07 settle-guard tail on re-opens would hang a pure activeElement poll (1-in-4 webkit)
+- [Phase ?]: 21-08: NO vite.config.ts watch mitigation — Vite 8.1.5 dev-server chokidar defaults already ignore **/test-results/** (resolveChokidarOptions via _createServer); A/B outputDir experiment shows no measurable cost; ~190% CPU = run-correlated serving on a long-lived server (fresh server idles 0%) — fresh-server gate protocol is the mitigation
+- [Phase ?]: 21-08: honest gate GREEN on fresh server — lint 0 + unit 1605/0/13 + e2e 1733/0/20 at --workers=2 under load 13; UAT Test 7 closed; ACPT-08 flip stays with verify-work (D13-06/D21-14)
 
 ### Pending Todos
 
@@ -543,8 +547,8 @@ Items acknowledged and deferred at milestone close on 2026-08-10:
 
 ## Session Continuity
 
-Last session: 2026-09-03T01:37:46.171Z
-Stopped at: Completed 21-07-PLAN.md (Tasks 1-2; human-verify checkpoint pending)
+Last session: 2026-09-07T14:56:04.966Z
+Stopped at: Completed 21-08-PLAN.md (phase 21 ready for verification)
 Resume file: None
 
 ## Operator Next Steps
