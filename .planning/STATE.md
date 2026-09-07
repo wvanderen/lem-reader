@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-08-30)
 Phase: 21
 Plan: Not started
 Status: Phase complete — ready for verification
-Last activity: 2026-09-07 — Completed quick task 260907-pdl: UI cohesion pass
+Last activity: 2026-09-07 — Completed quick task 260907-pm5: open-source and portfolio readiness
 
 ## Recent Decisions (Phase 18)
 
@@ -520,6 +520,7 @@ None yet. (2026-08-21-fix-prod-ui-paste-ingest-flow resolved by quick task 26082
 | 260823-gfi | Retroactive gsd-verifier on phase 07-ingestion-substrate (07-VERIFICATION.md — 12/12 truths, 5 SCs verified w/ fresh evidence) + v2.0 milestone audit re-run flipped gaps_found → pass (26/26) | 2026-08-23 | 602453c | [260823-gfi-run-gsd-verifier-on-phase-07-ingestion-s](./quick/260823-gfi-run-gsd-verifier-on-phase-07-ingestion-s/) |
 
 | 260907-pdl | Polish navigation, library and highlights layout; remove empty status chrome | 2026-09-07 | 01c9ea6 | [260907-pdl-polish-library-highlights-and-navigation](./quick/260907-pdl-polish-library-highlights-and-navigation/) |
+| 260907-pm5 | Prepare Lem Reader for open-source and portfolio presentation | 2026-09-07 | 234f46c | [260907-pm5-prepare-lem-reader-for-open-source-and-p](./quick/260907-pm5-prepare-lem-reader-for-open-source-and-p/) |
 
 ## Deferred Items
 
