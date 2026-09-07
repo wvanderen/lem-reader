@@ -5,7 +5,7 @@ milestone_name: Reader Experience
 current_phase: 21
 status: verifying
 stopped_at: Completed 21-08-PLAN.md (phase 21 ready for verification)
-last_updated: "2026-09-07T15:05:07.082Z"
+last_updated: "2026-09-07T23:23:27.931506+00:00"
 last_activity: 2026-09-07
 last_activity_desc: Phase 21 complete
 progress:
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-08-30)
 Phase: 21
 Plan: Not started
 Status: Phase complete — ready for verification
-Last activity: 2026-09-07 — Phase 21 complete
+Last activity: 2026-09-07 — Completed quick task 260907-pdl: UI cohesion pass
 
 ## Recent Decisions (Phase 18)
 
@@ -518,6 +518,8 @@ None yet. (2026-08-21-fix-prod-ui-paste-ingest-flow resolved by quick task 26082
 | 260821-k6z | Deploy minimal production to Vercel — port /api/ingest to a Vercel Node function (D7-05 adapter), vercel.json + deploy script; ingestion works in prod (workerd can't run jsdom per 07-01 spike) | 2026-08-21 | 934853f | [260821-k6z-deploy-minimal-production-to-vercel-port](./quick/260821-k6z-deploy-minimal-production-to-vercel-port/) |
 | 260821-ov7 | Fix paste flow — accept plain-text pastes by routing tag-less content through the markdown intake (looksLikePlainText + Stage 0.5 reroute); closes todo 2026-08-21-fix-prod-ui-paste-ingest-flow | 2026-08-21 | 2a33ea0 | [260821-ov7-fix-paste-flow-accept-plain-text-pastes-](./quick/260821-ov7-fix-paste-flow-accept-plain-text-pastes-/) |
 | 260823-gfi | Retroactive gsd-verifier on phase 07-ingestion-substrate (07-VERIFICATION.md — 12/12 truths, 5 SCs verified w/ fresh evidence) + v2.0 milestone audit re-run flipped gaps_found → pass (26/26) | 2026-08-23 | 602453c | [260823-gfi-run-gsd-verifier-on-phase-07-ingestion-s](./quick/260823-gfi-run-gsd-verifier-on-phase-07-ingestion-s/) |
+
+| 260907-pdl | Polish navigation, library and highlights layout; remove empty status chrome | 2026-09-07 | 01c9ea6 | [260907-pdl-polish-library-highlights-and-navigation](./quick/260907-pdl-polish-library-highlights-and-navigation/) |
 
 ## Deferred Items
 
