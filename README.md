@@ -10,7 +10,13 @@ Lem Reader turns articles, Markdown, PDFs, and EPUBs into a focused personal rea
 
 The project began as an experiment in accessible browser pagination: can a responsive web reader feel like a book without giving up semantic HTML, keyboard access, text selection, or a scrolling alternative? It has since grown into a local-first library with highlights, notes, robust ingestion, and versioned export/import.
 
-> Lem Reader is a portfolio project and active prototype. It is not currently offered as a hosted service; run it locally to explore it.
+> Lem Reader is a portfolio project and active prototype, not a managed reading or backup service.
+
+## Live demo
+
+Explore the production build at **[lem-reader.vercel.app](https://lem-reader.vercel.app/)**. The library is stored locally in your browser, so you can read the included guide, add public content, change reading settings, highlight passages, and export your library without creating an account.
+
+Export your library before clearing site data, and do not rely on the demo deployment as the only copy of important material.
 
 ## What it does
 
@@ -57,7 +63,7 @@ npm ci
 npm run dev
 ```
 
-Open `http://localhost:5173`. The repository includes representative sample articles, so the reading experience is available immediately. URL ingestion uses the Vite development server's same-origin Node middleware.
+Open `http://localhost:5173`. A Getting Started article is included, so the reading experience is available immediately. URL ingestion uses the Vite development server's same-origin Node middleware. The broader published-article corpus remains in the repository for layout and browser regression coverage but is not shown in a fresh library.
 
 ## Useful commands
 
@@ -71,8 +77,25 @@ Open `http://localhost:5173`. The repository includes representative sample arti
 | `npm run lint`               | Run ESLint                                        |
 | `npm run lint:no-danger`     | Enforce the no-`dangerouslySetInnerHTML` boundary |
 | `npm run perf`               | Run the browser performance budget harness        |
+| `npm run deploy:vercel`      | Build and deploy the linked Vercel project        |
 
 Playwright tests require its browser binaries. Install them once with `npx playwright install` if they are not already present.
+
+## Production deployment
+
+The public demo is hosted on Vercel. [`vercel.json`](vercel.json) runs `npm run build` and publishes `dist`. The build also creates a self-contained Node function at `/api/ingest`, allowing production to use the same validated ingestion pipeline as local development.
+
+To deploy your own fork:
+
+```bash
+npm ci
+npx vercel login
+npm run deploy:vercel
+```
+
+The first deployment links the checkout to a Vercel project and writes machine-specific configuration to the gitignored `.vercel/` directory. Confirm the returned production URL, then test both the SPA and at least one URL ingestion.
+
+Vercel applies a request-body ceiling before application code runs. Binary PDF or EPUB uploads above roughly 3.4 MB decoded may reach the platform's 4.5 MB request limit after base64/JSON encoding and return the app's calm server-error state. Supporting larger uploads requires a direct blob-upload path rather than raising Lem Reader's own ingestion limit.
 
 ## Project map
 

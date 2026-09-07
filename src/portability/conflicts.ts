@@ -30,12 +30,9 @@ import { loadAllNotes } from "../persistence/notesStore";
 import { loadAllLocations } from "../persistence/locationStore";
 import { listBooks } from "../persistence/booksStore";
 import { db } from "../persistence/db";
-import { fixtures } from "../fixtures";
+import { bundledFixtures } from "../fixtures";
 import { figureAssetIds } from "../content/assets/AssetProvider";
-import {
-  graphemeClusters,
-  normalizeText,
-} from "../content/normalizeText";
+import { graphemeClusters, normalizeText } from "../content/normalizeText";
 import { resolveQuoteSelectorInText } from "../annotations/resolution";
 import { effectiveTitle } from "../ingestion/library/effectiveMetadata";
 import type {
@@ -81,9 +78,7 @@ function danglingAssetArticleIds(
   bundle: ExportBundle,
   importAssets: readonly ValidatedImportAsset[],
 ): Set<string> {
-  const available = new Set(
-    importAssets.map((row) => `${row.articleId}\u0000${row.assetId}`),
-  );
+  const available = new Set(importAssets.map((row) => `${row.articleId}\u0000${row.assetId}`));
   const dangling = new Set<string>();
   for (const article of bundle.articles) {
     for (const assetId of figureAssetIds(article)) {
@@ -251,14 +246,8 @@ type ArticleLookupSource = "bundle" | "local" | "fixture";
  * duplicate calm no-op therefore requires override state to match too
  * (Pitfall 4 fix: an incoming override never arrives silently dropped).
  */
-export function metadataDiffers(
-  a: CanonicalArticle,
-  local: CanonicalArticle,
-): boolean {
-  return (
-    a.readerTitle !== local.readerTitle ||
-    a.readerAuthor !== local.readerAuthor
-  );
+export function metadataDiffers(a: CanonicalArticle, local: CanonicalArticle): boolean {
+  return a.readerTitle !== local.readerTitle || a.readerAuthor !== local.readerAuthor;
 }
 
 type ArticleLookupEntry = {
@@ -291,7 +280,7 @@ export function buildArticleLookup(
   for (const a of localArticles) {
     if (!lookup.has(a.id)) lookup.set(a.id, { article: a, source: "local" });
   }
-  for (const a of fixtures) {
+  for (const a of bundledFixtures) {
     if (!lookup.has(a.id)) lookup.set(a.id, { article: a, source: "fixture" });
   }
   return lookup;
@@ -341,9 +330,7 @@ function resolveHighlightStatus(
     article.lang,
     highlight.position,
   );
-  return resolved === "ambiguous" || resolved === "orphan"
-    ? resolved
-    : "confident";
+  return resolved === "ambiguous" || resolved === "orphan" ? resolved : "confident";
 }
 
 // ── detectImportPreview — the dry-run pass (PURE READS) ──────────────────────
@@ -381,9 +368,7 @@ export async function detectImportPreview(
   const localBookById = new Map(localBooks.map((b) => [b.id, b]));
   const localHighlightIds = new Set(localHighlights.map((h) => h.id));
   const localNoteIds = new Set(localNotes.map((n) => n.id));
-  const localLocationByKey = new Map(
-    localLocations.map((l) => [locationKey(l), l]),
-  );
+  const localLocationByKey = new Map(localLocations.map((l) => [locationKey(l), l]));
 
   // ── Conflict classification (PK comparisons only) ──
   const bookConflicts: string[] = [];
@@ -432,9 +417,7 @@ export async function detectImportPreview(
       added.articles++;
     } else if (a.revision !== local.revision) {
       revisionConflicts.push(a.id);
-    } else if (
-      a.provenance.originalHtmlHash !== local.provenance.originalHtmlHash
-    ) {
+    } else if (a.provenance.originalHtmlHash !== local.provenance.originalHtmlHash) {
       divergenceConflicts.push(a.id);
     } else if (metadataDiffers(a, local)) {
       // Phase 17 17-04 (D17-11): same id+revision+hash but a differing
@@ -446,18 +429,10 @@ export async function detectImportPreview(
         id: a.id,
         localName: effectiveTitle(local),
         incomingName: effectiveTitle(a),
-        ...(local.readerTitle !== undefined
-          ? { localReaderTitle: local.readerTitle }
-          : {}),
-        ...(a.readerTitle !== undefined
-          ? { incomingReaderTitle: a.readerTitle }
-          : {}),
-        ...(local.readerAuthor !== undefined
-          ? { localReaderAuthor: local.readerAuthor }
-          : {}),
-        ...(a.readerAuthor !== undefined
-          ? { incomingReaderAuthor: a.readerAuthor }
-          : {}),
+        ...(local.readerTitle !== undefined ? { localReaderTitle: local.readerTitle } : {}),
+        ...(a.readerTitle !== undefined ? { incomingReaderTitle: a.readerTitle } : {}),
+        ...(local.readerAuthor !== undefined ? { localReaderAuthor: local.readerAuthor } : {}),
+        ...(a.readerAuthor !== undefined ? { incomingReaderAuthor: a.readerAuthor } : {}),
       });
     }
     // else: identical duplicate (same id+revision+hash) INCLUDING override
@@ -484,13 +459,8 @@ export async function detectImportPreview(
     }
   }
 
-  const summarize = (
-    kind: ConflictKind,
-    ids: readonly string[],
-  ): ConflictSummary | null =>
-    ids.length > 0
-      ? { kind, count: ids.length, sampleIds: ids.slice(0, 5) }
-      : null;
+  const summarize = (kind: ConflictKind, ids: readonly string[]): ConflictSummary | null =>
+    ids.length > 0 ? { kind, count: ids.length, sampleIds: ids.slice(0, 5) } : null;
 
   const conflicts: ConflictSummary[] = [];
   for (const summary of [
@@ -685,9 +655,7 @@ export async function resolveImportPlan(
   const localBookById = new Map(localBooks.map((b) => [b.id, b]));
   const localHighlightIds = new Set(localHighlights.map((h) => h.id));
   const localNoteIds = new Set(localNotes.map((n) => n.id));
-  const localLocationByKey = new Map(
-    localLocations.map((l) => [locationKey(l), l]),
-  );
+  const localLocationByKey = new Map(localLocations.map((l) => [locationKey(l), l]));
 
   const plan: ResolvedImportPlan = {
     booksToWrite: [],
@@ -726,8 +694,7 @@ export async function resolveImportPlan(
   // (D17-11) OR the per-kind overwrite as the honest bulk take-incoming.
   const metadataTakeIncoming = itemChoices?.metadataTakeIncoming ?? EMPTY_METADATA_TAKE_INCOMING;
   const takeIncomingMetadata = (id: string): boolean =>
-    overrides["article-metadata-override"] === "overwrite" ||
-    metadataTakeIncoming.has(id);
+    overrides["article-metadata-override"] === "overwrite" || metadataTakeIncoming.has(id);
   // Phase 20 (20-05): the no-broken-refs gate — re-derived exactly as the
   // preview derived it (the determinism note above covers the window). A
   // dangling article skips BEFORE any conflict classification: no honest
@@ -747,25 +714,16 @@ export async function resolveImportPlan(
       // the local row (an explicit reader choice under Overwrite-all). The
       // LOCAL-wins path (equal-or-lower) stays untouched — no write, the
       // local row and its overrides are already safe.
-      if (
-        overrides["article-revision"] === "overwrite" &&
-        a.revision > local.revision
-      ) {
-        plan.articlesToWrite.push(
-          mergeOnWin(a, local, takeIncomingMetadata),
-        );
+      if (overrides["article-revision"] === "overwrite" && a.revision > local.revision) {
+        plan.articlesToWrite.push(mergeOnWin(a, local, takeIncomingMetadata));
       } else {
         plan.skipped.articles++; // skip | keep-both(as skip) | lower revision
       }
-    } else if (
-      a.provenance.originalHtmlHash !== local.provenance.originalHtmlHash
-    ) {
+    } else if (a.provenance.originalHtmlHash !== local.provenance.originalHtmlHash) {
       if (overrides["article-content-divergence"] === "overwrite") {
         // Incoming wins (content replaced) — the local name survives unless
         // take-incoming (D17-10).
-        plan.articlesToWrite.push(
-          mergeOnWin(a, local, takeIncomingMetadata),
-        );
+        plan.articlesToWrite.push(mergeOnWin(a, local, takeIncomingMetadata));
       } else {
         plan.skipped.articles++;
       }

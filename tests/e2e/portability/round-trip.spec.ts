@@ -31,7 +31,7 @@
 //              offsets byte-equal; the fixture-backed highlight renders a
 //              visible mark in the reader (the ANNO rendering surface).
 import { test, expect } from "@playwright/test";
-import { fixtures } from "../../../src/fixtures";
+import { regressionFixtures } from "../../../src/fixtures";
 import { ArticleSchema } from "../../../src/content/schema";
 import type { CanonicalArticle } from "../../../src/content/types";
 import {
@@ -41,10 +41,7 @@ import {
   normalizeText,
   resolveQuoteSelector,
 } from "../../../src/content/normalizeText";
-import type {
-  TextPositionSelector,
-  TextQuoteSelector,
-} from "../../../src/content/normalizeText";
+import type { TextPositionSelector, TextQuoteSelector } from "../../../src/content/normalizeText";
 import { ExportBundleSchema } from "../../../src/portability/bundle";
 import { computeManifest, sha256Hex } from "../../../src/portability/manifest";
 import { validBookEpub3 } from "../../unit/server/epub-fixtures";
@@ -111,7 +108,7 @@ test("SC#4 — export on machine A re-imports on machine B with offsets intact",
     // construction, ASCII so grapheme segmentation is engine-identical.
     const anchorAlpha = confidentHighlightOn(PASTE_ARTICLE);
     const anchorBeta = confidentHighlightOn(MD_ARTICLE);
-    const fixtureArticle = fixtures.find((f) => f.id === "essay-long-form");
+    const fixtureArticle = regressionFixtures.find((f) => f.id === "essay-long-form");
     expect(fixtureArticle, "essay-long-form fixture must be bundled").toBeDefined();
     // A fixture passage: begin the scan ~150 graphemes in so the walk starts
     // inside genuine body prose (past the opening heading + first paragraph).
@@ -336,14 +333,13 @@ test("SC#4 books — a book travels machines with its chapters + highlight intac
     // text machine B will hold after import.
     const savedArticles = await readAllRows(pageA, "articles");
     const chapterRows = savedArticles.filter(
-      (r) => (r as { ingestionMeta?: { chapterIndex?: number } }).ingestionMeta
-        ?.chapterIndex !== undefined,
+      (r) =>
+        (r as { ingestionMeta?: { chapterIndex?: number } }).ingestionMeta?.chapterIndex !==
+        undefined,
     );
     expect(chapterRows, "the uploaded book must have saved chapter articles").toHaveLength(4);
     const chapter2Row = chapterRows.find(
-      (r) =>
-        (r as { ingestionMeta?: { chapterIndex?: number } }).ingestionMeta
-          ?.chapterIndex === 1,
+      (r) => (r as { ingestionMeta?: { chapterIndex?: number } }).ingestionMeta?.chapterIndex === 1,
     );
     expect(chapter2Row, "chapter 2 (chapterIndex 1) must exist").toBeDefined();
     const chapter2 = ArticleSchema.parse(chapter2Row!) as CanonicalArticle;
@@ -430,21 +426,15 @@ test("SC#4 books — a book travels machines with its chapters + highlight intac
       const row = await readRow(pageB, "articles", chapterId);
       expect(row, `chapter ${chapterId} must exist on machine B`).not.toBeNull();
       expect((row as { bookId?: string }).bookId).toBe(bookId);
-      expect(
-        (row as { ingestionMeta?: { bookId?: string } }).ingestionMeta?.bookId,
-      ).toBe(bookId);
+      expect((row as { ingestionMeta?: { bookId?: string } }).ingestionMeta?.bookId).toBe(bookId);
     }
 
     // The chapter-2 highlight offsets are byte-equal (the byte-equality
     // assertion pattern — the re-resolution substrate traveled intact).
     const hlRowB = await readRow(pageB, "highlights", "hl-rt-chapter");
     expect(hlRowB).not.toBeNull();
-    expect((hlRowB!.position as { start: number }).start).toBe(
-      anchorChapter2.position.start,
-    );
-    expect((hlRowB!.position as { end: number }).end).toBe(
-      anchorChapter2.position.end,
-    );
+    expect((hlRowB!.position as { start: number }).start).toBe(anchorChapter2.position.start);
+    expect((hlRowB!.position as { end: number }).end).toBe(anchorChapter2.position.end);
 
     // The traveled location is byte-equal too.
     const locationRowB = await readRow(pageB, "location", [chapter2Id, 1]);
@@ -455,19 +445,16 @@ test("SC#4 books — a book travels machines with its chapters + highlight intac
     await pageB.keyboard.press("Escape"); // close the settings panel
     await expect(panelB).not.toBeVisible();
     await pageB.reload(); // LibraryView loads once per mount (08-05 precedent)
-    await expect(
-      pageB.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(pageB.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible({
+      timeout: 10_000,
+    });
     const bookRow = pageB.locator("li.book-row");
     await expect(bookRow).toHaveCount(1);
     await expect(
       bookRow.getByRole("heading", { level: 2, name: "The Synthetic Book" }),
     ).toBeVisible();
     await bookRow.locator(".book-toggle").click();
-    await expect(bookRow.locator(".book-toggle")).toHaveAttribute(
-      "aria-expanded",
-      "true",
-    );
+    await expect(bookRow.locator(".book-toggle")).toHaveAttribute("aria-expanded", "true");
     await expect(bookRow.locator(".book-chapter-list > li")).toHaveCount(4);
 
     // The traveled location surfaces as the ONE book-level strip entry —
@@ -566,22 +553,19 @@ test("SC#4 v1-compat — a v1 bundle (no books) imports exactly as before with z
     });
 
     const panel = await openSettings(page);
-    await panel
-      .locator('input[type="file"][accept=".zip"]')
-      .setInputFiles({
-        name: "lem-reader-bundle-v1.zip",
-        mimeType: "application/zip",
-        buffer: v1Bundle,
-      });
+    await panel.locator('input[type="file"][accept=".zip"]').setInputFiles({
+      name: "lem-reader-bundle-v1.zip",
+      mimeType: "application/zip",
+      buffer: v1Bundle,
+    });
 
     const preview = page.locator("dialog.import-preview");
     await expect(preview).toBeVisible({ timeout: 15_000 });
     await expect(preview).toContainText("This bundle contains 1 article, 1 highlight");
     await preview.getByRole("button", { name: "Import", exact: true }).click();
-    await expect(settingsStatus(page)).toContainText(
-      "Imported 1 article, 1 highlight",
-      { timeout: 15_000 },
-    );
+    await expect(settingsStatus(page)).toContainText("Imported 1 article, 1 highlight", {
+      timeout: 15_000,
+    });
 
     // Exactly as before: the article + highlight landed…
     expect(await readRow(page, "articles", V1_ARTICLE.id)).not.toBeNull();
@@ -657,12 +641,12 @@ test("SC#4 overrides — an edited title/author travels machines byte-equal insi
     // render before the dialog drive.
     await pageA.goto(`${BASE}/#/`);
     await pageA.reload();
-    await expect(
-      pageA.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible({ timeout: 10_000 });
-    await expect(
-      pageA.locator(`#title-${OVERRIDE_RT_ARTICLE.id}`),
-    ).toHaveText("Round Trip Override Article");
+    await expect(pageA.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(pageA.locator(`#title-${OVERRIDE_RT_ARTICLE.id}`)).toHaveText(
+      "Round Trip Override Article",
+    );
 
     const editRow = pageA
       .locator(".library-list > li")
@@ -675,9 +659,7 @@ test("SC#4 overrides — an edited title/author travels machines byte-equal insi
     await editDialog.getByRole("button", { name: "Save" }).click();
     await expect(editDialog).not.toBeVisible();
     // The row immediately re-derives on save (the 17-02 refreshKey).
-    await expect(pageA.locator(`#title-${OVERRIDE_RT_ARTICLE.id}`)).toHaveText(
-      A_RENAMED_TITLE,
-    );
+    await expect(pageA.locator(`#title-${OVERRIDE_RT_ARTICLE.id}`)).toHaveText(A_RENAMED_TITLE);
 
     // ── Machine A: export through the real UI ──────────────────────────────
     const panelA = await openSettings(pageA);
@@ -696,15 +678,11 @@ test("SC#4 overrides — an edited title/author travels machines byte-equal insi
     expect(exportedArticles.map((a) => a.id).sort()).toEqual(
       [OVERRIDE_RT_ARTICLE.id, PLAIN_RT_ARTICLE.id].sort(),
     );
-    const overrideExported = exportedArticles.find(
-      (a) => a.id === OVERRIDE_RT_ARTICLE.id,
-    );
+    const overrideExported = exportedArticles.find((a) => a.id === OVERRIDE_RT_ARTICLE.id);
     expect(overrideExported?.readerTitle).toBe(A_RENAMED_TITLE);
     expect(overrideExported?.readerAuthor).toBe(A_RENAMED_AUTHOR);
     // The no-override companion carries NEITHER key (regression cell).
-    const plainExported = exportedArticles.find(
-      (a) => a.id === PLAIN_RT_ARTICLE.id,
-    );
+    const plainExported = exportedArticles.find((a) => a.id === PLAIN_RT_ARTICLE.id);
     expect(
       Object.prototype.hasOwnProperty.call(plainExported, "readerTitle"),
       "plain article must export without a readerTitle key",
@@ -746,23 +724,17 @@ test("SC#4 overrides — an edited title/author travels machines byte-equal insi
     // The plain companion imported with NO override keys.
     const bPlainRow = await readRow(pageB, "articles", PLAIN_RT_ARTICLE.id);
     expect(bPlainRow).not.toBeNull();
-    expect(
-      Object.prototype.hasOwnProperty.call(bPlainRow, "readerTitle"),
-    ).toBe(false);
-    expect(
-      Object.prototype.hasOwnProperty.call(bPlainRow, "readerAuthor"),
-    ).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(bPlainRow, "readerTitle")).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(bPlainRow, "readerAuthor")).toBe(false);
 
     // ── Machine B: the library row shows the one effective name ────────────
     await pageB.keyboard.press("Escape"); // close the settings panel
     await expect(panelB).not.toBeVisible();
     await pageB.reload(); // LibraryView loads once per mount (08-05)
-    await expect(
-      pageB.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible({ timeout: 10_000 });
-    await expect(pageB.locator(`#title-${OVERRIDE_RT_ARTICLE.id}`)).toHaveText(
-      A_RENAMED_TITLE,
-    );
+    await expect(pageB.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(pageB.locator(`#title-${OVERRIDE_RT_ARTICLE.id}`)).toHaveText(A_RENAMED_TITLE);
     await expect(pageB.locator(`#title-${PLAIN_RT_ARTICLE.id}`)).toHaveText(
       "Round Trip Plain Article",
     );
@@ -797,9 +769,10 @@ const SPAN_RT_ARTICLE = makeArticle({
  * the SHIPPED deriveQuoteSelector + resolveQuoteSelector machinery (the
  * confidentHighlightOn discipline — never a forked offset computation).
  */
-function confidentSpanOn(
-  article: CanonicalArticle,
-): { position: TextPositionSelector; quote: TextQuoteSelector } {
+function confidentSpanOn(article: CanonicalArticle): {
+  position: TextPositionSelector;
+  quote: TextQuoteSelector;
+} {
   const normalized = normalizeText(article);
   const total = graphemeLength(article);
   let sep = normalized.indexOf(BLOCK_SEPARATOR);
@@ -810,10 +783,7 @@ function confidentSpanOn(
       const position = { start, end };
       const quote = deriveQuoteSelector(article, position);
       const resolved = resolveQuoteSelector(article, quote, position);
-      if (
-        typeof resolved === "object" &&
-        quote.exact.includes(BLOCK_SEPARATOR)
-      ) {
+      if (typeof resolved === "object" && quote.exact.includes(BLOCK_SEPARATOR)) {
         return { position, quote };
       }
     }
@@ -869,32 +839,23 @@ test("SC#4 spans — a cross-block highlight travels machines as ONE record with
     await panelB.locator('input[type="file"][accept=".zip"]').setInputFiles(bundlePath!);
     const preview = pageB.locator("dialog.import-preview");
     await expect(preview).toBeVisible({ timeout: 15_000 });
-    await expect(preview).toContainText(
-      "This bundle contains 1 article, 1 highlight",
-    );
+    await expect(preview).toContainText("This bundle contains 1 article, 1 highlight");
     await preview.getByRole("button", { name: "Import", exact: true }).click();
-    await expect(settingsStatus(pageB)).toContainText(
-      "Imported 1 article, 1 highlight",
-      { timeout: 15_000 },
-    );
+    await expect(settingsStatus(pageB)).toContainText("Imported 1 article, 1 highlight", {
+      timeout: 15_000,
+    });
 
     // ── Machine B: raw IndexedDB truth — ONE record, separators intact ──
     expect(await countRows(pageB, "highlights")).toBe(1);
     const spanRow = await readRow(pageB, "highlights", "hl-rt-span");
     expect(spanRow).not.toBeNull();
-    expect((spanRow!.quote as { exact: string }).exact).toBe(
-      anchorSpan.quote.exact,
-    );
+    expect((spanRow!.quote as { exact: string }).exact).toBe(anchorSpan.quote.exact);
     expect(
       (spanRow!.quote as { exact: string }).exact.includes(BLOCK_SEPARATOR),
       "the imported quote.exact still carries the block separators",
     ).toBe(true);
-    expect((spanRow!.position as { start: number }).start).toBe(
-      anchorSpan.position.start,
-    );
-    expect((spanRow!.position as { end: number }).end).toBe(
-      anchorSpan.position.end,
-    );
+    expect((spanRow!.position as { start: number }).start).toBe(anchorSpan.position.start);
+    expect((spanRow!.position as { end: number }).end).toBe(anchorSpan.position.end);
 
     // ── Machine B: the span re-anchors CONFIDENT and renders in BOTH ────
     // blocks. Marks render only for resolvedPosition !== null; the ABSENCE
@@ -1118,11 +1079,9 @@ test("SC#4 assets — an article's images travel machines byte-equal and render 
     const img = pageB.locator("figure img");
     await expect(img).toBeVisible({ timeout: 15_000 });
     await expect
-      .poll(
-        async () =>
-          await img.evaluate((el) => (el as HTMLImageElement).naturalWidth),
-        { timeout: 10_000 },
-      )
+      .poll(async () => await img.evaluate((el) => (el as HTMLImageElement).naturalWidth), {
+        timeout: 10_000,
+      })
       .toBeGreaterThan(0);
     expect(await img.getAttribute("src")).toMatch(/^blob:/);
   } finally {

@@ -1,0 +1,228 @@
+{
+  "id": "getting-started",
+  "revision": 1,
+  "lang": "en",
+  "provenance": {
+    "sourceUrl": "https://github.com/wvanderen/lem-reader",
+    "title": "Getting started with Lem Reader",
+    "author": "Lem Reader",
+    "retrievedAt": "2026-09-07T00:00:00Z",
+    "originalHtmlHash": "3b411bd49d50918645913f678421c86d2edda1f700a1f3f88f365b35fe0c098e",
+    "license": "MIT"
+  },
+  "blocks": [
+    {
+      "kind": "paragraph",
+      "content": [
+        {
+          "text": "Welcome. Lem Reader is a calm, local-first place for long-form reading. This short guide is already in your library so you can explore the reader before adding anything of your own.",
+          "marks": []
+        }
+      ]
+    },
+    {
+      "kind": "blockquote",
+      "children": [
+        {
+          "kind": "paragraph",
+          "content": [
+            {
+              "text": "The interface should recede behind the article while keeping your place and your choices predictable.",
+              "marks": []
+            }
+          ]
+        }
+      ]
+    },
+    { "kind": "heading", "level": 2, "content": [{ "text": "Choose how you read", "marks": [] }] },
+    {
+      "kind": "paragraph",
+      "content": [
+        {
+          "text": "Use the reading-mode control in the header to move between responsive pages and a continuous scrolling view. Your place is stored as a position in the article—not as a page number—so changing the window size, type, spacing, or reading mode does not make the saved location meaningless.",
+          "marks": []
+        }
+      ]
+    },
+    {
+      "kind": "bulleted-list",
+      "items": [
+        {
+          "content": [
+            {
+              "kind": "paragraph",
+              "content": [
+                {
+                  "text": "Paginated mode gives you stable, viewport-sized reading surfaces and keyboard page turns.",
+                  "marks": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "content": [
+            {
+              "kind": "paragraph",
+              "content": [
+                {
+                  "text": "Scrolling mode keeps the same semantic article in a familiar continuous flow.",
+                  "marks": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "content": [
+            {
+              "kind": "paragraph",
+              "content": [
+                {
+                  "text": "Reading settings let you change theme, typeface, text size, spacing, and line length.",
+                  "marks": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "paragraph",
+      "content": [
+        {
+          "text": "Lem Reader respects browser zoom, visible focus, reduced-motion preferences, and keyboard navigation. If pagination cannot remain reliable for a particular layout, the app explains the problem and falls back to scrolling instead of hiding broken output.",
+          "marks": []
+        }
+      ]
+    },
+    { "kind": "heading", "level": 2, "content": [{ "text": "Build your library", "marks": [] }] },
+    {
+      "kind": "paragraph",
+      "content": [
+        {
+          "text": "Return to Library and choose Add to Library. You can save a public article by URL, paste HTML or Markdown, or upload Markdown, HTML, PDF, and EPUB files. EPUB books stay grouped while each chapter opens in the same reader.",
+          "marks": []
+        }
+      ]
+    },
+    {
+      "kind": "numbered-list",
+      "start": 1,
+      "items": [
+        {
+          "content": [
+            {
+              "kind": "paragraph",
+              "content": [
+                { "text": "Add an article or book from the Library screen.", "marks": [] }
+              ]
+            }
+          ]
+        },
+        {
+          "content": [
+            {
+              "kind": "paragraph",
+              "content": [
+                {
+                  "text": "Edit its display title or author, and organize it with tags.",
+                  "marks": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "content": [
+            {
+              "kind": "paragraph",
+              "content": [
+                {
+                  "text": "Use All, Unread, In progress, and Finished to move through the library by reading state.",
+                  "marks": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "paragraph",
+      "content": [
+        {
+          "text": "Lem Reader is intentionally honest about its content scope. It handles the structures common to long-form publishing—headings, prose, links, quotations, lists, figures and captions, footnotes, and code. Complex tables, math, interactive embeds, scanned PDFs, or structurally ambiguous documents may be refused rather than silently converted into confusing text.",
+          "marks": []
+        }
+      ]
+    },
+    { "kind": "heading", "level": 2, "content": [{ "text": "Mark what matters", "marks": [] }] },
+    {
+      "kind": "paragraph",
+      "content": [
+        {
+          "text": "Select text to create a highlight, then attach a note if you want to keep your own context. Highlights can cross paragraphs and other semantic blocks. The Highlights destination gathers annotations from the whole library, and the article toolbar lets you navigate its contents, tags, highlights, and reading settings without crowding the page.",
+          "marks": []
+        }
+      ]
+    },
+    {
+      "kind": "paragraph",
+      "content": [
+        {
+          "text": "Annotations are anchored to normalized source text rather than DOM nodes or page numbers. When imported content changes, Lem Reader reattaches only when it has enough evidence; uncertain matches remain visibly unresolved for review.",
+          "marks": []
+        }
+      ]
+    },
+    {
+      "kind": "heading",
+      "level": 2,
+      "content": [{ "text": "Your data stays yours", "marks": [] }]
+    },
+    {
+      "kind": "paragraph",
+      "content": [
+        {
+          "text": "The library, reading positions, preferences, highlights, notes, and saved images live in this browser using IndexedDB. There is no Lem Reader account and no cross-device sync service. Clearing browser storage removes this local data, so export a backup before clearing site data or moving browsers.",
+          "marks": []
+        }
+      ]
+    },
+    {
+      "kind": "paragraph",
+      "content": [
+        {
+          "text": "Export creates a versioned library bundle. Import previews changes and conflicts before writing anything, allowing you to decide what should win instead of silently overwriting your library.",
+          "marks": []
+        }
+      ]
+    },
+    {
+      "kind": "heading",
+      "level": 2,
+      "content": [{ "text": "Help shape the project", "marks": [] }]
+    },
+    {
+      "kind": "paragraph",
+      "content": [
+        {
+          "text": "Lem Reader is an open-source portfolio project and active prototype. If something feels rough, inaccessible, or surprising, return to the Library and use Share feedback. Bug reports and ideas open as structured GitHub issues so useful browser, content-format, viewport, and accessibility context is easy to include.",
+          "marks": []
+        }
+      ]
+    },
+    {
+      "kind": "paragraph",
+      "content": [
+        {
+          "text": "You are ready. Try changing the reading mode, adjust the typography, highlight a sentence in this guide, and then add something you genuinely want to read.",
+          "marks": [{ "type": "strong" }]
+        }
+      ]
+    }
+  ],
+  "footnotes": []
+}

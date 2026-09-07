@@ -12,7 +12,7 @@
   "bugs": {
     "url": "https://github.com/wvanderen/lem-reader/issues"
   },
-  "homepage": "https://github.com/wvanderen/lem-reader#readme",
+  "homepage": "https://lem-reader.vercel.app/",
   "scripts": {
     "dev": "vite",
     "build": "npm run build:api && tsc && vite build",

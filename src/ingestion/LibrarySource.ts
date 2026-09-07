@@ -29,7 +29,7 @@
 import { db } from "../persistence/db";
 import type { AssetRecordRow } from "../persistence/db";
 import { ArticleSchema, type CanonicalArticle } from "../content/schema";
-import { fixtures } from "../fixtures";
+import { bundledFixtures, libraryFixtures } from "../fixtures";
 import type { ArticleRepository } from "../content/repository";
 import type { ValidatedAsset } from "./IngestionClient";
 
@@ -96,10 +96,7 @@ export class DexieLibrarySource implements ArticleRepository {
    * stays a pure put/delete sequence: no Zod, no crypto, no network inside,
    * the 09-04 rule).
    */
-  async save(
-    article: CanonicalArticle,
-    assets: ValidatedAsset[] = [],
-  ): Promise<void> {
+  async save(article: CanonicalArticle, assets: ValidatedAsset[] = []): Promise<void> {
     const createdAt = new Date().toISOString();
     const rows: AssetRecordRow[] = assets.map((asset) => ({
       articleId: article.id,
@@ -225,7 +222,7 @@ export const dexieLibrarySource = new DexieLibrarySource();
 export const compositeLibraryRepository: ArticleRepository = {
   async list() {
     const [fixtureList, ingestedList] = await Promise.all([
-      Promise.resolve([...fixtures]),
+      Promise.resolve([...libraryFixtures]),
       dexieLibrarySource.list(),
     ]);
     const seen = new Set<string>();
@@ -244,6 +241,6 @@ export const compositeLibraryRepository: ArticleRepository = {
   async open(id) {
     const ingested = await dexieLibrarySource.open(id);
     if (ingested) return ingested;
-    return fixtures.find((a) => a.id === id) ?? null;
+    return bundledFixtures.find((a) => a.id === id) ?? null;
   },
 };

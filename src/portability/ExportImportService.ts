@@ -33,7 +33,7 @@
 // ONLY the four named identifiers zipSync, unzipSync, strToU8, strFromU8
 // may ever be imported from "fflate" in src/ — nothing else.
 import { zipSync, unzipSync, strToU8, strFromU8 } from "fflate";
-import { fixtures } from "../fixtures";
+import { bundledFixtures } from "../fixtures";
 import { dexieLibrarySource } from "../ingestion/LibrarySource";
 import { db } from "../persistence/db";
 import type { AssetRecordRow, LocationRecordRow } from "../persistence/db";
@@ -96,9 +96,7 @@ export async function buildBundleBytes(): Promise<Uint8Array<ArrayBuffer>> {
       // loadAllHighlights precedent): one drifted row never blocks the
       // reader's export.
     ]);
-  const preferences = settingsResult.ok
-    ? settingsResult.settings
-    : DEFAULT_SETTINGS;
+  const preferences = settingsResult.ok ? settingsResult.settings : DEFAULT_SETTINGS;
   // Writers ALWAYS emit the books field on v2 (empty array on a book-free
   // library) — the field's presence is the v2 write contract (bundle.ts).
   const books = booksResult.ok ? booksResult.books : [];
@@ -110,9 +108,7 @@ export async function buildBundleBytes(): Promise<Uint8Array<ArrayBuffer>> {
   // outside any transaction (there is none on the export path; the note
   // keeps the 09-04 no-crypto-in-closures rule explicit for future edits).
   const articleIds = new Set(articles.map((a) => a.id));
-  const exportAssetRows = assetRows.filter((row) =>
-    articleIds.has(row.articleId),
-  );
+  const exportAssetRows = assetRows.filter((row) => articleIds.has(row.articleId));
   const assetEntries: Record<string, Uint8Array> = {};
   const assets: AssetExportMeta[] = [];
   for (const row of exportAssetRows) {
@@ -143,9 +139,7 @@ export async function buildBundleBytes(): Promise<Uint8Array<ArrayBuffer>> {
     const owner = highlightById.get(n.highlightId);
     if (owner !== undefined) referenced.add(owner.articleId);
   }
-  const fixtureIds = fixtures
-    .filter((f) => referenced.has(f.id))
-    .map((f) => f.id);
+  const fixtureIds = bundledFixtures.filter((f) => referenced.has(f.id)).map((f) => f.id);
 
   const bundle = ExportBundleSchema.parse({
     // Phase 12 (12-07) + Phase 17 (17-04) + Phase 20 (20-05): writers emit
@@ -238,9 +232,7 @@ const MAX_ENTRY_ORIGINAL_SIZE = 200_000_000;
  * enums (schemaVersion, kinds, theme, …) reject every unexpected value;
  * any problem surfaces loudly through the issues list, never silently.
  */
-export async function validateBundle(
-  file: File,
-): Promise<BundleValidationResult> {
+export async function validateBundle(file: File): Promise<BundleValidationResult> {
   // 1. Unzip with the bomb cap. A filtered (over-cap) entry is skipped by
   //    fflate without ever being inflated — if that entry was required, the
   //    pipeline refuses below with missing-entry rather than allocating.
@@ -351,9 +343,7 @@ export async function validateBundle(
     ...claimed?.blocks,
   };
   if (claimedBlocks.assets === undefined) {
-    claimedBlocks.assets = await sha256Hex(
-      new TextEncoder().encode(JSON.stringify([])),
-    );
+    claimedBlocks.assets = await sha256Hex(new TextEncoder().encode(JSON.stringify([])));
   }
   // D21-03 (POLISH-09) manifest legacy-value tolerance: when the pre-parse
   // clamp mapped the enumerated legacy value (72 → 64), a v2.1-era
@@ -370,17 +360,15 @@ export async function validateBundle(
     claimedBlocks.preferences !== recomputed.blocks.preferences
   ) {
     const legacyHash = await sha256Hex(
-      new TextEncoder().encode(
-        JSON.stringify({ ...parsed.data.preferences, measure: 72 }),
-      ),
+      new TextEncoder().encode(JSON.stringify({ ...parsed.data.preferences, measure: 72 })),
     );
     if (claimedBlocks.preferences === legacyHash) {
       claimedBlocks.preferences = recomputed.blocks.preferences;
     }
   }
-  const failedBlocks = (Object.keys(recomputed.blocks) as Array<
-    keyof Manifest["blocks"]
-  >).filter((b) => recomputed.blocks[b] !== claimedBlocks[b]);
+  const failedBlocks = (Object.keys(recomputed.blocks) as Array<keyof Manifest["blocks"]>).filter(
+    (b) => recomputed.blocks[b] !== claimedBlocks[b],
+  );
   if (failedBlocks.length > 0) {
     return { ok: false, refusal: { kind: "corrupted", failedBlocks } };
   }
@@ -507,9 +495,7 @@ export async function applyImport(plan: ResolvedImportPlan): Promise<void> {
   // upsert-replacement discipline (a winning article's superseded rows
   // never linger, and an incoming asset-free winner clears stale local
   // rows exactly like re-ingest does).
-  const assetArticleIds = [
-    ...new Set(plan.articlesToWrite.map((a) => a.id)),
-  ];
+  const assetArticleIds = [...new Set(plan.articlesToWrite.map((a) => a.id))];
 
   // The puts-only closure, defined once. It is passed to whichever explicit
   // db.transaction overload matches the plan's touched-store set: db.settings
@@ -534,9 +520,7 @@ export async function applyImport(plan: ResolvedImportPlan): Promise<void> {
       // synchronous data shaping inside the puts-only closure (saveBook
       // precedent); non-chapter articles pass through byte-identically.
       const bookId = article.ingestionMeta?.bookId;
-      await db.articles.put(
-        bookId !== undefined ? { ...article, bookId } : article,
-      );
+      await db.articles.put(bookId !== undefined ? { ...article, bookId } : article);
     }
     // Phase 20 (20-05): assets ride their winning articles — the per-range
     // delete of superseded rows FIRST, then the puts (puts/deletes only;

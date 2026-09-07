@@ -12,7 +12,7 @@
 // `inMemoryRepository` is preserved — it's still the fixture-only reader the
 // composite merges with the Dexie source.
 import type { CanonicalArticle } from "./types";
-import { fixtures } from "../fixtures";
+import { bundledFixtures, libraryFixtures } from "../fixtures";
 import { compositeLibraryRepository } from "../ingestion/LibrarySource";
 
 export interface ArticleRepository {
@@ -22,10 +22,10 @@ export interface ArticleRepository {
 
 export const inMemoryRepository: ArticleRepository = {
   async list() {
-    return [...fixtures];
+    return [...libraryFixtures];
   },
   async open(id) {
-    return fixtures.find((a) => a.id === id) ?? null;
+    return bundledFixtures.find((a) => a.id === id) ?? null;
   },
 };
 
@@ -38,9 +38,5 @@ export { compositeLibraryRepository } from "../ingestion/LibrarySource";
 // (fixtures ∪ ingested). Callers are byte-unchanged. The .bind() preserves
 // the `this`-independent call semantics the composite's methods rely on
 // (they reference the singleton's internal `dexieLibrarySource`).
-export const listArticles = compositeLibraryRepository.list.bind(
-  compositeLibraryRepository,
-);
-export const openArticle = compositeLibraryRepository.open.bind(
-  compositeLibraryRepository,
-);
+export const listArticles = compositeLibraryRepository.list.bind(compositeLibraryRepository);
+export const openArticle = compositeLibraryRepository.open.bind(compositeLibraryRepository);
