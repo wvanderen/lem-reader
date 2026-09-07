@@ -3,7 +3,16 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Lem Reader — a calm, booklike reader for web articles.",
+  "description": "A calm, accessible, local-first reader for web articles and documents.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wvanderen/lem-reader.git"
+  },
+  "bugs": {
+    "url": "https://github.com/wvanderen/lem-reader/issues"
+  },
+  "homepage": "https://github.com/wvanderen/lem-reader#readme",
   "scripts": {
     "dev": "vite",
     "build": "npm run build:api && tsc && vite build",

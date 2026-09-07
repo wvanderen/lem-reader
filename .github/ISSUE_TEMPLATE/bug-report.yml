@@ -1,0 +1,70 @@
+name: Bug report
+description: Report something that is broken, inaccessible, or behaving unpredictably.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve Lem Reader. Please avoid including private documents or sensitive content.
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Tell us what you expected and what happened instead.
+      placeholder: I expected… Instead…
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How can we reproduce it?
+      description: Include the shortest reliable sequence of steps.
+      placeholder: |
+        1. Open…
+        2. Choose…
+        3. Observe…
+    validations:
+      required: true
+  - type: dropdown
+    id: input
+    attributes:
+      label: Content type
+      options:
+        - Built-in sample
+        - URL
+        - HTML
+        - Markdown
+        - PDF
+        - EPUB
+        - Not content-related
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Browser and operating system
+      placeholder: Firefox 142 on macOS 15
+    validations:
+      required: true
+  - type: input
+    id: viewport
+    attributes:
+      label: Viewport, zoom, or assistive technology
+      description: Include anything relevant, such as 320 px, 400% zoom, VoiceOver, or keyboard-only use.
+      placeholder: 1280 × 720 at 200% zoom
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Add screenshots, console output, or a public/non-sensitive sample if useful.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched existing issues for this problem.
+          required: true
+        - label: I removed private or sensitive content from this report.
+          required: true

@@ -198,6 +198,14 @@ describe("App — route hashes still swap the view", () => {
     window.location.hash = "";
     render(<App />);
     expect(screen.getByRole("heading", { level: 1, name: "Saved articles" })).not.toBeNull();
+    expect(
+      screen.getByRole("link", {
+        name: "Share feedback on GitHub (opens in a new tab)",
+      }),
+    ).toHaveAttribute(
+      "href",
+      "https://github.com/wvanderen/lem-reader/issues/new?template=feature-request.yml&title=%5BFeedback%5D%3A%20",
+    );
 
     // Navigate to the article route.
     window.location.hash = "#/article/a-one";

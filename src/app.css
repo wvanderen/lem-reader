@@ -30,11 +30,12 @@
   --touch: 44px; /* min interactive hit area */
 
   /* UI-SPEC §Typography font stacks */
-  --font-body: "Iowan Old Style", "Source Serif Pro", "Source Serif 4", Georgia, Charter,
-    "Times New Roman", serif;
+  --font-body:
+    "Iowan Old Style", "Source Serif Pro", "Source Serif 4", Georgia, Charter, "Times New Roman",
+    serif;
   --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --font-code: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono",
-    monospace;
+  --font-code:
+    ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
 
   /* Reading measure (Phase 2 D-07 default; applyTheme writes here live) */
   --measure: 64ch;
@@ -1076,12 +1077,12 @@ dialog.add-dialog::backdrop {
 /* The fill is a 100%-width inner div whose scaleX transform is driven by an
    inline style. NO transition, NO animation declared here — the inline style
    write on every scroll is the only thing that moves it. */
- .progress-hairline-fill {
-   height: 100%;
-   width: 100%;
-   background: var(--accent);
-   transform-origin: left;
-   /* Intentionally NO transition/animation property. The inline scaleX value
+.progress-hairline-fill {
+  height: 100%;
+  width: 100%;
+  background: var(--accent);
+  transform-origin: left;
+  /* Intentionally NO transition/animation property. The inline scaleX value
       tracks scroll position immediately (UI-SPEC §Interaction 12 + RESEARCH
       anti-pattern #6). */
 }
@@ -1337,7 +1338,10 @@ dialog.add-dialog::backdrop {
   position: fixed;
   top: calc(48px + var(--space-sm));
   right: var(--space-sm);
-  font: 400 14px/1.45 system-ui, -apple-system, sans-serif;
+  font:
+    400 14px/1.45 system-ui,
+    -apple-system,
+    sans-serif;
   color: var(--ink-soft);
   z-index: 5; /* same layer as the hairline; below the header (10) */
   pointer-events: none;
@@ -3681,12 +3685,8 @@ dialog.book-remove-confirm::backdrop {
 
   .article-body.paginated-surface > header {
     min-height: var(--touch);
-    max-height: calc(
-      (100vh - 48px - 2px - var(--space-sm) - var(--space-2xl)) * 0.25
-    );
-    max-height: calc(
-      (100dvh - 48px - 2px - var(--space-sm) - var(--space-2xl)) * 0.25
-    );
+    max-height: calc((100vh - 48px - 2px - var(--space-sm) - var(--space-2xl)) * 0.25);
+    max-height: calc((100dvh - 48px - 2px - var(--space-sm) - var(--space-2xl)) * 0.25);
     flex-wrap: nowrap;
     padding-inline-end: calc(var(--touch) + var(--space-sm));
     overflow: hidden;
@@ -4084,6 +4084,21 @@ main#main > .status:empty {
   padding: 0;
   border: 0;
   background: transparent;
+}
+
+.project-feedback {
+  margin-block-start: var(--space-xl);
+  padding-block-start: var(--space-lg);
+  border-block-start: 1px solid var(--hairline);
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 14px;
+}
+.project-feedback p {
+  margin: 0;
+}
+.project-feedback a {
+  font-weight: 600;
 }
 
 /* Library entries keep an editorial title and a consistent utility footer. */

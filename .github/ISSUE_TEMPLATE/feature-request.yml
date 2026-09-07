@@ -1,0 +1,36 @@
+name: Idea or improvement
+description: Suggest a change that would make reading calmer, clearer, or more accessible.
+title: "[Idea]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What reading problem would this solve?
+      description: Describe the situation and who it affects before proposing a particular interface.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: accessibility
+    attributes:
+      label: Accessibility and predictability
+      description: How might this affect keyboard use, screen readers, zoom, reduced motion, or spatial orientation?
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Optional—describe workarounds or other approaches you considered.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched existing issues for a similar idea.
+          required: true

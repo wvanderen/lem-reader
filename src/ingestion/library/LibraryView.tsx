@@ -61,11 +61,7 @@ import { BookRow } from "./BookRow";
 import { ContinueReadingStrip } from "./ContinueReadingStrip";
 import { filterLibrary, filterBooks } from "./libraryFilter";
 import { effectiveTitle } from "./effectiveMetadata";
-import {
-  articleReadingState,
-  bookReadingState,
-  countByState,
-} from "./readingState";
+import { articleReadingState, bookReadingState, countByState } from "./readingState";
 import type { LibraryViewName } from "../../App";
 import { setDocumentTitle } from "./pageMeta";
 import { loadAllLocations } from "../../persistence/locationStore";
@@ -142,10 +138,7 @@ const VIEW_LINKS: ReadonlyArray<{
 // keeps the byte-stable D8-04 pair; the previous filtered-empty copy render
 // is intentionally superseded (nothing pins that copy — verified by repo
 // grep): an empty view is membership-driven, a filtered-out view is not.
-const EMPTY_COPY: Record<
-  LibraryViewName,
-  { heading: string; body: string }
-> = {
+const EMPTY_COPY: Record<LibraryViewName, { heading: string; body: string }> = {
   all: {
     heading: "Your library is empty",
     // Plan 16-03 (D16-04) — the empty All view routes readers to Add via
@@ -230,9 +223,9 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
     () => peekLibraryContext()?.activeTag ?? null,
   );
   const [allTags, setAllTags] = useState<string[]>([]);
-  const [locationsByArticle, setLocationsByArticle] = useState<
-    Map<string, LocationRecord>
-  >(new Map());
+  const [locationsByArticle, setLocationsByArticle] = useState<Map<string, LocationRecord>>(
+    new Map(),
+  );
   // Plan 12-05 — the RAW locations array feeds BookRow's derivations
   // (deriveBookProgress/resolveResumeChapterId fold internally); the folded
   // per-article map above keeps serving standalone LibraryRow hairlines.
@@ -244,9 +237,7 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
   // Plan 08-04 — row-level trash trigger state. When non-null, RemoveConfirm
   // is open; the reader confirms or cancels. refreshKey re-triggers the load
   // effect after a successful remove so the list re-derives from Dexie.
-  const [removeTarget, setRemoveTarget] = useState<
-    { id: string; title: string } | null
-  >(null);
+  const [removeTarget, setRemoveTarget] = useState<{ id: string; title: string } | null>(null);
   // Plan 17-02 — the captured article row whose metadata the reader is
   // editing (D17-01). Non-null ⇒ EditMetadataDialog is open; onSaved closes
   // it and bumps refreshKey (the removeTarget onConfirm precedent) so the
@@ -254,8 +245,7 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
   const [editTarget, setEditTarget] = useState<CanonicalArticle | null>(null);
   // Plan 12-05 — book-level Remove trigger state. BookRemoveConfirm consumes
   // it (the BookRow onRemove callback below is its sole setter caller).
-  const [bookRemoveTarget, setBookRemoveTarget] =
-    useState<BookRemoveTarget | null>(null);
+  const [bookRemoveTarget, setBookRemoveTarget] = useState<BookRemoveTarget | null>(null);
   // Plan 16-03 (D16-03) — the Add dialog's open state, LibraryView-LOCAL
   // (the trigger is in-page; settingsOpen is App-level only because the
   // shell header triggers it). The header-row Add button is its sole
@@ -354,8 +344,7 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
       h1Ref.current?.focus();
       return;
     }
-    const maxScroll =
-      document.documentElement.scrollHeight - window.innerHeight;
+    const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
     window.scrollTo(0, clampScroll(snapshot.scrollTop, maxScroll));
     if (snapshot.lastArticleId === null) {
       // §Interaction 8 — the restored scroll stays authoritative.
@@ -367,8 +356,7 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
     );
     if (rowLink) {
       const rect = rowLink.getBoundingClientRect();
-      const intersectsViewport =
-        rect.bottom > 0 && rect.top < window.innerHeight;
+      const intersectsViewport = rect.bottom > 0 && rect.top < window.innerHeight;
       rowLink.focus({ preventScroll: intersectsViewport });
     } else {
       // Row gone — the truthful degrade (D14-05/D15-14).
@@ -405,10 +393,7 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
   const totalsById = useMemo(() => {
     const totals = new Map<string, number>();
     for (const article of items) {
-      totals.set(
-        article.id,
-        graphemeClusters(normalizeText(article), article.lang).length,
-      );
+      totals.set(article.id, graphemeClusters(normalizeText(article), article.lang).length);
     }
     return totals;
   }, [items]);
@@ -422,12 +407,7 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
     // discipline. A books-load failure routes calmly to zero book rows —
     // the standalone library stays usable (the strip's fail-quiet
     // discipline; recovery happens on the next refreshKey cycle).
-    Promise.all([
-      listArticles(),
-      loadAllLocations(),
-      loadAllTags(),
-      listBooks(),
-    ])
+    Promise.all([listArticles(), loadAllLocations(), loadAllTags(), listBooks()])
       .then(([articles, locations, tags, booksResult]) => {
         if (cancelled) return;
         // Index the latest location per articleId (max savedAt — D8-10).
@@ -499,10 +479,7 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
       ? standaloneArticles
       : standaloneArticles.filter(
           (a) =>
-            articleReadingState(
-              locationsByArticle.get(a.id),
-              totalsById.get(a.id) ?? 0,
-            ) === view,
+            articleReadingState(locationsByArticle.get(a.id), totalsById.get(a.id) ?? 0) === view,
         );
   const viewBooks =
     view === "all"
@@ -512,9 +489,7 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
           // Map.prototype.get requires its receiver; a bare .get reference
           // throws "called on incompatible receiver undefined" the moment a
           // book row exists (the render crashed with any located book).
-          (book) =>
-            bookReadingState(book, allLocations, (id) => totalsById.get(id)) ===
-            view,
+          (book) => bookReadingState(book, allLocations, (id) => totalsById.get(id)) === view,
         );
 
   // Plan 14-02 (D14-23/D14-24) — switcher counts fold through countByState
@@ -553,13 +528,12 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
   );
   const chapterTitlesByBook = new Map<string, string[]>();
   for (const [bookId, chapters] of chaptersByBook) {
-    chapterTitlesByBook.set(bookId, chapters.map((c) => c.provenance.title));
+    chapterTitlesByBook.set(
+      bookId,
+      chapters.map((c) => c.provenance.title),
+    );
   }
-  const visibleBooks = filterBooks(
-    sortedBooks,
-    { query, activeTag },
-    chapterTitlesByBook,
-  );
+  const visibleBooks = filterBooks(sortedBooks, { query, activeTag }, chapterTitlesByBook);
 
   return (
     <main id="main">
@@ -654,9 +628,7 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
                   at status ready (loading shows bare labels — never a
                   parenthetical zero lie). */}
               {status === "ready"
-                ? `${label} (${
-                    linkView === "all" ? allCount : stateCounts[linkView]
-                  })`
+                ? `${label} (${linkView === "all" ? allCount : stateCounts[linkView]})`
                 : label}
             </a>
           ))}
@@ -677,7 +649,7 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
           </>
         ) : (
           <>
-          {/* Plan 15-03 (D15-11) — the delegated launch capture. ONE onClick
+            {/* Plan 15-03 (D15-11) — the delegated launch capture. ONE onClick
               on the list ul records the launched article id into
               lastLaunchedRef (consumed by the unmount capture above); the
               plain anchor still navigates NATIVELY — this handler only
@@ -688,67 +660,59 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
               and are used only as the restore lookup key. BookRow chapter
               links match the same template (a chapter open is a launch too;
               on return an unexpanded book row degrades to h1 — D15-14). */}
-          <ul
-            className="library-list"
-            ref={listRef}
-            onClick={(event) => {
-              const anchor = (event.target as HTMLElement).closest(
-                'a[href^="#/article/"]',
-              );
-              if (!anchor) return;
-              const m = /^#\/article\/([a-z0-9-]+)$/.exec(
-                anchor.getAttribute("href") ?? "",
-              );
-              if (m) lastLaunchedRef.current = m[1]!;
-            }}
-          >
-            {visibleItems.map((a) => (
-              <LibraryRow
-                key={a.id}
-                article={a}
-                location={locationsByArticle.get(a.id)}
-                onRemove={() =>
-                  setRemoveTarget({
-                    id: a.id,
-                    // Plan 17-02 (D17-09) — the remove-dialog copy shows the
-                    // ONE effective name (effectiveTitle), never a second
-                    // canonical identity the reader no longer sees.
-                    title: effectiveTitle(a),
-                  })
-                }
-                // Plan 17-02 (D17-01) — the edit affordance is gated to
-                // Dexie-persisted rows ONLY (the SourceBadge fixture
-                // inference: bundled Sample rows have nowhere to persist an
-                // override — OQ1 resolved via gate). Book rows, chapter
-                // sub-rows, and fixture rows get NO onEdit (D17-05/D17-06).
-                onEdit={
-                  a.ingestionMeta !== undefined
-                    ? () => setEditTarget(a)
-                    : undefined
-                }
-              />
-            ))}
-            {/* Plan 12-05 — one expandable BookRow per VISIBLE Book (chapters
+            <ul
+              className="library-list"
+              ref={listRef}
+              onClick={(event) => {
+                const anchor = (event.target as HTMLElement).closest('a[href^="#/article/"]');
+                if (!anchor) return;
+                const m = /^#\/article\/([a-z0-9-]+)$/.exec(anchor.getAttribute("href") ?? "");
+                if (m) lastLaunchedRef.current = m[1]!;
+              }}
+            >
+              {visibleItems.map((a) => (
+                <LibraryRow
+                  key={a.id}
+                  article={a}
+                  location={locationsByArticle.get(a.id)}
+                  onRemove={() =>
+                    setRemoveTarget({
+                      id: a.id,
+                      // Plan 17-02 (D17-09) — the remove-dialog copy shows the
+                      // ONE effective name (effectiveTitle), never a second
+                      // canonical identity the reader no longer sees.
+                      title: effectiveTitle(a),
+                    })
+                  }
+                  // Plan 17-02 (D17-01) — the edit affordance is gated to
+                  // Dexie-persisted rows ONLY (the SourceBadge fixture
+                  // inference: bundled Sample rows have nowhere to persist an
+                  // override — OQ1 resolved via gate). Book rows, chapter
+                  // sub-rows, and fixture rows get NO onEdit (D17-05/D17-06).
+                  onEdit={a.ingestionMeta !== undefined ? () => setEditTarget(a) : undefined}
+                />
+              ))}
+              {/* Plan 12-05 — one expandable BookRow per VISIBLE Book (chapters
                 nested INSIDE the li, never top-level siblings — the 08-05
                 direct-child lesson). */}
-            {visibleBooks.map((book) => (
-              <BookRow
-                key={book.id}
-                book={book}
-                chapters={chaptersByBook.get(book.id) ?? []}
-                locations={allLocations}
-                onRemove={() =>
-                  setBookRemoveTarget({
-                    id: book.id,
-                    title: book.title,
-                    chapterCount: book.chapterArticleIds.length,
-                    chapterIds: book.chapterArticleIds,
-                  })
-                }
-              />
-            ))}
-          </ul>
-          {/* Plan 16-01 (D16-13) — the filtered-to-zero feedback branch.
+              {visibleBooks.map((book) => (
+                <BookRow
+                  key={book.id}
+                  book={book}
+                  chapters={chaptersByBook.get(book.id) ?? []}
+                  locations={allLocations}
+                  onRemove={() =>
+                    setBookRemoveTarget({
+                      id: book.id,
+                      title: book.title,
+                      chapterCount: book.chapterArticleIds.length,
+                      chapterIds: book.chapterArticleIds,
+                    })
+                  }
+                />
+              ))}
+            </ul>
+            {/* Plan 16-01 (D16-13) — the filtered-to-zero feedback branch.
               Rendered ONLY when the view's MEMBERSHIP is non-empty (the
               membership-empty ternary arm above owns the EMPTY_COPY render
               — D14-26: filtered-out is not an empty view), the load has
@@ -758,24 +722,24 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
               button resets BOTH filters (query + tag — simpler and honest).
               All strings are static React text children (T-16-01 — escaped
               by construction, no HTML injection to render the line). */}
-          {status === "ready" &&
-            (viewArticles.length > 0 || viewBooks.length > 0) &&
-            visibleItems.length === 0 &&
-            visibleBooks.length === 0 && (
-              <p className="library-no-matches">
-                Nothing in this view matches your filters.{" "}
-                <button
-                  type="button"
-                  className="library-clear-filters"
-                  onClick={() => {
-                    setQuery("");
-                    setActiveTag(null);
-                  }}
-                >
-                  Clear search and filters
-                </button>
-              </p>
-            )}
+            {status === "ready" &&
+              (viewArticles.length > 0 || viewBooks.length > 0) &&
+              visibleItems.length === 0 &&
+              visibleBooks.length === 0 && (
+                <p className="library-no-matches">
+                  Nothing in this view matches your filters.{" "}
+                  <button
+                    type="button"
+                    className="library-clear-filters"
+                    onClick={() => {
+                      setQuery("");
+                      setActiveTag(null);
+                    }}
+                  >
+                    Clear search and filters
+                  </button>
+                </p>
+              )}
           </>
         )}
       </section>
@@ -790,12 +754,25 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
           <>
             <h2>Couldn't open this article.</h2>
             <p>
-              The article could not be loaded. Select it again from the list, or
-              try a different article.
+              The article could not be loaded. Select it again from the list, or try a different
+              article.
             </p>
           </>
         )}
       </div>
+      <aside className="project-feedback" aria-label="Project feedback">
+        <p>
+          Help shape Lem Reader.{" "}
+          <a
+            href="https://github.com/wvanderen/lem-reader/issues/new?template=feature-request.yml&title=%5BFeedback%5D%3A%20"
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Share feedback on GitHub (opens in a new tab)"
+          >
+            Share feedback<span className="visually-hidden"> on GitHub (opens in a new tab)</span>
+          </a>
+        </p>
+      </aside>
       {/* Plan 08-04 — row-level trash → cascade-remove confirmation (LIB-02).
           D8-13: the destructive onClick calls dexieLibrarySource.remove(id)
           which atomically removes the article + highlights + notes + location
@@ -813,10 +790,7 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
           setRefreshKey((k) => k + 1);
           // If the reader was viewing the removed article, fall back to the
           // library list. The hash router's parseHash handles #/ gracefully.
-          if (
-            removedId !== undefined &&
-            window.location.hash === `#/article/${removedId}`
-          ) {
+          if (removedId !== undefined && window.location.hash === `#/article/${removedId}`) {
             window.location.hash = "#/";
           }
         }}
@@ -852,11 +826,7 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
           const removedChapterIds = bookRemoveTarget?.chapterIds ?? [];
           setBookRemoveTarget(null);
           setRefreshKey((k) => k + 1);
-          if (
-            removedChapterIds.some(
-              (id) => window.location.hash === `#/article/${id}`,
-            )
-          ) {
+          if (removedChapterIds.some((id) => window.location.hash === `#/article/${id}`)) {
             window.location.hash = "#/";
           }
         }}
