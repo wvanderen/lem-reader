@@ -21,7 +21,7 @@
 
 import type { CanonicalArticle } from "../content/types";
 import { graphemeLength } from "../content/normalizeText";
-import { pageStartGlobalOffset } from "./anchor";
+import { pageAnchorOffset, pageStartGlobalOffset } from "./anchor";
 import type { PageFragment } from "./types";
 
 /**
@@ -43,4 +43,24 @@ export function paginatedProgressRatio(
   if (total === 0) return 0;
   const start = pageStartGlobalOffset(article, fragment);
   return Math.min(1, Math.max(0, start / total));
+}
+
+/**
+ * Progress ratio [0, 1] for the COMMITTED page at `currentPageIdx` — the
+ * committed-page anchor (pageAnchorOffset) over graphemeLength, so the final
+ * page of a MULTI-page set reads exactly 1 (passive completion, 260908-oht)
+ * while a one-page article keeps reading 0 on open (POLISH-02). Defensive
+ * bounds mirror paginatedProgressRatio: empty coordinate space → 0.
+ */
+export function committedPageProgressRatio(
+  article: CanonicalArticle,
+  pages: PageFragment[],
+  currentPageIdx: number,
+): number {
+  const total = graphemeLength(article);
+  if (total === 0) return 0;
+  return Math.min(
+    1,
+    Math.max(0, pageAnchorOffset(article, pages, currentPageIdx) / total),
+  );
 }

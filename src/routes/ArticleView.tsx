@@ -38,7 +38,7 @@ import { PageTurnControls, isFormField } from "../reader/PageTurnControls";
 import { ProgressHairline } from "../reader/ProgressHairline";
 import { SectionAnnouncer } from "../reader/SectionAnnouncer";
 import { blockGraphemeLength } from "../pagination/anchor";
-import { BLOCK_SEPARATOR } from "../content/normalizeText";
+import { BLOCK_SEPARATOR, graphemeLength } from "../content/normalizeText";
 // Phase 18 Plan 18-03 (ORNT-06, D18-05/06): the passive transient
 // restoration marker replaces the retired ResumeBanner — the banner's
 // announce discipline survives verbatim INSIDE the marker.
@@ -1166,6 +1166,13 @@ export function ArticleView({
       if (swap.offset > 0 && article && articleRef.current) {
         const rafId = requestAnimationFrame(() => {
           if (!articleRef.current || !article) return;
+          // 260908-oht end-landing: a captured offset at the article total
+          // (the final-page pin) scrolls to the absolute document bottom so
+          // the first scroll-save re-pins total instead of un-finishing.
+          if (swap.offset >= graphemeLength(article)) {
+            window.scrollTo(0, document.documentElement.scrollHeight);
+            return;
+          }
           const blocks = queryBlocks(articleRef.current);
           // Silent + instant (A11Y-06) — never behavior: "smooth".
           findScrollTarget(article, blocks, swap.offset)?.scrollIntoView({
@@ -1715,14 +1722,23 @@ export function ArticleView({
           if (cancelled) return;
           const articleEl = articleRef.current;
           if (!articleEl) return;
-          const blocks = queryBlocks(articleEl);
-          const target = findScrollTarget(article, blocks, loc.graphemeOffset);
-          if (target) {
-            // Silent restore — never behavior: "smooth". The global reduced-
-            // motion gate (app.css) sets scroll-behavior: auto so this is
-            // instant under reduced motion; the default elsewhere is also
-            // instant (no scroll-behavior: smooth declared anywhere).
-            target.scrollIntoView({ block: "start" });
+          // 260908-oht end-landing: a saved offset at (or past) the article
+          // total lands at the absolute document bottom so the first
+          // scroll-save re-pins total instead of un-finishing a finished
+          // article. Genuine restore-landing either way — the marker set
+          // below runs in BOTH branches.
+          if (loc.graphemeOffset >= graphemeLength(article)) {
+            window.scrollTo(0, document.documentElement.scrollHeight);
+          } else {
+            const blocks = queryBlocks(articleEl);
+            const target = findScrollTarget(article, blocks, loc.graphemeOffset);
+            if (target) {
+              // Silent restore — never behavior: "smooth". The global reduced-
+              // motion gate (app.css) sets scroll-behavior: auto so this is
+              // instant under reduced motion; the default elsewhere is also
+              // instant (no scroll-behavior: smooth declared anywhere).
+              target.scrollIntoView({ block: "start" });
+            }
           }
           // Plan 18-03: the passive marker replaces the retired banner —
           // gated on genuine restore-landing (one-shot per article).

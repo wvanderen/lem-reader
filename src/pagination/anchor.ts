@@ -25,6 +25,7 @@ import {
   articleGraphemeIndex,
   blockNormalizedText,
   graphemeClusters,
+  graphemeLength,
 } from "../content/normalizeText";
 import type { PageFragment } from "./types";
 
@@ -119,4 +120,25 @@ export function fragmentContainingOffset(
   }
   // Offset overshoots the article (corpus changed) — clamp to the last page.
   return best;
+}
+
+/**
+ * The committed-page anchor: the anchor a reader persists while ON page
+ * `pageIndex` — pageStartGlobalOffset, except the LAST page of a MULTI-page
+ * set pins to graphemeLength(article) so a fully-turned article reads
+ * finished (260908-oht). A one-page set keeps anchor 0 (POLISH-02
+ * open-reads-0 boundary). Returns 0 for an empty pages array or an
+ * out-of-range index (defensive).
+ */
+export function pageAnchorOffset(
+  article: CanonicalArticle,
+  pages: PageFragment[],
+  pageIndex: number,
+): number {
+  if (pages.length === 0) return 0;
+  if (pageIndex < 0 || pageIndex >= pages.length) return 0;
+  if (pageIndex === pages.length - 1 && pages.length > 1) {
+    return graphemeLength(article);
+  }
+  return pageStartGlobalOffset(article, pages[pageIndex]!);
 }

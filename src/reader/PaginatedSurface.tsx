@@ -22,7 +22,7 @@
 // the imperative handle so pointer + keyboard + swipe stay in sync.
 //
 // D4-11 repagination anchor: the pagination effect captures the current
-// page's article-global offset (via pageStartGlobalOffset on the OLD pages)
+// page's article-global offset (via pageAnchorOffset on the OLD pages)
 // BEFORE setPages, then re-anchors currentPageIdx via fragmentContainingOffset
 // on the NEW pages. The old page stays mounted until the new one commits
 // (Phase 3 trustedView retention — PAGE-06). Capture reads from refs (not
@@ -52,8 +52,8 @@ import type { DiagnosticBus } from "../measurement/diagnostics";
 import type { PageFragment } from "../pagination/types";
 import { paginateDocument } from "../pagination/fragment";
 import { refragmentOverflowingPage } from "../pagination/overflowGuard";
-import { fragmentContainingOffset, pageStartGlobalOffset } from "../pagination/anchor";
-import { paginatedProgressRatio } from "../pagination/progress";
+import { fragmentContainingOffset, pageAnchorOffset } from "../pagination/anchor";
+import { committedPageProgressRatio } from "../pagination/progress";
 import { splittingGraphemeLength } from "../pagination/splitBlock";
 import { PageFragmentView } from "../pagination/fragmentRenderer";
 import type { ArticleBodyHighlight } from "../content/render/BlockRenderer";
@@ -105,9 +105,11 @@ export interface PaginatedSurfaceProps {
   initialAnchorOffset?: number;
   /**
    * D4-10/D4-11 anchor reporting: fired whenever currentPageIdx or pages
-   * change, with the article-global offset of the current page's first
-   * block. ArticleView stores this in a ref so the NEXT mode swap (paginated
-   * →scrolling) can capture it synchronously before the render swap. Optional.
+   * change, with the committed-page anchor (the current page's first-block
+   * offset, pinned to the article total on the final page of a multi-page
+   * set — 260908-oht passive completion). ArticleView stores this in a ref
+   * so the NEXT mode swap (paginated →scrolling) can capture it
+   * synchronously before the render swap. Optional.
    */
   onAnchorChange?: (offset: number) => void;
   /**
@@ -170,9 +172,11 @@ export interface PaginatedSurfaceHandle {
     pageIndex: number,
   ) => { page: number; total: number; moved: boolean } | null;
   /**
-   * The article-global D-05 grapheme offset of the current page's first block.
-   * Used by ArticleView to capture the paginated→scrolling anchor BEFORE the
-   * mode-swap re-render (Pitfall 7). Returns 0 when no pages are mounted.
+   * The article-global D-05 grapheme offset of the current page's committed
+   * anchor (first-block offset; the article total on the final page of a
+   * multi-page set — 260908-oht). Used by ArticleView to capture the
+   * paginated→scrolling anchor BEFORE the mode-swap re-render (Pitfall 7).
+   * Returns 0 when no pages are mounted.
    */
   getCurrentAnchorOffset: () => number;
   /** Current {page (1-based), total}, or null when no pages are mounted. */
@@ -279,7 +283,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
     // internal AbortError handling guarantee silent cancel.
     //
     // D4-11 repagination anchor (PAGE-05): capture the current view's
-    // article-global offset (pageStartGlobalOffset on the OLD pages) BEFORE
+    // article-global offset (pageAnchorOffset on the OLD pages) BEFORE
     // setPages, then re-anchor currentPageIdx via fragmentContainingOffset
     // on the NEW pages. On the FIRST pass (pages null), the anchor is the
     // D4-10 initialAnchorOffset prop (scrolling→paginated mode switch).
@@ -297,7 +301,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
       // on first mount use the D4-10 initialAnchorOffset.
       let anchorOffset: number;
       if (currentPages && currentPages[currentIdx]) {
-        anchorOffset = pageStartGlobalOffset(currentArticle, currentPages[currentIdx]!);
+        anchorOffset = pageAnchorOffset(currentArticle, currentPages, currentIdx);
       } else {
         anchorOffset = initialAnchorOffsetRef.current;
       }
@@ -538,7 +542,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
       if (!p || !p[currentPageIdx]) {
         return;
       }
-      onAnchorChange?.(pageStartGlobalOffset(articleRef.current, p[currentPageIdx]!));
+      onAnchorChange?.(pageAnchorOffset(articleRef.current, p, currentPageIdx));
     }, [currentPageIdx, pages, onAnchorChange]);
 
     // DEV-only: keep window.__lemPagination.currentPageIdx fresh on every
@@ -583,7 +587,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
       if (moved) {
         pendingTurnMotion.current = true;
         currentPageIdxRef.current = next;
-        lastAnchorOffsetRef.current = pageStartGlobalOffset(articleRef.current, p[next]!);
+        lastAnchorOffsetRef.current = pageAnchorOffset(articleRef.current, p, next);
         setCurrentPageIdx(next);
       }
       return { page: next + 1, total: p.length, moved };
@@ -633,7 +637,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
       if (moved) {
         pendingTurnMotion.current = true;
         currentPageIdxRef.current = next;
-        lastAnchorOffsetRef.current = pageStartGlobalOffset(articleRef.current, p[next]!);
+        lastAnchorOffsetRef.current = pageAnchorOffset(articleRef.current, p, next);
         setCurrentPageIdx(next);
       }
       return { page: next + 1, total: p.length, moved };
@@ -649,7 +653,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
           const p = pagesRef.current;
           const idx = currentPageIdxRef.current;
           if (!p || !p[idx]) return 0;
-          return pageStartGlobalOffset(articleRef.current, p[idx]!);
+          return pageAnchorOffset(articleRef.current, p, idx);
         },
         getState: () => {
           const p = pagesRef.current;
@@ -662,15 +666,16 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
     );
 
     // POLISH-02 (Phase 13 Plan 02): the hairline's progress is the offset-
-    // anchored D-05 ratio of the committed page's START, memoized per
+    // anchored D-05 ratio of the committed page, memoized per
     // (article, pages, currentPageIdx) the way LibraryRow memoizes its
-    // grapheme total — pageStartGlobalOffset + graphemeLength run once per
-    // committed page, not per render. First page of any article (including a
-    // one-page article) reads 0; the last page stays below 1.
+    // grapheme total — committedPageProgressRatio runs once per committed
+    // page, not per render. First page of any article (including a
+    // one-page article) reads 0; the final page of a multi-page set reads
+    // exactly 1 (the 260908-oht completion pin).
     const progressRatio = useMemo(() => {
       const p = pages;
       if (!p || !p[currentPageIdx]) return 0;
-      return paginatedProgressRatio(article, p[currentPageIdx]!);
+      return committedPageProgressRatio(article, p, currentPageIdx);
     }, [article, pages, currentPageIdx]);
 
     // Until the first pagination pass commits (or when status is "fallback"),
