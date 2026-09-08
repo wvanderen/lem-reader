@@ -140,6 +140,13 @@ export interface AssetStageOptions {
    * A non-positive value means the deadline is already expired (spec uses
    * this for the deterministic pre-expired cell). */
   deadlineMs?: number;
+  /** 260908-ef5 — the SSRF-validated article origin the orchestrator derives
+   * from finalUrl (new URL(finalUrl).origin), threaded to fetchImageAsset so
+   * hotlink-protected CDNs see the browser-equivalent Referer. MUST come from
+   * the validated article URL, never from an image src (see the seam's SSRF
+   * rule). Undefined (the url-less paste/html-upload/markdown paths) omits
+   * the Referer entirely — byte-stable for existing callers. */
+  refererOrigin?: string;
 }
 
 /** The stage result: rewritten blocks, the accepted unique assets (in
@@ -211,7 +218,18 @@ export async function runAssetStage(
         continue;
       }
       try {
-        fetched.set(src, await fetchImageAsset(src));
+        // 260908-ef5 — thread the article-origin Referer through the seam.
+        // The second argument is undefined when the option is absent, so
+        // existing callers observe the exact pre-260908-ef5 call shape.
+        fetched.set(
+          src,
+          await fetchImageAsset(
+            src,
+            options.refererOrigin !== undefined
+              ? { refererOrigin: options.refererOrigin }
+              : undefined,
+          ),
+        );
       } catch {
         // fetchImageAsset never throws by contract (D20-05) — this guard
         // keeps the stage's own never-throw promise even if that contract

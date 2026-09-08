@@ -454,4 +454,64 @@ describe("fetchImageAsset (network path — the ONLY asset egress)", () => {
     expect(result.contentType).toBe("image/gif");
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
+
+  // ── Quick task 260908-ef5 — request-header shape ───────────────────────────
+  // User-Agent + the browser-like image Accept ride EVERY image fetch (the
+  // Accept mirrors what browsers advertise for image subresources — svg+xml
+  // included, while the sniff still refuses SVG bytes, D20-10). Referer rides
+  // ONLY when the caller threads the SSRF-validated article origin, and then
+  // it is EXACTLY that origin — a request header, never a fetch target.
+  it("sends User-Agent + the image Accept on every fetch, with NO Referer when no origin is threaded", async () => {
+    serveBytes(STATIC_PNG, { "content-type": "image/png" });
+    await fetchImageAsset("https://cdn.example.com/pic.png");
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(init.headers).toMatchObject({
+      "User-Agent": "LemReader/2.0 (+https://lem-reader.app)",
+      Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+    });
+    expect(Object.keys(init.headers as Record<string, string>)).not.toContain("Referer");
+  });
+
+  it("Referer is EXACTLY the passed refererOrigin when the option is provided (Accept persists alongside)", async () => {
+    serveBytes(STATIC_PNG, { "content-type": "image/png" });
+    await fetchImageAsset("https://cdn.example.com/pic.png", {
+      refererOrigin: "https://news.example.com",
+    });
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(init.headers).toMatchObject({
+      Referer: "https://news.example.com",
+      Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+      "User-Agent": "LemReader/2.0 (+https://lem-reader.app)",
+    });
+  });
+
+  it("an empty-string refererOrigin omits the Referer entirely (treated as absent)", async () => {
+    serveBytes(STATIC_PNG, { "content-type": "image/png" });
+    await fetchImageAsset("https://cdn.example.com/pic.png", { refererOrigin: "" });
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(Object.keys(init.headers as Record<string, string>)).not.toContain("Referer");
+  });
+
+  it("the Referer header persists across redirect hops (CDN redirect chains expect it)", async () => {
+    resolve4Mock.mockResolvedValue(["93.184.216.34"]);
+    resolve6Mock.mockResolvedValue([]);
+    fetchMock
+      .mockResolvedValueOnce({
+        status: 302,
+        ok: false,
+        url: "https://cdn.example.com/old.png",
+        headers: new Headers({ location: "https://cdn.example.com/new.png" }),
+      } as Response)
+      .mockResolvedValueOnce(
+        fakeImageResponse({
+          headers: { "content-type": "image/png" },
+          byteBody: STATIC_PNG,
+        }),
+      );
+    await fetchImageAsset("https://cdn.example.com/old.png", {
+      refererOrigin: "https://news.example.com",
+    });
+    const hop2 = fetchMock.mock.calls[1]?.[1] as RequestInit;
+    expect(hop2.headers).toMatchObject({ Referer: "https://news.example.com" });
+  });
 });

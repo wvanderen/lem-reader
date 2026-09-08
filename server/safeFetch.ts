@@ -69,13 +69,20 @@ export interface FetchedContent {
  * (empty / application/octet-stream / binary/octet-stream) reach the body
  * read so the authoritative magic-byte sniff decides admission (D20-10 —
  * CDNs, S3, and signed URLs commonly serve real image bytes under opaque
- * binary headers). One pipeline, parameterized — never forked (D20-12). */
+ * binary headers). One pipeline, parameterized — never forked (D20-12).
+ * `headers` (quick task 260908-ef5) carries optional per-profile extra
+ * request headers (e.g. the image profile's browser-like Accept); they are
+ * merged AFTER the User-Agent literal, and an absent field yields exactly
+ * today's single-header shape — the document profile's request headers stay
+ * byte-identical. Redirect recursion threads the profile, so extra headers
+ * persist per hop (desired: CDN redirect chains expect the Referer). */
 export interface SafeFetchProfile {
   allowedContentTypes: string[];
   timeoutMs: number;
   maxBytes: number;
   bodyKind: "text" | "bytes";
   contentTypeGate?: "strict" | "admit-opaque";
+  headers?: Record<string, string>;
 }
 
 /** The validated-response shape returned by safeFetchCore. `body` is a string
@@ -222,10 +229,17 @@ export async function safeFetchCore(
   // first validated IP so a DNS-rebinding attacker cannot TOCTOU us between
   // resolve and fetch. The Node unit-test fetch ignores the `cf` key.
   const pinnedIp = v4[0] ?? v6[0];
+  // Quick task 260908-ef5 — profile headers merge AFTER the User-Agent
+  // literal. An absent `headers` field yields exactly today's single-header
+  // shape, so the document profile's request headers are byte-identical
+  // (the 19-vector e2e matrix pin holds untouched).
   const fetchOptions: RequestInit & { cf?: { resolveOverride: string } } = {
     redirect: "manual",
     signal: AbortSignal.timeout(profile.timeoutMs),
-    headers: { "User-Agent": "LemReader/2.0 (+https://lem-reader.app)" },
+    headers: {
+      "User-Agent": "LemReader/2.0 (+https://lem-reader.app)",
+      ...(profile.headers ?? {}),
+    },
   };
   if (pinnedIp) {
     fetchOptions.cf = { resolveOverride: pinnedIp };

@@ -81,13 +81,21 @@ export type ImageAssetRefusal = "fetch" | "type" | "bytes" | "pixels" | "animate
  * decides, so an octet-stream-labeled HTML challenge page refuses on its
  * bytes. Clearly-non-image declarations (text/html, application/json,
  * text/plain, application/pdf) keep the early calm pre-read refusal in the
- * core. One pipeline, parameterized — never forked (D20-12). */
+ * core. One pipeline, parameterized — never forked (D20-12).
+ *
+ * Browser-like Accept (260908-ef5): hotlink-protected CDNs (common on news
+ * sites) 403 requests that look non-browser; the Accept value mirrors what
+ * browsers advertise for image subresources (svg+xml included — the sniff
+ * still refuses SVG bytes, D20-10 unchanged). */
 export const IMAGE_FETCH_PROFILE: SafeFetchProfile = {
   allowedContentTypes: ["image/"],
   timeoutMs: ASSET_FETCH_TIMEOUT_MS,
   maxBytes: MAX_ASSET_BYTES,
   bodyKind: "bytes",
   contentTypeGate: "admit-opaque",
+  headers: {
+    Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+  },
 };
 
 /** image-size sniffed type → canonical content type. The JPEG type string
@@ -105,6 +113,20 @@ function bufferView(bytes: Uint8Array): Buffer {
   return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 }
 
+/** fetchImageAsset options (quick task 260908-ef5).
+ *
+ * SSRF RULE — `refererOrigin` MUST be derived by the caller from the
+ * ALREADY-SSRF-VALIDATED article URL (server/ingest.ts derives it via
+ * new URL(finalUrl).origin after safeFetch validated every hop). It is
+ * NEVER derived from any image src: it is a request HEADER, never a fetch
+ * target, and cannot influence which host is fetched — the 9-measure
+ * pipeline in safeFetchCore remains the sole egress authority (D20-12).
+ * The value discloses exactly what a real browser visit to the article
+ * would disclose to the CDN (T-EF5-02: accept). */
+export interface FetchImageAssetOptions {
+  refererOrigin?: string;
+}
+
 /**
  * fetchImageAsset — fetch an image URL through the shared SSRF-safe core,
  * then run the authoritative sniff on the returned bytes. Every fetch-layer
@@ -112,11 +134,26 @@ function bufferView(bytes: Uint8Array): Buffer {
  * the typed "fetch" refusal; the sniff's refusals are "bytes" | "type" |
  * "pixels" | "animated". Never throws (D20-05 composure — the stage applies
  * the calm per-figure fallback without try/catch noise).
+ *
+ * 260908-ef5: a non-empty `opts.refererOrigin` upgrades the per-call profile
+ * with a Referer header (spread over IMAGE_FETCH_PROFILE — Accept and every
+ * other profile field persist); an absent/empty one passes IMAGE_FETCH_PROFILE
+ * unchanged, so existing callers are byte-stable.
  */
-export async function fetchImageAsset(url: string): Promise<ImageAsset | ImageAssetRefusal> {
+export async function fetchImageAsset(
+  url: string,
+  opts: FetchImageAssetOptions = {},
+): Promise<ImageAsset | ImageAssetRefusal> {
+  const profile: SafeFetchProfile =
+    opts.refererOrigin !== undefined && opts.refererOrigin.length > 0
+      ? {
+          ...IMAGE_FETCH_PROFILE,
+          headers: { ...IMAGE_FETCH_PROFILE.headers, Referer: opts.refererOrigin },
+        }
+      : IMAGE_FETCH_PROFILE;
   let bytes: Uint8Array;
   try {
-    const result = await safeFetchCore(url, IMAGE_FETCH_PROFILE);
+    const result = await safeFetchCore(url, profile);
     // bytes-profile invariant: the core returns a Uint8Array body.
     bytes = result.body as Uint8Array;
   } catch {

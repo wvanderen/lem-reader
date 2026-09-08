@@ -349,6 +349,24 @@ describe("runAssetStage", () => {
     expect(result.refusedCount).toBe(0);
   });
 
+  // ── Quick task 260908-ef5 — refererOrigin threading ────────────────────────
+  // The stage forwards the orchestrator-derived article origin to the
+  // fetchImageAsset seam's SECOND argument; an absent option forwards
+  // undefined (the exact pre-260908-ef5 call shape — byte-stable).
+  it("threads refererOrigin to fetchImageAsset's second argument; undefined when absent", async () => {
+    fetchMock.mockImplementation(async (url: string) => fakeAsset(url));
+
+    await runAssetStage([fig("https://example.com/no-origin.png")]);
+    expect(fetchMock).toHaveBeenCalledWith("https://example.com/no-origin.png", undefined);
+
+    await runAssetStage([fig("https://example.com/with-origin.png")], {
+      refererOrigin: "https://news.example.com",
+    });
+    const lastCall = fetchMock.mock.calls[fetchMock.mock.calls.length - 1];
+    expect(lastCall?.[0]).toBe("https://example.com/with-origin.png");
+    expect(lastCall?.[1]).toEqual({ refererOrigin: "https://news.example.com" });
+  });
+
   it("substrate byte-identity for every figure position: top-level, nested-in-list, nested-in-blockquote", async () => {
     fetchMock.mockImplementation(async (url: string) =>
       url.includes("refuse") ? "type" : fakeAsset(url),

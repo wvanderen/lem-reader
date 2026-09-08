@@ -715,10 +715,29 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
     // container extraction). Per-figure refusals never block the article
     // (D20-05); refusedCount is disclosed via extractionWarnings below
     // (T-20-10 — never silent).
+    //
+    // 260908-ef5 — assetRefererOrigin: ONLY the url path has an article URL,
+    // and finalUrl there is the post-redirect URL safeFetch already validated
+    // hop-by-hop (the 9 measures). Deriving the Referer from new URL(finalUrl)
+    // .origin gives hotlink-protected CDNs the browser-equivalent disclosure;
+    // the paste/html-upload/markdown/pdf paths have no source URL (markdown
+    // intake carries none today), so Referer is omitted and Accept alone is
+    // sent. The origin is a request header, never a fetch target — it cannot
+    // influence which host the asset stage fetches (D20-12 one pipeline).
     let imageRefusalWarnings: string[] = [];
     let assetEnvelopes: AssetEnvelope[] = [];
     if (!hasPdf) {
-      const stage = await runAssetStage(blocks);
+      const assetRefererOrigin =
+        finalUrl !== undefined && /^https?:/i.test(finalUrl)
+          ? (() => {
+              try {
+                return new URL(finalUrl).origin;
+              } catch {
+                return undefined; // unreachable for an http(s) URL — calm guard
+              }
+            })()
+          : undefined;
+      const stage = await runAssetStage(blocks, { refererOrigin: assetRefererOrigin });
       blocks = stage.blocks;
       if (stage.refusedCount > 0) {
         // Count-first disclosure, matching the extractionWarnings tone

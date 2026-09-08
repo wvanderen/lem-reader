@@ -508,4 +508,25 @@ describe("safeFetchCore image profile (20-01 Task 2 — Pitfall 4)", () => {
     expect(arrayBufferCallCount).toBe(0);
     expect(textCallCount).toBe(1);
   });
+
+  it("document-profile byte-stability: fetch init headers carry ONLY User-Agent — no Accept, no Referer (260908-ef5 pin)", async () => {
+    resolve4Mock.mockResolvedValue(["93.184.216.34"]);
+    resolve6Mock.mockResolvedValue([]);
+    fetchMock.mockResolvedValueOnce(
+      fakeResponse({
+        status: 200,
+        url: "https://example.com/article",
+        headers: { "content-type": "text/html" },
+        body: "<p>doc</p>",
+      }),
+    );
+    await safeFetch("https://example.com/article");
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    // Exact-equality pin: the absent profile.headers field yields exactly
+    // today's single-header shape — the document fetch profile is unchanged
+    // by the 260908-ef5 image-header work (D20-12 byte-stability).
+    expect(init.headers).toEqual({
+      "User-Agent": "LemReader/2.0 (+https://lem-reader.app)",
+    });
+  });
 });
