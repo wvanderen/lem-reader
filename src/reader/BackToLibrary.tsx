@@ -32,20 +32,32 @@ interface BackToLibraryProps {
   hasAppHistory: boolean;
 }
 
+/**
+ * The ONE shared article→library close navigation contract (260908-oht:
+ * extracted so BackToLibrary and MarkReadAndClose can never diverge —
+ * T-Q02). history.back() only when the in-app flag is set; else the
+ * literal "#/" route-to-library fallback (Pitfall 7 — no attacker-
+ * influenced URL ever reaches navigation).
+ */
+export function leaveArticleToLibrary(hasAppHistory: boolean): void {
+  if (hasAppHistory) {
+    // Preserves the reader's place in history — the prior entry is a
+    // routed in-app hash (the flag proves at least one exists).
+    history.back();
+  } else {
+    // The deep-link-safe fallback: parseHash maps "#/" to the library
+    // list, so this always stays inside the app.
+    window.location.hash = "#/";
+  }
+}
+
 export function BackToLibrary({ hasAppHistory }: BackToLibraryProps) {
-  const goBack = () => {
-    if (hasAppHistory) {
-      // Preserves the reader's place in history — the prior entry is a
-      // routed in-app hash (the flag proves at least one exists).
-      history.back();
-    } else {
-      // The deep-link-safe fallback: parseHash maps "#/" to the library
-      // list, so this always stays inside the app.
-      window.location.hash = "#/";
-    }
-  };
   return (
-    <button type="button" className="back-to-library" onClick={goBack}>
+    <button
+      type="button"
+      className="back-to-library"
+      onClick={() => leaveArticleToLibrary(hasAppHistory)}
+    >
       Back to library
     </button>
   );

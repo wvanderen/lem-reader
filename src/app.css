@@ -3612,6 +3612,62 @@ dialog.book-remove-confirm::backdrop {
    section (the 260819-qbq quiet fixed 44px box near .page-viewport); this
    rule remains the home for scrolling mode + ReviewView. */
 
+/* ════════════════════════════════════════════════════════════════════════
+ * 260908-oht — "Mark read and close" (explicit article completion).
+ *
+ * .mark-read-close — the end-of-article gesture, mounted in BOTH modes:
+ * scrolling (flow placement, after the final block) and paginated (the
+ * fixed bottom chrome band on the final page). Same quiet-button register
+ * as .back-to-library (token-for-token): transparent bg, hairline border,
+ * 4px radius, min-height var(--touch) (A11Y-07), accent on hover only,
+ * :focus-visible inherits the global ring. Tokens only; zero motion
+ * properties (A11Y-06 discipline).
+ *
+ * .mark-read-close-page follows the .chapter-nav-page precedent (fixed in
+ * the chrome band below the pinned article surface) — except the button IS
+ * the box (the nav precedent centers an inline-block child via
+ * text-align), so the fixed box uses width: fit-content + auto inline
+ * margins between left:0/right:0 to center the quiet button itself instead
+ * of stretching it into a full-width bar. Fixed positioning takes it out of
+ * the article grid's flow, so mounting it on the final page can never
+ * change .page-viewport geometry and re-trigger pagination. When a
+ * mid-book chapter's final page shows BOTH the Next chapter link and the
+ * button, the :has() coexistence bump stacks the link above the button.
+ * ════════════════════════════════════════════════════════════════════════ */
+.mark-read-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--touch);
+  padding-inline: var(--space-md);
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  font-family: var(--font-ui);
+  font-size: 16px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.mark-read-close:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.mark-read-close-flow {
+  margin: var(--space-lg) 0 0 0;
+}
+.mark-read-close-page {
+  position: fixed;
+  bottom: var(--space-xs);
+  left: 0;
+  right: 0;
+  width: fit-content;
+  margin-inline: auto;
+  z-index: 5; /* same chrome layer as the page indicator + chevrons */
+}
+.article-body:has(.mark-read-close-page) .chapter-nav-page {
+  bottom: calc(var(--space-xs) + 48px); /* touch-target band: stack, never overlap */
+}
+
 /* Plan 13-04 (POLISH-03 / D13-13) — the SLIMMED article header anatomy:
  * the pinned per-page header is the back affordance + the title ONLY (the
  * byline/source/book-context/TagEntry/Export cluster moved to the
