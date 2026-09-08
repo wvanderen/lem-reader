@@ -79,7 +79,7 @@
     "linkedom": "^0.18.13",
     "prettier": "^3.4.0",
     "typescript": "7.0.2",
-    "vercel": "59.3.0",
+    "vercel": "^59.11.7",
     "vite": "8.1.5",
     "vitest": "4.1.10",
     "wrangler": "4.120.1"
