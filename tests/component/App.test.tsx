@@ -198,8 +198,12 @@ describe("App — route hashes still swap the view", () => {
     window.location.hash = "";
     render(<App />);
     expect(screen.getByRole("heading", { level: 1, name: "Saved articles" })).not.toBeNull();
+    // The feedback aside mounts only after the library load settles, so the
+    // link is asserted asynchronously — findByRole retries until the mock
+    // resolves. Its pending-load ABSENCE is pinned by the never-settling
+    // test at the bottom of this file.
     expect(
-      screen.getByRole("link", {
+      await screen.findByRole("link", {
         name: "Share feedback on GitHub (opens in a new tab)",
       }),
     ).toHaveAttribute(
@@ -213,5 +217,30 @@ describe("App — route hashes still swap the view", () => {
 
     await screen.findByRole("heading", { level: 1, name: "Article One" });
     expect(screen.queryByRole("heading", { level: 1, name: "Saved articles" })).toBeNull();
+  });
+});
+
+// Quick 260908-nk2 — the library's .project-feedback aside is gated on the
+// settled load (status !== "loading" in LibraryView): during the initial
+// load the page is short enough that the aside sat INSIDE the viewport and
+// the feedback link flashed before rows pushed it below the fold. The
+// never-settling mock pins that exact loading window indefinitely; the
+// settled-state render is already covered by the converted findByRole
+// assertion in the route-swap test above.
+describe("App — feedback aside never flashes during the library load", () => {
+  it("the feedback link is absent from the DOM while the load is pending", () => {
+    listArticlesMock.mockReturnValue(new Promise(() => {}));
+
+    window.location.hash = "";
+    render(<App />);
+
+    // The library chrome renders during load (h1 present synchronously) —
+    // this observes the loading state, not an empty mount.
+    expect(screen.getByRole("heading", { level: 1, name: "Saved articles" })).not.toBeNull();
+    expect(
+      screen.queryByRole("link", {
+        name: "Share feedback on GitHub (opens in a new tab)",
+      }),
+    ).toBeNull();
   });
 });
