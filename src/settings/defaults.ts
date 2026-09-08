@@ -12,5 +12,6 @@ export const DEFAULT_SETTINGS: ReaderSettings = {
   measure: 64, // D-07 calm measure
   spacing: "comfortable", // D-07 line-height 1.6
   theme: "sepia", // D-07 warm-paper == D2-09 default theme
+  animatePageTurns: false,
   readingMode: "paginated", // D4-12 — paginated default per PROJECT.md
 };

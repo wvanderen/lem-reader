@@ -45,7 +45,7 @@
 // its fragment + chevrons + indicator + hairline as children of that shared
 // article element.
 
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { forwardRef, useLayoutEffect, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type { CanonicalArticle } from "../content/types";
 import type { MeasurementResult } from "../measurement/types";
 import type { DiagnosticBus } from "../measurement/diagnostics";
@@ -79,6 +79,8 @@ import { focusNewPageTop } from "./PageTurnControls";
 import { useOptionalHighlightOverlay } from "./annotations/HighlightOverlay";
 
 export interface PaginatedSurfaceProps {
+  /** Opt-in presentation only; never participates in page measurement. */
+  animatePageTurns?: boolean;
   /** The canonical article being paginated. */
   article: CanonicalArticle;
   /** Phase 3's trusted view — the staleness contract is inherited, not re-implemented. */
@@ -195,11 +197,35 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
       onAnchorChange,
       firstPageReservedPx = 0,
       articleStartChrome,
+      animatePageTurns = false,
     },
     ref,
   ): React.ReactElement | null {
     const [pages, setPages] = useState<PageFragment[] | null>(null);
     const [currentPageIdx, setCurrentPageIdx] = useState(0);
+
+    const pendingTurnMotion = useRef(false);
+
+    // Fade the already-committed semantic tree; no duplicate prose, layout
+    // transforms, delayed focus, or animation on restoration/repagination.
+    useLayoutEffect(() => {
+      const requested = pendingTurnMotion.current;
+      pendingTurnMotion.current = false;
+      if (!requested || !animatePageTurns) return;
+      const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
+      const fragment = articleEl.querySelector<HTMLElement>(".page-fragment");
+      if (motion.matches || !fragment?.animate) return;
+      const animation = fragment.animate(
+        [{ opacity: 0.45 }, { opacity: 1 }],
+        { duration: 180, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
+      );
+      const cancel = () => animation.cancel();
+      motion.addEventListener("change", cancel);
+      return () => {
+        cancel();
+        motion.removeEventListener("change", cancel);
+      };
+    }, [currentPageIdx, pages, articleEl, animatePageTurns]);
 
     // Phase 5 Plan 05-04 (D5-16 cross-fragment slicing): read the resolved
     // highlights from the HighlightOverlay context (mounted by ArticleView
@@ -555,6 +581,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
         direction === "next" ? Math.min(cur + 1, p.length - 1) : Math.max(0, cur - 1);
       const moved = next !== cur;
       if (moved) {
+        pendingTurnMotion.current = true;
         currentPageIdxRef.current = next;
         lastAnchorOffsetRef.current = pageStartGlobalOffset(articleRef.current, p[next]!);
         setCurrentPageIdx(next);
@@ -604,6 +631,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
       const next = Math.max(0, Math.min(targetIdx, p.length - 1));
       const moved = next !== cur;
       if (moved) {
+        pendingTurnMotion.current = true;
         currentPageIdxRef.current = next;
         lastAnchorOffsetRef.current = pageStartGlobalOffset(articleRef.current, p[next]!);
         setCurrentPageIdx(next);

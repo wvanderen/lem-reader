@@ -11,11 +11,8 @@
 // initial `50% 50%` (center), making the fill expand from the middle. LTR
 // English content uses the physical `left` keyword so scaleX grows from the
 // inline-start edge; a `[dir="rtl"]` override to `right` is deferred
-// (UI-SPEC content is LTR English). CRITICAL (UI-SPEC §Interaction 12,
-// 02-RESEARCH anti-pattern #6): the .progress-hairline-fill CSS rule applies
-// NO transition/animation of any kind to the transform. The global
-// prefers-reduced-motion gate is trivially satisfied and the hairline never
-// animates — it reflects scroll position immediately, like a native scrollbar.
+// (UI-SPEC content is LTR English). CSS eases updates under no-preference;
+// reduced motion keeps the progress line immediate.
 //
 // Mirrors src/a11y/SkipLink.tsx minimal-component pattern: header comment
 // citing the locked decisions, single responsibility, verbatim UI-SPEC class

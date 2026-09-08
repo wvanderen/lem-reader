@@ -26,6 +26,7 @@ function validSettings(overrides: Record<string, unknown> = {}): unknown {
     spacing: "comfortable",
     theme: "sepia",
     readingMode: "paginated",
+    animatePageTurns: false,
     ...overrides,
   };
 }
@@ -51,6 +52,12 @@ describe("ReaderSettingsSchema accepts valid combinations", () => {
     expect(parsed).toEqual(DEFAULT_SETTINGS);
     expect(parsed.schemaVersion).toBe(2);
     expect(parsed.readingMode).toBe("paginated");
+  });
+
+  it("preserves motion opt-in and accepts legacy settings without it", () => {
+    expect(ReaderSettingsSchema.parse(validSettings({ animatePageTurns: true })).animatePageTurns).toBe(true);
+    expect(ReaderSettingsSchema.parse(validSettings({ animatePageTurns: undefined })).animatePageTurns).toBeUndefined();
+    expect(ReaderSettingsSchema.safeParse(validSettings({ animatePageTurns: "true" })).success).toBe(false);
   });
 
   it.each([

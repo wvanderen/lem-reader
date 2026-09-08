@@ -2404,6 +2404,7 @@ export function ArticleView({
                   re-measure loop). */}
               <div className="page-viewport">
                 <PaginatedSurface
+                  animatePageTurns={settings.animatePageTurns}
                   ref={surfaceRef}
                   article={article}
                   trustedView={trustedView}

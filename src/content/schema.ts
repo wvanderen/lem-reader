@@ -374,6 +374,8 @@ export const ReaderSettingsSchema = z.object({
   ]),
   spacing: z.enum(["compact", "comfortable", "spacious"]),
   theme: z.enum(["sepia", "light", "dark"]),
+  // Additive preference: older records omit this and retain instant turns.
+  animatePageTurns: z.boolean().optional(),
   // D4-12 — readingMode preference. PROJECT.md: "Pagination is the distinctive
   // default experience, but it is not mandatory." .default("paginated") is the
   // value-shape migration mechanism: a v1 row lacking this field parses with

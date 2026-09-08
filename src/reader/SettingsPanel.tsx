@@ -544,6 +544,22 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
             </label>
           </fieldset>
 
+          <fieldset className="settings-section">
+            <legend>Motion</legend>
+            <label className="settings-row">
+              <input
+                type="checkbox"
+                checked={settings.animatePageTurns ?? false}
+                onChange={(e) => update({ animatePageTurns: e.currentTarget.checked })}
+                aria-describedby="page-turn-motion-help"
+              />
+              <span>Animate page turns</span>
+            </label>
+            <p id="page-turn-motion-help" className="settings-help">
+              A gentle fade between pages. Follows your device’s reduced-motion setting.
+            </p>
+          </fieldset>
+
           {/* Plan 09-05 (D9-10) — the "Your data" cluster: the three
             whole-library data actions + the import file picker + the status
             live region. Conceptually grouped with the wipe action (which

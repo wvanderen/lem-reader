@@ -5,10 +5,7 @@
 //   1. Is present, aria-hidden, and full-width under the header.
 //   2. The fill's transform scaleX(...) is 0 (or near 0) at the top and
 //      increases toward 1 after scrolling to the bottom.
-//   3. CRITICAL (UI-SPEC §Interaction 12 + RESEARCH anti-pattern #6): the
-//      fill's computed transitionProperty/transitionDuration resolves to
-//      "none"/"0s" — NO animation on the transform. The hairline tracks
-//      scroll position like a native scrollbar, never animates.
+//   3. Smooth updates are disabled when reduced motion is requested.
 //
 // Uses real IndexedDB via Dexie — wiped at the start of each test so the
 // first-run state is deterministic. Reuses BASE + image-stub conventions.
@@ -55,34 +52,14 @@ test.describe("READ-05 progress hairline", () => {
     await expect(fill).toHaveCount(1);
   });
 
-  test("the fill's computed transition property resolves to 'none' (NO animation on the transform)", async ({
-    page,
-  }) => {
+  test("progress eases updates and respects reduced motion", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "no-preference" });
     await page.goto(`${BASE}/#/article/${FIXTURE}`);
-    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-
-    // CRITICAL acceptance criterion: NO CSS transition on the transform.
-    // The fill's inline style writes scaleX(...) on every scroll; the rule
-    // itself declares no transition property. Computed style should resolve
-    // transitionProperty to "none" (or "all" with duration "0s" — the
-    // global reduced-motion gate may apply, but the base rule has none).
-    const transitionInfo = await page
-      .locator(".progress-hairline-fill")
-      .evaluate((el) => {
-        const cs = getComputedStyle(el);
-        return {
-          property: cs.transitionProperty,
-          duration: cs.transitionDuration,
-        };
-      });
-    // Accept either: transitionProperty === "none" OR duration === "0s".
-    // Both prove no animation will run on the transform.
-    const noAnimation =
-      transitionInfo.property === "none" || transitionInfo.duration === "0s";
-    expect(
-      noAnimation,
-      `expected transitionProperty=none or duration=0s, got ${JSON.stringify(transitionInfo)}`,
-    ).toBe(true);
+    const fill = page.locator(".progress-hairline-fill");
+    await expect(fill).toHaveCSS("transition-property", "transform");
+    await expect(fill).toHaveCSS("transition-duration", "0.2s");
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await expect(fill).toHaveCSS("transition-duration", "0s");
   });
 
   test("the fill scaleX is near 0 at the top of the article", async ({ page }) => {
