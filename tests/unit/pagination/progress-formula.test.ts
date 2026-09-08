@@ -25,7 +25,11 @@
 import { describe, expect, it } from "vitest";
 import { ArticleSchema } from "../../../src/content/schema";
 import type { CanonicalArticle, InlineRun } from "../../../src/content/types";
-import { paginatedProgressRatio } from "../../../src/pagination/progress";
+import { graphemeLength } from "../../../src/content/normalizeText";
+import {
+  committedPageProgressRatio,
+  paginatedProgressRatio,
+} from "../../../src/pagination/progress";
 import type { PageFragment } from "../../../src/pagination/types";
 
 // ─── fixture builders (fragmentOrder.test.ts analogs) ───────────────────────
@@ -123,5 +127,97 @@ describe("paginatedProgressRatio — SC#2 boundary table", () => {
       { blockIndex: 0, startGrapheme: 999, endGrapheme: 1000 },
     ]);
     expect(paginatedProgressRatio(article, stale)).toBe(1);
+  });
+});
+
+// ─── 260908-oht: committedPageProgressRatio — the committed-page pin ────────
+// The hairline now consumes the COMMITTED-page ratio (pageAnchorOffset-based)
+// so the final page of a MULTI-page set reads exactly 1 (passive completion).
+// The fragment-level paginatedProgressRatio above stays byte-unchanged.
+
+describe("committedPageProgressRatio — committed-page pin boundary table", () => {
+  it("last page of a 3-page set → exactly 1", () => {
+    const texts = [
+      "First paragraph of several here.",
+      "Second paragraph of several here.",
+      "Third paragraph of several here.",
+    ];
+    const article = parseArticle(texts.map(paragraph));
+    const pages = texts.map((text, i) =>
+      fragment(i, [{ blockIndex: i, startGrapheme: 0, endGrapheme: text.length }]),
+    );
+    expect(committedPageProgressRatio(article, pages, 2)).toBe(1);
+  });
+
+  it("page 1 of 3 → 0", () => {
+    const texts = [
+      "First paragraph of several here.",
+      "Second paragraph of several here.",
+      "Third paragraph of several here.",
+    ];
+    const article = parseArticle(texts.map(paragraph));
+    const pages = texts.map((text, i) =>
+      fragment(i, [{ blockIndex: i, startGrapheme: 0, endGrapheme: text.length }]),
+    );
+    expect(committedPageProgressRatio(article, pages, 0)).toBe(0);
+  });
+
+  it("monotonically non-decreasing across pages, strictly below 1 before the last page", () => {
+    const texts = [
+      "First paragraph of several here.",
+      "Second paragraph of several here.",
+      "Third paragraph of several here.",
+    ];
+    const article = parseArticle(texts.map(paragraph));
+    const pages = texts.map((text, i) =>
+      fragment(i, [{ blockIndex: i, startGrapheme: 0, endGrapheme: text.length }]),
+    );
+    const ratios = pages.map((_, i) => committedPageProgressRatio(article, pages, i));
+    for (let i = 1; i < ratios.length; i++) {
+      expect(ratios[i]).toBeGreaterThanOrEqual(ratios[i - 1]!);
+    }
+    expect(ratios[0]!).toBe(0);
+    expect(ratios[1]!).toBeGreaterThan(0);
+    expect(ratios[1]!).toBeLessThan(1);
+    expect(ratios[2]!).toBe(1);
+  });
+
+  it("one-page set → 0 (POLISH-02: a one-page article never reads finished on open)", () => {
+    const article = parseArticle([
+      paragraph("A calm short paragraph."),
+      paragraph("A second calm paragraph."),
+    ]);
+    const only = fragment(0, [
+      { blockIndex: 0, startGrapheme: 0, endGrapheme: 23 },
+      { blockIndex: 1, startGrapheme: 0, endGrapheme: 25 },
+    ]);
+    expect(committedPageProgressRatio(article, [only], 0)).toBe(0);
+  });
+
+  it("empty pages → 0 (defensive)", () => {
+    const article = parseArticle([paragraph("Hello world")]);
+    expect(committedPageProgressRatio(article, [], 0)).toBe(0);
+  });
+
+  it("graphemeLength 0 article → 0 (defensive empty)", () => {
+    const article = parseArticle([{ kind: "code-block", source: "" }]);
+    const only = fragment(0, [
+      { blockIndex: 0, startGrapheme: 0, endGrapheme: 0 },
+    ]);
+    expect(committedPageProgressRatio(article, [only], 0)).toBe(0);
+  });
+
+  it("last-page pin equals graphemeLength-derived 1 while total > 0", () => {
+    const texts = [
+      "First paragraph of several here.",
+      "Second paragraph of several here.",
+      "Third paragraph of several here.",
+    ];
+    const article = parseArticle(texts.map(paragraph));
+    const pages = texts.map((text, i) =>
+      fragment(i, [{ blockIndex: i, startGrapheme: 0, endGrapheme: text.length }]),
+    );
+    expect(graphemeLength(article)).toBeGreaterThan(0);
+    expect(committedPageProgressRatio(article, pages, 2)).toBe(1);
   });
 });

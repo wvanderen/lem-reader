@@ -15,6 +15,8 @@ vi.mock("../../src/pagination/fragment", () => ({
 
 import { PaginatedSurface } from "../../src/reader/PaginatedSurface";
 import { paginateDocument } from "../../src/pagination/fragment";
+import { pageAnchorOffset, pageStartGlobalOffset } from "../../src/pagination/anchor";
+import { graphemeLength } from "../../src/content/normalizeText";
 import { DiagnosticBus } from "../../src/measurement/diagnostics";
 import type { CanonicalArticle } from "../../src/content/types";
 import type { MeasurementResult } from "../../src/measurement/types";
@@ -71,7 +73,7 @@ beforeEach(() => {
   paginateMock.mockReset();
 });
 
-function renderSurface() {
+function renderSurface(onAnchorChange?: (offset: number) => void) {
   const articleEl = document.createElement("article");
   const diagnostics = new DiagnosticBus();
   return render(
@@ -81,6 +83,7 @@ function renderSurface() {
       articleEl={articleEl}
       diagnostics={diagnostics}
       pageContentBoxHeightPx={600}
+      onAnchorChange={onAnchorChange}
     />,
   );
 }
@@ -203,5 +206,59 @@ describe("PaginatedSurface — single content tree + pointer turn", () => {
     expect(container.querySelectorAll(".page-fragment").length).toBe(0);
     // paginateDocument is NOT called until geometry is non-zero.
     expect(paginateMock).not.toHaveBeenCalled();
+  });
+});
+
+// ─── 260908-oht: the committed-page anchor pin (passive completion) ─────────
+// onAnchorChange must emit graphemeLength(article) on the FINAL page of a
+// multi-page set (so the debounced save persists offset = total → Finished),
+// while earlier pages keep emitting page-start offsets exactly as before.
+
+describe("PaginatedSurface — committed-page anchor pin (onAnchorChange)", () => {
+  it("the initial commit's call (page 1 of 3) is 0", () => {
+    paginateMock.mockReturnValue({
+      schemaVersion: 1,
+      status: "ok",
+      pages: makePages(3),
+    });
+    const onAnchorChange = vi.fn();
+    renderSurface(onAnchorChange);
+    const calls = onAnchorChange.mock.calls.map((c) => c[0]);
+    expect(calls.length).toBeGreaterThan(0);
+    expect(calls[calls.length - 1]).toBe(0);
+  });
+
+  it("page 2's call equals pageStartGlobalOffset(article, pages[1]) and is below graphemeLength(article)", () => {
+    const pages = makePages(3);
+    paginateMock.mockReturnValue({
+      schemaVersion: 1,
+      status: "ok",
+      pages,
+    });
+    const onAnchorChange = vi.fn();
+    renderSurface(onAnchorChange);
+    fireEvent.click(screen.getByRole("button", { name: "Next page" }));
+    const expected = pageStartGlobalOffset(article, pages[1]!);
+    const calls = onAnchorChange.mock.calls.map((c) => c[0]);
+    expect(calls[calls.length - 1]).toBe(expected);
+    expect(expected).toBeGreaterThan(0);
+    expect(expected).toBeLessThan(graphemeLength(article));
+  });
+
+  it("after two Next clicks the LAST onAnchorChange call equals graphemeLength(article) (the completion pin)", () => {
+    paginateMock.mockReturnValue({
+      schemaVersion: 1,
+      status: "ok",
+      pages: makePages(3),
+    });
+    const onAnchorChange = vi.fn();
+    renderSurface(onAnchorChange);
+    fireEvent.click(screen.getByRole("button", { name: "Next page" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next page" }));
+    const calls = onAnchorChange.mock.calls.map((c) => c[0]);
+    expect(calls.length).toBeGreaterThan(0);
+    expect(calls[calls.length - 1]).toBe(graphemeLength(article));
+    // The pinned anchor agrees with the pure helper (no forked math).
+    expect(calls[calls.length - 1]).toBe(pageAnchorOffset(article, makePages(3), 2));
   });
 });
