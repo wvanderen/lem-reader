@@ -16,8 +16,8 @@
 //
 // Mirrors src/a11y/SkipLink.tsx minimal-component pattern: header comment
 // citing the locked decisions, single responsibility, verbatim UI-SPEC class
-// hook. Mounted only on ArticleView (hidden on FixtureList per UI-SPEC
-// §Layout line 491 — no scroll progress to show there).
+// hook. Reader call sites opt into viewport placement; Library cards reuse
+// the same ratio presentation in normal flow.
 interface ProgressHairlineProps {
   /**
    * Position progress as a ratio in [0, 1]. 0 = at the start of the article;
@@ -29,9 +29,14 @@ interface ProgressHairlineProps {
    * change so the fill tracks like a native scrollbar.
    */
   progress?: number;
+  /** Fixed reader chrome or a card-local track in normal document flow. */
+  placement?: "inline" | "viewport";
 }
 
-export function ProgressHairline({ progress }: ProgressHairlineProps) {
+export function ProgressHairline({
+  progress,
+  placement = "inline",
+}: ProgressHairlineProps) {
   // Clamp the ratio to [0, 1] defensively — a position edge case (e.g. an
   // article shorter than the viewport, or a stale paginated offset) could
   // otherwise produce a negative or >1 ratio that flips or over-extends
@@ -39,7 +44,10 @@ export function ProgressHairline({ progress }: ProgressHairlineProps) {
   // presentational last line of defense.
   const ratio = Math.max(0, Math.min(1, progress ?? 0));
   return (
-    <div className="progress-hairline" aria-hidden="true">
+    <div
+      className={`progress-hairline progress-hairline-${placement}`}
+      aria-hidden="true"
+    >
       <div
         className="progress-hairline-fill"
         style={{

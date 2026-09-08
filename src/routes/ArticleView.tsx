@@ -2217,7 +2217,9 @@ export function ArticleView({
           never paint during the paginated pending window either (it would
           appear, then vanish at the swap — the exact first-load jump this
           plan closes). */}
-      {!isPaginated && <ProgressHairline progress={progress} />}
+      {!isPaginated && (
+        <ProgressHairline progress={progress} placement="viewport" />
+      )}
       {/* A11Y-08: polite live region announcing section changes during scroll.
           articleEl is null during loading; the callback ref sets it once the
           <article> mounts, triggering a re-render so this component receives

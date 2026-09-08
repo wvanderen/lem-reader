@@ -1062,19 +1062,22 @@ dialog.add-dialog::backdrop {
  * ════════════════════════════════════════════════════════════════════════ */
 
 /* ── Progress hairline (decorative, aria-hidden) ─────────────────────────── */
-/* Fixed immediately under the 48px header. Track = --ink-soft at low alpha;
-   fill = --accent (UI-SPEC §Color accent-reserved line 269). Mounted only on
-   ArticleView (hidden on FixtureList per UI-SPEC §Layout line 491). */
+/* Shared 2px track. Library-card instances stay in normal flow; reader call
+   sites opt into the viewport modifier below. */
 .progress-hairline {
+  height: 2px;
+  background: color-mix(in srgb, var(--ink-soft) 20%, transparent);
+  pointer-events: none; /* decorative — never intercepts clicks */
+}
+/* Fixed immediately under the 48px header. Track = --ink-soft at low alpha;
+   fill = --accent (UI-SPEC §Color accent-reserved line 269). */
+.progress-hairline-viewport {
   position: fixed;
   top: 48px; /* immediately under the .app-header (min-height: 48px) */
   left: 0;
   right: 0;
-  height: 2px;
-  background: color-mix(in srgb, var(--ink-soft) 20%, transparent);
   z-index: 5; /* above article content, below .app-header (z-index: 10) and
                  below dialogs (top-layer, unaffected by z-index) */
-  pointer-events: none; /* the hairline is decorative — never intercepts clicks */
 }
 /* Full-width fill; transform changes never affect layout. */
 .progress-hairline-fill {

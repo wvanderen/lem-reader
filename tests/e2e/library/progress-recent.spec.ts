@@ -208,6 +208,26 @@ test.describe("SC#5 + LIB-06 — progress hairline + continue-reading strip + fi
     const fill = row.locator(".progress-hairline-fill");
     await expect(fill).toBeVisible();
 
+    // A Library progress track is card-local, never reader chrome. Reusing
+    // ProgressHairline must not pull the track into the fixed 48px header
+    // register that ArticleView owns.
+    const track = row.locator(".progress-hairline");
+    await expect(track).toHaveCSS("position", "static");
+    const [rowBox, trackBox] = await Promise.all([
+      row.boundingBox(),
+      track.boundingBox(),
+    ]);
+    expect(rowBox).not.toBeNull();
+    expect(trackBox).not.toBeNull();
+    expect(trackBox!.x).toBeGreaterThanOrEqual(rowBox!.x);
+    expect(trackBox!.x + trackBox!.width).toBeLessThanOrEqual(
+      rowBox!.x + rowBox!.width,
+    );
+    expect(trackBox!.y).toBeGreaterThanOrEqual(rowBox!.y);
+    expect(trackBox!.y + trackBox!.height).toBeLessThanOrEqual(
+      rowBox!.y + rowBox!.height,
+    );
+
     // The transform is `scaleX(<ratio>)` — extract the ratio with a regex
     // and assert it's close to 0.5 (precision 1 = within 0.05).
     const transform = await fill.evaluate(
