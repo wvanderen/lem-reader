@@ -218,3 +218,205 @@ describe("htmlToBlocks — figureSrcResolver hook (20-02 Task 2)", () => {
     }
   });
 });
+
+// ── Quick task 260908-ef5 — inline-image hoisting + srcset selection ─────────
+// Honesty: no silent garbage. An img inside a paragraph is hoisted to its own
+// FigureBlock AFTER the paragraph (paragraph-first ordering); an img with a
+// srcset imports the best candidate instead of the tiny fallback src. All
+// cells follow the direct htmlToBlocks document-fixture pattern above.
+
+describe("htmlToBlocks — inline-image hoisting (260908-ef5)", () => {
+  const wrap = (inner: string) =>
+    `<!doctype html><html><body><main>${inner}</main></body></html>`;
+
+  it("a paragraph with text + one http img yields the paragraph FIRST, then the figure — runs byte-identical to the img-free equivalent", () => {
+    const html = wrap(
+      "<p>Text before the image stays put <img src=\"https://cdn.example.com/one.png\" alt=\"First inline\"> and text after it too.</p>",
+    );
+    const { blocks } = htmlToBlocks(new JSDOM(html).window.document, undefined);
+    const imgFree = htmlToBlocks(
+      new JSDOM(html.replace(/<img[^>]*>/, "")).window.document,
+      undefined,
+    ).blocks;
+
+    expect(blocks.map((b) => b.kind)).toEqual(["paragraph", "figure"]);
+    // The paragraph's inline runs are byte-identical to the img-free walk —
+    // the img contributes nothing to run extraction (text preserved).
+    expect(blocks[0]).toEqual(imgFree[0]);
+    const fig = blocks[1];
+    if (fig?.kind !== "figure") throw new Error("expected figure");
+    expect(fig.src).toBe("https://cdn.example.com/one.png");
+    expect(fig.alt).toBe("First inline");
+    expect(fig.caption).toEqual([]); // figcaption cannot nest inside p
+  });
+
+  it("a paragraph with TWO http imgs yields the paragraph, then both figures in document order", () => {
+    const html = wrap(
+      "<p>Before <img src=\"https://cdn.example.com/a.png\" alt=\"A\"> middle <img src=\"https://cdn.example.com/b.png\" alt=\"B\"> after.</p>",
+    );
+    const { blocks } = htmlToBlocks(new JSDOM(html).window.document, undefined);
+    expect(blocks.map((b) => b.kind)).toEqual(["paragraph", "figure", "figure"]);
+    const [figA, figB] = blocks.slice(1);
+    if (figA?.kind !== "figure" || figB?.kind !== "figure") {
+      throw new Error("expected figures");
+    }
+    expect(figA.src).toBe("https://cdn.example.com/a.png");
+    expect(figB.src).toBe("https://cdn.example.com/b.png");
+  });
+
+  it("an img-only paragraph yields JUST the figure (empty paragraph omitted)", () => {
+    const html = wrap("<p><img src=\"https://cdn.example.com/only.png\" alt=\"Only\"></p>");
+    const { blocks } = htmlToBlocks(new JSDOM(html).window.document, undefined);
+    expect(blocks.map((b) => b.kind)).toEqual(["figure"]);
+    const fig = blocks[0];
+    if (fig?.kind !== "figure") throw new Error("expected figure");
+    expect(fig.src).toBe("https://cdn.example.com/only.png");
+    expect(fig.alt).toBe("Only");
+    expect(fig.caption).toEqual([]);
+  });
+
+  it("paragraphs inside blockquote children and list items hoist via the same recursion", () => {
+    const html = wrap(
+      "<blockquote><p>Quoted <img src=\"https://cdn.example.com/quote.png\" alt=\"Quoted\"></p></blockquote>" +
+        "<ul><li><p>Listed <img src=\"https://cdn.example.com/list.png\" alt=\"Listed\"></p></li></ul>",
+    );
+    const { blocks } = htmlToBlocks(new JSDOM(html).window.document, undefined);
+    const quote = blocks[0];
+    const list = blocks[1];
+    if (quote?.kind !== "blockquote" || list?.kind !== "bulleted-list") {
+      throw new Error("expected blockquote + bulleted-list");
+    }
+    expect(quote.children.map((c) => c.kind)).toEqual(["paragraph", "figure"]);
+    expect(list.items[0]?.content.map((c) => c.kind)).toEqual(["paragraph", "figure"]);
+    const quoteFig = quote.children[1];
+    if (quoteFig?.kind !== "figure") throw new Error("expected figure");
+    expect(quoteFig.src).toBe("https://cdn.example.com/quote.png");
+  });
+
+  it("a non-resolvable relative inline img yields the paragraph PLUS the honest unsupported disclosure (never a silent drop)", () => {
+    // No document URL → the relative src cannot resolve → same honest
+    // UnsupportedBlock a bare top-level relative img produces.
+    const html = wrap("<p>Keep me <img src=\"images/pic.png\" alt=\"Local\"></p>");
+    const { blocks } = htmlToBlocks(new JSDOM(html).window.document, undefined);
+    expect(blocks.map((b) => b.kind)).toEqual(["paragraph", "unsupported"]);
+    const unsupported = blocks[1];
+    if (unsupported?.kind !== "unsupported") throw new Error("expected unsupported");
+    expect(unsupported.originalKind).toBe("figure");
+    expect(unsupported.plainDescription.length).toBeGreaterThan(0);
+  });
+
+  it("the heading arm is NOT hoisted — heading-with-image stays byte-stable (scope decision)", () => {
+    const html = wrap("<h2>Heading <img src=\"https://cdn.example.com/h.png\" alt=\"H\"></h2>");
+    const { blocks } = htmlToBlocks(new JSDOM(html).window.document, undefined);
+    expect(blocks.map((b) => b.kind)).toEqual(["heading"]);
+    const heading = blocks[0];
+    if (heading?.kind !== "heading") throw new Error("expected heading");
+    // Byte-stable with the pre-260908-ef5 walk: extractInline has no img arm,
+    // so the run keeps its trailing space and NO figure block is emitted.
+    expect(heading.content.map((r) => r.text).join("")).toBe("Heading ");
+  });
+});
+
+describe("htmlToBlocks — srcset best-candidate selection (260908-ef5)", () => {
+  const wrap = (inner: string, url?: string) =>
+    [`<!doctype html><html><body><main>${inner}</main></body></html>`, url] as const;
+
+  it("width descriptors: picks the largest candidate up to 1600 (1080w over 480w despite the 1x1 placeholder src)", () => {
+    const [html, url] = wrap(
+      "<img src=\"https://cdn.example.com/1x1.png\" srcset=\"https://cdn.example.com/pic-480.png 480w, https://cdn.example.com/pic-1080.png 1080w\" alt=\"Responsive\">",
+    );
+    const { blocks } = htmlToBlocks(new JSDOM(html).window.document, url);
+    const fig = blocks[0];
+    if (fig?.kind !== "figure") throw new Error("expected figure");
+    expect(fig.src).toBe("https://cdn.example.com/pic-1080.png");
+    expect(fig.alt).toBe("Responsive");
+  });
+
+  it("width descriptors: a within-cap candidate beats every over-cap candidate; all-over-1600 picks the largest available", () => {
+    const [withinBeatsOver, url1] = wrap(
+      "<img src=\"https://cdn.example.com/1x1.png\" srcset=\"https://cdn.example.com/pic-2048.png 2048w, https://cdn.example.com/pic-1200.png 1200w\" alt=\"A\">",
+    );
+    const figA = htmlToBlocks(new JSDOM(withinBeatsOver).window.document, url1).blocks[0];
+    if (figA?.kind !== "figure") throw new Error("expected figure");
+    expect(figA.src).toBe("https://cdn.example.com/pic-1200.png");
+
+    const [allOver, url2] = wrap(
+      "<img src=\"https://cdn.example.com/1x1.png\" srcset=\"https://cdn.example.com/pic-1920.png 1920w, https://cdn.example.com/pic-3840.png 3840w\" alt=\"B\">",
+    );
+    const figB = htmlToBlocks(new JSDOM(allOver).window.document, url2).blocks[0];
+    if (figB?.kind !== "figure") throw new Error("expected figure");
+    expect(figB.src).toBe("https://cdn.example.com/pic-3840.png");
+  });
+
+  it("density-only candidates: the smallest at or above 1 wins; all-below-1 picks the largest below", () => {
+    const [atOrAbove, url1] = wrap(
+      "<img src=\"https://cdn.example.com/1x1.png\" srcset=\"https://cdn.example.com/a.png 1x, https://cdn.example.com/b.png 2x, https://cdn.example.com/c.png 3x\" alt=\"A\">",
+    );
+    const figA = htmlToBlocks(new JSDOM(atOrAbove).window.document, url1).blocks[0];
+    if (figA?.kind !== "figure") throw new Error("expected figure");
+    expect(figA.src).toBe("https://cdn.example.com/a.png");
+
+    const [below, url2] = wrap(
+      "<img src=\"https://cdn.example.com/1x1.png\" srcset=\"https://cdn.example.com/a.png 0.5x, https://cdn.example.com/b.png 0.75x\" alt=\"B\">",
+    );
+    const figB = htmlToBlocks(new JSDOM(below).window.document, url2).blocks[0];
+    if (figB?.kind !== "figure") throw new Error("expected figure");
+    expect(figB.src).toBe("https://cdn.example.com/b.png");
+  });
+
+  it("a bare URL with no descriptor is a density-1 candidate", () => {
+    const [html, url] = wrap(
+      "<img src=\"https://cdn.example.com/1x1.png\" srcset=\"https://cdn.example.com/bare.png, https://cdn.example.com/hi-dpi.png 2x\" alt=\"Bare\">",
+    );
+    const fig = htmlToBlocks(new JSDOM(html).window.document, url).blocks[0];
+    if (fig?.kind !== "figure") throw new Error("expected figure");
+    expect(fig.src).toBe("https://cdn.example.com/bare.png");
+  });
+
+  it("malformed parts are skipped calmly — the valid candidate still wins, the helper never throws", () => {
+    const [html, url] = wrap(
+      "<img src=\"https://cdn.example.com/fallback.png\" srcset=\", https://cdn.example.com/good.png 2x, , part-with-extra tokens here, https://cdn.example.com/bad-desc.png 480q, 480w\" alt=\"M\">",
+    );
+    const fig = htmlToBlocks(new JSDOM(html).window.document, url).blocks[0];
+    if (fig?.kind !== "figure") throw new Error("expected figure");
+    expect(fig.src).toBe("https://cdn.example.com/good.png");
+  });
+
+  it("relative candidates resolve against the document URL", () => {
+    const [html, url] = wrap(
+      "<img src=\"https://cdn.example.com/1x1.png\" srcset=\"images/pic-480.png 480w, images/pic-1080.png 1080w\" alt=\"R\">",
+      "https://example.com/article/",
+    );
+    const fig = htmlToBlocks(new JSDOM(html, { url }).window.document, url).blocks[0];
+    if (fig?.kind !== "figure") throw new Error("expected figure");
+    expect(fig.src).toBe("https://example.com/article/images/pic-1080.png");
+  });
+
+  it("a non-http scheme candidate is skipped, keeping plain src (T-EF5-03)", () => {
+    const [html, url] = wrap(
+      "<img src=\"https://cdn.example.com/keep-src.png\" srcset=\"javascript:alert(1) 900w\" alt=\"S\">",
+    );
+    const fig = htmlToBlocks(new JSDOM(html).window.document, url).blocks[0];
+    if (fig?.kind !== "figure") throw new Error("expected figure");
+    expect(fig.src).toBe("https://cdn.example.com/keep-src.png");
+  });
+
+  it("an empty/unparseable srcset leaves plain src in force (byte-stable)", () => {
+    const [html, url] = wrap(
+      "<img src=\"https://cdn.example.com/plain.png\" srcset=\"\" alt=\"P\">",
+    );
+    const fig = htmlToBlocks(new JSDOM(html).window.document, url).blocks[0];
+    if (fig?.kind !== "figure") throw new Error("expected figure");
+    expect(fig.src).toBe("https://cdn.example.com/plain.png");
+  });
+});
+
+describe("sanitizeExtractedHtml preserves the srcset attribute (260908-ef5 ALLOWED_ATTR proof)", () => {
+  it("an https srcset survives sanitization (consumed only by our parser — T-EF5-03)", () => {
+    const out = sanitizeExtractedHtml(
+      "<img src=\"https://cdn.example.com/a.png\" srcset=\"https://cdn.example.com/a-480.png 480w, https://cdn.example.com/a-1080.png 1080w\" alt=\"x\">",
+    );
+    expect(out).toContain("srcset");
+    expect(out).toContain("a-1080.png");
+  });
+});

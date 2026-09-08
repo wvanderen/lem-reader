@@ -81,7 +81,17 @@ export const SANITIZE_CONFIG = {
     "br", "hr", // structural
     "sup", // FootnoteReferenceBlock (marker)
   ],
-  ALLOWED_ATTR: ["href", "title", "alt", "src", "cite"],
+  // 260908-ef5 — srcset admitted for the best-candidate selection below.
+  // Injection-surface analysis (T-EF5-03): the attribute is consumed ONLY
+  // by selectSrcsetCandidate's parser and is never re-serialized into DOM
+  // output; every chosen candidate must resolve to an absolute http(s) URL
+  // via the URL constructor before entering the model and is re-validated
+  // by the ArticleSchema httpUrl refinement at parse time; non-http
+  // (script-scheme) candidates are skipped by the resolver. data-* stays
+  // stripped — ALLOW_DATA_ATTR:false is the load-bearing Pitfall 4 defense
+  // and data-srcset is deliberately NOT rescued (Readability's pre-sanitize
+  // lazy-load swap already handles the common data-src case).
+  ALLOWED_ATTR: ["href", "title", "alt", "src", "cite", "srcset"],
   // Explicitly forbid the dangerous tags even if a profile would allow them.
   FORBID_TAGS: [
     "script", "style", "iframe", "object", "embed", "form", "input",
@@ -205,6 +215,133 @@ function headingLevel(tag: string): 1 | 2 | 3 | 4 | 5 | 6 | null {
  * existing unsupported fallback below. */
 export type FigureSrcResolver = (src: string) => boolean;
 
+// ── srcset best-candidate selection (quick task 260908-ef5) ──────────────────
+// A srcset-carrying img imports its best real candidate instead of the tiny
+// fallback src publishers put in the attribute for no-JS browsers. The
+// selector is PURE and never throws: malformed parts are skipped calmly,
+// unresolvable or non-http(s) candidates (any script-scheme payload) are
+// skipped by the URL-constructor resolver, and a nothing-parseable result
+// returns null so plain src stays in force — byte-stable for every document
+// that carries no usable srcset.
+//
+// Selection precedence (the repro's planner decision): width descriptors
+// take precedence when width and density candidates are mixed — widths are
+// the physical cap the 1600px display budget reasons about; among widths,
+// the largest up to and including 1600, else the largest overall; among
+// density-only candidates, the smallest density at or above 1 (a 1x-equiv
+// pick), else the largest below 1 (best available below parity).
+
+/** The display-budget ceiling for srcset width selection. */
+const SRCSET_MAX_WIDTH = 1600;
+
+/** Width descriptor: an integer immediately followed by "w" (case-insensitive). */
+const WIDTH_DESCRIPTOR = /^\d+w$/i;
+/** Density descriptor: a decimal number immediately followed by "x". */
+const DENSITY_DESCRIPTOR = /^(?:\d+\.?\d*|\.\d+)x$/i;
+
+/** Resolve a candidate URL against the document base; null when the URL
+ * constructor throws or the result is not http(s) — the script-scheme skip
+ * lives here, before anything enters the model (T-EF5-03). */
+function resolveHttpCandidate(candidate: string, baseUri: string): string | null {
+  try {
+    const resolved = new URL(candidate, baseUri);
+    if (resolved.protocol !== "http:" && resolved.protocol !== "https:") {
+      return null;
+    }
+    return resolved.toString();
+  } catch {
+    return null; // unresolvable — skipped calmly (the helper never throws)
+  }
+}
+
+/** Width preference: the largest width up to and including the cap beats any
+ * over-cap width; among equals-to-the-cap-class the larger wins; when every
+ * candidate is over the cap, the largest available wins. */
+function preferWidth(candidate: number, best: number): boolean {
+  if (candidate === best) return false;
+  if (candidate <= SRCSET_MAX_WIDTH && best <= SRCSET_MAX_WIDTH) {
+    return candidate > best; // both within cap — larger
+  }
+  if (candidate <= SRCSET_MAX_WIDTH) return true; // within-cap beats over-cap
+  if (best <= SRCSET_MAX_WIDTH) return false;
+  return candidate > best; // both over cap — largest available
+}
+
+/** Density preference: the smallest density at or above 1 wins; a below-1
+ * candidate only wins when every candidate is below 1 (then the largest). */
+function preferDensity(candidate: number, best: number): boolean {
+  if (candidate === best) return false;
+  if (candidate >= 1 && best >= 1) return candidate < best; // both ≥1 — smallest
+  if (candidate >= 1) return true; // at-or-above-1 beats below-1
+  if (best >= 1) return false;
+  return candidate > best; // both below 1 — largest below
+}
+
+/** selectSrcsetCandidate — parse a srcset attribute and return the resolved
+ * absolute http(s) URL of the best candidate, or null when nothing usable
+ * parses. Grammar per candidate part (comma-separated): exactly one
+ * whitespace token is a bare URL (density 1); exactly two tokens whose
+ * second matches a width or density descriptor is a described candidate;
+ * anything else — empty part, a lone descriptor (missing URL), extra
+ * tokens, an unparseable descriptor — is malformed and skipped calmly. */
+function selectSrcsetCandidate(attr: string, baseUri: string): string | null {
+  const widths: { url: string; width: number }[] = [];
+  const densities: { url: string; density: number }[] = [];
+
+  for (const part of attr.split(",")) {
+    const tokens = part.trim().split(/\s+/).filter((t) => t.length > 0);
+    if (tokens.length === 1) {
+      // A lone descriptor token is a missing-URL malformed part, never a
+      // relative URL we should admit.
+      if (WIDTH_DESCRIPTOR.test(tokens[0]!) || DENSITY_DESCRIPTOR.test(tokens[0]!)) {
+        continue;
+      }
+      const resolved = resolveHttpCandidate(tokens[0]!, baseUri);
+      if (resolved !== null) densities.push({ url: resolved, density: 1 });
+      continue;
+    }
+    if (tokens.length === 2) {
+      const [url, descriptor] = tokens as [string, string];
+      const widthMatch = WIDTH_DESCRIPTOR.exec(descriptor);
+      if (widthMatch) {
+        const resolved = resolveHttpCandidate(url, baseUri);
+        if (resolved !== null) {
+          widths.push({ url: resolved, width: Number.parseInt(widthMatch[0], 10) });
+        }
+        continue;
+      }
+      const densityMatch = DENSITY_DESCRIPTOR.exec(descriptor);
+      if (densityMatch) {
+        const resolved = resolveHttpCandidate(url, baseUri);
+        if (resolved !== null) {
+          densities.push({ url: resolved, density: Number.parseFloat(densityMatch[0]) });
+        }
+        continue;
+      }
+      // Unparseable descriptor — malformed, skipped calmly.
+      continue;
+    }
+    // Empty or 3+-token part — malformed, skipped calmly.
+  }
+
+  // Width descriptors take precedence when both kinds are present.
+  if (widths.length > 0) {
+    let best = widths[0]!;
+    for (const c of widths) {
+      if (preferWidth(c.width, best.width)) best = c;
+    }
+    return best.url;
+  }
+  if (densities.length > 0) {
+    let best = densities[0]!;
+    for (const c of densities) {
+      if (preferDensity(c.density, best.density)) best = c;
+    }
+    return best.url;
+  }
+  return null;
+}
+
 /** Build a FigureBlock from a <figure> or bare <img>; UnsupportedBlock if src
  * is not a valid http(s) URL (T-7-17 — ArticleSchema.httpUrl re-validates). */
 function figureBlock(el: Element, figureSrcResolver?: FigureSrcResolver): Block[] {
@@ -228,6 +365,18 @@ function figureBlock(el: Element, figureSrcResolver?: FigureSrcResolver): Block[
     if (idl) src = idl;
   } catch {
     /* keep rawSrc */
+  }
+  // 260908-ef5 — srcset selection: when the img carries a non-empty srcset,
+  // the chosen best candidate overrides src BEFORE the http(s) test and the
+  // figureSrcResolver logic below — both stay unchanged and simply see the
+  // chosen candidate (re-validated by ArticleSchema.httpUrl at parse). A
+  // null result (absent/empty/nothing-parseable srcset — the EPUB case,
+  // where relative candidates cannot resolve against about:blank) leaves
+  // plain src in force, byte-stable.
+  const srcset = img.getAttribute("srcset") ?? "";
+  if (srcset.trim().length > 0) {
+    const chosen = selectSrcsetCandidate(srcset, img.baseURI);
+    if (chosen !== null) src = chosen;
   }
   if (/^https?:/i.test(src)) {
     const caption = figcaption ? tidyRuns(extractInline(figcaption, [])) : [];
@@ -325,7 +474,37 @@ function visit(
 
   if (tag === "p") {
     const content = tidyRuns(extractInline(el, []));
-    return content.length ? [{ kind: "paragraph", content }] : [];
+    // 260908-ef5 — inline-image hoisting (Honesty: no silent garbage). An
+    // img inside a paragraph used to be silently dropped by the inline-run
+    // extractor; now each el.querySelectorAll("img") match becomes its own
+    // FigureBlock AFTER the paragraph (paragraph-first ordering — calm
+    // reading flow, the figure-after-paragraph convention from the repro).
+    // An img-only paragraph emits its figures with the empty paragraph
+    // omitted. Hoisted figures always carry an EMPTY caption array —
+    // figcaption cannot nest inside p — so the D-05 normalized-text
+    // substrate and the assertRoundTripAnchor gate are provably unaffected
+    // (the caption channel contributes nothing). Non-resolvable inline
+    // imgs produce the same honest UnsupportedBlock a bare top-level img
+    // produces — one admission code path (figureBlock), no fork, no silent
+    // drop; volume stays bounded by the stage's existing count/budget/
+    // deadline caps (T-EF5-04). Scope: headings are NOT hoisted —
+    // heading-with-image is pathological layout abuse and the heading arm
+    // stays byte-stable. Recursion already reaches paragraphs inside
+    // blockquote children and list items, so those hoist via this same arm.
+    // EPUB compatibility: epubToBooks reuses sanitizeExtractedHtml +
+    // htmlToBlocks with a JSDOM that carries no document URL, so relative
+    // srcset candidates fail URL resolution against about:blank and calmly
+    // fall back to the src/container-marker path — srcset inside EPUBs is
+    // rare; acceptable and stated.
+    const hoistedFigures = Array.from(el.querySelectorAll("img")).flatMap((img) =>
+      figureBlock(img, figureSrcResolver),
+    );
+    if (content.length) {
+      return hoistedFigures.length
+        ? [{ kind: "paragraph", content }, ...hoistedFigures]
+        : [{ kind: "paragraph", content }];
+    }
+    return hoistedFigures;
   }
 
   if (tag === "blockquote") {
