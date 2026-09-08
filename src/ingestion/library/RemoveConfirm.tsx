@@ -73,16 +73,33 @@ export function RemoveConfirm({
   }, [open]);
 
   // Register the `close` event listener (with cleanup). Restore focus to the
-  // captured trigger (Pitfall 1).
+  // captured trigger (Pitfall 1). Deps [onCancel]: the scrim listener below
+  // routes through onCancel, so the effect must re-register when the parent's
+  // callback identity changes (never a stale closure — the live-mirror
+  // discipline these files preach).
   useEffect(() => {
     const dlg = ref.current;
     if (!dlg) return;
     const handleClose = () => {
       triggerRef.current?.focus();
     };
+    // A click whose target IS the dialog element itself is the dimmed
+    // ::backdrop (padding: 0 + the .library-remove-confirm-inner wrapper
+    // mean the dialog border box == the visible card, so clicks on visible
+    // content always target descendants). Route it through the SAME
+    // onCancel path the "Keep article" button / Esc use — the parent's
+    // open-prop flip owns every close (never dlg.close() here; the 09-06
+    // wedge lesson).
+    const handleScrimClick = (e: MouseEvent) => {
+      if (e.target === dlg) onCancel();
+    };
     dlg.addEventListener("close", handleClose);
-    return () => dlg.removeEventListener("close", handleClose);
-  }, []);
+    dlg.addEventListener("click", handleScrimClick);
+    return () => {
+      dlg.removeEventListener("close", handleClose);
+      dlg.removeEventListener("click", handleScrimClick);
+    };
+  }, [onCancel]);
 
   // ── PITFALL 8 LOAD-BEARING HANDLER ──────────────────────────────────────
   // The ONLY call site for `dexieLibrarySource.remove` in the new code. It

@@ -126,8 +126,21 @@ export function AnnotationsDrawer({
       onClose();
       triggerRef.current?.focus();
     };
+    // A click whose target IS the dialog element itself is the dimmed
+    // ::backdrop (padding: 0 + the .annotations-drawer-inner wrapper mean
+    // the dialog border box == the visible sheet, so clicks on visible
+    // content always target descendants). Route it through the SAME
+    // onClose path as the × / Esc controls — App's open-prop flip owns
+    // every close (never dlg.close() here; the 09-06 wedge lesson).
+    const handleScrimClick = (e: MouseEvent) => {
+      if (e.target === dlg) onClose();
+    };
     dlg.addEventListener("close", handleClose);
-    return () => dlg.removeEventListener("close", handleClose);
+    dlg.addEventListener("click", handleScrimClick);
+    return () => {
+      dlg.removeEventListener("close", handleClose);
+      dlg.removeEventListener("click", handleScrimClick);
+    };
   }, [onClose]);
 
   const countFormatter = new Intl.NumberFormat(navigator.language);

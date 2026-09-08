@@ -213,8 +213,23 @@ export function ImportPreviewDialog({
       triggerRef.current?.focus();
       if (openRef.current) onCancel();
     };
+    // A click whose target IS the dialog element itself is the dimmed
+    // ::backdrop (padding: 0 + the .import-preview-inner wrapper mean the
+    // dialog border box == the visible card, so clicks on visible content
+    // always target descendants). Route it through the SAME onCancel path
+    // the Cancel import button uses — the parent flips the open prop, the
+    // sync effect calls dlg.close(), and the close listener's openRef
+    // check then skips its own onCancel (no double-cancel). Never
+    // dlg.close() from here (the 09-06 wedge lesson).
+    const handleScrimClick = (e: MouseEvent) => {
+      if (e.target === dlg) onCancel();
+    };
     dlg.addEventListener("close", handleClose);
-    return () => dlg.removeEventListener("close", handleClose);
+    dlg.addEventListener("click", handleScrimClick);
+    return () => {
+      dlg.removeEventListener("close", handleClose);
+      dlg.removeEventListener("click", handleScrimClick);
+    };
   }, [onCancel]);
 
   // ── PITFALL 8 LOAD-BEARING HANDLER ──────────────────────────────────────

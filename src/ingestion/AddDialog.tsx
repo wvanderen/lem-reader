@@ -246,11 +246,27 @@ export function AddDialog({ open, onCancel, onBookAdded }: AddDialogProps) {
       if (submittingRef.current) return;
       onCancel();
     };
+    // A click whose target IS the dialog element itself is the dimmed
+    // ::backdrop (padding: 0 + the .add-dialog-inner wrapper mean the
+    // dialog border box == the visible card, so clicks on visible content
+    // always target descendants). Route it through the SAME onCancel path
+    // as the Cancel button / Esc (the open-prop mirror owns every close —
+    // never dlg.close() here). D16-10 extends to the scrim: the live
+    // submittingRef mirror decides, so an in-flight submission ignores
+    // the click. No preventDefault — that is the cancel event's
+    // Esc-specific browser guard.
+    const handleScrimClick = (e: MouseEvent) => {
+      if (e.target !== dlg) return;
+      if (submittingRef.current) return;
+      onCancel();
+    };
     dlg.addEventListener("close", handleClose);
     dlg.addEventListener("cancel", handleDialogCancel);
+    dlg.addEventListener("click", handleScrimClick);
     return () => {
       dlg.removeEventListener("close", handleClose);
       dlg.removeEventListener("cancel", handleDialogCancel);
+      dlg.removeEventListener("click", handleScrimClick);
     };
   }, [onCancel]);
 

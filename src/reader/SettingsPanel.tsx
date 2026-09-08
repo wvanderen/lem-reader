@@ -153,8 +153,21 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
       // A11Y-02: restore focus to the trigger. showModal does not do this for us.
       triggerRef.current?.focus();
     };
+    // A click whose target IS the dialog element itself is the dimmed
+    // ::backdrop (padding: 0 + the .settings-panel-inner wrapper mean the
+    // dialog border box == the visible sheet, so clicks on visible content
+    // always target descendants). Route it through the SAME onClose path
+    // as the × / Esc controls — the parent's open-prop flip owns every
+    // close (never dlg.close() here; the 09-06 wedge lesson).
+    const handleScrimClick = (e: MouseEvent) => {
+      if (e.target === dlg) onClose();
+    };
     dlg.addEventListener("close", handleClose);
-    return () => dlg.removeEventListener("close", handleClose);
+    dlg.addEventListener("click", handleScrimClick);
+    return () => {
+      dlg.removeEventListener("close", handleClose);
+      dlg.removeEventListener("click", handleScrimClick);
+    };
   }, [onClose]);
 
   // Form-change dispatchers — call update() with the typed patch. The

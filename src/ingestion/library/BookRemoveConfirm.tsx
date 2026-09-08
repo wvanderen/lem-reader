@@ -102,11 +102,24 @@ export function BookRemoveConfirm({
       e.preventDefault();
       onCancel();
     };
+    // A click whose target IS the dialog element itself is the dimmed
+    // ::backdrop (padding: 0 + the .book-remove-confirm-inner wrapper mean
+    // the dialog border box == the visible card, so clicks on visible
+    // content always target descendants). Route it through the SAME
+    // onCancel path as the "Keep book" button / Esc (the open-prop mirror
+    // owns every close — never dlg.close() here). No preventDefault on the
+    // click — the cancel listener's preventDefault is the Esc-specific
+    // browser guard; a click has no default dialog close to stop.
+    const handleScrimClick = (e: MouseEvent) => {
+      if (e.target === dlg) onCancel();
+    };
     dlg.addEventListener("close", handleClose);
     dlg.addEventListener("cancel", handleCancel);
+    dlg.addEventListener("click", handleScrimClick);
     return () => {
       dlg.removeEventListener("close", handleClose);
       dlg.removeEventListener("cancel", handleCancel);
+      dlg.removeEventListener("click", handleScrimClick);
     };
   }, [onCancel]);
 
