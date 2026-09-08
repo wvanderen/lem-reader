@@ -141,7 +141,8 @@ export function Header({
           destination link even though the href matches.
         */}
         <a className="app-wordmark" href="#/">
-          Lem Reader
+          <span className="app-logo" aria-hidden="true" />
+          <span className="visually-hidden">Lem Reader</span>
         </a>
         {/*
           Plan 15-02 (D15-02/D15-08): the persistent shell destination nav —

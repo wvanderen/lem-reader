@@ -4213,3 +4213,14 @@ main#main > .status:empty {
     padding-inline: var(--space-sm);
   }
 }
+
+/* Approved LEM book mark: follows the active theme and link hover color. */
+.app-logo {
+  display: block;
+  width: 60px;
+  height: 36px;
+  flex-shrink: 0;
+  background-color: currentColor;
+  mask: url("/brand/lem.svg") center / contain no-repeat;
+  forced-color-adjust: none;
+}
