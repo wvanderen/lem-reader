@@ -760,19 +760,31 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
           </>
         )}
       </div>
-      <aside className="project-feedback" aria-label="Project feedback">
-        <p>
-          Help shape Lem Reader.{" "}
-          <a
-            href="https://github.com/wvanderen/lem-reader/issues/new?template=feature-request.yml&title=%5BFeedback%5D%3A%20"
-            target="_blank"
-            rel="noreferrer"
-            aria-label="Share feedback on GitHub (opens in a new tab)"
-          >
-            Share feedback<span className="visually-hidden"> on GitHub (opens in a new tab)</span>
-          </a>
-        </p>
-      </aside>
+      {/* Quick 260908-nk2 — during the initial load the page is short enough
+          (header row, switcher, search, tag filter, empty list) that this
+          aside sat INSIDE the viewport and the feedback link flashed on
+          screen until the rows loaded and pushed it below the fold — a
+          flash of wrong content. The gate mounts the aside only after the
+          load settles (ready OR error — a failed load may be exactly when a
+          reader wants to file an issue); a refreshKey re-load
+          (remove/add/edit) never returns status to "loading", so the aside
+          never unmounts/remounts on refreshes. Markup is byte-stable — only
+          mount timing changes. */}
+      {status !== "loading" && (
+        <aside className="project-feedback" aria-label="Project feedback">
+          <p>
+            Help shape Lem Reader.{" "}
+            <a
+              href="https://github.com/wvanderen/lem-reader/issues/new?template=feature-request.yml&title=%5BFeedback%5D%3A%20"
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Share feedback on GitHub (opens in a new tab)"
+            >
+              Share feedback<span className="visually-hidden"> on GitHub (opens in a new tab)</span>
+            </a>
+          </p>
+        </aside>
+      )}
       {/* Plan 08-04 — row-level trash → cascade-remove confirmation (LIB-02).
           D8-13: the destructive onClick calls dexieLibrarySource.remove(id)
           which atomically removes the article + highlights + notes + location
