@@ -382,6 +382,83 @@ describe("safeFetchCore image profile (20-01 Task 2 — Pitfall 4)", () => {
     expect(arrayBufferCallCount).toBe(0); // Measure 7 — no body read on refusal
   });
 
+  // ── Quick task 260908-ef5 — the admit-opaque gate mode ────────────────────
+  // The advisory claim made real: opaque/binary-ish declared headers reach
+  // the body read under "admit-opaque" so the magic-byte sniff (D20-10)
+  // decides admission — CDNs/S3/signed URLs serve real images under these
+  // headers. The document profile (absent gate = "strict") keeps refusing
+  // octet-stream exactly as before (byte-stability pin below).
+  const admitOpaqueImageProfile: SafeFetchProfile = {
+    ...tinyImageProfile,
+    contentTypeGate: "admit-opaque",
+  };
+
+  it.each([
+    ["application/octet-stream", { "content-type": "application/octet-stream" }],
+    ["binary/octet-stream", { "content-type": "binary/octet-stream" }],
+    [
+      "parameterized octet-stream",
+      { "content-type": "application/octet-stream; charset=binary" },
+    ],
+    ["no content-type header at all", {}],
+  ])(
+    "admit-opaque: %s returns the byte body — the sniff decides, not the declared header (D20-10)",
+    async (_label, headers) => {
+      resolve4Mock.mockResolvedValue(["93.184.216.34"]);
+      resolve6Mock.mockResolvedValue([]);
+      const body = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+      fetchMock.mockResolvedValueOnce(
+        fakeResponse({
+          status: 200,
+          url: "https://cdn.example.com/s3-signed",
+          headers: { ...headers, "content-length": String(body.byteLength) },
+          byteBody: body,
+        }),
+      );
+      const result = await safeFetchCore(
+        "https://cdn.example.com/s3-signed",
+        admitOpaqueImageProfile,
+      );
+      expect(Array.from(result.body as Uint8Array)).toEqual(Array.from(body));
+      expect(arrayBufferCallCount).toBe(1); // the read happened — that is the point
+      expect(textCallCount).toBe(0);
+    },
+  );
+
+  it("admit-opaque still refuses a clearly-non-image declaration pre-read (text/html challenge page, zero body reads)", async () => {
+    resolve4Mock.mockResolvedValue(["93.184.216.34"]);
+    resolve6Mock.mockResolvedValue([]);
+    fetchMock.mockResolvedValueOnce(
+      fakeResponse({
+        status: 200,
+        url: "https://example.com/challenge.html",
+        headers: { "content-type": "text/html; charset=utf-8", "content-length": "3" },
+        byteBody: new Uint8Array([1, 2, 3]),
+      }),
+    );
+    await expect(
+      safeFetchCore("https://example.com/challenge.html", admitOpaqueImageProfile),
+    ).rejects.toMatchObject({ reason: "unsupported-content-type" });
+    expect(arrayBufferCallCount).toBe(0); // Measure 7 — no body read on refusal
+  });
+
+  it("document profile byte-stability: application/octet-stream still refuses unsupported-content-type (absent gate = strict)", async () => {
+    resolve4Mock.mockResolvedValue(["93.184.216.34"]);
+    resolve6Mock.mockResolvedValue([]);
+    fetchMock.mockResolvedValueOnce(
+      fakeResponse({
+        status: 200,
+        url: "https://example.com/binary-blob",
+        headers: { "content-type": "application/octet-stream", "content-length": "4" },
+        body: "xxxx",
+      }),
+    );
+    await expect(safeFetch("https://example.com/binary-blob")).rejects.toMatchObject({
+      reason: "unsupported-content-type",
+    });
+    expect(textCallCount).toBe(0); // Measure 7 — no body read on refusal
+  });
+
   it("per-hop redirect re-validation runs under the SAME profile (image bytes follow the hop)", async () => {
     resolve4Mock.mockResolvedValue(["93.184.216.34"]);
     resolve6Mock.mockResolvedValue([]);

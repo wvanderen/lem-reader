@@ -73,14 +73,21 @@ export type ImageAssetRefusal = "fetch" | "type" | "bytes" | "pixels" | "animate
 
 /** The image profile over safeFetchCore — the ONLY fetch entry for assets (no
  * second SSRF egress path exists for images). The "image/" content-type gate
- * is ADVISORY: it calmly refuses obviously-non-image responses early, while
- * the sniff below decides actual admission (D20-10 — headers lie; bytes do
- * not). */
+ * is genuinely ADVISORY (quick task 260908-ef5): with contentTypeGate
+ * "admit-opaque", CDNs/S3/signed URLs serving real image bytes under an
+ * application/octet-stream, binary/octet-stream, or empty declared header
+ * flow through to sniffImageAsset below, which stays the SOLE admission
+ * authority per D20-10 (headers lie; bytes do not) — the sniffed type still
+ * decides, so an octet-stream-labeled HTML challenge page refuses on its
+ * bytes. Clearly-non-image declarations (text/html, application/json,
+ * text/plain, application/pdf) keep the early calm pre-read refusal in the
+ * core. One pipeline, parameterized — never forked (D20-12). */
 export const IMAGE_FETCH_PROFILE: SafeFetchProfile = {
   allowedContentTypes: ["image/"],
   timeoutMs: ASSET_FETCH_TIMEOUT_MS,
   maxBytes: MAX_ASSET_BYTES,
   bodyKind: "bytes",
+  contentTypeGate: "admit-opaque",
 };
 
 /** image-size sniffed type → canonical content type. The JPEG type string

@@ -60,12 +60,22 @@ export interface FetchedContent {
  * content-type header (the image profile passes ["image/"] — advisory only;
  * the byte sniff in fetchImageAsset decides admission). `bodyKind` selects
  * the read: "text" → res.text() (document profile, byte-stable); "bytes" →
- * res.arrayBuffer() + post-read byteLength re-check against maxBytes. */
+ * res.arrayBuffer() + post-read byteLength re-check against maxBytes.
+ * `contentTypeGate` (quick task 260908-ef5) selects the gate MODE over the
+ * declared header: "strict" (the absent-field default — the document profile
+ * passes no gate, so its observable behavior stays byte-identical and the
+ * 19-vector e2e matrix holds untouched) refuses any header failing the
+ * substring test; "admit-opaque" additionally lets the exhaustive opaque set
+ * (empty / application/octet-stream / binary/octet-stream) reach the body
+ * read so the authoritative magic-byte sniff decides admission (D20-10 —
+ * CDNs, S3, and signed URLs commonly serve real image bytes under opaque
+ * binary headers). One pipeline, parameterized — never forked (D20-12). */
 export interface SafeFetchProfile {
   allowedContentTypes: string[];
   timeoutMs: number;
   maxBytes: number;
   bodyKind: "text" | "bytes";
+  contentTypeGate?: "strict" | "admit-opaque";
 }
 
 /** The validated-response shape returned by safeFetchCore. `body` is a string
@@ -130,6 +140,25 @@ async function sha256Hex(text: string): Promise<string> {
   let hex = "";
   for (const b of bytes) hex += b.toString(16).padStart(2, "0");
   return `sha256:${hex}`;
+}
+
+// Quick task 260908-ef5 — the opaque-header predicate for the "admit-opaque"
+// gate mode. Normalizes by taking the media type before the first semicolon,
+// trimming + lowercasing, then admits ONLY the exhaustive three-member set
+// {empty, application/octet-stream, binary/octet-stream} — exhaustive
+// membership, no catch-all. Everything else (text/html challenge pages,
+// application/json, text/plain, application/pdf, ...) stays OUT: those are
+// clearly-non-image declarations that keep the early calm pre-read refusal.
+// Rationale (D20-10): CDNs, S3, and signed URLs frequently serve real image
+// bytes under an opaque binary header or none at all; the magic-byte sniff in
+// fetchImageAsset remains the sole admission authority — headers lie; bytes
+// do not.
+function isOpaqueContentType(contentType: string): boolean {
+  const mediaType = contentType.split(";")[0]!.trim().toLowerCase();
+  if (mediaType === "") return true;
+  if (mediaType === "application/octet-stream") return true;
+  if (mediaType === "binary/octet-stream") return true;
+  return false;
 }
 
 /**
@@ -231,9 +260,23 @@ export async function safeFetchCore(
   // profile passes ALLOWED_CONTENT_TYPES (only (text|application)/(xhtml+)html
   // is article-shaped); the image profile passes ["image/"] — advisory only,
   // the sniff in fetchImageAsset decides actual admission (D20-10: headers
-  // lie; bytes do not).
+  // lie; bytes do not). Quick task 260908-ef5 makes the advisory claim real:
+  // substringAllowed keeps the existing substring test unchanged, while
+  // opaqueAdmitted lets ONLY the exhaustive opaque set (empty /
+  // application/octet-stream / binary/octet-stream) through when the profile
+  // selects the "admit-opaque" mode — an absent field means "strict", so the
+  // document profile's refusal behavior is byte-identical and the 19-vector
+  // tests/e2e/ingestion/ssrf-matrix.spec.ts pin holds with zero edits.
+  // Clearly-non-image declarations (text/html challenge pages,
+  // application/json, text/plain, application/pdf) fail both arms under both
+  // modes and keep the early calm pre-read refusal.
   const contentType = res.headers.get("content-type") ?? "";
-  if (!profile.allowedContentTypes.some((t) => contentType.includes(t))) {
+  const substringAllowed = profile.allowedContentTypes.some((t) =>
+    contentType.includes(t),
+  );
+  const opaqueAdmitted =
+    profile.contentTypeGate === "admit-opaque" && isOpaqueContentType(contentType);
+  if (!substringAllowed && !opaqueAdmitted) {
     throw new IngestionError("unsupported-content-type");
   }
 

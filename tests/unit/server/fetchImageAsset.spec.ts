@@ -380,6 +380,41 @@ describe("fetchImageAsset (network path — the ONLY asset egress)", () => {
     expect(arrayBufferCallCount).toBe(0);
   });
 
+  // ── Quick task 260908-ef5 — opaque declared headers reach the sniff ──────
+  // IMAGE_FETCH_PROFILE runs the core in "admit-opaque" mode: a real JPEG
+  // served as application/octet-stream (S3/CDN/signed-URL convention) or
+  // with no content-type header at all flows through to the sniff, which
+  // stays the sole admission authority (D20-10). The returned contentType
+  // comes from the BYTES, never the declared header — and the result is an
+  // ImageAsset, never the "fetch" refusal the pre-260908-ef5 hard gate
+  // produced.
+  it.each([
+    ["application/octet-stream", { "content-type": "application/octet-stream" }],
+    ["no content-type header", {}],
+  ])(
+    "a real JPEG served as %s admits via the sniff — contentType from the bytes, never the declared header (D20-10)",
+    async (_label, headers) => {
+      serveBytes(STATIC_JPEG, headers);
+      const result = await fetchImageAsset("https://cdn.example.com/signed-asset");
+      if (typeof result === "string") {
+        throw new Error(`expected ImageAsset, got refusal ${result}`);
+      }
+      expect(result.contentType).toBe("image/jpeg"); // the SNIFF, not the header
+      expect(result.width).toBe(2);
+      expect(result.height).toBe(1);
+      expect(result.assetId).toMatch(/^img-[a-z0-9]{12}$/);
+      expect(arrayBufferCallCount).toBe(1); // the body WAS read — no pre-read refusal
+    },
+  );
+
+  it("octet-stream-declared HTML challenge bytes still refuse \"type\" — the sniff overrules the opaque header (D20-10)", async () => {
+    serveBytes(new TextEncoder().encode("<html>challenge</html>"), {
+      "content-type": "application/octet-stream",
+    });
+    const result = await fetchImageAsset("https://cdn.example.com/challenge");
+    expect(result).toBe("type");
+  });
+
   it("an over-cap content-length header refuses \"fetch\" with the body NEVER read", async () => {
     serveBytes(STATIC_PNG, {
       "content-type": "image/png",
