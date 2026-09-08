@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-08-30)
 Phase: 21
 Plan: Not started
 Status: Phase complete — ready for verification
-Last activity: 2026-09-07 — Completed quick task 260907-pw1: live deployment docs and Getting Started library
+Last activity: 2026-09-08 — Completed quick task 260908-ef5: fix web article image import (content-type gate, fetch headers, inline images, srcset)
 
 ## Recent Decisions (Phase 18)
 
@@ -522,6 +522,7 @@ None yet. (2026-08-21-fix-prod-ui-paste-ingest-flow resolved by quick task 26082
 | 260907-pdl | Polish navigation, library and highlights layout; remove empty status chrome | 2026-09-07 | 01c9ea6 | [260907-pdl-polish-library-highlights-and-navigation](./quick/260907-pdl-polish-library-highlights-and-navigation/) |
 | 260907-pm5 | Prepare Lem Reader for open-source and portfolio presentation | 2026-09-07 | 234f46c | [260907-pm5-prepare-lem-reader-for-open-source-and-p](./quick/260907-pm5-prepare-lem-reader-for-open-source-and-p/) |
 | 260907-pw1 | Document the Vercel demo and replace the public sample corpus with a Getting Started guide | 2026-09-07 | b13eba5 | [260907-pw1-document-the-live-vercel-deployment-and-](./quick/260907-pw1-document-the-live-vercel-deployment-and-/) |
+| 260908-ef5 | Fix web article image import — truly-advisory image content-type gate (octet-stream admitted to the byte sniff), browser-like Accept + article-origin Referer on image fetches, inline paragraph images hoisted as figures (no silent drops), best srcset candidate selection | 2026-09-08 | 8e59fb4 | [260908-ef5-fix-web-article-image-import-octet-strea](./quick/260908-ef5-fix-web-article-image-import-octet-strea/) |
 
 ## Deferred Items
 
