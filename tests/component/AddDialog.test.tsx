@@ -21,7 +21,11 @@
 //   - D16-10 in-flight blocking (Cancel + active submit disabled; the
 //     `cancel` event is gated while submitting),
 //   - D16-12 success arms (article: onCancel() then #/article/<id>;
-//     book: onCancel() then onBookAdded()).
+//     book: onCancel() then onBookAdded()),
+//   - scrim dismissal (quick task 260908-o0w): an idle scrim click
+//     (target === the dialog element — the dimmed ::backdrop) fires
+//     onCancel, an inner-wrapper click is inert, and an in-flight
+//     submission ignores the scrim (D16-10 extended to the click path).
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, act, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -551,5 +555,83 @@ describe("AddDialog (16-02 Task 2)", () => {
     });
     await waitFor(() => expect(hasBookMock).toHaveBeenCalledWith("book-id"));
     expect(saveBookMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Backdrop scrim dismissal (quick task 260908-o0w). jsdom cannot hit-test
+// the ::backdrop (Pitfall 2/5 — the real-browser proof lives in
+// tests/e2e/scrim-dismiss.spec.ts), so the listener logic is exercised
+// directly: a scrim click is a native click dispatched on the dialog
+// element itself (the listener sees target === dialog), and the negative
+// case is the same bubbling click dispatched on the .add-dialog-inner
+// wrapper (target = a descendant — visible-content clicks never dismiss).
+describe("AddDialog — backdrop scrim dismissal (260908-o0w)", () => {
+  it("an idle dialog's scrim click (target === dialog) fires onCancel", () => {
+    const { onCancel } = renderDialog();
+    const dlg = screen.getByRole("dialog") as HTMLDialogElement;
+    act(() => {
+      dlg.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it("a bubbling click on the .add-dialog-inner wrapper does NOT fire onCancel", () => {
+    const { onCancel } = renderDialog();
+    const dlg = screen.getByRole("dialog") as HTMLDialogElement;
+    const inner = dlg.querySelector(".add-dialog-inner");
+    expect(inner).not.toBeNull();
+    act(() => {
+      inner!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(onCancel).not.toHaveBeenCalled();
+  });
+
+  it("BLOCKS the scrim click while a URL submission is in flight; once it settles, the scrim dismisses again (D16-10)", async () => {
+    const user = userEvent.setup();
+    // Terminal outcome = dedupe-refuse error, so the dialog STAYS OPEN
+    // after the held promise resolves (the D16-12 success arm would close
+    // it on its own and muddy the assertion).
+    hasMock.mockResolvedValue(true);
+    type UrlSuccess = Awaited<ReturnType<typeof ingestUrl>>;
+    let resolveIngest!: (value: UrlSuccess) => void;
+    ingestUrlMock.mockReturnValue(
+      new Promise<UrlSuccess>((resolve) => {
+        resolveIngest = resolve;
+      }),
+    );
+    const { onCancel } = renderDialog();
+
+    await user.type(
+      screen.getByRole("textbox", { name: "Add by URL" }),
+      "https://example.com/article",
+    );
+    await user.click(screen.getByRole("button", { name: /^add$/i }));
+    await waitFor(() => {
+      expect(screen.getByText("Fetching article…")).not.toBeNull();
+    });
+
+    // In flight: the live submittingRef mirror gates the scrim — no
+    // onCancel, no state churn, the dialog stays open.
+    const dlg = screen.getByRole("dialog") as HTMLDialogElement;
+    act(() => {
+      dlg.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(onCancel).not.toHaveBeenCalled();
+    expect(dlg.open).toBe(true);
+
+    // Settle the submission (dedupe-refuse error) → idle-but-open, and
+    // the scrim dismissal works again.
+    resolveIngest({
+      article: sampleArticle(),
+      confidence: { state: "confident" },
+      assets: [],
+    });
+    await waitFor(() => {
+      expect(screen.getByText(/already in your library/i)).not.toBeNull();
+    });
+    act(() => {
+      dlg.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(onCancel).toHaveBeenCalledTimes(1);
   });
 });

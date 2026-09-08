@@ -138,6 +138,37 @@ describe("SettingsPanel — open/close state", () => {
   });
 });
 
+// Backdrop scrim dismissal (quick task 260908-o0w). jsdom cannot hit-test
+// the ::backdrop (Pitfall 2 — real-browser proof lives in
+// tests/e2e/scrim-dismiss.spec.ts), so the listener logic is exercised
+// directly: a scrim click is a native click dispatched on the dialog
+// element itself (the listener sees target === dialog), and the negative
+// case is the same bubbling click dispatched on the .settings-panel-inner
+// wrapper (target = a descendant — visible-content clicks never dismiss).
+describe("SettingsPanel — backdrop scrim dismissal (260908-o0w)", () => {
+  it("a click whose target is the dialog element itself calls onClose", () => {
+    const onClose = vi.fn();
+    render(<Harness open={true} onClose={onClose} />);
+    const dlg = screen.getByRole("dialog", {
+      name: "Reading settings",
+    }) as HTMLDialogElement;
+    dlg.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("a bubbling click on the .settings-panel-inner wrapper does NOT call onClose", () => {
+    const onClose = vi.fn();
+    render(<Harness open={true} onClose={onClose} />);
+    const dlg = screen.getByRole("dialog", {
+      name: "Reading settings",
+    }) as HTMLDialogElement;
+    const inner = dlg.querySelector(".settings-panel-inner");
+    expect(inner).not.toBeNull();
+    inner!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
 // Source-level invariant (Pitfall 1 / A11Y-02): the focus-restore CALL SITE
 // must exist. jsdom cannot replicate the actual focus-restore behavior
 // (Pitfall 2 — that is a Playwright assertion), but the call site presence is
