@@ -23,6 +23,8 @@
 //     continue-reading strip count + ordering assertions read the live DOM.
 import { test, expect, type Page } from "@playwright/test";
 import { fixtures } from "../../../src/fixtures";
+import { ArticleSchema } from "../../../src/content/schema";
+import type { CanonicalArticle } from "../../../src/content/schema";
 import {
   normalizeText,
   graphemeClusters,
@@ -32,16 +34,62 @@ const BASE = "http://localhost:5173";
 
 // A representative fixture for hairline + finished assertions. Picked for
 // stable content (won't drift between releases) + a non-trivial grapheme
-// length so a 50% offset is comfortably mid-article.
+// length so a 50% offset is comfortably mid-article. Since the 260907-pw1
+// single-article starter library, `fixtures` carries ONE bundled article —
+// the two continue-reading strip articles are Node-built schema-valid
+// standalones (the library-restore.spec.ts makeStandalone discipline) and
+// are SEEDED as article rows so the library actually lists them.
 const HAIRLINE_FIXTURE = fixtures[0]!;
 const HAIRLINE_TOTAL = graphemeClusters(
   normalizeText(HAIRLINE_FIXTURE),
   HAIRLINE_FIXTURE.lang,
 ).length;
 
-// Two fixtures used for the continue-reading strip derivation.
-const STRIP_FIXTURE_A = fixtures[1]!;
-const STRIP_FIXTURE_B = fixtures[2]!;
+/** Build an ArticleSchema-valid standalone article from plain paragraphs
+ * (library-restore.spec.ts makeStandalone discipline — schema-built in
+ * Node so the store-seam Zod read never drops a seeded row). */
+function makeStandalone(
+  id: string,
+  title: string,
+  paragraphs: string[],
+): CanonicalArticle {
+  return ArticleSchema.parse({
+    id,
+    revision: 1,
+    lang: "en",
+    provenance: {
+      title,
+      retrievedAt: "2026-08-13T00:00:00.000Z",
+      originalHtmlHash: `sha256:${"3".repeat(64)}`,
+    },
+    blocks: paragraphs.map((text) => ({
+      kind: "paragraph",
+      content: [{ text, marks: [] }],
+    })),
+  });
+}
+
+// Two standalones used for the continue-reading strip derivation (distinct
+// ids + titles so row/card filters are deterministic; multi-paragraph bodies
+// so mid-article ratios are meaningful).
+const STRIP_FIXTURE_A = makeStandalone(
+  "progress-recent-strip-a",
+  "Quiet Harbor Logbook",
+  [
+    "The morning inventory listed rope, lantern oil, and one borrowed chronometer whose owner everyone had politely forgotten.",
+    "Midday brought the ferry, two letters, and a dispute about whether the west pier counts as part of the harbor at all.",
+    "By evening the log was closed with a short note that the tide had been reasonable, which is the highest praise the harbor allows.",
+  ],
+);
+const STRIP_FIXTURE_B = makeStandalone(
+  "progress-recent-strip-b",
+  "Lantern Field Guide",
+  [
+    "A field guide begins with the admission that most lanterns are older than the people describing them.",
+    "The middle chapters organize flames by patience instead of brightness, which the old keepers insisted was the honest axis.",
+    "The final entry is blank on purpose: a place for the reader's own lantern, wherever it happens to be burning.",
+  ],
+);
 const STRIP_TOTAL_A = graphemeClusters(
   normalizeText(STRIP_FIXTURE_A),
   STRIP_FIXTURE_A.lang,
@@ -50,6 +98,34 @@ const STRIP_TOTAL_B = graphemeClusters(
   normalizeText(STRIP_FIXTURE_B),
   STRIP_FIXTURE_B.lang,
 ).length;
+
+/**
+ * seedArticleRows — write ArticleSchema-valid article rows (built in Node)
+ * into the articles store via a raw put (the library-restore.spec.ts
+ * discipline). MUST run BEFORE openLibrary (seed-before-open).
+ */
+async function seedArticleRows(
+  page: Page,
+  articles: CanonicalArticle[],
+): Promise<void> {
+  await page.evaluate(async (rows) => {
+    await new Promise<void>((resolve, reject) => {
+      const req = indexedDB.open("lem-reader");
+      req.onsuccess = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains("articles")) {
+          resolve();
+          return;
+        }
+        const tx = db.transaction("articles", "readwrite");
+        for (const row of rows) tx.objectStore("articles").put(row);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      };
+      req.onerror = () => reject(req.error);
+    });
+  }, articles);
+}
 
 /**
  * seedLocation — write a single LocationRecord row directly into Dexie via
@@ -195,6 +271,9 @@ test.describe("SC#5 + LIB-06 — progress hairline + continue-reading strip + fi
     // transform: scaleX(0.5).
     const halfOffset = Math.floor(HAIRLINE_TOTAL * 0.5);
     await seedLocation(page, HAIRLINE_FIXTURE.id, halfOffset, "2026-08-13T00:00:00.000Z");
+    // Seed the strip standalones so the "fresh article with no location"
+    // row below exists in the library list.
+    await seedArticleRows(page, [STRIP_FIXTURE_A]);
     await openLibrary(page);
 
     // The fixture row carries a .progress-hairline-fill element with
@@ -285,6 +364,7 @@ test.describe("SC#5 + LIB-06 — progress hairline + continue-reading strip + fi
     // first in the strip (D8-10 — savedAt descending).
     const halfOffsetA = Math.floor(STRIP_TOTAL_A * 0.5);
     const halfOffsetB = Math.floor(STRIP_TOTAL_B * 0.3);
+    await seedArticleRows(page, [STRIP_FIXTURE_A, STRIP_FIXTURE_B]);
     await seedLocation(page, STRIP_FIXTURE_A.id, halfOffsetA, "2026-08-12T00:00:00.000Z");
     await seedLocation(page, STRIP_FIXTURE_B.id, halfOffsetB, "2026-08-13T12:00:00.000Z");
     await openLibrary(page);
@@ -319,6 +399,7 @@ test.describe("SC#5 + LIB-06 — progress hairline + continue-reading strip + fi
     // produces ratio ≈ 0.9798 < 0.98 due to integer truncation, which would
     // NOT mark the article Finished).
     const halfOffsetA = Math.floor(STRIP_TOTAL_A * 0.5);
+    await seedArticleRows(page, [STRIP_FIXTURE_A, STRIP_FIXTURE_B]);
     await seedLocation(page, STRIP_FIXTURE_A.id, halfOffsetA, "2026-08-13T12:00:00.000Z");
     await seedLocation(page, STRIP_FIXTURE_B.id, STRIP_TOTAL_B, "2026-08-13T13:00:00.000Z");
     await openLibrary(page);
