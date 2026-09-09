@@ -643,10 +643,16 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
           // filters hide every row still renders the ul with zero children —
           // a filtered-out view is not an empty view. Plan 12-05: a library
           // holding ONLY book groups is not empty either.
-          <>
+          // 2026-09-08 user feedback: the copy now sits inside a
+          // .library-empty wrapper joining the shared 1100px centered
+          // measure (the library gutter discipline) — the bare h2/p
+          // previously escaped every sibling's cap and spanned the window
+          // at wide viewports. Element kinds and copy strings stay
+          // byte-stable.
+          <div className="library-empty">
             <h2>{EMPTY_COPY[view].heading}</h2>
             <p>{EMPTY_COPY[view].body}</p>
-          </>
+          </div>
         ) : (
           <>
             {/* Plan 15-03 (D15-11) — the delegated launch capture. ONE onClick

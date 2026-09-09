@@ -732,6 +732,55 @@ test.describe("LIB-07/LIB-08 — views/counts/rows/empty agreement (D14-20/23/24
     await expect(page.locator(".library-list > li")).toHaveCount(fixtures.length);
   });
 
+  test("per-view empty state joins the shared library measure (2026-09-08 gutter fix)", async ({
+    page,
+  }) => {
+    // NO seedCorpus — the bundled fixtures are all unread, so Finished is
+    // membership-empty (the same corpus state the D14-26 test above relies
+    // on). Mirrors the chrome/library-tidy.spec.ts G1 geometry pattern: at
+    // a wide viewport the empty copy sits inside the SAME capped, centered
+    // 1100px measure as the header row (always present); at a narrow
+    // viewport the measure introduces no change.
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await openView(page, "#/finished");
+    await expect(
+      page.getByRole("heading", { name: "Nothing finished yet" }),
+    ).toBeVisible();
+
+    const wideEmpty = await page.locator(".library-empty").boundingBox();
+    const wideHeader = await page.locator(".library-header").boundingBox();
+    if (!wideEmpty || !wideHeader) {
+      throw new Error("reading-views spec: measure boxes unresolved at 1400×900");
+    }
+    expect(
+      wideEmpty.width,
+      "empty-state copy is capped at the shared measure",
+    ).toBeLessThanOrEqual(1100);
+    expect(
+      wideHeader.width,
+      "header row is capped at the shared measure",
+    ).toBeLessThanOrEqual(1100);
+    const emptyCenter = wideEmpty.x + wideEmpty.width / 2;
+    const headerCenter = wideHeader.x + wideHeader.width / 2;
+    expect(
+      Math.abs(emptyCenter - headerCenter),
+      "empty state and header row share one horizontal center",
+    ).toBeLessThanOrEqual(1);
+
+    // Narrow viewport: both boxes fill the main content box exactly — the
+    // measure rule introduces no narrow-viewport regression.
+    await page.setViewportSize({ width: 360, height: 640 });
+    const narrowEmpty = await page.locator(".library-empty").boundingBox();
+    const narrowHeader = await page.locator(".library-header").boundingBox();
+    if (!narrowEmpty || !narrowHeader) {
+      throw new Error("reading-views spec: measure boxes unresolved at 360×640");
+    }
+    expect(
+      narrowEmpty.width,
+      "empty state fills the content box like its siblings",
+    ).toBe(narrowHeader.width);
+  });
+
   test("unknown #/ segment falls back to the All view (D14-16)", async ({
     page,
   }) => {

@@ -2352,6 +2352,26 @@ dialog.annotations-drawer::backdrop {
   border-color: var(--accent);
 }
 
+/* ── Per-view membership empty states (Plan 14-02 — D14-26) ──────────────── */
+/* 2026-09-08 gutter fix (user feedback): the empty-view copy previously
+   rendered as bare h2/p children of the list section — only main#main's
+   padding-inline held them, so at wide viewports they spanned nearly the
+   full window. The .library-empty wrapper joins the shared 1100px centered
+   measure every sibling region already shares (.library-header, the
+   continue-reading strip, .view-switcher, .library-search, .tag-filter,
+   the library list, .library-no-matches — the G1 discipline); its
+   block-start rhythm mirrors .library-search / .library-no-matches, and
+   the h2's block-start margin collapses to that row rhythm (the
+   .library-header h1 / .continue-reading-strip h2 precedents). Token-only
+   (POLISH-07); zero motion properties (A11Y-06 discipline). */
+.library-empty {
+  max-width: 1100px;
+  margin: var(--space-lg) auto 0 auto;
+}
+.library-empty h2 {
+  margin-block-start: 0;
+}
+
 /* ── LibraryView tidy sections (Plan 13-03 — POLISH-06 / D13-16) ────────── */
 /* The library home reads as a header row plus calm ordered regions:
    continue reading, then the library list. (Plan 16-03 — the add-content
