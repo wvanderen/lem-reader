@@ -374,9 +374,9 @@ test.describe("focused Add dialog (ADD-04 — 16-04 Task 1)", () => {
 
     // The reader opened the ingested article.
     await page.waitForURL(new RegExp(`#/article/${fixtureArticle.id}$`), { timeout: 15_000 });
-    await expect(page.getByRole("heading", { level: 1, name: fixtureArticle.title })).toBeVisible({
-      timeout: 10_000,
-    });
+    await expect(
+      page.getByRole("heading", { level: 1, name: fixtureArticle.provenance.title }),
+    ).toBeVisible({ timeout: 10_000 });
 
     // THE Pitfall 6 assertion: at the router's transition moment, the
     // dialog is already gone from the document — close/teardown before
