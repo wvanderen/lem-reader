@@ -530,6 +530,8 @@ None yet. (2026-08-21-fix-prod-ui-paste-ingest-flow resolved by quick task 26082
 | 260907-pw1 | Document the Vercel demo and replace the public sample corpus with a Getting Started guide | 2026-09-07 | b13eba5 | [260907-pw1-document-the-live-vercel-deployment-and-](./quick/260907-pw1-document-the-live-vercel-deployment-and-/) |
 | 260908-ef5 | Fix web article image import — truly-advisory image content-type gate (octet-stream admitted to the byte sniff), browser-like Accept + article-origin Referer on image fetches, inline paragraph images hoisted as figures (no silent drops), best srcset candidate selection | 2026-09-08 | 8e59fb4 | [260908-ef5-fix-web-article-image-import-octet-strea](./quick/260908-ef5-fix-web-article-image-import-octet-strea/) |
 
+| 260908-ug0 | Refine Add to Library modal and stabilize source switching | 2026-09-09 | See task commit | [260908-ug0-refine-add-to-library-modal-layout-and-s](./quick/260908-ug0-refine-add-to-library-modal-layout-and-s/) |
+
 ## Deferred Items
 
 Items acknowledged and deferred at milestone close on 2026-08-23 (v2.0):

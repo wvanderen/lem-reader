@@ -53,10 +53,7 @@ source switches inside one dialog session.
 
 /** The calm status line inside the Add dialog's live region (the
  * upload-queue ingestStatus shape). */
-function ingestStatus(
-  page: Page,
-  text: string,
-): import("@playwright/test").Locator {
+function ingestStatus(page: Page, text: string): import("@playwright/test").Locator {
   return page.locator("dialog.add-dialog .status").filter({ hasText: text });
 }
 
@@ -68,9 +65,7 @@ function addButton(page: Page) {
 /** Open the library surface (the saved-articles list on #/). */
 async function openLibrary(page: Page): Promise<void> {
   await page.goto(`${BASE}/#/`);
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Saved articles" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
 }
 
 test.beforeEach(async ({ page }) => {
@@ -110,15 +105,9 @@ test.describe("focused Add dialog (ADD-04 — 16-04 Task 1)", () => {
       };
     });
     expect(active.type).toBe("INPUT[radio]");
-    expect(active.name, "the active radio belongs to the source group").toBe(
-      "source",
-    );
-    expect(active.value, "the Web address radio is the initial focus").toBe(
-      "url",
-    );
-    expect(active.marked, "the focused radio is the data-initial-focus target").toBe(
-      true,
-    );
+    expect(active.name, "the active radio belongs to the source group").toBe("source");
+    expect(active.value, "the Web address radio is the initial focus").toBe("url");
+    expect(active.marked, "the focused radio is the data-initial-focus target").toBe(true);
   });
 
   test("Tab cycles within the dialog; Escape when idle closes and restores focus to the trigger", async ({
@@ -197,15 +186,11 @@ test.describe("focused Add dialog (ADD-04 — 16-04 Task 1)", () => {
     await openAddDialog(page);
 
     // Web address is checked; the URL field is empty — fresh session.
-    await expect(
-      page.getByRole("radio", { name: "Web address" }),
-    ).toBeChecked();
+    await expect(page.getByRole("radio", { name: "Web address" })).toBeChecked();
     const urlValue = await page
       .locator("input#ingest-url")
       .evaluate((el) => (el as HTMLInputElement).value);
-    expect(urlValue, "the reopened dialog starts with an empty URL field").toBe(
-      "",
-    );
+    expect(urlValue, "the reopened dialog starts with an empty URL field").toBe("");
     // The upload group is hidden again (only the selected source renders).
     await expect(page.locator("input#ingest-file")).toBeHidden();
   });
@@ -229,7 +214,7 @@ test.describe("focused Add dialog (ADD-04 — 16-04 Task 1)", () => {
       buffer: Buffer.from(SMALL_MARKDOWN, "utf-8"),
     });
     // The pick registered (the hasFile mirror re-evaluated).
-    const addFile = page.locator(".add-file-form button[type='submit']");
+    const addFile = page.locator(".add-dialog-submit");
     await expect(addFile).toBeEnabled();
 
     // Switch away to Web address and back — the pick is retained.
@@ -316,9 +301,7 @@ test.describe("focused Add dialog (ADD-04 — 16-04 Task 1)", () => {
     // Settle the route with the typed refusal: the dialog recovers to the
     // error state with the calm copy — never a zombie, never a wedge.
     gate1.resolve();
-    await expect(
-      ingestStatus(page, "Couldn't reliably read this page."),
-    ).toBeVisible();
+    await expect(ingestStatus(page, "Couldn't reliably read this page.")).toBeVisible();
 
     // Retry is available (D16-11 — the error never cleared the text):
     // the URL is retained and the submit control is enabled again.
@@ -331,9 +314,7 @@ test.describe("focused Add dialog (ADD-04 — 16-04 Task 1)", () => {
     await page.getByRole("button", { name: /^add$/i }).click();
     await expect(ingestStatus(page, "Fetching article…")).toBeVisible();
     gate2.resolve();
-    await expect(
-      ingestStatus(page, "Couldn't reliably read this page."),
-    ).toBeVisible();
+    await expect(ingestStatus(page, "Couldn't reliably read this page.")).toBeVisible();
   });
 
   test("article success closes the dialog first, then opens the article in the reader (Pitfall 6)", async ({
@@ -382,35 +363,31 @@ test.describe("focused Add dialog (ADD-04 — 16-04 Task 1)", () => {
         "hashchange",
         () => {
           const dlg = document.querySelector("dialog.add-dialog");
-          w.__focusedAddNav!.dialogGoneAtHashChange =
-            dlg === null || !document.contains(dlg);
+          w.__focusedAddNav!.dialogGoneAtHashChange = dlg === null || !document.contains(dlg);
         },
         { once: true },
       );
     });
 
-    await page
-      .getByRole("textbox", { name: /add by url/i })
-      .fill("https://example.com/ordering");
+    await page.getByRole("textbox", { name: /add by url/i }).fill("https://example.com/ordering");
     await page.getByRole("button", { name: /^add$/i }).click();
 
     // The reader opened the ingested article.
-    await page.waitForURL(
-      new RegExp(`#/article/${fixtureArticle.id}$`),
-      { timeout: 15_000 },
-    );
-    await expect(
-      page.getByRole("heading", { level: 1, name: "The looting of science fiction" }),
-    ).toBeVisible({ timeout: 10_000 });
+    await page.waitForURL(new RegExp(`#/article/${fixtureArticle.id}$`), { timeout: 15_000 });
+    await expect(page.getByRole("heading", { level: 1, name: fixtureArticle.title })).toBeVisible({
+      timeout: 10_000,
+    });
 
     // THE Pitfall 6 assertion: at the router's transition moment, the
     // dialog is already gone from the document — close/teardown before
     // the reader route, never a live modal over the article view.
     const nav = await page.evaluate(
       () =>
-        (window as unknown as {
-          __focusedAddNav?: { dialogGoneAtHashChange: boolean };
-        }).__focusedAddNav,
+        (
+          window as unknown as {
+            __focusedAddNav?: { dialogGoneAtHashChange: boolean };
+          }
+        ).__focusedAddNav,
     );
     expect(
       nav?.dialogGoneAtHashChange,
@@ -485,4 +462,24 @@ test.describe("focused Add dialog (ADD-04 — 16-04 Task 1)", () => {
     await expect(page.locator("textarea#ingest-paste")).toBeVisible();
     await expect(page.locator("input#ingest-file")).toBeHidden();
   });
+});
+
+test("source switching keeps the dialog and footer stable and hides inactive forms", async ({
+  page,
+}) => {
+  await openLibrary(page);
+  await openAddDialog(page);
+  const dialog = page.locator("dialog.add-dialog");
+  const footer = page.locator(".add-dialog-actions");
+  const initial = await dialog.boundingBox();
+  const initialFooter = await footer.boundingBox();
+  for (const source of ["paste", "file", "url"] as const) {
+    await pickSource(page, source);
+    await expect(dialog.locator("form:visible")).toHaveCount(1);
+    const box = await dialog.boundingBox();
+    const actionBox = await footer.boundingBox();
+    expect(Math.abs(box!.y - initial!.y)).toBeLessThan(1);
+    expect(Math.abs(box!.height - initial!.height)).toBeLessThan(1);
+    expect(Math.abs(actionBox!.y - initialFooter!.y)).toBeLessThan(1);
+  }
 });

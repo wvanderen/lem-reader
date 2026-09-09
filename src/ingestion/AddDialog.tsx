@@ -281,10 +281,7 @@ export function AddDialog({ open, onCancel, onBookAdded }: AddDialogProps) {
     setStatus("submitting");
     setMessage("Fetching article…");
     try {
-      const result =
-        which === "url"
-          ? await ingestUrl(urlValue)
-          : await ingestHtml(htmlValue);
+      const result = which === "url" ? await ingestUrl(urlValue) : await ingestHtml(htmlValue);
 
       // D7-07 dedupe-refuse: check has() BEFORE save. If has returns
       // true, surface "Already in your library." and refuse the re-ingest
@@ -482,11 +479,7 @@ export function AddDialog({ open, onCancel, onBookAdded }: AddDialogProps) {
   // SettingsPanel L349-353 lesson). Every non-submitting control is
   // type="button".
   return (
-    <dialog
-      ref={dialogRef}
-      className="add-dialog"
-      aria-labelledby="add-dialog-title"
-    >
+    <dialog ref={dialogRef} className="add-dialog" aria-labelledby="add-dialog-title">
       <div className="add-dialog-inner">
         <h2 id="add-dialog-title">Add to your library</h2>
 
@@ -495,7 +488,7 @@ export function AddDialog({ open, onCancel, onBookAdded }: AddDialogProps) {
             discipline); controlled radios (checked from state — never
             uncontrolled; the Firefox persistence quirk, Pitfall 9). NOT a
             tablist (the D14-22 machinery is deliberately avoided). */}
-        <fieldset className="add-source-picker">
+        <fieldset className="add-source-picker" disabled={submitting}>
           <legend>Add from</legend>
           <label className="add-source-row">
             <input
@@ -535,88 +528,76 @@ export function AddDialog({ open, onCancel, onBookAdded }: AddDialogProps) {
             live in the lifted urlValue/htmlValue state, so switching
             sources never loses typed text. The accessible names + ids are
             the byte-stable anchors the e2e suite drives. */}
-        {source === "url" && (
-          <form onSubmit={handleUrlSubmit} className="add-url-form">
-            <label htmlFor="ingest-url">Add by URL</label>
-            <input
-              id="ingest-url"
-              name="url"
-              type="url"
-              inputMode="url"
-              autoComplete="off"
-              placeholder="https://example.com/article"
-              value={urlValue}
-              disabled={submitting}
-              onChange={(e) => setUrlValue(e.target.value)}
-            />
-            <button type="submit" disabled={submitting || urlValue.length === 0}>
-              Add
-            </button>
-          </form>
-        )}
+        <div className="add-source-content">
+          {source === "url" && (
+            <form id="add-url-form" onSubmit={handleUrlSubmit} className="add-url-form">
+              <label htmlFor="ingest-url">Add by URL</label>
+              <input
+                id="ingest-url"
+                name="url"
+                type="url"
+                inputMode="url"
+                autoComplete="off"
+                placeholder="https://example.com/article"
+                value={urlValue}
+                disabled={submitting}
+                onChange={(e) => setUrlValue(e.target.value)}
+              />
+            </form>
+          )}
 
-        {source === "paste" && (
-          <form onSubmit={handlePasteSubmit} className="add-paste-form">
-            <label htmlFor="ingest-paste">Paste HTML or text</label>
-            <textarea
-              id="ingest-paste"
-              name="html"
-              rows={4}
-              placeholder="<article>…</article>"
-              value={htmlValue}
-              disabled={submitting}
-              onChange={(e) => setHtmlValue(e.target.value)}
-            />
-            <button
-              type="submit"
-              disabled={submitting || htmlValue.length === 0}
-            >
-              Add pasted article
-            </button>
-          </form>
-        )}
+          {source === "paste" && (
+            <form id="add-paste-form" onSubmit={handlePasteSubmit} className="add-paste-form">
+              <label htmlFor="ingest-paste">Paste HTML or text</label>
+              <textarea
+                id="ingest-paste"
+                name="html"
+                rows={4}
+                placeholder="<article>…</article>"
+                value={htmlValue}
+                disabled={submitting}
+                onChange={(e) => setHtmlValue(e.target.value)}
+              />
+            </form>
+          )}
 
-        {/* Pattern 3a (D16-07) — the file group stays ALWAYS MOUNTED; the
+          {/* Pattern 3a (D16-07) — the file group stays ALWAYS MOUNTED; the
             `hidden` attribute (on BOTH the form and the input — never
             unmounting) hides it when another source is selected.
             Unmounting the input would clear input.files (read-only,
             non-reassignable) and silently drop a picked File mid-session.
             fileInputRef + the G2 resetFilePick seam work byte-unchanged
             against the always-mounted input. */}
-        <form
-          onSubmit={handleFileSubmit}
-          className="add-file-form"
-          hidden={source !== "file"}
-        >
-          <label htmlFor="ingest-file">Upload a file</label>
-          <p className="meta">Accepts .md, .html, PDF, and EPUB books</p>
-          <input
-            id="ingest-file"
-            ref={fileInputRef}
-            name="file"
-            type="file"
-            accept=".md,.html,.pdf,.epub"
+          <form
+            id="add-file-form"
+            onSubmit={handleFileSubmit}
+            className="add-file-form"
             hidden={source !== "file"}
-            disabled={submitting}
-            onChange={(e) =>
-              setHasFile(e.target.files !== null && e.target.files.length > 0)
-            }
-          />
-          {hasFile && (
-            <button
-              type="button"
-              className="add-remove-file"
+          >
+            <label htmlFor="ingest-file">Upload a file</label>
+            <p className="meta">Accepts .md, .html, PDF, and EPUB books</p>
+            <input
+              id="ingest-file"
+              ref={fileInputRef}
+              name="file"
+              type="file"
+              accept=".md,.html,.pdf,.epub"
+              hidden={source !== "file"}
               disabled={submitting}
-              onClick={resetFilePick}
-            >
-              Remove file
-            </button>
-          )}
-          <button type="submit" disabled={submitting || !hasFile}>
-            Add file
-          </button>
-        </form>
-
+              onChange={(e) => setHasFile(e.target.files !== null && e.target.files.length > 0)}
+            />
+            {hasFile && (
+              <button
+                type="button"
+                className="add-remove-file"
+                disabled={submitting}
+                onClick={resetFilePick}
+              >
+                Remove file
+              </button>
+            )}
+          </form>
+        </div>
         <div className="add-dialog-actions">
           {/* D16-10 — the Cancel control is inert while a submission is in
               flight (defense in depth alongside the cancel-event gate). */}
@@ -628,6 +609,21 @@ export function AddDialog({ open, onCancel, onBookAdded }: AddDialogProps) {
           >
             Cancel
           </button>
+          <button
+            type="submit"
+            className="add-dialog-submit"
+            form={`add-${source}-form`}
+            disabled={
+              submitting ||
+              (source === "url"
+                ? urlValue.length === 0
+                : source === "paste"
+                  ? htmlValue.length === 0
+                  : !hasFile)
+            }
+          >
+            {source === "url" ? "Add" : source === "paste" ? "Add pasted article" : "Add file"}
+          </button>
         </div>
 
         {/* The .status live region (the original control's L450-459 shape —
@@ -636,12 +632,7 @@ export function AddDialog({ open, onCancel, onBookAdded }: AddDialogProps) {
             and navigates away, book success closes onto the Library.
             aria-atomic="true" so the SR re-announces the whole phrase on
             every change (not just the diff). */}
-        <div
-          className="status"
-          role="status"
-          aria-live="polite"
-          aria-atomic="true"
-        >
+        <div className="status" role="status" aria-live="polite" aria-atomic="true">
           {status === "submitting" && message !== null && <p>{message}</p>}
           {status === "error" && message !== null && <p>{message}</p>}
           {status === "success" && message !== null && <p>{message}</p>}

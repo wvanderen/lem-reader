@@ -51,10 +51,7 @@ upload. The control must return to its empty, disabled resting state.
 `;
 
 /** The calm status line inside the Add dialog's live region. */
-function ingestStatus(
-  page: Page,
-  text: string,
-): import("@playwright/test").Locator {
+function ingestStatus(page: Page, text: string): import("@playwright/test").Locator {
   return page.locator("dialog.add-dialog .status").filter({ hasText: text });
 }
 
@@ -63,11 +60,7 @@ function ingestStatus(
  * shape — every upload drives the REAL input#ingest-file + Add file
  * button, never a direct API POST). Idempotent open: a refusal leaves the
  * dialog open, so consecutive drives skip the trigger click. */
-async function uploadEpub(
-  page: Page,
-  name: string,
-  bytes: Uint8Array,
-): Promise<void> {
+async function uploadEpub(page: Page, name: string, bytes: Uint8Array): Promise<void> {
   await openAddDialog(page);
   await pickSource(page, "file");
   await page.locator("input#ingest-file").setInputFiles({
@@ -81,9 +74,7 @@ async function uploadEpub(
 /** Open the library surface (the saved-articles list on #/). */
 async function openLibrary(page: Page): Promise<void> {
   await page.goto(`${BASE}/#/`);
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Saved articles" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
 }
 
 test.beforeEach(async ({ page }) => {
@@ -128,9 +119,7 @@ test("Remove file clears a queued pick before upload", async ({ page }) => {
   await expect(page.locator("button.add-remove-file")).toBeVisible();
 });
 
-test("a completed book upload resets the picker without a page refresh", async ({
-  page,
-}) => {
+test("a completed book upload resets the picker without a page refresh", async ({ page }) => {
   await openLibrary(page);
 
   // The canonical 4-chapter book through the REAL pipeline (epub-intake
@@ -148,9 +137,7 @@ test("a completed book upload resets the picker without a page refresh", async (
   // display:none and excluded from the accessibility tree).
   const fileInput = page.locator("input#ingest-file");
   expect(await fileInput.evaluate((el) => (el as HTMLInputElement).value)).toBe("");
-  await expect(
-    page.locator(".add-file-form button[type='submit']"),
-  ).toBeDisabled();
+  await expect(page.locator(".add-dialog-submit")).toBeDisabled();
   await expect(page.locator("button.add-remove-file")).toHaveCount(0);
 });
 
@@ -173,9 +160,9 @@ test("a refusal clears the pick so re-picking the same file re-fires the picker"
     buffer: Buffer.from(bytes),
   });
   await addFile.click();
-  await expect(
-    ingestStatus(page, "This file could not be read as an EPUB book."),
-  ).toBeVisible({ timeout: 15_000 });
+  await expect(ingestStatus(page, "This file could not be read as an EPUB book.")).toBeVisible({
+    timeout: 15_000,
+  });
 
   // The refusal cleared the pick: the raw input value reads empty and
   // Add file is disabled again.
@@ -198,9 +185,9 @@ test("a refusal clears the pick so re-picking the same file re-fires the picker"
   await expect(ingestStatus(page, "Reading file…")).toBeVisible({
     timeout: 15_000,
   });
-  await expect(
-    ingestStatus(page, "This file could not be read as an EPUB book."),
-  ).toBeVisible({ timeout: 15_000 });
+  await expect(ingestStatus(page, "This file could not be read as an EPUB book.")).toBeVisible({
+    timeout: 15_000,
+  });
   // And the terminal state resets the picker once more.
   expect(await fileInput.evaluate((el) => (el as HTMLInputElement).value)).toBe("");
   await expect(addFile).toBeDisabled();

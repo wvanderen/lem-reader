@@ -900,25 +900,18 @@ dialog.wipe-confirm::backdrop {
 }
 
 /* ── AddDialog — the focused Add-to-library modal (Plan 16-02/16-03) ──────── */
-/* Structural clone of dialog.library-remove-confirm (the clone-lineage rule:
-   own .add-dialog* hooks — RemoveConfirm, BookRemoveConfirm, and AddDialog
-   all three mount in LibraryView, so a shared class would break strict-mode
-   dialog.<class> locators). Centered modal geometry on POLISH-07 tokens:
-   margin:auto UA centering, 320px-safe width (calc(100vw - --space-xl)),
-   overflow:auto so tall content / high zoom scrolls instead of clipping.
-   Zero motion properties by design (A11Y-06 discipline). The retiring
-   three-form control's input/label/button geometry is re-homed here under
-   the dialog's own hooks (Plan 16-03 — ADD-01). */
+/* Stable source selection and footer preserve orientation between inputs. */
 dialog.add-dialog {
   margin: auto;
   padding: 0;
   border: 1px solid var(--hairline);
-  border-radius: 8px;
+  border-radius: 16px;
   background: var(--surface-raised);
   color: var(--ink);
-  width: calc(100vw - var(--space-xl)); /* safe at 320px */
+  width: calc(100vw - var(--space-xl));
   max-width: 560px;
-  overflow: auto; /* tall content / high zoom scrolls */
+  max-height: calc(100dvh - var(--space-xl));
+  overflow: auto;
 }
 dialog.add-dialog::backdrop {
   background: rgba(31, 27, 22, 0.5);
@@ -926,122 +919,172 @@ dialog.add-dialog::backdrop {
 .add-dialog-inner {
   display: flex;
   flex-direction: column;
-  gap: var(--space-md);
-  padding: var(--space-lg);
+  gap: var(--space-lg);
+  padding: var(--space-xl);
 }
 .add-dialog-inner h2 {
   margin: 0;
-  font-family: var(--font-ui);
-  font-size: 22px;
-  line-height: 1.3;
+  font-family: var(--font-body);
+  font-size: 28px;
+  line-height: 1.25;
   font-weight: 600;
 }
-/* D16-05 — the visible 3-way source-first picker: native fieldset/legend/
-   radio semantics (the .tag-entry discipline). Each row is a label-wrapped
-   radio with a 44px interactive row height (A11Y-07). */
 .add-source-picker {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-xs);
-  padding: var(--space-sm) var(--space-md);
-  border: 1px solid var(--hairline);
-  border-radius: 4px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
 }
 .add-source-picker legend {
-  padding-inline: var(--space-xs);
-  font-family: var(--font-ui);
-  font-size: 14px;
-  line-height: 1.45;
-  font-weight: 600;
-  color: var(--ink);
+  padding: 0;
+  margin-bottom: var(--space-sm);
+  font: 14px/1.45 var(--font-ui);
+  color: var(--ink-soft);
 }
 .add-source-row {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: var(--space-sm);
   min-height: var(--touch);
-  font-family: var(--font-ui);
-  font-size: 14px;
-  line-height: 1.45;
-  color: var(--ink);
+  padding: var(--space-sm);
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
   cursor: pointer;
 }
-/* Each source form stacks vertically inside the dialog (the retired
-   three-form control's geometry, re-homed). */
+.add-source-row:has(:checked) {
+  background: var(--surface);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.add-source-row:hover {
+  border-color: var(--accent);
+}
+.add-source-row input {
+  margin: 0;
+  accent-color: var(--accent);
+  flex-shrink: 0;
+}
+.add-source-content {
+  min-height: 224px;
+}
 .add-dialog-inner form {
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
 }
+/* Author display rules must never override the native hidden state. */
+.add-dialog-inner [hidden] {
+  display: none;
+}
 .add-dialog-inner label {
-  font-family: var(--font-ui);
-  font-size: 14px;
-  line-height: 1.45;
-  font-weight: 600;
+  font: 600 14px/1.45 var(--font-ui);
   color: var(--ink);
 }
 .add-dialog-inner .meta {
   margin: 0;
-  font-family: var(--font-ui);
-  font-size: 14px;
-  line-height: 1.45;
+  font: 14px/1.45 var(--font-ui);
   color: var(--ink-soft);
 }
 .add-dialog-inner input[type="url"],
 .add-dialog-inner input[type="file"],
 .add-dialog-inner textarea {
+  box-sizing: border-box;
   width: 100%;
+  min-width: 0;
   min-height: var(--touch);
-  padding: var(--space-sm);
+  padding: var(--space-md);
   background: var(--surface);
   border: 1px solid var(--hairline);
-  border-radius: 4px;
-  font-family: var(--font-ui);
-  font-size: 14px;
-  line-height: 1.45;
+  border-radius: 8px;
+  font: 14px/1.5 var(--font-ui);
   color: var(--ink);
-  /* :focus-visible inherits the global 2px ring rule (app.css). */
+  caret-color: var(--accent);
 }
 .add-dialog-inner textarea {
-  min-height: calc(var(--touch) * 2);
+  min-height: 152px;
   resize: vertical;
 }
-/* Shared quiet-button geometry (A11Y-07 — 44px touch target): neutral
-   hairline border, --accent on hover — the retired submit-button treatment
-   re-homed, extended to the dialog's own Cancel + Remove file controls. */
-.add-dialog-inner form button[type="submit"],
+.add-dialog-inner ::placeholder {
+  color: var(--ink-soft);
+  opacity: 1;
+}
+.add-dialog-inner input::file-selector-button {
+  min-height: var(--touch);
+  margin-inline-end: var(--space-sm);
+  padding-inline: var(--space-sm);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  background: var(--surface-raised);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+.add-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--hairline);
+}
+.add-dialog-submit,
 .add-remove-file,
 .add-dialog-cancel {
   align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   min-height: var(--touch);
-  padding-inline: var(--space-md);
-  background: transparent;
+  padding: var(--space-sm) var(--space-md);
   border: 1px solid var(--hairline);
-  border-radius: 4px;
-  font-family: var(--font-ui);
-  font-size: 16px;
+  border-radius: 8px;
+  background: transparent;
   color: var(--ink);
+  font: 16px/1.45 var(--font-ui);
   cursor: pointer;
 }
-.add-dialog-inner form button[type="submit"]:hover:not(:disabled),
-.add-remove-file:hover:not(:disabled),
-.add-dialog-cancel:hover:not(:disabled) {
-  color: var(--accent);
+.add-dialog-submit {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--surface);
+}
+.add-dialog-submit:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+.add-dialog-cancel:hover:not(:disabled),
+.add-remove-file:hover:not(:disabled) {
   border-color: var(--accent);
 }
-.add-dialog-inner form button[type="submit"]:disabled,
-.add-remove-file:disabled,
-.add-dialog-cancel:disabled {
+.add-dialog-inner button:disabled {
   opacity: 0.5;
   cursor: default;
 }
-/* The dialog's .status live region reuses the global .status card rules
-   (Plan 02 — polite/atomic), scoped quietly inside the dialog. */
 .add-dialog-inner .status {
-  margin-block: 0;
+  margin: 0;
+}
+.add-dialog-inner .status:empty {
+  padding: 0;
+  border: 0;
+}
+.add-dialog-inner:has(.status:empty) {
+  row-gap: var(--space-lg);
+}
+.add-dialog-inner .status:empty {
+  margin-top: calc(-1 * var(--space-lg));
+}
+@media (max-width: 480px) {
+  .add-dialog-inner {
+    padding: var(--space-lg) var(--space-md);
+  }
+  .add-source-row {
+    flex-direction: column;
+    gap: var(--space-xs);
+    text-align: center;
+  }
+  .add-dialog-actions > button {
+    flex: 1;
+    min-height: 68px;
+  }
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -1085,7 +1128,6 @@ dialog.add-dialog::backdrop {
   width: 100%;
   background: var(--accent);
   transform-origin: left;
-
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -1093,7 +1135,6 @@ dialog.add-dialog::backdrop {
     transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 }
-
 
 /* ════════════════════════════════════════════════════════════════════════
  * Phase 4 Plan 04-03 — Paginated vertical slice
