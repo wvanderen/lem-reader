@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-08-30)
 Phase: 21
 Plan: Not started
 Status: Phase complete — ready for verification
-Last activity: 2026-09-09 - Completed quick task 260908-tpb: library empty-state gutter fix + Continue reading strip stable across all views
+Last activity: 2026-09-09 - Completed quick task 260909-ahy: fix library flash/flicker when marking read/unread
 
 ## Recent Decisions (Phase 18)
 
@@ -512,6 +512,7 @@ None yet. (2026-08-21-fix-prod-ui-paste-ingest-flow resolved by quick task 26082
 
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
+| 260909-ahy | Fix library flash/flicker when marking read/unread — strip reloads via refreshKey prop (stale-while-revalidate, no key-remount) + optimistic read-state in ReadingStateButton; e2e DOM-identity regression lock | 2026-09-09 | 888b600 | [260909-ahy-fix-library-flash-flicker-when-marking-r](./quick/260909-ahy-fix-library-flash-flicker-when-marking-r/) |
 | 260909-ab2 | Fix tsc type error in focused-add.spec.ts breaking the Vercel prod build (fixtureArticle.title → provenance.title; build exits 0 on Node 22) | 2026-09-09 | 27d229c | [260909-ab2-fix-tsc-type-error-in-focused-add-spec-t](./quick/260909-ab2-fix-tsc-type-error-in-focused-add-spec-t/) |
 | 260908-tpb | Fix two related library UX issues: per-view empty-state copy joined the shared 1100px measure via .library-empty wrapper; Continue reading strip now mounts on every view (D16-14 superseded by user feedback, D16-15 honored) | 2026-09-09 | df33679 | [260908-tpb-fix-two-related-library-ux-issues-empty-](./quick/260908-tpb-fix-two-related-library-ux-issues-empty-/) |
 | 260908-oht | Fix article completion detection + add Mark read and close (pinned end anchor, scroll-bottom pin, flush-now save; e2e runner repaired, ~191 pre-existing e2e failures logged to deferred-items.md) | 2026-09-08 | 7737cdf | [260908-oht-fix-article-completion-detection-and-add](./quick/260908-oht-fix-article-completion-detection-and-add/) |
