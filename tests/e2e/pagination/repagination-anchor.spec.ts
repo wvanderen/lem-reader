@@ -68,9 +68,10 @@ test.describe("PAGE-05 repagination anchor (04-05)", () => {
     expect(dev0.status, "engine status before resize").toBe("ok");
     expect(dev0.pagesLength, "essay-long-form must produce ≥2 pages").toBeGreaterThanOrEqual(2);
 
-    // Turn to page 3 (index 2) and capture its first passage's text — the
-    // passage to preserve across the resize.
-    await page.getByRole("button", { name: "Next page" }).click();
+    // Turn to page 2 (index 1) and capture its first passage's text — the
+    // mid-article passage to preserve across the resize. (Turning to the
+    // LAST page would exercise the 260908-oht completion pin instead —
+    // covered by the dedicated test below.)
     await page.getByRole("button", { name: "Next page" }).click();
     await page.waitForTimeout(200);
     const passageHeading = await page.evaluate(() => {
@@ -148,6 +149,57 @@ test.describe("PAGE-05 repagination anchor (04-05)", () => {
     expect(finalIdx, "returned to the engine's anchored page after probing").toBe(anchoredIdx);
 
     expect(pageErrors, "no uncaught errors during repagination").toEqual([]);
+  });
+
+  test("resize from the LAST page re-anchors to the NEW last page (260908-oht completion pin)", async ({
+    page,
+  }) => {
+    const pageErrors: string[] = [];
+    page.on("pageerror", (err) => pageErrors.push(String(err)));
+
+    await page.goto(`${BASE}/#/article/${FIXTURE}`);
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await page.waitForFunction(
+      () =>
+        (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
+      undefined,
+      { timeout: 8000 },
+    );
+    await page.waitForTimeout(600);
+    const dev0 = await readPagination(page);
+    expect(dev0.status, "engine status before resize").toBe("ok");
+    expect(dev0.pagesLength, "essay-long-form must produce ≥2 pages").toBeGreaterThanOrEqual(2);
+
+    // Turn to the FINAL page — the reader is at the article's end, and the
+    // committed-page anchor pins to graphemeLength (passive completion).
+    for (let i = 1; i < dev0.pagesLength; i++) {
+      await page.getByRole("button", { name: "Next page" }).click();
+    }
+    await page.waitForTimeout(200);
+    const devLast = await readPagination(page);
+    expect(devLast.currentPageIdx, "turned to the final page").toBe(
+      devLast.pagesLength - 1,
+    );
+
+    // Resize: repagination re-derives MORE pages; the pinned end anchor
+    // (offset = total, +∞-clamped by fragmentContainingOffset) must land
+    // the reader on the NEW final page — a reader at the end stays at the
+    // end. Next is aria-disabled there (the D4-08 last-page boundary).
+    await page.setViewportSize({ width: 480, height: 700 });
+    await page.waitForTimeout(1500);
+    const dev1 = await readPagination(page);
+    expect(dev1.status, "repagination must produce ok status").toBe("ok");
+    expect(dev1.pagesLength, "narrower viewport must produce more pages").toBeGreaterThan(
+      dev0.pagesLength,
+    );
+    expect(dev1.currentPageIdx, "end anchor must land on the NEW final page").toBe(
+      dev1.pagesLength - 1,
+    );
+    await expect(
+      page.getByRole("button", { name: "Next page" }),
+    ).toHaveAttribute("aria-disabled", "true");
+
+    expect(pageErrors, "no uncaught errors during last-page repagination").toEqual([]);
   });
 
   test("typography change (size 18→24) repaginates and keeps the passage (D4-11)", async ({

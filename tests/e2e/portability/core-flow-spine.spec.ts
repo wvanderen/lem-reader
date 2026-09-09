@@ -341,7 +341,11 @@ test("ACPT-06 — ingest .md, read, highlight, export, re-import: nothing lost a
     // the first block that is BOTH disjoint AND currently intersecting the
     // viewport; do NOT scrollIntoView — a synthetic scroll would fire the
     // debounced location save and overwrite the imported mid-article row
-    // the final reload-restore check depends on.
+    // the final reload-restore check depends on. The block must ALSO clear
+    // the fixed 48px app header: a finished article now restores to the
+    // document bottom (260908-oht end-landing), where the topmost
+    // in-viewport block can sit partially under the header and the toolbar
+    // rendered at its rect is pointer-intercepted by the header chrome.
     const blockTwo = await pageB.evaluate(
       ({ exclude, min }) => {
         const blocks = Array.from(
@@ -352,12 +356,15 @@ test("ACPT-06 — ingest .md, read, highlight, export, re-import: nothing lost a
         for (const el of blocks) {
           const idx = Number(el.getAttribute("data-block-index"));
           const rect = el.getBoundingClientRect();
-          const inViewport = rect.bottom > 0 && rect.top < window.innerHeight;
+          // The 0..24-char selection renders at the block's TOP: it must
+          // start below the 48px header (+ slack) and inside the viewport.
+          const selectionTopVisible =
+            rect.top >= 56 && rect.top < window.innerHeight;
           if (
             !exclude.includes(idx) &&
             !Number.isNaN(idx) &&
             (el.textContent?.length ?? 0) >= min &&
-            inViewport
+            selectionTopVisible
           ) {
             return idx;
           }
