@@ -35,6 +35,13 @@
 // !== "in-progress") — behavior identical to the old ratio gates; the
 // surface, copy, and DOM are untouched (Phase 16 owns the redesign).
 //
+// Quick 260909-ahy — the strip re-derives via the refreshKey PROP as an
+// effect dep (stale-while-revalidate): previously-derived entries keep
+// rendering while the reload is in flight. The previous parent-side
+// key-remount (commit 109fb3d) flashed because the remounted instance
+// began at entries null and unmounted the whole section until the async
+// reload re-derived it (content below jumped up, then rebuilt).
+//
 // `FINISHED_THRESHOLD = 0.98` (RESEARCH §Pattern 4 L498) is EXPORTED so unit
 // + e2e tests can reference the same constant (not a magic number).
 import { useEffect, useState } from "react";
@@ -91,11 +98,20 @@ type StripEntry =
  * OR when the unfinished set is empty (spare chrome). A books-load failure
  * routes calmly to article-only entries (the strip is spare chrome; the
  * fail-quiet discipline is unchanged).
+ *
+ * Quick 260909-ahy — `refreshKey` re-runs the load effect IN PLACE (the
+ * component is never remounted by the parent): stale entries stay mounted
+ * until fresh data replaces them, so a reading-state write never collapses
+ * the section. A strip that legitimately becomes empty still renders null
+ * once the FRESH data lands — a single data-driven change, not a flash.
  */
 export function ContinueReadingStrip({
   onReadingStateChange,
+  refreshKey = 0,
 }: {
   onReadingStateChange?: (article: CanonicalArticle, read: boolean) => Promise<void>;
+  /** Quick 260909-ahy — bump to re-derive from Dexie WITHOUT remounting. */
+  refreshKey?: number;
 }) {
   const [entries, setEntries] = useState<StripEntry[] | null>(null);
 
@@ -202,7 +218,11 @@ export function ContinueReadingStrip({
     return () => {
       cancelled = true;
     };
-  }, []);
+    // Quick 260909-ahy — [refreshKey] (not []): the cleanup's cancelled flag
+    // cancels the in-flight run before the next starts (mirrors LibraryView's
+    // [refreshKey] load effect). entries is deliberately NOT reset here —
+    // stale-while-revalidate keeps the section mounted during the reload.
+  }, [refreshKey]);
 
   // null = still loading; [] = loaded but empty → render nothing in both cases.
   if (!entries || entries.length === 0) return null;

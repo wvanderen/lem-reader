@@ -583,8 +583,16 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
           for chrome stability. The strip component itself stays
           byte-unchanged (D16-15) and still owns the spare-chrome null. */}
       <section className="library-section library-section-continue">
+        {/* Quick 260909-ahy — the strip is mounted ONCE per LibraryView
+            lifetime and re-derives through the refreshKey PROP (an effect
+            dep inside the strip). The old remount-by-key mechanism
+            (key={refreshKey}, commit 109fb3d) was the library flash: the
+            key change synchronously removed the section (layout collapse,
+            scroll clamp) until the remounted instance's async reload
+            re-derived and re-appended it. Stale-while-revalidate replaces
+            it — see ContinueReadingStrip's [refreshKey] load effect. */}
         <ContinueReadingStrip
-          key={refreshKey}
+          refreshKey={refreshKey}
           onReadingStateChange={async (article, read) => {
             await setArticleReadState(article, read);
             setRefreshKey((k) => k + 1);
