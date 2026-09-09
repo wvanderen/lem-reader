@@ -75,7 +75,8 @@ import { fragmentContainingOffset } from "../pagination/anchor";
 // surface below). Inert at mount (Pitfall 8-5 — does NOT steal focus from
 // the article body).
 import { TagEntry } from "../reader/TagEntry";
-import { BackToLibrary } from "../reader/BackToLibrary";
+import { BackToLibrary, leaveArticleToLibrary } from "../reader/BackToLibrary";
+import { MarkReadAndClose } from "../reader/MarkReadAndClose";
 // Phase 18 Plan 18-02 (ORNT-01/03/04/05): the non-modal TOC panel + the
 // derived-entry type consumed by the mode-aware jump handler (the D5-11
 // tail — canonical D-05 offsets, never page numbers or DOM identity).
@@ -583,8 +584,13 @@ export function ArticleView({
   // the returned scheduler feeds paginated per-turn offsets
   // (handleAnchorChange) through the SAME debounced save + dual flush —
   // page turns fire no window scroll, so without this a pure-paginated
-  // reader never persists a location at all.
-  const scheduleLocationSave = useScrollSave(article, articleRef);
+  // reader never persists a location at all. 260908-oht: saveLocationNow is
+  // the synchronous flush-now seam for handleMarkRead (unmount cancels
+  // pending debounces — the explicit button must flush, not schedule).
+  const { scheduleLocationSave, saveLocationNow } = useScrollSave(
+    article,
+    articleRef,
+  );
 
   // Phase 3 (PAGE-06 + PAGE-07): mount the staleness-safe measurement
   // pipeline. The hook no-ops during article loading (rules of hooks). The
@@ -687,6 +693,18 @@ export function ArticleView({
     // useScrollSave) — listing it keeps the exhaustive-deps rule satisfied
     // without changing this callback's identity.
   }, [scheduleLocationSave]);
+
+  // 260908-oht: the explicit end-of-article completion gesture. Persists
+  // offset = total SYNCHRONOUSLY (saveLocationNow — the flush, never the
+  // debounce: the unmount that follows the navigation cancels pending
+  // debounces and nulls pendingRef), then closes through the ONE shared
+  // leaveArticleToLibrary contract (identical to Back to library — Pitfall
+  // 7 deep-link safety).
+  const handleMarkRead = useCallback(() => {
+    if (!article) return;
+    saveLocationNow(graphemeLength(article));
+    leaveArticleToLibrary(hasAppHistory);
+  }, [article, saveLocationNow, hasAppHistory]);
 
   // Phase 4 Plan 04-04 (D4-09 + D4-10): the mode-toggle handler. Captures the
   // anchor SYNCHRONOUSLY before calling update() so the post-swap render can
@@ -2498,6 +2516,21 @@ export function ArticleView({
                   </a>
                 </nav>
               )}
+              {/* 260908-oht: the end-of-article gesture on the FINAL page —
+                  the SAME final-page gate the Next chapter link uses. A
+                  one-page article satisfies the gate (1 === 1), which is
+                  exactly how one-page articles finish given the POLISH-02
+                  open-reads-0 guard. The fixed-position band keeps it
+                  outside the measured page content (no pagination
+                  disturbance); DOM order after the page fragment keeps Tab
+                  order after page content. */}
+              {pageState !== null && pageState.page === pageState.total && (
+                <MarkReadAndClose
+                  placement="page"
+                  onMarkRead={handleMarkRead}
+                  hasAppHistory={hasAppHistory}
+                />
+              )}
             </>
           ) : paginatedPending ? (
             <>
@@ -2563,6 +2596,14 @@ export function ArticleView({
                 </nav>
               )}
               <ArticleBody article={article} />
+              {/* 260908-oht: the end-of-article gesture sits at the end of
+                  the content — BEFORE the book navigation that follows it
+                  (flow placement, calm quiet-button register). */}
+              <MarkReadAndClose
+                placement="flow"
+                onMarkRead={handleMarkRead}
+                hasAppHistory={hasAppHistory}
+              />
               {/* Plan 12-06 (D12-05): Next chapter exactly at chapter END —
                   after the last block in the article flow; a calm link, not
                   permanent chrome. */}

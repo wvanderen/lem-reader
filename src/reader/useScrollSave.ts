@@ -48,6 +48,19 @@ const SAVE_DEBOUNCE_MS = 1200;
 export type ScheduleLocationSave = (graphemeOffset: number) => void;
 
 /**
+ * 260908-oht: the hook's return — the debounced external scheduler plus the
+ * IMMEDIATE flush-now seam (saveLocationNow). saveLocationNow exists because
+ * the unmount cleanup CANCELS pending debounces and nulls pendingRef: a
+ * merely-scheduled save is LOST when the caller navigates away (the "Mark
+ * read and close" button). Both share the single LocationRecord shape +
+ * the flush()-owned saveLocation call site.
+ */
+export interface UseScrollSaveReturn {
+  scheduleLocationSave: ScheduleLocationSave;
+  saveLocationNow: ScheduleLocationSave;
+}
+
+/**
  * Approximate header height in CSS pixels — used to identify the "topmost
  * visible block" as the last block whose top edge has scrolled past the
  * header line. Mirrors SectionAnnouncer's HEADER_PX.
@@ -88,11 +101,12 @@ interface UseScrollSaveOptions {
 /**
  * useScrollSave(article, articleElRef, options?) — schedules a debounced
  * location save on every scroll and flushes pending on
- * visibilitychange-hidden + pagehide. Returns a stable
- * `scheduleLocationSave(graphemeOffset)` scheduler so the paginated path
- * (page turns, which fire NO window scroll — the 18-03 Pitfall 2 gap) can
- * feed precise per-turn offsets through the SAME debounced save + dual
- * flush. Latest-wins semantics: a scheduled save replaces any pending one
+ * visibilitychange-hidden + pagehide. Returns `{ scheduleLocationSave,
+ * saveLocationNow }` (both stable): the debounced scheduler so the
+ * paginated path (page turns, which fire NO window scroll — the 18-03
+ * Pitfall 2 gap) can feed precise per-turn offsets through the SAME
+ * debounced save + dual flush, and the synchronous flush-now seam (above).
+ * Latest-wins semantics: a scheduled save replaces any pending one
  * (the debounce timer resets), so an initial page-1 commit followed by a
  * restore turn persists only the restored offset.
  *
@@ -109,7 +123,7 @@ export function useScrollSave(
   article: CanonicalArticle | null,
   articleElRef: React.RefObject<HTMLElement | null>,
   options?: UseScrollSaveOptions,
-): ScheduleLocationSave {
+): UseScrollSaveReturn {
   // Stash the latest options + article in refs so the listener closures stay
   // stable across re-renders without re-registering (mirrors the pendingRef
   // pattern in SettingsContext). The article ref lets computeOffset read the
@@ -199,6 +213,36 @@ export function useScrollSave(
     [],
   );
 
+  /**
+   * 260908-oht: persist the offset SYNCHRONOUSLY (the "Mark read and
+   * close" seam). Builds the same LocationRecord shape, stashes it in
+   * pendingRef, clears any pending debounce timer (latest-wins — no
+   * redundant second write), then calls flush() IMMEDIATELY. Mandatory,
+   * not an optimization: the unmount cleanup cancels pending debounces and
+   * nulls pendingRef, so a merely-scheduled save is lost when the caller
+   * navigates away. The saveLocation call-site family stays singular
+   * (flush owns it); failure routing through onStorageError is unchanged.
+   */
+  const saveLocationNow = useCallback<ScheduleLocationSave>(
+    (graphemeOffset: number) => {
+      const currentArticle = articleRef.current;
+      if (!currentArticle) return;
+      pendingRef.current = {
+        schemaVersion: 1,
+        articleId: currentArticle.id,
+        revision: currentArticle.revision,
+        graphemeOffset,
+        savedAt: new Date().toISOString(),
+      };
+      if (saveTimer.current !== null) {
+        window.clearTimeout(saveTimer.current);
+        saveTimer.current = null;
+      }
+      flush();
+    },
+    [],
+  );
+
   // Scroll listener — register on mount, cleanup on unmount. Re-registers
   // only if the article identity changes (article swap). No-ops while article
   // is null (loading state) — the hook is safe to call unconditionally.
@@ -270,5 +314,5 @@ export function useScrollSave(
     };
   }, []);
 
-  return scheduleSaveAtOffset;
+  return { scheduleLocationSave: scheduleSaveAtOffset, saveLocationNow };
 }
