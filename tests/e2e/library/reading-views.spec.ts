@@ -1171,32 +1171,31 @@ test.describe("NAV-04 — focus/title/history matrix", () => {
   });
 });
 
-// ── Plan 16-01 Task 2 — LIB-09/LIB-10: strip view-gating (D16-14/D16-15)
-// and membership-pure switcher counts mid-search (D16-16). Strengthen-only:
-// no existing test above was modified or removed.
-test.describe("LIB-09/LIB-10 — no-matches era: strip gating + counts-pure mid-search", () => {
-  test("Continue Reading strip: visible on #/ only — absent from unread, in-progress, and finished (D16-14/D16-15)", async ({
+// ── Plan 16-01 Task 2 — LIB-09/LIB-10: strip view-stability and
+// membership-pure switcher counts mid-search (D16-16). D16-14 (strip
+// gated to the All view) is SUPERSEDED by 2026-09-08 user feedback — the
+// strip is pinned chrome above the view switcher, so the section now
+// mounts on EVERY view; the strip component itself stays byte-unchanged
+// (D16-15). Strengthen-only: no existing test above was modified or
+// removed.
+test.describe("LIB-09/LIB-10 — no-matches era: strip stability + counts-pure mid-search", () => {
+  test("Continue Reading strip: mounted and visible on every view — all, unread, in-progress, and finished (D16-14 superseded; D16-15 byte-unchanged)", async ({
     page,
   }) => {
     await seedCorpus(page);
 
-    // All: the section renders and the strip shows the in-progress corpus
-    // (STANDALONE_PROGRESS has a mid-article location ⇒ strip cards exist).
-    await openView(page, "#/");
-    await expect(page.locator(".library-section-continue")).toBeVisible();
-    await expect(page.locator(".continue-reading-strip")).toBeVisible();
-    await expect(page.locator(".continue-reading-strip")).toContainText(
-      "Continue reading",
-    );
-
-    // Non-All views: the whole section is conditionally mounted — ABSENT
-    // from the DOM (not merely hidden by CSS).
-    await openView(page, "#/unread");
-    await expect(page.locator(".library-section-continue")).toHaveCount(0);
-    await openView(page, "#/in-progress");
-    await expect(page.locator(".library-section-continue")).toHaveCount(0);
-    await openView(page, "#/finished");
-    await expect(page.locator(".library-section-continue")).toHaveCount(0);
+    // Every view: the section is unconditionally mounted and the strip
+    // shows the in-progress corpus (STANDALONE_PROGRESS has a mid-article
+    // location ⇒ strip cards exist regardless of the view's membership).
+    // The pinned chrome never disappears when the reader switches views.
+    for (const view of ["all", "unread", "in-progress", "finished"] as const) {
+      await openView(page, VIEW_HREFS[view]);
+      await expect(page.locator(".library-section-continue")).toBeVisible();
+      await expect(page.locator(".continue-reading-strip")).toBeVisible();
+      await expect(page.locator(".continue-reading-strip")).toContainText(
+        "Continue reading",
+      );
+    }
   });
 
   test("view-switcher counts stay membership-pure while a zero-match search narrows the list (D16-16)", async ({

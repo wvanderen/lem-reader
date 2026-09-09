@@ -48,8 +48,9 @@ async function tidyOrder(page: Page): Promise<{
     return {
       // The ordered regions after the Plan 16-03 dissolution:
       // continue-reading container → the header Add button → search input
-      // → the library list (prepareFreshPage lands on #/, the All view, so
-      // the continue section is present).
+      // → the library list (the continue section is unconditionally
+      // mounted on EVERY view — D16-14 superseded 2026-09-08 — so its
+      // presence here needs no #/ landing justification).
       continueBeforeSearch: before(
         q(".library-section-continue"),
         q(".library-search"),

@@ -573,16 +573,18 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
       {/* (1) Continue reading — the strip returns null while loading OR when
           the unfinished set is empty (spare chrome per UI-SPEC); the section
           wrapper keeps the region's place in the order regardless.
-          Plan 16-01 (D16-14) — the whole section renders on the All view
-          ONLY: on In-progress it duplicated the first rows; on Unread/
-          Finished it showed items absent from the view. All is the
-          "everything" overview where recency belongs. The strip component
-          itself is byte-unchanged (D16-15) — the gate lives here alone. */}
-      {view === "all" && (
-        <section className="library-section library-section-continue">
-          <ContinueReadingStrip />
-        </section>
-      )}
+          Plan 16-01 (D16-14) — SUPERSEDED by 2026-09-08 user feedback: the
+          section used to render on the All view ONLY (on In-progress it
+          duplicated the first rows; on Unread/Finished it showed items
+          absent from the view). The strip is pinned chrome ABOVE the view
+          switcher, so its mounting must not be coupled to which view is
+          selected — its disappearance on any switch read as bizarre,
+          unstable UX. The original D16-14 rationale is consciously traded
+          for chrome stability. The strip component itself stays
+          byte-unchanged (D16-15) and still owns the spare-chrome null. */}
+      <section className="library-section library-section-continue">
+        <ContinueReadingStrip />
+      </section>
       {/* Plan 16-03 (D16-03) — the permanently-mounted add-content section
           DISSOLVES: the three ingestion forms now live behind the header
           Add button's dialog (ADD-01). The library-load .status live
