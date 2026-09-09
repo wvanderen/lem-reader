@@ -512,6 +512,7 @@ None yet. (2026-08-21-fix-prod-ui-paste-ingest-flow resolved by quick task 26082
 
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
+| 260909-ab2 | Fix tsc type error in focused-add.spec.ts breaking the Vercel prod build (fixtureArticle.title → provenance.title; build exits 0 on Node 22) | 2026-09-09 | 27d229c | [260909-ab2-fix-tsc-type-error-in-focused-add-spec-t](./quick/260909-ab2-fix-tsc-type-error-in-focused-add-spec-t/) |
 | 260908-tpb | Fix two related library UX issues: per-view empty-state copy joined the shared 1100px measure via .library-empty wrapper; Continue reading strip now mounts on every view (D16-14 superseded by user feedback, D16-15 honored) | 2026-09-09 | df33679 | [260908-tpb-fix-two-related-library-ux-issues-empty-](./quick/260908-tpb-fix-two-related-library-ux-issues-empty-/) |
 | 260908-oht | Fix article completion detection + add Mark read and close (pinned end anchor, scroll-bottom pin, flush-now save; e2e runner repaired, ~191 pre-existing e2e failures logged to deferred-items.md) | 2026-09-08 | 7737cdf | [260908-oht-fix-article-completion-detection-and-add](./quick/260908-oht-fix-article-completion-detection-and-add/) |
 | 260908-o0w | Close dimmed modals on backdrop scrim click | 2026-09-08 | e8b1d84 | [260908-o0w-close-dimmed-modals-on-backdrop-scrim-cl](./quick/260908-o0w-close-dimmed-modals-on-backdrop-scrim-cl/) |
