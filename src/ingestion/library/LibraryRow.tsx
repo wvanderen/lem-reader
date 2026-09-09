@@ -1,35 +1,9 @@
-// src/ingestion/library/LibraryRow.tsx
-// Plan 08-03 Task 2 — LibraryRow. One article row in the personal library
-// list. EXTENDS the v1.0 FixtureList `<li>` markup byte-stably per Pitfall 8-5
-// + UI-SPEC §Regression Targets:
-//
-//   - `<h2 id="title-{id}">{title}</h2>`              (byte-stable)
-//   - `<p class="meta">{author}</p>`                  (byte-stable; when present)
-//   - `<a href="#/article/{id}" aria-labelledby="title-{id}">Open article</a>`
-//                                                     (byte-stable href + text)
-//
-// Added as SIBLINGS inside the `<li>` (NOT structural changes — Pitfall 8-5):
-//   - `<SourceBadge />`         (D8-02)
-//   - `<ProgressHairline />`    (D8-11 — only when 0 < ratio < 0.98)
-//   - `<p class="meta finished-mark">● Finished</p>` (D8-12 — only when ratio >= 0.98)
-//   - `<ul class="library-row-tags">` of display-only `<span>` chips (D8-05)
-//   - `<button class="library-row-remove">` (only when onRemove is provided —
-//     Plan 04 wires it; default is no remove button in Plan 03; the glyph is
-//     the inline-SVG TrashIcon below per the Phase 13 G3 icon policy)
-//
-// `ratio` is `Math.min(1, location.graphemeOffset / total)` where
-// `total = graphemeClusters(normalizeText(article), article.lang).length`
-// (D-05 substrate — reused UNCHANGED per Pitfall 2; do NOT fork). When no
-// location is present, ratio = 0 → no hairline, no finished mark.
-//
-// Forced-colors safety (UI-SPEC §Interaction 10): the "Finished" mark uses a
-// filled-circle glyph (●) + text so state is conveyed by shape + text, not
-// color alone (mirrors Phase 5 mark.unresolved discipline).
 import { useMemo } from "react";
 import type { CanonicalArticle } from "../../content/types";
 import type { LocationRecord } from "../../content/schema";
 import { normalizeText, graphemeClusters } from "../../content/normalizeText";
 import { ProgressHairline } from "../../reader/ProgressHairline";
+import { ReadingStateButton } from "./ReadingStateButton";
 import { SourceBadge } from "./SourceBadge";
 import { articleReadingState } from "./readingState";
 import { effectiveTitle, effectiveAuthor } from "./effectiveMetadata";
@@ -57,6 +31,7 @@ interface LibraryRowProps {
    * fixtures and book/chapter rows never do; D17-05/D17-06).
    */
   onEdit?: () => void;
+  onReadingStateChange?: (read: boolean) => Promise<void>;
   /**
    * Heading level for the row title (Plan 12-05 — BookRow chapter sub-rows).
    * Default 2 keeps the standalone-row markup byte-stable (Pitfall 8-5);
@@ -71,6 +46,7 @@ export function LibraryRow({
   location,
   onRemove,
   onEdit,
+  onReadingStateChange,
   headingLevel = 2,
 }: LibraryRowProps) {
   const id = article.id;
@@ -99,23 +75,19 @@ export function LibraryRow({
         {/* byte-stable title heading (Pitfall 8-5; h3 inside book groups).
             Plan 17-02 (D17-09): the VALUE SOURCE is the effectiveTitle
             derivation — markup shape + heading id stay byte-stable. */}
-        <Title id={`title-${id}`}>{effectiveTitle(article)}</Title>
-        {/* byte-stable author meta (omitted when absent). Plan 17-02
+        <Title id={`title-${id}`}>
+          <a className="library-card-link" href={`#/article/${id}`}>
+            {effectiveTitle(article)}
+          </a>
+        </Title>
+        <div className="library-card-meta">
+          {/* byte-stable author meta (omitted when absent). Plan 17-02
             (D17-09): effectiveAuthor inside the existing truthy guard —
             an absent canonical author restored via Reset renders nothing. */}
-        {effectiveAuthor(article) && (
-          <p className="meta">{effectiveAuthor(article)}</p>
-        )}
-        {/* D8-02 source indicator + LIB-05 source link */}
-        <SourceBadge article={article} />
-        {/* D8-11 per-row progress hairline (only when 0 < ratio < 0.98) */}
-        {showHairline && <ProgressHairline progress={ratio} />}
-        {/* D8-12 finished mark (filled-circle glyph + text for forced-colors) */}
-        {isFinished && (
-          <p className="meta finished-mark">
-            <span aria-hidden="true">●</span> Finished
-          </p>
-        )}
+          {effectiveAuthor(article) && <p className="meta">{effectiveAuthor(article)}</p>}
+          {/* D8-02 source indicator + LIB-05 source link */}
+          <SourceBadge article={article} />
+        </div>
         {/* D8-05 display-only tag chips on the row (no edit affordance) */}
         {tags.length > 0 && (
           <ul className="library-row-tags">
@@ -127,10 +99,13 @@ export function LibraryRow({
           </ul>
         )}
         <div className="library-row-actions">
-          {/* Open article and curation share a bottom-aligned action row. */}
-          <a href={`#/article/${id}`} aria-labelledby={`title-${id}`}>
-            Open article
-          </a>
+          {onReadingStateChange && (
+            <ReadingStateButton
+              title={effectiveTitle(article)}
+              isRead={isFinished}
+              onChange={onReadingStateChange}
+            />
+          )}
           {/* Edit-metadata affordance — Plan 17-02 (D17-01). Only when
             onEdit is wired (Dexie-persisted top-level rows only). Sits
             immediately before the remove button in the same actions
@@ -162,6 +137,15 @@ export function LibraryRow({
             </button>
           )}
         </div>
+        {isFinished && <p className="meta finished-mark">Finished</p>}
+        {showHairline && (
+          <>
+            <p className="meta library-progress-label">
+              {Math.min(97, Math.floor(ratio * 100))}% read
+            </p>
+            <ProgressHairline progress={ratio} />
+          </>
+        )}
       </article>
     </li>
   );

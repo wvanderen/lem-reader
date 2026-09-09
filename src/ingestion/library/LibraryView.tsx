@@ -64,7 +64,7 @@ import { effectiveTitle } from "./effectiveMetadata";
 import { articleReadingState, bookReadingState, countByState } from "./readingState";
 import type { LibraryViewName } from "../../App";
 import { setDocumentTitle } from "./pageMeta";
-import { loadAllLocations } from "../../persistence/locationStore";
+import { loadAllLocations, setArticleReadState } from "../../persistence/locationStore";
 import { listBooks } from "../../persistence/booksStore";
 import { loadAllTags } from "./tagsStore";
 // Plan 15-03 (D15-11..14) — the session-scoped return-context seam. PURE
@@ -583,7 +583,13 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
           for chrome stability. The strip component itself stays
           byte-unchanged (D16-15) and still owns the spare-chrome null. */}
       <section className="library-section library-section-continue">
-        <ContinueReadingStrip />
+        <ContinueReadingStrip
+          key={refreshKey}
+          onReadingStateChange={async (article, read) => {
+            await setArticleReadState(article, read);
+            setRefreshKey((k) => k + 1);
+          }}
+        />
       </section>
       {/* Plan 16-03 (D16-03) — the permanently-mounted add-content section
           DISSOLVES: the three ingestion forms now live behind the header
@@ -683,6 +689,10 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
                   key={a.id}
                   article={a}
                   location={locationsByArticle.get(a.id)}
+                  onReadingStateChange={async (read) => {
+                    await setArticleReadState(a, read);
+                    setRefreshKey((k) => k + 1);
+                  }}
                   onRemove={() =>
                     setRemoveTarget({
                       id: a.id,

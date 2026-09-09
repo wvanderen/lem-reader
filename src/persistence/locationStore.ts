@@ -25,6 +25,8 @@ import { db } from "./db";
 import type { LocationRecordRow } from "./db";
 import { LocationRecordSchema } from "../content/schema";
 import type { LocationRecord } from "../content/schema";
+import type { CanonicalArticle } from "../content/types";
+import { graphemeClusters, normalizeText } from "../content/normalizeText";
 import { classifyStorageError } from "./errors";
 
 /**
@@ -109,6 +111,24 @@ export async function saveLocation(loc: LocationRecord): Promise<void> {
     savedAt: loc.savedAt,
   };
   await db.location.put(row);
+}
+
+/** Set the library's explicit reading state using the existing location model.
+ * Unread removes every revision: an older location must not revive progress.
+ * Failures propagate so the initiating control can offer a retry.
+ */
+export async function setArticleReadState(article: CanonicalArticle, read: boolean): Promise<void> {
+  if (!read) {
+    await db.location.filter((location) => location.articleId === article.id).delete();
+    return;
+  }
+  await saveLocation({
+    schemaVersion: 1,
+    articleId: article.id,
+    revision: article.revision,
+    graphemeOffset: Math.max(1, graphemeClusters(normalizeText(article), article.lang).length),
+    savedAt: new Date().toISOString(),
+  });
 }
 
 /**

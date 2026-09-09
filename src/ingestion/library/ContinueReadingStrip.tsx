@@ -4,11 +4,9 @@
 // UNFINISHED articles. Mounted only when the unfinished set is non-empty
 // (returns null otherwise — spare chrome per UI-SPEC §ContinueReadingStrip).
 //
-// The strip is distinct from the main list:
-//   - Single column (never widens — `.continue-reading { grid-template-
-//     columns: 1fr }`); the strip does not compete with the main grid.
-//   - NO source badge, NO remove affordance, NO tag chips — just the resume
-//     gesture (title link + author + per-row progress hairline).
+// Compact responsive resume cards: native title links cover each surface,
+// with progress and an independent mark-as-read action for articles.
+// Books retain their chapter-specific resume link and aggregate progress.
 //
 // Substrate (D-05 grapheme offset):
 //   - `loadAllLocations()` (Plan 02) returns ALL persisted LocationRecords
@@ -47,15 +45,9 @@ import { listArticles } from "../../content/repository";
 import { loadAllLocations } from "../../persistence/locationStore";
 import { listBooks } from "../../persistence/booksStore";
 import { ProgressHairline } from "../../reader/ProgressHairline";
-import {
-  deriveBookProgress,
-  resolveResumeChapterId,
-  chapterOrdinal,
-} from "./bookProgress";
-import {
-  articleReadingState,
-  bookReadingState,
-} from "./readingState";
+import { deriveBookProgress, resolveResumeChapterId, chapterOrdinal } from "./bookProgress";
+import { articleReadingState, bookReadingState } from "./readingState";
+import { ReadingStateButton } from "./ReadingStateButton";
 import { effectiveTitle, effectiveAuthor } from "./effectiveMetadata";
 
 /**
@@ -100,7 +92,11 @@ type StripEntry =
  * routes calmly to article-only entries (the strip is spare chrome; the
  * fail-quiet discipline is unchanged).
  */
-export function ContinueReadingStrip() {
+export function ContinueReadingStrip({
+  onReadingStateChange,
+}: {
+  onReadingStateChange?: (article: CanonicalArticle, read: boolean) => Promise<void>;
+}) {
   const [entries, setEntries] = useState<StripEntry[] | null>(null);
 
   useEffect(() => {
@@ -122,10 +118,7 @@ export function ContinueReadingStrip() {
         // same D-05 substrate LibraryRow/BookRow consume).
         const totalsById = new Map<string, number>();
         for (const article of articles) {
-          totalsById.set(
-            article.id,
-            graphemeClusters(normalizeText(article), article.lang).length,
-          );
+          totalsById.set(article.id, graphemeClusters(normalizeText(article), article.lang).length);
         }
 
         // Standalone article entries (D12-02: chapter members — articles
@@ -141,8 +134,7 @@ export function ContinueReadingStrip() {
             // the ONE policy module (behavior identical to the old
             // progress >= FINISHED_THRESHOLD gate; the ratio above still
             // feeds the entry's hairline).
-            if (articleReadingState(location, total) !== "in-progress")
-              return [];
+            if (articleReadingState(location, total) !== "in-progress") return [];
             return [
               {
                 kind: "article" as const,
@@ -157,51 +149,46 @@ export function ContinueReadingStrip() {
         // location + chapters-finished progress < 1. The label carries the
         // D12-06 "Chapter N of M" numbering; the link resumes the D12-07
         // last-read chapter.
-        const bookEntries: StripEntry[] = (
-          booksResult.ok ? booksResult.books : []
-        ).flatMap((book) => {
-          // D14-20 — the membership gate is a !== in-progress check on
-          // the ONE policy module (behavior identical to the old
-          // resumeChapterId === null + progress >= 1 gates). The entry
-          // construction below still needs the resume / ordinal /
-          // progress derivations, so only the membership decision swaps.
-          if (
-            bookReadingState(book, locations, (articleId) =>
+        const bookEntries: StripEntry[] = (booksResult.ok ? booksResult.books : []).flatMap(
+          (book) => {
+            // D14-20 — the membership gate is a !== in-progress check on
+            // the ONE policy module (behavior identical to the old
+            // resumeChapterId === null + progress >= 1 gates). The entry
+            // construction below still needs the resume / ordinal /
+            // progress derivations, so only the membership decision swaps.
+            if (
+              bookReadingState(book, locations, (articleId) => totalsById.get(articleId)) !==
+              "in-progress"
+            )
+              return [];
+            const resumeChapterId = resolveResumeChapterId(book, locations);
+            if (resumeChapterId === null) return []; // defensive — in-progress implies a resume chapter
+            const progress = deriveBookProgress(book, locations, (articleId) =>
               totalsById.get(articleId),
-            ) !== "in-progress"
-          )
-            return [];
-          const resumeChapterId = resolveResumeChapterId(book, locations);
-          if (resumeChapterId === null) return []; // defensive — in-progress implies a resume chapter
-          const progress = deriveBookProgress(book, locations, (articleId) =>
-            totalsById.get(articleId),
-          );
-          const ordinal = chapterOrdinal(book, resumeChapterId);
-          const total = book.chapterArticleIds.length;
-          if (ordinal === 0 || total === 0) return []; // defensive — resume id outside the record
-          const resumeLocation = latestByArticle.get(resumeChapterId);
-          if (!resumeLocation) return [];
-          return [
-            {
-              kind: "book" as const,
-              book,
-              resumeChapterId,
-              ordinal,
-              total,
-              progress,
-              lastOpenedAt: resumeLocation.savedAt,
-            },
-          ];
-        });
+            );
+            const ordinal = chapterOrdinal(book, resumeChapterId);
+            const total = book.chapterArticleIds.length;
+            if (ordinal === 0 || total === 0) return []; // defensive — resume id outside the record
+            const resumeLocation = latestByArticle.get(resumeChapterId);
+            if (!resumeLocation) return [];
+            return [
+              {
+                kind: "book" as const,
+                book,
+                resumeChapterId,
+                ordinal,
+                total,
+                progress,
+                lastOpenedAt: resumeLocation.savedAt,
+              },
+            ];
+          },
+        );
 
         const unfinished = [...articleEntries, ...bookEntries]
           .sort((a, b) =>
             // savedAt descending (most-recently-opened first — D8-10).
-            a.lastOpenedAt < b.lastOpenedAt
-              ? 1
-              : a.lastOpenedAt > b.lastOpenedAt
-                ? -1
-                : 0,
+            a.lastOpenedAt < b.lastOpenedAt ? 1 : a.lastOpenedAt > b.lastOpenedAt ? -1 : 0,
           )
           .slice(0, CONTINUE_READING_CAP);
         setEntries(unfinished);
@@ -230,12 +217,22 @@ export function ContinueReadingStrip() {
               {/* Plan 17-02 (D17-09) — the strip shows the ONE effective
                   name (effectiveTitle/effectiveAuthor inside the truthy
                   guard); book entries below stay canonical (D17-05). */}
-              <a href={`#/article/${entry.article.id}`}>
+              <a className="library-card-link" href={`#/article/${entry.article.id}`}>
                 {effectiveTitle(entry.article)}
               </a>
               {effectiveAuthor(entry.article) && (
                 <p className="meta">{effectiveAuthor(entry.article)}</p>
               )}
+              <div className="continue-reading-footer">
+                <span className="meta">{Math.floor(entry.progress * 100)}% read</span>
+                {onReadingStateChange && (
+                  <ReadingStateButton
+                    title={effectiveTitle(entry.article)}
+                    isRead={false}
+                    onChange={(read) => onReadingStateChange(entry.article, read)}
+                  />
+                )}
+              </div>
               <ProgressHairline progress={entry.progress} />
             </li>
           ) : (
@@ -243,7 +240,7 @@ export function ContinueReadingStrip() {
               {/* D12-02 — the book-level entry: ONE link resuming the
                   last-read chapter, labeled with the book's own TOC
                   numbering (D12-06 "Chapter N of M"). */}
-              <a href={`#/article/${entry.resumeChapterId}`}>
+              <a className="library-card-link" href={`#/article/${entry.resumeChapterId}`}>
                 {entry.book.title} — Chapter {entry.ordinal} of {entry.total}
               </a>
               {entry.book.authors.length > 0 && (
