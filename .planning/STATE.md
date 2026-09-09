@@ -4,10 +4,10 @@ milestone: v2.1
 milestone_name: Reader Experience
 current_phase: 21
 status: verifying
-stopped_at: Completed 21-08-PLAN.md (phase 21 ready for verification)
-last_updated: "2026-09-07T23:23:27.931506+00:00"
-last_activity: 2026-09-07
-last_activity_desc: Phase 21 complete
+stopped_at: Completed quick task 260908-oht (article completion detection + Mark read and close)
+last_updated: "2026-09-09T00:55:00+00:00"
+last_activity: 2026-09-09
+last_activity_desc: Quick task 260908-oht complete
 progress:
   total_phases: 8
   completed_phases: 8
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-08-30)
 Phase: 21
 Plan: Not started
 Status: Phase complete — ready for verification
-Last activity: 2026-09-08 - Completed quick task 260908-o0w: Close dimmed modals on backdrop scrim click
+Last activity: 2026-09-09 - Completed quick task 260908-oht: Fix article completion detection + add Mark read and close (e2e runner repaired; ~191 pre-existing e2e failures from the 09-07 non-GSD commits logged to deferred-items.md)
 
 ## Recent Decisions (Phase 18)
 
@@ -512,6 +512,7 @@ None yet. (2026-08-21-fix-prod-ui-paste-ingest-flow resolved by quick task 26082
 
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
+| 260908-oht | Fix article completion detection + add Mark read and close (pinned end anchor, scroll-bottom pin, flush-now save; e2e runner repaired, ~191 pre-existing e2e failures logged to deferred-items.md) | 2026-09-08 | 7737cdf | [260908-oht-fix-article-completion-detection-and-add](./quick/260908-oht-fix-article-completion-detection-and-add/) |
 | 260908-o0w | Close dimmed modals on backdrop scrim click | 2026-09-08 | e8b1d84 | [260908-o0w-close-dimmed-modals-on-backdrop-scrim-cl](./quick/260908-o0w-close-dimmed-modals-on-backdrop-scrim-cl/) |
 | 260908-nk2 | Fix library page flicker: feedback issue link flashes during load | 2026-09-08 | e334e14 | [260908-nk2-fix-library-page-flicker-feedback-issue-](./quick/260908-nk2-fix-library-page-flicker-feedback-issue-/) |
 | 260908-h9l | Smooth progress and optional page-turn motion | 2026-09-08 | 5f2e583 | [260908-h9l-smooth-progress-and-optional-page-turn-m](./quick/260908-h9l-smooth-progress-and-optional-page-turn-m/) |
