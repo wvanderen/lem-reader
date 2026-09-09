@@ -421,6 +421,60 @@ test.describe("SC#5 + LIB-06 — progress hairline + continue-reading strip + fi
     await expect(finishedRow.locator(".finished-mark")).toBeVisible();
   });
 
+  // Quick 260909-ahy — regression lock: marking a row read must NOT remount
+  // the continue-reading strip. The data-flash-probe attribute is the
+  // remount detector: React never writes it, so it can only survive the
+  // refreshKey reload if the section element is the SAME DOM node. A remount
+  // (the old key={refreshKey} mechanism, commit 109fb3d) would render a
+  // fresh section WITHOUT the attribute — exactly the flash (collapse →
+  // scroll jump → rebuild) this quick task fixes.
+  test("marking a row read does not remount the continue-reading strip (Quick 260909-ahy)", async ({
+    page,
+  }) => {
+    // Seed both strip standalones with UNFINISHED mid-article locations and
+    // distinct savedAt timestamps (the two-card test above is the pattern).
+    // The bundled HAIRLINE_FIXTURE row is NOT a strip member — it has no
+    // seeded location until the mark-as-read click writes one (finished ≠
+    // in-progress), so both seeded strip entries must survive the
+    // re-derivation.
+    const halfOffsetA = Math.floor(STRIP_TOTAL_A * 0.5);
+    const halfOffsetB = Math.floor(STRIP_TOTAL_B * 0.3);
+    await seedArticleRows(page, [STRIP_FIXTURE_A, STRIP_FIXTURE_B]);
+    await seedLocation(page, STRIP_FIXTURE_A.id, halfOffsetA, "2026-08-12T00:00:00.000Z");
+    await seedLocation(page, STRIP_FIXTURE_B.id, halfOffsetB, "2026-08-13T12:00:00.000Z");
+    await openLibrary(page);
+
+    // The strip renders with both seeded entries.
+    const strip = page.locator(".continue-reading-strip");
+    await expect(strip).toBeVisible();
+    await expect(strip.locator(".continue-reading-row")).toHaveCount(2);
+
+    // Tag the live section node — the probe that survives only if React
+    // does NOT recreate the element.
+    await strip.evaluate((el) => el.setAttribute("data-flash-probe", "alive"));
+
+    // Mark the bundled fixture row read (not a strip member).
+    const row = page
+      .locator(".library-list > li")
+      .filter({ hasText: HAIRLINE_FIXTURE.provenance.title });
+    await row.getByRole("button", { name: /^Mark as read:/ }).click();
+
+    // The accessible name flips to the target action at click time — this
+    // holds in BOTH the optimistic transient (Quick 260909-ahy Task 2) and
+    // the settled state, so it cannot flake on reload timing yet locks that
+    // the name never idles on the stale "Mark as read:" label.
+    await expect(row.getByRole("button", { name: /^Mark as unread:/ })).toBeVisible();
+
+    // The Finished mark proves the refreshKey reload has landed (the
+    // ordering gate for the probe assertion below).
+    await expect(row.locator(".finished-mark")).toBeVisible();
+
+    // The probe survived the reload — same DOM node, no remount — and the
+    // marked fixture never joined the strip: both seeded entries persist.
+    await expect(page.locator('.continue-reading-strip[data-flash-probe="alive"]')).toBeVisible();
+    await expect(strip.locator(".continue-reading-row")).toHaveCount(2);
+  });
+
   test("empty strip: with zero unfinished locations the strip is NOT rendered (spare chrome)", async ({
     page,
   }) => {
