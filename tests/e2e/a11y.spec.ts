@@ -8,7 +8,7 @@
 //
 // axe reports only automatable issues — these tests do NOT replace the manual
 // keyboard and screen-reader passes documented in VALIDATION.md Manual-Only
-// Verifications (performed before /gsd-verify-work).
+// Verifications (performed before each manual verification round).
 import { test, expect, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { fixtures } from "../../src/fixtures";
@@ -209,8 +209,8 @@ test("a11y ACPT-02 #2: note popover open is a modal dialog + axe-clean + single-
 // ul.review-section-list rows must pass the list rule). Seeded NON-EMPTY
 // (article + confident highlight + note) so axe samples the real row
 // structure — quote, note preview, date, curation cluster. The two
-// manual-only SR rows in 10-VALIDATION.md stay queued for
-// /gsd-verify-work (axe reports only automatable issues).
+// manual-only SR rows in 10-VALIDATION.md stay queued for manual
+// verification (axe reports only automatable issues).
 test("review panel #/highlights: zero serious/critical WCAG 2.2 AA violations (seeded non-empty panel)", async ({
   page,
 }) => {

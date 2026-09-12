@@ -12,7 +12,7 @@
 //
 // Per 04-VALIDATION.md §Sampling Rate:
 //   - After every plan wave: `npm run test:e2e -- --grep pagination` (3 engines)
-//   - Before /gsd-verify-work: full Playwright corpus matrix
+//   - Before each verification round: full Playwright corpus matrix
 //   - Max feedback latency: ~6 minutes (e2e wave)
 //
 // The SAMPLED_TYPOGRAPHY subset retains the calibration matrix's drift-driver

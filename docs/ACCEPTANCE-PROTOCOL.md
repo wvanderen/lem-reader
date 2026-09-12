@@ -1,7 +1,7 @@
 # Lem Reader — Manual Screen-Reader + Keyboard Acceptance Protocol
 
 <!--
-  GSD-managed document. Mirrors the AGENTS.md markdown discipline (top-of-file
+  Mirrors the AGENTS.md markdown discipline (top-of-file
   summary header, explicit sectioning, "Downstream agents MUST read" cross-references).
   Do not edit casually — this is the durable, re-runnable ACPT-02 instrument.
   Re-run on material reader-surface changes.
