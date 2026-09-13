@@ -6,19 +6,23 @@
 // Dexie queries of its own — components own the reads (the store-seam
 // discipline), this module owns the algebra.
 //
-// FINISHED_THRESHOLD + the latest-savedAt fold (latestLocationByArticle)
-// come from ../../reader/readingPosition — Issue #2's ONE pure home for
-// the completion policy (the former upward import from
-// ./ContinueReadingStrip is retired; a policy module never imports from a
-// UI component). The fold moved there verbatim so the savedAt-tie
-// discipline lives beside the threshold it feeds.
+// FINISHED_THRESHOLD's predicate (isFinishedOffset) + the latest-savedAt
+// fold (latestLocationByArticle) come from ../../reader/readingPosition —
+// Issue #2's ONE pure home for the completion policy (the former upward
+// import from ./ContinueReadingStrip is retired; a policy module never
+// imports from a UI component). The fold moved there verbatim so the
+// savedAt-tie discipline lives beside the threshold it feeds, and the
+// chapter finished check below CALLS isFinishedOffset instead of forking
+// the threshold algebra — every finished decision in the app reads ONE
+// predicate (behavior-identical for every nonzero total; the opened-
+// zero-length 0/0 edge now AGREES with articleReadingState: not finished).
 //
 // Contracts (12-05-PLAN.md §must_haves truths):
 //   - deriveBookProgress (D12-03): chapters-finished ratio — count(chapter
-//     locations at >= FINISHED_THRESHOLD x chapter text length) ÷
-//     chapterArticleIds.length. A chapter with NO location is unfinished; a
-//     chapter whose text length is UNKNOWN (article row missing — partial
-//     import) is unfinished. 0 when the chapter list is empty.
+//     locations finished per isFinishedOffset) ÷ chapterArticleIds.length.
+//     A chapter with NO location is unfinished; a chapter whose text length
+//     is UNKNOWN (article row missing — partial import) is unfinished. 0
+//     when the chapter list is empty.
 //   - resolveResumeChapterId (D12-07): the chapter id (within
 //     chapterArticleIds) whose LocationRecord has the MAX savedAt —
 //     last-read wins, even mid-chapter or re-skimmed earlier. null when no
@@ -28,14 +32,14 @@
 //     chapterArticleIds.length.
 //
 // The latest-per-article fold (now readingPosition's
-// latestLocationByArticle) mirrors ContinueReadingStrip.tsx / LibraryView
-// .tsx exactly (max savedAt per articleId — D8-10 "recently-read =
-// opened"). LocationRecords are keyed [articleId+revision], so a chapter
-// read across revisions carries several rows; the latest-savedAt row is
-// the live truth for BOTH the finished check and the resume pick.
+// latestLocationByArticle) is the ONE fold the strip and LibraryView call
+// too (max savedAt per articleId — D8-10 "recently-read = opened").
+// LocationRecords are keyed [articleId+revision], so a chapter read across
+// revisions carries several rows; the latest-savedAt row is the live truth
+// for BOTH the finished check and the resume pick.
 import type { Book, LocationRecord } from "../../content/schema";
 import {
-  FINISHED_THRESHOLD,
+  isFinishedOffset,
   latestLocationByArticle,
 } from "../../reader/readingPosition";
 
@@ -69,7 +73,7 @@ export function deriveBookProgress(
     if (!loc) continue; // never opened → unfinished
     const len = textLengthOf(chapterId);
     if (len === undefined) continue; // unknown text length → unfinished
-    if (loc.graphemeOffset >= FINISHED_THRESHOLD * len) {
+    if (isFinishedOffset(loc.graphemeOffset, len)) {
       finished += 1;
     }
   }

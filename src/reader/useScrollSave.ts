@@ -228,20 +228,20 @@ export function useScrollSave(
   useEffect(() => {
     if (!article) return; // loading state — no scroll listener
     const onScroll = () => {
-      // 260908-oht scroll-bottom pin: at (or within 4px of) the document
-      // bottom, persist the ONE end-pin (endPinOffset — Issue #2's
-      // readingPosition module) so a fully-read article crosses the
+      // 260908-oht scroll-bottom pin: at (or within BOTTOM_EPSILON_PX of)
+      // the document bottom, persist the ONE end-pin (endPinOffset — Issue
+      // #2's readingPosition module) so a fully-read article crosses the
       // FINISHED_THRESHOLD — the top-block START offset computeOffset()
       // reports there stays below 0.98 whenever the final block exceeds
       // 2% of the article.
       const currentArticle = articleRef.current;
       if (
         currentArticle !== null &&
-        atScrollBottom(
-          window.scrollY,
-          window.innerHeight,
-          document.documentElement.scrollHeight,
-        )
+        atScrollBottom({
+          scrollY: window.scrollY,
+          viewportHeight: window.innerHeight,
+          scrollHeight: document.documentElement.scrollHeight,
+        })
       ) {
         scheduleSaveAtOffset(endPinOffset(currentArticle));
         return;
