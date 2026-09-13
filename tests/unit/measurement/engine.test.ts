@@ -18,8 +18,28 @@
 // is proven by tests/e2e/measurement/* in real browsers; Pitfall 2).
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import type { BlockMeasurement, MeasurementResult } from "../../../src/measurement/types";
+import type {
+  BlockMeasurement,
+  EligibilityState,
+  MeasurementResult,
+} from "../../../src/measurement/types";
 import type { CanonicalArticle } from "../../../src/content/types";
+import type { ReaderSettings } from "../../../src/content/schema";
+import type { RuntimeDriftGuard } from "../../../src/measurement/driftGuard";
+
+// ── Module mocks ───────────────────────────────────────────────────────────
+// Mock the textMeasurer adapter so dispatch tests can stage Pretext
+// predictions without a canvas (jsdom has none). fontStringFor keeps a
+// deterministic per-kind geometry; measureParagraphHeight throws by default
+// so a test that unexpectedly reaches the fast measurer fails loudly.
+const textMeasurerMocks = vi.hoisted(() => ({
+  fontStringFor: vi.fn(),
+  measureParagraphHeight: vi.fn(),
+}));
+vi.mock("../../../src/measurement/textMeasurer", () => ({
+  fontStringFor: textMeasurerMocks.fontStringFor,
+  measureParagraphHeight: textMeasurerMocks.measureParagraphHeight,
+}));
 
 // ── Module mocks ───────────────────────────────────────────────────────────
 // Mock the font gate so run() does not block on document.fonts.ready. The
@@ -253,5 +273,308 @@ describe("MeasurementEngine — V7 error classification", () => {
     await expect(engine.run(constraintsFor(18))).resolves.toBeUndefined();
     // The diagnostic was emitted.
     expect(diagnostics.recent().some((e) => (e as { kind: string }).kind === "measurement-error")).toBe(true);
+  });
+});
+
+// ── Issue-6 seam: calibration-gated per-block strategy dispatch ────────────
+
+/** A deterministic ReaderSettings stub for the dispatch's geometry reads. */
+const settingsStub: ReaderSettings = {
+  schemaVersion: 2,
+  font: "serif",
+  size: 18,
+  measure: 64,
+  spacing: "comfortable",
+  theme: "sepia",
+  readingMode: "paginated",
+};
+
+/** Seed eligibility mirroring the committed fingerprint: headings eligible. */
+const HEADING_ELIGIBLE: EligibilityState = {
+  paragraph: { pretextEligible: false },
+  heading: { pretextEligible: true },
+};
+const ALL_DOM: EligibilityState = {
+  paragraph: { pretextEligible: false },
+  heading: { pretextEligible: false },
+};
+
+/** A DOM-truth heading block as measureAllBlocks would produce it. */
+function domHeadingBlock(over: Partial<BlockMeasurement> = {}): BlockMeasurement {
+  return {
+    kind: "heading",
+    heightPx: 28.2,
+    lineCount: 1,
+    lineBoxes: [{ charOffset: 0, topPx: 100, bottomPx: 128.2 }],
+    marginBlockStartPx: 12,
+    marginBlockEndPx: 12,
+    ...over,
+  };
+}
+
+/**
+ * Mount the [data-block-index] elements the dispatch walks for Pretext
+ * inputs (textContent + width + heading level). Order must match the mocked
+ * measureAllBlocks output — the same contract the real domMeasurer satisfies.
+ */
+function mountDispatchDom(
+  articleEl: HTMLElement,
+  specs: { kind: "paragraph" | "heading"; text?: string }[],
+): void {
+  for (let i = 0; i < specs.length; i++) {
+    const spec = specs[i]!;
+    const el = document.createElement(spec.kind === "heading" ? "h2" : "p");
+    el.setAttribute("data-block-index", String(i));
+    el.textContent =
+      spec.text ?? (spec.kind === "heading" ? "A heading" : "Some paragraph text.");
+    articleEl.appendChild(el);
+  }
+}
+
+/** Build an engine wired for dispatch tests + spies on the bus/commits. */
+function buildDispatchEngine(
+  domBlocks: BlockMeasurement[],
+  eligibility: EligibilityState,
+  engineOpts: {
+    driftGuard?: RuntimeDriftGuard;
+    driftTolerancePx?: number;
+    getReaderSettings?: () => ReaderSettings;
+    diagnostics?: InstanceType<typeof DiagnosticBus>;
+  } = {},
+) {
+  const article = stubArticle(domBlocks.length);
+  const articleEl = document.createElement("article");
+  mountDispatchDom(
+    articleEl,
+    domBlocks.map((b) => ({
+      kind: b.kind as "paragraph" | "heading",
+      text: b.kind === "heading" ? "A heading" : "Some paragraph text.",
+    })),
+  );
+  const diagnostics = engineOpts.diagnostics ?? new DiagnosticBus();
+  const engine = new MeasurementEngine({
+    article,
+    articleEl,
+    diagnostics,
+    eligibility,
+    getReaderSettings:
+      "getReaderSettings" in engineOpts
+        ? engineOpts.getReaderSettings
+        : () => settingsStub,
+    driftGuard: engineOpts.driftGuard,
+    driftTolerancePx: engineOpts.driftTolerancePx,
+  });
+  const committed: MeasurementResult[] = [];
+  engine.onTrusted((result) => committed.push(result));
+  return { engine, articleEl, committed, diagnostics };
+}
+
+describe("MeasurementEngine — calibration-gated strategy dispatch (issue 6)", () => {
+  const { fontStringFor: fontStringForMock, measureParagraphHeight: measureParagraphHeightMock } =
+    textMeasurerMocks;
+
+  beforeEach(() => {
+    fontStringForMock.mockReset().mockImplementation(
+      (kind: "paragraph" | "heading") =>
+        kind === "heading"
+          ? { font: "600 22px serif", lineHeightPx: 28.6 }
+          : { font: "400 18px serif", lineHeightPx: 28.8 },
+    );
+    measureParagraphHeightMock.mockReset();
+    measureParagraphHeightMock.mockImplementation(() => {
+      throw new Error("measureParagraphHeight not stubbed for this test");
+    });
+  });
+
+  it("ineligible-only corpus commits byte-identical DOM blocks with zero Pretext calls", async () => {
+    const dom = [domHeadingBlock(), stubBlock()];
+    measureAllBlocksMock.mockImplementation(() => dom);
+    const { engine, committed, diagnostics } = buildDispatchEngine(dom, ALL_DOM);
+
+    await engine.run(constraintsFor(18));
+
+    expect(committed).toHaveLength(1);
+    expect(committed[0]!.blocks).toEqual(dom);
+    expect(measureParagraphHeightMock).not.toHaveBeenCalled();
+    expect(diagnostics.recent()).toHaveLength(0);
+  });
+
+  it("no settings reader → all-DOM even when the fingerprint seeds eligibility", async () => {
+    const dom = [domHeadingBlock(), stubBlock()];
+    measureAllBlocksMock.mockImplementation(() => dom);
+    const { engine, committed, diagnostics } = buildDispatchEngine(dom, HEADING_ELIGIBLE, {
+      getReaderSettings: undefined,
+    });
+
+    await engine.run(constraintsFor(18));
+
+    expect(committed).toHaveLength(1);
+    expect(committed[0]!.blocks).toEqual(dom);
+    expect(measureParagraphHeightMock).not.toHaveBeenCalled();
+    expect(diagnostics.recent()).toHaveLength(0);
+  });
+
+  it("agreement commits the fast measurement with DOM margins + line boxes", async () => {
+    const dom = [domHeadingBlock()];
+    measureAllBlocksMock.mockImplementation(() => dom);
+    // DOM truth 28.2px vs prediction 28.6px — inside the 1.0px tolerance, so
+    // the committed height MUST be the fast measurer's 28.6 (discriminates
+    // dispatch from a pure-DOM commit).
+    measureParagraphHeightMock.mockReturnValue({ height: 28.6, lineCount: 1 });
+    const { engine, committed, diagnostics } = buildDispatchEngine(dom, HEADING_ELIGIBLE);
+
+    await engine.run(constraintsFor(18));
+
+    expect(measureParagraphHeightMock).toHaveBeenCalledTimes(1);
+    expect(committed).toHaveLength(1);
+    const block = committed[0]!.blocks[0]!;
+    expect(block.heightPx).toBe(28.6);
+    expect(block.lineCount).toBe(1);
+    // Margins + line boxes stay DOM truth (atomic kinds consume margins;
+    // splitting kinds keep the D-05 DOM split primitive).
+    expect(block.marginBlockStartPx).toBe(12);
+    expect(block.marginBlockEndPx).toBe(12);
+    expect(block.lineBoxes).toEqual(dom[0]!.lineBoxes);
+    expect(diagnostics.recent()).toHaveLength(0);
+  });
+
+  it("drift exactly at the tolerance boundary agrees (strictly-greater rule)", async () => {
+    const dom = [domHeadingBlock({ heightPx: 28.6 })];
+    measureAllBlocksMock.mockImplementation(() => dom);
+    // |28.6 − 29.6| = 1.0 == tolerance → agreement, mirroring the drift
+    // guard's boundary semantics.
+    measureParagraphHeightMock.mockReturnValue({ height: 29.6, lineCount: 1 });
+    const { engine, committed, diagnostics } = buildDispatchEngine(dom, HEADING_ELIGIBLE);
+
+    await engine.run(constraintsFor(18));
+
+    expect(committed[0]!.blocks[0]!.heightPx).toBe(29.6);
+    expect(diagnostics.recent()).toHaveLength(0);
+  });
+
+  it("beyond-tolerance drift falls back to DOM and emits drift-exceedance", async () => {
+    const dom = [domHeadingBlock()];
+    measureAllBlocksMock.mockImplementation(() => dom);
+    measureParagraphHeightMock.mockReturnValue({ height: 40.5, lineCount: 2 });
+    const { engine, committed, diagnostics } = buildDispatchEngine(dom, HEADING_ELIGIBLE);
+
+    await engine.run(constraintsFor(18));
+
+    expect(committed).toHaveLength(1);
+    expect(committed[0]!.blocks).toEqual(dom);
+    const drifts = diagnostics.recent().filter((e) => e.kind === "drift-exceedance");
+    expect(drifts).toHaveLength(1);
+    expect(diagnostics.recent().some((e) => e.kind === "measurement-error")).toBe(false);
+  });
+
+  it("lineCount mismatch falls back to DOM even when height agrees", async () => {
+    const dom = [domHeadingBlock()];
+    measureAllBlocksMock.mockImplementation(() => dom);
+    measureParagraphHeightMock.mockReturnValue({ height: 28.2, lineCount: 2 });
+    const { engine, committed, diagnostics } = buildDispatchEngine(dom, HEADING_ELIGIBLE);
+
+    await engine.run(constraintsFor(18));
+
+    expect(committed[0]!.blocks).toEqual(dom);
+    expect(diagnostics.recent().some((e) => e.kind === "drift-exceedance")).toBe(true);
+  });
+
+  it("a Pretext throw falls back to DOM with measurement-error (V7), no drift-exceedance", async () => {
+    const dom = [domHeadingBlock()];
+    measureAllBlocksMock.mockImplementation(() => dom);
+    measureParagraphHeightMock.mockImplementation(() => {
+      throw new Error("canvas unavailable");
+    });
+    const { engine, committed, diagnostics } = buildDispatchEngine(dom, HEADING_ELIGIBLE);
+
+    await expect(engine.run(constraintsFor(18))).resolves.toBeUndefined();
+
+    expect(committed).toHaveLength(1);
+    expect(committed[0]!.blocks).toEqual(dom);
+    expect(diagnostics.recent().some((e) => e.kind === "drift-exceedance")).toBe(false);
+    const errors = diagnostics.recent().filter((e) => e.kind === "measurement-error");
+    expect(errors).toHaveLength(1);
+    expect((errors[0] as { message: string }).message).toContain("canvas unavailable");
+  });
+
+  it("an empty-text heading uses DOM silently — not applicable, not drift", async () => {
+    const dom = [domHeadingBlock()];
+    measureAllBlocksMock.mockImplementation(() => dom);
+    const { engine, articleEl, committed, diagnostics } = buildDispatchEngine(
+      dom,
+      HEADING_ELIGIBLE,
+    );
+    // Empty the mounted heading text — the fast measurer has nothing to
+    // canvas-measure, so the block is not applicable (DOM, no diagnostics).
+    articleEl.querySelector<HTMLElement>("[data-block-index='0']")!.textContent = "";
+
+    await engine.run(constraintsFor(18));
+
+    expect(measureParagraphHeightMock).not.toHaveBeenCalled();
+    expect(committed[0]!.blocks).toEqual(dom);
+    expect(diagnostics.recent()).toHaveLength(0);
+  });
+
+  it("paragraphs stay DOM when only headings are eligible", async () => {
+    const dom = [stubBlock(), domHeadingBlock()];
+    measureAllBlocksMock.mockImplementation(() => dom);
+    measureParagraphHeightMock.mockReturnValue({ height: 28.6, lineCount: 1 });
+    const { engine, committed } = buildDispatchEngine(dom, HEADING_ELIGIBLE);
+
+    await engine.run(constraintsFor(18));
+
+    expect(measureParagraphHeightMock).toHaveBeenCalledTimes(1);
+    expect(committed[0]!.blocks[0]).toEqual(dom[0]);
+    expect(committed[0]!.blocks[1]!.heightPx).toBe(28.6);
+  });
+
+  it("driftTolerancePx tightens the agreement gate", async () => {
+    const dom = [domHeadingBlock({ heightPx: 28.6 })];
+    measureAllBlocksMock.mockImplementation(() => dom);
+    // Drift 1.0px would agree at the default tolerance but not at 0.5.
+    measureParagraphHeightMock.mockReturnValue({ height: 29.6, lineCount: 1 });
+    const { engine, committed, diagnostics } = buildDispatchEngine(dom, HEADING_ELIGIBLE, {
+      driftTolerancePx: 0.5,
+    });
+
+    await engine.run(constraintsFor(18));
+
+    expect(committed[0]!.blocks).toEqual(dom);
+    expect(diagnostics.recent().some((e) => e.kind === "drift-exceedance")).toBe(true);
+  });
+
+  it("runtime guard downgrade flips eligibility so the next pass is all-DOM", async () => {
+    const { RuntimeDriftGuard } = await import("../../../src/measurement/driftGuard");
+    const dom = [domHeadingBlock({ heightPx: 28.6 })];
+    measureAllBlocksMock.mockImplementation(() => dom);
+    measureParagraphHeightMock.mockReturnValue({ height: 40.5, lineCount: 2 });
+    // The guard MUST share the engine's bus (T-04 threading contract) so its
+    // downgrade diagnostics land where the test (and the UI) reads them.
+    const diagnostics = new DiagnosticBus();
+    const { engine, committed } = buildDispatchEngine(dom, HEADING_ELIGIBLE, {
+      driftGuard: new RuntimeDriftGuard({ tolerancePx: 1.0, diagnostics }),
+      diagnostics,
+    });
+
+    // Pass 1: drift → per-block DOM fallback + drift-exceedance + the guard's
+    // kind-level downgrade diagnostic.
+    await engine.run(constraintsFor(18));
+    expect(diagnostics.recent().some((e) => e.kind === "drift-exceedance")).toBe(true);
+    const downgrades = diagnostics
+      .recent()
+      .filter((e) => e.kind === "runtime-guard-downgrade");
+    expect(downgrades).toHaveLength(1);
+    expect((downgrades[0] as { "kind-downgraded": string })["kind-downgraded"]).toBe("heading");
+
+    // Pass 2: the downgraded kind dispatches DOM — no Pretext call, no new
+    // diagnostics.
+    measureParagraphHeightMock.mockClear();
+    await engine.run(constraintsFor(18));
+    expect(measureParagraphHeightMock).not.toHaveBeenCalled();
+    expect(committed).toHaveLength(2);
+    expect(committed[1]!.blocks).toEqual(dom);
+    expect(
+      diagnostics.recent().filter((e) => e.kind === "runtime-guard-downgrade"),
+    ).toHaveLength(1);
   });
 });
