@@ -28,7 +28,11 @@ import type { Book } from "../content/schema";
 import { ArticleBody } from "../content/render/BlockRenderer";
 import type { ArticleBodyHighlight } from "../content/render/BlockRenderer";
 import { loadLocation } from "../persistence/locationStore";
-import { findScrollTarget, computeTopVisibleOffset } from "../reader/restoreLocation";
+import { computeTopVisibleOffset } from "../reader/restoreLocation";
+// Issue #5 — the ONE mode-aware passage-jump tail (deep-link, restore,
+// back-nav, TOC, and the D4-10 mode-swap re-anchor all call it) + the D4-07
+// settleFocus discipline.
+import { jumpToOffset, settleFocus } from "../reader/jumpToOffset";
 import { useScrollSave } from "../reader/useScrollSave";
 import { useMeasurement } from "../measurement/useMeasurement";
 import { useSettings } from "../settings/SettingsContext";
@@ -38,7 +42,9 @@ import { PageTurnControls, isFormField } from "../reader/PageTurnControls";
 import { ProgressHairline } from "../reader/ProgressHairline";
 import { SectionAnnouncer } from "../reader/SectionAnnouncer";
 import { blockGraphemeLength } from "../pagination/anchor";
-import { endPinOffset, landingForRestore } from "../reader/readingPosition";
+// Issue #2 — the end-pin policy stays imported for the mark-read gesture;
+// the restore/mode-swap end-LANDING decision moved behind jumpToOffset.
+import { endPinOffset } from "../reader/readingPosition";
 import { BLOCK_SEPARATOR } from "../content/normalizeText";
 // Phase 18 Plan 18-03 (ORNT-06, D18-05/06): the passive transient
 // restoration marker replaces the retired ResumeBanner — the banner's
@@ -70,7 +76,6 @@ import { SelectionToolbar } from "../reader/annotations/SelectionToolbar";
 // navigate-back). Both consume useHighlightOverlay() inside the provider.
 import { NotePopover } from "../reader/annotations/NotePopover";
 import { AnnotationsDrawer } from "../reader/annotations/AnnotationsDrawer";
-import { fragmentContainingOffset } from "../pagination/anchor";
 // Plan 08-04 (LIB-04 + D8-05) — TagEntry edits tags WHILE reading. Plan
 // 13-10 (G5) mounts it inside the top-bar tag popover (see the .tag-popover
 // surface below). Inert at mount (Pitfall 8-5 — does NOT steal focus from
@@ -1169,8 +1174,10 @@ export function ArticleView({
 
   // Phase 4 Plan 04-04 (D4-10 anchor apply — paginated→scrolling): after the
   // mode swap commits, silent-scroll the scrolling ArticleBody to the captured
-  // offset via the SAME findScrollTarget helper Phase 2's location-restore
-  // uses (no fork). rAF-deferred so the blocks are positioned before the query.
+  // offset via jumpToOffset (Issue #5 — the ONE jump tail; the module resolves
+  // the target through the SAME findScrollTarget helper Phase 2's
+  // location-restore uses, no fork). rAF-deferred so the blocks are positioned
+  // before the query.
   //
   // Phase 4 Plan 04-05: tracks effectiveMode (NOT settings.readingMode) so a
   // session-override fallback flip (which does NOT change settings.readingMode)
@@ -1189,18 +1196,14 @@ export function ArticleView({
       if (swap.offset > 0 && article && articleRef.current) {
         const rafId = requestAnimationFrame(() => {
           if (!articleRef.current || !article) return;
-          // 260908-oht end-landing (Issue #2: the decision routes through
-          // readingPosition): a captured offset at the article total (the
-          // final-page pin) lands at the absolute document bottom so the
-          // first scroll-save re-pins total instead of un-finishing.
-          if (landingForRestore(swap.offset, endPinOffset(article)) === "end") {
-            window.scrollTo(0, document.documentElement.scrollHeight);
-            return;
-          }
-          const blocks = queryBlocks(articleRef.current);
-          // Silent + instant (A11Y-06) — never behavior: "smooth".
-          findScrollTarget(article, blocks, swap.offset)?.scrollIntoView({
-            block: "start",
+          // endLanding = the 260908-oht end-landing (Issue #2): a captured
+          // offset at the article total (the final-page pin) lands at the
+          // absolute document bottom so the first scroll-save re-pins total.
+          jumpToOffset(article, swap.offset, {
+            mode: "scrolling",
+            surface: null,
+            blocks: queryBlocks(articleRef.current),
+            endLanding: true,
           });
         });
         return () => cancelAnimationFrame(rafId);
@@ -1607,30 +1610,19 @@ export function ArticleView({
         return;
       }
 
-      // ── Ready: the handleNavigateBack tail, verbatim (D5-11) ──
-      const offset = position.start;
-      if (isPaginated && pages && pages.length > 0) {
-        // PAGINATED: resolve offset → page index via
-        // fragmentContainingOffset (anchor.ts), then turn to that page.
-        const surface = surfaceRef.current;
-        if (surface) {
-          const pageIdx = fragmentContainingOffset(pages, offset, article);
-          surface.turnToPage(pageIdx);
-        }
-      } else {
-        // SCROLLING: findScrollTarget + scrollIntoView (reusing the
-        // Phase 2 helper EXACTLY — no fork).
-        const blocks = queryBlocks(articleRef.current);
-        const target = findScrollTarget(article, blocks, offset);
-        target?.scrollIntoView({ block: "center" });
-      }
-      // Firefox settle guard — BOTH calls on the same closure, verbatim
-      // (scrollIntoView's async settle can race a single rAF on firefox).
-      const focusMark = () => {
-        document.getElementById(`hl-${jumpHighlightId}`)?.focus();
-      };
-      requestAnimationFrame(focusMark);
-      window.setTimeout(focusMark, 120);
+      // ── Ready: the ONE jump tail (Issue #5 — jumpToOffset owns the mode
+      // branch, target resolution, and the D4-07 settle guard); highlight
+      // jumps land the mark mid-viewport and focus it after settle. ──
+      const articleEl = articleRef.current;
+      jumpToOffset(article, position.start, {
+        mode: isPaginated ? "paginated" : "scrolling",
+        surface: surfaceRef.current,
+        blocks: articleEl ? queryBlocks(articleEl) : [],
+        scrollAlignment: "center",
+        onSettled: () => {
+          document.getElementById(`hl-${jumpHighlightId}`)?.focus();
+        },
+      });
 
       // Strip AFTER the jump commits.
       finish();
@@ -1719,12 +1711,13 @@ export function ArticleView({
               requestAnimationFrame(attemptPaginatedRestore);
               return;
             }
-            const pageIdx = fragmentContainingOffset(
-              pages,
-              loc.graphemeOffset,
-              article,
-            );
-            surface.turnToPage(pageIdx);
+            // Issue #5 — the ONE jump tail: offset → page via the module's
+            // fragmentContainingOffset resolution, then turnToPage.
+            jumpToOffset(article, loc.graphemeOffset, {
+              mode: "paginated",
+              surface,
+              blocks: [],
+            });
             // Plan 18-03: the passive marker replaces the retired banner —
             // gated on genuine restore-landing (one-shot per article).
             if (restorationMarkerArticleRef.current !== article) {
@@ -1746,25 +1739,17 @@ export function ArticleView({
           if (cancelled) return;
           const articleEl = articleRef.current;
           if (!articleEl) return;
-          // 260908-oht end-landing (Issue #2: the decision routes through
-          // readingPosition): a saved offset at (or past) the article
-          // total lands at the absolute document bottom so the first
-          // scroll-save re-pins total instead of un-finishing a finished
-          // article. Genuine restore-landing either way — the marker set
-          // below runs in BOTH branches.
-          if (landingForRestore(loc.graphemeOffset, endPinOffset(article)) === "end") {
-            window.scrollTo(0, document.documentElement.scrollHeight);
-          } else {
-            const blocks = queryBlocks(articleEl);
-            const target = findScrollTarget(article, blocks, loc.graphemeOffset);
-            if (target) {
-              // Silent restore — never behavior: "smooth". The global reduced-
-              // motion gate (app.css) sets scroll-behavior: auto so this is
-              // instant under reduced motion; the default elsewhere is also
-              // instant (no scroll-behavior: smooth declared anywhere).
-              target.scrollIntoView({ block: "start" });
-            }
-          }
+          // endLanding = the 260908-oht end-landing: a saved offset at (or
+          // past) the article total lands at the absolute document bottom so
+          // the first scroll-save re-pins total instead of un-finishing a
+          // finished article. Genuine restore-landing either way — the
+          // marker set below runs in BOTH branches.
+          jumpToOffset(article, loc.graphemeOffset, {
+            mode: "scrolling",
+            surface: null,
+            blocks: queryBlocks(articleEl),
+            endLanding: true,
+          });
           // Plan 18-03: the passive marker replaces the retired banner —
           // gated on genuine restore-landing (one-shot per article).
           if (restorationMarkerArticleRef.current !== article) {
@@ -1934,13 +1919,9 @@ export function ArticleView({
   /**
    * Phase 5 Plan 05-03 (D5-11 navigate-back): drawer entry → passage.
    *
-   * Closes the drawer, resolves the highlight's grapheme offset to its block
-   * via data-block-index, then:
-   *   - PAGINATED: fragmentContainingOffset(pages, offset) → turnToPage(pageIdx)
-   *     (the D4-10/D4-11 anchor machinery in reverse — reuses anchor.ts).
-   *   - SCROLLING: findScrollTarget(article, blocks, offset).scrollIntoView
-   *     (reusing Phase 2's findScrollTarget EXACTLY — do not fork).
-   * Then focuses the <mark> (D4-07 pattern — the reader navigated TO this
+   * Closes the drawer, resolves the highlight's grapheme offset, then jumps
+   * through jumpToOffset (Issue #5 — the ONE mode-aware tail) and focuses
+   * the <mark> through its D4-07 settle guard (the reader navigated TO this
    * highlight, so they expect to land on it).
    *
    * Ambiguous/orphan entries never call this (their jump button is disabled —
@@ -1957,37 +1938,15 @@ export function ArticleView({
       );
       if (!resolved || !resolved.resolvedPosition) return;
 
-      const offset = resolved.resolvedPosition.start;
-
-      if (isPaginated) {
-        // PAGINATED: resolve offset → page index via fragmentContainingOffset
-        // (anchor.ts — D4-10/D4-11 machinery in reverse), then turn to that
-        // page via the surface's turnToPage imperative handle.
-        const surface = surfaceRef.current;
-        const pages = surface?.getPages();
-        if (surface && pages && pages.length > 0) {
-          const pageIdx = fragmentContainingOffset(pages, offset, article);
-          surface.turnToPage(pageIdx);
-        }
-      } else {
-        // SCROLLING: findScrollTarget + scrollIntoView (reusing Phase 2 EXACTLY).
-        const blocks = queryBlocks(articleRef.current);
-        const target = findScrollTarget(article, blocks, offset);
-        target?.scrollIntoView({ block: "center" });
-      }
-
-      // Focus the <mark> after the turn/scroll commits (D4-07 pattern). The
-      // rAF defers so the browser completes the layout before we query the mark.
-      // Firefox quirk: scrollIntoView's async settle can race a single rAF
-      // (the mark is in the DOM + focusable, but the rAF fires before the
-      // scroll completes + the focus call doesn't land). A short setTimeout
-      // belt-and-suspenders re-focuses after firefox's scroll settle so the
-      // mark reclaims focus cross-engine.
-      const focusMark = () => {
-        document.getElementById(`hl-${highlightId}`)?.focus();
-      };
-      requestAnimationFrame(focusMark);
-      window.setTimeout(focusMark, 120);
+      jumpToOffset(article, resolved.resolvedPosition.start, {
+        mode: isPaginated ? "paginated" : "scrolling",
+        surface: surfaceRef.current,
+        blocks: queryBlocks(articleRef.current),
+        scrollAlignment: "center",
+        onSettled: () => {
+          document.getElementById(`hl-${highlightId}`)?.focus();
+        },
+      });
     },
     [article, isPaginated, onCloseDrawer],
   );
@@ -2020,24 +1979,19 @@ export function ArticleView({
   );
 
   /**
-   * Phase 18 Plan 18-02 (D18-03 + the D5-11 tail VERBATIM from
-   * handleNavigateBack above): close the panel through the ONE seam, then
-   * jump to the entry's canonical D-05 grapheme offset —
-   *   - PAGINATED: fragmentContainingOffset(pages, offset, article) →
-   *     surfaceRef.turnToPage(pageIdx) (anchor.ts machinery in reverse).
-   *   - SCROLLING: findScrollTarget(article, queryBlocks(el), offset) →
-   *     scrollIntoView({ block: "start" }) (the Phase 2 helper EXACTLY —
-   *     never a fork).
-   * Then focus the destination heading: resolve via [data-block-index] on
-   * the visible surface, set tabIndex -1, focus through the rAF + 120ms
-   * double-call (the D4-07 firefox-settle guard). The same entry lands on
-   * the same structural destination in BOTH modes because the currency is
-   * the canonical offset — never a page number, never DOM identity
-   * (ORNT-03). The Top entry (blockIndex -1, offset 0) scrolls to the
-   * article start / page 1 with focus on the article h1 (the D14-03
-   * articleH1Ref precedent). The hash router is NEVER touched — activations
-   * were intercepted in the panel (preventDefault; Pitfall 4), and this
-   * handler never assigns the hash (no re-parse, no remount).
+   * Phase 18 Plan 18-02 (D18-03 + the D5-11 tail via jumpToOffset — Issue
+   * #5's ONE mode-aware tail): close the panel through the ONE seam, then
+   * jump to the entry's canonical D-05 grapheme offset and focus the
+   * destination heading through the module's D4-07 settle guard (resolve via
+   * [data-block-index] on the visible surface, tabIndex -1, focus). The same
+   * entry lands on the same structural destination in BOTH modes because the
+   * currency is the canonical offset — never a page number, never DOM
+   * identity (ORNT-03). The Top entry (blockIndex -1, offset 0) is the one
+   * pure focus-sink tail: scroll-to-top / page 1 with focus on the article
+   * h1 (the D14-03 articleH1Ref precedent) through the exported settleFocus
+   * discipline. The hash router is NEVER touched — activations were
+   * intercepted in the panel (preventDefault; Pitfall 4), and this handler
+   * never assigns the hash (no re-parse, no remount).
    */
   const handleTocJump = useCallback(
     (entry: TocEntry) => {
@@ -2055,39 +2009,22 @@ export function ArticleView({
         } else {
           window.scrollTo({ top: 0 });
         }
-        const focusH1 = () => articleH1Ref.current?.focus();
-        requestAnimationFrame(focusH1);
-        window.setTimeout(focusH1, 120);
+        settleFocus(() => articleH1Ref.current?.focus());
         return;
       }
 
-      const offset = entry.offset;
-      if (isPaginated) {
-        const surface = surfaceRef.current;
-        const pages = surface?.getPages();
-        if (surface && pages && pages.length > 0) {
-          const pageIdx = fragmentContainingOffset(pages, offset, article);
-          surface.turnToPage(pageIdx);
-        }
-      } else {
-        if (articleRef.current) {
-          const blocks = queryBlocks(articleRef.current);
-          const target = findScrollTarget(article, blocks, offset);
-          target?.scrollIntoView({ block: "start" });
-        }
-      }
-
-      // Focus the destination heading after the turn/scroll commits (the
-      // D4-07 double-call guard — verbatim from handleNavigateBack).
-      const focusDestination = () => {
-        const el = resolveTocDestination(entry.blockIndex);
-        if (!el) return;
-        el.tabIndex = -1;
-        el.classList.add("toc-destination"); // the :focus-visible ring hook
-        el.focus();
-      };
-      requestAnimationFrame(focusDestination);
-      window.setTimeout(focusDestination, 120);
+      jumpToOffset(article, entry.offset, {
+        mode: isPaginated ? "paginated" : "scrolling",
+        surface: surfaceRef.current,
+        blocks: articleRef.current ? queryBlocks(articleRef.current) : [],
+        onSettled: () => {
+          const el = resolveTocDestination(entry.blockIndex);
+          if (!el) return;
+          el.tabIndex = -1;
+          el.classList.add("toc-destination"); // the :focus-visible ring hook
+          el.focus();
+        },
+      });
     },
     [article, isPaginated, resolveTocDestination],
   );
