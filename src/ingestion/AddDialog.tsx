@@ -45,84 +45,25 @@
 //     children; zero innerHTML (lint:no-danger unaffected).
 //   - T-16-07 (duplicate submission via mid-flight dismissal) → D16-10
 //     blocking above.
+//
+// Issue #4: the ingest → dedupe-refuse → atomic save POLICY (and the
+// pure asset/book attribution logic) moved out of this file into
+// ./addToLibrary — the service is the single home of D7-07 (it used to
+// appear once per submission arm) and the outcome union it returns is
+// what this dialog renders its copy from. This file keeps ONLY form
+// chrome, size validation, and the calm refusal copy mapping.
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import {
-  ingestUrl,
-  ingestHtml,
-  ingestMarkdown,
-  ingestPdf,
-  ingestEpub,
-  IngestionError,
-  type IngestionSuccess,
-} from "./IngestionClient";
-import { dexieLibrarySource } from "./LibrarySource";
-import { hasBook, saveBook } from "../persistence/booksStore";
-import type { BookAsset } from "../persistence/booksStore";
-import type { ValidatedAsset } from "./IngestionClient";
-import type { Block } from "../content/types";
 import { EPUB_MAX_BYTES, PDF_MAX_BYTES } from "./types";
-// Plan 16-02 Task 1 — the refusal-copy map + chunked base64 live in
-// ./ingestCopy; this dialog consumes the same exports the retired control did
-// (no fork — the byte-pinned DOC-06 catalog is load-bearing surface).
-import { mapReasonToCopy, bytesToBase64 } from "./ingestCopy";
+// Plan 16-02 Task 1 — the refusal-copy map lives in ./ingestCopy; this
+// dialog consumes the same export the retired control did (no fork — the
+// byte-pinned DOC-06 catalog is load-bearing surface).
+import { mapReasonToCopy } from "./ingestCopy";
+// Issue #4 — the ingest-and-persist policy service; ONE call per
+// submission arm.
+import { addToLibrary } from "./addToLibrary";
+import type { AddToLibraryOutcome } from "./addToLibrary";
 
 type IngestStatus = "idle" | "submitting" | "success" | "error";
-
-/**
- * assetRefBodiesInBlocks — collect the `asset:img-<12hex>` reference BODIES
- * (the scheme-stripped assetIds) from every figure in a block tree,
- * recursing through containers (blockquote children + list item content —
- * figures nest per the assetStage rewrite recursion). Phase 20 (20-04
- * Task 1): the book arm attributes envelope assets to their OWNING chapter
- * articles by walking each chapter's blocks — the envelope itself carries
- * no articleId, so the model's refs are the only attribution source
- * (D20-15 article-owned rows).
- */
-function assetRefBodiesInBlocks(blocks: readonly Block[]): string[] {
-  const ids: string[] = [];
-  const visit = (nodes: readonly Block[]) => {
-    for (const block of nodes) {
-      if (block.kind === "figure") {
-        if (block.src !== undefined && block.src.startsWith("asset:")) {
-          ids.push(block.src.slice("asset:".length));
-        }
-      } else if (block.kind === "blockquote") {
-        visit(block.children);
-      } else if (block.kind === "bulleted-list" || block.kind === "numbered-list") {
-        for (const item of block.items) {
-          visit(item.content);
-        }
-      }
-    }
-  };
-  visit(blocks);
-  return ids;
-}
-
-/**
- * bookAssetsForChapters — attribute validated envelope assets to chapter
- * articles, producing the flat BookAsset list saveBook persists (the
- * 20-03 contract). An asset referenced by TWO chapters produces TWO rows
- * (the [articleId+assetId] compound key makes rows article-owned — D20-15);
- * an envelope asset no chapter references is dropped (the attribution is
- * model-driven, never envelope-driven).
- */
-function bookAssetsForChapters(
-  chapters: readonly { id: string; blocks: readonly Block[] }[],
-  assets: readonly ValidatedAsset[],
-): BookAsset[] {
-  const byId = new Map(assets.map((asset) => [asset.assetId, asset]));
-  const out: BookAsset[] = [];
-  for (const chapter of chapters) {
-    for (const assetId of new Set(assetRefBodiesInBlocks(chapter.blocks))) {
-      const asset = byId.get(assetId);
-      if (asset) {
-        out.push({ articleId: chapter.id, ...asset });
-      }
-    }
-  }
-  return out;
-}
 
 /** The selected intake source (D16-05). Reset to "url" on every open. */
 export type AddDialogSource = "url" | "paste" | "file";
@@ -271,78 +212,96 @@ export function AddDialog({ open, onCancel, onBookAdded }: AddDialogProps) {
   }, [onCancel]);
 
   /**
-   * handleSubmit — the url/paste submission spine, carried verbatim from
-   * the original control's L161-197 with the D16-12 close-first adaptation. Every
-   * failure routes to a calm DOC-06 phrase via mapReasonToCopy; the
-   * D7-07 dedupe-refuse check runs has() BEFORE save (refusal-only —
-   * D16-09); URL/paste text is NEVER cleared by an error (D16-11).
+   * applyOutcome — render ONE service outcome (issue #4). Every refusal
+   * routes to a calm DOC-06 phrase via mapReasonToCopy (the dedupe-refuse
+   * arrives as reason "already-in-library" — D16-09/D7-07); the two
+   * success arms are the D16-12 close-first split: article closes then
+   * navigates to #/article/<id>, book closes then lands on the Library
+   * via onBookAdded (the skip disclosure composes from the outcome's
+   * skippedChapterCount and stays durable on the BookRow).
    */
-  async function handleSubmit(which: "url" | "paste") {
+  function applyOutcome(outcome: AddToLibraryOutcome) {
+    if (outcome.outcome === "refused") {
+      setStatus("error");
+      setMessage(mapReasonToCopy(outcome.reason));
+      return;
+    }
+    if (outcome.outcome === "saved-book") {
+      setStatus("success");
+      let successCopy = "Book added to your library.";
+      if (outcome.skippedChapterCount > 0) {
+        successCopy +=
+          outcome.skippedChapterCount === 1
+            ? " 1 chapter could not be read."
+            : ` ${outcome.skippedChapterCount} chapters could not be read.`;
+      }
+      setMessage(successCopy);
+      // D16-12 book arm: close FIRST, then land on the Library where the
+      // new book row now is.
+      onCancel();
+      onBookAdded();
+      return;
+    }
+    setStatus("success");
+    setMessage(null);
+    // D16-12 article arm: close the dialog FIRST (the parent's open-prop
+    // flip runs the close effect + focus restore while the trigger is
+    // still mounted), THEN navigate to the reader.
+    onCancel();
+    window.location.hash = `#/article/${outcome.articleId}`;
+  }
+
+  /**
+   * renderOutcome — applyOutcome guarded: a throw from a parent callback
+   * (onCancel / onBookAdded) must not become an unhandled rejection with
+   * the dialog wedged open; it surfaces as the calm catch-all copy, the
+   * same surface the pre-service arms' catch blocks gave it.
+   */
+  function renderOutcome(outcome: AddToLibraryOutcome) {
+    try {
+      applyOutcome(outcome);
+    } catch {
+      setStatus("error");
+      setMessage(mapReasonToCopy("server-error"));
+    }
+  }
+
+  /**
+   * runUrlPaste — the url/paste submission arm. One service call (issue
+   * #4): addToLibrary owns ingest → dedupe-refuse → atomic save; the
+   * outcome renders through renderOutcome. URL/paste text is NEVER cleared
+   * by an error (D16-11) — no pick reset on this arm.
+   */
+  async function runUrlPaste(which: "url" | "paste") {
     setStatus("submitting");
     setMessage("Fetching article…");
-    try {
-      const result = which === "url" ? await ingestUrl(urlValue) : await ingestHtml(htmlValue);
-
-      // D7-07 dedupe-refuse: check has() BEFORE save. If has returns
-      // true, surface "Already in your library." and refuse the re-ingest
-      // (no overwrite, no orphaned highlights, no "Open it" action).
-      const alreadyInLibrary = await dexieLibrarySource.has(result.article.id);
-      if (alreadyInLibrary) {
-        setStatus("error");
-        setMessage(mapReasonToCopy("already-in-library"));
-        return;
-      }
-
-      // Phase 20 (20-04 Task 1 — D20-04/D20-15): the article AND its
-      // validated envelope assets save together in ONE Dexie transaction
-      // (LibrarySource.save's atomic upsert). A saved article is always
-      // complete — refused figures never reached the envelope, and every
-      // accepted asset lands with its owning article or not at all.
-      await dexieLibrarySource.save(result.article, result.assets);
-      setStatus("success");
-      setMessage(null);
-      // D16-12 article arm: close the dialog FIRST (the parent's open-prop
-      // flip runs the close effect + focus restore while the trigger is
-      // still mounted), THEN navigate to the reader.
-      onCancel();
-      window.location.hash = `#/article/${result.article.id}`;
-    } catch (e) {
-      setStatus("error");
-      if (e instanceof IngestionError) {
-        setMessage(mapReasonToCopy(e.reason));
-      } else {
-        // Catch-all: any non-IngestionError throw surfaces as the generic
-        // server-error copy.
-        setMessage(mapReasonToCopy("server-error"));
-      }
-    }
+    const input =
+      which === "url"
+        ? ({ kind: "url", url: urlValue } as const)
+        : ({ kind: "paste", html: htmlValue } as const);
+    renderOutcome(await addToLibrary(input));
   }
 
   function handleUrlSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (status === "submitting" || urlValue.length === 0) return;
-    void handleSubmit("url");
+    void runUrlPaste("url");
   }
 
   function handlePasteSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (status === "submitting" || htmlValue.length === 0) return;
-    void handleSubmit("paste");
+    void runUrlPaste("paste");
   }
 
   /**
-   * handleFileSubmit — the file-upload arm, carried verbatim from
-   * the original control's L231-351 with the D16-12 close-first adaptation.
-   * Dispatch by extension: `.md` → ingestMarkdown (forwards file.name for
-   * the D8-17 title fallback); `.pdf` → binary read + chunked base64 →
-   * ingestPdf; `.epub` → binary read + chunked base64 → ingestEpub (the
-   * book path — book-level hasBook/saveBook instead of the single-article
-   * has/save); else → ingestHtml (title derived from content metadata).
-   *
-   * T-8-14 + T-11-02 + T-12-09: the extension-aware client-side cap
-   * refuses BEFORE any read (no network cost, no arrayBuffer
-   * materialization). G2: every terminal outcome routes through
-   * resetFilePick so retry = re-pick (D16-11).
+   * handleFileSubmit — the file-upload arm. The dialog keeps ONLY its
+   * form-chrome duty: the extension-aware client-side cap refuses BEFORE
+   * any read (T-8-14 + T-11-02 + T-12-09 — no network cost, no
+   * arrayBuffer materialization), then ONE service call (issue #4) owns
+   * the extension dispatch, read, ingest, dedupe-refuse, and atomic
+   * save. G2: every terminal outcome routes through resetFilePick so
+   * retry = re-pick (D16-11).
    */
   async function handleFileSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -376,102 +335,11 @@ export function AddDialog({ open, onCancel, onBookAdded }: AddDialogProps) {
 
     setStatus("submitting");
     setMessage("Reading file…");
-    try {
-      // Phase 12 (ING-05): the book arm. Binary read → chunked base64 →
-      // ingestEpub; the book ok-variant carries book + chapter articles +
-      // skippedCount. Book-level dedupe-refuse: hasBook(book.id) BEFORE
-      // saveBook (D7-07 at book level — re-uploading identical bytes
-      // produces the same content-hash book id). The save is ONE Dexie
-      // transaction (booksStore.saveBook).
-      if (isEpub) {
-        const bytes = new Uint8Array(await file.arrayBuffer());
-        const b64 = bytesToBase64(bytes);
-        const result = await ingestEpub(b64, file.name);
-
-        if (await hasBook(result.book.id)) {
-          setStatus("error");
-          setMessage(mapReasonToCopy("already-in-library"));
-          resetFilePick();
-          return;
-        }
-
-        // Phase 20 (20-04 Task 1 — D20-04/D20-15): the book arm threads
-        // the SAME validated assets into saveBook's one-transaction
-        // chapter upsert. The envelope carries no articleId, so each
-        // chapter's blocks attribute its owned rows (bookAssetsForChapters
-        // above). Zero chapter assets until 20-06's container extraction
-        // fills the book envelope — the wiring is complete NOW.
-        await saveBook(
-          result.book,
-          result.articles,
-          bookAssetsForChapters(result.articles, result.assets),
-        );
-        setStatus("success");
-        let successCopy = "Book added to your library.";
-        if (result.skippedCount > 0) {
-          successCopy +=
-            result.skippedCount === 1
-              ? " 1 chapter could not be read."
-              : ` ${result.skippedCount} chapters could not be read.`;
-        }
-        setMessage(successCopy);
-        // G2: the pick clears at every terminal outcome (retry = re-pick).
-        resetFilePick();
-        // D16-12 book arm: close FIRST, then land on the Library where the
-        // new book row now is (the D12-11 skip disclosure stays durable on
-        // the BookRow — no in-dialog copy needed).
-        onCancel();
-        onBookAdded();
-        return;
-      }
-
-      const isMarkdown = /\.md$/i.test(file.name);
-      let result: IngestionSuccess;
-      if (isMarkdown) {
-        result = await ingestMarkdown(await file.text(), file.name);
-      } else if (isPdf) {
-        // Binary read → chunked base64 → ingestPdf. Identical bytes
-        // produce a pdf-<hash> id server-side, so re-uploading the same
-        // PDF hits the D7-07 dedupe-refuse below (D11 id invariant).
-        const bytes = new Uint8Array(await file.arrayBuffer());
-        const b64 = bytesToBase64(bytes);
-        result = await ingestPdf(b64, file.name);
-      } else {
-        result = await ingestHtml(await file.text());
-      }
-
-      // D7-07 dedupe-refuse (identical to the url/paste paths).
-      const alreadyInLibrary = await dexieLibrarySource.has(result.article.id);
-      if (alreadyInLibrary) {
-        setStatus("error");
-        setMessage(mapReasonToCopy("already-in-library"));
-        resetFilePick();
-        return;
-      }
-
-      // Phase 20 (20-04 Task 1): the file arm mirrors the url/paste arm —
-      // validated envelope assets ride the article into the ONE Dexie
-      // save transaction (markdown/html uploads can carry figures).
-      await dexieLibrarySource.save(result.article, result.assets);
-      setStatus("success");
-      setMessage(null);
-      // Uniform reset contract (G2) — keeps every terminal outcome
-      // identical.
-      resetFilePick();
-      // D16-12 article arm: close FIRST, then navigate.
-      onCancel();
-      window.location.hash = `#/article/${result.article.id}`;
-    } catch (err) {
-      setStatus("error");
-      if (err instanceof IngestionError) {
-        setMessage(mapReasonToCopy(err.reason));
-      } else {
-        // Non-typed throw (file read, JSON parse, unexpected client bug) —
-        // surface as the generic server-error copy.
-        setMessage(mapReasonToCopy("server-error"));
-      }
-      resetFilePick();
-    }
+    const outcome = await addToLibrary({ kind: "file", file });
+    // Uniform reset contract (G2) — the pick clears at every terminal
+    // outcome of this arm.
+    resetFilePick();
+    renderOutcome(outcome);
   }
 
   // The dialog renders <form> elements with PREVENTED submits only — NO
