@@ -15,6 +15,10 @@
 //   5. chapter sub-rows render h3 headings (the book title stays h2 —
 //      heading order preserved inside the group);
 //   6. the book TagEntry is present in the expanded region.
+//
+// Issue #3 — BookRow consumes the ONE LibrarySnapshot (locations + the
+// latest-location fold + the grapheme-total fold); the render helper builds
+// one directly from the same schema-validated rows (no Dexie here).
 import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -34,6 +38,17 @@ import type {
   CanonicalArticle,
   LocationRecord,
 } from "../../../src/content/schema";
+import {
+  EMPTY_LIBRARY_SNAPSHOT,
+} from "../../../src/ingestion/library/librarySnapshot";
+import type {
+  LibrarySnapshot,
+} from "../../../src/ingestion/library/librarySnapshot";
+import {
+  graphemeClusters,
+  normalizeText,
+} from "../../../src/content/normalizeText";
+import { latestLocationByArticle } from "../../../src/reader/readingPosition";
 
 const BOOK_ID = "epub-book000111";
 
@@ -109,13 +124,37 @@ function sampleChapters(): CanonicalArticle[] {
   ];
 }
 
+/** The LibrarySnapshot BookRow consumes, built from the same rows (Issue #3):
+ * the totals fold + the latest-location fold derived exactly as the module
+ * derives them. */
+function snapshotFor(
+  chapters: CanonicalArticle[],
+  locations: LocationRecord[],
+): LibrarySnapshot {
+  const totalsByArticleId = new Map<string, number>();
+  for (const article of chapters) {
+    totalsByArticleId.set(
+      article.id,
+      graphemeClusters(normalizeText(article), article.lang).length,
+    );
+  }
+  return {
+    ...EMPTY_LIBRARY_SNAPSHOT,
+    articles: chapters,
+    chaptersByBook: new Map([[BOOK_ID, chapters]]),
+    locations,
+    latestLocationByArticleId: latestLocationByArticle(locations),
+    totalsByArticleId,
+  };
+}
+
 describe("BookRow — disclosure semantics (T-12-15 + D12-01)", () => {
   it("renders the chevron button collapsed with a matching aria-controls region", () => {
     render(
       <BookRow
         book={makeBook()}
         chapters={sampleChapters()}
-        locations={[]}
+        snapshot={snapshotFor(sampleChapters(), [])}
         onRemove={() => {}}
       />,
     );
@@ -137,7 +176,7 @@ describe("BookRow — disclosure semantics (T-12-15 + D12-01)", () => {
       <BookRow
         book={makeBook()}
         chapters={sampleChapters()}
-        locations={[]}
+        snapshot={snapshotFor(sampleChapters(), [])}
         onRemove={() => {}}
       />,
     );
@@ -161,7 +200,7 @@ describe("BookRow — disclosure semantics (T-12-15 + D12-01)", () => {
       <BookRow
         book={makeBook()}
         chapters={sampleChapters()}
-        locations={[]}
+        snapshot={snapshotFor(sampleChapters(), [])}
         onRemove={() => {}}
       />,
     );
@@ -187,7 +226,7 @@ describe("BookRow — resume targeting (D12-07)", () => {
       <BookRow
         book={book}
         chapters={sampleChapters()}
-        locations={locations}
+        snapshot={snapshotFor(sampleChapters(), locations)}
         onRemove={() => {}}
       />,
     );
@@ -202,7 +241,7 @@ describe("BookRow — resume targeting (D12-07)", () => {
       <BookRow
         book={makeBook()}
         chapters={sampleChapters()}
-        locations={[]}
+        snapshot={snapshotFor(sampleChapters(), [])}
         onRemove={() => {}}
       />,
     );
@@ -216,7 +255,7 @@ describe("BookRow — skip disclosure (D12-11)", () => {
       <BookRow
         book={makeBook({ skippedChapterCount: 2 })}
         chapters={sampleChapters()}
-        locations={[]}
+        snapshot={snapshotFor(sampleChapters(), [])}
         onRemove={() => {}}
       />,
     );
@@ -230,7 +269,7 @@ describe("BookRow — skip disclosure (D12-11)", () => {
       <BookRow
         book={makeBook({ skippedChapterCount: 1 })}
         chapters={sampleChapters()}
-        locations={[]}
+        snapshot={snapshotFor(sampleChapters(), [])}
         onRemove={() => {}}
       />,
     );
@@ -242,7 +281,7 @@ describe("BookRow — skip disclosure (D12-11)", () => {
       <BookRow
         book={makeBook()}
         chapters={sampleChapters()}
-        locations={[]}
+        snapshot={snapshotFor(sampleChapters(), [])}
         onRemove={() => {}}
       />,
     );
@@ -257,7 +296,7 @@ describe("BookRow — chapter sub-rows + tags (D12-01 + D12-04)", () => {
       <BookRow
         book={makeBook()}
         chapters={sampleChapters()}
-        locations={[]}
+        snapshot={snapshotFor(sampleChapters(), [])}
         onRemove={() => {}}
       />,
     );
@@ -285,7 +324,7 @@ describe("BookRow — chapter sub-rows + tags (D12-01 + D12-04)", () => {
       <BookRow
         book={makeBook({ tags: ["essays"] })}
         chapters={sampleChapters()}
-        locations={[]}
+        snapshot={snapshotFor(sampleChapters(), [])}
         onRemove={() => {}}
       />,
     );
@@ -309,7 +348,7 @@ describe("BookRow — chapter sub-rows + tags (D12-01 + D12-04)", () => {
       <BookRow
         book={makeBook()}
         chapters={chapters}
-        locations={[]}
+        snapshot={snapshotFor(chapters, [])}
         onRemove={() => {}}
       />,
     );

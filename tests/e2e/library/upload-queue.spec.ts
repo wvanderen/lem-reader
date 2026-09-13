@@ -13,7 +13,7 @@
 // header button, ADD-01). Book success now CLOSES the dialog (D16-12) —
 // the G2 reset assertions below read the always-mounted picker through
 // the closed dialog (attached DOM), and the success signal is the book
-// row appearing via refreshKey. Refusals keep the dialog OPEN (consecutive
+// row appearing via the snapshot invalidation (Issue #3). Refusals keep the dialog OPEN (consecutive
 // drives skip the trigger click — the helper is idempotent).
 //
 // Harness (cloned from tests/e2e/epub-intake.spec.ts + the library-suite
@@ -124,8 +124,8 @@ test("a completed book upload resets the picker without a page refresh", async (
 
   // The canonical 4-chapter book through the REAL pipeline (epub-intake
   // uploadEpub shape). Plan 16-03 (D16-12): book success CLOSES the
-  // dialog and the book row appears via refreshKey — the row IS the
-  // success signal now.
+  // dialog and the book row appears via the snapshot invalidation — the
+  // row IS the success signal now.
   await uploadEpub(page, "the-synthetic-book.epub", validBookEpub3());
   await expect(page.locator("li.book-row")).toBeVisible({ timeout: 15_000 });
 

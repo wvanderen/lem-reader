@@ -1,7 +1,5 @@
-import { useMemo } from "react";
 import type { CanonicalArticle } from "../../content/types";
 import type { LocationRecord } from "../../content/schema";
-import { normalizeText, graphemeClusters } from "../../content/normalizeText";
 import { ProgressHairline } from "../../reader/ProgressHairline";
 import { ReadingStateButton } from "./ReadingStateButton";
 import { SourceBadge } from "./SourceBadge";
@@ -17,6 +15,13 @@ interface LibraryRowProps {
    * when no location has been persisted for this article.
    */
   location?: LocationRecord;
+  /**
+   * The article's normalized-text grapheme total (Issue #3 — the ONE fold
+   * lives in the LibrarySnapshot module; callers read it from
+   * `snapshot.totalsByArticleId`, so this row never re-runs the
+   * Intl.Segmenter pass itself).
+   */
+  total: number;
   /**
    * Optional remove-trigger handler. When present, the row renders a quiet
    * trash-glyph button (D8-13). Plan 04 (RemoveConfirm) wires this; Plan 03
@@ -44,19 +49,13 @@ interface LibraryRowProps {
 export function LibraryRow({
   article,
   location,
+  total,
   onRemove,
   onEdit,
   onReadingStateChange,
   headingLevel = 2,
 }: LibraryRowProps) {
   const id = article.id;
-  // Compute the grapheme-total once per article (D-05 substrate). useMemo so
-  // the Intl.Segmenter pass doesn't re-run on every parent re-render (e.g.
-  // when the user types in the search box).
-  const total = useMemo(
-    () => graphemeClusters(normalizeText(article), article.lang).length,
-    [article],
-  );
   const ratio = location ? Math.min(1, location.graphemeOffset / total) : 0;
   // D14-20 — the finished decision routes through the ONE policy module
   // (readingState.ts); the ratio math above stays verbatim because the

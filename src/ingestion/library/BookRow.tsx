@@ -25,14 +25,14 @@
 // Chapter ordering is the planner's partial-import-tolerant resolution:
 // chapterArticleIds order first (rows missing from the record simply don't
 // render), then any live rows extra to the record appended in load order.
+//
+// Issue #3 — the row consumes the ONE LibrarySnapshot: per-chapter totals
+// read snapshot.totalsByArticleId (the ONE grapheme-total fold) and
+// per-chapter hairlines read snapshot.latestLocationByArticleId (the ONE
+// latest-location fold); the book-progress derivations fold over
+// snapshot.locations. No local fold copies remain.
 import { useMemo, useState } from "react";
-import type {
-  Book,
-  CanonicalArticle,
-  LocationRecord,
-} from "../../content/schema";
-import { normalizeText, graphemeClusters } from "../../content/normalizeText";
-import { latestLocationByArticle } from "../../reader/readingPosition";
+import type { Book, CanonicalArticle } from "../../content/schema";
 import { ProgressHairline } from "../../reader/ProgressHairline";
 import { TagEntry } from "../../reader/TagEntry";
 import { setBookTags } from "../../persistence/booksStore";
@@ -42,14 +42,16 @@ import {
 } from "./bookProgress";
 import { bookReadingState } from "./readingState";
 import { LibraryRow } from "./LibraryRow";
+import type { LibrarySnapshot } from "./librarySnapshot";
 
 interface BookRowProps {
   /** The Book record (its chapterArticleIds are the ordered TOC). */
   book: Book;
   /** The book's chapter articles (live rows, any order — BookRow orders). */
   chapters: CanonicalArticle[];
-  /** ALL persisted LocationRecords (the derivations fold to this book). */
-  locations: LocationRecord[];
+  /** The ONE library read model (Issue #3) — locations, the latest-location
+   * fold, and the grapheme-total fold this row's derivations consume. */
+  snapshot: LibrarySnapshot;
   /** Remove-book trigger — LibraryView routes it to BookRemoveConfirm. */
   onRemove: () => void;
 }
@@ -57,45 +59,24 @@ interface BookRowProps {
 export function BookRow({
   book,
   chapters,
-  locations,
+  snapshot,
   onRemove,
 }: BookRowProps) {
   const [open, setOpen] = useState(false);
 
-  // Per-chapter normalized-text totals (D-05 substrate — the same
-  // graphemeClusters(normalizeText(article)) computation LibraryRow runs,
-  // memoized once per chapters identity rather than per render).
-  const totalsById = useMemo(() => {
-    const totals = new Map<string, number>();
-    for (const article of chapters) {
-      totals.set(
-        article.id,
-        graphemeClusters(normalizeText(article), article.lang).length,
-      );
-    }
-    return totals;
-  }, [chapters]);
-
-  // Latest location per chapter (per-chapter sub-row hairlines) — the ONE
-  // latestLocationByArticle fold (Issue #2's readingPosition module; the
-  // savedAt-tie discipline lives there now, not in a local copy).
-  const latestByChapter = useMemo(
-    () => latestLocationByArticle(locations),
-    [locations],
-  );
-
   // D12-03 book progress + D12-07 resume target — pure derivations, zero
-  // new measurement (bookProgress.ts owns the algebra).
+  // new measurement (bookProgress.ts owns the algebra; the text-length
+  // lookup reads the snapshot's ONE totals fold).
   const progress = useMemo(
     () =>
-      deriveBookProgress(book, locations, (articleId) =>
-        totalsById.get(articleId),
+      deriveBookProgress(book, snapshot.locations, (articleId) =>
+        snapshot.totalsByArticleId.get(articleId),
       ),
-    [book, locations, totalsById],
+    [book, snapshot],
   );
   const resumeChapterId = useMemo(
-    () => resolveResumeChapterId(book, locations),
-    [book, locations],
+    () => resolveResumeChapterId(book, snapshot.locations),
+    [book, snapshot.locations],
   );
 
   // Partial-import-tolerant ordering: the book's declared TOC order first
@@ -119,8 +100,8 @@ export function BookRow({
   // (readingState.ts); the progress memo above stays untouched because
   // the hairline ratio still needs it.
   const isFinished =
-    bookReadingState(book, locations, (articleId) =>
-      totalsById.get(articleId),
+    bookReadingState(book, snapshot.locations, (articleId) =>
+      snapshot.totalsByArticleId.get(articleId),
     ) === "finished";
   const showHairline = progress > 0 && !isFinished;
   const chaptersRegionId = `chapters-${book.id}`;
@@ -179,7 +160,8 @@ export function BookRow({
                 key={chapter.id}
                 article={chapter}
                 headingLevel={3}
-                location={latestByChapter.get(chapter.id)}
+                location={snapshot.latestLocationByArticleId.get(chapter.id)}
+                total={snapshot.totalsByArticleId.get(chapter.id) ?? 0}
               />
             ))}
           </ul>

@@ -424,7 +424,7 @@ test.describe("SC#5 + LIB-06 — progress hairline + continue-reading strip + fi
   // Quick 260909-ahy — regression lock: marking a row read must NOT remount
   // the continue-reading strip. The data-flash-probe attribute is the
   // remount detector: React never writes it, so it can only survive the
-  // refreshKey reload if the section element is the SAME DOM node. A remount
+  // invalidation reload if the section element is the SAME DOM node. A remount
   // (the old key={refreshKey} mechanism, commit 109fb3d) would render a
   // fresh section WITHOUT the attribute — exactly the flash (collapse →
   // scroll jump → rebuild) this quick task fixes.
@@ -465,7 +465,7 @@ test.describe("SC#5 + LIB-06 — progress hairline + continue-reading strip + fi
     // the name never idles on the stale "Mark as read:" label.
     await expect(row.getByRole("button", { name: /^Mark as unread:/ })).toBeVisible();
 
-    // The Finished mark proves the refreshKey reload has landed (the
+    // The Finished mark proves the invalidation reload has landed (the
     // ordering gate for the probe assertion below).
     await expect(row.locator(".finished-mark")).toBeVisible();
 

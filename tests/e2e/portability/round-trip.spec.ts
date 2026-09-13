@@ -324,7 +324,7 @@ test("SC#4 books — a book travels machines with its chapters + highlight intac
     });
     await pageA.getByRole("button", { name: /add file/i }).click();
     // Plan 16-03 (D16-12): book success closes the dialog and the row
-    // appears via refreshKey — the durable success signal.
+    // appears via the snapshot invalidation — the durable success signal.
     await expect(pageA.locator("li.book-row")).toBeVisible({ timeout: 15_000 });
 
     // ── Machine A: read the saved chapters, highlight chapter 2 ───────────
@@ -658,7 +658,7 @@ test("SC#4 overrides — an edited title/author travels machines byte-equal insi
     await editDialog.getByRole("textbox", { name: /^Author$/ }).fill(A_RENAMED_AUTHOR);
     await editDialog.getByRole("button", { name: "Save" }).click();
     await expect(editDialog).not.toBeVisible();
-    // The row immediately re-derives on save (the 17-02 refreshKey).
+    // The row immediately re-derives on save (the 17-02 invalidation).
     await expect(pageA.locator(`#title-${OVERRIDE_RT_ARTICLE.id}`)).toHaveText(A_RENAMED_TITLE);
 
     // ── Machine A: export through the real UI ──────────────────────────────

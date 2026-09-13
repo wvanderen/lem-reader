@@ -190,7 +190,7 @@ export function EditMetadataDialog({
       await db.articles.put(row);
     } catch {
       // Even the save path defends itself: if the put throws, close calmly
-      // (the RemoveConfirm discipline) — the parent's refreshKey
+      // (the RemoveConfirm discipline) — the parent's snapshot
       // re-derivation shows the unchanged row; the reader can retry.
     }
     onSaved();
