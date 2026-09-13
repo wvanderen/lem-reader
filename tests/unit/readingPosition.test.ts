@@ -115,45 +115,47 @@ describe("FINISHED_THRESHOLD + isFinishedOffset — threshold boundary table", (
 // ─── 2. at-end in both reading modes ────────────────────────────────────────
 
 describe("atScrollBottom — scrolling-mode boundary table (viewport 800, scrollHeight 2000 → scrollMax 1200)", () => {
+  /** Build one ScrollGeometry observation (the clump the predicate consumes). */
+  const geometry = (scrollY: number, scrollHeight = 2000) => ({
+    scrollY,
+    viewportHeight: 800,
+    scrollHeight,
+  });
+
   it("the default tolerance is BOTTOM_EPSILON_PX = 4 (sub-pixel/rounding slack)", () => {
     expect(BOTTOM_EPSILON_PX).toBe(4);
   });
 
   it("exact bottom (scrollY 1200) → true", () => {
-    expect(atScrollBottom(1200, 800, 2000)).toBe(true);
+    expect(atScrollBottom(geometry(1200))).toBe(true);
   });
 
   it("within 4px above bottom (scrollY 1197 = scrollMax − 3) → true", () => {
-    expect(atScrollBottom(1197, 800, 2000)).toBe(true);
+    expect(atScrollBottom(geometry(1197))).toBe(true);
   });
 
   it("exactly at the epsilon edge (scrollY 1196 = scrollMax − 4) → true", () => {
-    expect(atScrollBottom(1196, 800, 2000)).toBe(true);
+    expect(atScrollBottom(geometry(1196))).toBe(true);
   });
 
   it("5px above bottom (scrollY 1195) → false", () => {
-    expect(atScrollBottom(1195, 800, 2000)).toBe(false);
+    expect(atScrollBottom(geometry(1195))).toBe(false);
   });
 
   it("top of a scrollable page (scrollY 0) → false", () => {
-    expect(atScrollBottom(0, 800, 2000)).toBe(false);
+    expect(atScrollBottom(geometry(0))).toBe(false);
   });
 
   it("non-scrollable article (scrollHeight === viewportHeight) → false (never passively finishes)", () => {
-    expect(atScrollBottom(0, 800, 800)).toBe(false);
+    expect(atScrollBottom(geometry(0, 800))).toBe(false);
   });
 
   it("non-scrollable article (scrollHeight < viewportHeight) → false", () => {
-    expect(atScrollBottom(0, 800, 700)).toBe(false);
+    expect(atScrollBottom(geometry(0, 700))).toBe(false);
   });
 
   it("rubber-band overshoot (scrollY > scrollMax) → true", () => {
-    expect(atScrollBottom(1210, 800, 2000)).toBe(true);
-  });
-
-  it("custom epsilonPx narrows the window (0 → exact bottom only)", () => {
-    expect(atScrollBottom(1200, 800, 2000, 0)).toBe(true);
-    expect(atScrollBottom(1199, 800, 2000, 0)).toBe(false);
+    expect(atScrollBottom(geometry(1210))).toBe(true);
   });
 });
 

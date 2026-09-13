@@ -76,7 +76,7 @@ import { fragmentContainingOffset } from "../pagination/anchor";
 // surface below). Inert at mount (Pitfall 8-5 — does NOT steal focus from
 // the article body).
 import { TagEntry } from "../reader/TagEntry";
-import { BackToLibrary, leaveArticleToLibrary } from "../reader/BackToLibrary";
+import { BackToLibrary } from "../reader/BackToLibrary";
 import { MarkReadAndClose } from "../reader/MarkReadAndClose";
 // Phase 18 Plan 18-02 (ORNT-01/03/04/05): the non-modal TOC panel + the
 // derived-entry type consumed by the mode-aware jump handler (the D5-11
@@ -699,14 +699,17 @@ export function ArticleView({
   // one of the four decision sites that call readingPosition). Persists
   // the ONE end-pin offset SYNCHRONOUSLY (saveLocationNow — the flush,
   // never the debounce: the unmount that follows the navigation cancels
-  // pending debounces and nulls pendingRef), then closes through the ONE
-  // shared leaveArticleToLibrary contract (identical to Back to library —
-  // Pitfall 7 deep-link safety).
+  // pending debounces and nulls pendingRef). The CLOSE is NOT here: the
+  // MarkReadAndClose component owns it through the ONE shared
+  // leaveArticleToLibrary contract (identical to Back to library —
+  // Pitfall 7 deep-link safety). Navigating from BOTH sides fired TWO
+  // history.back() calls per click and bounced the reader PAST the
+  // library to the pre-app entry (caught by the mark-read-and-close e2e;
+  // the RTL suite masked it — its onMarkRead is a stub).
   const handleMarkRead = useCallback(() => {
     if (!article) return;
     saveLocationNow(endPinOffset(article));
-    leaveArticleToLibrary(hasAppHistory);
-  }, [article, saveLocationNow, hasAppHistory]);
+  }, [article, saveLocationNow]);
 
   // Phase 4 Plan 04-04 (D4-09 + D4-10): the mode-toggle handler. Captures the
   // anchor SYNCHRONOUSLY before calling update() so the post-swap render can

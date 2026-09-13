@@ -515,14 +515,16 @@ test.describe("NAV-03 — library return-context restore matrix", () => {
       name: "Saved articles",
     });
     await expect(libraryH1).toBeVisible({ timeout: 10_000 });
+    // 12 corpus − 1 deleted + 1 starter fixture (the 13-06 realignment
+    // precedent — the starter library shrank `fixtures` to one article).
     await expect(
-      page.getByRole("link", { name: /^All \(18\)/ }),
+      page.getByRole("link", { name: /^All \(12\)/ }),
     ).toBeVisible({ timeout: 10_000 });
 
     // The truthful degrade: h1 focused with DEFAULT scroll (reset to
-    // top), the row is gone (18 rows — 12 corpus − 1 + 7 fixtures), and
-    // nothing false is focused or restored. No crash: the library loaded
-    // (the All count rendered) and every assertion below runs against it.
+    // top), the row is gone, and nothing false is focused or restored.
+    // No crash: the library loaded (the All count rendered) and every
+    // assertion below runs against it.
     await expect(
       page.locator('.library-list a[href="#/article/lr-restore-a00"]'),
     ).toHaveCount(0);
@@ -536,7 +538,7 @@ test.describe("NAV-03 — library return-context restore matrix", () => {
     await seedCorpus(page);
     await openView(page, "#/");
 
-    // Deep capture: scroll to the 19-row document bottom, then launch the
+    // Deep capture: scroll to the 13-row document bottom, then launch the
     // LAST row (a bundled fixture row — fixtures render after Dexie rows,
     // and they survive the corpus deletion below while staying last).
     await scrollToOffset(page, 1_000_000);
@@ -546,12 +548,17 @@ test.describe("NAV-03 — library return-context restore matrix", () => {
       page.getByRole("heading", { level: 1 }),
     ).not.toHaveText("Saved articles", { timeout: 10_000 });
 
-    // While in Reader, delete EVERY corpus row (the launched fixture row
-    // stays — the row-found path runs; a row-gone h1 reset would zero
-    // scrollY and this clamp case would assert nothing).
+    // While in Reader, delete the FIRST HALF of the corpus rows (the
+    // launched starter-fixture row stays — the row-found path runs; a
+    // row-gone h1 reset would zero scrollY and this clamp case would
+    // assert nothing). Starter-library realignment: the bundled library
+    // is ONE article now, so a FULL corpus deletion would leave a
+    // non-overflowing list whose clamp is 0 — half the corpus (6 rows +
+    // the fixture) keeps the shrunk document overflowing so the
+    // clamp-not-reset contract stays meaningful.
     await deleteArticleRows(
       page,
-      CORPUS.map((a) => a.id),
+      CORPUS.slice(0, 6).map((a) => a.id),
     );
 
     await page.getByRole("button", { name: "Back to library" }).click();
@@ -570,7 +577,8 @@ test.describe("NAV-03 — library return-context restore matrix", () => {
       page.locator(`.library-list a[href="${launchHref}"]`),
     ).toBeFocused();
 
-    // Short list (7 fixture rows), captured offset overshoots it → the
+    // Short list (7 rows — 6 surviving corpus rows + the starter
+    // fixture), captured offset overshoots it → the
     // restore CLAMPS to the new bottom: within tolerance of the live
     // maxScroll AND > 0 (clamped, not reset — the row stays visible at
     // the bottom, so preventScroll keeps the clamp authoritative).

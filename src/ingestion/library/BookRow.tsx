@@ -32,6 +32,7 @@ import type {
   LocationRecord,
 } from "../../content/schema";
 import { normalizeText, graphemeClusters } from "../../content/normalizeText";
+import { latestLocationByArticle } from "../../reader/readingPosition";
 import { ProgressHairline } from "../../reader/ProgressHairline";
 import { TagEntry } from "../../reader/TagEntry";
 import { setBookTags } from "../../persistence/booksStore";
@@ -75,17 +76,13 @@ export function BookRow({
     return totals;
   }, [chapters]);
 
-  // Latest location per chapter (per-chapter sub-row hairlines).
-  const latestByChapter = useMemo(() => {
-    const latest = new Map<string, LocationRecord>();
-    for (const loc of locations) {
-      const prev = latest.get(loc.articleId);
-      if (!prev || loc.savedAt > prev.savedAt) {
-        latest.set(loc.articleId, loc);
-      }
-    }
-    return latest;
-  }, [locations]);
+  // Latest location per chapter (per-chapter sub-row hairlines) — the ONE
+  // latestLocationByArticle fold (Issue #2's readingPosition module; the
+  // savedAt-tie discipline lives there now, not in a local copy).
+  const latestByChapter = useMemo(
+    () => latestLocationByArticle(locations),
+    [locations],
+  );
 
   // D12-03 book progress + D12-07 resume target — pure derivations, zero
   // new measurement (bookProgress.ts owns the algebra).

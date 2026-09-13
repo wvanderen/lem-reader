@@ -62,6 +62,7 @@ import { ContinueReadingStrip } from "./ContinueReadingStrip";
 import { filterLibrary, filterBooks } from "./libraryFilter";
 import { effectiveTitle } from "./effectiveMetadata";
 import { articleReadingState, bookReadingState, countByState } from "./readingState";
+import { latestLocationByArticle } from "../../reader/readingPosition";
 import type { LibraryViewName } from "../../App";
 import { setDocumentTitle } from "./pageMeta";
 import { loadAllLocations, setArticleReadState } from "../../persistence/locationStore";
@@ -410,14 +411,10 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
     Promise.all([listArticles(), loadAllLocations(), loadAllTags(), listBooks()])
       .then(([articles, locations, tags, booksResult]) => {
         if (cancelled) return;
-        // Index the latest location per articleId (max savedAt — D8-10).
-        const latest = new Map<string, LocationRecord>();
-        for (const loc of locations) {
-          const prev = latest.get(loc.articleId);
-          if (!prev || loc.savedAt > prev.savedAt) {
-            latest.set(loc.articleId, loc);
-          }
-        }
+        // Index the latest location per articleId (max savedAt — D8-10) —
+        // the ONE latestLocationByArticle fold (Issue #2's readingPosition
+        // module; the savedAt-tie discipline lives there now).
+        const latest = latestLocationByArticle(locations);
         setItems(articles);
         setAllLocations(locations);
         setLocationsByArticle(latest);

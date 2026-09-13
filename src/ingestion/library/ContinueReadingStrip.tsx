@@ -45,14 +45,18 @@
 // Issue #2: FINISHED_THRESHOLD now lives in ../../reader/readingPosition
 // (the ONE pure completion-policy home — it previously lived here, a UI
 // component that policy modules imported upward). The strip's membership
-// still flows through readingState.ts, which consumes it there.
+// still flows through readingState.ts, which consumes it there, and the
+// latest-savedAt fold below is readingPosition's latestLocationByArticle —
+// the ONE fold instead of a local copy that could drift from the tie
+// discipline it feeds.
 import { useEffect, useState } from "react";
 import type { CanonicalArticle } from "../../content/types";
-import type { Book, LocationRecord } from "../../content/schema";
+import type { Book } from "../../content/schema";
 import { normalizeText, graphemeClusters } from "../../content/normalizeText";
 import { listArticles } from "../../content/repository";
 import { loadAllLocations } from "../../persistence/locationStore";
 import { listBooks } from "../../persistence/booksStore";
+import { latestLocationByArticle } from "../../reader/readingPosition";
 import { ProgressHairline } from "../../reader/ProgressHairline";
 import { deriveBookProgress, resolveResumeChapterId, chapterOrdinal } from "./bookProgress";
 import { articleReadingState, bookReadingState } from "./readingState";
@@ -115,13 +119,10 @@ export function ContinueReadingStrip({
         if (cancelled) return;
         // Index the latest location per articleId (max savedAt per articleId —
         // D8-10 "recently-read = opened"; savedAt is updated on every open).
-        const latestByArticle = new Map<string, LocationRecord>();
-        for (const loc of locations) {
-          const prev = latestByArticle.get(loc.articleId);
-          if (!prev || loc.savedAt > prev.savedAt) {
-            latestByArticle.set(loc.articleId, loc);
-          }
-        }
+        // Issue #2 convergence: the fold is the ONE latestLocationByArticle
+        // in ../../reader/readingPosition (tie discipline pinned beside the
+        // threshold it feeds).
+        const latestByArticle = latestLocationByArticle(locations);
         // Per-article normalized-text totals — computed ONCE for both the
         // article ratios and the book chapters-finished derivations (the
         // same D-05 substrate LibraryRow/BookRow consume).

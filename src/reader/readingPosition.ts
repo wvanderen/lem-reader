@@ -72,22 +72,33 @@ export function isFinishedOffset(offset: number, total: number): boolean {
 export const BOTTOM_EPSILON_PX = 4;
 
 /**
+ * ScrollGeometry — ONE viewport-in-document observation: the three numbers
+ * that always travel together (where the reader is, how tall the viewport
+ * is, how tall the whole document is). The Data-Clump fix: the at-end
+ * predicate consumes one geometry object, never a loose triple.
+ */
+export interface ScrollGeometry {
+  /** window.scrollY — the reader's current y position. */
+  scrollY: number;
+  /** window.innerHeight — the visible viewport height. */
+  viewportHeight: number;
+  /** document.documentElement.scrollHeight — the full document height. */
+  scrollHeight: number;
+}
+
+/**
  * atScrollBottom — the SCROLLING-mode at-end predicate (moved verbatim
  * from useScrollSave.ts; its boundary table moved with it into
  * reading-position.test.ts). True when the document is scrolled to (or
- * within `epsilonPx` of) its absolute bottom — and always false for a
- * non-scrollable document (scrollHeight <= viewportHeight), which must
- * never passively finish.
+ * within BOTTOM_EPSILON_PX of) its absolute bottom — and always false for
+ * a non-scrollable document (scrollHeight <= viewportHeight), which must
+ * never passively finish. The tolerance is the module-owned constant —
+ * callers never supply it.
  */
-export function atScrollBottom(
-  scrollY: number,
-  viewportHeight: number,
-  scrollHeight: number,
-  epsilonPx: number = BOTTOM_EPSILON_PX,
-): boolean {
-  const scrollMax = scrollHeight - viewportHeight;
+export function atScrollBottom(geometry: ScrollGeometry): boolean {
+  const scrollMax = geometry.scrollHeight - geometry.viewportHeight;
   if (scrollMax <= 0) return false;
-  return scrollY >= scrollMax - epsilonPx;
+  return geometry.scrollY >= scrollMax - BOTTOM_EPSILON_PX;
 }
 
 /**
@@ -144,10 +155,11 @@ export function landingForRestore(
 
 /**
  * latestLocationByArticle — index the max-savedAt LocationRecord per
- * articleId (the D8-10 fold, moved verbatim from bookProgress.ts;
- * identical comparison discipline to the strip + LibraryView folds —
- * ISO-8601 strings from Date.prototype.toISOString() compare correctly
- * lexicographically). On a savedAt TIE the first row in iteration order
+ * articleId (the D8-10 fold, moved verbatim from bookProgress.ts; the
+ * strip / LibraryView / BookRow folds all CALL this function now — Issue
+ * #2 convergence, one fold instead of four drift-prone copies). ISO-8601
+ * strings from Date.prototype.toISOString() compare correctly
+ * lexicographically. On a savedAt TIE the first row in iteration order
  * wins (strict > keeps the incumbent) — the discipline the
  * reading-position truth table pins. LocationRecords are keyed
  * [articleId+revision], so an article read across revisions carries
