@@ -22,14 +22,14 @@
 //     can never read finished — deriveBookProgress's own denominator
 //     discipline keeps it honestly in-progress.
 //
-// FINISHED_THRESHOLD is imported from ./ContinueReadingStrip (the exported
-// single source of truth — never fork the constant; any numeric threshold
-// literal in this file would be a fork of D8-12). The readingState ↔ strip
-// import cycle is the exact bookProgress ↔ strip precedent already
-// shipping (importing a constant is side-effect free — see bookProgress.ts
-// header); do NOT restructure it.
+// FINISHED_THRESHOLD + the finished predicate (isFinishedOffset) come
+// from ../../reader/readingPosition — Issue #2's ONE pure home for the
+// completion policy (the former upward import from ./ContinueReadingStrip
+// is retired; a policy module never imports from a UI component). The
+// isFinishedOffset expression is the VERBATIM Math.min(1, offset/total)
+// ratio this module always applied — byte-stable by construction.
 import type { Book, LocationRecord } from "../../content/schema";
-import { FINISHED_THRESHOLD } from "./ContinueReadingStrip";
+import { isFinishedOffset } from "../../reader/readingPosition";
 import { deriveBookProgress, resolveResumeChapterId } from "./bookProgress";
 
 /** The library reading-state union (D14-18/D14-19 — the LIB-07 vocabulary). */
@@ -54,8 +54,9 @@ export function articleReadingState(
   total: number,
 ): ReadingState {
   if (!location) return "unread";
-  const ratio = Math.min(1, location.graphemeOffset / total);
-  return ratio >= FINISHED_THRESHOLD ? "finished" : "in-progress";
+  return isFinishedOffset(location.graphemeOffset, total)
+    ? "finished"
+    : "in-progress";
 }
 
 /**

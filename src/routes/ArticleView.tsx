@@ -38,7 +38,8 @@ import { PageTurnControls, isFormField } from "../reader/PageTurnControls";
 import { ProgressHairline } from "../reader/ProgressHairline";
 import { SectionAnnouncer } from "../reader/SectionAnnouncer";
 import { blockGraphemeLength } from "../pagination/anchor";
-import { BLOCK_SEPARATOR, graphemeLength } from "../content/normalizeText";
+import { endPinOffset, landingForRestore } from "../reader/readingPosition";
+import { BLOCK_SEPARATOR } from "../content/normalizeText";
 // Phase 18 Plan 18-03 (ORNT-06, D18-05/06): the passive transient
 // restoration marker replaces the retired ResumeBanner — the banner's
 // announce discipline survives verbatim INSIDE the marker.
@@ -694,15 +695,16 @@ export function ArticleView({
     // without changing this callback's identity.
   }, [scheduleLocationSave]);
 
-  // 260908-oht: the explicit end-of-article completion gesture. Persists
-  // offset = total SYNCHRONOUSLY (saveLocationNow — the flush, never the
-  // debounce: the unmount that follows the navigation cancels pending
-  // debounces and nulls pendingRef), then closes through the ONE shared
-  // leaveArticleToLibrary contract (identical to Back to library — Pitfall
-  // 7 deep-link safety).
+  // 260908-oht: the explicit end-of-article completion gesture (Issue #2:
+  // one of the four decision sites that call readingPosition). Persists
+  // the ONE end-pin offset SYNCHRONOUSLY (saveLocationNow — the flush,
+  // never the debounce: the unmount that follows the navigation cancels
+  // pending debounces and nulls pendingRef), then closes through the ONE
+  // shared leaveArticleToLibrary contract (identical to Back to library —
+  // Pitfall 7 deep-link safety).
   const handleMarkRead = useCallback(() => {
     if (!article) return;
-    saveLocationNow(graphemeLength(article));
+    saveLocationNow(endPinOffset(article));
     leaveArticleToLibrary(hasAppHistory);
   }, [article, saveLocationNow, hasAppHistory]);
 
@@ -1184,10 +1186,11 @@ export function ArticleView({
       if (swap.offset > 0 && article && articleRef.current) {
         const rafId = requestAnimationFrame(() => {
           if (!articleRef.current || !article) return;
-          // 260908-oht end-landing: a captured offset at the article total
-          // (the final-page pin) scrolls to the absolute document bottom so
-          // the first scroll-save re-pins total instead of un-finishing.
-          if (swap.offset >= graphemeLength(article)) {
+          // 260908-oht end-landing (Issue #2: the decision routes through
+          // readingPosition): a captured offset at the article total (the
+          // final-page pin) lands at the absolute document bottom so the
+          // first scroll-save re-pins total instead of un-finishing.
+          if (landingForRestore(swap.offset, endPinOffset(article)) === "end") {
             window.scrollTo(0, document.documentElement.scrollHeight);
             return;
           }
@@ -1740,12 +1743,13 @@ export function ArticleView({
           if (cancelled) return;
           const articleEl = articleRef.current;
           if (!articleEl) return;
-          // 260908-oht end-landing: a saved offset at (or past) the article
+          // 260908-oht end-landing (Issue #2: the decision routes through
+          // readingPosition): a saved offset at (or past) the article
           // total lands at the absolute document bottom so the first
           // scroll-save re-pins total instead of un-finishing a finished
           // article. Genuine restore-landing either way — the marker set
           // below runs in BOTH branches.
-          if (loc.graphemeOffset >= graphemeLength(article)) {
+          if (landingForRestore(loc.graphemeOffset, endPinOffset(article)) === "end") {
             window.scrollTo(0, document.documentElement.scrollHeight);
           } else {
             const blocks = queryBlocks(articleEl);

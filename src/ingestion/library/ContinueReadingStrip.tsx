@@ -42,8 +42,10 @@
 // began at entries null and unmounted the whole section until the async
 // reload re-derived it (content below jumped up, then rebuilt).
 //
-// `FINISHED_THRESHOLD = 0.98` (RESEARCH §Pattern 4 L498) is EXPORTED so unit
-// + e2e tests can reference the same constant (not a magic number).
+// Issue #2: FINISHED_THRESHOLD now lives in ../../reader/readingPosition
+// (the ONE pure completion-policy home — it previously lived here, a UI
+// component that policy modules imported upward). The strip's membership
+// still flows through readingState.ts, which consumes it there.
 import { useEffect, useState } from "react";
 import type { CanonicalArticle } from "../../content/types";
 import type { Book, LocationRecord } from "../../content/schema";
@@ -56,15 +58,6 @@ import { deriveBookProgress, resolveResumeChapterId, chapterOrdinal } from "./bo
 import { articleReadingState, bookReadingState } from "./readingState";
 import { ReadingStateButton } from "./ReadingStateButton";
 import { effectiveTitle, effectiveAuthor } from "./effectiveMetadata";
-
-/**
- * FINISHED_THRESHOLD — D8-12 + RESEARCH §Pattern 4 L498 recommendation. At or
- * above this ratio the article is "Finished": it leaves the continue-reading
- * strip and shows the filled-hairline + "Finished" mark in the main list.
- * Exported so tests + bookProgress.ts can reference the same value without
- * forking the constant.
- */
-export const FINISHED_THRESHOLD = 0.98;
 
 /** The cap on continue-reading cards (D8-09 — calm lower end). */
 const CONTINUE_READING_CAP = 3;

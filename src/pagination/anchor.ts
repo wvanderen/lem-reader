@@ -25,8 +25,8 @@ import {
   articleGraphemeIndex,
   blockNormalizedText,
   graphemeClusters,
-  graphemeLength,
 } from "../content/normalizeText";
+import { endPinOffset, isFinalPage } from "../reader/readingPosition";
 import type { PageFragment } from "./types";
 
 /**
@@ -125,10 +125,10 @@ export function fragmentContainingOffset(
 /**
  * The committed-page anchor: the anchor a reader persists while ON page
  * `pageIndex` — pageStartGlobalOffset, except the LAST page of a MULTI-page
- * set pins to graphemeLength(article) so a fully-turned article reads
- * finished (260908-oht). A one-page set keeps anchor 0 (POLISH-02
- * open-reads-0 boundary). Returns 0 for an empty pages array or an
- * out-of-range index (defensive).
+ * set pins to the end-pin (endPinOffset — Issue #2's readingPosition
+ * module) so a fully-turned article reads finished (260908-oht). A one-page
+ * set keeps anchor 0 (POLISH-02 open-reads-0 boundary). Returns 0 for an
+ * empty pages array or an out-of-range index (defensive).
  */
 export function pageAnchorOffset(
   article: CanonicalArticle,
@@ -137,8 +137,8 @@ export function pageAnchorOffset(
 ): number {
   if (pages.length === 0) return 0;
   if (pageIndex < 0 || pageIndex >= pages.length) return 0;
-  if (pageIndex === pages.length - 1 && pages.length > 1) {
-    return graphemeLength(article);
+  if (isFinalPage(pageIndex, pages.length)) {
+    return endPinOffset(article);
   }
   return pageStartGlobalOffset(article, pages[pageIndex]!);
 }

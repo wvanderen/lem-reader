@@ -26,8 +26,8 @@
 import { useCallback, useEffect, useRef } from "react";
 import type { CanonicalArticle } from "../content/types";
 import type { LocationRecord } from "../content/schema";
-import { graphemeLength } from "../content/normalizeText";
 import { computeTopVisibleOffset } from "./restoreLocation";
+import { atScrollBottom, endPinOffset } from "./readingPosition";
 import { saveLocation } from "../persistence/locationStore";
 import { classifyStorageError } from "../persistence/errors";
 
@@ -66,27 +66,6 @@ export interface UseScrollSaveReturn {
  * header line. Mirrors SectionAnnouncer's HEADER_PX.
  */
 const HEADER_PX = 48;
-
-/** Scroll-bottom pin tolerance (260908-oht): within this many CSS px of the
- * document bottom counts as "reached the end" (sub-pixel/rounding slack). */
-const BOTTOM_EPSILON_PX = 4;
-
-/**
- * Pure geometry predicate (260908-oht passive completion): true when the
- * document is scrolled to (or within `epsilonPx` of) its absolute bottom —
- * and always false for a non-scrollable document (scrollHeight <=
- * viewportHeight), which must never passively finish.
- */
-export function atScrollBottom(
-  scrollY: number,
-  viewportHeight: number,
-  scrollHeight: number,
-  epsilonPx: number = BOTTOM_EPSILON_PX,
-): boolean {
-  const scrollMax = scrollHeight - viewportHeight;
-  if (scrollMax <= 0) return false;
-  return scrollY >= scrollMax - epsilonPx;
-}
 
 interface UseScrollSaveOptions {
   /**
@@ -250,10 +229,11 @@ export function useScrollSave(
     if (!article) return; // loading state — no scroll listener
     const onScroll = () => {
       // 260908-oht scroll-bottom pin: at (or within 4px of) the document
-      // bottom, persist graphemeLength(article) so a fully-read article
-      // crosses the FINISHED_THRESHOLD — the top-block START offset
-      // computeOffset() reports there stays below 0.98 whenever the final
-      // block exceeds 2% of the article.
+      // bottom, persist the ONE end-pin (endPinOffset — Issue #2's
+      // readingPosition module) so a fully-read article crosses the
+      // FINISHED_THRESHOLD — the top-block START offset computeOffset()
+      // reports there stays below 0.98 whenever the final block exceeds
+      // 2% of the article.
       const currentArticle = articleRef.current;
       if (
         currentArticle !== null &&
@@ -263,7 +243,7 @@ export function useScrollSave(
           document.documentElement.scrollHeight,
         )
       ) {
-        scheduleSaveAtOffset(graphemeLength(currentArticle));
+        scheduleSaveAtOffset(endPinOffset(currentArticle));
         return;
       }
       scheduleSaveAtOffset(computeOffset());

@@ -6,11 +6,12 @@
 // Dexie queries of its own — components own the reads (the store-seam
 // discipline), this module owns the algebra.
 //
-// FINISHED_THRESHOLD is imported from ./ContinueReadingStrip (the exported
-// single source of truth — never fork the constant). This module lives
-// BESIDE the strip precisely to avoid a persistence→ingestion cycle; the
-// transitive module load constructs the Dexie instance lazily (no open, no
-// query — importing a constant is side-effect free).
+// FINISHED_THRESHOLD + the latest-savedAt fold (latestLocationByArticle)
+// come from ../../reader/readingPosition — Issue #2's ONE pure home for
+// the completion policy (the former upward import from
+// ./ContinueReadingStrip is retired; a policy module never imports from a
+// UI component). The fold moved there verbatim so the savedAt-tie
+// discipline lives beside the threshold it feeds.
 //
 // Contracts (12-05-PLAN.md §must_haves truths):
 //   - deriveBookProgress (D12-03): chapters-finished ratio — count(chapter
@@ -26,32 +27,17 @@
 //     chapterArticleIds — the "Chapter N" source; callers render "of M" with
 //     chapterArticleIds.length.
 //
-// The latest-per-article fold mirrors ContinueReadingStrip.tsx L72-78 /
-// LibraryView.tsx L78-84 exactly (max savedAt per articleId — D8-10
-// "recently-read = opened"). LocationRecords are keyed [articleId+revision],
-// so a chapter read across revisions carries several rows; the latest-savedAt
-// row is the live truth for BOTH the finished check and the resume pick.
+// The latest-per-article fold (now readingPosition's
+// latestLocationByArticle) mirrors ContinueReadingStrip.tsx / LibraryView
+// .tsx exactly (max savedAt per articleId — D8-10 "recently-read =
+// opened"). LocationRecords are keyed [articleId+revision], so a chapter
+// read across revisions carries several rows; the latest-savedAt row is
+// the live truth for BOTH the finished check and the resume pick.
 import type { Book, LocationRecord } from "../../content/schema";
-import { FINISHED_THRESHOLD } from "./ContinueReadingStrip";
-
-/**
- * latestLocationByArticle — index the max-savedAt LocationRecord per
- * articleId (the D8-10 fold; identical comparison discipline to the strip +
- * LibraryView folds — ISO-8601 strings from Date.prototype.toISOString()
- * compare correctly lexicographically).
- */
-export function latestLocationByArticle(
-  locations: LocationRecord[],
-): Map<string, LocationRecord> {
-  const latest = new Map<string, LocationRecord>();
-  for (const loc of locations) {
-    const prev = latest.get(loc.articleId);
-    if (!prev || loc.savedAt > prev.savedAt) {
-      latest.set(loc.articleId, loc);
-    }
-  }
-  return latest;
-}
+import {
+  FINISHED_THRESHOLD,
+  latestLocationByArticle,
+} from "../../reader/readingPosition";
 
 /**
  * deriveBookProgress (D12-03) — chapters-finished ratio in [0, 1].
