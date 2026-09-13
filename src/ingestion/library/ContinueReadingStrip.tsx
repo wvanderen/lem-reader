@@ -35,33 +35,28 @@
 // !== "in-progress") — behavior identical to the old ratio gates; the
 // surface, copy, and DOM are untouched (Phase 16 owns the redesign).
 //
-// Quick 260909-ahy — the strip re-derives via the refreshKey PROP as an
-// effect dep (stale-while-revalidate): previously-derived entries keep
-// rendering while the reload is in flight. The previous parent-side
-// key-remount (commit 109fb3d) flashed because the remounted instance
-// began at entries null and unmounted the whole section until the async
-// reload re-derived it (content below jumped up, then rebuilt).
+// Quick 260909-ahy — the strip used to re-derive via its own whole-library
+// load keyed on a refreshKey prop (stale-while-revalidate: previously-
+// derived entries kept rendering while the reload was in flight).
 //
-// Issue #2: FINISHED_THRESHOLD now lives in ../../reader/readingPosition
-// (the ONE pure completion-policy home — it previously lived here, a UI
-// component that policy modules imported upward). The strip's membership
-// still flows through readingState.ts, which consumes it there, and the
-// latest-savedAt fold below is readingPosition's latestLocationByArticle —
-// the ONE fold instead of a local copy that could drift from the tie
-// discipline it feeds.
-import { useEffect, useState } from "react";
+// Issue #3 — that duplicate load is GONE. The strip is now a pure
+// derivation over the ONE LibrarySnapshot (passed down from LibraryView's
+// useLibrarySnapshot mount): the entries memo recomputes only when the
+// snapshot identity changes, so an invalidation reload keeps the stale
+// entries mounted until the fresh snapshot lands — the same
+// stale-while-revalidate behavior, with the fold copies (latest-location,
+// grapheme totals) deleted behind the module. The strip renders null while
+// not ready (initial load or load failure — the fail-quiet spare-chrome
+// discipline) or when the unfinished set is empty.
+import { useMemo } from "react";
 import type { CanonicalArticle } from "../../content/types";
 import type { Book } from "../../content/schema";
-import { normalizeText, graphemeClusters } from "../../content/normalizeText";
-import { listArticles } from "../../content/repository";
-import { loadAllLocations } from "../../persistence/locationStore";
-import { listBooks } from "../../persistence/booksStore";
-import { latestLocationByArticle } from "../../reader/readingPosition";
 import { ProgressHairline } from "../../reader/ProgressHairline";
 import { deriveBookProgress, resolveResumeChapterId, chapterOrdinal } from "./bookProgress";
 import { articleReadingState, bookReadingState } from "./readingState";
 import { ReadingStateButton } from "./ReadingStateButton";
 import { effectiveTitle, effectiveAuthor } from "./effectiveMetadata";
+import type { LibrarySnapshot } from "./librarySnapshot";
 
 /** The cap on continue-reading cards (D8-09 — calm lower end). */
 const CONTINUE_READING_CAP = 3;
@@ -90,135 +85,102 @@ type StripEntry =
 
 /**
  * ContinueReadingStrip — derives the most-recently-opened unfinished set
- * (standalone articles + in-progress books) from `listArticles()` +
- * `loadAllLocations()` + `listBooks()` on mount. Returns null while loading
- * OR when the unfinished set is empty (spare chrome). A books-load failure
- * routes calmly to article-only entries (the strip is spare chrome; the
- * fail-quiet discipline is unchanged).
- *
- * Quick 260909-ahy — `refreshKey` re-runs the load effect IN PLACE (the
- * component is never remounted by the parent): stale entries stay mounted
- * until fresh data replaces them, so a reading-state write never collapses
- * the section. A strip that legitimately becomes empty still renders null
- * once the FRESH data lands — a single data-driven change, not a flash.
+ * (standalone articles + in-progress books) from the ONE LibrarySnapshot
+ * (Issue #3 — no own load, no own folds). Returns null while the snapshot
+ * is not ready (initial load or load failure — fail quiet, the strip is
+ * spare chrome) OR when the unfinished set is empty.
  */
 export function ContinueReadingStrip({
+  snapshot,
+  ready,
   onReadingStateChange,
-  refreshKey = 0,
 }: {
+  /** The ONE library read model (from useLibrarySnapshot). */
+  snapshot: LibrarySnapshot;
+  /** True only when the snapshot has settled ready — gates the spare-chrome null. */
+  ready: boolean;
   onReadingStateChange?: (article: CanonicalArticle, read: boolean) => Promise<void>;
-  /** Quick 260909-ahy — bump to re-derive from Dexie WITHOUT remounting. */
-  refreshKey?: number;
 }) {
-  const [entries, setEntries] = useState<StripEntry[] | null>(null);
+  const entries = useMemo<StripEntry[] | null>(() => {
+    if (!ready) return null; // loading or failed — spare chrome either way
+    const latestByArticle = snapshot.latestLocationByArticleId;
+    const totalsById = snapshot.totalsByArticleId;
 
-  useEffect(() => {
-    let cancelled = false;
-    Promise.all([listArticles(), loadAllLocations(), listBooks()])
-      .then(([articles, locations, booksResult]) => {
-        if (cancelled) return;
-        // Index the latest location per articleId (max savedAt per articleId —
-        // D8-10 "recently-read = opened"; savedAt is updated on every open).
-        // Issue #2 convergence: the fold is the ONE latestLocationByArticle
-        // in ../../reader/readingPosition (tie discipline pinned beside the
-        // threshold it feeds).
-        const latestByArticle = latestLocationByArticle(locations);
-        // Per-article normalized-text totals — computed ONCE for both the
-        // article ratios and the book chapters-finished derivations (the
-        // same D-05 substrate LibraryRow/BookRow consume).
-        const totalsById = new Map<string, number>();
-        for (const article of articles) {
-          totalsById.set(article.id, graphemeClusters(normalizeText(article), article.lang).length);
-        }
-
-        // Standalone article entries (D12-02: chapter members — articles
-        // carrying ingestionMeta.bookId — NEVER emit their own entry).
-        const articleEntries: StripEntry[] = articles
-          .filter((a) => !a.ingestionMeta?.bookId)
-          .flatMap((article) => {
-            const location = latestByArticle.get(article.id);
-            if (!location) return [];
-            const total = totalsById.get(article.id) ?? 0;
-            const progress = Math.min(1, location.graphemeOffset / total);
-            // D14-20 — the membership gate is a !== in-progress check on
-            // the ONE policy module (behavior identical to the old
-            // progress >= FINISHED_THRESHOLD gate; the ratio above still
-            // feeds the entry's hairline).
-            if (articleReadingState(location, total) !== "in-progress") return [];
-            return [
-              {
-                kind: "article" as const,
-                article,
-                progress,
-                lastOpenedAt: location.savedAt,
-              },
-            ];
-          });
-
-        // ONE book-level entry per in-progress book (D12-02): any chapter
-        // location + chapters-finished progress < 1. The label carries the
-        // D12-06 "Chapter N of M" numbering; the link resumes the D12-07
-        // last-read chapter.
-        const bookEntries: StripEntry[] = (booksResult.ok ? booksResult.books : []).flatMap(
-          (book) => {
-            // D14-20 — the membership gate is a !== in-progress check on
-            // the ONE policy module (behavior identical to the old
-            // resumeChapterId === null + progress >= 1 gates). The entry
-            // construction below still needs the resume / ordinal /
-            // progress derivations, so only the membership decision swaps.
-            if (
-              bookReadingState(book, locations, (articleId) => totalsById.get(articleId)) !==
-              "in-progress"
-            )
-              return [];
-            const resumeChapterId = resolveResumeChapterId(book, locations);
-            if (resumeChapterId === null) return []; // defensive — in-progress implies a resume chapter
-            const progress = deriveBookProgress(book, locations, (articleId) =>
-              totalsById.get(articleId),
-            );
-            const ordinal = chapterOrdinal(book, resumeChapterId);
-            const total = book.chapterArticleIds.length;
-            if (ordinal === 0 || total === 0) return []; // defensive — resume id outside the record
-            const resumeLocation = latestByArticle.get(resumeChapterId);
-            if (!resumeLocation) return [];
-            return [
-              {
-                kind: "book" as const,
-                book,
-                resumeChapterId,
-                ordinal,
-                total,
-                progress,
-                lastOpenedAt: resumeLocation.savedAt,
-              },
-            ];
+    // Standalone article entries (D12-02: chapter members — articles
+    // carrying ingestionMeta.bookId — NEVER emit their own entry; the
+    // snapshot's partition already excluded them).
+    const articleEntries: StripEntry[] = snapshot.standaloneArticles.flatMap(
+      (article) => {
+        const location = latestByArticle.get(article.id);
+        if (!location) return [];
+        const total = totalsById.get(article.id) ?? 0;
+        const progress = Math.min(1, location.graphemeOffset / total);
+        // D14-20 — the membership gate is a !== in-progress check on
+        // the ONE policy module (behavior identical to the old
+        // progress >= FINISHED_THRESHOLD gate; the ratio above still
+        // feeds the entry's hairline).
+        if (articleReadingState(location, total) !== "in-progress") return [];
+        return [
+          {
+            kind: "article" as const,
+            article,
+            progress,
+            lastOpenedAt: location.savedAt,
           },
-        );
+        ];
+      },
+    );
 
-        const unfinished = [...articleEntries, ...bookEntries]
-          .sort((a, b) =>
-            // savedAt descending (most-recently-opened first — D8-10).
-            a.lastOpenedAt < b.lastOpenedAt ? 1 : a.lastOpenedAt > b.lastOpenedAt ? -1 : 0,
-          )
-          .slice(0, CONTINUE_READING_CAP);
-        setEntries(unfinished);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        // Fail quiet — the strip is spare chrome; a load failure just hides
-        // it (mirrors FixtureList's "ready + empty" non-error discipline).
-        setEntries([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-    // Quick 260909-ahy — [refreshKey] (not []): the cleanup's cancelled flag
-    // cancels the in-flight run before the next starts (mirrors LibraryView's
-    // [refreshKey] load effect). entries is deliberately NOT reset here —
-    // stale-while-revalidate keeps the section mounted during the reload.
-  }, [refreshKey]);
+    // ONE book-level entry per in-progress book (D12-02): any chapter
+    // location + chapters-finished progress < 1. The label carries the
+    // D12-06 "Chapter N of M" numbering; the link resumes the D12-07
+    // last-read chapter.
+    const bookEntries: StripEntry[] = snapshot.books.flatMap((book) => {
+      // D14-20 — the membership gate is a !== in-progress check on
+      // the ONE policy module (behavior identical to the old
+      // resumeChapterId === null + progress >= 1 gates). The entry
+      // construction below still needs the resume / ordinal /
+      // progress derivations, so only the membership decision swaps.
+      if (
+        bookReadingState(book, snapshot.locations, (articleId) =>
+          totalsById.get(articleId),
+        ) !== "in-progress"
+      )
+        return [];
+      const resumeChapterId = resolveResumeChapterId(book, snapshot.locations);
+      if (resumeChapterId === null) return []; // defensive — in-progress implies a resume chapter
+      const progress = deriveBookProgress(book, snapshot.locations, (articleId) =>
+        totalsById.get(articleId),
+      );
+      const ordinal = chapterOrdinal(book, resumeChapterId);
+      const total = book.chapterArticleIds.length;
+      if (ordinal === 0 || total === 0) return []; // defensive — resume id outside the record
+      const resumeLocation = latestByArticle.get(resumeChapterId);
+      if (!resumeLocation) return [];
+      return [
+        {
+          kind: "book" as const,
+          book,
+          resumeChapterId,
+          ordinal,
+          total,
+          progress,
+          lastOpenedAt: resumeLocation.savedAt,
+        },
+      ];
+    });
 
-  // null = still loading; [] = loaded but empty → render nothing in both cases.
+    return [...articleEntries, ...bookEntries]
+      .sort((a, b) =>
+        // savedAt descending (most-recently-opened first — D8-10).
+        a.lastOpenedAt < b.lastOpenedAt ? 1 : a.lastOpenedAt > b.lastOpenedAt ? -1 : 0,
+      )
+      .slice(0, CONTINUE_READING_CAP);
+    // The snapshot identity fully determines the derivation (every input —
+    // articles, locations, folds, books — settles together in one load).
+  }, [ready, snapshot]);
+
+  // null = not ready; [] = ready but empty → render nothing in both cases.
   if (!entries || entries.length === 0) return null;
 
   return (

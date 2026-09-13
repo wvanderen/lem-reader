@@ -27,33 +27,22 @@
 // "Opening article…" / "Couldn't open this article" surface, not an
 // ingest surface), re-homed as a direct child of main after the list
 // region. Article success navigates from INSIDE the dialog (D16-12);
-// book success bumps refreshKey via onBookAdded so the new book row
-// appears (the RemoveConfirm onConfirm precedent).
+// book success invalidates the library snapshot via onBookAdded so the new
+// book row appears (the RemoveConfirm onConfirm precedent).
 //
 // The hash router (App.tsx) is unchanged — only the list-view component
 // import swaps (`FixtureList` → `LibraryView`). parseHash + hashchange + the
 // Gap 3 fragment guard stay byte-stable.
 //
-// State (Plan 03 Task 3 action):
-//   - items, status       — listArticles() load (FixtureList parity)
-//   - query               — LibrarySearch lifted state (D8-06)
-//   - activeTag           — TagFilter single-select state (D8-07)
-//   - allTags             — derived from loadAllTags() on mount (D8-08 auto-prune)
-//   - locationsByArticle  — Map<articleId, LocationRecord> from loadAllLocations()
-//                           (per-row hairline + finished mark)
-//
-// Deviation note (Rule 3 — blocking): the plan action specifies a default
-// sort by `addedAt`, but `CanonicalArticle` does not carry that field — it
-// lives only on the Dexie row (`db.articles` Table type annotation). Rather
-// than fork the schema or violate types, we keep the composite-library order
-// (ingested-first, then fixtures — already the natural "recently-added first"
-// order from `compositeLibraryRepository.list()`). The original FixtureList
-// did not sort either; v1.0 e2e tests assert row COUNT, not order.
-import { useEffect, useMemo, useRef, useState } from "react";
-import { listArticles } from "../../content/repository";
+// State (Issue #3 — the LibrarySnapshot migration): the per-field load
+// state (items / allTags / locationsByArticle / allLocations / books), the
+// totalsById memo, the [refreshKey] load effect, and the
+// "loading | ready | error" machine are DELETED — this component renders
+// from the ONE useLibrarySnapshot mount, and every write path (remove,
+// edit, add, read-state) follows up with the ONE invalidateLibrarySnapshot()
+// call instead of bumping a local refreshKey.
+import { useEffect, useRef, useState } from "react";
 import type { CanonicalArticle } from "../../content/types";
-import type { Book, LocationRecord } from "../../content/schema";
-import { normalizeText, graphemeClusters } from "../../content/normalizeText";
 import { LibrarySearch } from "./LibrarySearch";
 import { TagFilter } from "./TagFilter";
 import { LibraryRow } from "./LibraryRow";
@@ -62,12 +51,12 @@ import { ContinueReadingStrip } from "./ContinueReadingStrip";
 import { filterLibrary, filterBooks } from "./libraryFilter";
 import { effectiveTitle } from "./effectiveMetadata";
 import { articleReadingState, bookReadingState, countByState } from "./readingState";
-import { latestLocationByArticle } from "../../reader/readingPosition";
 import type { LibraryViewName } from "../../App";
 import { setDocumentTitle } from "./pageMeta";
-import { loadAllLocations, setArticleReadState } from "../../persistence/locationStore";
-import { listBooks } from "../../persistence/booksStore";
-import { loadAllTags } from "./tagsStore";
+import { setArticleReadState } from "../../persistence/locationStore";
+// Issue #3 — the ONE whole-library read model + its invalidation call.
+import { invalidateLibrarySnapshot } from "./librarySnapshot";
+import { useLibrarySnapshot } from "./useLibrarySnapshot";
 // Plan 15-03 (D15-11..14) — the session-scoped return-context seam. PURE
 // module (zero React, zero storage imports); this component owns the IO:
 // lazy-initializer reads at mount (filters always restore — D15-13), ONE
@@ -214,8 +203,13 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
   // Back from the library) do not fragment-scroll at all; their events
   // keep the ref live too.
   const scrollTopRef = useRef(0);
-  const [items, setItems] = useState<CanonicalArticle[]>([]);
-  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  // Issue #3 — the ONE library read model. status + snapshot come from the
+  // hook (the ONE loading/status machine); the old per-field useState set,
+  // the totalsById memo, the [refreshKey] load effect, and the render-body
+  // partition loop are deleted — the snapshot module owns the load, the
+  // partition (standaloneArticles/chaptersByBook, D12-01), and both folds
+  // (latest-location, grapheme totals).
+  const { status, snapshot } = useLibrarySnapshot();
   // Plan 15-03 (D15-13) — filters restore on ALL return paths (view match
   // gates ONLY scroll + row focus). Lazy initializers read the session
   // snapshot ONCE at mount; cold loads (null peek) keep today's defaults.
@@ -223,26 +217,14 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
   const [activeTag, setActiveTag] = useState<string | null>(
     () => peekLibraryContext()?.activeTag ?? null,
   );
-  const [allTags, setAllTags] = useState<string[]>([]);
-  const [locationsByArticle, setLocationsByArticle] = useState<Map<string, LocationRecord>>(
-    new Map(),
-  );
-  // Plan 12-05 — the RAW locations array feeds BookRow's derivations
-  // (deriveBookProgress/resolveResumeChapterId fold internally); the folded
-  // per-article map above keeps serving standalone LibraryRow hairlines.
-  const [allLocations, setAllLocations] = useState<LocationRecord[]>([]);
-  // Plan 12-05 — book groups (listBooks, Zod-validated per row at the store
-  // seam) + their chapter rows, partitioned from the article list by
-  // ingestionMeta.bookId (D12-01 — chapters never render top-level).
-  const [books, setBooks] = useState<Book[]>([]);
   // Plan 08-04 — row-level trash trigger state. When non-null, RemoveConfirm
-  // is open; the reader confirms or cancels. refreshKey re-triggers the load
-  // effect after a successful remove so the list re-derives from Dexie.
+  // is open; the reader confirms or cancels. invalidateLibrarySnapshot()
+  // re-derives the list from Dexie after a successful remove.
   const [removeTarget, setRemoveTarget] = useState<{ id: string; title: string } | null>(null);
   // Plan 17-02 — the captured article row whose metadata the reader is
   // editing (D17-01). Non-null ⇒ EditMetadataDialog is open; onSaved closes
-  // it and bumps refreshKey (the removeTarget onConfirm precedent) so the
-  // list re-derives the row with the effective values.
+  // it and invalidates the library snapshot (the removeTarget onConfirm
+  // precedent) so the list re-derives the row with the effective values.
   const [editTarget, setEditTarget] = useState<CanonicalArticle | null>(null);
   // Plan 12-05 — book-level Remove trigger state. BookRemoveConfirm consumes
   // it (the BookRow onRemove callback below is its sole setter caller).
@@ -253,7 +235,6 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
   // opener; every close path (Cancel, Esc, success) mirrors back through
   // AddDialog's onCancel.
   const [addOpen, setAddOpen] = useState(false);
-  const [refreshKey, setRefreshKey] = useState(0);
 
   // Plan 15-03 (Pitfall 8) — rewrite EVERY render so the unmount cleanup
   // below always reads the CURRENT context. A StrictMode double render
@@ -309,9 +290,16 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
   // an earlier scrollTo would clamp against zero height and the row
   // lookup would run against an unpainted list; T-15-09). [status]-keyed
   // so it fires on the loading→ready transition only — an in-session
-  // refreshKey reload never re-enters "ready" from another value, so a
+  // snapshot invalidation never re-enters "ready" from another value, so a
   // mid-session remove cannot replay a stale restore. Idempotent: a
   // StrictMode double-run re-restores identical values.
+  //
+  // reachedReadyRef (Issue #3): the load callback that used to set it is
+  // gone with the load effect — the ref now flips in this same
+  // ready-gated effect, BEFORE the session-snapshot reads, so the capture
+  // cleanup stays gated on "this mount painted a settled list" and the
+  // StrictMode simulated unmount (which runs before any async load
+  // settles) still skips.
   //
   // Ordering (Pitfall 5): scroll FIRST (clamped to the CURRENT list
   // height), THEN focus — never focus an off-screen row.
@@ -338,22 +326,26 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
   // never interpolated into URLs or DOM.
   useEffect(() => {
     if (status !== "ready") return;
-    const snapshot = peekLibraryContext();
-    if (snapshot === null) return; // cold load — natural focus (D14-03)
-    if (!viewMatches(view, snapshot.view)) {
+    reachedReadyRef.current = true;
+    // `session` (not `snapshot`) — the hook's LibrarySnapshot owns the
+    // component-level `snapshot` name now; this local is the librarySession
+    // departure context.
+    const session = peekLibraryContext();
+    if (session === null) return; // cold load — natural focus (D14-03)
+    if (!viewMatches(view, session.view)) {
       // D15-14 mismatch degrade: fresh reset (h1 default, scroll at top).
       h1Ref.current?.focus();
       return;
     }
     const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
-    window.scrollTo(0, clampScroll(snapshot.scrollTop, maxScroll));
-    if (snapshot.lastArticleId === null) {
+    window.scrollTo(0, clampScroll(session.scrollTop, maxScroll));
+    if (session.lastArticleId === null) {
       // §Interaction 8 — the restored scroll stays authoritative.
       h1Ref.current?.focus({ preventScroll: true });
       return;
     }
     const rowLink = listRef.current?.querySelector<HTMLAnchorElement>(
-      `a[href="#/article/${snapshot.lastArticleId}"]`,
+      `a[href="#/article/${session.lastArticleId}"]`,
     );
     if (rowLink) {
       const rect = rowLink.getBoundingClientRect();
@@ -386,84 +378,32 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
     h1Ref.current?.focus();
   }, [view]);
 
-  // Plan 14-02 — ONE totalsById Map for the whole render body (the BookRow
-  // L66-75 memo precedent): per article graphemeClusters(normalizeText(
-  // article), lang).length, keyed on items identity so the per-view state
-  // derivations below never recompute the Intl.Segmenter fold per row (the
-  // 260819-tld lesson).
-  const totalsById = useMemo(() => {
-    const totals = new Map<string, number>();
-    for (const article of items) {
-      totals.set(article.id, graphemeClusters(normalizeText(article), article.lang).length);
-    }
-    return totals;
-  }, [items]);
-
-  useEffect(() => {
-    let cancelled = false;
-    // Parallel load — listArticles (compositeLibraryRepository) +
-    // loadAllLocations (per-row hairline + finished mark) + loadAllTags
-    // (auto-pruned chip list) + listBooks (Plan 12-05 — the book groups).
-    // Each is independent; Promise.all mirrors the composite-library read
-    // discipline. A books-load failure routes calmly to zero book rows —
-    // the standalone library stays usable (the strip's fail-quiet
-    // discipline; recovery happens on the next refreshKey cycle).
-    Promise.all([listArticles(), loadAllLocations(), loadAllTags(), listBooks()])
-      .then(([articles, locations, tags, booksResult]) => {
-        if (cancelled) return;
-        // Index the latest location per articleId (max savedAt — D8-10) —
-        // the ONE latestLocationByArticle fold (Issue #2's readingPosition
-        // module; the savedAt-tie discipline lives there now).
-        const latest = latestLocationByArticle(locations);
-        setItems(articles);
-        setAllLocations(locations);
-        setLocationsByArticle(latest);
-        // Chip list = article tags ∪ book tags (Plan 12-05 — D12-04: a tag
-        // on a book must surface as a filterable chip). loadAllTags returns
-        // article tags only; union the books' tags and re-sort (the
-        // loadAllTags localeCompare discipline).
-        const loadedBooks = booksResult.ok ? booksResult.books : [];
-        const tagSet = new Set<string>(tags);
-        for (const book of loadedBooks) {
-          for (const tag of book.tags ?? []) {
-            tagSet.add(tag);
-          }
-        }
-        setAllTags([...tagSet].sort((a, b) => a.localeCompare(b)));
-        setBooks(loadedBooks);
-        // Plan 15-03 (Pitfall 8) — this mount's list is painted + known:
-        // from here on, an unmount is a REAL departure, so the capture
-        // cleanup above may write the session snapshot (see reachedReadyRef).
-        reachedReadyRef.current = true;
-        setStatus("ready");
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setStatus("error");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [refreshKey]);
-
+  // Issue #3 — render-body aliases over the snapshot (the old per-field
+  // state set + totalsById memo + [refreshKey] load effect are deleted;
+  // the snapshot module owns the load, the partition, and both folds).
+  //   - totalsById — THE grapheme-total fold (one Intl.Segmenter pass per
+  //     load, keyed on article id — the 260819-tld lesson, now behind the
+  //     module).
+  //   - locationsByArticle — THE latest-location fold (max savedAt — D8-10;
+  //     readingPosition's latestLocationByArticle applied at load).
+  //   - allLocations — the RAW rows BookRow's bookProgress derivations fold.
+  //   - books — Book rows (listBooks fail-quiet routes to [] behind the
+  //     module — a books-load failure leaves the standalone library usable).
+  //   - allTags — article tags ∪ book tags, localeCompare-sorted (D12-04
+  //     chip list; loadAllTags keeps its persisted-rows-only derivation).
+  const totalsById = snapshot.totalsByArticleId;
+  const locationsByArticle = snapshot.latestLocationByArticleId;
+  const allLocations = snapshot.locations;
+  const books = snapshot.books;
+  const allTags = snapshot.tags;
   // Plan 12-05 — the book/article partition (D12-01): articles carrying
   // ingestionMeta.bookId are CHAPTER members (grouped under their Book;
   // never top-level rows); everything else is standalone and renders as
   // today. Chapter rows whose Book record is absent (orphaned by a partial
   // import) do not render — the live-truth cascade in booksStore.removeBook
   // makes orphans unreachable through normal flows.
-  const standaloneArticles: CanonicalArticle[] = [];
-  const chaptersByBook = new Map<string, CanonicalArticle[]>();
-  for (const article of items) {
-    const bookId = article.ingestionMeta?.bookId;
-    if (bookId) {
-      const list = chaptersByBook.get(bookId) ?? [];
-      list.push(article);
-      chaptersByBook.set(bookId, list);
-    } else {
-      standaloneArticles.push(article);
-    }
-  }
+  const standaloneArticles = snapshot.standaloneArticles;
+  const chaptersByBook = snapshot.chaptersByBook;
 
   // Plan 14-02 (D14-20/23/24) — per-view membership from the ONE policy
   // module, derived in the SAME render body as the switcher counts below
@@ -581,18 +521,20 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
           byte-unchanged (D16-15) and still owns the spare-chrome null. */}
       <section className="library-section library-section-continue">
         {/* Quick 260909-ahy — the strip is mounted ONCE per LibraryView
-            lifetime and re-derives through the refreshKey PROP (an effect
-            dep inside the strip). The old remount-by-key mechanism
-            (key={refreshKey}, commit 109fb3d) was the library flash: the
-            key change synchronously removed the section (layout collapse,
-            scroll clamp) until the remounted instance's async reload
-            re-derived and re-appended it. Stale-while-revalidate replaces
-            it — see ContinueReadingStrip's [refreshKey] load effect. */}
+            lifetime and re-derives through the LibrarySnapshot (Issue #3):
+            an invalidation reload keeps status "ready" and the settled
+            snapshot mounted, so the strip's entries memo keeps rendering
+            the stale derivation until the fresh snapshot lands. The old
+            remount-by-key mechanism (key={refreshKey}, commit 109fb3d) was
+            the library flash: the key change synchronously removed the
+            section (layout collapse, scroll clamp) until the remounted
+            instance's async reload re-derived and re-appended it. */}
         <ContinueReadingStrip
-          refreshKey={refreshKey}
+          snapshot={snapshot}
+          ready={status === "ready"}
           onReadingStateChange={async (article, read) => {
             await setArticleReadState(article, read);
-            setRefreshKey((k) => k + 1);
+            invalidateLibrarySnapshot();
           }}
         />
       </section>
@@ -694,9 +636,10 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
                   key={a.id}
                   article={a}
                   location={locationsByArticle.get(a.id)}
+                  total={totalsById.get(a.id) ?? 0}
                   onReadingStateChange={async (read) => {
                     await setArticleReadState(a, read);
-                    setRefreshKey((k) => k + 1);
+                    invalidateLibrarySnapshot();
                   }}
                   onRemove={() =>
                     setRemoveTarget({
@@ -723,7 +666,7 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
                   key={book.id}
                   book={book}
                   chapters={chaptersByBook.get(book.id) ?? []}
-                  locations={allLocations}
+                  snapshot={snapshot}
                   onRemove={() =>
                     setBookRemoveTarget({
                       id: book.id,
@@ -789,7 +732,7 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
           screen until the rows loaded and pushed it below the fold — a
           flash of wrong content. The gate mounts the aside only after the
           load settles (ready OR error — a failed load may be exactly when a
-          reader wants to file an issue); a refreshKey re-load
+          reader wants to file an issue); an invalidation re-load
           (remove/add/edit) never returns status to "loading", so the aside
           never unmounts/remounts on refreshes. Markup is byte-stable — only
           mount timing changes. */}
@@ -811,10 +754,11 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
       {/* Plan 08-04 — row-level trash → cascade-remove confirmation (LIB-02).
           D8-13: the destructive onClick calls dexieLibrarySource.remove(id)
           which atomically removes the article + highlights + notes + location
-          in one Dexie transaction (Phase 7 Plan 07-06). On confirm, bump
-          refreshKey to re-trigger the load effect and navigate to #/ if the
-          reader was viewing the removed article (the hash router handles the
-          unknown-article-id case gracefully by falling back to the list). */}
+          in one Dexie transaction (Phase 7 Plan 07-06). On confirm, invalidate
+          the library snapshot (Issue #3) to re-trigger the load and navigate
+          to #/ if the reader was viewing the removed article (the hash router
+          handles the unknown-article-id case gracefully by falling back to
+          the list). */}
       <RemoveConfirm
         open={removeTarget !== null}
         articleId={removeTarget?.id ?? ""}
@@ -822,7 +766,7 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
         onConfirm={() => {
           const removedId = removeTarget?.id;
           setRemoveTarget(null);
-          setRefreshKey((k) => k + 1);
+          invalidateLibrarySnapshot();
           // If the reader was viewing the removed article, fall back to the
           // library list. The hash router's parseHash handles #/ gracefully.
           if (removedId !== undefined && window.location.hash === `#/article/${removedId}`) {
@@ -834,24 +778,25 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
       {/* Plan 17-02 — the reader-owned metadata edit dialog (D17-01..D17-04).
           open mirrors editTarget; the dialog's Save handler owns the ONE
           override write on the articles table (Pitfall 8). onSaved closes the
-          dialog and bumps refreshKey so the row re-derives with the
-          effective values (the removeTarget onConfirm precedent); every
-          calm close path (Cancel, Esc) routes through onCancel. */}
+          dialog and invalidates the library snapshot so the row re-derives
+          with the effective values (the removeTarget onConfirm precedent);
+          every calm close path (Cancel, Esc) routes through onCancel. */}
       <EditMetadataDialog
         open={editTarget !== null}
         article={editTarget}
         onSaved={() => {
           setEditTarget(null);
-          setRefreshKey((k) => k + 1);
+          invalidateLibrarySnapshot();
         }}
         onCancel={() => setEditTarget(null)}
       />
       {/* Plan 12-05 — book-level cascade-remove confirmation. The Proceed
           onClick inside BookRemoveConfirm is the SOLE executable
           booksStore.removeBook call site (Pitfall 8 isolation); on confirm,
-          bump refreshKey so the list re-derives from Dexie, and fall back to
-          #/ if the reader was viewing one of the removed book's chapters
-          (the hash router handles the unknown-article-id fallback). */}
+          invalidate the library snapshot so the list re-derives from Dexie,
+          and fall back to #/ if the reader was viewing one of the removed
+          book's chapters (the hash router handles the unknown-article-id
+          fallback). */}
       <BookRemoveConfirm
         open={bookRemoveTarget !== null}
         bookId={bookRemoveTarget?.id ?? ""}
@@ -860,7 +805,7 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
         onConfirm={() => {
           const removedChapterIds = bookRemoveTarget?.chapterIds ?? [];
           setBookRemoveTarget(null);
-          setRefreshKey((k) => k + 1);
+          invalidateLibrarySnapshot();
           if (removedChapterIds.some((id) => window.location.hash === `#/article/${id}`)) {
             window.location.hash = "#/";
           }
@@ -870,15 +815,15 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
       {/* Plan 16-03 (D16-12) — the focused Add dialog mount. Article success
           needs NO LibraryView involvement (the dialog closes itself via
           onCancel then navigates to #/article/<id> internally); book success
-          fires onBookAdded AFTER onCancel, bumping refreshKey so the load
-          effect re-derives the list and the new book row appears (the
+          fires onBookAdded AFTER onCancel, invalidating the library snapshot
+          so the list re-derives and the new book row appears (the
           RemoveConfirm onConfirm wiring precedent). The dialog never
           unmounts the Library, so the librarySession capture/restore seam
           above is structurally unaffected (D15-11..14) — do NOT touch it. */}
       <AddDialog
         open={addOpen}
         onCancel={() => setAddOpen(false)}
-        onBookAdded={() => setRefreshKey((k) => k + 1)}
+        onBookAdded={() => invalidateLibrarySnapshot()}
       />
     </main>
   );

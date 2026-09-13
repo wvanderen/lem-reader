@@ -1,5 +1,5 @@
 // Quick 260909-ahy — the stale-label regression: `pending` cleared when
-// onChange resolved (DB write + refreshKey bump done) while the parent's
+// onChange resolved (DB write + snapshot invalidation done) while the parent's
 // list reload was still in flight, so the prop-only label briefly showed
 // the OLD action ("Saving…" → stale label → correct label). The optimistic
 // layer below covers the write→reload window (accessible name flips to the

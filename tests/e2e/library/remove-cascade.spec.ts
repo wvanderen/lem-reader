@@ -348,8 +348,8 @@ test.describe("SC#2 + LIB-02 — cascade-remove + confirmation", () => {
 
     // 8. Click "Remove article" (the destructive button). The cascade fires
     //    in one Dexie transaction (D8-13 — article + highlights + notes +
-    //    location atomic). LibraryView bumps refreshKey and the row leaves
-    //    the list.
+    //    location atomic). LibraryView invalidates the library snapshot
+    //    (Issue #3) and the row leaves the list.
     await dialog.locator(".library-remove-destructive").click();
 
     // 9. The dialog closes; navigation returns to #/ (the reader was on #/

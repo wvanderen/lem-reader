@@ -140,8 +140,8 @@ export type AddDialogProps = {
   /** Invoked by the Cancel button, the cancel event (Esc), and BOTH
    *  success arms AFTER the save resolves (D16-12 — close first). */
   onCancel: () => void;
-  /** Invoked after a book success (after onCancel) — LibraryView bumps
-   *  its refreshKey so the new book row appears. */
+  /** Invoked after a book success (after onCancel) — LibraryView
+   *  invalidates the library snapshot so the new book row appears. */
   onBookAdded: () => void;
 };
 

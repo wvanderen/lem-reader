@@ -303,7 +303,7 @@ async function seedBookLibrary(page: Page): Promise<void> {
   await page.goto(`${BOOK_BASE}/#/`);
   await uploadEbook(page);
   // Plan 16-03 (D16-12): book success closes the dialog and the book row
-  // appears via refreshKey — the row is the durable success signal.
+  // appears via the snapshot invalidation — the row is the durable success signal.
   await expect(page.locator("li.book-row")).toBeVisible({ timeout: 15_000 });
   await page.reload();
   await expect(
