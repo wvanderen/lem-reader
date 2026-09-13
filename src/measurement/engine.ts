@@ -2,8 +2,28 @@
 // MeasurementEngine — orchestrates the staleness-safe pipeline:
 //
 //   bump (epoch) → fontGate (await .ready) → measureAllBlocks (DOM read) →
-//     [optional] RuntimeDriftGuard sampling (Pretext prediction vs DOM) →
+//     calibration-gated per-block strategy dispatch (chooseStrategy) →
+//     [optional] RuntimeDriftGuard sampling →
 //     commit-guard (epoch.isCurrent + !signal.aborted) → trustedView | drop
+//
+// Per-block strategy dispatch (issue 6 — ADR-0001's calibration gate, live):
+// the DOM pass above is ALWAYS computed — it is the calibration reference
+// (D3-03) AND the fallback. Blocks that chooseStrategy routes to "pretext"
+// (paragraph/heading kinds the committed calibration fingerprint seeds
+// eligible via useMeasurement) are then measured by the Pretext fast text
+// measurer, and the fast result is what the trusted view commits — PROVIDED
+// it agrees with the DOM reference (drift ≤ tolerance AND same line count).
+// Any disagreement, invalid prediction, or Pretext throw falls back to the
+// DOM measurement, which remains the truth; drift beyond tolerance also
+// emits a `drift-exceedance` diagnostic (D3-05 — never silently). DOM line
+// boxes are kept on every committed block: they are the D-05 split-point
+// primitive for splitting kinds (lineBoxes.ts contract), and the only
+// currently-eligible kind (heading) is ATOMIC (D4-02), so pagination
+// consumes only the fast heightPx/lineCount from dispatched entries.
+//
+// The post-render overflow guard (PaginatedSurface → refragmentOverflowingPage)
+// stays authoritative regardless of which measurer produced a height — it
+// re-checks live DOM after render and corrects or falls back.
 //
 // PAGE-07 lives in the commit guard: a late result computed for older
 // constraints is DROPPED (emits `late-epoch-drop`); the trusted view is
@@ -22,17 +42,16 @@
 // Per-kind strategy dispatch (Pattern F — exhaustive switch, NO default):
 //   paragraph + heading → "pretext" when eligibility flags them eligible
 //   (seeded from calibration/fingerprint.json by useMeasurement); otherwise
-//   "dom". All other kinds are DOM by definition (D3-01). The Pretext
-//   measurement branch (Plan 02) is invoked when strategy === "pretext";
-//   on any Pretext throw, the engine emits a measurement-error diagnostic
-//   and falls back to DOM for that block (V7 — never block reading).
+//   "dom". All other kinds are DOM by definition (D3-01). On any Pretext
+//   throw, the engine emits a measurement-error diagnostic and falls back
+//   to DOM for that block (V7 — never block reading).
 //
-// RuntimeDriftGuard (D3-08): if injected, the engine samples up to N
-// Pretext-predicted eligible blocks per pass, compares to DOM references,
-// and downgrades the kind (sets eligibility false + emits
+// RuntimeDriftGuard (D3-08): if injected, the dispatch feeds every usable
+// (prediction, DOM reference) pair it produced to the guard, which samples
+// up to N per pass and downgrades the kind (sets eligibility false + emits
 // runtime-guard-downgrade) on drift beyond tolerance. The guard runs AFTER
-// the DOM measure step but BEFORE the commit guard so a downgrade feeds
-// the diagnostic bus (D3-05) and adjusts eligibility for the next pass.
+// the dispatch but BEFORE the commit guard so a downgrade feeds the
+// diagnostic bus (D3-05) and adjusts eligibility for the next pass.
 
 import type { CanonicalArticle } from "../content/types";
 import type { ReaderSettings } from "../content/schema";
@@ -47,10 +66,22 @@ import { AbortError, awaitFontsReady } from "./fontGate";
 import type { DiagnosticBus } from "./diagnostics";
 import { measureAllBlocks } from "./domMeasurer";
 import type { RuntimeDriftGuard } from "./driftGuard";
-import { fontStringFor, measureParagraphWithBreaks } from "./textMeasurer";
+import { fontStringFor, measureParagraphHeight } from "./textMeasurer";
+import { COMMITTED_FINGERPRINT } from "./fingerprint";
 
-/** DOM-only eligibility default (Plan 01 — Plan 02 seeds from the fingerprint). */
-export const DEFAULT_ELIGIBILITY: EligibilityState = {
+/**
+ * Default per-block drift tolerance for the dispatch's agreement gate.
+ * Derived from the committed fingerprint's own toleranceBound (the same
+ * bound the calibration gate measured the corpus against) with a
+ * conservative 1.0px fallback for an unbounded artifact; the hook passes
+ * its RUNTIME_DRIFT_TOLERANCE_PX explicitly so the dispatch and the drift
+ * guard share one bound in production.
+ */
+const DEFAULT_DRIFT_TOLERANCE_PX =
+  COMMITTED_FINGERPRINT.toleranceBound?.heightDriftPx ?? 1.0;
+
+/** DOM-only eligibility default (seeded from the fingerprint by the hook). */
+const DEFAULT_ELIGIBILITY: EligibilityState = {
   paragraph: { pretextEligible: false },
   heading: { pretextEligible: false },
 };
@@ -88,9 +119,19 @@ export interface MeasurementEngineOptions {
    * Reads the current ReaderSettings — needed to derive the canvas font
    * shorthand + line-height per block kind for Pretext measurement. The
    * hook supplies this from its settingsRef. Required when driftGuard is
-   * present OR any kind is eligible (so Pretext predictions can be computed).
+   * present OR any kind is eligible (so Pretext predictions can be computed);
+   * absent → every pass is all-DOM regardless of eligibility.
    */
   getReaderSettings?: () => ReaderSettings;
+  /**
+   * Max |DOM heightPx − fast-measurer heightPx| for a dispatched block to
+   * count as agreement (the fast result is committed). Blocks beyond it —
+   * or with a line-count mismatch — fall back to the DOM measurement and
+   * emit drift-exceedance. Defaults to DEFAULT_DRIFT_TOLERANCE_PX; the hook
+   * passes its RUNTIME_DRIFT_TOLERANCE_PX so the dispatch and the drift
+   * guard share one bound.
+   */
+  driftTolerancePx?: number;
 }
 
 /**
@@ -109,6 +150,7 @@ export class MeasurementEngine {
     driftGuard?: RuntimeDriftGuard;
     getReaderSettings?: () => ReaderSettings;
   };
+  private readonly driftTolerancePx: number;
   private readonly epoch = new Epoch();
   private trustedHandler: ((result: MeasurementResult) => void) | null = null;
 
@@ -128,6 +170,7 @@ export class MeasurementEngine {
       driftGuard: opts.driftGuard,
       getReaderSettings: opts.getReaderSettings,
     };
+    this.driftTolerancePx = opts.driftTolerancePx ?? DEFAULT_DRIFT_TOLERANCE_PX;
   }
 
   /**
@@ -146,8 +189,9 @@ export class MeasurementEngine {
       // DOM truth — read-phase per ~10ms slice (Pitfall 2 within a slice;
       // 260820-beo: the pass is async and yields between slices so it never
       // blocks paint). Always computed: it is the calibration reference
-      // (D3-03) AND the runtime fallback when a kind is not Pretext-eligible.
-      const blocks = await measureAllBlocks(this.opts.articleEl, signal);
+      // (D3-03) AND the runtime fallback when a kind is not Pretext-eligible
+      // or the fast measurer disagrees with it.
+      const domBlocks = await measureAllBlocks(this.opts.articleEl, signal);
       // Plan 04-06 contract defense: MeasurementResult.blocks MUST be 1:1
       // with article.blocks. PaginatedSurface replaces ArticleBody with a
       // single page fragment in paginated mode — when the ResizeObserver
@@ -162,21 +206,22 @@ export class MeasurementEngine {
       // defense. No diagnostic emitted — this is expected behavior in
       // paginated mode, not an error condition (emitting measurement-error
       // would trigger ArticleView's fallback subscription → unwanted flip).
-      if (blocks.length !== this.opts.article.blocks.length) {
+      if (domBlocks.length !== this.opts.article.blocks.length) {
         return;
       }
-      // Plan 02: runtime drift sampling. Only when a guard is configured
-      // AND at least one kind is currently Pretext-eligible (otherwise no
-      // work to do — guard.sample would short-circuit anyway, but checking
-      // here avoids the per-block text walk when not needed).
+      // Calibration-gated per-block strategy dispatch (issue 6): eligible
+      // kinds are measured by the fast text measurer; every disagreement —
+      // and every non-eligible kind — keeps the DOM measurement. Produces
+      // the committed block list AND the (prediction, DOM reference) pairs
+      // for the runtime drift guard.
+      const dispatch = this.dispatchPretextStrategies(domBlocks);
+      // D3-08 runtime drift sampling: feed the guard the pairs the dispatch
+      // produced. The guard caps how many it compares (sampleSize), downgrades
+      // drifting kinds in place, and emits runtime-guard-downgrade per kind —
+      // the NEXT pass then dispatches DOM for the downgraded kind.
       const dg = this.opts.driftGuard;
-      if (
-        dg &&
-        this.opts.getReaderSettings &&
-        (this.opts.eligibility.paragraph.pretextEligible ||
-          this.opts.eligibility.heading.pretextEligible)
-      ) {
-        this.samplePretextDrift(blocks);
+      if (dg && dispatch.predictions.length > 0) {
+        dg.sample(dispatch.predictions, dispatch.domReference, this.opts.eligibility);
       }
       // Commit guard — PAGE-07.
       if (!this.epoch.isCurrent(captured) || signal.aborted) {
@@ -191,7 +236,7 @@ export class MeasurementEngine {
       const result: MeasurementResult = {
         schemaVersion: 2,
         constraints,
-        blocks,
+        blocks: dispatch.blocks,
         computedAt: new Date().toISOString(),
       };
       // V7: any handler error becomes a measurement-error diagnostic, never
@@ -220,64 +265,114 @@ export class MeasurementEngine {
   }
 
   /**
-   * Compute Pretext predictions for sampled eligible blocks and feed them
-   * to the drift guard. Mutates `this.opts.eligibility` on downgrade so
-   * the next pass dispatches DOM for the downgraded kind. Emits a
-   * `runtime-guard-downgrade` diagnostic per downgraded kind (D3-05).
+   * Calibration-gated per-block strategy dispatch (issue 6 — the seam the
+   * ADR-0001 gate feeds).
    *
-   * Walks the same selector list as domMeasurer (single read-phase already
-   * complete above); reads element.textContent + content-box width per
-   * sampled block. On any Pretext throw, emits measurement-error and
-   * falls back to DOM for that block (V7 — never block reading).
+   * For each DOM-measured block, chooseStrategy picks the measurer:
+   *   - "dom" (non-eligible kinds, or kinds the runtime guard downgraded)
+   *     → the DOM measurement is committed unchanged.
+   *   - "pretext" → the fast text measurer produces height + lineCount from
+   *     the block's text (canvas-measured, no reflow). The fast result is
+   *     committed ONLY when it agrees with the DOM reference: finite,
+   *     positive, line-count equal, and |Δheight| ≤ driftTolerancePx.
+   *     Committed entries keep the DOM margins AND the DOM line boxes —
+   *     line boxes are the D-05 split-point primitive for splitting kinds
+   *     (lineBoxes.ts), and the sole currently-eligible kind (heading) is
+   *     atomic, so pagination consumes only the fast height/lineCount.
+   *     Every usable pair (agreement or not) is also returned for the
+   *     runtime drift guard, which owns kind-level downgrade (D3-08).
+   *
+   * Disagreement/throw handling (never silent):
+   *   - usable prediction + drift beyond tolerance or line-count mismatch
+   *     → DOM committed; ONE `drift-exceedance` diagnostic per pass.
+   *   - Pretext throw → DOM committed; `measurement-error` diagnostic (V7).
+   *   - empty text / non-finite numbers → DOM committed, no diagnostic
+   *     (the fast measurer is not applicable — calibration never exercised
+   *     such blocks; this is expected fallback, not drift).
+   *
+   * When no settings reader is configured (or no block routes to "pretext")
+   * the returned blocks ARE the DOM measurements — byte-identical output to
+   * a dispatch-free pass (zero behavior change for ineligible-only corpora).
    */
-  private samplePretextDrift(domBlocks: BlockMeasurement[]): void {
+  private dispatchPretextStrategies(domBlocks: BlockMeasurement[]): {
+    blocks: BlockMeasurement[];
+    predictions: BlockMeasurement[];
+    domReference: BlockMeasurement[];
+  } {
+    const blocks: BlockMeasurement[] = [];
+    const predictions: BlockMeasurement[] = [];
+    const domReference: BlockMeasurement[] = [];
     const getSettings = this.opts.getReaderSettings;
-    const guard = this.opts.driftGuard;
-    if (!getSettings || !guard) return;
+    if (!getSettings) {
+      // No canvas geometry derivable → the pass is all-DOM by construction.
+      return { blocks: domBlocks, predictions, domReference };
+    }
     const settings = getSettings();
-    const paragraphGeometry = fontStringFor("paragraph", 1, settings);
     // letterSpacingPx: parse the spacing preset's CSS (e.g. "0.01em" →
     // 0.01 × size). Pitfall 6: spacious ALSO writes wordSpacing 0.05em
     // which Pretext does NOT model — calibration must include spacious.
     const letterSpacingPx = letterSpacingPxForPreset(settings);
-
     const elements = Array.from(
       this.opts.articleEl.querySelectorAll<HTMLElement>(
-        // Plan 05-05: exclude .page-fragment blocks (they carry data-block-
-        // index for D5-08 capture but are a per-page slice, not the full
-        // article set; including them would double-count + misalign the
-        // drift guard's prediction-vs-DOM arrays).
+        // Same selector as domMeasurer and the former drift-sampler walk
+        // (Plan 05-05): the page-fragment's blocks carry data-block-index for
+        // D5-08 capture but are a per-page slice, not the full article set.
+        // The 1:1 length defense in run() already passed, so elements[i]
+        // aligns with domBlocks[i] by the domMeasurer's document-order
+        // contract.
         "[data-block-index]:not(.page-fragment [data-block-index])",
       ),
     );
-    // Build parallel arrays of (prediction, domReference) for the kinds
-    // currently eligible. The guard's sample() caps how many it actually
-    // compares; we compute predictions for all eligible blocks so the
-    // guard can pick the first N (the engine does not need to know N).
-    const predictions: BlockMeasurement[] = [];
-    const domReference: BlockMeasurement[] = [];
-    for (let i = 0; i < elements.length && i < domBlocks.length; i++) {
-      const el = elements[i]!;
+    let sawDrift = false;
+
+    for (let i = 0; i < domBlocks.length; i++) {
       const dom = domBlocks[i]!;
       const kind = dom.kind;
-      if (kind !== "paragraph" && kind !== "heading") continue;
-      if (!this.opts.eligibility[kind].pretextEligible) continue;
+      const el = elements[i];
+      // BlockMeasurement.kind is a free-form string (domMeasurer maps
+      // arbitrary tags), so narrow to the two Pretext-capable kinds BEFORE
+      // consulting the strategy seam; everything else is DOM by definition
+      // (D3-01).
+      if (!el || (kind !== "paragraph" && kind !== "heading")) {
+        blocks.push(dom);
+        continue;
+      }
+      if (chooseStrategy(kind as BlockKind, this.opts.eligibility) !== "pretext") {
+        blocks.push(dom);
+        continue;
+      }
       try {
         const text = el.textContent ?? "";
-        if (!text) continue;
+        if (text.length === 0) {
+          // Nothing to canvas-measure — DOM stays (see header note).
+          blocks.push(dom);
+          continue;
+        }
         const geom =
           kind === "heading"
             ? fontStringFor("heading", headingLevelFor(el), settings)
-            : paragraphGeometry;
+            : fontStringFor("paragraph", 1, settings);
+        // Border-box width — the exact convention the calibration harness
+        // measures with (calibration.harness.spec.ts), so the runtime gate
+        // sees the same geometry the eligibility cells were computed against.
         const maxWidthPx = el.getBoundingClientRect().width;
-        const prediction = measureParagraphWithBreaks({
+        const prediction = measureParagraphHeight({
           text,
           font: geom.font,
           letterSpacingPx,
           lineHeightPx: geom.lineHeightPx,
           maxWidthPx,
         });
-        predictions.push({
+        const usable =
+          Number.isFinite(prediction.height) &&
+          prediction.height > 0 &&
+          Number.isInteger(prediction.lineCount) &&
+          prediction.lineCount >= 1;
+        if (!usable) {
+          blocks.push(dom);
+          continue;
+        }
+        const predictionBlock: BlockMeasurement = {
           kind,
           heightPx: prediction.height,
           lineCount: prediction.lineCount,
@@ -286,23 +381,51 @@ export class MeasurementEngine {
           // reads it). Required because BlockMeasurementSchema made the field
           // non-optional in the inferred type (Plan 04-06 schema evolution).
           lineBoxes: [],
-        });
+        };
+        const drift = Math.abs(dom.heightPx - prediction.height);
+        const agrees =
+          drift <= this.driftTolerancePx && prediction.lineCount === dom.lineCount;
+        // Feed the guard every usable pair; its sampleSize cap decides how
+        // many actually get compared (D3-08 — the engine need not know N).
+        predictions.push(predictionBlock);
         domReference.push(dom);
+        if (!agrees) {
+          sawDrift = true;
+          blocks.push(dom); // DOM remains the truth on any disagreement.
+          continue;
+        }
+        blocks.push({
+          kind,
+          heightPx: prediction.height,
+          marginBlockStartPx: dom.marginBlockStartPx,
+          marginBlockEndPx: dom.marginBlockEndPx,
+          lineCount: prediction.lineCount,
+          // DOM line boxes stay: the D-05 split primitive for splitting
+          // kinds; the eligible heading kind is atomic (D4-02) and never
+          // splits on them.
+          lineBoxes: dom.lineBoxes,
+        });
       } catch (e) {
         // V7: Pretext threw for this block — emit + DOM-fallback.
         this.opts.diagnostics.emit({
           kind: "measurement-error",
-          message: `pretext-sample: ${String(e)}`,
+          message: `pretext-dispatch: ${String(e)}`,
           ts: new Date().toISOString(),
         });
-        // Implicitly fall through: this block was not added to predictions,
-        // so the guard will not compare it. The committed result still
-        // carries the DOM measurement for this block (computed above).
+        blocks.push(dom);
       }
     }
-    if (predictions.length > 0) {
-      guard.sample(predictions, domReference, this.opts.eligibility);
+    if (sawDrift) {
+      // D3-05: DOM-vs-fast-measurer drift surfaced through the existing
+      // diagnostics, never silently. One event per pass — the per-kind
+      // consequence arrives via runtime-guard-downgrade when the guard
+      // downgrades.
+      this.opts.diagnostics.emit({
+        kind: "drift-exceedance",
+        ts: new Date().toISOString(),
+      });
     }
+    return { blocks, predictions, domReference };
   }
 
   /**
@@ -363,6 +486,10 @@ function letterSpacingPxForPreset(settings: ReaderSettings): number {
  * dispatch to "pretext" when their eligibility flag is true (seeded from
  * calibration/fingerprint.json); all other kinds are DOM by definition
  * (D3-01 — rich/non-text kinds have no Pretext fast path).
+ *
+ * Production caller: MeasurementEngine.run() → dispatchPretextStrategies
+ * invokes this per block (issue 6 wiring); the runtime drift guard's
+ * downgrades mutate the eligibility the next pass consults here.
  */
 export function chooseStrategy(
   kind: BlockKind,

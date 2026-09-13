@@ -126,6 +126,10 @@ export function useMeasurement(
       eligibility,
       driftGuard,
       getReaderSettings: () => settingsRef.current,
+      // The dispatch's per-block agreement gate shares the guard's bound so
+      // "committed the fast result" and "guard tolerates the drift" cannot
+      // disagree at the boundary.
+      driftTolerancePx: RUNTIME_DRIFT_TOLERANCE_PX,
     });
     const unsubTrusted = engine.onTrusted((result) => {
       setTrustedView(result);
