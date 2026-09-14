@@ -930,108 +930,26 @@ export function ArticleView({
     }
   }, [effectiveMode, article]);
 
-  // Paginated geometry: derive the usable page height from .page-viewport,
-  // not from the surrounding <article>. The article also contains its visible
-  // provenance header; treating the article's full height as page capacity
-  // over-packs every fragment by roughly the header height and leaves clipped
-  // text in the accessibility tree.
-  const [pageContentBoxHeightPx, setPageContentBoxHeightPx] = useState(0);
-  // Plan 13-04 (Option A — human decision 2026-08-18): the measured
-  // margin-box height of the article-top metadata spot, threaded BOTH into
-  // PaginatedSurface's firstPageReservedPx (the engine's page-1 budget) and
-  // the --article-top-meta-reserve CSS var on .page-viewport (the page-1
-  // fragment's flow height) — one value, one source, so the engine budget
-  // and the rendered geometry always agree. Measured ONCE per article at
-  // settle (same rAF batch as pageContentBoxHeightPx below, so the FIRST
-  // pagination publication already carries the reserve — the
-  // first-publication==settled contract holds). A mid-article typography
-  // change or tag-add producing a stale reserve is the documented
-  // guard-covered edge (the post-render overflow guard corrects any
-  // overshoot); re-measuring would re-trigger pagination and oscillate.
-  const [metaSpotReservePx, setMetaSpotReservePx] = useState(0);
-  // null = not yet measured for this article; guards the measure-once rule.
-  const metaSpotReserveRef = useRef<number | null>(null);
-  // Plan 04-09 (PAGE-01 round-trip fix): reset pageContentBoxHeightPx to 0
-  // SYNCHRONOUSLY DURING RENDER when the mode changes. React child effects
-  // (PaginatedSurface's pagination effect) run BEFORE parent effects
-  // (ArticleView's geometry effect), so the effect-based reset below was too
-  // late — the pagination effect ran with stale scrolling-mode height on the
-  // first render after a mode swap, produced wrong pages, and overwrote the
-  // D4-10 anchor via onAnchorChange before the correct-height pass could run.
-  // This is the official React pattern for adjusting state when a prop changes
-  // (https://react.dev/reference/react/useState#storing-information-from-previous-renders).
-  const [prevIsPaginated, setPrevIsPaginated] = useState(isPaginated);
-  if (isPaginated !== prevIsPaginated) {
-    setPrevIsPaginated(isPaginated);
-    setPageContentBoxHeightPx(0);
-    // Plan 12-06 (D12-05): no stale page state across a mode swap — the
-    // chapter nav's first/last-page gating re-arms on the next pagination
-    // commit (onAnchorChange), so a stale "final page" from the previous
-    // paginated session can never flash the Next link on re-entry.
-    setPageState(null);
-  }
-  // Plan 04-06: recompute the page-content-box height on article mount AND
-  // when the active render mode changes (trustedView commits → paginatedActive
-  // flips → PaginatedSurface mounts with the .paginated-surface geometry).
-  // The .paginated-surface CSS pins the height to calc(100vh - 48px - 2px -
-  // 2*var(--space-2xl)) — a much smaller value than the natural scrolling
-  // ArticleBody height. Without recomputing on mode swap, the engine would
-  // receive the OLD scrolling height (~1148px for a long-form essay) and
-  // produce 1 giant overflowing page. Deps are primitives so this hook runs
-  // unconditionally (no hooks-after-conditional-return violation).
+  // Issue #10 — the parent no longer measures paginated geometry. The
+  // .page-viewport content-box height and the article-top metadata spot's
+  // first-page reserve are owned by PaginatedSurface (resize observation of
+  // its own viewport + chrome; both halves of the reserved-height convention
+  // read its own measurement), which reports geometry readiness upward
+  // through its single onGeometryReady callback.
+  //
+  // Plan 12-06 (D12-05): pageState staleness across paginated-branch
+  // unmounts. The old render-time state-reset hack (the prevIsPaginated
+  // compare) is gone; this effect covers the same stale-flash surface: when
+  // the paginated branch unmounts (mode swap, fallback session flip, article
+  // swap), pageState nulls while NO pageState chrome is rendered (the
+  // scrolling + pending branches never read it), so the remount render
+  // already sees null — the chapter nav / final-page gating re-arms on the
+  // next pagination commit (onAnchorChange), and a stale "final page" from
+  // the previous paginated session can never flash on re-entry.
+  const paginatedActive = isPaginated && trustedView !== null && articleEl !== null;
   useEffect(() => {
-    if (!articleEl) return;
-    let cancelled = false;
-    const rafId = requestAnimationFrame(() => {
-      if (cancelled) return;
-      // Plan 13-04 (Option A): measure the metadata spot's margin-box
-      // height ONCE per article, after the measurement view commits
-      // (fonts settled — the spot's wrap is final) and BEFORE the page
-      // height below lands in the same rAF batch. PaginatedSurface's first
-      // pagination pass therefore sees the reserve together with the
-      // height: no intermediate reserve=0 publication, so first-publication
-      // == settled (page-turn-stability) and page 1 is never displaced by
-      // an unaccounted spot. The spot is mounted in BOTH modes at this
-      // point (scrolling flow above the body / first child of
-      // .page-viewport at article start), and its height is
-      // width-determined — identical in either home.
-      if (trustedView !== null && metaSpotReserveRef.current === null) {
-        const spot = articleEl.querySelector<HTMLElement>(".article-top-meta");
-        if (spot) {
-          const rect = spot.getBoundingClientRect();
-          const style = getComputedStyle(spot);
-          const marginTop = parseFloat(style.marginTop) || 0;
-          const marginBottom = parseFloat(style.marginBottom) || 0;
-          const reserve = Math.ceil(rect.height + marginTop + marginBottom);
-          metaSpotReserveRef.current = reserve;
-          setMetaSpotReservePx(reserve);
-        }
-      }
-      // Plan 13-09 (G4): the pinned-frame class no longer orders this read —
-      // it now arrives with the pending placeholder frame at first paint, so
-      // it is present BEFORE the engine has committed a trusted measurement
-      // view, and reading the viewport height in that window would publish
-      // page geometry with no metadata-spot reserve measured yet (an early
-      // reserve-less first publication — the exact 13-04 regression class:
-      // first-publication ≠ settled). The trustedView check below now does
-      // the ordering: the height read runs only once the engine has
-      // committed, in the same rAF batch as the reserve measurement above,
-      // so the first publication still carries height + reserve together
-      // (the 05-06 mega-page guard and the 13-04 measure-once contract,
-      // both preserved). In scrolling mode the early return keeps the
-      // height at its useState(0) initial value, so the pagination effect
-      // (which guards on a positive height) never runs there.
-      if (!isPaginated || trustedView === null) return;
-      const pageViewport = articleEl.querySelector<HTMLElement>(".page-viewport");
-      if (!pageViewport) return;
-      const rect = pageViewport.getBoundingClientRect();
-      setPageContentBoxHeightPx(rect.height);
-    });
-    return () => {
-      cancelled = true;
-      cancelAnimationFrame(rafId);
-    };
-  }, [articleEl, isPaginated, trustedView]);
+    if (!paginatedActive) setPageState(null);
+  }, [paginatedActive]);
 
   // Phase 4 Plan 04-05 (PAGE-04 + PAGE-09 — DiagnosticBus subscription):
   // subscribe to the SAME DiagnosticBus instance threaded from useMeasurement
@@ -1096,11 +1014,9 @@ export function ArticleView({
     // chapter-context state resets are structurally impossible (a swap
     // recomputes from the new article; no stale book line / nav can flash).
     setPageState(null);
-    // Plan 13-04 (Option A): reset the metadata-spot reserve so the next
-    // article's spot (different byline/tags shape) re-measures at its own
-    // settle. A stale cross-article reserve would mis-bound page 1.
-    metaSpotReserveRef.current = null;
-    setMetaSpotReservePx(0);
+    // Issue #10: the metadata-spot reserve is owned by PaginatedSurface now
+    // (measured once per surface mount) — no parent-side reserve state to
+    // reset on article swap.
     // Plan 12-06 (Rule 1 — chapter links are the first article→article
     // navigation that keeps ArticleView MOUNTED): reset the D4-10 anchor
     // refs on swap. A stale offset from the previous article would feed
@@ -1781,13 +1697,14 @@ export function ArticleView({
   };
 
   // Paginated mode mounts PaginatedSurface only when trustedView + articleEl
-  // are both ready (paginatedActive). The .paginated-surface frame class,
-  // however, is applied to the shared <article> whenever the EFFECTIVE mode
-  // is paginated (see the className below) so the pinned frame is present
-  // from the first paint — a fallback flip (session override → scrolling)
-  // reverts the class in the same render that mounts the scrolling body, so
-  // the overflow locks never clip a fallback rendering.
-  const paginatedActive = isPaginated && trustedView !== null && articleEl !== null;
+  // are both ready (paginatedActive — declared above the loading/error
+  // early return so the pageState-reset effect can key on it). The
+  // .paginated-surface frame class, however, is applied to the shared
+  // <article> whenever the EFFECTIVE mode is paginated (see the className
+  // below) so the pinned frame is present from the first paint — a fallback
+  // flip (session override → scrolling) reverts the class in the same render
+  // that mounts the scrolling body, so the overflow locks never clip a
+  // fallback rendering.
   // Plan 13-09 (G4 — 13-UAT stable first paint): the pending window — the
   // effective mode is paginated but measurement has not settled. Render the
   // stable paginated frame with a calm placeholder, NEVER the scrolling
@@ -1803,9 +1720,10 @@ export function ArticleView({
   // popover), NO Export button (the per-article export lives in the
   // annotations drawer — a highlight-scoped action in the highlight-scoped
   // surface). Placement contract (13-04 Option A, unchanged): render-once
-  // page-1 mount + the measured firstPageReservedPx reserve; the anatomy is
-  // now provenance-only, so the reserve is simply much smaller — a generous
-  // page-1 content budget at 360×640.
+  // page-1 mount + the surface-measured first-page reserve (Issue #10 — the
+  // surface sizes the reserve from this spot's own margin-box); the anatomy
+  // is now provenance-only, so the reserve is simply much smaller — a
+  // generous page-1 content budget at 360×640.
   //   - scrolling mode: ordinary flow content above the article body —
   //     scrolls away naturally.
   //   - paginated mode: mounted INSIDE .page-viewport as flow content above
@@ -1813,7 +1731,7 @@ export function ArticleView({
   //     header row (the page-viewport row height never oscillates between
   //     turns) and OUTSIDE the pagination block stream (the engine's
   //     firstPageReservedPx budget — fed with the once-measured spot height
-  //     below — is its sanctioned seat per the Option A human decision,
+  //     — is its sanctioned seat per the Option A human decision,
   //     2026-08-18).
   const articleTopMeta = (
     <div className="article-top-meta">
@@ -2046,7 +1964,8 @@ export function ArticleView({
                   PaginatedSurface (articleStartChrome) — the surface shows
                   it exactly on page 1, in the same render as the page-1
                   fragment whose height yields the measured reserve (the
-                  same value threaded as firstPageReservedPx). Single-owner
+                  same value the surface feeds its own engine budget —
+                  Issue #10). Single-owner
                   mounting keeps spot, fragment height, and page index in
                   one commit — a parent-state spot can lag a turn by one
                   effect cycle and transiently render page 2 inside page-1
@@ -2062,8 +1981,6 @@ export function ArticleView({
                   trustedView={trustedView}
                   articleEl={articleEl}
                   diagnostics={diagnostics}
-                  pageContentBoxHeightPx={pageContentBoxHeightPx}
-                  firstPageReservedPx={metaSpotReservePx}
                   articleStartChrome={articleTopMeta}
                   initialAnchorOffset={currentAnchorOffsetRef.current}
                   onAnchorChange={handleAnchorChange}

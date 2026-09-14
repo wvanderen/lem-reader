@@ -92,8 +92,6 @@ export interface PaginatedSurfaceProps {
   articleEl: HTMLElement;
   /** The single DiagnosticBus instance from useMeasurement — never a second `new DiagnosticBus()`. */
   diagnostics: DiagnosticBus;
-  /** The current page content-box height in CSS pixels (from articleEl.getBoundingClientRect). */
-  pageContentBoxHeightPx: number;
   /**
    * D4-10 scrolling→paginated anchor: the article-global grapheme offset
    * captured by ArticleView BEFORE the mode swap (from computeTopVisibleOffset).
@@ -113,29 +111,28 @@ export interface PaginatedSurfaceProps {
    */
   onAnchorChange?: (offset: number) => void;
   /**
-   * Plan 13-04 (Option A — human decision 2026-08-18): CSS px reserved at
-   * the top of the FIRST page for ArticleView's article-top metadata spot.
-   * Threaded straight into paginateDocument's page-1 budget; pages 2+ keep
-   * the full viewport budget. The post-render overflow guard, DEV hook, and
-   * anchor machinery stay reserve-unaware by decision. ArticleView measures
-   * the spot once at settle and passes the same value here — the engine
-   * budget and the rendered page-1 fragment height (below) always agree.
-   * Default 0 = byte-equivalent to the pre-13-04 surface for every
-   * existing caller.
+   * Issue #10 — geometry readiness, reported UPWARD through this ONE
+   * callback. The surface measures its own geometry (resize observation of
+   * its .page-viewport + the article-start chrome reserve below), so the
+   * parent no longer tracks page geometry at all; this callback is the
+   * single signal that the surface has a usable page height and pagination
+   * is about to run. Fired exactly once per mount, on the transition from
+   * "no geometry" (viewport height 0) to "geometry ready" (height > 0).
+   * Optional — legacy callers that pass nothing keep working unchanged.
    */
-  firstPageReservedPx?: number;
+  onGeometryReady?: () => void;
   /**
-   * Plan 13-04 (Option A / D13-13): the article-top metadata spot element,
-   * OWNED by ArticleView but MOUNTED by this surface. The surface shows it
-   * exactly when the reader is at the article's first page — including the
-   * pre-pagination window before the first commit (so the parent's settle-
-   * time measurement finds it laid out). Mounting here — rather than in
-   * the parent from pageState — keeps the spot, the page-1 fragment
-   * height, and currentPageIdx in ONE component's render: no parent state
-   * can lag a turn by a commit and transiently render page 2 inside
-   * page-1 geometry (the observed guard-overflow → dom-fallback flip).
-   * Absent for legacy callers — the surface renders identically to
-   * pre-13-04.
+   * Plan 13-04 (Option A — human decision 2026-08-18): the article-top
+   * metadata spot, OWNED by ArticleView but MOUNTED by this surface. The
+   * surface shows it exactly when the reader is at the article's first
+   * page — including the pre-pagination window before the first commit.
+   * The spot is also the surface's OWN reserve source: since Issue #10 the
+   * surface measures the mounted spot's margin-box height once (at settle —
+   * the surface mounts only after trustedView commits, so fonts are final)
+   * and uses that ONE value for BOTH halves of the reserved-height
+   * convention — the engine's page-1 budget and the rendered page-1
+   * fragment height below. Absent for legacy callers — the surface renders
+   * identically (reserve 0).
    */
   articleStartChrome?: React.ReactNode;
 }
@@ -196,10 +193,9 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
       trustedView,
       articleEl,
       diagnostics,
-      pageContentBoxHeightPx,
       initialAnchorOffset = 0,
       onAnchorChange,
-      firstPageReservedPx = 0,
+      onGeometryReady,
       articleStartChrome,
       animatePageTurns = false,
     },
@@ -207,6 +203,34 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
   ): React.ReactElement | null {
     const [pages, setPages] = useState<PageFragment[] | null>(null);
     const [currentPageIdx, setCurrentPageIdx] = useState(0);
+
+    // ── Issue #10 — geometry ownership ────────────────────────────────────
+    // The surface measures its OWN geometry; the parent passes none.
+    //   pageContentBoxHeightPx — the .page-viewport content-box height in
+    //     CSS px, kept fresh by resize observation of that box (the RO's
+    //     initial delivery + a synchronous first read below; .page-viewport
+    //     has no padding/border, so content-box == the border-box height
+    //     the parent's old getBoundingClientRect read produced — value
+    //     semantics byte-identical).
+    //   firstPageReservedPx — the article-start chrome's margin-box height
+    //     (ceil), the ONE reserve value feeding BOTH halves of the
+    //     reserved-height convention: the engine's page-1 budget (below)
+    //     and the rendered page-1 fragment height (the inline style on
+    //     PageFragmentView). Measured once per mount, during the
+    //     pre-pagination window (pages === null) while the chrome is
+    //     mounted, then FROZEN — a spot unmount/remount at a page turn
+    //     must never re-trigger pagination (header-geometry e2e (c)/(d)).
+    //     Settle-safety is structural: the surface mounts only when
+    //     trustedView has committed, so the font gate has already passed
+    //     and the spot's wrap is final at measure time.
+    const [pageContentBoxHeightPx, setPageContentBoxHeightPx] = useState(0);
+    const [firstPageReservedPx, setFirstPageReservedPx] = useState(0);
+    const geometryReadyNotifiedRef = useRef(false);
+    // Ref-mirror pattern (initialAnchorOffsetRef precedent): the readiness
+    // callback is read from a ref so the geometry effect below never needs
+    // the callback in its dependency array.
+    const onGeometryReadyRef = useRef(onGeometryReady);
+    onGeometryReadyRef.current = onGeometryReady;
 
     const pendingTurnMotion = useRef(false);
 
@@ -277,6 +301,82 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
     // precise anchor through refragmentation.
     const lastAnchorOffsetRef = useRef<number>(initialAnchorOffset);
 
+    // Geometry ownership (Issue #10): resize observation of the surface's
+    // viewport + top chrome. DOM contract: the surface renders inside a
+    // .page-viewport within the shared articleEl (ArticleView's paginated
+    // branch) — the same box the parent's old geometry effect queried.
+    //
+    // The chrome reserve is measured in this effect's synchronous first run:
+    // the chrome mounts in the SAME commit (the pre-pagination early return
+    // renders articleStartChrome), effects run after that commit, and
+    // getBoundingClientRect forces layout — so the spot is laid out and its
+    // margin-box is readable immediately. getComputedStyle margins are read
+    // exactly as the parent's old measure did (marginTop + marginBottom,
+    // ceiled). A reserve of 0 (no chrome — legacy callers, or jsdom's zero
+    // layout) is skipped, keeping the default 0.
+    //
+    // After the synchronous first read, the ResizeObserver keeps BOTH boxes
+    // under observation — the viewport (the repagination driver: height
+    // changes flow through the pagination effect's dependency) and the
+    // article-start chrome (a chrome-only resize — e.g. the epub
+    // book-context line resolving after mount — re-wraps the spot without
+    // moving the viewport, and the freeze-gated measure below picks it up
+    // before the first publication). Once pages has committed the measure
+    // no-ops, so a spot unmount (page 2+) or remount (back to page 1) can
+    // never re-trigger pagination; a detached-chrome zero box is dropped by
+    // the reserve > 0 gate.
+    //
+    // Readiness (the ONE upward report): publishHeight fires onGeometryReady
+    // exactly once per mount when the height first exceeds 0.
+    useEffect(() => {
+      // The surface is .page-viewport's child — React mounts the parent box
+      // before this child's effects run, so the query below cannot miss
+      // while the surface is mounted; the early return only guards legacy
+      // callers that render the surface outside the paginated branch DOM
+      // contract.
+      const pageViewport = articleEl.querySelector<HTMLElement>(".page-viewport");
+      if (!pageViewport) return;
+      const publishHeight = (heightPx: number) => {
+        setPageContentBoxHeightPx(heightPx);
+        if (heightPx > 0 && !geometryReadyNotifiedRef.current) {
+          geometryReadyNotifiedRef.current = true;
+          onGeometryReadyRef.current?.();
+        }
+      };
+      const measureChromeReserve = () => {
+        if (pagesRef.current !== null) return; // frozen after first publication
+        const spot = articleEl.querySelector<HTMLElement>(".article-top-meta");
+        if (!spot) return;
+        const rect = spot.getBoundingClientRect();
+        const style = window.getComputedStyle(spot);
+        const reserve = Math.ceil(
+          rect.height +
+            (parseFloat(style.marginTop) || 0) +
+            (parseFloat(style.marginBottom) || 0),
+        );
+        if (reserve > 0) setFirstPageReservedPx(reserve);
+      };
+
+      // Synchronous first read — the box is already laid out at effect time;
+      // no reason to wait a frame for the RO's initial delivery (which would
+      // cost the pre-pagination window an extra commit).
+      publishHeight(pageViewport.getBoundingClientRect().height);
+      measureChromeReserve();
+
+      const observer = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          if (entry.target === pageViewport) {
+            publishHeight(entry.contentRect.height);
+          }
+        }
+        measureChromeReserve();
+      });
+      observer.observe(pageViewport);
+      const chromeAtMount = articleEl.querySelector<HTMLElement>(".article-top-meta");
+      if (chromeAtMount) observer.observe(chromeAtMount);
+      return () => observer.disconnect();
+    }, [articleEl]);
+
     // Cancelled-flag pagination effect (mirrors ArticleView L107-129 pattern):
     // a stale pagination pass (e.g. after a rapid article swap or viewport
     // change) cannot overwrite a newer one. AbortController + the engine's
@@ -289,8 +389,8 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
     // D4-10 initialAnchorOffset prop (scrolling→paginated mode switch).
     useEffect(() => {
       // Wait for geometry — the engine needs a non-zero page height to produce
-      // pages. ArticleView's rAF-deferred getBoundingClientRect effect sets
-      // this; on the very first render it's 0.
+      // pages. The surface's OWN geometry effect (Issue #10) sets this from
+      // its resize observation; on the very first render it's 0.
       if (pageContentBoxHeightPx <= 0) return;
       const currentArticle = articleRef.current;
       const currentPages = pagesRef.current;
@@ -680,11 +780,12 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
 
     // Until the first pagination pass commits (or when status is "fallback"),
     // render only the article-start chrome (Plan 13-04 Option A). The spot
-    // stays laid out during this window so the parent's settle-time
-    // measurement can size the reserve BEFORE the first paginateDocument
-    // call — the first publication then already carries the correct page-1
-    // budget (first-publication==settled, page-turn-stability). Without
-    // chrome (legacy callers) this is byte-identical to the old null return.
+    // stays laid out during this window so the surface's OWN settle-time
+    // measurement (the geometry effect above) can size the reserve BEFORE
+    // the first paginateDocument call — the first publication then already
+    // carries the correct page-1 budget (first-publication==settled,
+    // page-turn-stability). Without chrome (legacy callers) this is
+    // byte-identical to the old null return.
     if (!pages || pages.length === 0) {
       return articleStartChrome !== undefined ? <>{articleStartChrome}</> : null;
     }
@@ -699,12 +800,13 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
           mounted as .page-viewport's first flow child ONLY on the article's
           first page, in the SAME render that shows page 1 (single owner of
           the decision). It never enters the pagination block stream: the
-          engine's firstPageReservedPx budget (the parent-measured value
-          below) is its sanctioned seat, and the post-render overflow guard
-          — measuring live child rects against the same viewport — remains
-          the documented net for stale-reserve edge cases. The .page-
-          viewport box is grid-determined, so mounting/unmounting the spot
-          never changes its height (no ResizeObserver re-measure loop).
+          engine's firstPageReservedPx budget (the surface's OWN measured
+          reserve — Issue #10) is its sanctioned seat, and the post-render
+          overflow guard — measuring live child rects against the same
+          viewport — remains the documented net for stale-reserve edge
+          cases. The .page-viewport box is grid-determined, so
+          mounting/unmounting the spot never changes its height (no
+          ResizeObserver re-measure loop).
         */}
         {isFirst && articleStartChrome !== undefined ? articleStartChrome : null}
         {/*
