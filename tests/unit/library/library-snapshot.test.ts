@@ -7,6 +7,10 @@
 // reads (fake-indexeddb), so the LibraryView/strip/BookRow consumers
 // cannot drift from what the stores actually return.
 //
+// Issue #8 — the snapshot also carries EVERY persisted highlight + note
+// (the review view's join input and the highlights export's payload), so
+// those consumers cannot drift either.
+//
 // Harness mirrors tests/unit/library/library-source.test.ts:
 // fake-indexeddb via Dexie.dependencies at module top-level,
 // wipeDatabase beforeEach, lazy module imports after the install.
@@ -14,12 +18,16 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   ArticleSchema,
   BookSchema,
+  HighlightRecordSchema,
   LocationRecordSchema,
+  NoteRecordSchema,
 } from "../../../src/content/schema";
 import type {
   Book,
   CanonicalArticle,
+  HighlightRecord,
   LocationRecord,
+  NoteRecord,
 } from "../../../src/content/schema";
 import fakeIndexedDB, { IDBKeyRange } from "fake-indexeddb";
 import { Dexie } from "dexie";
@@ -159,6 +167,28 @@ function sampleLocation(
     revision,
     graphemeOffset,
     savedAt,
+  });
+}
+
+function sampleHighlight(articleId: string, id = "hl-1"): HighlightRecord {
+  return HighlightRecordSchema.parse({
+    schemaVersion: 1,
+    id,
+    articleId,
+    revision: 1,
+    position: { start: 0, end: 4 },
+    quote: { prefix: "", exact: "Body", suffix: " text." },
+    createdAt: "2026-09-10T00:00:00.000Z",
+  });
+}
+
+function sampleNote(highlightId: string, text = "A note."): NoteRecord {
+  return NoteRecordSchema.parse({
+    schemaVersion: 1,
+    id: `note-${highlightId}`,
+    highlightId,
+    text,
+    updatedAt: "2026-09-10T01:00:00.000Z",
   });
 }
 
@@ -325,6 +355,39 @@ describe("loadLibrarySnapshot — tags fold (Issue #3)", () => {
     // list (loadAllTags discipline) reads persisted rows only.
     expect(snapshot.articles.length).toBeGreaterThan(0);
     expect(snapshot.tags).toEqual([]);
+  });
+});
+
+describe("loadLibrarySnapshot — annotation records (Issue #8)", () => {
+  beforeEach(async () => {
+    await wipeDatabase();
+  });
+
+  it("carries every persisted highlight and note (the review/export payload)", async () => {
+    const standaloneId = await seedStandaloneAndBook();
+    const { saveHighlight } = await import("../../../src/persistence/highlightsStore");
+    const { saveNote } = await import("../../../src/persistence/notesStore");
+    const { loadLibrarySnapshot } = await loadSnapshot();
+
+    const hlA = sampleHighlight(standaloneId, "hl-a");
+    const hlB = sampleHighlight("epub-abc123def456-c00", "hl-b");
+    await saveHighlight(hlA);
+    await saveHighlight(hlB);
+    await saveNote(sampleNote("hl-a"));
+
+    const snapshot = await loadLibrarySnapshot();
+
+    expect(snapshot.highlights.map((h) => h.id)).toEqual(["hl-a", "hl-b"]);
+    expect(snapshot.notes.map((n) => n.highlightId)).toEqual(["hl-a"]);
+  });
+
+  it("an annotation-free library yields empty arrays (EMPTY snapshot parity)", async () => {
+    const { loadLibrarySnapshot } = await loadSnapshot();
+
+    const snapshot = await loadLibrarySnapshot();
+
+    expect(snapshot.highlights).toEqual([]);
+    expect(snapshot.notes).toEqual([]);
   });
 });
 

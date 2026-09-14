@@ -28,14 +28,21 @@
 // cluster member; see 09-PATTERNS.md correction). Every result and refusal
 // announces through the cluster's role="status" live region in calm DOC-06
 // voice; applyImport fires ONLY in the dialog Proceed handler (Pitfall 8).
+//
+// Issue #8 — the panel owns NO library loads of its own: the exports read
+// the ONE LibrarySnapshot (the bundle's article count rides its own build;
+// the highlights export is one loadLibrarySnapshot() call at action time —
+// always the truth at the moment of export), and a landed import calls the
+// ONE invalidateLibrarySnapshot() so mounted surfaces re-derive.
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import { useSettings } from "../settings/SettingsContext";
 import { MEASURE_STEPS, SIZE_STEPS } from "../settings/tokens";
 import type { ReaderSettings } from "../content/schema";
-import type { CanonicalArticle } from "../content/types";
+// Issue #8 — the CanonicalArticle type import rode the export-highlights
+// fixture-merge fold; the snapshot's composite list replaced it.
 import { ImportPreviewDialog } from "./ImportPreviewDialog";
-import { applyImport, buildBundleBytes, validateBundle } from "../portability/ExportImportService";
+import { applyImport, buildBundle, validateBundle } from "../portability/ExportImportService";
 import type { ImportRefusal } from "../portability/ExportImportService";
 import { detectImportPreview, resolveImportPlan } from "../portability/conflicts";
 import type {
@@ -52,11 +59,14 @@ import {
   renderLibraryHighlights,
 } from "../portability/markdown";
 import type { HighlightEntry, HighlightSection } from "../portability/markdown";
-import { dexieLibrarySource } from "../ingestion/LibrarySource";
-import { loadAllHighlights } from "../persistence/highlightsStore";
-import { loadAllNotes } from "../persistence/notesStore";
-import { loadAllLocations } from "../persistence/locationStore";
-import { fixtures } from "../fixtures";
+// Issue #8 — the ONE library read model + its invalidation call replace the
+// panel's own export-time re-lists (the four-store Promise.all + fixture
+// merge) and close the import gap: after applyImport lands, the mounted
+// library surfaces re-derive through invalidation.
+import {
+  invalidateLibrarySnapshot,
+  loadLibrarySnapshot,
+} from "../ingestion/library/librarySnapshot";
 
 interface SettingsPanelProps {
   open: boolean;
@@ -217,13 +227,14 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     setDataBusy("export-bundle");
     setDataMessage("Building your bundle…");
     try {
-      const bytes = await buildBundleBytes();
+      // Issue #8 — the summary count is the EXACT article set the bundle
+      // serialized (the build's own Dexie-only read; fixtures never ride),
+      // so the status line can never disagree with the exported file.
+      const { bytes, articleCount } = await buildBundle();
       downloadBlob([bytes], BUNDLE_FILENAME, "application/zip");
-      // Terminal-granularity summary (RESEARCH A6): re-read the article
-      // count through the same Zod-validated loader the build used.
-      const articles = await dexieLibrarySource.list();
+      // Terminal-granularity summary (RESEARCH A6).
       setDataMessage(
-        `Exported ${counted(articles.length, "article", "articles")} to ${BUNDLE_FILENAME}.`,
+        `Exported ${counted(articleCount, "article", "articles")} to ${BUNDLE_FILENAME}.`,
       );
     } catch {
       setDataMessage("Export didn't complete. Nothing was exported.");
@@ -237,31 +248,24 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     setDataBusy("export-highlights");
     setDataMessage("Collecting highlights…");
     try {
-      const [saved, highlights, notes, locations] = await Promise.all([
-        dexieLibrarySource.list(),
-        loadAllHighlights(),
-        loadAllNotes(),
-        loadAllLocations(),
-      ]);
-      // Fixtures join the article set (first-seen wins — a saved article
-      // shadows a same-id fixture) so fixture-backed highlights resolve
-      // (the same Pattern 8 precedence detectImportPreview uses).
-      const seen = new Set<string>();
-      const articles: CanonicalArticle[] = [];
-      for (const a of [...saved, ...fixtures]) {
-        if (!seen.has(a.id)) {
-          seen.add(a.id);
-          articles.push(a);
-        }
-      }
-      const entries = collectHighlightEntries(articles, highlights, notes);
+      // Issue #8 — ONE whole-library read model instead of the panel's own
+      // four-store Promise.all + fixture-merge fold: the snapshot's
+      // composite article list already carries the same first-seen-wins
+      // precedence (ingested shadows same-id fixtures), and
+      // highlights/notes/locations arrive settled together with it.
+      const snapshot = await loadLibrarySnapshot();
+      const entries = collectHighlightEntries(
+        snapshot.articles,
+        snapshot.highlights,
+        snapshot.notes,
+      );
       // Group into per-article sections (only articles with ≥1 entry get a
       // section — an empty `## title` block would be noise, not calm).
       // D9-09 never-drop: entries whose article exists NOWHERE in the export
       // set (vanished article — removed-with-corrupt-row or fixture skew)
       // become the combined file's trailing unmatched section instead of
       // being silently dropped; their notes ride along.
-      const articleById = new Map(articles.map((a) => [a.id, a] as const));
+      const articleById = new Map(snapshot.articles.map((a) => [a.id, a] as const));
       const entriesByArticle = new Map<string, HighlightEntry[]>();
       for (const entry of entries) {
         const list = entriesByArticle.get(entry.highlight.articleId) ?? [];
@@ -278,10 +282,13 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
           unmatched.push(...list);
         }
       }
-      const md = renderLibraryHighlights(orderSectionsByRecency(sections, locations), unmatched);
+      const md = renderLibraryHighlights(
+        orderSectionsByRecency(sections, snapshot.locations),
+        unmatched,
+      );
       downloadBlob([md], HIGHLIGHTS_FILENAME, "text/markdown");
       setDataMessage(
-        `Exported ${counted(highlights.length, "highlight", "highlights")} to ${HIGHLIGHTS_FILENAME}.`,
+        `Exported ${counted(snapshot.highlights.length, "highlight", "highlights")} to ${HIGHLIGHTS_FILENAME}.`,
       );
     } catch {
       setDataMessage("Export didn't complete. Nothing was exported.");
@@ -351,6 +358,11 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
         importAssets ?? [],
       );
       await applyImport(plan); // atomic 7-store transaction — rolls back on throw
+      // Issue #8 — the ONE write-followup call: mounted library surfaces
+      // (ArticleView's chapter context, the library view, the review panel)
+      // re-derive from the imported rows; nothing stays stale behind the
+      // panel.
+      invalidateLibrarySnapshot();
       const skipped =
         plan.skipped.articles +
         plan.skipped.highlights +

@@ -60,6 +60,7 @@ import {
   bookReadingState,
   countByState,
 } from "../../../src/ingestion/library/readingState";
+import { latestLocationByArticle } from "../../../src/reader/readingPosition";
 // Plan 14-04 Task 2 — the DEEP LINK case reuses the jump-bidirectional
 // seeding machinery (REUSE-DO-NOT-FORK): makeArticle/confidentHighlightOn/
 // highlightRow/seedRows build the article + confident anchor through the
@@ -360,12 +361,11 @@ for (const a of CORPUS_ARTICLES) TOTALS_BY_ID.set(a.id, totalOf(a));
 const textLengthOf = (articleId: string): number | undefined =>
   TOTALS_BY_ID.get(articleId);
 
-/** The latest-savedAt fold (the app's locationsByArticle discipline — D8-10). */
-const LATEST_BY_ARTICLE = new Map<string, LocationRecord>();
-for (const l of CORPUS_LOCATIONS) {
-  const prev = LATEST_BY_ARTICLE.get(l.articleId);
-  if (!prev || l.savedAt > prev.savedAt) LATEST_BY_ARTICLE.set(l.articleId, l);
-}
+/** The latest-savedAt fold (the app's locationsByArticle discipline — D8-10).
+ * Issue #8 — folded through readingPosition's ONE latestLocationByArticle
+ * (the same fold snapshot.latestLocationByArticleId carries), not a private
+ * hand-rolled copy. */
+const LATEST_BY_ARTICLE = latestLocationByArticle(CORPUS_LOCATIONS);
 
 const STANDALONE_ENTRIES = [
   ...SEEDED_STANDALONE.map((a) => ({
@@ -383,7 +383,7 @@ const STANDALONE_ENTRIES = [
 const EXPECTED_COUNTS = countByState(
   STANDALONE_ENTRIES,
   CORPUS_BOOKS,
-  CORPUS_LOCATIONS,
+  LATEST_BY_ARTICLE,
   textLengthOf,
 );
 const EXPECTED_ALL_COUNT = STANDALONE_ENTRIES.length + CORPUS_BOOKS.length;
@@ -394,7 +394,7 @@ const FIXTURE_ENTRIES = fixtures.map((f) => ({
   location: undefined,
   total: TOTALS_BY_ID.get(f.id)!,
 }));
-const EMPTY_COUNTS = countByState(FIXTURE_ENTRIES, [], [], textLengthOf);
+const EMPTY_COUNTS = countByState(FIXTURE_ENTRIES, [], new Map(), textLengthOf);
 
 type ViewName = "all" | "unread" | "in-progress" | "finished";
 const VIEW_HREFS: Record<ViewName, string> = {
@@ -431,7 +431,7 @@ function expectedRowsFor(view: ViewName): number {
     (e) => articleReadingState(e.location, e.total) === state,
   ).length;
   const bookRows = CORPUS_BOOKS.filter(
-    (b) => bookReadingState(b, CORPUS_LOCATIONS, textLengthOf) === state,
+    (b) => bookReadingState(b, LATEST_BY_ARTICLE, textLengthOf) === state,
   ).length;
   if (standaloneRows + bookRows !== EXPECTED_COUNTS[state]) {
     throw new Error(
@@ -651,11 +651,11 @@ test.describe("LIB-07/LIB-08 — views/counts/rows/empty agreement (D14-20/23/24
     expect(EMPTY_COUNTS["in-progress"]).toBe(0);
     expect(EMPTY_COUNTS.finished).toBe(0);
     // The honesty rows themselves, held out against the seeded raw rows:
-    expect(bookReadingState(BOOK_PARTIAL, CORPUS_LOCATIONS, textLengthOf)).toBe(
+    expect(bookReadingState(BOOK_PARTIAL, LATEST_BY_ARTICLE, textLengthOf)).toBe(
       "in-progress",
     );
     expect(
-      bookReadingState(BOOK_MISSING_ROW, CORPUS_LOCATIONS, textLengthOf),
+      bookReadingState(BOOK_MISSING_ROW, LATEST_BY_ARTICLE, textLengthOf),
     ).toBe("in-progress");
   });
 

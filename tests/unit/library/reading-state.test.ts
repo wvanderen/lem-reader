@@ -12,12 +12,18 @@
 //     never read finished — it stays honestly in-progress.
 //   - D14-24: countByState folds BOTH derivations so counts cannot disagree
 //     with membership; each book counts exactly once.
+//
+// Issue #8 — bookReadingState/countByState take the ONE precomputed
+// latest-location fold (snapshot.latestLocationByArticleId): tests fold
+// fixture rows through readingPosition's latestLocationByArticle (the same
+// ONE fold the snapshot module calls) and pin the exact same semantics.
 import { describe, expect, it } from "vitest";
 import {
   articleReadingState,
   bookReadingState,
   countByState,
 } from "../../../src/ingestion/library/readingState";
+import { latestLocationByArticle } from "../../../src/reader/readingPosition";
 import { BookSchema, LocationRecordSchema } from "../../../src/content/schema";
 import type { Book, LocationRecord } from "../../../src/content/schema";
 
@@ -56,6 +62,12 @@ function loc(
 /** The identity text-length lookup — lengths[name] ?? undefined. */
 function lengthsOf(lengths: Record<string, number>) {
   return (articleId: string): number | undefined => lengths[articleId];
+}
+
+/** The ONE latest-location fold (what snapshot.latestLocationByArticleId
+ * carries) applied to fixture rows — the call-shape every consumer uses. */
+function latestOf(rows: LocationRecord[]): ReturnType<typeof latestLocationByArticle> {
+  return latestLocationByArticle(rows);
 }
 
 describe("articleReadingState (D14-18 — opened = in-progress; unread = never opened)", () => {
@@ -104,7 +116,7 @@ describe("articleReadingState (D14-18 — opened = in-progress; unread = never o
 describe("bookReadingState (D14-19/D14-21 — honest book-level states)", () => {
   it("book with no chapter locations → unread", () => {
     const book = makeBook(["epub-book000111-c00", "epub-book000111-c01"]);
-    expect(bookReadingState(book, [], lengthsOf({
+    expect(bookReadingState(book, latestOf([]), lengthsOf({
       "epub-book000111-c00": 100,
       "epub-book000111-c01": 100,
     }))).toBe("unread");
@@ -118,7 +130,7 @@ describe("bookReadingState (D14-19/D14-21 — honest book-level states)", () => 
       // ids[1] never opened
     ];
     expect(
-      bookReadingState(book, locations, lengthsOf({
+      bookReadingState(book, latestOf(locations), lengthsOf({
         [ids[0]!]: 100,
         [ids[1]!]: 100,
       })),
@@ -137,7 +149,7 @@ describe("bookReadingState (D14-19/D14-21 — honest book-level states)", () => 
       .slice(0, 39)
       .map((id) => loc(id, 100, "2026-01-01T00:00:00.000Z"));
     const lengths = lengthsOf(Object.fromEntries(ids.map((id) => [id, 100])));
-    expect(bookReadingState(book, locations, lengths)).toBe("in-progress");
+    expect(bookReadingState(book, latestOf(locations), lengths)).toBe("in-progress");
   });
 
   it("missing chapter row (textLengthOf undefined) with all present chapters finished → in-progress (D14-21)", () => {
@@ -151,7 +163,7 @@ describe("bookReadingState (D14-19/D14-21 — honest book-level states)", () => 
       loc(ids[1]!, 1_000_000, "2026-01-03T00:00:00.000Z"),
     ];
     expect(
-      bookReadingState(book, locations, lengthsOf({ [ids[0]!]: 100 })),
+      bookReadingState(book, latestOf(locations), lengthsOf({ [ids[0]!]: 100 })),
     ).toBe("in-progress");
   });
 
@@ -162,7 +174,7 @@ describe("bookReadingState (D14-19/D14-21 — honest book-level states)", () => 
       loc(id, 100, `2026-01-0${i + 2}T00:00:00.000Z`),
     );
     const lengths = lengthsOf(Object.fromEntries(ids.map((id) => [id, 100])));
-    expect(bookReadingState(book, locations, lengths)).toBe("finished");
+    expect(bookReadingState(book, latestOf(locations), lengths)).toBe("finished");
   });
 });
 
@@ -201,7 +213,7 @@ describe("countByState (D14-24 — counts cannot disagree with membership)", () 
         { id: "art-done", location: locations[1], total: 100 }, // finished
       ],
       [inProgressBook, finishedBook, unreadBook],
-      locations,
+      latestOf(locations),
       lengths,
     );
 

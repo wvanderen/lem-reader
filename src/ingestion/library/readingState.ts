@@ -67,23 +67,24 @@ export function articleReadingState(
  * 39/40-chapter and missing-chapter-row edges fall out of
  * deriveBookProgress's own denominator discipline.
  *
- * @param book         The Book record (its ordered chapterArticleIds are
- *                     the denominator).
- * @param locations    ALL persisted LocationRecords (the derivations fold
- *                     to this book's chapters; callers may pass the whole
- *                     library's rows).
- * @param textLengthOf Lookup for a chapter's normalized-text grapheme
- *                     total. Returns undefined when the chapter article
- *                     row is absent (partial import) — such chapters count
- *                     as UNFINISHED, never as errors.
+ * @param book              The Book record (its ordered chapterArticleIds
+ *                          are the denominator).
+ * @param latestByArticleId THE latest-location fold (max savedAt per
+ *                          articleId) — pass snapshot.latestLocationByArticleId,
+ *                          never raw rows (Issue #8: the snapshot owns the
+ *                          fold; consumers never re-fold).
+ * @param textLengthOf      Lookup for a chapter's normalized-text grapheme
+ *                          total. Returns undefined when the chapter article
+ *                          row is absent (partial import) — such chapters
+ *                          count as UNFINISHED, never as errors.
  */
 export function bookReadingState(
   book: Book,
-  locations: LocationRecord[],
+  latestByArticleId: ReadonlyMap<string, LocationRecord>,
   textLengthOf: (articleId: string) => number | undefined,
 ): ReadingState {
-  if (resolveResumeChapterId(book, locations) === null) return "unread";
-  return deriveBookProgress(book, locations, textLengthOf) === 1
+  if (resolveResumeChapterId(book, latestByArticleId) === null) return "unread";
+  return deriveBookProgress(book, latestByArticleId, textLengthOf) === 1
     ? "finished"
     : "in-progress";
 }
@@ -104,16 +105,18 @@ export interface StandaloneArticleEntry {
  * once via articleReadingState; each book counts ONCE via bookReadingState
  * (matching D12-01 — chapters never count top-level).
  *
- * @param standalone  The standalone (non-chapter) article entries.
- * @param books       Every Book row.
- * @param locations   ALL persisted LocationRecords.
- * @param textLengthOf Lookup for any article id's grapheme total (chapters
- *                     included); undefined when the row is absent.
+ * @param standalone        The standalone (non-chapter) article entries.
+ * @param books             Every Book row.
+ * @param latestByArticleId THE latest-location fold (max savedAt per
+ *                          articleId) — pass snapshot.latestLocationByArticleId.
+ * @param textLengthOf      Lookup for any article id's grapheme total
+ *                          (chapters included); undefined when the row is
+ *                          absent.
  */
 export function countByState(
   standalone: StandaloneArticleEntry[],
   books: Book[],
-  locations: LocationRecord[],
+  latestByArticleId: ReadonlyMap<string, LocationRecord>,
   textLengthOf: (articleId: string) => number | undefined,
 ): Record<ReadingState, number> {
   const counts: Record<ReadingState, number> = {
@@ -125,7 +128,7 @@ export function countByState(
     counts[articleReadingState(entry.location, entry.total)] += 1;
   }
   for (const book of books) {
-    counts[bookReadingState(book, locations, textLengthOf)] += 1;
+    counts[bookReadingState(book, latestByArticleId, textLengthOf)] += 1;
   }
   return counts;
 }

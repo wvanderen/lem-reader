@@ -6,7 +6,8 @@
 // Verification-map rows owned by this file (10-VALIDATION.md):
 //   - RECV-01.f — curate in place (edit note incl. orphans, empty-text note
 //     delete, Esc-close commit, delete w/ confirm + cascade copy + safe
-//     focus default, .status announcements, refreshKey re-derivation)
+//     focus default, .status announcements, snapshot-invalidation
+//     re-derivation — Issue #8)
 //
 // Corpus (built ENTIRELY through the _portability.ts seeding helpers —
 // REUSE-DO-NOT-FORK):
@@ -16,8 +17,9 @@
 //     row), note-less (the D10-11 edge: adding a note needs NO article).
 //
 // The six behaviors (10-05-PLAN must_haves):
-//   1. Edit note in place → new preview text WITHOUT reload (refreshKey
-//      re-derivation) + persistence proof via one final reload.
+//   1. Edit note in place → new preview text WITHOUT reload (snapshot
+//      invalidation re-derivation, Issue #8) + persistence proof via one
+//      final reload.
 //   2. Add a note to the note-less ORPHAN row (D10-11).
 //   3. Empty-text commit deletes the NoteRecord (D5-10) — preview gone
 //      without reload.
@@ -179,7 +181,7 @@ test.describe("RECV-01.f review-panel curate (10-05 in-place edit + delete)", ()
     await expect(dialog).toBeHidden();
 
     // The row's note preview shows the NEW text WITHOUT any reload — the
-    // refreshKey bump re-derived the panel from Dexie (Pitfall 6).
+    // snapshot invalidation re-derived the panel from Dexie (Pitfall 6).
     await expect(
       rowByExcerpt(page, EXCERPT_NOTED).locator(".review-note-preview"),
     ).toHaveText(REVISED_NOTE);
@@ -337,7 +339,7 @@ test.describe("RECV-01.f review-panel curate (10-05 in-place edit + delete)", ()
     await expect(alert).toBeHidden();
 
     // The row (and its note preview) is gone WITHOUT a reload — the
-    // refreshKey bump re-derived from Dexie.
+    // snapshot invalidation re-derived from Dexie.
     await expect(rowByExcerpt(page, EXCERPT_NOTED)).toHaveCount(0);
     // The orphan row is untouched by the cascade.
     await expect(rowByExcerpt(page, EXCERPT_ORPHAN)).toBeVisible();

@@ -44,7 +44,7 @@
 //
 // A failed write must not strand the dialog (the RemoveConfirm catch
 // discipline): commit() swallows store errors and still calls onDone() — the
-// panel's refreshKey re-derivation reads Dexie and reveals the truth.
+// panel's snapshot invalidation re-derivation reads Dexie and reveals the truth.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { deleteNote, saveNote } from "../../persistence/notesStore";
 import type { NoteRecord } from "../../content/schema";
@@ -154,9 +154,9 @@ export function ReviewNoteDialog({
         await deleteNote(highlightId);
       }
     } catch {
-      // A failed write must not strand the dialog: the panel's refreshKey
-      // re-derivation reads Dexie and reveals the truth; the reader can
-      // retry (the RemoveConfirm catch discipline — no auto-retry here).
+      // A failed write must not strand the dialog: the panel's snapshot
+      // invalidation re-derivation reads Dexie and reveals the truth; the
+      // reader can retry (the RemoveConfirm catch discipline — no auto-retry here).
     }
     onDone();
   }, [text, highlightId, existing, onDone]);

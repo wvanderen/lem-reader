@@ -141,15 +141,17 @@ export function ContinueReadingStrip({
       // resumeChapterId === null + progress >= 1 gates). The entry
       // construction below still needs the resume / ordinal /
       // progress derivations, so only the membership decision swaps.
+      // Issue #8 — every derivation reads the snapshot's ONE precomputed
+      // latest-location fold (never a re-fold of the raw rows).
       if (
-        bookReadingState(book, snapshot.locations, (articleId) =>
+        bookReadingState(book, latestByArticle, (articleId) =>
           totalsById.get(articleId),
         ) !== "in-progress"
       )
         return [];
-      const resumeChapterId = resolveResumeChapterId(book, snapshot.locations);
+      const resumeChapterId = resolveResumeChapterId(book, latestByArticle);
       if (resumeChapterId === null) return []; // defensive — in-progress implies a resume chapter
-      const progress = deriveBookProgress(book, snapshot.locations, (articleId) =>
+      const progress = deriveBookProgress(book, latestByArticle, (articleId) =>
         totalsById.get(articleId),
       );
       const ordinal = chapterOrdinal(book, resumeChapterId);

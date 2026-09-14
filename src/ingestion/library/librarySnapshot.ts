@@ -9,7 +9,14 @@
 // trigger the follow-up reload — the refreshKey idiom, hoisted behind the
 // module so no consumer re-implements it.
 //
-// What the snapshot carries (the shapes the library view consumes):
+// Issue #8 — the remaining library consumers migrated onto this read model:
+// the annotation review view (its own articles/highlights/notes/tags load
+// + refreshKey re-derive machine) and the settings panel's highlights
+// export (its own four-store Promise.all + fixture-merge fold) read THIS
+// snapshot now; curation writes (note save, highlight delete) and imports
+// follow up with the ONE invalidateLibrarySnapshot() call.
+//
+// What the snapshot carries (the shapes the library surfaces consume):
 //   - articles              — the composite library (fixtures ∪ ingested;
 //                             the listArticles seam, unchanged)
 //   - standaloneArticles +  — the D12-01 partition (articles carrying
@@ -36,15 +43,27 @@
 //                             (the D12-04 chip list: a tag on a book must
 //                             surface as a filterable chip; loadAllTags keeps
 //                             its persisted-rows-only derivation).
+//   - highlights + notes    — EVERY persisted annotation record (the review
+//                             view's join input and the highlights export's
+//                             payload; loadAllHighlights/loadAllNotes keep
+//                             their calm corrupt-row-drop derivations).
 //
 // The module is a data seam, not a cache: every load re-reads the stores.
 // Invalidation is a broadcast, not state — subscribers (useLibrarySnapshot)
 // decide what a reload means for their own surface. Zero React imports, so
 // the fold-pinning unit suite imports this module directly.
-import type { Book, CanonicalArticle, LocationRecord } from "../../content/schema";
+import type {
+  Book,
+  CanonicalArticle,
+  HighlightRecord,
+  LocationRecord,
+  NoteRecord,
+} from "../../content/schema";
 import { graphemeClusters, normalizeText } from "../../content/normalizeText";
 import { listArticles } from "../../content/repository";
 import { loadAllLocations } from "../../persistence/locationStore";
+import { loadAllHighlights } from "../../persistence/highlightsStore";
+import { loadAllNotes } from "../../persistence/notesStore";
 import { listBooks } from "../../persistence/booksStore";
 import { loadAllTags } from "./tagsStore";
 import { latestLocationByArticle } from "../../reader/readingPosition";
@@ -72,6 +91,12 @@ export interface LibrarySnapshot {
   totalsByArticleId: Map<string, number>;
   /** Article tags ∪ book tags, localeCompare-sorted (the D12-04 chip list). */
   tags: string[];
+  /** EVERY persisted HighlightRecord (the review view's rows + the
+   * highlights export's payload; corrupt rows already dropped at the seam). */
+  highlights: HighlightRecord[];
+  /** EVERY persisted NoteRecord (keyed by highlightId; corrupt rows already
+   * dropped at the seam). */
+  notes: NoteRecord[];
 }
 
 /** The pre-first-load snapshot: every collection empty, every fold settled. */
@@ -84,21 +109,26 @@ export const EMPTY_LIBRARY_SNAPSHOT: LibrarySnapshot = {
   latestLocationByArticleId: new Map(),
   totalsByArticleId: new Map(),
   tags: [],
+  highlights: [],
+  notes: [],
 };
 
 /**
  * loadLibrarySnapshot — the ONE whole-library read. Composes the existing
  * store seams in parallel and derives every fold from the same settled
  * results. Rejects only when a load the library cannot render without
- * fails (articles/locations/tags — the mirrors of the old LibraryView load
- * effect's Promise.all); a books failure stays fail-quiet ([]).
+ * fails (articles/locations/tags/highlights/notes — the mirrors of the old
+ * LibraryView/ReviewView load effects' Promise.all); a books failure stays
+ * fail-quiet ([]).
  */
 export async function loadLibrarySnapshot(): Promise<LibrarySnapshot> {
-  const [articles, locations, tags, booksResult] = await Promise.all([
+  const [articles, locations, tags, booksResult, highlights, notes] = await Promise.all([
     listArticles(),
     loadAllLocations(),
     loadAllTags(),
     listBooks(),
+    loadAllHighlights(),
+    loadAllNotes(),
   ]);
   const books = booksResult.ok ? booksResult.books : [];
 
@@ -148,12 +178,15 @@ export async function loadLibrarySnapshot(): Promise<LibrarySnapshot> {
     latestLocationByArticleId,
     totalsByArticleId,
     tags: [...tagSet].sort((a, b) => a.localeCompare(b)),
+    highlights,
+    notes,
   };
 }
 
 // ── Invalidation (the one write-followup call) ──────────────────────────────
 // Write paths (remove article/book, add book, edit metadata, read-state
-// changes) call invalidateLibrarySnapshot() after the write lands; subscribed
+// changes, review-panel curation, bundle import) call
+// invalidateLibrarySnapshot() after the write lands; subscribed
 // consumers re-run their load. A plain broadcast set — no state, no caching,
 // no third-party store (the AGENTS.md stack rule): the hook below the bus
 // owns whatever reload semantics a surface needs.
