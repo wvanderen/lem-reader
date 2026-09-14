@@ -1,6 +1,6 @@
 // tests/unit/portability/export-service.test.ts
 // Plan 09-04 Task 1 (TDD RED → GREEN) — the PORT-01 export truth:
-//   - buildBundleBytes returns bytes that unzip to EXACTLY the entries
+//   - buildBundle returns bytes that unzip to EXACTLY the entries
 //     bundle.json + manifest.json (D9-01)
 //   - the two seeded Dexie articles serialize; the bundled FIXTURE article
 //     never does (ARCHITECTURE L615 — fixtures excluded by construction)
@@ -288,16 +288,16 @@ function collectPageKeys(value: unknown, path: string, found: string[]): void {
   }
 }
 
-/** Unzip buildBundleBytes output into its entries (test-side truth). */
+/** Unzip buildBundle output into its entries (test-side truth). */
 async function buildEntries() {
-  const { buildBundleBytes } = await loadService();
-  const bytes = await buildBundleBytes();
+  const { buildBundle } = await loadService();
+  const bytes = (await buildBundle()).bytes;
   return unzipSync(bytes);
 }
 
 // ── The contract ─────────────────────────────────────────────────────────────
 
-describe("buildBundleBytes (09-04 Task 1)", () => {
+describe("buildBundle (09-04 Task 1)", () => {
   beforeEach(async () => {
     await wipeDatabase();
   });

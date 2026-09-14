@@ -150,9 +150,9 @@ export function DeleteHighlightConfirm({
     } catch {
       // Even the destructive path defends itself: if the delete throws, we
       // still close the dialog so the reader isn't stuck. The panel's
-      // refreshKey re-derivation will reveal the row is still present; the
-      // reader can retry. (No delete retry here — the reader explicitly
-      // consented ONCE.)
+      // snapshot invalidation re-derivation will reveal the row is still
+      // present; the reader can retry. (No delete retry here — the reader
+      // explicitly consented ONCE.)
     }
     onConfirm();
   };

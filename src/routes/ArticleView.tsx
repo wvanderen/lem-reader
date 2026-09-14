@@ -21,7 +21,7 @@
 //      RestorationMarker (Plan 18-03 — the passive transient cue that
 //      replaced the retired ResumeBanner, D18-06: reopen-restore only,
 //      never blocks or shifts content, auto-clears at 4s).
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { openArticle } from "../content/repository";
 import type { CanonicalArticle } from "../content/types";
 import type { Book } from "../content/schema";
@@ -102,14 +102,18 @@ import { downloadBlob } from "../portability/download";
 import { loadAllHighlights } from "../persistence/highlightsStore";
 import { loadAllNotes } from "../persistence/notesStore";
 // Plan 12-06 (ING-05 — D12-08 + D12-05): the epub-chapter context line +
-// end-of-chapter navigation. The Book record loads through the booksStore
-// seam (getBook is Zod-validated + tolerant — a missing/corrupt row returns
-// null and renders neither the line nor the nav, never an error state); the
+// end-of-chapter navigation. Issue #8 — the Book record and the neighbor
+// chapter context derive from the ONE LibrarySnapshot (snapshot.books +
+// snapshot.chaptersByBook) instead of a per-open getBook + per-neighbor
+// openArticle reads; a missing/corrupt book row still renders neither the
+// line nor the nav (calm no-chrome read, never an error state). The
 // "Chapter N" ordinal derives from the book's own TOC via chapterOrdinal
 // (D12-06 — publisher intent is the unit of truth). Ordinary articles never
-// reach either code path (the load effect gates on source "epub-chapter").
-import { getBook } from "../persistence/booksStore";
+// reach the derivation (it gates on source "epub-chapter").
 import { chapterOrdinal } from "../ingestion/library/bookProgress";
+// Issue #8 — the ONE library read model (book/neighbor context) + its ONE
+// loading/status machine.
+import { useLibrarySnapshot } from "../ingestion/library/useLibrarySnapshot";
 // Plan 14-03 Task 2 (D14-02) — the per-destination document.title via the
 // ONE shared helper (pageMeta owns the suffix, separator, and 64-char
 // truncation; ArticleView never string-builds its own title tail).
@@ -296,22 +300,58 @@ export function ArticleView({
   const restorationMarkerArticleRef = useRef<CanonicalArticle | null>(null);
   const [progress, setProgress] = useState(0);
 
-  // Plan 12-06 (D12-08 + D12-05): epub-chapter context. chapterContext holds
-  // the resolved Book plus the derived neighbor chapter ids (next/prev within
-  // the book's ordered TOC); null renders NEITHER the context line NOR the
-  // chapter nav (tolerant lookup — a missing/corrupt book record is a calm
-  // no-chrome read, never an error state). neighborTitles carries the
-  // next/prev chapter titles for the nav's lighter span (null → the bare
-  // "Next chapter" / "Previous chapter" text). Both reset on article swap.
-  const [chapterContext, setChapterContext] = useState<{
+  // Plan 12-06 (D12-08 + D12-05) + Issue #8 — the epub-chapter context,
+  // derived from the ONE LibrarySnapshot in the render body. chapterContext
+  // holds the resolved Book, the derived neighbor chapter ids (next/prev
+  // within the book's ordered TOC), and the neighbor titles for the nav's
+  // lighter span (null → the bare "Next chapter" / "Previous chapter"
+  // text); null renders NEITHER the context line NOR the chapter nav
+  // (tolerant lookup — a missing/corrupt book record is a calm no-chrome
+  // read, never an error state). The snapshot hook owns the load + status:
+  // while the snapshot is unsettled the context is null (no stale flash —
+  // the old per-open state resets are structurally impossible now).
+  const { status: libraryStatus, snapshot } = useLibrarySnapshot();
+  const chapterContext = useMemo<{
     book: Book;
     prevId: string | undefined;
     nextId: string | undefined;
-  } | null>(null);
-  const [neighborTitles, setNeighborTitles] = useState<{
-    prev: string | null;
-    next: string | null;
-  }>({ prev: null, next: null });
+    prevTitle: string | null;
+    nextTitle: string | null;
+  } | null>(() => {
+    if (libraryStatus !== "ready") return null;
+    const meta = article?.ingestionMeta;
+    if (!article || meta?.source !== "epub-chapter" || !meta.bookId) return null;
+    // Tolerant book lookup over the snapshot's fail-quiet books list: a
+    // missing/corrupt row is simply absent → no line, no nav.
+    const book = snapshot.books.find((b) => b.id === meta.bookId);
+    if (!book) return null;
+    // Neighbor derivation (D12-05): prefer the stamped chapterIndex when
+    // it still agrees with the book's own TOC (partial imports can leave
+    // the declared list stale), else fall back to indexOf — either way a
+    // chapter outside the record gets NO links (never a self-reference);
+    // the context line itself still renders (D12-08).
+    const idx =
+      meta.chapterIndex !== undefined &&
+      book.chapterArticleIds[meta.chapterIndex] === article.id
+        ? meta.chapterIndex
+        : book.chapterArticleIds.indexOf(article.id);
+    const prevId = idx >= 0 ? book.chapterArticleIds[idx - 1] : undefined;
+    const nextId = idx >= 0 ? book.chapterArticleIds[idx + 1] : undefined;
+    // Neighbor titles from the snapshot's chapter partition (the composite
+    // library) — a row missing from the library (partial import) renders
+    // the bare "Next chapter" / "Previous chapter" text, the old tolerant
+    // loadTitle discipline without the per-neighbor reads.
+    const chapters = snapshot.chaptersByBook.get(meta.bookId) ?? [];
+    const titleOf = (id: string | undefined): string | null =>
+      id ? (chapters.find((c) => c.id === id)?.provenance.title ?? null) : null;
+    return {
+      book,
+      prevId,
+      nextId,
+      prevTitle: titleOf(prevId),
+      nextTitle: titleOf(nextId),
+    };
+  }, [article, libraryStatus, snapshot]);
   // Plan 12-06 (D12-05): the paginated surface's current {page, total},
   // mirrored from onAnchorChange (which fires on every page/pages commit) so
   // the chapter nav can mount the Next link ONLY on the final page and the
@@ -1376,10 +1416,10 @@ export function ArticleView({
     // the new article's eager batch-resolve can fire its own "{N} couldn't
     // be relocated." announce if it has unresolved highlights.
     unresolvedAnnouncedRef.current = false;
-    // Plan 12-06 (D12-08 + D12-05): reset the epub-chapter context so a
-    // stale book line / nav from the previous article never flashes.
-    setChapterContext(null);
-    setNeighborTitles({ prev: null, next: null });
+    // Plan 12-06 (D12-08 + D12-05): the epub-chapter context is a render-
+    // body derivation over (article, snapshot) since Issue #8 — the old
+    // chapter-context state resets are structurally impossible (a swap
+    // recomputes from the new article; no stale book line / nav can flash).
     setPageState(null);
     // Plan 13-04 (Option A): reset the metadata-spot reserve so the next
     // article's spot (different byline/tags shape) re-measures at its own
@@ -1396,58 +1436,15 @@ export function ArticleView({
     currentAnchorOffsetRef.current = 0;
     lastPreciseAnchorRef.current = null;
     openArticle(articleId)
-      .then(async (a) => {
+      .then((a) => {
         if (cancelled) return;
         setArticle(a);
         setStatus(a ? "ready" : "error");
-        // Plan 12-06 (D12-08 + D12-05): epub-chapter context + neighbor
-        // links. Ordinary articles (no epub-chapter ingestionMeta with a
-        // bookId) return here — zero new code paths for them. The book
-        // lookup is TOLERANT: getBook returns null for a missing/corrupt
-        // row (Zod-at-boundary) and renders neither the context line nor
-        // the nav; a Dexie-level throw is caught into the same calm null.
-        const meta = a?.ingestionMeta;
-        if (!a || meta?.source !== "epub-chapter" || !meta.bookId) return;
-        let book: Book | null = null;
-        try {
-          book = await getBook(meta.bookId);
-        } catch {
-          book = null; // tolerant — reading continues without chapter chrome
-        }
-        if (cancelled) return;
-        if (!book) return; // missing/corrupt record → no line, no nav
-        // Neighbor derivation (D12-05): prefer the stamped chapterIndex when
-        // it still agrees with the book's own TOC (partial imports can leave
-        // the declared list stale), else fall back to indexOf — either way a
-        // chapter outside the record gets NO links (never a self-reference).
-        const idx =
-          meta.chapterIndex !== undefined &&
-          book.chapterArticleIds[meta.chapterIndex] === a.id
-            ? meta.chapterIndex
-            : book.chapterArticleIds.indexOf(a.id);
-        const prevId = idx >= 0 ? book.chapterArticleIds[idx - 1] : undefined;
-        const nextId = idx >= 0 ? book.chapterArticleIds[idx + 1] : undefined;
-        setChapterContext({ book, prevId, nextId });
-        // Neighbor titles for the nav's lighter span — light repository
-        // reads through the same Zod-validated seam (tolerant of missing
-        // rows: a null title renders the bare "Next chapter" text).
-        const loadTitle = async (
-          id: string | undefined,
-        ): Promise<string | null> => {
-          if (!id) return null;
-          try {
-            const neighbor = await openArticle(id);
-            return neighbor?.provenance.title ?? null;
-          } catch {
-            return null;
-          }
-        };
-        const [prevTitle, nextTitle] = await Promise.all([
-          loadTitle(prevId),
-          loadTitle(nextId),
-        ]);
-        if (cancelled) return;
-        setNeighborTitles({ prev: prevTitle, next: nextTitle });
+        // Plan 12-06 (D12-08 + D12-05) + Issue #8 — the epub-chapter
+        // context + neighbor links derive from the ONE LibrarySnapshot in
+        // the render body (chapterContext above): no per-open getBook, no
+        // per-neighbor openArticle reads, no post-load state machine. The
+        // load effect owns ONLY the article itself.
       })
       .catch(() => {
         if (cancelled) return;
@@ -2427,20 +2424,20 @@ export function ArticleView({
                     className="chapter-nav chapter-nav-page chapter-nav-next"
                     aria-label="Book chapters"
                   >
-                    <a
-                      className="chapter-next"
-                      href={`#/article/${chapterContext.nextId}`}
-                    >
-                      Next chapter
-                      {neighborTitles.next && (
-                        <span className="chapter-nav-title">
-                          {" "}
-                          {neighborTitles.next}
-                        </span>
-                      )}
-                    </a>
-                  </nav>
-                )}
+                  <a
+                    className="chapter-next"
+                    href={`#/article/${chapterContext.nextId}`}
+                  >
+                    Next chapter
+                    {chapterContext.nextTitle && (
+                      <span className="chapter-nav-title">
+                        {" "}
+                        {chapterContext.nextTitle}
+                      </span>
+                    )}
+                  </a>
+                </nav>
+              )}
               {chapterContext?.prevId && pageState !== null && pageState.page === 1 && (
                 <nav
                   className="chapter-nav chapter-nav-page chapter-nav-previous"
@@ -2451,10 +2448,10 @@ export function ArticleView({
                     href={`#/article/${chapterContext.prevId}`}
                   >
                     Previous chapter
-                    {neighborTitles.prev && (
+                    {chapterContext.prevTitle && (
                       <span className="chapter-nav-title">
                         {" "}
-                        {neighborTitles.prev}
+                        {chapterContext.prevTitle}
                       </span>
                     )}
                   </a>
@@ -2530,10 +2527,10 @@ export function ArticleView({
                     href={`#/article/${chapterContext.prevId}`}
                   >
                     Previous chapter
-                    {neighborTitles.prev && (
+                    {chapterContext.prevTitle && (
                       <span className="chapter-nav-title">
                         {" "}
-                        {neighborTitles.prev}
+                        {chapterContext.prevTitle}
                       </span>
                     )}
                   </a>
@@ -2561,10 +2558,10 @@ export function ArticleView({
                     href={`#/article/${chapterContext.nextId}`}
                   >
                     Next chapter
-                    {neighborTitles.next && (
+                    {chapterContext.nextTitle && (
                       <span className="chapter-nav-title">
                         {" "}
-                        {neighborTitles.next}
+                        {chapterContext.nextTitle}
                       </span>
                     )}
                   </a>

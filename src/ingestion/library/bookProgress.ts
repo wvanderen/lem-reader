@@ -1,21 +1,27 @@
 // src/ingestion/library/bookProgress.ts
 // Plan 12-05 Task 1 — PURE book-level derivations over existing
 // LocationRecords (D12-03 + D12-07). ZERO new measurement: every input is a
-// persisted row (Book.chapterArticleIds + LocationRecord[]) plus a
-// caller-supplied text-length lookup. This module has NO React usage and NO
-// Dexie queries of its own — components own the reads (the store-seam
+// persisted Book row plus the CALLER-FOLDED latest-location map and a
+// caller-supplied text-length lookup. This module has NO React usage and
+// NO Dexie queries of its own — components own the reads (the store-seam
 // discipline), this module owns the algebra.
 //
-// FINISHED_THRESHOLD's predicate (isFinishedOffset) + the latest-savedAt
-// fold (latestLocationByArticle) come from ../../reader/readingPosition —
-// Issue #2's ONE pure home for the completion policy (the former upward
-// import from ./ContinueReadingStrip is retired; a policy module never
-// imports from a UI component). The fold moved there verbatim so the
-// savedAt-tie discipline lives beside the threshold it feeds, and the
-// chapter finished check below CALLS isFinishedOffset instead of forking
-// the threshold algebra — every finished decision in the app reads ONE
-// predicate (behavior-identical for every nonzero total; the opened-
-// zero-length 0/0 edge now AGREES with articleReadingState: not finished).
+// Issue #8 — the functions take the ONE precomputed latest-location fold
+// (snapshot.latestLocationByArticleId — readingPosition's
+// latestLocationByArticle applied once per LibrarySnapshot load) instead of
+// re-folding raw rows per call. No consumer folds twice: the snapshot owns
+// the fold, this module owns the book algebra over it.
+//
+// FINISHED_THRESHOLD's predicate (isFinishedOffset) comes from
+// ../../reader/readingPosition — Issue #2's ONE pure home for the
+// completion policy (the former upward import from ./ContinueReadingStrip
+// is retired; a policy module never imports from a UI component). The fold
+// moved there verbatim so the savedAt-tie discipline lives beside the
+// threshold it feeds, and the chapter finished check below CALLS
+// isFinishedOffset instead of forking the threshold algebra — every
+// finished decision in the app reads ONE predicate (behavior-identical for
+// every nonzero total; the opened-zero-length 0/0 edge now AGREES with
+// articleReadingState: not finished).
 //
 // Contracts (12-05-PLAN.md §must_haves truths):
 //   - deriveBookProgress (D12-03): chapters-finished ratio — count(chapter
@@ -31,45 +37,42 @@
 //     chapterArticleIds — the "Chapter N" source; callers render "of M" with
 //     chapterArticleIds.length.
 //
-// The latest-per-article fold (now readingPosition's
-// latestLocationByArticle) is the ONE fold the strip and LibraryView call
+// The latest-per-article fold (readingPosition's latestLocationByArticle,
+// carried in the snapshot) is the ONE fold the strip and LibraryView read
 // too (max savedAt per articleId — D8-10 "recently-read = opened").
 // LocationRecords are keyed [articleId+revision], so a chapter read across
 // revisions carries several rows; the latest-savedAt row is the live truth
 // for BOTH the finished check and the resume pick.
 import type { Book, LocationRecord } from "../../content/schema";
-import {
-  isFinishedOffset,
-  latestLocationByArticle,
-} from "../../reader/readingPosition";
+import { isFinishedOffset } from "../../reader/readingPosition";
 
 /**
  * deriveBookProgress (D12-03) — chapters-finished ratio in [0, 1].
  *
- * @param book         The Book record (its ordered chapterArticleIds are the
- *                     denominator).
- * @param locations    ALL persisted LocationRecords (the fold filters to the
- *                     book's chapters; callers may pass the whole library's
- *                     rows).
- * @param textLengthOf Lookup for a chapter's normalized-text grapheme total
- *                     (`graphemeClusters(normalizeText(article), lang)
- *                     .length`). Returns undefined when the chapter article
- *                     row is absent (partial import) — such chapters count
- *                     as UNFINISHED, never as errors.
+ * @param book              The Book record (its ordered chapterArticleIds
+ *                          are the denominator).
+ * @param latestByArticleId THE latest-location fold (max savedAt per
+ *                          articleId) — pass snapshot.latestLocationByArticleId,
+ *                          never raw rows (the snapshot already folded them).
+ * @param textLengthOf      Lookup for a chapter's normalized-text grapheme
+ *                          total (`graphemeClusters(normalizeText(article),
+ *                          lang).length`). Returns undefined when the
+ *                          chapter article row is absent (partial import) —
+ *                          such chapters count as UNFINISHED, never as
+ *                          errors.
  * @returns finished-chapters ÷ chapterArticleIds.length; 0 when the book
  *                   declares no chapters.
  */
 export function deriveBookProgress(
   book: Book,
-  locations: LocationRecord[],
+  latestByArticleId: ReadonlyMap<string, LocationRecord>,
   textLengthOf: (articleId: string) => number | undefined,
 ): number {
   const total = book.chapterArticleIds.length;
   if (total === 0) return 0;
-  const latest = latestLocationByArticle(locations);
   let finished = 0;
   for (const chapterId of book.chapterArticleIds) {
-    const loc = latest.get(chapterId);
+    const loc = latestByArticleId.get(chapterId);
     if (!loc) continue; // never opened → unfinished
     const len = textLengthOf(chapterId);
     if (len === undefined) continue; // unknown text length → unfinished
@@ -86,18 +89,19 @@ export function deriveBookProgress(
  * mid-chapter or an EARLIER chapter re-skimmed later (the re-skim's savedAt
  * is newer — predictability beats read-in-order assumptions).
  *
+ * @param latestByArticleId THE latest-location fold (max savedAt per
+ *                          articleId) — pass snapshot.latestLocationByArticleId.
  * @returns The chapter article id, or null when no chapter of this book has
  *          any location (a fresh book — nothing to resume).
  */
 export function resolveResumeChapterId(
   book: Book,
-  locations: LocationRecord[],
+  latestByArticleId: ReadonlyMap<string, LocationRecord>,
 ): string | null {
   const chapterSet = new Set(book.chapterArticleIds);
-  const latest = latestLocationByArticle(locations);
   let bestId: string | null = null;
   let bestAt: string | null = null;
-  for (const [articleId, loc] of latest) {
+  for (const [articleId, loc] of latestByArticleId) {
     if (!chapterSet.has(articleId)) continue;
     if (bestAt === null || loc.savedAt > bestAt) {
       bestAt = loc.savedAt;

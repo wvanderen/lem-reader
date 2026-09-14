@@ -29,8 +29,9 @@
 // Issue #3 — the row consumes the ONE LibrarySnapshot: per-chapter totals
 // read snapshot.totalsByArticleId (the ONE grapheme-total fold) and
 // per-chapter hairlines read snapshot.latestLocationByArticleId (the ONE
-// latest-location fold); the book-progress derivations fold over
-// snapshot.locations. No local fold copies remain.
+// latest-location fold). Issue #8 — the book-progress derivations take that
+// same precomputed fold; no consumer folds the raw rows, no local fold
+// copies remain.
 import { useMemo, useState } from "react";
 import type { Book, CanonicalArticle } from "../../content/schema";
 import { ProgressHairline } from "../../reader/ProgressHairline";
@@ -66,17 +67,20 @@ export function BookRow({
 
   // D12-03 book progress + D12-07 resume target — pure derivations, zero
   // new measurement (bookProgress.ts owns the algebra; the text-length
-  // lookup reads the snapshot's ONE totals fold).
+  // lookup reads the snapshot's ONE totals fold, the latest-location input
+  // is the snapshot's ONE precomputed fold — Issue #8, never a re-fold).
   const progress = useMemo(
     () =>
-      deriveBookProgress(book, snapshot.locations, (articleId) =>
-        snapshot.totalsByArticleId.get(articleId),
+      deriveBookProgress(
+        book,
+        snapshot.latestLocationByArticleId,
+        (articleId) => snapshot.totalsByArticleId.get(articleId),
       ),
     [book, snapshot],
   );
   const resumeChapterId = useMemo(
-    () => resolveResumeChapterId(book, snapshot.locations),
-    [book, snapshot.locations],
+    () => resolveResumeChapterId(book, snapshot.latestLocationByArticleId),
+    [book, snapshot.latestLocationByArticleId],
   );
 
   // Partial-import-tolerant ordering: the book's declared TOC order first
@@ -100,8 +104,10 @@ export function BookRow({
   // (readingState.ts); the progress memo above stays untouched because
   // the hairline ratio still needs it.
   const isFinished =
-    bookReadingState(book, snapshot.locations, (articleId) =>
-      snapshot.totalsByArticleId.get(articleId),
+    bookReadingState(
+      book,
+      snapshot.latestLocationByArticleId,
+      (articleId) => snapshot.totalsByArticleId.get(articleId),
     ) === "finished";
   const showHairline = progress > 0 && !isFinished;
   const chaptersRegionId = `chapters-${book.id}`;

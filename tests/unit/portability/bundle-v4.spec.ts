@@ -171,18 +171,18 @@ describe("fflate A5 — mixed-value zipSync round-trips byte-equal (20-05 Task 1
 
 // ── Task 1: writer emits v4 with asset meta + entries ────────────────────────
 
-describe("buildBundleBytes — v4 asset emission (20-05 Task 1)", () => {
+describe("buildBundle — v4 asset emission (20-05 Task 1)", () => {
   beforeEach(async () => {
     await wipeDatabase();
   });
 
   it("emits schemaVersion 4 with per-asset meta and a raw zip entry at assets/<articleId>/<assetId>", async () => {
-    const { buildBundleBytes } = await loadService();
+    const { buildBundle } = await loadService();
     const { db } = await loadDb();
     await db.articles.put(figureArticle());
     const bytes = await seedFigureAsset();
 
-    const entries = unzipSync(await buildBundleBytes());
+    const entries = unzipSync((await buildBundle()).bytes);
     const bundleJson = JSON.parse(strFromU8(entries["bundle.json"]!)) as {
       schemaVersion: number;
       assets?: Array<Record<string, unknown>>;
@@ -211,12 +211,12 @@ describe("buildBundleBytes — v4 asset emission (20-05 Task 1)", () => {
   });
 
   it("an asset-free library still emits the ALWAYS-PRESENT empty assets array with zero asset entries", async () => {
-    const { buildBundleBytes } = await loadService();
+    const { buildBundle } = await loadService();
     const { db } = await loadDb();
     // An article with NO matching asset row (the beforeEach wiped the store).
     await db.articles.put(figureArticle());
 
-    const entries = unzipSync(await buildBundleBytes());
+    const entries = unzipSync((await buildBundle()).bytes);
     const bundleJson = JSON.parse(strFromU8(entries["bundle.json"]!)) as {
       assets?: unknown[];
     };
@@ -228,12 +228,12 @@ describe("buildBundleBytes — v4 asset emission (20-05 Task 1)", () => {
   });
 
   it("validates back through validateBundle with schemaVersion 4 (round trip)", async () => {
-    const { buildBundleBytes, validateBundle } = await loadService();
+    const { buildBundle, validateBundle } = await loadService();
     const { db } = await loadDb();
     await db.articles.put(figureArticle());
     await seedFigureAsset();
 
-    const bytes = await buildBundleBytes();
+    const bytes = (await buildBundle()).bytes;
     const result = await validateBundle(new File([new Uint8Array(bytes)], "x.zip"));
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -252,12 +252,12 @@ describe("manifest assets block (20-05 Task 1)", () => {
   });
 
   it("manifest.json blocks.assets equals the recomputed computeManifest over the parsed v4 bundle", async () => {
-    const { buildBundleBytes } = await loadService();
+    const { buildBundle } = await loadService();
     const { db } = await loadDb();
     await db.articles.put(figureArticle());
     await seedFigureAsset();
 
-    const entries = unzipSync(await buildBundleBytes());
+    const entries = unzipSync((await buildBundle()).bytes);
     const parsed = ExportBundleSchema.parse(
       JSON.parse(strFromU8(entries["bundle.json"]!)),
     );

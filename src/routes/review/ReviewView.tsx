@@ -4,11 +4,17 @@
 // Plan 15-01 — D15-06, canonical route #/highlights with the legacy
 // #/review alias handled in App.tsx).
 // The LibraryView twin: same page shape (<main id="main"> + one h1 + .status
-// live region + filter row + list), same cancelled-flag Promise.all load
-// effect keyed on refreshKey, same pure-derivation-in-the-render-body
+// live region + filter row + list), same pure-derivation-in-the-render-body
 // discipline (D10-09). ALL data logic lives in ./review/reviewFilter
 // (Plan 10-01) — this component owns no new derivation logic, only
 // rendering + control state.
+//
+// Issue #8 — the view consumes the ONE LibrarySnapshot (useLibrarySnapshot):
+// its own articles/highlights/notes/tags Promise.all load, its own
+// "loading | ready | error" machine, and its refreshKey re-derive bump are
+// all gone — the snapshot module owns the load, the hook owns the status
+// machine, and every curation commit (note save, highlight delete) follows
+// up with the ONE invalidateLibrarySnapshot() call.
 //
 // Locked decisions rendered here:
 //   - D10-01: dedicated route (not a modal) — one h1 per page
@@ -42,9 +48,10 @@
 //     curatable in place. "Edit note" opens ReviewNoteDialog (notes are
 //     keyed to highlightId, so no article is needed); "Remove highlight"
 //     opens DeleteHighlightConfirm (cascade-honest copy, destructive write
-//     ONLY in its Proceed onClick). Both commits bump refreshKey (Pitfall 6
-//     — re-derive from Dexie, never a stale row) and announce calmly in
-//     .status ("Highlight removed." / "Note saved.").
+//     ONLY in its Proceed onClick). Both commits invalidate the ONE
+//     LibrarySnapshot (Issue #8 — re-derive from Dexie, never a stale row)
+//     and announce calmly in .status ("Highlight removed." / "Note
+//     saved.").
 //
 // Threat register (10-02-PLAN.md <threat_model>):
 //   - T-10-02b (stored XSS): every quote/note/title/host string renders as
@@ -54,11 +61,8 @@
 //     record ids only; hashchange consumers re-parse through the same
 //     App.tsx regex grammar.
 import { useEffect, useRef, useState } from "react";
-import { listArticles } from "../../content/repository";
 import type { CanonicalArticle } from "../../content/types";
-import type { HighlightRecord, NoteRecord } from "../../content/schema";
 import { TagFilter } from "../../ingestion/library/TagFilter";
-import { loadAllTags } from "../../ingestion/library/tagsStore";
 // Plan 14-03 Task 1 (D14-02) — the review destination's document.title via
 // the ONE shared helper (never string-built here; the helper owns the
 // suffix, separator, and 64-char truncation).
@@ -67,8 +71,10 @@ import { setDocumentTitle } from "../../ingestion/library/pageMeta";
 // options sort, section h2) carry the ONE effective title: the reader-owned
 // override when present, canonical as fallback. One name, one order.
 import { effectiveTitle } from "../../ingestion/library/effectiveMetadata";
-import { loadAllHighlights } from "../../persistence/highlightsStore";
-import { loadAllNotes } from "../../persistence/notesStore";
+// Issue #8 — the ONE library read model + its invalidation call replace the
+// view's own whole-library load and refreshKey state machine.
+import { invalidateLibrarySnapshot } from "../../ingestion/library/librarySnapshot";
+import { useLibrarySnapshot } from "../../ingestion/library/useLibrarySnapshot";
 // Plan 19-02 (D19-10) — every stored-quote excerpt derivation routes through
 // the ONE shared pure helper: a cross-block span describes itself as its
 // first fragment + a calm ellipsis, never a truncated multi-block blob.
@@ -316,23 +322,27 @@ function ReviewRow({
  * ReviewView — the cross-article annotation review panel, the Highlights
  * destination at #/highlights (D15-06 rename; the legacy #/review URL
  * aliases here via App.tsx normalization).
- * Loads the whole library (articles + highlights + notes + tags) in one
- * parallel Promise.all, derives sections purely in the render body
- * (D10-09 — no effect chains), and renders grouped-by-article sections
- * plus the never-drop orphan tail.
+ * Reads the whole library (articles + highlights + notes + tags) from the
+ * ONE LibrarySnapshot (Issue #8 — no own load, no own status machine),
+ * derives sections purely in the render body (D10-09 — no effect chains),
+ * and renders grouped-by-article sections plus the never-drop orphan tail.
  */
 export function ReviewView({ hasAppHistory }: { hasAppHistory: boolean }) {
   // Plan 14-03 Task 1 (renamed by Plan 15-01 / D15-06) — the h1 focus
   // target (the tabindex=-1 pattern; text is the D15-06 "Highlights"
   // anchor, level byte-stable).
   const h1Ref = useRef<HTMLHeadingElement>(null);
-  const [status, setStatus] = useState<"loading" | "ready" | "error">(
-    "loading",
-  );
-  const [articles, setArticles] = useState<CanonicalArticle[]>([]);
-  const [highlights, setHighlights] = useState<HighlightRecord[]>([]);
-  const [notes, setNotes] = useState<NoteRecord[]>([]);
-  const [allTags, setAllTags] = useState<string[]>([]);
+  // Issue #8 — the ONE loading/status machine (useLibrarySnapshot). Invali-
+  // dation-triggered reloads never rewind to "loading" and never clear the
+  // settled snapshot — stale-while-revalidate, so a curation commit never
+  // flashes the panel through an empty state.
+  const { status, snapshot } = useLibrarySnapshot();
+  // Render-body aliases over the snapshot (the LibraryView discipline):
+  // the old per-field article/highlight/note/tag states are deleted.
+  const articles = snapshot.articles;
+  const highlights = snapshot.highlights;
+  const notes = snapshot.notes;
+  const allTags = snapshot.tags;
   // D10-08: filters AND-compose; confidence "all" includes ambiguous and
   // orphan rows (tri-state is never silently filtered away).
   const [filters, setFilters] = useState<ReviewFilters>({
@@ -342,10 +352,6 @@ export function ReviewView({ hasAppHistory }: { hasAppHistory: boolean }) {
   });
   // D10-08: Date is the default sort.
   const [sort, setSort] = useState<ReviewSort>("date");
-  // refreshKey re-triggers the load effect after every curation commit
-  // (Plan 10-05, Pitfall 6 — the panel re-derives from Dexie so no stale
-  // row survives an edit or delete; never a reload).
-  const [refreshKey, setRefreshKey] = useState(0);
   // Plan 10-05 curation targets: the ReviewEntry under action (null when
   // the corresponding dialog is closed). Notes are keyed to highlightId, so
   // the note dialog opens for ANY row — orphan rows included (D10-11).
@@ -373,34 +379,6 @@ export function ReviewView({ hasAppHistory }: { hasAppHistory: boolean }) {
     if (hasAppHistory) h1Ref.current?.focus();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount only
   }, []);
-
-  // Load effect — the LibraryView L66-97 twin: cancelled-flag +
-  // Promise.all over the whole-library Zod-validated readers. NO new store
-  // code; on rejection the calm DOC-06 error copy surfaces through .status.
-  useEffect(() => {
-    let cancelled = false;
-    Promise.all([
-      listArticles(),
-      loadAllHighlights(),
-      loadAllNotes(),
-      loadAllTags(),
-    ])
-      .then(([loadedArticles, loadedHighlights, loadedNotes, loadedTags]) => {
-        if (cancelled) return;
-        setArticles(loadedArticles);
-        setHighlights(loadedHighlights);
-        setNotes(loadedNotes);
-        setAllTags(loadedTags);
-        setStatus("ready");
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setStatus("error");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [refreshKey]);
 
   // D10-09 — pure derivation in the render body (the filterLibrary
   // pattern): join → classify → filter → group → sort, no effect chains.
@@ -579,9 +557,10 @@ export function ReviewView({ hasAppHistory }: { hasAppHistory: boolean }) {
       )}
       {/* Plan 10-05 curation wiring. Both dialogs are always mounted
           (showModal requires DOM presence). The commit handlers share ONE
-          shape (the LibraryView RemoveConfirm twin): clear the target, bump
-          refreshKey (Pitfall 6 — re-derive from Dexie, no stale rows), and
-          announce calmly through .status. Cancel closes only. */}
+          shape (the LibraryView write-path twin): clear the target,
+          invalidate the ONE LibrarySnapshot (Issue #8 — re-derive from
+          Dexie, no stale rows), and announce calmly through .status.
+          Cancel closes only. */}
       <ReviewNoteDialog
         open={noteTarget !== null}
         highlightId={noteTarget?.highlight.id ?? ""}
@@ -589,7 +568,7 @@ export function ReviewView({ hasAppHistory }: { hasAppHistory: boolean }) {
         existing={noteTarget?.note ?? null}
         onDone={() => {
           setNoteTarget(null);
-          setRefreshKey((k) => k + 1);
+          invalidateLibrarySnapshot();
           setAnnouncement("Note saved.");
         }}
       />
@@ -603,7 +582,7 @@ export function ReviewView({ hasAppHistory }: { hasAppHistory: boolean }) {
         }
         onConfirm={() => {
           setRemoveTarget(null);
-          setRefreshKey((k) => k + 1);
+          invalidateLibrarySnapshot();
           // D10-12 exact copy.
           setAnnouncement("Highlight removed.");
         }}

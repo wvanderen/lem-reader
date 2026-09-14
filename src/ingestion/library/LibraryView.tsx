@@ -385,15 +385,15 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
   //     load, keyed on article id — the 260819-tld lesson, now behind the
   //     module).
   //   - locationsByArticle — THE latest-location fold (max savedAt — D8-10;
-  //     readingPosition's latestLocationByArticle applied at load).
-  //   - allLocations — the RAW rows BookRow's bookProgress derivations fold.
+  //     readingPosition's latestLocationByArticle applied at load). Issue
+  //     #8: the book-state derivations read THIS map too — no consumer
+  //     re-folds the raw rows.
   //   - books — Book rows (listBooks fail-quiet routes to [] behind the
   //     module — a books-load failure leaves the standalone library usable).
   //   - allTags — article tags ∪ book tags, localeCompare-sorted (D12-04
   //     chip list; loadAllTags keeps its persisted-rows-only derivation).
   const totalsById = snapshot.totalsByArticleId;
   const locationsByArticle = snapshot.latestLocationByArticleId;
-  const allLocations = snapshot.locations;
   const books = snapshot.books;
   const allTags = snapshot.tags;
   // Plan 12-05 — the book/article partition (D12-01): articles carrying
@@ -426,7 +426,7 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
           // Map.prototype.get requires its receiver; a bare .get reference
           // throws "called on incompatible receiver undefined" the moment a
           // book row exists (the render crashed with any located book).
-          (book) => bookReadingState(book, allLocations, (id) => totalsById.get(id)) === view,
+          (book) => bookReadingState(book, locationsByArticle, (id) => totalsById.get(id)) === view,
         );
 
   // Plan 14-02 (D14-23/D14-24) — switcher counts fold through countByState
@@ -441,7 +441,7 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
       total: totalsById.get(a.id) ?? 0,
     })),
     books,
-    allLocations,
+    locationsByArticle,
     // Rule 1 fix (14-04): arrow wrapper — same detached-Map.get hazard as
     // viewBooks above (the count fold crashed identically).
     (id) => totalsById.get(id),

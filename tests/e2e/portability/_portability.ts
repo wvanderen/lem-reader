@@ -343,7 +343,7 @@ export function highlightRow(
 /**
  * Build a real, valid bundle .zip in Node from an ExportBundle-shaped object:
  * the same ExportBundleSchema.parse self-check + computeManifest +
- * bundle.json (pretty) / manifest.json (minified) layout buildBundleBytes
+ * bundle.json (pretty) / manifest.json (minified) layout buildBundle
  * produces. The input is `unknown` on purpose — the parse IS the self-check,
  * so callers construct plain objects and invalid shapes throw here, in Node.
  * Phase 20 (20-05): `assetEntries` carries raw asset zip entries

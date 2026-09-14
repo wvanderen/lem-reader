@@ -4,12 +4,19 @@
 // React, no Dexie — bookProgress.ts owns only algebra over Book +
 // LocationRecord inputs (the library-search.test.ts discipline for pure
 // helpers).
+//
+// Issue #8 — the derivations take the ONE precomputed latest-location fold
+// (snapshot.latestLocationByArticleId) instead of raw rows: tests fold their
+// fixture rows through readingPosition's latestLocationByArticle (the same
+// ONE fold the snapshot module calls) and pin the exact same semantics as
+// before.
 import { describe, expect, it } from "vitest";
 import {
   deriveBookProgress,
   resolveResumeChapterId,
   chapterOrdinal,
 } from "../../../src/ingestion/library/bookProgress";
+import { latestLocationByArticle } from "../../../src/reader/readingPosition";
 import { BookSchema, LocationRecordSchema } from "../../../src/content/schema";
 import type { Book, LocationRecord } from "../../../src/content/schema";
 
@@ -50,23 +57,29 @@ function lengthsOf(lengths: Record<string, number>) {
   return (articleId: string): number | undefined => lengths[articleId];
 }
 
+/** The ONE latest-location fold (what snapshot.latestLocationByArticleId
+ * carries) applied to fixture rows — the call-shape every consumer uses. */
+function latestOf(rows: LocationRecord[]): ReturnType<typeof latestLocationByArticle> {
+  return latestLocationByArticle(rows);
+}
+
 describe("deriveBookProgress (D12-03 — chapters-finished ratio)", () => {
   it("counts a chapter finished at EXACTLY the FINISHED_THRESHOLD boundary (>=)", () => {
     // 0.98 x 100 = 98 — offset 98 is AT the boundary and counts.
     const book = makeBook(["epub-book000111-c00"]);
-    const progress = deriveBookProgress(book, [loc("epub-book000111-c00", 98, "2026-01-02T00:00:00.000Z")], lengthsOf({ "epub-book000111-c00": 100 }));
+    const progress = deriveBookProgress(book, latestOf([loc("epub-book000111-c00", 98, "2026-01-02T00:00:00.000Z")]), lengthsOf({ "epub-book000111-c00": 100 }));
     expect(progress).toBe(1);
   });
 
   it("one below the boundary is unfinished", () => {
     const book = makeBook(["epub-book000111-c00"]);
-    const progress = deriveBookProgress(book, [loc("epub-book000111-c00", 97, "2026-01-02T00:00:00.000Z")], lengthsOf({ "epub-book000111-c00": 100 }));
+    const progress = deriveBookProgress(book, latestOf([loc("epub-book000111-c00", 97, "2026-01-02T00:00:00.000Z")]), lengthsOf({ "epub-book000111-c00": 100 }));
     expect(progress).toBe(0);
   });
 
   it("a mid-chapter location is unfinished", () => {
     const book = makeBook(["epub-book000111-c00"]);
-    const progress = deriveBookProgress(book, [loc("epub-book000111-c00", 50, "2026-01-02T00:00:00.000Z")], lengthsOf({ "epub-book000111-c00": 100 }));
+    const progress = deriveBookProgress(book, latestOf([loc("epub-book000111-c00", 50, "2026-01-02T00:00:00.000Z")]), lengthsOf({ "epub-book000111-c00": 100 }));
     expect(progress).toBe(0);
   });
 
@@ -87,12 +100,12 @@ describe("deriveBookProgress (D12-03 — chapters-finished ratio)", () => {
       [ids[1]!]: 1000,
       [ids[2]!]: 1000,
     });
-    expect(deriveBookProgress(book, locations, lengths)).toBeCloseTo(1 / 3, 10);
+    expect(deriveBookProgress(book, latestOf(locations), lengths)).toBeCloseTo(1 / 3, 10);
   });
 
   it("empty locations → 0", () => {
     const book = makeBook(["epub-book000111-c00", "epub-book000111-c01"]);
-    expect(deriveBookProgress(book, [], lengthsOf({}))).toBe(0);
+    expect(deriveBookProgress(book, latestOf([]), lengthsOf({}))).toBe(0);
   });
 
   it("missing text length (partial import) → the chapter is unfinished", () => {
@@ -101,14 +114,14 @@ describe("deriveBookProgress (D12-03 — chapters-finished ratio)", () => {
     // the ratio cannot be known, so the chapter never counts as finished.
     const progress = deriveBookProgress(
       book,
-      [loc("epub-book000111-c00", 1_000_000, "2026-01-02T00:00:00.000Z")],
+      latestOf([loc("epub-book000111-c00", 1_000_000, "2026-01-02T00:00:00.000Z")]),
       lengthsOf({}),
     );
     expect(progress).toBe(0);
   });
 
   it("an empty chapterArticleIds list → 0 (never NaN)", () => {
-    expect(deriveBookProgress(makeBook([]), [], lengthsOf({}))).toBe(0);
+    expect(deriveBookProgress(makeBook([]), latestOf([]), lengthsOf({}))).toBe(0);
   });
 
   it("locations for articles OUTSIDE the book never count", () => {
@@ -117,7 +130,7 @@ describe("deriveBookProgress (D12-03 — chapters-finished ratio)", () => {
       loc("some-other-article", 1000, "2026-01-02T00:00:00.000Z"),
     ];
     expect(
-      deriveBookProgress(book, locations, lengthsOf({ "some-other-article": 1000 })),
+      deriveBookProgress(book, latestOf(locations), lengthsOf({ "some-other-article": 1000 })),
     ).toBe(0);
   });
 
@@ -130,7 +143,7 @@ describe("deriveBookProgress (D12-03 — chapters-finished ratio)", () => {
       loc("epub-book000111-c00", 10, "2026-01-03T00:00:00.000Z", 2),
     ];
     expect(
-      deriveBookProgress(book, locations, lengthsOf({ "epub-book000111-c00": 1000 })),
+      deriveBookProgress(book, latestOf(locations), lengthsOf({ "epub-book000111-c00": 1000 })),
     ).toBe(0);
   });
 });
@@ -144,7 +157,7 @@ describe("resolveResumeChapterId (D12-07 — last-read wins)", () => {
       loc(ids[0]!, 100, "2026-01-02T00:00:00.000Z"),
       loc(ids[1]!, 100, "2026-01-05T00:00:00.000Z"),
     ];
-    expect(resolveResumeChapterId(book, locations)).toBe(ids[1]);
+    expect(resolveResumeChapterId(book, latestOf(locations))).toBe(ids[1]);
   });
 
   it("an EARLIER chapter re-skimmed later wins (D12-07)", () => {
@@ -153,16 +166,16 @@ describe("resolveResumeChapterId (D12-07 — last-read wins)", () => {
       loc(ids[0]!, 100, "2026-01-10T00:00:00.000Z"), // c00 re-skimmed LAST
       loc(ids[1]!, 100, "2026-01-05T00:00:00.000Z"),
     ];
-    expect(resolveResumeChapterId(book, locations)).toBe(ids[0]);
+    expect(resolveResumeChapterId(book, latestOf(locations))).toBe(ids[0]);
   });
 
   it("no locations at all → null", () => {
-    expect(resolveResumeChapterId(makeBook(ids), [])).toBeNull();
+    expect(resolveResumeChapterId(makeBook(ids), latestOf([]))).toBeNull();
   });
 
   it("locations for non-chapter articles are ignored (→ null)", () => {
     const locations = [loc("some-other-article", 5, "2026-01-02T00:00:00.000Z")];
-    expect(resolveResumeChapterId(makeBook(ids), locations)).toBeNull();
+    expect(resolveResumeChapterId(makeBook(ids), latestOf(locations))).toBeNull();
   });
 
   it("resumes mid-chapter (any offset qualifies — recency is the only rule)", () => {
@@ -171,7 +184,7 @@ describe("resolveResumeChapterId (D12-07 — last-read wins)", () => {
       loc(ids[0]!, 3, "2026-01-09T00:00:00.000Z"), // barely started, but most recent
       loc(ids[1]!, 900, "2026-01-01T00:00:00.000Z"),
     ];
-    expect(resolveResumeChapterId(book, locations)).toBe(ids[0]);
+    expect(resolveResumeChapterId(book, latestOf(locations))).toBe(ids[0]);
   });
 });
 

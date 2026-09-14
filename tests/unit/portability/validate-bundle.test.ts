@@ -19,7 +19,7 @@
 //   +. decompression bomb — an entry DECLARING an originalSize over the cap is
 //                           filtered (never inflated); the function returns a
 //                           refusal rather than allocating (T-9-02)
-//   +. round trip         — a well-formed bundle built by buildBundleBytes
+//   +. round trip         — a well-formed bundle built by buildBundle
 //                           validates ok with bundle + manifest
 //
 // Tests build zips in-memory via zipSync; a File is constructed via
@@ -42,7 +42,7 @@ import fakeIndexedDB, { IDBKeyRange } from "fake-indexeddb";
 import { Dexie } from "dexie";
 
 // Dexie 4 captures `indexedDB` + `IDBKeyRange` on `Dexie.dependencies` at
-// dexie-module-load time (needed for the round-trip case's buildBundleBytes
+// dexie-module-load time (needed for the round-trip case's buildBundle
 // seed). Mirrors tests/unit/ingestion-tags.test.ts.
 Dexie.dependencies.indexedDB = fakeIndexedDB;
 Dexie.dependencies.IDBKeyRange = IDBKeyRange;
@@ -493,13 +493,13 @@ describe("validateBundle — round trip (09-04 Task 2)", () => {
     await wipeDatabase();
   });
 
-  it("validates a well-formed bundle built by buildBundleBytes with ok:true + bundle + manifest", async () => {
-    const { buildBundleBytes, validateBundle } = await loadService();
+  it("validates a well-formed bundle built by buildBundle with ok:true + bundle + manifest", async () => {
+    const { buildBundle, validateBundle } = await loadService();
     const { db } = await loadDb();
     await db.articles.put(sampleArticle());
     await db.settings.put({ key: "reader-prefs", value: samplePrefs() });
 
-    const bytes = await buildBundleBytes();
+    const bytes = (await buildBundle()).bytes;
     // new Uint8Array(bytes) re-backs the view on a fresh ArrayBuffer —
     // BlobPart requires ArrayBuffer backing under TS 7 (the 09-01
     // sha256Hex typing precedent).

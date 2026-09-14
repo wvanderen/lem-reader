@@ -56,11 +56,17 @@ import { loadAllAssets } from "../persistence/assetsStore";
 // ── Export side (PORT-01) ────────────────────────────────────────────────────
 
 /**
- * buildBundleBytes — read the six record sources (five Phase-9 sources +
- * books since Phase 12) through the Zod-validated loaders (STATE-04 — never
- * raw db.* reads, never N+1 per-article loaders), derive fixtureIds,
- * self-check the envelope, and zip bundle.json (pretty, human-debuggable —
- * negligible after DEFLATE) + manifest.json (minified).
+ * buildBundle — read the six record sources (five Phase-9 sources + books
+ * since Phase 12) through the Zod-validated loaders (STATE-04 — never raw
+ * db.* reads, never N+1 per-article loaders), derive fixtureIds, self-check
+ * the envelope, and zip bundle.json (pretty, human-debuggable — negligible
+ * after DEFLATE) + manifest.json (minified).
+ *
+ * Returns the zipped bytes PLUS the article count of the EXACT set the
+ * bundle serialized (Issue #8): the count rides the build's own read — the
+ * settings panel's export summary never re-lists the library and can never
+ * disagree with the file it just handed the reader. Dexie articles ONLY —
+ * fixtures never ride the bundle.
  *
  * fixtureIds (D9-04): the ids of bundled fixtures the reader's records
  * actually reference — highlights.articleId, locations.articleId, and notes
@@ -74,7 +80,15 @@ import { loadAllAssets } from "../persistence/assetsStore";
  * bug surfaced to the caller (the 09-05 UI catches and reports calmly) —
  * it can never produce a half-valid bundle.
  */
-export async function buildBundleBytes(): Promise<Uint8Array<ArrayBuffer>> {
+export interface ExportBuild {
+  /** The zipped bundle bytes (bundle.json + manifest.json + assets). */
+  bytes: Uint8Array<ArrayBuffer>;
+  /** How many article rows the bundle carries (the same `articles` array
+   * the envelope was parsed from — Dexie rows, fixtures never ride). */
+  articleCount: number;
+}
+
+export async function buildBundle(): Promise<ExportBuild> {
   const [articles, highlights, notes, locations, settingsResult, booksResult, assetRows] =
     await Promise.all([
       dexieLibrarySource.list(), // Dexie articles ONLY — fixtures never ride
@@ -166,11 +180,12 @@ export async function buildBundleBytes(): Promise<Uint8Array<ArrayBuffer>> {
   // The SAME zipSync call carries the text entries (strToU8 values) and the
   // raw asset entries (Uint8Array values) — the A5 Wave-0 proof in
   // bundle-v4.spec.ts locks fflate's mixed-value behavior byte-exact.
-  return zipSync({
+  const bytes = zipSync({
     "bundle.json": strToU8(JSON.stringify(bundle, null, 2)),
     "manifest.json": strToU8(JSON.stringify(manifest)),
     ...assetEntries,
   });
+  return { bytes, articleCount: articles.length };
 }
 
 // ── Import validation side (PORT-02, pre-write) ──────────────────────────────
