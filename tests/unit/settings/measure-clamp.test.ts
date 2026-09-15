@@ -4,7 +4,8 @@
 // settings-entry seam.
 //
 //   1. clampLegacyMeasure (the pure map, src/settings/legacyMeasure.ts):
-//      the enumerated legacy maximum 72 maps to 64 with every other field
+//      the enumerated legacy maximum 72 maps to the nearest lower step
+//      (70 — issue #18 remap) with every other field
 //      identical; EVERY other shape — 71, a string, null, a missing measure
 //      key, a non-object — passes through UNCHANGED so the downstream
 //      ReaderSettingsSchema.safeParse still fails and the seam's
@@ -71,8 +72,10 @@ const LEGACY_MAX_RECORD = {
   readingMode: "scrolling",
 };
 
-/** The same record after the clamp — ONLY measure changes (D21-03). */
-const CLAMPED_RECORD = { ...LEGACY_MAX_RECORD, measure: 64 };
+/** The same record after the clamp — ONLY measure changes (D21-03; issue #18
+ * remaps the legacy maximum onto the nearest lower step of the extended
+ * uniform-6 ladder). */
+const CLAMPED_RECORD = { ...LEGACY_MAX_RECORD, measure: 70 };
 
 beforeEach(() => {
   settingsGet.mockReset();
@@ -82,10 +85,10 @@ beforeEach(() => {
 // ── 1. The pure bounded map (D21-03 / T-21-01) ───────────────────────────────
 
 describe("clampLegacyMeasure — the bounded legacy-value map", () => {
-  it("maps the enumerated legacy maximum 72 → 64 preserving every other field", () => {
+  it("maps the enumerated legacy maximum 72 → 70 preserving every other field", () => {
     const out = clampLegacyMeasure(LEGACY_MAX_RECORD) as typeof LEGACY_MAX_RECORD;
     expect(out).toEqual(CLAMPED_RECORD);
-    expect(out.measure).toBe(64);
+    expect(out.measure).toBe(70);
     expect(out.font).toBe("sans");
     expect(out.size).toBe(22);
     expect(out.spacing).toBe("spacious");
@@ -121,16 +124,16 @@ describe("clampLegacyMeasure — the bounded legacy-value map", () => {
     expect(clampLegacyMeasure(input)).toBe(input);
   });
 
-  it("LEGACY_MEASURE contains exactly one entry — 72 → 64 (bounded map, T-21-02)", () => {
+  it("LEGACY_MEASURE contains exactly one entry — 72 → 70 (bounded map, T-21-02)", () => {
     expect(Object.keys(LEGACY_MEASURE)).toEqual(["72"]);
-    expect(LEGACY_MEASURE[72]).toBe(64);
+    expect(LEGACY_MEASURE[72]).toBe(70);
   });
 });
 
 // ── 2a. Seam 1 — settingsStore.loadSettings (Dexie row read) ─────────────────
 
 describe("loadSettings clamps the legacy maximum calmly (D21-03 seam 1)", () => {
-  it("a stored-72 Dexie row loads ok at measure 64 with every other field intact (never WipeConfirm)", async () => {
+  it("a stored-72 Dexie row loads ok at measure 70 with every other field intact (never WipeConfirm)", async () => {
     settingsGet.mockResolvedValue({ key: "reader-prefs", value: { ...LEGACY_MAX_RECORD } });
     const result = await loadSettings();
     expect(result).toEqual({ ok: true, settings: CLAMPED_RECORD });
@@ -156,7 +159,7 @@ describe("loadSettings clamps the legacy maximum calmly (D21-03 seam 1)", () => 
 // ── 2b. Seam 2 — settingsMirror.readSettingsMirror (localStorage) ────────────
 
 describe("readSettingsMirror clamps the legacy maximum calmly (D21-03 seam 2)", () => {
-  it("a painted-72 mirror returns parsed settings at 64 (not null), every other field intact", () => {
+  it("a painted-72 mirror returns parsed settings at 70 (not null), every other field intact", () => {
     window.localStorage.setItem(
       SETTINGS_MIRROR_KEY,
       JSON.stringify(LEGACY_MAX_RECORD),
@@ -182,7 +185,7 @@ describe("readSettingsMirror clamps the legacy maximum calmly (D21-03 seam 2)", 
 // ── 2c. Seam 3 — the import preferences block (validateBundle) ───────────────
 //
 // A v2.1-era exported bundle whose preferences block carries the legacy
-// maximum must re-import calmly (ok, measure 64) — NOT refuse the whole
+// maximum must re-import calmly (ok, measure 70) — NOT refuse the whole
 // bundle. The claimed manifest of such a bundle hashes the preferences
 // block WITH the legacy value (it was in-union at export time), so the
 // seam also proves the manifest legacy-value tolerance: the recomputed
@@ -282,13 +285,13 @@ async function legacyBundle(manifestPreferencesOverride?: Manifest["blocks"]) {
 }
 
 describe("validateBundle clamps the legacy maximum calmly (D21-03 seam 3)", () => {
-  it("a v2.1-era bundle whose preferences carry measure 72 imports ok at 64 (manifest legacy hash accepted)", async () => {
+  it("a v2.1-era bundle whose preferences carry measure 72 imports ok at 70 (manifest legacy hash accepted)", async () => {
     const { validateBundle } = await loadService();
     const { file } = await legacyBundle();
     const result = await validateBundle(file);
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.bundle.preferences.measure).toBe(64);
+      expect(result.bundle.preferences.measure).toBe(70);
       expect(result.bundle.preferences.font).toBe("sans");
       expect(result.bundle.preferences.theme).toBe("dark");
     }
@@ -371,7 +374,7 @@ describe("index.html paint-hint legacy map sync check", () => {
   it("the inline LEGACY_MEASURE copy equals the module map (first paint matches hydration — no 72ch flash)", () => {
     const src = extractMarked("LEGACY_MEASURE");
     expect(src).toContain("72");
-    expect(src).toContain("64");
+    expect(src).toContain("70");
     // Evaluate the `var LEGACY_MEASURE = { ... };` block (repo-authored
     // literal, not user input — the mirror.test.ts eval discipline).
     const stripped = src
@@ -397,6 +400,6 @@ describe("the clamped record parses through ReaderSettingsSchema", () => {
   it("CLAMPED_RECORD is a valid ReaderSettings (compile + runtime)", async () => {
     const { ReaderSettingsSchema } = await import("../../../src/content/schema");
     const parsed = ReaderSettingsSchema.parse(CLAMPED_RECORD) as ReaderSettings;
-    expect(parsed.measure).toBe(64);
+    expect(parsed.measure).toBe(70);
   });
 });

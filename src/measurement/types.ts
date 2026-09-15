@@ -28,16 +28,20 @@ export const ConstraintsSchema = z.object({
     z.literal(22),
     z.literal(24),
   ]),
-  // D21-01/D21-02 (POLISH-09): mirrors the truthful five-step measure range
-  // in src/settings/tokens.ts MEASURE_STEPS / ReaderSettingsSchema — this
+  // Issue #18 (D22-01): mirrors the uniform-6 measure ladder [40..88] in
+  // src/settings/tokens.ts MEASURE_STEPS / ReaderSettingsSchema — this
   // closed set must never drift from the settings union (the module-header
-  // contract). 72 left the range; 40/46 are the new lower steps.
+  // contract). 72 remains outside the range; the legacy remap is 72 → 70.
   measure: z.union([
     z.literal(40),
     z.literal(46),
     z.literal(52),
     z.literal(58),
     z.literal(64),
+    z.literal(70),
+    z.literal(76),
+    z.literal(82),
+    z.literal(88),
   ]),
   spacing: z.enum(["compact", "comfortable", "spacious"]),
   viewportWidthPx: z.number().positive(),

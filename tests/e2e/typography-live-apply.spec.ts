@@ -108,21 +108,23 @@ test.describe("READ-02 typography live-apply (02-04 gap 2)", () => {
   });
 });
 
-// ── POLISH-09 (D21-01/D21-02/D21-04): the truthful reading width ─────────────
+// ── POLISH-09 (D21-01/D21-02/D21-04) + issue #18 (D22-01): the truthful
+//    reading width ────────────────────────────────────────────────────────────
 //
-// The slider's far-right endpoint is a TRUTHFUL 64ch: shown value,
-// programmatic attributes, and the rendered column all agree, in BOTH
-// reading modes. Truth criterion (css-values-4, RESEARCH Pitfall 4): `ch`
-// is the advance measure of the "0" glyph — a hidden 64-"0" ruler probe
-// inside the reading surface must equal the surface's content width within
-// 1px. NEVER verify by counting prose characters (mixed-case glyph widths
-// vary; the "0" advance is the unit the control displays).
-test.describe("POLISH-09 truthful reading width (21-01)", () => {
+// The slider's far-right endpoint is a TRUTHFUL 88ch (issue #18 extended the
+// uniform-6 ladder beyond the POLISH-09 64): shown value, programmatic
+// attributes, and the rendered column all agree, in BOTH reading modes.
+// Truth criterion (css-values-4, RESEARCH Pitfall 4): `ch` is the advance
+// measure of the "0" glyph — a hidden 88-"0" ruler probe inside the reading
+// surface must equal the surface's content width within 1px. NEVER verify by
+// counting prose characters (mixed-case glyph widths vary; the "0" advance
+// is the unit the control displays).
+test.describe("POLISH-09 truthful reading width (21-01 + #18)", () => {
   test.setTimeout(60_000);
 
-  /** The 64-"0" ruler truth check: a hidden, absolutely-positioned,
+  /** The 88-"0" ruler truth check: a hidden, absolutely-positioned,
    * white-space:pre probe span appended inside the surface measured against
-   * the surface's own box width (D21-01 contract). */
+   * the surface's own box width (D21-01 contract at the #18 maximum). */
   async function expectRulerEqualsSurfaceWidth(
     page: Page,
     selector: string,
@@ -132,7 +134,7 @@ test.describe("POLISH-09 truthful reading width (21-01)", () => {
       const probe = document.createElement("span");
       probe.style.cssText =
         "position:absolute;visibility:hidden;white-space:pre";
-      probe.textContent = "0".repeat(64);
+      probe.textContent = "0".repeat(88);
       el.appendChild(probe);
       const w = probe.getBoundingClientRect().width;
       const s = el.getBoundingClientRect().width;
@@ -141,11 +143,11 @@ test.describe("POLISH-09 truthful reading width (21-01)", () => {
     }, selector);
     expect(
       diff,
-      `64-zero ruler ${ruler}px must equal ${selector} width ${surface}px within 1px (ch = the "0"-glyph advance, css-values-4)`,
+      `88-zero ruler ${ruler}px must equal ${selector} width ${surface}px within 1px (ch = the "0"-glyph advance, css-values-4)`,
     ).toBeLessThanOrEqual(1);
   }
 
-  test("far-right endpoint is a truthful 64 in scrolling AND paginated mode (ruler + aria + readout)", async ({
+  test("far-right endpoint is a truthful 88 in scrolling AND paginated mode (ruler + aria + readout)", async ({
     page,
   }) => {
     await page.goto(`${BASE}/#/article/${FIXTURE}`);
@@ -174,24 +176,24 @@ test.describe("POLISH-09 truthful reading width (21-01)", () => {
     await slider.focus();
     await slider.press("End");
 
-    // (c) Programmatic agreement (D21-01): the aria attributes derive from
-    // MEASURE_STEPS array ends — far-right is 64, the floor is 40.
-    await expect(slider).toHaveAttribute("aria-valuenow", "64");
-    await expect(slider).toHaveAttribute("aria-valuemax", "64");
+    // (c) Programmatic agreement (D21-01 + #18): the aria attributes derive
+    // from MEASURE_STEPS array ends — far-right is 88, the floor is 40.
+    await expect(slider).toHaveAttribute("aria-valuenow", "88");
+    await expect(slider).toHaveAttribute("aria-valuemax", "88");
     await expect(slider).toHaveAttribute("aria-valuemin", "40");
 
     // (d) Readout agreement (D21-04 keeps the inline shape).
     const readout = page.locator("legend", { hasText: "Reading width" });
     await expect(readout).toContainText("Reading width");
-    await expect(readout).toContainText("64 ch");
+    await expect(readout).toContainText("88 ch");
 
-    // The token the surfaces consume resolves to 64ch.
+    // The token the surfaces consume resolves to 88ch.
     const measureToken = await page.evaluate(() =>
       getComputedStyle(document.documentElement)
         .getPropertyValue("--measure")
         .trim(),
     );
-    expect(measureToken).toBe("64ch");
+    expect(measureToken).toBe("88ch");
 
     // (a) Ruler truth in scrolling mode (.article-body max-width:
     // var(--measure) — app.css). The panel may stay open; live-apply has

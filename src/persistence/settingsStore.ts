@@ -61,9 +61,10 @@ export async function loadSettings(): Promise<SettingsLoadResult> {
       // first time. This is NOT an error state.
       return { ok: true, settings: DEFAULT_SETTINGS };
     }
-    // D21-03 (POLISH-09): clamp the enumerated legacy measure value (72 → 64)
+    // D21-03 (POLISH-09) + issue #18 (D22-01): clamp the enumerated legacy
+    // measure value (72 → 70, the nearest lower step of the extended ladder)
     // on the raw row BEFORE safeParse so a stored legacy maximum loads calmly
-    // — never the corrupt path. The map contains exactly {72: 64}; every
+    // — never the corrupt path. The map contains exactly {72: 70}; every
     // other invalid value still fails parse below (STATE-04 holds).
     const parsed = ReaderSettingsSchema.safeParse(clampLegacyMeasure(raw.value));
     if (parsed.success) {

@@ -43,12 +43,13 @@
             spacious: { lineHeight: 1.8, letterSpacing: "0.01em", wordSpacing: "0.05em" }
           };
           // tokens:SPACING_PRESETS:end
-          // D21-03 (POLISH-09): inline copy of src/settings/legacyMeasure.ts
-          // LEGACY_MEASURE — the ONE legacy-value map (exactly one entry) so
-          // the --measure write never paints the dead legacy width; first
-          // paint matches hydration (no 72ch flash-then-clamp).
+          // D21-03 (POLISH-09) + issue #18 (D22-01): inline copy of
+          // src/settings/legacyMeasure.ts LEGACY_MEASURE — the ONE
+          // legacy-value map (exactly one entry; 72 → the nearest lower
+          // step 70) so the --measure write never paints a non-step width;
+          // first paint matches hydration (no flash-then-clamp).
           // tokens:LEGACY_MEASURE:start
-          var LEGACY_MEASURE = { 72: 64 };
+          var LEGACY_MEASURE = { 72: 70 };
           // tokens:LEGACY_MEASURE:end
           var THEMES = { sepia: true, light: true, dark: true };
           var own = Object.prototype.hasOwnProperty;
