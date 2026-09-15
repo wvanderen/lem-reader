@@ -29,6 +29,7 @@ import { JSDOM } from "jsdom";
 import DOMPurify, { clearWindow } from "isomorphic-dompurify";
 import { Readability, isProbablyReaderable } from "@mozilla/readability";
 import type { Block, InlineRun } from "../src/content/schema";
+import { attachAdjacentCaptions, withCaption } from "./figureCaptions";
 
 /** Partial Provenance — the subset htmlToBlocks can extract from meta/link
  * tags. Structurally compatible with `Partial<Provenance>` (z.infer); the
@@ -127,10 +128,14 @@ export function sanitizeExtractedHtml(html: string): string {
 }
 
 // ── Inline-run extraction (D-04 mark set — copy of normalize-source.ts L39-95) ──
-/** Recursively extract inline runs from a node, accumulating D-04 marks. */
-function extractInline(node: Node, marks: Mark[]): InlineRunT[] {
+/** Recursively extract inline runs from a node list, accumulating D-04 marks.
+ * The node-list form is the byte-faithful core; `extractInline` delegates to
+ * it (and the issue #19 paragraph segmentation reuses it directly so caption
+ * runs flow through the IDENTICAL mark logic — no drift, Pitfall 8-1
+ * discipline). */
+function extractInlineNodes(nodes: Node[], marks: Mark[]): InlineRunT[] {
   const runs: InlineRunT[] = [];
-  for (const child of Array.from(node.childNodes ?? [])) {
+  for (const child of nodes) {
     if (isText(child)) {
       const text = (child.textContent ?? "").replace(/\s+/g, " ");
       if (text.trim().length > 0) runs.push({ text, marks });
@@ -159,10 +164,15 @@ function extractInline(node: Node, marks: Mark[]): InlineRunT[] {
       } else if (tag === "em" || tag === "i") {
         next.push({ type: "em" });
       }
-      runs.push(...extractInline(child, next));
+      runs.push(...extractInlineNodes(Array.from(child.childNodes ?? []), next));
     }
   }
   return runs;
+}
+
+/** Extract inline runs from one node's children (the historical shape). */
+function extractInline(node: Node, marks: Mark[]): InlineRunT[] {
+  return extractInlineNodes(Array.from(node.childNodes ?? []), marks);
 }
 
 /** Collapse leading/trailing whitespace-only runs; merge adjacent identical-mark runs. */
@@ -423,6 +433,42 @@ export interface HtmlToBlocksResult {
   provenancePartial: ProvenancePartial;
 }
 
+/** Issue #19 — split a paragraph's DIRECT child nodes into caption segments:
+ * segments[0] holds the nodes before the first img, then one segment per img
+ * holds the nodes between it and the next img (or the paragraph end). Each
+ * segment's runs feed the caption channel through the shared extractor, so
+ * marks and whitespace behave byte-identically to paragraph runs. */
+function splitDirectChildSegments(el: Element): Node[][] {
+  const segments: Node[][] = [[]];
+  for (const child of Array.from(el.childNodes)) {
+    if (isEl(child) && child.tagName.toLowerCase() === "img") {
+      segments.push([]);
+      continue;
+    }
+    segments[segments.length - 1]!.push(child);
+  }
+  return segments;
+}
+
+/**
+ * visitChildren — walk one container's element children through `visit`,
+ * then run the issue #19 adjacent-caption pass over the flattened result so
+ * caption-looking paragraphs attach to caption-empty figures at every
+ * container level (root, blockquote children, list items, recursed
+ * containers) — not just at the article root.
+ */
+function visitChildren(
+  el: Element,
+  footnoteCounter: { n: number },
+  figureSrcResolver?: FigureSrcResolver,
+): Block[] {
+  return attachAdjacentCaptions(
+    Array.from(el.children).flatMap((c) =>
+      visit(c, footnoteCounter, figureSrcResolver),
+    ),
+  );
+}
+
 /**
  * visit — map a single DOM element to 0..N Block nodes (Pattern F).
  *
@@ -478,25 +524,48 @@ function visit(
     // img inside a paragraph used to be silently dropped by the inline-run
     // extractor; now each el.querySelectorAll("img") match becomes its own
     // FigureBlock AFTER the paragraph (paragraph-first ordering — calm
-    // reading flow, the figure-after-paragraph convention from the repro).
-    // An img-only paragraph emits its figures with the empty paragraph
-    // omitted. Hoisted figures always carry an EMPTY caption array —
-    // figcaption cannot nest inside p — so the D-05 normalized-text
-    // substrate and the assertRoundTripAnchor gate are provably unaffected
-    // (the caption channel contributes nothing). Non-resolvable inline
-    // imgs produce the same honest UnsupportedBlock a bare top-level img
-    // produces — one admission code path (figureBlock), no fork, no silent
-    // drop; volume stays bounded by the stage's existing count/budget/
-    // deadline caps (T-EF5-04). Scope: headings are NOT hoisted —
-    // heading-with-image is pathological layout abuse and the heading arm
-    // stays byte-stable. Recursion already reaches paragraphs inside
-    // blockquote children and list items, so those hoist via this same arm.
-    // EPUB compatibility: epubToBooks reuses sanitizeExtractedHtml +
-    // htmlToBlocks with a JSDOM that carries no document URL, so relative
-    // srcset candidates fail URL resolution against about:blank and calmly
-    // fall back to the src/container-marker path — srcset inside EPUBs is
-    // rare; acceptable and stated.
-    const hoistedFigures = Array.from(el.querySelectorAll("img")).flatMap((img) =>
+    // reading flow). An img-only paragraph emits its figures with the empty
+    // paragraph omitted. Non-resolvable inline imgs produce the same honest
+    // UnsupportedBlock a bare top-level img produces — one admission code
+    // path (figureBlock), no fork, no silent drop; volume stays bounded by
+    // the stage's existing count/budget/deadline caps (T-EF5-04). Scope:
+    // headings are NOT hoisted — heading-with-image is pathological layout
+    // abuse and the heading arm stays byte-stable. Recursion already reaches
+    // paragraphs inside blockquote children and list items, so those hoist
+    // via this same arm. EPUB compatibility: epubToBooks reuses
+    // sanitizeExtractedHtml + htmlToBlocks with a JSDOM that carries no
+    // document URL, so relative srcset candidates fail URL resolution
+    // against about:blank and calmly fall back to the src/container-marker
+    // path — srcset inside EPUBs is rare; acceptable and stated.
+    //
+    // Issue #19 — image-first caption attachment. When the paragraph's
+    // meaningful content BEGINS at its first img (image-first), the text
+    // following each img is caption text: each hoisted figure carries its
+    // trailing segment as caption runs and renders them as a real
+    // <figcaption> BELOW the image. The per-segment runs flow through the
+    // SAME extractInlineNodes/tidyRuns pair as the paragraph channel
+    // (D-05/Pitfall 8-1 discipline), so caption offsets anchor exactly like
+    // a true figcaption's do (capture.ts figure alignment). Text-first
+    // paragraphs keep the pinned paragraph-first ordering above with empty
+    // captions, and paragraphs whose imgs sit inside inline wrappers
+    // (span/a/…) keep the calm legacy fallback — segmentation needs direct
+    // img children; a heuristic miss degrades to a body paragraph, never to
+    // lost text.
+    const allImgs = Array.from(el.querySelectorAll("img"));
+    if (allImgs.length === 0) {
+      return content.length ? [{ kind: "paragraph", content }] : [];
+    }
+    const directOnly = allImgs.every((img) => img.parentElement === el);
+    const segments = directOnly ? splitDirectChildSegments(el) : null;
+    if (segments && tidyRuns(extractInlineNodes(segments[0]!, [])).length === 0) {
+      return allImgs.flatMap((img, k) =>
+        withCaption(
+          figureBlock(img, figureSrcResolver),
+          tidyRuns(extractInlineNodes(segments[k + 1] ?? [], [])),
+        ),
+      );
+    }
+    const hoistedFigures = allImgs.flatMap((img) =>
       figureBlock(img, figureSrcResolver),
     );
     if (content.length) {
@@ -508,7 +577,7 @@ function visit(
   }
 
   if (tag === "blockquote") {
-    const children = Array.from(el.children).flatMap((c) => visit(c, footnoteCounter, figureSrcResolver));
+    const children = visitChildren(el, footnoteCounter, figureSrcResolver);
     if (children.length) return [{ kind: "blockquote", children }];
     // Fallback: capture the blockquote's own inline text as a paragraph.
     const content = tidyRuns(extractInline(el, []));
@@ -519,7 +588,7 @@ function visit(
     const items: { content: Block[] }[] = [];
     for (const li of Array.from(el.children)) {
       if (li.tagName.toLowerCase() !== "li") continue;
-      const liContent = Array.from(li.children).flatMap((c) => visit(c, footnoteCounter, figureSrcResolver));
+      const liContent = visitChildren(li, footnoteCounter, figureSrcResolver);
       if (liContent.length) items.push({ content: liContent });
     }
     if (!items.length) return [];
@@ -554,7 +623,7 @@ function visit(
   // Container-ish elements (div, section, aside, main, article, span, dl):
   // recurse into children to find nested block content.
   if (!BLOCK_TAGS.has(tag)) {
-    return Array.from(el.children).flatMap((c) => visit(c, footnoteCounter, figureSrcResolver));
+    return visitChildren(el, footnoteCounter, figureSrcResolver);
   }
 
   // Catch-all (no `default:` clause — the unsupported branch IS the default).
@@ -581,9 +650,7 @@ export function htmlToBlocks(
 ): HtmlToBlocksResult {
   const footnoteCounter = { n: 0 };
   const root = findContentRoot(sanitizedDom);
-  const blocks = Array.from(root.children).flatMap((child) =>
-    visit(child, footnoteCounter, figureSrcResolver),
-  );
+  const blocks = visitChildren(root, footnoteCounter, figureSrcResolver);
 
   return {
     blocks,

@@ -41,6 +41,7 @@ import remarkParse from "remark-parse"; // strict CommonMark (raw HTML escaped b
 import remarkFrontmatter from "remark-frontmatter"; // emits mdast `yaml` node for front-matter
 import { parse as parseYaml } from "yaml"; // strict YAML 1.2 (safe-schema; no implicit type coercion)
 import type { Block, InlineRun } from "../src/content/schema";
+import { attachAdjacentCaptions, withCaption } from "./figureCaptions";
 
 /** ProvenancePartial — same shape as `server/htmlToBlocks.ts` L37-42. The
  * orchestrator merges this into a full Provenance + computes originalHtmlHash
@@ -109,12 +110,15 @@ interface MdastNode {
 const processor = unified().use(remarkParse).use(remarkFrontmatter);
 
 // ── Inline-run extraction (D-04 mark set — mirrors htmlToBlocks L121-156) ────
-/** Recurse mdast `.children` and accumulate inline runs carrying D-04 marks.
- * The recursion shape mirrors `extractInline` in htmlToBlocks.ts L121-156 so
- * the output feeds `normalizeText` identically (Pitfall 8-1). */
-function extractInlineMdast(node: MdastNode, marks: Mark[]): InlineRunT[] {
+/** Recurse an mdast node LIST and accumulate inline runs carrying D-04 marks.
+ * The node-list form is the byte-faithful core; `extractInlineMdast`
+ * delegates to it (and the issue #19 paragraph segmentation reuses it
+ * directly so caption runs flow through the IDENTICAL mark logic — no drift,
+ * Pitfall 8-1 discipline). The recursion shape mirrors `extractInlineNodes`
+ * in htmlToBlocks.ts so the output feeds `normalizeText` identically. */
+function extractInlineMdastNodes(nodes: MdastNode[], marks: Mark[]): InlineRunT[] {
   const runs: InlineRunT[] = [];
-  for (const child of node.children ?? []) {
+  for (const child of nodes) {
     if (child.type === "text") {
       // whitespace collapse — Pitfall 8-1 (byte-faithful with htmlToBlocks L125)
       const text = (child.value ?? "").replace(/\s+/g, " ");
@@ -158,9 +162,14 @@ function extractInlineMdast(node: MdastNode, marks: Mark[]): InlineRunT[] {
     // For all other inline types (image, html inline, etc.) recurse without a
     // new mark — the content is carried as text children of the node, or
     // dropped if the node has no inline-runnable children.
-    runs.push(...extractInlineMdast(child, next));
+    runs.push(...extractInlineMdastNodes(child.children ?? [], next));
   }
   return runs;
+}
+
+/** Extract inline runs from one mdast node's children (the historical shape). */
+function extractInlineMdast(node: MdastNode, marks: Mark[]): InlineRunT[] {
+  return extractInlineMdastNodes(node.children ?? [], marks);
 }
 
 /** Collapse leading/trailing whitespace-only runs; merge adjacent identical-
@@ -211,21 +220,50 @@ function visit(node: MdastNode): Block[] {
   }
 
   if (node.type === "paragraph") {
-    // Block-level standalone image: a paragraph whose only child is an image
-    // → FigureBlock (mirrors htmlToBlocks figure handling; the markdown spec
-    // has no native figure syntax, so this is the canonical promotion path).
-    const onlyChild = (node.children ?? [])[0];
-    const isStandaloneImage =
-      (node.children ?? []).length === 1 && onlyChild && onlyChild.type === "image";
-    if (isStandaloneImage && onlyChild) {
-      return figureFromImage(onlyChild);
+    const children = node.children ?? [];
+    const images = children.filter((c) => c.type === "image");
+    // markdown has no native figure syntax — images are inline constructs.
+    // Issue #19: when the paragraph's meaningful content BEGINS at its first
+    // image (image-first), each image promotes to a figure carrying its
+    // trailing text as caption runs (a real <figcaption> below the image);
+    // the previously-silent image drop is gone. Text-first mixed paragraphs
+    // keep their runs byte-identical (images contribute nothing to run
+    // extraction — Pitfall 8-1) and still hoist their figures with empty
+    // captions (HTML parity). Images nested inside inline wrappers
+    // (emphasis/link/…) cannot be segmented at the child level, so such
+    // paragraphs keep the legacy paragraph-only shape — a heuristic miss
+    // degrades to today's behavior, never to lost text.
+    if (images.length > 0) {
+      const nestedImage = children.some(
+        (c) => c.type !== "image" && containsImageDeep(c),
+      );
+      const segments = nestedImage ? null : splitChildSegments(children);
+      if (
+        segments &&
+        tidyRuns(extractInlineMdastNodes(segments[0]!, [])).length === 0
+      ) {
+        return images.flatMap((img, k) =>
+          withCaption(
+            figureFromImage(img),
+            tidyRuns(extractInlineMdastNodes(segments[k + 1] ?? [], [])),
+          ),
+        );
+      }
+      const content = tidyRuns(extractInlineMdast(node, []));
+      const hoisted = images.flatMap((img) => figureFromImage(img));
+      if (content.length) {
+        return hoisted.length
+          ? [{ kind: "paragraph", content }, ...hoisted]
+          : [{ kind: "paragraph", content }];
+      }
+      return hoisted;
     }
     const content = tidyRuns(extractInlineMdast(node, []));
     return content.length ? [{ kind: "paragraph", content }] : [];
   }
 
   if (node.type === "blockquote") {
-    const children = (node.children ?? []).flatMap((c) => visit(c));
+    const children = visitChildren(node.children ?? []);
     if (children.length) return [{ kind: "blockquote", children }];
     // Fallback: empty blockquote → nothing. Mirrors htmlToBlocks L312-315.
     return [];
@@ -237,7 +275,7 @@ function visit(node: MdastNode): Block[] {
     for (const item of node.children ?? []) {
       if (item.type !== "listItem") continue;
       // listItem.children is typically [paragraph, ...]; walk each as a block.
-      const itemContent = (item.children ?? []).flatMap((c) => visit(c));
+      const itemContent = visitChildren(item.children ?? []);
       if (itemContent.length) items.push({ content: itemContent });
     }
     if (!items.length) return [];
@@ -283,6 +321,44 @@ function visit(node: MdastNode): Block[] {
     originalKind: node.type,
     plainDescription: `A ${node.type} element from the original document that the reader could not render.`,
   }];
+}
+
+/** Issue #19 — split a paragraph's child nodes into caption segments:
+ * segments[0] holds the nodes before the first image, then one segment per
+ * image holds the nodes between it and the next image (or the paragraph
+ * end). Each segment's runs feed the caption channel through the shared
+ * extractor, so marks and whitespace behave byte-identically to paragraph
+ * runs. */
+function splitChildSegments(children: MdastNode[]): MdastNode[][] {
+  const segments: MdastNode[][] = [[]];
+  for (const child of children) {
+    if (child.type === "image") {
+      segments.push([]);
+      continue;
+    }
+    segments[segments.length - 1]!.push(child);
+  }
+  return segments;
+}
+
+/** True when an image hides INSIDE an inline wrapper (emphasis, link, …) —
+ * such images cannot be segmented at the paragraph-child level. */
+function containsImageDeep(node: MdastNode): boolean {
+  for (const child of node.children ?? []) {
+    if (child.type === "image") return true;
+    if (containsImageDeep(child)) return true;
+  }
+  return false;
+}
+
+/**
+ * visitChildren — walk one container's mdast children through `visit`, then
+ * run the issue #19 adjacent-caption pass over the flattened result so
+ * caption-looking paragraphs attach to caption-empty figures at every
+ * container level (top level, blockquote children, list items).
+ */
+function visitChildren(nodes: MdastNode[]): Block[] {
+  return attachAdjacentCaptions(nodes.flatMap((c) => visit(c)));
 }
 
 /** Build a FigureBlock from an mdast image node. http(s) srcs produce the
@@ -332,8 +408,8 @@ export interface MarkdownToBlocksResult {
 export async function markdownToBlocks(md: string): Promise<MarkdownToBlocksResult> {
   const tree = processor.parse(md);
 
-  const blocks: Block[] = [];
   const provenancePartial: ProvenancePartial = {};
+  const body: MdastNode[] = [];
 
   for (const node of tree.children as unknown as MdastNode[]) {
     // yaml front-matter → provenancePartial (does NOT emit a Block).
@@ -341,8 +417,9 @@ export async function markdownToBlocks(md: string): Promise<MarkdownToBlocksResu
       mergeYamlFrontMatter(node.value ?? "", provenancePartial);
       continue;
     }
-    blocks.push(...visit(node));
+    body.push(node);
   }
+  const blocks = visitChildren(body);
 
   return {
     blocks,

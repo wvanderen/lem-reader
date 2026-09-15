@@ -16,6 +16,8 @@ import {
   sanitizeExtractedHtml,
   type HtmlToBlocksResult,
 } from "../../../server/htmlToBlocks";
+import { assertRoundTripAnchor } from "../../../server/ingest";
+import { blockNormalizedText } from "../../../src/content/normalizeText";
 
 // The 9 schema-allowed block kinds (src/content/schema.ts BlockSchema). Every
 // extracted block MUST have a kind in this tuple — the exhaustive switch has
@@ -314,6 +316,199 @@ describe("htmlToBlocks — inline-image hoisting (260908-ef5)", () => {
     // Byte-stable with the pre-260908-ef5 walk: extractInline has no img arm,
     // so the run keeps its trailing space and NO figure block is emitted.
     expect(heading.content.map((r) => r.text).join("")).toBe("Heading ");
+  });
+});
+
+// ── Issue #19 — caption attachment ──────────────────────────────────────────
+// Captions must land in the figure's caption channel (rendered BELOW the
+// image as a real <figcaption> in both reader modes), never as a body
+// paragraph above it. Three attachment paths:
+//   1. Image-first paragraph: <p><img> caption</p> — each hoisted figure
+//      carries its trailing text as caption runs (image-only paragraphs are
+//      unchanged; the pinned text-first ordering above still holds).
+//   2. Adjacent caption-looking paragraph BEFORE a caption-empty figure —
+//      consumed into figure.caption (caption moves below the image).
+//   3. Adjacent caption-looking paragraph AFTER a caption-empty figure —
+//      consumed too (the caption-below publishing convention, e.g. classic
+//      WordPress <p><img></p><p>caption</p> output).
+// "Caption-looking" is deliberately conservative: SHORT (≤ 200 chars) AND
+// either keyword-prefixed (Figure/Photo/…, case-insensitive) or entirely
+// em-marked. Ordinary body prose is never consumed; true <figcaption> output
+// is untouched.
+
+describe("htmlToBlocks — caption attachment (issue #19)", () => {
+  const wrap = (inner: string) =>
+    `<!doctype html><html><body><main>${inner}</main></body></html>`;
+
+  it("an image-first paragraph puts its trailing text in the figure's caption channel — no caption paragraph above", () => {
+    const html = wrap(
+      "<p><img src=\"https://cdn.example.com/one.png\" alt=\"One\"> Caption text below the image.</p>",
+    );
+    const { blocks } = htmlToBlocks(new JSDOM(html).window.document, undefined);
+    expect(blocks.map((b) => b.kind)).toEqual(["figure"]);
+    const fig = blocks[0];
+    if (fig?.kind !== "figure") throw new Error("expected figure");
+    expect(fig.src).toBe("https://cdn.example.com/one.png");
+    expect(fig.alt).toBe("One");
+    expect(fig.caption.map((r) => r.text).join("")).toBe(
+      "Caption text below the image.",
+    );
+    // D-05 alignment: the caption participates AFTER the alt in the block's
+    // normalized text (the same substrate splitBlock/capture reason over).
+    expect(blockNormalizedText(fig)).toBe(
+      "One\nCaption text below the image.",
+    );
+  });
+
+  it("an image-first paragraph with several images gives each figure its own trailing caption", () => {
+    const html = wrap(
+      "<p><img src=\"https://cdn.example.com/a.png\" alt=\"A\"> Cap a <img src=\"https://cdn.example.com/b.png\" alt=\"B\"> Cap b</p>",
+    );
+    const { blocks } = htmlToBlocks(new JSDOM(html).window.document, undefined);
+    expect(blocks.map((b) => b.kind)).toEqual(["figure", "figure"]);
+    const [figA, figB] = blocks;
+    if (figA?.kind !== "figure" || figB?.kind !== "figure") {
+      throw new Error("expected figures");
+    }
+    expect(figA.caption.map((r) => r.text).join("")).toBe("Cap a");
+    expect(figB.caption.map((r) => r.text).join("")).toBe("Cap b");
+  });
+
+  it("caption runs keep their inline marks (D19-01 caption marks)", () => {
+    const html = wrap(
+      "<p><img src=\"https://cdn.example.com/m.png\" alt=\"M\"> An <em>emphasized</em> caption.</p>",
+    );
+    const { blocks } = htmlToBlocks(new JSDOM(html).window.document, undefined);
+    const fig = blocks[0];
+    if (fig?.kind !== "figure") throw new Error("expected figure");
+    expect(fig.caption.map((r) => r.text).join("")).toBe(
+      "An emphasized caption.",
+    );
+    expect(fig.caption.map((r) => r.marks.map((m) => m.type))).toEqual([
+      [],
+      ["em"],
+      [],
+    ]);
+  });
+
+  it("a caption-looking paragraph before an image-only paragraph is consumed into the figure (caption moves below)", () => {
+    const html = wrap(
+      "<p>Figure 2: Annual rainfall by region</p>" +
+        "<p><img src=\"https://cdn.example.com/chart.png\" alt=\"Chart\"></p>",
+    );
+    const { blocks } = htmlToBlocks(new JSDOM(html).window.document, undefined);
+    expect(blocks.map((b) => b.kind)).toEqual(["figure"]);
+    const fig = blocks[0];
+    if (fig?.kind !== "figure") throw new Error("expected figure");
+    expect(fig.caption.map((r) => r.text).join("")).toBe(
+      "Figure 2: Annual rainfall by region",
+    );
+  });
+
+  it("a caption-looking paragraph after an image-only paragraph is consumed too (caption-below convention)", () => {
+    const html = wrap(
+      "<p><img src=\"https://cdn.example.com/chart.png\" alt=\"Chart\"></p>" +
+        "<p>Figure 2: Annual rainfall by region</p>",
+    );
+    const { blocks } = htmlToBlocks(new JSDOM(html).window.document, undefined);
+    expect(blocks.map((b) => b.kind)).toEqual(["figure"]);
+    const fig = blocks[0];
+    if (fig?.kind !== "figure") throw new Error("expected figure");
+    expect(fig.caption.map((r) => r.text).join("")).toBe(
+      "Figure 2: Annual rainfall by region",
+    );
+  });
+
+  it("an entirely em-marked short paragraph is caption-looking", () => {
+    const html = wrap(
+      "<p><em>A sunset over the harbor at dusk.</em></p>" +
+        "<p><img src=\"https://cdn.example.com/sunset.png\" alt=\"Sunset\"></p>",
+    );
+    const { blocks } = htmlToBlocks(new JSDOM(html).window.document, undefined);
+    expect(blocks.map((b) => b.kind)).toEqual(["figure"]);
+    const fig = blocks[0];
+    if (fig?.kind !== "figure") throw new Error("expected figure");
+    expect(fig.caption.map((r) => r.text).join("")).toBe(
+      "A sunset over the harbor at dusk.",
+    );
+  });
+
+  it("ordinary body prose is NEVER consumed — short plain paragraph stays a paragraph", () => {
+    const html = wrap(
+      "<p>A calm sentence that carries no caption signal at all.</p>" +
+        "<p><img src=\"https://cdn.example.com/x.png\" alt=\"X\"></p>",
+    );
+    const { blocks } = htmlToBlocks(new JSDOM(html).window.document, undefined);
+    expect(blocks.map((b) => b.kind)).toEqual(["paragraph", "figure"]);
+    const fig = blocks[1];
+    if (fig?.kind !== "figure") throw new Error("expected figure");
+    expect(fig.caption).toEqual([]);
+  });
+
+  it("a long keyword-free paragraph before an image stays a paragraph (no body-text theft)", () => {
+    const longProse =
+      "Long body prose that meanders well past any reasonable caption length while never mentioning a keyword, " +
+      "so even though it directly precedes an image-only paragraph it must remain in the reading flow untouched.";
+    const html = wrap(
+      `<p>${longProse}</p><p><img src="https://cdn.example.com/y.png" alt="Y"></p>`,
+    );
+    const { blocks } = htmlToBlocks(new JSDOM(html).window.document, undefined);
+    expect(blocks.map((b) => b.kind)).toEqual(["paragraph", "figure"]);
+    const para = blocks[0];
+    if (para?.kind !== "paragraph") throw new Error("expected paragraph");
+    expect(para.content.map((r) => r.text).join("")).toBe(longProse);
+  });
+
+  it("a true <figcaption> is never overwritten by an adjacent caption-looking paragraph", () => {
+    const html = wrap(
+      "<p>Figure 3: The real caption lives in the figcaption</p>" +
+        "<figure><img src=\"https://cdn.example.com/real.png\" alt=\"Real\">" +
+        "<figcaption>The real figcaption text</figcaption></figure>",
+    );
+    const { blocks } = htmlToBlocks(new JSDOM(html).window.document, undefined);
+    expect(blocks.map((b) => b.kind)).toEqual(["paragraph", "figure"]);
+    const fig = blocks[1];
+    if (fig?.kind !== "figure") throw new Error("expected figure");
+    expect(fig.caption.map((r) => r.text).join("")).toBe(
+      "The real figcaption text",
+    );
+    const para = blocks[0];
+    if (para?.kind !== "paragraph") throw new Error("expected paragraph");
+    expect(para.content.map((r) => r.text).join("")).toBe(
+      "Figure 3: The real caption lives in the figcaption",
+    );
+  });
+
+  it("an image nested inside an inline wrapper keeps the calm legacy fallback (paragraph-first, empty captions)", () => {
+    const html = wrap(
+      "<p><span><img src=\"https://cdn.example.com/deep.png\" alt=\"Deep\"></span> Caption stays a paragraph.</p>",
+    );
+    const { blocks } = htmlToBlocks(new JSDOM(html).window.document, undefined);
+    expect(blocks.map((b) => b.kind)).toEqual(["paragraph", "figure"]);
+    const fig = blocks[1];
+    if (fig?.kind !== "figure") throw new Error("expected figure");
+    expect(fig.caption).toEqual([]);
+  });
+
+  it("an ingested caption-bearing article passes the assertRoundTripAnchor gate (caption offsets align)", () => {
+    const html = wrap(
+      "<p><img src=\"https://cdn.example.com/one.png\" alt=\"One\"> The caption anchors over the figcaption substrate.</p>" +
+        "<p>Surrounding body text gives the quote selector unique context for the gate.</p>",
+    );
+    const { blocks } = htmlToBlocks(new JSDOM(html).window.document, undefined);
+    const article = {
+      id: "caption-anchor-proof",
+      revision: 1,
+      lang: "en",
+      provenance: {
+        title: "Caption Anchor Proof",
+        retrievedAt: "2026-09-15T00:00:00.000Z",
+        originalHtmlHash: "test-hash",
+      },
+      blocks,
+      footnotes: [],
+    };
+    expect(() => assertRoundTripAnchor(article)).not.toThrow();
   });
 });
 
