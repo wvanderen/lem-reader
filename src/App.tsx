@@ -31,6 +31,11 @@ import { SettingsPanel } from "./reader/SettingsPanel";
 import { StorageBanner } from "./reader/StorageBanner";
 import { WipeConfirm } from "./reader/WipeConfirm";
 import { SettingsProvider, useSettings } from "./settings/SettingsContext";
+// PROTOTYPE (#29) — throwaway stats-presentation variants (wayfinder ticket).
+// Delete this import + the stats-prototype seams in this file, the
+// LibraryView/LibraryRow seams, the app.css prototype block, and
+// src/routes/statsPrototype.tsx with the ticket branch.
+import { StatsPrototypeBar, StatsPrototypeView } from "./routes/statsPrototype";
 
 // Plan 10-02 (D10-01/D10-03) — the View union gains the review alternative
 // and the article alternative gains the optional /h/<highlightId> deep-link
@@ -52,7 +57,9 @@ type View =
   // site stays byte-stable. The optional legacyAlias marker (D15-07) is
   // set ONLY when parseHash matched the legacy #/review literal, so the
   // onHash handler below can normalize the URL via replaceState.
-  | { name: "review"; legacyAlias?: true };
+  | { name: "review"; legacyAlias?: true }
+  // PROTOTYPE (#29) — throwaway stats-presentation variants route.
+  | { name: "stats-prototype"; variant: "a" | "b" | "c" };
 
 function parseHash(): View {
   // Grammar order matters (10-RESEARCH Pattern 1): the /h/ suffix form
@@ -94,6 +101,11 @@ function parseHash(): View {
   }
   if (window.location.hash === "#/finished") {
     return { name: "list", view: "finished" };
+  }
+  // PROTOTYPE (#29) — throwaway route: #/stats-prototype/<a|b|c>.
+  const mStats = /^#\/stats-prototype\/([abc])$/.exec(window.location.hash);
+  if (mStats) {
+    return { name: "stats-prototype", variant: mStats[1] as "a" | "b" | "c" };
   }
   return { name: "list", view: "all" };
 }
@@ -334,7 +346,11 @@ function AppInner() {
       ? "library"
       : view.name === "review"
         ? "highlights"
-        : "reader";
+        : // PROTOTYPE (#29) — "stats" matches no shell-nav link, so nothing
+          // claims aria-current while the prototype route is up.
+          view.name === "stats-prototype"
+          ? "stats"
+          : "reader";
 
   return (
     <>
@@ -373,6 +389,13 @@ function AppInner() {
         />
       ) : view.name === "review" ? (
         <ReviewView hasAppHistory={hasAppHistory} />
+      ) : view.name === "stats-prototype" ? (
+        // PROTOTYPE (#29) — the three variants at #/stats-prototype/<a|b|c>.
+        <StatsPrototypeView
+          variant={view.variant}
+          onSwitchView={switchLibraryView}
+          warmMount={hasAppHistory}
+        />
       ) : (
         <ArticleView
           articleId={view.id}
@@ -386,6 +409,17 @@ function AppInner() {
           onCloseToc={() => setTocOpen(false)}
           onAnnotationCountChange={setAnnotationCount}
           hasAppHistory={hasAppHistory}
+        />
+      )}
+      {/* PROTOTYPE (#29) — dev-only variant switcher bar. The prototype
+          lives entirely at its throwaway route; the plain #/ library stays
+          byte-production. */}
+      {import.meta.env.DEV && view.name === "stats-prototype" && (
+        <StatsPrototypeBar
+          variant={view.variant}
+          onVariant={(next) => {
+            window.location.hash = `#/stats-prototype/${next}`;
+          }}
         />
       )}
     </>

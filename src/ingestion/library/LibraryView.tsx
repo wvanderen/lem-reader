@@ -42,6 +42,7 @@
 // edit, add, read-state) follows up with the ONE invalidateLibrarySnapshot()
 // call instead of bumping a local refreshKey.
 import { useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import type { CanonicalArticle } from "../../content/types";
 import { LibrarySearch } from "./LibrarySearch";
 import { TagFilter } from "./TagFilter";
@@ -108,6 +109,15 @@ interface LibraryViewProps {
    * cold loads and reloads keep natural browser focus; threaded from
    * App's hasAppHistory). */
   warmMount: boolean;
+  /** PROTOTYPE (#29) — throwaway stats-presentation seam (wayfinder ticket).
+   * Renders the variant-A summary strip above the list section when the
+   * prototype provides one; undefined in production. Delete with the
+   * prototype branch. */
+  prototypeStatsSlot?: ReactNode;
+  /** PROTOTYPE (#29) — articleId → quiet "time read" label for the row
+   * enrichment seam. Absent in production; delete with the prototype
+   * branch. */
+  prototypeTimeRead?: ReadonlyMap<string, string>;
 }
 
 // Plan 14-02 (D14-22) — the four switcher links, in order. hrefs stay the
@@ -150,7 +160,13 @@ const EMPTY_COPY: Record<LibraryViewName, { heading: string; body: string }> = {
   },
 };
 
-export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps) {
+export function LibraryView({
+  view,
+  onSwitchView,
+  warmMount,
+  prototypeStatsSlot,
+  prototypeTimeRead,
+}: LibraryViewProps) {
   // Plan 14-02 Task 3 — the h1 focus target (tabindex=-1 pattern; text and
   // level byte-stable per D14-25) + the previous-view ref for the
   // view-switch effect below.
@@ -538,6 +554,13 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
           }}
         />
       </section>
+      {/* PROTOTYPE (#29) — throwaway stats-strip slot (variant A). Delete
+          with the prototype branch. */}
+      {prototypeStatsSlot && (
+        <section className="library-section stats-proto-strip-section">
+          {prototypeStatsSlot}
+        </section>
+      )}
       {/* Plan 16-03 (D16-03) — the permanently-mounted add-content section
           DISSOLVES: the three ingestion forms now live behind the header
           Add button's dialog (ADD-01). The library-load .status live
@@ -637,6 +660,7 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
                   article={a}
                   location={locationsByArticle.get(a.id)}
                   total={totalsById.get(a.id) ?? 0}
+                  prototypeTimeReadLabel={prototypeTimeRead?.get(a.id)}
                   onReadingStateChange={async (read) => {
                     await setArticleReadState(a, read);
                     invalidateLibrarySnapshot();

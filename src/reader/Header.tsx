@@ -101,8 +101,11 @@ interface HeaderProps {
    * Highlights link iff destination === "highlights", and the brand link
    * NEVER carries it. Phase 18 also renders it as the data-destination
    * styling hook on .app-header (the ≤420px staged Reader collapse).
+   * PROTOTYPE (#29) adds the transient "stats" value: it matches no shell
+   * nav link, so nothing carries aria-current while the prototype route is
+   * up. Delete with the prototype branch.
    */
-  destination: "library" | "highlights" | "reader";
+  destination: "library" | "highlights" | "stats" | "reader";
 }
 
 export function Header({

@@ -44,6 +44,10 @@ interface LibraryRowProps {
    * h3 chapter titles) so heading order is preserved within the group.
    */
   headingLevel?: 2 | 3;
+  /** PROTOTYPE (#29) — throwaway "time read" row enrichment (wayfinder
+   * ticket). When present, a quiet meta line renders under the row meta.
+   * Undefined in production; delete with the prototype branch. */
+  prototypeTimeReadLabel?: string;
 }
 
 export function LibraryRow({
@@ -54,6 +58,7 @@ export function LibraryRow({
   onEdit,
   onReadingStateChange,
   headingLevel = 2,
+  prototypeTimeReadLabel,
 }: LibraryRowProps) {
   const id = article.id;
   const ratio = location ? Math.min(1, location.graphemeOffset / total) : 0;
@@ -87,6 +92,11 @@ export function LibraryRow({
           {/* D8-02 source indicator + LIB-05 source link */}
           <SourceBadge article={article} />
         </div>
+        {/* PROTOTYPE (#29) — throwaway "time read" enrichment line. Delete
+            with the prototype branch. */}
+        {prototypeTimeReadLabel && (
+          <p className="meta stats-proto-row-time">{prototypeTimeReadLabel}</p>
+        )}
         {/* D8-05 display-only tag chips on the row (no edit affordance) */}
         {tags.length > 0 && (
           <ul className="library-row-tags">
