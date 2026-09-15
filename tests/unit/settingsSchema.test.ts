@@ -81,15 +81,20 @@ describe("ReaderSettingsSchema accepts valid combinations", () => {
   });
 
   it.each([
-    // D21-01/D21-02 (POLISH-09): the five-step uniform-6 truthful range —
-    // 40/46 are the new lower steps; 72 is REMOVED from the union (a
-    // stored legacy 72 clamps calmly pre-parse at the read seams per
-    // D21-03 — see tests/unit/settings/measure-clamp.test.ts).
+    // Issue #18 (D22-01): the uniform-6 ladder extends upward from the
+    // POLISH-09 truthful range to the new maximum 88 (40 + 6×8 — the range
+    // input's step-6 arithmetic stays exact). 72 is still NOT a step: a
+    // stored legacy 72 clamps calmly pre-parse to the nearest lower step
+    // (D21-03 remap — see tests/unit/settings/measure-clamp.test.ts).
     [40, { measure: 40 }],
     [46, { measure: 46 }],
     [52, { measure: 52 }],
     [58, { measure: 58 }],
     [64, { measure: 64 }],
+    [70, { measure: 70 }],
+    [76, { measure: 76 }],
+    [82, { measure: 82 }],
+    [88, { measure: 88 }],
   ])("accepts measure=%i", (measure, override) => {
     expect(ReaderSettingsSchema.parse(validSettings(override)).measure).toBe(
       measure,
@@ -132,12 +137,14 @@ describe("ReaderSettingsSchema.parse rejects out-of-contract records", () => {
     ["size below the step range (12)", { size: 12 }],
     ["size above the step range (28)", { size: 28 }],
     ["out-of-step measure (60 — between steps)", { measure: 60 }],
-    // D21-01/D21-02 (POLISH-09): the range extends downward to 40 — a
-    // below-range value must now be under 40 (34); and the legacy maximum
-    // 72 is NO LONGER in the union: raw 72 fails parse here while the
-    // enumerated-seam clamp (D21-03) maps it pre-parse for calm loads.
+    // Issue #18: the range extends upward to 88 — a below-range value must
+    // be under 40 (34), an above-range value over 88 (94); and the legacy
+    // value 72 is still NOT a step: raw 72 fails parse here while the
+    // enumerated-seam clamp (D21-03, remapped 72 → 70) handles it pre-parse
+    // for calm loads.
     ["measure below the step range (34)", { measure: 34 }],
-    ["the legacy maximum 72 (D21-01 — removed from the union; D21-03 clamps pre-parse at the seams)", { measure: 72 }],
+    ["measure above the step range (94)", { measure: 94 }],
+    ["the legacy maximum 72 (not a step on the #18 ladder; D21-03 clamps pre-parse at the seams)", { measure: 72 }],
     ["unknown spacing value", { spacing: "snug" }],
     ["unknown theme value", { theme: "solarized" }],
     ["missing font field", { font: undefined }],
@@ -230,6 +237,51 @@ describe("LocationRecordSchema.parse rejects malformed records", () => {
     ["non-literal schemaVersion", { schemaVersion: 2 }],
   ])("throws when %s", (_label, override) => {
     expect(() => LocationRecordSchema.parse(validLocation(override))).toThrow();
+  });
+});
+
+// ── Issue #18 (D22-01): the unions and the MEASURE_STEPS ladder cannot drift ──
+// The schema union, the measurement ConstraintsSchema union, and the slider's
+// MEASURE_STEPS token must stay the SAME closed set (the module-header
+// contracts say so in prose; this is the mechanical pin). Sweep a window of
+// integers around the ladder and require parse-success EXACTLY on the steps —
+// in both directions (a step missing from a union fails; a union literal off
+// the ladder fails).
+
+describe("measure closed-set agreement (tokens ↔ schema ↔ Constraints)", () => {
+  const WINDOW = [34, 40, 46, 52, 58, 60, 64, 70, 72, 76, 82, 88, 94] as const;
+
+  function constraintsWith(measure: number): unknown {
+    return {
+      font: "serif",
+      size: 18,
+      measure,
+      spacing: "comfortable",
+      viewportWidthPx: 800,
+      lang: "en",
+    };
+  }
+
+  it("ReaderSettingsSchema accepts EXACTLY the MEASURE_STEPS values", async () => {
+    const { MEASURE_STEPS } = await import("../../src/settings/tokens");
+    for (const m of WINDOW) {
+      const accepted =
+        ReaderSettingsSchema.safeParse(validSettings({ measure: m })).success;
+      expect(accepted, `measure ${m}`).toBe(
+        (MEASURE_STEPS as readonly number[]).includes(m),
+      );
+    }
+  });
+
+  it("ConstraintsSchema accepts EXACTLY the MEASURE_STEPS values", async () => {
+    const { MEASURE_STEPS } = await import("../../src/settings/tokens");
+    const { ConstraintsSchema } = await import("../../src/measurement/types");
+    for (const m of WINDOW) {
+      const accepted = ConstraintsSchema.safeParse(constraintsWith(m)).success;
+      expect(accepted, `measure ${m}`).toBe(
+        (MEASURE_STEPS as readonly number[]).includes(m),
+      );
+    }
   });
 });
 

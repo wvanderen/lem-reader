@@ -66,12 +66,14 @@ export const VIEWPORTS: readonly Viewport[] = [
  * Three typography cells balancing coverage and CI runtime. Default is the
  * D-07 baseline; the two stress cells exercise drift drivers and edge cases:
  *   - serif/18/64/comfortable — D-07 default (baseline)
- *   - sans/22/64/spacious     — stress (system-ui Pitfall 5 + wordSpacing
- *                               Pitfall 6 + the truthful maximum measure
- *                               pushes wrap math — D21-01: the 72 cell moved
- *                               to the now-maximum 64 when the lying step
- *                               left the union)
- *   - dyslexic/16/52/compact  — stress (smallest size + narrowest measure +
+ *   - sans/22/88/spacious     — stress (system-ui Pitfall 5 + wordSpacing
+ *                               Pitfall 6 + the new maximum measure pushes
+ *                               wrap math — issue #18: the cell tracks the
+ *                               sliding maximum, D21-01 then #18-D22-01;
+ *                               max-width:100% clamps it calmly on the
+ *                               narrow viewports, so this cell proves BOTH
+ *                               truthful wide delivery and viewport clamping)
+ *   - dyslexic/16/52/compact  — stress (smallest size + narrow measure +
  *                               tightest line-height; hardest wrapping case)
  *
  * Reuses TypographyVariant from tests/e2e/calibration/fixtures-matrix.ts so
@@ -79,7 +81,7 @@ export const VIEWPORTS: readonly Viewport[] = [
  */
 export const SAMPLED_TYPOGRAPHY: readonly TypographyVariant[] = [
   { font: "serif", size: 18, measure: 64, spacing: "comfortable" },
-  { font: "sans", size: 22, measure: 64, spacing: "spacious" },
+  { font: "sans", size: 22, measure: 88, spacing: "spacious" },
   { font: "dyslexic", size: 16, measure: 52, spacing: "compact" },
 ] as const;
 

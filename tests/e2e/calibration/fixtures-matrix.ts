@@ -8,7 +8,7 @@
 //     Spacious MUST be measured.
 //
 // Coverage mandate: EVERY font × spacing cell (3 fonts × 3 spacings = 9
-// baseline cells) is represented. The full matrix (3 × 5 × 3 × 4 = 180
+// baseline cells) is represented. The full matrix (3 × 5 × 3 × 9 = 405
 // variants) is available as TYPOGRAPHY_MATRIX; the CI-friendly SAMPLED_MATRIX
 // retains full font × spacing coverage but samples size × measure for speed
 // (RESEARCH §Calibration Matrix L591 — "planner MAY sample a representative
@@ -34,19 +34,23 @@ export interface TypographyVariant {
 
 const FONTS: readonly FontKey[] = ["serif", "sans", "dyslexic"];
 const SIZES_FULL: readonly SizeStep[] = [16, 18, 20, 22, 24];
-// D21-01/D21-02 (POLISH-09): the truthful five-step uniform-6 range — 72
-// left the ReaderSettingsSchema union, so the measure axis follows it
-// (MeasureStep derives from the schema type; a 72 here would not compile).
-const MEASURES_FULL: readonly MeasureStep[] = [40, 46, 52, 58, 64];
+// Issue #18 (D22-01): the uniform-6 ladder extends upward to 88 — the
+// measure axis follows MEASURE_STEPS / the ReaderSettingsSchema union
+// (MeasureStep derives from the schema type; a non-step value like 72
+// would not compile).
+const MEASURES_FULL: readonly MeasureStep[] = [
+  40, 46, 52, 58, 64, 70, 76, 82, 88,
+];
 const SPACINGS: readonly SpacingKey[] = ["compact", "comfortable", "spacious"];
 
 // CI-friendly sampled steps (RESEARCH Open Question A2 — full matrix may be
 // too slow for CI; sampled steps retain representativeness).
 const SIZES_SAMPLED: readonly SizeStep[] = [18, 22];
-// D21-02: sample the new narrow floor (46) and the truthful maximum (64) —
-// the widest spread across the evolved range (the old [58, 72] sampled the
-// then-max; 72 no longer parses).
-const MEASURES_SAMPLED: readonly MeasureStep[] = [46, 64];
+// Issue #18 (D22-01): sample a narrow step (46) and the new maximum (88) —
+// the widest practical spread across the extended range (40 remains the
+// floor and 64 the default; both stay covered by the full-matrix axis and
+// the fixture baseline cells).
+const MEASURES_SAMPLED: readonly MeasureStep[] = [46, 88];
 
 /** Cartesian product helper. */
 function cartesian<F, S, T, U>(
@@ -61,8 +65,8 @@ function cartesian<F, S, T, U>(
 }
 
 /**
- * The full typography matrix: 3 fonts × 5 sizes × 3 spacings × 5 measures
- * = 225 variants. Used for the comprehensive (slow) calibration run.
+ * The full typography matrix: 3 fonts × 5 sizes × 3 spacings × 9 measures
+ * = 405 variants. Used for the comprehensive (slow) calibration run.
  */
 export const TYPOGRAPHY_MATRIX: readonly TypographyVariant[] = cartesian(
   FONTS,
@@ -96,7 +100,7 @@ export const SAMPLED_MATRIX: readonly TypographyVariant[] = cartesian(
 
 /**
  * The active matrix for the harness run. Override via LEM_FULL_CALIBRATION=1
- * to use the full 180-variant matrix.
+ * to use the full 405-variant matrix.
  */
 export const ACTIVE_MATRIX: readonly TypographyVariant[] = process.env
   .LEM_FULL_CALIBRATION

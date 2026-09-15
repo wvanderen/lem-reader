@@ -304,9 +304,10 @@ export async function validateBundle(file: File): Promise<BundleValidationResult
     };
   }
 
-  // 4.5 D21-03 (POLISH-09): clamp the enumerated legacy measure value
-  //     (72 → 64) on the RAW preferences block BEFORE the full schema
-  //     parse — a v2.1-era bundle whose preferences carry the
+  // 4.5 D21-03 (POLISH-09) + issue #18 (D22-01): clamp the enumerated
+  //     legacy measure value (72 → 70, the nearest lower step of the
+  //     extended ladder) on the RAW preferences block BEFORE the full
+  //     schema parse — a v2.1-era bundle whose preferences carry the
   //     pre-truthful-range maximum re-imports calmly instead of failing
   //     the measure union (which would refuse the whole bundle). Bounded
   //     map: only the known legacy value maps; garbage still fails parse
@@ -361,7 +362,7 @@ export async function validateBundle(file: File): Promise<BundleValidationResult
     claimedBlocks.assets = await sha256Hex(new TextEncoder().encode(JSON.stringify([])));
   }
   // D21-03 (POLISH-09) manifest legacy-value tolerance: when the pre-parse
-  // clamp mapped the enumerated legacy value (72 → 64), a v2.1-era
+  // clamp mapped the enumerated legacy value (72 → 70), a v2.1-era
   // exporter's claimed preferences hash was computed over the block WITH
   // the legacy value (it was in-union at export time) — it can never equal
   // the recomputed (clamped) hash. Accept the export-era hash as the

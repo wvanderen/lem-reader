@@ -42,11 +42,12 @@ export function readSettingsMirror(): ReaderSettings | null {
     const raw = window.localStorage.getItem(SETTINGS_MIRROR_KEY);
     if (!raw) return null;
     const value: unknown = JSON.parse(raw);
-    // D21-03 (POLISH-09): clamp the enumerated legacy measure value (72 → 64)
+    // D21-03 (POLISH-09) + issue #18 (D22-01): clamp the enumerated legacy
+    // measure value (72 → 70, the nearest lower step of the extended ladder)
     // on the parsed JSON BEFORE safeParse so a mirror painted with the legacy
-    // maximum stays a useful hint at 64 (not null → Dexie double-work, and a
-    // dead 72ch first paint). Null-on-doubt holds for every other invalid
-    // value (the map contains exactly {72: 64}).
+    // maximum stays a useful hint at 70 (not null → Dexie double-work, and a
+    // non-step first paint). Null-on-doubt holds for every other invalid
+    // value (the map contains exactly {72: 70}).
     const parsed = ReaderSettingsSchema.safeParse(clampLegacyMeasure(value));
     return parsed.success ? parsed.data : null;
   } catch {

@@ -517,4 +517,30 @@ describe("validateBundle — round trip (09-04 Task 2)", () => {
       expect(result.manifest.algorithm).toBe("sha256");
     }
   });
+
+  // Issue #18 (D22-01) acceptance: the reader's width choice survives
+  // export/import AT the new maximum — an 88ch preference round-trips
+  // byte-identically (no legacy clamp touches in-union values; the
+  // manifest hash is computed over the parsed 88 block and re-verifies).
+  it("round-trips the new maximum measure 88 through buildBundle → validateBundle unchanged", async () => {
+    const { buildBundle, validateBundle } = await loadService();
+    const { db } = await loadDb();
+    const widePrefs = ReaderSettingsSchema.parse({
+      ...samplePrefs(),
+      measure: 88,
+    });
+    await db.articles.put(sampleArticle());
+    await db.settings.put({ key: "reader-prefs", value: widePrefs });
+
+    const bytes = (await buildBundle()).bytes;
+    const result = await validateBundle(
+      new File([new Uint8Array(bytes)], "wide.zip"),
+    );
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.bundle.preferences.measure).toBe(88);
+      expect(result.bundle.preferences).toEqual(widePrefs);
+    }
+  });
 });

@@ -29,9 +29,14 @@ export const SPACING_PRESETS = {
 
 // D2-07 — stepped/discrete (arrow-key navigable, predictable, calm).
 export const SIZE_STEPS = [16, 18, 20, 22, 24] as const; // px — index 1 (18) is the default
-// D21-01/D21-02 (POLISH-09): the far-right endpoint is a TRUTHFUL 64 — the
-// lying 72 step is removed and the range extends downward with the same
-// uniform step 6 (real reader choice at the narrow end under high zoom /
-// large type). Stored legacy-72 settings clamp calmly to 64 at the read
-// seams (legacyMeasure.ts, D21-03).
-export const MEASURE_STEPS = [40, 46, 52, 58, 64] as const; // ch — index 4 (64) is the default
+// D21-01/D21-02 (POLISH-09) + issue #18 (D22-01): the uniform step-6 ladder
+// keeps the truthful 64 default and extends UPWARD to 88 — "give users
+// freedom to increase column width even much more". The new maximum is a
+// CONSCIOUS revision of the POLISH-09 decision, not a re-add of the lying
+// 72 step: 88 = 40 + 6×8, so the range input's step-6 arithmetic stays
+// exact and every stored value remains in-union. 72 is still NOT a step —
+// a stored legacy-72 setting clamps calmly to the nearest lower step (70)
+// at the read seams (legacyMeasure.ts, D21-03 as remapped by #18).
+export const MEASURE_STEPS = [
+  40, 46, 52, 58, 64, 70, 76, 82, 88,
+] as const; // ch — index 4 (64) remains the default
