@@ -495,3 +495,128 @@ describe("markdownToBlocks — Round-trip anchor gate (Pitfall 8-1)", () => {
     expect(() => assertRoundTripAnchor(article)).not.toThrow();
   });
 });
+
+// ── Issue #19 — caption attachment ──────────────────────────────────────────
+// The markdown spec has no native figure syntax, so captions arrive as plain
+// text: either trailing the image inside the same paragraph, or as an
+// adjacent paragraph. Both must land in the figure's caption channel (a real
+// <figcaption> below the image), never as a body paragraph. "Caption-looking"
+// is deliberately conservative: SHORT (≤ 200 chars) AND either
+// keyword-prefixed (Figure/Photo/…, case-insensitive) or entirely em-marked.
+// Ordinary body prose is never consumed; the standalone-image promotion above
+// (caption []) is unchanged.
+
+describe("markdownToBlocks — caption attachment (issue #19)", () => {
+  it("an image-first paragraph promotes to a figure carrying its trailing text as the caption", async () => {
+    const { blocks } = await markdownToBlocks(
+      "![harbor](https://example.com/harbor.png) A sunset over the harbor.\n",
+    );
+    expect(blocks.map((b) => b.kind)).toEqual(["figure"]);
+    const fig = blocks[0];
+    if (fig?.kind !== "figure") throw new Error("expected figure");
+    expect(fig.src).toBe("https://example.com/harbor.png");
+    expect(fig.alt).toBe("harbor");
+    expect(fig.caption.map((r) => r.text).join("")).toBe(
+      "A sunset over the harbor.",
+    );
+  });
+
+  it("caption runs keep their inline marks (D19-01)", async () => {
+    const { blocks } = await markdownToBlocks(
+      "![m](https://example.com/m.png) An **emphasized** caption.\n",
+    );
+    const fig = blocks[0];
+    if (fig?.kind !== "figure") throw new Error("expected figure");
+    expect(fig.caption.map((r) => r.text).join("")).toBe(
+      "An emphasized caption.",
+    );
+    expect(fig.caption.map((r) => r.marks.map((m) => m.type))).toEqual([
+      [],
+      ["strong"],
+      [],
+    ]);
+  });
+
+  it("several images in one paragraph each carry their own trailing caption (no silent image drop)", async () => {
+    const { blocks } = await markdownToBlocks(
+      "![a](https://example.com/a.png) Cap a\n![b](https://example.com/b.png) Cap b\n",
+    );
+    expect(blocks.map((b) => b.kind)).toEqual(["figure", "figure"]);
+    const [figA, figB] = blocks;
+    if (figA?.kind !== "figure" || figB?.kind !== "figure") {
+      throw new Error("expected figures");
+    }
+    expect(figA.caption.map((r) => r.text).join("")).toBe("Cap a");
+    expect(figB.caption.map((r) => r.text).join("")).toBe("Cap b");
+  });
+
+  it("a caption-looking paragraph before an image-only paragraph is consumed into the figure", async () => {
+    const { blocks } = await markdownToBlocks(
+      "Figure 1: A calm chart\n\n![chart](https://example.com/chart.png)\n",
+    );
+    expect(blocks.map((b) => b.kind)).toEqual(["figure"]);
+    const fig = blocks[0];
+    if (fig?.kind !== "figure") throw new Error("expected figure");
+    expect(fig.caption.map((r) => r.text).join("")).toBe(
+      "Figure 1: A calm chart",
+    );
+  });
+
+  it("a caption-looking paragraph after an image-only paragraph is consumed too (caption-below convention)", async () => {
+    const { blocks } = await markdownToBlocks(
+      "![chart](https://example.com/chart.png)\n\nFigure 1: A calm chart\n",
+    );
+    expect(blocks.map((b) => b.kind)).toEqual(["figure"]);
+    const fig = blocks[0];
+    if (fig?.kind !== "figure") throw new Error("expected figure");
+    expect(fig.caption.map((r) => r.text).join("")).toBe(
+      "Figure 1: A calm chart",
+    );
+  });
+
+  it("an entirely em-marked short paragraph is caption-looking", async () => {
+    const { blocks } = await markdownToBlocks(
+      "*An italic caption.*\n\n![sunset](https://example.com/sunset.png)\n",
+    );
+    expect(blocks.map((b) => b.kind)).toEqual(["figure"]);
+    const fig = blocks[0];
+    if (fig?.kind !== "figure") throw new Error("expected figure");
+    expect(fig.caption.map((r) => r.text).join("")).toBe("An italic caption.");
+  });
+
+  it("ordinary body prose is NEVER consumed — a plain short paragraph stays a paragraph", async () => {
+    const { blocks } = await markdownToBlocks(
+      "A calm sentence that carries no caption signal at all.\n\n![x](https://example.com/x.png)\n",
+    );
+    expect(blocks.map((b) => b.kind)).toEqual(["paragraph", "figure"]);
+    const fig = blocks[1];
+    if (fig?.kind !== "figure") throw new Error("expected figure");
+    expect(fig.caption).toEqual([]);
+  });
+
+  it("a long keyword-free paragraph before an image stays a paragraph (no body-text theft)", async () => {
+    const longProse =
+      "Long body prose that meanders well past any reasonable caption length while never mentioning a keyword, " +
+      "so even though it directly precedes a standalone image it must remain in the reading flow untouched.";
+    const { blocks } = await markdownToBlocks(
+      `${longProse}\n\n![y](https://example.com/y.png)\n`,
+    );
+    expect(blocks.map((b) => b.kind)).toEqual(["paragraph", "figure"]);
+    const para = blocks[0];
+    if (para?.kind !== "paragraph") throw new Error("expected paragraph");
+    expect(para.content.map((r) => r.text).join("")).toBe(longProse);
+  });
+
+  it("a text-first mixed paragraph keeps its runs byte-identical and still hoists the image (HTML parity)", async () => {
+    const md = "Before the image stays put ![a](https://example.com/a.png) and after it too.\n";
+    const { blocks } = await markdownToBlocks(md);
+    expect(blocks.map((b) => b.kind)).toEqual(["paragraph", "figure"]);
+    const imgFree = await markdownToBlocks(md.replace(/!\[[^\]]*\]\([^)]*\)/, ""));
+    // The paragraph's runs are byte-identical to the image-free walk — the
+    // image contributes nothing to run extraction (text preserved).
+    expect(blocks[0]).toEqual(imgFree.blocks[0]);
+    const fig = blocks[1];
+    if (fig?.kind !== "figure") throw new Error("expected figure");
+    expect(fig.caption).toEqual([]);
+  });
+});
