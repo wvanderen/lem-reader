@@ -172,3 +172,22 @@ export {
   MAX_ARTICLE_ASSET_BYTES,
   MAX_ASSET_RESPONSE_BYTES,
 };
+
+// ── Transcript intake caps (issue #35; decision source #27 / ADR 0002) ───────
+// Per-call guards for the InnerTube transcript client (server/
+// youtubeTranscript.ts), following the existing limits conventions: each
+// value mirrors the document-fetch discipline (REQUEST_TIMEOUT_MS /
+// MAX_RESPONSE_BYTES) at a per-call granularity — every outbound call
+// (player POST, next POST, signed caption GET) is bounded individually.
+
+/** Transcript fetch timeout (AbortSignal cap) — mirrors REQUEST_TIMEOUT_MS
+ * ("~30s per call", issue #35): Workers CPU limit is 30s on most plans and
+ * each of the client's calls is an independent network round-trip, so the
+ * same wall-clock generosity/tightness tradeoff applies. */
+export const TRANSCRIPT_TIMEOUT_MS = 30_000;
+
+/** Maximum response body size per transcript-client call — mirrors
+ * MAX_RESPONSE_BYTES (5MB). A player response runs ~250KB, a WEB `next`
+ * response ~1-2MB; the ANDROID `next` variant measured 14MB live on
+ * 2026-09-16, which is exactly the pathological shape this cap refuses. */
+export const TRANSCRIPT_MAX_BYTES = 5 * 1024 * 1024;

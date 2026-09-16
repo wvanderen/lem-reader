@@ -1,0 +1,120 @@
+// src/ingestion/youtube.ts
+// Issue #35 — the shared transcript-fetch contract. The server-side InnerTube
+// client (server/youtubeTranscript.ts) produces these shapes; the client side
+// re-validates them at the boundary (Zod-at-boundary — the types.ts
+// STATE-04 convention). Lives in /src because the /src→/server import
+// direction is forbidden and the reader-facing refusal kinds will surface in
+// the client's status live region once transcript ingestion is wired (the
+// #26/#21 follow-up tickets).
+//
+// Posture (issue #27 resolution, ADR 0002): minimal hand-rolled InnerTube
+// client, NO new dependency; refusals are never retried and never cached —
+// the library is the cache.
+import { z } from "zod";
+
+/** The canonical 11-character YouTube video id alphabet (A-Za-z0-9_-). Every
+ * outbound request embeds the id ONLY after this regex validates it — the
+ * client refuses to build an InnerTube body from an unvalidated id. */
+export const YOUTUBE_VIDEO_ID_REGEX = /^[A-Za-z0-9_-]{11}$/;
+
+/**
+ * extractYouTubeVideoId — pull the video id from the three accepted URL
+ * forms (issue #35 AC: watch / shorts / youtu.be):
+ *
+ *   https://www.youtube.com/watch?v=<id>   (+ m. subdomain, extra params ok)
+ *   https://www.youtube.com/shorts/<id>
+ *   https://youtu.be/<id>                  (+ trailing path/query ok)
+ *
+ * Returns null for anything else — non-YouTube hosts, missing/malformed ids,
+ * non-http(s) schemes. Pure string/URL work; no requests, no throws.
+ */
+export function extractYouTubeVideoId(rawUrl: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+  const host = url.hostname.toLowerCase();
+  const validVideoId = (candidate: string | undefined | null): string | null =>
+    candidate !== undefined && candidate !== null && YOUTUBE_VIDEO_ID_REGEX.test(candidate)
+      ? candidate
+      : null;
+  if (host === "youtu.be") {
+    return validVideoId(url.pathname.split("/")[1]);
+  }
+  if (host === "youtube.com" || host === "www.youtube.com" || host === "m.youtube.com") {
+    if (url.pathname === "/watch") {
+      return validVideoId(url.searchParams.get("v"));
+    }
+    if (url.pathname.startsWith("/shorts/")) {
+      return validVideoId(url.pathname.split("/")[2]);
+    }
+  }
+  return null;
+}
+
+/** TranscriptRefusalReasonEnum — the FOUR structured, reader-facing refusal
+ * kinds (issue #35). Each maps one YouTube state, never a transport failure
+ * (transport failures throw IngestionError with the existing honest catalog
+ * reasons instead):
+ *   no-captions        — the video plays but exposes no caption tracks
+ *   unavailable-private — playabilityStatus ERROR/UNPLAYABLE (removed or
+ *                        private; from the reader's side indistinguishable)
+ *   age-gated          — LOGIN_REQUIRED age verification
+ *   bot-check          — LOGIN_REQUIRED "confirm you're not a bot"
+ * Refusals are terminal: the client never retries them and never caches them
+ * (the library is the cache — issue #27). */
+export const TranscriptRefusalReasonEnum = z.enum([
+  "no-captions",
+  "unavailable-private",
+  "age-gated",
+  "bot-check",
+]);
+export type TranscriptRefusalReason = z.infer<typeof TranscriptRefusalReasonEnum>;
+
+/** TranscriptSegmentSchema — one caption line. `startMs`/`durationMs` are the
+ * canonical timing (the #26 normalization ticket keys block timestamps off
+ * these); text is decoded and markup-stripped (srv3 markup stripped per the
+ * ticket) but otherwise raw — downstream normalization is ingest's job. */
+export const TranscriptSegmentSchema = z.object({
+  text: z.string().min(1),
+  startMs: z.number().int().min(0),
+  durationMs: z.number().int().min(0),
+});
+export type TranscriptSegment = z.infer<typeof TranscriptSegmentSchema>;
+
+/** TranscriptChapterSchema — one creator chapter from the `next` engagement
+ * panel (title + start; chapters are start-anchored markers). */
+export const TranscriptChapterSchema = z.object({
+  title: z.string().min(1),
+  startMs: z.number().int().min(0),
+});
+export type TranscriptChapter = z.infer<typeof TranscriptChapterSchema>;
+
+/** YouTubeTranscriptResultSchema — the discriminated envelope the transcript
+ * client returns. Success carries metadata (title, channel, duration), the
+ * chosen caption track's language + ASR flag, the parsed segments, and the
+ * creator chapters ([] when the video has none or the optional `next` call
+ * degraded — chapters are enrichment, never a refusal). Failure carries
+ * exactly one of the four refusal kinds. */
+export const YouTubeTranscriptResultSchema = z.discriminatedUnion("ok", [
+  z.object({
+    ok: z.literal(true),
+    videoId: z.string().regex(YOUTUBE_VIDEO_ID_REGEX),
+    title: z.string().min(1),
+    channel: z.string().min(1),
+    durationSeconds: z.number().int().min(0),
+    languageCode: z.string().min(1),
+    isAutoGenerated: z.boolean(),
+    segments: z.array(TranscriptSegmentSchema).min(1),
+    chapters: z.array(TranscriptChapterSchema),
+  }),
+  z.object({
+    ok: z.literal(false),
+    refusal: TranscriptRefusalReasonEnum,
+  }),
+]);
+export type YouTubeTranscriptResult = z.infer<typeof YouTubeTranscriptResultSchema>;
+export type TranscriptSuccess = Extract<YouTubeTranscriptResult, { ok: true }>;

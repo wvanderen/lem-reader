@@ -1,0 +1,16 @@
+{
+ "responseKind": "player-ok-no-captions",
+ "provenance": "synthesized 2026-09-16: transcripts-disabled videos return playabilityStatus OK with the captions renderer absent (TranscriptsDisabled taxonomy of docs/spikes/0008 §3); every probed 2026 video carries ASR tracks, so no live no-caption capture was possible",
+ "playabilityStatus": {
+  "status": "OK"
+ },
+ "videoDetails": {
+  "videoId": "jNQXAC9IVRw",
+  "title": "Me at the zoo",
+  "lengthSeconds": 19,
+  "author": "jawed",
+  "channelId": "UC4QobU6STFB0P71PMvOGN5A",
+  "isPrivate": false,
+  "isLiveContent": false
+ }
+}

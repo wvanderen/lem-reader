@@ -169,6 +169,48 @@ function isOpaqueContentType(contentType: string): boolean {
 }
 
 /**
+ * resolveValidatedHost — the shared pre-fetch host validation (Measures 5, 3,
+ * 4): metadata-hostname blocklist → DNS resolve4/6 → ip-address deny-list on
+ * EVERY resolved IP. Returns the validated IP list (v4 first — the caller
+ * pins allIps[0], byte-identical to the pre-refactor v4[0] ?? v6[0] pin).
+ * Throws IngestionError BEFORE any fetch (Measure 7 discipline). Extracted
+ * verbatim from safeFetchCore so non-pipeline fetchers (the InnerTube POSTs
+ * of server/youtubeTranscript.ts, whose constant endpoints bypass safeFetchCore
+ * because it is GET-shaped) run the SAME validation — one guard shape, never
+ * a fork of the checks (issue #35 AC: private/internal endpoints refused on
+ * all outbound requests).
+ */
+export async function resolveValidatedHost(hostname: string): Promise<string[]> {
+  // Measure 5 — cloud-metadata hostname blocklist. Checked BEFORE DNS so the
+  // cheapest metadata-exfil path (169.254.169.254 et al.) never reaches fetch.
+  if (METADATA_HOSTNAMES.includes(hostname as (typeof METADATA_HOSTNAMES)[number])) {
+    throw new IngestionError("ssrf-blocked-metadata");
+  }
+
+  // Measure 3 — DNS RESOLVE (resolve4/resolve6 work on Workers via DoH to
+  // 1.1.1.1; see 07-RESEARCH.md L377-379). If both empty, the hostname is
+  // unresolvable → fetch-failed (do not leak internal DNS state).
+  const [v4, v6] = await Promise.all([
+    dns.promises.resolve4(hostname).catch(() => [] as string[]),
+    dns.promises.resolve6(hostname).catch(() => [] as string[]),
+  ]);
+  const allIps = [...v4, ...v6];
+  if (allIps.length === 0) {
+    throw new IngestionError("fetch-failed", "dns-unresolved");
+  }
+
+  // Measure 4 — validate EVERY resolved IP against PRIVATE_RANGES via the
+  // ip-address library. ANY private IP refuses the fetch (do not fall back to
+  // a public one — an attacker controlling DNS could rotate which IP we hit).
+  for (const ip of allIps) {
+    if (isPrivateIp(ip)) {
+      throw new IngestionError("ssrf-blocked-private-ip");
+    }
+  }
+  return allIps;
+}
+
+/**
  * safeFetchCore — the parameterized 9-measure SSRF-safe pipeline. Runs
  * scheme → metadata-hostname → DNS-resolve → ip-address deny-list →
  * pinning/timeout → manual-redirect-per-hop → content-length cap →
@@ -197,38 +239,15 @@ export async function safeFetchCore(
     throw new IngestionError("ssrf-blocked-scheme");
   }
 
-  // Measure 5 — cloud-metadata hostname blocklist. Checked BEFORE DNS so the
-  // cheapest metadata-exfil path (169.254.169.254 et al.) never reaches fetch.
-  if (METADATA_HOSTNAMES.includes(parsed.hostname as (typeof METADATA_HOSTNAMES)[number])) {
-    throw new IngestionError("ssrf-blocked-metadata");
-  }
-
-  // Measure 3 — DNS RESOLVE (resolve4/resolve6 work on Workers via DoH to
-  // 1.1.1.1; see 07-RESEARCH.md L377-379). If both empty, the hostname is
-  // unresolvable → fetch-failed (do not leak internal DNS state).
-  const [v4, v6] = await Promise.all([
-    dns.promises.resolve4(parsed.hostname).catch(() => [] as string[]),
-    dns.promises.resolve6(parsed.hostname).catch(() => [] as string[]),
-  ]);
-  const allIps = [...v4, ...v6];
-  if (allIps.length === 0) {
-    throw new IngestionError("fetch-failed", "dns-unresolved");
-  }
-
-  // Measure 4 — validate EVERY resolved IP against PRIVATE_RANGES via the
-  // ip-address library. ANY private IP refuses the fetch (do not fall back to
-  // a public one — an attacker controlling DNS could rotate which IP we hit).
-  for (const ip of allIps) {
-    if (isPrivateIp(ip)) {
-      throw new IngestionError("ssrf-blocked-private-ip");
-    }
-  }
+  // Measures 5+3+4 — metadata blocklist → resolve → deny-list (the shared
+  // pre-fetch host validation above; observable behavior is identical).
+  const allIps = await resolveValidatedHost(parsed.hostname);
 
   // Measure 3 (DNS pinning) + Measure 8 (timeout) + Measure 2 (manual redirect).
   // 07-01 spike A1 PASS: Workers fetch() honors cf.resolveOverride; we pin the
   // first validated IP so a DNS-rebinding attacker cannot TOCTOU us between
   // resolve and fetch. The Node unit-test fetch ignores the `cf` key.
-  const pinnedIp = v4[0] ?? v6[0];
+  const pinnedIp = allIps[0];
   // Quick task 260908-ef5 — profile headers merge AFTER the User-Agent
   // literal. An absent `headers` field yields exactly today's single-header
   // shape, so the document profile's request headers are byte-identical

@@ -1,0 +1,19 @@
+{
+ "responseKind": "player-login-required-age-gate",
+ "provenance": "synthesized 2026-09-16 from the reason phrasing documented in docs/spikes/0008 §3 (LOGIN_REQUIRED age gate); not live-captured",
+ "playabilityStatus": {
+  "status": "LOGIN_REQUIRED",
+  "reason": "This video may be inappropriate for some users. Sign in to your primary account to confirm your age.",
+  "errorScreen": {
+   "playerErrorMessageRenderer": {
+    "reason": {
+     "runs": [
+      {
+       "text": "This video may be inappropriate for some users."
+      }
+     ]
+    }
+   }
+  }
+ }
+}

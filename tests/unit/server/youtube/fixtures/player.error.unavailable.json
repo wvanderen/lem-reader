@@ -1,0 +1,8 @@
+{
+ "responseKind": "player-error-unavailable",
+ "captured": "2026-09-16",
+ "playabilityStatus": {
+  "status": "ERROR",
+  "reason": "This video is unavailable"
+ }
+}

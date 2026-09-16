@@ -1,0 +1,137 @@
+{
+ "responseKind": "next-chapters",
+ "captured": "2026-09-16",
+ "engagementPanels": [
+  {
+   "engagementPanelSectionListRenderer": {
+    "panelIdentifier": "engagement-panel-macro-markers-description-chapters",
+    "content": {
+     "macroMarkersListRenderer": {
+      "contents": [
+       {
+        "macroMarkersListItemRenderer": {
+         "title": {
+          "simpleText": "Introduction example"
+         },
+         "timeDescription": {
+          "simpleText": "0:00"
+         }
+        }
+       },
+       {
+        "macroMarkersListItemRenderer": {
+         "title": {
+          "simpleText": "Series preview"
+         },
+         "timeDescription": {
+          "simpleText": "1:07"
+         }
+        }
+       },
+       {
+        "macroMarkersListItemRenderer": {
+         "title": {
+          "simpleText": "What are neurons?"
+         },
+         "timeDescription": {
+          "simpleText": "2:42"
+         }
+        }
+       },
+       {
+        "macroMarkersListItemRenderer": {
+         "title": {
+          "simpleText": "Introducing layers"
+         },
+         "timeDescription": {
+          "simpleText": "3:35"
+         }
+        }
+       },
+       {
+        "macroMarkersListItemRenderer": {
+         "title": {
+          "simpleText": "Why layers?"
+         },
+         "timeDescription": {
+          "simpleText": "5:31"
+         }
+        }
+       },
+       {
+        "macroMarkersListItemRenderer": {
+         "title": {
+          "simpleText": "Edge detection example"
+         },
+         "timeDescription": {
+          "simpleText": "8:38"
+         }
+        }
+       },
+       {
+        "macroMarkersListItemRenderer": {
+         "title": {
+          "simpleText": "Counting weights and biases"
+         },
+         "timeDescription": {
+          "simpleText": "11:34"
+         }
+        }
+       },
+       {
+        "macroMarkersListItemRenderer": {
+         "title": {
+          "simpleText": "How learning relates"
+         },
+         "timeDescription": {
+          "simpleText": "12:30"
+         }
+        }
+       },
+       {
+        "macroMarkersListItemRenderer": {
+         "title": {
+          "simpleText": "Notation and linear algebra"
+         },
+         "timeDescription": {
+          "simpleText": "13:26"
+         }
+        }
+       },
+       {
+        "macroMarkersListItemRenderer": {
+         "title": {
+          "simpleText": "Recap"
+         },
+         "timeDescription": {
+          "simpleText": "15:17"
+         }
+        }
+       },
+       {
+        "macroMarkersListItemRenderer": {
+         "title": {
+          "simpleText": "Some final words"
+         },
+         "timeDescription": {
+          "simpleText": "16:27"
+         }
+        }
+       },
+       {
+        "macroMarkersListItemRenderer": {
+         "title": {
+          "simpleText": "ReLU vs Sigmoid"
+         },
+         "timeDescription": {
+          "simpleText": "17:03"
+         }
+        }
+       }
+      ]
+     }
+    }
+   }
+  }
+ ]
+}
