@@ -1,0 +1,19 @@
+{
+ "responseKind": "player-login-required-bot-check",
+ "provenance": "synthesized 2026-09-16 from the reason string documented in docs/spikes/0008 §3 and youtube-transcript-api _transcripts.py (not live-captured; bot-gating is IP-reputation-dependent)",
+ "playabilityStatus": {
+  "status": "LOGIN_REQUIRED",
+  "reason": "Sign in to confirm you are not a bot",
+  "errorScreen": {
+   "playerErrorMessageRenderer": {
+    "reason": {
+     "runs": [
+      {
+       "text": "Sign in to confirm you are not a bot"
+      }
+     ]
+    }
+   }
+  }
+ }
+}
