@@ -34,7 +34,8 @@ export type Manifest = {
     | "notes"
     | "locations"
     | "preferences"
-    | "assets",
+    | "assets"
+    | "readingSessions",
     string
   >;
 };
@@ -54,6 +55,21 @@ export type Manifest = {
 // absent claimed assets key as the empty-array hash so old bundles never
 // false-positive as corrupted (a v4 bundle with actual assets still
 // mismatches — tampering stays detected).
+//
+// Issue #37: the `readingSessions` block joins on the same shape —
+// JSON.stringify(bundle.readingSessions ?? []); v1..v4 claimed manifests
+// predate the key and are read as the empty-array hash (the assets
+// precedent).
+
+/** The hash of an ABSENT block — `sha256("[]")`, the single derivation
+ * both fallbacks share: computeManifest's `block ?? []` arms and
+ * validateBundle's absent-claimed-key shim for bundles exported before a
+ * block existed (assets since 20-05, readingSessions since issue #37).
+ * The known-answer test in manifest.test.ts pins the value independently. */
+export async function emptyBlockHash(): Promise<string> {
+  return await sha256Hex(new TextEncoder().encode(JSON.stringify([])));
+}
+
 export async function computeManifest(bundle: ExportBundle): Promise<Manifest> {
   const entry = async (block: unknown): Promise<string> =>
     await sha256Hex(new TextEncoder().encode(JSON.stringify(block)));
@@ -66,6 +82,7 @@ export async function computeManifest(bundle: ExportBundle): Promise<Manifest> {
       locations: await entry(bundle.locations),
       preferences: await entry(bundle.preferences),
       assets: await entry(bundle.assets ?? []),
+      readingSessions: await entry(bundle.readingSessions ?? []),
     },
   };
 }

@@ -16,8 +16,9 @@
 //       contract extended; v1-v3 claimed manifests predate the key and are
 //       read as the empty-array hash)
 //     - union read: v1/v2/v3 fixtures parse exactly as before; a v4 bundle
-//       with an assets array parses and retains it; v5+ forward-refuses at
-//       the validateBundle peek (D9-04 preserved, threshold > 4)
+//       with an assets array parses and retains it; v6+ forward-refuses at
+//       the validateBundle peek (D9-04 preserved; the threshold moved to
+//       > 5 by issue #37)
 //   Task 2 cells (import gates) live in the describes further down.
 //
 // Harness mirrors tests/unit/portability/atomic-import.test.ts (fake-indexeddb
@@ -176,7 +177,7 @@ describe("buildBundle — v4 asset emission (20-05 Task 1)", () => {
     await wipeDatabase();
   });
 
-  it("emits schemaVersion 4 with per-asset meta and a raw zip entry at assets/<articleId>/<assetId>", async () => {
+  it("emits schemaVersion 5 (writers emit v5 since issue #37) with per-asset meta and a raw zip entry at assets/<articleId>/<assetId>", async () => {
     const { buildBundle } = await loadService();
     const { db } = await loadDb();
     await db.articles.put(figureArticle());
@@ -188,8 +189,10 @@ describe("buildBundle — v4 asset emission (20-05 Task 1)", () => {
       assets?: Array<Record<string, unknown>>;
     };
 
-    // Writers emit v4 (the fourth union-widening application — 12-07/17-04).
-    expect(bundleJson.schemaVersion).toBe(4);
+    // Writers emit v5 since issue #37 (the 12-07/17-04/20-05
+    // version-bump assertion-update precedent); the assets meta block
+    // rides unchanged.
+    expect(bundleJson.schemaVersion).toBe(5);
 
     // The assets meta block: one row, canonical service-generated entry name,
     // honest sha256 + byteLength over the actual bytes.
@@ -227,7 +230,7 @@ describe("buildBundle — v4 asset emission (20-05 Task 1)", () => {
     ).toEqual([]);
   });
 
-  it("validates back through validateBundle with schemaVersion 4 (round trip)", async () => {
+  it("validates back through validateBundle with the writer's version — 5 since issue #37, assets intact (round trip)", async () => {
     const { buildBundle, validateBundle } = await loadService();
     const { db } = await loadDb();
     await db.articles.put(figureArticle());
@@ -237,7 +240,7 @@ describe("buildBundle — v4 asset emission (20-05 Task 1)", () => {
     const result = await validateBundle(new File([new Uint8Array(bytes)], "x.zip"));
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.bundle.schemaVersion).toBe(4);
+      expect(result.bundle.schemaVersion).toBe(5);
       expect(result.bundle.assets).toHaveLength(1);
       expect(result.bundle.assets?.[0]?.entry).toBe(FIGURE_ENTRY);
     }
@@ -334,20 +337,25 @@ describe("union read + forward refusal (20-05 Task 1)", () => {
     expect(bare.success).toBe(true);
   });
 
-  it("rejects schemaVersion 5 at the schema (forward-compat gate)", () => {
-    const result = ExportBundleSchema.safeParse({
+  it("rejects schemaVersion 6 at the schema (forward-compat gate); v5 parses since issue #37", () => {
+    const v5 = ExportBundleSchema.safeParse({
       ...sampleBundle(),
       schemaVersion: 5,
     });
-    expect(result.success).toBe(false);
+    expect(v5.success).toBe(true);
+    const v6 = ExportBundleSchema.safeParse({
+      ...sampleBundle(),
+      schemaVersion: 6,
+    });
+    expect(v6.success).toBe(false);
   });
 
-  it("peeks a v5 bundle BEFORE the full parse and refuses newer-schema-version calmly", async () => {
+  it("peeks a v6 bundle BEFORE the full parse and refuses newer-schema-version calmly", async () => {
     const { validateBundle } = await loadService();
-    // schemaVersion 5 AND other damage — the calm newer-version refusal wins.
+    // schemaVersion 6 AND other damage — the calm newer-version refusal wins.
     const damaged: Record<string, unknown> = {
       ...sampleBundle(),
-      schemaVersion: 5,
+      schemaVersion: 6,
       articles: "not-an-array",
     };
     const result = await validateBundle(
@@ -360,7 +368,7 @@ describe("union read + forward refusal (20-05 Task 1)", () => {
     if (!result.ok) {
       expect(result.refusal).toEqual({
         kind: "newer-schema-version",
-        bundleVersion: 5,
+        bundleVersion: 6,
       });
     }
   });

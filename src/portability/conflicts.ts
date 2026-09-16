@@ -28,6 +28,7 @@ import { dexieLibrarySource } from "../ingestion/LibrarySource";
 import { loadAllHighlights } from "../persistence/highlightsStore";
 import { loadAllNotes } from "../persistence/notesStore";
 import { loadAllLocations } from "../persistence/locationStore";
+import { loadAllReadingSessions } from "../persistence/readingSessionsStore";
 import { listBooks } from "../persistence/booksStore";
 import { db } from "../persistence/db";
 import { bundledFixtures } from "../fixtures";
@@ -42,6 +43,7 @@ import type {
   LocationRecord,
   NoteRecord,
   ReaderSettings,
+  ReadingSessionRecord,
 } from "../content/schema";
 import type { AssetExportMeta, ExportBundle } from "./bundle";
 
@@ -205,6 +207,13 @@ export interface ResolvedImportPlan {
   notesToWrite: NoteRecord[];
   locationsToWrite: LocationRecord[];
   assetsToWrite: ValidatedImportAsset[];
+  /** Issue #37 — the incoming session rows that MERGE into the receiving
+   * history: every bundle session whose per-visit uuid has NO local row.
+   * A uuid already present locally keeps the LOCAL row (no duplication, no
+   * clobbering) and contributes nothing here — recorded history has no
+   * reader decision, so there is no conflict kind and no skip count (the
+   * Phase 20 assets ride-along precedent). */
+  sessionsToWrite: ReadingSessionRecord[];
   preferences?: ReaderSettings;
   applyPreferences: boolean;
   idRewrites: Map<string, string>;
@@ -640,14 +649,17 @@ export async function resolveImportPlan(
   itemChoices?: ImportItemChoices,
   importAssets: readonly ValidatedImportAsset[] = [],
 ): Promise<ResolvedImportPlan> {
-  // Same loaders as detectImportPreview — the write-free re-read.
-  const [localArticles, localHighlights, localNotes, localLocations, localBooksResult] =
+  // Same loaders as detectImportPreview — the write-free re-read — plus
+  // the local session-id set (issue #37; the preview carries no session
+  // data because sessions never conflict and need no reader decision).
+  const [localArticles, localHighlights, localNotes, localLocations, localBooksResult, localSessions] =
     await Promise.all([
       dexieLibrarySource.list(),
       loadAllHighlights(),
       loadAllNotes(),
       loadAllLocations(),
       listBooks(),
+      loadAllReadingSessions(),
     ]);
   const localBooks = localBooksResult.ok ? localBooksResult.books : [];
 
@@ -656,6 +668,7 @@ export async function resolveImportPlan(
   const localHighlightIds = new Set(localHighlights.map((h) => h.id));
   const localNoteIds = new Set(localNotes.map((n) => n.id));
   const localLocationByKey = new Map(localLocations.map((l) => [locationKey(l), l]));
+  const localSessionIds = new Set(localSessions.map((s) => s.id));
 
   const plan: ResolvedImportPlan = {
     booksToWrite: [],
@@ -664,6 +677,7 @@ export async function resolveImportPlan(
     notesToWrite: [],
     locationsToWrite: [],
     assetsToWrite: [],
+    sessionsToWrite: [],
     applyPreferences,
     idRewrites: new Map<string, string>(),
     skipped: { books: 0, articles: 0, highlights: 0, notes: 0, locations: 0 },
@@ -804,6 +818,25 @@ export async function resolveImportPlan(
     if (ridingArticleIds.has(asset.articleId)) {
       plan.assetsToWrite.push(asset);
     }
+  }
+
+  // ── Issue #37: reading sessions merge by their per-visit uuid PRIMARY
+  // KEY. A new id always writes (the history rides along); an id already
+  // present locally keeps the LOCAL row — no duplication, no clobbering.
+  // There is NO new ConflictKind and no reader choice: a visit row is
+  // recorded history, not a reader-authored decision (the Phase 20 assets
+  // ride-along precedent). The merge keys on the session's own PK only —
+  // NOT on the article resolution above: a session whose article was
+  // skipped as a conflict still rides (the local article under the same id
+  // is exactly what the visit refers to), and a session whose article is
+  // nowhere on this device rides as inert orphan history (the orphan-
+  // tolerant highlight precedent — a visit HAPPENED; dropping it would be
+  // silently discarding the reader's history).
+  for (const session of bundle.readingSessions ?? []) {
+    if (!localSessionIds.has(session.id)) {
+      plan.sessionsToWrite.push(session);
+    }
+    // else: same-visit uuid already local — calm no-op (keep local).
   }
 
   return plan;
