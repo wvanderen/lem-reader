@@ -22,7 +22,7 @@
 import type { InlineRun } from "../content/types";
 import type { TextPositionSelector } from "../content/normalizeText";
 import { graphemeClusters } from "../content/normalizeText";
-import { splitParagraphRuns } from "../pagination/splitBlock";
+import { inlineStreamGraphemeLength, splitParagraphRuns } from "../pagination/splitBlock";
 
 /** A highlight intersecting a block, expressed for the slicer. */
 export interface HighlightSliceEntry {
@@ -78,11 +78,13 @@ export interface HighlightSlice {
  * Slice a paragraph's InlineRun[] at every highlight boundary intersecting
  * this block's article-global range.
  *
- * The block's range is `[blockGlobalStart, blockGlobalStart + blockLen)` where
- * `blockLen` is the per-run grapheme sum (matching splitParagraphRuns's
- * accounting). Each highlight's article-global [start, end) is intersected
- * with the block range; the intra-block intersection is then used as the slice
- * boundary.
+ * The block's range is `[blockGlobalStart, blockGlobalStart + blockLen)`
+ * where `blockLen` is the D-05 stream length of the run array (Spike 0007 F2
+ * reconciliation — inlineStreamGraphemeLength: the same coordinate highlight
+ * positions are stored in, so the clamp is exact for multi-run/whitespace-y
+ * content, not just clean single-run prose). Each highlight's article-global
+ * [start, end) is intersected with the block range; the intra-block
+ * intersection is then used as the slice boundary.
  *
  * Returns an ordered array of slices covering the full run array with no gaps
  * and no overlaps. Consecutive same-owner slices are NOT merged (the renderer
@@ -100,10 +102,7 @@ export function sliceRunsForHighlights(
   highlights: readonly HighlightSliceEntry[],
   lang: string,
 ): HighlightSlice[] {
-  const blockLen = runs.reduce(
-    (sum, r) => sum + graphemeClusters(r.text, lang).length,
-    0,
-  );
+  const blockLen = inlineStreamGraphemeLength(runs, lang);
 
   // Compute intra-block intersections (D5-16 intersection math). hlStart
   // carries the highlight's article-global start so the emitted slice can
@@ -134,9 +133,7 @@ export function sliceRunsForHighlights(
 
   // No intersections → a single un-highlighted slice over the full run array.
   if (intersections.length === 0) {
-    return [
-      { runs: [...runs], highlightId: null, hasNote: false, status: "confident" },
-    ];
+    return [{ runs: [...runs], highlightId: null, hasNote: false, status: "confident" }];
   }
 
   // Sort by start offset so the walk is monotonic. (Stable enough for

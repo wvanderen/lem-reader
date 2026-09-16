@@ -26,11 +26,11 @@ import {
   _test_claimSlicesFirstOccurrence,
   _test_claimItemSlicesFirstOccurrence,
   _test_claimCodeSegmentsFirstOccurrence,
-  _test_computeEntryListItemSlices,
 } from "../../../src/pagination/fragmentRenderer";
 import { sliceRunsForHighlights } from "../../../src/annotations/highlightRanges";
 import { sliceCodeForHighlights } from "../../../src/annotations/highlightRanges";
 import type { HighlightSliceEntry } from "../../../src/annotations/highlightRanges";
+import { sliceBlockHighlights } from "../../../src/annotations/unifiedHighlightSlicer";
 import type { Block } from "../../../src/content/types";
 import type { ArticleBodyHighlight } from "../../../src/content/render/BlockRenderer";
 import type { CanonicalArticle } from "../../../src/content/types";
@@ -50,8 +50,7 @@ function articleWithOneParagraph(len: number): CanonicalArticle {
       sourceUrl: "https://example.com/synthetic",
       title: "Synthetic Article",
       retrievedAt: "2026-08-07T00:00:00Z",
-      originalHtmlHash:
-        "0000000000000000000000000000000000000000000000000000000000000000",
+      originalHtmlHash: "0000000000000000000000000000000000000000000000000000000000000000",
     },
     blocks: [
       {
@@ -223,8 +222,7 @@ describe("_test_sliceHighlightsForEntry — D5-16 cross-fragment intersection ma
         sourceUrl: "https://example.com/two",
         title: "Two Blocks",
         retrievedAt: "2026-08-07T00:00:00Z",
-        originalHtmlHash:
-          "0000000000000000000000000000000000000000000000000000000000000000",
+        originalHtmlHash: "0000000000000000000000000000000000000000000000000000000000000000",
       },
       blocks: [
         { kind: "paragraph", content: [{ text: "B".repeat(50), marks: [] }] },
@@ -259,11 +257,7 @@ describe("_test_sliceHighlightsForEntry — D5-16 cross-fragment intersection ma
 // the cross-fragment-render.spec.ts Playwright cells). ──────────────────────
 
 /** Construct a HighlightSliceEntry at entry-local [start, end). */
-function entrySliceAt(
-  id: string,
-  start: number,
-  end: number,
-): HighlightSliceEntry {
+function entrySliceAt(id: string, start: number, end: number): HighlightSliceEntry {
   return { id, position: { start, end }, hasNote: false, status: "confident" };
 }
 
@@ -293,9 +287,7 @@ describe("19-04 per-page first-occurrence pass + entry-local items threading", (
     expect(markedB.isFirst).toBe(false);
     // Exactly ONE isFirst across the whole mounted page — the DOM id
     // carrier (InlineRenderer stamps id="hl-…" only when isFirst).
-    expect(
-      [...slicesA, ...slicesB].filter((s) => s.isFirst === true),
-    ).toHaveLength(1);
+    expect([...slicesA, ...slicesB].filter((s) => s.isFirst === true)).toHaveLength(1);
   });
 
   it("a split-block highlight across TWO pages yields isFirst on EACH page's first slice (fresh seen-set per mounting)", () => {
@@ -304,12 +296,8 @@ describe("19-04 per-page first-occurrence pass + entry-local items threading", (
     // page (the D5-16 cells above). Only ONE PageFragmentView mounts at a
     // time, so each mounting runs the pass with its OWN seen-set: both
     // pages' (only) slices claim isFirst — one id per mounted document.
-    const pageA = sliceSingleRunBlock("A".repeat(50), [
-      entrySliceAt("hl-split", 30, 50),
-    ]);
-    const pageB = sliceSingleRunBlock("B".repeat(20), [
-      entrySliceAt("hl-split", 0, 20),
-    ]);
+    const pageA = sliceSingleRunBlock("A".repeat(50), [entrySliceAt("hl-split", 30, 50)]);
+    const pageB = sliceSingleRunBlock("B".repeat(20), [entrySliceAt("hl-split", 0, 20)]);
     const seenPageA = new Set<string>();
     _test_claimSlicesFirstOccurrence(pageA, seenPageA);
     const seenPageB = new Set<string>();
@@ -331,14 +319,12 @@ describe("19-04 per-page first-occurrence pass + entry-local items threading", (
     const flagged = [...entry1, ...entry2].filter((s) => s.isFirst === true);
     expect(flagged).toHaveLength(1);
     expect(flagged[0]!.highlightId).toBe("hl-cont");
-    expect(flagged[0] === entry1.find((s) => s.highlightId === "hl-cont")).toBe(
-      true,
-    );
+    expect(flagged[0] === entry1.find((s) => s.highlightId === "hl-cont")).toBe(true);
   });
 
   it("entry-local items-shape threading: per-child extents + nested recursion (D19-15) + single isFirst via the claim walk", () => {
-    // List layout (BLOCK_SEPARATOR = "\n", length 1 — the splitting-
-    // coordinate join rule sliceList/splittingBlockText use):
+    // List layout (BLOCK_SEPARATOR = "\n", length 1 — the D-05 join rule;
+    // Spike 0007 F2 reconciliation made it THE coordinate for the slicer):
     //   item 0 paragraph "AAAAAAAA" → entry-local [0, 8)
     //   item 1 paragraph "BBBBBBBB" → entry-local [9, 17)
     //   item 1 NESTED list item "CCCCCCCC" → entry-local [18, 26)
@@ -377,35 +363,38 @@ describe("19-04 per-page first-occurrence pass + entry-local items threading", (
         },
       ],
     } satisfies Block;
-    const itemSlices = _test_computeEntryListItemSlices(
-      list,
-      [entrySliceAt("hl-items", 6, 20)],
-      "en",
-    );
-    expect(itemSlices).not.toBeNull();
+    const result = sliceBlockHighlights({
+      block: list,
+      origin: 0,
+      visibleLen: 26,
+      highlights: [entrySliceAt("hl-items", 6, 20)],
+      lang: "en",
+    });
+    expect(result?.kind).toBe("items");
+    if (result?.kind !== "items") return;
+    const itemSlices = result.slices;
     // item 0 leaf: intersection [6,8) → the last two graphemes.
-    const leaf0 = itemSlices!.perItem[0]![0]!;
+    const leaf0 = itemSlices.perItem[0]![0]!;
     const marked0 = (leaf0 as ReturnType<typeof sliceRunsForHighlights>).find(
       (s) => s.highlightId === "hl-items",
     )!;
     expect(marked0.runs.map((r) => r.text).join("")).toBe("AA");
     // item 1 leaf: [9,17) fully covered → the whole run.
-    const leaf1 = itemSlices!.perItem[1]![0]!;
+    const leaf1 = itemSlices.perItem[1]![0]!;
     const marked1 = (leaf1 as ReturnType<typeof sliceRunsForHighlights>).find(
       (s) => s.highlightId === "hl-items",
     )!;
     expect(marked1.runs.map((r) => r.text).join("")).toBe("BBBBBBBB");
     // nested list child (D19-15): [18,20) → the first two graphemes.
-    const nested = itemSlices!.perItem[1]![1]!;
+    const nested = itemSlices.perItem[1]![1]!;
     expect(Array.isArray(nested)).toBe(false);
-    const nestedLeaf = (
-      nested as Exclude<typeof nested, ReturnType<typeof sliceRunsForHighlights>>
-    ).perItem[0]![0]! as ReturnType<typeof sliceRunsForHighlights>;
+    const nestedLeaf = (nested as Exclude<typeof nested, ReturnType<typeof sliceRunsForHighlights>>)
+      .perItem[0]![0]! as ReturnType<typeof sliceRunsForHighlights>;
     const markedN = nestedLeaf.find((s) => s.highlightId === "hl-items")!;
     expect(markedN.runs.map((r) => r.text).join("")).toBe("CC");
     // The nested-shape claim walk flags exactly ONE slice per id.
     const seen = new Set<string>();
-    _test_claimItemSlicesFirstOccurrence(itemSlices!, seen);
+    _test_claimItemSlicesFirstOccurrence(itemSlices, seen);
     expect(
       [
         ...(leaf0 as ReturnType<typeof sliceRunsForHighlights>),
@@ -421,20 +410,12 @@ describe("19-04 per-page first-occurrence pass + entry-local items threading", (
     // The slicer flags BOTH calls' segments (entry-local start 0/2 >= 0 —
     // the entry-local-blind comparison); the pass owns the flag: the
     // second entry's segments on the SAME page get isFirst = false.
-    const first = sliceCodeForHighlights("XXXXXXXXXX", 0, [
-      entrySliceAt("hl-code", 2, 8),
-    ], "en");
+    const first = sliceCodeForHighlights("XXXXXXXXXX", 0, [entrySliceAt("hl-code", 2, 8)], "en");
     const seen = new Set<string>();
     _test_claimCodeSegmentsFirstOccurrence(first, seen);
-    expect(
-      first.filter((s) => s.entry !== null && s.isFirst === true),
-    ).toHaveLength(1);
-    const second = sliceCodeForHighlights("YYYYYY", 0, [
-      entrySliceAt("hl-code", 0, 3),
-    ], "en");
+    expect(first.filter((s) => s.entry !== null && s.isFirst === true)).toHaveLength(1);
+    const second = sliceCodeForHighlights("YYYYYY", 0, [entrySliceAt("hl-code", 0, 3)], "en");
     _test_claimCodeSegmentsFirstOccurrence(second, seen);
-    expect(
-      second.filter((s) => s.entry !== null && s.isFirst === true),
-    ).toHaveLength(0);
+    expect(second.filter((s) => s.entry !== null && s.isFirst === true)).toHaveLength(0);
   });
 });

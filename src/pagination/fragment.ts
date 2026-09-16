@@ -61,9 +61,9 @@ import type { MeasurementResult } from "../measurement/types";
 import type { DiagnosticBus } from "../measurement/diagnostics";
 import type { LineBox, PageFragment, FragmentationResult } from "./types";
 import { AbortError } from "../measurement/fontGate";
-import { graphemeClusters } from "../content/normalizeText";
+import { blockNormalizedText, buildRawToNormMap, graphemeClusters } from "../content/normalizeText";
 import { charOffsetToGrapheme } from "./lineBoxes";
-import { classifyBlock, splittingBlockText } from "./splitBlock";
+import { blockRawText, classifyBlock } from "./splitBlock";
 import { applyLineWidowOrphan, SPLIT_WIDOW_LINES } from "./widowRules";
 
 /**
@@ -193,18 +193,16 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
   // articleEl has no full body to walk. The measurement phase (which runs
   // earlier, against the full ArticleBody) is the sole source of truth.
   //
-  // Per-block normalized text + grapheme lengths derive from article.blocks
-  // via splittingBlockText (renderer-aligned coordinate — Pitfall 3, no
-  // normalization fork). For paragraphs/headings this matches DOM textContent
-  // for clean ASCII; for containers it inserts BLOCK_SEPARATORs between
-  // children (matching the renderer's recursive slicing coordinate).
-  const blockLineBoxes: LineBox[][] = opts.measurement.blocks.map(
-    (b) => b.lineBoxes,
-  );
-  const blockTexts: string[] = articleBlocks.map((b) => splittingBlockText(b));
-  const blockGraphemeLengths: number[] = blockTexts.map((t) =>
-    graphemeClusters(t, lang).length,
-  );
+  // Spike 0007 F2 reconciliation: per-block normalized text + grapheme
+  // lengths derive from article.blocks via blockNormalizedText — the D-05
+  // substrate ITSELF (Pitfall 3, no fork; previously the engine used the
+  // raw run-concatenating splittingBlockText, whose coordinate drifted from
+  // the D-05 positions highlights are stored in). Fragment entry ranges are
+  // therefore D-05 ordinals, exactly what sliceHighlightsForEntry, the
+  // anchors, and the unified highlight slicer address.
+  const blockLineBoxes: LineBox[][] = opts.measurement.blocks.map((b) => b.lineBoxes);
+  const blockTexts: string[] = articleBlocks.map((b) => blockNormalizedText(b));
+  const blockGraphemeLengths: number[] = blockTexts.map((t) => graphemeClusters(t, lang).length);
 
   // Walk state.
   const pages: PageFragment[] = [];
@@ -223,8 +221,7 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
     FIRST_PAGE_BUDGET_FLOOR * pageHeight,
   );
   /** Placement budget for the page currently being built (page 1 reserved). */
-  const currentBudgetPx = (): number =>
-    pages.length === 0 ? firstPageBudgetPx : pageHeight;
+  const currentBudgetPx = (): number => (pages.length === 0 ? firstPageBudgetPx : pageHeight);
 
   const emitFallback = (reason: string): FragmentationResult => {
     diagnostics.emit({ kind: "dom-fallback", ts: new Date().toISOString() });
@@ -259,15 +256,11 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
       const block = articleBlocks[i]!;
       const decision = classifyBlock(block);
       const heightPx = opts.measurement.blocks[i]?.heightPx ?? 0;
-      const marginBlockStartPx =
-        opts.measurement.blocks[i]?.marginBlockStartPx ?? 0;
-      const marginBlockEndPx =
-        opts.measurement.blocks[i]?.marginBlockEndPx ?? 0;
+      const marginBlockStartPx = opts.measurement.blocks[i]?.marginBlockStartPx ?? 0;
+      const marginBlockEndPx = opts.measurement.blocks[i]?.marginBlockEndPx ?? 0;
       const lineBoxes = blockLineBoxes[i]!;
       const measuredLineSpanPx =
-        lineBoxes.length > 0
-          ? lineBoxes[lineBoxes.length - 1]!.bottomPx - lineBoxes[0]!.topPx
-          : 0;
+        lineBoxes.length > 0 ? lineBoxes[lineBoxes.length - 1]!.bottomPx - lineBoxes[0]!.topPx : 0;
       // Range line boxes describe glyph rows, not container chrome such as
       // list indentation, nested paragraph rhythm, padding, or line leading.
       // Preserve the measured difference as structural overhead on either
@@ -286,9 +279,7 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
       if (
         decision.kind === "atomic" &&
         heightPx >
-          (block.kind === "code-block"
-            ? CODE_BLOCK_OVERSIZE_THRESHOLD
-            : OVERSIZE_THRESHOLD) *
+          (block.kind === "code-block" ? CODE_BLOCK_OVERSIZE_THRESHOLD : OVERSIZE_THRESHOLD) *
             pageHeight
       ) {
         return emitFallback("oversized-block");
@@ -305,8 +296,7 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
           : currentPageHeightPx -
             currentTrailingMarginPx +
             Math.max(currentTrailingMarginPx, marginBlockStartPx);
-      const wholeBlockPageHeightPx =
-        occupiedBeforeBlockPx + heightPx + marginBlockEndPx;
+      const wholeBlockPageHeightPx = occupiedBeforeBlockPx + heightPx + marginBlockEndPx;
 
       // Case A: whole block fits on the current page — place + continue.
       // Plan 13-04 (Option A): the placement budget is the current page's
@@ -333,8 +323,7 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
         // its safe threshold): flush the current page and start a new one
         // with this block alone.
         flushPage();
-        const freshPageHeightPx =
-          marginBlockStartPx + heightPx + marginBlockEndPx;
+        const freshPageHeightPx = marginBlockStartPx + heightPx + marginBlockEndPx;
         if (freshPageHeightPx > pageHeight) {
           return emitFallback("oversized-block");
         }
@@ -365,8 +354,7 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
         //       block's after-slice left too little room for the boundary
         //       paragraph's widow-legal minimum).
         flushPage();
-        const freshPageHeightPx =
-          marginBlockStartPx + heightPx + marginBlockEndPx;
+        const freshPageHeightPx = marginBlockStartPx + heightPx + marginBlockEndPx;
         if (freshPageHeightPx <= pageHeight) {
           currentPageBlocks.push({
             blockIndex: i,
@@ -441,7 +429,16 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
       // using THIS block's normalized text. This is the seam between DOM
       // Range offsets (UTF-16 code units) and the D-05 substrate (grapheme
       // clusters). Reuses charOffsetToGrapheme — never re-implement.
-      const beforeEndGrapheme = charOffsetToGrapheme(
+      //
+      // Spike 0007 F2 reconciliation: the line-box charOffset is a UTF-16
+      // ordinal over the rendered DOM text (raw run concatenation —
+      // InlineRenderer adds no separators, no whitespace collapsing), while
+      // blockText is now the D-05 normalized text (collapse + " " joins).
+      // The shared buildRawToNormMap bridge aligns the two streams so the
+      // emitted split ordinals address the SAME stream highlight positions
+      // address. For clean prose (raw == norm) the bridge is the identity.
+      const beforeEndGrapheme = domCharOffsetToNormGrapheme(
+        block,
         blockText,
         lineBoxes[plan.splitLineIdx]!.charOffset,
         lang,
@@ -455,8 +452,7 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
         startGrapheme: 0,
         endGrapheme: beforeEndGrapheme,
       });
-      currentPageHeightPx =
-        occupiedBeforeBlockPx + plan.beforeHeightPx + marginBlockEndPx;
+      currentPageHeightPx = occupiedBeforeBlockPx + plan.beforeHeightPx + marginBlockEndPx;
       currentTrailingMarginPx = marginBlockEndPx;
       flushPage();
       currentPageBlocks.push({
@@ -464,8 +460,7 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
         startGrapheme: beforeEndGrapheme,
         endGrapheme: blockGraphemeLen,
       });
-      currentPageHeightPx =
-        marginBlockStartPx + plan.afterHeightPx + marginBlockEndPx;
+      currentPageHeightPx = marginBlockStartPx + plan.afterHeightPx + marginBlockEndPx;
       currentTrailingMarginPx = marginBlockEndPx;
     }
 
@@ -484,6 +479,35 @@ export function paginateDocument(opts: PaginateOptions): FragmentationResult {
     }
     throw e;
   }
+}
+
+/**
+ * Convert a DOM line-box charOffset (UTF-16 ordinal over the rendered raw
+ * text) into a D-05 grapheme ordinal over `normText` (the block's
+ * normalized text).
+ *
+ * Two-step, reusing shared primitives (never re-implemented):
+ *   1. charOffsetToGrapheme over the block's RAW text (the DOM textContent
+ *      projection — blockRawText) yields the raw-cluster ordinal the line
+ *      box addresses.
+ *   2. buildRawToNormMap (the shared raw↔norm bridge — the same walk
+ *      annotation capture uses) maps that raw ordinal onto the D-05 stream.
+ *
+ * For clean prose (raw == norm) step 2 is the identity, so split points are
+ * unchanged for every well-formed corpus article; for whitespace-y or
+ * no-boundary-run content the bridge keeps split points aligned with the
+ * D-05 positions highlights (and read-aloud spoken offsets) address.
+ */
+function domCharOffsetToNormGrapheme(
+  block: CanonicalArticle["blocks"][number],
+  normText: string,
+  charOffset: number,
+  lang: string,
+): number {
+  const rawText = blockRawText(block);
+  const rawIndex = charOffsetToGrapheme(rawText, charOffset, lang);
+  const map = buildRawToNormMap(graphemeClusters(rawText, lang), graphemeClusters(normText, lang));
+  return map[Math.min(rawIndex, map.length - 1)]!;
 }
 
 /**
@@ -557,8 +581,7 @@ function chooseSplit(
   // orphan bump moved the split to SPLIT_WIDOW_LINES). In that case the
   // block must move whole to the next page rather than produce an
   // overflowing page-1 entry.
-  const beforeHeightPx =
-    lineBoxes[adjusted - 1]!.bottomPx - firstLineTop + splitLayoutOverheadPx;
+  const beforeHeightPx = lineBoxes[adjusted - 1]!.bottomPx - firstLineTop + splitLayoutOverheadPx;
   if (occupiedBeforeTextPx + beforeHeightPx + marginBlockEndPx > pageHeight) {
     return null;
   }
@@ -569,7 +592,6 @@ function chooseSplit(
     splitLineIdx: adjusted,
     beforeEndGrapheme: splitLineBox.charOffset,
     beforeHeightPx,
-    afterHeightPx:
-      lastLineBox.bottomPx - splitLineBox.topPx + splitLayoutOverheadPx,
+    afterHeightPx: lastLineBox.bottomPx - splitLineBox.topPx + splitLayoutOverheadPx,
   };
 }

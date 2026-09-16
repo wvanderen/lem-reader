@@ -1,6 +1,6 @@
 import type { Block, CanonicalArticle, InlineRun } from "../../../src/content/types";
 import { normalizeText } from "../../../src/content/normalizeText";
-import { splittingGraphemeLength } from "../../../src/pagination/splitBlock";
+import { blockGraphemeLength } from "../../../src/pagination/anchor";
 import type { ArticleBodyHighlight } from "../../../src/content/render/BlockRenderer";
 
 export function run(text: string, marks: InlineRun["marks"] = []): InlineRun {
@@ -16,8 +16,7 @@ export function makeArticle(blocks: Block[]): CanonicalArticle {
       sourceUrl: "https://example.com/spike",
       title: "Spike Fixture",
       retrievedAt: "2026-09-13T00:00:00Z",
-      originalHtmlHash:
-        "0000000000000000000000000000000000000000000000000000000000000000",
+      originalHtmlHash: "0000000000000000000000000000000000000000000000000000000000000000",
     },
     blocks,
     footnotes: [],
@@ -106,30 +105,35 @@ export const HIGHLIGHT_SETS: Record<string, ArticleBodyHighlight[]> = {
   crossBlockHead: [
     hl("hl-a", at(HARD_ARTICLE, "Alpha Heading", 2), at(HARD_ARTICLE, "First paragraph", 6)),
   ],
-  plainProse: [
-    hl("hl-b", at(HARD_ARTICLE, "plain prose", 0), at(HARD_ARTICLE, "plain prose", 11)),
-  ],
+  plainProse: [hl("hl-b", at(HARD_ARTICLE, "plain prose", 0), at(HARD_ARTICLE, "plain prose", 11))],
   linkRun: [
-    hl("hl-c", at(HARD_ARTICLE, "anchor text", 0), at(HARD_ARTICLE, "anchor text", 11), "confident", true),
+    hl(
+      "hl-c",
+      at(HARD_ARTICLE, "anchor text", 0),
+      at(HARD_ARTICLE, "anchor text", 11),
+      "confident",
+      true,
+    ),
   ],
   proseToQuoteChild: [
     hl("hl-d", at(HARD_ARTICLE, "trailing", 0), at(HARD_ARTICLE, "Quote child one.", 5)),
   ],
   quoteChildBoundary: [
-    hl("hl-e", at(HARD_ARTICLE, "inner heading", 2), at(HARD_ARTICLE, "Quote child three text.", 6), "ambiguous"),
+    hl(
+      "hl-e",
+      at(HARD_ARTICLE, "inner heading", 2),
+      at(HARD_ARTICLE, "Quote child three text.", 6),
+      "ambiguous",
+    ),
   ],
   listSpan: [
     hl("hl-f", at(HARD_ARTICLE, "Item one alpha", 7), at(HARD_ARTICLE, "Nested deep one", 8)),
   ],
-  nestedTail: [
-    hl("hl-g", at(HARD_ARTICLE, "deep two", 0), at(HARD_ARTICLE, "deep two", 8)),
-  ],
+  nestedTail: [hl("hl-g", at(HARD_ARTICLE, "deep two", 0), at(HARD_ARTICLE, "deep two", 8))],
   afterNested: [
     hl("hl-h", at(HARD_ARTICLE, "Item three gamma", 0), at(HARD_ARTICLE, "Item three gamma", 16)),
   ],
-  codeHead: [
-    hl("hl-i", at(HARD_ARTICLE, "const a", 0), at(HARD_ARTICLE, "const a", 8)),
-  ],
+  codeHead: [hl("hl-i", at(HARD_ARTICLE, "const a", 0), at(HARD_ARTICLE, "const a", 8))],
   codeMid: [
     hl("hl-j", at(HARD_ARTICLE, "return a", 0), at(HARD_ARTICLE, "return a", 8), "confident", true),
   ],
@@ -144,9 +148,7 @@ export const HIGHLIGHT_SETS: Record<string, ArticleBodyHighlight[]> = {
   ],
 };
 
-export const ALL_HIGHLIGHTS: ArticleBodyHighlight[] = Object.values(
-  HIGHLIGHT_SETS,
-).flat();
+export const ALL_HIGHLIGHTS: ArticleBodyHighlight[] = Object.values(HIGHLIGHT_SETS).flat();
 
 export function wholeEntry(
   article: CanonicalArticle,
@@ -155,6 +157,6 @@ export function wholeEntry(
   return {
     blockIndex,
     startGrapheme: 0,
-    endGrapheme: splittingGraphemeLength(article.blocks[blockIndex]!, "en"),
+    endGrapheme: blockGraphemeLength(article.blocks[blockIndex]!, "en"),
   };
 }

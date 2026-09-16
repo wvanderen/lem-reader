@@ -56,8 +56,7 @@ test.describe("PAGE-05 repagination anchor (04-05)", () => {
     await page.goto(`${BASE}/#/article/${FIXTURE}`);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     await page.waitForFunction(
-      () =>
-        (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
+      () => (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
       undefined,
       { timeout: 8000 },
     );
@@ -93,11 +92,10 @@ test.describe("PAGE-05 repagination anchor (04-05)", () => {
 
     // The captured passage should still be on the current (or immediately
     // adjacent) page after repagination. The D4-11 anchor uses an
-    // article-global grapheme offset to find the new page; an off-by-one at
-    // a mid-block split boundary (a known coordinate mismatch between
-    // splittingBlockText and the D-05 normalized substrate for blocks whose
-    // inline marks shift per-block lengths) can land the reader on the page
-    // immediately before or after the captured passage. The contract is that
+    // article-global grapheme offset to find the new page; the residual
+    // ≤1-grapheme fuzz at a mid-block split boundary whose line break lands
+    // on a whitespace seam can land the reader on the page immediately
+    // before or after the captured passage. The contract is that
     // the reader stays WITHIN ONE PAGE of the passage — calm nearest-page
     // fallback (Plan 04-09) — not exact-page preservation under arbitrary
     // redistribution.
@@ -143,8 +141,8 @@ test.describe("PAGE-05 repagination anchor (04-05)", () => {
     // Sanity: we returned to the engine's anchored page.
     const finalIdx = await page.evaluate(
       () =>
-        (window as unknown as { __lemPagination?: { currentPageIdx: number } })
-          .__lemPagination?.currentPageIdx ?? -1,
+        (window as unknown as { __lemPagination?: { currentPageIdx: number } }).__lemPagination
+          ?.currentPageIdx ?? -1,
     );
     expect(finalIdx, "returned to the engine's anchored page after probing").toBe(anchoredIdx);
 
@@ -160,8 +158,7 @@ test.describe("PAGE-05 repagination anchor (04-05)", () => {
     await page.goto(`${BASE}/#/article/${FIXTURE}`);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     await page.waitForFunction(
-      () =>
-        (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
+      () => (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
       undefined,
       { timeout: 8000 },
     );
@@ -177,9 +174,7 @@ test.describe("PAGE-05 repagination anchor (04-05)", () => {
     }
     await page.waitForTimeout(200);
     const devLast = await readPagination(page);
-    expect(devLast.currentPageIdx, "turned to the final page").toBe(
-      devLast.pagesLength - 1,
-    );
+    expect(devLast.currentPageIdx, "turned to the final page").toBe(devLast.pagesLength - 1);
 
     // Resize: repagination re-derives MORE pages; the pinned end anchor
     // (offset = total, +∞-clamped by fragmentContainingOffset) must land
@@ -195,9 +190,10 @@ test.describe("PAGE-05 repagination anchor (04-05)", () => {
     expect(dev1.currentPageIdx, "end anchor must land on the NEW final page").toBe(
       dev1.pagesLength - 1,
     );
-    await expect(
-      page.getByRole("button", { name: "Next page" }),
-    ).toHaveAttribute("aria-disabled", "true");
+    await expect(page.getByRole("button", { name: "Next page" })).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
 
     expect(pageErrors, "no uncaught errors during last-page repagination").toEqual([]);
   });
@@ -211,8 +207,7 @@ test.describe("PAGE-05 repagination anchor (04-05)", () => {
     await page.goto(`${BASE}/#/article/${FIXTURE}`);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     await page.waitForFunction(
-      () =>
-        (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
+      () => (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
       undefined,
       { timeout: 8000 },
     );

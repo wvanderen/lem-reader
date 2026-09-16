@@ -27,7 +27,10 @@ export function normalizeRunText(text: string): string {
 
 /** Render an inline run array to its normalized text contribution. */
 function inlineText(runs: InlineRun[]): string {
-  return runs.map((r) => normalizeRunText(r.text)).filter(Boolean).join(" ");
+  return runs
+    .map((r) => normalizeRunText(r.text))
+    .filter(Boolean)
+    .join(" ");
 }
 
 /**
@@ -164,9 +167,7 @@ const articleIndexCache = new WeakMap<CanonicalArticle, ArticleGraphemeIndex>();
  * sources are verbatim and can themselves contain newline characters, so
  * separator positions in the joined string are not reliable block boundaries.
  */
-export function articleGraphemeIndex(
-  article: CanonicalArticle,
-): ArticleGraphemeIndex {
+export function articleGraphemeIndex(article: CanonicalArticle): ArticleGraphemeIndex {
   let index = articleIndexCache.get(article);
   if (!index) {
     const normalizedText = normalizeText(article);
@@ -197,6 +198,109 @@ export function articleGraphemeIndex(
 /** The canonical length of an article in grapheme clusters. */
 export function graphemeLength(article: CanonicalArticle): number {
   return articleGraphemeIndex(article).totalGraphemes;
+}
+
+// ── Raw↔normalized cluster alignment (Pitfall 1 bridge) ─────────────────────
+// The DOM renders run texts concatenated (InlineRenderer adds no separators),
+// while the D-05 normalized text collapses whitespace AND joins runs with " ".
+// Both streams carry the same non-whitespace clusters in the same order; they
+// diverge only in whitespace. One alignment walk maps raw-cluster ordinals
+// (DOM textContent, line boxes, capture Ranges) onto normalized-grapheme
+// ordinals (the D-05 substrate) — shared by annotation capture and the
+// pagination engine's line-box → grapheme conversion. Never fork this walk
+// (Pitfall 3): a divergence would shift capture offsets against split points.
+
+/**
+ * A whitespace cluster: a grapheme cluster consisting solely of ASCII
+ * [\t\n\f\r ] (the set normalizeRunText collapses). Unicode whitespace
+ * (NBSP, ZWJ, RTL marks) is NOT in this set — those are readable text and
+ * must NOT be collapsed (Pitfall 2 rule from normalizeText.ts). Shared by
+ * the raw↔norm bridge and the paginated visible-window clip: separator
+ * graphemes (BLOCK_SEPARATOR, the inlineText run join) are whitespace
+ * clusters that render in no run piece.
+ */
+export function isWhitespaceCluster(cluster: string): boolean {
+  return /^[\t\n\f\r ]+$/.test(cluster);
+}
+
+/**
+ * Build a map from raw-cluster offset → normalized-grapheme offset.
+ *
+ * `rawClusters` is the grapheme clustering of a block's raw concatenated
+ * text (the DOM textContent projection). `normClusters` is the grapheme
+ * clustering of blockNormalizedText(block). Both contain the same
+ * non-whitespace clusters in the same order; whitespace may differ (raw has
+ * extra spaces from non-collapsed runs / run-boundary concatenation that
+ * normalizeRunText collapses + trims, or norm has separator spaces that raw
+ * lacks at run boundaries).
+ *
+ * The returned array has length `rawClusters.length + 1`. `map[i]` is the
+ * normalized-grapheme offset corresponding to raw-cluster offset `i`. The
+ * extra trailing entry `map[rawClusters.length]` is the normalized length
+ * (past-the-end), so an end-exclusive DOM offset maps cleanly.
+ */
+export function buildRawToNormMap(
+  rawClusters: readonly string[],
+  normClusters: readonly string[],
+): number[] {
+  const rawLen = rawClusters.length;
+  const map: number[] = new Array<number>(rawLen + 1);
+  let r = 0; // raw-cluster index
+  let n = 0; // norm-cluster index
+
+  // Skip leading raw whitespace (normalizeRunText trims leading). These map to
+  // norm offset 0 (before the first norm cluster).
+  while (r < rawLen && isWhitespaceCluster(rawClusters[r]!)) {
+    map[r] = 0;
+    r++;
+  }
+
+  while (r < rawLen) {
+    const rc = rawClusters[r]!;
+    if (isWhitespaceCluster(rc)) {
+      if (n < normClusters.length && isWhitespaceCluster(normClusters[n]!)) {
+        // Aligned whitespace — map and advance both pointers.
+        map[r] = n;
+        r++;
+        n++;
+        // Collapse: skip any additional raw whitespace clusters that
+        // normalizeRunText would have folded into this single space.
+        while (r < rawLen && isWhitespaceCluster(rawClusters[r]!)) {
+          map[r] = n;
+          r++;
+        }
+      } else {
+        // norm has no whitespace here — this raw whitespace was collapsed into
+        // the previous norm space or trimmed. Map to the current norm offset
+        // and advance only the raw pointer.
+        map[r] = n;
+        r++;
+      }
+    } else {
+      // Non-whitespace raw cluster — must align with a non-ws norm cluster.
+      if (n < normClusters.length && !isWhitespaceCluster(normClusters[n]!)) {
+        map[r] = n;
+        r++;
+        n++;
+      } else if (n < normClusters.length && isWhitespaceCluster(normClusters[n]!)) {
+        // norm inserted a separator space here (inlineText joins runs with
+        // " ") but raw concatenated without a separator. Skip the norm space
+        // and align.
+        n++;
+        map[r] = n;
+        r++;
+        n++;
+      } else {
+        // norm exhausted (raw has trailing content not in the normalized
+        // text — defensive; should not happen for well-formed blocks). Clamp.
+        map[r] = normClusters.length;
+        r++;
+      }
+    }
+  }
+  // Past-the-end: maps to the normalized length (end-exclusive DOM offset).
+  map[rawLen] = normClusters.length;
+  return map;
 }
 
 // ── W3C Web Annotation selectors (types + derive only in Phase 1) ───────────

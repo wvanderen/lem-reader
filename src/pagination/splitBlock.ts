@@ -32,7 +32,9 @@ import type { Block, InlineRun } from "../content/types";
 import type { SplitDecision } from "./types";
 import {
   BLOCK_SEPARATOR,
+  buildRawToNormMap,
   graphemeClusters,
+  normalizeRunText,
 } from "../content/normalizeText";
 
 // Compile-time guarantee: Block.kind literals match BlockKind exactly. If
@@ -48,68 +50,31 @@ const _blockKindAssertion: _AssertBlockKindMatchesCanonical = true;
 void _blockKindAssertion;
 
 /**
- * Per-block grapheme length in the renderer's coordinate system.
+ * The block's raw concatenated text — the DOM textContent projection.
  *
- * Equivalent to `graphemeClusters(splittingBlockText(block), lang).length`
- * but slightly cheaper (no intermediate string allocation). Mirrors the
- * private `splittingBlockGraphemeLength` in fragmentRenderer.tsx so the
- * engine, the renderer, and the DEV debug hook all agree on per-block
- * length for whole-vs-subrange detection.
+ * Spike 0007 F2 reconciliation: there is ONE text coordinate (the D-05
+ * normalized text, blockNormalizedText). This helper exists ONLY as the raw
+ * counterpart the pagination engine needs to convert DOM line-box char
+ * offsets (UTF-16 ordinals over the rendered text nodes, which concatenate
+ * run texts verbatim with no separators and no whitespace collapsing) into
+ * D-05 grapheme ordinals via the shared buildRawToNormMap bridge.
  *
- * Plan 04-06: used by PaginatedSurface's publishDev hook so the e2e
- * coverage-invariant spec sees the SAME blockLen the engine emits
- * endGrapheme against.
+ * Mirrors the DOM structure the renderer emits: leaf runs contribute their
+ * text verbatim; container children/items concatenate with NOTHING between
+ * them (adjacent elements contribute no text nodes). Code-block source is
+ * verbatim (raw == norm there by contract). Figures project alt + caption —
+ * unused in practice (figures are D4-02 atomic and never split).
  */
-export function splittingGraphemeLength(block: Block, lang: string): number {
-  return graphemeClusters(splittingBlockText(block), lang).length;
-}
-
-/**
- * Compute a splitting-kind block's intra-block text in the renderer's
- * coordinate system (Plan 04-06 Task 3).
- *
- * This is the source-of-truth text the pagination engine + the fragment
- * renderer share:
- *   - paragraphs/headings → concatenated run texts WITHOUT separators
- *     (matches DOM textContent for clean ASCII where adjacent runs are
- *     whitespace-separated in source HTML)
- *   - blockquote → recursive child texts joined by BLOCK_SEPARATOR
- *   - bulleted-list / numbered-list → per-item content texts joined by
- *     BLOCK_SEPARATOR, items joined by BLOCK_SEPARATOR
- *   - figure → alt + caption text joined by BLOCK_SEPARATOR (no separators
- *     inside an inline-run caption)
- *   - code-block → block.source (verbatim)
- *   - footnote-reference → block.marker
- *   - unsupported → block.plainDescription
- *
- * The grapheme length of this text equals what the renderer's (private)
- * `splittingBlockGraphemeLength` computes for whole-vs-subrange detection.
- * Keeping the engine + renderer on the SAME text coordinate prevents
- * Pitfall 3 normalization drift between split math (engine) and slicing
- * math (renderer).
- *
- * NOTE: this is NOT the D-05 substrate text (normalizeText uses
- * `inlineText` which joins runs with " "). The D-05 substrate is for
- * persisted locations/annotations; the pagination-engine coordinate is a
- * SEPARATE, internal-only coordinate that must round-trip through the
- * renderer's slicing helpers. Persisting engine offsets directly would
- * corrupt saved locations — PAGE-03 offsets are ephemeral.
- */
-export function splittingBlockText(block: Block): string {
+export function blockRawText(block: Block): string {
   switch (block.kind) {
     case "heading":
     case "paragraph":
-      // Concatenated run texts WITHOUT separators — matches the renderer's
-      // per-run grapheme summing (splitParagraphRuns walks runs without
-      // inserting separators) AND aligns with DOM textContent for ASCII.
       return block.content.map((r) => r.text).join("");
     case "blockquote":
-      return block.children.map(splittingBlockText).join(BLOCK_SEPARATOR);
+      return block.children.map(blockRawText).join("");
     case "bulleted-list":
     case "numbered-list":
-      return block.items
-        .map((item) => item.content.map(splittingBlockText).join(BLOCK_SEPARATOR))
-        .join(BLOCK_SEPARATOR);
+      return block.items.map((item) => item.content.map(blockRawText).join("")).join("");
     case "figure": {
       const captionText = block.caption.map((r) => r.text).join("");
       return [block.alt, captionText].filter(Boolean).join(BLOCK_SEPARATOR);
@@ -159,28 +124,70 @@ export function classifyBlock(block: Block): SplitDecision {
 }
 
 /**
- * Split a paragraph's inline-run array at a grapheme offset, preserving
- * every inline mark (link/code/strong/em) on BOTH slices per Pitfall 4.
+ * The D-05 stream length of an inline-run array: the grapheme count of the
+ * block's normalized text contribution (normalizeRunText per run, empties
+ * dropped, non-empty runs joined with " " — the inlineText join rule).
  *
- * Walks the runs accumulating per-run grapheme count via
- * `graphemeClusters(run.text, lang)`. When the accumulated count crosses
- * `splitAtGrapheme`, the boundary run is sliced at the intra-run grapheme
- * offset; BOTH halves inherit the boundary run's `marks` array verbatim
- * — a link run split mid-text becomes two link runs with the same href.
+ * Grapheme clusters never span the inserted single-space separator, so the
+ * count is the sum of per-contribution cluster counts plus one separator per
+ * adjacent contribution pair — identical to segmenting the joined string.
  *
- * The `before` slice covers runs contributing graphemes [0, splitAtGrapheme);
- * the `after` slice covers [splitAtGrapheme, total). Either slice may be
- * empty (e.g. splitAtGrapheme === 0 yields before = []; splitAtGrapheme >=
- * total yields after = []). Empty-text runs are dropped (InlineRun.text
- * must be a non-empty string per the schema — slicing may produce zero-
- * length text on the boundary, which we omit to keep the runs schema-valid).
+ * Spike 0007 F2 reconciliation: this — NOT the raw per-run sum — is the
+ * length sliceRunsForHighlights clamps intersections against and the
+ * pagination engine emits endGrapheme against. One coordinate everywhere:
+ * highlight positions (stored D-05 offsets), split points, and run slicing
+ * now address the same stream, so marks stay aligned across wrap and reflow.
+ */
+export function inlineStreamGraphemeLength(runs: readonly InlineRun[], lang: string): number {
+  let len = 0;
+  let contributing = 0;
+  for (const run of runs) {
+    const norm = normalizeRunText(run.text);
+    if (norm.length === 0) continue;
+    len += graphemeClusters(norm, lang).length + (contributing > 0 ? 1 : 0);
+    contributing++;
+  }
+  return len;
+}
+
+/**
+ * Split an inline-run array at an intra-block D-05 grapheme offset,
+ * preserving every inline mark (link/code/strong/em) on BOTH slices per
+ * Pitfall 4.
  *
- * The D-05 round-trip integrity depends on this: the concatenated text of
- * `before` + `after` equals the concatenated text of the input runs, and
- * marks survive so a sliced link still renders as an anchor on each side.
+ * Spike 0007 F2 reconciliation — the walk consumes the D-05 STREAM, the same
+ * coordinate every other consumer addresses: each run contributes its
+ * normalized text (normalizeRunText), empty contributions drop out, and
+ * adjacent contributions are joined by a single " " separator (the
+ * inlineText rule — the whitespace-neutral join that makes slicing stable
+ * across wrap and reflow). The `before` slice covers stream graphemes
+ * [0, splitAtGrapheme); `after` covers [splitAtGrapheme, total).
+ *
+ * Faithfulness rules:
+ *   - Every emitted piece carries RAW run text, and before+after
+ *     concatenate to EXACTLY the input run texts (no character is dropped
+ *     or normalized away) — the rendered text union of any slice set is
+ *     the input's rendered text, so selection/capture/screen-reader output
+ *     never loses whitespace at a split.
+ *   - A run cut inside (or at the end of) its contribution is sliced at
+ *     the RAW cluster position the shared raw↔norm map
+ *     (buildRawToNormMap) indicates for the intra-stream offset — boundary whitespace rides with the piece
+ *     it lexically belongs to — and both pieces carry the run's marks
+ *     verbatim (Pitfall 4).
+ *   - Whitespace-only runs have no stream presence; they ride with BEFORE
+ *     when the cut is at/past the next contribution's start, AFTER
+ *     otherwise — so rendered text is never dropped.
+ *
+ * Either slice may be empty (splitAtGrapheme <= 0 → before = [];
+ * splitAtGrapheme >= total → after = []). Empty-text pieces are omitted to
+ * keep the runs schema-valid (InlineRun.text must be non-empty).
+ *
+ * The D-05 round-trip integrity depends on this: the slices' normalized
+ * streams concatenate to the input's normalized stream, and marks survive
+ * so a sliced link still renders as an anchor on each side.
  *
  * @param runs             InlineRun[] (typically ParagraphBlock.content).
- * @param splitAtGrapheme  Intra-block grapheme offset where the split lands.
+ * @param splitAtGrapheme  Intra-block D-05 grapheme offset where the split lands.
  * @param lang             BCP-47 locale for Intl.Segmenter grapheme walking.
  */
 export function splitParagraphRuns(
@@ -190,32 +197,62 @@ export function splitParagraphRuns(
 ): { before: InlineRun[]; after: InlineRun[] } {
   const before: InlineRun[] = [];
   const after: InlineRun[] = [];
-  let consumed = 0;
+  let cursor = 0; // stream start of the next contributing run
+  let cut = false;
   for (const run of runs) {
-    const runGraphemeLen = graphemeClusters(run.text, lang).length;
-    const runEnd = consumed + runGraphemeLen;
-    if (runEnd <= splitAtGrapheme) {
-      // Entirely before the split — clone the run (marks array copied by
-      // reference; the renderer treats marks as read-only metadata).
-      before.push({ text: run.text, marks: run.marks });
-    } else if (consumed >= splitAtGrapheme) {
-      // Entirely after the split.
+    const norm = normalizeRunText(run.text);
+    if (norm.length === 0) {
+      // Whitespace-only run: no stream presence. It rides with BEFORE when
+      // the cut sits at/past the next contribution's start, AFTER otherwise.
+      const scrap: InlineRun = { text: run.text, marks: run.marks };
+      if (splitAtGrapheme >= cursor) {
+        before.push(scrap);
+      } else {
+        after.push(scrap);
+      }
+      continue;
+    }
+    if (cut) {
       after.push({ text: run.text, marks: run.marks });
-    } else {
-      // Boundary run — slice its text at the intra-run grapheme offset.
-      // Both halves inherit the run's marks verbatim (Pitfall 4).
-      const intraOffset = splitAtGrapheme - consumed;
-      const clusters = graphemeClusters(run.text, lang);
-      const beforeText = clusters.slice(0, intraOffset).join("");
-      const afterText = clusters.slice(intraOffset).join("");
+      continue;
+    }
+    const normLen = graphemeClusters(norm, lang).length;
+    if (splitAtGrapheme <= cursor) {
+      // The cut lands at/before this contribution's start — everything from
+      // here on belongs to the after slice (raw text preserved).
+      cut = true;
+      after.push({ text: run.text, marks: run.marks });
+    } else if (splitAtGrapheme <= cursor + normLen) {
+      // Boundary run — cut the run's RAW clusters at the position the
+      // shared raw↔norm map assigns to the intra-stream offset, so both
+      // pieces keep the run's raw whitespace layout (a trailing space in
+      // "Alpha " stays rendered on whichever side of the cut it lexically
+      // sits). Both halves inherit the run's marks verbatim (Pitfall 4).
+      const k = splitAtGrapheme - cursor; // 1..normLen
+      const rawClusters = graphemeClusters(run.text, lang);
+      const normClusters = graphemeClusters(norm, lang);
+      const map = buildRawToNormMap(rawClusters, normClusters);
+      let rawCut = rawClusters.length;
+      for (let i = 0; i < rawClusters.length; i++) {
+        if (map[i]! >= k) {
+          rawCut = i;
+          break;
+        }
+      }
+      const beforeText = rawClusters.slice(0, rawCut).join("");
+      const afterText = rawClusters.slice(rawCut).join("");
       if (beforeText.length > 0) {
         before.push({ text: beforeText, marks: run.marks });
       }
       if (afterText.length > 0) {
         after.push({ text: afterText, marks: run.marks });
       }
+      cut = true;
+    } else {
+      // Entirely before the cut — whole run (raw text) to before.
+      before.push({ text: run.text, marks: run.marks });
     }
-    consumed = runEnd;
+    cursor += normLen + 1; // +1: the " " separator the inlineText join inserts
   }
   return { before, after };
 }

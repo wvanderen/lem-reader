@@ -1,25 +1,29 @@
+// tests/unit/annotations/unifiedHighlightSlicer.test.ts
+// Interface/semantics probes for the PRODUCTION unified highlight slicer
+// (Spike 0007 promotion — issue #36). Ported near-verbatim from the spike's
+// probes; the spike's `measureChild` parameter is gone (F2 reconciled — one
+// D-05 child measure) and the "documented blocker" cells became the
+// reconciliation proof.
 import { describe, expect, it } from "vitest";
-import {
-  _test_computeEntryListItemSlices,
-} from "../../../src/pagination/fragmentRenderer";
 import { sliceRunsForHighlights } from "../../../src/annotations/highlightRanges";
 import type { HighlightSliceEntry } from "../../../src/annotations/highlightRanges";
 import { blockGraphemeLength } from "../../../src/pagination/anchor";
-import { splittingGraphemeLength } from "../../../src/pagination/splitBlock";
-import { articleGraphemeIndex, blockNormalizedText } from "../../../src/content/normalizeText";
+import {
+  articleGraphemeIndex,
+  blockNormalizedText,
+  normalizeRunText,
+} from "../../../src/content/normalizeText";
 import type { Block } from "../../../src/content/types";
+import { HARD_ARTICLE, HIGHLIGHT_SETS, run } from "./spikeFixtures";
 import {
-  HARD_ARTICLE,
-  HIGHLIGHT_SETS,
-  run,
-} from "./fixtures";
-import {
+  blockGraphemeLen,
   clipRange,
   sliceBlockHighlights,
-} from "./unifiedHighlightSlicer";
+} from "../../../src/annotations/unifiedHighlightSlicer";
 import {
-  resolveBlockSlice,
-  splittingBlockGraphemeLength,
+  legacyComputeEntryListItemSlices,
+  legacyResolveBlockSlice,
+  legacySplittingGraphemeLength,
 } from "./legacyFreeze";
 
 function toEntry(h: {
@@ -48,9 +52,7 @@ describe("clipRange — the single intersection primitive", () => {
 
 describe("article-global origin reproduces the scrolling twin", () => {
   const index = articleGraphemeIndex(HARD_ARTICLE);
-  const allEntries = Object.values(HIGHLIGHT_SETS)
-    .flat()
-    .map(toEntry);
+  const allEntries = Object.values(HIGHLIGHT_SETS).flat().map(toEntry);
 
   it("paragraph: unified slices === sliceRunsForHighlights at the block's global start", () => {
     const blockIndex = 1;
@@ -62,7 +64,6 @@ describe("article-global origin reproduces the scrolling twin", () => {
       origin,
       visibleLen,
       highlights: allEntries,
-      measureChild: blockGraphemeLength,
       lang: "en",
     });
     const active = allEntries.filter(
@@ -83,7 +84,6 @@ describe("article-global origin reproduces the scrolling twin", () => {
       origin: 0,
       visibleLen: blockGraphemeLength(block0, "en"),
       highlights: [head],
-      measureChild: blockGraphemeLength,
       lang: "en",
     });
     const r1 = sliceBlockHighlights({
@@ -91,7 +91,6 @@ describe("article-global origin reproduces the scrolling twin", () => {
       origin: index.blockStartOffsets[1]!,
       visibleLen: blockGraphemeLength(block1, "en"),
       highlights: [head],
-      measureChild: blockGraphemeLength,
       lang: "en",
     });
     expect(r0?.kind).toBe("inline");
@@ -112,15 +111,12 @@ describe("article-global origin reproduces the scrolling twin", () => {
       origin,
       visibleLen: blockGraphemeLength(figure, "en"),
       highlights: HIGHLIGHT_SETS.captionWithAlt!,
-      measureChild: blockGraphemeLength,
       lang: "en",
     });
     expect(result?.kind).toBe("caption");
     if (result?.kind !== "caption") return;
     const marked = result.slices.filter((s) => s.highlightId === "hl-k");
-    expect(marked.map((s) => s.runs.map((r) => r.text).join(""))).toEqual([
-      "caption prose",
-    ]);
+    expect(marked.map((s) => s.runs.map((r) => r.text).join(""))).toEqual(["caption prose"]);
     expect(marked[0]!.isFirst).toBe(true);
   });
 
@@ -133,15 +129,12 @@ describe("article-global origin reproduces the scrolling twin", () => {
       origin,
       visibleLen: blockGraphemeLength(figure, "en"),
       highlights: HIGHLIGHT_SETS.captionNoAltCross!,
-      measureChild: blockGraphemeLength,
       lang: "en",
     });
     expect(result?.kind).toBe("caption");
     if (result?.kind !== "caption") return;
     const marked = result.slices.filter((s) => s.highlightId === "hl-l");
-    expect(marked.map((s) => s.runs.map((r) => r.text).join(""))).toEqual([
-      "No-alt caption.",
-    ]);
+    expect(marked.map((s) => s.runs.map((r) => r.text).join(""))).toEqual(["No-alt caption."]);
   });
 
   it("code-block: segments concatenate to the exact source; marked segment carries the substring", () => {
@@ -153,7 +146,6 @@ describe("article-global origin reproduces the scrolling twin", () => {
       origin,
       visibleLen: blockGraphemeLength(code, "en"),
       highlights: [...HIGHLIGHT_SETS.codeHead!, ...HIGHLIGHT_SETS.codeMid!],
-      measureChild: blockGraphemeLength,
       lang: "en",
     });
     expect(result?.kind).toBe("code");
@@ -172,7 +164,6 @@ describe("article-global origin reproduces the scrolling twin", () => {
       origin,
       visibleLen: blockGraphemeLength(block2, "en"),
       highlights: HIGHLIGHT_SETS.endExclusiveAtBlockBoundary!,
-      measureChild: blockGraphemeLength,
       lang: "en",
     });
     expect(result).toBeNull();
@@ -187,7 +178,6 @@ describe("article-global origin reproduces the scrolling twin", () => {
       origin,
       visibleLen: blockGraphemeLength(quote, "en"),
       highlights: HIGHLIGHT_SETS.quoteChildBoundary!,
-      measureChild: blockGraphemeLength,
       lang: "en",
     });
     expect(result?.kind).toBe("children");
@@ -204,46 +194,37 @@ describe("article-global origin reproduces the scrolling twin", () => {
 });
 
 describe("entry-local origin reproduces the paginated twin", () => {
-  const listBlock = HARD_ARTICLE.blocks[4]! as Extract<
-    Block,
-    { kind: "bulleted-list" }
-  >;
+  const listBlock = HARD_ARTICLE.blocks[4]! as Extract<Block, { kind: "bulleted-list" }>;
 
-  it("whole list: unified items slices === _test_computeEntryListItemSlices", () => {
+  it("whole list: unified items slices === the frozen legacy list threading", () => {
     const entries: HighlightSliceEntry[] = [
       { id: "hl-x", position: { start: 5, end: 40 }, hasNote: false, status: "confident" },
       { id: "hl-y", position: { start: 44, end: 60 }, hasNote: true, status: "confident" },
     ];
-    const legacy = _test_computeEntryListItemSlices(listBlock, entries, "en");
+    const legacy = legacyComputeEntryListItemSlices(listBlock, entries, "en");
     const result = sliceBlockHighlights({
       block: listBlock,
       origin: 0,
-      visibleLen: splittingBlockGraphemeLength(listBlock, "en"),
+      visibleLen: blockGraphemeLength(listBlock, "en"),
       highlights: entries,
-      measureChild: splittingBlockGraphemeLength,
       lang: "en",
     });
     expect(result).toEqual({ kind: "items", slices: legacy });
   });
 
   it("sliced list (resolved sub-range): unified === legacy twin on the resolved block", () => {
-    const resolved = resolveBlockSlice(listBlock, 3, 40, "en");
+    const resolved = legacyResolveBlockSlice(listBlock, 3, 40, "en");
     expect(resolved.kind).toBe("bulleted-list");
     const resolvedList = resolved as Extract<Block, { kind: "bulleted-list" }>;
     const entries: HighlightSliceEntry[] = [
       { id: "hl-x", position: { start: 0, end: 20 }, hasNote: false, status: "confident" },
     ];
-    const legacy = _test_computeEntryListItemSlices(
-      resolvedList,
-      entries,
-      "en",
-    );
+    const legacy = legacyComputeEntryListItemSlices(resolvedList, entries, "en");
     const result = sliceBlockHighlights({
       block: resolvedList,
       origin: 0,
-      visibleLen: splittingBlockGraphemeLength(resolvedList, "en"),
+      visibleLen: blockGraphemeLength(resolvedList, "en"),
       highlights: entries,
-      measureChild: splittingBlockGraphemeLength,
       lang: "en",
     });
     expect(result).toEqual({ kind: "items", slices: legacy });
@@ -252,21 +233,17 @@ describe("entry-local origin reproduces the paginated twin", () => {
   it("empty item still consumes its separator (offset accounting parity)", () => {
     const withEmpty: Extract<Block, { kind: "bulleted-list" }> = {
       kind: "bulleted-list",
-      items: [
-        { content: [] },
-        { content: [{ kind: "paragraph", content: [run("After empty")] }] },
-      ],
+      items: [{ content: [] }, { content: [{ kind: "paragraph", content: [run("After empty")] }] }],
     };
     const entries: HighlightSliceEntry[] = [
       { id: "hl-z", position: { start: 1, end: 7 }, hasNote: false, status: "confident" },
     ];
-    const legacy = _test_computeEntryListItemSlices(withEmpty, entries, "en");
+    const legacy = legacyComputeEntryListItemSlices(withEmpty, entries, "en");
     const result = sliceBlockHighlights({
       block: withEmpty,
       origin: 0,
-      visibleLen: splittingBlockGraphemeLength(withEmpty, "en"),
+      visibleLen: blockGraphemeLength(withEmpty, "en"),
       highlights: entries,
-      measureChild: splittingBlockGraphemeLength,
       lang: "en",
     });
     expect(result).toEqual({ kind: "items", slices: legacy });
@@ -280,46 +257,87 @@ describe("entry-local origin reproduces the paginated twin", () => {
   });
 });
 
-describe("documented blocker: D-05 measure vs splitting measure diverge on multi-run leaves", () => {
-  it("blockGraphemeLength (D-05) != splittingGraphemeLength for runs whose joins differ", () => {
-    const multiRun: Block = {
-      kind: "paragraph",
-      content: [run("See"), run("docs")],
-    };
+describe("F2 reconciliation: ONE coordinate — the D-05 stream (issue #36)", () => {
+  const multiRun: Block = {
+    kind: "paragraph",
+    content: [run("See"), run("docs")],
+  };
+
+  it("the D-05 join is whitespace-neutral: normalize+join produces 'See docs' (8 graphemes)", () => {
     expect(blockNormalizedText(multiRun)).toBe("See docs");
     expect(blockGraphemeLength(multiRun, "en")).toBe(8);
-    expect(splittingGraphemeLength(multiRun, "en")).toBe(7);
+    expect(blockGraphemeLen(multiRun, "en")).toBe(8);
   });
 
-  it("one slicer, explicit measure: each measure reproduces its own renderer's coordinate system", () => {
-    const multiRun: Block = {
+  it("the reconciled slicer addresses the D-05 stream — no measure parameter to drift", () => {
+    // [4, 8) of "See docs" = "docs": the boundary lands in D-05
+    // coordinates, exactly where the stored selector says. (The separator
+    // grapheme at 3 is a join artifact — it renders in no run piece.)
+    const entries: HighlightSliceEntry[] = [
+      { id: "hl-m", position: { start: 4, end: 8 }, hasNote: false, status: "confident" },
+    ];
+    const result = sliceBlockHighlights({
+      block: multiRun,
+      origin: 0,
+      visibleLen: blockGraphemeLen(multiRun, "en"),
+      highlights: entries,
+      lang: "en",
+    });
+    expect(result?.kind).toBe("inline");
+    if (result?.kind !== "inline") return;
+    const marked = result.slices.find((s) => s.highlightId === "hl-m");
+    expect(marked!.runs.map((r) => r.text).join("")).toBe("docs");
+  });
+
+  it("documents what was reconciled: the old raw splitting measure counted 7", () => {
+    // The frozen legacy measure concatenated run texts raw ("Seedocs") —
+    // one grapheme short of the D-05 stream the highlight addresses. The
+    // reconciliation removed that second coordinate from production; this
+    // assertion pins the drift the fix eliminated.
+    expect(legacySplittingGraphemeLength(multiRun, "en")).toBe(7);
+    expect(legacySplittingGraphemeLength(multiRun, "en")).not.toBe(
+      blockGraphemeLen(multiRun, "en"),
+    );
+  });
+
+  it("leaf slicer accounting is D-05: highlight boundaries slice the normalized stream", () => {
+    // run("See docs") as ONE run vs the two-run join must slice identically —
+    // whitespace-neutral across run structure changes (wrap/reflow stability).
+    const singleRun: Block = {
       kind: "paragraph",
-      content: [run("See"), run("docs")],
+      content: [run("See docs")],
     };
     const entries: HighlightSliceEntry[] = [
-      { id: "hl-m", position: { start: 5, end: 8 }, hasNote: false, status: "confident" },
+      { id: "hl-n", position: { start: 4, end: 8 }, hasNote: false, status: "confident" },
     ];
-    const d05 = sliceBlockHighlights({
+    const two = sliceBlockHighlights({
       block: multiRun,
       origin: 0,
       visibleLen: 8,
       highlights: entries,
-      measureChild: blockGraphemeLength,
       lang: "en",
     });
-    const splitting = sliceBlockHighlights({
-      block: multiRun,
+    const one = sliceBlockHighlights({
+      block: singleRun,
       origin: 0,
-      visibleLen: 7,
-      highlights: [{ ...entries[0]!, position: { start: 5, end: 7 } }],
-      measureChild: splittingBlockGraphemeLength,
+      visibleLen: 8,
+      highlights: entries,
       lang: "en",
     });
-    expect(d05?.kind).toBe("inline");
-    expect(splitting?.kind).toBe("inline");
-    if (d05?.kind !== "inline" || splitting?.kind !== "inline") return;
-    expect(d05.slices.some((s) => s.highlightId === "hl-m")).toBe(true);
-    expect(splitting.slices.some((s) => s.highlightId === "hl-m")).toBe(true);
+    // Marked text compares on the normalized stream (the join separator is
+    // a stream artifact, not rendered text — normalizeRunText of a mark's
+    // runs is what a reader perceives).
+    const markedText = (r: typeof two) => {
+      if (r?.kind !== "inline") return "";
+      return normalizeRunText(
+        r.slices
+          .filter((s) => s.highlightId === "hl-n")
+          .map((s) => s.runs.map((x) => x.text).join(""))
+          .join(""),
+      );
+    };
+    expect(markedText(two)).toBe(markedText(one));
+    expect(markedText(one)).toBe("docs");
   });
 });
 
@@ -331,8 +349,14 @@ describe("no-highlight and non-readable kinds thread nothing", () => {
         block: para,
         origin: 0,
         visibleLen: 10,
-        highlights: [toEntry({ id: "hl-far", position: { start: 50, end: 60 }, hasNote: false, status: "confident" })],
-        measureChild: blockGraphemeLength,
+        highlights: [
+          toEntry({
+            id: "hl-far",
+            position: { start: 50, end: 60 },
+            hasNote: false,
+            status: "confident",
+          }),
+        ],
         lang: "en",
       }),
     ).toBeNull();
@@ -359,7 +383,6 @@ describe("no-highlight and non-readable kinds thread nothing", () => {
           origin: 0,
           visibleLen: 100,
           highlights: entries,
-          measureChild: blockGraphemeLength,
           lang: "en",
         }),
       ).toBeNull();

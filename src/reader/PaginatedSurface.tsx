@@ -45,7 +45,15 @@
 // its fragment + chevrons + indicator + hairline as children of that shared
 // article element.
 
-import { forwardRef, useLayoutEffect, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import {
+  forwardRef,
+  useLayoutEffect,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { CanonicalArticle } from "../content/types";
 import type { MeasurementResult } from "../measurement/types";
 import type { DiagnosticBus } from "../measurement/diagnostics";
@@ -54,7 +62,7 @@ import { paginateDocument } from "../pagination/fragment";
 import { refragmentOverflowingPage } from "../pagination/overflowGuard";
 import { fragmentContainingOffset, pageAnchorOffset } from "../pagination/anchor";
 import { committedPageProgressRatio } from "../pagination/progress";
-import { splittingGraphemeLength } from "../pagination/splitBlock";
+import { blockGraphemeLength } from "../pagination/anchor";
 import { PageFragmentView } from "../pagination/fragmentRenderer";
 import type { ArticleBodyHighlight } from "../content/render/BlockRenderer";
 import { ProgressHairline } from "./ProgressHairline";
@@ -157,17 +165,13 @@ export interface PaginatedSurfaceHandle {
    * new {page (1-based), total, moved} so the caller can announce + apply
    * D4-07 focus restoration, or null when no pages are mounted.
    */
-  turn: (
-    direction: "next" | "previous",
-  ) => { page: number; total: number; moved: boolean } | null;
+  turn: (direction: "next" | "previous") => { page: number; total: number; moved: boolean } | null;
   /**
    * Turn to a SPECIFIC page index (0-based). Used by D5-11 navigate-back
    * (drawer entry → target page). Bounds-checked (clamps to [0, pages.length-1]).
    * Returns the new {page (1-based), total, moved} or null when no pages mounted.
    */
-  turnToPage: (
-    pageIndex: number,
-  ) => { page: number; total: number; moved: boolean } | null;
+  turnToPage: (pageIndex: number) => { page: number; total: number; moved: boolean } | null;
   /**
    * The article-global D-05 grapheme offset of the current page's committed
    * anchor (first-block offset; the article total on the final page of a
@@ -243,10 +247,10 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
       const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
       const fragment = articleEl.querySelector<HTMLElement>(".page-fragment");
       if (motion.matches || !fragment?.animate) return;
-      const animation = fragment.animate(
-        [{ opacity: 0.45 }, { opacity: 1 }],
-        { duration: 180, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
-      );
+      const animation = fragment.animate([{ opacity: 0.45 }, { opacity: 1 }], {
+        duration: 180,
+        easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+      });
       const cancel = () => animation.cancel();
       motion.addEventListener("change", cancel);
       return () => {
@@ -350,9 +354,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
         const rect = spot.getBoundingClientRect();
         const style = window.getComputedStyle(spot);
         const reserve = Math.ceil(
-          rect.height +
-            (parseFloat(style.marginTop) || 0) +
-            (parseFloat(style.marginBottom) || 0),
+          rect.height + (parseFloat(style.marginTop) || 0) + (parseFloat(style.marginBottom) || 0),
         );
         if (reserve > 0) setFirstPageReservedPx(reserve);
       };
@@ -442,22 +444,18 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
         // exactly-once / monotonic invariants + PAGE-04 fallback status
         // without probing private React state (T-04-16: page count + status
         // only — no reader content or PII).
-        const publishDev = (
-          status: "ok" | "fallback",
-          pgs: PageFragment[] | null,
-          idx: number,
-        ) => {
+        const publishDev = (status: "ok" | "fallback", pgs: PageFragment[] | null, idx: number) => {
           if (!import.meta.env.DEV) return;
           // Per-block grapheme lengths in the ENGINE's coordinate system
-          // (Plan 04-06 Task 3). The engine consumes splittingBlockText —
-          // the renderer-aligned coordinate that concatenates runs WITHOUT
-          // separators (distinct from the D-05 substrate which joins runs
-          // with ' '). Using the engine's coordinate here makes the
+          // (Plan 04-06 Task 3). Spike 0007 F2 reconciliation: the engine now
+          // consumes blockNormalizedText — the D-05 substrate itself — so the
+          // engine coordinate IS the D-05 coordinate and blockGraphemeLength
+          // is the exact length (graphemeClusters(blockNormalizedText(block),
+          // lang).length). Using the engine's coordinate here makes the
           // coverage e2e's `[0, blockLen)` assertion agree with the
-          // endGrapheme values the engine emits. splittingBlockGraphemeLength
-          // is graphemeClusters(splittingBlockText(block, lang)).length.
+          // endGrapheme values the engine emits.
           const blockLens = currentArticle.blocks.map((b) =>
-            splittingGraphemeLength(b, currentArticle.lang),
+            blockGraphemeLength(b, currentArticle.lang),
           );
           const articleGraphemeLength =
             blockLens.reduce((acc, n) => acc + n, 0) +
@@ -472,11 +470,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
           };
         };
         if (result.status === "ok" && result.pages.length > 0) {
-          const nextIdx = fragmentContainingOffset(
-            result.pages,
-            anchorOffset,
-            currentArticle,
-          );
+          const nextIdx = fragmentContainingOffset(result.pages, anchorOffset, currentArticle);
           setPages(result.pages);
           setCurrentPageIdx(nextIdx);
           publishDev("ok", result.pages, nextIdx);
@@ -549,14 +543,11 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
       const rafId = requestAnimationFrame(() => {
         if (cancelled || controller.signal.aborted) return;
 
-        const fragmentEl = articleEl.querySelector(
-          ".page-fragment",
-        ) as HTMLElement | null;
+        const fragmentEl = articleEl.querySelector(".page-fragment") as HTMLElement | null;
         if (!fragmentEl) return;
 
         const pageViewportEl = fragmentEl.parentElement as HTMLElement | null;
-        const pageViewportHeight =
-          pageViewportEl?.clientHeight ?? pageContentBoxHeightPx;
+        const pageViewportHeight = pageViewportEl?.clientHeight ?? pageContentBoxHeightPx;
 
         // Capture the anchor BEFORE setPages (Pitfall 7).
         // Plan 04-09: use lastAnchorOffsetRef (the SAME anchor the pagination
@@ -590,11 +581,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
         }
 
         // Corrected pages: commit + re-anchor to the same passage.
-        const nextIdx = fragmentContainingOffset(
-          result,
-          anchorOffset,
-          currentArticle,
-        );
+        const nextIdx = fragmentContainingOffset(result, anchorOffset, currentArticle);
         setPages(result);
         setCurrentPageIdx(nextIdx);
 
@@ -602,9 +589,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
         // e2e sees the corrected pagesLength + currentPageIdx between turns
         // (T-04-16: gated behind import.meta.env.DEV; production unaffected).
         if (import.meta.env.DEV) {
-          const dev = (
-            window as unknown as Record<string, unknown>
-          ).__lemPagination as
+          const dev = (window as unknown as Record<string, unknown>).__lemPagination as
             | {
                 pages: PageFragment[] | null;
                 currentPageIdx: number;
@@ -652,7 +637,12 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
     // behind import.meta.env.DEV (T-04-16).
     if (import.meta.env.DEV) {
       const dev = (window as unknown as Record<string, unknown>).__lemPagination as
-        | { pages: PageFragment[] | null; currentPageIdx: number; status: string; pagesLength: number }
+        | {
+            pages: PageFragment[] | null;
+            currentPageIdx: number;
+            status: string;
+            pagesLength: number;
+          }
         | undefined;
       if (dev && dev.currentPageIdx !== currentPageIdx) {
         dev.currentPageIdx = currentPageIdx;
@@ -681,8 +671,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
       const p = pagesRef.current;
       if (!p || p.length === 0) return null;
       const cur = currentPageIdxRef.current;
-      const next =
-        direction === "next" ? Math.min(cur + 1, p.length - 1) : Math.max(0, cur - 1);
+      const next = direction === "next" ? Math.min(cur + 1, p.length - 1) : Math.max(0, cur - 1);
       const moved = next !== cur;
       if (moved) {
         pendingTurnMotion.current = true;
@@ -726,9 +715,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
      * ref-update + re-anchor discipline as commitTurn so the overflow guard
      * + onAnchorChange stay in lockstep. Bounds-checked (clamps to valid range).
      */
-    function turnToPage(
-      targetIdx: number,
-    ): { page: number; total: number; moved: boolean } | null {
+    function turnToPage(targetIdx: number): { page: number; total: number; moved: boolean } | null {
       const p = pagesRef.current;
       if (!p || p.length === 0) return null;
       const cur = currentPageIdxRef.current;

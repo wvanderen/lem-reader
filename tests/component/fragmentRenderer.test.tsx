@@ -8,12 +8,17 @@
 // the same href).
 //
 // The test fixture is a paragraph with 3 runs totaling exactly 100 graphemes
-// (40 + 20 + 40), with the middle run carrying a link mark. Two fragments
-// reference the same blockIndex with non-overlapping ranges [0,50) and
-// [50,100); the split point (50) falls inside the link run, so BOTH slices
-// must render an <a> with the same href. Their concatenated textContent
-// equals the full paragraph text; they share ZERO characters of meaningful
-// overlap (verified by sliding a 5-char window of A across B).
+// (40 + 20 + 40), with the middle run carrying a link mark. Spike 0007 F2
+// reconciliation: fragment entries address the D-05 stream, whose inlineText
+// join inserts a " " separator between adjacent no-boundary runs — the
+// block's stream length is 102 (40 + 1 + 20 + 1 + 40). Two fragments
+// reference the same blockIndex with non-overlapping ranges [0,51) and
+// [51,102); the split point (51) falls inside the link run (link stream span
+// [41,61), offset 10 inside the run), so BOTH slices must render an <a> with
+// the same href. Their concatenated textContent equals the full paragraph
+// text (the join separators render in no run piece); they share ZERO
+// characters of meaningful overlap (verified by sliding a 5-char window of A
+// across B).
 import { describe, expect, it } from "vitest";
 import { render } from "@testing-library/react";
 import { PageFragmentView } from "../../src/pagination/fragmentRenderer";
@@ -55,25 +60,24 @@ const articleWithLinkedParagraph = (): CanonicalArticle => ({
   footnotes: [],
 });
 
-const expectedFullText =
-  "A".repeat(40) + "abcdefghij0123456789" + "C".repeat(40);
+const expectedFullText = "A".repeat(40) + "abcdefghij0123456789" + "C".repeat(40);
 
 const fragmentFirstHalf = (): PageFragment => ({
   schemaVersion: 1,
   pageIndex: 0,
-  blocks: [{ blockIndex: 0, startGrapheme: 0, endGrapheme: 50 }],
+  blocks: [{ blockIndex: 0, startGrapheme: 0, endGrapheme: 51 }],
 });
 
 const fragmentSecondHalf = (): PageFragment => ({
   schemaVersion: 1,
   pageIndex: 1,
-  blocks: [{ blockIndex: 0, startGrapheme: 50, endGrapheme: 100 }],
+  blocks: [{ blockIndex: 0, startGrapheme: 51, endGrapheme: 102 }],
 });
 
 const fragmentWhole = (): PageFragment => ({
   schemaVersion: 1,
   pageIndex: 0,
-  blocks: [{ blockIndex: 0, startGrapheme: 0, endGrapheme: 100 }],
+  blocks: [{ blockIndex: 0, startGrapheme: 0, endGrapheme: 102 }],
 });
 
 /**
@@ -116,20 +120,13 @@ describe("PageFragmentView — D4-01 intra-block paragraph slicing", () => {
         lang="en"
       />,
     );
-    expect(container.querySelector("section")?.getAttribute("aria-label")).toBe(
-      "Page 4",
-    );
+    expect(container.querySelector("section")?.getAttribute("aria-label")).toBe("Page 4");
   });
 
   it("the concatenated text of the two halves equals the full paragraph text (PAGE-03 exactly-once)", () => {
     const article = articleWithLinkedParagraph();
     const { container: containerA } = render(
-      <PageFragmentView
-        fragment={fragmentFirstHalf()}
-        pageIndex={0}
-        article={article}
-        lang="en"
-      />,
+      <PageFragmentView fragment={fragmentFirstHalf()} pageIndex={0} article={article} lang="en" />,
     );
     const { container: containerB } = render(
       <PageFragmentView
@@ -147,12 +144,7 @@ describe("PageFragmentView — D4-01 intra-block paragraph slicing", () => {
   it("the two halves share ZERO characters of meaningful overlap (PAGE-03 no-duplication)", () => {
     const article = articleWithLinkedParagraph();
     const { container: containerA } = render(
-      <PageFragmentView
-        fragment={fragmentFirstHalf()}
-        pageIndex={0}
-        article={article}
-        lang="en"
-      />,
+      <PageFragmentView fragment={fragmentFirstHalf()} pageIndex={0} article={article} lang="en" />,
     );
     const { container: containerB } = render(
       <PageFragmentView
@@ -171,12 +163,7 @@ describe("PageFragmentView — D4-01 intra-block paragraph slicing", () => {
   it("BOTH halves render an <a> carrying the same href when the split lands inside a link run (Pitfall 4)", () => {
     const article = articleWithLinkedParagraph();
     const { container: containerA } = render(
-      <PageFragmentView
-        fragment={fragmentFirstHalf()}
-        pageIndex={0}
-        article={article}
-        lang="en"
-      />,
+      <PageFragmentView fragment={fragmentFirstHalf()} pageIndex={0} article={article} lang="en" />,
     );
     const { container: containerB } = render(
       <PageFragmentView
@@ -197,12 +184,7 @@ describe("PageFragmentView — D4-01 intra-block paragraph slicing", () => {
   it("a whole-block fragment (start=0, end=blockLen) renders the identical text to the two halves concatenated", () => {
     const article = articleWithLinkedParagraph();
     const { container } = render(
-      <PageFragmentView
-        fragment={fragmentWhole()}
-        pageIndex={0}
-        article={article}
-        lang="en"
-      />,
+      <PageFragmentView fragment={fragmentWhole()} pageIndex={0} article={article} lang="en" />,
     );
     const text = container.querySelector(".page-fragment")?.textContent ?? "";
     expect(text).toBe(expectedFullText);

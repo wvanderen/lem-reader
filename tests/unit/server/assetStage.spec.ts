@@ -10,7 +10,7 @@
 //   - one bad image never blocks the article: refused figures stay
 //     FigureBlocks with alt + caption intact and src omitted
 //   - the rewrite touches ONLY src/originalSrc/width/height — the
-//     splittingBlockText figure-case output ([alt, captionText] joined on
+//     blockNormalizedText figure-case output ([alt, captionText] joined on
 //     BLOCK_SEPARATOR) is byte-identical before vs after, for every figure
 //     position (top-level, nested-in-list, nested-in-blockquote)
 //   - caps are deterministic in document order: count cap before any fetch,
@@ -33,7 +33,7 @@ import {
   type AssetResolution,
 } from "../../../server/assetStage";
 import type { Block } from "../../../src/content/schema";
-import { splittingBlockText } from "../../../src/pagination/splitBlock";
+import { blockNormalizedText } from "../../../src/content/normalizeText";
 
 /** The figure arm of Block (schema.ts exports the zod schema, not the type). */
 type FigureT = Extract<Block, { kind: "figure" }>;
@@ -51,8 +51,7 @@ const fetchMock = fetchImageAsset as unknown as ReturnType<typeof vi.fn>;
  * (sha256 of the bytes — here the src string stands in for the bytes). */
 function fakeAsset(src: string, byteLength = 16): ImageAsset {
   return {
-    assetId:
-      "img-" + createHash("sha256").update(src).digest("hex").slice(0, 12),
+    assetId: "img-" + createHash("sha256").update(src).digest("hex").slice(0, 12),
     contentType: "image/png",
     width: 640,
     height: 480,
@@ -70,9 +69,7 @@ function fig(
 
 /** The four-field omit — everything EXCEPT src/originalSrc/width/height must
  * deep-equal the pre-rewrite figure (the D-05 substrate). */
-function omitFigureFields(
-  b: FigureT,
-): Record<string, unknown> {
+function omitFigureFields(b: FigureT): Record<string, unknown> {
   const { src: _s, originalSrc: _o, width: _w, height: _h, ...rest } = b;
   return rest;
 }
@@ -92,11 +89,11 @@ function findFigures(blocks: Block[]): FigureT[] {
   return out;
 }
 
-/** Per-top-level-block splittingBlockText snapshot — the substrate
+/** Per-top-level-block normalized-text snapshot — the substrate
  * byte-identity comparison basis (containers recurse inside the real
  * helper; no forked reimplementation in this spec). */
 function substrateSnapshot(blocks: Block[]): string[] {
-  return blocks.map((b) => splittingBlockText(b));
+  return blocks.map((b) => blockNormalizedText(b));
 }
 
 beforeEach(() => {
@@ -109,10 +106,7 @@ describe("rewriteFiguresWithAssets", () => {
   it("rewrites an accepted figure to the asset ref with originalSrc + dims (ONLY those four fields differ)", () => {
     const before = fig("https://example.com/a.png");
     const asset = fakeAsset("https://example.com/a.png");
-    const out = rewriteFiguresWithAssets(
-      [before],
-      new Map([["https://example.com/a.png", asset]]),
-    );
+    const out = rewriteFiguresWithAssets([before], new Map([["https://example.com/a.png", asset]]));
     const after = out[0];
     if (!after || after.kind !== "figure") throw new Error("expected figure");
     expect(after.src).toBe("asset:" + asset.assetId);
@@ -202,7 +196,10 @@ describe("runAssetStage", () => {
     expect(result.refusedCount).toBe(0);
     expect(result.assets).toHaveLength(2);
     expect(result.assets.map((a) => a.assetId).sort()).toEqual(
-      [fakeAsset("https://example.com/a.png").assetId, fakeAsset("https://example.com/b.png").assetId].sort(),
+      [
+        fakeAsset("https://example.com/a.png").assetId,
+        fakeAsset("https://example.com/b.png").assetId,
+      ].sort(),
     );
     const figs = findFigures(result.blocks);
     expect(figs).toHaveLength(3);
@@ -222,9 +219,7 @@ describe("runAssetStage", () => {
     );
     const blocks: Block[] = [
       fig("https://example.com/one.png", "One"),
-      fig("https://example.com/bad.png", "The bad one", [
-        { text: "caption", marks: [] },
-      ]),
+      fig("https://example.com/bad.png", "The bad one", [{ text: "caption", marks: [] }]),
       fig("https://example.com/three.png", "Three"),
     ];
     const before = substrateSnapshot(blocks);
@@ -253,9 +248,8 @@ describe("runAssetStage", () => {
   it("count cap: srcs beyond MAX_FIGURES_PER_ARTICLE refuse 'count' with NO fetch performed", async () => {
     fetchMock.mockImplementation(async (url: string) => fakeAsset(url));
     const over = 3;
-    const blocks: Block[] = Array.from(
-      { length: MAX_FIGURES_PER_ARTICLE + over },
-      (_, i) => fig(`https://example.com/f${i}.png`),
+    const blocks: Block[] = Array.from({ length: MAX_FIGURES_PER_ARTICLE + over }, (_, i) =>
+      fig(`https://example.com/f${i}.png`),
     );
     const result = await runAssetStage(blocks);
 
@@ -312,8 +306,7 @@ describe("runAssetStage", () => {
 
   it("deadline mid-flight: remaining srcs refuse 'deadline' once the wall-clock budget passes", async () => {
     fetchMock.mockImplementation(
-      (url: string) =>
-        new Promise((resolve) => setTimeout(() => resolve(fakeAsset(url)), 30)),
+      (url: string) => new Promise((resolve) => setTimeout(() => resolve(fakeAsset(url)), 30)),
     );
     const blocks: Block[] = Array.from({ length: 8 }, (_, i) =>
       fig(`https://example.com/slow${i}.png`),

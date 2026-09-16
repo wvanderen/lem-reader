@@ -60,8 +60,7 @@ test.describe("PAGE-04 fallback on oversize (04-05)", () => {
     await page.goto(`${BASE}/#/article/technical-post`);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     await page.waitForFunction(
-      () =>
-        (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
+      () => (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
       undefined,
       { timeout: 8000 },
     );
@@ -93,7 +92,7 @@ test.describe("PAGE-04 fallback on oversize (04-05)", () => {
   // Plan 04-06: the prior "container fixture trips block-element-mismatch
   // fallback" test was rendered obsolete by Plan 04-06. Containers now
   // paginate cleanly (pre-captured line boxes + [data-block-index] 1:1
-  // mapping + splittingBlockText coordinate alignment); list-reference and
+  // mapping + D-05 coordinate alignment); list-reference and
   // every other container-bearing fixture produce status "ok". The
   // fallback path is still proven by the "oversized atomic block" test
   // above (huge font + tiny viewport) and by fallback-banner.spec.ts.
