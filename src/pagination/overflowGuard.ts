@@ -45,14 +45,15 @@
 
 import type { CanonicalArticle } from "../content/types";
 import type { DiagnosticBus } from "../measurement/diagnostics";
+import {
+  blockNormalizedText as modelBlockNormalizedText,
+  buildRawToNormMap,
+  graphemeClusters,
+} from "../content/normalizeText";
 import type { LineBox, PageFragment } from "./types";
 import { classifyBlock } from "./splitBlock";
 import { applyLineWidowOrphan, SPLIT_WIDOW_LINES } from "./widowRules";
-import {
-  blockNormalizedText,
-  charOffsetToGrapheme,
-  readLineBoxes,
-} from "./lineBoxes";
+import { blockNormalizedText, charOffsetToGrapheme, readLineBoxes } from "./lineBoxes";
 
 /**
  * PAGE_CEILING mirrors src/pagination/fragment.ts. If the input pages[] is
@@ -103,9 +104,7 @@ export interface RefragmentOptions {
  * SAME article-global source range as the input; corrections strictly
  * redistribute entries, never drop or duplicate them.
  */
-export function refragmentOverflowingPage(
-  opts: RefragmentOptions,
-): PageFragment[] | null {
+export function refragmentOverflowingPage(opts: RefragmentOptions): PageFragment[] | null {
   if (opts.signal.aborted) return null;
 
   // T-04-07-02 termination guard: never subdivide past the ceiling. If the
@@ -170,24 +169,38 @@ export function refragmentOverflowingPage(
       return [];
     }
     // Otherwise: split the overflowing page into [entriesBefore] + [entriesFromOffending].
-    return splitPageAtChild(opts.pages, opts.overflowingPageIndex, entriesBefore, entriesFromOffending);
+    return splitPageAtChild(
+      opts.pages,
+      opts.overflowingPageIndex,
+      entriesBefore,
+      entriesFromOffending,
+    );
   }
 
   // ── SPLITTING: try to re-split at a tighter widow-legal line ─────────────
   // The live rendered element contains the slice [offendingEntry.startGrapheme,
   // offendingEntry.endGrapheme) of the block. readLineBoxes walks THAT slice's
-  // text (Range.getClientRects over the rendered text nodes). blockNormalizedText
-  // gives us the slice's normalized text — for paragraphs in clean ASCII this
-  // equals splittingBlockText of the slice (the renderer concatenates run texts
-  // without separators), so the grapheme offsets round-trip through the
-  // renderer's slicing (Pitfall 3 — no normalization fork).
-  const sliceText = blockNormalizedText(childEl);
+  // text (Range.getClientRects over the rendered text nodes). Spike 0007 F2
+  // reconciliation: entry ranges are D-05 ordinals, so the slice-local split
+  // the guard chooses must be bridged onto the slice's D-05 window through
+  // the SHARED buildRawToNormMap walk (the same seam the pagination engine's
+  // line-box conversion uses in fragment.ts) — raw rendered text ↔ the
+  // window's normalized text. For clean prose the bridge is the identity
+  // (Pitfall 3 — no normalization fork).
+  const sliceRawText = childEl.textContent ?? "";
+  const sliceNormText = graphemeClusters(
+    modelBlockNormalizedText(offendingBlock),
+    opts.article.lang,
+  )
+    .slice(offendingEntry.startGrapheme, offendingEntry.endGrapheme)
+    .join("");
   if (opts.signal.aborted) return null;
-  const lineBoxes = readLineBoxes(childEl, sliceText, opts.signal);
+  const lineBoxes = readLineBoxes(childEl, blockNormalizedText(childEl), opts.signal);
 
   const sliceSplitGrapheme = chooseLargestWidowLegalSplit(
     lineBoxes,
-    sliceText,
+    sliceRawText,
+    sliceNormText,
     opts.article.lang,
     pageTop,
     pageBox,
@@ -202,7 +215,12 @@ export function refragmentOverflowingPage(
       emitFallback(opts.diagnostics);
       return [];
     }
-    return splitPageAtChild(opts.pages, opts.overflowingPageIndex, entriesBefore, entriesFromOffending);
+    return splitPageAtChild(
+      opts.pages,
+      opts.overflowingPageIndex,
+      entriesBefore,
+      entriesFromOffending,
+    );
   }
 
   // Build the new entries: the offending entry is split at
@@ -230,7 +248,12 @@ export function refragmentOverflowingPage(
       emitFallback(opts.diagnostics);
       return [];
     }
-    return splitPageAtChild(opts.pages, opts.overflowingPageIndex, entriesBefore, entriesFromOffending);
+    return splitPageAtChild(
+      opts.pages,
+      opts.overflowingPageIndex,
+      entriesBefore,
+      entriesFromOffending,
+    );
   }
 
   const newCurrentBlocks = [
@@ -276,7 +299,8 @@ export function refragmentOverflowingPage(
  */
 function chooseLargestWidowLegalSplit(
   lineBoxes: readonly LineBox[],
-  sliceText: string,
+  sliceRawText: string,
+  sliceNormText: string,
   lang: string,
   pageTopPx: number,
   pageBox: number,
@@ -300,8 +324,16 @@ function chooseLargestWidowLegalSplit(
     // that still extended below the page boundary.
     const beforeBottom = lineBoxes[adjusted - 1]!.bottomPx - pageTopPx;
     if (beforeBottom <= limit) {
+      // Slice-local D-05 ordinal: raw cluster the line box addresses →
+      // normalized-grapheme ordinal via the shared bridge (see the call
+      // site's coordinate note).
       const splitCharOffset = lineBoxes[adjusted]!.charOffset;
-      return charOffsetToGrapheme(sliceText, splitCharOffset, lang);
+      const rawIndex = charOffsetToGrapheme(sliceRawText, splitCharOffset, lang);
+      const map = buildRawToNormMap(
+        graphemeClusters(sliceRawText, lang),
+        graphemeClusters(sliceNormText, lang),
+      );
+      return map[Math.min(rawIndex, map.length - 1)]!;
     }
   }
   return null;

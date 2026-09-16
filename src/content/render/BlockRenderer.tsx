@@ -28,11 +28,18 @@ import { Fragment, memo, useMemo, useState } from "react";
 import { InlineList } from "./InlineRenderer";
 import { highlightAriaLabelForText } from "./InlineRenderer";
 import type { TextPositionSelector } from "../normalizeText";
-import { BLOCK_SEPARATOR, blockNormalizedText, graphemeClusters } from "../normalizeText";
-import { sliceRunsForHighlights } from "../../annotations/highlightRanges";
-import { sliceCodeForHighlights } from "../../annotations/highlightRanges";
-import type { HighlightSliceEntry } from "../../annotations/highlightRanges";
-import type { CodeSegment } from "../../annotations/highlightRanges";
+import { BLOCK_SEPARATOR } from "../normalizeText";
+import type { CodeSegment, HighlightSlice } from "../../annotations/highlightRanges";
+// Spike 0007 promotion (issue #36): the ONE unified highlight slicer serves
+// the scrolling walk here and the paginated walk in fragmentRenderer.tsx.
+// The per-kind slice computation branches this file used to carry (paragraph/
+// heading, blockquote per-child, list per-item recursion, figure caption,
+// code segments) collapsed into sliceBlockHighlights + blockViewSlices.
+import {
+  blockGraphemeLen,
+  blockViewSlices,
+  sliceBlockHighlights,
+} from "../../annotations/unifiedHighlightSlicer";
 // Phase 5 Plan 05-02: ArticleBody reads from the highlight overlay context
 // when no explicit highlights prop is passed, so the scrolling ArticleBody
 // renders <mark> overlays from the provider state. The measurement body
@@ -92,7 +99,7 @@ export interface ListItemSlices {
 
 /** One child's entry inside ListItemSlices.perItem (see the interface). */
 type ListChildSlices =
-  | ReturnType<typeof sliceRunsForHighlights> // leaf paragraph/heading child
+  | HighlightSlice[] // leaf paragraph/heading child
   | ListItemSlices // nested list child (D19-15)
   | undefined; // no intersecting highlight / non-readable kind
 
@@ -106,7 +113,7 @@ type BlockViewProps = {
    * When present, InlineList wraps highlighted slices in <mark>. Absent for
    * non-paragraph/heading kinds + the measurement body.
    */
-  highlightSlices?: ReturnType<typeof sliceRunsForHighlights>;
+  highlightSlices?: HighlightSlice[];
   /**
    * Phase 5 Plan 05-07: per-child highlight slices for a blockquote block,
    * indexed by child position in block.children. Consumed ONLY by the
@@ -116,7 +123,7 @@ type BlockViewProps = {
    * or is a non-paragraph/heading kind. Absent for non-container kinds + the
    * measurement body.
    */
-  childHighlightSlices?: (ReturnType<typeof sliceRunsForHighlights> | undefined)[];
+  childHighlightSlices?: (HighlightSlice[] | undefined)[];
   /**
    * Phase 19 Plan 19-03 (D19-13/D19-15): per-item highlight slices for a
    * bulleted/numbered-list block (from computeListItemSlices). Consumed ONLY
@@ -133,7 +140,7 @@ type BlockViewProps = {
    * ever (alt is an attribute — the interior-gap visual is plain surface
    * per D19-02/UI-SPEC). Absent for non-figure kinds + the measurement body.
    */
-  captionHighlightSlices?: ReturnType<typeof sliceRunsForHighlights>;
+  captionHighlightSlices?: HighlightSlice[];
   /**
    * Phase 19 Plan 19-03 (D19-01): verbatim-source segments for a code block
    * (from sliceCodeForHighlights). Consumed ONLY by the code-block case:
@@ -182,11 +189,7 @@ export function BlockView({
             // with its own slices and renders the <mark>. Optional chaining
             // keeps absent/undefined as "no slices" (byte-unchanged when no
             // highlight intersects this child).
-            <BlockView
-              key={i}
-              block={child}
-              highlightSlices={childHighlightSlices?.[i]}
-            />
+            <BlockView key={i} block={child} highlightSlices={childHighlightSlices?.[i]} />
           ))}
         </blockquote>
       );
@@ -242,10 +245,7 @@ export function BlockView({
                   anatomy identical to prose. The img/alt surface renders no
                   marks ever (alt is an attribute — D19-02 gap by
                   construction). */}
-              <InlineList
-                runs={block.caption}
-                highlightSlices={captionHighlightSlices}
-              />
+              <InlineList runs={block.caption} highlightSlices={captionHighlightSlices} />
             </figcaption>
           )}
         </figure>
@@ -286,11 +286,7 @@ export function BlockView({
                   className={className}
                   data-highlight-id={seg.entry.id}
                   tabIndex={0}
-                  aria-label={highlightAriaLabelForText(
-                    seg.text,
-                    seg.entry.hasNote,
-                    status,
-                  )}
+                  aria-label={highlightAriaLabelForText(seg.text, seg.entry.hasNote, status)}
                   aria-haspopup="dialog"
                 >
                   {seg.text}
@@ -402,9 +398,7 @@ function FigureMedia({ block }: { block: Extract<Block, { kind: "figure" }> }) {
         <circle cx="9" cy="9" r="1.5" />
         <path d="m21 15-3.5-3.5-9 9" />
       </svg>
-      <span>
-        {block.alt.length > 0 ? block.alt : "Image unavailable."}
-      </span>
+      <span>{block.alt.length > 0 ? block.alt : "Image unavailable."}</span>
     </span>
   );
 }
@@ -423,7 +417,9 @@ function FigureMedia({ block }: { block: Extract<Block, { kind: "figure" }> }) {
  * Returns null when no highlights intersect the article — the start/length
  * index is consumed ONLY by highlight slice filtering, so the no-highlight
  * render path (the common case, incl. the hidden measurement body) does
- * zero grapheme segmentation work at all.
+ * zero grapheme segmentation work at all. Index construction stays with the
+ * CALLER (spike 0007 risk mitigation): the unified slicer takes `origin` as
+ * input and never re-accumulates per block.
  */
 interface BlockHighlightIndex {
   /** Article-global D-05 grapheme start of article.blocks[i]. */
@@ -432,9 +428,7 @@ interface BlockHighlightIndex {
   lens: number[];
 }
 
-function buildBlockHighlightIndex(
-  article: CanonicalArticle,
-): BlockHighlightIndex | null {
+function buildBlockHighlightIndex(article: CanonicalArticle): BlockHighlightIndex | null {
   const starts = new Array<number>(article.blocks.length);
   const lens = new Array<number>(article.blocks.length);
   let acc = 0;
@@ -447,51 +441,12 @@ function buildBlockHighlightIndex(
   return { starts, lens };
 }
 
-/**
- * Filter highlights that intersect a block's article-global range and convert
- * them to HighlightSliceEntry for sliceRunsForHighlights. Confident highlights
- * use their resolvedPosition; ambiguous/orphan highlights use their best-
- * effort vicinity (resolvedPosition = first candidate / stored position hint
- * — set by useAnnotationState from the resolveQuoteSelector tri-state). The
- * status field threads through so InlineRenderer emits the right modifier
- * (mark.highlight.unresolved for ambiguous/orphan — Plan 05-04 / D5-04).
- */
-function highlightsForBlock(
-  highlights: readonly ArticleBodyHighlight[],
-  blockGlobalStart: number,
-  blockLen: number,
-): HighlightSliceEntry[] {
-  const entries: HighlightSliceEntry[] = [];
-  for (const h of highlights) {
-    const interStart = Math.max(0, h.position.start - blockGlobalStart);
-    const interEnd = Math.min(blockLen, h.position.end - blockGlobalStart);
-    if (interStart < interEnd) {
-      entries.push({
-        id: h.id,
-        position: h.position,
-        hasNote: h.hasNote,
-        status: h.status,
-      });
-    }
-  }
-  return entries;
-}
-
-/**
- * Per-block grapheme length over the D-05 normalized-text contract (mirrors
- * pagination/anchor.ts blockGraphemeLength but stays local to avoid an extra
- * cross-module import in the renderer).
- */
-function blockGraphemeLen(block: Block, lang: string): number {
-  return graphemeClusters(blockNormalizedText(block), lang).length;
-}
-
 /** Leaf-slice lookup for the list cases: perItem[i][j] when it is a run-slice array. */
 function leafSlicesFor(
   slices: ListItemSlices | undefined,
   i: number,
   j: number,
-): ReturnType<typeof sliceRunsForHighlights> | undefined {
+): HighlightSlice[] | undefined {
   const child = slices?.perItem[i]?.[j];
   return Array.isArray(child) ? child : undefined;
 }
@@ -504,86 +459,6 @@ function nestedSlicesFor(
 ): ListItemSlices | undefined {
   const child = slices?.perItem[i]?.[j];
   return child != null && !Array.isArray(child) ? child : undefined;
-}
-
-/**
- * Per-item highlight-slice computation for bulleted/numbered lists (Plan
- * 19-03 — D19-13/D19-15). The items-shape mirror of the 05-07 blockquote
- * walk: a list-local accumulator walks items (joined by BLOCK_SEPARATOR per
- * normalizeText.ts L48-52); within each item an item-local accumulator walks
- * `item.content` (content blocks joined by BLOCK_SEPARATOR). For each child,
- * `childGlobalStart = blockGlobalStart + itemLocalOffset` and paragraph/
- * heading children get highlightsForBlock + sliceRunsForHighlights EXACTLY
- * as the blockquote path does (no forked slicer). Nested bulleted/numbered
- * children RECURSE (D19-15), producing the same nested shape at every depth.
- * Kinds without slices (figure/code/etc. inside items) simply produce none —
- * interior gaps render unmarked by construction (D19-02).
- *
- * List markers are CSS ::marker/start-attribute chrome and never render as
- * DOM text (D19-14) — this helper computes offsets over item CONTENT only,
- * exactly matching the D-05 substrate's blockText join.
- *
- * Returns null when no child at any depth produced slices (the list cases
- * then thread nothing — byte-unchanged rendering, mirroring the blockquote
- * path's anyChildSlices discipline).
- */
-function computeListItemSlices(
-  block:
-    | Extract<Block, { kind: "bulleted-list" }>
-    | Extract<Block, { kind: "numbered-list" }>,
-  blockGlobalStart: number,
-  effectiveHighlights: readonly ArticleBodyHighlight[],
-  article: CanonicalArticle,
-): ListItemSlices | null {
-  let itemLocalOffset = 0; // list-local: items joined by BLOCK_SEPARATOR
-  const perItem: ListChildSlices[][] = [];
-  let anySlices = false;
-  for (const item of block.items) {
-    let childLocalOffset = itemLocalOffset; // item-local: content blocks joined by BLOCK_SEPARATOR
-    const perChild: ListChildSlices[] = [];
-    for (const child of item.content) {
-      const childLen = blockGraphemeLen(child, article.lang);
-      const childGlobalStart = blockGlobalStart + childLocalOffset;
-      if (child.kind === "paragraph" || child.kind === "heading") {
-        const entries = highlightsForBlock(
-          effectiveHighlights,
-          childGlobalStart,
-          childLen,
-        );
-        if (entries.length > 0) {
-          perChild.push(
-            sliceRunsForHighlights(child.content, childGlobalStart, entries, article.lang),
-          );
-          anySlices = true;
-        } else {
-          perChild.push(undefined);
-        }
-      } else if (child.kind === "bulleted-list" || child.kind === "numbered-list") {
-        // D19-15: recurse — sub-list items are readable children with the
-        // same mark anatomy, addressed in the same D-05 coordinate stream.
-        const nested = computeListItemSlices(
-          child,
-          childGlobalStart,
-          effectiveHighlights,
-          article,
-        );
-        perChild.push(nested ?? undefined);
-        anySlices = anySlices || nested !== null;
-      } else {
-        perChild.push(undefined);
-      }
-      childLocalOffset += childLen + BLOCK_SEPARATOR.length;
-    }
-    perItem.push(perChild);
-    // After the child loop, childLocalOffset sits at itemStart + Σ(childLen)
-    // + n·SEPARATOR — which equals itemStart + itemLen + SEP for n > 0
-    // (the trailing per-child separator coincides with the inter-item
-    // separator). An EMPTY item still consumes its inter-item separator.
-    itemLocalOffset =
-      childLocalOffset +
-      (item.content.length === 0 ? BLOCK_SEPARATOR.length : 0);
-  }
-  return anySlices ? { perItem } : null;
 }
 
 /**
@@ -647,8 +522,7 @@ export const ArticleBody = memo(
     // (the common render, incl. the hidden measurement body) the index is
     // null and the per-block map below does NO grapheme segmentation.
     const highlightIndex = useMemo(
-      () =>
-        effectiveHighlights.length > 0 ? buildBlockHighlightIndex(article) : null,
+      () => (effectiveHighlights.length > 0 ? buildBlockHighlightIndex(article) : null),
       // effectiveHighlights is a fresh array per render by construction (the
       // spread/map above); when non-empty the memo re-runs per render and the
       // rebuild is the one linear pass this fix exists for. When empty the
@@ -663,222 +537,66 @@ export const ArticleBody = memo(
           // 260820: O(1) start lookup from the linear index (null when no
           // highlights — the value is consumed only by highlight filtering).
           const blockGlobalStart = highlightIndex?.starts[i] ?? 0;
-          // Compute highlight slices for the paragraph/heading path (direct)
-          // AND the container paths: blockquote (per-child, Plan 05-07) and
-          // lists (per-item with nested-list recursion, Plan 19-03 — the
-          // 05-07 items-shape deferral paid down per D19-13/D19-15), AND the
-          // two readable atomic surfaces: figure CAPTIONS + code interiors
-          // (Plan 19-03 — D19-01 render coverage). The figure alt-divergence
-          // that once deferred caption rendering is now PAID DOWN ON BOTH
-          // SIDES: Plan 19-01 fixed the capture-side offset
-          // (captionLocalStart alignment) and the render side below computes
-          // the SYMMETRIC offset (Pitfall 1's pair). Footnote-reference and
-          // unsupported remain unmarked (footnote bodies are ineligible
-          // boundaries; unsupported interiors are D19-02 gaps).
-          //
-          // D5-07 capture eligibility is independent of inline rendering: every
-          // CAPTURABLE kind persists + re-resolves; inline <mark> coverage is
-          // per-kind. For paragraph/heading, sliceRunsForHighlights wraps the
-          // highlighted runs directly. For blockquote, Plan 05-07 threads slices
-          // per child (mirrors the paragraph path per child paragraph). For
-          // lists, Plan 19-03 threads slices per item content child.
-          let highlightSlices: ReturnType<typeof sliceRunsForHighlights> | undefined;
-          // Plan 05-07: per-child slices for a blockquote block (undefined for
-          // non-blockquote kinds + when no highlight intersects any child).
-          let childHighlightSlices:
-            | (ReturnType<typeof sliceRunsForHighlights> | undefined)[]
-            | undefined;
-          // Plan 19-03: per-item slices for list blocks (undefined for
-          // non-list kinds + when no highlight intersects any item at any
-          // nesting depth).
-          let itemHighlightSlices: ListItemSlices | undefined;
-          // Plan 19-03 (D19-01): caption slices for figures + verbatim-source
-          // segments for code blocks (undefined when no highlight intersects).
-          let captionHighlightSlices: ReturnType<typeof sliceRunsForHighlights> | undefined;
-          let codeSegments: CodeSegment[] | undefined;
-          if (highlightIndex) {
-          if (block.kind === "paragraph" || block.kind === "heading") {
-            const blockLen = highlightIndex.lens[i]!;
-            const entries = highlightsForBlock(
-              effectiveHighlights,
-              blockGlobalStart,
-              blockLen,
-            );
-            if (entries.length > 0) {
-              highlightSlices = sliceRunsForHighlights(
-                block.content,
-                blockGlobalStart,
-                entries,
-                article.lang,
-              );
-            }
-          } else if (block.kind === "figure") {
-            // Caption marks (Plan 19-03 — the Pitfall 1 RENDER-side
-            // symmetric offset to 19-01's capture fix). blockText joins
-            // [alt, inlineText(caption)].filter(Boolean) with
-            // BLOCK_SEPARATOR, so figure-local caption coordinates start
-            // after alt + separator when alt is non-empty, 0 otherwise
-            // (empty alt drops out of the filter(Boolean) join). The gate
-            // length follows the shipped run-sum discipline (the same
-            // accounting sliceRunsForHighlights uses internally).
-            const captionRunLen = block.caption.reduce(
-              (sum, r) => sum + graphemeClusters(r.text, article.lang).length,
-              0,
-            );
-            if (captionRunLen > 0) {
-              const captionLocalStart =
-                block.alt.length > 0
-                  ? graphemeClusters(block.alt, article.lang).length +
-                    BLOCK_SEPARATOR.length
-                  : 0;
-              const captionGlobalStart = blockGlobalStart + captionLocalStart;
-              const entries = highlightsForBlock(
-                effectiveHighlights,
-                captionGlobalStart,
-                captionRunLen,
-              );
-              if (entries.length > 0) {
-                captionHighlightSlices = sliceRunsForHighlights(
-                  block.caption,
-                  captionGlobalStart,
-                  entries,
-                  article.lang,
+          // Spike 0007 promotion (issue #36): the unified slicer computes
+          // EVERY readable kind's slices in one recursive walk —
+          // paragraph/heading (inline), blockquote (per-child), lists
+          // (per-item with nested-list recursion), figure CAPTIONS, and
+          // code interiors — with the article-global origin + the block's
+          // D-05 visible window from the linear index. A null result threads
+          // nothing (byte-unchanged rendering when no highlight intersects);
+          // footnote-reference + unsupported remain unmarked (D19-02) by the
+          // slicer's own kind contract. First-occurrence id semantics
+          // (isFirst) stay slicer-derived here: article-global origin makes
+          // document-firstness derivable (spike F3 — the scrolling twin).
+          const slices = blockViewSlices(
+            highlightIndex === null
+              ? null
+              : sliceBlockHighlights({
+                  block,
+                  origin: blockGlobalStart,
+                  visibleLen: highlightIndex.lens[i] ?? 0,
+                  highlights: effectiveHighlights,
+                  lang: article.lang,
+                }),
+          );
+          // data-block-index establishes the 1:1 top-level block↔element mapping
+          // the measurement phase + pagination engine share (Plan 04-06). It is
+          // emitted ONLY here at the top-level ArticleBody map — recursive
+          // <BlockView> calls inside the blockquote/list renderers do NOT carry
+          // it (container interiors are not article.blocks entries). The
+          // attribute is presentation-only (a numeric array index); React
+          // serializes the number to a string attribute value.
+          return <BlockView key={i} block={block} data-block-index={i} {...slices} />;
+        })}
+        {article.footnotes.length > 0 && (
+          <section aria-label="Footnotes">
+            <ol>
+              {article.footnotes.map((fn) => {
+                // fn.id is schema-locked to /^fn-\d+$/ (Plan 01 Task 2,
+                // Pitfall 4 — DOM-clobbering guard), so the derived suffix `n`
+                // is digits-only and safe in both the href fragment and the
+                // aria-label. React escapes text/attribute children; the
+                // react/no-danger rule forbids raw-HTML injection here.
+                const n = fn.id.replace(/^fn-/, "");
+                return (
+                  <li key={fn.id} id={fn.id}>
+                    <InlineList runs={fn.content} />{" "}
+                    <a href={`#fn-ref-${n}`} aria-label={`Return to reference ${n}`}>
+                      {"\u21A9"}
+                    </a>
+                  </li>
                 );
-              }
-            }
-          } else if (block.kind === "code-block") {
-            // Code marks (Plan 19-03 — verbatim-source segmentation; raw ==
-            // norm in the D-05 substrate, so grapheme offsets over the
-            // source address the block's global range directly).
-            const entries = highlightsForBlock(
-              effectiveHighlights,
-              blockGlobalStart,
-              highlightIndex.lens[i]!,
-            );
-            if (entries.length > 0) {
-              codeSegments = sliceCodeForHighlights(
-                block.source,
-                blockGlobalStart,
-                entries,
-                article.lang,
-              );
-            }
-          } else if (block.kind === "bulleted-list" || block.kind === "numbered-list") {
-            // Per-item slice threading (Plan 19-03 — D19-13/D19-15). The
-            // items-shape mirror of the blockquote walk below: a list-local
-            // accumulator walks items, an item-local accumulator walks each
-            // item's content blocks (both joined by BLOCK_SEPARATOR per
-            // normalizeText's blockText rule), and each paragraph/heading
-            // child reuses highlightsForBlock + sliceRunsForHighlights
-            // exactly as the paragraph path does. Nested lists recurse
-            // (D19-15). Returns null when nothing intersects — thread
-            // nothing (byte-unchanged rendering).
-            itemHighlightSlices =
-              computeListItemSlices(
-                block,
-                blockGlobalStart,
-                effectiveHighlights,
-                article,
-              ) ?? undefined;
-          } else if (block.kind === "blockquote") {
-            // Per-child slice threading (Plan 05-07). Walk block.children
-            // accumulating each child's intra-blockquote grapheme offset
-            // (BLOCK_SEPARATOR between children — mirrors blockNormalizedText's
-            // join rule + sliceChildBlocks in fragmentRenderer). For each
-            // paragraph/heading child, reuse highlightsForBlock +
-            // sliceRunsForHighlights exactly as the paragraph path does (the
-            // child's article-global start = blockGlobalStart + childIntraStart).
-            // The resulting array forwards per-child slices to the blockquote
-            // BlockView case so each child InlineList renders its <mark>.
-            let childIntraStart = 0;
-            const perChild: (
-              ReturnType<typeof sliceRunsForHighlights>
-              | undefined
-            )[] = [];
-            let anyChildSlices = false;
-            for (const child of block.children) {
-              const childLen = blockGraphemeLen(child, article.lang);
-              const childGlobalStart = blockGlobalStart + childIntraStart;
-              let childSlices:
-                | ReturnType<typeof sliceRunsForHighlights>
-                | undefined;
-              if (child.kind === "paragraph" || child.kind === "heading") {
-                const entries = highlightsForBlock(
-                  effectiveHighlights,
-                  childGlobalStart,
-                  childLen,
-                );
-                if (entries.length > 0) {
-                  childSlices = sliceRunsForHighlights(
-                    child.content,
-                    childGlobalStart,
-                    entries,
-                    article.lang,
-                  );
-                  anyChildSlices = true;
-                }
-              }
-              perChild.push(childSlices);
-              childIntraStart += childLen + BLOCK_SEPARATOR.length;
-            }
-            // Only thread when at least one child produced slices (absent =
-            // no marks, mirroring the paragraph path's "absent when empty").
-            if (anyChildSlices) {
-              childHighlightSlices = perChild;
-            }
-          }
-        }
-        // data-block-index establishes the 1:1 top-level block↔element mapping
-        // the measurement phase + pagination engine share (Plan 04-06). It is
-        // emitted ONLY here at the top-level ArticleBody map — recursive
-        // <BlockView> calls inside the blockquote/list renderers do NOT carry
-        // it (container interiors are not article.blocks entries). The
-        // attribute is presentation-only (a numeric array index); React
-        // serializes the number to a string attribute value.
-        return (
-          <BlockView
-            key={i}
-            block={block}
-            data-block-index={i}
-            highlightSlices={highlightSlices}
-            childHighlightSlices={childHighlightSlices}
-            itemHighlightSlices={itemHighlightSlices}
-            captionHighlightSlices={captionHighlightSlices}
-            codeSegments={codeSegments}
-          />
-        );
-      })}
-      {article.footnotes.length > 0 && (
-        <section aria-label="Footnotes">
-          <ol>
-            {article.footnotes.map((fn) => {
-              // fn.id is schema-locked to /^fn-\d+$/ (Plan 01 Task 2,
-              // Pitfall 4 — DOM-clobbering guard), so the derived suffix `n`
-              // is digits-only and safe in both the href fragment and the
-              // aria-label. React escapes text/attribute children; the
-              // react/no-danger rule forbids raw-HTML injection here.
-              const n = fn.id.replace(/^fn-/, "");
-              return (
-                <li key={fn.id} id={fn.id}>
-                  <InlineList runs={fn.content} />
-                  {" "}
-                  <a href={`#fn-ref-${n}`} aria-label={`Return to reference ${n}`}>
-                    {"\u21A9"}
-                  </a>
-                </li>
-              );
-            })}
-          </ol>
-        </section>
-      )}
-    </>
-  );
+              })}
+            </ol>
+          </section>
+        )}
+      </>
+    );
   },
   // Comparator: re-render only when the article identity or the explicit
   // highlights prop identity changes. Absent highlights (undefined) on both
   // sides compare equal — the scrolling body re-renders via its context
   // subscription when live highlights change, NOT via this prop path.
   // Context updates bypass memo entirely, so highlight changes keep working.
-  (prev, next) =>
-    prev.article === next.article && prev.highlights === next.highlights,
+  (prev, next) => prev.article === next.article && prev.highlights === next.highlights,
 );

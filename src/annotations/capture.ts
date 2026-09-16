@@ -47,6 +47,7 @@ import type { Block, CanonicalArticle } from "../content/types";
 import {
   BLOCK_SEPARATOR,
   blockNormalizedText,
+  buildRawToNormMap,
   graphemeClusters,
 } from "../content/normalizeText";
 import type { TextPositionSelector } from "../content/normalizeText";
@@ -67,103 +68,12 @@ export type CaptureResult =
   | { ok: true; blockIndex: number; position: TextPositionSelector }
   | {
       ok: false;
-      reason:
-        | "empty"
-        | "ineligible"
-        | "measurement-body"
-        | "boundary-ineligible"
-        | "empty-span";
+      reason: "empty" | "ineligible" | "measurement-body" | "boundary-ineligible" | "empty-span";
     };
 
-/**
- * A whitespace cluster: a grapheme cluster consisting solely of ASCII
- * [\t\n\f\r ] (the set normalizeRunText collapses). Unicode whitespace
- * (NBSP, ZWJ, RTL marks) is NOT in this set — those are readable text and
- * must NOT be collapsed (Pitfall 2 rule from normalizeText.ts).
- */
-function isWsCluster(cluster: string): boolean {
-  return /^[\t\n\f\r ]+$/.test(cluster);
-}
-
-/**
- * Build a map from raw-cluster offset → normalized-grapheme offset.
- *
- * `rawClusters` is the grapheme clustering of the DOM block element's
- * textContent. `normClusters` is the grapheme clustering of
- * blockNormalizedText(block). Both contain the same non-whitespace clusters in
- * the same order; whitespace may differ (raw has extra spaces from
- * non-collapsed runs / run-boundary concatenation that normalizeRunText
- * collapses + trims, or norm has separator spaces that raw lacks at run
- * boundaries).
- *
- * The returned array has length `rawClusters.length + 1`. `map[i]` is the
- * normalized-grapheme offset corresponding to raw-cluster offset `i`. The
- * extra trailing entry `map[rawClusters.length]` is the normalized length
- * (past-the-end), so an end-exclusive DOM offset maps cleanly.
- */
-function buildRawToNormMap(
-  rawClusters: readonly string[],
-  normClusters: readonly string[],
-): number[] {
-  const rawLen = rawClusters.length;
-  const map: number[] = new Array<number>(rawLen + 1);
-  let r = 0; // raw-cluster index
-  let n = 0; // norm-cluster index
-
-  // Skip leading raw whitespace (normalizeRunText trims leading). These map to
-  // norm offset 0 (before the first norm cluster).
-  while (r < rawLen && isWsCluster(rawClusters[r]!)) {
-    map[r] = 0;
-    r++;
-  }
-
-  while (r < rawLen) {
-    const rc = rawClusters[r]!;
-    if (isWsCluster(rc)) {
-      if (n < normClusters.length && isWsCluster(normClusters[n]!)) {
-        // Aligned whitespace — map and advance both pointers.
-        map[r] = n;
-        r++;
-        n++;
-        // Collapse: skip any additional raw whitespace clusters that
-        // normalizeRunText would have folded into this single space.
-        while (r < rawLen && isWsCluster(rawClusters[r]!)) {
-          map[r] = n;
-          r++;
-        }
-      } else {
-        // norm has no whitespace here — this raw whitespace was collapsed into
-        // the previous norm space or trimmed. Map to the current norm offset
-        // and advance only the raw pointer.
-        map[r] = n;
-        r++;
-      }
-    } else {
-      // Non-whitespace raw cluster — must align with a non-ws norm cluster.
-      if (n < normClusters.length && !isWsCluster(normClusters[n]!)) {
-        map[r] = n;
-        r++;
-        n++;
-      } else if (n < normClusters.length && isWsCluster(normClusters[n]!)) {
-        // norm inserted a separator space here (inlineText joins runs with
-        // " ") but raw concatenated without a separator. Skip the norm space
-        // and align.
-        n++;
-        map[r] = n;
-        r++;
-        n++;
-      } else {
-        // norm exhausted (raw has trailing content not in the normalized
-        // text — defensive; should not happen for well-formed blocks). Clamp.
-        map[r] = normClusters.length;
-        r++;
-      }
-    }
-  }
-  // Past-the-end: maps to the normalized length (end-exclusive DOM offset).
-  map[rawLen] = normClusters.length;
-  return map;
-}
+// buildRawToNormMap is imported from ../content/normalizeText — the SHARED
+// raw↔norm alignment walk (Pitfall 3: never fork the bridge). See there for
+// the full contract.
 
 /**
  * Walk the block element's text nodes in document order and return the
@@ -237,10 +147,7 @@ function domPointToIntraBlockGraphemeOffset(
  * `data-block-index` AND contained within `root`. Returns null when no such
  * ancestor exists before hitting `root`'s boundary (or the document root).
  */
-function findBlockAncestor(
-  node: Node,
-  root: HTMLElement,
-): HTMLElement | null {
+function findBlockAncestor(node: Node, root: HTMLElement): HTMLElement | null {
   let current: Node | null = node;
   while (current && current !== root) {
     if (
@@ -253,10 +160,7 @@ function findBlockAncestor(
   }
   // Check root itself (the readingRoot may carry data-block-index in edge
   // layouts — defensive).
-  if (
-    root.nodeType === Node.ELEMENT_NODE &&
-    root.hasAttribute("data-block-index")
-  ) {
+  if (root.nodeType === Node.ELEMENT_NODE && root.hasAttribute("data-block-index")) {
     return root;
   }
   return null;
@@ -290,10 +194,7 @@ function isEligibleBlock(block: Block): boolean {
  * BLOCK_SEPARATOR between blocks (mirrors normalizeText's join rule + the
  * pageStartGlobalOffset accumulation in src/pagination/anchor.ts).
  */
-function computeBlockGlobalStart(
-  article: CanonicalArticle,
-  blockIndex: number,
-): number {
+function computeBlockGlobalStart(article: CanonicalArticle, blockIndex: number): number {
   let offset = 0;
   for (let i = 0; i < blockIndex && i < article.blocks.length; i++) {
     const blockText = blockNormalizedText(article.blocks[i]!);
@@ -313,10 +214,7 @@ function computeBlockGlobalStart(
  * (ANNO-13 stays Future).
  */
 function isInsideMeasurementBody(node: Node): boolean {
-  const el =
-    node.nodeType === Node.ELEMENT_NODE
-      ? (node as HTMLElement)
-      : node.parentElement;
+  const el = node.nodeType === Node.ELEMENT_NODE ? (node as HTMLElement) : node.parentElement;
   return el !== null && el.closest(".article-body-measurement") !== null;
 }
 
@@ -363,8 +261,7 @@ function resolveSelectionEndpoint(
     return { ok: false, reason: "ineligible" };
   }
   const blockIndexAttr = blockEl.getAttribute("data-block-index");
-  const blockIndex =
-    blockIndexAttr === null ? Number.NaN : Number(blockIndexAttr);
+  const blockIndex = blockIndexAttr === null ? Number.NaN : Number(blockIndexAttr);
   if (!Number.isInteger(blockIndex) || blockIndex < 0) {
     return { ok: false, reason: "ineligible" };
   }
@@ -402,21 +299,12 @@ function resolveSelectionEndpoint(
     if (captionEl !== null && captionEl.contains(container)) {
       const captionLocalStart =
         block.alt.length > 0
-          ? graphemeClusters(block.alt, article.lang).length +
-            BLOCK_SEPARATOR.length
+          ? graphemeClusters(block.alt, article.lang).length + BLOCK_SEPARATOR.length
           : 0;
-      const fullNorm = graphemeClusters(
-        blockNormalizedText(block),
-        article.lang,
-      );
-      const captionWindowEnd = Math.min(
-        fullNorm.length,
-        captionLocalStart + fullNorm.length,
-      );
+      const fullNorm = graphemeClusters(blockNormalizedText(block), article.lang);
+      const captionWindowEnd = Math.min(fullNorm.length, captionLocalStart + fullNorm.length);
       const normWindow =
-        captionLocalStart > 0
-          ? fullNorm.slice(captionLocalStart, captionWindowEnd)
-          : fullNorm;
+        captionLocalStart > 0 ? fullNorm.slice(captionLocalStart, captionWindowEnd) : fullNorm;
       const inCaption = domPointToIntraBlockGraphemeOffset(
         captionEl as HTMLElement,
         container,
@@ -431,11 +319,7 @@ function resolveSelectionEndpoint(
       };
     }
     const placeholderEl = blockEl.querySelector(".figure-placeholder");
-    if (
-      placeholderEl !== null &&
-      placeholderEl.contains(container) &&
-      block.alt.length === 0
-    ) {
+    if (placeholderEl !== null && placeholderEl.contains(container) && block.alt.length === 0) {
       // The visible "Image unavailable." note is not substrate text — there
       // is nothing honest to anchor ("no silent garbage").
       return { ok: false, reason: "ineligible" };
@@ -465,26 +349,17 @@ function resolveSelectionEndpoint(
     block.kind === "figure" &&
     block.alt.length > 0 &&
     blockEl.querySelector(".figure-placeholder") === null
-      ? graphemeClusters(block.alt, article.lang).length +
-        BLOCK_SEPARATOR.length
+      ? graphemeClusters(block.alt, article.lang).length + BLOCK_SEPARATOR.length
       : 0;
   const windowStart = captionLocalStart + sliceStart;
-  const fullNormClusters = graphemeClusters(
-    blockNormalizedText(block),
-    article.lang,
-  );
+  const fullNormClusters = graphemeClusters(blockNormalizedText(block), article.lang);
   // The element's normalized text ≈ the full normalized text from
   // windowStart on. For whole blocks (windowStart = 0) this is the entire
   // array. We align the map against the element's portion so the raw→norm
   // indices match its textContent (Pitfall 1).
-  const windowEnd = Math.min(
-    fullNormClusters.length,
-    windowStart + fullNormClusters.length,
-  );
+  const windowEnd = Math.min(fullNormClusters.length, windowStart + fullNormClusters.length);
   const normClusters =
-    windowStart > 0
-      ? fullNormClusters.slice(windowStart, windowEnd)
-      : fullNormClusters;
+    windowStart > 0 ? fullNormClusters.slice(windowStart, windowEnd) : fullNormClusters;
   const windowedOffset = domPointToIntraBlockGraphemeOffset(
     blockEl,
     container,
@@ -577,11 +452,8 @@ export function captureSelection(
   //    each endpoint's block-global start + its intra-block offset. The DOM
   //    Range is already in document order — no swap step (Pitfall 9).
   const start =
-    computeBlockGlobalStart(article, startEndpoint.blockIndex) +
-    startEndpoint.intraOffset;
-  const end =
-    computeBlockGlobalStart(article, endEndpoint.blockIndex) +
-    endEndpoint.intraOffset;
+    computeBlockGlobalStart(article, startEndpoint.blockIndex) + startEndpoint.intraOffset;
+  const end = computeBlockGlobalStart(article, endEndpoint.blockIndex) + endEndpoint.intraOffset;
   if (start === end) {
     // Defensive — never reachable from an ordinary non-collapsed Range, but
     // a whitespace-only selection over text normalizeRunText collapses can
