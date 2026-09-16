@@ -34,6 +34,12 @@ import { computeTopVisibleOffset } from "../reader/restoreLocation";
 // settleFocus discipline.
 import { jumpToOffset, settleFocus } from "../reader/jumpToOffset";
 import { useScrollSave } from "../reader/useScrollSave";
+// Issue #34 (reading-history milestone): one append-only reading-session row
+// per visit (decision #24). The hook owns the accumulator lifecycle + flush
+// discipline; this route supplies the pulse sources it owns (page turns via
+// handleAnchorChange, the mark-read end-pin) on top of the hook's own
+// scroll/presence/visibility listeners.
+import { useReadingSession } from "../reader/useReadingSession";
 import { useMeasurement } from "../measurement/useMeasurement";
 import { useSettings } from "../settings/SettingsContext";
 import { PaginatedSurface } from "../reader/PaginatedSurface";
@@ -685,11 +691,26 @@ export function ArticleView({
   // this precise offset are in the SAME block, we prefer the precise offset
   // so the reader re-lands on the exact page (not the page before the split).
   const lastPreciseAnchorRef = useRef<number | null>(null);
+  // Issue #34: the reading-session recorder. articleId null (loading/error)
+  // records nothing; the hook registers its own scroll/presence/visibility
+  // listeners and reads the continuously-fresh D4-10 anchor (below) for
+  // pulse offsets. noteActivity is stable — callbacks below depend on it
+  // without churn.
+  const { noteActivity } = useReadingSession(
+    article?.id ?? null,
+    () => currentAnchorOffsetRef.current,
+  );
   const handleAnchorChange = useCallback((offset: number) => {
     currentAnchorOffsetRef.current = offset;
     // Track the latest precise offset (only updated in paginated mode where
     // PaginatedSurface reports via onAnchorChange).
     lastPreciseAnchorRef.current = offset;
+    // Issue #34: a page turn (or the initial commit) is a reading-activity
+    // pulse — in paginated mode NO window scroll fires, so without this the
+    // idle cap could never distinguish an active page-turning reader from a
+    // parked tab (the 18-03 Pitfall 2 shape: paginated signals must ride
+    // the anchor path).
+    noteActivity(offset);
     // Phase 18 Plan 18-03 (Pitfall 2 closure — D18-06/UI-SPEC §Auto-Resolved
     // #8): persist the per-turn offset through the SHARED debounced save +
     // dual-flush discipline in useScrollSave (SAVE_DEBOUNCE_MS 1200; the
@@ -720,8 +741,9 @@ export function ArticleView({
     });
     // scheduleLocationSave is a stable useCallback (empty deps in
     // useScrollSave) — listing it keeps the exhaustive-deps rule satisfied
-    // without changing this callback's identity.
-  }, [scheduleLocationSave]);
+    // without changing this callback's identity. noteActivity (issue #34)
+    // is likewise stable.
+  }, [scheduleLocationSave, noteActivity]);
 
   // 260908-oht: the explicit end-of-article completion gesture (Issue #2:
   // one of the four decision sites that call readingPosition). Persists
@@ -736,8 +758,12 @@ export function ArticleView({
   // the RTL suite masked it — its onMarkRead is a stub).
   const handleMarkRead = useCallback(() => {
     if (!article) return;
+    // Issue #34: the completion gesture is the visit's final pulse — record
+    // the ONE end-pin offset as the session's end position before the
+    // unmount flush closes the row.
+    noteActivity(endPinOffset(article));
     saveLocationNow(endPinOffset(article));
-  }, [article, saveLocationNow]);
+  }, [article, saveLocationNow, noteActivity]);
 
   // Phase 4 Plan 04-04 (D4-09 + D4-10): the mode-toggle handler. Captures the
   // anchor SYNCHRONOUSLY before calling update() so the post-swap render can

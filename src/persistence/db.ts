@@ -82,6 +82,27 @@ export interface AssetRecordRow {
   createdAt: string; // ISO-8601
 }
 
+/** Shape of a row in the `readingSessions` store (issue #34 — reading-history
+ * milestone). ONE append-only row per visit (decision #24): mirrors
+ * ReadingSessionRecordSchema (src/content/schema.ts — the
+ * HighlightRecordRow/HighlightRecordSchema twin discipline). The row is
+ * upserted by its per-visit `id` primary key as the visit's totals refine
+ * (flush discipline) — never duplicated per visit, never deleted except by
+ * the article cascade. The `articleId` index powers the single-transaction
+ * range deletes in DexieLibrarySource.remove / removeBook (the v6 assets
+ * precedent), and the `startedAt` index powers recency reads for the future
+ * stats surfaces. */
+export interface ReadingSessionRecordRow {
+  schemaVersion: 1;
+  id: string; // crypto.randomUUID() — the per-visit primary key
+  articleId: string; // FK → articles.id
+  startedAt: string; // ISO-8601
+  endedAt: string; // ISO-8601 — last flushed moment of the visit
+  startOffset: number; // D-05 canonical grapheme offset
+  endOffset: number; // D-05 canonical grapheme offset
+  activeSeconds: number; // idle-capped active time (integer seconds)
+}
+
 export class LemReaderDB extends Dexie {
   // Declared table properties give TypeScript a handle on the stores reserved
   // by the version blocks below. Without these, `db.settings.get(...)` would
@@ -137,6 +158,11 @@ export class LemReaderDB extends Dexie {
   // annotation mirrors the books! precedent above; runtime-unaffected
   // (Dexie resolves the store by name from the v6 declaration below).
   assets!: Table<AssetRecordRow, [string, string]>;
+  // Issue #34 (reading-history milestone): the readingSessions table stores
+  // one append-only row per visit keyed by the per-visit uuid. Definite-
+  // assignment annotation mirrors the assets! precedent; runtime-unaffected
+  // (Dexie resolves the store by name from the v7 declaration below).
+  readingSessions!: Table<ReadingSessionRecordRow, string>;
 
   constructor() {
     super("lem-reader");
@@ -256,6 +282,32 @@ export class LemReaderDB extends Dexie {
       notes: "id, highlightId",
       books: "id, title, *tags",
       assets: "[articleId+assetId], articleId",
+    });
+    // ── Issue #34 (reading-history milestone + Pitfall 9): the seventh
+    // version block is an APPEND. ──
+    // v1..v6 byte-unchanged. v7 adds the NEW `readingSessions` store — one
+    // append-only row per visit (decision #24): primary key `id` (the
+    // per-visit uuid), the `articleId` index powering the cascade range
+    // deletes in DexieLibrarySource.remove / removeBook (a session's
+    // lifecycle is exactly its article's — the v6 assets/D20-15 precedent),
+    // and the `startedAt` index for recency reads. NO `.upgrade()` callback —
+    // a new store that starts EMPTY; Dexie creates it on next open without
+    // row migration (the v3/v4/v5/v6 additive precedent). The v6 → v7
+    // upgrade therefore preserves every existing row untouched (articles,
+    // highlights, notes, locations, books, assets, settings) — proven by
+    // tests/unit/persistence/reading-sessions-migration.spec.ts. The
+    // remaining stores are re-declared at their existing shapes because
+    // Dexie requires the full stores object at each version; their values
+    // match v6 verbatim.
+    this.version(7).stores({
+      articles: "id, revision, source, addedAt, *tags, bookId",
+      settings: "key",
+      location: "[articleId+revision]",
+      highlights: "id, [articleId+revision]",
+      notes: "id, highlightId",
+      books: "id, title, *tags",
+      assets: "[articleId+assetId], articleId",
+      readingSessions: "id, articleId, startedAt",
     });
   }
 }

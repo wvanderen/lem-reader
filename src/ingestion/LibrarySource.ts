@@ -134,29 +134,29 @@ export class DexieLibrarySource implements ArticleRepository {
 
   /**
    * remove — D5-12 cascade-delete: removes the article AND every highlight,
-   * note, location, and asset row keyed to it, in a single Dexie
-   * transaction. The transaction guarantees atomicity — either every
+   * note, location, asset, and reading-session row keyed to it, in a single
+   * Dexie transaction. The transaction guarantees atomicity — either every
    * related row commits the delete, or all roll back (Pitfall 10 — no
    * orphaned highlights/notes; Phase 20 extends the same guarantee to
-   * article-owned asset blobs — D20-15: an asset's lifecycle is exactly its
-   * article's).
+   * article-owned asset blobs — D20-15; issue #34 extends it to reading
+   * sessions — removing the article removes its sessions, no ghosts).
    *
    * The compound-index range queries (highlights/location) mirror
    * highlightsStore.ts L66-69 and locationStore.ts: the `[articleId+revision]`
    * compound index is queried as an array range covering every revision of
    * the article. Notes cascade through their `highlightId` FK: collect the
    * to-be-deleted highlight ids, then delete every note whose highlightId
-   * is in that set. Assets cascade through the v6 `articleId` index — ONE
-   * range delete line inside this same transaction (D17-13 shape).
+   * is in that set. Assets and reading sessions cascade through their
+   * `articleId` index — ONE range delete line each inside this same
+   * transaction (D17-13 shape).
    */
   async remove(id: string): Promise<void> {
+    // The readonly-ARRAY overload: SIX tables exceed the tuple overloads,
+    // which stop at five (the saveBook/removeBook 12-07 precedent — the
+    // standardized form).
     await db.transaction(
       "rw",
-      db.articles,
-      db.highlights,
-      db.notes,
-      db.location,
-      db.assets,
+      [db.articles, db.highlights, db.notes, db.location, db.assets, db.readingSessions],
       async () => {
         // Collect the to-be-deleted highlight ids BEFORE deleting them so
         // the notes cascade has the FK set. Within a Dexie transaction,
@@ -195,6 +195,11 @@ export class DexieLibrarySource implements ArticleRepository {
         // Assets: every article-owned blob goes with the article (D20-15) —
         // the v6 articleId index range delete, same transaction.
         await db.assets.where("articleId").equals(id).delete();
+
+        // Reading sessions: every visit row goes with the article (issue
+        // #34 — no ghost history) — the v7 articleId index range delete,
+        // same transaction.
+        await db.readingSessions.where("articleId").equals(id).delete();
       },
     );
   }
