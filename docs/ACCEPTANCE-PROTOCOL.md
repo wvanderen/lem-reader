@@ -22,7 +22,10 @@ since **v1.3**, of **ACPT-08** ("Library, Highlights, Add, and Reader flows pass
 the documented keyboard/NVDA/VoiceOver/reduced-motion/forced-colors/reflow/zoom
 matrix with no blocker or major finding" — D21-14 grew the protocol by the
 v2.1 capability flows §3 G–L; the automated matrix arms live in the extended
-edge-invariant specs, this protocol owns the human SR layer).
+edge-invariant specs, this protocol owns the human SR layer). Since **v1.4**
+([#30](https://github.com/wvanderen/lem-reader/issues/30)) it also carries the
+bound milestone's flows §3 M–O, drafted ahead of their implementation (§1
+"v1.4 scope").
 Per PROJECT.md, this is *engineering acceptance on representative content*, not a
 formal user-study instrument. This protocol proves the reader can complete the
 documented flows using only a screen reader and keyboard, with no content or
@@ -33,10 +36,10 @@ automated test. It is a human-run manual protocol on real hardware.
 
 | Field | Value |
 |-------|-------|
-| **Version** | 1.3 |
-| **Authoritative decisions** | D6-05 (SR matrix), D6-06 (hybrid protocol shape), D6-07 (zero-blocker policy), D6-08 (versioned + re-run), D21-14 (v1.3 capability flows / ACPT-08), D21-12 (Safari image-flow fold-in) |
-| **Applies to** | Lem Reader v2.1 (v1.0 reader/settings flows A–F + v2.1 capability flows G–L) |
-| **Results recorded in** | `.planning/phases/21-integrated-refinement-and-acceptance/21-VERIFICATION.md` (v1.3 runs; the v1.0–v1.2 history lives in `06-VERIFICATION.md` / `13-VERIFICATION.md`) |
+| **Version** | 1.4 |
+| **Authoritative decisions** | D6-05 (SR matrix), D6-06 (hybrid protocol shape), D6-07 (zero-blocker policy), D6-08 (versioned + re-run), D21-14 (v1.3 capability flows / ACPT-08), D21-12 (Safari image-flow fold-in), [#30](https://github.com/wvanderen/lem-reader/issues/30) (v1.4 bound-milestone additions, drafted from #24/#29, #21/#26/#27, #23 + [ADR 0001](../adr/0001-single-canonical-reading-location.md); bound by [#25](https://github.com/wvanderen/lem-reader/issues/25)) |
+| **Applies to** | Lem Reader v2.1 (v1.0 reader/settings flows A–F + v2.1 capability flows G–L) + the bound milestone's flows M–O (drafted ahead of implementation; each becomes runnable when its effort ships, in [#25](https://github.com/wvanderen/lem-reader/issues/25)'s order: recording → transcripts → read-aloud) |
+| **Results recorded in** | `.planning/phases/21-integrated-refinement-and-acceptance/21-VERIFICATION.md` (v1.3 runs; the v1.0–v1.2 history lives in `06-VERIFICATION.md` / `13-VERIFICATION.md`); flows M–O record in the bound milestone's verification artifacts as each effort ships |
 | **First run** | _Run date:_ _____________ _(filled at execution — Plan 06-06)_ |
 | **Last run** | _Run date:_ _____________ _(filled at each re-run)_ |
 | **Run by** | _Tester name + SR/OS versions:_ _____________ |
@@ -82,6 +85,62 @@ the human SR layer on top. The Add-dialog flow (H) retires the Phase 16
 manual-SR deferral (`.planning/phases/16-organized-library-and-focused-add-flow/16-VALIDATION.md`
 §Manual SR row — axe covered the automatable checks only; the SR pass was
 deferred to this instrument).
+
+### v1.4 scope: the bound-milestone additions (flows M–O, #30)
+
+The bound milestone ([#25](https://github.com/wvanderen/lem-reader/issues/25): recording →
+transcripts → read-aloud) adds three scripted flows, drafted in [#30](https://github.com/wvanderen/lem-reader/issues/30)
+so implementation phases can plan verification without further discovery:
+
+- **Flow M — reading-history surfaces** (#24/#29): the ambient library strip
+  ("You've read … across N visits." + "N finished.", only-when-nonzero) and the
+  per-card "time read here" line — spare-chrome **silent when history is empty**
+  (the silence IS the early empty state; nothing backfills). No `#/stats`
+  destination and no words-read display in v1.
+- **Flow N — YouTube transcript articles** (#21/#26/#27): transcript-article
+  **reading inherits the existing engine bar unchanged** (flows A–L already own
+  it); what is new is ingest-side — success shape (title/channel/badge/duration),
+  the four calm refusals (`no-captions`, `unavailable-private`, `age-gated`,
+  `bot-check`), and ASR low-confidence honesty.
+- **Flow O — read-aloud transport** (#23, ADR 0001): transport-bar keyboard
+  coverage, follow-level visibility, the `aria-hidden` spoken word + one polite
+  `role="status"` for transport state only, reduced-motion instant
+  page-turn/follow-scroll, and position-driven-by-listening.
+
+**Runnability honesty:** M–O are drafted against features that ship *inside* the
+milestone. A flow whose effort has not shipped is **not runnable** and is
+excluded from a pairing's pass verdict until it lands — it is never counted as
+a silent skip (no silent garbage applies to this instrument too). Per #25, the
+stats *surface* is a tail-stretch goal (droppable at the cut-line) while
+recording is not; Flow M's gate is the reader-visible surface, so it runs only
+when that surface ships.
+
+**Automated arms this protocol does not re-prove** (owned by unit/e2e suites in
+the shipping phases):
+
+- *Recording semantics* (Flow M substrate): active-time accumulator with the
+  ~2-minute idle cap, flush checkpoints on the existing
+  `visibilitychange`/`pagehide`/unmount discipline plus the ~60 s heartbeat,
+  the Dexie v7 `readingSessions` append-only store, cascade delete with the
+  article, and the export-bundle **schemaVersion 5** additive widening with
+  append-only import merge. Read-aloud's playing state feeds the same
+  accumulator through the external-activity seam (ADR 0001 — listening is
+  reading).
+- *Transcript ingest* (Flow N substrate): `playabilityStatus`/typed-error →
+  refusal-reason mapping, track selection (manual over ASR in the reader's
+  language, never auto-translated), ~380-char paragraph budget with the ~600
+  hard cap, never splitting a caption segment across paragraphs, chapter edge
+  rules, block-keyed `ingestionMeta.transcript`
+  timestamps (stored, never rendered, never in `normalizeText`), the anchor
+  round-trip on transcript text, and the corpus gates (3-hour ASR transcript +
+  pathological ~2,000-char cue).
+- *Read-aloud internals* (Flow O substrate): the transport bar's axe + keyboard
+  cells in the edge-invariant suites; the **slicer-promotion differential
+  suite** (`docs/spikes/0007-unified-highlight-slicer.md` F2 — the
+  whitespace-neutral splitting coordinate making paginated and scrolling marks
+  agree; the 169-test differential re-run) which, per #25, read-aloud opens
+  with; `charIndex` → UTF-16 → grapheme → canonical re-anchoring; the
+  unpunctuated-ASR fixed word-window chunker.
 
 ### Relationship to the automated cross-engine matrix (ACPT-01)
 
@@ -134,7 +193,10 @@ When running a step, verify the **gate** (role + name + state) and record any
 
 Flows **A–F** are the v1.0 reader/settings core (unchanged). Flows **G–L**
 (v1.3, D21-14) are the v2.1 capability flows — one per capability, each run on
-**both SR pairings**. For each step: perform the **keyboard sequence**, then
+**both SR pairings**. Flows **M–O** (v1.4, [#30](https://github.com/wvanderen/lem-reader/issues/30))
+are the bound-milestone additions (§1 "v1.4 scope"); each runs on **both
+pairings once its effort ships** and is excluded from the verdict until then.
+For each step: perform the **keyboard sequence**, then
 verify the **expected outcome** (role + accessible name + state). Record PASS /
 the finding severity (§5) per step.
 
@@ -447,6 +509,84 @@ disclosed calmly with text.
 
 ---
 
+### Flow M — Reading-history surfaces: the library strip + per-card "time read here" (bound milestone)
+
+**Goal:** Reading stats are **ambient text** that reads calmly in document
+order, stays completely silent when history is empty, and describes only the
+surviving library. There is no stats destination to operate and no words-read
+display (#29 verdict A — "on the shelf"); the recording machinery itself
+(accumulator, idle cap, flush, export v5 merge) is the automated substrate
+(§1), not a manual gate. (Decisions: #24, #29.)
+
+| # | Keyboard sequence | Expected outcome (role + name + state) |
+|---|-------------------|----------------------------------------|
+| M1 | On a fresh profile (Setup step 3 wipe), open `#/` and **read-all** from the top of the page | **No reading-time text exists**: the space between "Continue reading" and the list reads with no "You've read…" sentence, and no article card carries a "read here" line. Silence is the empty state — no zero-value copy, no placeholder. |
+| M2 | Open an article (e.g. `essay-long-form`) and interact for a visible interval (keep turning pages/scrolling past the idle cap), return to `#/`, read-all again | A static-text strip reads "**You've read {total time} across {N} visits.**" in document order between Continue reading and the list. The second sentence "**{N} finished.**" appears **only** when at least one article is finished. The just-read article's card carries a quiet meta line "**{duration} read here**" (suppressed under one minute). All values are plain text — reachable by read-all, never color/icon-only. |
+| M3 | Finish an article (read to the end — the existing 0.98 threshold), return to `#/` | The strip's "{N} finished." sentence is present and the count matches the finished article(s); when the count is zero the sentence is absent entirely (only-when-nonzero discipline). |
+| M4 | Note the strip's totals, then remove the article read in M2 (the RemoveConfirm path) | The totals **shrink by that article's visits/time** — no ghost rows survive removal. If no history remains, the strip disappears entirely (M1 silence restored). |
+
+**Pass criterion:** stats are silent when empty, plain-text in document order
+when present, "finished" only-when-nonzero, and totals describe only the
+surviving library. No new interactive control is introduced (nothing extra to
+operate); the strip and meta line add no keyboard stops; and **no streaks,
+goals, or daily targets appear anywhere** (#24 rejected them for this product).
+
+---
+
+### Flow N — Add a YouTube transcript article (bound milestone)
+
+**Goal:** A YouTube URL saved through the ordinary Add dialog becomes a
+**transcript article** that reads like any text article; the four refusals are
+calm and specific; fidelity (ASR) is disclosed. **Reading itself inherits the
+existing engine bar unchanged** — flows A–L apply to a transcript article
+verbatim; this flow owns only what ingest adds. (Decisions: #21, #26, #27.)
+
+| # | Keyboard sequence | Expected outcome (role + name + state) |
+|---|-------------------|----------------------------------------|
+| N1 | Flow H path: Add dialog → "Web address" → paste a YouTube watch/short/youtu.be URL for a captioned video → **Enter** on "Add" | On success the dialog closes and the reader opens: **heading level 1** = the video title, the channel name in the author/byline spot. Transcript paragraphs read in caption order; **timestamps are never announced** (never rendered). Position, restore, and finished-state behave exactly as for any text article. |
+| N2 | With a chaptered video's article open, open the "Table of contents" panel (Flow J path) | Chapters appear as **heading** entries (h2) and jump targets land at the chapter — no special-casing. With no chapters, the panel honestly offers only "Top of article" (#26 edge rule 1). |
+| N3 | Return to `#/` and read the new row | The row link's accessible name carries the video title; the row exposes a "**YouTube**" badge and the **duration** as text, with the channel in the author field. |
+| N4 | Repeat the N1 submission with (a) a video with **no captions**, (b) a **private/removed** video, (c) an **age-gated** video | Each refusal is **calm and specific** through the dialog's `role="status"` region (the `no-captions` / `unavailable-private` / `age-gated` reasons — no jargon, no stack detail); the dialog stays open, the typed URL is retained, "Add" remains enabled for retry, and the row count is unchanged (no library side effects). |
+| N5 | Repeat with a video that trips **bot-check** (rate limiting) — only if reproducible at run time | The `bot-check` refusal announces calmly and immediately, with **no automatic retry** (retry is always an explicit reader action). **Coverage note:** if not reproducible on demand, record it as evidenced by the automated ingest suite instead — never as a silent skip. |
+| N6 | Save a video with only an **ASR** (auto-generated) track and inspect its library row / confidence disclosure | Ingest succeeds; the article carries the **existing low-confidence disclosure** (the shipped tri-state badge/text surface — `extractionConfidence: "low"`), never a silent upgrade to trusted. Repetitive ASR text may make highlight quote resolution return `ambiguous` — the existing tri-state behavior, not special-cased. |
+
+**Pass criterion:** a transcript article is indistinguishable from any article
+to the reading engine (A–L hold); the four refusal reasons are calm, specific,
+and side-effect-free; ASR fidelity is honestly disclosed; timestamps never
+reach the reading surface.
+
+---
+
+### Flow O — Read-aloud: the transport bar (bound milestone)
+
+**Goal:** A keyboard/SR user can start, control, and stop read-aloud from the
+transport bar, knows where speech is **without word-by-word chatter**, keeps
+orientation under reduced motion, and the listened position persists —
+listening *is* reading (ADR 0001). (Decisions: #23; spoken-word style is
+distinct from annotation marks.)
+
+| # | Keyboard sequence | Expected outcome (role + name + state) |
+|---|-------------------|----------------------------------------|
+| O1 | While reading any article, **Tab** to the transport bar (fixed compact bottom bar) | Each control is a real **button** with role + accessible name ("Play"/"Pause", "Stop", skip sentence backward/forward, skip paragraph forward), with visible focus. The **current follow level — one of word / sentence / passage / progress-only — and the rate are visible as text** on the bar (state, not icon/color-only), always present while the bar is mounted. Focus cycles through the bar and back into the page without trapping. |
+| O2 | Activate **Play** (Enter; VoiceOver **VO+Space**) | Speech starts at the current reading position. The **spoken word** is visibly marked but is **`aria-hidden`** — per-word updates are never announced. **Exactly one polite `role="status"`** announces the transport state (e.g. "Reading aloud."), and **focus does not move** to the spoken position. |
+| O3 | Activate **Pause** (the control's name flips back to "Play" — state, not color); then the **skip sentence ±** and **skip paragraph forward** controls | Speech halts/resumes and audibly jumps to the skipped sentence/paragraph; the visible spoken-word marker hops accordingly; any follow-level change announces **once** through the same polite region — no per-word or per-hop chatter. |
+| O4 | In **paginated** mode with playback running, let speech reach a page boundary; repeat with the OS/emulated **reduced-motion** setting on | The page turns automatically at the fragment boundary; under reduced motion the turn is **instant** (no transition). Manual turning during playback remains possible; the bar's "jump to spoken position" affordance returns focus-free orientation. |
+| O5 | In **scrolling** mode with playback running, listen past a viewport; repeat under reduced motion | Follow-scroll keeps the spoken passage in view; under reduced motion the follow jump is **instant** (no smooth scrolling). |
+| O6 | **Stop** playback, leave the article, reopen it; (session two) complete an article **by ear alone**, then check `#/` | The restored reading position is the **listened** position (ADR 0001 — the canonical location moves with speech; position persistence fires while speech runs). An article finished by ear is marked finished, and the Flow M strip reflects it ("{N} finished."). |
+| O7 | Listen across `technical-post` / `footnote-academic` passages containing a link, a code block, a figure, and footnotes | The link's **text** is spoken (never its href); code and `unsupported` blocks are **skipped silently** (the spoken word visibly hops — honest without announcing); a figure is skipped but its **caption reads**; footnotes read at document end. Reading order stays document order. (This gates the **spoken channel only** — Flow A2's reading-surface reachability bar is unchanged and still holds.) |
+| O8 | Flow F path: open "Reading settings", find the **voice** and **rate** controls | The voice control offers the **probed, filtered local-voice list** and the rate control spans roughly 0.5–3; both are reachable, operable, announce role + name + value, and apply to subsequent playback (global settings, not per-article). |
+| O9 | (Where the engine allows — typically VoiceOver+iOS) background the app/browser during playback, then return | Playback stops on backgrounding with a **visible resume affordance** on return; nothing resumes silently. If a platform gate blocks *starting* playback from an SR gesture (iOS start is gesture-gated with stall detection), record it as a platform-boundary observation, not a blocker. |
+
+**Pass criterion:** the transport bar is fully operable by keyboard on both
+pairings; one polite region owns transport/follow-level announcements and the
+spoken word never enters the a11y tree; follow level is always visible;
+reduced-motion behaviors are instant; the listened position persists,
+completes, and feeds history. **Negative constraints hold:** no global hotkeys
+and no click-word-to-start exist in v1 — bare keys never trigger or steer
+playback, and the only start is the transport bar's Play control (#23).
+
+---
+
 ### Checklist completion record (per pairing)
 
 For each pairing, record: flow → PASS or severity (§5) + notes.
@@ -465,6 +605,9 @@ For each pairing, record: flow → PASS or severity (§5) + notes.
 | J — TOC navigation (v1.3) | ☐ | ☐ |
 | K — cross-block highlight + review (v1.3) | ☐ | ☐ |
 | L — images: save → offline reopen → view (v1.3) | ☐ | ☐ (VO run additionally completes the D21-12 export/import sighted pass) |
+| M — reading-history surfaces (v1.4, runs when the stats surface ships) | ☐ | ☐ |
+| N — YouTube transcript article (v1.4, runs when transcript ingest ships) | ☐ | ☐ |
+| O — read-aloud transport (v1.4, runs when read-aloud ships) | ☐ | ☐ |
 
 ---
 
@@ -480,7 +623,9 @@ unreachable.
 > **Goal:** Complete the entire reading + annotation loop using only the screen
 > reader (open → read → switch mode → create a highlight → add a note → navigate
 > back to the passage → delete the highlight → adjust settings → return to
-> reading). **Note anything confusing, lost, or unreachable.**
+> reading — and, once read-aloud ships, listen to a passage via the transport
+> bar (Flow O path) and resume reading from the listened position). **Note
+> anything confusing, lost, or unreachable.**
 
 Look for: lost focus after an action, ambiguous announcements, controls the SR
 cannot reach, content that reads out of order, actions with no confirmation,
@@ -567,14 +712,19 @@ cosmetic difference (D6-07).
 
 ## 6. Recording Results
 
-Record the v1.3 run results in
+Record run results using the blank results sheets below: the **v1.3** record
+lives in
 **`.planning/phases/21-integrated-refinement-and-acceptance/21-VERIFICATION.md`**
-(the Phase 21 verification artifact) under the **ACPT-08** section, using the
-blank results sheets below. The v1.0–v1.2 run history remains in
-`06-VERIFICATION.md` / `13-VERIFICATION.md`. For each pairing, capture:
+(the Phase 21 verification artifact) under the **ACPT-08** section; **v1.4's**
+flows M–O record in the
+bound milestone's verification artifacts as each effort ships. The v1.0–v1.2
+run history remains in
+`06-VERIFICATION.md` / `13-VERIFICATION.md`. For each
+pairing, capture:
 
 1. Environment: SR name + version, browser + version, OS.
-2. The completed checklist (§3) — PASS/severity per flow (A–L at v1.3).
+2. The completed checklist (§3) — PASS/severity per flow (A–L at v1.3; M–O at
+   v1.4, recorded as each effort ships per §1's runnability honesty).
 3. Exploratory charter findings (§4) — observed behavior + severity per scenario.
 4. The overall verdict: **PASS** (zero blocker + zero major) **or FAIL** (list
    every blocker/major with reproduction).
@@ -598,7 +748,7 @@ blank results sheets below. The v1.0–v1.2 run history remains in
 > automated matrix arms (edge-invariant specs) are necessary but never
 > sufficient.
 
-### v1.3 results sheet — NVDA + Firefox (Windows)
+### v1.4 results sheet — NVDA + Firefox (Windows)
 
 | Field | Value |
 |-------|-------|
@@ -607,7 +757,7 @@ blank results sheets below. The v1.0–v1.2 run history remains in
 | NVDA version | _____________ |
 | Firefox version | _____________ |
 | Windows version | _____________ |
-| Protocol version | 1.3 |
+| Protocol version | 1.4 |
 
 | Flow | Result (PASS / severity + notes) |
 |------|----------------------------------|
@@ -623,6 +773,9 @@ blank results sheets below. The v1.0–v1.2 run history remains in
 | J — TOC navigation | ☐ |
 | K — cross-block highlight + review | ☐ |
 | L — images: save → offline reopen → view | ☐ |
+| M — reading-history surfaces (when shipped) | ☐ |
+| N — YouTube transcript article (when shipped) | ☐ |
+| O — read-aloud transport (when shipped) | ☐ |
 
 | Charter (§4) | Findings (observed + severity + blocks?) |
 |--------------|-------------------------------------------|
@@ -636,7 +789,7 @@ Verdict: _____________ (PASS = zero blocker + zero major) — blockers/majors
 with reproduction: _____________ . Minors carried to deferred items:
 _____________ .
 
-### v1.3 results sheet — VoiceOver + Safari (macOS)
+### v1.4 results sheet — VoiceOver + Safari (macOS)
 
 | Field | Value |
 |-------|-------|
@@ -644,7 +797,7 @@ _____________ .
 | Tester | _____________ |
 | VoiceOver (macOS) version | _____________ |
 | Safari version | _____________ |
-| Protocol version | 1.3 |
+| Protocol version | 1.4 |
 
 | Flow | Result (PASS / severity + notes) |
 |------|----------------------------------|
@@ -660,6 +813,9 @@ _____________ .
 | J — TOC navigation | ☐ |
 | K — cross-block highlight + review | ☐ |
 | L — images: save → offline reopen → view | ☐ |
+| M — reading-history surfaces (when shipped) | ☐ |
+| N — YouTube transcript article (when shipped) | ☐ |
+| O — read-aloud transport (when shipped) | ☐ |
 
 | Charter (§4) | Findings (observed + severity + blocks?) |
 |--------------|-------------------------------------------|
@@ -686,6 +842,11 @@ _____________ .
 - New reading controls, annotation flows, or settings panel controls.
 - Changes to focus management, keyboard shortcuts, or announced status regions.
 - Changes to pagination behavior, fallback, or mode-switching.
+- Changes to the reading-history surfaces (strip/meta-line presence, copy, or
+  silence-when-empty), transcript ingest surfaces (refusal copy, library
+  badge/duration, confidence disclosure), or read-aloud (transport controls,
+  spoken-word treatment, follow-level visibility, motion behavior, position
+  persistence).
 - Changes that affect the accessibility tree (roles, names, states) of any
   reader-surface element a documented flow touches.
 
