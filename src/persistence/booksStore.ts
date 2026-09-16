@@ -204,9 +204,11 @@ export async function saveBook(
 
 /**
  * removeBook — full cascade in ONE Dexie transaction over books + articles
- * + highlights + notes + location + assets (12-RESEARCH Pitfall 7 — no
- * stranded annotations; Phase 20 adds the chapter-owned asset blobs to the
- * same single transaction — D20-15/D17-13). Deletes, in order:
+ * + highlights + notes + location + assets + readingSessions (12-RESEARCH
+ * Pitfall 7 — no stranded annotations; Phase 20 adds the chapter-owned
+ * asset blobs to the same single transaction — D20-15/D17-13; issue #34
+ * adds the per-chapter reading-session rows — no ghost history). Deletes,
+ * in order:
  *
  *   1. reads the book row (its chapterArticleIds are the declared TOC) and
  *      UNIONS it with every live article row carrying bookId === id — live
@@ -217,10 +219,11 @@ export async function saveBook(
  *      collect-before-delete discipline from DexieLibrarySource.remove);
  *   3. deletes highlights, notes (by collected highlightId), locations
  *      (compound [articleId+revision] range), assets (the v6 articleId
- *      index range delete — one line per chapter in the same loop), the
- *      chapter article rows, and finally the book row.
+ *      index range delete) and reading sessions (the v7 articleId index
+ *      range delete — issue #34) — one line each per chapter in the same
+ *      loop — then the chapter article rows, and finally the book row.
  *
- * The transaction uses Dexie's readonly-ARRAY overload: SIX tables exceed
+ * The transaction uses Dexie's readonly-ARRAY overload: SEVEN tables exceed
  * the tuple overloads, which stop at five (the applyImport 12-07 precedent
  * — the standardized form saveBook also adopted in Phase 20).
  *
@@ -230,7 +233,15 @@ export async function saveBook(
 export async function removeBook(id: string): Promise<void> {
   await db.transaction(
     "rw",
-    [db.books, db.articles, db.highlights, db.notes, db.location, db.assets],
+    [
+      db.books,
+      db.articles,
+      db.highlights,
+      db.notes,
+      db.location,
+      db.assets,
+      db.readingSessions,
+    ],
     async () => {
       const book = await db.books.get(id);
 
@@ -260,9 +271,10 @@ export async function removeBook(id: string): Promise<void> {
         }
       }
 
-      // Highlights + locations + assets: every row for each chapter across
-      // ALL revisions (compound-index array ranges; the assets articleId
-      // index range delete rides the same loop — D20-15).
+      // Highlights + locations + assets + reading sessions: every row for
+      // each chapter across ALL revisions (compound-index array ranges; the
+      // assets v6 + reading-sessions v7 articleId index range deletes ride
+      // the same loop — D20-15 / issue #34).
       for (const chapterId of chapterIds) {
         await db.highlights
           .where("[articleId+revision]")
@@ -273,6 +285,7 @@ export async function removeBook(id: string): Promise<void> {
           .between([chapterId, 0], [chapterId, Number.MAX_SAFE_INTEGER])
           .delete();
         await db.assets.where("articleId").equals(chapterId).delete();
+        await db.readingSessions.where("articleId").equals(chapterId).delete();
       }
 
       // Notes: cascade through the collected highlight ids.

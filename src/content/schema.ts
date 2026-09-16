@@ -454,3 +454,25 @@ export const NoteRecordSchema = z.object({
   updatedAt: z.string().datetime(),
 });
 export type NoteRecord = z.infer<typeof NoteRecordSchema>;
+
+// ── Reading sessions (milestone "reading history & stats" — issue #34) ──────
+// ONE append-only row per visit (decision #24). History accrues only while
+// recorded, so recording ships ahead of any stats UI. startOffset/endOffset
+// are canonical grapheme offsets into normalizeText(article) (the D-05
+// substrate — never page numbers); activeSeconds is idle-capped active time
+// (the ReadingSessionRecorder accumulator). The row is keyed by a per-visit
+// uuid primary key: a visit's row is UPSERTED as its totals refine (flush
+// discipline) but never duplicated and never deleted except by the article
+// cascade (D5-12 extension — a session's lifecycle is exactly its article's,
+// the D20-15 asset precedent).
+export const ReadingSessionRecordSchema = z.object({
+  schemaVersion: z.literal(1), // STATE-04 migration hook
+  id: z.string(), // crypto.randomUUID() at session begin — the visit identity
+  articleId: z.string().regex(/^[a-z0-9-]+$/), // reuse LocationRecord regex (D-06)
+  startedAt: z.string().datetime(), // ISO-8601 — when the visit began
+  endedAt: z.string().datetime(), // ISO-8601 — last flushed moment of the visit
+  startOffset: z.number().int().min(0), // D-05 offset where the visit started
+  endOffset: z.number().int().min(0), // D-05 offset where the visit last stood
+  activeSeconds: z.number().int().min(0), // idle-capped active time (floored)
+});
+export type ReadingSessionRecord = z.infer<typeof ReadingSessionRecordSchema>;
