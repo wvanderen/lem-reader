@@ -31,7 +31,7 @@ describe("computeManifest (determinism contract — Pitfall 2 / A4)", () => {
     expect(second.blocks).toEqual(first.blocks);
   });
 
-  it("returns algorithm sha256 and exactly the six block keys (assets since 20-05)", async () => {
+  it("returns algorithm sha256 and exactly the seven block keys (assets since 20-05, readingSessions since issue #37)", async () => {
     const bundle = ExportBundleSchema.parse(sampleBundle());
     const manifest = await computeManifest(bundle);
     expect(manifest.algorithm).toBe("sha256");
@@ -42,6 +42,15 @@ describe("computeManifest (determinism contract — Pitfall 2 / A4)", () => {
       "locations",
       "notes",
       "preferences",
+      "readingSessions",
     ]);
+  });
+
+  it("hashes an absent readingSessions block as the empty-array hash (the v1-v4 bundle compat shim)", async () => {
+    const bundle = ExportBundleSchema.parse(sampleBundle()); // v1 — no readingSessions key
+    const manifest = await computeManifest(bundle);
+    const emptyHash = await sha256Hex(new TextEncoder().encode(JSON.stringify([])));
+    expect(manifest.blocks.readingSessions).toBe(emptyHash);
+    expect(manifest.blocks.assets).toBe(emptyHash);
   });
 });

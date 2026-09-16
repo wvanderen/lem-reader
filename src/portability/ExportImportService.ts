@@ -41,13 +41,14 @@ import { listBooks } from "../persistence/booksStore";
 import { loadAllHighlights } from "../persistence/highlightsStore";
 import { loadAllNotes } from "../persistence/notesStore";
 import { loadAllLocations } from "../persistence/locationStore";
+import { loadAllReadingSessions } from "../persistence/readingSessionsStore";
 import { loadSettings } from "../persistence/settingsStore";
 import { MAX_ARTICLE_ASSET_BYTES, MAX_ASSET_BYTES } from "../ingestion/types";
 import { DEFAULT_SETTINGS } from "../settings/defaults";
 import { clampLegacyMeasure } from "../settings/legacyMeasure";
 import { ExportBundleSchema, resolveAppVersion } from "./bundle";
 import type { ExportBundle, AssetExportMeta } from "./bundle";
-import { computeManifest, sha256Hex } from "./manifest";
+import { computeManifest, emptyBlockHash, sha256Hex } from "./manifest";
 import type { Manifest } from "./manifest";
 import { isSafeEntryName } from "./zipSlip";
 import type { ResolvedImportPlan, ValidatedImportAsset } from "./conflicts";
@@ -56,10 +57,11 @@ import { loadAllAssets } from "../persistence/assetsStore";
 // ── Export side (PORT-01) ────────────────────────────────────────────────────
 
 /**
- * buildBundle — read the six record sources (five Phase-9 sources + books
- * since Phase 12) through the Zod-validated loaders (STATE-04 — never raw
- * db.* reads, never N+1 per-article loaders), derive fixtureIds, self-check
- * the envelope, and zip bundle.json (pretty, human-debuggable — negligible
+ * buildBundle — read the record sources (five Phase-9 sources + books
+ * since Phase 12 + assets since Phase 20 + reading sessions since issue
+ * #37) through the Zod-validated loaders (STATE-04 — never raw db.* reads,
+ * never N+1 per-article loaders), derive fixtureIds, self-check the
+ * envelope, and zip bundle.json (pretty, human-debuggable — negligible
  * after DEFLATE) + manifest.json (minified).
  *
  * Returns the zipped bytes PLUS the article count of the EXACT set the
@@ -89,27 +91,39 @@ export interface ExportBuild {
 }
 
 export async function buildBundle(): Promise<ExportBuild> {
-  const [articles, highlights, notes, locations, settingsResult, booksResult, assetRows] =
-    await Promise.all([
-      dexieLibrarySource.list(), // Dexie articles ONLY — fixtures never ride
-      loadAllHighlights(),
-      loadAllNotes(),
-      loadAllLocations(),
-      loadSettings(), // ok ⇒ settings (first run yields DEFAULT_SETTINGS);
-      // !ok ⇒ storage trouble — still export, with defaults (D9-12
-      // always-present; the reader's records must not be hostage to a
-      // settings-read failure).
-      listBooks(), // Phase 12 (12-07) — Book records ride the v2 bundle.
-      // Same D9-12-shaped tolerance as settings: !ok ⇒ storage trouble —
-      // still export the records that DID read (books: []; chapters keep
-      // riding articles with ingestionMeta.bookId, so machine B re-groups
-      // them only if the book row also traveled — the never-silent ethos is
-      // served by refusing to hostage the whole export to one store read).
-      loadAllAssets(), // Phase 20 (20-05) — asset blobs ride the v4 bundle.
-      // Plain-array whole-library read with calm corrupt-row drops (the
-      // loadAllHighlights precedent): one drifted row never blocks the
-      // reader's export.
-    ]);
+  const [
+    articles,
+    highlights,
+    notes,
+    locations,
+    settingsResult,
+    booksResult,
+    assetRows,
+    readingSessions,
+  ] = await Promise.all([
+    dexieLibrarySource.list(), // Dexie articles ONLY — fixtures never ride
+    loadAllHighlights(),
+    loadAllNotes(),
+    loadAllLocations(),
+    loadSettings(), // ok ⇒ settings (first run yields DEFAULT_SETTINGS);
+    // !ok ⇒ storage trouble — still export, with defaults (D9-12
+    // always-present; the reader's records must not be hostage to a
+    // settings-read failure).
+    listBooks(), // Phase 12 (12-07) — Book records ride the v2 bundle.
+    // Same D9-12-shaped tolerance as settings: !ok ⇒ storage trouble —
+    // still export the records that DID read (books: []; chapters keep
+    // riding articles with ingestionMeta.bookId, so machine B re-groups
+    // them only if the book row also traveled — the never-silent ethos is
+    // served by refusing to hostage the whole export to one store read).
+    loadAllAssets(), // Phase 20 (20-05) — asset blobs ride the v4 bundle.
+    // Plain-array whole-library read with calm corrupt-row drops (the
+    // loadAllHighlights precedent): one drifted row never blocks the
+    // reader's export.
+    loadAllReadingSessions(), // Issue #37 — visit history rides the v5 bundle.
+    // Plain-array whole-library read with calm corrupt-row drops (the
+    // loadAllHighlights/loadAllLocations precedent) — a single corrupt
+    // history row never blocks the reader's export.
+  ]);
   const preferences = settingsResult.ok ? settingsResult.settings : DEFAULT_SETTINGS;
   // Writers ALWAYS emit the books field on v2 (empty array on a book-free
   // library) — the field's presence is the v2 write contract (bundle.ts).
@@ -156,12 +170,13 @@ export async function buildBundle(): Promise<ExportBuild> {
   const fixtureIds = bundledFixtures.filter((f) => referenced.has(f.id)).map((f) => f.id);
 
   const bundle = ExportBundleSchema.parse({
-    // Phase 12 (12-07) + Phase 17 (17-04) + Phase 20 (20-05): writers emit
-    // v4 — reader-owned metadata overrides ride each article row via
-    // ArticleSchema composition (D17-12) and image assets ride the assets
-    // metadata array + raw zip entries (IMG-04); the 1|2|3|4 union read
-    // stays in bundle.ts; a v5+ bundle is refused by the peek below (D9-04).
-    schemaVersion: 4 as const,
+    // Phase 12 (12-07) + Phase 17 (17-04) + Phase 20 (20-05) + issue #37:
+    // writers emit v5 — reader-owned metadata overrides ride each article
+    // row via ArticleSchema composition (D17-12), image assets ride the
+    // assets metadata array + raw zip entries (IMG-04), and visit history
+    // rides the readingSessions array; the 1|2|3|4|5 union read stays in
+    // bundle.ts; a v6+ bundle is refused by the peek below (D9-04).
+    schemaVersion: 5 as const,
     exportedAt: new Date().toISOString(),
     appVersion: resolveAppVersion(),
     articles,
@@ -174,6 +189,10 @@ export async function buildBundle(): Promise<ExportBuild> {
     // ALWAYS present on v4 writes (empty array on an asset-free library) —
     // the field's presence is the v4 write contract (the books precedent).
     assets,
+    // ALWAYS present on v5 writes (empty array on a session-free library) —
+    // the field's presence is the v5 write contract (the books/assets
+    // precedent).
+    readingSessions,
   });
 
   const manifest = await computeManifest(bundle);
@@ -286,7 +305,8 @@ export async function validateBundle(file: File): Promise<BundleValidationResult
   //    Phase 12 (12-07): the threshold moved from > 1 to > 2 — v2 bundles
   //    (books-capable) parse. Phase 17 (17-04): > 2 → > 3 — v3 bundles
   //    (metadata-override-capable) parse. Phase 20 (20-05): > 3 → > 4 — v4
-  //    bundles (asset-capable) parse; v5+ still refuses loudly (D9-04).
+  //    bundles (asset-capable) parse. Issue #37: > 4 → > 5 — v5 bundles
+  //    (reading-session-capable) parse; v6+ still refuses loudly (D9-04).
   let raw: unknown;
   try {
     raw = JSON.parse(strFromU8(bundleBytes));
@@ -297,7 +317,7 @@ export async function validateBundle(file: File): Promise<BundleValidationResult
     };
   }
   const peeked = (raw as { schemaVersion?: unknown }).schemaVersion;
-  if (typeof peeked === "number" && peeked > 4) {
+  if (typeof peeked === "number" && peeked > 5) {
     return {
       ok: false,
       refusal: { kind: "newer-schema-version", bundleVersion: peeked },
@@ -347,7 +367,9 @@ export async function validateBundle(file: File): Promise<BundleValidationResult
   //    Phase 20 (20-05): v1/v2/v3 claimed manifests predate the assets
   //    block — an absent claimed assets key is read as the empty-array hash
   //    so old bundles never false-positive as corrupted; a v4 bundle with
-  //    actual assets still mismatches (tampering stays detected).
+  //    actual assets still mismatches (tampering stays detected). Issue
+  //    #37: v1..v4 claimed manifests likewise predate the readingSessions
+  //    block — same absent-key shim, same tampering semantics.
   const recomputed = await computeManifest(parsed.data);
   let claimed: Manifest | undefined;
   try {
@@ -358,8 +380,12 @@ export async function validateBundle(file: File): Promise<BundleValidationResult
   const claimedBlocks: Record<string, string | undefined> = {
     ...claimed?.blocks,
   };
+  const emptyHash = await emptyBlockHash();
   if (claimedBlocks.assets === undefined) {
-    claimedBlocks.assets = await sha256Hex(new TextEncoder().encode(JSON.stringify([])));
+    claimedBlocks.assets = emptyHash;
+  }
+  if (claimedBlocks.readingSessions === undefined) {
+    claimedBlocks.readingSessions = emptyHash;
   }
   // D21-03 (POLISH-09) manifest legacy-value tolerance: when the pre-parse
   // clamp mapped the enumerated legacy value (72 → 70), a v2.1-era
@@ -519,10 +545,11 @@ export async function applyImport(plan: ResolvedImportPlan): Promise<void> {
   // DexieLibrarySource.remove cascade precedent, extended with db.settings);
   // db.books always joins (Phase 12 — books are record data); db.assets
   // always joins (Phase 20 — assets are record data, riding their
-  // articles). BOTH branches use the readonly-ARRAY overload — adding
-  // db.assets makes SEVEN tables on the settings branch and SIX on the
-  // other, and the tuple overloads stop at five (the STATE 12-07 lesson;
-  // the saveBook/removeBook array-form standardization).
+  // articles); db.readingSessions always joins (issue #37 — visit history
+  // is record data). BOTH branches use the readonly-ARRAY overload — adding
+  // db.readingSessions makes EIGHT tables on the settings branch and SEVEN
+  // on the other, and the tuple overloads stop at five (the STATE 12-07
+  // lesson; the saveBook/removeBook array-form standardization).
   const applyPuts = async (): Promise<void> => {
     for (const book of plan.booksToWrite) {
       await db.books.put(book);
@@ -564,25 +591,42 @@ export async function applyImport(plan: ResolvedImportPlan): Promise<void> {
       };
       await db.location.put(row);
     }
+    // Issue #37: reading sessions are record data like any other block —
+    // the plan's merge already excluded same-id locals (no duplication, no
+    // clobbering), so these are plain puts of the ReadingSessionRecordRow
+    // shape (identical field-for-field to the bundle's records — the
+    // putReadingSession mapping).
+    for (const session of plan.sessionsToWrite) {
+      await db.readingSessions.put(session);
+    }
     if (plan.applyPreferences && plan.preferences !== undefined) {
       await db.settings.put({ key: READER_PREFS_KEY, value: plan.preferences });
     }
   };
 
   if (plan.applyPreferences) {
-    // SEVEN tables (articles/highlights/notes/location/settings/books/
-    // assets) — the readonly-array overload (the tuple overloads stop at
-    // FIVE; the 12-07 lesson, now on both branches).
+    // EIGHT tables (articles/highlights/notes/location/readingSessions/
+    // settings/books/assets) — the readonly-array overload (the tuple
+    // overloads stop at FIVE; the 12-07 lesson, now on both branches).
     await db.transaction(
       "rw",
-      [db.articles, db.highlights, db.notes, db.location, db.settings, db.books, db.assets],
+      [
+        db.articles,
+        db.highlights,
+        db.notes,
+        db.location,
+        db.readingSessions,
+        db.settings,
+        db.books,
+        db.assets,
+      ],
       applyPuts,
     );
   } else {
-    // SIX tables without settings — the same array-overload form.
+    // SEVEN tables without settings — the same array-overload form.
     await db.transaction(
       "rw",
-      [db.articles, db.highlights, db.notes, db.location, db.books, db.assets],
+      [db.articles, db.highlights, db.notes, db.location, db.readingSessions, db.books, db.assets],
       applyPuts,
     );
   }

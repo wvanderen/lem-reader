@@ -42,6 +42,21 @@
 //     field's presence is the v4 write contract, the books precedent).
 //     The zip FILENAME stays lem-reader-bundle-v1.zip (D9-01 — the
 //     filename is not the version contract).
+//   - Issue #37 (reading-history milestone) — the fifth application of the
+//     union discipline: schemaVersion is the 1|2|3|4|5 UNION. A v5 bundle
+//     carries the library's reading sessions as a readingSessions array
+//     composing ReadingSessionRecordSchema — one append-only row per visit
+//     keyed by the per-visit uuid (decision #24). v1..v4 bundles parse
+//     exactly as before (readingSessions hydrates to undefined); a v6+
+//     bundle forward-rejects (D9-04 preserved; the validateBundle peek
+//     threshold moved to > 5), and writers emit schemaVersion 5 with an
+//     ALWAYS-present readingSessions array (empty on a session-free
+//     library — the presence-is-the-contract books/assets precedent).
+//     Sessions MERGE on import by their own primary key — a new visit id
+//     always writes, an id already present locally keeps the LOCAL row (no
+//     duplication, no clobbering); no new ConflictKind and no reader
+//     choice (the Phase 20 assets ride-along precedent — a visit row is
+//     recorded history, not a reader-authored decision).
 //
 // This module COMPOSES the existing record schemas — no record shape is
 // re-declared here (REUSE-DO-NOT-FORK; the schemas are the STATE-04 trust
@@ -54,6 +69,7 @@ import {
   LocationRecordSchema,
   NoteRecordSchema,
   ReaderSettingsSchema,
+  ReadingSessionRecordSchema,
 } from "../content/schema";
 
 /**
@@ -91,12 +107,19 @@ export const AssetExportMetaSchema = z.object({
 export type AssetExportMeta = z.infer<typeof AssetExportMetaSchema>;
 
 export const ExportBundleSchema = z.object({
-  // PORT-01/02 versioning hook — the 1|2|3|4 union reads all four
-  // generations; v5+ forward-rejects (D9-04). Phase 17 (17-04): v3 carries
+  // PORT-01/02 versioning hook — the 1|2|3|4|5 union reads all five
+  // generations; v6+ forward-rejects (D9-04). Phase 17 (17-04): v3 carries
   // reader-owned metadata overrides (readerTitle/readerAuthor) inside each
   // article row via ArticleSchema composition (D17-12). Phase 20 (20-05):
-  // v4 carries the assets metadata array (raw bytes ride the zip).
-  schemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
+  // v4 carries the assets metadata array (raw bytes ride the zip). Issue
+  // #37: v5 carries the readingSessions array.
+  schemaVersion: z.union([
+    z.literal(1),
+    z.literal(2),
+    z.literal(3),
+    z.literal(4),
+    z.literal(5),
+  ]),
   exportedAt: z.string().datetime(), // ISO-8601
   appVersion: z.string(), // diagnostic only (D9-04)
   articles: z.array(ArticleSchema), // Dexie articles ONLY — fixtures never serialize
@@ -112,6 +135,12 @@ export const ExportBundleSchema = z.object({
   // undefined); ALWAYS present on v4 writes (empty array on asset-free
   // libraries — the presence-is-the-contract books precedent).
   assets: z.array(AssetExportMetaSchema).optional(),
+  // Issue #37 — absent on v1..v4 bundles (hydrates to undefined); ALWAYS
+  // present on v5 writes (empty array on a session-free library — the
+  // presence-is-the-contract books/assets precedent). Composes
+  // ReadingSessionRecordSchema — one append-only row per visit (decision
+  // #24); the per-visit uuid primary key is the merge key at import.
+  readingSessions: z.array(ReadingSessionRecordSchema).optional(),
 });
 export type ExportBundle = z.infer<typeof ExportBundleSchema>;
 

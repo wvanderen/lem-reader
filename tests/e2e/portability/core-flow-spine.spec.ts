@@ -225,13 +225,13 @@ test("ACPT-06 — ingest .md, read, highlight, export, re-import: nothing lost a
     const bundlePath = await download.path();
     expect(bundlePath, "download must be persisted to disk").toBeTruthy();
 
-    // ── Node side: the transferred archive unzips; v4 envelope sanity ─────
-    // (writers emit 4 since Phase 20 — 20-05; the 12-07/17-04 version-bump
+    // ── Node side: the transferred archive unzips; v5 envelope sanity ─────
+    // (writers emit 5 since issue #37 — the 12-07/17-04/20-05 version-bump
     // assertion-update precedent, the same flip the round-trip cells made —
     // this writer-emit site surfaced in the honest full-suite gate run.)
     const { bundle: bundleJson, entries } = readBundleJson(bundlePath!);
     expect(entries["manifest.json"]).toBeDefined();
-    expect(bundleJson.schemaVersion).toBe(4);
+    expect(bundleJson.schemaVersion).toBe(5);
     expect(bundleJson.books).toEqual([]);
     expect(
       (bundleJson.articles as Array<{ id: string }>).map((a) => a.id),

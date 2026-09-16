@@ -172,11 +172,11 @@ test("SC#4 — export on machine A re-imports on machine B with offsets intact",
     // Both required entries exist.
     expect(entries["manifest.json"]).toBeDefined();
 
-    // Versioned envelope (PORT-01) — writers emit v4 since Phase 20 (20-05,
-    // the 12-07/17-04 version-bump assertion-update precedent), always
-    // carrying the books + assets fields (empty arrays on book-free /
-    // asset-free libraries).
-    expect(bundleJson.schemaVersion).toBe(4);
+    // Versioned envelope (PORT-01) — writers emit v5 since issue #37 (the
+    // 12-07/17-04/20-05 version-bump assertion-update precedent), always
+    // carrying the books + assets + readingSessions fields (empty arrays on
+    // book-free / asset-free / session-free libraries).
+    expect(bundleJson.schemaVersion).toBe(5);
     expect(bundleJson.books).toEqual([]);
 
     // Both articles ride; the fixture does NOT (fixtures are bundled code —
@@ -369,11 +369,11 @@ test("SC#4 books — a book travels machines with its chapters + highlight intac
     const bundlePathA = await downloadA.path();
     expect(bundlePathA, "download must be persisted to disk").toBeTruthy();
 
-    // ── Node-side bundle inspection: books ride v4 ────────────────────────
-    // (writers emit 4 since Phase 20 — 20-05; the same version-bump
+    // ── Node-side bundle inspection: books ride v5 ────────────────────────
+    // (writers emit 5 since issue #37 — the same version-bump
     // assertion-update precedent as the base flow's envelope check above.)
     const { bundle: bundleA } = readBundleJson(bundlePathA!);
-    expect(bundleA.schemaVersion).toBe(4);
+    expect(bundleA.schemaVersion).toBe(5);
     const booksA = bundleA.books as Array<Record<string, unknown>>;
     expect(booksA).toHaveLength(1);
     expect(booksA[0]?.title).toBe("The Synthetic Book");
@@ -670,10 +670,11 @@ test("SC#4 overrides — an edited title/author travels machines byte-equal insi
     const bundlePath = await download.path();
     expect(bundlePath, "download must be persisted to disk").toBeTruthy();
 
-    // ── Node-side bundle inspection: the overrides ride the record (v4
-    // envelope since 20-05 — the version-bump assertion-update precedent).
+    // ── Node-side bundle inspection: the overrides ride the record (v5
+    // envelope since issue #37 — the version-bump assertion-update
+    // precedent).
     const { bundle: bundleJson } = readBundleJson(bundlePath!);
-    expect(bundleJson.schemaVersion).toBe(4);
+    expect(bundleJson.schemaVersion).toBe(5);
     const exportedArticles = bundleJson.articles as Array<Record<string, unknown>>;
     expect(exportedArticles.map((a) => a.id).sort()).toEqual(
       [OVERRIDE_RT_ARTICLE.id, PLAIN_RT_ARTICLE.id].sort(),
@@ -991,9 +992,10 @@ test("SC#4 assets — an article's images travel machines byte-equal and render 
     const bundlePath = await download.path();
     expect(bundlePath, "download must be persisted to disk").toBeTruthy();
 
-    // ── Node-side bundle inspection: the v4 asset envelope ───────────────
+    // ── Node-side bundle inspection: the v5 asset envelope (assets ride
+    // since 20-05; the envelope is v5 since issue #37) ────────────────────
     const { bundle: bundleJson, entries } = readBundleJson(bundlePath!);
-    expect(bundleJson.schemaVersion).toBe(4);
+    expect(bundleJson.schemaVersion).toBe(5);
     const meta = bundleJson.assets as Array<Record<string, unknown>>;
     expect(meta).toHaveLength(1);
     expect(meta[0]).toMatchObject({
