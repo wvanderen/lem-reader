@@ -238,8 +238,51 @@ export const ArticleSourceSchema = z.enum([
   "html-upload", // Phase 8 — D8-15 (.html file-upload; paste textarea stays as "paste")
   "pdf", // Phase 11 — ING-04 (.pdf upload via pdfToBlocks)
   "epub-chapter", // Phase 12 — ING-05 (.epub upload via epubToBooks; one article per chapter, Option A)
+  "youtube", // Issue #39 — transcript-as-article (InnerTube captions via server/youtubeTranscript.ts)
 ]);
 export type ArticleSource = z.infer<typeof ArticleSourceSchema>;
+
+// ── Issue #39 (decision #26) — transcript block-keyed timing metadata ────────
+
+/** YOUTUBE_VIDEO_ID_REGEX — the canonical 11-character YouTube video id
+ * alphabet (A-Za-z0-9_-). Lives HERE (not in src/ingestion/youtube.ts, which
+ * re-exports it) because TranscriptMetaSchema below validates videoId with it
+ * and the /src→ingestion import direction is forbidden — ingestion imports
+ * content, never the reverse (the httpUrl single-source-of-truth precedent
+ * above). Server/youtubeTranscript.ts keeps consuming it via the re-export. */
+export const YOUTUBE_VIDEO_ID_REGEX = /^[A-Za-z0-9_-]{11}$/;
+
+/** TranscriptSegmentAnchorSchema — ONE block-keyed timestamp: `blockIndex`
+ * indexes the article's persisted `blocks` array (stable per revision — the
+ * same stability the pagination annotations depend on; any future change that
+ * re-derives blocks must re-derive `segments` with them), `startMs` is the
+ * block's start time. START-only granularity (decision #26): a block's end
+ * time is derivable from the next mapped block's start (the last ends at
+ * `durationSeconds`). Timestamps are metadata — NEVER rendered, never part of
+ * normalizeText — so selectors, highlights, and reading position are
+ * untouched. */
+export const TranscriptSegmentAnchorSchema = z.object({
+  blockIndex: z.number().int().min(0),
+  startMs: z.number().int().min(0),
+});
+export type TranscriptSegmentAnchor = z.infer<typeof TranscriptSegmentAnchorSchema>;
+
+/** TranscriptMetaSchema — the cohesive optional `ingestionMeta.transcript`
+ * object (decision #26). Block-keyed metadata on the additive bag, NOT new
+ * block fields: the block unions stay untouched (D20-06 — no new block
+ * kinds). `captionSource` distinguishes human tracks from auto-generated ASR
+ * (which forces `extractionConfidence: "low"` — never a silent upgrade to
+ * trusted); `captionLanguage` is the chosen track's full BCP-47 code (the
+ * article's `lang` carries its base language). Nothing here is Dexie-indexed
+ * — the bookId/chapterIndex additive precedent (no schema bump). */
+export const TranscriptMetaSchema = z.object({
+  videoId: z.string().regex(YOUTUBE_VIDEO_ID_REGEX),
+  durationSeconds: z.number().int().min(0),
+  captionSource: z.enum(["manual", "asr"]),
+  captionLanguage: z.string().min(1),
+  segments: z.array(TranscriptSegmentAnchorSchema),
+});
+export type TranscriptMeta = z.infer<typeof TranscriptMetaSchema>;
 
 /** IngestionMetaSchema — derived per-article metadata written at ingest time.
  * Shape per 07-RESEARCH.md §IngestionMeta/ArticleSource Schema L566-574.
@@ -267,6 +310,11 @@ export const IngestionMetaSchema = z.object({
     .regex(/^[a-z0-9-]+$/)
     .optional(), // FK → BookSchema.id (grouping reads key on this)
   chapterIndex: z.number().int().min(0).optional(), // position within BookSchema.chapterArticleIds (admitted order — D12-10/D12-11 numbering)
+  // Issue #39 (decision #26) — block-keyed transcript timing for youtube
+  // articles. Additive-optional (Pitfall 9 — every non-youtube row omits the
+  // field and hydrates to `undefined`, the bookId/chapterIndex mechanism
+  // above); timestamps live HERE, never in blocks, never rendered.
+  transcript: TranscriptMetaSchema.optional(),
 });
 export type IngestionMeta = z.infer<typeof IngestionMetaSchema>;
 

@@ -63,6 +63,16 @@ export function mapReasonToCopy(reason: IngestionFailureReason): string {
       return "No readable chapters were found in this book.";
     case "epub-too-large":
       return "This book is too large to add.";
+    // Issue #39 — the four YouTube transcript refusals. Calm DOC-06 strings;
+    // pinned byte-for-byte by tests/unit/youtube-copy.test.ts.
+    case "youtube-no-captions":
+      return "This video has no captions, so there is no transcript to read.";
+    case "youtube-unavailable-private":
+      return "This video is unavailable — it may be private or removed.";
+    case "youtube-age-gated":
+      return "This video is age-restricted, so its transcript can't be fetched.";
+    case "youtube-bot-check":
+      return "YouTube is asking for extra verification, so this video can't be added right now.";
     case "already-in-library":
       return "Already in your library.";
     case "server-error":

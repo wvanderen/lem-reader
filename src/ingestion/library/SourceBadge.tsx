@@ -50,6 +50,8 @@ function badgeLabel(source: NonNullable<CanonicalArticle["ingestionMeta"]>["sour
       return "PDF";
     case "epub-chapter":
       return "Book";
+    case "youtube":
+      return "YouTube";
   }
 }
 
