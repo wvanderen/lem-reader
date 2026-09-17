@@ -4413,3 +4413,24 @@ main#main > .status:empty {
   mask: url("/brand/lem.svg") center / contain no-repeat;
   forced-color-adjust: none;
 }
+
+/* ── Issue #38 — the ambient reading-stats strip ("on the shelf") ──────── */
+/* The plain-text summary line between the continue-reading section and the
+   library list, plus the per-row "time read here" meta line. Token-only,
+   no motion, no color/icon meaning: the strip is quiet chrome that reads
+   as document text (no new keyboard stops — nothing here is focusable). */
+.library-stats-strip {
+  max-width: 1100px;
+  margin-block: var(--space-xl) 0;
+  margin-inline: auto;
+  font-family: var(--font-ui);
+  font-size: 15px;
+  color: var(--ink-soft);
+}
+.library-stats-strip strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+.library-row-time-read {
+  margin-block: var(--space-xs) 0;
+}

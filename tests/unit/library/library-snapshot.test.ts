@@ -21,6 +21,7 @@ import {
   HighlightRecordSchema,
   LocationRecordSchema,
   NoteRecordSchema,
+  ReadingSessionRecordSchema,
 } from "../../../src/content/schema";
 import type {
   Book,
@@ -28,6 +29,7 @@ import type {
   HighlightRecord,
   LocationRecord,
   NoteRecord,
+  ReadingSessionRecord,
 } from "../../../src/content/schema";
 import fakeIndexedDB, { IDBKeyRange } from "fake-indexeddb";
 import { Dexie } from "dexie";
@@ -189,6 +191,22 @@ function sampleNote(highlightId: string, text = "A note."): NoteRecord {
     highlightId,
     text,
     updatedAt: "2026-09-10T01:00:00.000Z",
+  });
+}
+
+function sampleSession(
+  id: string,
+  articleId: string,
+): ReadingSessionRecord {
+  return ReadingSessionRecordSchema.parse({
+    schemaVersion: 1,
+    id,
+    articleId,
+    startedAt: "2026-09-15T10:00:00.000Z",
+    endedAt: "2026-09-15T10:05:00.000Z",
+    startOffset: 0,
+    endOffset: 120,
+    activeSeconds: 90,
   });
 }
 
@@ -426,6 +444,65 @@ describe("loadLibrarySnapshot — corrupt rows (STATE-04 agreement)", () => {
     expect(snapshot.locations).toHaveLength(1);
     expect(snapshot.books.map((b) => b.id)).toEqual(["epub-abc123def456"]);
     expect(snapshot.latestLocationByArticleId.get(standaloneId)?.graphemeOffset).toBe(5);
+  });
+});
+
+describe("loadLibrarySnapshot — reading sessions (issue #38)", () => {
+  beforeEach(async () => {
+    await wipeDatabase();
+  });
+
+  it("carries every persisted reading session (the stats strip's payload)", async () => {
+    const standaloneId = await seedStandaloneAndBook();
+    const { putReadingSession } = await import(
+      "../../../src/persistence/readingSessionsStore"
+    );
+    const { loadLibrarySnapshot } = await loadSnapshot();
+
+    await putReadingSession(sampleSession("visit-1", standaloneId));
+    await putReadingSession(sampleSession("visit-2", "epub-abc123def456-c00"));
+
+    const snapshot = await loadLibrarySnapshot();
+
+    expect(snapshot.readingSessions.map((s) => s.id)).toEqual([
+      "visit-1",
+      "visit-2",
+    ]);
+  });
+
+  it("a session-free library yields an empty array (EMPTY snapshot parity)", async () => {
+    const { loadLibrarySnapshot } = await loadSnapshot();
+
+    const snapshot = await loadLibrarySnapshot();
+
+    expect(snapshot.readingSessions).toEqual([]);
+  });
+
+  it("drops corrupt session rows without blocking the snapshot (STATE-04 agreement)", async () => {
+    const standaloneId = await seedStandaloneAndBook();
+    const { putReadingSession } = await import(
+      "../../../src/persistence/readingSessionsStore"
+    );
+    const { loadLibrarySnapshot } = await loadSnapshot();
+    const { db } = await loadDb();
+
+    await putReadingSession(sampleSession("visit-1", standaloneId));
+    // Corrupt row (negative activeSeconds) bypasses the write seam exactly
+    // like tampered storage would — the store seam drops it on read.
+    await db.readingSessions.put({
+      schemaVersion: 1,
+      id: "visit-corrupt",
+      articleId: standaloneId,
+      startedAt: "2026-09-15T10:00:00.000Z",
+      endedAt: "2026-09-15T10:05:00.000Z",
+      startOffset: 0,
+      endOffset: 10,
+      activeSeconds: -5,
+    } as unknown as ReadingSessionRecord);
+
+    const snapshot = await loadLibrarySnapshot();
+
+    expect(snapshot.readingSessions.map((s) => s.id)).toEqual(["visit-1"]);
   });
 });
 
