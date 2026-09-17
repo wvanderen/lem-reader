@@ -33,8 +33,10 @@ describe("mapReasonToCopy EPUB entries (12-03 Task 2)", () => {
     }
   });
 
-  it("returns a non-empty calm phrase ending in a period for EVERY cataloged reason (exhaustive, 20)", () => {
-    expect(IngestionFailureReasonEnum.options.length).toBe(20);
+  it("returns a non-empty calm phrase ending in a period for EVERY cataloged reason (exhaustive, 24)", () => {
+    // 24 since issue #39: the 20-reason catalog + the four YouTube transcript
+    // refusals (each pinned byte-for-byte in tests/unit/youtube-copy.test.ts).
+    expect(IngestionFailureReasonEnum.options.length).toBe(24);
     for (const reason of IngestionFailureReasonEnum.options) {
       const copy = mapReasonToCopy(reason);
       expect(copy.length).toBeGreaterThan(0);

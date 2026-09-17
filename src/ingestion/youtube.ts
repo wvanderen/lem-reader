@@ -11,11 +11,14 @@
 // client, NO new dependency; refusals are never retried and never cached —
 // the library is the cache.
 import { z } from "zod";
+import { YOUTUBE_VIDEO_ID_REGEX } from "../content/schema";
 
-/** The canonical 11-character YouTube video id alphabet (A-Za-z0-9_-). Every
- * outbound request embeds the id ONLY after this regex validates it — the
- * client refuses to build an InnerTube body from an unvalidated id. */
-export const YOUTUBE_VIDEO_ID_REGEX = /^[A-Za-z0-9_-]{11}$/;
+// Single source of truth since issue #39: the canonical 11-character video-id
+// alphabet is OWNED by src/content/schema.ts (TranscriptMetaSchema validates
+// videoId with it and the /src→ingestion import direction is forbidden) and
+// re-exported here so the #35 consumers (server/youtubeTranscript.ts + this
+// module's URL extraction) keep their import surface byte-identical.
+export { YOUTUBE_VIDEO_ID_REGEX };
 
 /**
  * extractYouTubeVideoId — pull the video id from the three accepted URL

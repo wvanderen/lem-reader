@@ -193,6 +193,14 @@ export const IngestionFailureReasonEnum = z.enum([
   "epub-unreadable", // Phase 12 — corrupt/unparseable container/OPF/zip, Zip Slip, entity/proto hostility
   "epub-empty", // Phase 12 — zero chapters admit — whole-document refusal (D12-11)
   "epub-too-large", // Phase 12 — decoded size/chapters over cap (EPUB_MAX_BYTES / EPUB_MAX_CHAPTERS)
+  // Issue #39 — the FOUR structured YouTube-state refusals from the #35
+  // transcript client (TranscriptRefusalReasonEnum in ./youtube), each mapped
+  // 1:1 to a cataloged reason. Terminal: never retried, never cached (the
+  // library is the cache — issue #27).
+  "youtube-no-captions", // the video plays but exposes no caption tracks
+  "youtube-unavailable-private", // removed or private — indistinguishable reader-side
+  "youtube-age-gated", // LOGIN_REQUIRED age verification
+  "youtube-bot-check", // LOGIN_REQUIRED "confirm you're not a bot"
   "already-in-library", // D7-07 — save-once-read-forever dedupe-refuse
   "server-error", // catch-all for unexpected exceptions (5xx)
 ]);

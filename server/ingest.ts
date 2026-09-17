@@ -40,6 +40,9 @@ import { extractAndNormalize, type ExtractAndNormalizeResult } from "./htmlToBlo
 import { markdownToBlocks, stripMarkdownExtension } from "./markdownToBlocks";
 import { pdfToBlocks } from "./pdfToBlocks";
 import { epubToBooks } from "./epubToBooks";
+import { transcriptToBlocks } from "./transcriptToBlocks";
+import { fetchYouTubeTranscript } from "./youtubeTranscript";
+import { extractYouTubeVideoId, type TranscriptRefusalReason } from "../src/ingestion/youtube";
 import { deriveConfidence, type ConfidenceResult } from "./confidence";
 import { slugifyUrl } from "./slugify";
 import { runAssetStage } from "./assetStage";
@@ -49,9 +52,11 @@ import { EPUB_MAX_BYTES, PDF_MAX_BYTES } from "./limits";
 import {
   ArticleSchema,
   BookSchema,
+  type ArticleSource,
   type Block,
   type Book,
   type CanonicalArticle,
+  type TranscriptMeta,
 } from "../src/content/schema";
 import {
   normalizeText,
@@ -59,7 +64,12 @@ import {
   deriveQuoteSelector,
   resolveQuoteSelector,
 } from "../src/content/normalizeText";
-import type { IngestionRequest, IngestionResponse } from "../src/ingestion/types";
+import type {
+  IngestionFailureReason,
+  IngestionRequest,
+  IngestionResponse,
+} from "../src/ingestion/types";
+import { normalizeForTitleMatch } from "./titleMatch";
 
 /**
  * assertRoundTripAnchor — the SC#1 integration-truth gate. Samples 5 grapheme
@@ -143,6 +153,30 @@ function shortHash(s: string): string {
   return createHash("sha256").update(s).digest("hex").slice(0, 12);
 }
 
+// ── Issue #39 — the YouTube transcript branch ────────────────────────────────
+
+/** TRANSCRIPT_REFUSAL_REASONS — the #35 client's four structured YouTube-state
+ * refusals map 1:1 onto cataloged IngestionFailureReason values (each has its
+ * calm DOC-06 phrase in src/ingestion/ingestCopy.ts). Refusals are terminal —
+ * thrown once through the shared catch envelope, never retried. */
+const TRANSCRIPT_REFUSAL_REASONS: Record<TranscriptRefusalReason, IngestionFailureReason> = {
+  "no-captions": "youtube-no-captions",
+  "unavailable-private": "youtube-unavailable-private",
+  "age-gated": "youtube-age-gated",
+  "bot-check": "youtube-bot-check",
+};
+
+/**
+ * baseLanguage — the BCP-47 base language of a caption track's languageCode
+ * (decision #26: article.lang carries the base — "pt-BR" → "pt" — so the
+ * Intl.Segmenter locale stays the broad one; the FULL code rides
+ * ingestionMeta.transcript.captionLanguage). Falls back to the full code when
+ * the base subtag is empty; the client schema guarantees min(1) overall.
+ */
+function baseLanguage(languageCode: string): string {
+  return languageCode.split("-")[0] || languageCode;
+}
+
 /**
  * safeHostname — extract a hostname for the title fallback. Never throws
  * (defensive — a malformed finalUrl should not crash the pipeline).
@@ -206,18 +240,6 @@ function toIsoDatetimeOrNull(raw: string | undefined): string | undefined {
   if (raw === undefined || raw.length === 0) return undefined;
   const d = new Date(raw);
   return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
-}
-
-/**
- * normalizeForTitleMatch — lowercase + separator-collapse (the D11-09 fuzzy
- * matching basis: case/whitespace-insensitive containment). Hyphens and
- * underscores count as whitespace because the filename channel slugifies
- * spaces ("calm-report.pdf" ↔ page-1 heading "Calm Report") — the canonical
- * filename-fallback doubled-title case only matches when word separators are
- * normalized uniformly on both sides.
- */
-function normalizeForTitleMatch(s: string): string {
-  return s.toLowerCase().replace(/[-_\s]+/g, " ").trim();
 }
 
 /**
@@ -547,6 +569,11 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
   // input has already been rewritten onto {markdown}, so the hasHtml branch
   // below can only fire for TAGGED content.
   const hasUrl = "url" in request && request.url !== undefined;
+  // Issue #39 — the URL variant dispatches on YouTube-ness (watch / shorts /
+  // youtu.be forms per the #35 extraction): a YouTube URL takes the transcript
+  // branch instead of the HTML pipeline (Readability would find no article).
+  // The id is extracted ONCE here and consumed by the branch below.
+  const youTubeVideoId = hasUrl ? extractYouTubeVideoId(request.url) : null;
   const hasHtml = "html" in request && request.html !== undefined;
   const hasMarkdown = "markdown" in request && request.markdown !== undefined;
   const hasPdf = "pdf" in request && request.pdf !== undefined;
@@ -577,9 +604,10 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
     let isReaderable: ExtractAndNormalizeResult["isReaderable"];
 
     // id + ingestion metadata vary per source (D7-07 url id, paste content-
-    // hash id, D8-18 markdown content-hash id, D11 pdf content-hash id).
+    // hash id, D8-18 markdown content-hash id, D11 pdf content-hash id, #39
+    // youtube videoId-hash id).
     let id: string;
-    let source: "url" | "paste" | "markdown" | "html-upload" | "pdf";
+    let source: ArticleSource;
     let origin: "url" | "paste" | "upload";
     let fetchedAt: string | undefined;
     let finalUrl: string | undefined;
@@ -593,8 +621,60 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
     // pdfFilenameHint — the sibling channel for the pdf branch's D11-07
     // filename fallback. Undefined for the other three paths.
     let pdfFilenameHint: string | undefined;
+    // transcriptMeta + transcriptWarnings — the #39 youtube branch's block-
+    // keyed timing metadata (ingestionMeta.transcript) and its chapter
+    // edge-rule disclosures (merged into extractionWarnings). Undefined/[]
+    // for every other path.
+    let transcriptMeta: TranscriptMeta | undefined;
+    let transcriptWarnings: string[] = [];
 
-    if (hasUrl) {
+    if (youTubeVideoId !== null) {
+      // ── Issue #39 — the YOUTUBE branch (transcript-as-article) ──────────
+      // A YouTube URL never enters the HTML pipeline: the #35 InnerTube
+      // client fetches the caption track server-side, transcriptToBlocks
+      // normalizes it, and the shared stages 2+ run unchanged below. The
+      // FOUR YouTube-state refusals throw IngestionError with their
+      // cataloged reasons through the shared catch envelope (terminal — no
+      // retry, no cache; the library is the cache per issue #27).
+      const videoId = youTubeVideoId;
+      finalUrl = `https://www.youtube.com/watch?v=${videoId}`;
+      const result = await fetchYouTubeTranscript(videoId);
+      if (!result.ok) {
+        throw new IngestionError(TRANSCRIPT_REFUSAL_REASONS[result.refusal]);
+      }
+      const normalized = transcriptToBlocks(result);
+      blocks = normalized.blocks;
+      footnotes = [];
+      lang = baseLanguage(result.languageCode);
+      provenancePartial = {
+        sourceUrl: finalUrl,
+        title: result.title,
+        author: result.channel,
+      };
+      isReaderable = true;
+      // D7-07 immutability mirror — id = yt-<shortHash(videoId)>: the
+      // videoId IS the stable identity, so the watch / shorts / youtu.be
+      // URL forms all dedupe-refuse to the one library article (the
+      // pdf-/md- content-hash precedent; the id regex forbids the videoId's
+      // uppercase letters and stays locked per D-06).
+      id = `yt-${shortHash(videoId)}`;
+      source = "youtube";
+      origin = "url";
+      fetchedAt = new Date().toISOString();
+      // Traceability: the parsed InnerTube result is the payload the article
+      // was derived from (the #35 client returns parsed shapes, not raw XML).
+      sourceBytes = JSON.stringify(result);
+      transcriptMeta = {
+        videoId: result.videoId,
+        durationSeconds: result.durationSeconds,
+        captionSource: result.isAutoGenerated ? "asr" : "manual",
+        captionLanguage: result.languageCode,
+        // The persisted field name is the decision-#26 `segments`; the values
+        // are the normalizer's block-keyed anchors.
+        segments: normalized.anchors,
+      };
+      transcriptWarnings = normalized.warnings;
+    } else if (hasUrl) {
       const fetched: FetchedContent = await safeFetch(request.url as string);
       finalUrl = fetched.finalUrl;
       const extracted = await extractAndNormalize(fetched.html, fetched.finalUrl);
@@ -711,8 +791,10 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
     // (D20-04 — a saved article is always complete). Runs on the three
     // network-path sources (url / paste+html-upload / markdown); the PDF
     // path stays text-only (D20-01 — no pdfToBlocks change, nothing new
-    // called) and the EPUB path diverges in its own flow (20-06 wires the
-    // container extraction). Per-figure refusals never block the article
+    // called), the youtube transcript branch is text-only by construction
+    // (paragraph/heading blocks only — #39), and the EPUB path diverges in
+    // its own flow (20-06 wires the container extraction). Per-figure
+    // refusals never block the article
     // (D20-05); refusedCount is disclosed via extractionWarnings below
     // (T-20-10 — never silent).
     //
@@ -726,7 +808,7 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
     // influence which host the asset stage fetches (D20-12 one pipeline).
     let imageRefusalWarnings: string[] = [];
     let assetEnvelopes: AssetEnvelope[] = [];
-    if (!hasPdf) {
+    if (!hasPdf && source !== "youtube") {
       const assetRefererOrigin =
         finalUrl !== undefined && /^https?:/i.test(finalUrl)
           ? (() => {
@@ -807,7 +889,10 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
         originalHtmlHash,
         fetchedAt,
         extractionConfidence: "high" as const, // placeholder — stamped post-gate
-        extractionWarnings: imageRefusalWarnings,
+        extractionWarnings: [...imageRefusalWarnings, ...transcriptWarnings],
+        // Issue #39 — the youtube branch's block-keyed timing metadata.
+        // Absent for every other source (Pitfall 9 additive-optional).
+        ...(transcriptMeta !== undefined ? { transcript: transcriptMeta } : {}),
       },
     };
 
@@ -829,6 +914,15 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
     const confidence: ConfidenceResult = deriveConfidence(article, { isReaderable });
     if (confidence.state === "unsupported") {
       return { ok: false, reason: "extraction-unsupported" };
+    }
+
+    // Issue #39 (decision #26) — an ASR-only transcript NEVER upgrades to
+    // trusted: an auto-generated caption track enters the library flagged
+    // "low" even when its length/block count would otherwise read confident.
+    // Manual tracks keep the unchanged ING-06 formula above.
+    if (confidence.state === "confident" && transcriptMeta?.captionSource === "asr") {
+      confidence.state = "low";
+      confidence.reason = "asr-caption-track";
     }
 
     // Stamp the confidence onto the article (mutation is safe — the article

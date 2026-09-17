@@ -123,8 +123,9 @@ describe("ArticleSourceSchema", () => {
   // upload via paste path with a distinct badge per D8-02). Phase 11 (Plan
   // 11-01 Task 2) adds "pdf" (ING-04 — .pdf upload via pdfToBlocks). Phase 12
   // (Plan 12-01 Task 2) adds "epub-chapter" (ING-05 — .epub upload via
-  // epubToBooks; one article per chapter, Option A).
-  it("enum equals exactly [fixture, url, paste, markdown, html-upload, pdf, epub-chapter] (D7-08 + D8-15 + D8-16 + ING-04 + ING-05)", () => {
+  // epubToBooks; one article per chapter, Option A). Issue #39 adds
+  // "youtube" (transcript-as-article via the InnerTube caption client).
+  it("enum equals exactly [fixture, url, paste, markdown, html-upload, pdf, epub-chapter, youtube] (D7-08 + D8-15 + D8-16 + ING-04 + ING-05 + #39)", () => {
     // Zod 4: `.options` is the value array; `.enum` is now the object map.
     expect(ArticleSourceSchema.options).toEqual([
       "fixture",
@@ -134,6 +135,7 @@ describe("ArticleSourceSchema", () => {
       "html-upload",
       "pdf",
       "epub-chapter",
+      "youtube",
     ]);
   });
 
@@ -145,6 +147,7 @@ describe("ArticleSourceSchema", () => {
     "html-upload",
     "pdf",
     "epub-chapter",
+    "youtube",
   ] as const)("parses source %s", (source) => {
     expect(ArticleSourceSchema.parse(source)).toBe(source);
   });
@@ -233,6 +236,90 @@ describe("IngestionMetaSchema", () => {
         bookId: "NOT/VALID",
       }),
     ).toThrow();
+  });
+
+  // Issue #39 (decision #26) — the additive block-keyed transcript metadata.
+  const validTranscript = {
+    videoId: "dQw4w9WgXcQ",
+    durationSeconds: 213,
+    captionSource: "manual",
+    captionLanguage: "en",
+    segments: [
+      { blockIndex: 0, startMs: 0 },
+      { blockIndex: 1, startMs: 1360 },
+    ],
+  };
+
+  it("parses a youtube meta with the full transcript block-timing object (decision #26 shape)", () => {
+    const parsed = IngestionMetaSchema.parse({
+      source: "youtube",
+      origin: "url",
+      sourceUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      originalHtmlHash: "sha256:yt",
+      fetchedAt: "2026-09-16T00:00:00.000Z",
+      extractionConfidence: "low",
+      transcript: validTranscript,
+    });
+    expect(parsed.transcript?.videoId).toBe("dQw4w9WgXcQ");
+    expect(parsed.transcript?.durationSeconds).toBe(213);
+    expect(parsed.transcript?.captionSource).toBe("manual");
+    expect(parsed.transcript?.captionLanguage).toBe("en");
+    expect(parsed.transcript?.segments).toEqual([
+      { blockIndex: 0, startMs: 0 },
+      { blockIndex: 1, startMs: 1360 },
+    ]);
+  });
+
+  it("hydrates transcript to undefined on rows that omit it (Pitfall 9 — every pre-#39 row unchanged)", () => {
+    const parsed = IngestionMetaSchema.parse(validIngestionMeta);
+    expect(parsed.transcript).toBeUndefined();
+  });
+
+  it("rejects a transcript videoId outside the 11-char id alphabet (validated at the boundary)", () => {
+    expect(() =>
+      IngestionMetaSchema.parse({
+        ...validIngestionMeta,
+        transcript: { ...validTranscript, videoId: "short!!" },
+      }),
+    ).toThrow();
+  });
+
+  it("rejects a transcript captionSource outside manual|asr and a negative startMs", () => {
+    expect(() =>
+      IngestionMetaSchema.parse({
+        ...validIngestionMeta,
+        transcript: { ...validTranscript, captionSource: "auto-translated" },
+      }),
+    ).toThrow();
+    expect(() =>
+      IngestionMetaSchema.parse({
+        ...validIngestionMeta,
+        transcript: { ...validTranscript, segments: [{ blockIndex: 0, startMs: -1 }] },
+      }),
+    ).toThrow();
+  });
+
+  it("validates captionLanguage as a BCP-47 language tag (decision #26 — not merely min(1))", () => {
+    // Well-formed tags: bare language, region, script, script+region, numeric
+    // region, variant subtag, and the client's "und" fallback.
+    for (const tag of ["en", "pt-BR", "zh-Hans", "zh-Hant-TW", "es-419", "sl-rozaj", "und"]) {
+      expect(() =>
+        IngestionMetaSchema.parse({
+          ...validIngestionMeta,
+          transcript: { ...validTranscript, captionLanguage: tag },
+        }),
+      ).not.toThrow();
+    }
+    // Junk the boundary refuses: empty, prose, digits-only, one-letter,
+    // trailing hyphen, underscore separator.
+    for (const tag of ["", "not a language", "123", "e", "en-", "en_US"]) {
+      expect(() =>
+        IngestionMetaSchema.parse({
+          ...validIngestionMeta,
+          transcript: { ...validTranscript, captionLanguage: tag },
+        }),
+      ).toThrow();
+    }
   });
 
   it("rejects a negative chapterIndex (int min(0) — positions are 0-based admitted order)", () => {
@@ -502,8 +589,8 @@ describe("IngestionResponseSchema", () => {
   });
 });
 
-describe("IngestionFailureReasonEnum (the 20 cataloged reasons)", () => {
-  it("exposes exactly the 20 reasons — the Phase 7 catalog + Phase 11 PDF + Phase 12 EPUB members slotting in before the dedupe-refuse + catch-all tail", () => {
+describe("IngestionFailureReasonEnum (the 24 cataloged reasons)", () => {
+  it("exposes exactly the 24 reasons — the Phase 7 catalog + Phase 11 PDF + Phase 12 EPUB + issue #39 YouTube members slotting in before the dedupe-refuse + catch-all tail", () => {
     expect(IngestionFailureReasonEnum.options).toEqual([
       "ssrf-blocked-scheme",
       "ssrf-blocked-private-ip",
@@ -520,16 +607,21 @@ describe("IngestionFailureReasonEnum (the 20 cataloged reasons)", () => {
       "pdf-scanned",
       "pdf-multi-column",
       "pdf-too-large",
-      // Phase 12 ING-05 — the four EPUB members; "already-in-library" and
-      // "server-error" stay last.
+      // Phase 12 ING-05 — the four EPUB members...
       "epub-protected",
       "epub-unreadable",
       "epub-empty",
       "epub-too-large",
+      // Issue #39 — the four YouTube-state refusals from the #35 client...
+      "youtube-no-captions",
+      "youtube-unavailable-private",
+      "youtube-age-gated",
+      "youtube-bot-check",
+      // ..."already-in-library" and "server-error" stay last.
       "already-in-library",
       "server-error",
     ]);
-    expect(IngestionFailureReasonEnum.options).toHaveLength(20);
+    expect(IngestionFailureReasonEnum.options).toHaveLength(24);
   });
 
   it("parses each Phase 11 PDF reason (pdf-scanned et al. — the enum accepts all five new members)", () => {
@@ -545,6 +637,15 @@ describe("IngestionFailureReasonEnum (the 20 cataloged reasons)", () => {
     expect(IngestionFailureReasonEnum.parse("epub-unreadable")).toBe("epub-unreadable");
     expect(IngestionFailureReasonEnum.parse("epub-empty")).toBe("epub-empty");
     expect(IngestionFailureReasonEnum.parse("epub-too-large")).toBe("epub-too-large");
+  });
+
+  it("parses each issue #39 YouTube reason (the enum accepts all four new members)", () => {
+    expect(IngestionFailureReasonEnum.parse("youtube-no-captions")).toBe("youtube-no-captions");
+    expect(IngestionFailureReasonEnum.parse("youtube-unavailable-private")).toBe(
+      "youtube-unavailable-private",
+    );
+    expect(IngestionFailureReasonEnum.parse("youtube-age-gated")).toBe("youtube-age-gated");
+    expect(IngestionFailureReasonEnum.parse("youtube-bot-check")).toBe("youtube-bot-check");
   });
 });
 
