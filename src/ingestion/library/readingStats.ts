@@ -92,3 +92,43 @@ export function deriveReadingStats(
   }
   return { totalSeconds, visits, secondsByArticleId };
 }
+
+/**
+ * ReadingStatsInput — the structural slice of the ONE LibrarySnapshot the
+ * reading-stats fold reads (articles for membership, sessions for the
+ * fold). Kept structural so this pure module stays decoupled from the
+ * snapshot loader; every real caller passes the snapshot as-is.
+ */
+export interface ReadingStatsInput {
+  readonly articles: ReadonlyArray<{ readonly id: string }>;
+  readonly readingSessions: readonly ReadingSessionRecord[];
+}
+
+/**
+ * deriveLibraryReadingStats — the whole-library fold from the ONE snapshot:
+ * builds the article-membership set over `snapshot.articles` and folds the
+ * snapshot's session rows. Every reading-stats consumer (the strip and the
+ * row labels) folds the same way, so the membership construction and the
+ * orphan discipline live in exactly one place.
+ */
+export function deriveLibraryReadingStats(
+  snapshot: ReadingStatsInput,
+): ReadingStats {
+  const knownArticleIds = new Set(snapshot.articles.map((article) => article.id));
+  return deriveReadingStats(snapshot.readingSessions, knownArticleIds);
+}
+
+/**
+ * timeReadLabels — the per-article card meta lines as one map keyed by
+ * article id. A label exists ONLY for articles whose accrued time clears
+ * the under-one-minute suppression — the missing key is the empty state,
+ * not a placeholder.
+ */
+export function timeReadLabels(stats: ReadingStats): Map<string, string> {
+  const labels = new Map<string, string>();
+  for (const [articleId, seconds] of stats.secondsByArticleId) {
+    const label = timeReadLabel(seconds);
+    if (label !== undefined) labels.set(articleId, label);
+  }
+  return labels;
+}

@@ -50,7 +50,7 @@ import { BookRow } from "./BookRow";
 import { ContinueReadingStrip } from "./ContinueReadingStrip";
 // Issue #38 — the ambient reading-stats strip + its pure derivations.
 import { ReadingStatsStrip } from "./ReadingStatsStrip";
-import { deriveReadingStats, timeReadLabel } from "./readingStats";
+import { deriveLibraryReadingStats, timeReadLabels } from "./readingStats";
 import { filterLibrary, filterBooks } from "./libraryFilter";
 import { effectiveTitle } from "./effectiveMetadata";
 import { articleReadingState, bookReadingState, countByState } from "./readingState";
@@ -409,25 +409,17 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
   const chaptersByBook = snapshot.chaptersByBook;
 
   // Issue #38 — the per-article "time read here" labels (the card meta
-  // line). One pure fold over the snapshot's session rows (readingStats.ts
-  // — the same deriveReadingStats the strip runs); the under-one-minute
-  // suppression lives behind timeReadLabel, so this map carries labels
-  // ONLY for articles whose quiet line may render. Recomputes on snapshot
-  // identity change only — an invalidation reload keeps the settled map
-  // mounted until the fresh snapshot lands (stale-while-revalidate).
-  const timeReadByArticleId = useMemo(() => {
-    const knownArticleIds = new Set(snapshot.articles.map((a) => a.id));
-    const { secondsByArticleId } = deriveReadingStats(
-      snapshot.readingSessions,
-      knownArticleIds,
-    );
-    const labels = new Map<string, string>();
-    for (const [articleId, seconds] of secondsByArticleId) {
-      const label = timeReadLabel(seconds);
-      if (label !== undefined) labels.set(articleId, label);
-    }
-    return labels;
-  }, [snapshot]);
+  // line). The whole fold lives in readingStats.ts (deriveLibraryReadingStats
+  // + timeReadLabels) — the SAME fold the strip runs, with the
+  // under-one-minute suppression and orphan discipline behind the module, so
+  // this map carries labels ONLY for articles whose quiet line may render.
+  // Recomputes on snapshot identity change only — an invalidation reload
+  // keeps the settled map mounted until the fresh snapshot lands
+  // (stale-while-revalidate).
+  const timeReadByArticleId = useMemo(
+    () => timeReadLabels(deriveLibraryReadingStats(snapshot)),
+    [snapshot],
+  );
 
   // Plan 14-02 (D14-20/23/24) — per-view membership from the ONE policy
   // module, derived in the SAME render body as the switcher counts below

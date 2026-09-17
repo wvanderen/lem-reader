@@ -25,10 +25,7 @@
 // reload keeps the settled derivation mounted until the fresh snapshot
 // lands (the stale-while-revalidate discipline).
 import { useMemo } from "react";
-import {
-  deriveReadingStats,
-  formatDuration,
-} from "./readingStats";
+import { deriveLibraryReadingStats, formatDuration } from "./readingStats";
 import type { LibrarySnapshot } from "./librarySnapshot";
 
 /**
@@ -51,24 +48,22 @@ export function ReadingStatsStrip({
 }) {
   const stats = useMemo(() => {
     if (!ready) return null;
-    // Membership set over the composite library — orphan history (an
-    // articleId no longer/not in the library, possible only via the #37
-    // import ride-along) counts nowhere (readingStats.ts discipline).
-    const knownArticleIds = new Set(snapshot.articles.map((a) => a.id));
-    return deriveReadingStats(snapshot.readingSessions, knownArticleIds);
+    // The membership set + orphan discipline live behind the shared fold
+    // (readingStats.ts) — the strip and the row labels fold identically.
+    return deriveLibraryReadingStats(snapshot);
     // The snapshot identity fully determines the derivation (sessions and
     // articles settle together in one load).
   }, [ready, snapshot]);
 
   if (!stats || stats.visits === 0) return null;
 
-  const visits = new Intl.NumberFormat(navigator.language).format(stats.visits);
+  // One formatter per render — both counts share it.
+  const countFormatter = new Intl.NumberFormat(navigator.language);
   return (
     <p className="library-stats-strip">
       You've read <strong>{formatDuration(stats.totalSeconds)}</strong> across{" "}
-      {visits} {stats.visits === 1 ? "visit" : "visits"}.
-      {finishedCount > 0 &&
-        ` ${new Intl.NumberFormat(navigator.language).format(finishedCount)} finished.`}
+      {countFormatter.format(stats.visits)} {stats.visits === 1 ? "visit" : "visits"}.
+      {finishedCount > 0 && ` ${countFormatter.format(finishedCount)} finished.`}
     </p>
   );
 }

@@ -6,14 +6,19 @@
 //   - the "{duration} read here" meta line's under-one-minute suppression;
 //   - deriveReadingStats folding totals + per-article time over the SAME
 //     counted sessions, with orphan history (an articleId missing from the
-//     library — the issue #37 import ride-along edge) counting nowhere.
+//     library — the issue #37 import ride-along edge) counting nowhere;
+//   - deriveLibraryReadingStats + timeReadLabels — the snapshot-level fold
+//     every consumer shares, and the label map whose missing key is the
+//     empty state.
 import { describe, expect, it } from "vitest";
 import { ReadingSessionRecordSchema } from "../../../src/content/schema";
 import type { ReadingSessionRecord } from "../../../src/content/schema";
 import {
+  deriveLibraryReadingStats,
   deriveReadingStats,
   formatDuration,
   timeReadLabel,
+  timeReadLabels,
 } from "../../../src/ingestion/library/readingStats";
 
 function session(
@@ -124,5 +129,53 @@ describe("deriveReadingStats — the whole-library fold", () => {
     expect([...reversed.secondsByArticleId.entries()]).toEqual(
       expect.arrayContaining([...forward.secondsByArticleId.entries()]),
     );
+  });
+});
+
+describe("deriveLibraryReadingStats — the snapshot-level fold (issue #38)", () => {
+  it("builds membership from the snapshot's articles and folds its sessions", () => {
+    const stats = deriveLibraryReadingStats({
+      articles: [{ id: "article-a" }, { id: "article-b" }],
+      readingSessions: [
+        session("v1", "article-a", 120),
+        session("v2", "removed-article", 3600),
+      ],
+    });
+    // The orphan row (not in snapshot.articles) counts nowhere.
+    expect(stats.totalSeconds).toBe(120);
+    expect(stats.visits).toBe(1);
+    expect(stats.secondsByArticleId.get("article-a")).toBe(120);
+  });
+
+  it("agrees with the raw fold over the same rows and ids", () => {
+    const readingSessions = [session("v1", "article-a", 90)];
+    const knownArticleIds = new Set(["article-a"]);
+    expect(deriveLibraryReadingStats({ articles: [{ id: "article-a" }], readingSessions })).toEqual(
+      deriveReadingStats(readingSessions, knownArticleIds),
+    );
+  });
+});
+
+describe("timeReadLabels — the per-article label map (issue #38)", () => {
+  it("carries a label ONLY for articles clearing the one-minute suppression", () => {
+    const stats = deriveLibraryReadingStats({
+      articles: [{ id: "article-a" }, { id: "article-b" }],
+      readingSessions: [
+        session("v1", "article-a", 300),
+        session("v2", "article-b", 45),
+      ],
+    });
+    const labels = timeReadLabels(stats);
+    expect(labels.get("article-a")).toBe("5 min read here");
+    expect(labels.has("article-b")).toBe(false);
+    expect(labels.size).toBe(1);
+  });
+
+  it("is empty when no article clears the suppression (silence is the empty state)", () => {
+    const stats = deriveLibraryReadingStats({
+      articles: [{ id: "article-a" }],
+      readingSessions: [session("v1", "article-a", 59)],
+    });
+    expect(timeReadLabels(stats).size).toBe(0);
   });
 });
