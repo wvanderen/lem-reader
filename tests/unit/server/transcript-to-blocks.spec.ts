@@ -5,7 +5,8 @@
 // timestamp anchor map ({blockIndex, startMs}) that rides
 // ingestionMeta.transcript — timestamps never enter block text.
 import { describe, expect, it } from "vitest";
-import { BlockSchema } from "../../../src/content/schema";
+import { ArticleSchema, BlockSchema } from "../../../src/content/schema";
+import { deriveToc } from "../../../src/content/toc";
 import {
   TRANSCRIPT_PARAGRAPH_CAP_CHARS,
   TRANSCRIPT_PARAGRAPH_TARGET_CHARS,
@@ -136,7 +137,7 @@ describe("caption → paragraph grouping (char budgets)", () => {
     }
   });
 
-  it("drops whitespace-only cues (no readable text, no anchor)", () => {
+  it("drops whitespace-only cues (no readable text, no anchor) with a calm count warning", () => {
     const result = transcriptToBlocks(
       success([seg("real words here", 0), seg("   ", 1000), seg("more real words", 2000)]),
     );
@@ -144,6 +145,15 @@ describe("caption → paragraph grouping (char budgets)", () => {
     expect(textOf(result.blocks[0] as { content: { text: string }[] })).toBe(
       "real words here more real words",
     );
+    // The drop is DISCLOSED, never silent (the honesty guardrail).
+    expect(result.warnings).toEqual(["1 caption cue without readable text was omitted"]);
+  });
+
+  it("discloses an all-whitespace track while refusing (empty blocks + the count warning)", () => {
+    const result = transcriptToBlocks(success([seg("  ", 0), seg("\n\t", 1000)]));
+    expect(result.blocks).toHaveLength(0);
+    expect(result.anchors).toHaveLength(0);
+    expect(result.warnings).toEqual(["2 caption cues without readable text were omitted"]);
   });
 
   it("validates every emitted block against the canonical BlockSchema", () => {
@@ -163,6 +173,27 @@ describe("chapter → h2 edge rules (decision #26, all five)", () => {
     expect(result.warnings).toEqual([]);
   });
 
+  it("rule 1 downstream — a chapterless transcript's TOC honestly offers only 'Top of article'", () => {
+    // The acceptance-criteria composition: normalizer output with zero
+    // heading blocks derives a Top-only TOC (deriveToc D18-13) — the reading
+    // surface never invents structure the transcript didn't carry.
+    const result = transcriptToBlocks(success([seg("a cue", 0), seg("another cue", 1000)]));
+    const article = ArticleSchema.parse({
+      id: "transcript-rule-1",
+      revision: 1,
+      lang: "en",
+      provenance: {
+        sourceUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        title: "Chapterless Transcript",
+        retrievedAt: "2026-09-17T00:00:00.000Z",
+        originalHtmlHash: "sha256:rule1",
+      },
+      blocks: result.blocks,
+      footnotes: [],
+    });
+    expect(deriveToc(article).map((entry) => entry.text)).toEqual(["Top of article"]);
+  });
+
   it("rule 2 — empty/whitespace chapter title: dropped + warning, never invented", () => {
     const result = transcriptToBlocks(
       success([seg("a cue", 5000)], [ch("", 0), ch("   ", 1000), ch("Real", 5000)]),
@@ -170,7 +201,7 @@ describe("chapter → h2 edge rules (decision #26, all five)", () => {
     const headings = result.blocks.filter((b) => b.kind === "heading");
     expect(headings).toHaveLength(1);
     expect(textOf(headings[0] as { content: { text: string }[] })).toBe("Real");
-    expect(result.warnings).toEqual(["2 chapters without titles were omitted"]);
+    expect(result.warnings).toEqual(["2 chapters without a title were omitted"]);
   });
 
   it("rule 3 — duplicate 0:00 chapter restating the title: dropped + warning", () => {

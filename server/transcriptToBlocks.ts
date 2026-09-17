@@ -26,6 +26,7 @@ import type {
   TranscriptSegmentAnchor,
 } from "../src/content/schema";
 import type { TranscriptChapter, TranscriptSegment, TranscriptSuccess } from "../src/ingestion/youtube";
+import { normalizeForTitleMatch } from "./titleMatch";
 
 // ── Grouping budgets (decision #26, decided character budgets) ───────────────
 
@@ -57,34 +58,30 @@ export interface TranscriptNormalization {
 
 // ── Chapter edge rules (decision #26 — all five accepted) ────────────────────
 
-/** normalizedTitleKey — the D11-09 fuzzy-title algebra (lowercase +
- * separator-collapse): case/whitespace-insensitive containment for the
- * duplicate-0:00 detection. Hyphens/underscores count as whitespace so
- * "Never Gonna Give You Up (Official Video)" and "never_gonna_give_you_up"
- * match the same key shape the PDF doubled-title consume uses. */
-function normalizedTitleKey(s: string): string {
-  return s.toLowerCase().replace(/[-_\s]+/g, " ").trim();
-}
-
 /** restatesVideoTitle — rule 3's predicate: the chapter RESTATES the video
- * title when the two normalize to the same key (case/whitespace-insensitive
- * equality — the common creator pattern of repeating the video title as the
- * 0:00 chapter marker). Deliberately NOT substring containment: a 0:00
- * chapter like "Introduction" under a video titled "Introduction to X" is a
- * legitimate chapter, and an over-broad drop would silently discard real
- * structure (a kept near-duplicate h2 is harmless; a dropped chapter is
- * lost). */
+ * title when the two share the shared D11-09 title-match key (see
+ * server/titleMatch.ts — the same algebra the PDF doubled-title consume
+ * uses; case/whitespace-insensitive equality, the common creator pattern of
+ * repeating the video title as the 0:00 chapter marker). Deliberately NOT
+ * substring containment: a 0:00 chapter like "Introduction" under a video
+ * titled "Introduction to X" is a legitimate chapter, and an over-broad
+ * drop would silently discard real structure (a kept near-duplicate h2 is
+ * harmless; a dropped chapter is lost). */
 function restatesVideoTitle(chapterTitle: string, videoTitle: string): boolean {
-  const chapterKey = normalizedTitleKey(chapterTitle);
-  const videoKey = normalizedTitleKey(videoTitle);
+  const chapterKey = normalizeForTitleMatch(chapterTitle);
+  const videoKey = normalizeForTitleMatch(videoTitle);
   return chapterKey.length > 0 && chapterKey === videoKey;
 }
 
-/** countWarning — one calm count-form warning entry (the extractionWarnings
- * tone: "3 unsupported blocks omitted" / "1 image could not be included").
- * Each dropped chapter discloses its RULE, never silent. */
-function countWarning(n: number, singular: string, plural: string): string {
-  return n === 1 ? `1 chapter ${singular} was omitted` : `${n} chapters ${plural} were omitted`;
+/** countWarning — one calm count-form omission warning entry (the
+ * extractionWarnings tone: "3 unsupported blocks omitted" / "1 image could
+ * not be included"). NOUN carries the number ("chapter" / "caption cue"),
+ * DESCRIPTOR the omission reason; every dropped item discloses its RULE,
+ * never silent. */
+function countWarning(n: number, noun: string, descriptor: string): string {
+  return n === 1
+    ? `1 ${noun} ${descriptor} was omitted`
+    : `${n} ${noun}s ${descriptor} were omitted`;
 }
 
 /**
@@ -124,11 +121,11 @@ function admitChapters(
     admitted.push(chapter);
   }
   const warnings: string[] = [];
-  if (untitled > 0) warnings.push(countWarning(untitled, "without a title", "without titles"));
+  if (untitled > 0) warnings.push(countWarning(untitled, "chapter", "without a title"));
   if (duplicates > 0) {
-    warnings.push(countWarning(duplicates, "duplicating the video title", "duplicating the video title"));
+    warnings.push(countWarning(duplicates, "chapter", "duplicating the video title"));
   }
-  if (beyondEnd > 0) warnings.push(countWarning(beyondEnd, "past the last caption", "past the last caption"));
+  if (beyondEnd > 0) warnings.push(countWarning(beyondEnd, "chapter", "past the last caption"));
   return { admitted, warnings };
 }
 
@@ -154,7 +151,14 @@ function admitChapters(
 export function transcriptToBlocks(transcript: TranscriptSuccess): TranscriptNormalization {
   // Whitespace-only cue bodies carry no readable text (their timing is
   // meaningless without text) — drop them before grouping so every paragraph
-  // run satisfies the InlineRun min(1) contract after normalization.
+  // run satisfies the InlineRun min(1) contract after normalization. The
+  // drop is DISCLOSED, never silent (the honesty guardrail): one calm count
+  // warning joins the chapter edge-rule warnings.
+  const whitespaceOnlyCount = transcript.segments.filter((s) => s.text.trim().length === 0).length;
+  const cueWarnings =
+    whitespaceOnlyCount > 0
+      ? [countWarning(whitespaceOnlyCount, "caption cue", "without readable text")]
+      : [];
   const segments: TranscriptSegment[] = transcript.segments
     .filter((s) => s.text.trim().length > 0)
     .sort((a, b) => a.startMs - b.startMs);
@@ -167,8 +171,9 @@ export function transcriptToBlocks(transcript: TranscriptSuccess): TranscriptNor
     // could be whitespace-only. An empty block list would fail
     // ArticleSchema.blocks min(1) downstream — the orchestrator's honest
     // extraction-unsupported refusal is the right outcome, so return the
-    // empty shape and let the shared refusal fire.
-    return { blocks, anchors, warnings: [] };
+    // empty shape (with the drop still disclosed) and let the shared
+    // refusal fire.
+    return { blocks, anchors, warnings: cueWarnings };
   }
 
   const { admitted: chapters, warnings } = admitChapters(
@@ -224,5 +229,5 @@ export function transcriptToBlocks(transcript: TranscriptSuccess): TranscriptNor
   }
   flushGroup();
 
-  return { blocks, anchors, warnings };
+  return { blocks, anchors, warnings: [...cueWarnings, ...warnings] };
 }

@@ -299,6 +299,29 @@ describe("IngestionMetaSchema", () => {
     ).toThrow();
   });
 
+  it("validates captionLanguage as a BCP-47 language tag (decision #26 — not merely min(1))", () => {
+    // Well-formed tags: bare language, region, script, script+region, numeric
+    // region, variant subtag, and the client's "und" fallback.
+    for (const tag of ["en", "pt-BR", "zh-Hans", "zh-Hant-TW", "es-419", "sl-rozaj", "und"]) {
+      expect(() =>
+        IngestionMetaSchema.parse({
+          ...validIngestionMeta,
+          transcript: { ...validTranscript, captionLanguage: tag },
+        }),
+      ).not.toThrow();
+    }
+    // Junk the boundary refuses: empty, prose, digits-only, one-letter,
+    // trailing hyphen, underscore separator.
+    for (const tag of ["", "not a language", "123", "e", "en-", "en_US"]) {
+      expect(() =>
+        IngestionMetaSchema.parse({
+          ...validIngestionMeta,
+          transcript: { ...validTranscript, captionLanguage: tag },
+        }),
+      ).toThrow();
+    }
+  });
+
   it("rejects a negative chapterIndex (int min(0) — positions are 0-based admitted order)", () => {
     expect(() =>
       IngestionMetaSchema.parse({

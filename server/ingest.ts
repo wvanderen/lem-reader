@@ -69,6 +69,7 @@ import type {
   IngestionRequest,
   IngestionResponse,
 } from "../src/ingestion/types";
+import { normalizeForTitleMatch } from "./titleMatch";
 
 /**
  * assertRoundTripAnchor — the SC#1 integration-truth gate. Samples 5 grapheme
@@ -239,18 +240,6 @@ function toIsoDatetimeOrNull(raw: string | undefined): string | undefined {
   if (raw === undefined || raw.length === 0) return undefined;
   const d = new Date(raw);
   return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
-}
-
-/**
- * normalizeForTitleMatch — lowercase + separator-collapse (the D11-09 fuzzy
- * matching basis: case/whitespace-insensitive containment). Hyphens and
- * underscores count as whitespace because the filename channel slugifies
- * spaces ("calm-report.pdf" ↔ page-1 heading "Calm Report") — the canonical
- * filename-fallback doubled-title case only matches when word separators are
- * normalized uniformly on both sides.
- */
-function normalizeForTitleMatch(s: string): string {
-  return s.toLowerCase().replace(/[-_\s]+/g, " ").trim();
 }
 
 /**

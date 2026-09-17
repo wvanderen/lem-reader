@@ -12,8 +12,18 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
+import fakeIndexedDB, { IDBKeyRange } from "fake-indexeddb";
+import { Dexie } from "dexie";
 import { ingest } from "../../../server/ingest";
 import { normalizeText } from "../../../src/content/normalizeText";
+
+// fake-indexeddb install at module top-level (the library-source.test.ts
+// pattern): the dedupe describe below drives the REAL dexieLibrarySource.has
+// seam, so Dexie must capture the shim before the db's first operation.
+Dexie.dependencies.indexedDB = fakeIndexedDB;
+Dexie.dependencies.IDBKeyRange = IDBKeyRange;
+(globalThis as { indexedDB?: typeof fakeIndexedDB }).indexedDB = fakeIndexedDB;
+(globalThis as { IDBKeyRange?: typeof IDBKeyRange }).IDBKeyRange = IDBKeyRange;
 
 vi.mock("node:dns", () => ({
   default: {
@@ -107,6 +117,19 @@ function fakeResponse(opts: {
     headers: new Headers(opts.headers ?? {}),
     text: async () => opts.body ?? "",
   } as Response;
+}
+
+/** wipeDatabase — clear the fake-indexeddb "lem-reader" db between dedupe
+ * tests (the library-source.test.ts helper, verbatim). */
+async function wipeDatabase(): Promise<void> {
+  await new Promise<void>((resolve) => {
+    const idb = (globalThis as { indexedDB?: typeof fakeIndexedDB }).indexedDB;
+    if (!idb) return resolve();
+    const req = idb.deleteDatabase("lem-reader");
+    req.onsuccess = () => resolve();
+    req.onerror = () => resolve();
+    req.onblocked = () => resolve();
+  });
 }
 
 function installRouter(fixtures: {
@@ -223,6 +246,26 @@ describe("happy path — manual caption track (fixture-driven)", () => {
     expect(shorts.article.id).toBe(watch.article.id);
   });
 
+  it("carries the track's full languageCode as captionLanguage and its BASE as article.lang (decision #26)", async () => {
+    // The "pt-BR" case pins the base-language interpretation end-to-end:
+    // article.lang stays the broad Intl.Segmenter locale ("pt"), while the
+    // FULL tag rides ingestionMeta.transcript.captionLanguage verbatim.
+    const player = JSON.parse(PLAYER_OK) as {
+      captions: { playerCaptionsTracklistRenderer: { captionTracks: { languageCode?: string }[] } };
+    };
+    player.captions.playerCaptionsTracklistRenderer.captionTracks[0]!.languageCode = "pt-BR";
+    installRouter({
+      player: JSON.stringify(player),
+      next: nextWithChapters(CHAPTERS),
+      caption: srv1Xml(CUES),
+    });
+    const response = await ingest({ url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" });
+    expect(response.ok).toBe(true);
+    if (!response.ok || !("article" in response)) return;
+    expect(response.article.lang).toBe("pt");
+    expect(response.article.ingestionMeta?.transcript?.captionLanguage).toBe("pt-BR");
+  });
+
   it("round-trips TextQuoteSelectors over the transcript text (the SC#1 gate passed)", async () => {
     const response = await ingest({ url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" });
     expect(response.ok).toBe(true);
@@ -303,5 +346,36 @@ describe("dispatch — only real YouTube URLs take the transcript branch", () =>
     expect(
       fetchCalls.some((c) => c.url.startsWith("https://www.youtube.com/youtubei")),
     ).toBe(false);
+  });
+});
+
+describe("dedupe — watch/shorts/youtu.be collapse to ONE library article", () => {
+  beforeEach(async () => {
+    installRouter({
+      player: PLAYER_OK,
+      next: nextWithChapters(CHAPTERS),
+      caption: srv1Xml(CUES),
+    });
+    await wipeDatabase();
+  });
+
+  it("a second URL form of the same video hits the has() dedupe-refuse seam (already-in-library)", async () => {
+    // Lazy import — the modules under test load AFTER the fake-indexeddb
+    // install at module top-level (the library-source.test.ts pattern).
+    const { dexieLibrarySource } = await import("../../../src/ingestion/LibrarySource");
+    const watch = await ingest({ url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" });
+    expect(watch.ok).toBe(true);
+    if (!watch.ok || !("article" in watch)) return expect.unreachable();
+    await dexieLibrarySource.save(watch.article);
+    // The add dialog's saveArticle consults dexieLibrarySource.has BEFORE
+    // save (D7-07): a different URL form of the same video derives the SAME
+    // yt-<hash> id, so the second add refuses (already-in-library) instead
+    // of saving a twin article.
+    for (const url of ["https://youtu.be/dQw4w9WgXcQ?t=42", "https://www.youtube.com/shorts/dQw4w9WgXcQ"]) {
+      const again = await ingest({ url });
+      expect(again.ok).toBe(true);
+      if (!again.ok || !("article" in again)) return expect.unreachable();
+      expect(await dexieLibrarySource.has(again.article.id)).toBe(true);
+    }
   });
 });

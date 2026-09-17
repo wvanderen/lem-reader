@@ -252,6 +252,17 @@ export type ArticleSource = z.infer<typeof ArticleSourceSchema>;
  * above). Server/youtubeTranscript.ts keeps consuming it via the re-export. */
 export const YOUTUBE_VIDEO_ID_REGEX = /^[A-Za-z0-9_-]{11}$/;
 
+/** BCP47_LANGUAGE_TAG_REGEX — a pragmatic BCP-47 language-tag shape:
+ * language subtag (2-3 alpha), optional script (4 alpha), optional region
+ * (2 alpha or 3 digits — "en", "pt-BR", "zh-Hans", "zh-Hant-TW", "es-419"),
+ * optional variant subtags (5-8 alphanumerics). Deliberately NOT the full
+ * RFC 5646 grammar (grandfathered and private-use primary subtags excluded)
+ * — the boundary's job is refusing junk strings, not certifying compliance.
+ * Decision #26: captionLanguage carries the chosen track's FULL code here,
+ * so it is validated as a language tag, not merely min(1). */
+export const BCP47_LANGUAGE_TAG_REGEX =
+  /^[A-Za-z]{2,3}(-[A-Za-z]{4})?(-(?:[A-Za-z]{2}|\d{3}))?(-[A-Za-z0-9]{5,8})*$/;
+
 /** TranscriptSegmentAnchorSchema — ONE block-keyed timestamp: `blockIndex`
  * indexes the article's persisted `blocks` array (stable per revision — the
  * same stability the pagination annotations depend on; any future change that
@@ -279,7 +290,7 @@ export const TranscriptMetaSchema = z.object({
   videoId: z.string().regex(YOUTUBE_VIDEO_ID_REGEX),
   durationSeconds: z.number().int().min(0),
   captionSource: z.enum(["manual", "asr"]),
-  captionLanguage: z.string().min(1),
+  captionLanguage: z.string().regex(BCP47_LANGUAGE_TAG_REGEX), // decision #26: BCP-47, validated at the boundary
   segments: z.array(TranscriptSegmentAnchorSchema),
 });
 export type TranscriptMeta = z.infer<typeof TranscriptMetaSchema>;
