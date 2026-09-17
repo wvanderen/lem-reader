@@ -44,6 +44,14 @@ interface LibraryRowProps {
    * h3 chapter titles) so heading order is preserved within the group.
    */
   headingLevel?: 2 | 3;
+  /**
+   * Issue #38 — the quiet "{duration} read here" meta line (the ambient
+   * stats card enrichment). Undefined when the article has no accrued
+   * reading time at or above one minute — the suppression IS the empty
+   * state. Plain text (readingStats.timeReadLabel); no interactive
+   * elements, no new keyboard stops.
+   */
+  timeReadLabel?: string;
 }
 
 export function LibraryRow({
@@ -54,6 +62,7 @@ export function LibraryRow({
   onEdit,
   onReadingStateChange,
   headingLevel = 2,
+  timeReadLabel,
 }: LibraryRowProps) {
   const id = article.id;
   const ratio = location ? Math.min(1, location.graphemeOffset / total) : 0;
@@ -87,6 +96,9 @@ export function LibraryRow({
           {/* D8-02 source indicator + LIB-05 source link */}
           <SourceBadge article={article} />
         </div>
+        {/* Issue #38 — the quiet "{duration} read here" meta line. Absent
+            under one minute of accrued time (silence is the empty state). */}
+        {timeReadLabel && <p className="meta library-row-time-read">{timeReadLabel}</p>}
         {/* D8-05 display-only tag chips on the row (no edit affordance) */}
         {tags.length > 0 && (
           <ul className="library-row-tags">

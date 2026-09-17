@@ -41,13 +41,16 @@
 // from the ONE useLibrarySnapshot mount, and every write path (remove,
 // edit, add, read-state) follows up with the ONE invalidateLibrarySnapshot()
 // call instead of bumping a local refreshKey.
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CanonicalArticle } from "../../content/types";
 import { LibrarySearch } from "./LibrarySearch";
 import { TagFilter } from "./TagFilter";
 import { LibraryRow } from "./LibraryRow";
 import { BookRow } from "./BookRow";
 import { ContinueReadingStrip } from "./ContinueReadingStrip";
+// Issue #38 — the ambient reading-stats strip + its pure derivations.
+import { ReadingStatsStrip } from "./ReadingStatsStrip";
+import { deriveReadingStats, timeReadLabel } from "./readingStats";
 import { filterLibrary, filterBooks } from "./libraryFilter";
 import { effectiveTitle } from "./effectiveMetadata";
 import { articleReadingState, bookReadingState, countByState } from "./readingState";
@@ -405,6 +408,27 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
   const standaloneArticles = snapshot.standaloneArticles;
   const chaptersByBook = snapshot.chaptersByBook;
 
+  // Issue #38 — the per-article "time read here" labels (the card meta
+  // line). One pure fold over the snapshot's session rows (readingStats.ts
+  // — the same deriveReadingStats the strip runs); the under-one-minute
+  // suppression lives behind timeReadLabel, so this map carries labels
+  // ONLY for articles whose quiet line may render. Recomputes on snapshot
+  // identity change only — an invalidation reload keeps the settled map
+  // mounted until the fresh snapshot lands (stale-while-revalidate).
+  const timeReadByArticleId = useMemo(() => {
+    const knownArticleIds = new Set(snapshot.articles.map((a) => a.id));
+    const { secondsByArticleId } = deriveReadingStats(
+      snapshot.readingSessions,
+      knownArticleIds,
+    );
+    const labels = new Map<string, string>();
+    for (const [articleId, seconds] of secondsByArticleId) {
+      const label = timeReadLabel(seconds);
+      if (label !== undefined) labels.set(articleId, label);
+    }
+    return labels;
+  }, [snapshot]);
+
   // Plan 14-02 (D14-20/23/24) — per-view membership from the ONE policy
   // module, derived in the SAME render body as the switcher counts below
   // (agreement is structural, never copy-synchronized). Standalone articles
@@ -538,6 +562,19 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
           }}
         />
       </section>
+      {/* (1b) Issue #38 — the ambient reading-stats strip, BETWEEN continue
+          reading and the list. Plain text in document order — no heading,
+          no destination, no interactive elements (zero new keyboard stops);
+          silent at zero visits (no backfill — silence IS the empty state).
+          The finished count rides from the SAME countByState fold the view
+          switcher uses (D14-23/D14-24 — the strip's "{N} finished." cannot
+          disagree with the Finished view's count). Renders null while
+          loading/failed — spare chrome, the strip discipline. */}
+      <ReadingStatsStrip
+        snapshot={snapshot}
+        ready={status === "ready"}
+        finishedCount={stateCounts.finished}
+      />
       {/* Plan 16-03 (D16-03) — the permanently-mounted add-content section
           DISSOLVES: the three ingestion forms now live behind the header
           Add button's dialog (ADD-01). The library-load .status live
@@ -637,6 +674,7 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
                   article={a}
                   location={locationsByArticle.get(a.id)}
                   total={totalsById.get(a.id) ?? 0}
+                  timeReadLabel={timeReadByArticleId.get(a.id)}
                   onReadingStateChange={async (read) => {
                     await setArticleReadState(a, read);
                     invalidateLibrarySnapshot();

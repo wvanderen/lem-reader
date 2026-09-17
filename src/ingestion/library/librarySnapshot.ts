@@ -47,6 +47,12 @@
 //                             view's join input and the highlights export's
 //                             payload; loadAllHighlights/loadAllNotes keep
 //                             their calm corrupt-row-drop derivations).
+//   - readingSessions       — EVERY persisted ReadingSessionRecord (issue
+//                             #38 — the ambient stats strip's whole-history
+//                             payload). Fail-quiet like books: stats are
+//                             non-critical chrome (D2-13), so a sessions
+//                             read failure routes calmly to [] and the
+//                             strip stays silent.
 //
 // The module is a data seam, not a cache: every load re-reads the stores.
 // Invalidation is a broadcast, not state — subscribers (useLibrarySnapshot)
@@ -58,12 +64,14 @@ import type {
   HighlightRecord,
   LocationRecord,
   NoteRecord,
+  ReadingSessionRecord,
 } from "../../content/schema";
 import { graphemeClusters, normalizeText } from "../../content/normalizeText";
 import { listArticles } from "../../content/repository";
 import { loadAllLocations } from "../../persistence/locationStore";
 import { loadAllHighlights } from "../../persistence/highlightsStore";
 import { loadAllNotes } from "../../persistence/notesStore";
+import { loadAllReadingSessions } from "../../persistence/readingSessionsStore";
 import { listBooks } from "../../persistence/booksStore";
 import { loadAllTags } from "./tagsStore";
 import { latestLocationByArticle } from "../../reader/readingPosition";
@@ -97,6 +105,10 @@ export interface LibrarySnapshot {
   /** EVERY persisted NoteRecord (keyed by highlightId; corrupt rows already
    * dropped at the seam). */
   notes: NoteRecord[];
+  /** EVERY persisted ReadingSessionRecord (issue #38 — the stats strip's
+   * payload; fail-quiet [] on a sessions-read failure; corrupt rows already
+   * dropped at the seam). */
+  readingSessions: ReadingSessionRecord[];
 }
 
 /** The pre-first-load snapshot: every collection empty, every fold settled. */
@@ -111,6 +123,7 @@ export const EMPTY_LIBRARY_SNAPSHOT: LibrarySnapshot = {
   tags: [],
   highlights: [],
   notes: [],
+  readingSessions: [],
 };
 
 /**
@@ -118,18 +131,23 @@ export const EMPTY_LIBRARY_SNAPSHOT: LibrarySnapshot = {
  * store seams in parallel and derives every fold from the same settled
  * results. Rejects only when a load the library cannot render without
  * fails (articles/locations/tags/highlights/notes — the mirrors of the old
- * LibraryView/ReviewView load effects' Promise.all); a books failure stays
- * fail-quiet ([]).
+ * LibraryView/ReviewView load effects' Promise.all); a books or
+ * reading-sessions failure stays fail-quiet ([]).
  */
 export async function loadLibrarySnapshot(): Promise<LibrarySnapshot> {
-  const [articles, locations, tags, booksResult, highlights, notes] = await Promise.all([
-    listArticles(),
-    loadAllLocations(),
-    loadAllTags(),
-    listBooks(),
-    loadAllHighlights(),
-    loadAllNotes(),
-  ]);
+  const [articles, locations, tags, booksResult, highlights, notes, readingSessions] =
+    await Promise.all([
+      listArticles(),
+      loadAllLocations(),
+      loadAllTags(),
+      listBooks(),
+      loadAllHighlights(),
+      loadAllNotes(),
+      // Issue #38 — fail-quiet like books: the stats strip is spare chrome,
+      // so a sessions-read failure routes calmly to [] (never blocks the
+      // library the reader cannot render without).
+      loadAllReadingSessions().catch(() => []),
+    ]);
   const books = booksResult.ok ? booksResult.books : [];
 
   // The D12-01 partition — chapter members grouped under their Book, never
@@ -180,6 +198,7 @@ export async function loadLibrarySnapshot(): Promise<LibrarySnapshot> {
     tags: [...tagSet].sort((a, b) => a.localeCompare(b)),
     highlights,
     notes,
+    readingSessions,
   };
 }
 
