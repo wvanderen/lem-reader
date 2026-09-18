@@ -6,6 +6,9 @@
 //   2. it is ABSENT when undefined (under-one-minute suppression — silence
 //      is the empty state);
 //   3. it carries no interactive elements (no new keyboard stops).
+// Issue #41 — plus the transcript-article video-duration line (flow N3):
+// rendered from the persisted ingestionMeta.transcript duration, absent for
+// every other source, no interactive elements.
 import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 
@@ -19,8 +22,14 @@ vi.mock("../../../src/ingestion/library/tagsStore", () => ({
 import { LibraryRow } from "../../../src/ingestion/library/LibraryRow";
 import { ArticleSchema } from "../../../src/content/schema";
 import type { CanonicalArticle } from "../../../src/content/schema";
+import {
+  FAKE_HASH,
+  transcriptIngestionMeta,
+} from "../fixtures/transcript-meta";
 
-function makeArticle(): CanonicalArticle {
+function makeArticle(transcript?: {
+  durationSeconds: number;
+}): CanonicalArticle {
   return ArticleSchema.parse({
     id: "row-article",
     revision: 1,
@@ -28,15 +37,26 @@ function makeArticle(): CanonicalArticle {
     provenance: {
       title: "Row Article",
       retrievedAt: "2026-09-01T00:00:00.000Z",
-      originalHtmlHash: "sha256:" + "0".repeat(64),
+      originalHtmlHash: FAKE_HASH,
     },
     blocks: [{ kind: "paragraph", content: [{ text: "Body text." }] }],
+    ...(transcript
+      ? {
+          ingestionMeta: transcriptIngestionMeta({
+            durationSeconds: transcript.durationSeconds,
+          }),
+        }
+      : {}),
   });
 }
 
-function renderRow(timeReadLabel?: string) {
+function renderRow(timeReadLabel?: string, article?: CanonicalArticle) {
   return render(
-    <LibraryRow article={makeArticle()} total={100} timeReadLabel={timeReadLabel} />,
+    <LibraryRow
+      article={article ?? makeArticle()}
+      total={100}
+      timeReadLabel={timeReadLabel}
+    />,
   );
 }
 
@@ -56,6 +76,27 @@ describe("LibraryRow — the time-read meta line (issue #38)", () => {
   it("the label line carries no interactive elements (no new keyboard stops)", () => {
     renderRow("5 min read here");
     const line = document.querySelector(".library-row-time-read");
+    expect(
+      line!.querySelectorAll("a, button, input, select, textarea, [tabindex]"),
+    ).toHaveLength(0);
+  });
+});
+
+describe("LibraryRow — the video-duration meta line (issue #41, flow N3)", () => {
+  it("renders the transcript duration as quiet text beside the source badge", () => {
+    renderRow(undefined, makeArticle({ durationSeconds: 735 }));
+    const line = screen.getByText("12 min");
+    expect(line).toHaveClass("meta", "library-row-duration");
+  });
+
+  it("renders nothing for a non-transcript article (silence is the empty state)", () => {
+    const { container } = renderRow(undefined);
+    expect(container.querySelector(".library-row-duration")).toBeNull();
+  });
+
+  it("the duration line carries no interactive elements (no new keyboard stops)", () => {
+    renderRow(undefined, makeArticle({ durationSeconds: 735 }));
+    const line = document.querySelector(".library-row-duration");
     expect(
       line!.querySelectorAll("a, button, input, select, textarea, [tabindex]"),
     ).toHaveLength(0);

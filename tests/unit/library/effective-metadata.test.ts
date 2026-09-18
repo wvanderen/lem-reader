@@ -23,7 +23,9 @@ import { ArticleSchema } from "../../../src/content/schema";
 import {
   effectiveAuthor,
   effectiveTitle,
+  videoDuration,
 } from "../../../src/ingestion/library/effectiveMetadata";
+import { transcriptIngestionMeta } from "../fixtures/transcript-meta";
 
 /** Build a minimal valid article row (the ingestion-schema.test.ts
  * validV1Article shape) with per-test overrides spread over it. The row is
@@ -113,5 +115,35 @@ describe("effectiveTitle/effectiveAuthor (META-02 — one derivation; META-03 �
     );
     expect(article.provenance.author).toBeUndefined();
     expect(effectiveAuthor(article)).toBeUndefined();
+  });
+});
+
+describe("videoDuration (issue #41, flow N3 — one duration derivation)", () => {
+  it("a transcript article derives the formatDuration voice from the persisted duration", () => {
+    const article = ArticleSchema.parse(
+      makeRow({
+        ingestionMeta: transcriptIngestionMeta({ durationSeconds: 735 }),
+      }),
+    );
+    expect(videoDuration(article)).toBe("12 min");
+  });
+
+  it("a non-transcript article derives no duration (absence is the empty state)", () => {
+    const article = ArticleSchema.parse(makeRow());
+    expect(videoDuration(article)).toBeUndefined();
+  });
+
+  it("an ingestionMeta without a transcript derives no duration", () => {
+    const article = ArticleSchema.parse(
+      makeRow({
+        ingestionMeta: {
+          source: "url",
+          originalHtmlHash: "sha256:abc123def456",
+          extractionConfidence: "high",
+          extractionWarnings: [],
+        },
+      }),
+    );
+    expect(videoDuration(article)).toBeUndefined();
   });
 });

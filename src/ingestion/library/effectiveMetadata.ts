@@ -2,9 +2,10 @@
 // Plan 17-01 Task 1 — PURE effective-metadata derivation (META-02's
 // structural guarantee, on the D14-20 one-derivation-point precedent:
 // ONE derivation owned by ONE module). Computes the display title/author
-// for an article from EXISTING row fields — zero I/O, zero React, zero
-// Dexie queries of its own (the readingState.ts store-seam discipline:
-// components own the reads, this module owns the algebra).
+// and the transcript video duration for an article from EXISTING row
+// fields — zero I/O, zero React, zero Dexie queries of its own (the
+// readingState.ts store-seam discipline: components own the reads, this
+// module owns the algebra).
 //
 // Consumers (every surface imports THIS module — never fork the ?? chain;
 // forking title derivation is the Phase 17 anti-pattern):
@@ -28,6 +29,7 @@
 //   - META-01: the canonical record is NEVER touched by derivation — the
 //     override is layered ON TOP of it.
 import type { CanonicalArticle } from "../../content/types";
+import { formatDuration } from "./readingStats";
 
 /**
  * effectiveTitle (META-02) — the ONE display-title derivation. The
@@ -53,4 +55,18 @@ export function effectiveAuthor(
   article: CanonicalArticle,
 ): string | undefined {
   return article.readerAuthor ?? article.provenance.author;
+}
+
+/**
+ * videoDuration (issue #41, flow N3) — the ONE display-duration derivation:
+ * the persisted transcript video duration through the ONE duration voice
+ * (readingStats.formatDuration). Undefined for every non-transcript
+ * article — absence is the empty state, never a placeholder (the same
+ * silence discipline as effectiveAuthor's absent-author case).
+ */
+export function videoDuration(
+  article: CanonicalArticle,
+): string | undefined {
+  const transcript = article.ingestionMeta?.transcript;
+  return transcript ? formatDuration(transcript.durationSeconds) : undefined;
 }

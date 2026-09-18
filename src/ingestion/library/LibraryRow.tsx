@@ -4,7 +4,11 @@ import { ProgressHairline } from "../../reader/ProgressHairline";
 import { ReadingStateButton } from "./ReadingStateButton";
 import { SourceBadge } from "./SourceBadge";
 import { articleReadingState } from "./readingState";
-import { effectiveTitle, effectiveAuthor } from "./effectiveMetadata";
+import {
+  effectiveTitle,
+  effectiveAuthor,
+  videoDuration,
+} from "./effectiveMetadata";
 
 interface LibraryRowProps {
   /** The article this row represents. */
@@ -95,6 +99,11 @@ export function LibraryRow({
           {effectiveAuthor(article) && <p className="meta">{effectiveAuthor(article)}</p>}
           {/* D8-02 source indicator + LIB-05 source link */}
           <SourceBadge article={article} />
+          {/* Issue #41 (flow N3) — the video duration as text (absent for
+              every non-transcript source) via the ONE duration derivation. */}
+          {videoDuration(article) && (
+            <p className="meta library-row-duration">{videoDuration(article)}</p>
+          )}
         </div>
         {/* Issue #38 — the quiet "{duration} read here" meta line. Absent
             under one minute of accrued time (silence is the empty state). */}
