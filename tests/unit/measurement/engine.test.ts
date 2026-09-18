@@ -287,6 +287,7 @@ const settingsStub: ReaderSettings = {
   spacing: "comfortable",
   theme: "sepia",
   readingMode: "paginated",
+  rate: 1,
 };
 
 /** Seed eligibility mirroring the committed fingerprint: headings eligible. */

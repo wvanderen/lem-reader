@@ -138,6 +138,13 @@ import {
   effectiveTitle,
   effectiveAuthor,
 } from "../ingestion/library/effectiveMetadata";
+// Issue #40 — the minimal speakable read-aloud path: the transport bar
+// (Play/Pause/Stop, fixed bottom) + the engine hook. Listening is reading
+// (ADR 0001): the listened canonical position drives the SAME shared
+// location-save discipline as scroll/page turns, persists, restores, and
+// marks the article finished when the last chunk completes by ear.
+import { useReadAloud } from "../reader/useReadAloud";
+import { ReadAloudBar } from "../reader/ReadAloudBar";
 
 /** The D4-10 mode-toggle handler signature (App threads a ref of this shape). */
 type ModeToggleHandler = () => void;
@@ -764,6 +771,39 @@ export function ArticleView({
     noteActivity(endPinOffset(article));
     saveLocationNow(endPinOffset(article));
   }, [article, saveLocationNow, noteActivity]);
+
+  // Issue #40 (ADR 0001 — listening is reading): the read-aloud session.
+  //   - Play starts at the reader's current canonical position (the live
+  //     D4-10 anchor — the same currency as scroll/page-turn saves).
+  //   - While speaking, the listened position IS the reading position: it
+  //     refreshes the anchor ref (mode swaps/deep links stay coherent) and
+  //     rides the SAME debounced save + dual-flush discipline as the scroll
+  //     path, so leaving and reopening restores where listening reached.
+  //   - Finishing by ear persists the ONE end-pin offset SYNCHRONOUSLY
+  //     (saveLocationNow — the flush, never the debounce), which crosses the
+  //     FINISHED_THRESHOLD and marks the article finished — the same
+  //     contract as handleMarkRead above.
+  const {
+    supported: readAloudSupported,
+    state: readAloudState,
+    followLevel: readAloudFollowLevel,
+    announcement: readAloudAnnouncement,
+    play: playReadAloud,
+    pauseOrResume: pauseOrResumeReadAloud,
+    stop: stopReadAloud,
+  } = useReadAloud(article, {
+    getStartOffset: () => currentAnchorOffsetRef.current,
+    onListenProgress: (offset) => {
+      currentAnchorOffsetRef.current = offset;
+      noteActivity(offset);
+      scheduleLocationSave(offset);
+    },
+    onListenFinished: () => {
+      if (!article) return;
+      noteActivity(endPinOffset(article));
+      saveLocationNow(endPinOffset(article));
+    },
+  });
 
   // Phase 4 Plan 04-04 (D4-09 + D4-10): the mode-toggle handler. Captures the
   // anchor SYNCHRONOUSLY before calling update() so the post-swap render can
@@ -2275,6 +2315,26 @@ export function ArticleView({
           exportingHighlights={exportingHighlights}
         />
         </HighlightOverlayProvider>
+        {/* Issue #40: the fixed compact transport bar — mounted in BOTH
+            reading modes (manual turning/scrolling during playback is still
+            allowed at this stage). Position:fixed keeps it out of the
+            paginated grid flow, so mounting it can never change
+            .page-viewport geometry (the chapter-nav-page precedent). The
+            primary button's name flips between "Play" and "Pause" as state;
+            the ONE polite transport role=status rides inside the bar
+            component. No focus moves on play; the only start is Play. */}
+        <ReadAloudBar
+          supported={readAloudSupported}
+          state={readAloudState}
+          followLevel={readAloudFollowLevel}
+          announcement={readAloudAnnouncement}
+          onPrimary={() =>
+            readAloudState === "playing"
+              ? pauseOrResumeReadAloud()
+              : playReadAloud()
+          }
+          onStop={stopReadAloud}
+        />
       </main>
     </>
   );

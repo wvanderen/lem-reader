@@ -50,6 +50,7 @@ const validSettings: ReaderSettings = {
   spacing: "spacious",
   theme: "dark",
   readingMode: "paginated",
+  rate: 1,
 };
 
 /** A record that will fail ReaderSettingsSchema.safeParse (bad enum). */
