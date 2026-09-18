@@ -35,6 +35,7 @@ const NON_DEFAULT: ReaderSettings = {
   spacing: "spacious",
   theme: "dark",
   readingMode: "scrolling",
+  rate: 1,
 };
 
 type ThrowSpec = { getItem?: boolean; setItem?: boolean; removeItem?: boolean };
@@ -115,8 +116,8 @@ describe("readSettingsMirror", () => {
       JSON.stringify({ ...NON_DEFAULT, theme: "neon" }),
     ],
     [
-      "unknown schemaVersion (v3 forward-reject)",
-      JSON.stringify({ ...NON_DEFAULT, schemaVersion: 3 }),
+      "unknown schemaVersion (v4 forward-reject)",
+      JSON.stringify({ ...NON_DEFAULT, schemaVersion: 4 }),
     ],
     [
       "non-object stored value",

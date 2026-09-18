@@ -19,7 +19,9 @@ import { DEFAULT_SETTINGS } from "../../src/settings/defaults";
 // may or may not validate; Zod is the authority, not TS here).
 function validSettings(overrides: Record<string, unknown> = {}): unknown {
   return {
-    schemaVersion: 2,
+    // The canonical v3 write shape (issue #40). Tests of legacy v1/v2 rows
+    // pass an explicit schemaVersion override.
+    schemaVersion: 3,
     font: "serif",
     size: 18,
     measure: 64,
@@ -27,6 +29,7 @@ function validSettings(overrides: Record<string, unknown> = {}): unknown {
     theme: "sepia",
     readingMode: "paginated",
     animatePageTurns: false,
+    rate: 1,
     ...overrides,
   };
 }
@@ -50,7 +53,7 @@ describe("ReaderSettingsSchema accepts valid combinations", () => {
   it("parses the D-07 default baseline and round-trips every field", () => {
     const parsed = ReaderSettingsSchema.parse(validSettings());
     expect(parsed).toEqual(DEFAULT_SETTINGS);
-    expect(parsed.schemaVersion).toBe(2);
+    expect(parsed.schemaVersion).toBe(3);
     expect(parsed.readingMode).toBe("paginated");
   });
 
@@ -126,10 +129,11 @@ describe("ReaderSettingsSchema accepts valid combinations", () => {
 
 describe("ReaderSettingsSchema.parse rejects out-of-contract records", () => {
   it.each([
-    // schemaVersion — STATE-04 hook. After the 04-02 bump, the schema accepts
-    // both v1 (legacy rows hydrated via readingMode .default) and v2
-    // (canonical write). v3+ forward-rejects (V5 boundary discipline).
-    ["non-literal schemaVersion (STATE-04 hook — v3 forward-rejects)", { schemaVersion: 3 }],
+    // schemaVersion — STATE-04 hook. After the 04-02 bump the schema accepted
+    // v1+v2; issue #40 (read-aloud voice + rate) adds v3 as the canonical
+    // write version. v1/v2 legacy rows hydrate via .defaults; v4+
+    // forward-rejects (V5 boundary discipline).
+    ["non-literal schemaVersion (STATE-04 hook — v4 forward-rejects)", { schemaVersion: 4 }],
     ["schemaVersion as string", { schemaVersion: "1" }],
     ["missing schemaVersion", { schemaVersion: undefined }],
     ["unknown font value", { font: "comic-sans" }],
@@ -185,18 +189,75 @@ describe("ReaderSettingsSchema hydrates readingMode for legacy v1 rows (D4-12, P
 
   it("a v2 row may explicitly carry readingMode: 'scrolling'", () => {
     const parsed = ReaderSettingsSchema.parse(
-      validSettings({ readingMode: "scrolling" }),
+      validSettings({ schemaVersion: 2, readingMode: "scrolling" }),
     );
     expect(parsed.readingMode).toBe("scrolling");
     expect(parsed.schemaVersion).toBe(2);
   });
 
-  it("DEFAULT_SETTINGS mirrors the v2 canonical shape (schemaVersion 2 + readingMode paginated)", () => {
-    expect(DEFAULT_SETTINGS.schemaVersion).toBe(2);
+  it("DEFAULT_SETTINGS mirrors the v3 canonical shape (schemaVersion 3 + readingMode paginated + read-aloud defaults)", () => {
+    expect(DEFAULT_SETTINGS.schemaVersion).toBe(3);
     expect(DEFAULT_SETTINGS.readingMode).toBe("paginated");
+    // Issue #40 — the read-aloud defaults: no picked voice (platform
+    // default) and the 1× rate multiplier.
+    expect(DEFAULT_SETTINGS.voice).toBeUndefined();
+    expect(DEFAULT_SETTINGS.rate).toBe(1);
     // Round-trip DEFAULT_SETTINGS through parse — proves the literal satisfies
     // the schema exactly (no missing/extra fields).
     expect(ReaderSettingsSchema.parse(DEFAULT_SETTINGS)).toEqual(DEFAULT_SETTINGS);
+  });
+});
+
+// ── Issue #40 — v2→v3 value-shape evolution (read-aloud voice + rate) ───────
+// Pitfall 9 (the readingMode mechanism): a v2 row lacking voice/rate hydrates
+// both via schema defaults on read; schemaVersion is NOT mutated by parse. A
+// v3 row carries them explicitly. voice is an opaque voiceURI string; rate is
+// the honest playable band [0.5, 2] (spike 0009: engines stall above 2).
+
+describe("ReaderSettingsSchema hydrates read-aloud prefs for legacy v1/v2 rows (issue #40, Pitfall 9)", () => {
+  it("a v1 row missing voice/rate hydrates both via defaults", () => {
+    const legacyRow = {
+      schemaVersion: 1,
+      font: "serif",
+      size: 18,
+      measure: 64,
+      spacing: "comfortable",
+      theme: "sepia",
+    };
+    const parsed = ReaderSettingsSchema.parse(legacyRow);
+    expect(parsed.schemaVersion).toBe(1); // schemaVersion is NOT mutated by parse
+    expect(parsed.voice).toBeUndefined();
+    expect(parsed.rate).toBe(1);
+  });
+
+  it("a v2 row missing voice/rate hydrates both via defaults and keeps its version", () => {
+    const parsed = ReaderSettingsSchema.parse(
+      validSettings({ schemaVersion: 2, rate: undefined }),
+    );
+    expect(parsed.schemaVersion).toBe(2); // schemaVersion is NOT mutated by parse
+    expect(parsed.voice).toBeUndefined();
+    expect(parsed.rate).toBe(1);
+  });
+
+  it("a v3 row carries the selected voice and a non-default rate", () => {
+    const parsed = ReaderSettingsSchema.parse(
+      validSettings({ schemaVersion: 3, voice: "Daniel", rate: 1.5 }),
+    );
+    expect(parsed.schemaVersion).toBe(3);
+    expect(parsed.voice).toBe("Daniel");
+    expect(parsed.rate).toBe(1.5);
+  });
+
+  it.each([
+    ["empty-string voiceURI", { voice: "" }],
+    ["voice as a number", { voice: 7 }],
+    ["rate below the playable band (0.4)", { rate: 0.4 }],
+    ["rate above the playable band (2.1 — engines stall above 2, spike 0009)", { rate: 2.1 }],
+    ["rate as a string", { rate: "1" }],
+  ])("throws when %s", (_label, override) => {
+    expect(() =>
+      ReaderSettingsSchema.parse(validSettings({ schemaVersion: 3, ...override })),
+    ).toThrow();
   });
 });
 
@@ -320,6 +381,7 @@ describe("applyTheme writes :root tokens from validated settings", () => {
       spacing: "spacious",
       theme: "dark",
       readingMode: "paginated",
+      rate: 1,
     });
     const root = document.documentElement;
     expect(root.dataset.theme).toBe("dark");

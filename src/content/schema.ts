@@ -402,12 +402,15 @@ export type Book = z.infer<typeof BookSchema>;
 // does NOT apply.
 export const ReaderSettingsSchema = z.object({
   // STATE-04 migration hook: Phase 4 (Plan 04-02, D4-12) bumped the canonical
-  // write version from 1 → 2 when readingMode was added. The union accepts
-  // BOTH literals so that an existing v1 row (no readingMode field) hydrates
-  // readingMode via the .default() below on read — Pitfall 9 (NO Dexie store
-  // change; the settings store is key-value, Dexie is opaque to the value
-  // shape). v3 and above forward-reject (V5 boundary discipline preserved).
-  schemaVersion: z.union([z.literal(1), z.literal(2)]),
+  // write version from 1 → 2 when readingMode was added. Issue #40 bumps the
+  // canonical write version 2 → 3 when the read-aloud preferences (voice +
+  // rate, below) were added. The union accepts ALL THREE literals so that an
+  // existing v1 row (no readingMode field) and a v2 row (no voice/rate
+  // fields) hydrate via the .default()s below on read — Pitfall 9 (NO Dexie
+  // store change; the settings store is key-value, Dexie is opaque to the
+  // value shape). v4 and above forward-reject (V5 boundary discipline
+  // preserved).
+  schemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   font: z.enum(["serif", "sans", "dyslexic"]),
   size: z.union([
     z.literal(16),
@@ -445,6 +448,20 @@ export const ReaderSettingsSchema = z.object({
   // value-shape migration mechanism: a v1 row lacking this field parses with
   // the default on read (Pitfall 9 — no data wipe, no migration script).
   readingMode: z.enum(["paginated", "scrolling"]).default("paginated"),
+  // Issue #40 — read-aloud preferences (the v2 → v3 bump). Both are applied
+  // to playback by the read-aloud engine; the Reading-settings controls
+  // arrive with the completion ticket.
+  //   voice: the selected SpeechSynthesisVoice.voiceURI. Optional by
+  //     contract — undefined means "the platform default voice" (never a
+  //     lie: a stale URI for an uninstalled voice resolves to the default at
+  //     play time, see src/readaloud/webSpeech.ts).
+  //   rate: the SpeechSynthesisUtterance.rate multiplier. The Web Speech
+  //     spec allows 0.1–10 but engines may constrain further, and field
+  //     reports show rate > 2 stalling Chrome (spike 0009 §2.1/§6) — the
+  //     stored contract is the honest playable band [0.5, 2]. .default(1)
+  //     hydrates v1/v2 rows (Pitfall 9, the readingMode mechanism above).
+  voice: z.string().min(1).optional(),
+  rate: z.number().min(0.5).max(2).default(1),
 });
 export type ReaderSettings = z.infer<typeof ReaderSettingsSchema>;
 

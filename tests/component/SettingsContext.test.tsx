@@ -213,6 +213,7 @@ describe("SettingsContext (02-02 persistence + STATE-05)", () => {
       measure: 58,
       spacing: "compact",
       theme: "dark",
+      rate: 1,
       readingMode: "paginated",
     };
     loadMock.mockResolvedValue({ ok: true, settings: persisted });
@@ -260,6 +261,7 @@ describe("SettingsContext (02-02 persistence + STATE-05)", () => {
       measure: 58,
       spacing: "compact",
       theme: "dark",
+      rate: 1,
       readingMode: "scrolling",
     };
     window.localStorage.setItem(

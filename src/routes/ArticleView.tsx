@@ -138,6 +138,13 @@ import {
   effectiveTitle,
   effectiveAuthor,
 } from "../ingestion/library/effectiveMetadata";
+// Issue #40 — the minimal speakable read-aloud path: the transport bar
+// (Play/Pause/Stop, fixed bottom) + the engine hook. Listening is reading
+// (ADR 0001): the listened canonical position drives the SAME shared
+// location-save discipline as scroll/page turns, persists, restores, and
+// marks the article finished when the last chunk completes by ear.
+import { useReadAloud } from "../reader/useReadAloud";
+import { ReadAloudBar } from "../reader/ReadAloudBar";
 
 /** The D4-10 mode-toggle handler signature (App threads a ref of this shape). */
 type ModeToggleHandler = () => void;
@@ -700,6 +707,18 @@ export function ArticleView({
     article?.id ?? null,
     () => currentAnchorOffsetRef.current,
   );
+  // The ONE shared progress-recording step (issue #40 — listening is
+  // reading): every position source (page turn, scroll anchor, listened
+  // utterance) rides the SAME reading-activity pulse + debounced location
+  // save. Mode-specific extras (precise-anchor tracking, the page-state
+  // mirror) stay with their callers.
+  const recordProgress = useCallback(
+    (offset: number) => {
+      noteActivity(offset);
+      scheduleLocationSave(offset);
+    },
+    [noteActivity, scheduleLocationSave],
+  );
   const handleAnchorChange = useCallback((offset: number) => {
     currentAnchorOffsetRef.current = offset;
     // Track the latest precise offset (only updated in paginated mode where
@@ -710,7 +729,6 @@ export function ArticleView({
     // idle cap could never distinguish an active page-turning reader from a
     // parked tab (the 18-03 Pitfall 2 shape: paginated signals must ride
     // the anchor path).
-    noteActivity(offset);
     // Phase 18 Plan 18-03 (Pitfall 2 closure — D18-06/UI-SPEC §Auto-Resolved
     // #8): persist the per-turn offset through the SHARED debounced save +
     // dual-flush discipline in useScrollSave (SAVE_DEBOUNCE_MS 1200; the
@@ -718,7 +736,7 @@ export function ArticleView({
     // call here). Latest-wins: the initial page-1 commit's offset-0 save is
     // replaced by the restore turn's offset before the debounce fires, so a
     // reopen-restore never overwrites the reader's saved location with 0.
-    scheduleLocationSave(offset);
+    recordProgress(offset);
     // Plan 12-06 (D12-05): mirror the committed page state (the handle reads
     // from refs, so by the time this effect-scoped callback runs the values
     // are post-commit) so the chapter nav's first/last-page gating reacts to
@@ -739,11 +757,11 @@ export function ArticleView({
       }
       return next;
     });
-    // scheduleLocationSave is a stable useCallback (empty deps in
-    // useScrollSave) — listing it keeps the exhaustive-deps rule satisfied
-    // without changing this callback's identity. noteActivity (issue #34)
-    // is likewise stable.
-  }, [scheduleLocationSave, noteActivity]);
+    // recordProgress is a stable useCallback over the stable
+    // scheduleLocationSave (empty deps in useScrollSave) and noteActivity
+    // (issue #34) — listing it keeps the exhaustive-deps rule satisfied
+    // without changing this callback's identity.
+  }, [recordProgress]);
 
   // 260908-oht: the explicit end-of-article completion gesture (Issue #2:
   // one of the four decision sites that call readingPosition). Persists
@@ -764,6 +782,37 @@ export function ArticleView({
     noteActivity(endPinOffset(article));
     saveLocationNow(endPinOffset(article));
   }, [article, saveLocationNow, noteActivity]);
+
+  // Issue #40 (ADR 0001 — listening is reading): the read-aloud session.
+  //   - Play starts at the reader's current canonical position (the live
+  //     D4-10 anchor — the same currency as scroll/page-turn saves).
+  //   - While speaking, the listened position IS the reading position: it
+  //     refreshes the anchor ref (mode swaps/deep links stay coherent) and
+  //     rides the SAME debounced save + dual-flush discipline as the scroll
+  //     path, so leaving and reopening restores where listening reached.
+  //   - Finishing by ear persists the ONE end-pin offset SYNCHRONOUSLY
+  //     (saveLocationNow — the flush, never the debounce), which crosses the
+  //     FINISHED_THRESHOLD and marks the article finished — the same
+  //     contract as handleMarkRead above.
+  const {
+    state: readAloudState,
+    followLevel: readAloudFollowLevel,
+    announcement: readAloudAnnouncement,
+    play: playReadAloud,
+    pauseOrResume: pauseOrResumeReadAloud,
+    stop: stopReadAloud,
+  } = useReadAloud(article, {
+    getStartOffset: () => currentAnchorOffsetRef.current,
+    onListenProgress: (offset) => {
+      currentAnchorOffsetRef.current = offset;
+      recordProgress(offset);
+    },
+    onListenFinished: () => {
+      if (!article) return;
+      noteActivity(endPinOffset(article));
+      saveLocationNow(endPinOffset(article));
+    },
+  });
 
   // Phase 4 Plan 04-04 (D4-09 + D4-10): the mode-toggle handler. Captures the
   // anchor SYNCHRONOUSLY before calling update() so the post-swap render can
@@ -2275,6 +2324,25 @@ export function ArticleView({
           exportingHighlights={exportingHighlights}
         />
         </HighlightOverlayProvider>
+        {/* Issue #40: the fixed compact transport bar — mounted in BOTH
+            reading modes (manual turning/scrolling during playback is still
+            allowed at this stage). Position:fixed keeps it out of the
+            paginated grid flow, so mounting it can never change
+            .page-viewport geometry (the chapter-nav-page precedent). The
+            primary button's name flips between "Play" and "Pause" as state;
+            the ONE polite transport role=status rides inside the bar
+            component. No focus moves on play; the only start is Play. */}
+        <ReadAloudBar
+          state={readAloudState}
+          followLevel={readAloudFollowLevel}
+          announcement={readAloudAnnouncement}
+          onPrimary={() =>
+            readAloudState === "playing"
+              ? pauseOrResumeReadAloud()
+              : playReadAloud()
+          }
+          onStop={stopReadAloud}
+        />
       </main>
     </>
   );

@@ -118,6 +118,7 @@ export const DEFAULT_CALIBRATION_SETTINGS: ReaderSettings = {
   measure: 64,
   spacing: "comfortable",
   theme: "sepia",
+  rate: 1,
   readingMode: "paginated",
 };
 

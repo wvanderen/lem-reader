@@ -74,8 +74,11 @@ const LEGACY_MAX_RECORD = {
 
 /** The same record after the clamp — ONLY measure changes (D21-03; issue #18
  * remaps the legacy maximum onto the nearest lower step of the extended
- * uniform-6 ladder). */
+ * uniform-6 ladder). The RAW clamp never adds fields; the Dexie/mirror SEAM
+ * expectations below additionally carry the issue #40 read-aloud default
+ * (rate 1) because those paths go through the Zod read boundary. */
 const CLAMPED_RECORD = { ...LEGACY_MAX_RECORD, measure: 70 };
+const CLAMPED_RECORD_PARSED = { ...CLAMPED_RECORD, rate: 1 };
 
 beforeEach(() => {
   settingsGet.mockReset();
@@ -136,7 +139,7 @@ describe("loadSettings clamps the legacy maximum calmly (D21-03 seam 1)", () => 
   it("a stored-72 Dexie row loads ok at measure 70 with every other field intact (never WipeConfirm)", async () => {
     settingsGet.mockResolvedValue({ key: "reader-prefs", value: { ...LEGACY_MAX_RECORD } });
     const result = await loadSettings();
-    expect(result).toEqual({ ok: true, settings: CLAMPED_RECORD });
+    expect(result).toEqual({ ok: true, settings: CLAMPED_RECORD_PARSED });
   });
 
   it.each([
@@ -164,7 +167,7 @@ describe("readSettingsMirror clamps the legacy maximum calmly (D21-03 seam 2)", 
       SETTINGS_MIRROR_KEY,
       JSON.stringify(LEGACY_MAX_RECORD),
     );
-    expect(readSettingsMirror()).toEqual(CLAMPED_RECORD);
+    expect(readSettingsMirror()).toEqual(CLAMPED_RECORD_PARSED);
   });
 
   it.each([
