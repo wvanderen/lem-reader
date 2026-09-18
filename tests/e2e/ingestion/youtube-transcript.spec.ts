@@ -21,6 +21,10 @@
 //   as for any text article (flows A–L inherit; no special-casing).
 import { test, expect, type Page } from "@playwright/test";
 import { openAddDialog } from "../library/add-dialog";
+import {
+  selectRangeInBlock,
+  announcementRegion,
+} from "../annotations/_fixtures";
 
 const BASE = "http://localhost:5173";
 
@@ -34,8 +38,9 @@ interface ChapterSpec {
 function paragraph(text: string) {
   return { kind: "paragraph" as const, content: [{ text }] };
 }
-function heading(level: 2, text: string) {
-  return { kind: "heading" as const, level, content: [{ text }] };
+// Chapter headings — creator chapters emit h2 blocks (the TOC source).
+function h2(text: string) {
+  return { kind: "heading" as const, level: 2 as const, content: [{ text }] };
 }
 
 /**
@@ -58,7 +63,7 @@ function transcriptArticle(options: {
   const blocks = [
     ...options.intro.map(paragraph),
     ...options.chapters.flatMap((chapter) => [
-      heading(2, chapter.title),
+      h2(chapter.title),
       ...chapter.paragraphs.map(paragraph),
     ]),
   ];
@@ -165,16 +170,22 @@ const ASR_ONLY = transcriptArticle({
   asr: true,
 });
 
-/** Installs the POST /api/ingest mock; the posted {url} picks the response. */
+/**
+ * Installs the POST /api/ingest mock; the posted {url} picks the response.
+ * The returned `responses` map is the LIVE map — a cell may rewrite an
+ * entry (the N4 retry arm turns a refusal into a success) and the mock
+ * honors the new value on the next submission.
+ */
 function mockIngest(
   page: Page,
   byUrl: Record<string, unknown>,
-): { requests: () => number } {
+): { requests: () => number; responses: Record<string, unknown> } {
+  const responses = byUrl;
   let count = 0;
   void page.route("**/api/ingest", async (route) => {
     count += 1;
     const body = route.request().postDataJSON() as { url?: string };
-    const response = byUrl[body.url ?? ""];
+    const response = responses[body.url ?? ""];
     if (response === undefined) {
       await route.fulfill({ status: 500, body: "unexpected url" });
       return;
@@ -185,7 +196,7 @@ function mockIngest(
       body: JSON.stringify(response),
     });
   });
-  return { requests: () => count };
+  return { requests: () => count, responses };
 }
 
 async function libraryRowCount(page: Page): Promise<number> {
@@ -333,7 +344,9 @@ test.describe("YouTube ingest end-to-end (issue #41, flow N)", () => {
     page,
   }) => {
     const CHAPTERED_URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
-    const PLAIN_URL = "https://www.youtube.com/watch?v=e2ePlainClp";
+    // The chapterless article rides the SHORTS URL form — between N1 (watch)
+    // and N3 (youtu.be) every accepted URL form drives the transcript path.
+    const PLAIN_URL = "https://www.youtube.com/shorts/e2ePlainClp";
     mockIngest(page, {
       [CHAPTERED_URL]: {
         ok: true,
@@ -412,7 +425,7 @@ test.describe("YouTube ingest end-to-end (issue #41, flow N)", () => {
         copy: "This video is age-restricted, so its transcript can't be fetched.",
       },
     ] as const;
-    mockIngest(
+    const mock = mockIngest(
       page,
       Object.fromEntries(
         refusals.map((r) => [r.url, { ok: false, reason: r.reason }]),
@@ -441,6 +454,19 @@ test.describe("YouTube ingest end-to-end (issue #41, flow N)", () => {
 
     // No library side effects: the row count is unchanged.
     expect(await libraryRowCount(page)).toBe(rowsBefore);
+
+    // Retry possible — explicitly: the last refused URL now resolves, and
+    // resubmitting it ingests and opens the reader.
+    mock.responses[refusals[2]!.url] = {
+      ok: true,
+      article: CHAPTERLESS,
+      confidence: { state: "confident" },
+    };
+    await addByUrl(page, refusals[2]!.url);
+    await page.waitForURL(/#\/article\/yt-e2e-plain$/, { timeout: 15_000 });
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible({
+      timeout: 10_000,
+    });
   });
 
   test("N5: bot-check announces immediately with no automatic retry", async ({
@@ -505,5 +531,39 @@ test.describe("YouTube ingest end-to-end (issue #41, flow N)", () => {
     const row = page.locator(".library-row", { hasText: ASR_ONLY.provenance.title });
     await expect(row.locator(".source-badge")).toHaveText("YouTube");
     await expect(row.locator(".library-row-duration")).toHaveText("10 min");
+  });
+
+  test("A–L verbatim: a transcript paragraph highlights like any text block", async ({
+    page,
+  }) => {
+    const WATCH_URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
+    mockIngest(page, {
+      [WATCH_URL]: {
+        ok: true,
+        article: CHAPTERED,
+        confidence: { state: "confident" },
+      },
+    });
+
+    await page.goto(`${BASE}/#/`);
+    await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible();
+    await addByUrl(page, WATCH_URL);
+    await page.waitForURL(/#\/article\/yt-e2e-chaptered$/, { timeout: 15_000 });
+    await expect(page.locator(".page-fragment").first()).toBeVisible();
+
+    // Select a range inside the FIRST transcript paragraph (block 0 — the
+    // capture machinery must not care that the block came from captions).
+    const ok = await selectRangeInBlock(page, 0, 0, 24);
+    expect(ok, "selection must be set on the transcript paragraph").toBeTruthy();
+    const toolbar = page.locator(".selection-toolbar");
+    await expect(toolbar).toBeVisible();
+    await toolbar.getByRole("button", { name: "Highlight", exact: true }).click();
+
+    // The mark renders at the captured range and the capture announces —
+    // the ordinary flow-A annotation bar, no transcript special-casing.
+    const mark = page.locator("mark.highlight");
+    await expect(mark.first()).toBeVisible();
+    await expect(mark.first()).toHaveAttribute("data-highlight-id", /.+/);
+    await expect(announcementRegion(page)).toContainText(/Highlight saved/i);
   });
 });
