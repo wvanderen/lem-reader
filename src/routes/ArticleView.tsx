@@ -707,6 +707,18 @@ export function ArticleView({
     article?.id ?? null,
     () => currentAnchorOffsetRef.current,
   );
+  // The ONE shared progress-recording step (issue #40 — listening is
+  // reading): every position source (page turn, scroll anchor, listened
+  // utterance) rides the SAME reading-activity pulse + debounced location
+  // save. Mode-specific extras (precise-anchor tracking, the page-state
+  // mirror) stay with their callers.
+  const recordProgress = useCallback(
+    (offset: number) => {
+      noteActivity(offset);
+      scheduleLocationSave(offset);
+    },
+    [noteActivity, scheduleLocationSave],
+  );
   const handleAnchorChange = useCallback((offset: number) => {
     currentAnchorOffsetRef.current = offset;
     // Track the latest precise offset (only updated in paginated mode where
@@ -717,7 +729,6 @@ export function ArticleView({
     // idle cap could never distinguish an active page-turning reader from a
     // parked tab (the 18-03 Pitfall 2 shape: paginated signals must ride
     // the anchor path).
-    noteActivity(offset);
     // Phase 18 Plan 18-03 (Pitfall 2 closure — D18-06/UI-SPEC §Auto-Resolved
     // #8): persist the per-turn offset through the SHARED debounced save +
     // dual-flush discipline in useScrollSave (SAVE_DEBOUNCE_MS 1200; the
@@ -725,7 +736,7 @@ export function ArticleView({
     // call here). Latest-wins: the initial page-1 commit's offset-0 save is
     // replaced by the restore turn's offset before the debounce fires, so a
     // reopen-restore never overwrites the reader's saved location with 0.
-    scheduleLocationSave(offset);
+    recordProgress(offset);
     // Plan 12-06 (D12-05): mirror the committed page state (the handle reads
     // from refs, so by the time this effect-scoped callback runs the values
     // are post-commit) so the chapter nav's first/last-page gating reacts to
@@ -746,11 +757,11 @@ export function ArticleView({
       }
       return next;
     });
-    // scheduleLocationSave is a stable useCallback (empty deps in
-    // useScrollSave) — listing it keeps the exhaustive-deps rule satisfied
-    // without changing this callback's identity. noteActivity (issue #34)
-    // is likewise stable.
-  }, [scheduleLocationSave, noteActivity]);
+    // recordProgress is a stable useCallback over the stable
+    // scheduleLocationSave (empty deps in useScrollSave) and noteActivity
+    // (issue #34) — listing it keeps the exhaustive-deps rule satisfied
+    // without changing this callback's identity.
+  }, [recordProgress]);
 
   // 260908-oht: the explicit end-of-article completion gesture (Issue #2:
   // one of the four decision sites that call readingPosition). Persists
@@ -784,7 +795,6 @@ export function ArticleView({
   //     FINISHED_THRESHOLD and marks the article finished — the same
   //     contract as handleMarkRead above.
   const {
-    supported: readAloudSupported,
     state: readAloudState,
     followLevel: readAloudFollowLevel,
     announcement: readAloudAnnouncement,
@@ -795,8 +805,7 @@ export function ArticleView({
     getStartOffset: () => currentAnchorOffsetRef.current,
     onListenProgress: (offset) => {
       currentAnchorOffsetRef.current = offset;
-      noteActivity(offset);
-      scheduleLocationSave(offset);
+      recordProgress(offset);
     },
     onListenFinished: () => {
       if (!article) return;
@@ -2324,7 +2333,6 @@ export function ArticleView({
             the ONE polite transport role=status rides inside the bar
             component. No focus moves on play; the only start is Play. */}
         <ReadAloudBar
-          supported={readAloudSupported}
           state={readAloudState}
           followLevel={readAloudFollowLevel}
           announcement={readAloudAnnouncement}

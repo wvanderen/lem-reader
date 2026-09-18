@@ -10,9 +10,8 @@
 //   3. Exactly ONE polite role="status" region owns the transport
 //      announcements.
 //   4. Clicks route: primary → Play when stopped/paused; Pause when playing;
-//      Stop always routes onStop.
-//   5. When speech is unsupported both buttons are disabled (calm absence —
-//      the honest refusal announces through the same region via the hook).
+//      Stop always routes onStop. (Speech-unavailable refusal is hook
+//      behavior: Play always stays enabled here — the press never dead-ends.)
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, fireEvent } from "@testing-library/react";
 import { ReadAloudBar } from "../../../src/reader/ReadAloudBar";
@@ -22,7 +21,6 @@ afterEach(cleanup);
 
 function renderBar(state: TransportState, overrides: Partial<Parameters<typeof ReadAloudBar>[0]> = {}) {
   const props = {
-    supported: true,
     state,
     followLevel: null,
     announcement: null,
@@ -53,16 +51,6 @@ describe("ReadAloudBar — transport buttons", () => {
     expect(screen.getByRole("button", { name: "Play" })).not.toBeNull();
   });
 
-  it("unsupported speech: Play stays enabled (pressing announces the refusal)", () => {
-    const props = renderBar("stopped", { supported: false });
-    // Never a silent dead-end control: the button is live and the hook
-    // announces "Read aloud isn't available in this browser." on press.
-    expect((screen.getByRole("button", { name: "Play" }) as HTMLButtonElement).disabled).toBe(false);
-    expect((screen.getByRole("button", { name: "Stop" }) as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.click(screen.getByRole("button", { name: "Play" }));
-    expect(props.onPrimary).toHaveBeenCalledTimes(1);
-  });
-
   it("clicks route: primary when stopped → onPrimary; playing → onPrimary; Stop → onStop", () => {
     const props = renderBar("stopped");
     fireEvent.click(screen.getByRole("button", { name: "Play" }));
@@ -85,7 +73,6 @@ describe("ReadAloudBar — follow level + the ONE polite region", () => {
   it("follow level renders as text once probed; absent before it", () => {
     const { container } = render(
       <ReadAloudBar
-        supported
         state="stopped"
         followLevel={null}
         announcement={null}
@@ -98,7 +85,6 @@ describe("ReadAloudBar — follow level + the ONE polite region", () => {
 
     const probed = render(
       <ReadAloudBar
-        supported
         state="playing"
         followLevel="word"
         announcement="Reading aloud."
@@ -117,7 +103,6 @@ describe("ReadAloudBar — follow level + the ONE polite region", () => {
   ] as const)("label table maps %s → '%s'", (level, label) => {
     render(
       <ReadAloudBar
-        supported
         state="playing"
         followLevel={level}
         announcement={null}
@@ -132,7 +117,6 @@ describe("ReadAloudBar — follow level + the ONE polite region", () => {
   it("exactly ONE role=status region carries the announcement", () => {
     const { container } = render(
       <ReadAloudBar
-        supported
         state="playing"
         followLevel="sentence"
         announcement="Reading aloud."

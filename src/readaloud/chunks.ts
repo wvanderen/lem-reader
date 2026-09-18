@@ -58,16 +58,7 @@ export function chunkArticleForSpeech(article: CanonicalArticle): SpeechChunk[] 
 
   // UTF-16 code-unit index → canonical grapheme ordinal, over the WHOLE
   // normalized text (one walk; chunk ranges then read straight off it).
-  const utf16ToCanonical = new Array<number>(index.normalizedText.length + 1);
-  let u16 = 0;
-  for (let g = 0; g < clusters.length; g++) {
-    const len = clusters[g]!.length;
-    for (let k = 0; k < len; k++) {
-      utf16ToCanonical[u16 + k] = g;
-    }
-    u16 += len;
-  }
-  utf16ToCanonical[index.normalizedText.length] = clusters.length;
+  const utf16ToCanonical = buildUtf16ToGraphemeMap(clusters, 0, clusters.length);
 
   const chunks: SpeechChunk[] = [];
   const sentenceSegmenter = new Intl.Segmenter(article.lang, {
@@ -138,6 +129,34 @@ function isWhitespaceCluster(cluster: string): boolean {
   return /^[\t\n\f\r ]+$/.test(cluster);
 }
 
+/**
+ * Build the UTF-16 code-unit index → grapheme-ordinal map for the cluster
+ * range [start, end): entry u is the ordinal of the cluster owning UTF-16
+ * index u, and the trailing entry is the past-the-end ordinal so an
+ * end-exclusive charIndex maps cleanly. The joined clusters ARE the text,
+ * so the map's length is exactly text.length + 1. Shared by the whole-
+ * article map (start 0, end clusters.length) and each per-chunk map.
+ */
+function buildUtf16ToGraphemeMap(
+  clusters: readonly string[],
+  start: number,
+  end: number,
+): number[] {
+  let totalUnits = 0;
+  for (let i = start; i < end; i++) totalUnits += clusters[i]!.length;
+  const map = new Array<number>(totalUnits + 1);
+  let u16 = 0;
+  for (let g = 0; g < end - start; g++) {
+    const len = clusters[start + g]!.length;
+    for (let k = 0; k < len; k++) {
+      map[u16 + k] = g;
+    }
+    u16 += len;
+  }
+  map[totalUnits] = end - start;
+  return map;
+}
+
 /** Build one chunk covering [start, end): the spoken text and its per-chunk
  * UTF-16 → chunk-grapheme map. The text is exactly clusters[start..end)
  * joined, so segmenting it reproduces those clusters one-for-one. */
@@ -147,15 +166,6 @@ function buildChunk(
   end: number,
 ): SpeechChunk {
   const text = clusters.slice(start, end).join("");
-  const utf16ToGrapheme = new Array<number>(text.length + 1);
-  let u16 = 0;
-  for (let g = 0; g < end - start; g++) {
-    const len = clusters[start + g]!.length;
-    for (let k = 0; k < len; k++) {
-      utf16ToGrapheme[u16 + k] = g;
-    }
-    u16 += len;
-  }
-  utf16ToGrapheme[text.length] = end - start;
+  const utf16ToGrapheme = buildUtf16ToGraphemeMap(clusters, start, end);
   return { text, startGrapheme: start, endGrapheme: end, utf16ToGrapheme };
 }

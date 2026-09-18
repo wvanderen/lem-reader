@@ -24,9 +24,6 @@
 import type { FollowLevel, TransportState } from "../readaloud/types";
 
 interface ReadAloudBarProps {
-  /** speechSynthesis exists (the primary press announces the refusal when
-   * false — the button stays enabled, never a silent dead-end). */
-  supported: boolean;
   state: TransportState;
   /** Probed follow level — null until the first probe of the session. */
   followLevel: FollowLevel | null;

@@ -21,6 +21,7 @@ import type { FollowLevel, TransportState } from "../readaloud/types";
 import {
   createWebSpeechAdapter,
   speechSynthesisAvailable,
+  storedVoiceAvailable,
 } from "../readaloud/webSpeech";
 import { useSettings } from "../settings/SettingsContext";
 
@@ -35,8 +36,6 @@ export interface UseReadAloudHandlers {
 }
 
 export interface UseReadAloudReturn {
-  /** speechSynthesis exists in this browser (the bar renders regardless). */
-  supported: boolean;
   state: TransportState;
   /** The probed follow level — null until the first probe of the session. */
   followLevel: FollowLevel | null;
@@ -101,11 +100,22 @@ export function useReadAloud(
     }
     const currentArticle = articleRef.current;
     if (!currentArticle) return;
+    // Honest fallback note (once per session start): a stored voice that no
+    // longer resolves degrades to the platform default — the adapter does
+    // the degrading calmly, but the reader is TOLD rather than left
+    // wondering why the voice changed. The stale URI is dropped so playback
+    // deterministically matches the announcement.
+    const storedVoice = settingsRef.current.voice ?? null;
+    let voiceURI = storedVoice;
+    if (storedVoice !== null && !storedVoiceAvailable(storedVoice)) {
+      voiceURI = null;
+      setAnnouncement("Saved voice not found — using the default voice.");
+    }
     teardown();
     const nextEngine = new ReadAloudEngine({
       adapter: createWebSpeechAdapter(),
       chunks: chunkArticleForSpeech(currentArticle),
-      voiceURI: settingsRef.current.voice ?? null,
+      voiceURI,
       rate: settingsRef.current.rate,
       callbacks: {
         onStateChange: setState,
@@ -149,7 +159,6 @@ export function useReadAloud(
   }, [teardown]);
 
   return {
-    supported: supportedRef.current,
     state,
     followLevel,
     announcement,

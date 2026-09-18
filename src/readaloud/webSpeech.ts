@@ -20,6 +20,21 @@ export function speechSynthesisAvailable(): boolean {
 }
 
 /**
+ * Whether a stored voiceURI still resolves to an installed voice — the
+ * session-start check behind the honest fallback announcement (a stale URI
+ * for an uninstalled voice degrades to the platform default; the reader is
+ * TOLD, not left guessing why the voice changed). Conservative when the
+ * voice list has not loaded yet (empty getVoices, Chrome's async
+ * voiceschanged): nothing can be known, so report available and let the
+ * adapter's per-speak lookup decide — never a false "voice not found".
+ */
+export function storedVoiceAvailable(voiceURI: string): boolean {
+  if (!speechSynthesisAvailable()) return false;
+  const voices = window.speechSynthesis.getVoices();
+  return voices.length === 0 || voices.some((v) => v.voiceURI === voiceURI);
+}
+
+/**
  * Create the production adapter over window.speechSynthesis. Call only when
  * speechSynthesisAvailable() is true.
  */

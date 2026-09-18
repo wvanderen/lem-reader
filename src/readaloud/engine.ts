@@ -156,6 +156,13 @@ export class ReadAloudEngine {
 
   // ── internals ────────────────────────────────────────────────────────────
 
+  /** True when an event/timer closure carries a superseded session
+   * generation: it must no-op, so cancelled sessions' late events (end/error
+   * stragglers) can never drive a newer session. */
+  private isStale(generation: number): boolean {
+    return generation !== this.generation;
+  }
+
   /**
    * The per-voice calibration utterance (spike 0009 F3). Silent, short,
    * bounded: word boundary → word; sentence boundary then end → sentence;
@@ -168,7 +175,7 @@ export class ReadAloudEngine {
     let timer: ReturnType<typeof setTimeout> | null = null;
 
     const resolve = (level: FollowLevel) => {
-      if (resolved || generation !== this.generation) return;
+      if (resolved || this.isStale(generation)) return;
       resolved = true;
       if (timer !== null) clearTimeout(timer);
       this.followLevel = level;
@@ -205,23 +212,23 @@ export class ReadAloudEngine {
   }
 
   private startPlayback(generation: number): void {
-    if (generation !== this.generation || this.state !== "playing") return;
+    if (this.isStale(generation) || this.state !== "playing") return;
     this.speakNext(generation);
   }
 
   private speakNext(generation: number): void {
-    if (generation !== this.generation || this.state !== "playing") return;
+    if (this.isStale(generation) || this.state !== "playing") return;
     const chunk = this.chunks[this.nextChunkIndex];
     if (!chunk) {
       this.finish(generation);
       return;
     }
     const utteranceProgress = (canonical: number) => {
-      if (generation !== this.generation) return;
+      if (this.isStale(generation)) return;
       this.reportProgress(canonical);
     };
     const advance = () => {
-      if (generation !== this.generation || this.state !== "playing") return;
+      if (this.isStale(generation) || this.state !== "playing") return;
       this.clearStallTimer();
       this.consecutiveErrors = 0;
       this.reportProgress(chunk.endGrapheme);
@@ -229,7 +236,7 @@ export class ReadAloudEngine {
       this.speakNext(generation);
     };
     const advanceAfterError = () => {
-      if (generation !== this.generation || this.state !== "playing") return;
+      if (this.isStale(generation) || this.state !== "playing") return;
       this.clearStallTimer();
       this.consecutiveErrors += 1;
       if (this.consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
@@ -247,7 +254,7 @@ export class ReadAloudEngine {
       { text: chunk.text, voiceURI: this.voiceURI, rate: this.rate, volume: 1 },
       {
         onstart: () => {
-          if (generation !== this.generation) return;
+          if (this.isStale(generation)) return;
           // Speech began — the utterance is alive; the first-event watchdog
           // has done its job (a non-boundary voice's only early signal is
           // start, and a slow long passage must not read as a stall).
@@ -255,7 +262,7 @@ export class ReadAloudEngine {
           utteranceProgress(chunk.startGrapheme);
         },
         onboundary: (event) => {
-          if (generation !== this.generation) return;
+          if (this.isStale(generation)) return;
           // Any boundary event proves the engine is alive — clear the stall
           // watchdog; the utterance is speaking.
           this.clearStallTimer();
@@ -269,7 +276,7 @@ export class ReadAloudEngine {
   }
 
   private finish(generation: number): void {
-    if (generation !== this.generation) return;
+    if (this.isStale(generation)) return;
     this.generation += 1;
     this.clearStallTimer();
     this.setState("stopped");
@@ -277,7 +284,7 @@ export class ReadAloudEngine {
   }
 
   private fail(generation: number, message: string): void {
-    if (generation !== this.generation) return;
+    if (this.isStale(generation)) return;
     this.generation += 1;
     this.clearStallTimer();
     this.adapter.cancel();
@@ -305,7 +312,7 @@ export class ReadAloudEngine {
   private armStallTimer(generation: number, onStall: () => void): void {
     this.clearStallTimer();
     this.stallTimer = setTimeout(() => {
-      if (generation === this.generation && this.state === "playing") {
+      if (!this.isStale(generation) && this.state === "playing") {
         onStall();
       }
     }, FIRST_EVENT_STALL_MS);
