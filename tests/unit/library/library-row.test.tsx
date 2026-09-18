@@ -22,6 +22,10 @@ vi.mock("../../../src/ingestion/library/tagsStore", () => ({
 import { LibraryRow } from "../../../src/ingestion/library/LibraryRow";
 import { ArticleSchema } from "../../../src/content/schema";
 import type { CanonicalArticle } from "../../../src/content/schema";
+import {
+  FAKE_HASH,
+  transcriptIngestionMeta,
+} from "../fixtures/transcript-meta";
 
 function makeArticle(transcript?: {
   durationSeconds: number;
@@ -33,24 +37,14 @@ function makeArticle(transcript?: {
     provenance: {
       title: "Row Article",
       retrievedAt: "2026-09-01T00:00:00.000Z",
-      originalHtmlHash: "sha256:" + "0".repeat(64),
+      originalHtmlHash: FAKE_HASH,
     },
     blocks: [{ kind: "paragraph", content: [{ text: "Body text." }] }],
     ...(transcript
       ? {
-          ingestionMeta: {
-            source: "youtube",
-            originalHtmlHash: "sha256:" + "0".repeat(64),
-            extractionConfidence: "high",
-            extractionWarnings: [],
-            transcript: {
-              videoId: "dQw4w9WgXcQ",
-              durationSeconds: transcript.durationSeconds,
-              captionSource: "manual",
-              captionLanguage: "en",
-              segments: [{ blockIndex: 0, startMs: 0 }],
-            },
-          },
+          ingestionMeta: transcriptIngestionMeta({
+            durationSeconds: transcript.durationSeconds,
+          }),
         }
       : {}),
   });

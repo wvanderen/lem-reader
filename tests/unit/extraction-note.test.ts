@@ -9,6 +9,10 @@ import { describe, expect, it } from "vitest";
 import { extractionNote } from "../../src/routes/extractionNote";
 import { ArticleSchema } from "../../src/content/schema";
 import type { CanonicalArticle } from "../../src/content/schema";
+import {
+  FAKE_HASH,
+  transcriptIngestionMeta,
+} from "./fixtures/transcript-meta";
 
 function makeArticle(
   meta?: Record<string, unknown> & { transcript?: Record<string, unknown> },
@@ -20,7 +24,7 @@ function makeArticle(
     provenance: {
       title: "Note Article",
       retrievedAt: "2026-09-01T00:00:00.000Z",
-      originalHtmlHash: "sha256:" + "0".repeat(64),
+      originalHtmlHash: FAKE_HASH,
     },
     blocks: [{ kind: "paragraph", content: [{ text: "Body text." }] }],
     ...(meta ? { ingestionMeta: meta } : {}),
@@ -29,32 +33,21 @@ function makeArticle(
 
 const HIGH = {
   source: "url",
-  originalHtmlHash: "sha256:" + "0".repeat(64),
+  originalHtmlHash: FAKE_HASH,
   extractionConfidence: "high",
   extractionWarnings: [],
 };
 
 const LOW_ASR = {
-  source: "youtube",
-  originalHtmlHash: "sha256:" + "0".repeat(64),
+  ...transcriptIngestionMeta({ captionSource: "asr" }),
   extractionConfidence: "low",
-  extractionWarnings: [],
-  transcript: {
-    videoId: "dQw4w9WgXcQ",
-    durationSeconds: 212,
-    captionSource: "asr",
-    captionLanguage: "en",
-    segments: [{ blockIndex: 0, startMs: 0 }],
-  },
 };
 
 const LOW_WEB = { ...HIGH, extractionConfidence: "low" };
 
-const HIGH_MANUAL_TRANSCRIPT = {
-  ...LOW_ASR,
-  extractionConfidence: "high",
-  transcript: { ...LOW_ASR.transcript, captionSource: "manual" },
-};
+const HIGH_MANUAL_TRANSCRIPT = transcriptIngestionMeta({
+  captionSource: "manual",
+});
 
 describe("extractionNote (issue #41, flow N6)", () => {
   it("is silent for an article without ingestionMeta (bundled fixtures)", () => {

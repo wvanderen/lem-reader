@@ -171,6 +171,18 @@ const ASR_ONLY = transcriptArticle({
 });
 
 /**
+ * The single-article ok envelope (IngestionResponseSchema's confident arm;
+ * `assets` defaults to []). The confidence state rides along — ASR ingests
+ * carry { state: "low" }.
+ */
+function okEnvelope(
+  article: unknown,
+  confidence: { state: "confident" | "low" } = { state: "confident" },
+) {
+  return { ok: true, article, confidence };
+}
+
+/**
  * Installs the POST /api/ingest mock; the posted {url} picks the response.
  * The returned `responses` map is the LIVE map — a cell may rewrite an
  * entry (the N4 retry arm turns a refusal into a success) and the mock
@@ -244,11 +256,7 @@ test.describe("YouTube ingest end-to-end (issue #41, flow N)", () => {
   }) => {
     const WATCH_URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
     mockIngest(page, {
-      [WATCH_URL]: {
-        ok: true,
-        article: CHAPTERED,
-        confidence: { state: "confident" },
-      },
+      [WATCH_URL]: okEnvelope(CHAPTERED),
     });
 
     await page.goto(`${BASE}/#/`);
@@ -304,11 +312,7 @@ test.describe("YouTube ingest end-to-end (issue #41, flow N)", () => {
   }) => {
     const WATCH_URL = "https://youtu.be/dQw4w9WgXcQ"; // the youtu.be form drives too
     mockIngest(page, {
-      [WATCH_URL]: {
-        ok: true,
-        article: CHAPTERED,
-        confidence: { state: "confident" },
-      },
+      [WATCH_URL]: okEnvelope(CHAPTERED),
     });
 
     await page.goto(`${BASE}/#/`);
@@ -348,16 +352,8 @@ test.describe("YouTube ingest end-to-end (issue #41, flow N)", () => {
     // and N3 (youtu.be) every accepted URL form drives the transcript path.
     const PLAIN_URL = "https://www.youtube.com/shorts/e2ePlainClp";
     mockIngest(page, {
-      [CHAPTERED_URL]: {
-        ok: true,
-        article: CHAPTERED,
-        confidence: { state: "confident" },
-      },
-      [PLAIN_URL]: {
-        ok: true,
-        article: CHAPTERLESS,
-        confidence: { state: "confident" },
-      },
+      [CHAPTERED_URL]: okEnvelope(CHAPTERED),
+      [PLAIN_URL]: okEnvelope(CHAPTERLESS),
     });
 
     // Chaptered: the creator chapters are h2 heading entries in the TOC.
@@ -457,11 +453,7 @@ test.describe("YouTube ingest end-to-end (issue #41, flow N)", () => {
 
     // Retry possible — explicitly: the last refused URL now resolves, and
     // resubmitting it ingests and opens the reader.
-    mock.responses[refusals[2]!.url] = {
-      ok: true,
-      article: CHAPTERLESS,
-      confidence: { state: "confident" },
-    };
+    mock.responses[refusals[2]!.url] = okEnvelope(CHAPTERLESS);
     await addByUrl(page, refusals[2]!.url);
     await page.waitForURL(/#\/article\/yt-e2e-plain$/, { timeout: 15_000 });
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible({
@@ -502,11 +494,7 @@ test.describe("YouTube ingest end-to-end (issue #41, flow N)", () => {
   }) => {
     const ASR_URL = "https://www.youtube.com/watch?v=e2eAsrOnly1";
     mockIngest(page, {
-      [ASR_URL]: {
-        ok: true,
-        article: ASR_ONLY,
-        confidence: { state: "low" },
-      },
+      [ASR_URL]: okEnvelope(ASR_ONLY, { state: "low" }),
     });
 
     await page.goto(`${BASE}/#/`);
@@ -538,11 +526,7 @@ test.describe("YouTube ingest end-to-end (issue #41, flow N)", () => {
   }) => {
     const WATCH_URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
     mockIngest(page, {
-      [WATCH_URL]: {
-        ok: true,
-        article: CHAPTERED,
-        confidence: { state: "confident" },
-      },
+      [WATCH_URL]: okEnvelope(CHAPTERED),
     });
 
     await page.goto(`${BASE}/#/`);
