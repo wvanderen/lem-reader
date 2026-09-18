@@ -7,8 +7,12 @@
 //     visible text content, never color (native button text = the accessible
 //     name; no aria-label duplication).
 //   - The probed follow level is visible as TEXT on the bar (one of word /
-//     sentence / passage / progress only) — the spoken-word marker itself is
-//     NOT rendered at this stage.
+//     sentence / passage / progress only).
+//   - Issue #42: while a session exists (playing/paused) the bar also offers
+//     "Jump to spoken position" — a focus-free orientation affordance for
+//     when manual navigation left the spoken passage out of view. The
+//     spoken-word MARK itself is synthetic + aria-hidden and lives in the
+//     article renderers, never on this bar.
 //   - Exactly ONE polite role="status" region owns the transport
 //     announcements (this component's visually-hidden region; annotation and
 //     export regions stay separate — the D9-06 pattern).
@@ -29,9 +33,23 @@ interface ReadAloudBarProps {
   followLevel: FollowLevel | null;
   /** Copy for the ONE polite transport status region. */
   announcement: string | null;
+  /**
+   * Issue #42 — a transient route-level notice (e.g. the "jumped to spoken
+   * position" confirmation) shown through the SAME polite region. The notice
+   * is the feedback for the reader's LAST action, so it takes precedence
+   * while fresh; the route clears it when the transport next announces.
+   */
+  notice?: string | null;
   /** Primary press: Play when stopped/paused, Pause when playing. */
   onPrimary: () => void;
   onStop: () => void;
+  /**
+   * Issue #42 — "Jump to spoken position": restores the reader's view to
+   * the currently-spoken passage (auto page-turn / follow-scroll undo)
+   * WITHOUT moving focus. Rendered only while a session exists (playing or
+   * paused) and a jump handler is provided.
+   */
+  onJumpToSpoken?: () => void;
 }
 
 const FOLLOW_LABELS: Record<FollowLevel, string> = {
@@ -45,10 +63,13 @@ export function ReadAloudBar({
   state,
   followLevel,
   announcement,
+  notice,
   onPrimary,
   onStop,
+  onJumpToSpoken,
 }: ReadAloudBarProps) {
   const playing = state === "playing";
+  const sessionActive = state !== "stopped";
   return (
     <>
       <div className="readaloud-bar">
@@ -59,6 +80,18 @@ export function ReadAloudBar({
           <button type="button" className="readaloud-btn" onClick={onPrimary}>
             {playing ? "Pause" : "Play"}
           </button>
+          {/* Jump to spoken position — visible only while a session exists
+              (playing/paused); the marker may be out of view after manual
+              navigation, and this restores orientation focus-free. */}
+          {sessionActive && onJumpToSpoken && (
+            <button
+              type="button"
+              className="readaloud-btn"
+              onClick={onJumpToSpoken}
+            >
+              Jump to spoken position
+            </button>
+          )}
           <button
             type="button"
             className="readaloud-btn"
@@ -73,14 +106,17 @@ export function ReadAloudBar({
         </div>
       </div>
       {/* The ONE polite transport live region (visually hidden, mirrors the
-          annotation/export announce pattern). */}
+          annotation/export announce pattern). The jump notice takes
+          precedence while fresh — it is the feedback for the reader's LAST
+          action — and the route clears it the moment the transport next
+          announces. */}
       <div
         className="visually-hidden"
         role="status"
         aria-live="polite"
         aria-atomic="true"
       >
-        {announcement}
+        {notice ?? announcement ?? null}
       </div>
     </>
   );

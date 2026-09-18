@@ -40,6 +40,13 @@ import {
   blockViewSlices,
   sliceBlockHighlights,
 } from "../../annotations/unifiedHighlightSlicer";
+// Issue #42: the spoken-word marker — the render-side branch on the
+// reserved id that keeps the synthetic read-aloud highlight out of the a11y
+// tree, and the synthetic-entry builder the scrolling walk consumes.
+import { isSpokenMarkerId, spokenMarkerEntry } from "../../annotations/spokenMarker";
+// Issue #42: the article-global spoken range type shared with the paginated
+// twin (fragmentRenderer) — the same GraphemeRange the slicer clips with.
+import type { GraphemeRange } from "../../annotations/unifiedHighlightSlicer";
 // Phase 5 Plan 05-02: ArticleBody reads from the highlight overlay context
 // when no explicit highlights prop is passed, so the scrolling ArticleBody
 // renders <mark> overlays from the provider state. The measurement body
@@ -276,6 +283,17 @@ export function BlockView({
               if (seg.entry === null) {
                 return <Fragment key={i}>{seg.text}</Fragment>;
               }
+              // Issue #42 — the synthetic spoken-word marker inside code:
+              // same aria-hidden, non-focusable anatomy as the prose path
+              // (InlineRenderer) — never in the accessibility tree, never a
+              // popover target.
+              if (isSpokenMarkerId(seg.entry.id)) {
+                return (
+                  <mark key={i} className="spoken-word" aria-hidden="true">
+                    {seg.text}
+                  </mark>
+                );
+              }
               const status = seg.entry.status ?? "confident";
               const unresolved = status !== "confident";
               const className = `highlight${seg.entry.hasNote ? " has-note" : ""}${unresolved ? " unresolved" : ""}`;
@@ -476,6 +494,7 @@ export const ArticleBody = memo(
   function ArticleBody({
     article,
     highlights: explicitHighlights,
+    spokenRange,
   }: {
     article: CanonicalArticle;
     /**
@@ -487,6 +506,17 @@ export const ArticleBody = memo(
      * a runtime dep on the annotation state layer's ResolvedHighlight type.
      */
     highlights?: readonly ArticleBodyHighlight[];
+    /**
+     * Issue #42: the article-global D-05 grapheme range speech is currently
+     * inside, rendered through the unified slicer as the synthetic
+     * aria-hidden spoken-word marker (SPOKEN_MARKER_ID). Null/absent → no
+     * marker (byte-unchanged rendering). NEVER pass a live range to the
+     * hidden measurement body — measurement must stay marker-free so the
+     * page geometry stays the typography-only truth. The prop changes
+     * identity per spoken word; the memo comparator threads it so the
+     * per-word re-render stays scoped to the marker channel.
+     */
+    spokenRange?: GraphemeRange | null;
   }): React.ReactElement {
     // Call the context hook UNCONDITIONALLY (rules-of-hooks) — even when
     // explicitHighlights is provided. The return value is only used when the
@@ -515,6 +545,12 @@ export const ArticleBody = memo(
           hasNote: h.note !== null && h.note.text.length > 0,
           status: h.status,
         }));
+    }
+    // Issue #42: the synthetic spoken-word entry joins the SAME slicing
+    // input — the slicer clips it per block like any highlight; the
+    // renderers branch on the reserved id for the aria-hidden anatomy.
+    if (spokenRange != null) {
+      effectiveHighlights.push(spokenMarkerEntry(spokenRange));
     }
 
     // 260820: the linear cumulative block-start index (see
@@ -593,10 +629,17 @@ export const ArticleBody = memo(
       </>
     );
   },
-  // Comparator: re-render only when the article identity or the explicit
-  // highlights prop identity changes. Absent highlights (undefined) on both
-  // sides compare equal — the scrolling body re-renders via its context
-  // subscription when live highlights change, NOT via this prop path.
-  // Context updates bypass memo entirely, so highlight changes keep working.
-  (prev, next) => prev.article === next.article && prev.highlights === next.highlights,
+  // Comparator: re-render only when the article identity, the explicit
+  // highlights prop identity, or the spokenRange identity changes. Absent
+  // highlights (undefined) on both sides compare equal — the scrolling body
+  // re-renders via its context subscription when live highlights change,
+  // NOT via this prop path. Context updates bypass memo entirely, so
+  // highlight changes keep working. spokenRange (issue #42) changes identity
+  // per spoken word while playback runs and is referentially stable
+  // (null) otherwise — threading it here keeps the marker live without
+  // re-rendering for unrelated owner state.
+  (prev, next) =>
+    prev.article === next.article &&
+    prev.highlights === next.highlights &&
+    prev.spokenRange === next.spokenRange,
 );

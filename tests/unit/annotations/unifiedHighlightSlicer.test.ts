@@ -50,6 +50,52 @@ describe("clipRange — the single intersection primitive", () => {
   });
 });
 
+describe("multiple highlights in ONE block — the whitespace-decoration walk (issue #42)", () => {
+  // Issue #42 regression: the spoken-word marker rides the SAME entry array
+  // as annotations, so multi-entry blocks became the common case. The former
+  // walk measured every gap against raw stream offsets while each
+  // splitParagraphRuns piece TRIMS its own leading whitespace — the second
+  // boundary drifted one grapheme per preceding highlight ("word" → "ord ").
+  const runs = [run("alpha beta gamma")];
+
+  const entry = (id: string, start: number, end: number): HighlightSliceEntry => ({
+    id,
+    position: { start, end },
+    hasNote: false,
+    status: "confident",
+  });
+
+  const sliceTexts = (entries: HighlightSliceEntry[]) =>
+    sliceRunsForHighlights(runs, 0, entries, "en").map((s) => ({
+      id: s.highlightId,
+      text: s.runs.map((r) => r.text).join(""),
+    }));
+
+  it("each mark's norm content matches its range (no boundary drift)", () => {
+    const slices = sliceTexts([entry("a", 0, 5), entry("b", 6, 10)]);
+    const marked = slices.filter((s) => s.id !== null);
+    // "beta" — not "eta " (the pre-fix drift).
+    expect(marked).toContainEqual({ id: "b", text: " beta" });
+    expect(marked).toContainEqual({ id: "a", text: "alpha" });
+  });
+
+  it("slices stay a faithful raw partition (reading order never loses text)", () => {
+    const slices = sliceTexts([entry("a", 0, 5), entry("b", 6, 10)]);
+    expect(slices.map((s) => s.text).join("")).toBe("alpha beta gamma");
+  });
+
+  it("three highlights in one block stay exact (drift must not accumulate)", () => {
+    const slices = sliceTexts([
+      entry("a", 0, 5),
+      entry("b", 6, 10),
+      entry("c", 11, 16),
+    ]);
+    const marked = slices.filter((s) => s.id !== null);
+    expect(marked).toContainEqual({ id: "c", text: " gamma" });
+    expect(slices.map((s) => s.text).join("")).toBe("alpha beta gamma");
+  });
+});
+
 describe("article-global origin reproduces the scrolling twin", () => {
   const index = articleGraphemeIndex(HARD_ARTICLE);
   const allEntries = Object.values(HIGHLIGHT_SETS).flat().map(toEntry);

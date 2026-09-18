@@ -56,6 +56,12 @@ import type { CodeSegment } from "../annotations/highlightRanges";
 // and the pagination engine address the SAME D-05 coordinate stream, so the
 // spike's measureChild parameter is gone — there is one child measure.
 import { blockViewSlices, sliceBlockHighlights } from "../annotations/unifiedHighlightSlicer";
+import type { GraphemeRange } from "../annotations/unifiedHighlightSlicer";
+// Issue #42: the synthetic spoken-word marker entry — appended to the SAME
+// per-entry highlight translation the annotation highlights ride, then
+// rendered (via the InlineRenderer/BlockView branch on the reserved id) as
+// the aria-hidden spoken-word mark.
+import { spokenMarkerEntry } from "../annotations/spokenMarker";
 import type { PageFragment } from "./types";
 
 /**
@@ -102,6 +108,7 @@ export function PageFragmentView({
   article,
   lang,
   highlights,
+  spokenRange,
   style,
 }: {
   fragment: PageFragment;
@@ -109,6 +116,15 @@ export function PageFragmentView({
   article: CanonicalArticle;
   lang: string;
   highlights?: readonly ArticleBodyHighlight[];
+  /**
+   * Issue #42: the article-global D-05 grapheme range speech is currently
+   * inside — rendered through the SAME per-entry intersection + unified
+   * slicer walk as the annotation highlights, surfacing as the synthetic
+   * aria-hidden spoken-word <mark> (SPOKEN_MARKER_ID). Null/absent → no
+   * marker. The route threads it only to the VISIBLE page fragment, never
+   * the hidden measurement body.
+   */
+  spokenRange?: GraphemeRange | null;
   /**
    * Plan 13-04 (Option A): optional style pass-through. The surface sets
    * the page-1 fragment's flow height to calc(100% - firstPageReservedPx)
@@ -152,9 +168,15 @@ export function PageFragmentView({
         // the article-global translation is exact, and the slicer's per-kind
         // output is byte-identical to the scrolling twin's.)
         let unified: ReturnType<typeof sliceBlockHighlights> = null;
-        if (highlights && highlights.length > 0) {
+        // Issue #42: the spoken marker rides the same intersection path —
+        // one synthetic entry appended to the page's annotation highlights.
+        const entryHighlights: readonly ArticleBodyHighlight[] =
+          spokenRange != null
+            ? [...(highlights ?? []), spokenMarkerEntry(spokenRange)]
+            : (highlights ?? []);
+        if (entryHighlights.length > 0) {
           const entrySlices = sliceHighlightsForEntry(
-            highlights,
+            entryHighlights,
             article,
             entry.blockIndex,
             entry.startGrapheme,

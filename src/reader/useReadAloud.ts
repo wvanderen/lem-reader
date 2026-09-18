@@ -18,6 +18,7 @@ import type { CanonicalArticle } from "../content/types";
 import { chunkArticleForSpeech } from "../readaloud/chunks";
 import { ReadAloudEngine } from "../readaloud/engine";
 import type { FollowLevel, TransportState } from "../readaloud/types";
+import type { GraphemeRange } from "../annotations/unifiedHighlightSlicer";
 import {
   createWebSpeechAdapter,
   speechSynthesisAvailable,
@@ -31,6 +32,13 @@ export interface UseReadAloudHandlers {
   getStartOffset: () => number;
   /** The listened position moved — canonical article-global grapheme offset. */
   onListenProgress: (offset: number) => void;
+  /**
+   * Issue #42 — the spoken-range channel for the visual marker: the
+   * canonical [start, end) grapheme range speech is currently inside. A
+   * zero-width range (end === start) is the chunk-boundary sentinel —
+   * progress currency only; hosts must not move the marker for it.
+   */
+  onListenSpoken?: (range: GraphemeRange) => void;
   /** The last chunk finished — the article was completed by ear. */
   onListenFinished: () => void;
 }
@@ -121,6 +129,7 @@ export function useReadAloud(
         onStateChange: setState,
         onFollowLevel: setFollowLevel,
         onProgress: (offset) => handlersRef.current.onListenProgress(offset),
+        onSpokenRange: (range) => handlersRef.current.onListenSpoken?.(range),
         onFinish: () => {
           setAnnouncement("Read aloud finished.");
           handlersRef.current.onListenFinished();

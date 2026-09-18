@@ -18,6 +18,10 @@
      --ink on --highlight ≥ 4.5:1 in every theme (~13:1 Sepia). Reserved for
      <mark> inside the article body only — never on chrome. */
   --highlight: #f5e6c8;
+  /* Issue #42: the synthetic spoken-word marker fill — a warm tan (not the
+     annotation yellow), paired with a solid accent underline so the marker
+     is shape-distinct from annotation fills (A11Y-05). */
+  --spoken-highlight: #ecdcc3;
 
   /* UI-SPEC §Spacing Scale (multiples of 4) */
   --space-xs: 4px;
@@ -72,6 +76,8 @@
   --hairline: #ddd9d0;
   /* Phase 5 D5-14: warm pale yellow for the brighter Light surface (~14:1). */
   --highlight: #f7eaa6;
+  /* Issue #42: spoken-word marker fill (Light theme). */
+  --spoken-highlight: #e6ddd0;
 }
 
 [data-theme="dark"] {
@@ -87,6 +93,9 @@
   /* Phase 5 D5-14: warm golden-brown, lighter + warmer than the dark surface
      so the marker reads as a highlight (~7.5:1). */
   --highlight: #5c4a23;
+  /* Issue #42: spoken-word marker fill (dark theme — deeper brown than the
+     annotation fill, reads as a shadow under the voice). */
+  --spoken-highlight: #443624;
 }
 
 body {
@@ -1670,6 +1679,27 @@ mark.highlight.unresolved {
   color: var(--ink);
   outline: 1px dashed var(--ink-soft);
   outline-offset: 1px;
+}
+
+/* ── Issue #42: the synthetic spoken-word marker ──────────────────────────── */
+/* The read-aloud marker rides the SAME slicer output as mark.highlight but
+   renders aria-hidden + non-focusable (per-word updates never enter the
+   accessibility tree; focus never moves to it). Shape-distinct from every
+   annotation state: the warm-tan --spoken-highlight fill PLUS a solid accent
+   underline (never blinking, never animated — zero motion properties, the
+   global reduced-motion gate is trivially satisfied). Layout-neutral exactly
+   like mark.highlight (background/decoration only — no padding, border, or
+   line-height change), so marker churn can never perturb page geometry or
+   the pagination measurements. No :focus-visible rule: the mark is not
+   focusable by construction. */
+mark.spoken-word {
+  background-color: var(--spoken-highlight);
+  color: inherit;
+  border-radius: 2px;
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
 }
 
 /* ── Floating selection toolbar (D5-05, UI-SPEC §Interaction 25) ───────────── */
