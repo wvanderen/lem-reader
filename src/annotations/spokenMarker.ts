@@ -5,11 +5,11 @@
 // slicer (Spike 0007 promotion — issue #36) the annotation marks use: the
 // engine's canonical [start, end) grapheme range becomes ONE synthetic
 // HighlightSliceEntry appended to the highlights both render twins consume.
-// Unlike an annotation, the marker is presentation-only — its rendering path
-// (InlineRenderer's and BlockView's code case) branches on this reserved id
-// and emits an aria-hidden, non-focusable <mark class="spoken-word"> with no
-// data-highlight-id, so the spoken word never enters the accessibility tree,
-// never takes focus, and can never open the annotation popover.
+// Unlike an annotation, the marker is presentation-only — the renderers
+// branch on this reserved id and emit the shared SpokenMark (an aria-hidden,
+// non-focusable <mark class="spoken-word"> with no data-highlight-id), so
+// the spoken word never enters the accessibility tree, never takes focus,
+// and can never open the annotation popover.
 //
 // The id is intentionally impossible for a real annotation: highlight ids
 // are crypto.randomUUID() strings from the record layer.

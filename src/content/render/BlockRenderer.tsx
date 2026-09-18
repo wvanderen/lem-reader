@@ -42,8 +42,10 @@ import {
 } from "../../annotations/unifiedHighlightSlicer";
 // Issue #42: the spoken-word marker — the render-side branch on the
 // reserved id that keeps the synthetic read-aloud highlight out of the a11y
-// tree, and the synthetic-entry builder the scrolling walk consumes.
+// tree, and the synthetic-entry builder the scrolling walk consumes. The
+// mark anatomy itself is the shared SpokenMark (one copy for both twins).
 import { isSpokenMarkerId, spokenMarkerEntry } from "../../annotations/spokenMarker";
+import { SpokenMark } from "./SpokenMark";
 // Issue #42: the article-global spoken range type shared with the paginated
 // twin (fragmentRenderer) — the same GraphemeRange the slicer clips with.
 import type { GraphemeRange } from "../../annotations/unifiedHighlightSlicer";
@@ -284,14 +286,12 @@ export function BlockView({
                 return <Fragment key={i}>{seg.text}</Fragment>;
               }
               // Issue #42 — the synthetic spoken-word marker inside code:
-              // same aria-hidden, non-focusable anatomy as the prose path
-              // (InlineRenderer) — never in the accessibility tree, never a
-              // popover target.
+              // the SAME aria-hidden, non-focusable anatomy as the prose
+              // path (the shared SpokenMark) — never in the accessibility
+              // tree, never a popover target.
               if (isSpokenMarkerId(seg.entry.id)) {
                 return (
-                  <mark key={i} className="spoken-word" aria-hidden="true">
-                    {seg.text}
-                  </mark>
+                  <SpokenMark key={i}>{seg.text}</SpokenMark>
                 );
               }
               const status = seg.entry.status ?? "confident";

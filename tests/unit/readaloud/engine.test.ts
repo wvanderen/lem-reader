@@ -385,6 +385,71 @@ describe("spoken ranges — the visual marker channel (issue #42)", () => {
   });
 });
 
+// ─── 7. seekTo — the #43 skip-controls track (issue #42 review) ─────────────
+
+describe("seekTo — jump the playing session; the floors reset", () => {
+  it("moves the queue + marker BACK to an earlier chunk without re-probing", () => {
+    const h = makeEngine();
+    playWordCapable(h);
+    h.adapter.last!.events.onend?.(); // chunk 0 done → chunk 1 live
+    expect(h.adapter.last!.request.text).toBe("Three four.");
+    h.adapter.last!.events.onboundary?.({ name: "word", charIndex: 0, charLength: 5 });
+
+    h.engine.seekTo(0); // skip BACK to chunk 0
+    vi.advanceTimersByTime(60); // the post-cancel settle
+    // No re-probe: the follow level survives, the new utterance is audible.
+    expect(h.levels).toEqual(["word"]);
+    expect(h.adapter.last!.request.volume).toBe(1);
+    expect(h.adapter.last!.request.text).toBe("Zero one.");
+    // onstart emits the whole chunk — a BACKWARD spoken start accepted,
+    // because seekTo reset the monotonic floor.
+    h.adapter.last!.events.onstart?.();
+    expect(h.spokenRanges[h.spokenRanges.length - 1]).toEqual({ start: 0, end: 9 });
+    expect(h.progress[h.progress.length - 1]).toBe(0);
+  });
+
+  it("jumps FORWARD too; pre-seek events are stale (generation guard)", () => {
+    const h = makeEngine();
+    playWordCapable(h); // chunk 0 live
+    const spokenCount = h.spokenRanges.length;
+    const progressCount = h.progress.length;
+    h.engine.seekTo(20); // straight to chunk 2
+    // Stragglers from the pre-seek utterance must report nothing.
+    h.adapter.spoken[1]!.events.onboundary?.({ name: "word", charIndex: 5, charLength: 3 });
+    expect(h.spokenRanges).toHaveLength(spokenCount);
+    expect(h.progress).toHaveLength(progressCount);
+    vi.advanceTimersByTime(60);
+    h.adapter.last!.events.onstart?.();
+    expect(h.adapter.last!.request.text).toBe("Six seven.");
+    expect(h.spokenRanges[h.spokenRanges.length - 1]).toEqual({ start: 20, end: 30 });
+  });
+
+  it("an offset at/past the end restarts from the top", () => {
+    const h = makeEngine();
+    playWordCapable(h);
+    h.engine.seekTo(999);
+    vi.advanceTimersByTime(60);
+    expect(h.adapter.last!.request.text).toBe("Zero one.");
+  });
+
+  it("is playing-only: a paused or stopped session ignores it", () => {
+    const h = makeEngine();
+    playWordCapable(h);
+    h.engine.pause();
+    const spokenCount = h.adapter.spoken.length;
+    h.engine.seekTo(20);
+    vi.advanceTimersByTime(60 + 5000);
+    expect(h.adapter.spoken).toHaveLength(spokenCount); // nothing new queued
+    expect(h.engine.getState()).toBe("paused");
+
+    h.engine.stop();
+    h.engine.seekTo(0);
+    vi.advanceTimersByTime(60 + 5000);
+    expect(h.engine.getState()).toBe("stopped");
+    expect(h.adapter.spoken).toHaveLength(spokenCount);
+  });
+});
+
 describe("mapBoundaryRangeToCanonical — pure mapping truth table", () => {
   it("maps both edges through the UTF-16 → grapheme map (astral-safe)", () => {
     // "𐐀𐐀 x" — 2 astral clusters (2 UTF-16 units each) + " x". The map

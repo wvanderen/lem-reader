@@ -54,6 +54,13 @@ export interface UseReadAloudReturn {
   /** Pause while playing; resume while paused. */
   pauseOrResume: () => void;
   stop: () => void;
+  /**
+   * Issue #42 — the track the #43 skip controls ride: jump the PLAYING
+   * session to the chunk containing the canonical offset (no re-probe; the
+   * spoken marker may move backward). No-op while paused/stopped — #43
+   * composes resume-then-seek for a paused skip.
+   */
+  seek: (fromOffset: number) => void;
 }
 
 export function useReadAloud(
@@ -167,6 +174,10 @@ export function useReadAloud(
     setAnnouncement("Read aloud stopped.");
   }, [teardown]);
 
+  const seek = useCallback((fromOffset: number) => {
+    engineRef.current?.seekTo(fromOffset);
+  }, []);
+
   return {
     state,
     followLevel,
@@ -174,5 +185,6 @@ export function useReadAloud(
     play,
     pauseOrResume,
     stop,
+    seek,
   };
 }

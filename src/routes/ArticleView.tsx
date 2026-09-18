@@ -28,7 +28,7 @@ import type { Book } from "../content/schema";
 import { ArticleBody } from "../content/render/BlockRenderer";
 import type { ArticleBodyHighlight } from "../content/render/BlockRenderer";
 import { loadLocation } from "../persistence/locationStore";
-import { computeTopVisibleOffset, findScrollTarget } from "../reader/restoreLocation";
+import { computeTopVisibleOffset, queryBlocks } from "../reader/restoreLocation";
 // Issue #5 — the ONE mode-aware passage-jump tail (deep-link, restore,
 // back-nav, TOC, and the D4-10 mode-swap re-anchor all call it) + the D4-07
 // settleFocus discipline.
@@ -48,9 +48,6 @@ import { PageTurnControls, isFormField } from "../reader/PageTurnControls";
 import { ProgressHairline } from "../reader/ProgressHairline";
 import { SectionAnnouncer } from "../reader/SectionAnnouncer";
 import { blockGraphemeLength } from "../pagination/anchor";
-// Issue #42 — the follower's page lookup (offset → 0-based page index) for
-// the auto page-turn + the jump-to-spoken-position turn.
-import { fragmentContainingOffset } from "../pagination/anchor";
 // Issue #2 — the end-pin policy stays imported for the mark-read gesture;
 // the restore/mode-swap end-LANDING decision moved behind jumpToOffset.
 import { endPinOffset } from "../reader/readingPosition";
@@ -147,15 +144,14 @@ import { extractionNote } from "./extractionNote";
 // (ADR 0001): the listened canonical position drives the SAME shared
 // location-save discipline as scroll/page turns, persists, restores, and
 // marks the article finished when the last chunk completes by ear.
-// Issue #42 — the follow-behavior decision policy (pure; the "never fight
-// the reader" state machine) + the spoken-range type the render twins share.
-import {
-  paginatedFollowDecision,
-  scrollingFollowDecision,
-} from "../readaloud/follow";
-import type { GraphemeRange } from "../annotations/unifiedHighlightSlicer";
+// Issue #42 — the spoken-word follower lives in ONE hook (useReadAloudFollow):
+// marker state, the "never fight the reader" suspension, the follow effects,
+// and the jump affordance + its notice. The route only wires the hook's
+// outputs to the surface, the body, and the transport bar.
 import { useReadAloud } from "../reader/useReadAloud";
+import { useReadAloudFollow } from "../reader/useReadAloudFollow";
 import { ReadAloudBar } from "../reader/ReadAloudBar";
+import type { GraphemeRange } from "../annotations/unifiedHighlightSlicer";
 
 /** The D4-10 mode-toggle handler signature (App threads a ref of this shape). */
 type ModeToggleHandler = () => void;
@@ -247,30 +243,9 @@ function formatDate(iso: string): string {
   }
 }
 
-/**
- * Query the rendered top-level block elements in document order. Used by both
- * the location-restore effect and the Resume handler. Mirrors the selector
- * used by useScrollSave's offset computation so save/restore round-trip
- * exactly.
- *
- * Plan 04-09 (PAGE-01 round-trip fix): switched from a tag-based selector
- * ("h2, h3, h4, p, blockquote, li, pre, figure, sup, details") to
- * [data-block-index] (emitted by BlockRenderer on each top-level block per
- * Plan 04-06). The tag-based selector DOUBLE-COUNTED: (a) the article
- * header's <p class="meta"> provenance paragraph (not an article block), and
- * (b) blockquote child <p> elements (a <blockquote> and its child <p> both
- * matched "p, blockquote"). The extra elements shifted the grapheme offsets
- * computed by computeTopVisibleOffset so they no longer matched the
- * article-global offsets from pageStartGlobalOffset (which walks article.blocks
- * via blockNormalizedText). [data-block-index] matches exactly the top-level
- * article blocks (verified: 8 vs 13 elements for essay-long-form), aligning
- * the scrolling-mode anchor with the paginated-mode page boundaries.
- */
-function queryBlocks(articleEl: HTMLElement): HTMLElement[] {
-  return Array.from(
-    articleEl.querySelectorAll<HTMLElement>("[data-block-index]"),
-  );
-}
+// queryBlocks moved to reader/restoreLocation.ts (issue #42 review): every
+// offset↔DOM consumer — this route, useScrollSave, the read-aloud follower —
+// shares ONE selector with ONE history note (the PAGE-01 double-count fix).
 
 /**
  * Plan 04-09 (PAGE-01 round-trip fix): check if two article-global grapheme
@@ -794,72 +769,13 @@ export function ArticleView({
     saveLocationNow(endPinOffset(article));
   }, [article, saveLocationNow, noteActivity]);
 
-  // Issue #42 — the spoken-word marker state: the canonical [start, end)
-  // grapheme range the voice is currently inside. The state (and its ref
-  // mirror for handler reads) feeds BOTH render twins as the synthetic
-  // aria-hidden spoken-word highlight; the follow effects + the jump
-  // affordance read the same range. Cleared when the transport stops, so a
-  // dead session never leaves a stale marker behind.
-  const [spokenRange, setSpokenRange] = useState<GraphemeRange | null>(null);
-  const spokenRangeRef = useRef<GraphemeRange | null>(null);
-  // Issue #42 — "never fight the reader": a manual page turn (onUserTurn)
-  // or manual scroll (the suspension listeners below) suspends the follower;
-  // it silently re-acquires when speech re-enters the reader's current view
-  // (the pure policy in readaloud/follow.ts owns the decision).
-  const followSuspendedRef = useRef(false);
-  // Issue #42 — programmatic-scroll window: scroll events inside this window
-  // are the FOLLOWER's own smooth scroll (or an instant jump), never user
-  // input — the scroll listener must not suspend on them. Wheel/touch/key
-  // input suspends unconditionally regardless of this window; the window
-  // only arbitrates scrollbar-drag-style scroll events. If a long glide
-  // outlives the window, its trailing events suspend the follower — which
-  // the next spoken-word update silently re-acquires once the glide lands
-  // the marker in view (the policy's re-entry rule).
-  const programmaticScrollUntilRef = useRef(0);
-  /** How long after a programmatic scroll its own scroll events stay
-   * disambiguated from user scrolls (smooth-glide upper bound). */
-  const PROGRAMMATIC_SCROLL_WINDOW_MS = 800;
-  /** How long the jump notice stays in the transport region before
-   * self-clearing (the RestorationMarker 4s tempo). */
-  const NOTICE_TTL_MS = 4000;
-
-  /** The DOM target for "where speech is" in scrolling mode: the rendered
-   * marker element when present, else the block containing the spoken
-   * offset (non-readable kinds render no mark). */
-  const spokenScrollTarget = useCallback(
-    (range: GraphemeRange): HTMLElement | null => {
-      if (!article || !articleEl) return null;
-      return (
-        articleEl.querySelector<HTMLElement>("mark.spoken-word") ??
-        findScrollTarget(article, queryBlocks(articleEl), range.start)
-      );
-    },
-    [article, articleEl],
-  );
-
-  /** Bring the spoken target into view. `reduced` forces the instant
-   * behavior (the reduced-motion contract); otherwise a calm smooth glide —
-   * the app's ONLY smooth-scroll site. Always arms the programmatic-scroll
-   * window so the follower's own events never read as user input. */
-  const scrollSpokenIntoView = useCallback(
-    (range: GraphemeRange, reduced: boolean): void => {
-      const target = spokenScrollTarget(range);
-      if (!target) return;
-      programmaticScrollUntilRef.current =
-        performance.now() + PROGRAMMATIC_SCROLL_WINDOW_MS;
-      target.scrollIntoView({ block: "center", behavior: reduced ? "auto" : "smooth" });
-    },
-    [spokenScrollTarget],
-  );
-
-  /** The spoken-range setter with its ref mirror; the engine's zero-width
-   * chunk-end sentinel ([end, end)) carries progress currency only and must
-   * NOT collapse the visible marker — it is dropped here. */
-  const updateSpokenRange = useCallback((range: GraphemeRange) => {
-    if (range.end <= range.start) return;
-    spokenRangeRef.current = range;
-    setSpokenRange(range);
-  }, []);
+  // Issue #42 — the spoken-word follower (ONE hook: marker state, "never
+  // fight the reader" suspension, the follow effects, and the jump
+  // affordance + its notice). The hook needs the transport state, and
+  // useReadAloud needs the hook's spoken-range setter — resolved with the
+  // route's standard latest-ref pattern: the engine always calls the
+  // freshest setter through the indirection ref.
+  const spokenSetterRef = useRef<(range: GraphemeRange) => void>(() => {});
 
   // Issue #40 (ADR 0001 — listening is reading): the read-aloud session.
   //   - Play starts at the reader's current canonical position (the live
@@ -885,7 +801,7 @@ export function ArticleView({
       currentAnchorOffsetRef.current = offset;
       recordProgress(offset);
     },
-    onListenSpoken: updateSpokenRange,
+    onListenSpoken: (range) => spokenSetterRef.current(range),
     onListenFinished: () => {
       if (!article) return;
       noteActivity(endPinOffset(article));
@@ -893,150 +809,18 @@ export function ArticleView({
     },
   });
 
-  // ── Issue #42 — the spoken-word follower ──────────────────────────────────
-  // The marker lives exactly as long as the session: stopped (stop, finish,
-  // or honest refusal) clears it and resets the follower.
-  useEffect(() => {
-    if (readAloudState !== "stopped") return;
-    if (spokenRangeRef.current !== null) {
-      spokenRangeRef.current = null;
-      setSpokenRange(null);
-    }
-    followSuspendedRef.current = false;
-  }, [readAloudState]);
-
-  // Paginated auto page-turn: on each spoken-range update, turn to the page
-  // containing the spoken word ONLY when the policy says the follower is
-  // healthy (never after a manual turn until speech re-enters the displayed
-  // page). turnToPage is the programmatic path — no focus movement; the
-  // optional fade inside respects prefers-reduced-motion (instant).
-  useEffect(() => {
-    if (readAloudState !== "playing" || !isPaginated || spokenRange === null || !article) return;
-    const surface = surfaceRef.current;
-    const pages = surface?.getPages();
-    if (!surface || !pages || pages.length === 0) return;
-    const spokenPage = fragmentContainingOffset(pages, spokenRange.start, article);
-    const decision = paginatedFollowDecision({
-      suspended: followSuspendedRef.current,
-      displayedPage: (surface.getState()?.page ?? 1) - 1,
-      spokenPage,
-    });
-    followSuspendedRef.current = decision.suspended;
-    if (decision.action === "turn") surface.turnToPage(spokenPage);
-  }, [readAloudState, isPaginated, spokenRange, article]);
-
-  // Scrolling follow-scroll: keep the spoken passage in view while playing
-  // (the marker element when present, else its block), again gated by the
-  // never-fight-the-reader policy. Reduced motion is honored here directly:
-  // behavior "auto" (instant) under prefers-reduced-motion, a calm smooth
-  // scroll otherwise.
-  useEffect(() => {
-    if (readAloudState !== "playing" || isPaginated || spokenRange === null || !articleEl)
-      return;
-    const target = spokenScrollTarget(spokenRange);
-    if (!target) return;
-    const rect = target.getBoundingClientRect();
-    const spokenInView = rect.bottom > 0 && rect.top < window.innerHeight;
-    const decision = scrollingFollowDecision({
-      suspended: followSuspendedRef.current,
-      spokenInView,
-    });
-    followSuspendedRef.current = decision.suspended;
-    if (decision.action === "scroll") {
-      const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      scrollSpokenIntoView(spokenRange, reduced);
-    }
-  }, [readAloudState, isPaginated, spokenRange, articleEl, spokenScrollTarget, scrollSpokenIntoView]);
-
-  // Manual-scroll suspension listeners (scrolling mode only, while a session
-  // exists): any user scroll gesture — wheel, touch, the keyboard scroll
-  // bundle, or a scrollbar drag (a scroll event outside the follower's
-  // programmatic window) — suspends the follower. Speech re-entering the
-  // viewport re-acquires (the policy), and the jump affordance re-acquires
-  // explicitly.
-  useEffect(() => {
-    if (readAloudState === "stopped" || isPaginated || !articleEl) return;
-    const suspend = () => {
-      followSuspendedRef.current = true;
-    };
-    const onWheel = (event: WheelEvent) => {
-      if (event.deltaY !== 0) suspend();
-    };
-    const onTouchMove = () => suspend();
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (isFormField(event.target)) return;
-      // Activating a control (Space/Enter on a button, etc.) doesn't scroll
-      // the page — not a manual-navigation signal.
-      if (
-        event.target instanceof Element &&
-        event.target.closest("button, a, [role='button']")
-      ) {
-        return;
-      }
-      if (
-        event.key === "PageUp" ||
-        event.key === "PageDown" ||
-        event.key === "ArrowUp" ||
-        event.key === "ArrowDown" ||
-        event.key === "Home" ||
-        event.key === "End" ||
-        event.key === " "
-      ) {
-        suspend();
-      }
-    };
-    const onScroll = () => {
-      if (performance.now() < programmaticScrollUntilRef.current) return;
-      suspend();
-    };
-    window.addEventListener("wheel", onWheel, { passive: true });
-    window.addEventListener("touchmove", onTouchMove, { passive: true });
-    window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("scroll", onScroll, { passive: true, capture: true });
-    return () => {
-      window.removeEventListener("wheel", onWheel);
-      window.removeEventListener("touchmove", onTouchMove);
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("scroll", onScroll, { capture: true });
-    };
-  }, [readAloudState, isPaginated, articleEl]);
-
-  // The "jump to spoken position" affordance: restore the reader's view to
-  // the spoken passage (auto page-turn / instant scroll) WITHOUT moving
-  // focus — the transport button keeps focus, and the ONE polite transport
-  // region confirms the jump for non-visual readers (the marker itself is
-  // aria-hidden). Re-acquires the follower. The notice rides the bar's
-  // single status region and self-clears (the RestorationMarker 4s tempo).
-  const [readAloudNotice, setReadAloudNotice] = useState<string | null>(null);
-  const noticeTimerRef = useRef<number | null>(null);
-  const handleJumpToSpoken = useCallback(() => {
-    const range = spokenRangeRef.current;
-    if (!article || !range) return;
-    followSuspendedRef.current = false;
-    if (isPaginatedRef.current) {
-      const pages = surfaceRef.current?.getPages();
-      if (pages && pages.length > 0) {
-        surfaceRef.current?.turnToPage(fragmentContainingOffset(pages, range.start, article));
-      }
-    } else {
-      // Instant (behavior "auto") — the app's jump policy; no smooth glide.
-      scrollSpokenIntoView(range, true);
-    }
-    setReadAloudNotice("Jumped to spoken position.");
-    if (noticeTimerRef.current !== null) clearTimeout(noticeTimerRef.current);
-    noticeTimerRef.current = window.setTimeout(() => setReadAloudNotice(null), NOTICE_TTL_MS);
-  }, [article, scrollSpokenIntoView]);
-  // The notice is the feedback for the reader's last action: the moment the
-  // transport itself announces again (pause/resume/stop/error), the notice
-  // yields so the ONE region always reflects the freshest event.
-  useEffect(() => {
-    setReadAloudNotice(null);
-  }, [readAloudAnnouncement]);
-  useEffect(() => {
-    return () => {
-      if (noticeTimerRef.current !== null) clearTimeout(noticeTimerRef.current);
-    };
-  }, []);
+  // The follower hook, AFTER the transport (it consumes readAloudState).
+  const follow = useReadAloudFollow({
+    state: readAloudState,
+    isPaginated,
+    isPaginatedRef,
+    article,
+    articleEl,
+    surfaceRef,
+    announcement: readAloudAnnouncement,
+  });
+  spokenSetterRef.current = follow.updateSpokenRange;
+  const { spokenRange } = follow;
 
   // Phase 4 Plan 04-04 (D4-09 + D4-10): the mode-toggle handler. Captures the
   // anchor SYNCHRONOUSLY before calling update() so the post-swap render can
@@ -2289,12 +2073,8 @@ export function ArticleView({
                   articleStartChrome={articleTopMeta}
                   initialAnchorOffset={currentAnchorOffsetRef.current}
                   onAnchorChange={handleAnchorChange}
-                  spokenRange={spokenRange}
-                  onUserTurn={() => {
-                    // Issue #42: a manual page turn suspends the read-aloud
-                    // follower (never fight the reader).
-                    followSuspendedRef.current = true;
-                  }}
+                  spokenRange={follow.spokenRange}
+                  onUserTurn={follow.suspend}
                 />
                 {/*
                   PageTurnControls registers the keyboard bundle + swipe + the
@@ -2572,14 +2352,14 @@ export function ArticleView({
           state={readAloudState}
           followLevel={readAloudFollowLevel}
           announcement={readAloudAnnouncement}
-          notice={readAloudNotice}
+          notice={follow.notice}
           onPrimary={() =>
             readAloudState === "playing"
               ? pauseOrResumeReadAloud()
               : playReadAloud()
           }
           onStop={stopReadAloud}
-          onJumpToSpoken={handleJumpToSpoken}
+          onJumpToSpoken={follow.jumpToSpoken}
         />
       </main>
     </>

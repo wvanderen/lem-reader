@@ -19,8 +19,10 @@ import type { HighlightSlice } from "../../annotations/highlightRanges";
 // Issue #42: the synthetic spoken-word marker rides the SAME slicer output
 // as annotation marks, but branches on the reserved id into an aria-hidden,
 // non-focusable <mark> — per-word updates never enter the accessibility
-// tree, never take focus, and never open the annotation popover.
+// tree, never take focus, and never open the annotation popover. The ONE
+// mark anatomy lives in SpokenMark (shared with the code-block path).
 import { isSpokenMarkerId } from "../../annotations/spokenMarker";
+import { SpokenMark } from "./SpokenMark";
 
 function Inline({ run }: { run: InlineRun }) {
   let node: React.ReactNode = run.text;
@@ -129,19 +131,13 @@ export function InlineList({
             </span>
           );
         }
-        // Issue #42 — the synthetic spoken-word marker: a purely visual,
-        // synthetic highlight. aria-hidden + no tabIndex + no label + no
-        // data-highlight-id: the spoken word never enters the accessibility
-        // tree (word-boundary updates would be unusable chatter), never
-        // receives focus, and can never trigger the annotation popover or
-        // the drawer jump targets. Distinct class → distinct calm styling.
         if (isSpokenMarkerId(slice.highlightId)) {
           return (
-            <mark key={i} className="spoken-word" aria-hidden="true">
+            <SpokenMark key={i}>
               {slice.runs.map((r, j) => (
                 <Inline key={j} run={r} />
               ))}
-            </mark>
+            </SpokenMark>
           );
         }
         // Highlighted slice — wrap in <mark class="highlight">. The modifier

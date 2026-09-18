@@ -330,6 +330,53 @@ test.describe("Issue #42 — spoken word + follow behaviors", () => {
     ).toHaveCount(1);
   });
 
+  test("a scrollbar-drag-style scroll INSIDE the programmatic window suspends too", async ({
+    page,
+  }) => {
+    await openEssay(page);
+    await page.getByRole("button", { name: "Reading mode: paginated" }).click();
+    await expect(
+      page.getByRole("button", { name: "Reading mode: scrolling" }),
+    ).toBeVisible({ timeout: 10_000 });
+
+    await playAndAwaitProbe(page);
+
+    const deepOffset = Math.floor(TOTAL * 0.7);
+    const inView = () =>
+      page.evaluate(() => {
+        const m = document.querySelector("mark.spoken-word");
+        if (!m) return false;
+        const r = m.getBoundingClientRect();
+        return r.top >= 0 && r.bottom <= window.innerHeight && window.scrollY > 0;
+      });
+
+    // Glide #1 settles at the O5 position (and its disambiguation window
+    // fully expires).
+    await fireBoundaryAt(page, deepOffset);
+    await expect.poll(inView, { timeout: 15_000 }).toBe(true);
+    await page.waitForTimeout(900);
+
+    // Glide #2 arms a short hop deeper — drag away to the top MID-GLIDE,
+    // inside the 800 ms window. The drag lands off the glide's
+    // [from, target] span, so it is reader input: the follower suspends
+    // and never yanks back.
+    await fireBoundaryAt(page, deepOffset + 400);
+    await page.waitForTimeout(150); // the glide is definitively in flight
+    await page.evaluate(() => window.scrollTo({ top: 0, behavior: "auto" }));
+    await page.waitForTimeout(900); // the window expires
+
+    await fireBoundaryAt(page, deepOffset + 440);
+    await fireBoundaryAt(page, deepOffset + 480);
+    await page.waitForTimeout(700);
+    expect(await page.evaluate(() => window.scrollY)).toBeLessThan(50);
+
+    // The explicit re-acquire path still works: jump restores orientation.
+    await page.getByRole("button", { name: "Jump to spoken position" }).click();
+    await expect
+      .poll(() => page.evaluate(() => window.scrollY), { timeout: 15_000 })
+      .toBeGreaterThan(50);
+  });
+
   test("reduced motion: the follow scroll is instant (auto behavior, no smooth glide)", async ({
     page,
   }) => {

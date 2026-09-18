@@ -64,9 +64,9 @@ export interface ReadAloudEngineCallbacks {
    * chunk (the passage marker until the first boundary arrives); a chunk
    * completion emits a zero-width [end, end) sentinel that carries progress
    * but must NOT move the marker (the next utterance's start immediately
-   * replaces it). Starts never move backward within a session — a future
-   * skip-BACK transport (#43) must route through play() (which resets the
-   * floor), never through this channel alone. */
+   * replaces it). Starts never move backward within a session — a skip-BACK
+   * transport (#43) resets the floor explicitly by routing through seekTo()
+   * (or stop→play for a fresh session), never through this channel alone. */
   onSpokenRange?(range: GraphemeRange): void;
   /** The last chunk finished — the article was completed by ear. */
   onFinish?(): void;
@@ -168,6 +168,33 @@ export class ReadAloudEngine {
     this.clearStallTimer();
     this.adapter.cancel();
     this.setState("stopped");
+  }
+
+  /**
+   * Issue #42 — the track the #43 skip controls ride: jump the PLAYING
+   * session to the chunk containing `fromOffset` without a stop→play
+   * round-trip (no re-probe — the follow level is already known). The
+   * monotonic floors reset here, so the spoken-range channel may move
+   * BACKWARD (skip-back) as well as forward, and the pre-seek utterance's
+   * late events no-op via the generation guard. No-op while paused/stopped —
+   * a paused seek is resume-then-seek for the caller (#43 owns that
+   * composition). An offset at/past the end restarts from the top.
+   */
+  seekTo(fromOffset: number): void {
+    if (this.state !== "playing") return;
+    this.generation += 1;
+    const generation = this.generation;
+    this.clearStallTimer();
+    // Same settle discipline as the probe's post-cancel handoff (WebKit
+    // cancel→queue race, bug 238189).
+    this.adapter.cancel();
+    let startIndex = this.chunks.findIndex((c) => c.endGrapheme > fromOffset);
+    if (startIndex === -1) startIndex = 0;
+    this.nextChunkIndex = startIndex;
+    this.lastReported = -1;
+    this.lastSpokenStart = -1;
+    this.consecutiveErrors = 0;
+    setTimeout(() => this.startPlayback(generation), CANCEL_SETTLE_MS);
   }
 
   // ── internals ────────────────────────────────────────────────────────────
