@@ -5,6 +5,7 @@ import { ReadingStateButton } from "./ReadingStateButton";
 import { SourceBadge } from "./SourceBadge";
 import { articleReadingState } from "./readingState";
 import { effectiveTitle, effectiveAuthor } from "./effectiveMetadata";
+import { formatDuration } from "./readingStats";
 
 interface LibraryRowProps {
   /** The article this row represents. */
@@ -72,6 +73,13 @@ export function LibraryRow({
   const isFinished = articleReadingState(location, total) === "finished";
   const showHairline = ratio > 0 && !isFinished;
   const tags = article.tags ?? [];
+  // Issue #41 (flow N3) — the transcript article's video duration as quiet
+  // text beside the source badge. Derived from the persisted transcript meta
+  // (youtube-sourced articles only — every other source omits the field, so
+  // the line is absent); formatDuration is the ONE duration voice.
+  const videoDuration = article.ingestionMeta?.transcript
+    ? formatDuration(article.ingestionMeta.transcript.durationSeconds)
+    : undefined;
   // Dynamic heading element (Plan 12-05): h2 (default — byte-stable for
   // standalone rows) or h3 (chapter sub-rows inside a book group). The id
   // contract (`title-{id}`) is identical at either level, so the
@@ -95,6 +103,11 @@ export function LibraryRow({
           {effectiveAuthor(article) && <p className="meta">{effectiveAuthor(article)}</p>}
           {/* D8-02 source indicator + LIB-05 source link */}
           <SourceBadge article={article} />
+          {/* Issue #41 (flow N3) — the video duration as text (absent for
+              every non-transcript source). */}
+          {videoDuration && (
+            <p className="meta library-row-duration">{videoDuration}</p>
+          )}
         </div>
         {/* Issue #38 — the quiet "{duration} read here" meta line. Absent
             under one minute of accrued time (silence is the empty state). */}

@@ -138,6 +138,7 @@ import {
   effectiveTitle,
   effectiveAuthor,
 } from "../ingestion/library/effectiveMetadata";
+import { extractionNote } from "./extractionNote";
 // Issue #40 — the minimal speakable read-aloud path: the transport bar
 // (Play/Pause/Stop, fixed bottom) + the engine hook. Listening is reading
 // (ADR 0001): the listened canonical position drives the SAME shared
@@ -1820,6 +1821,12 @@ export function ArticleView({
           {effectiveAuthor(article) && article.provenance.publishedAt && " · "}
           {article.provenance.publishedAt && formatDate(article.provenance.publishedAt)}
         </p>
+      )}
+      {/* Issue #41 (flow N6) — the low-confidence disclosure. Undefined is
+          the empty state (silence, never a placeholder); ASR transcripts
+          carry the caption-specific wording via the ONE copy derivation. */}
+      {extractionNote(article) && (
+        <p className="meta extraction-note">{extractionNote(article)}</p>
       )}
       {/* Plan 12-06 (D12-08): epub-chapter context line — calm book
           provenance below the article provenance, epub-chapter only
