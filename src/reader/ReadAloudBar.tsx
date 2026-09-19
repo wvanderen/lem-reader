@@ -7,17 +7,24 @@
 //     visible text content, never color (native button text = the accessible
 //     name; no aria-label duplication).
 //   - The probed follow level is visible as TEXT on the bar (one of word /
-//     sentence / passage / progress only).
+//     sentence / passage / progress only), and the configured rate is always
+//     visible as text (issue #43, O1: follow level + rate visible while the
+//     bar is mounted — state, never icon/color-only).
 //   - Issue #42: while a session exists (playing/paused) the bar also offers
 //     "Jump to spoken position" — a focus-free orientation affordance for
 //     when manual navigation left the spoken passage out of view. The
 //     spoken-word MARK itself is synthetic + aria-hidden and lives in the
 //     article renderers, never on this bar.
+//   - Issue #43 (O3): while a session exists the bar offers "Skip sentence
+//     backward", "Skip sentence forward", and "Skip paragraph forward" —
+//     speech audibly jumps and the marker hops; successful skips stay silent
+//     (no per-hop chatter — any announcement rides the ONE polite region).
 //   - Exactly ONE polite role="status" region owns the transport
 //     announcements (this component's visually-hidden region; annotation and
 //     export regions stay separate — the D9-06 pattern).
 //   - No focus movement on play; no global hotkeys; no click-word-to-start.
-//     The only start is Play.
+//     The only start is Play. All controls are native buttons, so Tab order
+//     cycles through the bar and back into the page without trapping (O1).
 //
 // Styling follows the .mark-read-close quiet-button register (tokens only,
 // zero motion properties — trivially reduced-motion safe; :focus-visible
@@ -26,6 +33,7 @@
 // geometry.
 
 import type { FollowLevel, TransportState } from "../readaloud/types";
+import { formatRate } from "../settings/tokens";
 
 interface ReadAloudBarProps {
   state: TransportState;
@@ -40,6 +48,8 @@ interface ReadAloudBarProps {
    * while fresh; the route clears it when the transport next announces.
    */
   notice?: string | null;
+  /** The configured read-aloud rate — visible as text (issue #43, O1). */
+  rate: number;
   /** Primary press: Play when stopped/paused, Pause when playing. */
   onPrimary: () => void;
   onStop: () => void;
@@ -50,6 +60,14 @@ interface ReadAloudBarProps {
    * paused) and a jump handler is provided.
    */
   onJumpToSpoken?: () => void;
+  /**
+   * Issue #43 (O3) — the skip controls. Rendered only while a session
+   * exists (playing or paused); while paused the skip resumes the session
+   * and jumps (resume-then-seek is composed inside the hook).
+   */
+  onSkipSentenceBack?: () => void;
+  onSkipSentenceForward?: () => void;
+  onSkipParagraphForward?: () => void;
 }
 
 const FOLLOW_LABELS: Record<FollowLevel, string> = {
@@ -64,9 +82,13 @@ export function ReadAloudBar({
   followLevel,
   announcement,
   notice,
+  rate,
   onPrimary,
   onStop,
   onJumpToSpoken,
+  onSkipSentenceBack,
+  onSkipSentenceForward,
+  onSkipParagraphForward,
 }: ReadAloudBarProps) {
   const playing = state === "playing";
   const sessionActive = state !== "stopped";
@@ -80,6 +102,37 @@ export function ReadAloudBar({
           <button type="button" className="readaloud-btn" onClick={onPrimary}>
             {playing ? "Pause" : "Play"}
           </button>
+          {/* Skip controls (issue #43, O3) — visible only while a session
+              exists; pressing one jumps the voice and the marker, and a
+              skip at the session boundary announces once through the polite
+              region. */}
+          {sessionActive && onSkipSentenceBack && (
+            <button
+              type="button"
+              className="readaloud-btn"
+              onClick={onSkipSentenceBack}
+            >
+              Skip sentence backward
+            </button>
+          )}
+          {sessionActive && onSkipSentenceForward && (
+            <button
+              type="button"
+              className="readaloud-btn"
+              onClick={onSkipSentenceForward}
+            >
+              Skip sentence forward
+            </button>
+          )}
+          {sessionActive && onSkipParagraphForward && (
+            <button
+              type="button"
+              className="readaloud-btn"
+              onClick={onSkipParagraphForward}
+            >
+              Skip paragraph forward
+            </button>
+          )}
           {/* Jump to spoken position — visible only while a session exists
               (playing/paused); the marker may be out of view after manual
               navigation, and this restores orientation focus-free. */}
@@ -100,9 +153,12 @@ export function ReadAloudBar({
           >
             Stop
           </button>
+          {/* The status text pair (O1): follow level once probed, the
+              configured rate always — visible text, never color-only. */}
           {followLevel !== null && (
             <span className="readaloud-follow">{FOLLOW_LABELS[followLevel]}</span>
           )}
+          <span className="readaloud-follow">Rate: {formatRate(rate)}×</span>
         </div>
       </div>
       {/* The ONE polite transport live region (visually hidden, mirrors the

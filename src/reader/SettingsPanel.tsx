@@ -37,8 +37,17 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import { useSettings } from "../settings/SettingsContext";
-import { MEASURE_STEPS, SIZE_STEPS } from "../settings/tokens";
+import { formatRate, MEASURE_STEPS, RATE_STEPS, SIZE_STEPS } from "../settings/tokens";
 import type { ReaderSettings } from "../content/schema";
+// Issue #43 (O8) — the read-aloud voice/rate controls' platform seam: the
+// probed voice list + the local-voice filter (spike 0009 §5.3) live beside
+// the other Web Speech seams in src/readaloud/webSpeech.ts.
+import {
+  filterVoiceChoices,
+  probeVoices,
+  speechSynthesisAvailable,
+} from "../readaloud/webSpeech";
+import type { VoiceChoice } from "../readaloud/webSpeech";
 // Issue #8 — the CanonicalArticle type import rode the export-highlights
 // fixture-merge fold; the snapshot's composite list replaced it.
 import { ImportPreviewDialog } from "./ImportPreviewDialog";
@@ -187,7 +196,44 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   const onMeasure = (measure: ReaderSettings["measure"]) => update({ measure });
   const onSpacing = (spacing: ReaderSettings["spacing"]) => update({ spacing });
   const onTheme = (theme: ReaderSettings["theme"]) => update({ theme });
+  const onRate = (rate: number) => update({ rate });
+  const onVoice = (voiceURI: string) =>
+    update({ voice: voiceURI === "" ? undefined : voiceURI });
   const onReset = () => reset(); // D2-04 — restores DEFAULT_SETTINGS
+
+  // ── Issue #43 (O8): the read-aloud voice/rate controls ──────────────────
+  // Capability is environment-level — computed once per mount (the
+  // hasWebCrypto pattern). The voice list is PROBED each open (Chrome fills
+  // getVoices() asynchronously via voiceschanged; probeVoices bounds the
+  // wait); the OPTIONS show the filtered local-voice list while the
+  // unfiltered probe labels a stored voice the filter hid (a remote voice,
+  // or one since uninstalled).
+  const [speechAvailable] = useState(speechSynthesisAvailable);
+  const [probedVoices, setProbedVoices] = useState<VoiceChoice[] | null>(null);
+  useEffect(() => {
+    if (!open || !speechAvailable) return;
+    let cancelled = false;
+    probeVoices().then((voices) => {
+      if (!cancelled) setProbedVoices(voices);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, speechAvailable]);
+
+  const voiceOptions = probedVoices ? filterVoiceChoices(probedVoices) : [];
+  const storedVoiceMissing =
+    settings.voice !== undefined &&
+    !voiceOptions.some((v) => v.voiceURI === settings.voice);
+  // The stored-but-hidden voice is APPENDED so the control always reflects
+  // the live truth (never a value with no option, never a silent mismatch
+  // between what is stored and what is displayed). Label: the voice's real
+  // name when the platform knows it, else the opaque URI.
+  const storedVoiceLabel =
+    storedVoiceMissing
+      ? (probedVoices ?? []).find((v) => v.voiceURI === settings.voice)?.name ??
+        settings.voice
+      : settings.voice;
 
   // ── Plan 09-05 (D9-10): the "Your data" cluster state machine ───────────
   // One busy kind at a time (all three buttons disable while any data action
@@ -584,6 +630,77 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
               A gentle fade between pages. Follows your device’s reduced-motion setting.
             </p>
           </fieldset>
+
+          {/* Issue #43 (O8) — the read-aloud voice control: the probed,
+              filtered local-voice list (system default first; a stored voice
+              the filter hid is appended so the control always shows the live
+              truth). Native <select>: keyboard/SR operable, role + name +
+              value announced by the platform. */}
+          {speechAvailable ? (
+            <>
+              <fieldset className="settings-section">
+                <legend>Read-aloud voice</legend>
+                <select
+                  aria-label="Read-aloud voice"
+                  className="settings-select"
+                  value={settings.voice ?? ""}
+                  onChange={(e) => onVoice(e.currentTarget.value)}
+                >
+                  <option value="">System default voice</option>
+                  {voiceOptions.map((v) => (
+                    <option key={v.voiceURI} value={v.voiceURI}>
+                      {v.name} ({v.lang})
+                    </option>
+                  ))}
+                  {storedVoiceMissing && (
+                    <option value={settings.voice}>{storedVoiceLabel}</option>
+                  )}
+                </select>
+                <p className="settings-help">
+                  Voices installed on this device. Reading aloud falls back to
+                  the system default when a saved voice is missing.
+                </p>
+              </fieldset>
+
+              {/* Issue #43 (O8) — the read-aloud rate: stepped 0.5–3
+                  (RATE_STEPS, arrow keys land on a valid step), the same
+                  stepped-range pattern as Text size. Applies to subsequent
+                  playback — the honest boundary the help line names. */}
+              <fieldset className="settings-section">
+                <legend>
+                  Read-aloud rate{" "}
+                  <span className="settings-value">{formatRate(settings.rate)}×</span>
+                </legend>
+                <input
+                  type="range"
+                  name="readaloud-rate"
+                  min={RATE_STEPS[0]}
+                  max={RATE_STEPS[RATE_STEPS.length - 1]}
+                  step={0.25}
+                  value={settings.rate}
+                  aria-label="Read-aloud rate"
+                  aria-valuenow={settings.rate}
+                  aria-valuemin={RATE_STEPS[0]}
+                  aria-valuemax={RATE_STEPS[RATE_STEPS.length - 1]}
+                  aria-valuetext={`${formatRate(settings.rate)} times`}
+                  onChange={(e) => {
+                    const next = Number(e.currentTarget.value);
+                    if (RATE_STEPS.includes(next as (typeof RATE_STEPS)[number])) {
+                      onRate(next);
+                    }
+                  }}
+                />
+                <p className="settings-help">Applies when reading aloud starts again.</p>
+              </fieldset>
+            </>
+          ) : (
+            <fieldset className="settings-section">
+              <legend>Read aloud</legend>
+              <p className="settings-help">
+                Read aloud isn't available in this browser.
+              </p>
+            </fieldset>
+          )}
 
           {/* Plan 09-05 (D9-10) — the "Your data" cluster: the three
             whole-library data actions + the import file picker + the status

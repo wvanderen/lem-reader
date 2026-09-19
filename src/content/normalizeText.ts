@@ -25,8 +25,11 @@ export function normalizeRunText(text: string): string {
   return text.replace(/[\t\n\f\r ]+/g, " ").trim();
 }
 
-/** Render an inline run array to its normalized text contribution. */
-function inlineText(runs: InlineRun[]): string {
+/** Render an inline run array to its normalized text contribution.
+ * Exported for the read-aloud speakable-channel walk (src/readaloud/chunks.ts),
+ * which needs the caption sub-range of a figure block — the SAME function the
+ * D-05 substrate uses, never a fork (Pitfall 3). */
+export function inlineText(runs: InlineRun[]): string {
   return runs
     .map((r) => normalizeRunText(r.text))
     .filter(Boolean)

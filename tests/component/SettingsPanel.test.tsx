@@ -217,3 +217,64 @@ describe("SettingsPanel — live-apply wiring (D2-03)", () => {
     ).toBe("18px");
   });
 });
+
+// ── Issue #43 (O8) — the read-aloud voice + rate controls ────────────────────
+
+describe("SettingsPanel — read-aloud controls (issue #43, O8)", () => {
+  function stubSpeech(voices: Array<Record<string, unknown>>): void {
+    Object.defineProperty(window, "speechSynthesis", {
+      value: { getVoices: () => voices },
+      configurable: true,
+      writable: true,
+    });
+  }
+
+  it("without speechSynthesis the section degrades to a calm help line (no dead controls)", () => {
+    render(<Harness open={true} onClose={() => undefined} />);
+    expect(screen.getByText("Read aloud isn't available in this browser.")).not.toBeNull();
+    expect(screen.queryByRole("combobox", { name: "Read-aloud voice" })).toBeNull();
+    expect(screen.queryByRole("slider", { name: "Read-aloud rate" })).toBeNull();
+  });
+
+  it("with speech: the probed FILTERED local-voice list renders (remote voices filtered)", async () => {
+    stubSpeech([
+      { voiceURI: "cloud", name: "Cloud Voice", lang: "en", localService: false },
+      { voiceURI: "zora", name: "Zora", lang: "fr", localService: true },
+    ]);
+    render(<Harness open={true} onClose={() => undefined} />);
+    const select = screen.getByRole("combobox", { name: "Read-aloud voice" });
+    // The probed list arrived: the system default + the LOCAL voice only.
+    await screen.findByRole("option", { name: "Zora (fr)" });
+    const optionLabels = Array.from(select.querySelectorAll("option")).map(
+      (o) => o.textContent ?? "",
+    );
+    expect(optionLabels).toContain("System default voice");
+    expect(optionLabels).toContain("Zora (fr)");
+    expect(optionLabels).not.toContain("Cloud Voice (en)");
+  });
+
+  it("the rate control spans 0.5–3 and applies a stepped change", async () => {
+    stubSpeech([]);
+    render(<Harness open={true} onClose={() => undefined} />);
+    const rate = screen.getByRole("slider", { name: "Read-aloud rate" });
+    expect(rate.getAttribute("min")).toBe("0.5");
+    expect(rate.getAttribute("max")).toBe("3");
+    expect(rate.getAttribute("step")).toBe("0.25");
+    expect(rate.getAttribute("aria-valuenow")).toBe("1");
+    fireEvent.change(rate, { target: { value: "1.5" } });
+    // The value rides the live settings state (the debounced Dexie save is
+    // the seam's own concern — the control's job is the state flip).
+    await screen.findByText("1.5×");
+    expect(rate.getAttribute("aria-valuenow")).toBe("1.5");
+  });
+
+  it("picking a voice updates the select's live value", async () => {
+    stubSpeech([
+      { voiceURI: "zora", name: "Zora", lang: "fr", localService: true },
+    ]);
+    render(<Harness open={true} onClose={() => undefined} />);
+    const select = await screen.findByRole("combobox", { name: "Read-aloud voice" });
+    fireEvent.change(select, { target: { value: "zora" } });
+    expect((select as HTMLSelectElement).value).toBe("zora");
+  });
+});

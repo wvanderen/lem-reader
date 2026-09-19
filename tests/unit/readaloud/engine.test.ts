@@ -55,7 +55,16 @@ class FakeAdapter implements SpeechAdapter {
 
 // ASCII-only chunks → the UTF-16 → grapheme map is the identity (plus the
 // past-the-end entry), keeping engine tests focused on transport behavior.
-function chunk(text: string, startGrapheme: number): SpeechChunk {
+// sentenceIndex/paragraphIndex default to 0/0 — the skip tests below build
+// chunk sets with explicit units.
+function chunk(
+  text: string,
+  startGrapheme: number,
+  units: { sentenceIndex: number; paragraphIndex: number } = {
+    sentenceIndex: 0,
+    paragraphIndex: 0,
+  },
+): SpeechChunk {
   const width = text.length; // 1 unit per cluster
   return {
     text,
@@ -64,6 +73,7 @@ function chunk(text: string, startGrapheme: number): SpeechChunk {
     utf16ToGrapheme: Array.from({ length: width + 1 }, (_, i) =>
       Math.min(i, width),
     ),
+    ...units,
   };
 }
 
@@ -450,6 +460,143 @@ describe("seekTo — jump the playing session; the floors reset", () => {
   });
 });
 
+// ─── 8. skip controls (issue #43, O3) ────────────────────────────────────────
+
+/** A 3-paragraph article: p0 has two sentences (each one chunk), p1 one
+ * sentence split over budget into two pieces, p2 one sentence. Ranges are
+ * ASCII (identity maps): p0s0 [0,5) "Alpha", p0s1 [5,10) "Beta", p1s0
+ * pieces [10,15) "Gam-1" [15,20) "Gam-2", p2s0 [20,25) "Delta". */
+function makeSkipChunks(): SpeechChunk[] {
+  return [
+    chunk("Alpha", 0, { sentenceIndex: 0, paragraphIndex: 0 }),
+    chunk("Beta", 5, { sentenceIndex: 1, paragraphIndex: 0 }),
+    chunk("Gam-1", 10, { sentenceIndex: 2, paragraphIndex: 1 }),
+    chunk("Gam-2", 15, { sentenceIndex: 2, paragraphIndex: 1 }),
+    chunk("Delta", 20, { sentenceIndex: 3, paragraphIndex: 2 }),
+  ];
+}
+
+describe("skipSentences — skip sentence backward/forward (issue #43, O3)", () => {
+  it("skip forward lands on the first chunk of the NEXT sentence, no re-probe", () => {
+    const h = makeEngine(makeSkipChunks());
+    playWordCapable(h); // chunk 0 live ("Alpha", sentence 0)
+    expect(h.engine.skipSentences(1)).toBe(true);
+    vi.advanceTimersByTime(60);
+    expect(h.levels).toEqual(["word"]); // the follow level survives
+    expect(h.adapter.last!.request.volume).toBe(1);
+    expect(h.adapter.last!.request.text).toBe("Beta");
+    // The monotonic floors reset — the onstart marker re-emits the target.
+    h.adapter.last!.events.onstart?.();
+    expect(h.spokenRanges[h.spokenRanges.length - 1]).toEqual({ start: 5, end: 9 });
+  });
+
+  it("skip backward lands on the PREVIOUS sentence (strict ±1)", () => {
+    const h = makeEngine(makeSkipChunks());
+    playWordCapable(h);
+    h.engine.skipSentences(1);
+    vi.advanceTimersByTime(60);
+    h.engine.skipSentences(-1);
+    vi.advanceTimersByTime(60);
+    expect(h.adapter.last!.request.text).toBe("Alpha");
+  });
+
+  it("skipping from a mid-sentence piece of an over-budget sentence jumps past the whole sentence", () => {
+    const h = makeEngine(makeSkipChunks());
+    playWordCapable(h);
+    h.engine.seekTo(12); // mid "Gamma" — piece 1 of sentence 2
+    vi.advanceTimersByTime(60);
+    expect(h.adapter.last!.request.text).toBe("Gam-1");
+    // Skip forward from sentence 2 → sentence 3, past the "Gam-2" piece.
+    expect(h.engine.skipSentences(1)).toBe(true);
+    vi.advanceTimersByTime(60);
+    expect(h.adapter.last!.request.text).toBe("Delta");
+  });
+
+  it("a skip at the session boundary moves nothing and reports false", () => {
+    const h = makeEngine(makeSkipChunks());
+    playWordCapable(h);
+    expect(h.engine.skipSentences(-1)).toBe(false); // before the first sentence
+    vi.advanceTimersByTime(60);
+    expect(h.adapter.last!.request.text).toBe("Alpha"); // nothing queued
+    // Jump to the last sentence; skip forward past it.
+    h.engine.seekTo(20);
+    vi.advanceTimersByTime(60);
+    expect(h.adapter.last!.request.text).toBe("Delta");
+    h.adapter.last!.events.onstart?.(); // keep the stall watchdog quiet
+    expect(h.engine.skipSentences(1)).toBe(false); // past the last sentence
+    vi.advanceTimersByTime(5000);
+    expect(h.adapter.last!.request.text).toBe("Delta"); // nothing queued
+    expect(h.engine.getState()).toBe("playing");
+  });
+
+  it("while PAUSED the skip resumes the session and jumps (resume-then-seek)", () => {
+    const h = makeEngine(makeSkipChunks());
+    playWordCapable(h);
+    h.engine.pause();
+    expect(h.engine.getState()).toBe("paused");
+    expect(h.engine.skipSentences(1)).toBe(true);
+    expect(h.engine.getState()).toBe("playing");
+    vi.advanceTimersByTime(60);
+    expect(h.adapter.last!.request.text).toBe("Beta");
+  });
+
+  it("a stopped session ignores skips", () => {
+    const h = makeEngine(makeSkipChunks());
+    playWordCapable(h);
+    h.engine.stop();
+    const spokenCount = h.adapter.spoken.length;
+    expect(h.engine.skipSentences(1)).toBe(false);
+    expect(h.engine.skipParagraphForward()).toBe(false);
+    vi.advanceTimersByTime(60 + 5000);
+    expect(h.adapter.spoken).toHaveLength(spokenCount);
+    expect(h.engine.getState()).toBe("stopped");
+  });
+});
+
+describe("skipParagraphForward — skip paragraph forward (issue #43, O3)", () => {
+  it("jumps to the first chunk of the NEXT paragraph unit, crossing sentence boundaries", () => {
+    const h = makeEngine(makeSkipChunks());
+    playWordCapable(h); // paragraph 0, sentence 0
+    expect(h.engine.skipParagraphForward()).toBe(true);
+    vi.advanceTimersByTime(60);
+    expect(h.adapter.last!.request.text).toBe("Gam-1"); // paragraph 1's first chunk
+  });
+
+  it("from a mid-sentence piece, the jump still lands on the next paragraph's first chunk", () => {
+    const h = makeEngine(makeSkipChunks());
+    playWordCapable(h);
+    h.engine.seekTo(12); // mid paragraph 1
+    vi.advanceTimersByTime(60);
+    expect(h.engine.skipParagraphForward()).toBe(true);
+    vi.advanceTimersByTime(60);
+    expect(h.adapter.last!.request.text).toBe("Delta"); // paragraph 2
+  });
+
+  it("at the last paragraph the jump moves nothing and reports false", () => {
+    const h = makeEngine(makeSkipChunks());
+    playWordCapable(h);
+    h.engine.seekTo(20); // paragraph 2 — the last
+    vi.advanceTimersByTime(60);
+    expect(h.adapter.last!.request.text).toBe("Delta");
+    h.adapter.last!.events.onstart?.(); // keep the stall watchdog quiet
+    expect(h.engine.skipParagraphForward()).toBe(false);
+    vi.advanceTimersByTime(5000);
+    expect(h.adapter.last!.request.text).toBe("Delta");
+    expect(h.engine.getState()).toBe("playing");
+  });
+
+  it("rapid skips settle on the LAST target (the generation guard supersedes stale starts)", () => {
+    const h = makeEngine(makeSkipChunks());
+    playWordCapable(h);
+    h.engine.skipSentences(1); // → Beta
+    h.engine.skipParagraphForward(); // → Gam-1 (bumps generation again)
+    vi.advanceTimersByTime(60);
+    expect(h.adapter.last!.request.text).toBe("Gam-1");
+    h.adapter.last!.events.onstart?.();
+    expect(h.spokenRanges[h.spokenRanges.length - 1]).toEqual({ start: 10, end: 15 });
+  });
+});
+
 describe("mapBoundaryRangeToCanonical — pure mapping truth table", () => {
   it("maps both edges through the UTF-16 → grapheme map (astral-safe)", () => {
     // "𐐀𐐀 x" — 2 astral clusters (2 UTF-16 units each) + " x". The map
@@ -461,6 +608,8 @@ describe("mapBoundaryRangeToCanonical — pure mapping truth table", () => {
       startGrapheme: 100,
       endGrapheme: 104,
       utf16ToGrapheme: [0, 0, 1, 1, 2, 3, 4],
+      sentenceIndex: 0,
+      paragraphIndex: 0,
     };
     const range = mapBoundaryRangeToCanonical(c, { name: "word", charIndex: 5, charLength: 1 });
     expect(range).toEqual({ start: 103, end: 104 });

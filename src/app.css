@@ -735,6 +735,22 @@ dialog.settings-panel::backdrop {
   min-height: var(--touch);
   accent-color: var(--accent);
 }
+/* Issue #43 — the read-aloud voice select: the .import-preview select
+   register (16px form-control text, hairline border). height (not just
+   min-height) because WebKit ignores min-height on a native-appearance
+   <select> — the .review-select probed lesson. Tokens only, no motion. */
+.settings-select {
+  width: 100%;
+  min-height: var(--touch);
+  height: var(--touch);
+  padding-inline: var(--space-sm);
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  font-family: var(--font-ui);
+  font-size: 16px;
+  color: var(--ink);
+}
 
 /* Panel footer (Reset) — names the consequence (UI-SPEC §Copywriting line 317). */
 .settings-footer {
@@ -3795,6 +3811,11 @@ dialog.book-remove-confirm::backdrop {
   display: inline-flex;
   align-items: center;
   gap: var(--space-sm);
+  /* Issue #43: the skip controls widen the cluster past narrow viewports —
+   * wrap calmly instead of overflowing (tokens only, no motion). */
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: calc(100vw - 2 * var(--space-sm));
   padding: var(--space-xs) var(--space-md);
   background: var(--surface-raised);
   border: 1px solid var(--hairline);
