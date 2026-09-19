@@ -340,11 +340,11 @@ describe("chunkArticleForSpeech — sentenceIndex + paragraphIndex (the skip uni
       "Four.",
     ]);
     // sentenceIndex: a running ordinal across the speakable stream.
-    expect(chunks.map((c) => c.sentenceIndex)).toEqual([0, 1, 2, 3, 4]);
+    expect(chunks.map((c) => c.units.sentenceIndex)).toEqual([0, 1, 2, 3, 4]);
     // paragraphIndex: heading = unit 0; the 3-sentence paragraph = unit 1;
     // the code block owns NO unit; the final paragraph = unit 2 — so a
     // paragraph skip from unit 1 lands on unit 2 (the marker hops the code).
-    expect(chunks.map((c) => c.paragraphIndex)).toEqual([0, 1, 1, 1, 2]);
+    expect(chunks.map((c) => c.units.paragraphIndex)).toEqual([0, 1, 1, 1, 2]);
   });
 
   it("all pieces of an over-budget split sentence share one sentenceIndex", () => {
@@ -354,8 +354,8 @@ describe("chunkArticleForSpeech — sentenceIndex + paragraphIndex (the skip uni
     ]);
     const chunks = chunkArticleForSpeech(article);
     expect(chunks.length).toBeGreaterThan(1);
-    expect(new Set(chunks.map((c) => c.sentenceIndex)).size).toBe(1);
-    expect(new Set(chunks.map((c) => c.paragraphIndex)).size).toBe(1);
+    expect(new Set(chunks.map((c) => c.units.sentenceIndex)).size).toBe(1);
+    expect(new Set(chunks.map((c) => c.units.paragraphIndex)).size).toBe(1);
   });
 
   it("footnote bodies form their own paragraph units after the body blocks", () => {
@@ -378,7 +378,7 @@ describe("chunkArticleForSpeech — sentenceIndex + paragraphIndex (the skip uni
       "First source.",
       "Second source.",
     ]);
-    expect(chunks.map((c) => c.paragraphIndex)).toEqual([0, 1, 2]);
+    expect(chunks.map((c) => c.units.paragraphIndex)).toEqual([0, 1, 2]);
     expect(chunks[1]!.startGrapheme).toBeGreaterThan(chunks[0]!.endGrapheme);
   });
 });

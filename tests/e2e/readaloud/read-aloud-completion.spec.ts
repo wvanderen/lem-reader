@@ -35,7 +35,7 @@ const ESSAY_CHUNKS = chunkArticleForSpeech(ESSAY);
 const TECH_CHUNKS = chunkArticleForSpeech(TECH);
 
 function firstChunkOfSentence(chunks: typeof ESSAY_CHUNKS, sentenceIndex: number) {
-  const i = chunks.findIndex((c) => c.sentenceIndex === sentenceIndex);
+  const i = chunks.findIndex((c) => c.units.sentenceIndex === sentenceIndex);
   return chunks[i]!;
 }
 
@@ -179,7 +179,7 @@ test.describe("Issue #43 — read-aloud completion", () => {
     await playAndAwaitProbe(page);
 
     // Paragraph forward: from paragraph 0 to the first chunk of paragraph 1.
-    const paragraph1 = ESSAY_CHUNKS.find((c) => c.paragraphIndex === 1)!;
+    const paragraph1 = ESSAY_CHUNKS.find((c) => c.units.paragraphIndex === 1)!;
     await bar.getByRole("button", { name: "Skip paragraph forward" }).click();
     await expect.poll(() => liveUtteranceText(page), { timeout: 10_000 }).toBe(paragraph1.text);
 

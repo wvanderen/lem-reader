@@ -3790,9 +3790,9 @@ dialog.book-remove-confirm::backdrop {
  * button discipline token-for-token (min-height var(--touch), accent on
  * hover only); the primary button's accessible name is its visible text,
  * which flips "Play"/"Pause" with state — never color.
- * .readaloud-follow — the probed follow level as TEXT (the spoken-word
- * marker itself is not rendered at this stage); the .page-indicator quiet
- * text register.
+ * .readaloud-follow — the follow level as TEXT (the spoken-word
+ * marker itself is not rendered at this stage); .readaloud-rate — the
+ * configured rate as TEXT. Both the .page-indicator quiet text register.
  *
  * Zero motion properties (A11Y-06 discipline — trivially reduced-motion
  * safe); :focus-visible inherits the global 2px ring.
@@ -3844,7 +3844,8 @@ dialog.book-remove-confirm::backdrop {
   color: var(--ink-soft);
   cursor: default;
 }
-.readaloud-follow {
+.readaloud-follow,
+.readaloud-rate {
   font-family: var(--font-ui);
   font-size: 14px;
   line-height: 1.45;

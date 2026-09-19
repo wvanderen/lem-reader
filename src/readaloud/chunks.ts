@@ -14,17 +14,30 @@
 // bodies read at document end. The rules live HERE, not in normalizeText —
 // the D-05 substrate is the persistence contract (locations, highlights,
 // pagination all address it) and must never shift; the spoken channel is a
-// lens over it. Chunks also carry sentenceIndex + paragraphIndex — the skip
-// units the #43 transport controls ride.
+// lens over it. Chunks also carry their SkipUnits — the sentence/paragraph
+// ordinals the #43 transport skip controls ride.
 //
 // Pure domain logic — no DOM, no speech APIs, no React. jsdom-safe.
 
 import type { Block, CanonicalArticle } from "../content/types";
 import {
   articleGraphemeIndex,
+  BLOCK_SEPARATOR,
   graphemeClusters,
   inlineText,
 } from "../content/normalizeText";
+
+/** The skip units (issue #43): sentenceIndex — the ordinal of a chunk's
+ * sentence across the whole speakable stream (all pieces of one over-budget
+ * sentence share it); paragraphIndex — the ordinal of the speakable paragraph
+ * unit (top-level body block or footnote body) the chunk starts in. Both
+ * count ONLY speakable units — skipped blocks (code/unsupported/figure
+ * media) produce no unit, so a skip lands on the next speakable text and the
+ * marker visibly hops the gap. */
+export interface SkipUnits {
+  sentenceIndex: number;
+  paragraphIndex: number;
+}
 
 /** One sentence-sized utterance. startGrapheme is inclusive, endGrapheme
  * exclusive, both canonical article-global grapheme offsets (D-05). */
@@ -40,17 +53,8 @@ export interface SpeechChunk {
    * segmentation matches the D-05 substrate.
    */
   utf16ToGrapheme: readonly number[];
-  /**
-   * Issue #43 — the skip units. sentenceIndex: the ordinal of this chunk's
-   * sentence across the whole speakable stream (all pieces of one
-   * over-budget sentence share it). paragraphIndex: the ordinal of the
-   * speakable paragraph unit (top-level body block or footnote body) the
-   * chunk starts in. Both count ONLY speakable units — skipped blocks
-   * (code/unsupported/figure media) produce no unit, so a skip lands on the
-   * next speakable text and the marker visibly hops the gap.
-   */
-  sentenceIndex: number;
-  paragraphIndex: number;
+  /** The skip units the #43 transport controls ride (see SkipUnits). */
+  units: SkipUnits;
 }
 
 /**
@@ -113,7 +117,10 @@ export function chunkArticleForSpeech(article: CanonicalArticle): SpeechChunk[] 
       while (start < end && isWhitespaceCluster(clusters[start]!)) start++;
       while (end > start && isWhitespaceCluster(clusters[end - 1]!)) end--;
       if (end <= start) continue; // whitespace-only segment
-      pushChunksForRange(clusters, start, end, chunks, sentenceIndex, paragraphIndex);
+      pushChunksForRange(clusters, start, end, chunks, {
+        sentenceIndex,
+        paragraphIndex,
+      });
       sentenceIndex += 1;
     }
   }
@@ -164,8 +171,11 @@ function speakableRanges(
     }
   });
   // Footnote bodies — document end, one speakable unit per non-empty body.
-  const bodyEmpty =
-    article.blocks.length === 1 && index.perBlockLengths[0] === 0;
+  // normalizeText joins the footnotes region after a body whose text is
+  // non-empty (`[bodyText, footnoteText].filter(Boolean).join(…)`), so "the
+  // body is empty" is exactly "every block contributes zero clusters" — one
+  // predicate for one empty block or several.
+  const bodyEmpty = index.perBlockLengths.every((len) => len === 0);
   let cursor = bodyEmpty ? 0 : index.blockStartOffsets[article.blocks.length]!;
   for (const fn of article.footnotes) {
     const len = graphemeClusters(inlineText(fn.content), article.lang).length;
@@ -173,7 +183,7 @@ function speakableRanges(
       ranges.push({ start: cursor, end: cursor + len });
       // The BLOCK_SEPARATOR before the next NON-EMPTY body — normalizeText
       // filters empty bodies out of the join, so they spend no separator.
-      cursor += len + 1;
+      cursor += len + BLOCK_SEPARATOR.length;
     }
   }
   return ranges;
@@ -193,14 +203,13 @@ function pushChunksForRange(
   from: number,
   to: number,
   out: SpeechChunk[],
-  sentenceIndex: number,
-  paragraphIndex: number,
+  units: SkipUnits,
 ): void {
   let cursor = from;
   while (cursor < to) {
     const remaining = to - cursor;
     if (remaining <= MAX_CHUNK_GRAPHEMES) {
-      out.push(buildChunk(clusters, cursor, to, sentenceIndex, paragraphIndex));
+      out.push(buildChunk(clusters, cursor, to, units));
       return;
     }
     // Prefer a cut just after a whitespace cluster at or before the budget
@@ -215,10 +224,10 @@ function pushChunksForRange(
     }
     if (cut <= cursor) {
       // No whitespace in the window — hard cut at the budget edge.
-      out.push(buildChunk(clusters, cursor, budgetEdge, sentenceIndex, paragraphIndex));
+      out.push(buildChunk(clusters, cursor, budgetEdge, units));
       cursor = budgetEdge;
     } else {
-      out.push(buildChunk(clusters, cursor, cut, sentenceIndex, paragraphIndex));
+      out.push(buildChunk(clusters, cursor, cut, units));
       cursor = cut + 1; // skip the separator whitespace
     }
   }
@@ -263,10 +272,9 @@ function buildChunk(
   clusters: readonly string[],
   start: number,
   end: number,
-  sentenceIndex: number,
-  paragraphIndex: number,
+  units: SkipUnits,
 ): SpeechChunk {
   const text = clusters.slice(start, end).join("");
   const utf16ToGrapheme = buildUtf16ToGraphemeMap(clusters, start, end);
-  return { text, startGrapheme: start, endGrapheme: end, utf16ToGrapheme, sentenceIndex, paragraphIndex };
+  return { text, startGrapheme: start, endGrapheme: end, utf16ToGrapheme, units };
 }

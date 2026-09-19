@@ -6,10 +6,12 @@
 //   - The primary button's NAME flips between "Play" and "Pause" as state —
 //     visible text content, never color (native button text = the accessible
 //     name; no aria-label duplication).
-//   - The probed follow level is visible as TEXT on the bar (one of word /
-//     sentence / passage / progress only), and the configured rate is always
-//     visible as text (issue #43, O1: follow level + rate visible while the
-//     bar is mounted — state, never icon/color-only).
+//   - The follow level is visible as TEXT on the bar (one of word / sentence
+//     / passage / progress only) whenever the bar is mounted — the floor
+//     ("progress only") shows until a session's probe resolves and returns
+//     at every session end, so the text is never stale (issue #43, O1) —
+//     and the configured rate is always visible as text. State, never
+//     icon/color-only.
 //   - Issue #42: while a session exists (playing/paused) the bar also offers
 //     "Jump to spoken position" — a focus-free orientation affordance for
 //     when manual navigation left the spoken passage out of view. The
@@ -37,7 +39,11 @@ import { formatRate } from "../settings/tokens";
 
 interface ReadAloudBarProps {
   state: TransportState;
-  /** Probed follow level — null until the first probe of the session. */
+  /**
+   * The current follow level — the floor ("progress-only") until the
+   * session's probe resolves; the hook resets it at every session end.
+   * Nullable only as defensive rendering: the hook never supplies null.
+   */
   followLevel: FollowLevel | null;
   /** Copy for the ONE polite transport status region. */
   announcement: string | null;
@@ -77,6 +83,18 @@ const FOLLOW_LABELS: Record<FollowLevel, string> = {
   "progress-only": "Follows: progress only",
 };
 
+/** The skip controls (issue #43, O3) — one table, one render loop. Each is
+ * visible only while a session exists; pressing one jumps the voice and the
+ * marker, and a skip at the session boundary announces once through the
+ * polite region. */
+const SKIP_CONTROLS = [
+  { key: "skip-sentence-back", label: "Skip sentence backward" },
+  { key: "skip-sentence-forward", label: "Skip sentence forward" },
+  { key: "skip-paragraph-forward", label: "Skip paragraph forward" },
+] as const;
+
+type SkipControlKey = (typeof SKIP_CONTROLS)[number]["key"];
+
 export function ReadAloudBar({
   state,
   followLevel,
@@ -92,6 +110,11 @@ export function ReadAloudBar({
 }: ReadAloudBarProps) {
   const playing = state === "playing";
   const sessionActive = state !== "stopped";
+  const skipHandlers: Record<SkipControlKey, (() => void) | undefined> = {
+    "skip-sentence-back": onSkipSentenceBack,
+    "skip-sentence-forward": onSkipSentenceForward,
+    "skip-paragraph-forward": onSkipParagraphForward,
+  };
   return (
     <>
       <div className="readaloud-bar">
@@ -102,37 +125,21 @@ export function ReadAloudBar({
           <button type="button" className="readaloud-btn" onClick={onPrimary}>
             {playing ? "Pause" : "Play"}
           </button>
-          {/* Skip controls (issue #43, O3) — visible only while a session
-              exists; pressing one jumps the voice and the marker, and a
-              skip at the session boundary announces once through the polite
-              region. */}
-          {sessionActive && onSkipSentenceBack && (
-            <button
-              type="button"
-              className="readaloud-btn"
-              onClick={onSkipSentenceBack}
-            >
-              Skip sentence backward
-            </button>
-          )}
-          {sessionActive && onSkipSentenceForward && (
-            <button
-              type="button"
-              className="readaloud-btn"
-              onClick={onSkipSentenceForward}
-            >
-              Skip sentence forward
-            </button>
-          )}
-          {sessionActive && onSkipParagraphForward && (
-            <button
-              type="button"
-              className="readaloud-btn"
-              onClick={onSkipParagraphForward}
-            >
-              Skip paragraph forward
-            </button>
-          )}
+          {/* Skip controls (issue #43, O3) — see SKIP_CONTROLS. */}
+          {sessionActive &&
+            SKIP_CONTROLS.map(({ key, label }) => {
+              const onSkip = skipHandlers[key];
+              return onSkip ? (
+                <button
+                  key={key}
+                  type="button"
+                  className="readaloud-btn"
+                  onClick={onSkip}
+                >
+                  {label}
+                </button>
+              ) : null;
+            })}
           {/* Jump to spoken position — visible only while a session exists
               (playing/paused); the marker may be out of view after manual
               navigation, and this restores orientation focus-free. */}
@@ -153,12 +160,13 @@ export function ReadAloudBar({
           >
             Stop
           </button>
-          {/* The status text pair (O1): follow level once probed, the
-              configured rate always — visible text, never color-only. */}
+          {/* The status text pair (O1): follow level (the floor until a
+              session's probe resolves — always present, never stale), the
+              configured rate always. Visible text, never color-only. */}
           {followLevel !== null && (
             <span className="readaloud-follow">{FOLLOW_LABELS[followLevel]}</span>
           )}
-          <span className="readaloud-follow">Rate: {formatRate(rate)}×</span>
+          <span className="readaloud-rate">Rate: {formatRate(rate)}×</span>
         </div>
       </div>
       {/* The ONE polite transport live region (visually hidden, mirrors the

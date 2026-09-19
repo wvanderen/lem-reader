@@ -676,7 +676,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                   name="readaloud-rate"
                   min={RATE_STEPS[0]}
                   max={RATE_STEPS[RATE_STEPS.length - 1]}
-                  step={0.25}
+                  step={RATE_STEPS[1] - RATE_STEPS[0]}
                   value={settings.rate}
                   aria-label="Read-aloud rate"
                   aria-valuenow={settings.rate}

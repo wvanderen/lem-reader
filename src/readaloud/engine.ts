@@ -207,11 +207,7 @@ export class ReadAloudEngine {
    * successful skip itself stays silent (no per-hop chatter, O3).
    */
   skipSentences(delta: -1 | 1): boolean {
-    const current = this.chunks[this.nextChunkIndex];
-    if (!current) return false;
-    const target = this.chunks.find((c) => c.sentenceIndex === current.sentenceIndex + delta);
-    if (!target) return false;
-    return this.skipToChunk(target);
+    return this.skipByUnit((c) => c.units.sentenceIndex, delta);
   }
 
   /**
@@ -222,9 +218,17 @@ export class ReadAloudEngine {
    * jump crosses them and the marker visibly hops the gap.
    */
   skipParagraphForward(): boolean {
+    return this.skipByUnit((c) => c.units.paragraphIndex, 1);
+  }
+
+  /** The shared skip walk behind both skip controls: land on the first chunk
+   * whose unit ordinal is exactly `delta` steps from the current chunk's,
+   * then the shared skip transport. False when there is no chunk in that
+   * direction (the session boundary) or no session at all. */
+  private skipByUnit(unit: (chunk: SpeechChunk) => number, delta: number): boolean {
     const current = this.chunks[this.nextChunkIndex];
     if (!current) return false;
-    const target = this.chunks.find((c) => c.paragraphIndex === current.paragraphIndex + 1);
+    const target = this.chunks.find((c) => unit(c) === unit(current) + delta);
     if (!target) return false;
     return this.skipToChunk(target);
   }

@@ -21,7 +21,7 @@ import {
   mapBoundaryRangeToCanonical,
   ReadAloudEngine,
 } from "../../../src/readaloud/engine";
-import type { SpeechChunk } from "../../../src/readaloud/chunks";
+import type { SkipUnits, SpeechChunk } from "../../../src/readaloud/chunks";
 import type {
   SpeechAdapter,
   SpeakRequest,
@@ -55,12 +55,12 @@ class FakeAdapter implements SpeechAdapter {
 
 // ASCII-only chunks → the UTF-16 → grapheme map is the identity (plus the
 // past-the-end entry), keeping engine tests focused on transport behavior.
-// sentenceIndex/paragraphIndex default to 0/0 — the skip tests below build
-// chunk sets with explicit units.
+// The skip units default to 0/0 — the skip tests below build chunk sets with
+// explicit units.
 function chunk(
   text: string,
   startGrapheme: number,
-  units: { sentenceIndex: number; paragraphIndex: number } = {
+  units: SkipUnits = {
     sentenceIndex: 0,
     paragraphIndex: 0,
   },
@@ -73,7 +73,7 @@ function chunk(
     utf16ToGrapheme: Array.from({ length: width + 1 }, (_, i) =>
       Math.min(i, width),
     ),
-    ...units,
+    units,
   };
 }
 
@@ -608,8 +608,7 @@ describe("mapBoundaryRangeToCanonical — pure mapping truth table", () => {
       startGrapheme: 100,
       endGrapheme: 104,
       utf16ToGrapheme: [0, 0, 1, 1, 2, 3, 4],
-      sentenceIndex: 0,
-      paragraphIndex: 0,
+      units: { sentenceIndex: 0, paragraphIndex: 0 },
     };
     const range = mapBoundaryRangeToCanonical(c, { name: "word", charIndex: 5, charLength: 1 });
     expect(range).toEqual({ start: 103, end: 104 });
