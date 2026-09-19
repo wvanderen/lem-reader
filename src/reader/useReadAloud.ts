@@ -26,6 +26,17 @@ import {
 } from "../readaloud/webSpeech";
 import { useSettings } from "../settings/SettingsContext";
 
+/** The guaranteed-floor follow level (the engine's own pre-probe default).
+ * Shown until a session's probe resolves and restored at every session end,
+ * so the bar's follow text is always present and never stale (O1). */
+const FOLLOW_LEVEL_FLOOR: FollowLevel = "progress-only";
+
+/** O9 — the one honest line for a background-forced stop. Set on hide and
+ * re-announced on visible return: most screen readers don't announce
+ * live-region text that changed while the page was hidden. */
+const BACKGROUND_STOP_MESSAGE =
+  "Read aloud stopped while the reader was in the background. Press Play to continue.";
+
 export interface UseReadAloudHandlers {
   /** The reader's live canonical position, read at press time (the only
    * start is Play, and Play starts at the current reading location). */
@@ -45,8 +56,10 @@ export interface UseReadAloudHandlers {
 
 export interface UseReadAloudReturn {
   state: TransportState;
-  /** The probed follow level — null until the first probe of the session. */
-  followLevel: FollowLevel | null;
+  /** The follow level: the guaranteed floor until the session's probe
+   * resolves, reset to the floor whenever the session ends — the bar's
+   * follow text is therefore always present and never stale (O1). */
+  followLevel: FollowLevel;
   /** The ONE polite transport announcement (role=status copy). */
   announcement: string | null;
   /** Start (or resume after pause) — the only start is Play. */
@@ -61,6 +74,16 @@ export interface UseReadAloudReturn {
    * composes resume-then-seek for a paused skip.
    */
   seek: (fromOffset: number) => void;
+  /**
+   * Issue #43 (O3) — skip sentence backward/forward and skip paragraph
+   * forward. While paused the composition is resume-then-seek (speech
+   * audibly jumps); a skip at the session boundary announces ONE honest
+   * line through the polite region — a successful skip itself stays silent
+   * (no per-hop chatter).
+   */
+  skipSentenceBack: () => void;
+  skipSentenceForward: () => void;
+  skipParagraphForward: () => void;
 }
 
 export function useReadAloud(
@@ -70,8 +93,11 @@ export function useReadAloud(
   const { settings } = useSettings();
   const supportedRef = useRef(speechSynthesisAvailable());
   const [state, setState] = useState<TransportState>("stopped");
-  const [followLevel, setFollowLevel] = useState<FollowLevel | null>(null);
+  const [followLevel, setFollowLevel] = useState<FollowLevel>(FOLLOW_LEVEL_FLOOR);
   const [announcement, setAnnouncement] = useState<string | null>(null);
+  /** O9 — a background-forced stop is awaiting its visible-return
+   * re-announcement (set on hide/pagehide, consumed on visible). */
+  const backgroundStopRef = useRef(false);
 
   // Latest-handler refs (useScrollSave pattern): ArticleView's callbacks are
   // re-created per render; the engine must always call the freshest ones.
@@ -127,6 +153,9 @@ export function useReadAloud(
       setAnnouncement("Saved voice not found — using the default voice.");
     }
     teardown();
+    // The fresh session probes from scratch — show the floor until its probe
+    // resolves (never the previous session's level).
+    setFollowLevel(FOLLOW_LEVEL_FLOOR);
     const nextEngine = new ReadAloudEngine({
       adapter: createWebSpeechAdapter(),
       chunks: chunkArticleForSpeech(currentArticle),
@@ -138,10 +167,14 @@ export function useReadAloud(
         onProgress: (offset) => handlersRef.current.onListenProgress(offset),
         onSpokenRange: (range) => handlersRef.current.onListenSpoken?.(range),
         onFinish: () => {
+          setFollowLevel(FOLLOW_LEVEL_FLOOR);
           setAnnouncement("Read aloud finished.");
           handlersRef.current.onListenFinished();
         },
-        onError: (message) => setAnnouncement(message),
+        onError: (message) => {
+          setFollowLevel(FOLLOW_LEVEL_FLOOR);
+          setAnnouncement(message);
+        },
       },
     });
     engineRef.current = nextEngine;
@@ -171,12 +204,86 @@ export function useReadAloud(
     if (!engine) return;
     teardown();
     setState("stopped");
+    setFollowLevel(FOLLOW_LEVEL_FLOOR);
     setAnnouncement("Read aloud stopped.");
   }, [teardown]);
 
   const seek = useCallback((fromOffset: number) => {
     engineRef.current?.seekTo(fromOffset);
   }, []);
+
+  // Issue #43 (O3) — the skip wrappers. A successful skip is SILENT (the
+  // speech jump + marker hop are the feedback; no per-hop chatter); only a
+  // skip at the session boundary announces, once, through the ONE polite
+  // region. Skips with no live session are inert (the bar doesn't render
+  // them while stopped).
+  const runSkip = useCallback(
+    (attempt: (engine: ReadAloudEngine) => boolean, boundaryMessage: string) => {
+      const engine = engineRef.current;
+      if (!engine || engine.getState() === "stopped") return;
+      if (!attempt(engine)) setAnnouncement(boundaryMessage);
+    },
+    [],
+  );
+
+  const skipSentenceBack = useCallback(() => {
+    runSkip((engine) => engine.skipSentences(-1), "No previous sentence.");
+  }, [runSkip]);
+
+  const skipSentenceForward = useCallback(() => {
+    runSkip((engine) => engine.skipSentences(1), "No next sentence.");
+  }, [runSkip]);
+
+  const skipParagraphForward = useCallback(() => {
+    runSkip((engine) => engine.skipParagraphForward(), "No next paragraph.");
+  }, [runSkip]);
+
+  // Issue #43 (O9) — backgrounding stops playback (spike 0009 F4: "read-aloud
+  // controls must treat 'backgrounded' as 'stopped'"): mobile browsers kill
+  // the synthesizer on background/lock, so a session that outlives the page
+  // would come back as a zombie — a fake "playing" state that never speaks.
+  // The session is torn down honestly instead; on return the bar's Play
+  // button is the visible resume affordance and the ONE polite region
+  // explains the stop — nothing resumes silently (no auto-resume anywhere).
+  // Because most screen readers don't announce live-region text that changed
+  // while the page was hidden, the explanation is RE-ANNOUNCED on visible
+  // return (clear-then-set so the region's text actually changes); a Play
+  // press in between supersedes it via the engine guard below.
+  // The dual visibilitychange-hidden + pagehide listener pair mirrors the
+  // settings-flush discipline (bfcache-safe; no session-end events).
+  useEffect(() => {
+    const stopForBackground = () => {
+      const engine = engineRef.current;
+      if (!engine) return;
+      const s = engine.getState();
+      if (s !== "playing" && s !== "paused") return;
+      teardown();
+      setState("stopped");
+      setFollowLevel(FOLLOW_LEVEL_FLOOR);
+      backgroundStopRef.current = true;
+      setAnnouncement(BACKGROUND_STOP_MESSAGE);
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        stopForBackground();
+      } else if (backgroundStopRef.current) {
+        backgroundStopRef.current = false;
+        setAnnouncement(null);
+        window.setTimeout(() => {
+          // Only speak the return line if the reader hasn't already pressed
+          // Play — never announce over a live session.
+          if (engineRef.current === null) setAnnouncement(BACKGROUND_STOP_MESSAGE);
+        }, 0);
+      }
+    };
+    const onPageHide = () => stopForBackground();
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", onPageHide);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", onPageHide);
+    };
+  }, [teardown]);
 
   return {
     state,
@@ -186,5 +293,8 @@ export function useReadAloud(
     pauseOrResume,
     stop,
     seek,
+    skipSentenceBack,
+    skipSentenceForward,
+    skipParagraphForward,
   };
 }

@@ -7,10 +7,37 @@
 // ephemeral UTF-16 into the utterance's own text; canonical grapheme offsets
 // are the only durable currency).
 //
+// Issue #43 — the spoken channel follows the document honestly (acceptance
+// flow O7): a link's TEXT is spoken (hrefs never enter the D-05 substrate),
+// code-block and unsupported blocks are skipped SILENTLY (the marker visibly
+// hops the gap), a figure is skipped but its caption reads, and footnote
+// bodies read at document end. The rules live HERE, not in normalizeText —
+// the D-05 substrate is the persistence contract (locations, highlights,
+// pagination all address it) and must never shift; the spoken channel is a
+// lens over it. Chunks also carry their SkipUnits — the sentence/paragraph
+// ordinals the #43 transport skip controls ride.
+//
 // Pure domain logic — no DOM, no speech APIs, no React. jsdom-safe.
 
-import type { CanonicalArticle } from "../content/types";
-import { articleGraphemeIndex } from "../content/normalizeText";
+import type { Block, CanonicalArticle } from "../content/types";
+import {
+  articleGraphemeIndex,
+  BLOCK_SEPARATOR,
+  graphemeClusters,
+  inlineText,
+} from "../content/normalizeText";
+
+/** The skip units (issue #43): sentenceIndex — the ordinal of a chunk's
+ * sentence across the whole speakable stream (all pieces of one over-budget
+ * sentence share it); paragraphIndex — the ordinal of the speakable paragraph
+ * unit (top-level body block or footnote body) the chunk starts in. Both
+ * count ONLY speakable units — skipped blocks (code/unsupported/figure
+ * media) produce no unit, so a skip lands on the next speakable text and the
+ * marker visibly hops the gap. */
+export interface SkipUnits {
+  sentenceIndex: number;
+  paragraphIndex: number;
+}
 
 /** One sentence-sized utterance. startGrapheme is inclusive, endGrapheme
  * exclusive, both canonical article-global grapheme offsets (D-05). */
@@ -26,60 +53,140 @@ export interface SpeechChunk {
    * segmentation matches the D-05 substrate.
    */
   utf16ToGrapheme: readonly number[];
+  /** The skip units the #43 transport controls ride (see SkipUnits). */
+  units: SkipUnits;
 }
 
 /**
  * Safety budget per utterance (graphemes). Sentence segmentation alone can
- * produce pathological "sentences" (un-punctuated code blocks, run-on
- * transcripts); the spec's own ceiling is 32,767 characters and Chrome's
- * Google voices cut long utterances at ~14 s (spike 0009 §2.3). 250 graphemes
- * is several normal sentences' worth of headroom under both.
+ * produce pathological "sentences" (un-punctuated run-on transcripts); the
+ * spec's own ceiling is 32,767 characters and Chrome's Google voices cut long
+ * utterances at ~14 s (spike 0009 §2.3). 250 graphemes is several normal
+ * sentences' worth of headroom under both.
  */
 export const MAX_CHUNK_GRAPHEMES = 250;
 
 /**
- * Chunk the article's normalized text into sentence-sized utterances.
+ * Chunk the article's SPOKEN channel into sentence-sized utterances.
  *
+ * - The spoken channel is the D-05 normalized text minus what read-aloud
+ *   skips silently (O7): code-block sources, unsupported-block disclosures,
+ *   and figure media (alt) — figures contribute their caption only. Footnote
+ *   bodies stay at document end (the substrate's own ordering).
  * - Sentence boundaries come from Intl.Segmenter (sentence granularity, the
- *   article's own lang) over normalizeText — the SAME canonical string every
- *   other consumer addresses.
- * - Whitespace-only segments (the BLOCK_SEPARATOR runs) are skipped — nothing
- *   to speak, nothing to track.
+ *   article's own lang) over each speakable range separately, so sentences
+ *   align with document blocks.
+ * - Whitespace-only segments are skipped — nothing to speak, nothing to
+ *   track.
  * - Segments over MAX_CHUNK_GRAPHEMES are split at whitespace-cluster
- *   boundaries (hard cut only if a window has no whitespace — code blocks).
+ *   boundaries (hard cut only if a window has no whitespace — a run-on
+ *   unbroken span).
  *
  * Offsets stay canonical end-to-end: a chunk's [startGrapheme, endGrapheme)
- * range is exact against the article's cluster array regardless of splitting.
+ * range is exact against the article's cluster array regardless of splitting
+ * or skipping (the skipped ranges simply belong to no chunk — progress and
+ * the marker hop across them without losing ground).
  */
 export function chunkArticleForSpeech(article: CanonicalArticle): SpeechChunk[] {
   const index = articleGraphemeIndex(article);
   const clusters = index.clusters;
   if (clusters.length === 0) return [];
 
-  // UTF-16 code-unit index → canonical grapheme ordinal, over the WHOLE
-  // normalized text (one walk; chunk ranges then read straight off it).
-  const utf16ToCanonical = buildUtf16ToGraphemeMap(clusters, 0, clusters.length);
-
   const chunks: SpeechChunk[] = [];
-  const sentenceSegmenter = new Intl.Segmenter(article.lang, {
+  const segmenter = new Intl.Segmenter(article.lang, {
     granularity: "sentence",
   });
-  for (const segment of sentenceSegmenter.segment(index.normalizedText)) {
-    const rawStart = utf16ToCanonical[segment.index];
-    const rawEnd = utf16ToCanonical[segment.index + segment.segment.length];
-    if (rawStart === undefined || rawEnd === undefined) continue; // defensive
-    if (rawEnd <= rawStart) continue;
-    // Trim the segment's canonical range to its non-whitespace clusters:
-    // sentence segments carry the trailing space (and the block separator
-    // when one follows), which no utterance needs to speak.
-    let start = rawStart;
-    let end = rawEnd;
-    while (start < end && isWhitespaceCluster(clusters[start]!)) start++;
-    while (end > start && isWhitespaceCluster(clusters[end - 1]!)) end--;
-    if (end <= start) continue; // whitespace-only segment (separators)
-    pushChunksForRange(clusters, start, end, chunks);
+  let sentenceIndex = 0;
+  for (const [paragraphIndex, range] of speakableRanges(article, index).entries()) {
+    // Segment the range's OWN text and map segment spans back to canonical
+    // ordinals through the shared per-range UTF-16 → grapheme map — the same
+    // discipline the per-block index builds (never segment a joined string
+    // and split on separators).
+    const rangeMap = buildUtf16ToGraphemeMap(clusters, range.start, range.end);
+    for (const segment of segmenter.segment(
+      clusters.slice(range.start, range.end).join(""),
+    )) {
+      const localStart = rangeMap[segment.index];
+      const localEnd = rangeMap[segment.index + segment.segment.length];
+      if (localStart === undefined || localEnd === undefined) continue; // defensive
+      let start = range.start + localStart;
+      let end = range.start + localEnd;
+      // Trim the segment's canonical range to its non-whitespace clusters:
+      // sentence segments carry trailing (and leading) whitespace no
+      // utterance needs to speak.
+      while (start < end && isWhitespaceCluster(clusters[start]!)) start++;
+      while (end > start && isWhitespaceCluster(clusters[end - 1]!)) end--;
+      if (end <= start) continue; // whitespace-only segment
+      pushChunksForRange(clusters, start, end, chunks, {
+        sentenceIndex,
+        paragraphIndex,
+      });
+      sentenceIndex += 1;
+    }
   }
   return chunks;
+}
+
+/**
+ * The spoken channel's paragraph units, in document order: the canonical
+ * [start, end) grapheme ranges a read-aloud session may speak (O7).
+ *
+ * Speakable whole: headings, paragraphs, blockquotes, lists, and the visible
+ * footnote-reference markers. Caption-only: figures (the media is skipped —
+ * the caption is the figure's honest spoken text). Silent: code-block
+ * sources, unsupported-block disclosures (they are visible disclosures on the
+ * page, but speech skips them), and the block separators. Footnote bodies
+ * follow at document end — the substrate's own ordering.
+ */
+function speakableRanges(
+  article: CanonicalArticle,
+  index: ReturnType<typeof articleGraphemeIndex>,
+): { start: number; end: number }[] {
+  const ranges: { start: number; end: number }[] = [];
+  article.blocks.forEach((block: Block, i: number) => {
+    const start = index.blockStartOffsets[i]!;
+    const len = index.perBlockLengths[i]!;
+    if (len === 0) return;
+    switch (block.kind) {
+      case "heading":
+      case "paragraph":
+      case "blockquote":
+      case "bulleted-list":
+      case "numbered-list":
+      case "footnote-reference":
+        ranges.push({ start, end: start + len });
+        break;
+      case "figure": {
+        // O7 — the figure is skipped but its caption reads. The figure's
+        // normalized contribution is `[alt, captionText].filter(Boolean)
+        // .join("\n")`, so a non-empty caption always occupies the TAIL of
+        // the contribution: its range is the last captionLen clusters.
+        const captionLen = graphemeClusters(inlineText(block.caption), article.lang).length;
+        if (captionLen > 0) ranges.push({ start: start + len - captionLen, end: start + len });
+        break;
+      }
+      case "code-block":
+      case "unsupported":
+        break; // skipped silently — the marker hops the gap
+    }
+  });
+  // Footnote bodies — document end, one speakable unit per non-empty body.
+  // normalizeText joins the footnotes region after a body whose text is
+  // non-empty (`[bodyText, footnoteText].filter(Boolean).join(…)`), so "the
+  // body is empty" is exactly "every block contributes zero clusters" — one
+  // predicate for one empty block or several.
+  const bodyEmpty = index.perBlockLengths.every((len) => len === 0);
+  let cursor = bodyEmpty ? 0 : index.blockStartOffsets[article.blocks.length]!;
+  for (const fn of article.footnotes) {
+    const len = graphemeClusters(inlineText(fn.content), article.lang).length;
+    if (len > 0) {
+      ranges.push({ start: cursor, end: cursor + len });
+      // The BLOCK_SEPARATOR before the next NON-EMPTY body — normalizeText
+      // filters empty bodies out of the join, so they spend no separator.
+      cursor += len + BLOCK_SEPARATOR.length;
+    }
+  }
+  return ranges;
 }
 
 /**
@@ -88,20 +195,21 @@ export function chunkArticleForSpeech(article: CanonicalArticle): SpeechChunk[] 
  * points prefer the whitespace cluster nearest the budget edge — the
  * separator whitespace belongs to neither piece (words stay whole, spoken
  * text never ends/starts with a dangling space); a whitespace-free window
- * hard-cuts at the budget (code-block sources are verbatim and may have
- * none).
+ * hard-cuts at the budget (a run-on unbroken span). Every chunk pushed
+ * carries the caller's sentence/paragraph skip indices.
  */
 function pushChunksForRange(
   clusters: readonly string[],
   from: number,
   to: number,
   out: SpeechChunk[],
+  units: SkipUnits,
 ): void {
   let cursor = from;
   while (cursor < to) {
     const remaining = to - cursor;
     if (remaining <= MAX_CHUNK_GRAPHEMES) {
-      out.push(buildChunk(clusters, cursor, to));
+      out.push(buildChunk(clusters, cursor, to, units));
       return;
     }
     // Prefer a cut just after a whitespace cluster at or before the budget
@@ -116,10 +224,10 @@ function pushChunksForRange(
     }
     if (cut <= cursor) {
       // No whitespace in the window — hard cut at the budget edge.
-      out.push(buildChunk(clusters, cursor, budgetEdge));
+      out.push(buildChunk(clusters, cursor, budgetEdge, units));
       cursor = budgetEdge;
     } else {
-      out.push(buildChunk(clusters, cursor, cut));
+      out.push(buildChunk(clusters, cursor, cut, units));
       cursor = cut + 1; // skip the separator whitespace
     }
   }
@@ -134,8 +242,8 @@ function isWhitespaceCluster(cluster: string): boolean {
  * range [start, end): entry u is the ordinal of the cluster owning UTF-16
  * index u, and the trailing entry is the past-the-end ordinal so an
  * end-exclusive charIndex maps cleanly. The joined clusters ARE the text,
- * so the map's length is exactly text.length + 1. Shared by the whole-
- * article map (start 0, end clusters.length) and each per-chunk map.
+ * so the map's length is exactly text.length + 1. Shared by the per-range
+ * maps and each per-chunk map.
  */
 function buildUtf16ToGraphemeMap(
   clusters: readonly string[],
@@ -164,8 +272,9 @@ function buildChunk(
   clusters: readonly string[],
   start: number,
   end: number,
+  units: SkipUnits,
 ): SpeechChunk {
   const text = clusters.slice(start, end).join("");
   const utf16ToGrapheme = buildUtf16ToGraphemeMap(clusters, start, end);
-  return { text, startGrapheme: start, endGrapheme: end, utf16ToGrapheme };
+  return { text, startGrapheme: start, endGrapheme: end, utf16ToGrapheme, units };
 }

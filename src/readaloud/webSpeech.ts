@@ -34,6 +34,76 @@ export function storedVoiceAvailable(voiceURI: string): boolean {
   return voices.length === 0 || voices.some((v) => v.voiceURI === voiceURI);
 }
 
+/** The plain voice surface the settings picker consumes (issue #43, O8) —
+ * the four fields the filtered list and its option labels need, nothing
+ * more. */
+export interface VoiceChoice {
+  voiceURI: string;
+  name: string;
+  lang: string;
+  localService: boolean;
+}
+
+/**
+ * Probe the platform voice list (issue #43, O8 — the "probed" voice list).
+ * Chrome populates getVoices() asynchronously (the voiceschanged event), so
+ * an empty first read is NOT the truth: wait for voiceschanged until voices
+ * appear, bounded by a timeout that resolves with whatever is present (an
+ * engine with no voices at all resolves empty — the picker shows its calm
+ * fallback, never a hang). Resolves immediately when the list is already
+ * loaded. Safe on any environment (resolves [] without speechSynthesis).
+ */
+export function probeVoices(timeoutMs = 2000): Promise<VoiceChoice[]> {
+  return new Promise((resolve) => {
+    if (!speechSynthesisAvailable()) {
+      resolve([]);
+      return;
+    }
+    const synth = window.speechSynthesis;
+    const collect = (): VoiceChoice[] =>
+      synth.getVoices().map((v) => ({
+        voiceURI: v.voiceURI,
+        name: v.name,
+        lang: v.lang,
+        localService: v.localService,
+      }));
+    let settled = false;
+    const finish = (voices: VoiceChoice[]) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      synth.removeEventListener?.("voiceschanged", onVoicesChanged);
+      resolve(voices);
+    };
+    const onVoicesChanged = () => {
+      const voices = collect();
+      if (voices.length > 0) finish(voices);
+    };
+    const timer = setTimeout(() => finish(collect()), timeoutMs);
+    // EventTarget methods are spec'd on speechSynthesis, but a non-throwing
+    // probe is the contract (this runs inside the settings panel).
+    synth.addEventListener?.("voiceschanged", onVoicesChanged);
+    const first = collect();
+    if (first.length > 0) finish(first);
+  });
+}
+
+/**
+ * The filtered LOCAL-voice list for the settings picker (spike 0009 §5.3:
+ * prefer localService voices; online/effect voices exist to be filtered).
+ * Local voices only, sorted by name (lang tiebreak) for a predictable,
+ * calm order. When the platform exposes NO local voices the filter lifts
+ * rather than showing an empty picker — an honest fallback, never a silent
+ * dead-end control.
+ */
+export function filterVoiceChoices(voices: readonly VoiceChoice[]): VoiceChoice[] {
+  const local = voices.filter((v) => v.localService);
+  const chosen = local.length > 0 ? local : [...voices];
+  return chosen.sort(
+    (a, b) => a.name.localeCompare(b.name) || a.lang.localeCompare(b.lang),
+  );
+}
+
 /**
  * Create the production adapter over window.speechSynthesis. Call only when
  * speechSynthesisAvailable() is true.

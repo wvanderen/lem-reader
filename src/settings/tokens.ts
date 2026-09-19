@@ -40,3 +40,18 @@ export const SIZE_STEPS = [16, 18, 20, 22, 24] as const; // px — index 1 (18) 
 export const MEASURE_STEPS = [
   40, 46, 52, 58, 64, 70, 76, 82, 88,
 ] as const; // ch — index 4 (64) remains the default
+
+// Issue #43 (O8) — the read-aloud rate ladder: 0.5–3 in 0.25 steps (11
+// arrow-key stops; every value exact in binary, no float drift). The band
+// mirrors the acceptance protocol's control range and the stored contract
+// (ReaderSettingsSchema rate: min 0.5, max 3); index 2 (1) is the default.
+export const RATE_STEPS = [
+  0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3,
+] as const;
+
+/** The visible form of a rate multiplier ("1", "1.5", "1.25") — the caller
+ * appends the "×" so the transport bar and the settings readout stay
+ * byte-identical. Shared so the two surfaces cannot drift. */
+export function formatRate(rate: number): string {
+  return rate.toFixed(2).replace(/\.?0+$/, "");
+}

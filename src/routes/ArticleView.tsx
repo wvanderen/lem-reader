@@ -795,6 +795,9 @@ export function ArticleView({
     play: playReadAloud,
     pauseOrResume: pauseOrResumeReadAloud,
     stop: stopReadAloud,
+    skipSentenceBack: skipSentenceBackReadAloud,
+    skipSentenceForward: skipSentenceForwardReadAloud,
+    skipParagraphForward: skipParagraphForwardReadAloud,
   } = useReadAloud(article, {
     getStartOffset: () => currentAnchorOffsetRef.current,
     onListenProgress: (offset) => {
@@ -2347,12 +2350,14 @@ export function ArticleView({
             .page-viewport geometry (the chapter-nav-page precedent). The
             primary button's name flips between "Play" and "Pause" as state;
             the ONE polite transport role=status rides inside the bar
-            component. No focus moves on play; the only start is Play. */}
+            component. No focus moves on play; the only start is Play.
+            Issue #43: the skip controls + the rate text (O1/O3). */}
         <ReadAloudBar
           state={readAloudState}
           followLevel={readAloudFollowLevel}
           announcement={readAloudAnnouncement}
           notice={follow.notice}
+          rate={settings.rate}
           onPrimary={() =>
             readAloudState === "playing"
               ? pauseOrResumeReadAloud()
@@ -2360,6 +2365,9 @@ export function ArticleView({
           }
           onStop={stopReadAloud}
           onJumpToSpoken={follow.jumpToSpoken}
+          onSkipSentenceBack={skipSentenceBackReadAloud}
+          onSkipSentenceForward={skipSentenceForwardReadAloud}
+          onSkipParagraphForward={skipParagraphForwardReadAloud}
         />
       </main>
     </>
