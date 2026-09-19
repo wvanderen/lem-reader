@@ -212,7 +212,8 @@ describe("ReaderSettingsSchema hydrates readingMode for legacy v1 rows (D4-12, P
 // Pitfall 9 (the readingMode mechanism): a v2 row lacking voice/rate hydrates
 // both via schema defaults on read; schemaVersion is NOT mutated by parse. A
 // v3 row carries them explicitly. voice is an opaque voiceURI string; rate is
-// the honest playable band [0.5, 2] (spike 0009: engines stall above 2).
+// the control band [0.5, 3] (issue #43 / O8; engines that stall at high rates
+// surface through the session probe + stall watchdog as calm refusals).
 
 describe("ReaderSettingsSchema hydrates read-aloud prefs for legacy v1/v2 rows (issue #40, Pitfall 9)", () => {
   it("a v1 row missing voice/rate hydrates both via defaults", () => {
@@ -251,13 +252,22 @@ describe("ReaderSettingsSchema hydrates read-aloud prefs for legacy v1/v2 rows (
   it.each([
     ["empty-string voiceURI", { voice: "" }],
     ["voice as a number", { voice: 7 }],
-    ["rate below the playable band (0.4)", { rate: 0.4 }],
-    ["rate above the playable band (2.1 — engines stall above 2, spike 0009)", { rate: 2.1 }],
+    ["rate below the band (0.4)", { rate: 0.4 }],
+    ["rate above the band (3.1)", { rate: 3.1 }],
     ["rate as a string", { rate: "1" }],
   ])("throws when %s", (_label, override) => {
     expect(() =>
       ReaderSettingsSchema.parse(validSettings({ schemaVersion: 3, ...override })),
     ).toThrow();
+  });
+
+  it("accepts the band edges (0.5 and 3) and the old 2.1 that moved inside the band", () => {
+    for (const rate of [0.5, 2.1, 3]) {
+      const parsed = ReaderSettingsSchema.parse(
+        validSettings({ schemaVersion: 3, rate }),
+      );
+      expect(parsed.rate).toBe(rate);
+    }
   });
 });
 

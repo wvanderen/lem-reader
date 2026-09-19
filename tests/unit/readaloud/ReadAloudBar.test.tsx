@@ -6,12 +6,15 @@
 //      flips between "Play" and "Pause" as transport state (visible text,
 //      never color).
 //   2. The probed follow level is visible as TEXT ("Follows: …") — and
-//      absent before the first probe of the session (null).
+//      absent before the first probe of the session (null). The configured
+//      rate is visible as text whenever the bar is mounted (issue #43, O1).
 //   3. Exactly ONE polite role="status" region owns the transport
 //      announcements.
 //   4. Clicks route: primary → Play when stopped/paused; Pause when playing;
 //      Stop always routes onStop. (Speech-unavailable refusal is hook
 //      behavior: Play always stays enabled here — the press never dead-ends.)
+//   5. Issue #43 (O3): the skip controls render only while a session exists
+//      and route their clicks without touching the transport.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, fireEvent } from "@testing-library/react";
 import { ReadAloudBar } from "../../../src/reader/ReadAloudBar";
@@ -24,6 +27,7 @@ function renderBar(state: TransportState, overrides: Partial<Parameters<typeof R
     state,
     followLevel: null,
     announcement: null,
+    rate: 1,
     onPrimary: vi.fn(),
     onStop: vi.fn(),
     ...overrides,
@@ -73,6 +77,7 @@ describe("ReadAloudBar — follow level + the ONE polite region", () => {
   it("follow level renders as text once probed; absent before it", () => {
     const { container } = render(
       <ReadAloudBar
+        rate={1}
         state="stopped"
         followLevel={null}
         announcement={null}
@@ -85,6 +90,7 @@ describe("ReadAloudBar — follow level + the ONE polite region", () => {
 
     const probed = render(
       <ReadAloudBar
+        rate={1}
         state="playing"
         followLevel="word"
         announcement="Reading aloud."
@@ -103,6 +109,7 @@ describe("ReadAloudBar — follow level + the ONE polite region", () => {
   ] as const)("label table maps %s → '%s'", (level, label) => {
     render(
       <ReadAloudBar
+        rate={1}
         state="playing"
         followLevel={level}
         announcement={null}
@@ -117,6 +124,7 @@ describe("ReadAloudBar — follow level + the ONE polite region", () => {
   it("exactly ONE role=status region carries the announcement", () => {
     const { container } = render(
       <ReadAloudBar
+        rate={1}
         state="playing"
         followLevel="sentence"
         announcement="Reading aloud."
@@ -164,6 +172,7 @@ describe("ReadAloudBar — jump to spoken position (issue #42)", () => {
   it("the jump notice rides the SAME single status region, fresh over the transport copy", () => {
     const { container } = render(
       <ReadAloudBar
+        rate={1}
         state="playing"
         followLevel="word"
         announcement="Reading aloud."
@@ -183,6 +192,7 @@ describe("ReadAloudBar — jump to spoken position (issue #42)", () => {
 
     const noNotice = render(
       <ReadAloudBar
+        rate={1}
         state="playing"
         followLevel="word"
         announcement="Read aloud paused."
@@ -194,5 +204,79 @@ describe("ReadAloudBar — jump to spoken position (issue #42)", () => {
     );
     const region = noNotice.container.querySelector('[role="status"]');
     expect(region!.textContent).toBe("Read aloud paused.");
+  });
+});
+
+describe("ReadAloudBar — rate text (issue #43, O1)", () => {
+  it("the rate is visible as text whenever the bar is mounted (stopped included)", () => {
+    const stopped = render(
+      <ReadAloudBar
+        rate={1.5}
+        state="stopped"
+        followLevel={null}
+        announcement={null}
+        onPrimary={() => {}}
+        onStop={() => {}}
+      />,
+    );
+    expect(stopped.container.textContent).toContain("Rate: 1.5×");
+    cleanup();
+
+    const playing = render(
+      <ReadAloudBar
+        rate={0.75}
+        state="playing"
+        followLevel="word"
+        announcement={null}
+        onPrimary={() => {}}
+        onStop={() => {}}
+      />,
+    );
+    expect(playing.container.textContent).toContain("Rate: 0.75×");
+  });
+});
+
+describe("ReadAloudBar — skip controls (issue #43, O3)", () => {
+  const skipHandlers = {
+    onSkipSentenceBack: vi.fn(),
+    onSkipSentenceForward: vi.fn(),
+    onSkipParagraphForward: vi.fn(),
+  };
+
+  it("renders the three skip buttons only while a session exists AND handlers are provided", () => {
+    renderBar("stopped", { ...skipHandlers });
+    expect(screen.queryByRole("button", { name: "Skip sentence backward" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Skip sentence forward" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Skip paragraph forward" })).toBeNull();
+    cleanup();
+
+    for (const state of ["playing", "paused"] as const) {
+      renderBar(state, { ...skipHandlers });
+      expect(
+        screen.getByRole("button", { name: "Skip sentence backward" }),
+      ).not.toBeNull();
+      expect(
+        screen.getByRole("button", { name: "Skip sentence forward" }),
+      ).not.toBeNull();
+      expect(
+        screen.getByRole("button", { name: "Skip paragraph forward" }),
+      ).not.toBeNull();
+      cleanup();
+    }
+
+    renderBar("playing"); // no handlers — the bar renders without skips
+    expect(screen.queryByRole("button", { name: "Skip sentence backward" })).toBeNull();
+  });
+
+  it("clicks route to the skip handlers without touching the transport", () => {
+    const props = renderBar("playing", { ...skipHandlers });
+    fireEvent.click(screen.getByRole("button", { name: "Skip sentence backward" }));
+    fireEvent.click(screen.getByRole("button", { name: "Skip sentence forward" }));
+    fireEvent.click(screen.getByRole("button", { name: "Skip paragraph forward" }));
+    expect(skipHandlers.onSkipSentenceBack).toHaveBeenCalledTimes(1);
+    expect(skipHandlers.onSkipSentenceForward).toHaveBeenCalledTimes(1);
+    expect(skipHandlers.onSkipParagraphForward).toHaveBeenCalledTimes(1);
+    expect(props.onPrimary).not.toHaveBeenCalled();
+    expect(props.onStop).not.toHaveBeenCalled();
   });
 });

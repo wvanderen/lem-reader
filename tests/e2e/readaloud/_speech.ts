@@ -13,6 +13,9 @@ interface SpokenRecord {
   text: string;
   rate: number;
   volume: number;
+  /** Issue #43 — the resolved voiceURI (null = platform default), so the
+   * settings-picker tests can assert the voice applied to playback. */
+  voice: string | null;
   done: boolean;
   cancelled: boolean;
   utterance: {
@@ -59,6 +62,7 @@ export async function installFakeSpeech(page: Page, mode: SpeechMode): Promise<v
           text: u.text,
           rate: u.rate,
           volume: u.volume,
+          voice: (u.voice as { voiceURI?: string } | null)?.voiceURI ?? null,
           done: false,
           cancelled: false,
           utterance: u,
@@ -94,6 +98,9 @@ export async function installFakeSpeech(page: Page, mode: SpeechMode): Promise<v
       pause(): void {},
       resume(): void {},
       getVoices(): unknown[] {
+        // Issue #43 (O8) — two voices so the settings picker's FILTER is
+        // observable in e2e: one local (selectable) and one remote cloud
+        // voice (filtered out of the picker's local-voice list).
         return [
           {
             voiceURI: "stub-voice",
@@ -101,6 +108,12 @@ export async function installFakeSpeech(page: Page, mode: SpeechMode): Promise<v
             lang: "en",
             localService: true,
             default: true,
+          },
+          {
+            voiceURI: "cloud-voice",
+            name: "Cloud Voice",
+            lang: "en",
+            localService: false,
           },
         ];
       },

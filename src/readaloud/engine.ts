@@ -197,6 +197,49 @@ export class ReadAloudEngine {
     setTimeout(() => this.startPlayback(generation), CANCEL_SETTLE_MS);
   }
 
+  /**
+   * Issue #43 — skip sentence backward/forward (O3): jump the session to the
+   * first chunk of the sentence `delta` steps from the one currently being
+   * spoken. While PAUSED the composition is resume-then-seek (speech
+   * halts/resumes and audibly jumps); while stopped it is a no-op. Returns
+   * false when there is no sentence in that direction (the session boundary)
+   * so the host can give the ONE polite region a single honest line — a
+   * successful skip itself stays silent (no per-hop chatter, O3).
+   */
+  skipSentences(delta: -1 | 1): boolean {
+    const current = this.chunks[this.nextChunkIndex];
+    if (!current) return false;
+    const target = this.chunks.find((c) => c.sentenceIndex === current.sentenceIndex + delta);
+    if (!target) return false;
+    return this.skipToChunk(target);
+  }
+
+  /**
+   * Issue #43 — skip paragraph forward (O3): jump the session to the first
+   * chunk of the NEXT speakable paragraph unit (top-level body block or
+   * footnote body). Same paused/stopped semantics and return contract as
+   * skipSentences. Skipped blocks (code/unsupported) own no unit, so the
+   * jump crosses them and the marker visibly hops the gap.
+   */
+  skipParagraphForward(): boolean {
+    const current = this.chunks[this.nextChunkIndex];
+    if (!current) return false;
+    const target = this.chunks.find((c) => c.paragraphIndex === current.paragraphIndex + 1);
+    if (!target) return false;
+    return this.skipToChunk(target);
+  }
+
+  /** The shared skip transport: paused → resume first (the acceptance
+   * flow's "speech halts/resumes"), then the seekTo jump (no re-probe; the
+   * monotonic floors reset so the marker may hop backward). False when the
+   * session is stopped — nothing to skip. */
+  private skipToChunk(target: SpeechChunk): boolean {
+    if (this.state === "stopped") return false;
+    if (this.state === "paused") this.resume();
+    this.seekTo(target.startGrapheme);
+    return true;
+  }
+
   // ── internals ────────────────────────────────────────────────────────────
 
   /** True when an event/timer closure carries a superseded session

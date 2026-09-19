@@ -450,18 +450,21 @@ export const ReaderSettingsSchema = z.object({
   readingMode: z.enum(["paginated", "scrolling"]).default("paginated"),
   // Issue #40 — read-aloud preferences (the v2 → v3 bump). Both are applied
   // to playback by the read-aloud engine; the Reading-settings controls
-  // arrive with the completion ticket.
+  // arrived with the completion ticket (issue #43).
   //   voice: the selected SpeechSynthesisVoice.voiceURI. Optional by
   //     contract — undefined means "the platform default voice" (never a
   //     lie: a stale URI for an uninstalled voice resolves to the default at
   //     play time, see src/readaloud/webSpeech.ts).
   //   rate: the SpeechSynthesisUtterance.rate multiplier. The Web Speech
-  //     spec allows 0.1–10 but engines may constrain further, and field
-  //     reports show rate > 2 stalling Chrome (spike 0009 §2.1/§6) — the
-  //     stored contract is the honest playable band [0.5, 2]. .default(1)
+  //     spec allows 0.1–10 but engines may constrain further; the acceptance
+  //     protocol (O8) sets the control band at roughly 0.5–3, which the
+  //     stored contract mirrors exactly ([0.5, 3], RATE_STEPS in
+  //     src/settings/tokens.ts). Engines that stall at high rates surface
+  //     through the session probe + the stall watchdog as calm, honest
+  //     refusals — never a fake "playing" state (spike 0009 F4). .default(1)
   //     hydrates v1/v2 rows (Pitfall 9, the readingMode mechanism above).
   voice: z.string().min(1).optional(),
-  rate: z.number().min(0.5).max(2).default(1),
+  rate: z.number().min(0.5).max(3).default(1),
 });
 export type ReaderSettings = z.infer<typeof ReaderSettingsSchema>;
 
