@@ -85,6 +85,9 @@ import { focusNewPageTop } from "./PageTurnControls";
 // Overlay returns null outside the provider so legacy component tests that
 // render PaginatedSurface without a provider regress nothing.
 import { useOptionalHighlightOverlay } from "./annotations/HighlightOverlay";
+// Issue #42: the spoken-range type — the same GraphemeRange the slicer and
+// the render twins share.
+import type { GraphemeRange } from "../annotations/unifiedHighlightSlicer";
 
 export interface PaginatedSurfaceProps {
   /** Opt-in presentation only; never participates in page measurement. */
@@ -138,11 +141,28 @@ export interface PaginatedSurfaceProps {
    * surface measures the mounted spot's margin-box height once (at settle —
    * the surface mounts only after trustedView commits, so fonts are final)
    * and uses that ONE value for BOTH halves of the reserved-height
-   * convention — the engine's page-1 budget and the rendered page-1
+   * convention — the engine's page-1 budget (below) and the rendered page-1
    * fragment height below. Absent for legacy callers — the surface renders
    * identically (reserve 0).
    */
   articleStartChrome?: React.ReactNode;
+  /**
+   * Issue #42 — the article-global D-05 grapheme range the read-aloud voice
+   * is currently inside, threaded to the mounted PageFragmentView so the
+   * synthetic aria-hidden spoken-word marker renders on the visible page.
+   * Null/absent → no marker. Identity changes per spoken word during
+   * playback; the surface's render is otherwise stable (the pagination
+   * effect reads refs, so marker churn never re-triggers pagination).
+   */
+  spokenRange?: GraphemeRange | null;
+  /**
+   * Issue #42 — fired when the reader MANUALLY turns a page (chevrons,
+   * keyboard, swipe — the commitTurn paths). The read-aloud follower uses
+   * this to suspend auto page-turns so it never fights the reader.
+   * NOT fired by turnToPage (the programmatic path — jumps and the follower
+   * itself), so follower turns stay silent here. Optional.
+   */
+  onUserTurn?: () => void;
 }
 
 /**
@@ -202,6 +222,8 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
       onGeometryReady,
       articleStartChrome,
       animatePageTurns = false,
+      spokenRange,
+      onUserTurn,
     },
     ref,
   ): React.ReactElement | null {
@@ -235,6 +257,11 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
     // the callback in its dependency array.
     const onGeometryReadyRef = useRef(onGeometryReady);
     onGeometryReadyRef.current = onGeometryReady;
+    // Issue #42: same ref-mirror for the manual-turn signal — the
+    // imperative handle is created once (empty deps) and would otherwise
+    // capture the first render's prop.
+    const onUserTurnRef = useRef(onUserTurn);
+    onUserTurnRef.current = onUserTurn;
 
     const pendingTurnMotion = useRef(false);
 
@@ -678,6 +705,11 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
         currentPageIdxRef.current = next;
         lastAnchorOffsetRef.current = pageAnchorOffset(articleRef.current, p, next);
         setCurrentPageIdx(next);
+        // Issue #42: this is a MANUAL turn (chevrons/keyboard/swipe — the
+        // only commitTurn callers); the read-aloud follower suspends so it
+        // never fights the reader. The programmatic turnToPage path stays
+        // silent here by construction.
+        onUserTurnRef.current?.();
       }
       return { page: next + 1, total: p.length, moved };
     }
@@ -819,6 +851,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
           article={article}
           lang={article.lang}
           highlights={fragmentHighlights}
+          spokenRange={spokenRange}
           style={
             isFirst && firstPageReservedPx > 0
               ? { height: `calc(100% - ${firstPageReservedPx}px)` }

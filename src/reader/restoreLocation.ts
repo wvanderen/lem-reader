@@ -24,6 +24,27 @@ import {
   normalizeRunText,
 } from "../content/normalizeText";
 
+/**
+ * The rendered top-level article blocks in document order. The
+ * [data-block-index] selector matches EXACTLY the top-level blocks — not
+ * (a) the article header's <p class="meta"> provenance paragraph (not an
+ * article block), and (b) blockquote child <p> elements (a <blockquote> and
+ * its child <p> both matched "p, blockquote"). The extra elements shifted
+ * the grapheme offsets computed by computeTopVisibleOffset so they no longer
+ * matched the article-global offsets from pageStartGlobalOffset (which walks
+ * article.blocks via blockNormalizedText). [data-block-index] aligns the
+ * scrolling-mode anchor with the paginated-mode page boundaries.
+ *
+ * Lives here (not in the route) because every offset↔DOM consumer shares it:
+ * useScrollSave, the D4-10 anchor capture, the read-aloud follower's scroll
+ * target — one selector, one contract.
+ */
+export function queryBlocks(articleEl: HTMLElement): HTMLElement[] {
+  return Array.from(
+    articleEl.querySelectorAll<HTMLElement>("[data-block-index]"),
+  );
+}
+
 // ── Per-element grapheme-length cache (260819-tld) ───────────────────────────
 // computeTopVisibleOffset runs on EVERY scroll event (useScrollSave listener +
 // ArticleView anchor-capture listener) and used to re-segment every element's

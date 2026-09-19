@@ -16,6 +16,13 @@
 // reading order + D-05 offset integrity depend on reusing this same output).
 import type { InlineRun } from "../types";
 import type { HighlightSlice } from "../../annotations/highlightRanges";
+// Issue #42: the synthetic spoken-word marker rides the SAME slicer output
+// as annotation marks, but branches on the reserved id into an aria-hidden,
+// non-focusable <mark> — per-word updates never enter the accessibility
+// tree, never take focus, and never open the annotation popover. The ONE
+// mark anatomy lives in SpokenMark (shared with the code-block path).
+import { isSpokenMarkerId } from "../../annotations/spokenMarker";
+import { SpokenMark } from "./SpokenMark";
 
 function Inline({ run }: { run: InlineRun }) {
   let node: React.ReactNode = run.text;
@@ -122,6 +129,15 @@ export function InlineList({
                 <Inline key={j} run={r} />
               ))}
             </span>
+          );
+        }
+        if (isSpokenMarkerId(slice.highlightId)) {
+          return (
+            <SpokenMark key={i}>
+              {slice.runs.map((r, j) => (
+                <Inline key={j} run={r} />
+              ))}
+            </SpokenMark>
           );
         }
         // Highlighted slice — wrap in <mark class="highlight">. The modifier

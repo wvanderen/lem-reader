@@ -75,6 +75,20 @@ export interface HighlightSlice {
 }
 
 /**
+ * Decoration-corrected norm origin of `runs` (issue #42): the stream offset
+ * the piece's NORM stream actually starts at. See the walk comment in
+ * sliceRunsForHighlights for the invariant; this helper is its one formula.
+ */
+function decorationOrigin(
+  cursor: number,
+  blockLen: number,
+  runs: readonly InlineRun[],
+  lang: string,
+): number {
+  return cursor + (blockLen - cursor) - inlineStreamGraphemeLength(runs, lang);
+}
+
+/**
  * Slice a paragraph's InlineRun[] at every highlight boundary intersecting
  * this block's article-global range.
  *
@@ -141,15 +155,35 @@ export function sliceRunsForHighlights(
   // intersections share a start within a single block.)
   intersections.sort((a, b) => a.start - b.start);
 
+  // Issue #42 — the decoration measure (stated once here; the walk applies
+  // it via the decorationOrigin helper below). Each splitParagraphRuns cut
+  // leaves the AFTER piece carrying raw leading whitespace that
+  // normalizeRunText TRIMS away ("Spoken| word here." → after =
+  // " word here.", norm = "word here."). The piece's norm stream therefore
+  // sits `d` graphemes AHEAD of the block stream cursor — walking
+  // subsequent intersections with raw stream offsets drifts every boundary
+  // by the accumulated decoration (the next highlight's mark rendered
+  // "ord " instead of "word" whenever another highlight preceded it in the
+  // same block). The fix measures the decoration before every cut:
+  //   d      = remaining stream − currentRuns' norm length
+  //   origin = cursor + d  (currentRuns' norm == stream[origin..])
+  // and expresses each gap/marked length in the PIECE's norm coordinates,
+  // which splitParagraphRuns honors exactly (before covers norm
+  // [0, splitAtGrapheme)). Raw text still partitions exactly — the pieces
+  // concatenate to the input's raw text — so reading order and marks
+  // survive unchanged; only the slice BOUNDARIES become exact.
   const slices: HighlightSlice[] = [];
-  let cursor = 0; // intra-block offset consumed so far
+  let cursor = 0; // stream offset of currentRuns' NORM origin (decoration-corrected)
   let currentRuns: InlineRun[] = [...runs];
 
   for (const inter of intersections) {
-    // Gap before this intersection: [cursor, inter.start) → un-highlighted.
-    if (inter.start > cursor) {
-      const gapLen = inter.start - cursor;
-      const split = splitParagraphRuns(currentRuns, gapLen, lang);
+    // Gap before this intersection: [gapOrigin, inter.start) in stream
+    // coords, cut in the piece's own norm coordinates. One measure per
+    // phase — the gap cut changes currentRuns, so the intersection cut
+    // re-measures against the post-gap piece.
+    const gapOrigin = decorationOrigin(cursor, blockLen, currentRuns, lang);
+    if (inter.start > gapOrigin) {
+      const split = splitParagraphRuns(currentRuns, inter.start - gapOrigin, lang);
       if (split.before.length > 0) {
         slices.push({
           runs: split.before,
@@ -161,13 +195,9 @@ export function sliceRunsForHighlights(
       currentRuns = split.after;
       cursor = inter.start;
     }
-    // The intersection itself: [inter.start, inter.end) → highlighted slice.
-    // isFirst (Pitfall 2): the highlight's global start lies within this
-    // block exactly when it is >= this block's global start — the single,
-    // contiguous intersection slice carrying the flag becomes the DOM id
-    // carrier (InlineRenderer). See HighlightSlice.isFirst for the paginated
-    // entry-local caveat (Plan 19-04).
-    const interLen = inter.end - inter.start;
+    // The intersection itself: [inter.start, inter.end) → highlighted
+    // slice, cut in the (post-gap) piece's norm coordinates.
+    const interLen = inter.end - decorationOrigin(cursor, blockLen, currentRuns, lang);
     const split = splitParagraphRuns(currentRuns, interLen, lang);
     if (split.before.length > 0) {
       slices.push({

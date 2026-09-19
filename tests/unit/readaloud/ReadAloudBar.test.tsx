@@ -130,3 +130,69 @@ describe("ReadAloudBar — follow level + the ONE polite region", () => {
     expect(regions[0]!.textContent).toBe("Reading aloud.");
   });
 });
+
+describe("ReadAloudBar — jump to spoken position (issue #42)", () => {
+  it("renders only while a session exists AND a jump handler is provided", () => {
+    renderBar("stopped", { onJumpToSpoken: vi.fn() });
+    expect(screen.queryByRole("button", { name: "Jump to spoken position" })).toBeNull();
+    cleanup();
+
+    renderBar("playing");
+    expect(screen.queryByRole("button", { name: "Jump to spoken position" })).toBeNull();
+    cleanup();
+
+    renderBar("playing", { onJumpToSpoken: vi.fn() });
+    expect(
+      screen.getByRole("button", { name: "Jump to spoken position" }),
+    ).not.toBeNull();
+    cleanup();
+
+    renderBar("paused", { onJumpToSpoken: vi.fn() });
+    expect(
+      screen.getByRole("button", { name: "Jump to spoken position" }),
+    ).not.toBeNull();
+  });
+
+  it("clicks route to onJumpToSpoken without touching the transport", () => {
+    const props = renderBar("playing", { onJumpToSpoken: vi.fn() });
+    fireEvent.click(screen.getByRole("button", { name: "Jump to spoken position" }));
+    expect(props.onJumpToSpoken).toHaveBeenCalledTimes(1);
+    expect(props.onPrimary).not.toHaveBeenCalled();
+    expect(props.onStop).not.toHaveBeenCalled();
+  });
+
+  it("the jump notice rides the SAME single status region, fresh over the transport copy", () => {
+    const { container } = render(
+      <ReadAloudBar
+        state="playing"
+        followLevel="word"
+        announcement="Reading aloud."
+        notice="Jumped to spoken position."
+        onPrimary={() => {}}
+        onStop={() => {}}
+        onJumpToSpoken={() => {}}
+      />,
+    );
+    const regions = container.querySelectorAll('[role="status"]');
+    expect(regions).toHaveLength(1);
+    // The notice is the feedback for the reader's LAST action — it takes
+    // precedence while fresh (the route clears it when the transport next
+    // announces).
+    expect(regions[0]!.textContent).toBe("Jumped to spoken position.");
+    cleanup();
+
+    const noNotice = render(
+      <ReadAloudBar
+        state="playing"
+        followLevel="word"
+        announcement="Read aloud paused."
+        notice={null}
+        onPrimary={() => {}}
+        onStop={() => {}}
+        onJumpToSpoken={() => {}}
+      />,
+    );
+    const region = noNotice.container.querySelector('[role="status"]');
+    expect(region!.textContent).toBe("Read aloud paused.");
+  });
+});

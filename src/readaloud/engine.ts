@@ -32,6 +32,7 @@ import type {
   UtteranceEvents,
 } from "./types";
 import type { SpeechChunk } from "./chunks";
+import type { GraphemeRange } from "../annotations/unifiedHighlightSlicer";
 
 /** Probe settings: short, two sentences, several words — enough for a voice
  * to demonstrate word boundaries, sentence boundaries, or neither. Silent
@@ -57,6 +58,16 @@ export interface ReadAloudEngineCallbacks {
   onFollowLevel?(level: FollowLevel): void;
   /** Canonical article-global grapheme offset of the listened position. */
   onProgress?(canonicalGrapheme: number): void;
+  /** Issue #42 — the spoken-range channel for the visual marker: the
+   * canonical [start, end) grapheme range speech is currently inside. A word
+   * boundary emits the word's range; an utterance start emits the whole
+   * chunk (the passage marker until the first boundary arrives); a chunk
+   * completion emits a zero-width [end, end) sentinel that carries progress
+   * but must NOT move the marker (the next utterance's start immediately
+   * replaces it). Starts never move backward within a session — a skip-BACK
+   * transport (#43) resets the floor explicitly by routing through seekTo()
+   * (or stop→play for a fresh session), never through this channel alone. */
+  onSpokenRange?(range: GraphemeRange): void;
   /** The last chunk finished — the article was completed by ear. */
   onFinish?(): void;
   /** Honest refusal (speech refused to start / queue failed). */
@@ -91,6 +102,10 @@ export class ReadAloudEngine {
   private nextChunkIndex = 0;
   private followLevel: FollowLevel = "progress-only";
   private lastReported = -1;
+  /** Issue #42 — the spoken-range channel's own monotonic floor: equal
+   * starts ARE re-reported (a chunk-start passage refresh after the previous
+   * chunk's zero-width end sentinel), only backward starts are dropped. */
+  private lastSpokenStart = -1;
   private consecutiveErrors = 0;
   private stallTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -130,6 +145,7 @@ export class ReadAloudEngine {
     if (startIndex === -1) startIndex = 0; // at/past the end → start over
     this.nextChunkIndex = startIndex;
     this.lastReported = -1;
+    this.lastSpokenStart = -1;
     this.consecutiveErrors = 0;
     this.setState("playing");
     this.probe(generation);
@@ -152,6 +168,33 @@ export class ReadAloudEngine {
     this.clearStallTimer();
     this.adapter.cancel();
     this.setState("stopped");
+  }
+
+  /**
+   * Issue #42 — the track the #43 skip controls ride: jump the PLAYING
+   * session to the chunk containing `fromOffset` without a stop→play
+   * round-trip (no re-probe — the follow level is already known). The
+   * monotonic floors reset here, so the spoken-range channel may move
+   * BACKWARD (skip-back) as well as forward, and the pre-seek utterance's
+   * late events no-op via the generation guard. No-op while paused/stopped —
+   * a paused seek is resume-then-seek for the caller (#43 owns that
+   * composition). An offset at/past the end restarts from the top.
+   */
+  seekTo(fromOffset: number): void {
+    if (this.state !== "playing") return;
+    this.generation += 1;
+    const generation = this.generation;
+    this.clearStallTimer();
+    // Same settle discipline as the probe's post-cancel handoff (WebKit
+    // cancel→queue race, bug 238189).
+    this.adapter.cancel();
+    let startIndex = this.chunks.findIndex((c) => c.endGrapheme > fromOffset);
+    if (startIndex === -1) startIndex = 0;
+    this.nextChunkIndex = startIndex;
+    this.lastReported = -1;
+    this.lastSpokenStart = -1;
+    this.consecutiveErrors = 0;
+    setTimeout(() => this.startPlayback(generation), CANCEL_SETTLE_MS);
   }
 
   // ── internals ────────────────────────────────────────────────────────────
@@ -232,6 +275,10 @@ export class ReadAloudEngine {
       this.clearStallTimer();
       this.consecutiveErrors = 0;
       this.reportProgress(chunk.endGrapheme);
+      // Zero-width spoken sentinel: carries the progress currency only — the
+      // marker must NOT collapse; the next utterance's start range (same
+      // start offset, permitted by the equal-start rule) replaces it.
+      this.reportSpoken({ start: chunk.endGrapheme, end: chunk.endGrapheme });
       this.nextChunkIndex += 1;
       this.speakNext(generation);
     };
@@ -260,6 +307,9 @@ export class ReadAloudEngine {
           // start, and a slow long passage must not read as a stall).
           this.clearStallTimer();
           utteranceProgress(chunk.startGrapheme);
+          // Passage marker until the first boundary arrives (for a
+          // progress-only voice this IS the marker: the whole chunk).
+          this.reportSpoken({ start: chunk.startGrapheme, end: chunk.endGrapheme });
         },
         onboundary: (event) => {
           if (this.isStale(generation)) return;
@@ -268,6 +318,10 @@ export class ReadAloudEngine {
           this.clearStallTimer();
           const canonical = mapBoundaryToCanonical(chunk, event);
           if (canonical !== null) this.reportProgress(canonical);
+          // Issue #42 — the word-level marker range (never extrapolated:
+          // both edges map through the chunk's own UTF-16 → grapheme map).
+          const range = mapBoundaryRangeToCanonical(chunk, event);
+          if (range !== null) this.reportSpoken(range);
         },
         onend: advance,
         onerror: advanceAfterError,
@@ -298,6 +352,15 @@ export class ReadAloudEngine {
     if (canonical <= this.lastReported) return;
     this.lastReported = canonical;
     this.callbacks.onProgress?.(canonical);
+  }
+
+  /** Issue #42 spoken-range guard: backward starts are dropped; equal starts
+   * pass (the chunk-boundary passage refresh after the zero-width end
+   * sentinel), so the marker always reflects the CURRENT utterance. */
+  private reportSpoken(range: GraphemeRange): void {
+    if (range.start < this.lastSpokenStart) return;
+    this.lastSpokenStart = range.start;
+    this.callbacks.onSpokenRange?.(range);
   }
 
   private setState(state: TransportState): void {
@@ -343,4 +406,50 @@ export function mapBoundaryToCanonical(
   if (ordinal === undefined) return null;
   const canonical = chunk.startGrapheme + ordinal;
   return Math.max(chunk.startGrapheme, Math.min(canonical, chunk.endGrapheme));
+}
+
+/**
+ * Issue #42 — the spoken-range mapping behind the visual marker: both edges
+ * of the currently-spoken span in canonical article-global graphemes.
+ *
+ *   start — the boundary's own charIndex mapped by mapBoundaryToCanonical.
+ *   end   — charIndex + charLength when the engine supplies a positive
+ *           charLength; otherwise the next whitespace in the chunk's own
+ *           text (spec §4.2.6: charLength is 0/undefined when the engine
+ *           cannot determine it — the whitespace fallback keeps the marker
+ *           word-sized for sentence boundaries and length-less voices
+ *           instead of collapsing to an invisible zero-width slice).
+ *
+ * Both edges clamp to the chunk (a corrupt length degrades to the chunk
+ * edge, never a wrong passage), and end is never behind start. Returns null
+ * only when the start itself is unmappable (same contract as
+ * mapBoundaryToCanonical).
+ */
+export function mapBoundaryRangeToCanonical(
+  chunk: SpeechChunk,
+  event: BoundaryEvent,
+): GraphemeRange | null {
+  const start = mapBoundaryToCanonical(chunk, event);
+  if (start === null) return null;
+  let endUtf16: number;
+  if (event.charLength !== undefined && event.charLength > 0) {
+    endUtf16 = event.charIndex + event.charLength;
+  } else {
+    endUtf16 = chunk.text.length;
+    for (let i = event.charIndex + 1; i < chunk.text.length; i++) {
+      const ch = chunk.text[i];
+      if (ch === " " || ch === "\n" || ch === "\t" || ch === "\r") {
+        endUtf16 = i;
+        break;
+      }
+    }
+  }
+  const clampedEndUtf16 = Math.max(
+    event.charIndex + 1,
+    Math.min(endUtf16, chunk.utf16ToGrapheme.length - 1),
+  );
+  const endOrdinal = chunk.utf16ToGrapheme[clampedEndUtf16];
+  if (endOrdinal === undefined) return { start, end: start };
+  const end = chunk.startGrapheme + endOrdinal;
+  return { start, end: Math.max(start, Math.min(end, chunk.endGrapheme)) };
 }

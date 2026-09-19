@@ -28,7 +28,7 @@ import type { Book } from "../content/schema";
 import { ArticleBody } from "../content/render/BlockRenderer";
 import type { ArticleBodyHighlight } from "../content/render/BlockRenderer";
 import { loadLocation } from "../persistence/locationStore";
-import { computeTopVisibleOffset } from "../reader/restoreLocation";
+import { computeTopVisibleOffset, queryBlocks } from "../reader/restoreLocation";
 // Issue #5 — the ONE mode-aware passage-jump tail (deep-link, restore,
 // back-nav, TOC, and the D4-10 mode-swap re-anchor all call it) + the D4-07
 // settleFocus discipline.
@@ -144,8 +144,14 @@ import { extractionNote } from "./extractionNote";
 // (ADR 0001): the listened canonical position drives the SAME shared
 // location-save discipline as scroll/page turns, persists, restores, and
 // marks the article finished when the last chunk completes by ear.
+// Issue #42 — the spoken-word follower lives in ONE hook (useReadAloudFollow):
+// marker state, the "never fight the reader" suspension, the follow effects,
+// and the jump affordance + its notice. The route only wires the hook's
+// outputs to the surface, the body, and the transport bar.
 import { useReadAloud } from "../reader/useReadAloud";
+import { useReadAloudFollow } from "../reader/useReadAloudFollow";
 import { ReadAloudBar } from "../reader/ReadAloudBar";
+import type { GraphemeRange } from "../annotations/unifiedHighlightSlicer";
 
 /** The D4-10 mode-toggle handler signature (App threads a ref of this shape). */
 type ModeToggleHandler = () => void;
@@ -237,30 +243,9 @@ function formatDate(iso: string): string {
   }
 }
 
-/**
- * Query the rendered top-level block elements in document order. Used by both
- * the location-restore effect and the Resume handler. Mirrors the selector
- * used by useScrollSave's offset computation so save/restore round-trip
- * exactly.
- *
- * Plan 04-09 (PAGE-01 round-trip fix): switched from a tag-based selector
- * ("h2, h3, h4, p, blockquote, li, pre, figure, sup, details") to
- * [data-block-index] (emitted by BlockRenderer on each top-level block per
- * Plan 04-06). The tag-based selector DOUBLE-COUNTED: (a) the article
- * header's <p class="meta"> provenance paragraph (not an article block), and
- * (b) blockquote child <p> elements (a <blockquote> and its child <p> both
- * matched "p, blockquote"). The extra elements shifted the grapheme offsets
- * computed by computeTopVisibleOffset so they no longer matched the
- * article-global offsets from pageStartGlobalOffset (which walks article.blocks
- * via blockNormalizedText). [data-block-index] matches exactly the top-level
- * article blocks (verified: 8 vs 13 elements for essay-long-form), aligning
- * the scrolling-mode anchor with the paginated-mode page boundaries.
- */
-function queryBlocks(articleEl: HTMLElement): HTMLElement[] {
-  return Array.from(
-    articleEl.querySelectorAll<HTMLElement>("[data-block-index]"),
-  );
-}
+// queryBlocks moved to reader/restoreLocation.ts (issue #42 review): every
+// offset↔DOM consumer — this route, useScrollSave, the read-aloud follower —
+// shares ONE selector with ONE history note (the PAGE-01 double-count fix).
 
 /**
  * Plan 04-09 (PAGE-01 round-trip fix): check if two article-global grapheme
@@ -784,6 +769,14 @@ export function ArticleView({
     saveLocationNow(endPinOffset(article));
   }, [article, saveLocationNow, noteActivity]);
 
+  // Issue #42 — the spoken-word follower (ONE hook: marker state, "never
+  // fight the reader" suspension, the follow effects, and the jump
+  // affordance + its notice). The hook needs the transport state, and
+  // useReadAloud needs the hook's spoken-range setter — resolved with the
+  // route's standard latest-ref pattern: the engine always calls the
+  // freshest setter through the indirection ref.
+  const spokenSetterRef = useRef<(range: GraphemeRange) => void>(() => {});
+
   // Issue #40 (ADR 0001 — listening is reading): the read-aloud session.
   //   - Play starts at the reader's current canonical position (the live
   //     D4-10 anchor — the same currency as scroll/page-turn saves).
@@ -808,12 +801,26 @@ export function ArticleView({
       currentAnchorOffsetRef.current = offset;
       recordProgress(offset);
     },
+    onListenSpoken: (range) => spokenSetterRef.current(range),
     onListenFinished: () => {
       if (!article) return;
       noteActivity(endPinOffset(article));
       saveLocationNow(endPinOffset(article));
     },
   });
+
+  // The follower hook, AFTER the transport (it consumes readAloudState).
+  const follow = useReadAloudFollow({
+    state: readAloudState,
+    isPaginated,
+    isPaginatedRef,
+    article,
+    articleEl,
+    surfaceRef,
+    announcement: readAloudAnnouncement,
+  });
+  spokenSetterRef.current = follow.updateSpokenRange;
+  const { spokenRange } = follow;
 
   // Phase 4 Plan 04-04 (D4-09 + D4-10): the mode-toggle handler. Captures the
   // anchor SYNCHRONOUSLY before calling update() so the post-swap render can
@@ -2066,6 +2073,8 @@ export function ArticleView({
                   articleStartChrome={articleTopMeta}
                   initialAnchorOffset={currentAnchorOffsetRef.current}
                   onAnchorChange={handleAnchorChange}
+                  spokenRange={follow.spokenRange}
+                  onUserTurn={follow.suspend}
                 />
                 {/*
                   PageTurnControls registers the keyboard bundle + swipe + the
@@ -2210,7 +2219,7 @@ export function ArticleView({
                   </a>
                 </nav>
               )}
-              <ArticleBody article={article} />
+              <ArticleBody article={article} spokenRange={spokenRange} />
               {/* 260908-oht: the end-of-article gesture sits at the end of
                   the content — BEFORE the book navigation that follows it
                   (flow placement, calm quiet-button register). */}
@@ -2343,12 +2352,14 @@ export function ArticleView({
           state={readAloudState}
           followLevel={readAloudFollowLevel}
           announcement={readAloudAnnouncement}
+          notice={follow.notice}
           onPrimary={() =>
             readAloudState === "playing"
               ? pauseOrResumeReadAloud()
               : playReadAloud()
           }
           onStop={stopReadAloud}
+          onJumpToSpoken={follow.jumpToSpoken}
         />
       </main>
     </>

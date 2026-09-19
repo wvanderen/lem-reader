@@ -17,7 +17,10 @@
 //      the stall watchdog; three consecutive failed utterances fail the
 //      session — never an infinite speak/error loop.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ReadAloudEngine } from "../../../src/readaloud/engine";
+import {
+  mapBoundaryRangeToCanonical,
+  ReadAloudEngine,
+} from "../../../src/readaloud/engine";
 import type { SpeechChunk } from "../../../src/readaloud/chunks";
 import type {
   SpeechAdapter,
@@ -79,6 +82,8 @@ interface Harness {
   states: string[];
   levels: string[];
   progress: number[];
+  /** Issue #42 — the spoken-range channel ([start, end) pairs, in order). */
+  spokenRanges: { start: number; end: number }[];
   finished: number;
   errors: string[];
   engine: ReadAloudEngine;
@@ -91,6 +96,7 @@ function makeEngine(chunks = makeChunks()): Harness {
     states: [],
     levels: [],
     progress: [],
+    spokenRanges: [],
     finished: 0,
     errors: [],
     engine: null as unknown as ReadAloudEngine,
@@ -104,6 +110,7 @@ function makeEngine(chunks = makeChunks()): Harness {
       onStateChange: (s) => h.states.push(s),
       onFollowLevel: (l) => h.levels.push(l),
       onProgress: (o) => h.progress.push(o),
+      onSpokenRange: (range) => h.spokenRanges.push(range),
       onFinish: () => h.finished += 1,
       onError: (m) => h.errors.push(m),
     },
@@ -306,6 +313,162 @@ describe("transport — pause / resume / stop + stale-event guards", () => {
     h.adapter.last!.events.onend?.(); // stale
     expect(h.adapter.spoken).toHaveLength(spokenCount);
     expect(h.finished).toBe(1);
+  });
+});
+
+// ─── 6. spoken-range channel (issue #42) ─────────────────────────────────────
+
+describe("spoken ranges — the visual marker channel (issue #42)", () => {
+  it("an utterance start emits the whole chunk as the passage marker", () => {
+    const h = makeEngine();
+    playWordCapable(h);
+    h.adapter.last!.events.onstart?.();
+    // chunk 0 = [0,9): the passage marker spans the utterance.
+    expect(h.spokenRanges[h.spokenRanges.length - 1]).toEqual({ start: 0, end: 9 });
+  });
+
+  it("a word boundary emits the word's range via charLength", () => {
+    const h = makeEngine();
+    playWordCapable(h);
+    // "Zero| one." — charIndex 5, charLength 3 → canonical [5, 8).
+    h.adapter.last!.events.onboundary?.({ name: "word", charIndex: 5, charLength: 3 });
+    expect(h.spokenRanges[h.spokenRanges.length - 1]).toEqual({ start: 5, end: 8 });
+  });
+
+  it("a missing charLength falls back to the next whitespace (word-sized marker)", () => {
+    const h = makeEngine();
+    playWordCapable(h);
+    // chunk 0 "Zero one.": charIndex 0 ("Zero"), no charLength → whitespace
+    // at text index 4 → canonical [0, 4).
+    h.adapter.last!.events.onboundary?.({ name: "sentence", charIndex: 0 });
+    expect(h.spokenRanges[h.spokenRanges.length - 1]).toEqual({ start: 0, end: 4 });
+  });
+
+  it("a word range never leaves the chunk (corrupt charLength clamps)", () => {
+    const h = makeEngine();
+    playWordCapable(h);
+    h.adapter.last!.events.onboundary?.({ name: "word", charIndex: 0, charLength: 9999 });
+    const range = h.spokenRanges[h.spokenRanges.length - 1]!;
+    expect(range.start).toBe(0);
+    expect(range.end).toBe(9); // chunk 0's end, never chunk 1's territory
+  });
+
+  it("spoken starts never move backward within a session", () => {
+    const h = makeEngine();
+    playWordCapable(h);
+    h.adapter.last!.events.onboundary?.({ name: "word", charIndex: 5, charLength: 3 });
+    const forward = h.spokenRanges[h.spokenRanges.length - 1]!;
+    h.adapter.last!.events.onstart?.(); // would regress to the chunk start
+    const last = h.spokenRanges[h.spokenRanges.length - 1]!;
+    expect(last).toEqual(forward);
+  });
+
+  it("chunk completion emits a zero-width sentinel; the next start replaces it (equal start)", () => {
+    const h = makeEngine();
+    playWordCapable(h);
+    h.adapter.last!.events.onend?.(); // chunk 0 done → sentinel [9,9)
+    expect(h.spokenRanges[h.spokenRanges.length - 1]).toEqual({ start: 9, end: 9 });
+    // chunk 1's start event carries the SAME start (9) — the equal-start
+    // rule lets the passage marker replace the sentinel instead of dropping.
+    h.adapter.last!.events.onstart?.();
+    expect(h.spokenRanges[h.spokenRanges.length - 1]).toEqual({ start: 9, end: 20 });
+  });
+
+  it("stale events from a stopped session emit nothing (generation guard)", () => {
+    const h = makeEngine();
+    playWordCapable(h);
+    const count = h.spokenRanges.length;
+    h.engine.stop();
+    h.adapter.last!.events.onboundary?.({ name: "word", charIndex: 2, charLength: 3 });
+    h.adapter.last!.events.onstart?.();
+    expect(h.spokenRanges).toHaveLength(count);
+  });
+});
+
+// ─── 7. seekTo — the #43 skip-controls track (issue #42 review) ─────────────
+
+describe("seekTo — jump the playing session; the floors reset", () => {
+  it("moves the queue + marker BACK to an earlier chunk without re-probing", () => {
+    const h = makeEngine();
+    playWordCapable(h);
+    h.adapter.last!.events.onend?.(); // chunk 0 done → chunk 1 live
+    expect(h.adapter.last!.request.text).toBe("Three four.");
+    h.adapter.last!.events.onboundary?.({ name: "word", charIndex: 0, charLength: 5 });
+
+    h.engine.seekTo(0); // skip BACK to chunk 0
+    vi.advanceTimersByTime(60); // the post-cancel settle
+    // No re-probe: the follow level survives, the new utterance is audible.
+    expect(h.levels).toEqual(["word"]);
+    expect(h.adapter.last!.request.volume).toBe(1);
+    expect(h.adapter.last!.request.text).toBe("Zero one.");
+    // onstart emits the whole chunk — a BACKWARD spoken start accepted,
+    // because seekTo reset the monotonic floor.
+    h.adapter.last!.events.onstart?.();
+    expect(h.spokenRanges[h.spokenRanges.length - 1]).toEqual({ start: 0, end: 9 });
+    expect(h.progress[h.progress.length - 1]).toBe(0);
+  });
+
+  it("jumps FORWARD too; pre-seek events are stale (generation guard)", () => {
+    const h = makeEngine();
+    playWordCapable(h); // chunk 0 live
+    const spokenCount = h.spokenRanges.length;
+    const progressCount = h.progress.length;
+    h.engine.seekTo(20); // straight to chunk 2
+    // Stragglers from the pre-seek utterance must report nothing.
+    h.adapter.spoken[1]!.events.onboundary?.({ name: "word", charIndex: 5, charLength: 3 });
+    expect(h.spokenRanges).toHaveLength(spokenCount);
+    expect(h.progress).toHaveLength(progressCount);
+    vi.advanceTimersByTime(60);
+    h.adapter.last!.events.onstart?.();
+    expect(h.adapter.last!.request.text).toBe("Six seven.");
+    expect(h.spokenRanges[h.spokenRanges.length - 1]).toEqual({ start: 20, end: 30 });
+  });
+
+  it("an offset at/past the end restarts from the top", () => {
+    const h = makeEngine();
+    playWordCapable(h);
+    h.engine.seekTo(999);
+    vi.advanceTimersByTime(60);
+    expect(h.adapter.last!.request.text).toBe("Zero one.");
+  });
+
+  it("is playing-only: a paused or stopped session ignores it", () => {
+    const h = makeEngine();
+    playWordCapable(h);
+    h.engine.pause();
+    const spokenCount = h.adapter.spoken.length;
+    h.engine.seekTo(20);
+    vi.advanceTimersByTime(60 + 5000);
+    expect(h.adapter.spoken).toHaveLength(spokenCount); // nothing new queued
+    expect(h.engine.getState()).toBe("paused");
+
+    h.engine.stop();
+    h.engine.seekTo(0);
+    vi.advanceTimersByTime(60 + 5000);
+    expect(h.engine.getState()).toBe("stopped");
+    expect(h.adapter.spoken).toHaveLength(spokenCount);
+  });
+});
+
+describe("mapBoundaryRangeToCanonical — pure mapping truth table", () => {
+  it("maps both edges through the UTF-16 → grapheme map (astral-safe)", () => {
+    // "𐐀𐐀 x" — 2 astral clusters (2 UTF-16 units each) + " x". The map
+    // (length text.length + 1): utf16 0→0, 1→0 (mid-astral), 2→1, 3→1,
+    // 4→2, 5→3, 6→4 (past-the-end). Word "x" at charIndex 5, charLength 1
+    // → graphemes [3, 4) → canonical [103, 104).
+    const c: SpeechChunk = {
+      text: "\u{10300}\u{10300} x",
+      startGrapheme: 100,
+      endGrapheme: 104,
+      utf16ToGrapheme: [0, 0, 1, 1, 2, 3, 4],
+    };
+    const range = mapBoundaryRangeToCanonical(c, { name: "word", charIndex: 5, charLength: 1 });
+    expect(range).toEqual({ start: 103, end: 104 });
+  });
+
+  it("returns null when the start itself is unmappable (negative charIndex)", () => {
+    const h = makeChunks();
+    expect(mapBoundaryRangeToCanonical(h[0]!, { charIndex: -1 })).toBeNull();
   });
 });
 
