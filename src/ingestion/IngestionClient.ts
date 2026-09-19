@@ -28,7 +28,7 @@ import { z } from "zod";
 import { ArticleSchema, type CanonicalArticle } from "../content/schema";
 import type { Book } from "../content/schema";
 import { sha256Hex } from "../portability/manifest";
-import { AssetEnvelopeSchema, IngestionResponseSchema } from "./types";
+import { AssetEnvelopeSchema, IngestionResponseSchema, MAX_PREFERRED_LANGUAGES } from "./types";
 import type {
   AssetEnvelope,
   IngestionFailureReason,
@@ -115,7 +115,30 @@ export async function validateEnvelopeAssets(
 }
 
 /**
- * ingestUrl — POST {url} to /api/ingest and re-validate the response.
+ * browserPreferredLanguages — the reader's ordered browser language list,
+ * the ONE language-preference surface for YouTube imports (issue #59,
+ * decision #56: `navigator.languages` verbatim — no new setting, no
+ * per-import picker). Sliced to the request schema's MAX_PREFERRED_LANGUAGES
+ * (a long browser list must degrade to a shorter preference, never a
+ * refused import), empty strings dropped, `undefined` when nothing usable
+ * remains — an absent list is the contract's "no preference" state (the
+ * server selects exactly as before this feature).
+ */
+export function browserPreferredLanguages(): string[] | undefined {
+  const languages = typeof navigator !== "undefined" ? navigator.languages : undefined;
+  if (languages === undefined) return undefined;
+  const tags = Array.from(languages)
+    .filter((tag) => typeof tag === "string" && tag.length > 0)
+    .slice(0, MAX_PREFERRED_LANGUAGES);
+  return tags.length > 0 ? tags : undefined;
+}
+
+/**
+ * ingestUrl — POST {url} — or, on the YouTube-URL branch (issue #59), POST
+ * {url, preferredLanguages} — to /api/ingest and re-validate the response.
+ * The language list rides ONLY when the caller supplies one (addToLibrary
+ * forwards `browserPreferredLanguages()` for YouTube URLs alone), so the
+ * ordinary article URL body stays byte-identical.
  *
  * Throws `IngestionError` with the typed `.reason` on any ok:false response
  * OR on a non-2xx HTTP status. Throws ZodError (untyped) if the server
@@ -123,8 +146,13 @@ export async function validateEnvelopeAssets(
  * "Something went wrong. Try again." (the IngestionFailureReason
  * "server-error" copy).
  */
-export async function ingestUrl(url: string): Promise<IngestionSuccess> {
-  return ingest({ url });
+export async function ingestUrl(
+  url: string,
+  preferredLanguages?: string[],
+): Promise<IngestionSuccess> {
+  return preferredLanguages === undefined
+    ? ingest({ url })
+    : ingest({ url, preferredLanguages });
 }
 
 /**
@@ -302,6 +330,7 @@ export async function ingestEpub(
 async function ingest(
   body:
     | { url: string }
+    | { url: string; preferredLanguages: string[] }
     | { html: string }
     | { markdown: string; filename?: string }
     | { pdf: string; filename?: string },

@@ -27,6 +27,7 @@ vi.mock("../../src/ingestion/IngestionClient", () => ({
   ingestMarkdown: vi.fn(),
   ingestPdf: vi.fn(),
   ingestEpub: vi.fn(),
+  browserPreferredLanguages: vi.fn(),
   IngestionError: class IngestionError extends Error {
     readonly reason: string;
     constructor(reason: string, message?: string) {
@@ -52,6 +53,7 @@ vi.mock("../../src/persistence/booksStore", () => ({
 }));
 
 import {
+  browserPreferredLanguages,
   ingestUrl,
   ingestHtml,
   ingestMarkdown,
@@ -76,6 +78,7 @@ const ingestHtmlMock = vi.mocked(ingestHtml);
 const ingestMarkdownMock = vi.mocked(ingestMarkdown);
 const ingestPdfMock = vi.mocked(ingestPdf);
 const ingestEpubMock = vi.mocked(ingestEpub);
+const browserPreferredLanguagesMock = vi.mocked(browserPreferredLanguages);
 const hasMock = vi.mocked(dexieLibrarySource.has);
 const saveMock = vi.mocked(dexieLibrarySource.save);
 const hasBookMock = vi.mocked(hasBook);
@@ -87,6 +90,7 @@ beforeEach(() => {
   ingestMarkdownMock.mockReset();
   ingestPdfMock.mockReset();
   ingestEpubMock.mockReset();
+  browserPreferredLanguagesMock.mockReset();
   hasMock.mockReset();
   saveMock.mockReset();
   hasBookMock.mockReset();
@@ -184,6 +188,37 @@ describe("addToLibrary — article path (url/paste/file)", () => {
 
     expect(saveMock).toHaveBeenCalledWith(sampleArticle("with-figures"), [asset]);
     expect(outcome).toEqual({ outcome: "saved-article", articleId: "with-figures" });
+  });
+
+  // Issue #59 (decisions #56/#57) — the browser language list rides ONLY the
+  // YouTube-URL branch; ordinary article URLs keep the byte-identical one-arg
+  // call (the body the client constructs stays {url}).
+  it("YouTube URL: forwards browserPreferredLanguages() as ingestUrl's second arg", async () => {
+    browserPreferredLanguagesMock.mockReturnValue(["en-US", "en"]);
+    ingestUrlMock.mockResolvedValue(articleSuccess("yt-id"));
+    await addToLibrary({ kind: "url", url: "https://youtu.be/dQw4w9WgXcQ" });
+
+    expect(ingestUrlMock).toHaveBeenCalledWith("https://youtu.be/dQw4w9WgXcQ", ["en-US", "en"]);
+  });
+
+  it("non-YouTube URL: ingestUrl keeps its single-argument call (no language list)", async () => {
+    ingestUrlMock.mockResolvedValue(articleSuccess());
+    await addToLibrary({ kind: "url", url: "https://example.com/article" });
+
+    expect(ingestUrlMock).toHaveBeenCalledTimes(1);
+    expect(ingestUrlMock.mock.calls[0]).toEqual(["https://example.com/article"]);
+    expect(browserPreferredLanguagesMock).not.toHaveBeenCalled();
+  });
+
+  it("YouTube URL with no browser languages: the preference degrades to undefined (absent field)", async () => {
+    browserPreferredLanguagesMock.mockReturnValue(undefined);
+    ingestUrlMock.mockResolvedValue(articleSuccess("yt-id"));
+    await addToLibrary({ kind: "url", url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" });
+
+    expect(ingestUrlMock).toHaveBeenCalledWith(
+      "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      undefined,
+    );
   });
 
   it("paste arm routes ingestHtml", async () => {

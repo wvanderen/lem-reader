@@ -638,7 +638,14 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
       // retry, no cache; the library is the cache per issue #27).
       const videoId = youTubeVideoId;
       finalUrl = `https://www.youtube.com/watch?v=${videoId}`;
-      const result = await fetchYouTubeTranscript(videoId);
+      // Issue #59 — the url variant's optional `preferredLanguages` (the
+      // reader's ordered browser languages, decision #56) drives the caption
+      // track selection (decision #57); absent/empty/garbage → the unchanged
+      // rule (the schema's field-level catch guarantees the shape).
+      const result = await fetchYouTubeTranscript(
+        videoId,
+        (request as { preferredLanguages?: string[] }).preferredLanguages,
+      );
       if (!result.ok) {
         throw new IngestionError(TRANSCRIPT_REFUSAL_REASONS[result.refusal]);
       }

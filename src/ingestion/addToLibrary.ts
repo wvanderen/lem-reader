@@ -32,6 +32,7 @@
 //     IngestionClient pipeline) still re-validates the response at the
 //     network boundary before any result reaches this module.
 import {
+  browserPreferredLanguages,
   ingestUrl,
   ingestHtml,
   ingestMarkdown,
@@ -41,6 +42,7 @@ import {
   type IngestionSuccess,
   type ValidatedAsset,
 } from "./IngestionClient";
+import { extractYouTubeVideoId } from "./youtube";
 import { dexieLibrarySource } from "./LibrarySource";
 import { hasBook, saveBook } from "../persistence/booksStore";
 import type { BookAsset } from "../persistence/booksStore";
@@ -158,7 +160,16 @@ export async function addToLibrary(
  * ingestHtml, title derived from content metadata).
  */
 async function ingestArticleInput(input: AddToLibraryInput): Promise<IngestionSuccess> {
-  if (input.kind === "url") return ingestUrl(input.url);
+  if (input.kind === "url") {
+    // Issue #59 (decisions #56/#57) — the reader's ordered browser languages
+    // ride ONLY the YouTube-URL branch (the server's caption track
+    // selection); an ordinary article URL keeps the byte-identical {url}
+    // body (extractYouTubeVideoId is the same dispatcher the server runs —
+    // no fork, and the branch is request-free).
+    return extractYouTubeVideoId(input.url) !== null
+      ? ingestUrl(input.url, browserPreferredLanguages())
+      : ingestUrl(input.url);
+  }
   if (input.kind === "paste") return ingestHtml(input.html);
   const { file } = input;
   if (/\.md$/i.test(file.name)) {

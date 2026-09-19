@@ -16,7 +16,11 @@
 //      (no-captions / unavailable-private / age-gated / bot-check —
 //      TranscriptRefusalReasonEnum in src/ingestion/youtube.ts).
 //   3. OK → videoDetails (title, author, lengthSeconds) + captionTracks;
-//      manual track preferred over ASR; the track's signed baseUrl is stripped
+//      track selection prefers the READER's language (issue #59, decision
+//      #57 — exact tag, then base language, per the reader's ordered list;
+//      any preferred-language match, ASR included, beats a non-preferred
+//      manual track; no match → today's manual-over-ASR, first-track rule);
+//      the track's signed baseUrl is stripped
 //      of `&fmt=srv3` (the youtube-transcript-api srv3-stripping move — srv3
 //      is word-level XML; without the strip YouTube serves word-level markup)
 //      and fetched through safeFetchCore with the caption profile below.
@@ -347,6 +351,71 @@ async function fetchChapters(videoId: string): Promise<TranscriptChapter[]> {
   }
 }
 
+// ── caption track selection (issue #59; decisions #56/#57) ───────────────────
+
+/** normalizeLanguageTag — the comparison form of a BCP-47 tag. BCP-47 subtags
+ * are ASCII case-insensitive (RFC 5646 §2.1), so "PT-br" and "pt-BR" are the
+ * same tag; trim guards against a stray space. */
+function normalizeLanguageTag(tag: string): string {
+  return tag.trim().toLowerCase();
+}
+
+/** languageTagBase — the primary language subtag ("pt-BR" → "pt"). Deliberately
+ * local (not shared with server/ingest.ts baseLanguage): ingest imports THIS
+ * module, so a shared helper would live here and invert the dependency — and
+ * the two are one-liners whose drift the tier suite pins. */
+function languageTagBase(tag: string): string {
+  const base = tag.split("-")[0];
+  return base === undefined || base.length === 0 ? tag : base;
+}
+
+/**
+ * selectCaptionTrack — the caption-track selection policy (issue #59,
+ * decision #57 resolution, tiers verbatim):
+ *
+ *   1. For each reader language, in the reader's stated order: EXACT BCP-47
+ *      match (case-insensitive), then base-language match — within each tier,
+ *      manual beats ASR.
+ *   2. ANY match in a preferred language (including ASR) beats a manual track
+ *      in a non-preferred language — the earlier tiers are exhausted first.
+ *   3. No reader language matches any track (no preference, empty list, or
+ *      garbage tags) → today's rule unchanged: manual over ASR, first track
+ *      otherwise. Deterministic throughout: the sort is stable, so within a
+ *      tier InnerTube's listed order breaks every tie.
+ *
+ * Honesty holds unchanged: an ASR track that wins on language keeps the
+ * existing low-confidence disclosure (reading a language you speak with
+ * disclosed machine captions beats silently reading a language you don't).
+ * Pure + exported for the fixture-pinned tier suite
+ * (tests/unit/server/youtube-transcript.spec.ts).
+ */
+export function selectCaptionTrack(
+  tracks: Record<string, unknown>[],
+  preferredLanguages?: string[],
+): Record<string, unknown> | undefined {
+  if (preferredLanguages !== undefined) {
+    for (const rawTag of preferredLanguages) {
+      const preferred = normalizeLanguageTag(rawTag);
+      if (preferred.length === 0) continue;
+      const preferredBase = languageTagBase(preferred);
+      // Tier 1 (exact tag) then tier 2 (base language); within a tier the
+      // track's listed order holds except manual-beats-ASR (stable sort).
+      for (const exact of [true, false]) {
+        const tier = tracks.filter((t) => {
+          const code =
+            typeof t.languageCode === "string" ? normalizeLanguageTag(t.languageCode) : "";
+          if (code.length === 0) return false;
+          return exact ? code === preferred : languageTagBase(code) === preferredBase;
+        });
+        tier.sort((a, b) => (a.kind === "asr" ? 1 : 0) - (b.kind === "asr" ? 1 : 0));
+        if (tier.length > 0) return tier[0];
+      }
+    }
+  }
+  // The shipped rule (#27) unchanged: manual over ASR, first track otherwise.
+  return tracks.find((t) => t.kind !== "asr") ?? tracks[0];
+}
+
 // ── the client surface ───────────────────────────────────────────────────────
 
 /**
@@ -355,13 +424,21 @@ async function fetchChapters(videoId: string): Promise<TranscriptChapter[]> {
  * non-YouTube URL is a caller dispatch error and throws server-error BEFORE
  * any request (issue #35: the videoId is regex-validated before any request).
  *
+ * `preferredLanguages` (issue #59) is the reader's ordered BCP-47-ish tag
+ * list (the request schema already bounded count/length); it rides NOTHING
+ * on the wire — selection is purely client-side over the returned
+ * captionTracks, so the InnerTube request surface is byte-unchanged.
+ *
  * Returns the discriminated YouTubeTranscriptResult — ok:true with
  * transcript + metadata + chapters, or ok:false with one of the FOUR
  * structured refusal kinds. Transport failures throw IngestionError with the
  * existing honest catalog reasons (fetch-failed / response-too-large / …);
  * they are distinct from the four YouTube-state refusals. No retry, no cache.
  */
-export async function fetchYouTubeTranscript(videoId: string): Promise<YouTubeTranscriptResult> {
+export async function fetchYouTubeTranscript(
+  videoId: string,
+  preferredLanguages?: string[],
+): Promise<YouTubeTranscriptResult> {
   if (!YOUTUBE_VIDEO_ID_REGEX.test(videoId)) {
     // Caller contract violation — refuse before ANY request leaves.
     throw new IngestionError("server-error", "invalid-video-id");
@@ -397,8 +474,9 @@ export async function fetchYouTubeTranscript(videoId: string): Promise<YouTubeTr
   }
   const safeDurationSeconds = Math.floor(durationSeconds);
 
-  // 2. caption track selection — manual preferred over ASR (the spike §2
-  // discipline), first track otherwise; deterministic.
+  // 2. caption track selection — the reader's language tiers first (issue
+  // #59, decision #57), today's manual-over-ASR/first-track rule unchanged
+  // when no preference matches. Deterministic.
   const captionTracks = asObject(
     asObject(playerRecord?.captions)?.playerCaptionsTracklistRenderer,
   )?.captionTracks;
@@ -408,7 +486,7 @@ export async function fetchYouTubeTranscript(videoId: string): Promise<YouTubeTr
   const trackRecords = captionTracks
     .map(asObject)
     .filter((t): t is Record<string, unknown> => t !== undefined);
-  const track = trackRecords.find((t) => t.kind !== "asr") ?? trackRecords[0];
+  const track = selectCaptionTrack(trackRecords, preferredLanguages);
   if (!track || typeof track.baseUrl !== "string" || !track.baseUrl.startsWith("https://")) {
     throw new IngestionError("fetch-failed", "caption-track-unusable");
   }
@@ -471,10 +549,13 @@ export async function fetchYouTubeTranscript(videoId: string): Promise<YouTubeTr
  * watch / shorts / youtu.be forms). Extracts + validates the videoId BEFORE
  * any request; a non-YouTube URL is a caller dispatch error (server-error).
  */
-export async function fetchYouTubeTranscriptFromUrl(rawUrl: string): Promise<YouTubeTranscriptResult> {
+export async function fetchYouTubeTranscriptFromUrl(
+  rawUrl: string,
+  preferredLanguages?: string[],
+): Promise<YouTubeTranscriptResult> {
   const videoId = extractYouTubeVideoId(rawUrl);
   if (videoId === null) {
     throw new IngestionError("server-error", "not-a-youtube-url");
   }
-  return fetchYouTubeTranscript(videoId);
+  return fetchYouTubeTranscript(videoId, preferredLanguages);
 }

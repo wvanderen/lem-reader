@@ -12,6 +12,25 @@
 import { z } from "zod";
 import { ArticleSchema, BookSchema, httpUrl } from "../content/schema";
 
+/**
+ * MAX_PREFERRED_LANGUAGES — the count cap for the url variant's optional
+ * `preferredLanguages` list (issue #59; decisions #56/#57). Browsers bound
+ * `navigator.languages` to a handful of entries; 10 covers every real
+ * browser list with headroom. Lives HERE (not /server) because the client
+ * `browserPreferredLanguages` must slice to the SAME cap before posting —
+ * a long browser list must degrade to a shorter preference, never a refused
+ * import (the /src→/server import direction is forbidden).
+ */
+export const MAX_PREFERRED_LANGUAGES = 10;
+
+/**
+ * MAX_LANGUAGE_TAG_LENGTH — the per-tag length cap for `preferredLanguages`.
+ * RFC 5646 §2.1.1 bounds a legal BCP-47 tag at 35 characters, so anything
+ * longer cannot be a language tag (the DoS-shape guard of the limits
+ * conventions — the tags are matched, never persisted).
+ */
+export const MAX_LANGUAGE_TAG_LENGTH = 35;
+
 /** IngestionRequest — D7-03 input-source-agnostic envelope. Exactly one of
  * {url} | {html} | {markdown}. The url variant is httpUrl-refined (single
  * source of truth with Provenance.sourceUrl / IngestionMeta.sourceUrl); the
@@ -21,7 +40,24 @@ import { ArticleSchema, BookSchema, httpUrl } from "../content/schema";
  * filename ONLY for the title fallback chain (D8-17); it does NOT affect the
  * article id (D8-18 — id is content-hash, not filename-hash). */
 export const IngestionRequestSchema = z.union([
-  z.object({ url: httpUrl }),
+  z.object({
+    url: httpUrl,
+    // Issue #59 (decisions #56/#57) — the reader's ordered browser language
+    // list (`navigator.languages`), sent with the YouTube-URL import so the
+    // server's caption-track selection prefers the reader's language. No new
+    // setting, no per-import picker (decision #56). "BCP-47-ish" by design:
+    // only the count/length caps below are enforced — a tag the matcher can't
+    // match simply matches nothing. The FIELD-LEVEL `.catch(undefined)` is the
+    // honesty-preserving degrade: absent, empty, malformed, or oversized the
+    // request ALWAYS parses and selection falls back to today's rule — the
+    // import can never be broken by its own preference hint (no silent
+    // garbage: nothing invalid is ever applied or persisted).
+    preferredLanguages: z
+      .array(z.string().min(1).max(MAX_LANGUAGE_TAG_LENGTH))
+      .max(MAX_PREFERRED_LANGUAGES)
+      .optional()
+      .catch(undefined),
+  }),
   z.object({ html: z.string().min(1) }),
   // Phase 8 ING-03 + D8-17 — markdown upload with optional filename channel.
   z.object({
