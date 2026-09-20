@@ -641,8 +641,8 @@ describe("AddDialog — backdrop scrim dismissal (260908-o0w)", () => {
 // had, so YouTube transcript import is visible before the reader tries it.
 // The pinned strings are LOAD-BEARING product surface (the youtube-copy.test
 // byte-for-byte discipline, decision #58's pinned copy): every character is
-// asserted exactly, and the e2e-driven anchors (input#ingest-url,
-// form#add-url-form) must not move.
+// asserted exactly, and the e2e-driven anchor (input#ingest-url) must not
+// move; form#add-url-form anchors these component tests only.
 describe("AddDialog — discoverability hint (issue #60)", () => {
   it("shows the pinned hint line under the URL input, byte-for-byte", () => {
     renderDialog();
@@ -653,19 +653,22 @@ describe("AddDialog — discoverability hint (issue #60)", () => {
     expect(hint!.textContent).toBe("Article pages and YouTube videos");
   });
 
-  it("renders the hint as ordinary text in DOM order — label, input, hint — with no ARIA tricks", () => {
+  it("renders the hint as ordinary text following the URL input in DOM order — no ARIA tricks", () => {
     renderDialog();
-    const form = document.getElementById("add-url-form")!;
-    // DOM order: the label, then the input, then the hint — screen readers
-    // announce it naturally after the field it describes (no ARIA tricks:
-    // no hiding, no role overrides, not a live region; zoom-safe plain text).
-    const children = Array.from(form.children);
-    expect(children.map((el) => el.tagName)).toEqual(["LABEL", "INPUT", "P"]);
-    const hint = children[2] as HTMLElement;
+    const input = document.getElementById("ingest-url")!;
+    const hint = document.querySelector("form#add-url-form p.meta")!;
+    // The hint follows the field it describes in document order, so screen
+    // readers announce it naturally — robust to any future insertion
+    // between label, input, and hint (no exact-child-list pinning).
+    expect(
+      input.compareDocumentPosition(hint) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    // Ordinary text: a plain paragraph whose ONLY attribute is its class —
+    // nothing to hide it (aria-hidden), repurpose its announcement (role),
+    // or make it a live region (aria-live); zoom-safe plain text.
+    expect(hint.tagName).toBe("P");
     expect(hint.className).toBe("meta");
-    expect(hint.hasAttribute("aria-hidden")).toBe(false);
-    expect(hint.hasAttribute("role")).toBe(false);
-    expect(hint.hasAttribute("aria-live")).toBe(false);
+    expect(Array.from(hint.attributes).map((a) => a.name)).toEqual(["class"]);
   });
 
   it("keeps every other Add-dialog copy byte-unchanged (placeholder + radio labels + file hint)", () => {
