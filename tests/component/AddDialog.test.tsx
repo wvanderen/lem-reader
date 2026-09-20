@@ -635,3 +635,55 @@ describe("AddDialog — backdrop scrim dismissal (260908-o0w)", () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 });
+
+// ── Discoverability hint (issue #60, decision #58) ──────────────────────────
+// The Web-address source gains the quiet hint line the file source already
+// had, so YouTube transcript import is visible before the reader tries it.
+// The pinned strings are LOAD-BEARING product surface (the youtube-copy.test
+// byte-for-byte discipline, decision #58's pinned copy): every character is
+// asserted exactly, and the e2e-driven anchor (input#ingest-url) must not
+// move; form#add-url-form anchors these component tests only.
+describe("AddDialog — discoverability hint (issue #60)", () => {
+  it("shows the pinned hint line under the URL input, byte-for-byte", () => {
+    renderDialog();
+    const form = document.getElementById("add-url-form");
+    expect(form).not.toBeNull();
+    const hint = form!.querySelector("p.meta");
+    expect(hint).not.toBeNull();
+    expect(hint!.textContent).toBe("Article pages and YouTube videos");
+  });
+
+  it("renders the hint as ordinary text following the URL input in DOM order — no ARIA tricks", () => {
+    renderDialog();
+    const input = document.getElementById("ingest-url")!;
+    const hint = document.querySelector("form#add-url-form p.meta")!;
+    // The hint follows the field it describes in document order, so screen
+    // readers announce it naturally — robust to any future insertion
+    // between label, input, and hint (no exact-child-list pinning).
+    expect(
+      input.compareDocumentPosition(hint) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    // Ordinary text: a plain paragraph whose ONLY attribute is its class —
+    // nothing to hide it (aria-hidden), repurpose its announcement (role),
+    // or make it a live region (aria-live); zoom-safe plain text.
+    expect(hint.tagName).toBe("P");
+    expect(hint.className).toBe("meta");
+    expect(Array.from(hint.attributes).map((a) => a.name)).toEqual(["class"]);
+  });
+
+  it("keeps every other Add-dialog copy byte-unchanged (placeholder + radio labels + file hint)", () => {
+    renderDialog();
+    // The URL placeholder is byte-unchanged (decision #58: no placeholder
+    // change — the hint carries the discoverability weight).
+    const urlInput = document.getElementById("ingest-url") as HTMLInputElement;
+    expect(urlInput.placeholder).toBe("https://example.com/article");
+    // The three radio labels are byte-unchanged (decision #58: no
+    // radio-label change).
+    expect(screen.getByRole("radio", { name: "Web address" })).toBeTruthy();
+    expect(screen.getByRole("radio", { name: "Paste text" })).toBeTruthy();
+    expect(screen.getByRole("radio", { name: "Upload file" })).toBeTruthy();
+    // The file source's hint (the pattern this mirrors) is untouched.
+    const fileHint = document.querySelector("form#add-file-form p.meta");
+    expect(fileHint?.textContent).toBe("Accepts .md, .html, PDF, and EPUB books");
+  });
+});
