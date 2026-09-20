@@ -31,6 +31,17 @@ export const MAX_PREFERRED_LANGUAGES = 10;
  */
 export const MAX_LANGUAGE_TAG_LENGTH = 35;
 
+/**
+ * MAX_PASTED_TRANSCRIPT_CHARS — the text cap for the transcript-paste
+ * fallback variant (the youtube-bot-check companion). A 3-hour video's
+ * transcript panel copy is ~40k characters; 500k leaves two orders of
+ * magnitude of headroom while bounding DoS amplification (the
+ * PDF_MAX_BYTES philosophy). Lives HERE so the client dialog can refuse
+ * oversize pastes BEFORE any network cost (the T-16-05 earliest-enforcement
+ * pattern) and the server re-checks after Zod parse (defense-in-depth).
+ */
+export const MAX_PASTED_TRANSCRIPT_CHARS = 500_000;
+
 /** IngestionRequest — D7-03 input-source-agnostic envelope. Exactly one of
  * {url} | {html} | {markdown}. The url variant is httpUrl-refined (single
  * source of truth with Provenance.sourceUrl / IngestionMeta.sourceUrl); the
@@ -81,6 +92,18 @@ export const IngestionRequestSchema = z.union([
   z.object({
     epub: z.string().base64().min(1),
     filename: z.string().optional(),
+  }),
+  // The youtube-bot-check fallback — the reader pastes the transcript text
+  // from YouTube's own transcript panel when the server-side fetch is
+  // refused. NESTED (not a flat `{transcript, url}`) so the exactly-one-of
+  // variant count in ingest() stays a simple key count: `url` here is the
+  // OPTIONAL source-URL provenance channel (it drives the yt-<hash> article
+  // id and the "open original" link), never a second variant key.
+  z.object({
+    transcript: z.object({
+      text: z.string().min(1).max(MAX_PASTED_TRANSCRIPT_CHARS),
+      url: httpUrl.optional(),
+    }),
   }),
 ]);
 export type IngestionRequest = z.infer<typeof IngestionRequestSchema>;

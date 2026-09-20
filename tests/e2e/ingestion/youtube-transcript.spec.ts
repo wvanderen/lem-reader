@@ -16,6 +16,8 @@
 //       specific, dialog open, URL retained, retry enabled, no row added
 //   N5  bot-check — announces immediately, no automatic retry (request
 //       count stays at one)
+//   N5b bot-check fallback — the paste-transcript offer appears, the pasted
+//       text rides the {transcript} envelope, and the article opens
 //   N6  ASR-only video — ingest succeeds with the low-confidence disclosure
 //   plus the flow-N1 tail: position restore + finished state behave exactly
 //   as for any text article (flows A–L inherit; no special-casing).
@@ -464,7 +466,7 @@ test.describe("YouTube ingest end-to-end (issue #41, flow N)", () => {
   test("N5: bot-check announces immediately with no automatic retry", async ({
     page,
   }) => {
-    const BOT_URL = "https://www.youtube.com/watch?v=botCheckVid1";
+    const BOT_URL = "https://www.youtube.com/watch?v=botCheckVi1";
     const ingest = mockIngest(page, {
       [BOT_URL]: { ok: false, reason: "youtube-bot-check" },
     });
@@ -487,6 +489,73 @@ test.describe("YouTube ingest end-to-end (issue #41, flow N)", () => {
     expect(ingest.requests()).toBe(1);
 
     expect(await libraryRowCount(page)).toBe(rowsBefore);
+  });
+
+  test("N5b: bot-check offers the paste-transcript fallback and the pasted article opens", async ({
+    page,
+  }) => {
+    const BOT_URL = "https://www.youtube.com/watch?v=botCheckVi1";
+    const PASTED = transcriptArticle({
+      id: "yt-e2e-pasted",
+      videoId: "botCheckVi1",
+      title: "Pasted Lecture",
+      channel: "Calm Signal",
+      durationSeconds: 55,
+      intro: ["A transcript the reader pasted by hand from YouTube's transcript panel."],
+      chapters: [],
+    });
+    // The first POST ({url}) gets the bot-check refusal; the second (the
+    // {transcript} fallback envelope) gets the pasted-article success.
+    let transcriptBody: unknown;
+    await page.route("**/api/ingest", async (route) => {
+      const body = route.request().postDataJSON() as {
+        url?: string;
+        transcript?: { text?: string; url?: string };
+      };
+      if (body.url === BOT_URL) {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ ok: false, reason: "youtube-bot-check" }),
+        });
+        return;
+      }
+      if (body.transcript !== undefined) {
+        transcriptBody = body.transcript;
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify(okEnvelope(PASTED, { state: "low" })),
+        });
+        return;
+      }
+      await route.fulfill({ status: 500, body: "unexpected body" });
+    });
+
+    await page.goto(`${BASE}/#/`);
+    await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible();
+    await addByUrl(page, BOT_URL);
+
+    const dialog = page.locator("dialog.add-dialog");
+    await expect(dialog.locator(".status")).toContainText(
+      "YouTube is asking for extra verification, so this video can't be added right now.",
+    );
+    // The calm fallback appears with its guidance; paste and add.
+    await expect(dialog.getByText(/open the video on youtube/i)).toBeVisible();
+    await dialog
+      .getByRole("textbox", { name: /paste the transcript/i })
+      .fill("0:00\nA cue the reader pasted by hand");
+    await dialog.getByRole("button", { name: /add transcript/i }).click();
+
+    // The pasted text rode the {transcript} envelope with the source URL.
+    await page.waitForURL(/#\/article\/yt-e2e-pasted$/, { timeout: 15_000 });
+    expect(transcriptBody).toEqual({
+      text: "0:00\nA cue the reader pasted by hand",
+      url: BOT_URL,
+    });
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Pasted Lecture", {
+      timeout: 10_000,
+    });
   });
 
   test("N6: ASR-only video ingests successfully and carries the low-confidence disclosure", async ({
