@@ -411,6 +411,14 @@ export function AddDialog({ open, onCancel, onBookAdded }: AddDialogProps) {
                 disabled={submitting}
                 onChange={(e) => setUrlValue(e.target.value)}
               />
+              {/* Issue #60 — the discoverability hint (decision #58): the
+                  same quiet .meta voice the file source uses, ordinary text
+                  in DOM order (no ARIA tricks — screen readers announce it
+                  naturally), so YouTube transcript import is visible before
+                  the reader tries it. Pinned byte-for-byte in the component
+                  suite alongside the placeholder + radio-label no-drift
+                  guards. */}
+              <p className="meta">Article pages and YouTube videos</p>
             </form>
           )}
 

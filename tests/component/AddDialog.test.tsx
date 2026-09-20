@@ -635,3 +635,52 @@ describe("AddDialog — backdrop scrim dismissal (260908-o0w)", () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 });
+
+// ── Discoverability hint (issue #60, decision #58) ──────────────────────────
+// The Web-address source gains the quiet hint line the file source already
+// had, so YouTube transcript import is visible before the reader tries it.
+// The pinned strings are LOAD-BEARING product surface (the youtube-copy.test
+// byte-for-byte discipline, decision #58's pinned copy): every character is
+// asserted exactly, and the e2e-driven anchors (input#ingest-url,
+// form#add-url-form) must not move.
+describe("AddDialog — discoverability hint (issue #60)", () => {
+  it("shows the pinned hint line under the URL input, byte-for-byte", () => {
+    renderDialog();
+    const form = document.getElementById("add-url-form");
+    expect(form).not.toBeNull();
+    const hint = form!.querySelector("p.meta");
+    expect(hint).not.toBeNull();
+    expect(hint!.textContent).toBe("Article pages and YouTube videos");
+  });
+
+  it("renders the hint as ordinary text in DOM order — label, input, hint — with no ARIA tricks", () => {
+    renderDialog();
+    const form = document.getElementById("add-url-form")!;
+    // DOM order: the label, then the input, then the hint — screen readers
+    // announce it naturally after the field it describes (no ARIA tricks:
+    // no hiding, no role overrides, not a live region; zoom-safe plain text).
+    const children = Array.from(form.children);
+    expect(children.map((el) => el.tagName)).toEqual(["LABEL", "INPUT", "P"]);
+    const hint = children[2] as HTMLElement;
+    expect(hint.className).toBe("meta");
+    expect(hint.hasAttribute("aria-hidden")).toBe(false);
+    expect(hint.hasAttribute("role")).toBe(false);
+    expect(hint.hasAttribute("aria-live")).toBe(false);
+  });
+
+  it("keeps every other Add-dialog copy byte-unchanged (placeholder + radio labels + file hint)", () => {
+    renderDialog();
+    // The URL placeholder is byte-unchanged (decision #58: no placeholder
+    // change — the hint carries the discoverability weight).
+    const urlInput = document.getElementById("ingest-url") as HTMLInputElement;
+    expect(urlInput.placeholder).toBe("https://example.com/article");
+    // The three radio labels are byte-unchanged (decision #58: no
+    // radio-label change).
+    expect(screen.getByRole("radio", { name: "Web address" })).toBeTruthy();
+    expect(screen.getByRole("radio", { name: "Paste text" })).toBeTruthy();
+    expect(screen.getByRole("radio", { name: "Upload file" })).toBeTruthy();
+    // The file source's hint (the pattern this mirrors) is untouched.
+    const fileHint = document.querySelector("form#add-file-form p.meta");
+    expect(fileHint?.textContent).toBe("Accepts .md, .html, PDF, and EPUB books");
+  });
+});
