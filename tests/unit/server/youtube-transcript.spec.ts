@@ -38,6 +38,7 @@ import {
   fetchYouTubeTranscriptFromUrl,
   parseCaptionXml,
   parseChaptersFromNext,
+  selectCaptionTrack,
 } from "../../../server/youtubeTranscript";
 
 const resolve4Mock = dns.promises.resolve4 as unknown as ReturnType<typeof vi.fn>;
@@ -252,6 +253,148 @@ describe("happy path — transcript + metadata + chapters (fixture-driven)", () 
   it("never retries — exactly one player + one next + one caption call on success", async () => {
     await fetchYouTubeTranscript("dQw4w9WgXcQ");
     expect(fetchCalls).toHaveLength(3);
+  });
+});
+
+// ── Issue #59 — caption track selection, language tiers (decision #57) ───────
+//
+// The captured player fixture carries SIX tracks in InnerTube order:
+//   en (manual), en (asr), de-DE (manual), ja (manual), pt-BR (manual),
+//   es-419 (manual)
+// — every tier case below runs against that list (or a variant derived from
+// it in the documented shape), so the policy is pinned against REAL captured
+// shapes, not hand-rolled stand-ins.
+
+describe("selectCaptionTrack — language tiers over the captured fixture tracks", () => {
+  const fixtureTracks = (
+    JSON.parse(PLAYER_OK) as {
+      captions: { playerCaptionsTracklistRenderer: { captionTracks: Record<string, unknown>[] } };
+    }
+  ).captions.playerCaptionsTracklistRenderer.captionTracks;
+
+  /** What was picked, reduced to the two fields the policy decides on. */
+  const picked = (track: Record<string, unknown> | undefined) =>
+    track === undefined
+      ? undefined
+      : { languageCode: track.languageCode, kind: track.kind };
+
+  it("no preference → today's rule unchanged: first manual track (fixture order)", () => {
+    expect(picked(selectCaptionTrack(fixtureTracks))).toEqual({ languageCode: "en", kind: undefined });
+    expect(picked(selectCaptionTrack(fixtureTracks, undefined))).toEqual({
+      languageCode: "en",
+      kind: undefined,
+    });
+    expect(picked(selectCaptionTrack(fixtureTracks, []))).toEqual({ languageCode: "en", kind: undefined });
+  });
+
+  it("exact match beats the ASR twin of the same language (manual beats ASR within a tier)", () => {
+    expect(picked(selectCaptionTrack(fixtureTracks, ["en"]))).toEqual({ languageCode: "en", kind: undefined });
+  });
+
+  it("a preference past the first track wins over listed order (the 'I don't speak arabic' fix)", () => {
+    expect(picked(selectCaptionTrack(fixtureTracks, ["ja"]))).toEqual({ languageCode: "ja", kind: undefined });
+  });
+
+  it("base-language tier: 'pt' matches the pt-BR track", () => {
+    expect(picked(selectCaptionTrack(fixtureTracks, ["pt"]))).toEqual({
+      languageCode: "pt-BR",
+      kind: undefined,
+    });
+  });
+
+  it("exact matching is case-insensitive on the reader tag", () => {
+    expect(picked(selectCaptionTrack(fixtureTracks, ["PT-br"]))).toEqual({
+      languageCode: "pt-BR",
+      kind: undefined,
+    });
+  });
+
+  it("base tier keeps manual over ASR: 'en-US' → manual en, not the en asr twin", () => {
+    expect(picked(selectCaptionTrack(fixtureTracks, ["en-US"]))).toEqual({
+      languageCode: "en",
+      kind: undefined,
+    });
+  });
+
+  it("an unmatched language falls back to today's rule (manual over ASR, first otherwise)", () => {
+    expect(picked(selectCaptionTrack(fixtureTracks, ["fr"]))).toEqual({ languageCode: "en", kind: undefined });
+    expect(picked(selectCaptionTrack(fixtureTracks, ["not-a-language"]))).toEqual({
+      languageCode: "en",
+      kind: undefined,
+    });
+    expect(picked(selectCaptionTrack(fixtureTracks, ["", "ja"]))).toEqual({
+      languageCode: "ja",
+      kind: undefined,
+    });
+  });
+
+  it("reader language order is honored: the second preference wins when the first matches nothing", () => {
+    expect(picked(selectCaptionTrack(fixtureTracks, ["fr", "ja"]))).toEqual({
+      languageCode: "ja",
+      kind: undefined,
+    });
+  });
+
+  it("tier 2 fires only when tier 1 is empty: base candidates lose to ANY exact candidate", () => {
+    // Derived variant in the documented shape: en (asr) listed first, an
+    // en-GB (asr) twin behind it. Pref "en-GB": the exact tier contains ONLY
+    // en-GB, so en-GB wins even though the base-matching en track is listed
+    // first — exact-before-base, deterministic.
+    const enAsr = { ...fixtureTracks[1]! };
+    const enGbAsr = { ...fixtureTracks[1]!, languageCode: "en-GB" };
+    expect(picked(selectCaptionTrack([enAsr, enGbAsr], ["en-gb"]))).toEqual({
+      languageCode: "en-GB",
+      kind: "asr",
+    });
+  });
+
+  it("decision #57 core inversion: a preferred-language ASR track beats manual captions in languages the reader doesn't speak", () => {
+    // Derived variant: de-DE manual first, en available ONLY as asr, ja
+    // manual behind. Today's rule would serve de-DE; the reader asked for en.
+    const deManual = { ...fixtureTracks[2]! };
+    const enAsr = { ...fixtureTracks[1]! };
+    const jaManual = { ...fixtureTracks[3]! };
+    const tracks = [deManual, enAsr, jaManual];
+    expect(picked(selectCaptionTrack(tracks, ["en"]))).toEqual({ languageCode: "en", kind: "asr" });
+    expect(picked(selectCaptionTrack(tracks, ["de"]))).toEqual({
+      languageCode: "de-DE",
+      kind: undefined,
+    });
+    expect(picked(selectCaptionTrack(tracks, ["de-de"]))).toEqual({
+      languageCode: "de-DE",
+      kind: undefined,
+    });
+  });
+
+  it("track-side tags are case-insensitive too", () => {
+    const oddCase = { ...fixtureTracks[2]!, languageCode: "DE-de" };
+    expect(picked(selectCaptionTrack([oddCase], ["de-de"]))).toEqual({
+      languageCode: "DE-de",
+      kind: undefined,
+    });
+  });
+});
+
+describe("fetchYouTubeTranscript with preferredLanguages (end-to-end selection)", () => {
+  beforeEach(routeHappyPath);
+
+  it("selects the reader-language track and adds NO extra request", async () => {
+    const result = await fetchYouTubeTranscript("dQw4w9WgXcQ", ["ja"]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.languageCode).toBe("ja");
+    expect(result.isAutoGenerated).toBe(false);
+    // Selection is purely over the returned captionTracks — the InnerTube
+    // request surface is byte-unchanged (player + next + caption, once each).
+    expect(fetchCalls).toHaveLength(3);
+  });
+
+  it("an unmatched preference behaves exactly like the no-preference call", async () => {
+    const result = await fetchYouTubeTranscript("dQw4w9WgXcQ", ["fr"]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.languageCode).toBe("en");
+    expect(result.isAutoGenerated).toBe(false);
   });
 });
 

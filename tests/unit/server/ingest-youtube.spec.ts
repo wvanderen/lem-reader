@@ -266,6 +266,33 @@ describe("happy path — manual caption track (fixture-driven)", () => {
     expect(response.article.ingestionMeta?.transcript?.captionLanguage).toBe("pt-BR");
   });
 
+  it("threads the request's preferredLanguages into caption selection (issue #59, decision #57)", async () => {
+    // The FULL fixture list serves here: the first track is the manual en
+    // track, so a "pt" preference only wins if the orchestrator actually
+    // forwarded the list to the transcript client (base-language tier beats
+    // listed order).
+    const response = await ingest({
+      url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      preferredLanguages: ["pt"],
+    });
+    expect(response.ok).toBe(true);
+    if (!response.ok || !("article" in response)) return;
+    expect(response.article.lang).toBe("pt");
+    expect(response.article.ingestionMeta?.transcript?.captionLanguage).toBe("pt-BR");
+    expect(response.article.ingestionMeta?.transcript?.captionSource).toBe("manual");
+  });
+
+  it("an unmatched preferredLanguages selects identically to the no-preference request (issue #59)", async () => {
+    const response = await ingest({
+      url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      preferredLanguages: ["fr"],
+    });
+    expect(response.ok).toBe(true);
+    if (!response.ok || !("article" in response)) return;
+    expect(response.article.lang).toBe("en");
+    expect(response.article.ingestionMeta?.transcript?.captionLanguage).toBe("en");
+  });
+
   it("round-trips TextQuoteSelectors over the transcript text (the SC#1 gate passed)", async () => {
     const response = await ingest({ url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" });
     expect(response.ok).toBe(true);

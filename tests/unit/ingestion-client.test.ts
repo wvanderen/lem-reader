@@ -18,7 +18,7 @@ import userEvent from "@testing-library/user-event";
 import { ArticleSchema, BookSchema } from "../../src/content/schema";
 import type { Book } from "../../src/content/schema";
 import type { CanonicalArticle } from "../../src/content/types";
-import { EPUB_MAX_BYTES } from "../../src/ingestion/types";
+import { EPUB_MAX_BYTES, MAX_PREFERRED_LANGUAGES } from "../../src/ingestion/types";
 import fakeIndexedDB, { IDBKeyRange } from "fake-indexeddb";
 import { Dexie } from "dexie";
 
@@ -180,6 +180,65 @@ describe("IngestionClient (07-06 Task 1)", () => {
     });
     expect(result.article.id).toBe(article.id);
     expect(result.confidence.state).toBe("confident");
+  });
+
+  // Issue #59 (decisions #56/#57) — the YouTube-URL branch posts the reader's
+  // ordered browser languages alongside the url; the ordinary url body stays
+  // byte-identical (pinned by the test above).
+  it("ingestUrl posts {url, preferredLanguages} when a preference is supplied", async () => {
+    const article = sampleArticle();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ ok: true, article, confidence: { state: "confident" } }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    const { ingestUrl } = await loadClient();
+    await ingestUrl("https://youtu.be/dQw4w9WgXcQ", ["en-US", "en", "pt-BR"]);
+
+    const call = vi.mocked(globalThis.fetch).mock.calls[0];
+    expect(JSON.parse((call?.[1] as RequestInit).body as string)).toEqual({
+      url: "https://youtu.be/dQw4w9WgXcQ",
+      preferredLanguages: ["en-US", "en", "pt-BR"],
+    });
+  });
+
+  it("browserPreferredLanguages reads navigator.languages in order", async () => {
+    const { browserPreferredLanguages } = await loadClient();
+    vi.stubGlobal("navigator", { languages: ["en-US", "en", "de"] });
+    try {
+      expect(browserPreferredLanguages()).toEqual(["en-US", "en", "de"]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("browserPreferredLanguages slices to MAX_PREFERRED_LANGUAGES and drops empty tags", async () => {
+    const { browserPreferredLanguages } = await loadClient();
+    const long = ["", "en", ...Array.from({ length: 12 }, (_, i) => `x${i}`)];
+    vi.stubGlobal("navigator", { languages: long });
+    try {
+      const tags = browserPreferredLanguages();
+      expect(tags).toHaveLength(MAX_PREFERRED_LANGUAGES);
+      expect(tags?.[0]).toBe("en");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("browserPreferredLanguages returns undefined when nothing usable remains (absent field → today's selection)", async () => {
+    const { browserPreferredLanguages } = await loadClient();
+    vi.stubGlobal("navigator", { languages: [] });
+    const first = browserPreferredLanguages();
+    vi.stubGlobal("navigator", { languages: undefined });
+    const second = browserPreferredLanguages();
+    try {
+      expect(first).toBeUndefined();
+      expect(second).toBeUndefined();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("ingestHtml posts {html} and returns the article on success", async () => {

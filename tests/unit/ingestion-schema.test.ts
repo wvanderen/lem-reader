@@ -9,6 +9,8 @@ import {
   IngestionFailureReasonEnum,
   IngestionRequestSchema,
   IngestionResponseSchema,
+  MAX_LANGUAGE_TAG_LENGTH,
+  MAX_PREFERRED_LANGUAGES,
 } from "../../src/ingestion/types";
 // Phase 20 (Plan 20-01 Task 1) — namespace import so the RED-phase run fails
 // on ASSERTIONS (undefined !== pinned value) rather than a module-resolution
@@ -417,6 +419,53 @@ describe("IngestionRequestSchema (D7-03 — {url} | {html} | {markdown} | {pdf} 
     expect(IngestionRequestSchema.parse({ url: "https://example.com" })).toEqual({
       url: "https://example.com",
     });
+  });
+
+  // Issue #59 (decisions #56/#57) — the url variant's optional ordered
+  // language list for YouTube caption selection. Caps per the limits
+  // conventions (MAX_PREFERRED_LANGUAGES × MAX_LANGUAGE_TAG_LENGTH); the
+  // field-level catch DEGRADES any invalid state to absent instead of
+  // refusing, so a preference hint can never break an import.
+  it("parses a url request with ordered preferredLanguages (order preserved)", () => {
+    const preferredLanguages = ["en-US", "en", "pt-BR"];
+    expect(
+      IngestionRequestSchema.parse({ url: "https://example.com", preferredLanguages }),
+    ).toEqual({ url: "https://example.com", preferredLanguages });
+  });
+
+  it("parses an EMPTY preferredLanguages array (behavior identical to absent)", () => {
+    expect(
+      IngestionRequestSchema.parse({ url: "https://example.com", preferredLanguages: [] }),
+    ).toEqual({ url: "https://example.com", preferredLanguages: [] });
+  });
+
+  it("parses malformed tag strings within the caps (BCP-47-ish — the caps are the only grammar)", () => {
+    const preferredLanguages = ["not a tag", "123", "!!"];
+    expect(
+      IngestionRequestSchema.parse({ url: "https://example.com", preferredLanguages }),
+    ).toEqual({ url: "https://example.com", preferredLanguages });
+  });
+
+  it("DEGRADES an oversized list to absent (over MAX_PREFERRED_LANGUAGES — the request still parses)", () => {
+    const oversized = Array.from({ length: MAX_PREFERRED_LANGUAGES + 1 }, () => "en");
+    expect(
+      IngestionRequestSchema.parse({ url: "https://example.com", preferredLanguages: oversized }),
+    ).toEqual({ url: "https://example.com" });
+  });
+
+  it("DEGRADES an over-long tag to absent (over MAX_LANGUAGE_TAG_LENGTH)", () => {
+    const tooLong = "x".repeat(MAX_LANGUAGE_TAG_LENGTH + 1);
+    expect(
+      IngestionRequestSchema.parse({ url: "https://example.com", preferredLanguages: [tooLong] }),
+    ).toEqual({ url: "https://example.com" });
+  });
+
+  it("DEGRADES a wrong-typed preferredLanguages to absent (never refuses the import)", () => {
+    for (const bad of ["en", 42, { "0": "en" }, [42]]) {
+      expect(
+        IngestionRequestSchema.parse({ url: "https://example.com", preferredLanguages: bad }),
+      ).toEqual({ url: "https://example.com" });
+    }
   });
 
   it("parses an html request", () => {
