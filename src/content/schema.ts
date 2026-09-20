@@ -283,13 +283,16 @@ export type TranscriptSegmentAnchor = z.infer<typeof TranscriptSegmentAnchorSche
  * block fields: the block unions stay untouched (D20-06 — no new block
  * kinds). `captionSource` distinguishes human tracks from auto-generated ASR
  * (which forces `extractionConfidence: "low"` — never a silent upgrade to
- * trusted); `captionLanguage` is the chosen track's full BCP-47 code (the
- * article's `lang` carries its base language). Nothing here is Dexie-indexed
- * — the bookId/chapterIndex additive precedent (no schema bump). */
+ * trusted); "pasted" marks a transcript the reader pasted manually (the
+ * youtube-bot-check fallback) — it ALSO forces "low" (unverified provenance).
+ * `captionLanguage` is the chosen track's full BCP-47 code (the article's
+ * `lang` carries its base language); "und" is the honest value when the
+ * paste's language is unknowable. Nothing here is Dexie-indexed — the
+ * bookId/chapterIndex additive precedent (no schema bump). */
 export const TranscriptMetaSchema = z.object({
   videoId: z.string().regex(YOUTUBE_VIDEO_ID_REGEX),
   durationSeconds: z.number().int().min(0),
-  captionSource: z.enum(["manual", "asr"]),
+  captionSource: z.enum(["manual", "asr", "pasted"]),
   captionLanguage: z.string().regex(BCP47_LANGUAGE_TAG_REGEX), // decision #26: BCP-47, validated at the boundary
   segments: z.array(TranscriptSegmentAnchorSchema),
 });

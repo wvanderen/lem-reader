@@ -26,5 +26,8 @@ export function extractionNote(article: CanonicalArticle): string | undefined {
   if (meta.transcript?.captionSource === "asr") {
     return "Transcribed from auto-generated captions, so the wording may not be exact.";
   }
+  if (meta.transcript?.captionSource === "pasted") {
+    return "Transcript added by pasting the text manually, so it may differ from the video's captions.";
+  }
   return "This article may be incomplete or inaccurate — it could not be read reliably.";
 }

@@ -53,7 +53,7 @@
 // what this dialog renders its copy from. This file keeps ONLY form
 // chrome, size validation, and the calm refusal copy mapping.
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { EPUB_MAX_BYTES, PDF_MAX_BYTES } from "./types";
+import { EPUB_MAX_BYTES, MAX_PASTED_TRANSCRIPT_CHARS, PDF_MAX_BYTES } from "./types";
 // Plan 16-02 Task 1 — the refusal-copy map lives in ./ingestCopy; this
 // dialog consumes the same export the retired control did (no fork — the
 // byte-pinned DOC-06 catalog is load-bearing surface).
@@ -62,6 +62,10 @@ import { mapReasonToCopy } from "./ingestCopy";
 // submission arm.
 import { addToLibrary } from "./addToLibrary";
 import type { AddToLibraryOutcome } from "./addToLibrary";
+// The paste-transcript fallback dispatches on the same extractor the
+// server runs (request-free) — the fallback offer appears ONLY for a URL
+// that is actually a YouTube video.
+import { extractYouTubeVideoId } from "./youtube";
 
 type IngestStatus = "idle" | "submitting" | "success" | "error";
 
@@ -106,6 +110,13 @@ export function AddDialog({ open, onCancel, onBookAdded }: AddDialogProps) {
   // (refs are not reactive — the 08-04 discipline).
   const [hasFile, setHasFile] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // The paste-transcript fallback (the youtube-bot-check companion). When
+  // the URL arm is refused with the bot-check reason for an actual YouTube
+  // URL, the refused URL lands here and the dialog offers the manual
+  // path: paste the transcript from YouTube's own transcript panel. The
+  // URL is provenance only — it is never re-fetched.
+  const [botCheckUrl, setBotCheckUrl] = useState<string | null>(null);
+  const [transcriptValue, setTranscriptValue] = useState("");
 
   const submitting = status === "submitting";
   // Live mirror rewritten EVERY render (Pitfall 3 — the LibraryView L236
@@ -148,6 +159,8 @@ export function AddDialog({ open, onCancel, onBookAdded }: AddDialogProps) {
       setHtmlValue("");
       setStatus("idle");
       setMessage(null);
+      setBotCheckUrl(null);
+      setTranscriptValue("");
       resetFilePick();
       // Cross-engine focus management (Pitfall 1 + WebKit quirk — the
       // 02-01 lesson): Chromium auto-focuses the first focusable control
@@ -275,11 +288,27 @@ export function AddDialog({ open, onCancel, onBookAdded }: AddDialogProps) {
   async function runUrlPaste(which: "url" | "paste") {
     setStatus("submitting");
     setMessage("Fetching article…");
+    // A new URL submission always starts fresh — a stale fallback offer
+    // from a previously refused video must not survive.
+    setBotCheckUrl(null);
     const input =
       which === "url"
         ? ({ kind: "url", url: urlValue } as const)
         : ({ kind: "paste", html: htmlValue } as const);
-    renderOutcome(await addToLibrary(input));
+    const outcome = await addToLibrary(input);
+    // The fallback offer: the bot-check refusal for an actual YouTube URL
+    // (the server returns youtube-bot-check ONLY from the YouTube branch;
+    // the extractor guard keeps the offer honest when the reason ever
+    // surfaces for a non-video URL).
+    if (
+      outcome.outcome === "refused" &&
+      outcome.reason === "youtube-bot-check" &&
+      which === "url" &&
+      extractYouTubeVideoId(urlValue) !== null
+    ) {
+      setBotCheckUrl(urlValue);
+    }
+    renderOutcome(outcome);
   }
 
   function handleUrlSubmit(e: FormEvent<HTMLFormElement>) {
@@ -292,6 +321,30 @@ export function AddDialog({ open, onCancel, onBookAdded }: AddDialogProps) {
     e.preventDefault();
     if (status === "submitting" || htmlValue.length === 0) return;
     void runUrlPaste("paste");
+  }
+
+  /**
+   * handleTranscriptSubmit — the paste-transcript fallback arm (the
+   * youtube-bot-check companion). ONE service call with the refused video's
+   * URL as provenance; the outcome renders through renderOutcome (success
+   * closes + navigates like every article arm). The oversize paste refuses
+   * BEFORE any network cost (the T-16-05 earliest-enforcement pattern, the
+   * file-picker cap discipline). The pasted text is NEVER cleared by an
+   * error (D16-11 — retry keeps what the reader typed).
+   */
+  async function handleTranscriptSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (status === "submitting" || transcriptValue.trim().length === 0 || botCheckUrl === null) {
+      return;
+    }
+    if (transcriptValue.length > MAX_PASTED_TRANSCRIPT_CHARS) {
+      setStatus("error");
+      setMessage(mapReasonToCopy("response-too-large"));
+      return;
+    }
+    setStatus("submitting");
+    setMessage("Adding transcript…");
+    renderOutcome(await addToLibrary({ kind: "transcript-paste", text: transcriptValue, url: botCheckUrl }));
   }
 
   /**
@@ -466,6 +519,49 @@ export function AddDialog({ open, onCancel, onBookAdded }: AddDialogProps) {
             )}
           </form>
         </div>
+        {/* The paste-transcript fallback (the youtube-bot-check companion).
+            Appears ONLY after the URL arm was refused with the bot-check
+            reason for an actual YouTube URL. Calm guidance, one textarea,
+            one button — the same DOC-06 voice; all copy renders as React
+            text (T-16-06). The submitting/error status reuses the shared
+            live region below. */}
+        {botCheckUrl !== null && (
+          <form id="add-transcript-form" onSubmit={handleTranscriptSubmit} className="add-transcript-form">
+            <p className="add-transcript-guidance">
+              You can still add it by hand: open the video on YouTube, open its transcript
+              (below the player choose "…more" then "Show transcript"), select all the
+              transcript text, copy it, and paste it here.
+            </p>
+            <label htmlFor="ingest-transcript">Paste the transcript</label>
+            <textarea
+              id="ingest-transcript"
+              name="transcript"
+              rows={6}
+              placeholder="0:00&#10;First caption line…"
+              value={transcriptValue}
+              disabled={submitting}
+              onChange={(e) => setTranscriptValue(e.target.value)}
+            />
+            <div className="add-transcript-actions">
+              <button
+                type="button"
+                className="add-dialog-cancel"
+                disabled={submitting}
+                onClick={() => setBotCheckUrl(null)}
+              >
+                No thanks
+              </button>
+              <button
+                type="submit"
+                className="add-dialog-submit"
+                disabled={submitting || transcriptValue.trim().length === 0}
+              >
+                Add transcript
+              </button>
+            </div>
+          </form>
+        )}
+
         <div className="add-dialog-actions">
           {/* D16-10 — the Cancel control is inert while a submission is in
               flight (defense in depth alongside the cancel-event gate). */}

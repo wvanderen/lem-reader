@@ -316,11 +316,33 @@ export async function ingestEpub(
 }
 
 /**
+ * ingestPastedTranscript — POST {transcript: {text, url?}} to /api/ingest
+ * and re-validate the response. The youtube-bot-check fallback: the reader
+ * pastes the transcript text from YouTube's own transcript panel when the
+ * server-side fetch is refused (datacenter bot-check). The optional `url`
+ * is the source-video URL — it drives the yt-<videoId-hash> article id (the
+ * SAME identity a successful fetch derives, so the two paths dedupe to one
+ * article) and the provenance "open original" link; it is provenance ONLY.
+ *
+ * Throws `IngestionError` with the typed `.reason` on any ok:false response
+ * OR on a non-2xx HTTP status (the same shared pipeline as every other
+ * single-article variant — no fork).
+ */
+export async function ingestPastedTranscript(
+  text: string,
+  url?: string,
+): Promise<IngestionSuccess> {
+  return ingest({ transcript: { text, ...(url !== undefined ? { url } : {}) } });
+}
+
+/**
  * Private ingest — the shared POST + parse + throw pipeline. ingestUrl,
- * ingestHtml, ingestMarkdown, and ingestPdf all delegate here. The body is
- * always exactly one of {url} | {html} | {markdown, filename?} |
- * {pdf, filename?} (IngestionRequestSchema on the server enforces this, but
- * the client constructs the body so the contract is by construction).
+ * ingestHtml, ingestMarkdown, ingestPdf, and ingestPastedTranscript all
+ * delegate here. The body is always exactly one of {url} | {url,
+ * preferredLanguages} | {html} | {markdown, filename?} | {pdf, filename?} |
+ * {transcript: {text, url?}} (IngestionRequestSchema on the server enforces
+ * this, but the client constructs the body so the contract is by
+ * construction).
  *
  * STATE-04 defense-in-depth: the network response is RE-VALIDATED through
  * `ArticleSchema.parse`. A server that returns a malformed article (whether
@@ -333,7 +355,8 @@ async function ingest(
     | { url: string; preferredLanguages: string[] }
     | { html: string }
     | { markdown: string; filename?: string }
-    | { pdf: string; filename?: string },
+    | { pdf: string; filename?: string }
+    | { transcript: { text: string; url?: string } },
 ): Promise<IngestionSuccess> {
   const res = await fetch("/api/ingest", {
     method: "POST",

@@ -1055,6 +1055,25 @@ dialog.add-dialog::backdrop {
   padding-top: var(--space-md);
   border-top: 1px solid var(--hairline);
 }
+/* The paste-transcript fallback (the youtube-bot-check companion): a calm
+   guidance paragraph, a textarea, and its own action row — visually a
+   continuation of the dialog's form column, separated by the same
+   hairline rhythm. */
+.add-transcript-form {
+  margin-top: var(--space-md);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--hairline);
+}
+.add-transcript-guidance {
+  margin: 0;
+  font: 14px/1.5 var(--font-ui);
+  color: var(--ink-soft);
+}
+.add-transcript-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+}
 .add-dialog-submit,
 .add-remove-file,
 .add-dialog-cancel {

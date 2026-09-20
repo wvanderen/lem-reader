@@ -41,6 +41,7 @@ import { markdownToBlocks, stripMarkdownExtension } from "./markdownToBlocks";
 import { pdfToBlocks } from "./pdfToBlocks";
 import { epubToBooks } from "./epubToBooks";
 import { transcriptToBlocks } from "./transcriptToBlocks";
+import { pastedTranscriptToBlocks } from "./transcriptTextToBlocks";
 import { fetchYouTubeTranscript } from "./youtubeTranscript";
 import { extractYouTubeVideoId, type TranscriptRefusalReason } from "../src/ingestion/youtube";
 import { deriveConfidence, type ConfidenceResult } from "./confidence";
@@ -533,12 +534,14 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
   const inputHasMarkdown = "markdown" in input && input.markdown !== undefined;
   const inputHasPdf = "pdf" in input && input.pdf !== undefined;
   const inputHasEpub = "epub" in input && input.epub !== undefined;
+  const inputHasTranscript = "transcript" in input && input.transcript !== undefined;
   if (
     (inputHasUrl ? 1 : 0) +
       (inputHasHtml ? 1 : 0) +
       (inputHasMarkdown ? 1 : 0) +
       (inputHasPdf ? 1 : 0) +
-      (inputHasEpub ? 1 : 0) !==
+      (inputHasEpub ? 1 : 0) +
+      (inputHasTranscript ? 1 : 0) !==
     1
   ) {
     throw new IngestionError("server-error");
@@ -578,6 +581,10 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
   const hasMarkdown = "markdown" in request && request.markdown !== undefined;
   const hasPdf = "pdf" in request && request.pdf !== undefined;
   const hasEpub = "epub" in request && request.epub !== undefined;
+  // The youtube-bot-check fallback — the reader pasted the transcript text.
+  // The source URL (when the dialog supplies one) is NESTED inside the
+  // variant, so it never collides with the top-level {url} dispatch above.
+  const hasTranscript = "transcript" in request && request.transcript !== undefined;
 
   try {
     // Stage 1, fifth branch — EPUB (Phase 12 Plan 12-04). Returns the book
@@ -681,6 +688,57 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
         segments: normalized.anchors,
       };
       transcriptWarnings = normalized.warnings;
+    } else if (hasTranscript) {
+      // ── The paste-transcript fallback (the youtube-bot-check companion) ──
+      // YouTube refuses server-side transcript fetches from datacenter
+      // egress (the bot-check regime), so the reader can paste the
+      // transcript text from YouTube's own transcript panel. The server
+      // parses the pasted text ONCE here (canonical-model boundary) and
+      // rejoins the shared stages 2+ below — the same input-source-
+      // agnostic contract as every other format (D7-03).
+      const { text, url: pastedSourceUrl } = (
+        request as { transcript: { text: string; url?: string } }
+      ).transcript;
+      const videoId = pastedSourceUrl !== undefined ? extractYouTubeVideoId(pastedSourceUrl) : null;
+      const parsed = pastedTranscriptToBlocks(text);
+      blocks = parsed.blocks;
+      footnotes = [];
+      lang = "und";
+      provenancePartial = { title: "Transcript" };
+      isReaderable = true;
+      if (videoId !== null) {
+        // A YouTube source URL — the SAME yt-<videoId-hash> identity the
+        // fetched path derives (watch / shorts / youtu.be dedupe to one
+        // article; a later successful fetch would dedupe-refuse against
+        // this paste, which is the correct D7-07 behavior).
+        finalUrl = `https://www.youtube.com/watch?v=${videoId}`;
+        provenancePartial.sourceUrl = finalUrl;
+        id = `yt-${shortHash(videoId)}`;
+        source = "youtube";
+        origin = "url";
+        fetchedAt = new Date().toISOString();
+        // Timing metadata ONLY when the paste carried real timestamps (the
+        // anchors are block-keyed real clock values); a plain-text paste
+        // never fabricates timings — no transcript meta at all.
+        if (parsed.durationSeconds !== undefined) {
+          transcriptMeta = {
+            videoId,
+            durationSeconds: parsed.durationSeconds,
+            captionSource: "pasted",
+            captionLanguage: "und",
+            segments: parsed.anchors,
+          };
+        }
+      } else {
+        // No (or non-YouTube) URL — a plain pasted transcript article. A
+        // provided non-YouTube URL still rides provenance as the source.
+        finalUrl = pastedSourceUrl;
+        id = `paste-${shortHash(text)}`;
+        source = "paste";
+        origin = "paste";
+      }
+      sourceBytes = text;
+      transcriptWarnings = parsed.warnings;
     } else if (hasUrl) {
       const fetched: FetchedContent = await safeFetch(request.url as string);
       finalUrl = fetched.finalUrl;
@@ -815,7 +873,9 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
     // influence which host the asset stage fetches (D20-12 one pipeline).
     let imageRefusalWarnings: string[] = [];
     let assetEnvelopes: AssetEnvelope[] = [];
-    if (!hasPdf && source !== "youtube") {
+    // The pasted-transcript branch is text-only by construction (paragraph
+    // blocks only — no figures), so the stage is a guarded no-op there too.
+    if (!hasPdf && !hasTranscript && source !== "youtube") {
       const assetRefererOrigin =
         finalUrl !== undefined && /^https?:/i.test(finalUrl)
           ? (() => {
@@ -926,10 +986,16 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
     // Issue #39 (decision #26) — an ASR-only transcript NEVER upgrades to
     // trusted: an auto-generated caption track enters the library flagged
     // "low" even when its length/block count would otherwise read confident.
-    // Manual tracks keep the unchanged ING-06 formula above.
-    if (confidence.state === "confident" && transcriptMeta?.captionSource === "asr") {
+    // Manual tracks keep the unchanged ING-06 formula above. A PASTED
+    // transcript (the youtube-bot-check fallback) is likewise NEVER trusted:
+    // its wording is the reader's manual copy, unverified against the video
+    // — flagged "low" whether or not it carried timings (transcriptMeta).
+    if (
+      confidence.state === "confident" &&
+      (hasTranscript || transcriptMeta?.captionSource === "asr")
+    ) {
       confidence.state = "low";
-      confidence.reason = "asr-caption-track";
+      confidence.reason = hasTranscript ? "pasted-transcript" : "asr-caption-track";
     }
 
     // Stamp the confidence onto the article (mutation is safe — the article

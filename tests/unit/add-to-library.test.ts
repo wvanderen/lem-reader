@@ -27,6 +27,7 @@ vi.mock("../../src/ingestion/IngestionClient", () => ({
   ingestMarkdown: vi.fn(),
   ingestPdf: vi.fn(),
   ingestEpub: vi.fn(),
+  ingestPastedTranscript: vi.fn(),
   browserPreferredLanguages: vi.fn(),
   IngestionError: class IngestionError extends Error {
     readonly reason: string;
@@ -59,6 +60,7 @@ import {
   ingestMarkdown,
   ingestPdf,
   ingestEpub,
+  ingestPastedTranscript,
   IngestionError,
   type IngestionSuccess,
   type EpubIngestionSuccess,
@@ -78,6 +80,7 @@ const ingestHtmlMock = vi.mocked(ingestHtml);
 const ingestMarkdownMock = vi.mocked(ingestMarkdown);
 const ingestPdfMock = vi.mocked(ingestPdf);
 const ingestEpubMock = vi.mocked(ingestEpub);
+const ingestPastedTranscriptMock = vi.mocked(ingestPastedTranscript);
 const browserPreferredLanguagesMock = vi.mocked(browserPreferredLanguages);
 const hasMock = vi.mocked(dexieLibrarySource.has);
 const saveMock = vi.mocked(dexieLibrarySource.save);
@@ -90,6 +93,7 @@ beforeEach(() => {
   ingestMarkdownMock.mockReset();
   ingestPdfMock.mockReset();
   ingestEpubMock.mockReset();
+  ingestPastedTranscriptMock.mockReset();
   browserPreferredLanguagesMock.mockReset();
   hasMock.mockReset();
   saveMock.mockReset();
@@ -255,6 +259,42 @@ describe("addToLibrary — article path (url/paste/file)", () => {
 
     expect(ingestHtmlMock).toHaveBeenCalledWith("<article>x</article>");
     expect(outcome).toEqual({ outcome: "saved-article", articleId: "html-id" });
+  });
+
+  it("transcript-paste arm routes ingestPastedTranscript(text, url) — the bot-check fallback", async () => {
+    ingestPastedTranscriptMock.mockResolvedValue(articleSuccess("yt-pasted"));
+    const outcome = await addToLibrary({
+      kind: "transcript-paste",
+      text: "0:00\nhello",
+      url: "https://www.youtube.com/watch?v=aircAruvnKk",
+    });
+
+    expect(ingestPastedTranscriptMock).toHaveBeenCalledWith(
+      "0:00\nhello",
+      "https://www.youtube.com/watch?v=aircAruvnKk",
+    );
+    expect(outcome).toEqual({ outcome: "saved-article", articleId: "yt-pasted" });
+  });
+
+  it("transcript-paste arm without a url routes ingestPastedTranscript(text, undefined)", async () => {
+    ingestPastedTranscriptMock.mockResolvedValue(articleSuccess("paste-pasted"));
+    const outcome = await addToLibrary({ kind: "transcript-paste", text: "just text" });
+
+    expect(ingestPastedTranscriptMock).toHaveBeenCalledWith("just text", undefined);
+    expect(outcome).toEqual({ outcome: "saved-article", articleId: "paste-pasted" });
+  });
+
+  it("transcript-paste arm dedupe-refuses identically (ONE policy)", async () => {
+    hasMock.mockResolvedValue(true);
+    ingestPastedTranscriptMock.mockResolvedValue(articleSuccess("yt-pasted"));
+    const outcome = await addToLibrary({
+      kind: "transcript-paste",
+      text: "0:00\nhello",
+      url: "https://youtu.be/aircAruvnKk",
+    });
+
+    expect(outcome).toEqual({ outcome: "refused", reason: "already-in-library" });
+    expect(saveMock).not.toHaveBeenCalled();
   });
 
   it("article dedupe-refuse: has=true → refused already-in-library, save NEVER called (D7-07/D16-09)", async () => {

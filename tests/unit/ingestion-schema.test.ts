@@ -10,6 +10,7 @@ import {
   IngestionRequestSchema,
   IngestionResponseSchema,
   MAX_LANGUAGE_TAG_LENGTH,
+  MAX_PASTED_TRANSCRIPT_CHARS,
   MAX_PREFERRED_LANGUAGES,
 } from "../../src/ingestion/types";
 // Phase 20 (Plan 20-01 Task 1) — namespace import so the RED-phase run fails
@@ -535,6 +536,41 @@ describe("IngestionRequestSchema (D7-03 — {url} | {html} | {markdown} | {pdf} 
 
   it("rejects an empty epub string (min(1) — mirrors html/markdown/pdf)", () => {
     expect(() => IngestionRequestSchema.parse({ epub: "" })).toThrow();
+  });
+
+  // The youtube-bot-check fallback — the sixth union member: the pasted
+  // transcript text with an OPTIONAL nested source-URL provenance channel
+  // (nested so the top-level exactly-one-of key count stays simple).
+  it("parses a transcript request with a source url (the bot-check fallback shape)", () => {
+    expect(
+      IngestionRequestSchema.parse({
+        transcript: { text: "0:00\nhello", url: "https://www.youtube.com/watch?v=aircAruvnKk" },
+      }),
+    ).toEqual({
+      transcript: { text: "0:00\nhello", url: "https://www.youtube.com/watch?v=aircAruvnKk" },
+    });
+  });
+
+  it("parses a transcript request without a url (plain paste)", () => {
+    expect(IngestionRequestSchema.parse({ transcript: { text: "just text" } })).toEqual({
+      transcript: { text: "just text" },
+    });
+  });
+
+  it("rejects an empty transcript text (min(1))", () => {
+    expect(() => IngestionRequestSchema.parse({ transcript: { text: "" } })).toThrow();
+  });
+
+  it("rejects an oversize transcript text (over MAX_PASTED_TRANSCRIPT_CHARS)", () => {
+    expect(() =>
+      IngestionRequestSchema.parse({ transcript: { text: "x".repeat(MAX_PASTED_TRANSCRIPT_CHARS + 1) } }),
+    ).toThrow();
+  });
+
+  it("rejects a transcript url with a non-http scheme (mirrors the url variant's httpUrl)", () => {
+    expect(() =>
+      IngestionRequestSchema.parse({ transcript: { text: "hello", url: "javascript:alert(1)" } }),
+    ).toThrow();
   });
 });
 
