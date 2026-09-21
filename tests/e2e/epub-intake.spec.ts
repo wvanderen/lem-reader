@@ -616,7 +616,10 @@ test.describe("ING-05 — EPUB book intake (SC#1)", () => {
       page.getByRole("heading", { level: 1, name: "Saved articles" }),
     ).toBeVisible();
     await expandBook(page);
-    await bookRow(page).locator(".book-remove").click();
+    // Issue #67 — the remove trigger is the row action cluster's trash
+    // icon (the shared .library-row-remove aria-label template); the
+    // chapter sub-rows carry no cluster, so this locates exactly one.
+    await bookRow(page).locator(".library-row-remove").click();
 
     const dialog = page.locator("dialog.book-remove-confirm");
     await expect(dialog).toBeVisible();
@@ -1195,15 +1198,18 @@ test.describe("ING-05 — cross-chapter navigation, resume, progress (SC#3)", ()
     await reloadLibrary(page);
     // Finished book: leaves the continue strip (FINISHED_THRESHOLD
     // convention) but stays in the library — the D8-12/D12 algebra swaps
-    // the hairline for the "● Finished" mark at progress >= 1. Scoped to
-    // the book CARD (the finished chapter sub-rows carry their own marks).
+    // the hairline for the quiet "Finished" chip at progress >= 1
+    // (issue #67: ONE chip treatment for every row; the filled-circle
+    // glyph is superseded). Scoped to the book row's MAIN column (the
+    // finished chapter sub-rows nested inside .book-chapter-list carry
+    // their own marks).
     await expect(page.locator(".continue-reading-row")).toHaveCount(0);
     await expect(bookRow(page)).toHaveCount(1);
     await expect(
-      // Direct-child scope — the finished chapter sub-rows (nested inside
-      // .book-chapter-list) carry their own finished marks.
-      bookRow(page).locator(".book-card > .finished-mark"),
-    ).toHaveText("● Finished");
+      bookRow(page).locator(
+        ".book-card > .library-row-main > .finished-mark",
+      ),
+    ).toHaveText("Finished");
   });
 });
 

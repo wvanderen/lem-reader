@@ -30,6 +30,16 @@
 // book success invalidates the library snapshot via onBookAdded so the new
 // book row appears (the RemoveConfirm onConfirm precedent).
 //
+// Issue #67 (locked IA, variant A — decision recorded 2026-09-21, verdict
+// on the live prototype branch prototype/library-ia-issue-67) — the page
+// IA: header row (h1 + Add) with the stats line merged into the header
+// block → the ONE toolbar band (view switcher + search + tags) → the
+// continue-reading rail (slim cards) → the single-column library list.
+// Every row (article, chapter sub-row, book) shares ONE anatomy: a main
+// column (title → metaline → tags → progress/Finished) plus a
+// right-aligned icon action cluster. The prototype variants + switcher
+// live ONLY on the throwaway branch — main keeps the validated decision.
+//
 // The hash router (App.tsx) is unchanged — only the list-view component
 // import swaps (`FixtureList` → `LibraryView`). parseHash + hashchange + the
 // Gap 3 fragment guard stay byte-stable.
@@ -490,13 +500,13 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
 
   return (
     <main id="main">
-      {/* Plan 13-03 (POLISH-06 / D13-16) bounded tidy — the library home
-          reads as a header row plus calm ordered regions: continue
-          reading first, then the library list. Section wrappers are
-          structure-only (app.css token spacing; no new features, no new
-          data loading). Byte-stable anchors are preserved exactly:
-          main#main, the h1 text, the .status live region, the
-          LibraryRow markup, and the hash-assignment fallbacks below. */}
+      {/* Issue #67 (locked IA, variant A) — the library home reads as: the
+          header row (h1 + Add) with the stats line merged into the header
+          block → the ONE toolbar band (switcher + search + tags) → the
+          continue-reading rail → the single-column list. Byte-stable
+          anchors preserved: main#main, the h1 text, the .status live
+          region, the row title headings + `#/article/` launch links, and
+          the hash-assignment fallbacks below. */}
       <header className="library-header">
         {/* byte-stable page heading (SC#1 regression target — Pitfall 8-5).
             Plan 14-02 Task 3: gains ONLY tabIndex={-1} + the focus ref —
@@ -523,43 +533,14 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
           Add to Library
         </button>
       </header>
-      {/* (1) Continue reading — the strip returns null while loading OR when
-          the unfinished set is empty (spare chrome per UI-SPEC); the section
-          wrapper keeps the region's place in the order regardless.
-          Plan 16-01 (D16-14) — SUPERSEDED by 2026-09-08 user feedback: the
-          section used to render on the All view ONLY (on In-progress it
-          duplicated the first rows; on Unread/Finished it showed items
-          absent from the view). The strip is pinned chrome ABOVE the view
-          switcher, so its mounting must not be coupled to which view is
-          selected — its disappearance on any switch read as bizarre,
-          unstable UX. The original D16-14 rationale is consciously traded
-          for chrome stability. The strip component itself stays
-          byte-unchanged (D16-15) and still owns the spare-chrome null. */}
-      <section className="library-section library-section-continue">
-        {/* Quick 260909-ahy — the strip is mounted ONCE per LibraryView
-            lifetime and re-derives through the LibrarySnapshot (Issue #3):
-            an invalidation reload keeps status "ready" and the settled
-            snapshot mounted, so the strip's entries memo keeps rendering
-            the stale derivation until the fresh snapshot lands. The old
-            remount-by-key mechanism (key={refreshKey}, commit 109fb3d) was
-            the library flash: the key change synchronously removed the
-            section (layout collapse, scroll clamp) until the remounted
-            instance's async reload re-derived and re-appended it. */}
-        <ContinueReadingStrip
-          snapshot={snapshot}
-          ready={status === "ready"}
-          onReadingStateChange={async (article, read) => {
-            await setArticleReadState(article, read);
-            invalidateLibrarySnapshot();
-          }}
-        />
-      </section>
-      {/* (1b) Issue #38 — the ambient reading-stats strip, BETWEEN continue
-          reading and the list. Plain text in document order — no heading,
-          no destination, no interactive elements (zero new keyboard stops);
+      {/* (1) Issue #67 (locked IA, variant A) — the reading-stats line is
+          merged INTO the header block: a quiet right-aligned line directly
+          under the h1+Add row (no longer a standalone strip between
+          sections). Plain text in document order — no heading, no
+          destination, no interactive elements (zero new keyboard stops);
           silent at zero visits (no backfill — silence IS the empty state).
           The finished count rides from the SAME countByState fold the view
-          switcher uses (D14-23/D14-24 — the strip's "{N} finished." cannot
+          switcher uses (D14-23/D14-24 — the "{N} finished." sentence cannot
           disagree with the Finished view's count). Renders null while
           loading/failed — spare chrome, the strip discipline. */}
       <ReadingStatsStrip
@@ -567,23 +548,15 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
         ready={status === "ready"}
         finishedCount={stateCounts.finished}
       />
-      {/* Plan 16-03 (D16-03) — the permanently-mounted add-content section
-          DISSOLVES: the three ingestion forms now live behind the header
-          Add button's dialog (ADD-01). The library-load .status live
-          region below SURVIVES the dissolution byte-stable (Pitfall 7):
-          same classes, role, aria attributes, and copy strings — it is
-          the LIST's "Opening article…" / "Couldn't open this article"
-          surface, never an ingest surface. Re-homed as a DIRECT child of
-          main, after the list region (the position the old section's
-          wrapper occupied). */}
-      {/* (2) The library list — Plan 14-02: the view switcher governs the
-          list, so it mounts as the section's FIRST child above LibrarySearch
-          (D14-22: real links — views ARE routes — inside a labeled nav
-          landmark; exactly one aria-current="page"). D8-06 search + D8-07
-          tag filter always mounted (the reader can type/click even before
-          items finish loading; the filter runs over whatever items are
-          available), then the rows. */}
-      <section className="library-section library-section-list">
+      {/* (2) Issue #67 — the ONE toolbar band: the view switcher, search,
+          and tag filter grouped in a single bordered container directly
+          under the header. The switcher still governs the list (D14-22:
+          real links — views ARE routes — inside a labeled nav landmark;
+          exactly one aria-current="page"); D8-06 search + D8-07 tag filter
+          are always mounted (the reader can type/click even before items
+          finish loading; the filter runs over whatever items are
+          available). */}
+      <div className="library-toolbar">
         <nav className="view-switcher" aria-label="Library views">
           {VIEW_LINKS.map(({ view: linkView, href, label }) => (
             <a
@@ -619,6 +592,33 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
         </nav>
         <LibrarySearch query={query} onQueryChange={setQuery} />
         <TagFilter tags={allTags} activeTag={activeTag} onSelect={setActiveTag} />
+      </div>
+      {/* (3) Continue reading — the compact rail (issue #67, variant A):
+          slim cards — the stretched title link, the "Chapter N of M" line
+          for books, "% read" + hairline. Curation lives in the row action
+          clusters; the rail itself adds no keyboard stops beyond its resume
+          links. The rail returns null while loading OR when the unfinished
+          set is empty (spare chrome per UI-SPEC); the section wrapper keeps
+          the region's place in the order regardless. The rail is pinned
+          chrome ABOVE the list on EVERY view — its mounting must not be
+          coupled to which view is selected (the 2026-09-08 chrome-stability
+          rule; the strip component still owns the spare-chrome null). */}
+      <section className="library-section library-section-continue">
+        {/* Quick 260909-ahy — the strip is mounted ONCE per LibraryView
+            lifetime and re-derives through the LibrarySnapshot (Issue #3):
+            an invalidation reload keeps status "ready" and the settled
+            snapshot mounted, so the strip's entries memo keeps rendering
+            the stale derivation until the fresh snapshot lands. The old
+            remount-by-key mechanism (key={refreshKey}, commit 109fb3d) was
+            the library flash: the key change synchronously removed the
+            section (layout collapse, scroll clamp) until the remounted
+            instance's async reload re-derived and re-appended it. */}
+        <ContinueReadingStrip snapshot={snapshot} ready={status === "ready"} />
+      </section>
+      {/* (4) The library list — single-column rows (issue #67, variant A):
+          the main list starts right under the rail; every row shares the
+          ONE anatomy (main column + icon action cluster). */}
+      <section className="library-section library-section-list">
         {viewArticles.length === 0 && viewBooks.length === 0 && status === "ready" ? (
           // Plan 14-02 (D14-26) — per-view empty states keyed on VIEW
           // MEMBERSHIP, not filtered visibility: a view whose membership is

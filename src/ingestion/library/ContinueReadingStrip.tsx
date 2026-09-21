@@ -48,14 +48,20 @@
 // grapheme totals) deleted behind the module. The strip renders null while
 // not ready (initial load or load failure — the fail-quiet spare-chrome
 // discipline) or when the unfinished set is empty.
+//
+// Issue #67 (locked IA, variant A) — the rail card slims to the resume
+// essentials: the title link (stretched, native navigation), the book
+// "Chapter N of M" line, and "% read" + hairline. The author line and the
+// strip-level mark-read button are GONE — curation lives in the row action
+// clusters (one arrangement, the locked vocabulary); the strip carries
+// zero keyboard stops beyond the resume links themselves.
 import { useMemo } from "react";
 import type { CanonicalArticle } from "../../content/types";
 import type { Book } from "../../content/schema";
 import { ProgressHairline } from "../../reader/ProgressHairline";
 import { deriveBookProgress, resolveResumeChapterId, chapterOrdinal } from "./bookProgress";
 import { articleReadingState, bookReadingState } from "./readingState";
-import { ReadingStateButton } from "./ReadingStateButton";
-import { effectiveTitle, effectiveAuthor } from "./effectiveMetadata";
+import { effectiveTitle } from "./effectiveMetadata";
 import type { LibrarySnapshot } from "./librarySnapshot";
 
 /** The cap on continue-reading cards (D8-09 — calm lower end). */
@@ -93,13 +99,11 @@ type StripEntry =
 export function ContinueReadingStrip({
   snapshot,
   ready,
-  onReadingStateChange,
 }: {
   /** The ONE library read model (from useLibrarySnapshot). */
   snapshot: LibrarySnapshot;
   /** True only when the snapshot has settled ready — gates the spare-chrome null. */
   ready: boolean;
-  onReadingStateChange?: (article: CanonicalArticle, read: boolean) => Promise<void>;
 }) {
   const entries = useMemo<StripEntry[] | null>(() => {
     if (!ready) return null; // loading or failed — spare chrome either way
@@ -193,25 +197,16 @@ export function ContinueReadingStrip({
           entry.kind === "article" ? (
             <li key={`a-${entry.article.id}`} className="continue-reading-row">
               {/* Plan 17-02 (D17-09) — the strip shows the ONE effective
-                  name (effectiveTitle/effectiveAuthor inside the truthy
-                  guard); book entries below stay canonical (D17-05). */}
+                  name (effectiveTitle); book entries below stay canonical
+                  (D17-05). The stretched title link IS the card (native
+                  navigation); % read + hairline under it (D8-11). */}
               <a className="library-card-link" href={`#/article/${entry.article.id}`}>
                 {effectiveTitle(entry.article)}
               </a>
-              {effectiveAuthor(entry.article) && (
-                <p className="meta">{effectiveAuthor(entry.article)}</p>
-              )}
-              <div className="continue-reading-footer">
+              <div className="continue-reading-progress">
                 <span className="meta">{Math.floor(entry.progress * 100)}% read</span>
-                {onReadingStateChange && (
-                  <ReadingStateButton
-                    title={effectiveTitle(entry.article)}
-                    isRead={false}
-                    onChange={(read) => onReadingStateChange(entry.article, read)}
-                  />
-                )}
+                <ProgressHairline progress={entry.progress} />
               </div>
-              <ProgressHairline progress={entry.progress} />
             </li>
           ) : (
             <li key={`b-${entry.book.id}`} className="continue-reading-row">
@@ -221,10 +216,10 @@ export function ContinueReadingStrip({
               <a className="library-card-link" href={`#/article/${entry.resumeChapterId}`}>
                 {entry.book.title} — Chapter {entry.ordinal} of {entry.total}
               </a>
-              {entry.book.authors.length > 0 && (
-                <p className="meta">{entry.book.authors.join(", ")}</p>
-              )}
-              <ProgressHairline progress={entry.progress} />
+              <div className="continue-reading-progress">
+                <span className="meta">{Math.floor(entry.progress * 100)}% read</span>
+                <ProgressHairline progress={entry.progress} />
+              </div>
             </li>
           ),
         )}

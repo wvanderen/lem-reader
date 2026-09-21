@@ -10,17 +10,21 @@
 // does NOT toggle — two gestures, two targets (12-RESEARCH Pattern 7 L316:
 // the row's primary action is Resume/open; the chevron owns disclosure).
 //
-// Collapsed card: h2 book title + joined authors + the quiet "Book" source
-// badge + the book progress hairline (deriveBookProgress — D12-03) + a
-// Resume link to the D12-07 last-read chapter (shown while a resume chapter
-// exists AND progress < 1).
+// Issue #67 (locked IA, variant A) — the book row adopts the ONE row
+// anatomy (LibraryRow's): a MAIN column (title → metaline → tags →
+// progress/Finished → disclosure) plus the right-aligned ICON action
+// cluster (trash only — books carry no editable overrides). The TITLE is
+// the resume affordance: it links to the D12-07 last-read chapter while
+// one exists, else to the first declared chapter (an unread book's title
+// opens the book at its start; D12-06 numbering shows in the metaline).
+// The old standalone "Resume" text link and the in-region "Remove book"
+// text button are superseded by the title link and the cluster trash
+// (BookRemoveConfirm still gates the sole removeBook call site — Task 2
+// wires the dialog; BookRow itself only fires the onRemove callback).
 //
 // Expanded region: the chapter sub-list (LibraryRow anatomy at headingLevel
-// 3 — SourceBadge, per-chapter hairline from that chapter's location, open
-// link), the D12-11 skip disclosure when skippedChapterCount > 0, the book
-// TagEntry (D12-04 — tags persist on the BOOK record via setBookTags), and
-// the calm Remove book trigger (BookRemoveConfirm gates it — Task 2 wires
-// the dialog; BookRow itself only fires the onRemove callback).
+// 3), the D12-11 skip disclosure when skippedChapterCount > 0, and the book
+// TagEntry (D12-04 — tags persist on the BOOK record via setBookTags).
 //
 // Chapter ordering is the planner's partial-import-tolerant resolution:
 // chapterArticleIds order first (rows missing from the record simply don't
@@ -40,6 +44,7 @@ import { setBookTags } from "../../persistence/booksStore";
 import {
   deriveBookProgress,
   resolveResumeChapterId,
+  chapterOrdinal,
 } from "./bookProgress";
 import { bookReadingState } from "./readingState";
 import { LibraryRow } from "./LibraryRow";
@@ -111,90 +116,163 @@ export function BookRow({
     ) === "finished";
   const showHairline = progress > 0 && !isFinished;
   const chaptersRegionId = `chapters-${book.id}`;
+  const chapterCount = book.chapterArticleIds.length;
+
+  // Issue #67 — the title's link target: the D12-07 resume chapter while
+  // one exists, else the first declared chapter (an unread book opens at
+  // its start). A book with zero live chapters renders an unlinked title
+  // (honest — there is nothing to open).
+  const titleTarget = resumeChapterId ?? orderedChapters[0]?.id ?? null;
+  const inProgress = showHairline;
+  // D12-06 numbering for the metaline (defined only while in progress).
+  const ordinal =
+    inProgress && resumeChapterId !== null ? chapterOrdinal(book, resumeChapterId) : 0;
 
   return (
     <li className="book-row">
       <article className="book-card">
-        <h2 id={`title-${book.id}`}>{book.title}</h2>
-        {book.authors.length > 0 && (
-          <p className="meta">{book.authors.join(", ")}</p>
-        )}
-        {/* The Book source badge — byte-parity with SourceBadge's
-            badgeLabel("epub-chapter") plain-text variant (the chapter
-            sub-rows below render the real SourceBadge component). */}
-        <p className="meta source-badge">Book</p>
-        {/* D12-03 book progress hairline (chapters-finished ratio). Mirrors
-            the LibraryRow hairline/Finished algebra: hidden at 0, hairline
-            while 0 < ratio < 1, filled-circle Finished mark at 1. */}
-        {showHairline && <ProgressHairline progress={progress} />}
-        {isFinished && (
-          <p className="meta finished-mark">
-            <span aria-hidden="true">●</span> Finished
-          </p>
-        )}
-        {/* D12-07 Resume — the last-read chapter; hidden once the book is
-            finished (nothing left to resume) or never opened. */}
-        {resumeChapterId !== null && !isFinished && (
-          <a
-            className="book-resume"
-            href={`#/article/${resumeChapterId}`}
-            aria-labelledby={`title-${book.id}`}
-          >
-            Resume
-          </a>
-        )}
-        {/* T-12-15 — REAL disclosure button. aria-expanded + aria-controls
-            region; row-click never toggles (two gestures, two targets). */}
-        <button
-          type="button"
-          className="book-toggle"
-          aria-expanded={open}
-          aria-controls={chaptersRegionId}
-          aria-label={`Chapters of ${book.title}`}
-          onClick={() => setOpen((prev) => !prev)}
-        >
-          <span className="book-chevron" aria-hidden="true">
-            ▸
-          </span>
-        </button>
-        {/* The controlled disclosure region (always in the DOM so
-            aria-controls resolves in both states; `hidden` collapses it). */}
-        <div id={chaptersRegionId} className="book-chapters" hidden={!open}>
-          <ul className="book-chapter-list">
-            {orderedChapters.map((chapter) => (
-              <LibraryRow
-                key={chapter.id}
-                article={chapter}
-                headingLevel={3}
-                location={snapshot.latestLocationByArticleId.get(chapter.id)}
-                total={snapshot.totalsByArticleId.get(chapter.id) ?? 0}
-              />
-            ))}
-          </ul>
-          {/* D12-11 — calm skip disclosure. Never silently missing, never
-              silently broken; absent when nothing was skipped. */}
-          {book.skippedChapterCount > 0 && (
-            <p className="meta book-skip-disclosure">
-              {book.skippedChapterCount === 1
-                ? "1 chapter could not be read."
-                : `${book.skippedChapterCount} chapters could not be read.`}
-            </p>
+        <div className="library-row-main">
+          {/* Issue #67 — the title IS the resume link (aria-labelledby → the
+              h2 keeps the accessible name = the book title). Unlinked only
+              when no chapter row is live. */}
+          <h2 id={`title-${book.id}`}>
+            {titleTarget !== null ? (
+              <a className="library-card-link" href={`#/article/${titleTarget}`}>
+                {book.title}
+              </a>
+            ) : (
+              book.title
+            )}
+          </h2>
+          {/* Issue #67 — ONE metaline: kind+TOC size · authors · position. */}
+          <div className="library-card-meta">
+            <p className="meta">Book · {chapterCount} {chapterCount === 1 ? "chapter" : "chapters"}</p>
+            {book.authors.length > 0 && (
+              <p className="meta">{book.authors.join(", ")}</p>
+            )}
+            {inProgress && resumeChapterId !== null && (
+              <p className="meta">
+                Chapter {ordinal} of {chapterCount}
+              </p>
+            )}
+          </div>
+          {/* D12-04 — book tags display on the row (editing stays in the
+              expanded region's TagEntry). */}
+          {(book.tags ?? []).length > 0 && (
+            <ul className="library-row-tags">
+              {(book.tags ?? []).map((tag) => (
+                <li key={tag}>
+                  <span className="tag-chip tag-chip-readonly">{tag}</span>
+                </li>
+              ))}
+            </ul>
           )}
-          {/* D12-04 — tags live on the BOOK record. TagEntry's saveTags
-              override routes commits to setBookTags (tags on chapters are
-              out of scope per the D12-04 decision). */}
-          <TagEntry
-            articleId={book.id}
-            tags={book.tags ?? []}
-            saveTags={(tags) => setBookTags(book.id, tags)}
-          />
-          {/* The calm destructive trigger — BookRemoveConfirm (Task 2) gates
-              the sole removeBook call site behind explicit consent. */}
-          <button type="button" className="book-remove" onClick={onRemove}>
-            Remove book
+          {/* D12-03 book progress block (chapters-finished ratio). Mirrors
+              the LibraryRow algebra: hairline + % while in progress, the
+              quiet Finished chip at 1, nothing while unread. */}
+          {isFinished && <p className="meta finished-mark">Finished</p>}
+          {showHairline && (
+            <div className="library-row-progress">
+              <p className="meta library-progress-label">
+                {Math.min(97, Math.floor(progress * 100))}% read
+              </p>
+              <ProgressHairline progress={progress} />
+            </div>
+          )}
+          {/* T-12-15 — REAL disclosure button. aria-expanded + aria-controls
+              region; row-click never toggles (two gestures, two targets). */}
+          <button
+            type="button"
+            className="book-toggle"
+            aria-expanded={open}
+            aria-controls={chaptersRegionId}
+            aria-label={`Chapters of ${book.title}`}
+            onClick={() => setOpen((prev) => !prev)}
+          >
+            <span className="book-chevron" aria-hidden="true">
+              ▸
+            </span>
+          </button>
+          {/* The controlled disclosure region (always in the DOM so
+              aria-controls resolves in both states; `hidden` collapses it). */}
+          <div id={chaptersRegionId} className="book-chapters" hidden={!open}>
+            <ul className="book-chapter-list">
+              {orderedChapters.map((chapter) => (
+                <LibraryRow
+                  key={chapter.id}
+                  article={chapter}
+                  headingLevel={3}
+                  location={snapshot.latestLocationByArticleId.get(chapter.id)}
+                  total={snapshot.totalsByArticleId.get(chapter.id) ?? 0}
+                />
+              ))}
+            </ul>
+            {/* D12-11 — calm skip disclosure. Never silently missing, never
+                silently broken; absent when nothing was skipped. */}
+            {book.skippedChapterCount > 0 && (
+              <p className="meta book-skip-disclosure">
+                {book.skippedChapterCount === 1
+                  ? "1 chapter could not be read."
+                  : `${book.skippedChapterCount} chapters could not be read.`}
+              </p>
+            )}
+            {/* D12-04 — tags live on the BOOK record. TagEntry's saveTags
+                override routes commits to setBookTags (tags on chapters are
+                out of scope per the D12-04 decision). */}
+            <TagEntry
+              articleId={book.id}
+              tags={book.tags ?? []}
+              saveTags={(tags) => setBookTags(book.id, tags)}
+            />
+          </div>
+        </div>
+        {/* Issue #67 — the icon action cluster (trash only). The BookRemoveConfirm
+            gating stays: this trigger fires the same onRemove callback. */}
+        <div className="library-row-actions">
+          <button
+            type="button"
+            className="library-row-remove"
+            aria-label={`Remove ${book.title} from library`}
+            onClick={onRemove}
+          >
+            <BookTrashIcon aria-hidden="true" />
           </button>
         </div>
       </article>
     </li>
+  );
+}
+
+/**
+ * Phase 13 Plan 13-07 (G3 — icon policy / D13-12 chrome polish) — waste-bin
+ * glyph for the book remove affordance. Mirrors the LibraryRow TrashIcon
+ * anatomy exactly (20×20, 24-unit viewBox, currentColor stroke, round
+ * caps/joins, aria-hidden + focusable=false): decorative, so the button's
+ * aria-label carries the full accessible name.
+ */
+function BookTrashIcon({ ariaHidden }: { ariaHidden?: "true" }) {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden={ariaHidden}
+      focusable="false"
+    >
+      {/* lid */}
+      <path d="M3 6h18" />
+      {/* handle */}
+      <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      {/* body */}
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+      {/* inner lines */}
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+    </svg>
   );
 }

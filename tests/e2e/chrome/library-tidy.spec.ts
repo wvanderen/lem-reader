@@ -1,13 +1,12 @@
 // tests/e2e/chrome/library-tidy.spec.ts
 // POLISH-06 / D13-16 — the library home reads as a header row plus calm
-// ordered regions: continue reading, then the library list, with the
-// library-load status card following the list. This spec pins the DOM
-// ORDER and the byte-stable anchors the tidy promised to preserve
-// (Pitfall 8-5): main with id "main" (skip-link target), the h1 "Saved
-// articles", the .status live region (role=status + aria-live=polite),
-// and the ul.library-list rows — while proving the LibraryView reorg
-// introduced NO behavior change (the three existing library specs stay
-// green byte-unchanged, run separately by the plan's verification).
+// ordered regions, RE-ORDERED by the issue #67 locked IA (variant A):
+// header (h1 + Add) → stats line (header block) → the ONE toolbar band
+// (switcher + search + tags) → the continue-reading rail → the library
+// list, with the library-load status card following the list. This spec
+// pins the DOM ORDER and the byte-stable anchors (Pitfall 8-5): main with
+// id "main" (skip-link target), the h1 "Saved articles", the .status live
+// region (role=status + aria-live=polite), and the ul.library-list rows.
 //
 // Plan 16-03 re-anchor (same commit as the DOM change — Pitfall 1): the
 // permanently-mounted add-content section DISSOLVED (ADD-01). The header
@@ -31,7 +30,7 @@ import { prepareFreshPage } from "../portability/_portability";
 /** DOM-order predicate bundle evaluated in the live page. compareDocumentPosition
  * is the authoritative order check (visual position can differ under CSS). */
 async function tidyOrder(page: Page): Promise<{
-  continueBeforeSearch: boolean;
+  searchBeforeContinue: boolean;
   addBeforeSearch: boolean;
   searchBeforeList: boolean;
   statusFollowsList: boolean;
@@ -46,14 +45,14 @@ async function tidyOrder(page: Page): Promise<{
     const before = (a: Element, b: Element): boolean =>
       (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
     return {
-      // The ordered regions after the Plan 16-03 dissolution:
-      // continue-reading container → the header Add button → search input
-      // → the library list (the continue section is unconditionally
-      // mounted on EVERY view — D16-14 superseded 2026-09-08 — so its
-      // presence here needs no #/ landing justification).
-      continueBeforeSearch: before(
-        q(".library-section-continue"),
+      // The ordered regions after issue #67 (locked IA, variant A):
+      // the header Add button → the toolbar band (search) → the continue
+      // rail → the library list. The rail is unconditionally mounted on
+      // EVERY view (chrome-stability rule — D16-14 superseded 2026-09-08),
+      // so its presence here needs no #/ landing justification.
+      searchBeforeContinue: before(
         q(".library-search"),
+        q(".library-section-continue"),
       ),
       addBeforeSearch: before(q(".library-add-button"), q(".library-search")),
       searchBeforeList: before(q(".library-search"), q("ul.library-list")),
@@ -77,7 +76,7 @@ async function tidyOrder(page: Page): Promise<{
   });
 }
 
-test("library home renders the header row plus ordered regions (header → continue → list → status)", async ({
+test("library home renders the header row plus ordered regions (header → toolbar → continue → list → status)", async ({
   page,
 }) => {
   await prepareFreshPage(page);
@@ -88,7 +87,7 @@ test("library home renders the header row plus ordered regions (header → conti
   });
 
   const order = await tidyOrder(page);
-  expect(order.continueBeforeSearch, "continue-reading section precedes the search input").toBe(true);
+  expect(order.searchBeforeContinue, "the toolbar search precedes the continue rail (issue #67)").toBe(true);
   expect(order.addBeforeSearch, "the header Add button precedes the search input").toBe(true);
   expect(order.searchBeforeList, "search input precedes the library list").toBe(true);
   expect(order.statusFollowsList, "the .status live region follows the library list").toBe(true);

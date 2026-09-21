@@ -486,19 +486,23 @@ test.describe("a11y 12-06 — library with a book", () => {
     ).toBeVisible({ timeout: 10_000 });
     await expect(page.locator("li.book-row")).toBeVisible({ timeout: 10_000 });
 
-    // Keyboard-order proof: the Resume link is the focusable IMMEDIATELY
-    // before the chevron in DOM order — focus it (focusability, ALL
-    // engines), then ONE real Tab must land on the chevron (the DOM-order
-    // claim on chromium + firefox; webkit skips links in sequential nav —
-    // the 09-06 engine-divergence precedent).
-    const resume = page.locator("li.book-row .book-resume");
-    await expect(resume).toBeVisible({ timeout: 10_000 });
-    await resume.focus();
-    await expect(resume).toBeFocused();
+    // Keyboard-order proof (issue #67 — the TITLE is the resume affordance):
+    // the book title link is the focusable IMMEDIATELY before the chevron in
+    // DOM order — focus it (focusability, ALL engines), then ONE real Tab
+    // must land on the chevron (the DOM-order claim on chromium + firefox;
+    // webkit skips links in sequential nav — the 09-06 engine-divergence
+    // precedent). The selector scopes to the book row's main-column h2 —
+    // chapter sub-row links share the .library-card-link class but live
+    // inside the (hidden) disclosure region.
+    const resume =
+      "li.book-row .book-card > .library-row-main > h2 .library-card-link";
+    await expect(page.locator(resume)).toBeVisible({ timeout: 10_000 });
+    await page.locator(resume).focus();
+    await expect(page.locator(resume)).toBeFocused();
     if (tabOrderFollowsDom()) {
       expect(
-        await tabWalkFrom(page, "li.book-row .book-resume", "li.book-row .book-toggle", 2),
-        "Tab from Resume must reach the book chevron (adjacent focusables)",
+        await tabWalkFrom(page, resume, "li.book-row .book-toggle", 2),
+        "Tab from the title (resume) link must reach the book chevron (adjacent focusables)",
       ).toBe(true);
       // Keyboard focus → the global :focus-visible ring (UI-SPEC §4): a
       // Tab-originated focus matches :focus-visible, so the computed
@@ -526,11 +530,11 @@ test.describe("a11y 12-06 — library with a book", () => {
       "false",
     );
 
-    // Sane order — DOM order: Resume link BEFORE the chevron, chapter open
-    // links + Remove AFTER it (inside the expanded region).
+    // Sane order — DOM order: the title (resume) link BEFORE the chevron,
+    // chapter open links + the cluster trash AFTER it.
     const bookRow = page.locator("li.book-row");
-    await expect(bookRow.locator(".book-resume")).toBeVisible();
-    const resumeIndex = await bookRow.locator(".book-resume").evaluate((el) => {
+    await expect(page.locator(resume)).toBeVisible();
+    const resumeIndex = await page.locator(resume).evaluate((el) => {
       const row = el.closest("li");
       const focusables = row?.querySelectorAll(
         "a[href], button:not([disabled]), input",
@@ -567,12 +571,14 @@ test.describe("a11y 12-06 — library with a book", () => {
         ),
         "Tab from the chevron must reach the chapter sub-row open link",
       ).toBe(true);
-      // Continue the walk to the Remove book trigger.
+      // Continue the walk to the Remove book trigger (issue #67 — the
+      // cluster trash icon; chapter sub-rows carry no cluster, so this is
+      // the row's only remove affordance).
       expect(
         await tabWalkFrom(
           page,
           "li.book-row .book-chapter-list a[href^='#/article/']",
-          "li.book-row .book-remove",
+          "li.book-row .library-row-remove",
           12,
         ),
         "Tab must reach the Remove book button",

@@ -5,6 +5,14 @@
 // layer below covers the write→reload window (accessible name flips to the
 // target action at click time) and clears on catch-up (isRead matches) or
 // error (honest revert to the persisted prop truth + the retry copy).
+//
+// Issue #67 (locked IA, variant A) — the control is now an ICON button (the
+// check-circle glyph) in the row's right-aligned action cluster; the
+// aria-label template `${label}: ${title}` is UNCHANGED (every e2e contract
+// matches `/^Mark as read:/` etc. against the accessible name, never the
+// visible text — the name flips to the TARGET action at click time and
+// stays there through the pending window), and `disabled` carries the
+// pending state.
 import { useEffect, useState } from "react";
 
 /** Keep storage failures local and keep curation separate from card navigation. */
@@ -53,7 +61,7 @@ export function ReadingStateButton({
           }
         }}
       >
-        {pending ? "Saving…" : label}
+        <CheckIcon aria-hidden="true" />
       </button>
       {error && (
         <p className="meta" role="alert">
@@ -61,5 +69,32 @@ export function ReadingStateButton({
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * Issue #67 — check-circle glyph for the mark-read affordance. Clones the
+ * TrashIcon/EditIcon anatomy (20×20, 24-unit viewBox, currentColor stroke,
+ * round caps/joins, aria-hidden + focusable=false): decorative, so the
+ * button's aria-label carries the full accessible name.
+ */
+function CheckIcon({ ariaHidden }: { ariaHidden?: "true" }) {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden={ariaHidden}
+      focusable="false"
+    >
+      {/* circle with a check — one glyph, two states via the aria-label */}
+      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+      <path d="M22 4 12 14.01l-3-3" />
+    </svg>
   );
 }

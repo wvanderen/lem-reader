@@ -5,22 +5,27 @@
 // disclosure semantics, resume targeting, skip disclosure, heading order,
 // and the book TagEntry — never Dexie itself.
 //
-// Contracts pinned (12-05-PLAN Task 1 <action> item 7):
+// Contracts pinned (12-05-PLAN Task 1 <action> item 7, as amended by the
+// issue #67 locked IA — the title IS the resume affordance):
 //   1. the chevron button toggles aria-expanded + the controlled region
 //      (whose id matches aria-controls) — native disclosure semantics;
 //   2. ROW-CLICK does NOT toggle (two gestures, two targets);
-//   3. the Resume link targets the D12-07 last-read chapter id;
+//   3. the title link targets the D12-07 last-read chapter id (and the
+//      first declared chapter while unread);
 //   4. skippedChapterCount renders the calm "N chapters could not be read."
 //      note — and ABSENT at 0;
 //   5. chapter sub-rows render h3 headings (the book title stays h2 —
 //      heading order preserved inside the group);
-//   6. the book TagEntry is present in the expanded region.
+//   6. the book TagEntry is present in the expanded region;
+//   7. the remove trigger is the row action cluster's trash icon (the
+//      .library-row-remove aria-label template), not an in-region text
+//      button (issue #67 — one arrangement for every row).
 //
 // Issue #3 — BookRow consumes the ONE LibrarySnapshot (locations + the
 // latest-location fold + the grapheme-total fold); the render helper builds
 // one directly from the same schema-validated rows (no Dexie here).
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 // Mock the persistence seams — no Dexie in a component test.
@@ -215,8 +220,10 @@ describe("BookRow — disclosure semantics (T-12-15 + D12-01)", () => {
   });
 });
 
-describe("BookRow — resume targeting (D12-07)", () => {
-  it("the Resume link href targets the last-read chapter", () => {
+describe("BookRow — resume targeting (D12-07 + issue #67)", () => {
+  // Issue #67 (locked IA, variant A): the TITLE is the resume affordance —
+  // it links to the D12-07 last-read chapter while one exists.
+  it("the title link href targets the last-read chapter", () => {
     const book = makeBook();
     const locations = [
       loc(`${BOOK_ID}-c00`, 5, "2026-01-02T00:00:00.000Z"),
@@ -230,13 +237,13 @@ describe("BookRow — resume targeting (D12-07)", () => {
         onRemove={() => {}}
       />,
     );
-    // Accessible name comes from aria-labelledby → the book title heading.
-    const resume = screen.getByRole("link", { name: "The Synthetic Book" });
-    expect(resume.getAttribute("href")).toBe(`#/article/${BOOK_ID}-c02`);
-    expect(resume.textContent).toBe("Resume");
+    // Accessible name comes from the link text (the book title itself).
+    const titleLink = screen.getByRole("link", { name: "The Synthetic Book" });
+    expect(titleLink.getAttribute("href")).toBe(`#/article/${BOOK_ID}-c02`);
+    expect(titleLink.textContent).toBe("The Synthetic Book");
   });
 
-  it("no Resume link before the book is ever opened", () => {
+  it("an unread book's title links to the first declared chapter", () => {
     render(
       <BookRow
         book={makeBook()}
@@ -245,7 +252,8 @@ describe("BookRow — resume targeting (D12-07)", () => {
         onRemove={() => {}}
       />,
     );
-    expect(screen.queryByText("Resume")).toBeNull();
+    const titleLink = screen.getByRole("link", { name: "The Synthetic Book" });
+    expect(titleLink.getAttribute("href")).toBe(`#/article/${BOOK_ID}-c00`);
   });
 });
 
@@ -286,6 +294,27 @@ describe("BookRow — skip disclosure (D12-11)", () => {
       />,
     );
     expect(screen.queryByText(/could not be read/)).toBeNull();
+  });
+});
+
+describe("BookRow — the icon action cluster (issue #67)", () => {
+  it("the remove trigger is the cluster trash icon with the shared aria-label template", async () => {
+    const onRemove = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <BookRow
+        book={makeBook()}
+        chapters={sampleChapters()}
+        snapshot={snapshotFor(sampleChapters(), [])}
+        onRemove={onRemove}
+      />,
+    );
+    const remove = screen.getByRole("button", {
+      name: "Remove The Synthetic Book from library",
+    });
+    expect(remove.querySelector("svg")).not.toBeNull();
+    await user.click(remove);
+    expect(onRemove).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -331,10 +360,12 @@ describe("BookRow — chapter sub-rows + tags (D12-01 + D12-04)", () => {
     await user.click(
       screen.getByRole("button", { name: "Chapters of The Synthetic Book" }),
     );
-    // TagEntry renders the fieldset + legend + existing-tag chips.
+    // TagEntry renders the fieldset + legend + existing-tag chips. The chip
+    // is asserted WITHIN the fieldset — the collapsed row's readonly tag
+    // chips (issue #67 anatomy) also render the tag text outside it.
     const fieldset = screen.getByRole("group", { name: /tags/i });
     expect(fieldset).toBeInTheDocument();
-    expect(screen.getByText("essays")).toBeInTheDocument();
+    expect(within(fieldset).getByText("essays")).toBeInTheDocument();
   });
 
   it("chapters render in the book's declared TOC order", async () => {

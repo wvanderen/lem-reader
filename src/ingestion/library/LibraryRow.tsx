@@ -34,10 +34,10 @@ interface LibraryRowProps {
   onRemove?: () => void;
   /**
    * Optional edit-metadata trigger handler (Plan 17-02 — D17-01). When
-   * present, the row renders a quiet pencil-glyph button immediately before
-   * the remove button; LibraryView passes it ONLY on top-level article rows
-   * that are Dexie-persisted (`ingestionMeta !== undefined` — bundled Sample
-   * fixtures and book/chapter rows never do; D17-05/D17-06).
+   * present, the row renders a quiet pencil-glyph button in the actions
+   * cluster; LibraryView passes it ONLY on top-level article rows that are
+   * Dexie-persisted (`ingestionMeta !== undefined` — bundled Sample fixtures
+   * and book/chapter rows never do; D17-05/D17-06).
    */
   onEdit?: () => void;
   onReadingStateChange?: (read: boolean) => Promise<void>;
@@ -58,6 +58,14 @@ interface LibraryRowProps {
   timeReadLabel?: string;
 }
 
+/**
+ * Issue #67 (locked IA, variant A) — the ONE row anatomy for every library
+ * row (standalone article, chapter sub-row): a MAIN column (title → metaline
+ * → tags → progress/Finished) plus a right-aligned ICON action cluster
+ * (mark-read check, edit pencil, trash). The title's stretched link keeps
+ * the whole surface native-navigable (the "Title-led cards" CSS layer);
+ * the cluster buttons ride above it via the shared z-index rule.
+ */
 export function LibraryRow({
   article,
   location,
@@ -81,90 +89,101 @@ export function LibraryRow({
   // contract (`title-{id}`) is identical at either level, so the
   // aria-labelledby open-link pairing is unchanged.
   const Title = headingLevel === 2 ? "h2" : "h3";
+  const title = effectiveTitle(article);
+  const hasCluster = Boolean(onReadingStateChange || onEdit || onRemove);
   return (
     <li className="library-row" key={id}>
       <article>
-        {/* byte-stable title heading (Pitfall 8-5; h3 inside book groups).
-            Plan 17-02 (D17-09): the VALUE SOURCE is the effectiveTitle
-            derivation — markup shape + heading id stay byte-stable. */}
-        <Title id={`title-${id}`}>
-          <a className="library-card-link" href={`#/article/${id}`}>
-            {effectiveTitle(article)}
-          </a>
-        </Title>
-        <div className="library-card-meta">
-          {/* byte-stable author meta (omitted when absent). Plan 17-02
-            (D17-09): effectiveAuthor inside the existing truthy guard —
-            an absent canonical author restored via Reset renders nothing. */}
-          {effectiveAuthor(article) && <p className="meta">{effectiveAuthor(article)}</p>}
-          {/* D8-02 source indicator + LIB-05 source link */}
-          <SourceBadge article={article} />
-          {/* Issue #41 (flow N3) — the video duration as text (absent for
-              every non-transcript source) via the ONE duration derivation. */}
-          {videoDuration(article) && (
-            <p className="meta library-row-duration">{videoDuration(article)}</p>
+        <div className="library-row-main">
+          {/* byte-stable title heading (Pitfall 8-5; h3 inside book groups).
+              Plan 17-02 (D17-09): the VALUE SOURCE is the effectiveTitle
+              derivation — markup shape + heading id stay byte-stable. */}
+          <Title id={`title-${id}`}>
+            <a className="library-card-link" href={`#/article/${id}`}>
+              {title}
+            </a>
+          </Title>
+          {/* Issue #67 — ONE metaline: author · source · duration · time
+              read, all quiet p.meta items in the shared flex line (the
+              .library-card-meta container; margins zeroed there). */}
+          <div className="library-card-meta">
+            {effectiveAuthor(article) && <p className="meta">{effectiveAuthor(article)}</p>}
+            {/* D8-02 source indicator + LIB-05 source link */}
+            <SourceBadge article={article} />
+            {/* Issue #41 (flow N3) — the video duration as text (absent for
+                every non-transcript source) via the ONE duration derivation. */}
+            {videoDuration(article) && <p className="meta library-row-duration">{videoDuration(article)}</p>}
+            {/* Issue #38 — the quiet "{duration} read here" line joins the
+                metaline (was its own row). Absent under one minute of
+                accrued time (silence is the empty state). */}
+            {timeReadLabel && <p className="meta library-row-time-read">{timeReadLabel}</p>}
+          </div>
+          {/* D8-05 display-only tag chips on the row (no edit affordance) */}
+          {tags.length > 0 && (
+            <ul className="library-row-tags">
+              {tags.map((tag) => (
+                <li key={tag}>
+                  <span className="tag-chip tag-chip-readonly">{tag}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {/* Issue #67 — the progress block: "% read" + hairline while
+              in progress; a quiet "Finished" chip once finished; NOTHING
+              while unread (silence is the unread state). */}
+          {isFinished && <p className="meta finished-mark">Finished</p>}
+          {showHairline && (
+            <div className="library-row-progress">
+              <p className="meta library-progress-label">
+                {Math.min(97, Math.floor(ratio * 100))}% read
+              </p>
+              <ProgressHairline progress={ratio} />
+            </div>
           )}
         </div>
-        {/* Issue #38 — the quiet "{duration} read here" meta line. Absent
-            under one minute of accrued time (silence is the empty state). */}
-        {timeReadLabel && <p className="meta library-row-time-read">{timeReadLabel}</p>}
-        {/* D8-05 display-only tag chips on the row (no edit affordance) */}
-        {tags.length > 0 && (
-          <ul className="library-row-tags">
-            {tags.map((tag) => (
-              <li key={tag}>
-                <span className="tag-chip tag-chip-readonly">{tag}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-        <div className="library-row-actions">
-          {onReadingStateChange && (
-            <ReadingStateButton
-              title={effectiveTitle(article)}
-              isRead={isFinished}
-              onChange={onReadingStateChange}
-            />
-          )}
-          {/* Edit-metadata affordance — Plan 17-02 (D17-01). Only when
-            onEdit is wired (Dexie-persisted top-level rows only). Sits
-            immediately before the remove button in the same actions
-            cluster; the aria-label template names the action + the
-            EFFECTIVE title (the one name the reader sees). */}
-          {onEdit && (
-            <button
-              type="button"
-              className="library-row-edit"
-              aria-label={`Edit metadata for ${effectiveTitle(article)}`}
-              onClick={onEdit}
-            >
-              <EditIcon aria-hidden="true" />
-            </button>
-          )}
-          {/* Remove affordance — only when onRemove is wired (Plan 04). The
-            glyph is the inline-SVG waste-bin below (Phase 13 G3 — real icon,
-            not an emoji character); aria-label carries the accessible name
-            and locates this button for the remove-cascade + dialog-centering
-            specs, so its template stays byte-stable. */}
-          {onRemove && (
-            <button
-              type="button"
-              className="library-row-remove"
-              aria-label={`Remove ${effectiveTitle(article)} from library`}
-              onClick={onRemove}
-            >
-              <TrashIcon aria-hidden="true" />
-            </button>
-          )}
-        </div>
-        {isFinished && <p className="meta finished-mark">Finished</p>}
-        {showHairline && (
-          <>
-            <p className="meta library-progress-label">
-              {Math.min(97, Math.floor(ratio * 100))}% read
-            </p>
-            <ProgressHairline progress={ratio} />
-          </>
+        {/* Issue #67 — the icon action cluster: mark-read · edit · trash,
+            one arrangement for every row kind. Rendered only when at least
+            one action is wired (chapter sub-rows carry none). */}
+        {hasCluster && (
+          <div className="library-row-actions">
+            {onReadingStateChange && (
+              <ReadingStateButton
+                title={title}
+                isRead={isFinished}
+                onChange={onReadingStateChange}
+              />
+            )}
+            {/* Edit-metadata affordance — Plan 17-02 (D17-01). Only when
+              onEdit is wired (Dexie-persisted top-level rows only). Sits
+              between mark-read and remove in the cluster; the aria-label
+              template names the action + the EFFECTIVE title (the one name
+              the reader sees). */}
+            {onEdit && (
+              <button
+                type="button"
+                className="library-row-edit"
+                aria-label={`Edit metadata for ${title}`}
+                onClick={onEdit}
+              >
+                <EditIcon aria-hidden="true" />
+              </button>
+            )}
+            {/* Remove affordance — only when onRemove is wired (Plan 04). The
+              glyph is the inline-SVG waste-bin below (Phase 13 G3 — real icon,
+              not an emoji character); aria-label carries the accessible name
+              and locates this button for the remove-cascade + dialog-centering
+              specs, so its template stays byte-stable. */}
+            {onRemove && (
+              <button
+                type="button"
+                className="library-row-remove"
+                aria-label={`Remove ${title} from library`}
+                onClick={onRemove}
+              >
+                <TrashIcon aria-hidden="true" />
+              </button>
+            )}
+          </div>
         )}
       </article>
     </li>
