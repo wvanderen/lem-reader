@@ -38,7 +38,6 @@
 // copies remain.
 import { useMemo, useState } from "react";
 import type { Book, CanonicalArticle } from "../../content/schema";
-import { ProgressHairline } from "../../reader/ProgressHairline";
 import { TagEntry } from "../../reader/TagEntry";
 import { setBookTags } from "../../persistence/booksStore";
 import {
@@ -48,6 +47,8 @@ import {
 } from "./bookProgress";
 import { bookReadingState } from "./readingState";
 import { LibraryRow } from "./LibraryRow";
+import { RowProgress, RowTags } from "./RowAnatomy";
+import { TrashIcon } from "./icons";
 import type { LibrarySnapshot } from "./librarySnapshot";
 
 interface BookRowProps {
@@ -114,7 +115,6 @@ export function BookRow({
       snapshot.latestLocationByArticleId,
       (articleId) => snapshot.totalsByArticleId.get(articleId),
     ) === "finished";
-  const showHairline = progress > 0 && !isFinished;
   const chaptersRegionId = `chapters-${book.id}`;
   const chapterCount = book.chapterArticleIds.length;
 
@@ -123,10 +123,15 @@ export function BookRow({
   // its start). A book with zero live chapters renders an unlinked title
   // (honest — there is nothing to open).
   const titleTarget = resumeChapterId ?? orderedChapters[0]?.id ?? null;
-  const inProgress = showHairline;
-  // D12-06 numbering for the metaline (defined only while in progress).
-  const ordinal =
-    inProgress && resumeChapterId !== null ? chapterOrdinal(book, resumeChapterId) : 0;
+  const inProgress = progress > 0 && !isFinished;
+  // D12-06 numbering for the metaline (review fix — `number | null`, never a
+  // 0 sentinel): null whenever the book isn't mid-book, so the metaline
+  // guard below is the ONLY consumer of the sentinel and the derivation
+  // can't silently read as "chapter 0".
+  const ordinal: number | null =
+    inProgress && resumeChapterId !== null
+      ? chapterOrdinal(book, resumeChapterId)
+      : null;
 
   return (
     <li className="book-row">
@@ -150,35 +155,19 @@ export function BookRow({
             {book.authors.length > 0 && (
               <p className="meta">{book.authors.join(", ")}</p>
             )}
-            {inProgress && resumeChapterId !== null && (
+            {ordinal !== null && (
               <p className="meta">
                 Chapter {ordinal} of {chapterCount}
               </p>
             )}
           </div>
           {/* D12-04 — book tags display on the row (editing stays in the
-              expanded region's TagEntry). */}
-          {(book.tags ?? []).length > 0 && (
-            <ul className="library-row-tags">
-              {(book.tags ?? []).map((tag) => (
-                <li key={tag}>
-                  <span className="tag-chip tag-chip-readonly">{tag}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-          {/* D12-03 book progress block (chapters-finished ratio). Mirrors
-              the LibraryRow algebra: hairline + % while in progress, the
+              expanded region's TagEntry) — the shared RowAnatomy piece. */}
+          <RowTags tags={book.tags ?? []} />
+          {/* D12-03 book progress block (chapters-finished ratio) — the
+              shared RowAnatomy piece: hairline + % while in progress, the
               quiet Finished chip at 1, nothing while unread. */}
-          {isFinished && <p className="meta finished-mark">Finished</p>}
-          {showHairline && (
-            <div className="library-row-progress">
-              <p className="meta library-progress-label">
-                {Math.min(97, Math.floor(progress * 100))}% read
-              </p>
-              <ProgressHairline progress={progress} />
-            </div>
-          )}
+          <RowProgress finished={isFinished} progress={progress} />
           {/* T-12-15 — REAL disclosure button. aria-expanded + aria-controls
               region; row-click never toggles (two gestures, two targets). */}
           <button
@@ -235,44 +224,10 @@ export function BookRow({
             aria-label={`Remove ${book.title} from library`}
             onClick={onRemove}
           >
-            <BookTrashIcon aria-hidden="true" />
+            <TrashIcon />
           </button>
         </div>
       </article>
     </li>
-  );
-}
-
-/**
- * Phase 13 Plan 13-07 (G3 — icon policy / D13-12 chrome polish) — waste-bin
- * glyph for the book remove affordance. Mirrors the LibraryRow TrashIcon
- * anatomy exactly (20×20, 24-unit viewBox, currentColor stroke, round
- * caps/joins, aria-hidden + focusable=false): decorative, so the button's
- * aria-label carries the full accessible name.
- */
-function BookTrashIcon({ ariaHidden }: { ariaHidden?: "true" }) {
-  return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden={ariaHidden}
-      focusable="false"
-    >
-      {/* lid */}
-      <path d="M3 6h18" />
-      {/* handle */}
-      <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-      {/* body */}
-      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-      {/* inner lines */}
-      <path d="M10 11v6" />
-      <path d="M14 11v6" />
-    </svg>
   );
 }

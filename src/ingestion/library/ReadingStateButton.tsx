@@ -13,7 +13,15 @@
 // visible text — the name flips to the TARGET action at click time and
 // stays there through the pending window), and `disabled` carries the
 // pending state.
+//
+// Issue #67 review — pending is VISIBLE, not just disabled+opacity: the
+// glyph swaps to a spinner arc and the button carries aria-busy while the
+// write is in flight. The accessible name deliberately does NOT change
+// (Quick 260909-ahy — it stays the target action through the pending
+// window); sighted readers get the spinner, screen readers get a stable
+// name + busy state + the disabled semantics.
 import { useEffect, useState } from "react";
+import { CheckIcon, SpinnerIcon } from "./icons";
 
 /** Keep storage failures local and keep curation separate from card navigation. */
 export function ReadingStateButton({
@@ -46,6 +54,7 @@ export function ReadingStateButton({
         type="button"
         className="reading-state-button"
         disabled={pending}
+        aria-busy={pending || undefined}
         aria-label={`${label}: ${title}`}
         onClick={async () => {
           setPending(true);
@@ -61,7 +70,7 @@ export function ReadingStateButton({
           }
         }}
       >
-        <CheckIcon aria-hidden="true" />
+        {pending ? <SpinnerIcon /> : <CheckIcon />}
       </button>
       {error && (
         <p className="meta" role="alert">
@@ -69,32 +78,5 @@ export function ReadingStateButton({
         </p>
       )}
     </div>
-  );
-}
-
-/**
- * Issue #67 — check-circle glyph for the mark-read affordance. Clones the
- * TrashIcon/EditIcon anatomy (20×20, 24-unit viewBox, currentColor stroke,
- * round caps/joins, aria-hidden + focusable=false): decorative, so the
- * button's aria-label carries the full accessible name.
- */
-function CheckIcon({ ariaHidden }: { ariaHidden?: "true" }) {
-  return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden={ariaHidden}
-      focusable="false"
-    >
-      {/* circle with a check — one glyph, two states via the aria-label */}
-      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-      <path d="M22 4 12 14.01l-3-3" />
-    </svg>
   );
 }

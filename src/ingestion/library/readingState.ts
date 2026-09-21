@@ -36,6 +36,18 @@ import { deriveBookProgress, resolveResumeChapterId } from "./bookProgress";
 export type ReadingState = "unread" | "in-progress" | "finished";
 
 /**
+ * percentRead (issue #67 review) — the ONE in-progress percent label
+ * derivation for every surface (rows, book rows, the continue-reading rail).
+ * The 97 cap is display policy, not algebra: an unfinished record never
+ * DISPLAYS 98–100% (a 98–99% ratio floors there but still reads
+ * "in-progress"; showing ~100% while the Finished chip hasn't arrived reads
+ * as stuck). 100% belongs to the Finished chip alone.
+ */
+export function percentRead(progress: number): number {
+  return Math.min(97, Math.floor(progress * 100));
+}
+
+/**
  * articleReadingState (D14-18) — the ONE standalone-article derivation.
  *
  * The ratio formula stays VERBATIM from LibraryRow/the strip

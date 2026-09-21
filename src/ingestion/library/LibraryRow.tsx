@@ -1,9 +1,10 @@
 import type { CanonicalArticle } from "../../content/types";
 import type { LocationRecord } from "../../content/schema";
-import { ProgressHairline } from "../../reader/ProgressHairline";
 import { ReadingStateButton } from "./ReadingStateButton";
 import { SourceBadge } from "./SourceBadge";
 import { articleReadingState } from "./readingState";
+import { RowProgress, RowTags } from "./RowAnatomy";
+import { EditIcon, TrashIcon } from "./icons";
 import {
   effectiveTitle,
   effectiveAuthor,
@@ -80,9 +81,8 @@ export function LibraryRow({
   const ratio = location ? Math.min(1, location.graphemeOffset / total) : 0;
   // D14-20 — the finished decision routes through the ONE policy module
   // (readingState.ts); the ratio math above stays verbatim because the
-  // hairline (showHairline) still needs it.
+  // progress block still needs it.
   const isFinished = articleReadingState(location, total) === "finished";
-  const showHairline = ratio > 0 && !isFinished;
   const tags = article.tags ?? [];
   // Dynamic heading element (Plan 12-05): h2 (default — byte-stable for
   // standalone rows) or h3 (chapter sub-rows inside a book group). The id
@@ -118,28 +118,14 @@ export function LibraryRow({
                 accrued time (silence is the empty state). */}
             {timeReadLabel && <p className="meta library-row-time-read">{timeReadLabel}</p>}
           </div>
-          {/* D8-05 display-only tag chips on the row (no edit affordance) */}
-          {tags.length > 0 && (
-            <ul className="library-row-tags">
-              {tags.map((tag) => (
-                <li key={tag}>
-                  <span className="tag-chip tag-chip-readonly">{tag}</span>
-                </li>
-              ))}
-            </ul>
-          )}
+          {/* D8-05 display-only tag chips on the row (no edit affordance) —
+              the shared RowAnatomy piece. */}
+          <RowTags tags={tags} />
           {/* Issue #67 — the progress block: "% read" + hairline while
               in progress; a quiet "Finished" chip once finished; NOTHING
-              while unread (silence is the unread state). */}
-          {isFinished && <p className="meta finished-mark">Finished</p>}
-          {showHairline && (
-            <div className="library-row-progress">
-              <p className="meta library-progress-label">
-                {Math.min(97, Math.floor(ratio * 100))}% read
-              </p>
-              <ProgressHairline progress={ratio} />
-            </div>
-          )}
+              while unread (silence is the unread state) — the shared
+              RowAnatomy piece. */}
+          <RowProgress finished={isFinished} progress={ratio} />
         </div>
         {/* Issue #67 — the icon action cluster: mark-read · edit · trash,
             one arrangement for every row kind. Rendered only when at least
@@ -165,7 +151,7 @@ export function LibraryRow({
                 aria-label={`Edit metadata for ${title}`}
                 onClick={onEdit}
               >
-                <EditIcon aria-hidden="true" />
+                <EditIcon />
               </button>
             )}
             {/* Remove affordance — only when onRemove is wired (Plan 04). The
@@ -180,74 +166,12 @@ export function LibraryRow({
                 aria-label={`Remove ${title} from library`}
                 onClick={onRemove}
               >
-                <TrashIcon aria-hidden="true" />
+                <TrashIcon />
               </button>
             )}
           </div>
         )}
       </article>
     </li>
-  );
-}
-
-/**
- * Phase 13 Plan 13-07 (G3 — icon policy / D13-12 chrome polish) — waste-bin
- * glyph for the row remove affordance. Mirrors the GearIcon/HighlighterIcon
- * anatomy exactly (20×20, 24-unit viewBox, currentColor stroke, round
- * caps/joins, aria-hidden + focusable=false): decorative, so the button's
- * aria-label carries the full accessible name.
- */
-function TrashIcon({ ariaHidden }: { ariaHidden?: "true" }) {
-  return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden={ariaHidden}
-      focusable="false"
-    >
-      {/* lid */}
-      <path d="M3 6h18" />
-      {/* handle */}
-      <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-      {/* body */}
-      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-      {/* inner lines */}
-      <path d="M10 11v6" />
-      <path d="M14 11v6" />
-    </svg>
-  );
-}
-
-/**
- * Plan 17-02 (D17-01) — pencil glyph for the row edit-metadata affordance.
- * Clones the TrashIcon anatomy exactly (20×20, 24-unit viewBox, currentColor
- * stroke, round caps/joins, aria-hidden + focusable=false): decorative, so
- * the button's aria-label carries the full accessible name.
- */
-function EditIcon({ ariaHidden }: { ariaHidden?: "true" }) {
-  return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden={ariaHidden}
-      focusable="false"
-    >
-      {/* baseline */}
-      <path d="M12 20h9" />
-      {/* pencil body */}
-      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
-    </svg>
   );
 }

@@ -2332,7 +2332,18 @@ dialog.annotations-drawer::backdrop {
   border-radius: 4px;
 }
 .continue-reading-row a {
-  display: inline-block;
+  /* Issue #67 review — the locked rail card spec: ONE-line clamped title.
+     Visual clamp only (text-overflow ellipsis via -webkit-line-clamp): the
+     full title stays in the DOM and the accessible name — the no-clamp
+     rule in the TOC layer (app.css §toc-list) targets navigation
+     DESTINATION text; a rail card is a resume shortcut whose full title
+     lives on its library row. overflow-wrap keeps a long unbroken token
+     wrapping instead of clipping. */
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
   min-height: var(--touch);
   line-height: var(--touch);
 }
@@ -4543,6 +4554,22 @@ main#main > .status:empty {
 .reading-state-button:disabled {
   cursor: wait;
   opacity: 0.65;
+}
+/* Issue #67 review — pending is visible, not just opacity: the glyph swaps
+   to the icons.tsx spinner arc while the write is in flight (the accessible
+   name stays the target action — Quick 260909-ahy). Rotation rides the same
+   positive-gate pattern as the book disclosure animation above; under
+   reduced motion the global reduce gate (top of file) leaves the static arc
+   — still a different shape from the check. */
+@media (prefers-reduced-motion: no-preference) {
+  .reading-state-button[aria-busy="true"] svg {
+    animation: reading-state-spin 0.9s linear infinite;
+  }
+  @keyframes reading-state-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
 }
 
 /* Highlights: shared page measure, paired fields, one container per quote. */

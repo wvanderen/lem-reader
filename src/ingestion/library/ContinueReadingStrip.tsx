@@ -60,7 +60,7 @@ import type { CanonicalArticle } from "../../content/types";
 import type { Book } from "../../content/schema";
 import { ProgressHairline } from "../../reader/ProgressHairline";
 import { deriveBookProgress, resolveResumeChapterId, chapterOrdinal } from "./bookProgress";
-import { articleReadingState, bookReadingState } from "./readingState";
+import { articleReadingState, bookReadingState, percentRead } from "./readingState";
 import { effectiveTitle } from "./effectiveMetadata";
 import type { LibrarySnapshot } from "./librarySnapshot";
 
@@ -204,7 +204,7 @@ export function ContinueReadingStrip({
                 {effectiveTitle(entry.article)}
               </a>
               <div className="continue-reading-progress">
-                <span className="meta">{Math.floor(entry.progress * 100)}% read</span>
+                <span className="meta">{percentRead(entry.progress)}% read</span>
                 <ProgressHairline progress={entry.progress} />
               </div>
             </li>
@@ -217,7 +217,7 @@ export function ContinueReadingStrip({
                 {entry.book.title} — Chapter {entry.ordinal} of {entry.total}
               </a>
               <div className="continue-reading-progress">
-                <span className="meta">{Math.floor(entry.progress * 100)}% read</span>
+                <span className="meta">{percentRead(entry.progress)}% read</span>
                 <ProgressHairline progress={entry.progress} />
               </div>
             </li>
