@@ -316,12 +316,14 @@ export async function ingestEpub(
 }
 
 /**
- * ingestPastedTranscript — POST {transcript: {text, url?}} to /api/ingest
- * and re-validate the response. The youtube-bot-check fallback: the reader
- * pastes the transcript text from YouTube's own transcript panel when the
- * server-side fetch is refused (datacenter bot-check). The optional `url`
- * is the source-video URL — it drives the yt-<videoId-hash> article id (the
- * SAME identity a successful fetch derives, so the two paths dedupe to one
+ * ingestPastedTranscript — POST {transcript: {text, title, url?}} to
+ * /api/ingest and re-validate the response. The youtube-bot-check fallback:
+ * the reader pastes the transcript text from YouTube's own transcript panel
+ * when the server-side fetch is refused (datacenter bot-check). `title` is
+ * REQUIRED — the reader names the paste in the dialog's title field, so the
+ * pipeline never fabricates a neutral title. The optional `url` is the
+ * source-video URL — it drives the yt-<videoId-hash> article id (the SAME
+ * identity a successful fetch derives, so the two paths dedupe to one
  * article) and the provenance "open original" link; it is provenance ONLY.
  *
  * Throws `IngestionError` with the typed `.reason` on any ok:false response
@@ -330,9 +332,16 @@ export async function ingestEpub(
  */
 export async function ingestPastedTranscript(
   text: string,
+  title: string,
   url?: string,
 ): Promise<IngestionSuccess> {
-  return ingest({ transcript: { text, ...(url !== undefined ? { url } : {}) } });
+  return ingest({
+    transcript: {
+      text,
+      title,
+      ...(url !== undefined ? { url } : {}),
+    },
+  });
 }
 
 /**
@@ -340,7 +349,8 @@ export async function ingestPastedTranscript(
  * ingestHtml, ingestMarkdown, ingestPdf, and ingestPastedTranscript all
  * delegate here. The body is always exactly one of {url} | {url,
  * preferredLanguages} | {html} | {markdown, filename?} | {pdf, filename?} |
- * {transcript: {text, url?}} (IngestionRequestSchema on the server enforces
+ * | {transcript: {text, title, url?}} (IngestionRequestSchema on the server
+ * enforces
  * this, but the client constructs the body so the contract is by
  * construction).
  *
@@ -356,7 +366,7 @@ async function ingest(
     | { html: string }
     | { markdown: string; filename?: string }
     | { pdf: string; filename?: string }
-    | { transcript: { text: string; url?: string } },
+    | { transcript: { text: string; title: string; url?: string } },
 ): Promise<IngestionSuccess> {
   const res = await fetch("/api/ingest", {
     method: "POST",

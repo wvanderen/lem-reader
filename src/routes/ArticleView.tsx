@@ -137,6 +137,8 @@ import { setDocumentTitle } from "../ingestion/library/pageMeta";
 import {
   effectiveTitle,
   effectiveAuthor,
+  effectivePublishedAt,
+  effectiveSourceUrl,
 } from "../ingestion/library/effectiveMetadata";
 import { extractionNote } from "./extractionNote";
 // Issue #40 — the minimal speakable read-aloud path: the transport bar
@@ -151,6 +153,7 @@ import { extractionNote } from "./extractionNote";
 import { useReadAloud } from "../reader/useReadAloud";
 import { useReadAloudFollow } from "../reader/useReadAloudFollow";
 import { ReadAloudBar } from "../reader/ReadAloudBar";
+import { formatIsoDate } from "../ingestion/library/formatDate";
 import type { GraphemeRange } from "../annotations/unifiedHighlightSlicer";
 
 /** The D4-10 mode-toggle handler signature (App threads a ref of this shape). */
@@ -233,14 +236,8 @@ export interface ArticleViewProps {
 }
 
 function formatDate(iso: string): string {
-  try {
-    return new Intl.DateTimeFormat(navigator.language, { dateStyle: "medium" }).format(
-      new Date(iso),
-    );
-  } catch {
-    // Fall back to the raw ISO date if the user agent's locale is unavailable.
-    return iso;
-  }
+  // The ONE date voice (formatIsoDate) — medium style.
+  return formatIsoDate(iso, "medium");
 }
 
 // queryBlocks moved to reader/restoreLocation.ts (issue #42 review): every
@@ -1729,8 +1726,10 @@ export function ArticleView({
   // absent — there is no canonical source URL for a pasted article. v1.0
   // fixtures always supply sourceUrl so they render identically; paste-HTML
   // articles (07-06+) trigger the conditional. originalHtmlHash still provides
-  // traceability for paste-sourced articles.
-  const sourceUrl = article.provenance.sourceUrl;
+  // traceability for paste-sourced articles. The derivation reads the
+  // effective value (Plan 17 META — readerSourceUrl override ?? canonical),
+  // the same one-derivation-point discipline as the title/author byline.
+  const sourceUrl = effectiveSourceUrl(article);
   const domain = sourceUrl !== undefined ? new URL(sourceUrl).hostname : undefined;
 
   /**
@@ -1819,17 +1818,23 @@ export function ArticleView({
   //     firstPageReservedPx budget — fed with the once-measured spot height
   //     — is its sanctioned seat per the Option A human decision,
   //     2026-08-18).
+  // One derivation, computed once: the local consts let TypeScript narrow
+  // the guard + render + separator conditions through the SAME value (a
+  // bare function call in each JSX expression would widen back to
+  // string | undefined).
+  const effectiveByline = effectiveAuthor(article);
+  const effectiveDate = effectivePublishedAt(article);
   const articleTopMeta = (
     <div className="article-top-meta">
       {/* Plan 17-03 (META-02/D17-09): the byline reads the effective author
-          (override ?? canonical) at all three expressions so the guard, the
-          rendered text, and the " · " separator condition stay one truth;
-          the publishedAt branch logic is byte-unchanged. */}
-      {(effectiveAuthor(article) || article.provenance.publishedAt) && (
+          and effective date (override ?? canonical) at every expression so
+          the guard, the rendered text, and the " · " separator condition
+          stay one truth. */}
+      {(effectiveByline || effectiveDate) && (
         <p className="meta">
-          {effectiveAuthor(article)}
-          {effectiveAuthor(article) && article.provenance.publishedAt && " · "}
-          {article.provenance.publishedAt && formatDate(article.provenance.publishedAt)}
+          {effectiveByline}
+          {effectiveByline && effectiveDate && " · "}
+          {effectiveDate && formatDate(effectiveDate)}
         </p>
       )}
       {/* Issue #41 (flow N6) — the low-confidence disclosure. Undefined is

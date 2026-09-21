@@ -34,6 +34,7 @@ import type { HighlightRecord, LocationRecord, NoteRecord } from "../content/sch
 import {
   effectiveTitle,
   effectiveAuthor,
+  effectiveSourceUrl,
 } from "../ingestion/library/effectiveMetadata";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -148,13 +149,14 @@ function markerFor(status: HighlightEntry["status"]): string {
 
 /** The citation line: author + italic title, plus a source link when the
  * article has one. The author (and its comma) is omitted when absent.
- * Plan 17-03 (D17-09): both slots read the EFFECTIVE (reader-owned) values. */
+ * Plan 17-03 (D17-09): every slot reads the EFFECTIVE (reader-owned) values. */
 function citationLine(article: CanonicalArticle): string {
   const author = effectiveAuthor(article);
   const core = author
     ? `${author}, *${effectiveTitle(article)}*`
     : `*${effectiveTitle(article)}*`;
-  const source = article.provenance.sourceUrl ? ` ([source](${article.provenance.sourceUrl}))` : "";
+  const sourceUrl = effectiveSourceUrl(article);
+  const source = sourceUrl ? ` ([source](${sourceUrl}))` : "";
   return `> — ${core}${source}`;
 }
 

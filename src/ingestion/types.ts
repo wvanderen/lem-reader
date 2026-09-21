@@ -98,10 +98,13 @@ export const IngestionRequestSchema = z.union([
   // refused. NESTED (not a flat `{transcript, url}`) so the exactly-one-of
   // variant count in ingest() stays a simple key count: `url` here is the
   // OPTIONAL source-URL provenance channel (it drives the yt-<hash> article
-  // id and the "open original" link), never a second variant key.
+  // id and the "open original" link), never a second variant key. `title`
+  // is REQUIRED: the reader names the paste at ingest time, so the pipeline
+  // never fabricates a neutral title (no silent "Transcript" — honesty).
   z.object({
     transcript: z.object({
       text: z.string().min(1).max(MAX_PASTED_TRANSCRIPT_CHARS),
+      title: z.string().trim().min(1),
       url: httpUrl.optional(),
     }),
   }),

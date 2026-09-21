@@ -801,3 +801,209 @@ test.describe("META-02 cross-surface — one effective name everywhere (17-05, D
     expect(md).toContain(`> ${anchor.quote.exact}`);
   });
 });
+
+// ── META extension — readerPublishedAt/readerSourceUrl overrides ─────────────
+//
+// The title/author mechanism extended to the provenance date and source
+// link: save writes both new override keys while provenance stays untouched
+// (META-01); the reader header derives the effective date + source link;
+// reopening seeds the fields from the persisted overrides; Reset deletes
+// the keys from the stored row (META-03) and the canonical values return.
+const DATE_CANONICAL_TITLE = "Published Date Override Article";
+const DATE_CANONICAL_ISO = "2020-06-01T09:30:00Z";
+const DATE_OVERRIDE_INPUT = "2024-03-05";
+const DATE_OVERRIDE_ISO = "2024-03-05T12:00:00.000Z";
+const SOURCE_CANONICAL = "https://example.com/original";
+const SOURCE_OVERRIDE = "https://example.org/true-source";
+
+function pasteHtmlWithMeta(title: string): string {
+  return `<!DOCTYPE html>
+<html><head><title>${title}</title>
+<meta property="article:published_time" content="${DATE_CANONICAL_ISO}">
+<link rel="canonical" href="${SOURCE_CANONICAL}">
+</head>
+<body>
+<article>
+<h1>${title}</h1>
+<p>The first paragraph of ${title}. Long enough to clear the ING-06
+confidence threshold and the round-trip anchor gate, varied enough that the
+selectors resolve confidently. The canonical provenance carries a published
+date (article:published_time) and a source URL (link rel=canonical), so both
+override fields have a real canonical value to fall back to after Reset.</p>
+<p>The second paragraph continues the long-form prose so the article reads
+like any other ingested document. The reader header derives its byline and
+its "Originally published at" link from the effective metadata, which is the
+override while it exists and the canonical value once the keys are deleted.</p>
+<p>The third paragraph closes the corpus. Nothing about the reading engine
+changes: this article paginates, annotates, and restores identically — only
+the provenance display differs between the override and canonical states.</p>
+</article>
+</body></html>`;
+}
+
+test.describe("META extension — publishedAt + sourceUrl overrides", () => {
+  test("save writes both keys while provenance stays untouched; reader header derives effective values", async ({
+    page,
+  }) => {
+    await page.goto(`${BASE}/#/`);
+    await ingestPaste(page, pasteHtmlWithMeta(DATE_CANONICAL_TITLE));
+    const articleId = await discoverIngestedArticleId(page);
+    expect(articleId).not.toBe("");
+
+    await openLibrary(page);
+    const dialog = await openEditDialog(page, DATE_CANONICAL_TITLE);
+
+    // Baseline: the canonical date shows as the quiet hint (display-only;
+    // the year arrives wherever the reader's locale puts it).
+    await expect(dialog).toContainText(/Publication metadata: .*2020/);
+
+    // Keep the canonical title (Reset title — the explicit keep affordance),
+    // set BOTH new overrides, Save.
+    await dialog.getByRole("button", { name: "Reset title" }).click();
+    await dialog.locator("#edit-metadata-published").fill(DATE_OVERRIDE_INPUT);
+    await dialog.locator("#edit-metadata-source").fill(SOURCE_OVERRIDE);
+    await dialog.getByRole("button", { name: "Save" }).click();
+    await expect(dialog).not.toBeVisible();
+
+    // ROW TRUTH (META-01): the overrides are stored; provenance is untouched.
+    const row = await readRow(page, "articles", articleId);
+    expect(row?.readerPublishedAt).toBe(DATE_OVERRIDE_ISO);
+    expect(row?.readerSourceUrl).toBe(SOURCE_OVERRIDE);
+    const provenance = row?.provenance as Record<string, unknown>;
+    expect(provenance?.publishedAt).toBe(DATE_CANONICAL_ISO);
+    expect(provenance?.sourceUrl).toBe(SOURCE_CANONICAL);
+
+    // LIBRARY ROW (Pitfall 9 same-selector): the row's source badge link
+    // derives the EFFECTIVE source too — the override href, never the
+    // canonical's, so the correction holds everywhere the link renders.
+    const overrideRow = page
+      .locator(".library-list > li")
+      .filter({ hasText: DATE_CANONICAL_TITLE });
+    await expect(overrideRow.locator(".source-badge a")).toHaveAttribute(
+      "href",
+      SOURCE_OVERRIDE,
+    );
+
+    // READER: the byline derives the effective date (the override's year,
+    // never the canonical's) and the source link points at the override.
+    await page.goto(`${BASE}/#/article/${articleId}`);
+    await expect(
+      page.getByRole("heading", { level: 1, name: DATE_CANONICAL_TITLE }),
+    ).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator(".article-top-meta p.meta").first()).toContainText(
+      "2024",
+    );
+    await expect(
+      page.locator(".article-top-meta a", { hasText: "Originally published at" }),
+    ).toHaveAttribute("href", SOURCE_OVERRIDE);
+  });
+
+  test("reopen seeds the fields from the persisted overrides; Reset deletes both keys and the canonical values return (META-03)", async ({
+    page,
+  }) => {
+    await page.goto(`${BASE}/#/`);
+    await ingestPaste(page, pasteHtmlWithMeta(DATE_CANONICAL_TITLE));
+    const articleId = await discoverIngestedArticleId(page);
+    expect(articleId).not.toBe("");
+
+    // Save both overrides (title kept canonical via Reset title).
+    await openLibrary(page);
+    let dialog = await openEditDialog(page, DATE_CANONICAL_TITLE);
+    await dialog.getByRole("button", { name: "Reset title" }).click();
+    await dialog.locator("#edit-metadata-published").fill(DATE_OVERRIDE_INPUT);
+    await dialog.locator("#edit-metadata-source").fill(SOURCE_OVERRIDE);
+    await dialog.getByRole("button", { name: "Save" }).click();
+    await expect(dialog).not.toBeVisible();
+
+    // Reopen: the fields seed FROM THE OVERRIDES (the ISO datetime converts
+    // back to the date input's YYYY-MM-DD).
+    dialog = await openEditDialog(page, DATE_CANONICAL_TITLE);
+    await expect(dialog.locator("#edit-metadata-published")).toHaveValue(
+      DATE_OVERRIDE_INPUT,
+    );
+    await expect(dialog.locator("#edit-metadata-source")).toHaveValue(
+      SOURCE_OVERRIDE,
+    );
+
+    // Reset both, Save → the keys are DELETED from the stored row
+    // (META-03 — never blank) and the canonical values return in the reader.
+    // The title stays blank here, so the pinned D17-04 rule applies: Reset
+    // title first (the explicit keep-original affordance) or Save refuses.
+    await dialog.getByRole("button", { name: "Reset title" }).click();
+    await dialog.getByRole("button", { name: "Reset date" }).click();
+    await dialog.getByRole("button", { name: "Reset source" }).click();
+    await dialog.getByRole("button", { name: "Save" }).click();
+    await expect(dialog).not.toBeVisible();
+
+    const row = await readRow(page, "articles", articleId);
+    expect(
+      Object.prototype.hasOwnProperty.call(row, "readerPublishedAt"),
+      "readerPublishedAt key must be deleted after Reset date",
+    ).toBe(false);
+    expect(
+      Object.prototype.hasOwnProperty.call(row, "readerSourceUrl"),
+      "readerSourceUrl key must be deleted after Reset source",
+    ).toBe(false);
+
+    // LIBRARY ROW (Pitfall 9 same-selector): with the override deleted, the
+    // badge link restores the canonical href (absent override ⇔ canonical).
+    const canonicalRow = page
+      .locator(".library-list > li")
+      .filter({ hasText: DATE_CANONICAL_TITLE });
+    await expect(canonicalRow.locator(".source-badge a")).toHaveAttribute(
+      "href",
+      SOURCE_CANONICAL,
+    );
+
+    await page.goto(`${BASE}/#/article/${articleId}`);
+    await expect(
+      page.getByRole("heading", { level: 1, name: DATE_CANONICAL_TITLE }),
+    ).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator(".article-top-meta p.meta").first()).toContainText(
+      "2020",
+    );
+    await expect(
+      page.locator(".article-top-meta a", { hasText: "Originally published at" }),
+    ).toHaveAttribute("href", SOURCE_CANONICAL);
+  });
+
+  test("invalid source URL refusal: a nonempty non-http(s) value disables Save + shows the explanation; Reset source clears it (honesty — never a silent drop)", async ({
+    page,
+  }) => {
+    await page.goto(`${BASE}/#/`);
+    await ingestPaste(page, pasteHtmlWithMeta(DATE_CANONICAL_TITLE));
+    const articleId = await discoverIngestedArticleId(page);
+    expect(articleId).not.toBe("");
+
+    await openLibrary(page);
+    const dialog = await openEditDialog(page, DATE_CANONICAL_TITLE);
+
+    // Keep the canonical title, type a garbage source URL → Save blocks
+    // with the calm explanation (the native type=url constraint would also
+    // refuse a submit; the disabled button is the reader-visible first line).
+    await dialog.getByRole("button", { name: "Reset title" }).click();
+    const saveBtn = dialog.getByRole("button", { name: "Save" });
+    await expect(saveBtn).toBeEnabled();
+    await dialog.locator("#edit-metadata-source").fill("not a url at all");
+    await expect(saveBtn).toBeDisabled();
+    await expect(dialog).toContainText(
+      "Enter a full http(s) link, or choose Reset source to keep the original.",
+    );
+
+    // Reset source re-enables Save (the explicit clear affordance).
+    await dialog.getByRole("button", { name: "Reset source" }).click();
+    await expect(saveBtn).toBeEnabled();
+    await expect(dialog).not.toContainText(
+      "Enter a full http(s) link, or choose Reset source to keep the original.",
+    );
+    await dialog.getByRole("button", { name: "Save" }).click();
+    await expect(dialog).not.toBeVisible();
+
+    // The refused value never reached the stored row in any form.
+    const row = await readRow(page, "articles", articleId);
+    expect(
+      Object.prototype.hasOwnProperty.call(row, "readerSourceUrl"),
+      "an invalid source URL must never persist (nor silently drop the rest of the save)",
+    ).toBe(false);
+  });
+});

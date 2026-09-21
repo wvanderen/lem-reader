@@ -117,6 +117,13 @@ export function AddDialog({ open, onCancel, onBookAdded }: AddDialogProps) {
   // URL is provenance only — it is never re-fetched.
   const [botCheckUrl, setBotCheckUrl] = useState<string | null>(null);
   const [transcriptValue, setTranscriptValue] = useState("");
+  // The transcript fallback's metadata fields (the "no silent Transcript"
+  // fix): the reader names the paste at ingest time — the title is REQUIRED,
+  // and the video URL rides provenance only (prefilled from the refused
+  // URL, editable, clearable). Like transcriptValue, both survive source
+  // switches within one dialog session (D16-07).
+  const [transcriptTitleValue, setTranscriptTitleValue] = useState("");
+  const [transcriptUrlValue, setTranscriptUrlValue] = useState("");
 
   const submitting = status === "submitting";
   // Live mirror rewritten EVERY render (Pitfall 3 — the LibraryView L236
@@ -161,6 +168,8 @@ export function AddDialog({ open, onCancel, onBookAdded }: AddDialogProps) {
       setMessage(null);
       setBotCheckUrl(null);
       setTranscriptValue("");
+      setTranscriptTitleValue("");
+      setTranscriptUrlValue("");
       resetFilePick();
       // Cross-engine focus management (Pitfall 1 + WebKit quirk — the
       // 02-01 lesson): Chromium auto-focuses the first focusable control
@@ -307,6 +316,9 @@ export function AddDialog({ open, onCancel, onBookAdded }: AddDialogProps) {
       extractYouTubeVideoId(urlValue) !== null
     ) {
       setBotCheckUrl(urlValue);
+      // Prefill the fallback's provenance URL with the refused video's URL
+      // (editable + clearable in the form — the reader may correct it).
+      setTranscriptUrlValue(urlValue);
     }
     renderOutcome(outcome);
   }
@@ -325,16 +337,25 @@ export function AddDialog({ open, onCancel, onBookAdded }: AddDialogProps) {
 
   /**
    * handleTranscriptSubmit — the paste-transcript fallback arm (the
-   * youtube-bot-check companion). ONE service call with the refused video's
-   * URL as provenance; the outcome renders through renderOutcome (success
-   * closes + navigates like every article arm). The oversize paste refuses
-   * BEFORE any network cost (the T-16-05 earliest-enforcement pattern, the
-   * file-picker cap discipline). The pasted text is NEVER cleared by an
-   * error (D16-11 — retry keeps what the reader typed).
+   * youtube-bot-check companion). ONE service call with the reader-provided
+   * title (required — an empty one never submits, so the pipeline never
+   * fabricates a neutral title) and the refused video's URL as provenance
+   * (omitted entirely when the reader cleared the field). The outcome
+   * renders through renderOutcome (success closes + navigates like every
+   * article arm). The oversize paste refuses BEFORE any network cost (the
+   * T-16-05 earliest-enforcement pattern, the file-picker cap discipline).
+   * The pasted text is NEVER cleared by an error (D16-11 — retry keeps what
+   * the reader typed).
    */
   async function handleTranscriptSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (status === "submitting" || transcriptValue.trim().length === 0 || botCheckUrl === null) {
+    const trimmedTitle = transcriptTitleValue.trim();
+    if (
+      status === "submitting" ||
+      transcriptValue.trim().length === 0 ||
+      trimmedTitle.length === 0 ||
+      botCheckUrl === null
+    ) {
       return;
     }
     if (transcriptValue.length > MAX_PASTED_TRANSCRIPT_CHARS) {
@@ -342,9 +363,17 @@ export function AddDialog({ open, onCancel, onBookAdded }: AddDialogProps) {
       setMessage(mapReasonToCopy("response-too-large"));
       return;
     }
+    const trimmedUrl = transcriptUrlValue.trim();
     setStatus("submitting");
     setMessage("Adding transcript…");
-    renderOutcome(await addToLibrary({ kind: "transcript-paste", text: transcriptValue, url: botCheckUrl }));
+    renderOutcome(
+      await addToLibrary({
+        kind: "transcript-paste",
+        text: transcriptValue,
+        title: trimmedTitle,
+        url: trimmedUrl.length > 0 ? trimmedUrl : undefined,
+      }),
+    );
   }
 
   /**
@@ -529,10 +558,12 @@ export function AddDialog({ open, onCancel, onBookAdded }: AddDialogProps) {
         </div>
         {/* The paste-transcript fallback (the youtube-bot-check companion).
             Appears ONLY after the URL arm was refused with the bot-check
-            reason for an actual YouTube URL. Calm guidance, one textarea,
-            one button — the same DOC-06 voice; all copy renders as React
-            text (T-16-06). The submitting/error status reuses the shared
-            live region below. */}
+            reason for an actual YouTube URL. Calm guidance, a required
+            title (the paste is named at ingest — never a fabricated
+            "Transcript"), an optional prefilled video URL (provenance
+            only — never re-fetched), one textarea, one button — the same
+            DOC-06 voice; all copy renders as React text (T-16-06). The
+            submitting/error status reuses the shared live region below. */}
         {botCheckUrl !== null && (
           <form id="add-transcript-form" onSubmit={handleTranscriptSubmit} className="add-transcript-form">
             <p className="add-transcript-guidance">
@@ -540,6 +571,36 @@ export function AddDialog({ open, onCancel, onBookAdded }: AddDialogProps) {
               (below the player choose "…more" then "Show transcript"), select all the
               transcript text, copy it, and paste it here.
             </p>
+            <label htmlFor="ingest-transcript-title">Title</label>
+            <input
+              id="ingest-transcript-title"
+              name="title"
+              type="text"
+              autoComplete="off"
+              placeholder="Name this transcript"
+              required
+              aria-required="true"
+              aria-describedby={
+                transcriptTitleValue.trim().length === 0
+                  ? "ingest-transcript-title-hint"
+                  : undefined
+              }
+              value={transcriptTitleValue}
+              disabled={submitting}
+              onChange={(e) => setTranscriptTitleValue(e.target.value)}
+            />
+            <label htmlFor="ingest-transcript-url">Video URL (optional)</label>
+            <input
+              id="ingest-transcript-url"
+              name="url"
+              type="url"
+              inputMode="url"
+              autoComplete="off"
+              placeholder="https://www.youtube.com/watch?v=…"
+              value={transcriptUrlValue}
+              disabled={submitting}
+              onChange={(e) => setTranscriptUrlValue(e.target.value)}
+            />
             <label htmlFor="ingest-transcript">Paste the transcript</label>
             <textarea
               id="ingest-transcript"
@@ -551,6 +612,16 @@ export function AddDialog({ open, onCancel, onBookAdded }: AddDialogProps) {
               onChange={(e) => setTranscriptValue(e.target.value)}
             />
             <div className="add-transcript-actions">
+              {/* Calm inline explanation while Add is blocked on the
+                  required title (the D17-04 hint voice; the submit stays
+                  disabled — this says WHY, so the blocked state is never
+                  silent, especially for screen-reader readers via the
+                  title input's aria-describedby). */}
+              {transcriptTitleValue.trim().length === 0 && (
+                <p className="add-transcript-guidance" id="ingest-transcript-title-hint">
+                  Type a title to enable Add.
+                </p>
+              )}
               <button
                 type="button"
                 className="add-dialog-cancel"
@@ -562,7 +633,11 @@ export function AddDialog({ open, onCancel, onBookAdded }: AddDialogProps) {
               <button
                 type="submit"
                 className="add-dialog-submit"
-                disabled={submitting || transcriptValue.trim().length === 0}
+                disabled={
+                  submitting ||
+                  transcriptValue.trim().length === 0 ||
+                  transcriptTitleValue.trim().length === 0
+                }
               >
                 Add transcript
               </button>

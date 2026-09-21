@@ -70,7 +70,10 @@ import { setDocumentTitle } from "../../ingestion/library/pageMeta";
 // Plan 17-03 (META-02/D17-09) — the review surfaces (select option labels,
 // options sort, section h2) carry the ONE effective title: the reader-owned
 // override when present, canonical as fallback. One name, one order.
-import { effectiveTitle } from "../../ingestion/library/effectiveMetadata";
+import {
+  effectiveTitle,
+  effectiveSourceUrl,
+} from "../../ingestion/library/effectiveMetadata";
 // Issue #8 — the ONE library read model + its invalidation call replace the
 // view's own whole-library load and refreshKey state machine.
 import { invalidateLibrarySnapshot } from "../../ingestion/library/librarySnapshot";
@@ -86,6 +89,7 @@ import {
   type ReviewFilters,
   type ReviewSort,
 } from "./reviewFilter";
+import { formatIsoDate } from "../../ingestion/library/formatDate";
 import { ReviewNoteDialog } from "./ReviewNoteDialog";
 import { DeleteHighlightConfirm } from "./DeleteHighlightConfirm";
 import { BackToLibrary } from "../../reader/BackToLibrary";
@@ -107,30 +111,25 @@ function truncate(text: string, max: number): string {
 }
 
 /**
- * Short-date formatter — the ArticleView formatDate shape (L106-115) with
- * dateStyle "short" per the plan's row-vocabulary. Falls back to the raw
- * ISO string if the user agent's locale is unavailable.
+ * Short-date formatter — the ONE date voice (formatIsoDate) with dateStyle
+ * "short" per the plan's row-vocabulary.
  */
 function formatDate(iso: string): string {
-  try {
-    return new Intl.DateTimeFormat(navigator.language, {
-      dateStyle: "short",
-    }).format(new Date(iso));
-  } catch {
-    return iso;
-  }
+  return formatIsoDate(iso, "short");
 }
 
 /**
  * The subtle source-host suffix for a section heading — the ArticleView
- * L1085 `new URL(sourceUrl).hostname` vocabulary. Returns null when the
- * article carries no sourceUrl (fixtures, markdown, pasted HTML) so no
- * host renders. The try/catch is defensive only: ArticleSchema httpUrl-
- * refines sourceUrl at parse time, so an unparseable URL cannot reach
- * here through a validated record.
+ * `new URL(sourceUrl).hostname` vocabulary over the EFFECTIVE source
+ * (effectiveSourceUrl — the readerSourceUrl override ?? canonical, the
+ * one-derivation-point discipline). Returns null when the article carries
+ * no sourceUrl (fixtures, markdown, pasted HTML) so no host renders. The
+ * try/catch is defensive only: the schema httpUrl-refines both the
+ * canonical and the override, so an unparseable URL cannot reach here
+ * through a validated record.
  */
 function sourceHost(article: CanonicalArticle): string | null {
-  const sourceUrl = article.provenance.sourceUrl;
+  const sourceUrl = effectiveSourceUrl(article);
   if (!sourceUrl) return null;
   try {
     return new URL(sourceUrl).hostname;

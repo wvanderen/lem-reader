@@ -63,8 +63,16 @@ function parseClockToMs(raw: string): number | null {
  * the SAME normalization the fetched path uses. Timestamped pastes reuse
  * transcriptToBlocks verbatim (budget grouping + anchors); plain pastes
  * group lines into paragraphs under the same budgets with NO anchors.
+ * `videoTitle` feeds only the chapter-restate heuristic of the timestamped
+ * path (a pasted transcript never carries chapter markers — `chapters: []`
+ * — so it is effectively inert); it is REQUIRED because callers pass the
+ * reader-provided ingest-time title — no fabricated "Transcript" name can
+ * leak anywhere.
  */
-export function pastedTranscriptToBlocks(text: string): PastedTranscriptNormalization {
+export function pastedTranscriptToBlocks(
+  text: string,
+  videoTitle: string,
+): PastedTranscriptNormalization {
   const lines = text.split(/\r?\n/);
 
   // ── Timestamped detection pass ────────────────────────────────────────
@@ -112,7 +120,7 @@ export function pastedTranscriptToBlocks(text: string): PastedTranscriptNormaliz
     const normalized = transcriptToBlocks({
       ok: true,
       videoId: "",
-      title: "Transcript",
+      title: videoTitle,
       channel: "",
       durationSeconds: durationSeconds ?? 0,
       languageCode: "und",

@@ -63,9 +63,11 @@ export type AddToLibraryInput =
   | { kind: "paste"; html: string }
   | { kind: "file"; file: File }
   // The youtube-bot-check fallback — the reader pasted the transcript text
-  // from YouTube's transcript panel; `url` is the refused video's URL
-  // (provenance + the yt-<hash> identity, never re-fetched).
-  | { kind: "transcript-paste"; text: string; url?: string };
+  // from YouTube's transcript panel; `title` is the reader-provided name
+  // (required — the dialog refuses an empty one, so ingest never fabricates
+  // a neutral title) and `url` is the refused video's URL (provenance +
+  // the yt-<hash> identity, never re-fetched).
+  | { kind: "transcript-paste"; text: string; title: string; url?: string };
 
 /**
  * AddToLibraryOutcome — the navigation-ready result of one submission.
@@ -177,7 +179,7 @@ async function ingestArticleInput(input: AddToLibraryInput): Promise<IngestionSu
   }
   if (input.kind === "paste") return ingestHtml(input.html);
   if (input.kind === "transcript-paste") {
-    return ingestPastedTranscript(input.text, input.url);
+    return ingestPastedTranscript(input.text, input.title, input.url);
   }
   const { file } = input;
   if (/\.md$/i.test(file.name)) {

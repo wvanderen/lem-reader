@@ -1444,6 +1444,8 @@ describe("resolveImportPlan — metadata conflicts + merge-on-win (17-04, D17-10
         id: "art-meta",
         readerTitle: "Local Name",
         readerAuthor: "Local Author",
+        readerPublishedAt: "2024-03-05T12:00:00.000Z",
+        readerSourceUrl: "https://example.com/corrected",
       }),
     );
 
@@ -1464,8 +1466,36 @@ describe("resolveImportPlan — metadata conflicts + merge-on-win (17-04, D17-10
     expect(winner.revision).toBe(2); // incoming content won…
     expect(winner.readerTitle).toBe("Local Name"); // …but the reader's name survives
     expect(winner.readerAuthor).toBe("Local Author");
+    expect(winner.readerPublishedAt).toBe("2024-03-05T12:00:00.000Z"); // …and every override does
+    expect(winner.readerSourceUrl).toBe("https://example.com/corrected");
     // Zero writes: the local row is untouched until applyImport.
     expect((await db.articles.get("art-meta"))?.revision).toBe(1);
+  });
+
+  it("same id+revision+hash with a one-side-only readerPublishedAt difference → a metadata conflict (NOT the identical calm no-op — D17-11 covers every override key)", async () => {
+    const { detectImportPreview, resolveImportPlan } = await loadConflicts();
+    const { db } = await loadDb();
+    await db.articles.put(
+      sampleArticle({
+        id: "art-meta-date",
+        readerPublishedAt: "2024-03-05T12:00:00.000Z",
+      }),
+    );
+
+    const bundle = sampleBundle({
+      articles: [sampleArticle({ id: "art-meta-date" })], // NO override keys
+    });
+    const preview = await detectImportPreview(bundle);
+
+    expect(preview.conflicts).toHaveLength(1);
+    expect(preview.conflicts[0]?.kind).toBe("article-metadata-override");
+    expect(preview.conflicts[0]?.sampleIds).toContain("art-meta-date");
+    // Skip (default) keeps the local row — including its local override.
+    const plan = await resolveImportPlan(bundle, preview, ALL_SKIP, false);
+    expect(plan.articlesToWrite).toHaveLength(0);
+    expect(
+      (await db.articles.get("art-meta-date"))?.readerPublishedAt,
+    ).toBe("2024-03-05T12:00:00.000Z");
   });
 
   it("incoming revision+1 wins + the id in metadataTakeIncoming → the incoming row wins whole (no merge)", async () => {

@@ -413,6 +413,39 @@ describe("ArticleSchema.readerTitle/readerAuthor (Phase 17 — additive override
   });
 });
 
+describe("ArticleSchema.readerPublishedAt/readerSourceUrl (META extension — additive override fields)", () => {
+  it("parses a row carrying BOTH new overrides with the fields intact (overrides ride the article record)", () => {
+    const parsed = ArticleSchema.parse(
+      validV1Article({
+        readerPublishedAt: "2024-03-05T12:00:00.000Z",
+        readerSourceUrl: "https://example.org/true-source",
+      }),
+    );
+    expect(parsed.readerPublishedAt).toBe("2024-03-05T12:00:00.000Z");
+    expect(parsed.readerSourceUrl).toBe("https://example.org/true-source");
+  });
+
+  it("a row WITHOUT the new override keys parses with them undefined (Pitfall 9 hydration — bumpless)", () => {
+    const parsed = ArticleSchema.parse(validV1Article({}));
+    expect(parsed.readerPublishedAt).toBeUndefined();
+    expect(parsed.readerSourceUrl).toBeUndefined();
+  });
+
+  it("rejects a non-datetime readerPublishedAt (mirrors the canonical publishedAt refinement)", () => {
+    const result = ArticleSchema.safeParse(
+      validV1Article({ readerPublishedAt: "March 5, 2024" }),
+    );
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a non-http readerSourceUrl scheme (mirrors the canonical httpUrl guard)", () => {
+    const result = ArticleSchema.safeParse(
+      validV1Article({ readerSourceUrl: "javascript:alert(1)" }),
+    );
+    expect(result.success).toBe(false);
+  });
+});
+
 // ── src/ingestion/types.ts envelope schemas ──────────────────────────────────
 
 describe("IngestionRequestSchema (D7-03 — {url} | {html} | {markdown} | {pdf} | {epub})", () => {
@@ -539,37 +572,70 @@ describe("IngestionRequestSchema (D7-03 — {url} | {html} | {markdown} | {pdf} 
   });
 
   // The youtube-bot-check fallback — the sixth union member: the pasted
-  // transcript text with an OPTIONAL nested source-URL provenance channel
-  // (nested so the top-level exactly-one-of key count stays simple).
-  it("parses a transcript request with a source url (the bot-check fallback shape)", () => {
+  // transcript text, the REQUIRED reader-provided title (the paste is named
+  // at ingest — the pipeline never fabricates a neutral one), and an
+  // OPTIONAL nested source-URL provenance channel (nested so the top-level
+  // exactly-one-of key count stays simple).
+  it("parses a transcript request with a title and source url (the bot-check fallback shape)", () => {
     expect(
       IngestionRequestSchema.parse({
-        transcript: { text: "0:00\nhello", url: "https://www.youtube.com/watch?v=aircAruvnKk" },
+        transcript: {
+          text: "0:00\nhello",
+          title: "My Named Transcript",
+          url: "https://www.youtube.com/watch?v=aircAruvnKk",
+        },
       }),
     ).toEqual({
-      transcript: { text: "0:00\nhello", url: "https://www.youtube.com/watch?v=aircAruvnKk" },
+      transcript: {
+        text: "0:00\nhello",
+        title: "My Named Transcript",
+        url: "https://www.youtube.com/watch?v=aircAruvnKk",
+      },
     });
   });
 
   it("parses a transcript request without a url (plain paste)", () => {
-    expect(IngestionRequestSchema.parse({ transcript: { text: "just text" } })).toEqual({
-      transcript: { text: "just text" },
+    expect(
+      IngestionRequestSchema.parse({ transcript: { text: "just text", title: "Named" } }),
+    ).toEqual({
+      transcript: { text: "just text", title: "Named" },
     });
   });
 
+  it("trims the transcript title but refuses a blank one (trim().min(1))", () => {
+    expect(
+      IngestionRequestSchema.parse({ transcript: { text: "hello", title: "  Padded  " } }),
+    ).toEqual({
+      transcript: { text: "hello", title: "Padded" },
+    });
+    expect(() =>
+      IngestionRequestSchema.parse({ transcript: { text: "hello", title: "   " } }),
+    ).toThrow();
+  });
+
+  it("rejects a transcript request with NO title (the no-silent-'Transcript' rule)", () => {
+    expect(() => IngestionRequestSchema.parse({ transcript: { text: "0:00\nhello" } })).toThrow();
+  });
+
   it("rejects an empty transcript text (min(1))", () => {
-    expect(() => IngestionRequestSchema.parse({ transcript: { text: "" } })).toThrow();
+    expect(() =>
+      IngestionRequestSchema.parse({ transcript: { text: "", title: "Named" } }),
+    ).toThrow();
   });
 
   it("rejects an oversize transcript text (over MAX_PASTED_TRANSCRIPT_CHARS)", () => {
     expect(() =>
-      IngestionRequestSchema.parse({ transcript: { text: "x".repeat(MAX_PASTED_TRANSCRIPT_CHARS + 1) } }),
+      IngestionRequestSchema.parse({
+        transcript: { text: "x".repeat(MAX_PASTED_TRANSCRIPT_CHARS + 1), title: "Named" },
+      }),
     ).toThrow();
   });
 
   it("rejects a transcript url with a non-http scheme (mirrors the url variant's httpUrl)", () => {
     expect(() =>
-      IngestionRequestSchema.parse({ transcript: { text: "hello", url: "javascript:alert(1)" } }),
+      IngestionRequestSchema.parse({
+        transcript: { text: "hello", title: "Named", url: "javascript:alert(1)" },
+      }),
     ).toThrow();
   });
 });

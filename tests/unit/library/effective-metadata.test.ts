@@ -22,6 +22,8 @@ import { describe, expect, it } from "vitest";
 import { ArticleSchema } from "../../../src/content/schema";
 import {
   effectiveAuthor,
+  effectivePublishedAt,
+  effectiveSourceUrl,
   effectiveTitle,
   videoDuration,
 } from "../../../src/ingestion/library/effectiveMetadata";
@@ -115,6 +117,64 @@ describe("effectiveTitle/effectiveAuthor (META-02 — one derivation; META-03 �
     );
     expect(article.provenance.author).toBeUndefined();
     expect(effectiveAuthor(article)).toBeUndefined();
+  });
+});
+
+describe("effectivePublishedAt/effectiveSourceUrl (META extension — the same derivation discipline)", () => {
+  it("override present → effectivePublishedAt returns the override (reader-owned wins)", () => {
+    const article = ArticleSchema.parse(
+      makeRow({ readerPublishedAt: "2024-03-05T12:00:00.000Z" }),
+    );
+    expect(effectivePublishedAt(article)).toBe("2024-03-05T12:00:00.000Z");
+  });
+
+  it("override absent → effectivePublishedAt falls back to the canonical provenance.publishedAt", () => {
+    const article = ArticleSchema.parse(
+      makeRow({
+        provenance: {
+          sourceUrl: "https://example.com/article",
+          title: "Canonical Title",
+          author: "Canonical Author",
+          publishedAt: "2020-06-01T09:30:00.000Z",
+          retrievedAt: "2026-01-01T00:00:00Z",
+          originalHtmlHash: "sha256:abc123def456",
+        },
+      }),
+    );
+    expect(effectivePublishedAt(article)).toBe("2020-06-01T09:30:00.000Z");
+  });
+
+  it("absent override + absent canonical publishedAt → undefined (silence is the empty state)", () => {
+    const article = ArticleSchema.parse(makeRow());
+    expect(article.provenance.publishedAt).toBeUndefined();
+    expect(effectivePublishedAt(article)).toBeUndefined();
+  });
+
+  it("override present → effectiveSourceUrl returns the override (corrects the source link)", () => {
+    const article = ArticleSchema.parse(
+      makeRow({ readerSourceUrl: "https://example.org/true-source" }),
+    );
+    expect(effectiveSourceUrl(article)).toBe("https://example.org/true-source");
+  });
+
+  it("absent override → effectiveSourceUrl falls back to the canonical provenance.sourceUrl", () => {
+    const article = ArticleSchema.parse(makeRow());
+    expect(effectiveSourceUrl(article)).toBe("https://example.com/article");
+  });
+
+  it("cleared override + absent canonical sourceUrl → undefined (a cleared override restores 'no source link')", () => {
+    const article = ArticleSchema.parse(
+      makeRow({
+        provenance: {
+          title: "Canonical Title",
+          author: "Canonical Author",
+          retrievedAt: "2026-01-01T00:00:00Z",
+          originalHtmlHash: "sha256:abc123def456",
+        },
+      }),
+    );
+    expect(article.provenance.sourceUrl).toBeUndefined();
+    expect(effectiveSourceUrl(article)).toBeUndefined();
   });
 });
 

@@ -164,6 +164,19 @@ describe("renderArticleHighlights (D9-08 template, byte-for-byte)", () => {
     expect(out).not.toContain("([source]");
   });
 
+  it("citation source link reads the EFFECTIVE sourceUrl (D17-09 same-selector): a readerSourceUrl override replaces the canonical citation link", () => {
+    const overridden = sampleArticle({
+      readerSourceUrl: "https://corrected.example.org/real-origin",
+    });
+    const out = renderArticleHighlights(overridden, [
+      entry(confidentHighlight, "confident"),
+    ]);
+    expect(out).toContain(
+      "([source](https://corrected.example.org/real-origin))",
+    );
+    expect(out).not.toContain("example.com/article-a");
+  });
+
   it("prefixes the ambiguous quote line with the italic approx marker", () => {
     const out = renderArticleHighlights(sampleArticle(), [entry(ambiguousHighlight, "ambiguous")]);
     expect(out).toContain("\n> *[approx]* alpha beta gamma delta\n");

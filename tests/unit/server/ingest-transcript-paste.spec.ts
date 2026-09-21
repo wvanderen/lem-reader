@@ -27,19 +27,25 @@ const PANEL = [
   "Thanks for watching this walkthrough of the reader",
 ].join("\n");
 
+// The reader-provided title — REQUIRED since the no-silent-"Transcript"
+// change: the request schema refuses a missing/blank one, and the pipeline
+// stamps it as the canonical provenance title verbatim.
+const PASTE_TITLE = "Calm Reading Interfaces Lecture";
+
 describe("timestamped paste + YouTube URL", () => {
   it("ingests into a youtube-sourced article with pasted transcript meta", async () => {
     const response = await ingest({
-      transcript: { text: PANEL, url: "https://www.youtube.com/watch?v=aircAruvnKk" },
+      transcript: { text: PANEL, title: PASTE_TITLE, url: "https://www.youtube.com/watch?v=aircAruvnKk" },
     });
     expect(response.ok).toBe(true);
     if (!response.ok || !("article" in response)) return;
     const article = response.article;
     expect(article.ingestionMeta?.source).toBe("youtube");
     expect(article.id).toMatch(/^yt-[0-9a-f]{12}$/);
-    // Canonical provenance: the watch-form URL and the neutral title chain.
+    // Canonical provenance: the watch-form URL and the READER-PROVIDED
+    // title (the paste is named at ingest — never a fabricated neutral).
     expect(article.provenance.sourceUrl).toBe("https://www.youtube.com/watch?v=aircAruvnKk");
-    expect(article.provenance.title).toBe("Transcript");
+    expect(article.provenance.title).toBe(PASTE_TITLE);
     expect(article.lang).toBe("und");
     const transcript = article.ingestionMeta?.transcript;
     expect(transcript).toBeDefined();
@@ -56,7 +62,7 @@ describe("timestamped paste + YouTube URL", () => {
 
   it("stamps low confidence — a pasted transcript is never a silent upgrade to trusted", async () => {
     const response = await ingest({
-      transcript: { text: PANEL, url: "https://youtu.be/aircAruvnKk" },
+      transcript: { text: PANEL, title: PASTE_TITLE, url: "https://youtu.be/aircAruvnKk" },
     });
     expect(response.ok).toBe(true);
     if (!response.ok || !("article" in response)) return;
@@ -66,13 +72,13 @@ describe("timestamped paste + YouTube URL", () => {
 
   it("derives the SAME yt-<hash> id from every URL form (watch / youtu.be / shorts)", async () => {
     const watch = await ingest({
-      transcript: { text: PANEL, url: "https://www.youtube.com/watch?v=aircAruvnKk" },
+      transcript: { text: PANEL, title: PASTE_TITLE, url: "https://www.youtube.com/watch?v=aircAruvnKk" },
     });
     const shortForm = await ingest({
-      transcript: { text: PANEL, url: "https://youtu.be/aircAruvnKk?t=7" },
+      transcript: { text: PANEL, title: PASTE_TITLE, url: "https://youtu.be/aircAruvnKk?t=7" },
     });
     const shorts = await ingest({
-      transcript: { text: PANEL, url: "https://www.youtube.com/shorts/aircAruvnKk" },
+      transcript: { text: PANEL, title: PASTE_TITLE, url: "https://www.youtube.com/shorts/aircAruvnKk" },
     });
     if (!watch.ok || !("article" in watch)) return expect.unreachable();
     if (!shortForm.ok || !("article" in shortForm)) return expect.unreachable();
@@ -83,7 +89,7 @@ describe("timestamped paste + YouTube URL", () => {
 
   it("round-trips selectors over text with no timestamps in it (decision #26)", async () => {
     const response = await ingest({
-      transcript: { text: PANEL, url: "https://www.youtube.com/watch?v=aircAruvnKk" },
+      transcript: { text: PANEL, title: PASTE_TITLE, url: "https://www.youtube.com/watch?v=aircAruvnKk" },
     });
     expect(response.ok).toBe(true);
     if (!response.ok || !("article" in response)) return;
@@ -104,7 +110,7 @@ describe("plain-text paste (no timestamps)", () => {
 
   it("with a YouTube URL keeps the yt- identity but emits NO fabricated timings", async () => {
     const response = await ingest({
-      transcript: { text: PLAIN, url: "https://www.youtube.com/watch?v=aircAruvnKk" },
+      transcript: { text: PLAIN, title: PASTE_TITLE, url: "https://www.youtube.com/watch?v=aircAruvnKk" },
     });
     expect(response.ok).toBe(true);
     if (!response.ok || !("article" in response)) return;
@@ -117,7 +123,7 @@ describe("plain-text paste (no timestamps)", () => {
   });
 
   it("without any URL it is a plain pasted article (content-hash id, no sourceUrl)", async () => {
-    const response = await ingest({ transcript: { text: PLAIN } });
+    const response = await ingest({ transcript: { text: PLAIN, title: PASTE_TITLE } });
     expect(response.ok).toBe(true);
     if (!response.ok || !("article" in response)) return;
     const article = response.article;
@@ -125,13 +131,13 @@ describe("plain-text paste (no timestamps)", () => {
     expect(article.ingestionMeta?.source).toBe("paste");
     expect(article.ingestionMeta?.origin).toBe("paste");
     expect(article.provenance.sourceUrl).toBeUndefined();
-    expect(article.provenance.title).toBe("Transcript");
+    expect(article.provenance.title).toBe(PASTE_TITLE);
     expect(article.ingestionMeta?.transcript).toBeUndefined();
   });
 
   it("identical plain pastes derive the same content-hash id (dedupe by construction)", async () => {
-    const one = await ingest({ transcript: { text: PLAIN } });
-    const two = await ingest({ transcript: { text: PLAIN } });
+    const one = await ingest({ transcript: { text: PLAIN, title: PASTE_TITLE } });
+    const two = await ingest({ transcript: { text: PLAIN, title: PASTE_TITLE } });
     if (!one.ok || !("article" in one)) return expect.unreachable();
     if (!two.ok || !("article" in two)) return expect.unreachable();
     expect(two.article.id).toBe(one.article.id);
@@ -143,12 +149,12 @@ describe("variant invariants", () => {
     await expect(
       // The cast is deliberate: the request schema can never produce this
       // shape; ingest()'s Stage-0 count is the programming-error guard.
-      ingest({ transcript: { text: PANEL }, html: "<p>x</p>" } as never),
+      ingest({ transcript: { text: PANEL, title: PASTE_TITLE }, html: "<p>x</p>" } as never),
     ).rejects.toMatchObject({ reason: "server-error" });
   });
 
   it("refuses a whitespace-only paste as extraction-unsupported (never an empty article)", async () => {
-    const response = await ingest({ transcript: { text: "   \n  " } });
+    const response = await ingest({ transcript: { text: "   \n  ", title: PASTE_TITLE } });
     expect(response).toEqual({ ok: false, reason: "extraction-unsupported" });
   });
 });

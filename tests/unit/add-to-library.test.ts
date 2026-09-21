@@ -261,26 +261,36 @@ describe("addToLibrary — article path (url/paste/file)", () => {
     expect(outcome).toEqual({ outcome: "saved-article", articleId: "html-id" });
   });
 
-  it("transcript-paste arm routes ingestPastedTranscript(text, url) — the bot-check fallback", async () => {
+  it("transcript-paste arm routes ingestPastedTranscript(text, title, url) — the bot-check fallback", async () => {
     ingestPastedTranscriptMock.mockResolvedValue(articleSuccess("yt-pasted"));
     const outcome = await addToLibrary({
       kind: "transcript-paste",
       text: "0:00\nhello",
+      title: "My Named Transcript",
       url: "https://www.youtube.com/watch?v=aircAruvnKk",
     });
 
     expect(ingestPastedTranscriptMock).toHaveBeenCalledWith(
       "0:00\nhello",
+      "My Named Transcript",
       "https://www.youtube.com/watch?v=aircAruvnKk",
     );
     expect(outcome).toEqual({ outcome: "saved-article", articleId: "yt-pasted" });
   });
 
-  it("transcript-paste arm without a url routes ingestPastedTranscript(text, undefined)", async () => {
+  it("transcript-paste arm without a url routes ingestPastedTranscript(text, title, undefined)", async () => {
     ingestPastedTranscriptMock.mockResolvedValue(articleSuccess("paste-pasted"));
-    const outcome = await addToLibrary({ kind: "transcript-paste", text: "just text" });
+    const outcome = await addToLibrary({
+      kind: "transcript-paste",
+      text: "just text",
+      title: "My Named Transcript",
+    });
 
-    expect(ingestPastedTranscriptMock).toHaveBeenCalledWith("just text", undefined);
+    expect(ingestPastedTranscriptMock).toHaveBeenCalledWith(
+      "just text",
+      "My Named Transcript",
+      undefined,
+    );
     expect(outcome).toEqual({ outcome: "saved-article", articleId: "paste-pasted" });
   });
 
@@ -290,6 +300,7 @@ describe("addToLibrary — article path (url/paste/file)", () => {
     const outcome = await addToLibrary({
       kind: "transcript-paste",
       text: "0:00\nhello",
+      title: "My Named Transcript",
       url: "https://youtu.be/aircAruvnKk",
     });
 

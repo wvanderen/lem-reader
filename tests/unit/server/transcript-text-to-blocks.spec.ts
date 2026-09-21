@@ -28,7 +28,7 @@ describe("timestamped pastes", () => {
         "Thanks for watching the show",
       ],
     );
-    const result = pastedTranscriptToBlocks(text);
+    const result = pastedTranscriptToBlocks(text, "Test video");
     expect(result.blocks.length).toBeGreaterThan(0);
     expect(result.blocks.every((b) => b.kind === "paragraph")).toBe(true);
     // Anchors are block-keyed, in order, and start at the first stamp.
@@ -48,6 +48,7 @@ describe("timestamped pastes", () => {
     // cue's start (anchors are block-keyed, not cue-keyed, decision #26).
     const inline = pastedTranscriptToBlocks(
       ["0:00 first words here", "0:10 second words here", "0:20 third words here"].join("\n"),
+      "Test video",
     );
     expect(inline.blocks).toHaveLength(1);
     expect(inline.anchors).toEqual([{ blockIndex: 0, startMs: 0 }]);
@@ -57,18 +58,21 @@ describe("timestamped pastes", () => {
 
     const bracket = pastedTranscriptToBlocks(
       ["[0:00] alpha line", "[0:10] beta line", "[0:20] gamma line"].join("\n"),
+      "Test video",
     );
     expect(bracket.blocks).toHaveLength(1);
     expect(bracket.anchors).toEqual([{ blockIndex: 0, startMs: 0 }]);
 
     const dash = pastedTranscriptToBlocks(
       ["0:00 - alpha line", "0:10 - beta line", "0:20 - gamma line"].join("\n"),
+      "Test video",
     );
     expect(dash.blocks).toHaveLength(1);
     expect(dash.anchors).toEqual([{ blockIndex: 0, startMs: 0 }]);
 
     const hours = pastedTranscriptToBlocks(
       ["1:02:03 opening line", "1:02:13 middle line", "1:02:23 closing line"].join("\n"),
+      "Test video",
     );
     expect(hours.blocks).toHaveLength(1);
     expect(hours.anchors).toEqual([{ blockIndex: 0, startMs: 3_723_000 }]);
@@ -87,13 +91,14 @@ describe("timestamped pastes", () => {
           "another longer cue body with entirely different sentence material for reading",
         ],
       ),
+      "Test video",
     );
     expect(spaced.anchors.length).toBe(spaced.blocks.length);
   });
 
   it("keeps text before the first stamp as a leading paragraph and offsets the anchors", () => {
     const text = ["Some Channel - Transcript", "0:00 first cue", "0:10 second cue"].join("\n");
-    const result = pastedTranscriptToBlocks(text);
+    const result = pastedTranscriptToBlocks(text, "Test video");
     const first = result.blocks[0]!;
     expect(first.kind).toBe("paragraph");
     expect(first.kind === "paragraph" && first.content[0]!.text).toContain("Some Channel");
@@ -105,6 +110,7 @@ describe("timestamped pastes", () => {
   it("derives durations from following stamps and floors durationSeconds at the last stamp", () => {
     const result = pastedTranscriptToBlocks(
       panelCues(["0:00", "0:04", "0:10"], ["a cue", "b cue", "c cue"]),
+      "Test video",
     );
     expect(result.durationSeconds).toBe(10);
   });
@@ -113,7 +119,7 @@ describe("timestamped pastes", () => {
 describe("plain pastes (no timestamps)", () => {
   it("groups lines into budgeted paragraphs with NO anchors and no transcript meta timing", () => {
     const lines = Array.from({ length: 60 }, (_, i) => `plain line ${i} with some words to pad`);
-    const result = pastedTranscriptToBlocks(lines.join("\n"));
+    const result = pastedTranscriptToBlocks(lines.join("\n"), "Test video");
     expect(result.blocks.length).toBeGreaterThan(1);
     expect(result.anchors).toEqual([]);
     expect(result.durationSeconds).toBeUndefined();
@@ -123,6 +129,7 @@ describe("plain pastes (no timestamps)", () => {
   it("respects the pasted text's own blank-line structure", () => {
     const result = pastedTranscriptToBlocks(
       ["para one alpha", "para one beta", "", "para two gamma"].join("\n"),
+      "Test video",
     );
     expect(result.blocks).toHaveLength(2);
     expect(result.blocks[0]!.kind === "paragraph" && result.blocks[0]!.content[0]!.text).toContain(
@@ -136,6 +143,7 @@ describe("plain pastes (no timestamps)", () => {
   it("treats a lone clock mention as prose, not a stamp", () => {
     const result = pastedTranscriptToBlocks(
       ["At 5:30 in the video something happens", "and then the talk continues", "for a while more"].join("\n"),
+      "Test video",
     );
     // One lone stamp < the two-stamp threshold → plain-text path.
     expect(result.anchors).toEqual([]);
@@ -145,7 +153,7 @@ describe("plain pastes (no timestamps)", () => {
 
 describe("honest refusals", () => {
   it("returns no blocks for a whitespace-only paste (the shared extraction-unsupported guard fires)", () => {
-    const result = pastedTranscriptToBlocks("   \n\t\n  ");
+    const result = pastedTranscriptToBlocks("   \n\t\n  ", "Test video");
     expect(result.blocks).toEqual([]);
     expect(result.anchors).toEqual([]);
     expect(result.durationSeconds).toBeUndefined();
