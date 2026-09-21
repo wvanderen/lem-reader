@@ -578,6 +578,13 @@ export function AddDialog({ open, onCancel, onBookAdded }: AddDialogProps) {
               type="text"
               autoComplete="off"
               placeholder="Name this transcript"
+              required
+              aria-required="true"
+              aria-describedby={
+                transcriptTitleValue.trim().length === 0
+                  ? "ingest-transcript-title-hint"
+                  : undefined
+              }
               value={transcriptTitleValue}
               disabled={submitting}
               onChange={(e) => setTranscriptTitleValue(e.target.value)}
@@ -605,6 +612,16 @@ export function AddDialog({ open, onCancel, onBookAdded }: AddDialogProps) {
               onChange={(e) => setTranscriptValue(e.target.value)}
             />
             <div className="add-transcript-actions">
+              {/* Calm inline explanation while Add is blocked on the
+                  required title (the D17-04 hint voice; the submit stays
+                  disabled — this says WHY, so the blocked state is never
+                  silent, especially for screen-reader readers via the
+                  title input's aria-describedby). */}
+              {transcriptTitleValue.trim().length === 0 && (
+                <p className="add-transcript-guidance" id="ingest-transcript-title-hint">
+                  Type a title to enable Add.
+                </p>
+              )}
               <button
                 type="button"
                 className="add-dialog-cancel"

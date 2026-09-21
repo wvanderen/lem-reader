@@ -153,6 +153,7 @@ import { extractionNote } from "./extractionNote";
 import { useReadAloud } from "../reader/useReadAloud";
 import { useReadAloudFollow } from "../reader/useReadAloudFollow";
 import { ReadAloudBar } from "../reader/ReadAloudBar";
+import { formatIsoDate } from "../ingestion/library/formatDate";
 import type { GraphemeRange } from "../annotations/unifiedHighlightSlicer";
 
 /** The D4-10 mode-toggle handler signature (App threads a ref of this shape). */
@@ -235,14 +236,8 @@ export interface ArticleViewProps {
 }
 
 function formatDate(iso: string): string {
-  try {
-    return new Intl.DateTimeFormat(navigator.language, { dateStyle: "medium" }).format(
-      new Date(iso),
-    );
-  } catch {
-    // Fall back to the raw ISO date if the user agent's locale is unavailable.
-    return iso;
-  }
+  // The ONE date voice (formatIsoDate) — medium style.
+  return formatIsoDate(iso, "medium");
 }
 
 // queryBlocks moved to reader/restoreLocation.ts (issue #42 review): every

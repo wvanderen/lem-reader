@@ -545,14 +545,23 @@ test.describe("YouTube ingest end-to-end (issue #41, flow N)", () => {
     await expect(dialog.getByText(/open the video on youtube/i)).toBeVisible();
     await expect(dialog.locator("#ingest-transcript-url")).toHaveValue(BOT_URL);
     // The title field is REQUIRED and gates the submit (the no-silent-
-    // "Transcript" rule): empty title → Add transcript disabled.
+    // "Transcript" rule): empty title → Add transcript disabled, with the
+    // calm blocked-save explanation wired to the input via aria-describedby.
     const addTranscript = dialog.getByRole("button", { name: /add transcript/i });
     const titleInput = dialog.locator("#ingest-transcript-title");
+    await expect(titleInput).toHaveAttribute("required", "");
+    await expect(titleInput).toHaveAttribute("aria-required", "true");
     await dialog
       .getByRole("textbox", { name: /paste the transcript/i })
       .fill("0:00\nA cue the reader pasted by hand");
     await expect(addTranscript).toBeDisabled();
+    await expect(dialog).toContainText("Type a title to enable Add.");
+    await expect(titleInput).toHaveAttribute(
+      "aria-describedby",
+      "ingest-transcript-title-hint",
+    );
     await titleInput.fill("Pasted Lecture");
+    await expect(dialog).not.toContainText("Type a title to enable Add.");
     await addTranscript.click();
 
     // The pasted text rode the {transcript} envelope with the reader-provided

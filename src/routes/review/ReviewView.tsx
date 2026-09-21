@@ -89,6 +89,7 @@ import {
   type ReviewFilters,
   type ReviewSort,
 } from "./reviewFilter";
+import { formatIsoDate } from "../../ingestion/library/formatDate";
 import { ReviewNoteDialog } from "./ReviewNoteDialog";
 import { DeleteHighlightConfirm } from "./DeleteHighlightConfirm";
 import { BackToLibrary } from "../../reader/BackToLibrary";
@@ -110,18 +111,11 @@ function truncate(text: string, max: number): string {
 }
 
 /**
- * Short-date formatter — the ArticleView formatDate shape (L106-115) with
- * dateStyle "short" per the plan's row-vocabulary. Falls back to the raw
- * ISO string if the user agent's locale is unavailable.
+ * Short-date formatter — the ONE date voice (formatIsoDate) with dateStyle
+ * "short" per the plan's row-vocabulary.
  */
 function formatDate(iso: string): string {
-  try {
-    return new Intl.DateTimeFormat(navigator.language, {
-      dateStyle: "short",
-    }).format(new Date(iso));
-  } catch {
-    return iso;
-  }
+  return formatIsoDate(iso, "short");
 }
 
 /**

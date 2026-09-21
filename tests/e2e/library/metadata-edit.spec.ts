@@ -873,6 +873,17 @@ test.describe("META extension — publishedAt + sourceUrl overrides", () => {
     expect(provenance?.publishedAt).toBe(DATE_CANONICAL_ISO);
     expect(provenance?.sourceUrl).toBe(SOURCE_CANONICAL);
 
+    // LIBRARY ROW (Pitfall 9 same-selector): the row's source badge link
+    // derives the EFFECTIVE source too — the override href, never the
+    // canonical's, so the correction holds everywhere the link renders.
+    const overrideRow = page
+      .locator(".library-list > li")
+      .filter({ hasText: DATE_CANONICAL_TITLE });
+    await expect(overrideRow.locator(".source-badge a")).toHaveAttribute(
+      "href",
+      SOURCE_OVERRIDE,
+    );
+
     // READER: the byline derives the effective date (the override's year,
     // never the canonical's) and the source link points at the override.
     await page.goto(`${BASE}/#/article/${articleId}`);
@@ -934,6 +945,16 @@ test.describe("META extension — publishedAt + sourceUrl overrides", () => {
       "readerSourceUrl key must be deleted after Reset source",
     ).toBe(false);
 
+    // LIBRARY ROW (Pitfall 9 same-selector): with the override deleted, the
+    // badge link restores the canonical href (absent override ⇔ canonical).
+    const canonicalRow = page
+      .locator(".library-list > li")
+      .filter({ hasText: DATE_CANONICAL_TITLE });
+    await expect(canonicalRow.locator(".source-badge a")).toHaveAttribute(
+      "href",
+      SOURCE_CANONICAL,
+    );
+
     await page.goto(`${BASE}/#/article/${articleId}`);
     await expect(
       page.getByRole("heading", { level: 1, name: DATE_CANONICAL_TITLE }),
@@ -944,5 +965,45 @@ test.describe("META extension — publishedAt + sourceUrl overrides", () => {
     await expect(
       page.locator(".article-top-meta a", { hasText: "Originally published at" }),
     ).toHaveAttribute("href", SOURCE_CANONICAL);
+  });
+
+  test("invalid source URL refusal: a nonempty non-http(s) value disables Save + shows the explanation; Reset source clears it (honesty — never a silent drop)", async ({
+    page,
+  }) => {
+    await page.goto(`${BASE}/#/`);
+    await ingestPaste(page, pasteHtmlWithMeta(DATE_CANONICAL_TITLE));
+    const articleId = await discoverIngestedArticleId(page);
+    expect(articleId).not.toBe("");
+
+    await openLibrary(page);
+    const dialog = await openEditDialog(page, DATE_CANONICAL_TITLE);
+
+    // Keep the canonical title, type a garbage source URL → Save blocks
+    // with the calm explanation (the native type=url constraint would also
+    // refuse a submit; the disabled button is the reader-visible first line).
+    await dialog.getByRole("button", { name: "Reset title" }).click();
+    const saveBtn = dialog.getByRole("button", { name: "Save" });
+    await expect(saveBtn).toBeEnabled();
+    await dialog.locator("#edit-metadata-source").fill("not a url at all");
+    await expect(saveBtn).toBeDisabled();
+    await expect(dialog).toContainText(
+      "Enter a full http(s) link, or choose Reset source to keep the original.",
+    );
+
+    // Reset source re-enables Save (the explicit clear affordance).
+    await dialog.getByRole("button", { name: "Reset source" }).click();
+    await expect(saveBtn).toBeEnabled();
+    await expect(dialog).not.toContainText(
+      "Enter a full http(s) link, or choose Reset source to keep the original.",
+    );
+    await dialog.getByRole("button", { name: "Save" }).click();
+    await expect(dialog).not.toBeVisible();
+
+    // The refused value never reached the stored row in any form.
+    const row = await readRow(page, "articles", articleId);
+    expect(
+      Object.prototype.hasOwnProperty.call(row, "readerSourceUrl"),
+      "an invalid source URL must never persist (nor silently drop the rest of the save)",
+    ).toBe(false);
   });
 });

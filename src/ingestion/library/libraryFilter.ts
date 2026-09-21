@@ -31,7 +31,11 @@
 //     javascript:/data: URI). See T-8-12 mitigation in the plan.
 import type { CanonicalArticle } from "../../content/types";
 import type { Book } from "../../content/schema";
-import { effectiveTitle, effectiveAuthor } from "./effectiveMetadata";
+import {
+  effectiveTitle,
+  effectiveAuthor,
+  effectiveSourceUrl,
+} from "./effectiveMetadata";
 
 /**
  * `LibraryFilter` — the filter shape consumed by `filterLibrary`. Mirrors the
@@ -87,12 +91,13 @@ export function filterLibrary(
     // Search (D8-06 — title + author + sourceUrl-domain + tag-names).
     if (q.length > 0) {
       // D17-07 — override-only matching: the haystack reads the EFFECTIVE
-      // title/author, so a renamed article surfaces for its new name and
-      // NOT for its old canonical one (what you see is what matches).
+      // title/author/source-domain, so a renamed/re-linked article surfaces
+      // for its new name and NOT for its old canonical one (what you see is
+      // what matches).
       const haystack = [
         effectiveTitle(a),
         effectiveAuthor(a) ?? "",
-        domainOf(a.provenance.sourceUrl),
+        domainOf(effectiveSourceUrl(a)),
         ...(a.tags ?? []),
       ]
         .join(" ")

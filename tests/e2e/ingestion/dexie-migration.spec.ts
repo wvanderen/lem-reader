@@ -688,30 +688,33 @@ test.describe("v5 rows hydrate overrides without a write-back (17-05 META-04 + 1
     ).toHaveText("V5 Canonical Author");
 
     // 4. NO WRITE-BACK (META-04): the app opened, read, Zod-parsed, and
-    //    rendered the row — and the raw stored row STILL carries neither
-    //    override key. Hydration happened on read, never on disk; there is
-    //    no upgrade callback and no row re-put (17-01 Option A).
+    //    rendered the row — and the raw stored row STILL carries none of
+    //    the four override keys (readerTitle/readerAuthor from Phase 17;
+    //    readerPublishedAt/readerSourceUrl from the metadata-widening —
+    //    same bumpless Option A). Hydration happened on read, never on
+    //    disk; there is no upgrade callback and no row re-put.
     const articleRow = (await readRow(page, "articles", "v5-article-seed")) as {
       id: string;
       readerTitle?: string;
       readerAuthor?: string;
+      readerPublishedAt?: string;
+      readerSourceUrl?: string;
       provenance?: { title?: string; author?: string };
     } | null;
     expect(articleRow, "v5 article row must survive the app open").not.toBeNull();
     expect(articleRow?.id).toBe("v5-article-seed");
-    expect(
-      Object.prototype.hasOwnProperty.call(articleRow, "readerTitle"),
-      "raw row must gain NO readerTitle key (no write-back)",
-    ).toBe(false);
-    expect(
-      Object.prototype.hasOwnProperty.call(articleRow, "readerAuthor"),
-      "raw row must gain NO readerAuthor key (no write-back)",
-    ).toBe(false);
-    // The parsed-surface hydration claim made concrete: the raw values the
-    // schema would hydrate are absent on disk (undefined ≠ empty string — a
-    // bogus "" would violate ArticleSchema min(1) and drop the row).
-    expect(articleRow?.readerTitle).toBeUndefined();
-    expect(articleRow?.readerAuthor).toBeUndefined();
+    for (const key of [
+      "readerTitle",
+      "readerAuthor",
+      "readerPublishedAt",
+      "readerSourceUrl",
+    ]) {
+      expect(
+        Object.prototype.hasOwnProperty.call(articleRow, key),
+        `raw row must gain NO ${key} key (no write-back)`,
+      ).toBe(false);
+      expect(articleRow?.[key as keyof typeof articleRow]).toBeUndefined();
+    }
     // Canonical bytes untouched.
     const provenance = (articleRow?.provenance ?? {}) as {
       title?: string;
@@ -724,13 +727,16 @@ test.describe("v5 rows hydrate overrides without a write-back (17-05 META-04 + 1
   test("forward shape: a v5 row WITH override keys renders the effective values", async ({
     page,
   }) => {
-    // The post-Phase-17 row shape: same v5 row, both override keys present.
-    // Non-indexed fields persist through the Dexie open/read cycle and the
-    // one derivation (effectiveTitle/effectiveAuthor) renders them.
+    // The post-Phase-17 row shape: same v5 row, all four override keys
+    // present (title/author from Phase 17; the date/source widening rides
+    // the SAME bumpless mechanism). Non-indexed fields persist through the
+    // Dexie open/read cycle and the one derivation renders them.
     const FORWARD_ROW = {
       ...SEEDED_V5_ARTICLE,
       readerTitle: "Reader Renamed V5",
       readerAuthor: "Reader-Owned Author",
+      readerPublishedAt: "2024-03-05T12:00:00.000Z",
+      readerSourceUrl: "https://example.com/corrected-v5",
     };
     await page.evaluate(async (article) => {
       await new Promise<void>((resolve, reject) => {
@@ -771,16 +777,20 @@ test.describe("v5 rows hydrate overrides without a write-back (17-05 META-04 + 1
       forwardRow.locator("p.meta:not(.source-badge):not(.finished-mark)"),
     ).toHaveText("Reader-Owned Author");
 
-    // Row truth: both keys persisted through the open/read cycle and the
-    // canonical bytes stay canonical underneath (META-01's layering).
+    // Row truth: all four keys persisted through the open/read cycle and
+    // the canonical bytes stay canonical underneath (META-01's layering).
     const articleRow = (await readRow(page, "articles", "v5-article-seed")) as {
       readerTitle?: string;
       readerAuthor?: string;
+      readerPublishedAt?: string;
+      readerSourceUrl?: string;
       provenance?: { title?: string; author?: string };
     } | null;
     expect(articleRow).not.toBeNull();
     expect(articleRow?.readerTitle).toBe("Reader Renamed V5");
     expect(articleRow?.readerAuthor).toBe("Reader-Owned Author");
+    expect(articleRow?.readerPublishedAt).toBe("2024-03-05T12:00:00.000Z");
+    expect(articleRow?.readerSourceUrl).toBe("https://example.com/corrected-v5");
     expect(articleRow?.provenance?.title).toBe("V5 Seeded Article");
     expect(articleRow?.provenance?.author).toBe("V5 Canonical Author");
   });

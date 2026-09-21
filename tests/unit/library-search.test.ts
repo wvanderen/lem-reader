@@ -102,6 +102,26 @@ describe("filterLibrary (D8-06 + D8-07)", () => {
     ).toEqual([plato]);
   });
 
+  it("source-domain search reads the EFFECTIVE sourceUrl (D17-07 override-only): a renamed domain matches the new domain and NOT the canonical one", () => {
+    const reLinked = makeArticle({
+      id: "re-linked",
+      provenance: {
+        title: "Re-linked piece",
+        sourceUrl: "https://old.example.net/essay",
+        retrievedAt: "2026-01-01T00:00:00.000Z",
+        originalHtmlHash:
+          "0000000000000000000000000000000000000000000000000000000000000000",
+      },
+      readerSourceUrl: "https://corrected.example.org/essay",
+    });
+    expect(
+      filterLibrary([reLinked], { query: "corrected.example.org", activeTag: null }),
+    ).toEqual([reLinked]);
+    expect(
+      filterLibrary([reLinked], { query: "old.example.net", activeTag: null }),
+    ).toEqual([]);
+  });
+
   it("matches by tag name (D8-06 — tags are first-class searchable metadata)", () => {
     expect(filterLibrary(sampleArticles, { query: "essay", activeTag: null })).toEqual([
       plato,

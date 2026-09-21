@@ -65,12 +65,13 @@ function parseClockToMs(raw: string): number | null {
  * group lines into paragraphs under the same budgets with NO anchors.
  * `videoTitle` feeds only the chapter-restate heuristic of the timestamped
  * path (a pasted transcript never carries chapter markers — `chapters: []`
- * — so it is effectively inert); callers pass the reader-provided title so
- * no fabricated "Transcript" name leaks anywhere.
+ * — so it is effectively inert); it is REQUIRED because callers pass the
+ * reader-provided ingest-time title — no fabricated "Transcript" name can
+ * leak anywhere.
  */
 export function pastedTranscriptToBlocks(
   text: string,
-  videoTitle = "",
+  videoTitle: string,
 ): PastedTranscriptNormalization {
   const lines = text.split(/\r?\n/);
 

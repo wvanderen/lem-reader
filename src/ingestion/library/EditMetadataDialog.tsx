@@ -41,24 +41,16 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { CanonicalArticle } from "../../content/types";
 import { db } from "../../persistence/db";
+import { formatIsoDate } from "./formatDate";
 
 /** isoToDateInput — ISO datetime → the "YYYY-MM-DD" a date input holds. */
 function isoToDateInput(iso: string): string {
   return iso.slice(0, 10);
 }
 
-/** formatCanonicalDate — the quiet hint voice for the canonical published
- * date (medium date style; raw ISO fallback mirrors the ArticleView/
- * ReviewView formatter discipline). */
-function formatCanonicalDate(iso: string): string {
-  try {
-    return new Intl.DateTimeFormat(navigator.language, {
-      dateStyle: "medium",
-    }).format(new Date(iso));
-  } catch {
-    return iso;
-  }
-}
+// The canonical-date hint uses the ONE localized date voice (medium style)
+// — no local Intl copy (the duplicated-formatter anti-pattern).
+const formatCanonicalDate = (iso: string): string => formatIsoDate(iso, "medium");
 
 /** dateInputToIso — "YYYY-MM-DD" → UTC-noon ISO datetime; undefined for
  * anything else (defensive — a type=date input only yields valid values or
@@ -71,8 +63,10 @@ function dateInputToIso(value: string): string | undefined {
 
 /** isValidHttpUrl — the httpUrl mirror of the schema's canonical guard.
  * The field is a native type=url input (constraint validation refuses an
- * invalid value before this handler can fire), so this is defense-in-depth:
- * an unparseable value is the absent-override state, never a stored one. */
+ * invalid value before Save can pass), so this is defense-in-depth — but a
+ * NONEMPTY invalid value BLOCKS Save with the calm inline explanation
+ * (the honesty constraint: an unsaveable value refuses reader-visibly, it
+ * is never silently dropped while the rest of the row saves). */
 function isValidHttpUrl(value: string): boolean {
   try {
     const url = new URL(value);
@@ -122,9 +116,14 @@ export function EditMetadataDialog({
   const submittingRef = useRef(false);
   submittingRef.current = saving;
 
-  // The pinned validity rule: a blank title cannot be saved UNLESS Reset
-  // title was pressed (the explicit clear affordance).
-  const saveBlocked = titleValue.trim().length === 0 && !titleReset;
+  // The pinned validity rules: a blank title cannot be saved UNLESS Reset
+  // title was pressed (the explicit clear affordance), and a nonempty but
+  // invalid source URL blocks Save with the calm explanation (honesty —
+  // the row never saves with that value silently discarded).
+  const titleBlocked = titleValue.trim().length === 0 && !titleReset;
+  const sourceUrlInvalid =
+    sourceUrlValue.trim().length > 0 && !isValidHttpUrl(sourceUrlValue.trim());
+  const saveBlocked = titleBlocked || sourceUrlInvalid;
 
   // ── Dialog shell — RemoveConfirm clone + the AddDialog D16-08 reset ────
   // Sync the `open` prop with the underlying <dialog> state (idempotent
@@ -229,6 +228,7 @@ export function EditMetadataDialog({
     const trimmedAuthor = authorValue.trim();
     const trimmedSourceUrl = sourceUrlValue.trim();
     if (trimmedTitle.length === 0 && !titleReset) return; // blank-and-not-reset: the disabled rule, defensively
+    if (trimmedSourceUrl.length > 0 && !isValidHttpUrl(trimmedSourceUrl)) return; // invalid-URL block, defensively — never a silent drop
     setSaving(true);
     try {
       // Rule 1 fix: the captured article may ALREADY carry override keys
@@ -395,11 +395,18 @@ export function EditMetadataDialog({
               Reset source
             </button>
           </div>
-          {/* Calm inline explanation — visible exactly while Save is
-              blocked by the blank-and-not-reset rule (D17-04). */}
-          {saveBlocked && (
+          {/* Calm inline explanations — visible exactly while Save is
+              blocked: the blank-and-not-reset title rule (D17-04), or a
+              nonempty-but-invalid source URL (honesty — refuse calmly,
+              never save a silently-discarded field). */}
+          {titleBlocked && (
             <p className="edit-metadata-hint">
               Type a title, or choose Reset to keep the original.
+            </p>
+          )}
+          {sourceUrlInvalid && (
+            <p className="edit-metadata-hint">
+              Enter a full http(s) link, or choose Reset source to keep the original.
             </p>
           )}
           <div className="edit-metadata-actions">

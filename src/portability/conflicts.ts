@@ -249,14 +249,20 @@ const READER_PREFS_KEY = "reader-prefs";
 type ArticleLookupSource = "bundle" | "local" | "fixture";
 
 /**
- * metadataDiffers (Phase 17 17-04 — D17-11): strict inequality on
- * readerTitle OR readerAuthor, which makes one-side-only differences
- * (present here, absent there) count as differing — the D9-14 identical-
- * duplicate calm no-op therefore requires override state to match too
- * (Pitfall 4 fix: an incoming override never arrives silently dropped).
+ * metadataDiffers (Phase 17 17-04 — D17-11): strict inequality on ANY
+ * reader-override key (readerTitle, readerAuthor, readerPublishedAt,
+ * readerSourceUrl), which makes one-side-only differences (present here,
+ * absent there) count as differing — the D9-14 identical-duplicate calm
+ * no-op therefore requires override state to match too (Pitfall 4 fix: an
+ * incoming override never arrives silently dropped).
  */
 export function metadataDiffers(a: CanonicalArticle, local: CanonicalArticle): boolean {
-  return a.readerTitle !== local.readerTitle || a.readerAuthor !== local.readerAuthor;
+  return (
+    a.readerTitle !== local.readerTitle ||
+    a.readerAuthor !== local.readerAuthor ||
+    a.readerPublishedAt !== local.readerPublishedAt ||
+    a.readerSourceUrl !== local.readerSourceUrl
+  );
 }
 
 type ArticleLookupEntry = {
@@ -564,6 +570,8 @@ function mergeOnWin(
     ...incoming,
     readerTitle: local.readerTitle,
     readerAuthor: local.readerAuthor,
+    readerPublishedAt: local.readerPublishedAt,
+    readerSourceUrl: local.readerSourceUrl,
   };
 }
 

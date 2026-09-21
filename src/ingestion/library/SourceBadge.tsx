@@ -17,11 +17,13 @@
 // (fixture|url|paste|markdown|html-upload|pdf|epub-chapter — Plan 12 widened
 // the enum; the D12-01 chapter sub-rows reuse this badge).
 // Threat T-8-12 (SourceBadge link href injection): the sourceUrl comes from
-// `article.provenance.sourceUrl` which is `httpUrl`-refined at ArticleSchema
+// `effectiveSourceUrl(article)` — either the canonical `provenance.sourceUrl`
+// or the `readerSourceUrl` override, both `httpUrl`-refined at ArticleSchema
 // parse time — only http(s) URLs survive (Pitfall 5). The
 // `rel="noreferrer noopener"` + `target="_blank"` attributes prevent reverse-
 // tabnabbing. No `javascript:`/`data:` URI can reach this code path.
 import type { CanonicalArticle } from "../../content/types";
+import { effectiveSourceUrl } from "./effectiveMetadata";
 
 interface SourceBadgeProps {
   /** The article whose source the badge describes. */
@@ -58,7 +60,7 @@ function badgeLabel(source: NonNullable<CanonicalArticle["ingestionMeta"]>["sour
 export function SourceBadge({ article }: SourceBadgeProps) {
   const source = article.ingestionMeta?.source ?? "fixture";
   const label = badgeLabel(source);
-  const sourceUrl = article.provenance.sourceUrl;
+  const sourceUrl = effectiveSourceUrl(article);
   // The link variant renders ONLY when a sourceUrl is present. Per the schema
   // discipline this is true for `url`-sourced articles and SOME paste-HTML
   // articles; it is false for markdown / html-upload / fixtures. The check
