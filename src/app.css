@@ -2202,24 +2202,16 @@ dialog.annotations-drawer::backdrop {
  * LibraryRow extends the `.fixture-list li` card geometry byte-identically.
  * ════════════════════════════════════════════════════════════════════════ */
 
-/* Library list grid — byte-identical to .fixture-list (UI-SPEC §LibraryView). */
+/* Library list — issue #67 (locked IA, variant A): a SINGLE-COLUMN list of
+   full-width rows (the 2/3-column card grid is retired for the library
+   list). Every row shares one anatomy: main column + right icon cluster. */
 .library-list {
   list-style: none;
   margin: var(--space-xl) auto;
   padding: 0;
   max-width: 1100px;
   display: grid;
-  gap: var(--space-lg);
-}
-@media (min-width: 640px) {
-  .library-list {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-@media (min-width: 1024px) {
-  .library-list {
-    grid-template-columns: repeat(3, 1fr);
-  }
+  gap: var(--space-sm);
 }
 
 /* Library row — extends .fixture-list li geometry (UI-SPEC §LibraryRow). */
@@ -2280,9 +2272,21 @@ dialog.annotations-drawer::backdrop {
   margin: var(--space-xs) 0 0 0;
 }
 
-/* FinishedMark — .meta typography + filled-circle glyph (D8-12). */
+/* FinishedMark — issue #67: a quiet pill chip (the ONE finished treatment
+   for article rows and book rows; the old filled-circle glyph is superseded
+   — text + border carry the state beyond color, forced-colors safe). */
 .finished-mark {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 28px;
   margin: var(--space-xs) 0 0 0;
+  padding: 0 var(--space-sm);
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--ink-soft);
 }
 
 /* LibraryRowTags — inline chip list, display-only (D8-05). */
@@ -2295,7 +2299,10 @@ dialog.annotations-drawer::backdrop {
   gap: var(--space-xs);
 }
 
-/* ContinueReadingStrip — single-column, never widens (UI-SPEC §ContinueReading). */
+/* ContinueReadingStrip — issue #67 (variant A): the compact horizontal
+   rail. The rail grid widens to slim cards (auto-fit, 240px floor); the
+   card is raised surface like a list row but slimmer — the stretched
+   title link + "% read" + hairline only. */
 .continue-reading-strip {
   max-width: 1100px;
   margin: var(--space-xl) auto 0 auto;
@@ -2310,8 +2317,13 @@ dialog.annotations-drawer::backdrop {
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: 1fr; /* always single column — strip never widens */
+  grid-template-columns: 1fr; /* single column under 640px */
   gap: var(--space-md);
+}
+@media (min-width: 640px) {
+  .continue-reading {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  }
 }
 .continue-reading-row {
   padding: var(--space-md);
@@ -2320,12 +2332,63 @@ dialog.annotations-drawer::backdrop {
   border-radius: 4px;
 }
 .continue-reading-row a {
-  display: inline-block;
+  /* Issue #67 review — the locked rail card spec: ONE-line clamped title.
+     Visual clamp only (text-overflow ellipsis via -webkit-line-clamp): the
+     full title stays in the DOM and the accessible name — the no-clamp
+     rule in the TOC layer (app.css §toc-list) targets navigation
+     DESTINATION text; a rail card is a resume shortcut whose full title
+     lives on its library row. overflow-wrap keeps a long unbroken token
+     wrapping instead of clipping. */
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
   min-height: var(--touch);
   line-height: var(--touch);
 }
 .continue-reading-row .meta {
   margin: var(--space-xs) 0 0 0;
+}
+/* The slim rail card's progress line: "% read" over the hairline (issue #67). */
+.continue-reading-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin-block-start: var(--space-xs);
+}
+.continue-reading-progress .meta {
+  margin: 0;
+}
+
+/* ── Issue #67 — the ONE toolbar band ──────────────────────────────────────
+   The view switcher + search + tag filter grouped in one bordered container
+   directly under the header (the locked variant-A IA). Joins the shared
+   1100px centered measure; children keep their own components/classes. */
+.library-toolbar {
+  max-width: 1100px;
+  margin: var(--space-lg) auto 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs) var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+}
+.library-toolbar .view-switcher {
+  margin: 0;
+  max-width: none;
+}
+.library-toolbar .library-search {
+  flex: 1 1 240px;
+  margin: 0;
+  max-width: none;
+}
+.library-toolbar .tag-filter {
+  margin: 0;
+  max-width: none;
 }
 
 /* ViewSwitcher (Plan 14-02 — D14-22/D14-23) — four real links inside a
@@ -3482,14 +3545,9 @@ h2.review-note-title {
   border: 1px solid var(--hairline);
   border-radius: 4px;
 }
-/* The collapsed card's primary actions (Resume + any open link) get the
-   byte-stable 44px touch discipline (the .library-row link rule). */
-.book-card > a[href^="#/article/"] {
-  display: inline-block;
-  min-height: var(--touch);
-  min-width: var(--touch);
-  line-height: var(--touch);
-}
+/* The collapsed card's primary link (the title, issue #67) rides the
+   shared .library-card-link treatment — the 44px touch discipline comes
+   from the title's inline-flex line box. */
 
 /* The disclosure chevron — quiet hairline button, 44px touch target,
    inline with the card's meta cluster. aria-expanded conveys state beyond
@@ -3542,26 +3600,10 @@ h2.review-note-title {
   margin: var(--space-sm) 0 0 0;
 }
 
-/* Remove book — the calm destructive trigger. Consequence is named in the
-   BookRemoveConfirm copy; hover hints --destructive (never color alone). */
-.book-remove {
-  display: inline-flex;
-  align-items: center;
-  min-height: var(--touch);
-  margin-top: var(--space-md);
-  padding: 0 var(--space-md);
-  background: transparent;
-  border: 1px solid var(--hairline);
-  border-radius: 4px;
-  font-family: var(--font-ui);
-  font-size: 14px;
-  color: var(--ink-soft);
-  cursor: pointer;
-}
-.book-remove:hover {
-  color: var(--destructive);
-  border-color: var(--destructive);
-}
+/* Issue #67 — the book remove trigger is the row action cluster's trash
+   icon (.library-row-remove discipline shared with article rows); the old
+   in-region .book-remove text button is superseded. BookRemoveConfirm
+   still gates the sole removeBook call site. */
 
 /* ── BookRemoveConfirm alertdialog (Task 2 — the book cascade gate) ──────
  * Structural clone of .library-remove-confirm (the 09-05 import-preview
@@ -4383,14 +4425,25 @@ main#main > .status:empty {
 
 /* Title-led cards: native navigation covers the surface; utilities stay independent. */
 .library-row,
-.continue-reading-row {
+.continue-reading-row,
+.book-row {
   position: relative;
   isolation: isolate;
 }
-.library-row > article {
+/* Issue #67 — the ONE row anatomy: a main column (title → metaline → tags
+   → progress/Finished → book disclosure) plus the right-aligned icon
+   action cluster. The stretched title link covers the row (native nav);
+   the cluster rides above it via the z-index rule below. */
+.library-row > article,
+.book-card {
   display: flex;
-  flex-direction: column;
-  height: 100%;
+  flex-direction: row;
+  align-items: flex-start;
+  column-gap: var(--space-md);
+  min-width: 0;
+}
+.library-row-main {
+  flex: 1 1 auto;
   min-width: 0;
 }
 .library-row h2,
@@ -4413,9 +4466,26 @@ main#main > .status:empty {
   color: var(--accent);
   text-decoration: underline;
 }
-.library-card-link:focus-visible::after {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
+/* Issue #67 — the book title link: the stretched overlay is scoped to the
+   TITLE BLOCK (h2 becomes the overlay's containing block), not the whole
+   row — an expanded book row contains chapter sub-rows whose own links
+   must win hit-testing, and the disclosure/TagEntry controls below the
+   title stay directly clickable. The title link itself keeps the 44px
+   touch discipline. */
+.book-row .library-row-main > h2 {
+  position: relative;
+}
+.book-row .library-row-main > h2 .library-card-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch);
+}
+/* Sticky-header-aware scrollIntoView: the shell header (min-height 48px,
+   sticky top) must never cover a row link the browser just scrolled into
+   view (issue #67 — the more compact rows shifted scroll math at small
+   viewports; the margin fixes the class of cases, not one test). */
+.library-card-link {
+  scroll-margin-top: 64px;
 }
 .library-card-meta {
   display: flex;
@@ -4428,71 +4498,78 @@ main#main > .status:empty {
 }
 .library-card-meta a,
 .library-row-actions button,
-.continue-reading-footer button {
+/* Issue #67 — the book row's in-main interactive controls must stay
+   clickable above the title link's stretched overlay (z-index 1): the
+   disclosure chevron and the expanded region's TagEntry controls.
+   Chapter sub-row links/buttons carry their own elevation (nested
+   .library-row contexts). */
+.book-toggle,
+.book-chapters button,
+.book-chapters input {
   position: relative;
   z-index: 2;
 }
+/* Issue #67 — the right-aligned icon action cluster: mark-read · edit ·
+   trash, one arrangement for every row kind. */
 .library-row-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-xs);
-  margin-block-start: auto;
-  padding-block-start: var(--space-sm);
+}
+/* The progress block: "% read" label over the hairline, capped so a full-
+   width row's hairline stays a quiet measure (issue #67). */
+.library-row-progress {
+  max-width: 420px;
+  margin-block-start: var(--space-xs);
+}
+.library-progress-label {
+  margin: 0 0 var(--space-xs);
 }
 .reading-state-control {
-  margin-inline-end: auto;
+  display: flex;
+  flex-direction: column;
 }
+/* Issue #67 — the mark-read control is an ICON button (check circle) in
+   the cluster; the accessible name carries the action + title (unchanged
+   template). Quiet-chrome discipline: transparent rest, 44px box,
+   --ink-soft at rest, --accent on hover. */
 .reading-state-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: var(--touch);
-  padding: var(--space-xs) var(--space-sm);
+  min-width: var(--touch);
+  padding: 0;
   border: 1px solid transparent;
   border-radius: 4px;
   background: transparent;
   color: var(--ink-soft);
-  font: inherit;
-  font-family: var(--font-ui);
-  font-size: 14px;
   cursor: pointer;
 }
 .reading-state-button:hover {
-  border-color: var(--hairline);
   color: var(--accent);
+  border-color: var(--accent);
 }
 .reading-state-button:disabled {
   cursor: wait;
   opacity: 0.65;
 }
-.library-progress-label {
-  margin: var(--space-xs) 0 0;
-}
-.continue-reading {
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
-}
-.continue-reading-row {
-  display: flex;
-  flex-direction: column;
-  background: transparent;
-}
-.continue-reading-row > a {
-  display: block;
-  min-height: 0;
-  line-height: 1.4;
-  font-family: var(--font-body);
-  font-weight: 600;
-  overflow-wrap: anywhere;
-}
-.continue-reading-footer {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-xs) var(--space-sm);
-  margin-block-start: auto;
-  padding-block-start: var(--space-sm);
-}
-.continue-reading-footer .reading-state-control {
-  margin-inline-end: 0;
+/* Issue #67 review — pending is visible, not just opacity: the glyph swaps
+   to the icons.tsx spinner arc while the write is in flight (the accessible
+   name stays the target action — Quick 260909-ahy). Rotation rides the same
+   positive-gate pattern as the book disclosure animation above; under
+   reduced motion the global reduce gate (top of file) leaves the static arc
+   — still a different shape from the check. */
+@media (prefers-reduced-motion: no-preference) {
+  .reading-state-button[aria-busy="true"] svg {
+    animation: reading-state-spin 0.9s linear infinite;
+  }
+  @keyframes reading-state-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
 }
 
 /* Highlights: shared page measure, paired fields, one container per quote. */
@@ -4569,23 +4646,21 @@ main#main > .status:empty {
   forced-color-adjust: none;
 }
 
-/* ── Issue #38 — the ambient reading-stats strip ("on the shelf") ──────── */
-/* The plain-text summary line between the continue-reading section and the
-   library list, plus the per-row "time read here" meta line. Token-only,
-   no motion, no color/icon meaning: the strip is quiet chrome that reads
+/* ── Issue #38 / repositioned by issue #67 — the reading-stats line ──────
+   The plain-text summary line, merged INTO the header block: a quiet
+   right-aligned line directly under the h1+Add row (variant A). Token-only,
+   no motion, no color/icon meaning: the line is quiet chrome that reads
    as document text (no new keyboard stops — nothing here is focusable). */
 .library-stats-strip {
   max-width: 1100px;
-  margin-block: var(--space-xl) 0;
+  margin-block: var(--space-sm) 0;
   margin-inline: auto;
+  text-align: end;
   font-family: var(--font-ui);
-  font-size: 15px;
+  font-size: 14px;
   color: var(--ink-soft);
 }
 .library-stats-strip strong {
   color: var(--ink);
   font-weight: 600;
-}
-.library-row-time-read {
-  margin-block: var(--space-xs) 0;
 }

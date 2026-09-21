@@ -5,7 +5,23 @@
 // layer below covers the write→reload window (accessible name flips to the
 // target action at click time) and clears on catch-up (isRead matches) or
 // error (honest revert to the persisted prop truth + the retry copy).
+//
+// Issue #67 (locked IA, variant A) — the control is now an ICON button (the
+// check-circle glyph) in the row's right-aligned action cluster; the
+// aria-label template `${label}: ${title}` is UNCHANGED (every e2e contract
+// matches `/^Mark as read:/` etc. against the accessible name, never the
+// visible text — the name flips to the TARGET action at click time and
+// stays there through the pending window), and `disabled` carries the
+// pending state.
+//
+// Issue #67 review — pending is VISIBLE, not just disabled+opacity: the
+// glyph swaps to a spinner arc and the button carries aria-busy while the
+// write is in flight. The accessible name deliberately does NOT change
+// (Quick 260909-ahy — it stays the target action through the pending
+// window); sighted readers get the spinner, screen readers get a stable
+// name + busy state + the disabled semantics.
 import { useEffect, useState } from "react";
+import { CheckIcon, SpinnerIcon } from "./icons";
 
 /** Keep storage failures local and keep curation separate from card navigation. */
 export function ReadingStateButton({
@@ -38,6 +54,7 @@ export function ReadingStateButton({
         type="button"
         className="reading-state-button"
         disabled={pending}
+        aria-busy={pending || undefined}
         aria-label={`${label}: ${title}`}
         onClick={async () => {
           setPending(true);
@@ -53,7 +70,7 @@ export function ReadingStateButton({
           }
         }}
       >
-        {pending ? "Saving…" : label}
+        {pending ? <SpinnerIcon /> : <CheckIcon />}
       </button>
       {error && (
         <p className="meta" role="alert">

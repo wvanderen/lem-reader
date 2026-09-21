@@ -4,9 +4,9 @@
 //   1. Fresh profile: NO reading-time text anywhere on #/ (strip absent,
 //      no "read here" lines — silence IS the empty state);
 //   2. After reading: the strip reads "You've read {duration} across
-//      {N} visits." in document order BETWEEN the continue-reading
-//      section and the library list, and each read article's card carries
-//      the quiet "{duration} read here" meta line;
+//      {N} visits." in document order INSIDE THE HEADER BLOCK (issue #67
+//      — header → strip → continue rail → list), and each read article's
+//      card carries the quiet "{duration} read here" meta line;
 //   3. "{N} finished." appears ONLY when the finished count is nonzero;
 //   4. the per-card line is SUPPRESSED under one minute of accrued time;
 //   5. removing the read article shrinks the totals (cascade) — with no
@@ -285,7 +285,7 @@ test.describe("issue #38 — the ambient reading-stats strip", () => {
     expect(body).not.toMatch(/streak|goal|daily target|words read/i);
   });
 
-  test("after reading: strip between continue-reading and the list + per-card meta lines", async ({
+  test("after reading: strip in the header block + per-card meta lines", async ({
     page,
   }) => {
     await seedArticleRows(page, [STATS_ARTICLE_A, STATS_ARTICLE_B]);
@@ -302,19 +302,29 @@ test.describe("issue #38 — the ambient reading-stats strip", () => {
     // No finished locations — the second sentence is absent (criterion 3).
     await expect(strip).not.toContainText("finished");
 
-    // Document order: continue-reading section → strip → list section.
+    // Document order (issue #67 IA): the strip sits in the HEADER BLOCK —
+    // header → strip → continue-reading section → list section.
     const order = await page.evaluate(() => {
+      const header = document.querySelector(".library-header");
+      const strip = document.querySelector(".library-stats-strip");
       const continueSection = document.querySelector(
         ".library-section-continue",
       );
-      const strip = document.querySelector(".library-stats-strip");
       const list = document.querySelector(".library-section-list");
-      if (!continueSection || !strip || !list) return false;
-      return Boolean(
-        continueSection.compareDocumentPosition(strip) &
-          Node.DOCUMENT_POSITION_FOLLOWING,
-      ) && Boolean(
-        strip.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING,
+      if (!header || !strip || !continueSection || !list) return false;
+      return (
+        Boolean(
+          header.compareDocumentPosition(strip) &
+            Node.DOCUMENT_POSITION_FOLLOWING,
+        ) &&
+        Boolean(
+          strip.compareDocumentPosition(continueSection) &
+            Node.DOCUMENT_POSITION_FOLLOWING,
+        ) &&
+        Boolean(
+          continueSection.compareDocumentPosition(list) &
+            Node.DOCUMENT_POSITION_FOLLOWING,
+        )
       );
     });
     expect(order).toBe(true);
