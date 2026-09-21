@@ -136,6 +136,12 @@ export class LemReaderDB extends Dexie {
     // 17-RESEARCH OQ3 Option A).
     readerTitle?: string;
     readerAuthor?: string;
+    // The same bumpless mechanism extended: reader-owned display overrides
+    // for the provenance date and source link. Plain non-indexed row
+    // fields — NO Dexie version bump (only INDEXED properties require a
+    // version-block declaration; no query keys on overrides).
+    readerPublishedAt?: string;
+    readerSourceUrl?: string;
   }, string>;
   // Phase 5: real row types replace the Phase 1 placeholder annotations
   // (LOW risk — runtime-unaffected; Dexie resolves stores by name from the

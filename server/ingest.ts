@@ -696,15 +696,18 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
       // parses the pasted text ONCE here (canonical-model boundary) and
       // rejoins the shared stages 2+ below — the same input-source-
       // agnostic contract as every other format (D7-03).
-      const { text, url: pastedSourceUrl } = (
-        request as { transcript: { text: string; url?: string } }
+      const { text, url: pastedSourceUrl, title: transcriptTitle } = (
+        request as { transcript: { text: string; url?: string; title: string } }
       ).transcript;
       const videoId = pastedSourceUrl !== undefined ? extractYouTubeVideoId(pastedSourceUrl) : null;
-      const parsed = pastedTranscriptToBlocks(text);
+      const parsed = pastedTranscriptToBlocks(text, transcriptTitle);
       blocks = parsed.blocks;
       footnotes = [];
       lang = "und";
-      provenancePartial = { title: "Transcript" };
+      // The reader names the paste at ingest time (the request schema
+      // requires a non-blank title) — the pipeline never fabricates a
+      // neutral title (no silent "Transcript").
+      provenancePartial = { title: transcriptTitle };
       isReaderable = true;
       if (videoId !== null) {
         // A YouTube source URL — the SAME yt-<videoId-hash> identity the

@@ -11,8 +11,10 @@
 // forking title derivation is the Phase 17 anti-pattern):
 //   - Library rows (LibraryRow heading/byline/aria-label) + the strip
 //     (ContinueReadingStrip) + search (libraryFilter haystack, D17-07)
-//   - Reader header: document.title, byline, export filename (ArticleView)
-//   - Review surfaces (ReviewView options/sections, reviewFilter sort)
+//   - Reader header: document.title, byline, published date, source link,
+//     export filename (ArticleView)
+//   - Review surfaces (ReviewView options/sections/sort, reviewFilter sort,
+//     source-host suffix)
 //   - Markdown export citations/headings (portability/markdown.ts)
 //
 // Policy edges pinned by the truth table
@@ -55,6 +57,34 @@ export function effectiveAuthor(
   article: CanonicalArticle,
 ): string | undefined {
   return article.readerAuthor ?? article.provenance.author;
+}
+
+/**
+ * effectivePublishedAt — the ONE display-date derivation, the
+ * effectiveAuthor mechanism extended to the provenance date: the
+ * reader-owned override wins; the canonical publishedAt is the fallback.
+ * Absent override + absent canonical → undefined, and every consumer's
+ * existing truthy guard renders nothing. Both sides are ISO datetime, so
+ * every consumer's existing formatter works unchanged.
+ */
+export function effectivePublishedAt(
+  article: CanonicalArticle,
+): string | undefined {
+  return article.readerPublishedAt ?? article.provenance.publishedAt;
+}
+
+/**
+ * effectiveSourceUrl — the ONE display-source derivation: the override
+ * corrects the "Originally published at {domain}" link (and the review
+ * host suffix); the canonical sourceUrl is the fallback. The same absent-
+ * and-both-undefined → undefined discipline as effectiveAuthor: a cleared
+ * override on a paste article restores "no source link", never an empty
+ * href.
+ */
+export function effectiveSourceUrl(
+  article: CanonicalArticle,
+): string | undefined {
+  return article.readerSourceUrl ?? article.provenance.sourceUrl;
 }
 
 /**

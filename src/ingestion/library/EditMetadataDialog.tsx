@@ -1,10 +1,12 @@
 // src/ingestion/library/EditMetadataDialog.tsx
 // Plan 17-02 Task 2 — EditMetadataDialog (D17-01, D17-02, D17-03, D17-04,
 // D17-08, META-01/META-03). Native <dialog> hosting the reader-owned title/
-// author override write. STRUCTURAL CLONE of RemoveConfirm.tsx (the shipped
-// dialog grammar) + AddDialog.tsx (labeled inputs, prevented-submit forms,
-// in-flight guard) per Pitfall 8 — NO shared dialog abstraction, NO shared
-// metadata-write service.
+// author override write, extended with the readerPublishedAt/readerSourceUrl
+// overrides (the same mechanism, two more display fields: the provenance
+// date and the "Originally published at" link). STRUCTURAL CLONE of
+// RemoveConfirm.tsx (the shipped dialog grammar) + AddDialog.tsx (labeled
+// inputs, prevented-submit forms, in-flight guard) per Pitfall 8 — NO shared
+// dialog abstraction, NO shared metadata-write service.
 //
 // Five-part dialog grammar (cloned verbatim from RemoveConfirm/AddDialog):
 //   1. useEffect open↔showModal/close sync with idempotent guards
@@ -28,9 +30,57 @@
 // the save OMITS the readerTitle key (whole-row put deletes it — META-03).
 // Never persist a blank override: min(1) at the schema boundary would drop
 // the ENTIRE row on the next safeParse read (Pitfall 2 row-poison).
+//
+// The published-date conversion contract: the schema stores ISO datetime
+// (the canonical publishedAt shape — every consumer's formatter works
+// unchanged), but the reader knows a DAY, not a clock time, so the field is
+// a native date input converted to UTC-noon ISO on save. Noon UTC renders
+// as the reader's chosen calendar date across UTC-11..UTC+11 (the display
+// is dateStyle-only), and isoToDateInput inverts losslessly by slicing the
+// first ten characters.
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { CanonicalArticle } from "../../content/types";
 import { db } from "../../persistence/db";
+
+/** isoToDateInput — ISO datetime → the "YYYY-MM-DD" a date input holds. */
+function isoToDateInput(iso: string): string {
+  return iso.slice(0, 10);
+}
+
+/** formatCanonicalDate — the quiet hint voice for the canonical published
+ * date (medium date style; raw ISO fallback mirrors the ArticleView/
+ * ReviewView formatter discipline). */
+function formatCanonicalDate(iso: string): string {
+  try {
+    return new Intl.DateTimeFormat(navigator.language, {
+      dateStyle: "medium",
+    }).format(new Date(iso));
+  } catch {
+    return iso;
+  }
+}
+
+/** dateInputToIso — "YYYY-MM-DD" → UTC-noon ISO datetime; undefined for
+ * anything else (defensive — a type=date input only yields valid values or
+ * "", so an undefined result is the absent-override state). */
+function dateInputToIso(value: string): string | undefined {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return undefined;
+  const date = new Date(`${value}T12:00:00Z`);
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+}
+
+/** isValidHttpUrl — the httpUrl mirror of the schema's canonical guard.
+ * The field is a native type=url input (constraint validation refuses an
+ * invalid value before this handler can fire), so this is defense-in-depth:
+ * an unparseable value is the absent-override state, never a stored one. */
+function isValidHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
 
 interface EditMetadataDialogProps {
   /** When true, the dialog is open via showModal (focus-trapped). */
@@ -62,6 +112,8 @@ export function EditMetadataDialog({
   // one invalid combination).
   const [titleValue, setTitleValue] = useState("");
   const [authorValue, setAuthorValue] = useState("");
+  const [publishedValue, setPublishedValue] = useState("");
+  const [sourceUrlValue, setSourceUrlValue] = useState("");
   const [titleReset, setTitleReset] = useState(false);
   const [saving, setSaving] = useState(false);
   // Live mirror rewritten EVERY render (the AddDialog L110-116 discipline):
@@ -89,6 +141,12 @@ export function EditMetadataDialog({
       // Fresh field state from the article's CURRENT override state.
       setTitleValue(article?.readerTitle ?? "");
       setAuthorValue(article?.readerAuthor ?? "");
+      setPublishedValue(
+        article?.readerPublishedAt !== undefined
+          ? isoToDateInput(article.readerPublishedAt)
+          : "",
+      );
+      setSourceUrlValue(article?.readerSourceUrl ?? "");
       setTitleReset(false);
       setSaving(false);
       // Cross-engine focus management (Pitfall 1 + WebKit quirk — the
@@ -169,6 +227,7 @@ export function EditMetadataDialog({
     if (!article || saving) return;
     const trimmedTitle = titleValue.trim();
     const trimmedAuthor = authorValue.trim();
+    const trimmedSourceUrl = sourceUrlValue.trim();
     if (trimmedTitle.length === 0 && !titleReset) return; // blank-and-not-reset: the disabled rule, defensively
     setSaving(true);
     try {
@@ -180,12 +239,19 @@ export function EditMetadataDialog({
       const {
         readerTitle: _previousTitle,
         readerAuthor: _previousAuthor,
+        readerPublishedAt: _previousPublishedAt,
+        readerSourceUrl: _previousSourceUrl,
         ...base
       } = article;
+      const publishedIso = dateInputToIso(publishedValue);
       const row = {
         ...base,
         ...(trimmedTitle ? { readerTitle: trimmedTitle } : {}),
         ...(trimmedAuthor ? { readerAuthor: trimmedAuthor } : {}),
+        ...(publishedIso ? { readerPublishedAt: publishedIso } : {}),
+        ...(trimmedSourceUrl.length > 0 && isValidHttpUrl(trimmedSourceUrl)
+          ? { readerSourceUrl: trimmedSourceUrl }
+          : {}),
       };
       await db.articles.put(row);
     } catch {
@@ -216,7 +282,7 @@ export function EditMetadataDialog({
       aria-labelledby="edit-metadata-heading"
     >
       <div className="edit-metadata-inner">
-        <h2 id="edit-metadata-heading">Edit title and author</h2>
+        <h2 id="edit-metadata-heading">Edit metadata</h2>
         <form onSubmit={handleFormSubmit} className="edit-metadata-form">
           {/* Title field — placeholder carries the CANONICAL title
               (D17-03/D17-08: the canonical value is visible ONLY here,
@@ -272,6 +338,61 @@ export function EditMetadataDialog({
               onClick={() => setAuthorValue("")}
             >
               Reset author
+            </button>
+          </div>
+          {/* Published-date field — a native date input converted to
+              UTC-noon ISO on save (the canonical publishedAt shape). The
+              canonical date shows as quiet hint text (display-only, never
+              persisted — the D17-03 placeholder discipline; date inputs
+              cannot carry placeholders). */}
+          <div className="edit-metadata-field">
+            <label htmlFor="edit-metadata-published">Published date</label>
+            <input
+              id="edit-metadata-published"
+              name="published"
+              type="date"
+              value={publishedValue}
+              disabled={saving}
+              onChange={(e) => setPublishedValue(e.target.value)}
+            />
+            {article?.provenance.publishedAt !== undefined && (
+              <p className="edit-metadata-hint">
+                Publication metadata: {formatCanonicalDate(article.provenance.publishedAt)}
+              </p>
+            )}
+            <button
+              type="button"
+              className="edit-metadata-reset"
+              disabled={saving}
+              onClick={() => setPublishedValue("")}
+            >
+              Reset date
+            </button>
+          </div>
+          {/* Source-URL field — corrects the "Originally published at
+              {domain}" link. The canonical URL shows as the placeholder
+              (D17-03); "No source link" mirrors the author placeholder's
+              absent-canonical voice. */}
+          <div className="edit-metadata-field">
+            <label htmlFor="edit-metadata-source">Source URL</label>
+            <input
+              id="edit-metadata-source"
+              name="sourceUrl"
+              type="url"
+              inputMode="url"
+              autoComplete="off"
+              placeholder={article?.provenance.sourceUrl ?? "No source link"}
+              value={sourceUrlValue}
+              disabled={saving}
+              onChange={(e) => setSourceUrlValue(e.target.value)}
+            />
+            <button
+              type="button"
+              className="edit-metadata-reset"
+              disabled={saving}
+              onClick={() => setSourceUrlValue("")}
+            >
+              Reset source
             </button>
           </div>
           {/* Calm inline explanation — visible exactly while Save is

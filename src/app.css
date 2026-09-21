@@ -1015,6 +1015,7 @@ dialog.add-dialog::backdrop {
   color: var(--ink-soft);
 }
 .add-dialog-inner input[type="url"],
+.add-dialog-inner input[type="text"],
 .add-dialog-inner input[type="file"],
 .add-dialog-inner textarea {
   box-sizing: border-box;
@@ -2780,7 +2781,9 @@ dialog.edit-metadata::backdrop {
   font-weight: 600;
   color: var(--ink);
 }
-.edit-metadata-field input[type="text"] {
+.edit-metadata-field input[type="text"],
+.edit-metadata-field input[type="date"],
+.edit-metadata-field input[type="url"] {
   width: 100%;
   min-height: var(--touch);
   padding: var(--space-sm);

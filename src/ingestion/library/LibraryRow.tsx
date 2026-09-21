@@ -135,7 +135,7 @@ export function LibraryRow({
             <button
               type="button"
               className="library-row-edit"
-              aria-label={`Edit title and author for ${effectiveTitle(article)}`}
+              aria-label={`Edit metadata for ${effectiveTitle(article)}`}
               onClick={onEdit}
             >
               <EditIcon aria-hidden="true" />

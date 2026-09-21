@@ -359,6 +359,17 @@ export const ArticleSchema = z.object({
   // no-author-override, not an empty-string override.
   readerTitle: z.string().min(1).optional(),
   readerAuthor: z.string().min(1).optional(),
+  // Reader-owned display overrides for the provenance date and source link
+  // (the readerTitle/readerAuthor mechanism extended: same additive-optional
+  // Pitfall 9 hydration, same min-guard discipline — a blank publishedAt or
+  // sourceUrl is unrepresentable, and clearing an override means the key is
+  // omitted from the whole-row put). readerPublishedAt stays ISO datetime so
+  // every consumer can feed it to the shared formatters unchanged; the edit
+  // dialog converts a date-only input to UTC-noon ISO (the reader knows the
+  // day, not the clock time). readerSourceUrl is httpUrl like its canonical
+  // mirror — it corrects the "Originally published at {domain}" link only.
+  readerPublishedAt: z.string().datetime().optional(),
+  readerSourceUrl: httpUrl.optional(),
 });
 
 // Inferred types — also re-exported from types.ts. Schemas are the single

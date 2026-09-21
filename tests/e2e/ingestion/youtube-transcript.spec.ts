@@ -510,7 +510,7 @@ test.describe("YouTube ingest end-to-end (issue #41, flow N)", () => {
     await page.route("**/api/ingest", async (route) => {
       const body = route.request().postDataJSON() as {
         url?: string;
-        transcript?: { text?: string; url?: string };
+        transcript?: { text?: string; title?: string; url?: string };
       };
       if (body.url === BOT_URL) {
         await route.fulfill({
@@ -540,17 +540,27 @@ test.describe("YouTube ingest end-to-end (issue #41, flow N)", () => {
     await expect(dialog.locator(".status")).toContainText(
       "YouTube is asking for extra verification, so this video can't be added right now.",
     );
-    // The calm fallback appears with its guidance; paste and add.
+    // The calm fallback appears with its guidance; the video URL rides the
+    // form prefilled with the refused URL (provenance only, editable).
     await expect(dialog.getByText(/open the video on youtube/i)).toBeVisible();
+    await expect(dialog.locator("#ingest-transcript-url")).toHaveValue(BOT_URL);
+    // The title field is REQUIRED and gates the submit (the no-silent-
+    // "Transcript" rule): empty title → Add transcript disabled.
+    const addTranscript = dialog.getByRole("button", { name: /add transcript/i });
+    const titleInput = dialog.locator("#ingest-transcript-title");
     await dialog
       .getByRole("textbox", { name: /paste the transcript/i })
       .fill("0:00\nA cue the reader pasted by hand");
-    await dialog.getByRole("button", { name: /add transcript/i }).click();
+    await expect(addTranscript).toBeDisabled();
+    await titleInput.fill("Pasted Lecture");
+    await addTranscript.click();
 
-    // The pasted text rode the {transcript} envelope with the source URL.
+    // The pasted text rode the {transcript} envelope with the reader-provided
+    // title and the source URL.
     await page.waitForURL(/#\/article\/yt-e2e-pasted$/, { timeout: 15_000 });
     expect(transcriptBody).toEqual({
       text: "0:00\nA cue the reader pasted by hand",
+      title: "Pasted Lecture",
       url: BOT_URL,
     });
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Pasted Lecture", {
