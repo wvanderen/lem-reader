@@ -90,6 +90,9 @@ import { AddDialog } from "../AddDialog";
 // abstraction) hosting the single override write (the Dexie articles-table
 // put).
 import { EditMetadataDialog } from "./EditMetadataDialog";
+// PROTOTYPE (issue #67) — THROWAWAY library-IA variants behind ?lp=;
+// a passthrough (byte-identical DOM) unless the param is set in a dev build.
+import { LibraryIaPrototypeGate } from "./LibraryIaPrototype";
 
 /** A book pending destructive confirmation (Plan 12-05 — BookRow's Remove
  * book trigger is the only setter caller; BookRemoveConfirm consumes it). */
@@ -489,6 +492,10 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
   const visibleBooks = filterBooks(sortedBooks, { query, activeTag }, chapterTitlesByBook);
 
   return (
+    // PROTOTYPE (issue #67) — passthrough gate; delete with the prototype.
+    <LibraryIaPrototypeGate
+      data={{ snapshot, status, view, onSwitchView, allCount, stateCounts }}
+    >
     <main id="main">
       {/* Plan 13-03 (POLISH-06 / D13-16) bounded tidy — the library home
           reads as a header row plus calm ordered regions: continue
@@ -856,5 +863,6 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
         onBookAdded={() => invalidateLibrarySnapshot()}
       />
     </main>
+    </LibraryIaPrototypeGate>
   );
 }
