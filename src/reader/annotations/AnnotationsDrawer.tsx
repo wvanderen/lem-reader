@@ -70,6 +70,14 @@ export interface AnnotationsDrawerProps {
    * export button (the ArticleView state, threaded in).
    */
   exportingHighlights: boolean;
+  /**
+   * Issue #76 (decision #72) — the per-article review entry: the href of
+   * the URL-scoped review (#/highlights?article=<id>), template-built by
+   * ArticleView from the validated record id. Rendered as an anchor NEXT TO
+   * "Export highlights", hidden at 0 highlights (the gate IS the zero
+   * state — one entry point per surface). Absent = never rendered.
+   */
+  reviewHref?: string;
 }
 
 export function AnnotationsDrawer({
@@ -79,6 +87,7 @@ export function AnnotationsDrawer({
   onEditNote,
   onExportHighlights,
   exportingHighlights,
+  reviewHref,
 }: AnnotationsDrawerProps): React.ReactElement {
   const ref = useRef<HTMLDialogElement>(null);
   // Capture the trigger (the annotations-trigger button in the header) on open
@@ -168,6 +177,18 @@ export function AnnotationsDrawer({
               the drawer-scoped hook. Disabled while a download is in
               flight; the result announces through ArticleView's
               visually-hidden live region (the handler stays there). */}
+          {/* Issue #76 (decision #72) — the drawer's review entry: an
+              anchor (native link semantics — the row-link precedent) to the
+              URL-scoped review, gated at ≥ 1 highlight. Activation navigates
+              (a real history push); the view swap unmounts the drawer. */}
+          {sorted.length > 0 && reviewHref !== undefined && (
+            <a
+              className="btn btn-quiet annotations-drawer-review"
+              href={reviewHref}
+            >
+              Review highlights
+            </a>
+          )}
           <button
             type="button"
             className="btn btn-quiet article-export-highlights annotations-drawer-export"

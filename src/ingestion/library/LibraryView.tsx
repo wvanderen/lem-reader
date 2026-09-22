@@ -667,6 +667,7 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
                   location={locationsByArticle.get(a.id)}
                   total={totalsById.get(a.id) ?? 0}
                   timeReadLabel={timeReadByArticleId.get(a.id)}
+                  highlightCount={snapshot.highlightCountByArticleId.get(a.id)}
                   onReadingStateChange={async (read) => {
                     await setArticleReadState(a, read);
                     invalidateLibrarySnapshot();
