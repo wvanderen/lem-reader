@@ -35,9 +35,14 @@ test.beforeEach(async ({ page }) => {
   );
 });
 
-/** The shared back affordance (role + accessible name — the a11y contract). */
-function backToLibrary(page: Page) {
-  return page.getByRole("button", { name: "Back to library" });
+/**
+ * The shared back affordance (role + accessible name — the a11y contract).
+ * Issue #76 (decision #72): the REVIEW mount relabels to the honest "Back"
+ * (entries arrive from article pages as often as from the library); the
+ * article mount keeps the byte-stable "Back to library".
+ */
+function backToLibrary(page: Page, name = "Back to library") {
+  return page.getByRole("button", { name });
 }
 
 /** The library's byte-stable h1 (the arrival proof for every case). */
@@ -114,7 +119,7 @@ test("(b) deep link: fresh article URL → Back to library lands at #/ without l
   expect(new URL(page.url()).origin).toBe(appOrigin);
 });
 
-test("(c) in-app: library → review panel → Back to library returns to the library", async ({
+test("(c) in-app: library → review panel → Back returns to the library", async ({
   page,
 }) => {
   await page.goto(`${BASE}/#/`);
@@ -129,25 +134,27 @@ test("(c) in-app: library → review panel → Back to library returns to the li
   await expect(
     page.getByRole("heading", { level: 1, name: "Highlights" }),
   ).toBeVisible({ timeout: 10_000 });
-  await expect(backToLibrary(page)).toBeVisible();
+  // Issue #76 (decision #72) — the review mount's honest relabel.
+  await expect(backToLibrary(page, "Back")).toBeVisible();
 
   // history.back() on the REVIEW mount → the prior "#/" entry.
-  await backToLibrary(page).click();
+  await backToLibrary(page, "Back").click();
   await expect(libraryHeading(page)).toBeVisible({ timeout: 10_000 });
   await expect(page).toHaveURL(/#\/$/);
 });
 
-test("(c) deep link: fresh #/highlights → Back to library falls back to #/ (Enter activation)", async ({
+test("(c) deep link: fresh #/highlights → Back falls back to #/ (Enter activation)", async ({
   page,
 }) => {
   // Fresh context direct goto — the review mount's deep-link fallback, and
   // keyboard activation (focused button + Enter) covers the review mount's
-  // operability without a pointer.
+  // operability without a pointer. Issue #76: the review mount's accessible
+  // name is the relabeled "Back".
   await page.goto(`${BASE}/#/highlights`);
-  await expect(backToLibrary(page)).toBeVisible({ timeout: 10_000 });
+  await expect(backToLibrary(page, "Back")).toBeVisible({ timeout: 10_000 });
 
-  await backToLibrary(page).focus();
-  await expect(backToLibrary(page)).toBeFocused();
+  await backToLibrary(page, "Back").focus();
+  await expect(backToLibrary(page, "Back")).toBeFocused();
   await page.keyboard.press("Enter");
 
   await expect(libraryHeading(page)).toBeVisible({ timeout: 10_000 });

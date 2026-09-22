@@ -466,8 +466,9 @@ test.describe("NAV-03 — library return-context restore matrix", () => {
       page.getByRole("heading", { level: 1, name: "Highlights" }),
     ).toBeVisible({ timeout: 10_000 });
 
-    // Back to library from Highlights (history.back → the #/ entry).
-    await page.getByRole("button", { name: "Back to library" }).click();
+    // Back from Highlights (issue #76 — the review mount's honest
+    // relabel; history.back → the #/ entry).
+    await page.getByRole("button", { name: "Back", exact: true }).click();
     const libraryH1 = page.getByRole("heading", {
       level: 1,
       name: "Saved articles",
