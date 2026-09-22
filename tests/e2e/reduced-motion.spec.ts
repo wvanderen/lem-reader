@@ -134,7 +134,7 @@ test.describe("Reduced motion (A11Y-06)", () => {
       page.getByRole("heading", { name: "Saved articles" }),
     ).toBeVisible();
     await expect(
-      page.getByText("The looting of science fiction").first(),
+      page.getByText("Getting started with Lem Reader").first(),
     ).toBeVisible();
     const article = makeArticle({
       id: "rm-review-corpus",

@@ -123,7 +123,7 @@ async function seedAndOpenReview(page: Page): Promise<void> {
     page.getByRole("heading", { name: "Saved articles" }),
   ).toBeVisible();
   await expect(
-    page.getByText("The looting of science fiction").first(),
+    page.getByText("Getting started with Lem Reader").first(),
   ).toBeVisible();
   await seedRows(page, CORPUS_ROWS);
   await page.goto(`${BASE}/#/highlights`);

@@ -195,7 +195,7 @@ async function seedCorpus(
   // signal (the library is a fixtures ∪ ingested union, so it is never empty
   // and the empty-state heading cannot serve as this signal).
   await expect(
-    page.getByText("The looting of science fiction").first(),
+    page.getByText("Getting started with Lem Reader").first(),
   ).toBeVisible();
   await seedRows(page, {
     articles: [ARTICLE],

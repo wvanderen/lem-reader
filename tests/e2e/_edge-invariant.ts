@@ -261,7 +261,7 @@ export async function openEdgeDestination(
   // composite list must have actually loaded its rows — the first bundled
   // fixture's title is the deterministic sentinel.
   await expect(
-    page.getByText("The looting of science fiction").first(),
+    page.getByText("Getting started with Lem Reader").first(),
   ).toBeVisible();
 
   if (destination === "library") {

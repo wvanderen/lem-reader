@@ -228,7 +228,7 @@ test("review panel #/highlights: zero serious/critical WCAG 2.2 AA violations (s
   // A fixture row renders only once the repository read completed — the
   // deterministic "Dexie is open + schema declared" signal.
   await expect(
-    page.getByText("The looting of science fiction").first(),
+    page.getByText("Getting started with Lem Reader").first(),
   ).toBeVisible();
   const article = makeArticle({
     id: "a11y-review-corpus",
