@@ -1,0 +1,549 @@
+/* ────────────────────────────────────────────────────────────────────────────
+ * PROTOTYPE (issue #69) — throwaway design-system specimen sheet.
+ * Three vocabulary variants (A Quiet Press / B Soft Paper / C Ink & Rule)
+ * switchable via `#/prototype/design-system?variant=`. Never merge to main:
+ * the winning tokens graduate into app.css via the build ticket instead.
+ *Scoped under .dsproto; app.css is untouched.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+.dsproto {
+  /* Shared sheet chrome (not part of any variant's answer) */
+  --ds-sheet-max: 1040px;
+
+  max-width: var(--ds-sheet-max);
+  margin: 0 auto;
+  padding: var(--space-lg) var(--space-md) 160px;
+  font-family: var(--font-ui);
+  color: var(--ink);
+}
+
+.dsproto-kicker {
+  margin: 0 0 var(--space-xs);
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.dsproto-title {
+  margin: 0 0 var(--space-xs);
+  font-family: var(--font-body);
+  font-size: 30px;
+  line-height: 1.2;
+  font-weight: 600;
+}
+
+.dsproto-pov {
+  margin: 0 0 var(--space-lg);
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+  max-width: 62ch;
+}
+
+.dsproto-section {
+  margin-top: var(--space-2xl);
+}
+
+.dsproto-section > h2 {
+  margin: 0 0 var(--space-xs);
+  font-size: 19px;
+  font-weight: 650;
+}
+
+.dsproto-section > p.dsproto-notep {
+  margin: 0 0 var(--space-md);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+  max-width: 68ch;
+}
+
+/* ── Variant token sets ───────────────────────────────────────────────────── */
+
+/* A — Quiet Press: booklike, shadowless, filled primary, rule-line dialogs. */
+.dsproto[data-variant="a"] {
+  --ds-radius-sm: 4px;
+  --ds-radius-md: 8px;
+  --ds-radius-lg: 12px;
+  --ds-shadow-pop: none;
+  --ds-speed: 160ms;
+  --ds-ease: ease-out;
+  --ds-primary-bg: var(--accent);
+  --ds-primary-fg: var(--surface);
+  --ds-primary-border: var(--accent);
+  --ds-primary-hover-bg: var(--accent-hover);
+  --ds-primary-hover-fg: var(--surface);
+  --ds-quiet-bg: transparent;
+  --ds-quiet-fg: var(--ink);
+  --ds-quiet-border: var(--hairline);
+  --ds-quiet-hover-fg: var(--accent);
+  --ds-quiet-hover-border: var(--accent);
+  --ds-icon-bg: transparent;
+  --ds-icon-fg: var(--ink-soft);
+  --ds-icon-border: transparent;
+  --ds-icon-hover-fg: var(--accent);
+  --ds-danger-bg: transparent;
+  --ds-danger-fg: var(--destructive);
+  --ds-danger-border: transparent;
+  --ds-danger-hover-border: var(--destructive);
+  --ds-dialog-border: 1px solid var(--hairline);
+  --ds-dialog-shadow: none;
+  --ds-dialog-divider: 1px solid var(--hairline);
+  --ds-title-font: var(--font-body);
+  --ds-title-size: 24px;
+  --ds-actions-justify: flex-end;
+}
+
+/* B — Soft Paper: tactile calm, one earned elevation, outlined primary. */
+.dsproto[data-variant="b"] {
+  --ds-radius-sm: 8px;
+  --ds-radius-md: 12px;
+  --ds-radius-lg: 16px;
+  --ds-shadow-pop: 0 1px 2px rgba(31, 27, 22, 0.06), 0 8px 24px rgba(31, 27, 22, 0.1);
+  --ds-speed: 220ms;
+  --ds-ease: ease-out;
+  --ds-primary-bg: transparent;
+  --ds-primary-fg: var(--accent);
+  --ds-primary-border: var(--accent);
+  --ds-primary-hover-bg: color-mix(in srgb, var(--accent) 12%, transparent);
+  --ds-primary-hover-fg: var(--accent-hover);
+  --ds-quiet-bg: var(--surface-raised);
+  --ds-quiet-fg: var(--ink);
+  --ds-quiet-border: var(--hairline);
+  --ds-quiet-hover-fg: var(--accent);
+  --ds-quiet-hover-border: var(--accent);
+  --ds-icon-bg: var(--surface-raised);
+  --ds-icon-fg: var(--ink-soft);
+  --ds-icon-border: var(--hairline);
+  --ds-icon-hover-fg: var(--accent);
+  --ds-danger-bg: color-mix(in srgb, var(--destructive) 10%, transparent);
+  --ds-danger-fg: var(--destructive);
+  --ds-danger-border: transparent;
+  --ds-danger-hover-border: var(--destructive);
+  --ds-dialog-border: 1px solid var(--hairline);
+  --ds-dialog-shadow: var(--ds-shadow-pop);
+  --ds-dialog-divider: none;
+  --ds-title-font: var(--font-ui);
+  --ds-title-size: 20px;
+  --ds-actions-justify: flex-end;
+}
+
+/* C — Ink & Rule: print-like precision, ink carries action, rules carry
+ * structure; dense UI type; left-aligned dialog actions. */
+.dsproto[data-variant="c"] {
+  --ds-radius-sm: 2px;
+  --ds-radius-md: 4px;
+  --ds-radius-lg: 6px;
+  --ds-shadow-pop: none;
+  --ds-speed: 120ms;
+  --ds-ease: ease-out;
+  --ds-primary-bg: var(--ink);
+  --ds-primary-fg: var(--surface);
+  --ds-primary-border: var(--ink);
+  --ds-primary-hover-bg: var(--ink-soft);
+  --ds-primary-hover-fg: var(--surface);
+  --ds-quiet-bg: transparent;
+  --ds-quiet-fg: var(--ink-soft);
+  --ds-quiet-border: var(--hairline);
+  --ds-quiet-hover-fg: var(--ink);
+  --ds-quiet-hover-border: var(--ink-soft);
+  --ds-icon-bg: transparent;
+  --ds-icon-fg: var(--ink-soft);
+  --ds-icon-border: var(--hairline);
+  --ds-icon-hover-fg: var(--ink);
+  --ds-danger-bg: var(--destructive);
+  --ds-danger-fg: var(--surface);
+  --ds-danger-border: var(--destructive);
+  --ds-danger-hover-border: var(--destructive);
+  --ds-dialog-border: 1px solid var(--ink);
+  --ds-dialog-shadow: none;
+  --ds-dialog-divider: 1px solid var(--ink);
+  --ds-title-font: var(--font-ui);
+  --ds-title-size: 18px;
+  --ds-actions-justify: flex-start;
+}
+
+/* ── Foundations: radius / elevation / z ladder / motion ──────────────────── */
+
+.dsproto-foundations {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+  gap: var(--space-md);
+}
+
+.dsproto-fgroup {
+  border: 1px solid var(--hairline);
+  border-radius: var(--ds-radius-md);
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.dsproto-fgroup h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.dsproto-radius-row,
+.dsproto-elevation-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.dsproto-radius-chip {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 44px;
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+.dsproto-radius-chip.sm { border-radius: var(--ds-radius-sm); }
+.dsproto-radius-chip.md { border-radius: var(--ds-radius-md); }
+.dsproto-radius-chip.lg { border-radius: var(--ds-radius-lg); }
+
+.dsproto-swatch-card {
+  padding: var(--space-sm) var(--space-md);
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  border-radius: var(--ds-radius-md);
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+.dsproto-swatch-card.raised {
+  box-shadow: var(--ds-shadow-pop);
+}
+.dsproto-swatch-card.none {
+  box-shadow: none;
+  font-style: italic;
+}
+
+.dsproto-zladder {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12.5px;
+}
+.dsproto-zladder li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: 3px 8px;
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+}
+.dsproto-zladder li span:last-child {
+  font-family: var(--font-code);
+  color: var(--ink-soft);
+  font-size: 11.5px;
+  overflow-wrap: anywhere;
+}
+
+.dsproto-motion-chip {
+  align-self: flex-start;
+  min-height: 36px;
+  padding: 0 var(--space-md);
+  border: 1px solid var(--hairline);
+  border-radius: var(--ds-radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+  cursor: pointer;
+  transition:
+    background-color var(--ds-speed) var(--ds-ease),
+    border-color var(--ds-speed) var(--ds-ease),
+    color var(--ds-speed) var(--ds-ease),
+    transform var(--ds-speed) var(--ds-ease);
+}
+.dsproto-motion-chip:hover {
+  background: var(--surface-raised);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.dsproto-motion-chip:active {
+  transform: scale(0.97);
+}
+
+/* ── Button vocabulary ────────────────────────────────────────────────────── */
+
+.dsproto-btngrid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.dsproto-btnrow {
+  display: grid;
+  grid-template-columns: 110px repeat(3, max-content) 1fr;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--hairline);
+  border-radius: var(--ds-radius-md);
+}
+.dsproto-btnrow > .dsproto-rowlabel {
+  font-size: 12.5px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.dsproto-btnrow > .dsproto-rownote {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+@media (max-width: 640px) {
+  .dsproto-btnrow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .dsproto-btnrow > .dsproto-rowlabel {
+    flex-basis: 100%;
+  }
+  .dsproto-btnrow > .dsproto-rownote {
+    flex-basis: 100%;
+  }
+}
+
+/* The four kinds + loading, all driven by the variant token set. */
+.dsproto-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  min-height: var(--touch);
+  padding: 0 var(--space-md);
+  border-radius: var(--ds-radius-sm);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  line-height: 1.2;
+  cursor: pointer;
+  transition:
+    background-color var(--ds-speed) var(--ds-ease),
+    border-color var(--ds-speed) var(--ds-ease),
+    color var(--ds-speed) var(--ds-ease);
+}
+
+.dsproto-btn.primary {
+  background: var(--ds-primary-bg);
+  border: 1px solid var(--ds-primary-border);
+  color: var(--ds-primary-fg);
+}
+.dsproto-btn.primary:hover:not(:disabled) {
+  background: var(--ds-primary-hover-bg);
+  color: var(--ds-primary-hover-fg);
+}
+
+.dsproto-btn.quiet {
+  background: var(--ds-quiet-bg);
+  border: 1px solid var(--ds-quiet-border);
+  color: var(--ds-quiet-fg);
+}
+.dsproto-btn.quiet:hover:not(:disabled) {
+  color: var(--ds-quiet-hover-fg);
+  border-color: var(--ds-quiet-hover-border);
+}
+
+.dsproto-btn.icon {
+  width: var(--touch);
+  padding: 0;
+  background: var(--ds-icon-bg);
+  border: 1px solid var(--ds-icon-border);
+  border-radius: var(--ds-radius-sm);
+  color: var(--ds-icon-fg);
+}
+.dsproto-btn.icon:hover:not(:disabled) {
+  color: var(--ds-icon-hover-fg);
+}
+
+.dsproto-btn.danger {
+  background: var(--ds-danger-bg);
+  border: 1px solid var(--ds-danger-border);
+  color: var(--ds-danger-fg);
+}
+.dsproto-btn.danger:hover:not(:disabled) {
+  border-color: var(--ds-danger-hover-border);
+}
+
+.dsproto-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.dsproto-spin {
+  animation: dsproto-spin 900ms linear infinite;
+}
+@keyframes dsproto-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Field specimen ───────────────────────────────────────────────────────── */
+
+.dsproto-field {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-xs);
+  max-width: 420px;
+}
+.dsproto-field label {
+  font-size: 14px;
+  font-weight: 600;
+}
+.dsproto-field input {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: var(--touch);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--ds-radius-sm);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--ink);
+}
+.dsproto-field .dsproto-hint {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+/* ── Dialog exemplar (the rebuilt Edit-metadata dialog) ───────────────────── */
+
+.dsproto-exemplar {
+  margin: auto;
+  padding: 0;
+  border: var(--ds-dialog-border);
+  border-radius: var(--ds-radius-lg);
+  background: var(--surface-raised);
+  color: var(--ink);
+  width: calc(100vw - var(--space-xl));
+  max-width: 460px;
+  max-height: calc(100dvh - var(--space-xl));
+  overflow: auto;
+  box-shadow: var(--ds-dialog-shadow);
+}
+.dsproto-exemplar::backdrop {
+  background: rgba(31, 27, 22, 0.5);
+}
+
+.dsproto-exemplar-head {
+  padding: var(--space-lg) var(--space-lg) var(--space-md);
+}
+.dsproto[data-variant="c"] .dsproto-exemplar-head {
+  padding: var(--space-md) var(--space-lg);
+}
+.dsproto-exemplar-head h2 {
+  margin: 0;
+  font-family: var(--ds-title-font);
+  font-size: var(--ds-title-size);
+  line-height: 1.3;
+  font-weight: 600;
+}
+
+.dsproto-exemplar-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: 0 var(--space-lg) var(--space-lg);
+}
+.dsproto-exemplar-form .dsproto-field {
+  max-width: none;
+  width: 100%;
+}
+
+/* A: hairline bands divide header and footer from the body.
+ * C: a strong ink rule under the header. B: no rules — spacing only. */
+.dsproto[data-variant="a"] .dsproto-exemplar-head,
+.dsproto[data-variant="c"] .dsproto-exemplar-head {
+  border-bottom: var(--ds-dialog-divider);
+}
+.dsproto[data-variant="a"] .dsproto-exemplar-form {
+  padding-top: var(--space-md);
+}
+
+.dsproto-exemplar-actions {
+  display: flex;
+  justify-content: var(--ds-actions-justify);
+  gap: var(--space-sm);
+  padding-top: var(--space-md);
+}
+.dsproto[data-variant="a"] .dsproto-exemplar-actions {
+  margin-top: var(--space-md);
+  padding-top: var(--space-md);
+  border-top: var(--ds-dialog-divider);
+}
+
+/* ── Shared-proposals section (cross-variant) ─────────────────────────────── */
+
+.dsproto-iconrow {
+  display: flex;
+  gap: var(--space-lg);
+  color: var(--ink-soft);
+}
+.dsproto-iconrow figure {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+.dsproto-iconrow figure svg {
+  display: block;
+}
+
+/* ── Floating variant switcher (prototype furniture, not the design) ─────── */
+.dsproto-switcher {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm);
+  background: var(--ink);
+  color: var(--surface);
+  border-radius: 999px;
+  box-shadow: 0 4px 16px rgba(31, 27, 22, 0.35);
+}
+.dsproto-switcher button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--surface);
+  font-size: 16px;
+  cursor: pointer;
+}
+.dsproto-switcher button:hover {
+  background: rgba(251, 248, 243, 0.15);
+}
+.dsproto-switcher .dsproto-switcher-label {
+  min-width: 190px;
+  text-align: center;
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}

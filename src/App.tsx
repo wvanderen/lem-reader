@@ -25,6 +25,7 @@ import { useEffect, useRef, useState } from "react";
 import { LibraryView } from "./ingestion/library/LibraryView";
 import { ArticleView } from "./routes/ArticleView";
 import { ReviewView } from "./routes/review/ReviewView";
+import { DesignSystemPrototype } from "./routes/prototype/DesignSystemPrototype";
 import { SkipLink } from "./a11y/SkipLink";
 import { Header } from "./reader/Header";
 import { SettingsPanel } from "./reader/SettingsPanel";
@@ -52,7 +53,11 @@ type View =
   // site stays byte-stable. The optional legacyAlias marker (D15-07) is
   // set ONLY when parseHash matched the legacy #/review literal, so the
   // onHash handler below can normalize the URL via replaceState.
-  | { name: "review"; legacyAlias?: true };
+  | { name: "review"; legacyAlias?: true }
+  // PROTOTYPE (issue #69) — the dev-only design-system specimen sheet.
+  // Reachable only through the DEV-gated parseHash branch below; never in a
+  // production build.
+  | { name: "dsproto" };
 
 function parseHash(): View {
   // Grammar order matters (10-RESEARCH Pattern 1): the /h/ suffix form
@@ -80,6 +85,15 @@ function parseHash(): View {
     // D15-07 legacy alias — the caller (onHash / the mount effect)
     // rewrites the URL to the canonical #/highlights via replaceState.
     return { name: "review", legacyAlias: true };
+  }
+  // PROTOTYPE (issue #69) — dev-only throwaway route for the design-system
+  // specimen sheet. import.meta.env.DEV is false in production builds, so
+  // this branch is unreachable (and dead-code-eliminated) outside dev.
+  if (
+    import.meta.env.DEV &&
+    window.location.hash.startsWith("#/prototype/design-system")
+  ) {
+    return { name: "dsproto" };
   }
   // Plan 14-02 (D14-12/D14-16) — view segments: a CLOSED literal allowlist
   // (each hash is compared === against one of the four view constants;
@@ -373,6 +387,8 @@ function AppInner() {
         />
       ) : view.name === "review" ? (
         <ReviewView hasAppHistory={hasAppHistory} />
+      ) : view.name === "dsproto" ? (
+        <DesignSystemPrototype />
       ) : (
         <ArticleView
           articleId={view.id}
