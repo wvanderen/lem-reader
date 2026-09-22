@@ -135,6 +135,7 @@ function sampleChapters(): CanonicalArticle[] {
 function snapshotFor(
   chapters: CanonicalArticle[],
   locations: LocationRecord[],
+  highlightCountByArticleId: Map<string, number> = new Map(),
 ): LibrarySnapshot {
   const totalsByArticleId = new Map<string, number>();
   for (const article of chapters) {
@@ -150,6 +151,7 @@ function snapshotFor(
     locations,
     latestLocationByArticleId: latestLocationByArticle(locations),
     totalsByArticleId,
+    highlightCountByArticleId,
   };
 }
 
@@ -319,6 +321,48 @@ describe("BookRow — the icon action cluster (issue #67)", () => {
 });
 
 describe("BookRow — chapter sub-rows + tags (D12-01 + D12-04)", () => {
+  it("chapter sub-rows carry the per-article review entry at ≥ 1 highlight (issue #76)", async () => {
+    const user = userEvent.setup();
+    const chapters = sampleChapters();
+    render(
+      <BookRow
+        book={makeBook()}
+        chapters={chapters}
+        snapshot={snapshotFor(chapters, [], new Map([[`${BOOK_ID}-c01`, 2]]))}
+        onRemove={() => {}}
+      />,
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Chapters of The Synthetic Book" }),
+    );
+    const link = screen.getByLabelText(
+      "Review 2 highlights for Chapter 2. The Carpet-Bag",
+    );
+    expect(link).toHaveAttribute(
+      "href",
+      `#/highlights?article=${BOOK_ID}-c01`,
+    );
+    // Chapters without highlights stay gated off (the gate IS the zero state).
+    expect(
+      screen.queryByLabelText("Review 1 highlight for Chapter 1. Loomings"),
+    ).toBeNull();
+  });
+
+  it("the book cluster stays trash-only — no review entry on the book row (issue #76)", () => {
+    const chapters = sampleChapters();
+    render(
+      <BookRow
+        book={makeBook()}
+        chapters={chapters}
+        snapshot={snapshotFor(chapters, [], new Map([[`${BOOK_ID}-c01`, 2]]))}
+        onRemove={() => {}}
+      />,
+    );
+    const cluster = document.querySelector(".book-card > .library-row-actions")!;
+    expect(cluster.querySelectorAll(".library-row-highlights")).toHaveLength(0);
+    expect(cluster.querySelectorAll("button")).toHaveLength(1);
+  });
+
   it("expanded chapters render h3 headings under the h2 book title", async () => {
     const user = userEvent.setup();
     render(

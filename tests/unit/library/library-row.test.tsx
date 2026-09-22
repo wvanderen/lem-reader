@@ -9,6 +9,11 @@
 // Issue #41 — plus the transcript-article video-duration line (flow N3):
 // rendered from the persisted ingestionMeta.transcript duration, absent for
 // every other source, no interactive elements.
+// Issue #76 (decision #72) — plus the per-article review entry: at ≥ 1
+// highlight the cluster gains an anchor to #/highlights?article=<id> whose
+// aria-label carries the count; 0/undefined renders nothing (the gate IS
+// the zero state) and its presence alone still earns the cluster (chapter
+// sub-rows).
 import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 
@@ -100,5 +105,54 @@ describe("LibraryRow — the video-duration meta line (issue #41, flow N3)", () 
     expect(
       line!.querySelectorAll("a, button, input, select, textarea, [tabindex]"),
     ).toHaveLength(0);
+  });
+});
+
+describe("LibraryRow — the per-article review entry (issue #76)", () => {
+  it("renders the highlights anchor at ≥ 1 with the count in the aria-label", () => {
+    render(<LibraryRow article={makeArticle()} total={100} highlightCount={3} />);
+    const link = screen.getByLabelText("Review 3 highlights for Row Article");
+    expect(link).toHaveClass("library-row-highlights");
+    expect(link).toHaveAttribute("href", "#/highlights?article=row-article");
+  });
+
+  it("uses the singular label at exactly 1 highlight", () => {
+    render(<LibraryRow article={makeArticle()} total={100} highlightCount={1} />);
+    expect(
+      screen.getByLabelText("Review 1 highlight for Row Article"),
+    ).toBeInTheDocument();
+  });
+
+  it("renders nothing at 0 and when undefined (the gate IS the zero state)", () => {
+    const zero = render(
+      <LibraryRow article={makeArticle()} total={100} highlightCount={0} />,
+    );
+    expect(
+      zero.container.querySelector(".library-row-highlights"),
+    ).toBeNull();
+    expect(
+      zero.container.querySelector(".library-row-actions"),
+    ).toBeNull();
+    zero.unmount();
+    const absent = render(
+      <LibraryRow article={makeArticle()} total={100} />,
+    );
+    expect(
+      absent.container.querySelector(".library-row-highlights"),
+    ).toBeNull();
+  });
+
+  it("the entry alone earns the action cluster (chapter sub-rows have no other buttons)", () => {
+    render(
+      <LibraryRow
+        article={makeArticle()}
+        total={100}
+        headingLevel={3}
+        highlightCount={2}
+      />,
+    );
+    const cluster = document.querySelector(".library-row-actions");
+    expect(cluster).not.toBeNull();
+    expect(cluster!.children).toHaveLength(1);
   });
 });

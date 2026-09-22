@@ -409,6 +409,39 @@ describe("loadLibrarySnapshot — annotation records (Issue #8)", () => {
   });
 });
 
+describe("loadLibrarySnapshot — highlight-count fold (issue #76)", () => {
+  beforeEach(async () => {
+    await wipeDatabase();
+  });
+
+  it("folds highlight rows per articleId, aggregated across revisions and chapters", async () => {
+    const standaloneId = await seedStandaloneAndBook();
+    const { saveHighlight } = await import("../../../src/persistence/highlightsStore");
+    const { loadLibrarySnapshot } = await loadSnapshot();
+
+    await saveHighlight(sampleHighlight(standaloneId, "hl-a1"));
+    await saveHighlight(sampleHighlight(standaloneId, "hl-a2"));
+    await saveHighlight(sampleHighlight("epub-abc123def456-c00", "hl-b1"));
+
+    const snapshot = await loadLibrarySnapshot();
+
+    expect(snapshot.highlightCountByArticleId.get(standaloneId)).toBe(2);
+    expect(snapshot.highlightCountByArticleId.get("epub-abc123def456-c00")).toBe(1);
+    // An article with no highlights is simply absent (≥ 1 gates the row entry).
+    expect(
+      snapshot.highlightCountByArticleId.has("epub-abc123def456-c01"),
+    ).toBe(false);
+  });
+
+  it("an annotation-free library yields an empty fold", async () => {
+    const { loadLibrarySnapshot } = await loadSnapshot();
+
+    const snapshot = await loadLibrarySnapshot();
+
+    expect(snapshot.highlightCountByArticleId.size).toBe(0);
+  });
+});
+
 describe("loadLibrarySnapshot — corrupt rows (STATE-04 agreement)", () => {
   beforeEach(async () => {
     await wipeDatabase();
