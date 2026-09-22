@@ -122,7 +122,7 @@ export function ReadAloudBar({
           {/* Play stays ENABLED when speech is unavailable: pressing it
               announces the calm refusal through the transport region (the
               honesty constraint — never a silent dead-end control). */}
-          <button type="button" className="readaloud-btn" onClick={onPrimary}>
+          <button type="button" className="btn btn-quiet readaloud-btn" onClick={onPrimary}>
             {playing ? "Pause" : "Play"}
           </button>
           {/* Skip controls (issue #43, O3) — see SKIP_CONTROLS. */}
@@ -133,7 +133,7 @@ export function ReadAloudBar({
                 <button
                   key={key}
                   type="button"
-                  className="readaloud-btn"
+                  className="btn btn-quiet readaloud-btn"
                   onClick={onSkip}
                 >
                   {label}
@@ -146,7 +146,7 @@ export function ReadAloudBar({
           {sessionActive && onJumpToSpoken && (
             <button
               type="button"
-              className="readaloud-btn"
+              className="btn btn-quiet readaloud-btn"
               onClick={onJumpToSpoken}
             >
               Jump to spoken position
@@ -154,7 +154,7 @@ export function ReadAloudBar({
           )}
           <button
             type="button"
-            className="readaloud-btn"
+            className="btn btn-quiet readaloud-btn"
             onClick={onStop}
             disabled={state === "stopped"}
           >

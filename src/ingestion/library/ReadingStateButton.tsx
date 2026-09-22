@@ -21,7 +21,7 @@
 // window); sighted readers get the spinner, screen readers get a stable
 // name + busy state + the disabled semantics.
 import { useEffect, useState } from "react";
-import { CheckIcon, SpinnerIcon } from "./icons";
+import { CheckIcon, SpinnerIcon } from "../../ui/icons";
 
 /** Keep storage failures local and keep curation separate from card navigation. */
 export function ReadingStateButton({
@@ -52,7 +52,7 @@ export function ReadingStateButton({
     <div className="reading-state-control">
       <button
         type="button"
-        className="reading-state-button"
+        className="btn btn-icon reading-state-button"
         disabled={pending}
         aria-busy={pending || undefined}
         aria-label={`${label}: ${title}`}

@@ -27,6 +27,7 @@
 // render swap (Pitfall 7).
 
 import { useEffect, useRef, useState } from "react";
+import { PaginatedIcon, ScrollingIcon } from "../ui/icons";
 
 export type ReadingMode = "paginated" | "scrolling";
 
@@ -116,50 +117,4 @@ export function ModeToggle({ mode, onToggle }: ModeToggleProps): React.ReactElem
 // glyph never enters the focus order. aria-hidden because the button's
 // aria-label carries the accessible name.
 
-/** Paginated glyph — a single bounded page (one sheet with a corner fold). */
-function PaginatedIcon({ ariaHidden }: { ariaHidden?: "true" }) {
-  return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden={ariaHidden ?? "true"}
-      focusable="false"
-    >
-      <path d="M7 3h7l4 4v14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" />
-      <path d="M14 3v4h4" />
-      <path d="M9 13h6" />
-      <path d="M9 17h4" />
-    </svg>
-  );
-}
 
-/** Scrolling glyph — a continuous vertical flow (three stacked lines, unbounded). */
-function ScrollingIcon({ ariaHidden }: { ariaHidden?: "true" }) {
-  return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden={ariaHidden ?? "true"}
-      focusable="false"
-    >
-      <path d="M6 5h12" />
-      <path d="M6 10h12" />
-      <path d="M6 15h12" />
-      <path d="M6 20h8" />
-      <path d="M18 18l2 2-2 2" />
-      <path d="M20 20h-6" />
-    </svg>
-  );
-}

@@ -55,7 +55,7 @@ export function BackToLibrary({ hasAppHistory }: BackToLibraryProps) {
   return (
     <button
       type="button"
-      className="back-to-library"
+      className="btn btn-quiet back-to-library"
       onClick={() => leaveArticleToLibrary(hasAppHistory)}
     >
       Back to library

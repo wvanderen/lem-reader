@@ -229,10 +229,10 @@ export function NotePopover(): React.ReactElement | null {
                 {excerpt}
               </p>
             )}
-            <div className="highlight-popover-actions">
+            <div className="dialog-actions highlight-popover-actions">
               <button
                 type="button"
-                className="highlight-popover-destructive"
+                className="btn btn-destructive highlight-popover-destructive"
                 onClick={() => void handleDeleteConfirm()}
               >
                 Delete
@@ -241,7 +241,7 @@ export function NotePopover(): React.ReactElement | null {
                   An accidental Enter keeps the highlight. */}
               <button
                 type="button"
-                className="highlight-popover-cancel"
+                className="btn btn-quiet highlight-popover-cancel"
                 onClick={handleDeleteCancel}
                 data-initial-focus
               >
@@ -286,14 +286,14 @@ export function NotePopover(): React.ReactElement | null {
             <div className="highlight-popover-actions">
               <button
                 type="button"
-                className="highlight-popover-done"
+                className="btn btn-quiet highlight-popover-done"
                 onClick={handleDone}
               >
                 Done
               </button>
               <button
                 type="button"
-                className="highlight-popover-delete"
+                className="btn btn-destructive highlight-popover-delete"
                 onClick={handleDeleteStart}
               >
                 Delete

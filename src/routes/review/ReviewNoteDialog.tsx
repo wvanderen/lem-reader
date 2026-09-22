@@ -216,7 +216,7 @@ export function ReviewNoteDialog({
             textarea explicitly (the NotePopover D5-10 discipline). */}
         <button
           type="button"
-          className="highlight-popover-done"
+          className="btn btn-quiet highlight-popover-done"
           onClick={handleDone}
           data-initial-focus
         >

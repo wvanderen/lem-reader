@@ -4,7 +4,7 @@ import { ReadingStateButton } from "./ReadingStateButton";
 import { SourceBadge } from "./SourceBadge";
 import { articleReadingState } from "./readingState";
 import { RowProgress, RowTags } from "./RowAnatomy";
-import { EditIcon, TrashIcon } from "./icons";
+import { EditIcon, TrashIcon } from "../../ui/icons";
 import {
   effectiveTitle,
   effectiveAuthor,
@@ -147,7 +147,7 @@ export function LibraryRow({
             {onEdit && (
               <button
                 type="button"
-                className="library-row-edit"
+                className="btn btn-icon library-row-edit"
                 aria-label={`Edit metadata for ${title}`}
                 onClick={onEdit}
               >
@@ -162,7 +162,7 @@ export function LibraryRow({
             {onRemove && (
               <button
                 type="button"
-                className="library-row-remove"
+                className="btn btn-icon library-row-remove"
                 aria-label={`Remove ${title} from library`}
                 onClick={onRemove}
               >

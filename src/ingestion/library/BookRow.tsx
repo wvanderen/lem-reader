@@ -48,8 +48,8 @@ import {
 import { bookReadingState } from "./readingState";
 import { LibraryRow } from "./LibraryRow";
 import { RowProgress, RowTags } from "./RowAnatomy";
-import { TrashIcon } from "./icons";
 import type { LibrarySnapshot } from "./librarySnapshot";
+import { TrashIcon } from "../../ui/icons";
 
 interface BookRowProps {
   /** The Book record (its chapterArticleIds are the ordered TOC). */
@@ -172,7 +172,7 @@ export function BookRow({
               region; row-click never toggles (two gestures, two targets). */}
           <button
             type="button"
-            className="book-toggle"
+            className="btn btn-icon book-toggle"
             aria-expanded={open}
             aria-controls={chaptersRegionId}
             aria-label={`Chapters of ${book.title}`}
@@ -220,7 +220,7 @@ export function BookRow({
         <div className="library-row-actions">
           <button
             type="button"
-            className="library-row-remove"
+            className="btn btn-icon library-row-remove"
             aria-label={`Remove ${book.title} from library`}
             onClick={onRemove}
           >

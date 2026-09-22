@@ -36,6 +36,7 @@ interface PaginationFallbackBannerProps {
   onDismiss: () => void;
 }
 
+import { CloseIcon } from "../ui/icons";
 export function PaginationFallbackBanner({
   onSwitchToPages,
   onDismiss,
@@ -65,7 +66,7 @@ export function PaginationFallbackBanner({
             discipline (neutral border). */}
         <button
           type="button"
-          className="pagination-fallback-switch"
+          className="btn btn-primary pagination-fallback-switch"
           onClick={onSwitchToPages}
         >
           Switch to pages
@@ -74,33 +75,14 @@ export function PaginationFallbackBanner({
             carries the accessible name; the × glyph is decorative. */}
         <button
           type="button"
-          className="pagination-fallback-dismiss"
+          className="btn btn-icon pagination-fallback-dismiss"
           aria-label="Dismiss"
           onClick={onDismiss}
         >
-          <DismissIcon aria-hidden="true" />
+          <CloseIcon aria-hidden="true" />
         </button>
       </div>
     </div>
   );
 }
 
-function DismissIcon({ ariaHidden }: { ariaHidden?: "true" }) {
-  return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden={ariaHidden}
-      focusable="false"
-    >
-      <line x1="18" y1="6" x2="6" y2="18" />
-      <line x1="6" y1="6" x2="18" y2="18" />
-    </svg>
-  );
-}

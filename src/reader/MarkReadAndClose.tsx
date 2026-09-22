@@ -33,7 +33,7 @@ export function MarkReadAndClose({
   return (
     <button
       type="button"
-      className={`mark-read-close mark-read-close-${placement}`}
+      className={`btn btn-quiet mark-read-close mark-read-close-${placement}`}
       onClick={handleClick}
     >
       Mark read and close

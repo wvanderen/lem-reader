@@ -29,6 +29,7 @@ import { useHighlightOverlay } from "./HighlightOverlay";
 // Plan 19-02 (D19-10) — the excerpt derivation routes through the ONE
 // shared pure helper (first fragment + calm ellipsis for spans).
 import { firstFragmentExcerpt } from "../../annotations/excerpt";
+import { CloseIcon } from "../../ui/icons";
 
 /** Truncation limits for drawer entries (UI-SPEC §Interaction 30). */
 const EXCERPT_MAX_CHARS = 120;
@@ -169,7 +170,7 @@ export function AnnotationsDrawer({
               visually-hidden live region (the handler stays there). */}
           <button
             type="button"
-            className="article-export-highlights annotations-drawer-export"
+            className="btn btn-quiet article-export-highlights annotations-drawer-export"
             onClick={onExportHighlights}
             disabled={exportingHighlights}
           >
@@ -177,7 +178,7 @@ export function AnnotationsDrawer({
           </button>
           <button
             type="button"
-            className="annotations-drawer-close"
+            className="btn btn-icon annotations-drawer-close"
             aria-label="Close highlights and notes"
             onClick={onClose}
           >
@@ -279,22 +280,3 @@ export function AnnotationsDrawer({
   );
 }
 
-function CloseIcon({ ariaHidden }: { ariaHidden?: "true" }) {
-  return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden={ariaHidden}
-      focusable="false"
-    >
-      <line x1="18" y1="6" x2="6" y2="18" />
-      <line x1="6" y1="6" x2="18" y2="18" />
-    </svg>
-  );
-}

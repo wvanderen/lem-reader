@@ -93,6 +93,7 @@ import { formatIsoDate } from "../../ingestion/library/formatDate";
 import { ReviewNoteDialog } from "./ReviewNoteDialog";
 import { DeleteHighlightConfirm } from "./DeleteHighlightConfirm";
 import { BackToLibrary } from "../../reader/BackToLibrary";
+import { JumpToArticleIcon } from "../../ui/icons";
 
 /** Truncation limits for review rows (the AnnotationsDrawer discipline). */
 const EXCERPT_MAX_CHARS = 120;
@@ -147,28 +148,6 @@ function sourceHost(article: CanonicalArticle): string | null {
  * button's "Go to highlight: …" aria-label stays the whole accessible
  * name (the SVG adds nothing to it).
  */
-function JumpToArticleIcon({ ariaHidden }: { ariaHidden?: "true" }) {
-  return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden={ariaHidden}
-      focusable="false"
-      className="review-jump-glyph"
-    >
-      {/* shaft — south-west to north-east */}
-      <path d="M7 17L17 7" />
-      {/* arrowhead — the north-east corner */}
-      <path d="M8 7h9v9" />
-    </svg>
-  );
-}
 
 /**
  * One review row. Section rows (entry.article defined) render the
@@ -259,7 +238,7 @@ function ReviewRow({
     <div className="review-row-actions">
       <button
         type="button"
-        className="review-row-action review-row-action-note"
+        className="btn btn-quiet review-row-action review-row-action-note"
         aria-label={`Edit note: ${ariaExcerpt}`}
         onClick={() => onEditNote(entry)}
       >
@@ -267,7 +246,7 @@ function ReviewRow({
       </button>
       <button
         type="button"
-        className="review-row-action review-row-action-remove"
+        className="btn btn-quiet review-row-action review-row-action-remove"
         aria-label={`Remove highlight: ${ariaExcerpt}`}
         onClick={() => onRemove(entry)}
       >
