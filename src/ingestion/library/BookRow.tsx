@@ -193,6 +193,7 @@ export function BookRow({
                   headingLevel={3}
                   location={snapshot.latestLocationByArticleId.get(chapter.id)}
                   total={snapshot.totalsByArticleId.get(chapter.id) ?? 0}
+                  highlightCount={snapshot.highlightCountByArticleId.get(chapter.id)}
                 />
               ))}
             </ul>

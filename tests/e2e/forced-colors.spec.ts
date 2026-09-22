@@ -158,7 +158,7 @@ test.describe("Forced colors (A11Y-05)", () => {
       page.getByRole("heading", { name: "Saved articles" }),
     ).toBeVisible();
     await expect(
-      page.getByText("The looting of science fiction").first(),
+      page.getByText("Getting started with Lem Reader").first(),
     ).toBeVisible();
     const article = makeArticle({
       id: "fc-review-corpus",

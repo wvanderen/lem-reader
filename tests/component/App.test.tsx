@@ -148,6 +148,43 @@ describe("parseHash — route parser (unit)", () => {
     window.location.hash = "#/highlights/x";
     expect(parseHash()).toEqual({ name: "list", view: "all" });
   });
+
+  // Issue #76 (decision #72) — the review route's ONE URL-borne scope:
+  // `#/highlights?article=<id>`. The `#/path?k=v` grammar; only `article`
+  // is read; missing/empty degrades to the unscoped view (no silent
+  // garbage — an unknown value is just an id the view reports honestly
+  // through the "(deleted article)" chip).
+  it("maps '#/highlights?article=<id>' to the review view with the scope id", () => {
+    window.location.hash = "#/highlights?article=a-one";
+    expect(parseHash()).toEqual({ name: "review", articleId: "a-one" });
+  });
+
+  it("maps '#/highlights?article=' (empty value) to the unscoped review view", () => {
+    window.location.hash = "#/highlights?article=";
+    expect(parseHash()).toEqual({ name: "review" });
+  });
+
+  it("maps '#/highlights?foo=bar' (unknown query key) to the unscoped review view", () => {
+    window.location.hash = "#/highlights?foo=bar";
+    expect(parseHash()).toEqual({ name: "review" });
+  });
+
+  it("ignores extra query keys and keeps the article scope", () => {
+    window.location.hash = "#/highlights?foo=bar&article=a-one";
+    expect(parseHash()).toEqual({ name: "review", articleId: "a-one" });
+  });
+
+  it("maps '#/highlights?' (bare question mark) to the unscoped review view", () => {
+    window.location.hash = "#/highlights?";
+    expect(parseHash()).toEqual({ name: "review" });
+  });
+
+  it("maps '#/review?article=<id>' (legacy alias + query) to the list view", () => {
+    // The D15-07 alias gains NO query grammar — it stays the exact
+    // literal, so an unknown shape falls to the list fallback as always.
+    window.location.hash = "#/review?article=a-one";
+    expect(parseHash()).toEqual({ name: "list", view: "all" });
+  });
 });
 
 describe("App — fragment hashes do not swap the view (Gap 3)", () => {

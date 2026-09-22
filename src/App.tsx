@@ -52,7 +52,18 @@ type View =
   // site stays byte-stable. The optional legacyAlias marker (D15-07) is
   // set ONLY when parseHash matched the legacy #/review literal, so the
   // onHash handler below can normalize the URL via replaceState.
-  | { name: "review"; legacyAlias?: true };
+  //
+  // Issue #76 (decision #72) — the review route carries ONE URL-borne
+  // scope: `#/highlights?article=<id>`. The id is an opaque lookup key
+  // (validated-record charset upstream; consumed only as a Map.get /
+  // Array.find key in ReviewView — never markup, never property access).
+  // Every other review control (tag, confidence, sort) stays component
+  // state — deliberately NOT URL state.
+  | {
+      name: "review";
+      legacyAlias?: true;
+      articleId?: string;
+    };
 
 function parseHash(): View {
   // Grammar order matters (10-RESEARCH Pattern 1): the /h/ suffix form
@@ -73,8 +84,19 @@ function parseHash(): View {
   }
   // Closed literal allowlist (T-15-01): the route is compared === against
   // a constant — no route value is ever interpolated into the DOM or URLs.
-  if (window.location.hash === "#/highlights") {
-    return { name: "review" };
+  // Issue #76 — #/highlights gains an optional `?article=<id>` query
+  // (#/path?k=v grammar). Only the `article` key is read (URLSearchParams,
+  // no eval-shaped use); missing or empty → the unscoped review view, so
+  // `#/highlights?foo=bar` degrades to plain #/highlights. The legacy
+  // #/review literal check stays EXACT — the alias gains no query grammar.
+  const reviewMatch = /^#\/highlights(?:\?(.*))?$/.exec(window.location.hash);
+  if (reviewMatch) {
+    const params = new URLSearchParams(reviewMatch[1] ?? "");
+    const article = params.get("article");
+    return {
+      name: "review",
+      articleId: article !== null && article !== "" ? article : undefined,
+    };
   }
   if (window.location.hash === "#/review") {
     // D15-07 legacy alias — the caller (onHash / the mount effect)
@@ -372,7 +394,10 @@ function AppInner() {
           warmMount={hasAppHistory}
         />
       ) : view.name === "review" ? (
-        <ReviewView hasAppHistory={hasAppHistory} />
+        <ReviewView
+          hasAppHistory={hasAppHistory}
+          scopedArticleId={view.articleId}
+        />
       ) : (
         <ArticleView
           articleId={view.id}

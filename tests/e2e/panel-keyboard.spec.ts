@@ -149,7 +149,7 @@ test.describe("Review panel keyboard reachability (RECV-01.i)", () => {
       page.getByRole("heading", { name: "Saved articles" }),
     ).toBeVisible();
     await expect(
-      page.getByText("The looting of science fiction").first(),
+      page.getByText("Getting started with Lem Reader").first(),
     ).toBeVisible();
     const article = makeArticle({
       id: "kb-review-corpus",
@@ -311,7 +311,7 @@ test.describe("Destination keyboard arm (ACPT-08 — D21-14)", () => {
       page.getByRole("heading", { name: "Saved articles" }),
     ).toBeVisible();
     await expect(
-      page.getByText("The looting of science fiction").first(),
+      page.getByText("Getting started with Lem Reader").first(),
     ).toBeVisible();
     const article = makeArticle({
       id: "kb-dest-review",

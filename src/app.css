@@ -3856,6 +3856,11 @@ main#main > .status:empty {
 }
 .library-card-meta a,
 .library-row-actions button,
+/* Issue #76 — the cluster's review entry is an ANCHOR (native link
+   semantics for the scoped-review navigation); it needs the same
+   elevation as the cluster buttons above the title link's stretched
+   overlay. */
+.library-row-actions a,
 /* Issue #67 — the book row's in-main interactive controls must stay
    clickable above the title link's stretched overlay (z-index 1): the
    disclosure chevron and the expanded region's TagEntry controls.
@@ -3946,6 +3951,47 @@ main#main > .status:empty {
   width: 100%;
   min-width: 0;
   max-width: 100%;
+}
+/* Issue #76 (decision #72) — the URL-scoped review's scope chip: the ONE
+   removable chip in the article slot while #/highlights?article=<id> is
+   active. Pill register (the .finished-mark/.review-badge anatomy: hairline
+   border, --radius-pill, quiet UI voice) with an inside-× clear that rides
+   the shared .tag-chip-remove anatomy (44px touch target, --destructive
+   hover). The clear keeps its border transparent inside the pill — the pill
+   IS the border; hover colors the × alone. Token-only, no motion. */
+.review-scope-chip {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  padding-left: var(--space-sm);
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+}
+.review-scope-chip-text {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.review-scope-chip .review-scope-chip-remove {
+  min-height: calc(var(--touch) - 8px);
+  min-width: calc(var(--touch) - 8px);
+  border-color: transparent;
+}
+.review-scope-chip .review-scope-chip-remove:hover {
+  border-color: transparent;
+}
+/* Issue #76 — the vanished-scope empty state: the calm copy + back-to-all
+   link inside the shared .status live region (the honest D10-10 branch). */
+.review-scope-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-sm);
 }
 .review-section {
   margin-block: var(--space-xl);

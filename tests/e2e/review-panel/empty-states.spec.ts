@@ -77,7 +77,7 @@ async function seedAndOpenReview(
     page.getByRole("heading", { name: "Saved articles" }),
   ).toBeVisible();
   await expect(
-    page.getByText("The looting of science fiction").first(),
+    page.getByText("Getting started with Lem Reader").first(),
   ).toBeVisible();
   await seedRows(page, rows);
   await page.goto(`${BASE}/#/highlights`);
@@ -112,10 +112,10 @@ test.describe("RECV-01.g review-panel empty states (10-04 both branches)", () =>
     ).toBeVisible();
 
     // Article B has no orphan rows, so article=B ∧ confidence=Orphan
-    // matches nothing.
+    // matches nothing. Issue #76 — the option label carries the count.
     await page
       .getByLabel("Article", { exact: true })
-      .selectOption({ label: TITLE_B });
+      .selectOption({ label: `${TITLE_B} (1)` });
     await page
       .getByLabel("Anchor confidence", { exact: true })
       .selectOption("orphan");

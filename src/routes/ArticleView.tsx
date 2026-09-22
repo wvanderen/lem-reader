@@ -2346,6 +2346,7 @@ export function ArticleView({
           }}
           onExportHighlights={handleExportHighlights}
           exportingHighlights={exportingHighlights}
+          reviewHref={`#/highlights?article=${article.id}`}
         />
         </HighlightOverlayProvider>
         {/* Issue #40: the fixed compact transport bar — mounted in BOTH

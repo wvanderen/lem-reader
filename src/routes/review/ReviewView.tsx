@@ -66,8 +66,7 @@ import { TagFilter } from "../../ingestion/library/TagFilter";
 // Plan 14-03 Task 1 (D14-02) — the review destination's document.title via
 // the ONE shared helper (never string-built here; the helper owns the
 // suffix, separator, and 64-char truncation).
-import { setDocumentTitle } from "../../ingestion/library/pageMeta";
-// Plan 17-03 (META-02/D17-09) — the review surfaces (select option labels,
+import { setDocumentTitle } from "../../ingestion/library/pageMeta";// Plan 17-03 (META-02/D17-09) — the review surfaces (select option labels,
 // options sort, section h2) carry the ONE effective title: the reader-owned
 // override when present, canonical as fallback. One name, one order.
 import {
@@ -208,7 +207,10 @@ function ReviewRow({
   const foot = jumpable ? (
     <span className="review-row-foot">
       <span className="review-date">{formatDate(entry.highlight.createdAt)}</span>
-      <JumpToArticleIcon aria-hidden="true" />
+      {/* D21-06 — the layout hook rides the shared module's className prop
+          (the hover-tint selector in app.css); restored — issue #77's tree
+          dropped it and the D21-06 e2e pins it. */}
+      <JumpToArticleIcon aria-hidden="true" className="review-jump-glyph" />
     </span>
   ) : (
     <span className="review-date">{formatDate(entry.highlight.createdAt)}</span>
@@ -304,8 +306,25 @@ function ReviewRow({
  * ONE LibrarySnapshot (Issue #8 — no own load, no own status machine),
  * derives sections purely in the render body (D10-09 — no effect chains),
  * and renders grouped-by-article sections plus the never-drop orphan tail.
+ *
+ * Issue #76 (decision #72) — URL-borne per-article scope. `scopedArticleId`
+ * (parsed by App's parseHash from `#/highlights?article=<id>`) is the ONE
+ * URL state: while set, the filter row's article combobox is REPLACED by a
+ * removable scope chip (one slot, two states), the "article" sort option
+ * hides, and the derivation filters to that article (its orphan rows kept —
+ * a vanished article's remaining highlights still render, badged "Article
+ * missing"). Tag/confidence/sort stay component state; clearing the scope
+ * navigates to #/highlights (a real history push, so Back returns to the
+ * scoped URL) and the unscoped combobox filter resets — a chip clear must
+ * never leave a hidden article filter behind.
  */
-export function ReviewView({ hasAppHistory }: { hasAppHistory: boolean }) {
+export function ReviewView({
+  hasAppHistory,
+  scopedArticleId,
+}: {
+  hasAppHistory: boolean;
+  scopedArticleId?: string;
+}) {
   // Plan 14-03 Task 1 (renamed by Plan 15-01 / D15-06) — the h1 focus
   // target (the tabindex=-1 pattern; text is the D15-06 "Highlights"
   // anchor, level byte-stable).
@@ -340,6 +359,20 @@ export function ReviewView({ hasAppHistory }: { hasAppHistory: boolean }) {
   // announce (loading/error/empty states own the region then).
   const [announcement, setAnnouncement] = useState<string | null>(null);
 
+  // Issue #76 — scope-transition normalization (review→review hashchange
+  // does NOT remount this component, so Back/Forward between scoped and
+  // unscoped URLs lands here with state intact): scope CLEARED resets the
+  // unscoped combobox filter — a chip clear must never leave a hidden
+  // article filter behind (honesty). The "article"-sort case is handled
+  // synchronously below via effectiveSort (no effect-frame flash).
+  const prevScopedRef = useRef(scopedArticleId);
+  useEffect(() => {
+    if (prevScopedRef.current !== undefined && scopedArticleId === undefined) {
+      setFilters((f) => ({ ...f, articleId: null }));
+    }
+    prevScopedRef.current = scopedArticleId;
+  }, [scopedArticleId]);
+
   // Plan 14-03 Task 1 (D14-02/D14-01/D14-03; content renamed by Plan 15-01
   // / D15-06) — the Highlights destination's title + warm-gated mount
   // focus (the LibraryView 14-02 Task 3 twin). setDocumentTitle appends
@@ -360,7 +393,33 @@ export function ReviewView({ hasAppHistory }: { hasAppHistory: boolean }) {
 
   // D10-09 — pure derivation in the render body (the filterLibrary
   // pattern): join → classify → filter → group → sort, no effect chains.
-  const derivation = deriveReviewSections(articles, highlights, notes, filters, sort);
+  //
+  // Issue #76 — while scoped, the URL scope OWNS the article filter (the
+  // combobox is hidden; any stale component-state articleId is overridden,
+  // never silently composed), and the "article" sort coerces to the Date
+  // default (its option is hidden while scoped — the coercion keeps the
+  // hidden select's value honest across a Back/Forward re-entry).
+  const scoped = scopedArticleId !== undefined;
+  const effectiveFilters: ReviewFilters = scoped
+    ? { ...filters, articleId: scopedArticleId }
+    : filters;
+  const effectiveSort: ReviewSort =
+    scoped && sort === "article" ? "date" : sort;
+  const derivation = deriveReviewSections(
+    articles,
+    highlights,
+    notes,
+    effectiveFilters,
+    effectiveSort,
+  );
+
+  // Issue #76 — scope resolution: the scoped article's record (its
+  // EFFECTIVE title names the chip) and whether it vanished (deleted, or
+  // the URL id never existed — one mechanism, the chip says so either way).
+  const scopedArticle = scoped
+    ? articles.find((a) => a.id === scopedArticleId)
+    : undefined;
+  const scopeVanished = scoped && scopedArticle === undefined;
 
   // Article-filter options ordered by the EFFECTIVE title (Plan 17-03
   // OQ5 — sort keys use effective values; markdown.ts L253 localeCompare
@@ -368,6 +427,10 @@ export function ReviewView({ hasAppHistory }: { hasAppHistory: boolean }) {
   const articlesByTitle = [...articles].sort((a, b) =>
     effectiveTitle(a).localeCompare(effectiveTitle(b)),
   );
+
+  // Issue #76 — per-article highlight counts for the combobox suggestions
+  // (the ONE fold lives on the snapshot; this is a render-body alias).
+  const highlightCountByArticleId = snapshot.highlightCountByArticleId;
 
   // D10-10: the filters-matched-zero case is "both derived lists empty
   // while the stored highlight set is non-empty" (computed after the
@@ -381,8 +444,12 @@ export function ReviewView({ hasAppHistory }: { hasAppHistory: boolean }) {
         {/* Plan 13-04 (POLISH-05 / D13-15) — the shared back affordance at
             the review header start, identical anatomy to ArticleView's
             mount (the same component). App's in-app flag drives
-            history.back() vs the "#/" fallback (Pitfall 7). */}
-        <BackToLibrary hasAppHistory={hasAppHistory} />
+            history.back() vs the "#/" fallback (Pitfall 7). Issue #76
+            (decision #72): the review mount relabels to the honest "Back" —
+            entries arrive from article pages as often as from the library,
+            so the copy must not promise a destination it did not come
+            from. */}
+        <BackToLibrary hasAppHistory={hasAppHistory} label="Back" />
         {/* One h1 per page (D10-01) — skip-link parity via main#main.
             Plan 14-03 Task 1: gains ONLY tabIndex={-1} + the focus ref;
             Plan 15-01 (D15-06): text renamed to "Highlights", level
@@ -410,9 +477,27 @@ export function ReviewView({ hasAppHistory }: { hasAppHistory: boolean }) {
         {status === "ready" && highlights.length === 0 && (
           <p>No highlights yet. Highlights you make while reading appear here.</p>
         )}
-        {status === "ready" && highlights.length > 0 && derivedEmpty && (
-          <p>No highlights match these filters.</p>
-        )}
+        {status === "ready" &&
+          highlights.length > 0 &&
+          derivedEmpty &&
+          scopeVanished && (
+            <div className="review-scope-empty">
+              <p>
+                This article is no longer in your library, and no highlights
+                remain for it.
+              </p>
+              {/* Issue #76 (decision #72) — the calm back-to-all affordance
+                  for a vanished scope: a real link to the unscoped review
+                  (a history push, so Back returns to the scoped URL). */}
+              <a className="btn btn-quiet review-scope-back" href="#/highlights">
+                Show all highlights
+              </a>
+            </div>
+          )}
+        {status === "ready" &&
+          highlights.length > 0 &&
+          derivedEmpty &&
+          !scopeVanished && <p>No highlights match these filters.</p>}
       </div>
       {/* D10-08 filter row — TagFilter chips reused as-is + article select +
           confidence select + sort select. Always mounted so the reader can
@@ -424,29 +509,73 @@ export function ReviewView({ hasAppHistory }: { hasAppHistory: boolean }) {
           activeTag={filters.tag}
           onSelect={(tag) => setFilters((f) => ({ ...f, tag }))}
         />
-        <div className="review-filter-group">
-          <label className="review-filter-label" htmlFor="review-article-filter">
-            Article
-          </label>
-          <select
-            id="review-article-filter"
-            className="review-select"
-            value={filters.articleId ?? ""}
-            onChange={(e) =>
-              setFilters((f) => ({
-                ...f,
-                articleId: e.target.value === "" ? null : e.target.value,
-              }))
-            }
-          >
-            <option value="">All articles</option>
-            {articlesByTitle.map((a) => (
-              <option key={a.id} value={a.id}>
-                {effectiveTitle(a)}
-              </option>
-            ))}
-          </select>
-        </div>
+        {/* Issue #76 (decision #72) — the article slot, two states: the
+            combobox while unscoped (every article findable, zero-highlight
+            ones included, each suggestion carrying its count from the ONE
+            snapshot fold); the removable scope chip while URL-scoped. */}
+        {scoped ? (
+          <div className="review-filter-group review-scope-group">
+            {/* The scoped slot keeps the combobox's visible "Article" label
+                (same rhythm, same announcement); the chip carries the
+                scope's name — the EFFECTIVE title, or the calm
+                "(deleted article)" stand-in when the URL scope outlived
+                its article. */}
+            <span className="review-filter-label" id="review-scope-label">
+              Article
+            </span>
+            <span
+              className="review-scope-chip"
+              aria-labelledby="review-scope-label review-scope-chip-text"
+            >
+              <span
+                className="review-scope-chip-text"
+                id="review-scope-chip-text"
+              >
+                {scopedArticle !== undefined
+                  ? effectiveTitle(scopedArticle)
+                  : "(deleted article)"}
+              </span>
+              {/* The chip's inside-× clear (the TagEntry chip-remove
+                  anatomy): keyboard-complete, navigates to the unscoped
+                  review (a history push — Back returns to the scoped
+                  URL). */}
+              <button
+                type="button"
+                className="tag-chip-remove review-scope-chip-remove"
+                aria-label="Show highlights from all articles"
+                onClick={() => {
+                  window.location.hash = "#/highlights";
+                }}
+              >
+                ×
+              </button>
+            </span>
+          </div>
+        ) : (
+          <div className="review-filter-group">
+            <label className="review-filter-label" htmlFor="review-article-filter">
+              Article
+            </label>
+            <select
+              id="review-article-filter"
+              className="review-select"
+              value={filters.articleId ?? ""}
+              onChange={(e) =>
+                setFilters((f) => ({
+                  ...f,
+                  articleId: e.target.value === "" ? null : e.target.value,
+                }))
+              }
+            >
+              <option value="">All articles</option>
+              {articlesByTitle.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {effectiveTitle(a)} ({highlightCountByArticleId.get(a.id) ?? 0})
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="review-filter-group">
           <label className="review-filter-label" htmlFor="review-confidence-filter">
             Anchor confidence
@@ -472,14 +601,17 @@ export function ReviewView({ hasAppHistory }: { hasAppHistory: boolean }) {
           <label className="review-filter-label" htmlFor="review-sort">
             Sort
           </label>
+          {/* Issue #76 — the "article" sort is meaningless while one article
+              is scoped: its option (and only that option) is absent, and
+              effectiveSort keeps the select's value honest. */}
           <select
             id="review-sort"
             className="review-select"
-            value={sort}
+            value={effectiveSort}
             onChange={(e) => setSort(e.target.value as ReviewSort)}
           >
             <option value="date">Date</option>
-            <option value="article">Article</option>
+            {!scoped && <option value="article">Article</option>}
             <option value="position">Position</option>
           </select>
         </div>
