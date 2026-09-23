@@ -306,7 +306,11 @@ test("ACPT-06 — ingest .md, read, highlight, export, re-import: nothing lost a
     await expect(
       pageB.getByRole("heading", { level: 1, name: "Saved articles" }),
     ).toBeVisible({ timeout: 10_000 });
-    await pageB.locator(`a[aria-labelledby="title-${articleId}"]`).click();
+    // The row-title contract (Plan 12-05, kept by the variant-A anatomy):
+    // the `title-{id}` heading carries the row's name and its stretched
+    // open-link lives inside it (the old standalone aria-labelledby anchor
+    // retired with the #74 row anatomy — issue #81 rot).
+    await pageB.locator(`[id="title-${articleId}"] a.library-card-link`).click();
 
     // It opens in the traveled reading mode (scrolling prefs came along) and
     // the whole semantic body mounts.

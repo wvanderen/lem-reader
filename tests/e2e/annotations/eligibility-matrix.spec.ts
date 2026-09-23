@@ -60,7 +60,10 @@ import {
   visibleBlock,
   countHighlightsInDexie,
   announcementRegion,
+  BASE,
 } from "./_fixtures";
+import { seedRows } from "../portability/_portability";
+import { bundledFixtures } from "../../../src/fixtures";
 
 // The corpus members the cells address (FIXTURES order-independent — cells
 // name their fixture explicitly; ids verified against fixtures-matrix.ts).
@@ -771,6 +774,23 @@ test.describe("ANNO-12 eligibility matrix — D19-11 review row shape", () => {
     // collapse to exactly ONE ellipsis); (b) figure-heavy marker →
     // paragraph (a span whose first fragment "[1]" is WITHIN the cap — the
     // clean continuation ellipsis).
+    //
+    // Issue #81 rot repair: the b13eba5 Getting Started split shrank the
+    // library composite's fixture tier to `libraryFixtures`, so highlights
+    // on regression-corpus members classify ORPHAN at review (their
+    // articles are no longer listed) — orphan rows render `div.review-row`
+    // WITH the "Article missing" badge, which would falsify every
+    // confident-row shape this cell proves. Seed the two canonical rows
+    // into Dexie first (the seedImageryArticle discipline: mount the app
+    // once so the declared schema exists, then put rows) so both spans
+    // stay confident + article-backed jumpable rows.
+    await page.goto(`${BASE}/`);
+    await seedRows(page, {
+      articles: [
+        bundledFixtures.find((a) => a.id === ESSAY) as unknown as Record<string, unknown>,
+        bundledFixtures.find((a) => a.id === FIGURES) as unknown as Record<string, unknown>,
+      ],
+    });
     await openScrolling(page, ESSAY);
     let ok = await selectSpan(
       page,
@@ -789,7 +809,7 @@ test.describe("ANNO-12 eligibility matrix — D19-11 review row shape", () => {
     await createSpanViaToolbar(page);
 
     // The Highlights review (#/highlights since 15-01).
-    await page.goto("http://localhost:5173/#/highlights");
+    await page.goto(`${BASE}/#/highlights`);
     await expect(
       page.getByRole("heading", { level: 1, name: "Highlights" }),
     ).toBeVisible();

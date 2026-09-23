@@ -402,7 +402,7 @@ test("ACPT-07 — the v2.1 core flow as one unbroken journey: nothing lost acros
     await expect(pageA.locator(`#title-${articleId}`)).toHaveText(overriddenTitle);
 
     // ── Navigate by TOC: the panel turns the page to the section ────────
-    await pageA.locator(`a[aria-labelledby="title-${articleId}"]`).click();
+    await pageA.locator(`[id="title-${articleId}"] a.library-card-link`).click();
     await pageA.waitForURL(new RegExp(`#/article/${articleId}$`), { timeout: 10_000 });
     await expect(
       pageA.getByRole("heading", { level: 1 }).first(),
@@ -670,8 +670,9 @@ test("ACPT-07 — the v2.1 core flow as one unbroken journey: nothing lost acros
     await expect(
       pageB.getByRole("heading", { level: 1, name: "Saved articles" }),
     ).toBeVisible({ timeout: 10_000 });
-    // The traveled reader-title override is the row's effective name.
-    await pageB.locator(`a[aria-labelledby="title-${articleId}"]`).click();
+    // The traveled reader-title override is the row's effective name; the
+    // open-link rides inside the `title-{id}` heading (variant-A anatomy).
+    await pageB.locator(`[id="title-${articleId}"] a.library-card-link`).click();
     await expect(
       pageB.getByRole("heading", { level: 1 }).first(),
     ).toBeVisible({ timeout: 15_000 });

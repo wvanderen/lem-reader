@@ -318,6 +318,17 @@ test.describe("shell nav (15-02 — NAV-01/NAV-02/NAV-05)", () => {
     page,
   }) => {
     await page.setViewportSize({ width: NARROW.width, height: NARROW.height });
+    // Issue #81 rot inventory — deterministic walk start. The wipe's
+    // goto(`#/`) leaves this article goto a SAME-DOCUMENT navigation: the
+    // hashchange flips hasAppHistory warm and the h1 destination focus can
+    // park focus mid-document (an engine timing race, observed on
+    // firefox), and firefox's sequential navigation then continues from
+    // that position — skipping the shell, so the walk never represents
+    // "from the document start". A REAL load (about:blank detach) mounts
+    // cold with focus at the document start on every engine — the reader
+    // scenario the claim describes (open article, first Tab reaches the
+    // skip link, second the collapsed brand).
+    await page.goto("about:blank");
     await page.goto(`${BASE}/#/article/${FIXTURES[0]}`);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 

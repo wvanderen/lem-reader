@@ -57,7 +57,6 @@ import { fileURLToPath } from "node:url";
 import { test, expect, type Page } from "@playwright/test";
 import {
   BASE,
-  FIXTURES,
   wipeDatabase,
   selectRangeInBlock,
   findFirstBlockWithText,
@@ -83,8 +82,13 @@ const SCANNED_PDF = pdfFixture("synthetic-scanned.pdf");
 const CORRUPT_PDF = pdfFixture("synthetic-corrupt.pdf");
 const OUTLINE_PDF = pdfFixture("synthetic-outline.pdf");
 
-/** Baseline library row count after the wipe: the bundled corpus only. */
-const BASELINE_ROWS = FIXTURES.length;
+/** Baseline library row count after the wipe: the fresh-library starter
+ * corpus (src/fixtures `fixtures` = libraryFixtures), NOT the URL-only
+ * regression corpus — the b13eba5 split made the old FIXTURES.length
+ * baseline stale (issue #81 rot). */
+const BASELINE_ROWS = (
+  await import("../../src/fixtures")
+).fixtures.length;
 
 /** Library rows whose source badge reads "PDF" (badgeLabel("pdf")). */
 function pdfLibraryRows(page: Page): import("@playwright/test").Locator {
