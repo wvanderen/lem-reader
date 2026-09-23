@@ -24,7 +24,11 @@
 // its figure resolves without a Blob put — the plan's fixture-registry
 // seeding option).
 import { test, expect } from "@playwright/test";
-import { fixtures } from "../../../src/fixtures";
+// bundledFixtures, NOT `fixtures`: the geometry proofs read the STORED dims
+// of figure-heavy — a URL-addressable regression-corpus member that stopped
+// being a fresh-library row in the b13eba5 Getting Started split (issue #81
+// rot). openArticle below resolves the same bundled tier.
+import { bundledFixtures } from "../../../src/fixtures";
 import {
   openArticle,
   switchMode,
@@ -38,7 +42,7 @@ import {
   waitForDecoded,
 } from "./_helpers";
 
-const figureHeavy = fixtures.find((a) => a.id === "figure-heavy")!;
+const figureHeavy = bundledFixtures.find((a) => a.id === "figure-heavy")!;
 
 test.describe("20-08 geometry (IMG-05/IMG-06 — D20-13 reserved geometry)", () => {
   test("reserved-vs-rendered aspect: client box ratio equals the stored w/h ratio, incl. the EXIF-rotated fixture", async ({

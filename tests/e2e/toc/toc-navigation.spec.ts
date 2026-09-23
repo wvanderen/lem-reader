@@ -31,7 +31,8 @@ import { makeArticle, prepareFreshPage, seedRows } from "../portability/_portabi
 import { ArticleSchema } from "../../../src/content/schema";
 import type { CanonicalArticle } from "../../../src/content/types";
 
-const BASE = "http://localhost:5173";
+// LEM_E2E_BASE override (annotations/_fixtures.ts discipline).
+const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
 
 // ── Seeded corpus ────────────────────────────────────────────────────────────
 

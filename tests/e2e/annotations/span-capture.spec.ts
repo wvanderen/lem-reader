@@ -32,6 +32,8 @@ import {
   turnToPage,
   currentPageIdx,
 } from "./_fixtures";
+import { seedRows } from "../portability/_portability";
+import { bundledFixtures } from "../../../src/fixtures";
 
 const FIXTURE = FIXTURES[0]!; // essay-long-form
 
@@ -250,6 +252,21 @@ test.describe("ANNO-08 span capture (D19) — 19-01", () => {
     await page.waitForTimeout(500);
 
     // The Highlights review: click the row's jump affordance.
+    //
+    // Issue #81 rot repair: the b13eba5 Getting Started split shrank the
+    // library composite's fixture tier to `libraryFixtures`, so a
+    // highlight on a regression-corpus member classifies ORPHAN at review
+    // (no article → no jump affordance at all, D10-05). Seed the canonical
+    // row into Dexie BEFORE the review mounts (the seedImageryArticle
+    // discipline: mount the app once so the declared schema exists, then
+    // put rows) so the span stays a confident, article-backed, jumpable
+    // row.
+    await page.goto(`${BASE}/`);
+    await seedRows(page, {
+      articles: [
+        bundledFixtures.find((a) => a.id === FIXTURE) as unknown as Record<string, unknown>,
+      ],
+    });
     await page.goto(`${BASE}/#/highlights`);
     await expect(
       page.getByRole("heading", { level: 1, name: "Highlights" }),

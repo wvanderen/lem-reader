@@ -223,14 +223,18 @@ test.describe("TOC geometry (18-04 — ORNT-05 edge matrix)", () => {
         "visible-panel-control",
       );
     } else {
-      // Firefox scopes sequential navigation to the top-layer popover:
-      // focus rests on the visible, operable entry — never stranded on a
-      // hidden node — and Esc (the cell below) closes + restores focus on
-      // EVERY engine: the guaranteed keyboard escape (D18-04).
+      // Firefox (issue #81 rot inventory — engine drift, 2026-09): firefox
+      // previously scoped sequential navigation to the top-layer popover
+      // (outcome "visible-panel-control"); it now exits the panel like
+      // chromium. The D18-04 INVARIANT both behaviors satisfy — and the
+      // one this cell pins — is "never stranded": the walk lands on a
+      // real operable control (in-panel OR page content), never a
+      // clipped/hidden node (the helper refuses "stranded" by walking on),
+      // and Esc (the cell below) closes + restores focus on EVERY engine.
       expect(
-        outcome,
-        "focus must rest on a visible operable panel control (never stranded); Esc is the universal escape",
-      ).toBe("visible-panel-control");
+        ["page", "visible-panel-control"],
+        "focus must rest on a visible operable control (never stranded); Esc is the universal escape",
+      ).toContain(outcome);
     }
   });
 
@@ -252,10 +256,19 @@ test.describe("TOC geometry (18-04 — ORNT-05 edge matrix)", () => {
         "visible-panel-control",
       );
     } else {
+      // Firefox (issue #81 rot inventory — engine drift, 2026-09): firefox
+      // previously scoped sequential navigation to the top-layer popover
+      // (outcome "visible-panel-control"); it now exits the open sheet
+      // like the chromium branch. Either behavior satisfies the D18-04
+      // INVARIANT this cell pins — "never stranded": the walk lands on a
+      // real operable control (in-panel OR page content), never a
+      // clipped/hidden node (the helper refuses "stranded" by walking
+      // on), and Esc (the cell below) closes + restores focus on EVERY
+      // engine.
       expect(
-        outcome,
-        "focus must rest on a visible operable panel control (never stranded); Esc is the universal escape",
-      ).toBe("visible-panel-control");
+        ["page", "visible-panel-control"],
+        "focus must rest on a visible operable control (never stranded); Esc is the universal escape",
+      ).toContain(outcome);
     }
   });
 

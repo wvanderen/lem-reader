@@ -38,7 +38,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import {
   BASE,
-  FIXTURES,
   wipeDatabase,
   selectRangeInBlock,
   findFirstBlockWithText,
@@ -70,8 +69,14 @@ import {
 } from "../../src/content/normalizeText";
 import type { CanonicalArticle } from "../../src/content/types";
 
-/** Baseline top-level rows after the wipe: the bundled fixture corpus. */
-const BASELINE_ROWS = FIXTURES.length;
+/** Baseline top-level rows after the wipe: the fresh-library starter
+ * corpus (src/fixtures `fixtures` = libraryFixtures). The 7-article
+ * regression corpus (FIXTURES) stays URL-addressable but does NOT render
+ * as library rows since the Getting Started split (b13eba5) — counting it
+ * here was the pre-refresh rot (issue #81). */
+const BASELINE_ROWS = (
+  await import("../../src/fixtures")
+).fixtures.length;
 
 /** The calm status line inside the Add dialog's live region. */
 function ingestStatus(
