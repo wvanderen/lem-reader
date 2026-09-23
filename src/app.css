@@ -696,15 +696,17 @@ a:hover {
   gap: var(--space-sm);
   min-width: 0;
 }
-/* The persistent two-destination nav — mirrors .view-switcher link anatomy
+/* The persistent destination nav — mirrors .view-switcher link anatomy
    verbatim: 44px touch targets, --font-ui 14px, inherited global focus
    ring, no color override (links ride the global a rule). white-space:
    nowrap keeps the row single-row at every width (D15-01/D15-17 — no
    second nav row, no wrap). Current-destination state is weight 600 + 2px
    underline thickness scoped to aria-current — the ONLY current-state
    styling, never color alone (forced-colors safety, D14-22 promoted to
-   shell level). Zero transition/animation properties (§Interaction 12 /
-   A11Y-06 — the reduced-motion gate is trivially satisfied). */
+   shell level). Zero transition/animation/scroll-behavior properties
+   (§Interaction 12 / A11Y-06 — the reduced-motion gate is trivially
+   satisfied). Issue #82: the third link (Read) rides this anatomy
+   unchanged — it is the same class of destination link, data-driven. */
 .shell-nav {
   display: flex;
   align-items: center;
@@ -3420,7 +3422,7 @@ main:has(.readaloud-bar) .article-body:has(.mark-read-close-page) .chapter-nav-p
 
 /* ── ≤639px shell collapse + narrow tuning (Plan 15-02 — D15-17, UI-SPEC
       §Interaction 11 / Pitfalls 1 + 9) ────────────────────────────────────
-   At narrow widths the wordmark visually collapses so the two destination
+   At narrow widths the wordmark visually collapses so the destination
    links + the 44px icon buttons fit the SINGLE 48px row. The treatment is
    the shipped .visually-hidden CLIP applied at the breakpoint (identical
    declarations): the brand link is position:absolute (out of flex flow —
@@ -3448,6 +3450,11 @@ main:has(.readaloud-bar) .article-body:has(.mark-read-close-page) .chapter-nav-p
      3. Header gap 0 (space-between alone separates the two groups — the
         whole slack sits between them at 320px) + shell-nav gap --space-xs.
    Result at 320×640: ~10px slack, no wrap, no overlap, no overflow.
+   Issue #82 note: the third data-driven Read link widens shell-nav by
+   ~35px in flow; on the Reader the ≤420px staged collapse (below) still
+   takes the links out of flow through the tightest band, and the
+   read-nav row-budget e2e re-sweeps 320–810px with a target present to
+   keep the single-row claim honest.
    Zero new transition/animation/scroll-behavior properties (A11Y-06). */
 @media (max-width: 639px) {
   .app-wordmark {
@@ -3613,7 +3620,11 @@ main:has(.readaloud-bar) .article-body:has(.mark-read-close-page) .chapter-nav-p
  *
  * The 5th article-scoped button (D18-02) makes the Reader header row
  * arithmetically impossible below ≈378px (controls ≈254px + shell-nav
- * ≈122px + padding). The sanctioned relief: at ≤420px AND Reader only, the
+ * ≈122px + padding); Issue #82's third data-driven Read link widens
+ * shell-nav to ≈156px in flow, moving the impossible threshold to ≈410px —
+ * the ≤420px collapse still covers the whole infeasible band with margin,
+ * so the breakpoint itself is unchanged. The sanctioned relief: at ≤420px
+ * AND Reader only, the
  * shell-nav links receive the SAME visually-hidden clip treatment the
  * ≤639px wordmark collapse uses (identical declarations read from that
  * block) — position:absolute out of flex flow (zero row width), still in

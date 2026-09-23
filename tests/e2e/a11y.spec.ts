@@ -36,7 +36,9 @@ import {
 } from "../../src/content/normalizeText";
 import type { CanonicalArticle } from "../../src/content/types";
 
-const BASE = "http://localhost:5173";
+// Overridable for session-local dev-server runs (the _fixtures.ts
+// LEM_E2E_BASE discipline — parallel-wayfinder-sessions hygiene).
+const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
 const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] as const;
 // Pure-string SVG stub (see open-every-fixture.spec.ts for rationale).
 const PIXEL_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>';

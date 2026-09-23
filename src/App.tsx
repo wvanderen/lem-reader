@@ -21,8 +21,10 @@
 //                       in its destructive onClick — Pitfall 8; never auto)
 // Both mount inside the provider so they read the live storageState. Neither
 // blocks reading (article rendering is independent of Dexie — D2-13).
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { LibraryView } from "./ingestion/library/LibraryView";
+import { useLibrarySnapshot } from "./ingestion/library/useLibrarySnapshot";
+import { deriveResumeTargets } from "./ingestion/library/resumeTarget";
 import { ArticleView } from "./routes/ArticleView";
 import { ReviewView } from "./routes/review/ReviewView";
 import { SkipLink } from "./a11y/SkipLink";
@@ -358,6 +360,23 @@ function AppInner() {
         ? "highlights"
         : "reader";
 
+  // Issue #82 (decision #68) — the shell Read destination. AppInner
+  // consumes the ONE LibrarySnapshot (the same read model every surface
+  // mounts — useLibrarySnapshot's load broadcast keeps all mounts in
+  // step) and derives the resume target through the ONE shared
+  // derivation (deriveResumeTargets — the Continue-Reading rail's SAME
+  // entries, first one wins: max savedAt, unfinished-filtered, book-aware
+  // via the D12-07 resume chapter; no schema change, readingSessions
+  // stays stats-only). Hidden ENTIRELY while the snapshot has not
+  // settled (spare chrome, the rail's discipline) or the unfinished set
+  // is empty — no disabled state, no library fallback.
+  const { status: libraryStatus, snapshot: librarySnapshot } =
+    useLibrarySnapshot();
+  const readTarget = useMemo(() => {
+    if (libraryStatus !== "ready") return null;
+    return deriveResumeTargets(librarySnapshot)[0] ?? null;
+  }, [libraryStatus, librarySnapshot]);
+
   return (
     <>
       <SkipLink />
@@ -374,6 +393,8 @@ function AppInner() {
         tocOpen={tocOpen}
         onToggleToc={() => setTocOpen((v) => !v)}
         destination={destination}
+        readTarget={readTarget ? { articleId: readTarget.articleId } : null}
+        openArticleId={view.name === "article" ? view.id : null}
       />
       <SettingsPanel
         open={settingsOpen}

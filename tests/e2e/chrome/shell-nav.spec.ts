@@ -1,10 +1,16 @@
 // tests/e2e/chrome/shell-nav.spec.ts
 // Plan 15-02 — the persistent application shell (D15-01/D15-02): a
-// nav.shell-nav[aria-label="Primary"] with exactly two text links (Library →
-// #/, Highlights → #/highlights — D15-08) inside the existing 48px
+// nav.shell-nav[aria-label="Primary"] with up to three text links (Library →
+// #/, Highlights → #/highlights, and the data-driven Read destination added
+// by decision #68 / issue #82 — D15-08 revised) inside the existing 48px
 // app-header on ALL three destinations, the brand link home (D15-05), the
 // ModeToggle joining the articleMounted gate (D15-15), and the ≤639px
 // wordmark collapse + narrow tuning (D15-17).
+//
+// The Read link's FULL behavior (appear/use/roll/hide, aria-current,
+// row-budget sweep) lives in read-nav.spec.ts; this file pins the
+// fresh-library baseline: with no unfinished target the Read link is
+// hidden ENTIRELY, so a wiped library shows exactly two links.
 //
 // Requirements owned by this file:
 //   - NAV-01 — direct Library ↔ Highlights navigation through the shell
@@ -104,10 +110,14 @@ test.describe("shell nav (15-02 — NAV-01/NAV-02/NAV-05)", () => {
   });
 
   // (1) Persistent shell — D15-02: one shell, one rule. The Primary nav and
-  // its two text links render on every destination, and the nav holds
-  // EXACTLY two links (no Add destination — D15-08; destination links are
-  // text links at every width — D15-17).
-  test("(1) Primary nav renders Library + Highlights (exactly 2 links) on all three destinations", async ({
+  // its text links render on every destination. D15-08 (revised by decision
+  // #68): exactly THREE text links when an unfinished resume target exists;
+  // the data-driven Read link is hidden ENTIRELY otherwise (no disabled
+  // state, no library fallback). A wiped library has no target → exactly
+  // two links on all three destinations, and parking in the reader with no
+  // saved location does not conjure one (destination links are text links
+  // at every width — D15-17).
+  test("(1) Primary nav renders Library + Highlights (exactly 2 links, no target) on all three destinations", async ({
     page,
   }) => {
     for (const url of [
@@ -122,9 +132,14 @@ test.describe("shell nav (15-02 — NAV-01/NAV-02/NAV-05)", () => {
       await expect(
         nav.getByRole("link", { name: "Highlights" }),
       ).toBeVisible();
+      // Issue #82 — no unfinished target on a wiped library: the Read
+      // destination is absent, never disabled.
+      await expect(
+        nav.getByRole("link", { name: "Continue reading" }),
+      ).toHaveCount(0);
       await expect(
         nav.getByRole("link"),
-        "D15-08 — exactly two destination links (no Add)",
+        "D15-08 — exactly two destination links with no resume target",
       ).toHaveCount(2);
     }
   });

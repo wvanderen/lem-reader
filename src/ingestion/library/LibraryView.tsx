@@ -517,7 +517,9 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
             Plan 16-03 (D16-02/D16-03): the header row gains the Add to
             Library trigger BESIDE the h1 (the old Review-highlights button
             position) — the ONLY way into the focused Add dialog. The
-            shell header is untouched (two destinations, D15-08). The
+            shell header keeps its fixed links plus the data-driven Read
+            destination (three text links when a target exists — D15-08,
+            revised by decision #68). The
             trigger mirrors the Header gear-button shape: aria-haspopup
             dialog + an aria-expanded reflection of the open state. */}
         <h1 ref={h1Ref} tabIndex={-1}>
