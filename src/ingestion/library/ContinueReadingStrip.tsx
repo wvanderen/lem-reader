@@ -55,43 +55,29 @@
 // strip-level mark-read button are GONE — curation lives in the row action
 // clusters (one arrangement, the locked vocabulary); the strip carries
 // zero keyboard stops beyond the resume links themselves.
+//
+// Issue #82 (decision #68) — the derivation MOVED to ./resumeTarget (the
+// ONE shared resume-target derivation: the shell header's Read
+// destination consumes the same entries' first). This component keeps
+// only the rail-specific concerns: the ready gate, the D8-09 cap of 3,
+// and the card rendering. Membership, book-awareness, and sort live in
+// exactly one place now.
 import { useMemo } from "react";
-import type { CanonicalArticle } from "../../content/types";
-import type { Book } from "../../content/schema";
 import { ProgressHairline } from "../../reader/ProgressHairline";
-import { deriveBookProgress, resolveResumeChapterId, chapterOrdinal } from "./bookProgress";
-import { articleReadingState, bookReadingState, percentRead } from "./readingState";
+import { percentRead } from "./readingState";
 import { effectiveTitle } from "./effectiveMetadata";
 import type { LibrarySnapshot } from "./librarySnapshot";
+import {
+  deriveResumeTargets,
+  type ResumeTargetEntry,
+} from "./resumeTarget";
 
 /** The cap on continue-reading cards (D8-09 — calm lower end). */
 const CONTINUE_READING_CAP = 3;
 
 /**
- * The mixed strip entry union (Plan 12-05 — D12-02). `lastOpenedAt` is the
- * shared sort key (D8-10 recency): an article's location savedAt, or a
- * book's resume-chapter location savedAt.
- */
-type StripEntry =
-  | {
-      kind: "article";
-      article: CanonicalArticle;
-      progress: number;
-      lastOpenedAt: string;
-    }
-  | {
-      kind: "book";
-      book: Book;
-      resumeChapterId: string;
-      ordinal: number;
-      total: number;
-      progress: number;
-      lastOpenedAt: string;
-    };
-
-/**
- * ContinueReadingStrip — derives the most-recently-opened unfinished set
- * (standalone articles + in-progress books) from the ONE LibrarySnapshot
+ * ContinueReadingStrip — renders the first D8-09-cap of the ONE shared
+ * resume-target derivation (Issue #82) from the ONE LibrarySnapshot
  * (Issue #3 — no own load, no own folds). Returns null while the snapshot
  * is not ready (initial load or load failure — fail quiet, the strip is
  * spare chrome) OR when the unfinished set is empty.
@@ -105,83 +91,9 @@ export function ContinueReadingStrip({
   /** True only when the snapshot has settled ready — gates the spare-chrome null. */
   ready: boolean;
 }) {
-  const entries = useMemo<StripEntry[] | null>(() => {
+  const entries = useMemo<ResumeTargetEntry[] | null>(() => {
     if (!ready) return null; // loading or failed — spare chrome either way
-    const latestByArticle = snapshot.latestLocationByArticleId;
-    const totalsById = snapshot.totalsByArticleId;
-
-    // Standalone article entries (D12-02: chapter members — articles
-    // carrying ingestionMeta.bookId — NEVER emit their own entry; the
-    // snapshot's partition already excluded them).
-    const articleEntries: StripEntry[] = snapshot.standaloneArticles.flatMap(
-      (article) => {
-        const location = latestByArticle.get(article.id);
-        if (!location) return [];
-        const total = totalsById.get(article.id) ?? 0;
-        const progress = Math.min(1, location.graphemeOffset / total);
-        // D14-20 — the membership gate is a !== in-progress check on
-        // the ONE policy module (behavior identical to the old
-        // progress >= FINISHED_THRESHOLD gate; the ratio above still
-        // feeds the entry's hairline).
-        if (articleReadingState(location, total) !== "in-progress") return [];
-        return [
-          {
-            kind: "article" as const,
-            article,
-            progress,
-            lastOpenedAt: location.savedAt,
-          },
-        ];
-      },
-    );
-
-    // ONE book-level entry per in-progress book (D12-02): any chapter
-    // location + chapters-finished progress < 1. The label carries the
-    // D12-06 "Chapter N of M" numbering; the link resumes the D12-07
-    // last-read chapter.
-    const bookEntries: StripEntry[] = snapshot.books.flatMap((book) => {
-      // D14-20 — the membership gate is a !== in-progress check on
-      // the ONE policy module (behavior identical to the old
-      // resumeChapterId === null + progress >= 1 gates). The entry
-      // construction below still needs the resume / ordinal /
-      // progress derivations, so only the membership decision swaps.
-      // Issue #8 — every derivation reads the snapshot's ONE precomputed
-      // latest-location fold (never a re-fold of the raw rows).
-      if (
-        bookReadingState(book, latestByArticle, (articleId) =>
-          totalsById.get(articleId),
-        ) !== "in-progress"
-      )
-        return [];
-      const resumeChapterId = resolveResumeChapterId(book, latestByArticle);
-      if (resumeChapterId === null) return []; // defensive — in-progress implies a resume chapter
-      const progress = deriveBookProgress(book, latestByArticle, (articleId) =>
-        totalsById.get(articleId),
-      );
-      const ordinal = chapterOrdinal(book, resumeChapterId);
-      const total = book.chapterArticleIds.length;
-      if (ordinal === 0 || total === 0) return []; // defensive — resume id outside the record
-      const resumeLocation = latestByArticle.get(resumeChapterId);
-      if (!resumeLocation) return [];
-      return [
-        {
-          kind: "book" as const,
-          book,
-          resumeChapterId,
-          ordinal,
-          total,
-          progress,
-          lastOpenedAt: resumeLocation.savedAt,
-        },
-      ];
-    });
-
-    return [...articleEntries, ...bookEntries]
-      .sort((a, b) =>
-        // savedAt descending (most-recently-opened first — D8-10).
-        a.lastOpenedAt < b.lastOpenedAt ? 1 : a.lastOpenedAt > b.lastOpenedAt ? -1 : 0,
-      )
-      .slice(0, CONTINUE_READING_CAP);
+    return deriveResumeTargets(snapshot).slice(0, CONTINUE_READING_CAP);
     // The snapshot identity fully determines the derivation (every input —
     // articles, locations, folds, books — settles together in one load).
   }, [ready, snapshot]);
@@ -200,7 +112,7 @@ export function ContinueReadingStrip({
                   name (effectiveTitle); book entries below stay canonical
                   (D17-05). The stretched title link IS the card (native
                   navigation); % read + hairline under it (D8-11). */}
-              <a className="library-card-link" href={`#/article/${entry.article.id}`}>
+              <a className="library-card-link" href={`#/article/${entry.articleId}`}>
                 {effectiveTitle(entry.article)}
               </a>
               <div className="continue-reading-progress">
@@ -213,7 +125,7 @@ export function ContinueReadingStrip({
               {/* D12-02 — the book-level entry: ONE link resuming the
                   last-read chapter, labeled with the book's own TOC
                   numbering (D12-06 "Chapter N of M"). */}
-              <a className="library-card-link" href={`#/article/${entry.resumeChapterId}`}>
+              <a className="library-card-link" href={`#/article/${entry.articleId}`}>
                 {entry.book.title} — Chapter {entry.ordinal} of {entry.total}
               </a>
               <div className="continue-reading-progress">

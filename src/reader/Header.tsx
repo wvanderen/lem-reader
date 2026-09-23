@@ -104,6 +104,25 @@ interface HeaderProps {
    * styling hook on .app-header (the ≤420px staged Reader collapse).
    */
   destination: "library" | "highlights" | "reader";
+  /**
+   * Issue #82 (decision #68) — the resume target for the shell Read
+   * destination, derived in App from the ONE LibrarySnapshot through the
+   * ONE shared derivation (deriveResumeTargets — the Continue-Reading
+   * rail's SAME derivation, first entry). `null` = no unfinished target
+   * (nothing ever opened, or everything finished) — the Read link is
+   * hidden ENTIRELY (no disabled state, no library fallback). The href is
+   * the book-aware pointer: the standalone article, or the book's resume
+   * chapter.
+   */
+  readTarget: { articleId: string } | null;
+  /**
+   * Issue #82 (decision #68) — the mounted article id (null off the
+   * Reader). Drives the Read link's aria-current="page" ONLY while the
+   * open article IS the target; opening any other article drops the
+   * attribute (the target derivation updates on the article's first
+   * progress save).
+   */
+  openArticleId: string | null;
 }
 
 export function Header({
@@ -119,6 +138,8 @@ export function Header({
   tocOpen,
   onToggleToc,
   destination,
+  readTarget,
+  openArticleId,
 }: HeaderProps) {
   // Header is a useSettings consumer so the toggle's aria-pressed + glyph
   // reflect the LIVE preference without App prop-drilling. App stays unchanged.
@@ -146,15 +167,20 @@ export function Header({
           <span className="visually-hidden">Lem Reader</span>
         </a>
         {/*
-          Plan 15-02 (D15-02/D15-08): the persistent shell destination nav —
-          present and identical on Library, Highlights, AND Reader (one
-          shell, one rule). Exactly TWO text links (no Add destination —
-          D15-08; no icon-only links at any width — D15-17). Plain <a href>
-          links with NO onClick interception: activation assigns the hash,
-          pushing a history entry (the desired Back semantics for
-          destination navigation — D14-14), and modified clicks
-          (middle/cmd/ctrl/shift/alt) fall through to native browser
-          behavior. hrefs are fixed literals (same-origin by construction —
+          Plan 15-02 (D15-02/D15-08, revised by decision #68): the
+          persistent shell destination nav — present and identical on
+          Library, Highlights, AND Reader (one shell, one rule). Exactly
+          THREE text links (no Add destination — D15-08; no icon-only
+          links at any width — D15-17), the third being the data-driven
+          Read destination: hidden ENTIRELY when there is no unfinished
+          resume target (nothing ever opened, or everything finished —
+          never a disabled state), so the link count is two or three per
+          render. Plain <a href> links with NO onClick interception:
+          activation assigns the hash, pushing a history entry (the
+          desired Back semantics for destination navigation — D14-14),
+          and modified clicks (middle/cmd/ctrl/shift/alt) fall through to
+          native browser behavior. hrefs are fixed literals or the
+          validated record id charset (same-origin by construction —
           T-14-04/T-15-04).
           Landmark label "Primary" is distinct from "Library views"
           (view-switcher) and "Book chapters" (chapter nav) so all three
@@ -173,6 +199,30 @@ export function Header({
           >
             Highlights
           </a>
+          {/*
+            Issue #82 (decision #68 — the third nav item "Read"): visible
+            label "Read"; aria-label "Continue reading" ties it to the
+            rail's vocabulary. aria-current="page" ONLY while the open
+            article IS the target (the shared derivation's first entry —
+            the same resume chapter a book target points at); finishing
+            rolls the pointer to the next unfinished target or hides the
+            link; plain native href pushes history (D14-14 — no
+            hasAppHistory involvement).
+          */}
+          {readTarget && (
+            <a
+              href={`#/article/${readTarget.articleId}`}
+              aria-label="Continue reading"
+              aria-current={
+                destination === "reader" &&
+                openArticleId === readTarget.articleId
+                  ? "page"
+                  : undefined
+              }
+            >
+              Read
+            </a>
+          )}
         </nav>
       </div>
       {/*
