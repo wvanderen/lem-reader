@@ -42,11 +42,7 @@ import type { ReaderSettings } from "../content/schema";
 // Issue #43 (O8) — the read-aloud voice/rate controls' platform seam: the
 // probed voice list + the local-voice filter (spike 0009 §5.3) live beside
 // the other Web Speech seams in src/readaloud/webSpeech.ts.
-import {
-  filterVoiceChoices,
-  probeVoices,
-  speechSynthesisAvailable,
-} from "../readaloud/webSpeech";
+import { filterVoiceChoices, probeVoices, speechSynthesisAvailable } from "../readaloud/webSpeech";
 import type { VoiceChoice } from "../readaloud/webSpeech";
 // Issue #8 — the CanonicalArticle type import rode the export-highlights
 // fixture-merge fold; the snapshot's composite list replaced it.
@@ -54,11 +50,7 @@ import { ImportPreviewDialog } from "./ImportPreviewDialog";
 import { applyImport, buildBundle, validateBundle } from "../portability/ExportImportService";
 import type { ImportRefusal } from "../portability/ExportImportService";
 import { detectImportPreview, resolveImportPlan } from "../portability/conflicts";
-import type {
-  ImportPreviewData,
-  Overrides,
-  ValidatedImportAsset,
-} from "../portability/conflicts";
+import type { ImportPreviewData, Overrides, ValidatedImportAsset } from "../portability/conflicts";
 import { BUNDLE_FILENAME } from "../portability/bundle";
 import type { ExportBundle } from "../portability/bundle";
 import { downloadBlob } from "../portability/download";
@@ -69,6 +61,11 @@ import {
 } from "../portability/markdown";
 import type { HighlightEntry, HighlightSection } from "../portability/markdown";
 import { CloseIcon } from "../ui/icons";
+// Issue #86 (decision #73) — the custom-theme slot: seedCustomTheme powers
+// the first-activation seeding in onTheme; the builder is the disclosure
+// section mounted directly below the Theme fieldset while custom is active.
+import { CustomThemeBuilder } from "./CustomThemeBuilder";
+import { seedCustomTheme } from "../settings/customTheme";
 // Issue #8 — the ONE library read model + its invalidation call replace the
 // panel's own export-time re-lists (the four-store Promise.all + fixture
 // merge) and close the import gap: after applyImport lands, the mounted
@@ -196,10 +193,25 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   const onSize = (size: ReaderSettings["size"]) => update({ size });
   const onMeasure = (measure: ReaderSettings["measure"]) => update({ measure });
   const onSpacing = (spacing: ReaderSettings["spacing"]) => update({ spacing });
-  const onTheme = (theme: ReaderSettings["theme"]) => update({ theme });
+  // Issue #86 (decision #73) — the ONE custom slot: activating Custom from a
+  // preset resumes the STORED custom theme when there is one; the FIRST
+  // activation seeds it from the then-active preset (baseTheme + its 5
+  // tokens). Re-selecting Custom while already on it is a no-op. Leaving
+  // Custom keeps the stored record for the next activation (decision #73).
+  const onTheme = (theme: ReaderSettings["theme"]) => {
+    if (theme !== "custom" || settings.theme === "custom") {
+      update({ theme });
+      return;
+    }
+    update({
+      theme: "custom",
+      // The guard above narrowed settings.theme off "custom" — it IS a
+      // preset base here, so seeding from it is total.
+      customTheme: settings.customTheme ?? seedCustomTheme(settings.theme),
+    });
+  };
   const onRate = (rate: number) => update({ rate });
-  const onVoice = (voiceURI: string) =>
-    update({ voice: voiceURI === "" ? undefined : voiceURI });
+  const onVoice = (voiceURI: string) => update({ voice: voiceURI === "" ? undefined : voiceURI });
   const onReset = () => reset(); // D2-04 — restores DEFAULT_SETTINGS
 
   // ── Issue #43 (O8): the read-aloud voice/rate controls ──────────────────
@@ -224,17 +236,14 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
 
   const voiceOptions = probedVoices ? filterVoiceChoices(probedVoices) : [];
   const storedVoiceMissing =
-    settings.voice !== undefined &&
-    !voiceOptions.some((v) => v.voiceURI === settings.voice);
+    settings.voice !== undefined && !voiceOptions.some((v) => v.voiceURI === settings.voice);
   // The stored-but-hidden voice is APPENDED so the control always reflects
   // the live truth (never a value with no option, never a silent mismatch
   // between what is stored and what is displayed). Label: the voice's real
   // name when the platform knows it, else the opaque URI.
-  const storedVoiceLabel =
-    storedVoiceMissing
-      ? (probedVoices ?? []).find((v) => v.voiceURI === settings.voice)?.name ??
-        settings.voice
-      : settings.voice;
+  const storedVoiceLabel = storedVoiceMissing
+    ? ((probedVoices ?? []).find((v) => v.voiceURI === settings.voice)?.name ?? settings.voice)
+    : settings.voice;
 
   // ── Plan 09-05 (D9-10): the "Your data" cluster state machine ───────────
   // One busy kind at a time (all three buttons disable while any data action
@@ -614,7 +623,25 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
               />
               <span>Dark</span>
             </label>
+            {/* Issue #86 (decision #73) — the 4th slot: ONE custom theme.
+                Seeding/resume lives in onTheme; the builder disclosure rides
+                directly below this fieldset while custom is active. */}
+            <label className="settings-row">
+              <input
+                type="radio"
+                name="theme"
+                value="custom"
+                checked={settings.theme === "custom"}
+                onChange={() => onTheme("custom")}
+              />
+              <span>Custom</span>
+            </label>
           </fieldset>
+
+          {/* Issue #86 (decision #73) — the builder: ONLY while custom is
+              selected, directly below the Theme fieldset (inside the shared
+              sheet — no nested dialog). */}
+          {settings.theme === "custom" && <CustomThemeBuilder />}
 
           <fieldset className="settings-section">
             <legend>Motion</legend>
@@ -653,13 +680,11 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                       {v.name} ({v.lang})
                     </option>
                   ))}
-                  {storedVoiceMissing && (
-                    <option value={settings.voice}>{storedVoiceLabel}</option>
-                  )}
+                  {storedVoiceMissing && <option value={settings.voice}>{storedVoiceLabel}</option>}
                 </select>
                 <p className="settings-help">
-                  Voices installed on this device. Reading aloud falls back to
-                  the system default when a saved voice is missing.
+                  Voices installed on this device. Reading aloud falls back to the system default
+                  when a saved voice is missing.
                 </p>
               </fieldset>
 
@@ -697,9 +722,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
           ) : (
             <fieldset className="settings-section">
               <legend>Read aloud</legend>
-              <p className="settings-help">
-                Read aloud isn't available in this browser.
-              </p>
+              <p className="settings-help">Read aloud isn't available in this browser.</p>
             </fieldset>
           )}
 
@@ -782,4 +805,3 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     </>
   );
 }
-
