@@ -210,7 +210,7 @@ function ReviewRow({
       {/* D21-06 — the layout hook rides the shared module's className prop
           (the hover-tint selector in app.css); restored — issue #77's tree
           dropped it and the D21-06 e2e pins it. */}
-      <JumpToArticleIcon aria-hidden="true" className="review-jump-glyph" />
+      <JumpToArticleIcon className="review-jump-glyph" />
     </span>
   ) : (
     <span className="review-date">{formatDate(entry.highlight.createdAt)}</span>
@@ -477,27 +477,28 @@ export function ReviewView({
         {status === "ready" && highlights.length === 0 && (
           <p>No highlights yet. Highlights you make while reading appear here.</p>
         )}
-        {status === "ready" &&
-          highlights.length > 0 &&
-          derivedEmpty &&
-          scopeVanished && (
+        {status === "ready" && highlights.length > 0 && derivedEmpty && (
+          // Issue #76 (decision #72) — the two zero-matches states share one
+          // gate (rows exist, none survive the derivation): the vanished-
+          // scope calm empty state with its back-to-all affordance, or the
+          // plain filter miss.
+          scopeVanished ? (
             <div className="review-scope-empty">
               <p>
                 This article is no longer in your library, and no highlights
                 remain for it.
               </p>
-              {/* Issue #76 (decision #72) — the calm back-to-all affordance
-                  for a vanished scope: a real link to the unscoped review
-                  (a history push, so Back returns to the scoped URL). */}
+              {/* the calm back-to-all affordance for a vanished scope: a
+                  real link to the unscoped review (a history push, so Back
+                  returns to the scoped URL). */}
               <a className="btn btn-quiet review-scope-back" href="#/highlights">
                 Show all highlights
               </a>
             </div>
-          )}
-        {status === "ready" &&
-          highlights.length > 0 &&
-          derivedEmpty &&
-          !scopeVanished && <p>No highlights match these filters.</p>}
+          ) : (
+            <p>No highlights match these filters.</p>
+          )
+        )}
       </div>
       {/* D10-08 filter row — TagFilter chips reused as-is + article select +
           confidence select + sort select. Always mounted so the reader can

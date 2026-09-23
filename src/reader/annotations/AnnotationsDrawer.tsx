@@ -203,7 +203,7 @@ export function AnnotationsDrawer({
             aria-label="Close highlights and notes"
             onClick={onClose}
           >
-            <CloseIcon aria-hidden="true" />
+            <CloseIcon />
           </button>
         </div>
 

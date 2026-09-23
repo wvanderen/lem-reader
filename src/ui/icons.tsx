@@ -4,21 +4,19 @@
 // stroke, round caps/joins, fill none, aria-hidden + focusable="false" so
 // the glyph never enters the focus order or the accessible tree — each
 // host button's aria-label carries the full accessible name (D13-12 icon
-// policy: a real inline SVG, never an emoji character).
+// policy: a real inline SVG, never an emoji character). The hiding is
+// baked into the anatomy — no consumer passes it per call site.
 //
-// Consumers pass aria-hidden="true" explicitly (the existing call
-// contract); className is available for the rare glyph that carries a
-// layout hook (the review jump arrow's size class).
+// className is available for the rare glyph that carries a layout hook
+// (the review jump arrow's size class).
 
 interface IconProps {
-  ariaHidden?: "true";
   className?: string;
 }
 
 function Svg({
   size,
   className,
-  ariaHidden,
   children,
 }: IconProps & { size: number; children: React.ReactNode }) {
   return (
@@ -31,7 +29,7 @@ function Svg({
       strokeWidth="1.5"
       strokeLinecap="round"
       strokeLinejoin="round"
-      aria-hidden={ariaHidden ?? "true"}
+      aria-hidden="true"
       focusable="false"
       className={className}
     >

@@ -867,7 +867,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
           aria-disabled={isFirst}
           onClick={() => handleChevronTurn("previous")}
         >
-          <ChevronLeftIcon aria-hidden="true" />
+          <ChevronLeftIcon />
         </button>
         <button
           type="button"
@@ -876,17 +876,10 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
           aria-disabled={isLast}
           onClick={() => handleChevronTurn("next")}
         >
-          <ChevronRightIcon aria-hidden="true" />
+          <ChevronRightIcon />
         </button>
       </>
     );
   },
 );
-
-// ── Inline chevron glyphs ────────────────────────────────────────────────────
-// Mirrors Header.tsx GearIcon discipline (L42-59): inline SVG, viewBox
-// 0 0 24 24, stroke currentColor, focusable="false" so IE/Edge legacy doesn't
-// put it in the focus order. aria-hidden because the button's aria-label
-// carries the accessible name.
-
 

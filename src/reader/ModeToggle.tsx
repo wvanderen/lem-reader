@@ -96,7 +96,7 @@ export function ModeToggle({ mode, onToggle }: ModeToggleProps): React.ReactElem
           viewBox 0 0 24 24 + stroke currentColor mirrors the gear/chevron
           glyph discipline so the three header icons read as one family.
         */}
-        {isPaginated ? <PaginatedIcon aria-hidden="true" /> : <ScrollingIcon aria-hidden="true" />}
+        {isPaginated ? <PaginatedIcon /> : <ScrollingIcon />}
       </button>
       {/* Polite live region — mirrors SectionAnnouncer's role="status" pattern. */}
       <div
@@ -110,11 +110,4 @@ export function ModeToggle({ mode, onToggle }: ModeToggleProps): React.ReactElem
     </>
   );
 }
-
-// ── Inline mode glyphs ──────────────────────────────────────────────────────
-// Mirrors Header.tsx GearIcon + PaginatedSurface.tsx ChevronIcon discipline:
-// inline SVG, viewBox 0 0 24 24, stroke currentColor, focusable="false" so the
-// glyph never enters the focus order. aria-hidden because the button's
-// aria-label carries the accessible name.
-
 

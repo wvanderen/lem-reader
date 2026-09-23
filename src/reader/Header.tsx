@@ -203,7 +203,7 @@ export function Header({
             aria-label="Table of contents"
             aria-expanded={tocOpen}
           >
-            <ContentsIcon aria-hidden="true" />
+            <ContentsIcon />
           </button>
         )}
         {/*
@@ -225,7 +225,7 @@ export function Header({
             aria-haspopup="dialog"
             aria-expanded={tagsOpen}
           >
-            <TagIcon aria-hidden="true" />
+            <TagIcon />
           </button>
         )}
         {/*
@@ -248,7 +248,7 @@ export function Header({
             aria-haspopup="dialog"
             aria-expanded={drawerOpen}
           >
-            <HighlighterIcon aria-hidden="true" />
+            <HighlighterIcon />
             {annotationCount > 0 && (
               <span className="annotations-trigger-badge" aria-hidden="true">
                 {new Intl.NumberFormat(navigator.language).format(annotationCount)}
@@ -277,34 +277,9 @@ export function Header({
           aria-haspopup="dialog"
           aria-expanded={settingsOpen}
         >
-          {/* Inline-SVG gear glyph — aria-hidden because aria-label carries the
-              accessible name. Visible state change (closed vs open glyph) is the
-              secondary cue beyond aria-expanded (forced-colors safety — UI-SPEC
-              §Color contrast contract line 290). */}
-          <GearIcon aria-hidden="true" />
+          <GearIcon />
         </button>
       </div>
     </header>
   );
 }
-
-
-/**
- * Phase 5 Plan 05-03 — highlighter glyph for the annotations-trigger button.
- * A quiet inline-SVG marker icon; aria-hidden because aria-label carries the
- * accessible name. Mirrors the gear-button glyph discipline.
- */
-
-/**
- * Plan 13-10 (G5) — tag-label glyph for the tags-trigger button. A quiet
- * inline-SVG icon (the classic tag silhouette with its pin dot); aria-hidden
- * because aria-label carries the accessible name. Mirrors the GearIcon /
- * HighlighterIcon anatomy exactly (same box, stroke, caps, joins).
- */
-
-/**
- * Phase 18 Plan 18-02 (D18-02) — contents glyph for the toc-trigger button.
- * The standard three-line list glyph; aria-hidden because aria-label carries
- * the accessible name. Mirrors the GearIcon/HighlighterIcon/TagIcon anatomy
- * exactly (same 20px box, viewBox 24, stroke, caps, joins).
- */

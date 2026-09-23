@@ -39,7 +39,7 @@ export function StorageBanner({ onDismiss }: StorageBannerProps) {
         onClick={onDismiss}
       >
         {/* aria-label carries the accessible name; the × glyph is decorative. */}
-        <CloseIcon aria-hidden="true" />
+        <CloseIcon />
       </button>
     </div>
   );

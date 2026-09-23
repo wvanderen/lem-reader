@@ -459,7 +459,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
               aria-label="Close reading settings"
               onClick={onClose}
             >
-              <CloseIcon aria-hidden="true" />
+              <CloseIcon />
             </button>
           </div>
 

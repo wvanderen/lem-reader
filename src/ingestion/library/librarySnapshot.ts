@@ -133,6 +133,22 @@ export const EMPTY_LIBRARY_SNAPSHOT: LibrarySnapshot = {
 };
 
 /**
+ * THE per-article highlight-count fold (issue #76, decision #72) — one pass
+ * over the highlight rows, count per articleId. Named + exported like its
+ * sibling fold `latestLocationByArticle`: one definition, pinned directly
+ * by the fold unit suite, consumed through the snapshot.
+ */
+export function highlightCountByArticle(
+  highlights: HighlightRecord[],
+): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const highlight of highlights) {
+    counts.set(highlight.articleId, (counts.get(highlight.articleId) ?? 0) + 1);
+  }
+  return counts;
+}
+
+/**
  * loadLibrarySnapshot — the ONE whole-library read. Composes the existing
  * store seams in parallel and derives every fold from the same settled
  * results. Rejects only when a load the library cannot render without
@@ -186,11 +202,7 @@ export async function loadLibrarySnapshot(): Promise<LibrarySnapshot> {
 
   // Issue #76 — THE per-article highlight-count fold (one pass per load;
   // the library rows' review entry + the review combobox counts read it).
-  const highlightCountByArticleId = new Map<string, number>();
-  for (const highlight of highlights) {
-    const n = highlightCountByArticleId.get(highlight.articleId) ?? 0;
-    highlightCountByArticleId.set(highlight.articleId, n + 1);
-  }
+  const highlightCountByArticleId = highlightCountByArticle(highlights);
 
   // Chip list = article tags ∪ book tags (D12-04), the loadAllTags
   // localeCompare discipline (moved verbatim from LibraryView).

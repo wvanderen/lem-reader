@@ -79,7 +79,7 @@ export function PaginationFallbackBanner({
           aria-label="Dismiss"
           onClick={onDismiss}
         >
-          <CloseIcon aria-hidden="true" />
+          <CloseIcon />
         </button>
       </div>
     </div>

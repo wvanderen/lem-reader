@@ -34,8 +34,12 @@
   --touch: 44px; /* min interactive hit area */
 
   /* Issue #77 — Soft Paper design-system vocabulary (decision #69).
-     Radius roles: sm = controls · md = cards, pickers, popovers ·
+     Radius roles: 2xs = inline markers (highlight/spoken marks, the
+     restoration bar) · xs = small surface blocks (figure placeholder,
+     code blocks) · sm = controls · md = cards, pickers, popovers ·
      lg = dialogs. --radius-pill keeps pill chips/badges grep-clean. */
+  --radius-2xs: 2px;
+  --radius-xs: 4px;
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
@@ -514,7 +518,7 @@ body:has(main.paginated-main) {
   padding: var(--space-md);
   background: var(--surface-raised);
   border: 1px solid var(--hairline);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   color: var(--ink-soft);
   font-family: var(--font-ui);
   font-size: 14px;
@@ -536,7 +540,7 @@ body:has(main.paginated-main) {
   padding: var(--space-md);
   background: var(--surface-raised);
   border: 1px solid var(--hairline);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   overflow-x: auto;
 }
 .article-body pre code {
@@ -1073,12 +1077,11 @@ dialog.add-dialog {
 }
 /* The paste-transcript fallback (the youtube-bot-check companion): a calm
    guidance paragraph, a textarea, and its own action row — visually a
-   continuation of the dialog's form column, separated by the same
-   hairline rhythm. */
+   continuation of the dialog's form column, separated by spacing rhythm
+   only (no internal rule lines — the #77 dialog anatomy). */
 .add-transcript-form {
   margin-top: var(--space-md);
   padding-top: var(--space-md);
-  border-top: 1px solid var(--hairline);
 }
 .add-transcript-guidance {
   margin: 0;
@@ -1645,7 +1648,7 @@ dialog.add-dialog {
 mark.highlight {
   background-color: var(--highlight);
   color: inherit;
-  border-radius: 2px;
+  border-radius: var(--radius-2xs);
 }
 mark.highlight:focus-visible {
   outline: 2px solid var(--focus-ring);
@@ -1686,7 +1689,7 @@ mark.highlight.unresolved {
 mark.spoken-word {
   background-color: var(--spoken-highlight);
   color: inherit;
-  border-radius: 2px;
+  border-radius: var(--radius-2xs);
   text-decoration: underline;
   text-decoration-color: var(--accent);
   text-decoration-thickness: 2px;
@@ -2558,7 +2561,6 @@ dialog.edit-metadata {
   text-align: start;
   padding: var(--space-md);
   border: none;
-  border-radius: 0;
   background: transparent;
   color: inherit;
   cursor: pointer;
@@ -3691,7 +3693,7 @@ main:has(.readaloud-bar) .article-body:has(.mark-read-close-page) .chapter-nav-p
 .restoration-marker {
   position: absolute;
   width: 4px;
-  border-radius: 2px;
+  border-radius: var(--radius-2xs);
   background: var(--accent);
   pointer-events: none;
 }

@@ -401,7 +401,7 @@ function FigureMedia({ block }: { block: Extract<Block, { kind: "figure" }> }) {
     <span className="figure-placeholder" style={{ aspectRatio }}>
       {/* The shared image glyph (ui/icons) — aria-hidden decorative. Color
           inherits the span's --ink-soft via currentColor. */}
-      <ImageIcon aria-hidden="true" />
+      <ImageIcon />
       <span>{block.alt.length > 0 ? block.alt : "Image unavailable."}</span>
     </span>
   );

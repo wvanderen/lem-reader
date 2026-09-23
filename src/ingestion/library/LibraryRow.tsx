@@ -102,9 +102,11 @@ export function LibraryRow({
   const Title = headingLevel === 2 ? "h2" : "h3";
   const title = effectiveTitle(article);
   // Issue #76 — the review entry gates on ≥ 1 stored highlights; its
-  // presence alone (chapter sub-rows) still earns the cluster.
+  // presence alone (chapter sub-rows) still earns the cluster. ONE gate
+  // derivation, read by both the cluster below and the anchor in it.
+  const hasHighlights = (highlightCount ?? 0) > 0;
   const hasCluster = Boolean(
-    onReadingStateChange || onEdit || onRemove || (highlightCount ?? 0) > 0,
+    onReadingStateChange || onEdit || onRemove || hasHighlights,
   );
   return (
     <li className="library-row" key={id}>
@@ -175,7 +177,7 @@ export function LibraryRow({
               highlight; the count lives in the aria-label (the one
               accessible name), the glyph is aria-hidden. Sits between edit
               and remove so the destructive control stays last. */}
-            {(highlightCount ?? 0) > 0 && (
+            {hasHighlights && (
               <a
                 className="btn btn-icon library-row-highlights"
                 href={`#/highlights?article=${id}`}
