@@ -414,7 +414,7 @@ export type Book = z.infer<typeof BookSchema>;
 // (T-02-01 — Tampering V5). applyTheme consumes the inferred type directly.
 // No recursion here — Pitfall 7 (the two-pass recursive Block pattern above)
 // does NOT apply.
-export const ReaderSettingsObjectSchema = z.object({
+const ReaderSettingsObjectSchema = z.object({
   // STATE-04 migration hook: Phase 4 (Plan 04-02, D4-12) bumped the canonical
   // write version from 1 → 2 when readingMode was added. Issue #40 bumps the
   // canonical write version 2 → 3 when the read-aloud preferences (voice +
@@ -504,7 +504,8 @@ export const ReaderSettingsObjectSchema = z.object({
 // read seam (settingsStore / settingsMirror / the bundle's preferences
 // block) — the honest routing, never a silent preset fallback. The wrap is
 // ZodEffects: every existing import site safeParses THIS name (the object
-// schema below stays exported only for future shape consumers).
+// schema stays module-private — unexported until a real shape consumer
+// appears; speculative exports are not kept).
 export const ReaderSettingsSchema = ReaderSettingsObjectSchema.superRefine((s, ctx) => {
   if (s.theme === "custom" && s.customTheme === undefined) {
     ctx.addIssue({

@@ -235,6 +235,28 @@ function clampL(L: number): number {
 }
 
 /**
+ * Deterministic monotone bisect over [lo, hi]: `passes(lo)` is false,
+ * `passes(hi)` is true, and `passes` flips at most once across the segment
+ * (contrast is monotone in lightness at fixed hue/chroma). SEARCH_STEPS
+ * halvings later, `lastFailing` is the largest failing x and `firstPassing`
+ * the smallest passing x — each call site takes the bound its invariant
+ * names (and mirrors the predicate when its segment runs pass→fail).
+ */
+function bisectMonotone(
+  lo: number,
+  hi: number,
+  passes: (x: number) => boolean,
+): { lastFailing: number; firstPassing: number } {
+  for (let i = 0; i < SEARCH_STEPS; i++) {
+    const mid = (lo + hi) / 2;
+    if (mid === lo || mid === hi) break;
+    if (passes(mid)) hi = mid;
+    else lo = mid;
+  }
+  return { lastFailing: lo, firstPassing: hi };
+}
+
+/**
  * Re-lightness `hex` along its own hue/chroma, AWAY from `againstHex`'s
  * lightness, until `target` contrast is met. Contrast is monotone in
  * lightness at fixed hue/chroma, so BOTH directions are searched with a
@@ -252,19 +274,19 @@ function walkAwayFrom(hex: string, againstHex: string, target: number): string {
     okLchToHex({ ...token, L: clampL(token.L + dir * travel) });
   const walk = (dir: number): { hex: string; travel: number; ratio: number } | null => {
     const extreme = clampL(token.L + dir);
-    const extremeRatio = contrastRatio(candidate(dir, Math.abs(extreme - token.L)), againstHex);
+    const maxTravel = Math.abs(extreme - token.L);
+    const extremeRatio = contrastRatio(candidate(dir, maxTravel), againstHex);
     if (extremeRatio < target) return null; // this direction cannot reach the target
-    let lo = 0; // fails
-    let hi = Math.abs(extreme - token.L); // passes
-    for (let i = 0; i < SEARCH_STEPS; i++) {
-      const mid = (lo + hi) / 2;
-      if (contrastRatio(candidate(dir, mid), againstHex) >= target) hi = mid;
-      else lo = mid;
-    }
+    // Invariant: travel 0 fails (the early return above), maxTravel passes.
+    const { firstPassing } = bisectMonotone(
+      0,
+      maxTravel,
+      (travel) => contrastRatio(candidate(dir, travel), againstHex) >= target,
+    );
     return {
-      hex: candidate(dir, hi),
-      travel: hi,
-      ratio: contrastRatio(candidate(dir, hi), againstHex),
+      hex: candidate(dir, firstPassing),
+      travel: firstPassing,
+      ratio: contrastRatio(candidate(dir, firstPassing), againstHex),
     };
   };
   const lighter = walk(1);
@@ -304,19 +326,14 @@ function markerLightnessPair(
   const inkL = hexToOkLch(inkHex).L;
   const ratio = (L: number) => contrastRatio(inkHex, okLchToHex({ ...band, L }));
   if (ratio(surfaceL) >= target) {
-    // Bisect the surface→ink segment for the LAST passing lightness
-    // (invariant: lo passes, hi fails).
-    let lo = surfaceL;
-    let hi = inkL;
-    for (let i = 0; i < SEARCH_STEPS; i++) {
-      const mid = (lo + hi) / 2;
-      if (mid === lo || mid === hi) break;
-      if (ratio(mid) >= target) lo = mid;
-      else hi = mid;
-    }
+    // Bisect the surface→ink segment for the LAST passing lightness.
+    // The mirrored predicate (fails-AA) fits the helper's fail→pass
+    // invariant: surfaceL passes AA, inkL fails — so `lastFailing` is
+    // the largest still-compliant lightness.
+    const { lastFailing } = bisectMonotone(surfaceL, inkL, (L) => ratio(L) < target);
     return {
-      highlightL: clampL(surfaceL + (lo - surfaceL) * HIGHLIGHT_FRACTION),
-      spokenL: clampL(surfaceL + (lo - surfaceL) * SPOKEN_FRACTION),
+      highlightL: clampL(surfaceL + (lastFailing - surfaceL) * HIGHLIGHT_FRACTION),
+      spokenL: clampL(surfaceL + (lastFailing - surfaceL) * SPOKEN_FRACTION),
     };
   }
   // Degenerate: walk AWAY from the ink side over the FULL remaining range.
@@ -324,20 +341,12 @@ function markerLightnessPair(
   const extreme = dir > 0 ? 1 : 0;
   // Invariant: surfaceL fails (the branch above ran); the extreme passes
   // whenever ink is not itself at the lightness extreme.
-  let lo = surfaceL; // fails
-  let hi = extreme;
-  if (ratio(hi) < target) {
+  if (ratio(extreme) < target) {
     // Even the extreme fails (ink sits at the lightness extreme) — both
     // markers take the extreme (best effort, honest; the readout reports).
-    return { highlightL: hi, spokenL: hi };
+    return { highlightL: extreme, spokenL: extreme };
   }
-  for (let i = 0; i < SEARCH_STEPS; i++) {
-    const mid = (lo + hi) / 2;
-    if (mid === lo || mid === hi) break;
-    if (ratio(mid) >= target) hi = mid;
-    else lo = mid;
-  }
-  const highlightL = hi;
+  const highlightL = bisectMonotone(surfaceL, extreme, (L) => ratio(L) >= target).firstPassing;
   // Spoken steps 25% of the remaining compliant range deeper (away from
   // ink) — strictly more contrast, never equal to the annotation fill.
   const spokenL =
@@ -347,63 +356,82 @@ function markerLightnessPair(
 
 // ── Derivation ───────────────────────────────────────────────────────────────
 
+/** The canonical lowercase view of the stored tokens. The schema preserves
+ * case on read (hydration never coerces) and the UI commits lowercase —
+ * this ONE boundary makes derivation and fixing caseless, so no call site
+ * re-lowercases token by token. */
+function canonicalTokens(tokens: CustomThemeTokens): CustomThemeTokens {
+  return {
+    surface: tokens.surface.toLowerCase(),
+    surfaceRaised: tokens.surfaceRaised.toLowerCase(),
+    ink: tokens.ink.toLowerCase(),
+    accent: tokens.accent.toLowerCase(),
+    hairline: tokens.hairline.toLowerCase(),
+  };
+}
+
 /**
  * Resolve the full 11-token palette from the 5 stored tokens. Pure: same
  * input, same output — the unit tests pin the derived-pair guarantees
  * (D5-14, focus visibility, placeholder AA) across light, dark, and
  * saturated seeds.
  */
-export function resolveCustomTheme(tokens: CustomThemeTokens): ResolvedCustomTheme {
-  const surface = tokens.surface.toLowerCase();
-  const surfaceRaised = tokens.surfaceRaised.toLowerCase();
-  const ink = tokens.ink.toLowerCase();
-  const accent = tokens.accent.toLowerCase();
-  const hairline = tokens.hairline.toLowerCase();
+export function resolveCustomTheme(rawTokens: CustomThemeTokens): ResolvedCustomTheme {
+  const tokens = canonicalTokens(rawTokens);
 
-  const surfaceO = hexToOkLch(surface);
-  const inkO = hexToOkLch(ink);
-  const accentO = hexToOkLch(accent);
+  const surfaceLch = hexToOkLch(tokens.surface);
+  const inkLch = hexToOkLch(tokens.ink);
+  const accentLch = hexToOkLch(tokens.accent);
 
   // --ink-soft: ink's hue/chroma at max-travel lightness, then walked away
   // from the surface to the INK_SOFT_TARGET band when that overshoots
   // (walkAwayFrom returns the candidate unchanged when it already passes).
-  const inkSoftStart = clampL(surfaceO.L + (inkO.L - surfaceO.L) * INK_SOFT_MAX_TRAVEL);
-  const inkSoft = walkAwayFrom(okLchToHex({ ...inkO, L: inkSoftStart }), surface, INK_SOFT_TARGET);
+  const inkSoftStart = clampL(surfaceLch.L + (inkLch.L - surfaceLch.L) * INK_SOFT_MAX_TRAVEL);
+  const inkSoft = walkAwayFrom(
+    okLchToHex({ ...inkLch, L: inkSoftStart }),
+    tokens.surface,
+    INK_SOFT_TARGET,
+  );
 
   // --accent-hover: accent pushed AWAY from the surface (the presets darken
   // on light surfaces, lighten on dark ones), slight chroma lift.
-  const hoverDir = accentO.L >= surfaceO.L ? 1 : -1;
+  const hoverDir = accentLch.L >= surfaceLch.L ? 1 : -1;
   const accentHover = okLchToHex({
-    ...accentO,
-    L: clampL(accentO.L + hoverDir * HOVER_L_DELTA),
-    C: Math.min(accentO.C * HOVER_CHROMA_LIFT, MAX_CHROMA),
+    ...accentLch,
+    L: clampL(accentLch.L + hoverDir * HOVER_L_DELTA),
+    C: Math.min(accentLch.C * HOVER_CHROMA_LIFT, MAX_CHROMA),
   });
 
   // --focus-ring: the accent when 3:1 non-text already holds; else the
   // accent's hue walked away from the surface until it clears the target.
-  const focusRing = walkAwayFrom(accent, surface, FOCUS_TARGET_RATIO);
+  const focusRing = walkAwayFrom(tokens.accent, tokens.surface, FOCUS_TARGET_RATIO);
 
   // --highlight / --spoken-highlight: accent's hue, calm chroma, lightness
   // banded by the surface→AA-boundary search (D5-14 by construction; the
   // AA*1.02 margin keeps the boundary strictly compliant).
-  const band = { ...accentO, C: Math.min(accentO.C, MARKER_CHROMA_CAP) };
-  const { highlightL, spokenL } = markerLightnessPair(surfaceO.L, ink, band, AA_TEXT_RATIO * 1.02);
+  const band = { ...accentLch, C: Math.min(accentLch.C, MARKER_CHROMA_CAP) };
+  const { highlightL, spokenL } = markerLightnessPair(
+    surfaceLch.L,
+    tokens.ink,
+    band,
+    AA_TEXT_RATIO * 1.02,
+  );
   const highlight = okLchToHex({ ...band, L: highlightL });
   const spokenHighlight = okLchToHex({ ...band, L: spokenL });
 
   const destructive =
-    surfaceDisposition(surface) === "light" ? DESTRUCTIVE_LIGHT : DESTRUCTIVE_DARK;
+    surfaceDisposition(tokens.surface) === "light" ? DESTRUCTIVE_LIGHT : DESTRUCTIVE_DARK;
 
   return {
-    "--surface": surface,
-    "--surface-raised": surfaceRaised,
-    "--ink": ink,
+    "--surface": tokens.surface,
+    "--surface-raised": tokens.surfaceRaised,
+    "--ink": tokens.ink,
     "--ink-soft": inkSoft,
-    "--accent": accent,
+    "--accent": tokens.accent,
     "--accent-hover": accentHover,
     "--focus-ring": focusRing,
     "--destructive": destructive,
-    "--hairline": hairline,
+    "--hairline": tokens.hairline,
     "--highlight": highlight,
     "--spoken-highlight": spokenHighlight,
   };
@@ -412,16 +440,17 @@ export function resolveCustomTheme(tokens: CustomThemeTokens): ResolvedCustomThe
 /**
  * "Fix contrast": nudge ONE token so ONE policed pair clears AA — the ink
  * pair fixes via ink, the accent pair via accent; every other token rides
- * unchanged. Returns an equal-values copy when nothing fails.
+ * unchanged. Returns an equal-values copy when nothing fails. The result is
+ * canonical lowercase throughout (the same contract as resolveCustomTheme).
  */
-export function fixContrastPairs(tokens: CustomThemeTokens): CustomThemeTokens {
-  const surface = tokens.surface.toLowerCase();
+export function fixContrastPairs(rawTokens: CustomThemeTokens): CustomThemeTokens {
+  const tokens = canonicalTokens(rawTokens);
   const next: CustomThemeTokens = { ...tokens };
-  if (contrastRatio(tokens.ink.toLowerCase(), surface) < AA_TEXT_RATIO) {
-    next.ink = walkAwayFrom(tokens.ink.toLowerCase(), surface, FIX_TARGET_RATIO);
+  if (contrastRatio(tokens.ink, tokens.surface) < AA_TEXT_RATIO) {
+    next.ink = walkAwayFrom(tokens.ink, tokens.surface, FIX_TARGET_RATIO);
   }
-  if (contrastRatio(tokens.accent.toLowerCase(), surface) < AA_TEXT_RATIO) {
-    next.accent = walkAwayFrom(tokens.accent.toLowerCase(), surface, FIX_TARGET_RATIO);
+  if (contrastRatio(tokens.accent, tokens.surface) < AA_TEXT_RATIO) {
+    next.accent = walkAwayFrom(tokens.accent, tokens.surface, FIX_TARGET_RATIO);
   }
   return next;
 }

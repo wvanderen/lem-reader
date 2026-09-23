@@ -30,7 +30,9 @@ import { test, expect, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { wipeDatabase, BASE } from "../annotations/_fixtures";
 
-const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] as const;
+// CT-06 scans the FULL 2.2 AA rule set the header claims: axe's wcag22a/
+// wcag22aa tags on top of the 2.0/2.1 set the other specs scan.
+const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22a", "wcag22aa"] as const;
 
 /** Open the settings panel on the shell (the a11y.spec entry). */
 async function openSettings(page: Page): Promise<void> {
@@ -152,17 +154,11 @@ test.describe("Custom theme builder (#86 — one Custom slot, 5 tokens, derived 
     const verdict = await page.evaluate(() => {
       const lin = (c: number): number => {
         const s = c / 255;
-        return s <= 0.04045
-          ? s / 12.92
-          : Math.pow((s + 0.055) / 1.055, 2.4);
+        return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
       };
       const lum = (hex: string): number => {
         const n = parseInt(hex.slice(1), 16);
-        return (
-          0.2126 * lin((n >> 16) & 255) +
-          0.7152 * lin((n >> 8) & 255) +
-          0.0722 * lin(n & 255)
-        );
+        return 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
       };
       const ratio = (a: string, b: string): number => {
         const la = lum(a);

@@ -88,9 +88,16 @@ function TokenRow({
   onChange: (hex: string) => void;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
+  // The visible text is a real <label htmlFor> bound to the hex field (its
+  // click focuses the field); the hex field's aria-label keeps the fuller
+  // "{label} hex value" name — which contains the visible text, so
+  // WCAG 2.5.3 Label-in-Name holds. The color input has no visible text
+  // of its own and names itself "{label} color".
   return (
     <div className="custom-theme-row">
-      <span className="custom-theme-token-label">{label}</span>
+      <label className="custom-theme-token-label" htmlFor={`${idStem}-hex`}>
+        {label}
+      </label>
       <input
         type="color"
         className="custom-theme-swatch"
