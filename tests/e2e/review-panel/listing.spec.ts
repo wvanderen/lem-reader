@@ -175,7 +175,7 @@ async function seedCorpusAndOpenReview(
   // deterministic "Dexie is open + schema declared" signal (the library is
   // a fixtures ∪ ingested union, so it is never empty).
   await expect(
-    page.getByText("The looting of science fiction").first(),
+    page.getByText("Getting started with Lem Reader").first(),
   ).toBeVisible();
   await seedRows(page, rows);
   await page.goto(`${BASE}/#/highlights`);
@@ -287,13 +287,15 @@ test.describe("RECV-01.b review-panel listing (10-04 cross-article + filters + s
     await seedCorpusAndOpenReview(page);
 
     const select = page.getByLabel("Article", { exact: true });
-    // The select lists every article (fixtures included — the composite
-    // library); both corpus titles must be present.
+    // Issue #76 — each option's suggestion label carries the article's
+    // highlight count ("{title} ({n})"). The select lists every article
+    // (fixtures included — the composite library; zero-highlight articles
+    // stay findable), both corpus titles present with their counts.
     const optionTexts = await select.locator("option").allTextContents();
-    expect(optionTexts).toContain(TITLE_A);
-    expect(optionTexts).toContain(TITLE_B);
+    expect(optionTexts).toContain(`${TITLE_A} (2)`);
+    expect(optionTexts).toContain(`${TITLE_B} (1)`);
 
-    await select.selectOption({ label: TITLE_B });
+    await select.selectOption({ label: `${TITLE_B} (1)` });
 
     await expect(sectionByTitle(page, TITLE_B)).toBeVisible();
     await expect(

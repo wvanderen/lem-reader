@@ -305,7 +305,7 @@ export function EditMetadataDialog({
                 returns. */}
             <button
               type="button"
-              className="edit-metadata-reset"
+              className="btn btn-quiet edit-metadata-reset"
               disabled={saving}
               onClick={() => {
                 setTitleValue("");
@@ -333,7 +333,7 @@ export function EditMetadataDialog({
             />
             <button
               type="button"
-              className="edit-metadata-reset"
+              className="btn btn-quiet edit-metadata-reset"
               disabled={saving}
               onClick={() => setAuthorValue("")}
             >
@@ -362,7 +362,7 @@ export function EditMetadataDialog({
             )}
             <button
               type="button"
-              className="edit-metadata-reset"
+              className="btn btn-quiet edit-metadata-reset"
               disabled={saving}
               onClick={() => setPublishedValue("")}
             >
@@ -388,7 +388,7 @@ export function EditMetadataDialog({
             />
             <button
               type="button"
-              className="edit-metadata-reset"
+              className="btn btn-quiet edit-metadata-reset"
               disabled={saving}
               onClick={() => setSourceUrlValue("")}
             >
@@ -409,10 +409,10 @@ export function EditMetadataDialog({
               Enter a full http(s) link, or choose Reset source to keep the original.
             </p>
           )}
-          <div className="edit-metadata-actions">
+          <div className="dialog-actions edit-metadata-actions">
             <button
               type="submit"
-              className="edit-metadata-save"
+              className="btn btn-primary edit-metadata-save"
               disabled={saveBlocked || saving}
             >
               Save
@@ -422,7 +422,7 @@ export function EditMetadataDialog({
                 default; an accidental Enter cannot commit a write). */}
             <button
               type="button"
-              className="edit-metadata-cancel"
+              className="btn btn-quiet edit-metadata-cancel"
               onClick={onCancel}
               data-initial-focus
             >

@@ -36,6 +36,7 @@
 
 import { useSettings } from "../settings/SettingsContext";
 import { ModeToggle } from "./ModeToggle";
+import { GearIcon, HighlighterIcon, TagIcon, ContentsIcon } from "../ui/icons";
 
 interface HeaderProps {
   onOpenSettings: () => void;
@@ -197,12 +198,12 @@ export function Header({
         {articleMounted && (
           <button
             type="button"
-            className="toc-trigger"
+            className="btn btn-icon toc-trigger"
             onClick={onToggleToc}
             aria-label="Table of contents"
             aria-expanded={tocOpen}
           >
-            <ContentsIcon aria-hidden="true" />
+            <ContentsIcon />
           </button>
         )}
         {/*
@@ -218,13 +219,13 @@ export function Header({
         {articleMounted && (
           <button
             type="button"
-            className="tags-trigger"
+            className="btn btn-icon tags-trigger"
             onClick={onToggleTags}
             aria-label="Article tags"
             aria-haspopup="dialog"
             aria-expanded={tagsOpen}
           >
-            <TagIcon aria-hidden="true" />
+            <TagIcon />
           </button>
         )}
         {/*
@@ -237,7 +238,7 @@ export function Header({
         {articleMounted && (
           <button
             type="button"
-            className="annotations-trigger"
+            className="btn btn-icon annotations-trigger"
             onClick={onToggleAnnotations}
             aria-label={
               annotationCount > 0
@@ -247,7 +248,7 @@ export function Header({
             aria-haspopup="dialog"
             aria-expanded={drawerOpen}
           >
-            <HighlighterIcon aria-hidden="true" />
+            <HighlighterIcon />
             {annotationCount > 0 && (
               <span className="annotations-trigger-badge" aria-hidden="true">
                 {new Intl.NumberFormat(navigator.language).format(annotationCount)}
@@ -270,118 +271,15 @@ export function Header({
         )}
         <button
           type="button"
-          className="gear-button"
+          className="btn btn-icon gear-button"
           onClick={onOpenSettings}
           aria-label="Reading settings"
           aria-haspopup="dialog"
           aria-expanded={settingsOpen}
         >
-          {/* Inline-SVG gear glyph — aria-hidden because aria-label carries the
-              accessible name. Visible state change (closed vs open glyph) is the
-              secondary cue beyond aria-expanded (forced-colors safety — UI-SPEC
-              §Color contrast contract line 290). */}
-          <GearIcon aria-hidden="true" />
+          <GearIcon />
         </button>
       </div>
     </header>
-  );
-}
-
-function GearIcon({ ariaHidden }: { ariaHidden?: "true" }) {
-  return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden={ariaHidden}
-      focusable="false"
-    >
-      <circle cx="12" cy="12" r="3" />
-      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-    </svg>
-  );
-}
-
-/**
- * Phase 5 Plan 05-03 — highlighter glyph for the annotations-trigger button.
- * A quiet inline-SVG marker icon; aria-hidden because aria-label carries the
- * accessible name. Mirrors the gear-button glyph discipline.
- */
-function HighlighterIcon({ ariaHidden }: { ariaHidden?: "true" }) {
-  return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden={ariaHidden}
-      focusable="false"
-    >
-      <path d="M9 11l-6 6v3h3l6-6" />
-      <path d="M12 8l4 4" />
-      <path d="M17 3l4 4-9 9-4-4 9-9z" />
-    </svg>
-  );
-}
-
-/**
- * Plan 13-10 (G5) — tag-label glyph for the tags-trigger button. A quiet
- * inline-SVG icon (the classic tag silhouette with its pin dot); aria-hidden
- * because aria-label carries the accessible name. Mirrors the GearIcon /
- * HighlighterIcon anatomy exactly (same box, stroke, caps, joins).
- */
-function TagIcon({ ariaHidden }: { ariaHidden?: "true" }) {
-  return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden={ariaHidden}
-      focusable="false"
-    >
-      <path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z" />
-      <circle cx="7.5" cy="7.5" r="0.5" fill="currentColor" />
-    </svg>
-  );
-}
-
-/**
- * Phase 18 Plan 18-02 (D18-02) — contents glyph for the toc-trigger button.
- * The standard three-line list glyph; aria-hidden because aria-label carries
- * the accessible name. Mirrors the GearIcon/HighlighterIcon/TagIcon anatomy
- * exactly (same 20px box, viewBox 24, stroke, caps, joins).
- */
-function ContentsIcon({ ariaHidden }: { ariaHidden?: "true" }) {
-  return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden={ariaHidden}
-      focusable="false"
-    >
-      <path d="M4 6h16" />
-      <path d="M4 12h16" />
-      <path d="M4 18h16" />
-    </svg>
   );
 }

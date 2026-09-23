@@ -139,7 +139,7 @@ export function TagEntry({ articleId, tags, saveTags }: TagEntryProps) {
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={handleKeyDown}
         />
-        <button type="button" className="tag-entry-add" onClick={handleAdd}>
+        <button type="button" className="btn btn-quiet tag-entry-add" onClick={handleAdd}>
           Add tag
         </button>
       </div>

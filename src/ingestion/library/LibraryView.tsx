@@ -525,7 +525,7 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
         </h1>
         <button
           type="button"
-          className="library-add-button"
+          className="btn btn-primary library-add-button"
           onClick={() => setAddOpen(true)}
           aria-haspopup="dialog"
           aria-expanded={addOpen}
@@ -667,6 +667,7 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
                   location={locationsByArticle.get(a.id)}
                   total={totalsById.get(a.id) ?? 0}
                   timeReadLabel={timeReadByArticleId.get(a.id)}
+                  highlightCount={snapshot.highlightCountByArticleId.get(a.id)}
                   onReadingStateChange={async (read) => {
                     await setArticleReadState(a, read);
                     invalidateLibrarySnapshot();
@@ -726,7 +727,7 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
                   Nothing in this view matches your filters.{" "}
                   <button
                     type="button"
-                    className="library-clear-filters"
+                    className="btn btn-quiet library-clear-filters"
                     onClick={() => {
                       setQuery("");
                       setActiveTag(null);

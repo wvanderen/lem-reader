@@ -547,7 +547,7 @@ export function AddDialog({ open, onCancel, onBookAdded }: AddDialogProps) {
             {hasFile && (
               <button
                 type="button"
-                className="add-remove-file"
+                className="btn btn-quiet add-remove-file"
                 disabled={submitting}
                 onClick={resetFilePick}
               >
@@ -624,7 +624,7 @@ export function AddDialog({ open, onCancel, onBookAdded }: AddDialogProps) {
               )}
               <button
                 type="button"
-                className="add-dialog-cancel"
+                className="btn btn-quiet add-dialog-cancel"
                 disabled={submitting}
                 onClick={() => setBotCheckUrl(null)}
               >
@@ -632,7 +632,7 @@ export function AddDialog({ open, onCancel, onBookAdded }: AddDialogProps) {
               </button>
               <button
                 type="submit"
-                className="add-dialog-submit"
+                className="btn btn-primary add-dialog-submit"
                 disabled={
                   submitting ||
                   transcriptValue.trim().length === 0 ||
@@ -645,12 +645,12 @@ export function AddDialog({ open, onCancel, onBookAdded }: AddDialogProps) {
           </form>
         )}
 
-        <div className="add-dialog-actions">
+        <div className="dialog-actions add-dialog-actions">
           {/* D16-10 — the Cancel control is inert while a submission is in
               flight (defense in depth alongside the cancel-event gate). */}
           <button
             type="button"
-            className="add-dialog-cancel"
+            className="btn btn-quiet add-dialog-cancel"
             onClick={onCancel}
             disabled={submitting}
           >
@@ -658,7 +658,7 @@ export function AddDialog({ open, onCancel, onBookAdded }: AddDialogProps) {
           </button>
           <button
             type="submit"
-            className="add-dialog-submit"
+            className="btn btn-primary add-dialog-submit"
             form={`add-${source}-form`}
             disabled={
               submitting ||

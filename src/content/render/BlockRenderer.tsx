@@ -60,6 +60,7 @@ import { useOptionalHighlightOverlay } from "../../reader/annotations/HighlightO
 // resolution through the per-article object-URL provider. The hook is
 // optional-context (null outside a provider), consumed ONLY by FigureMedia.
 import { useAssetUrl } from "../assets/AssetProvider";
+import { ImageIcon } from "../../ui/icons";
 
 /**
  * The subset of a ResolvedHighlight the renderer needs. Defined locally so
@@ -398,24 +399,9 @@ function FigureMedia({ block }: { block: Extract<Block, { kind: "figure" }> }) {
   }
   return (
     <span className="figure-placeholder" style={{ aspectRatio }}>
-      {/* The 20px image glyph — aria-hidden decorative, mirroring the
-          header-icon stroke anatomy (viewBox 24, 1.75 stroke, round
-          joins). Color inherits the span's --ink-soft via currentColor. */}
-      <svg
-        width="20"
-        height="20"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-      >
-        <rect x="3" y="3" width="18" height="18" rx="2" />
-        <circle cx="9" cy="9" r="1.5" />
-        <path d="m21 15-3.5-3.5-9 9" />
-      </svg>
+      {/* The shared image glyph (ui/icons) — aria-hidden decorative. Color
+          inherits the span's --ink-soft via currentColor. */}
+      <ImageIcon />
       <span>{block.alt.length > 0 ? block.alt : "Image unavailable."}</span>
     </span>
   );

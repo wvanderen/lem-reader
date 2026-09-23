@@ -68,6 +68,7 @@ import {
   renderLibraryHighlights,
 } from "../portability/markdown";
 import type { HighlightEntry, HighlightSection } from "../portability/markdown";
+import { CloseIcon } from "../ui/icons";
 // Issue #8 — the ONE library read model + its invalidation call replace the
 // panel's own export-time re-lists (the four-store Promise.all + fixture
 // merge) and close the import gap: after applyImport lands, the mounted
@@ -454,11 +455,11 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
             <h2 id="settings-title">Reading settings</h2>
             <button
               type="button"
-              className="settings-close"
+              className="btn btn-icon settings-close"
               aria-label="Close reading settings"
               onClick={onClose}
             >
-              <CloseIcon aria-hidden="true" />
+              <CloseIcon />
             </button>
           </div>
 
@@ -712,7 +713,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
             <div className="settings-data-actions">
               <button
                 type="button"
-                className="settings-data-action"
+                className="btn btn-quiet settings-data-action"
                 onClick={handleExportBundle}
                 disabled={dataActionsDisabled}
               >
@@ -720,7 +721,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
               </button>
               <button
                 type="button"
-                className="settings-data-action"
+                className="btn btn-quiet settings-data-action"
                 onClick={() => importFileRef.current?.click()}
                 disabled={dataActionsDisabled}
               >
@@ -728,7 +729,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
               </button>
               <button
                 type="button"
-                className="settings-data-action"
+                className="btn btn-quiet settings-data-action"
                 onClick={handleExportHighlights}
                 disabled={dataActionsDisabled}
               >
@@ -760,7 +761,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
             {/* The Reset button's accessible name conveys the consequence (D2-04,
               UI-SPEC §Copywriting line 317); applyTheme + SettingsContext state
               flip together the moment it's clicked. */}
-            <button type="button" className="settings-reset" onClick={onReset}>
+            <button type="button" className="btn btn-quiet settings-reset" onClick={onReset}>
               Reset to defaults
             </button>
           </div>
@@ -782,22 +783,3 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   );
 }
 
-function CloseIcon({ ariaHidden }: { ariaHidden?: "true" }) {
-  return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden={ariaHidden}
-      focusable="false"
-    >
-      <line x1="18" y1="6" x2="6" y2="18" />
-      <line x1="6" y1="6" x2="18" y2="18" />
-    </svg>
-  );
-}

@@ -402,11 +402,11 @@ export function ImportPreviewDialog({
             </label>
           </div>
         )}
-        <div className="import-preview-actions">
+        <div className="dialog-actions import-preview-actions">
           {/* Destructive action — Pitfall 8: onProceed (the parent's
               applyImport bulk write) fires ONLY in onImportClick above. The
               button label names the consequence unambiguously. */}
-          <button type="button" className="import-preview-proceed" onClick={onImportClick}>
+          <button type="button" className="btn btn-destructive import-preview-proceed" onClick={onImportClick}>
             Import
           </button>
           {/* Cancel — names the actual outcome: nothing is written, local
@@ -415,7 +415,7 @@ export function ImportPreviewDialog({
               safer default per Pitfall 8). */}
           <button
             type="button"
-            className="import-preview-cancel"
+            className="btn btn-quiet import-preview-cancel"
             onClick={onCancel}
             data-initial-focus
           >

@@ -97,6 +97,11 @@ export interface LibrarySnapshot {
   /** THE grapheme-total fold: graphemeClusters(normalizeText(article), lang)
    * .length per article id (the D-05 substrate, computed once per load). */
   totalsByArticleId: Map<string, number>;
+  /** Issue #76 (decision #72) — THE per-article highlight-count fold:
+   * highlight rows per articleId, computed once per load (the library-row
+   * entry gate ≥ 1 and the review article-combobox counts read THIS map —
+   * no consumer re-folds the raw rows). */
+  highlightCountByArticleId: Map<string, number>;
   /** Article tags ∪ book tags, localeCompare-sorted (the D12-04 chip list). */
   tags: string[];
   /** EVERY persisted HighlightRecord (the review view's rows + the
@@ -120,11 +125,28 @@ export const EMPTY_LIBRARY_SNAPSHOT: LibrarySnapshot = {
   locations: [],
   latestLocationByArticleId: new Map(),
   totalsByArticleId: new Map(),
+  highlightCountByArticleId: new Map(),
   tags: [],
   highlights: [],
   notes: [],
   readingSessions: [],
 };
+
+/**
+ * THE per-article highlight-count fold (issue #76, decision #72) — one pass
+ * over the highlight rows, count per articleId. Named + exported like its
+ * sibling fold `latestLocationByArticle`: one definition, pinned directly
+ * by the fold unit suite, consumed through the snapshot.
+ */
+export function highlightCountByArticle(
+  highlights: HighlightRecord[],
+): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const highlight of highlights) {
+    counts.set(highlight.articleId, (counts.get(highlight.articleId) ?? 0) + 1);
+  }
+  return counts;
+}
 
 /**
  * loadLibrarySnapshot — the ONE whole-library read. Composes the existing
@@ -178,6 +200,10 @@ export async function loadLibrarySnapshot(): Promise<LibrarySnapshot> {
   // THE latest-location fold — readingPosition's one fold (Issue #2).
   const latestLocationByArticleId = latestLocationByArticle(locations);
 
+  // Issue #76 — THE per-article highlight-count fold (one pass per load;
+  // the library rows' review entry + the review combobox counts read it).
+  const highlightCountByArticleId = highlightCountByArticle(highlights);
+
   // Chip list = article tags ∪ book tags (D12-04), the loadAllTags
   // localeCompare discipline (moved verbatim from LibraryView).
   const tagSet = new Set<string>(tags);
@@ -195,6 +221,7 @@ export async function loadLibrarySnapshot(): Promise<LibrarySnapshot> {
     locations,
     latestLocationByArticleId,
     totalsByArticleId,
+    highlightCountByArticleId,
     tags: [...tagSet].sort((a, b) => a.localeCompare(b)),
     highlights,
     notes,

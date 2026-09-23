@@ -88,6 +88,7 @@ import { useOptionalHighlightOverlay } from "./annotations/HighlightOverlay";
 // Issue #42: the spoken-range type — the same GraphemeRange the slicer and
 // the render twins share.
 import type { GraphemeRange } from "../annotations/unifiedHighlightSlicer";
+import { ChevronLeftIcon, ChevronRightIcon } from "../ui/icons";
 
 export interface PaginatedSurfaceProps {
   /** Opt-in presentation only; never participates in page measurement. */
@@ -866,7 +867,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
           aria-disabled={isFirst}
           onClick={() => handleChevronTurn("previous")}
         >
-          <ChevronLeftIcon aria-hidden="true" />
+          <ChevronLeftIcon />
         </button>
         <button
           type="button"
@@ -875,53 +876,10 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
           aria-disabled={isLast}
           onClick={() => handleChevronTurn("next")}
         >
-          <ChevronRightIcon aria-hidden="true" />
+          <ChevronRightIcon />
         </button>
       </>
     );
   },
 );
 
-// ── Inline chevron glyphs ────────────────────────────────────────────────────
-// Mirrors Header.tsx GearIcon discipline (L42-59): inline SVG, viewBox
-// 0 0 24 24, stroke currentColor, focusable="false" so IE/Edge legacy doesn't
-// put it in the focus order. aria-hidden because the button's aria-label
-// carries the accessible name.
-
-function ChevronLeftIcon({ ariaHidden }: { ariaHidden?: "true" }) {
-  return (
-    <svg
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden={ariaHidden}
-      focusable="false"
-    >
-      <path d="M15 18l-6-6 6-6" />
-    </svg>
-  );
-}
-
-function ChevronRightIcon({ ariaHidden }: { ariaHidden?: "true" }) {
-  return (
-    <svg
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.75"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden={ariaHidden}
-      focusable="false"
-    >
-      <path d="M9 18l6-6-6-6" />
-    </svg>
-  );
-}

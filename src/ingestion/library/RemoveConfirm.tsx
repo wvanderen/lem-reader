@@ -138,13 +138,13 @@ export function RemoveConfirm({
           Remove this article? Your highlights and notes for it will also be
           removed.
         </p>
-        <div className="library-remove-confirm-actions">
+        <div className="dialog-actions library-remove-confirm-actions">
           {/* Destructive action — Pitfall 8: dexieLibrarySource.remove fires
               ONLY in onDestructiveClick above. The button label names the
               consequence unambiguously (UI-SPEC §Copywriting L262). */}
           <button
             type="button"
-            className="library-remove-destructive"
+            className="btn btn-destructive library-remove-destructive"
             onClick={onDestructiveClick}
           >
             Remove article
@@ -155,7 +155,7 @@ export function RemoveConfirm({
               button — safer default per Pitfall 8). */}
           <button
             type="button"
-            className="library-remove-cancel"
+            className="btn btn-quiet library-remove-cancel"
             onClick={onCancel}
             data-initial-focus
           >

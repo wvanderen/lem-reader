@@ -157,13 +157,13 @@ export function BookRemoveConfirm({
           {chapterCount === 1 ? "chapter" : "chapters"} and their highlights
           will be removed.
         </p>
-        <div className="book-remove-confirm-actions">
+        <div className="dialog-actions book-remove-confirm-actions">
           {/* Destructive action — Pitfall 8: booksStore.removeBook fires
               ONLY in onDestructiveClick above. The label names the outcome
               unambiguously (UI-SPEC §Copywriting). */}
           <button
             type="button"
-            className="book-remove-destructive"
+            className="btn btn-destructive book-remove-destructive"
             onClick={onDestructiveClick}
           >
             Remove book
@@ -174,7 +174,7 @@ export function BookRemoveConfirm({
               safer default per Pitfall 8). */}
           <button
             type="button"
-            className="book-remove-cancel"
+            className="btn btn-quiet book-remove-cancel"
             onClick={onCancel}
             data-initial-focus
           >

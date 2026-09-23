@@ -4,7 +4,7 @@ import { ReadingStateButton } from "./ReadingStateButton";
 import { SourceBadge } from "./SourceBadge";
 import { articleReadingState } from "./readingState";
 import { RowProgress, RowTags } from "./RowAnatomy";
-import { EditIcon, TrashIcon } from "./icons";
+import { EditIcon, HighlighterIcon, TrashIcon } from "../../ui/icons";
 import {
   effectiveTitle,
   effectiveAuthor,
@@ -57,6 +57,16 @@ interface LibraryRowProps {
    * elements, no new keyboard stops.
    */
   timeReadLabel?: string;
+  /**
+   * Issue #76 (decision #72) — this article's stored highlight count (read
+   * from the ONE snapshot fold `highlightCountByArticleId`). When ≥ 1 the
+   * row's action cluster gains the per-article review entry: an anchor to
+   * the URL-scoped review (#/highlights?article=<id>) with the count in the
+   * aria-label. 0 / undefined renders nothing — the gate IS the zero state.
+   * Book rows never receive it (chapters yes / books no — the locked entry
+   * set); chapter sub-rows do.
+   */
+  highlightCount?: number;
 }
 
 /**
@@ -76,6 +86,7 @@ export function LibraryRow({
   onReadingStateChange,
   headingLevel = 2,
   timeReadLabel,
+  highlightCount,
 }: LibraryRowProps) {
   const id = article.id;
   const ratio = location ? Math.min(1, location.graphemeOffset / total) : 0;
@@ -90,7 +101,13 @@ export function LibraryRow({
   // aria-labelledby open-link pairing is unchanged.
   const Title = headingLevel === 2 ? "h2" : "h3";
   const title = effectiveTitle(article);
-  const hasCluster = Boolean(onReadingStateChange || onEdit || onRemove);
+  // Issue #76 — the review entry gates on ≥ 1 stored highlights; its
+  // presence alone (chapter sub-rows) still earns the cluster. ONE gate
+  // derivation, read by both the cluster below and the anchor in it.
+  const hasHighlights = (highlightCount ?? 0) > 0;
+  const hasCluster = Boolean(
+    onReadingStateChange || onEdit || onRemove || hasHighlights,
+  );
   return (
     <li className="library-row" key={id}>
       <article>
@@ -147,12 +164,29 @@ export function LibraryRow({
             {onEdit && (
               <button
                 type="button"
-                className="library-row-edit"
+                className="btn btn-icon library-row-edit"
                 aria-label={`Edit metadata for ${title}`}
                 onClick={onEdit}
               >
                 <EditIcon />
               </button>
+            )}
+            {/* Issue #76 (decision #72) — the per-article review entry: an
+              anchor (native middle/new-tab semantics, the row-link
+              precedent) to the URL-scoped review. Rendered ONLY at ≥ 1
+              highlight; the count lives in the aria-label (the one
+              accessible name), the glyph is aria-hidden. Sits between edit
+              and remove so the destructive control stays last. */}
+            {hasHighlights && (
+              <a
+                className="btn btn-icon library-row-highlights"
+                href={`#/highlights?article=${id}`}
+                aria-label={`Review ${highlightCount} ${
+                  highlightCount === 1 ? "highlight" : "highlights"
+                } for ${title}`}
+              >
+                <HighlighterIcon />
+              </a>
             )}
             {/* Remove affordance — only when onRemove is wired (Plan 04). The
               glyph is the inline-SVG waste-bin below (Phase 13 G3 — real icon,
@@ -162,7 +196,7 @@ export function LibraryRow({
             {onRemove && (
               <button
                 type="button"
-                className="library-row-remove"
+                className="btn btn-icon library-row-remove"
                 aria-label={`Remove ${title} from library`}
                 onClick={onRemove}
               >

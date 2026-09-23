@@ -30,6 +30,14 @@ interface BackToLibraryProps {
    * tab has no prior in-app entry; back() would exit the app or no-op).
    */
   hasAppHistory: boolean;
+  /**
+   * Issue #76 (decision #72) — the review mount relabels the shared
+   * affordance to the honest "Back": review entries arrive from the article
+   * page (drawer/library row) as often as from the library, so the copy
+   * must not promise a destination it did not come from. Defaults to the
+   * byte-stable "Back to library" (the article mount's pinned copy).
+   */
+  label?: string;
 }
 
 /**
@@ -51,14 +59,14 @@ export function leaveArticleToLibrary(hasAppHistory: boolean): void {
   }
 }
 
-export function BackToLibrary({ hasAppHistory }: BackToLibraryProps) {
+export function BackToLibrary({ hasAppHistory, label = "Back to library" }: BackToLibraryProps) {
   return (
     <button
       type="button"
-      className="back-to-library"
+      className="btn btn-quiet back-to-library"
       onClick={() => leaveArticleToLibrary(hasAppHistory)}
     >
-      Back to library
+      {label}
     </button>
   );
 }

@@ -184,13 +184,13 @@ export function DeleteHighlightConfirm({
             {truncate(excerpt, EXCERPT_MAX_CHARS)}
           </p>
         )}
-        <div className="library-remove-confirm-actions">
+        <div className="dialog-actions library-remove-confirm-actions">
           {/* Destructive action — Pitfall 8: deleteHighlight fires ONLY in
               onDestructiveClick above. The button label names the action
               unambiguously. */}
           <button
             type="button"
-            className="library-remove-destructive"
+            className="btn btn-destructive library-remove-destructive"
             onClick={onDestructiveClick}
           >
             Remove highlight
@@ -201,7 +201,7 @@ export function DeleteHighlightConfirm({
               button — safer default per Pitfall 8 / T-10-05b). */}
           <button
             type="button"
-            className="library-remove-cancel"
+            className="btn btn-quiet library-remove-cancel"
             onClick={onCancel}
             data-initial-focus
           >

@@ -118,7 +118,9 @@ test("SC#4 — export on machine A re-imports on machine B with offsets intact",
     });
 
     /** The seeded reader preferences — distinctive values so machine B's
-     * applyPreferences write is observable (fresh device ⇒ default true). */
+     * applyPreferences write is observable (fresh device ⇒ default true).
+     * Issue #40 — the read-aloud rate rides the canonical record; its
+     * default 1 appears in every export (the seeded literal predates it). */
     const seededPrefs = {
       schemaVersion: 2,
       font: "sans",
@@ -127,6 +129,7 @@ test("SC#4 — export on machine A re-imports on machine B with offsets intact",
       spacing: "comfortable",
       theme: "dark",
       readingMode: "paginated",
+      rate: 1,
     };
 
     await seedRows(pageA, {

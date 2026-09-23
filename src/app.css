@@ -33,6 +33,34 @@
   --space-3xl: 64px;
   --touch: 44px; /* min interactive hit area */
 
+  /* Issue #77 — Soft Paper design-system vocabulary (decision #69).
+     Radius roles: 2xs = inline markers (highlight/spoken marks, the
+     restoration bar) · xs = small surface blocks (figure placeholder,
+     code blocks) · sm = controls · md = cards, pickers, popovers ·
+     lg = dialogs. --radius-pill keeps pill chips/badges grep-clean. */
+  --radius-2xs: 2px;
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+  /* The ONE elevation token — earned by top-layer surfaces only
+     (native <dialog>). No shadows anywhere else. */
+  --shadow-pop:
+    0 1px 2px rgba(31, 27, 22, 0.06), 0 8px 24px rgba(31, 27, 22, 0.1);
+  /* Semantic z ladder — dialogs stay native top-layer (no token needed). */
+  --z-content: 1;
+  --z-row-actions: 2;
+  --z-chrome: 5;
+  --z-popover: 8;
+  --z-header: 10;
+  --z-skip: 100;
+  /* Motion: state transitions ONLY (hover/press/busy) — never mount/
+     unmount (the A11Y-06 instant-mount policy stands). The global
+     reduced-motion gate at the top of this file disables all of it. */
+  --motion-speed: 220ms;
+  --motion-ease: ease-out;
+
   /* UI-SPEC §Typography font stacks */
   --font-body:
     "Iowan Old Style", "Source Serif Pro", "Source Serif 4", Georgia, Charter, "Times New Roman",
@@ -159,6 +187,140 @@ body {
 }
 /* outline: 0/none FORBIDDEN unless an equivalent replacement is supplied */
 
+/* ── Soft Paper button vocabulary (issue #77, decision #69) ───────────────
+   Four kinds — primary / quiet / icon / destructive — × the shared base.
+   Exactly ONE primary per surface. Legacy per-surface class names survive
+   in the DOM as byte-stable e2e/component-test locator hooks; ALL button
+   styling lives here (no per-surface button CSS remains).
+   States: rest / hover / active / disabled / busy. Busy keeps the label
+   and the button's width — the spinner glyph is PREPENDED by the component
+   (never swapped for the text); its rotation rides the positive
+   reduced-motion gate below. */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  min-height: var(--touch);
+  padding: 0 var(--space-md);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  line-height: 1.2;
+  cursor: pointer;
+  transition:
+    background-color var(--motion-speed) var(--motion-ease),
+    border-color var(--motion-speed) var(--motion-ease),
+    color var(--motion-speed) var(--motion-ease);
+}
+/* primary — outlined accent, soft tint fill on hover. */
+.btn-primary {
+  background: transparent;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.btn-primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent-hover);
+}
+.btn-primary:active:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+}
+/* quiet — surface-raised fill + hairline. */
+.btn-quiet {
+  background: var(--surface-raised);
+  border-color: var(--hairline);
+  color: var(--ink);
+}
+.btn-quiet:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.btn-quiet:active:not(:disabled) {
+  color: var(--accent-hover);
+}
+/* icon — the 44px raised square. aria-label REQUIRED (the glyph is
+   aria-hidden decoration). */
+.btn-icon {
+  width: var(--touch);
+  min-width: var(--touch);
+  padding: 0;
+  background: var(--surface-raised);
+  border-color: var(--hairline);
+  color: var(--ink-soft);
+}
+.btn-icon:hover:not(:disabled) {
+  color: var(--accent);
+}
+.btn-icon:active:not(:disabled) {
+  color: var(--accent-hover);
+}
+/* destructive — tinted fill + destructive text (calm, not shouting);
+   the confirm-dialog gate stays. */
+.btn-destructive {
+  background: color-mix(in srgb, var(--destructive) 10%, transparent);
+  border-color: transparent;
+  color: var(--destructive);
+}
+.btn-destructive:hover:not(:disabled) {
+  border-color: var(--destructive);
+}
+.btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.btn[aria-busy="true"] {
+  cursor: wait;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .btn[aria-busy="true"] svg:first-child {
+    animation: btn-spin 900ms linear infinite;
+  }
+  @keyframes btn-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+}
+
+/* Shared actions row: right-aligned, hairline-free (spacing rhythm only).
+   Per-dialog residuals (padding etc.) keep their own hooks. */
+.dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  justify-content: flex-end;
+  margin-top: var(--space-sm);
+}
+dialog.highlight-popover .dialog-actions {
+  margin-top: 0; /* the popover's flex column already spaces the row */
+}
+
+/* ── Soft Paper dialog anatomy (issue #77, decision #69) ──────────────────
+   Shared anatomy for every native top-layer <dialog>: a floating card on
+   the raised surface, hairline border, --radius-lg, the ONE elevation
+   token. Spacing rhythm only — NO internal rule lines (per-dialog
+   classes stay for layout; the no-shared-dialog-primitive policy stands).
+   Titles render in the UI voice at 20px. Backdrop is the shared scrim. */
+dialog {
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised);
+  color: var(--ink);
+  box-shadow: var(--shadow-pop);
+}
+dialog h2 {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 20px;
+  line-height: 1.3;
+  font-weight: 600;
+}
+dialog::backdrop {
+  background: rgba(31, 27, 22, 0.5);
+}
+
 /* Plan 21-04 (POLISH-11 audit finding F-1, D21-10): UA-default placeholder
    rendering (engine ink at ~54% opacity) measured 3.66:1 sepia / 3.74:1
    light — below the 4.5:1 AA text minimum, acute on the Library search
@@ -184,7 +346,7 @@ body {
   padding: var(--space-sm) var(--space-md);
   background: var(--surface);
   color: var(--accent);
-  z-index: 100;
+  z-index: var(--z-skip);
 }
 .skip-link:focus,
 .skip-link:focus-within {
@@ -356,7 +518,7 @@ body:has(main.paginated-main) {
   padding: var(--space-md);
   background: var(--surface-raised);
   border: 1px solid var(--hairline);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   color: var(--ink-soft);
   font-family: var(--font-ui);
   font-size: 14px;
@@ -378,7 +540,7 @@ body:has(main.paginated-main) {
   padding: var(--space-md);
   background: var(--surface-raised);
   border: 1px solid var(--hairline);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   overflow-x: auto;
 }
 .article-body pre code {
@@ -405,7 +567,7 @@ a:hover {
   margin-block: var(--space-lg);
   background: var(--surface-raised);
   border: 1px solid var(--hairline);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   padding: var(--space-md);
 }
 .disclosure > summary {
@@ -423,7 +585,7 @@ a:hover {
   padding: var(--space-lg);
   background: var(--surface-raised);
   border: 1px solid var(--hairline);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 .status p {
   margin-block: var(--space-sm);
@@ -447,7 +609,7 @@ a:hover {
   padding: var(--space-lg);
   background: var(--surface-raised);
   border: 1px solid var(--hairline);
-  border-radius: 4px;
+  border-radius: var(--radius-md);
 }
 .fixture-list li a {
   display: inline-block;
@@ -493,7 +655,7 @@ a:hover {
 .app-header {
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: var(--z-header);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -568,25 +730,6 @@ a:hover {
 /* Quiet when closed (--ink-soft); --accent only when open so the active
    affordance is conveyed beyond aria-expanded (forced-colors safety). 44px
    minimum hit area. */
-.gear-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--touch);
-  min-width: var(--touch);
-  padding: var(--space-sm);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  color: var(--ink-soft);
-  cursor: pointer;
-}
-.gear-button:hover {
-  color: var(--accent);
-}
-.gear-button[aria-expanded="true"] {
-  color: var(--accent);
-}
 
 /* ── Settings panel (D2-01 — native <dialog>/showModal) ─────────────────── */
 /* Slides over from the inline end (right in LTR). On viewports ≥ 640px the
@@ -594,14 +737,12 @@ a:hover {
    On < 640px the panel is a near-full-width sheet (small inline margin so
    the scrim is visible and dismiss-by-click is discoverable). */
 dialog.settings-panel {
-  /* Reset the user-agent dialog defaults (border / padding / background). */
   margin: 0;
   margin-inline-end: 0;
   padding: 0;
-  border: 1px solid var(--hairline);
-  border-radius: 8px 0 0 8px;
-  background: var(--surface-raised);
-  color: var(--ink);
+  /* Sheet shape — rounded on the inline-start side only (shared anatomy
+     supplies border / surface / elevation / radius-lg). */
+  border-radius: var(--radius-lg) 0 0 var(--radius-lg);
   /* Sheet geometry: near-full-width on narrow viewports, ~400px on ≥ 640px. */
   width: calc(100vw - var(--space-md));
   max-width: 420px;
@@ -613,11 +754,6 @@ dialog.settings-panel {
      animations (lines 43–52), so there is NO transition here even outside
      reduced-motion. */
 }
-dialog.settings-panel::backdrop {
-  /* Native backdrop — covers the article (which is auto-inert under
-     showModal). Sufficient alpha for legibility without competing. */
-  background: rgba(31, 27, 22, 0.4);
-}
 @media (min-width: 640px) {
   dialog.settings-panel {
     /* Anchored to the inline end with a small inset so the scrim is visible. */
@@ -626,7 +762,7 @@ dialog.settings-panel::backdrop {
     height: calc(100vh - var(--space-md));
     max-height: calc(100vh - var(--space-md));
     margin-block: var(--space-sm);
-    border-radius: 8px;
+    border-radius: var(--radius-lg);
   }
 }
 
@@ -644,29 +780,6 @@ dialog.settings-panel::backdrop {
   justify-content: space-between;
   gap: var(--space-md);
   margin-block: 0 calc(var(--space-lg) - var(--space-md));
-}
-.settings-panel-header h2 {
-  margin: 0;
-  font-family: var(--font-ui);
-  font-size: 22px;
-  line-height: 1.3;
-  font-weight: 600;
-}
-.settings-close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--touch);
-  min-width: var(--touch);
-  padding: var(--space-sm);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  color: var(--ink-soft);
-  cursor: pointer;
-}
-.settings-close:hover {
-  color: var(--accent);
 }
 
 /* ── Panel form controls (UI-SPEC §Interaction 9) ───────────────────────── */
@@ -714,7 +827,7 @@ dialog.settings-panel::backdrop {
   font-size: 16px;
   color: var(--ink);
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 .settings-row:hover {
   background: var(--surface);
@@ -746,7 +859,7 @@ dialog.settings-panel::backdrop {
   padding-inline: var(--space-sm);
   background: var(--surface);
   border: 1px solid var(--hairline);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-family: var(--font-ui);
   font-size: 16px;
   color: var(--ink);
@@ -759,24 +872,7 @@ dialog.settings-panel::backdrop {
   padding-top: var(--space-sm);
   border-top: 1px solid var(--hairline);
 }
-.settings-reset {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--touch);
-  padding-inline: var(--space-md);
-  background: transparent;
-  border: 1px solid var(--hairline);
-  border-radius: 4px;
-  font-family: var(--font-ui);
-  font-size: 16px;
-  color: var(--ink);
-  cursor: pointer;
-}
-.settings-reset:hover {
-  color: var(--accent);
-  border-color: var(--accent);
-}
+/* Issue #77 — .settings-reset rides .btn-quiet. */
 
 /* ════════════════════════════════════════════════════════════════════════
  * Phase 2 Plan 02-02 — STATE-05 recovery surfaces
@@ -822,22 +918,9 @@ dialog.settings-panel::backdrop {
   margin-block: 0;
   color: var(--ink-soft);
 }
+/* .storage-banner-dismiss rides .btn-icon (issue #77); residual: layout. */
 .storage-banner-dismiss {
   flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--touch);
-  min-width: var(--touch);
-  padding: var(--space-sm);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  color: var(--ink-soft);
-  cursor: pointer;
-}
-.storage-banner-dismiss:hover {
-  color: var(--accent);
 }
 
 /* ── Wipe-confirm alertdialog (focus-trapped, destructive) ──────────────── */
@@ -853,16 +936,9 @@ dialog.wipe-confirm {
      inline end, do not blanket-fix. */
   margin: auto;
   padding: 0;
-  border: 1px solid var(--hairline);
-  border-radius: 8px;
-  background: var(--surface-raised);
-  color: var(--ink);
   width: calc(100vw - var(--space-xl));
   max-width: 480px;
   overflow: auto;
-}
-dialog.wipe-confirm::backdrop {
-  background: rgba(31, 27, 22, 0.5);
 }
 .wipe-confirm-inner {
   display: flex;
@@ -870,89 +946,33 @@ dialog.wipe-confirm::backdrop {
   gap: var(--space-md);
   padding: var(--space-lg);
 }
-.wipe-confirm-inner h2 {
-  margin: 0;
-  font-family: var(--font-ui);
-  font-size: 22px;
-  line-height: 1.3;
-  font-weight: 600;
-}
 .wipe-confirm-inner p {
   margin: 0;
   color: var(--ink-soft);
   line-height: 1.5;
 }
-.wipe-confirm-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-sm);
-  justify-content: flex-end;
-  margin-top: var(--space-sm);
-}
-.wipe-confirm-destructive,
-.wipe-confirm-cancel {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--touch);
-  padding-inline: var(--space-md);
-  border-radius: 4px;
-  font-family: var(--font-ui);
-  font-size: 16px;
-  cursor: pointer;
-}
-/* Destructive button: --destructive border conveys consequence beyond copy
-   (forced-colors safety — UI-SPEC §Color contrast contract line 290). The
-   label "Reset local data" itself is unambiguous (UI-SPEC line 330). */
-.wipe-confirm-destructive {
-  background: transparent;
-  border: 1px solid var(--destructive);
-  color: var(--destructive);
-}
-.wipe-confirm-destructive:hover {
-  background: var(--destructive);
-  color: var(--surface);
-}
-/* Cancel button: neutral border, names the actual outcome (UI-SPEC line 331). */
-.wipe-confirm-cancel {
-  background: transparent;
-  border: 1px solid var(--hairline);
-  color: var(--ink);
-}
-.wipe-confirm-cancel:hover {
-  color: var(--accent);
-  border-color: var(--accent);
-}
+/* Issue #77 — the wipe-confirm actions row rides .dialog-actions. */
+/* Issue #77 — .wipe-confirm-destructive is .btn-destructive and
+   .wipe-confirm-cancel is .btn-quiet (shared vocabulary). The destructive
+   kind keeps consequence visible beyond copy (tinted fill + destructive
+   text; forced-colors safety — UI-SPEC §Color contrast contract line 290).
+   The confirm-dialog gate stands. */
 
 /* ── AddDialog — the focused Add-to-library modal (Plan 16-02/16-03) ──────── */
 /* Stable source selection and footer preserve orientation between inputs. */
 dialog.add-dialog {
   margin: auto;
   padding: 0;
-  border: 1px solid var(--hairline);
-  border-radius: 16px;
-  background: var(--surface-raised);
-  color: var(--ink);
   width: calc(100vw - var(--space-xl));
   max-width: 560px;
   max-height: calc(100dvh - var(--space-xl));
   overflow: auto;
-}
-dialog.add-dialog::backdrop {
-  background: rgba(31, 27, 22, 0.5);
 }
 .add-dialog-inner {
   display: flex;
   flex-direction: column;
   gap: var(--space-lg);
   padding: var(--space-xl);
-}
-.add-dialog-inner h2 {
-  margin: 0;
-  font-family: var(--font-body);
-  font-size: 28px;
-  line-height: 1.25;
-  font-weight: 600;
 }
 .add-source-picker {
   display: grid;
@@ -977,7 +997,7 @@ dialog.add-dialog::backdrop {
   min-height: var(--touch);
   padding: var(--space-sm);
   border: 1px solid var(--hairline);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   cursor: pointer;
 }
 .add-source-row:has(:checked) {
@@ -1025,7 +1045,7 @@ dialog.add-dialog::backdrop {
   padding: var(--space-md);
   background: var(--surface);
   border: 1px solid var(--hairline);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   font: 14px/1.5 var(--font-ui);
   color: var(--ink);
   caret-color: var(--accent);
@@ -1043,27 +1063,25 @@ dialog.add-dialog::backdrop {
   margin-inline-end: var(--space-sm);
   padding-inline: var(--space-sm);
   border: 1px solid var(--hairline);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: var(--surface-raised);
   color: var(--ink);
   font: inherit;
   cursor: pointer;
 }
+/* Issue #77 — .add-dialog-actions rides .dialog-actions (hairline rule
+   retired by the spacing-only anatomy); residual: the taller rhythm. */
 .add-dialog-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--space-sm);
   padding-top: var(--space-md);
-  border-top: 1px solid var(--hairline);
+  margin-top: 0;
 }
 /* The paste-transcript fallback (the youtube-bot-check companion): a calm
    guidance paragraph, a textarea, and its own action row — visually a
-   continuation of the dialog's form column, separated by the same
-   hairline rhythm. */
+   continuation of the dialog's form column, separated by spacing rhythm
+   only (no internal rule lines — the #77 dialog anatomy). */
 .add-transcript-form {
   margin-top: var(--space-md);
   padding-top: var(--space-md);
-  border-top: 1px solid var(--hairline);
 }
 .add-transcript-guidance {
   margin: 0;
@@ -1075,31 +1093,9 @@ dialog.add-dialog::backdrop {
   justify-content: flex-end;
   gap: var(--space-sm);
 }
-.add-dialog-submit,
-.add-remove-file,
-.add-dialog-cancel {
-  align-self: flex-start;
-  min-height: var(--touch);
-  padding: var(--space-sm) var(--space-md);
-  border: 1px solid var(--hairline);
-  border-radius: 8px;
-  background: transparent;
-  color: var(--ink);
-  font: 16px/1.45 var(--font-ui);
-  cursor: pointer;
-}
-.add-dialog-submit {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--surface);
-}
-.add-dialog-submit:hover:not(:disabled) {
-  background: var(--accent-hover);
-}
-.add-dialog-cancel:hover:not(:disabled),
-.add-remove-file:hover:not(:disabled) {
-  border-color: var(--accent);
-}
+/* Issue #77 — .add-dialog-submit is .btn-primary, .add-dialog-cancel /
+   .add-remove-file are .btn-quiet. The AddDialog STATUS reorganization
+   itself lands with the #70 build. */
 .add-dialog-inner button:disabled {
   opacity: 0.5;
   cursor: default;
@@ -1164,7 +1160,7 @@ dialog.add-dialog::backdrop {
   top: 48px; /* immediately under the .app-header (min-height: 48px) */
   left: 0;
   right: 0;
-  z-index: 5; /* above article content, below .app-header (z-index: 10) and
+  z-index: var(--z-chrome); /* above article content, below .app-header (z-index: 10) and
                  below dialogs (top-layer, unaffected by z-index) */
 }
 /* Full-width fill; transform changes never affect layout. */
@@ -1338,11 +1334,12 @@ dialog.add-dialog::backdrop {
   position: fixed;
   top: calc(48px + var(--space-sm));
   left: var(--space-sm);
-  z-index: 5; /* same chrome layer as .page-indicator (below the app header's 10) */
+  z-index: var(--z-chrome); /* same chrome layer as .page-indicator (below the app header's 10) */
   min-width: var(--touch);
   min-height: var(--touch); /* A11Y-07 REAL 44×44 box — no ::after hit-area shim */
   padding: 0; /* label flush at the left inset, mirroring the indicator's right */
   border: 0; /* quiet TEXT register — .page-indicator/the retired dismiss button are unboxed */
+  background: transparent; /* unbox the .btn-quiet raised fill (issue #77) */
   font-family: var(--font-ui);
   font-size: 14px;
   line-height: 1.45;
@@ -1437,7 +1434,7 @@ dialog.add-dialog::backdrop {
     -apple-system,
     sans-serif;
   color: var(--ink-soft);
-  z-index: 5; /* same layer as the hairline; below the header (10) */
+  z-index: var(--z-chrome); /* same layer as the hairline; below the header (10) */
   pointer-events: none;
 }
 
@@ -1458,7 +1455,7 @@ dialog.add-dialog::backdrop {
   background: transparent;
   border: 0;
   color: var(--ink-soft);
-  z-index: 5;
+  z-index: var(--z-chrome);
   touch-action: manipulation;
   cursor: pointer;
 }
@@ -1534,7 +1531,7 @@ dialog.add-dialog::backdrop {
   padding: var(--space-sm);
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   color: var(--ink-soft);
   cursor: pointer;
 }
@@ -1610,50 +1607,11 @@ dialog.add-dialog::backdrop {
    banner's secondary-button discipline (D18-06: the class is gone, the
    consequence register stays) so it reads as a recovery, not a
    confirmation). */
-.pagination-fallback-switch {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--touch);
-  padding-inline: var(--space-md);
-  background: transparent;
-  border: 1px solid var(--hairline);
-  border-radius: 4px;
-  color: var(--ink);
-  font-family: var(--font-ui);
-  font-size: 16px;
-  cursor: pointer;
-}
-.pagination-fallback-switch:hover {
-  color: var(--accent);
-  border-color: var(--accent);
-}
-.pagination-fallback-switch:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
-}
 /* Dismiss × button — reuses the ResumeBanner/StorageBanner dismiss geometry
    (pushed to the inline-end of the actions row). */
+/* .pagination-fallback-dismiss rides .btn-icon (issue #77); residual: layout. */
 .pagination-fallback-dismiss {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--touch);
-  min-width: var(--touch);
-  padding: var(--space-sm);
   margin-inline-start: auto; /* push to the inline-end of the actions row */
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  color: var(--ink-soft);
-  cursor: pointer;
-}
-.pagination-fallback-dismiss:hover {
-  color: var(--accent);
-}
-.pagination-fallback-dismiss:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -1690,7 +1648,7 @@ dialog.add-dialog::backdrop {
 mark.highlight {
   background-color: var(--highlight);
   color: inherit;
-  border-radius: 2px;
+  border-radius: var(--radius-2xs);
 }
 mark.highlight:focus-visible {
   outline: 2px solid var(--focus-ring);
@@ -1731,7 +1689,7 @@ mark.highlight.unresolved {
 mark.spoken-word {
   background-color: var(--spoken-highlight);
   color: inherit;
-  border-radius: 2px;
+  border-radius: var(--radius-2xs);
   text-decoration: underline;
   text-decoration-color: var(--accent);
   text-decoration-thickness: 2px;
@@ -1746,13 +1704,13 @@ mark.spoken-word {
    from the selection rect (edge-clamped + flip-below). */
 .selection-toolbar {
   position: fixed;
-  z-index: 8;
+  z-index: var(--z-popover);
   display: flex;
   flex-direction: row;
   gap: var(--space-sm);
   background: var(--surface-raised);
   border: 1px solid var(--hairline);
-  border-radius: 4px;
+  border-radius: var(--radius-md);
   /* No transition/animation property (A11Y-06 — instant mount/unmount). */
 }
 /* Two quiet text buttons (UI-SPEC §Typography — Meta/Label role). Default
@@ -1838,10 +1796,6 @@ dialog.highlight-popover {
      D13-14 — the reported visual bug). */
   margin: auto;
   padding: var(--space-lg);
-  border: 1px solid var(--hairline);
-  border-radius: 8px;
-  background: var(--surface-raised);
-  color: var(--ink);
   max-width: 380px;
   width: calc(100vw - 2 * var(--space-md));
 }
@@ -1894,7 +1848,7 @@ dialog.highlight-popover::backdrop {
   min-height: calc(var(--touch) + var(--space-md));
   padding: var(--space-sm);
   border: 1px solid var(--hairline);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--ink);
   font-family: var(--font-body);
@@ -1912,48 +1866,12 @@ dialog.highlight-popover::backdrop {
 }
 /* Actions row — Done + Delete, flex-wrap so both keep their hit area on
    narrow viewports. */
-.highlight-popover-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-sm);
-  justify-content: flex-end;
-}
-.highlight-popover-done,
-.highlight-popover-delete {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--touch);
-  padding-inline: var(--space-md);
-  border-radius: 4px;
-  font-family: var(--font-ui);
-  font-size: 14px;
-  line-height: 1;
-  font-weight: 400;
-  cursor: pointer;
-}
-/* Done button — quiet chrome, neutral --hairline border. */
-.highlight-popover-done {
-  background: transparent;
-  border: 1px solid var(--hairline);
-  color: var(--ink);
-}
-.highlight-popover-done:hover {
-  color: var(--accent);
-  border-color: var(--accent);
-}
-/* Delete button — --destructive border conveys consequence (D5-12, mirrors
-   WipeConfirm). Forced-colors safety so the consequence is conveyed beyond
-   the label. */
-.highlight-popover-delete {
-  background: transparent;
-  border: 1px solid var(--destructive);
-  color: var(--destructive);
-}
-.highlight-popover-delete:hover {
-  background: var(--destructive);
-  color: var(--surface);
-}
+/* Issue #77 — .highlight-popover-actions rides .dialog-actions. */
+/* Issue #77 — .highlight-popover-done is .btn-primary (the one primary on
+   the editor), .highlight-popover-delete and .highlight-popover-destructive
+   are .btn-destructive (consequence beyond copy — D5-12, mirrors
+   WipeConfirm), .highlight-popover-cancel is .btn-quiet. The delete
+   confirm-dialog gate stands. */
 
 /* ── Delete confirm prompt (D5-12, mirrors WipeConfirm L120-143) ────────────── */
 .highlight-popover-confirm {
@@ -1968,70 +1886,12 @@ dialog.highlight-popover::backdrop {
   font-weight: 600;
   color: var(--ink);
 }
-/* Confirm buttons mirror .wipe-confirm-destructive/.wipe-confirm-cancel geometry
-   exactly (Pitfall 8 — forced-colors safety + non-destructive default focus). */
-.highlight-popover-destructive,
-.highlight-popover-cancel {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--touch);
-  padding-inline: var(--space-md);
-  border-radius: 4px;
-  font-family: var(--font-ui);
-  font-size: 14px;
-  line-height: 1;
-  font-weight: 400;
-  cursor: pointer;
-}
-.highlight-popover-destructive {
-  background: transparent;
-  border: 1px solid var(--destructive);
-  color: var(--destructive);
-}
-.highlight-popover-destructive:hover {
-  background: var(--destructive);
-  color: var(--surface);
-}
-.highlight-popover-cancel {
-  background: transparent;
-  border: 1px solid var(--hairline);
-  color: var(--ink);
-}
-.highlight-popover-cancel:hover {
-  color: var(--accent);
-  border-color: var(--accent);
-}
 
 /* ── Annotations trigger (D5-09, UI-SPEC §Interaction 30) ───────────────────── */
 /* Mirrors .gear-button geometry EXACTLY: 44×44 hit area, transparent bg,
    --ink-soft default, --accent ONLY when [aria-expanded="true"]. The header
    does NOT grow — the three controls (annotations-trigger + mode-toggle +
    gear) share the same 44×44 geometry; .header-controls gap stays --space-sm. */
-.annotations-trigger {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--touch);
-  min-width: var(--touch);
-  padding: var(--space-sm);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  color: var(--ink-soft);
-  cursor: pointer;
-}
-.annotations-trigger:hover {
-  color: var(--accent);
-}
-.annotations-trigger[aria-expanded="true"] {
-  color: var(--accent);
-}
-.annotations-trigger:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
-}
 /* Count badge — superscript, --ink-soft. aria-hidden because the count is
    already in the button's aria-label (no visually-hidden duplicate). */
 .annotations-trigger-badge {
@@ -2055,30 +1915,6 @@ dialog.highlight-popover::backdrop {
    D21-05 (POLISH-08): this button is the NAMED ANCHOR for .tag-popover —
    anchor-name is document-scoped, so the DOM split (trigger in Header,
    popover mounted in ArticleView) is a non-issue. */
-.tags-trigger {
-  anchor-name: --tags-trigger;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--touch);
-  min-width: var(--touch);
-  padding: var(--space-sm);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  color: var(--ink-soft);
-  cursor: pointer;
-}
-.tags-trigger:hover {
-  color: var(--accent);
-}
-.tags-trigger[aria-expanded="true"] {
-  color: var(--accent);
-}
-.tags-trigger:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
-}
 /* .tag-popover — the ArticleView-owned surface wrapping the byte-unchanged
    TagEntry. The popover="auto" interaction contract is RETAINED byte-stable
    (D21-05): top layer (above everything — no stacking-index needed) with
@@ -2113,7 +1949,7 @@ dialog.highlight-popover::backdrop {
   padding: var(--space-md);
   background: var(--surface-raised);
   border: 1px solid var(--hairline);
-  border-radius: 4px;
+  border-radius: var(--radius-md);
   box-sizing: border-box;
   width: min(420px, calc(100vw - 2 * var(--space-md)));
 }
@@ -2135,18 +1971,14 @@ dialog.annotations-drawer {
   margin: 0;
   margin-inline-end: 0;
   padding: 0;
-  border: 1px solid var(--hairline);
-  border-radius: 8px 0 0 8px;
-  background: var(--surface-raised);
-  color: var(--ink);
+  /* Sheet shape — rounded on the inline-start side only (shared anatomy
+     supplies border / surface / elevation / radius-lg). */
+  border-radius: var(--radius-lg) 0 0 var(--radius-lg);
   width: calc(100vw - var(--space-md));
   max-width: 420px;
   height: 100vh;
   max-height: 100vh;
   overflow-y: auto;
-}
-dialog.annotations-drawer::backdrop {
-  background: rgba(31, 27, 22, 0.4);
 }
 @media (min-width: 640px) {
   dialog.annotations-drawer {
@@ -2155,7 +1987,7 @@ dialog.annotations-drawer::backdrop {
     height: calc(100vh - var(--space-md));
     max-height: calc(100vh - var(--space-md));
     margin-block: var(--space-sm);
-    border-radius: 8px;
+    border-radius: var(--radius-lg);
   }
 }
 
@@ -2172,13 +2004,6 @@ dialog.annotations-drawer::backdrop {
   justify-content: space-between;
   gap: var(--space-md);
   margin-block: 0 calc(var(--space-lg) - var(--space-md));
-}
-.annotations-drawer-header h2 {
-  margin: 0;
-  font-family: var(--font-ui);
-  font-size: 22px;
-  line-height: 1.3;
-  font-weight: 600;
 }
 .annotations-drawer-count {
   margin-inline-start: var(--space-sm);
@@ -2219,51 +2044,16 @@ dialog.annotations-drawer::backdrop {
   padding: var(--space-lg);
   background: var(--surface-raised);
   border: 1px solid var(--hairline);
-  border-radius: 4px;
+  border-radius: var(--radius-md);
 }
-/* G3 (Phase 13 user review) — quiet destructive icon button for the row
-   remove affordance, mirroring the × chip-remove discipline: transparent
-   rest state, 44px touch box, --ink-soft at rest, --destructive on hover
-   so consequence is conveyed beyond the accessible name (forced-colors
-   safe: shape + name carry the meaning). Zero motion properties. */
-.library-row-remove {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--touch);
-  min-width: var(--touch);
-  padding: 0;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  color: var(--ink-soft);
-  cursor: pointer;
-}
-.library-row-remove:hover {
+/* G3 (Phase 13 user review) — Issue #77: .library-row-remove /
+   .library-row-edit ride .btn-icon. The remove affordance keeps its
+   --destructive hover hint so consequence is conveyed beyond the
+   accessible name (forced-colors safe: shape + name carry the meaning);
+   the edit affordance keeps the accent register. */
+.library-row-remove:hover:not(:disabled) {
   color: var(--destructive);
   border-color: var(--destructive);
-}
-/* Plan 17-02 (D17-01) — quiet edit-metadata icon button for the row,
-   cloning the .library-row-remove discipline above with the ACCENT (not
-   destructive) on hover: transparent rest state, 44px touch box,
-   --ink-soft at rest, --accent on hover so the affordance reads as
-   non-destructive. Zero motion properties (POLISH-07). */
-.library-row-edit {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--touch);
-  min-width: var(--touch);
-  padding: 0;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  color: var(--ink-soft);
-  cursor: pointer;
-}
-.library-row-edit:hover {
-  color: var(--accent);
-  border-color: var(--accent);
 }
 
 /* SourceBadge — .meta typography; no border, no fill (UI-SPEC §SourceBadge).
@@ -2283,7 +2073,7 @@ dialog.annotations-drawer::backdrop {
   margin: var(--space-xs) 0 0 0;
   padding: 0 var(--space-sm);
   border: 1px solid var(--hairline);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-family: var(--font-ui);
   font-size: 13px;
   color: var(--ink-soft);
@@ -2329,7 +2119,7 @@ dialog.annotations-drawer::backdrop {
   padding: var(--space-md);
   background: var(--surface-raised);
   border: 1px solid var(--hairline);
-  border-radius: 4px;
+  border-radius: var(--radius-md);
 }
 .continue-reading-row a {
   /* Issue #67 review — the locked rail card spec: ONE-line clamped title.
@@ -2375,7 +2165,7 @@ dialog.annotations-drawer::backdrop {
   padding: var(--space-sm) var(--space-md);
   background: var(--surface-raised);
   border: 1px solid var(--hairline);
-  border-radius: 4px;
+  border-radius: var(--radius-md);
 }
 .library-toolbar .view-switcher {
   margin: 0;
@@ -2431,7 +2221,7 @@ dialog.annotations-drawer::backdrop {
   padding: var(--space-sm);
   background: var(--surface);
   border: 1px solid var(--hairline);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-family: var(--font-ui);
   font-size: 14px;
   line-height: 1.45;
@@ -2456,7 +2246,7 @@ dialog.annotations-drawer::backdrop {
   padding: var(--space-xs) var(--space-sm);
   background: var(--surface-raised);
   border: 1px solid var(--hairline);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-family: var(--font-ui);
   font-size: 14px;
   line-height: 1.45;
@@ -2501,25 +2291,9 @@ dialog.annotations-drawer::backdrop {
   line-height: 1.45;
   color: var(--ink-soft);
 }
+/* Issue #77 — .library-clear-filters rides .btn-quiet. */
 .library-clear-filters {
-  display: inline-flex;
-  align-items: center;
-  min-height: var(--touch);
-  padding-inline: var(--space-xs);
   margin-inline-start: var(--space-sm);
-  background: transparent;
-  border: 1px solid var(--hairline);
-  border-radius: 4px;
-  font-family: var(--font-ui);
-  font-size: 14px;
-  line-height: 1.45;
-  color: var(--ink-soft);
-  cursor: pointer;
-  /* :focus-visible inherits the global 2px ring rule (app.css). */
-}
-.library-clear-filters:hover {
-  color: var(--accent);
-  border-color: var(--accent);
 }
 
 /* ── Per-view membership empty states (Plan 14-02 — D14-26) ──────────────── */
@@ -2574,25 +2348,7 @@ dialog.annotations-drawer::backdrop {
    discipline: hairline border, --ink at rest, --accent on hover, 44px
    --touch minimum, inherited global focus-visible ring). Token-only;
    zero motion properties. */
-.library-add-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--touch);
-  padding-inline: var(--space-md);
-  background: transparent;
-  border: 1px solid var(--hairline);
-  border-radius: 4px;
-  font-family: var(--font-ui);
-  font-size: 16px;
-  color: var(--ink);
-  cursor: pointer;
-  /* :focus-visible inherits the global 2px ring rule (app.css). */
-}
-.library-add-button:hover {
-  color: var(--accent);
-  border-color: var(--accent);
-}
+/* Issue #77 — .library-add-button is the library surface's ONE .btn-primary. */
 .library-section {
   margin-block: var(--space-xl) 0;
 }
@@ -2615,7 +2371,7 @@ main#main > .status {
   margin-block: var(--space-md) 0;
   padding: var(--space-sm) var(--space-md);
   border: 1px solid var(--hairline);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 .tag-entry legend {
   padding-inline: var(--space-xs);
@@ -2649,7 +2405,7 @@ main#main > .status {
   padding: 0 var(--space-xs);
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-family: var(--font-ui);
   font-size: 16px;
   line-height: 1;
@@ -2673,7 +2429,7 @@ main#main > .status {
   padding: var(--space-sm);
   background: var(--surface);
   border: 1px solid var(--hairline);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-family: var(--font-ui);
   font-size: 14px;
   line-height: 1.45;
@@ -2682,24 +2438,6 @@ main#main > .status {
 }
 /* Add button — neutral hairline border, accent on hover (the quiet-button
    token discipline shared with .tag-entry-add). */
-.tag-entry-add {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--touch);
-  padding-inline: var(--space-md);
-  background: transparent;
-  border: 1px solid var(--hairline);
-  border-radius: 4px;
-  font-family: var(--font-ui);
-  font-size: 16px;
-  color: var(--ink);
-  cursor: pointer;
-}
-.tag-entry-add:hover {
-  color: var(--accent);
-  border-color: var(--accent);
-}
 /* The .status live region inside .tag-entry reuses the global .status rule
    (Plan 02 — polite/atomic). A small inline variant here keeps the failure
    copy calm and local to the fieldset. */
@@ -2720,16 +2458,9 @@ dialog.library-remove-confirm {
      root cause as the wipe-confirm fix; Plan 13-03 POLISH-04). */
   margin: auto;
   padding: 0;
-  border: 1px solid var(--hairline);
-  border-radius: 8px;
-  background: var(--surface-raised);
-  color: var(--ink);
   width: calc(100vw - var(--space-xl));
   max-width: 480px;
   overflow: auto;
-}
-dialog.library-remove-confirm::backdrop {
-  background: rgba(31, 27, 22, 0.5);
 }
 .library-remove-confirm-inner {
   display: flex;
@@ -2737,59 +2468,16 @@ dialog.library-remove-confirm::backdrop {
   gap: var(--space-md);
   padding: var(--space-lg);
 }
-.library-remove-confirm-inner h2 {
-  margin: 0;
-  font-family: var(--font-ui);
-  font-size: 22px;
-  line-height: 1.3;
-  font-weight: 600;
-}
 .library-remove-confirm-inner p {
   margin: 0;
   color: var(--ink-soft);
   line-height: 1.5;
 }
-.library-remove-confirm-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-sm);
-  justify-content: flex-end;
-  margin-top: var(--space-sm);
-}
-.library-remove-destructive,
-.library-remove-cancel {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--touch);
-  padding-inline: var(--space-md);
-  border-radius: 4px;
-  font-family: var(--font-ui);
-  font-size: 16px;
-  cursor: pointer;
-}
-/* Destructive button: --destructive border conveys consequence beyond copy
-   (forced-colors safety). The label "Remove article" itself is unambiguous
-   (UI-SPEC §Copywriting L262). */
-.library-remove-destructive {
-  background: transparent;
-  border: 1px solid var(--destructive);
-  color: var(--destructive);
-}
-.library-remove-destructive:hover {
-  background: var(--destructive);
-  color: var(--surface);
-}
-/* Cancel button: neutral border, names the actual outcome (Keep article). */
-.library-remove-cancel {
-  background: transparent;
-  border: 1px solid var(--hairline);
-  color: var(--ink);
-}
-.library-remove-cancel:hover {
-  color: var(--accent);
-  border-color: var(--accent);
-}
+/* Issue #77 — .library-remove-confirm-actions rides .dialog-actions. */
+/* Issue #77 — .library-remove-destructive is .btn-destructive (consequence
+   beyond copy, forced-colors safe — the label "Remove article" itself is
+   unambiguous, UI-SPEC §Copywriting L262) and .library-remove-cancel is
+   .btn-quiet. The confirm alertdialog gate stands. */
 
 /* ── EditMetadataDialog (Plan 17-02 — reader-owned metadata edit) ────────── */
 /* Structural clone of .library-remove-confirm + .add-dialog geometry (the
@@ -2801,29 +2489,15 @@ dialog.library-remove-confirm::backdrop {
 dialog.edit-metadata {
   margin: auto; /* UA dialog:modal centering (D13-14 — the POLISH-04 fix) */
   padding: 0;
-  border: 1px solid var(--hairline);
-  border-radius: 8px;
-  background: var(--surface-raised);
-  color: var(--ink);
   width: calc(100vw - var(--space-xl)); /* safe at 320px */
   max-width: 480px;
   overflow: auto;
-}
-dialog.edit-metadata::backdrop {
-  background: rgba(31, 27, 22, 0.5);
 }
 .edit-metadata-inner {
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
   padding: var(--space-lg);
-}
-.edit-metadata-inner h2 {
-  margin: 0;
-  font-family: var(--font-ui);
-  font-size: 22px;
-  line-height: 1.3;
-  font-weight: 600;
 }
 .edit-metadata-form {
   display: flex;
@@ -2852,7 +2526,7 @@ dialog.edit-metadata::backdrop {
   padding: var(--space-sm);
   background: var(--surface);
   border: 1px solid var(--hairline);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-family: var(--font-ui);
   font-size: 14px;
   line-height: 1.45;
@@ -2862,24 +2536,10 @@ dialog.edit-metadata::backdrop {
 /* Quiet per-field Reset — the .library-clear-filters token treatment:
    transparent rest, hairline border, --ink-soft at rest, --accent on
    hover, 44px --touch minimum. */
-.edit-metadata-reset {
-  display: inline-flex;
-  align-items: center;
-  min-height: var(--touch);
-  padding-inline: var(--space-xs);
-  background: transparent;
-  border: 1px solid var(--hairline);
-  border-radius: 4px;
-  font-family: var(--font-ui);
-  font-size: 14px;
-  line-height: 1.45;
-  color: var(--ink-soft);
-  cursor: pointer;
-}
-.edit-metadata-reset:hover:not(:disabled) {
-  color: var(--accent);
-  border-color: var(--accent);
-}
+/* Issue #77 — the edit-metadata exemplar rides the shared vocabulary:
+   .edit-metadata-save is .btn-primary (the committing affordance — the
+   deliberate anti-destructive; edit is not destructive), the CANCEL and
+   per-field RESET buttons are .btn-quiet. */
 /* The calm blank-title explanation line (D17-04). */
 .edit-metadata-hint {
   margin: 0;
@@ -2887,61 +2547,6 @@ dialog.edit-metadata::backdrop {
   font-size: 14px;
   line-height: 1.45;
   color: var(--ink-soft);
-}
-.edit-metadata-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-sm);
-  justify-content: flex-end;
-  margin-top: var(--space-sm);
-}
-.edit-metadata-save,
-.edit-metadata-cancel {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--touch);
-  padding-inline: var(--space-md);
-  border-radius: 4px;
-  font-family: var(--font-ui);
-  font-size: 16px;
-  cursor: pointer;
-}
-/* Save: --accent border conveys the committing affordance (the deliberate
-   anti-.library-remove-destructive — edit is not destructive). */
-.edit-metadata-save {
-  background: transparent;
-  border: 1px solid var(--accent);
-  color: var(--accent);
-}
-.edit-metadata-save:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-.edit-metadata-cancel {
-  background: transparent;
-  border: 1px solid var(--hairline);
-  color: var(--ink);
-}
-.edit-metadata-cancel:hover:not(:disabled) {
-  color: var(--accent);
-  border-color: var(--accent);
-}
-.annotations-drawer-close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--touch);
-  min-width: var(--touch);
-  padding: var(--space-sm);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  color: var(--ink-soft);
-  cursor: pointer;
-}
-.annotations-drawer-close:hover {
-  color: var(--accent);
 }
 
 /* ── Drawer list (reading order — D5-09) ────────────────────────────────────── */
@@ -2956,7 +2561,6 @@ dialog.edit-metadata::backdrop {
   text-align: start;
   padding: var(--space-md);
   border: none;
-  border-radius: 0;
   background: transparent;
   color: inherit;
   cursor: pointer;
@@ -3069,29 +2673,15 @@ dialog.import-preview {
      root cause as the wipe-confirm fix; Plan 13-03 POLISH-04). */
   margin: auto;
   padding: 0;
-  border: 1px solid var(--hairline);
-  border-radius: 8px;
-  background: var(--surface-raised);
-  color: var(--ink);
   width: calc(100vw - var(--space-xl));
   max-width: 480px;
   overflow: auto;
-}
-dialog.import-preview::backdrop {
-  background: rgba(31, 27, 22, 0.5);
 }
 .import-preview-inner {
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
   padding: var(--space-lg);
-}
-.import-preview-inner h2 {
-  margin: 0;
-  font-family: var(--font-ui);
-  font-size: 22px;
-  line-height: 1.3;
-  font-weight: 600;
 }
 .import-preview-body {
   display: flex;
@@ -3135,7 +2725,7 @@ dialog.import-preview::backdrop {
   padding-inline: var(--space-sm);
   background: var(--surface);
   border: 1px solid var(--hairline);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-family: var(--font-ui);
   font-size: 16px;
   color: var(--ink);
@@ -3158,47 +2748,10 @@ dialog.import-preview::backdrop {
   height: 18px;
   accent-color: var(--accent);
 }
-.import-preview-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-sm);
-  justify-content: flex-end;
-  margin-top: var(--space-sm);
-}
-.import-preview-proceed,
-.import-preview-cancel {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--touch);
-  padding-inline: var(--space-md);
-  border-radius: 4px;
-  font-family: var(--font-ui);
-  font-size: 16px;
-  cursor: pointer;
-}
-/* Proceed = the destructive bulk write: --destructive border conveys the
-   consequence beyond copy (forced-colors safety — same rule as
-   .library-remove-destructive). */
-.import-preview-proceed {
-  background: transparent;
-  border: 1px solid var(--destructive);
-  color: var(--destructive);
-}
-.import-preview-proceed:hover {
-  background: var(--destructive);
-  color: var(--surface);
-}
-/* Cancel: neutral border, names the actual outcome (nothing is written). */
-.import-preview-cancel {
-  background: transparent;
-  border: 1px solid var(--hairline);
-  color: var(--ink);
-}
-.import-preview-cancel:hover {
-  color: var(--accent);
-  border-color: var(--accent);
-}
+/* Issue #77 — .import-preview-actions rides .dialog-actions. */
+/* Issue #77 — .import-preview-proceed is .btn-destructive (the destructive
+   bulk write: tinted fill + destructive text carries the consequence beyond
+   copy, forced-colors safe) and .import-preview-cancel is .btn-quiet. */
 
 /* ── SettingsPanel "Your data" cluster (Plan 09-05, D9-10) ──────────────── */
 /* Reuses .settings-section (fieldset rhythm) — only adds the button-group
@@ -3206,33 +2759,12 @@ dialog.import-preview::backdrop {
    chrome). The .status live region inside the cluster reuses the global
    .status rule's role/aria contract but sits inline like .tag-entry .status
    (small, local to the fieldset). */
+/* Issue #77 — .settings-data-action rides .btn-quiet. */
 .settings-data-actions {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: var(--space-sm);
-}
-.settings-data-action {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--touch);
-  padding-inline: var(--space-md);
-  background: transparent;
-  border: 1px solid var(--hairline);
-  border-radius: 4px;
-  font-family: var(--font-ui);
-  font-size: 16px;
-  color: var(--ink);
-  cursor: pointer;
-}
-.settings-data-action:hover {
-  color: var(--accent);
-  border-color: var(--accent);
-}
-.settings-data-action:disabled {
-  opacity: 0.5;
-  cursor: default;
 }
 .settings-data .status {
   margin-block: 0;
@@ -3244,28 +2776,7 @@ dialog.import-preview::backdrop {
 /* ── ArticleView per-article "Export highlights" (Plan 09-05, D9-06) ─────── */
 /* Mirrors .tag-entry-add geometry — quiet hairline chrome until activated,
    44px touch target, accent on hover only. INERT at mount (Pitfall 8-5). */
-.article-export-highlights {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--touch);
-  padding-inline: var(--space-md);
-  background: transparent;
-  border: 1px solid var(--hairline);
-  border-radius: 4px;
-  font-family: var(--font-ui);
-  font-size: 16px;
-  color: var(--ink);
-  cursor: pointer;
-}
-.article-export-highlights:hover {
-  color: var(--accent);
-  border-color: var(--accent);
-}
-.article-export-highlights:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
+/* Issue #77 — .article-export-highlights rides .btn-quiet. */
 
 /* ════════════════════════════════════════════════════════════════════════
  * Phase 10 Plan 10-02 — Annotation review panel surface (ReviewView at
@@ -3321,7 +2832,7 @@ dialog.import-preview::backdrop {
   padding-inline: var(--space-sm);
   background: var(--surface);
   border: 1px solid var(--hairline);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-family: var(--font-ui);
   /* POLISH-07 (D15-03) intentional difference: 16px form-control register
      (the .settings-row / .import-preview select / dialog-button register) —
@@ -3394,7 +2905,7 @@ dialog.import-preview::backdrop {
   text-align: start;
   background: var(--surface-raised);
   border: 1px solid var(--hairline);
-  border-radius: 4px;
+  border-radius: var(--radius-md);
   font-family: var(--font-ui);
   font-size: 16px;
   color: var(--ink);
@@ -3457,7 +2968,7 @@ dialog.import-preview::backdrop {
   display: inline-block;
   padding: var(--space-xs) var(--space-sm);
   border: 1px solid var(--hairline);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-family: var(--font-ui);
   font-size: 12px;
   color: var(--ink-soft);
@@ -3492,23 +3003,7 @@ dialog.import-preview::backdrop {
   justify-content: flex-end;
   gap: var(--space-sm);
 }
-.review-row-action {
-  display: inline-flex;
-  align-items: center;
-  min-height: var(--touch);
-  padding-inline: var(--space-sm);
-  border: 1px solid var(--hairline);
-  border-radius: 4px;
-  background: var(--surface);
-  font-family: var(--font-ui);
-  font-size: 14px;
-  color: var(--ink-soft);
-  cursor: pointer;
-}
-.review-row-action:hover {
-  color: var(--accent);
-  border-color: var(--accent);
-}
+/* Issue #77 — .review-row-action rides .btn-quiet. */
 /* The remove affordable hints its consequence on hover only — the label +
  * the alertdialog copy carry the actual warning (never color alone). */
 .review-row-action-remove:hover {
@@ -3543,7 +3038,7 @@ h2.review-note-title {
   padding: var(--space-lg);
   background: var(--surface-raised);
   border: 1px solid var(--hairline);
-  border-radius: 4px;
+  border-radius: var(--radius-md);
 }
 /* The collapsed card's primary link (the title, issue #67) rides the
    shared .library-card-link treatment — the 44px touch discipline comes
@@ -3552,23 +3047,7 @@ h2.review-note-title {
 /* The disclosure chevron — quiet hairline button, 44px touch target,
    inline with the card's meta cluster. aria-expanded conveys state beyond
    the glyph rotation (forced-colors safety). */
-.book-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--touch);
-  min-width: var(--touch);
-  padding: 0 var(--space-xs);
-  background: transparent;
-  border: 1px solid var(--hairline);
-  border-radius: 4px;
-  color: var(--ink-soft);
-  cursor: pointer;
-}
-.book-toggle:hover {
-  color: var(--accent);
-  border-color: var(--accent);
-}
+/* Issue #77 — .book-toggle rides .btn-icon. */
 .book-chevron {
   display: inline-block;
   font-size: 16px;
@@ -3615,16 +3094,9 @@ h2.review-note-title {
 dialog.book-remove-confirm {
   margin: 0;
   padding: 0;
-  border: 1px solid var(--hairline);
-  border-radius: 8px;
-  background: var(--surface-raised);
-  color: var(--ink);
   width: calc(100vw - var(--space-xl));
   max-width: 480px;
   overflow: auto;
-}
-dialog.book-remove-confirm::backdrop {
-  background: rgba(31, 27, 22, 0.5);
 }
 .book-remove-confirm-inner {
   display: flex;
@@ -3632,44 +3104,12 @@ dialog.book-remove-confirm::backdrop {
   gap: var(--space-md);
   padding: var(--space-lg);
 }
-.book-remove-confirm-inner h2 {
-  margin: 0;
-  font-family: var(--font-ui);
-  font-size: 22px;
-  line-height: 1.3;
-  font-weight: 600;
-}
 .book-remove-confirm-inner p {
   margin: 0;
   color: var(--ink-soft);
   line-height: 1.5;
 }
-.book-remove-confirm-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-sm);
-  justify-content: flex-end;
-  margin-top: var(--space-sm);
-}
-.book-remove-destructive,
-.book-remove-cancel {
-  min-height: var(--touch);
-  padding: 0 var(--space-md);
-  border-radius: 4px;
-  font-family: var(--font-ui);
-  font-size: 14px;
-  cursor: pointer;
-}
-.book-remove-destructive {
-  border: 1px solid var(--destructive);
-  background: transparent;
-  color: var(--destructive);
-}
-.book-remove-cancel {
-  border: 1px solid var(--hairline);
-  background: var(--surface);
-  color: var(--ink);
-}
+/* Issue #77 — .book-remove-confirm-actions rides .dialog-actions. */
 
 /* Book disclosure animation — gated behind prefers-reduced-motion:
    no-preference (the POSITIVE gate; the global reduce gate at the top of
@@ -3745,7 +3185,7 @@ dialog.book-remove-confirm::backdrop {
   right: 0;
   margin: 0;
   text-align: center;
-  z-index: 5; /* same chrome layer as the page indicator + chevrons */
+  z-index: var(--z-chrome); /* same chrome layer as the page indicator + chevrons */
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -3761,24 +3201,7 @@ dialog.book-remove-confirm::backdrop {
  * trivially satisfied; wording kept free of greppable property names per
  * the 13-01 comment discipline).
  * ════════════════════════════════════════════════════════════════════════ */
-.back-to-library {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--touch);
-  padding-inline: var(--space-md);
-  background: transparent;
-  border: 1px solid var(--hairline);
-  border-radius: 4px;
-  font-family: var(--font-ui);
-  font-size: 16px;
-  color: var(--ink);
-  cursor: pointer;
-}
-.back-to-library:hover {
-  color: var(--accent);
-  border-color: var(--accent);
-}
+/* Issue #77 — .back-to-library rides .btn-quiet. */
 /* Paginated mode overrides this register in the Phase 4 paginated-surface
    section (the 260819-qbq quiet fixed 44px box near .page-viewport); this
    rule remains the home for scrolling mode + ReviewView. */
@@ -3805,24 +3228,6 @@ dialog.book-remove-confirm::backdrop {
  * mid-book chapter's final page shows BOTH the Next chapter link and the
  * button, the :has() coexistence bump stacks the link above the button.
  * ════════════════════════════════════════════════════════════════════════ */
-.mark-read-close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--touch);
-  padding-inline: var(--space-md);
-  background: transparent;
-  border: 1px solid var(--hairline);
-  border-radius: 4px;
-  font-family: var(--font-ui);
-  font-size: 16px;
-  color: var(--ink);
-  cursor: pointer;
-}
-.mark-read-close:hover {
-  color: var(--accent);
-  border-color: var(--accent);
-}
 .mark-read-close-flow {
   margin: var(--space-lg) 0 0 0;
 }
@@ -3833,7 +3238,7 @@ dialog.book-remove-confirm::backdrop {
   right: 0;
   width: fit-content;
   margin-inline: auto;
-  z-index: 5; /* same chrome layer as the page indicator + chevrons */
+  z-index: var(--z-chrome); /* same chrome layer as the page indicator + chevrons */
 }
 .article-body:has(.mark-read-close-page) .chapter-nav-page {
   bottom: calc(var(--space-xs) + 48px); /* touch-target band: stack, never overlap */
@@ -3868,7 +3273,7 @@ dialog.book-remove-confirm::backdrop {
   right: 0;
   display: flex;
   justify-content: center;
-  z-index: 5; /* same chrome layer as the page indicator + chevrons */
+  z-index: var(--z-chrome); /* same chrome layer as the page indicator + chevrons */
   pointer-events: none; /* the bar box never blocks content; cluster re-arms */
 }
 .readaloud-cluster {
@@ -3883,30 +3288,8 @@ dialog.book-remove-confirm::backdrop {
   padding: var(--space-xs) var(--space-md);
   background: var(--surface-raised);
   border: 1px solid var(--hairline);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   pointer-events: auto;
-}
-.readaloud-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--touch);
-  padding-inline: var(--space-md);
-  background: transparent;
-  border: 1px solid var(--hairline);
-  border-radius: 4px;
-  font-family: var(--font-ui);
-  font-size: 16px;
-  color: var(--ink);
-  cursor: pointer;
-}
-.readaloud-btn:hover:enabled {
-  color: var(--accent);
-  border-color: var(--accent);
-}
-.readaloud-btn:disabled {
-  color: var(--ink-soft);
-  cursor: default;
 }
 .readaloud-follow,
 .readaloud-rate {
@@ -4130,7 +3513,7 @@ main:has(.readaloud-bar) .article-body:has(.mark-read-close-page) .chapter-nav-p
   padding: var(--space-lg) var(--space-md);
   background: var(--surface-raised);
   border: 1px solid var(--hairline);
-  border-radius: 4px;
+  border-radius: var(--radius-md);
   font-family: var(--font-ui);
   color: var(--ink);
 }
@@ -4214,29 +3597,6 @@ main:has(.readaloud-bar) .article-body:has(.mark-read-close-page) .chapter-nav-p
  * transparent border, 4px radius, --ink-soft rest, --accent on hover and
  * ONLY when [aria-expanded="true"] (the quiet-chrome open-state
  * discipline). NO aria-haspopup — the panel is not a dialog (Pitfall 3). */
-.toc-trigger {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--touch);
-  min-width: var(--touch);
-  padding: var(--space-sm);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  color: var(--ink-soft);
-  cursor: pointer;
-}
-.toc-trigger:hover {
-  color: var(--accent);
-}
-.toc-trigger[aria-expanded="true"] {
-  color: var(--accent);
-}
-.toc-trigger:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
-}
 
 /* .toc-destination — the jump destination heading/block element (the class
  * is applied imperatively by ArticleView's handleTocJump alongside
@@ -4333,7 +3693,7 @@ main:has(.readaloud-bar) .article-body:has(.mark-read-close-page) .chapter-nav-p
 .restoration-marker {
   position: absolute;
   width: 4px;
-  border-radius: 2px;
+  border-radius: var(--radius-2xs);
   background: var(--accent);
   pointer-events: none;
 }
@@ -4383,7 +3743,7 @@ main:has(.readaloud-bar) .article-body:has(.mark-read-close-page) .chapter-nav-p
 .toc-list a {
   box-sizing: border-box;
   padding-block: var(--space-sm);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   overflow-wrap: anywhere;
 }
 .toc-list a:hover,
@@ -4459,8 +3819,8 @@ main#main > .status:empty {
   content: "";
   position: absolute;
   inset: 0;
-  z-index: 1;
-  border-radius: 4px;
+  z-index: var(--z-content);
+  border-radius: var(--radius-md);
 }
 .library-card-link:hover {
   color: var(--accent);
@@ -4498,6 +3858,11 @@ main#main > .status:empty {
 }
 .library-card-meta a,
 .library-row-actions button,
+/* Issue #76 — the cluster's review entry is an ANCHOR (native link
+   semantics for the scoped-review navigation); it needs the same
+   elevation as the cluster buttons above the title link's stretched
+   overlay. */
+.library-row-actions a,
 /* Issue #67 — the book row's in-main interactive controls must stay
    clickable above the title link's stretched overlay (z-index 1): the
    disclosure chevron and the expanded region's TagEntry controls.
@@ -4507,7 +3872,7 @@ main#main > .status:empty {
 .book-chapters button,
 .book-chapters input {
   position: relative;
-  z-index: 2;
+  z-index: var(--z-row-actions);
 }
 /* Issue #67 — the right-aligned icon action cluster: mark-read · edit ·
    trash, one arrangement for every row kind. */
@@ -4534,23 +3899,9 @@ main#main > .status:empty {
    the cluster; the accessible name carries the action + title (unchanged
    template). Quiet-chrome discipline: transparent rest, 44px box,
    --ink-soft at rest, --accent on hover. */
-.reading-state-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--touch);
-  min-width: var(--touch);
-  padding: 0;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--ink-soft);
-  cursor: pointer;
-}
-.reading-state-button:hover {
-  color: var(--accent);
-  border-color: var(--accent);
-}
+/* Issue #77 — .reading-state-button rides .btn-icon; residual: the
+   in-flight pending register (wait cursor + the icons.tsx spinner glyph
+   swap). */
 .reading-state-button:disabled {
   cursor: wait;
   opacity: 0.65;
@@ -4603,6 +3954,47 @@ main#main > .status:empty {
   min-width: 0;
   max-width: 100%;
 }
+/* Issue #76 (decision #72) — the URL-scoped review's scope chip: the ONE
+   removable chip in the article slot while #/highlights?article=<id> is
+   active. Pill register (the .finished-mark/.review-badge anatomy: hairline
+   border, --radius-pill, quiet UI voice) with an inside-× clear that rides
+   the shared .tag-chip-remove anatomy (44px touch target, --destructive
+   hover). The clear keeps its border transparent inside the pill — the pill
+   IS the border; hover colors the × alone. Token-only, no motion. */
+.review-scope-chip {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  padding-left: var(--space-sm);
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+}
+.review-scope-chip-text {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.review-scope-chip .review-scope-chip-remove {
+  min-height: calc(var(--touch) - 8px);
+  min-width: calc(var(--touch) - 8px);
+  border-color: transparent;
+}
+.review-scope-chip .review-scope-chip-remove:hover {
+  border-color: transparent;
+}
+/* Issue #76 — the vanished-scope empty state: the calm copy + back-to-all
+   link inside the shared .status live region (the honest D10-10 branch). */
+.review-scope-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-sm);
+}
 .review-section {
   margin-block: var(--space-xl);
 }
@@ -4613,7 +4005,7 @@ main#main > .status:empty {
   gap: 0;
   background: var(--surface-raised);
   border: 1px solid var(--hairline);
-  border-radius: 4px;
+  border-radius: var(--radius-md);
 }
 .review-item > .review-row {
   border: 0;
@@ -4624,10 +4016,6 @@ main#main > .status:empty {
   padding: var(--space-sm) var(--space-lg);
   border-block-start: 1px solid var(--hairline);
   gap: var(--space-sm);
-}
-.review-row-action {
-  background: transparent;
-  border-color: transparent;
 }
 @media (max-width: 639px) {
   .review-row-actions {
@@ -4663,4 +4051,19 @@ main#main > .status:empty {
 .library-stats-strip strong {
   color: var(--ink);
   font-weight: 600;
+}/* Issue #77 — the header triggers (toc / tags / annotations / gear) ride
+   the shared .btn-icon vocabulary; these residuals carry only state and
+   layout (the expanded tint, the badge anchor point). */
+.toc-trigger[aria-expanded="true"],
+.tags-trigger[aria-expanded="true"],
+.gear-button[aria-expanded="true"],
+.annotations-trigger[aria-expanded="true"] {
+  color: var(--accent);
 }
+.annotations-trigger {
+  position: relative;
+}
+.tags-trigger {
+  anchor-name: --tags-trigger;
+}
+

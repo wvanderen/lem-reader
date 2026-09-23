@@ -133,13 +133,13 @@ export function WipeConfirm({ open, onReset, onCancel }: WipeConfirmProps) {
           used. Resetting clears them so you can start fresh. This can&apos;t
           be undone.
         </p>
-        <div className="wipe-confirm-actions">
+        <div className="dialog-actions wipe-confirm-actions">
           {/* Destructive action — Pitfall 8: db.delete() fires ONLY in
               onDestructiveClick above. The button label names the consequence
               unambiguously (UI-SPEC §Copywriting line 330). */}
           <button
             type="button"
-            className="wipe-confirm-destructive"
+            className="btn btn-destructive wipe-confirm-destructive"
             onClick={onDestructiveClick}
           >
             Reset local data
@@ -150,7 +150,7 @@ export function WipeConfirm({ open, onReset, onCancel }: WipeConfirmProps) {
               here on open (NOT on the destructive button — safer default). */}
           <button
             type="button"
-            className="wipe-confirm-cancel"
+            className="btn btn-quiet wipe-confirm-cancel"
             onClick={onCancel}
             data-initial-focus
           >
