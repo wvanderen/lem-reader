@@ -738,8 +738,15 @@ a:hover {
    On < 640px the panel is a near-full-width sheet (small inline margin so
    the scrim is visible and dismiss-by-click is discoverable). */
 dialog.settings-panel {
-  margin: 0;
-  margin-inline-end: 0;
+  /* Anchored to the inline end — where the gear trigger and the radius
+     (rounded inline-start corners, below) both say it lives. The UA centers
+     modal dialogs with margin:auto against inset:0; an author margin:0
+     pins the over-constrained fixed box to the inline START (audit P1-1,
+     #88 — sheets opened opposite their top-inline-end triggers). The auto
+     START margin gives the free inline space to the start side, hugging
+     the sheet to the inline end at every width. */
+  margin-block: 0;
+  margin-inline: auto 0;
   padding: 0;
   /* Sheet shape — rounded on the inline-start side only (shared anatomy
      supplies border / surface / elevation / radius-lg). */
@@ -1018,9 +1025,10 @@ dialog.wipe-confirm {
   /* margin:auto restores the UA dialog:modal margin-auto centering (WHATWG
      HTML Rendering §15.3.3 — an author margin:0 defeats it and pins the
      over-constrained fixed box to the start edges, i.e. top-left in LTR).
-     Plan 13-03 (POLISH-04 / D13-14). The side sheets (settings-panel above,
-     annotations-drawer below) keep margin:0 ON PURPOSE — they anchor to the
-     inline end, do not blanket-fix. */
+   Plan 13-03 (POLISH-04 / D13-14). The side sheets (settings-panel above,
+   annotations-drawer below) are edge-anchored, not centered — they give
+   the free inline space to the START side (margin-inline: auto 0) to hug
+   the inline end (#88); do not blanket-fix margin:auto onto them. */
   margin: auto;
   padding: 0;
   width: calc(100vw - var(--space-xl));
@@ -2057,8 +2065,11 @@ dialog.highlight-popover::backdrop {
 
 /* ── Drawer sheet (reuses .settings-panel geometry — D5-09) ─────────────────── */
 dialog.annotations-drawer {
-  margin: 0;
-  margin-inline-end: 0;
+  /* Same inline-end anchor as .settings-panel (#88): auto START margin hugs
+     the sheet to the inline end — the annotations trigger's side and the
+     radius below agree. */
+  margin-block: 0;
+  margin-inline: auto 0;
   padding: 0;
   /* Sheet shape — rounded on the inline-start side only (shared anatomy
      supplies border / surface / elevation / radius-lg). */
