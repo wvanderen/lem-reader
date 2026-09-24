@@ -35,6 +35,11 @@ import {
   graphemeClusters,
 } from "../../src/content/normalizeText";
 import type { CanonicalArticle } from "../../src/content/types";
+// Issue #90 — the read-aloud transport scans below use the shared
+// controllable-fake speechSynthesis harness to drive a REAL session, and
+// assert the bar's LIVE labels (one rename site).
+import { installFakeSpeech } from "./readaloud/_speech";
+import { FOLLOW_LABELS } from "../../src/reader/ReadAloudBar";
 
 // Overridable for session-local dev-server runs (the _fixtures.ts
 // LEM_E2E_BASE discipline — parallel-wayfinder-sessions hygiene).
@@ -103,6 +108,61 @@ for (const article of fixtures) {
     });
   });
 }
+
+// ── Issue #90: the read-aloud transport, both states ────────────────────────
+// The idle collapse (one quiet entry) and the expanded session bar (skips +
+// jump + Stop + follow text + rate) are permanent reader chrome — held to
+// the SAME axe bar as every other surface. The per-fixture scans above
+// sample the bar only in its IDLE rest state (no session); a real session
+// needs the fake speech harness, so the expanded state gets its own scan
+// here. axe reports only automatable issues; the keyboard walkthrough lives
+// in the readaloud suite (tab-walk + Enter activation).
+test("a11y 90: read-aloud bar idle AND session-active is axe-clean", async ({
+  page,
+}) => {
+  await installFakeSpeech(page, "word");
+  await page.goto(`${BASE}/#/article/essay-long-form`);
+  await page.waitForFunction(
+    () =>
+      !!document.querySelector(
+        ".page-fragment [data-block-index], .article-body:not(.article-body-measurement) [data-block-index]",
+      ),
+    undefined,
+    { timeout: 10_000 },
+  );
+  const bar = page.locator(".readaloud-bar");
+  await expect(
+    bar.getByRole("button", { name: "Read aloud" }),
+  ).toBeVisible();
+
+  // Idle: the collapsed quiet entry is in the tree and axe-clean.
+  const idle = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
+  const idleSerious = seriousViolations(idle);
+  const idleIds = idleSerious.map((v) => v.id);
+  expect(idleIds, JSON.stringify(idleSerious, null, 2)).not.toContain("heading-order");
+  expect(idleIds).not.toContain("list");
+  expect(idleSerious).toEqual([]);
+
+  // Start a session via KEYBOARD (focus + Enter — no pointer), wait for the
+  // probe, then scan the EXPANDED transport (skips, jump, Stop, follow
+  // text, rate all in the tree).
+  await bar.getByRole("button", { name: "Read aloud" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(bar.getByText(FOLLOW_LABELS.word)).toBeVisible({
+    timeout: 10_000,
+  });
+  const active = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
+  const activeSerious = seriousViolations(active);
+  const activeIds = activeSerious.map((v) => v.id);
+  expect(activeIds, JSON.stringify(activeSerious, null, 2)).not.toContain(
+    "heading-order",
+  );
+  expect(activeIds).not.toContain("list");
+  expect(activeSerious).toEqual([]);
+
+  await bar.getByRole("button", { name: "Stop" }).click();
+  await expect(bar.getByRole("button", { name: "Read aloud" })).toBeVisible();
+});
 
 // ── A11Y-03 single-content-tree: settings panel open ─────────────────────────
 // Phase 2 (02-01): with the settings panel open via showModal, the article

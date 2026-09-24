@@ -29,10 +29,11 @@ import { chunkArticleForSpeech } from "../../../src/readaloud/chunks";
 import { articleGraphemeIndex } from "../../../src/content/normalizeText";
 // REUSE-DO-NOT-FORK: the shared controllable-fake speechSynthesis harness.
 import { installFakeSpeech, type SpeechMode } from "./_speech";
+// Shared plumbing (BASE/clear/play-until-probe) + the LIVE follow labels
+// (one rename site — ReadAloudBar's own map).
+import { BASE, clearAllRows, playAndAwaitProbe } from "./_harness";
+import { FOLLOW_LABELS } from "../../../src/reader/ReadAloudBar";
 
-// LEM_E2E_BASE override — the parallel-wayfinder-sessions discipline
-// (read-nav.spec.ts precedent: point this suite at a session-local server).
-const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
 const ESSAY = bundledFixtures.find((f) => f.id === "essay-long-form")!;
 const TECH = bundledFixtures.find((f) => f.id === "technical-post")!;
 const ESSAY_CHUNKS = chunkArticleForSpeech(ESSAY);
@@ -41,28 +42,6 @@ const TECH_CHUNKS = chunkArticleForSpeech(TECH);
 function firstChunkOfSentence(chunks: typeof ESSAY_CHUNKS, sentenceIndex: number) {
   const i = chunks.findIndex((c) => c.units.sentenceIndex === sentenceIndex);
   return chunks[i]!;
-}
-
-async function clearAllRows(page: Page): Promise<void> {
-  await page.evaluate(async () => {
-    await new Promise<void>((resolve) => {
-      const req = indexedDB.open("lem-reader");
-      req.onsuccess = () => {
-        const db = req.result;
-        const stores = ["articles", "settings", "location", "highlights", "notes", "books"];
-        const existing = stores.filter((s) => db.objectStoreNames.contains(s));
-        if (existing.length === 0) {
-          resolve();
-          return;
-        }
-        const tx = db.transaction(existing, "readwrite");
-        for (const s of existing) tx.objectStore(s).clear();
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => resolve();
-      };
-      req.onerror = () => resolve();
-    });
-  });
 }
 
 /** Open an article with the fake speech installed (ORDER IS LOAD-BEARING:
@@ -81,14 +60,6 @@ async function openArticle(
   await clearAllRows(page);
   await page.goto(`${BASE}/#/article/${articleId}`);
   return page;
-}
-
-async function playAndAwaitProbe(page: Page): Promise<void> {
-  const bar = page.locator(".readaloud-bar");
-  await expect(bar).toBeVisible();
-  await bar.getByRole("button", { name: "Read aloud" }).click();
-  await expect(bar.getByText("Highlights each word")).toBeVisible({ timeout: 10_000 });
-  await page.waitForTimeout(150); // the post-cancel settle before chunk 1
 }
 
 /** The text of the CURRENT live playback utterance (null when none). */
@@ -133,7 +104,7 @@ test.describe("Issue #43 — read-aloud completion", () => {
     await expect(bar.getByRole("button", { name: "Skip sentence forward" })).toBeVisible();
     await expect(bar.getByRole("button", { name: "Skip paragraph forward" })).toBeVisible();
     await expect(bar.getByText("Rate: 1×")).toBeVisible();
-    await expect(bar.getByText("Highlights each word")).toBeVisible();
+    await expect(bar.getByText(FOLLOW_LABELS.word)).toBeVisible();
 
     await bar.getByRole("button", { name: "Stop" }).click();
     await expect(bar.getByRole("button", { name: "Skip sentence backward" })).toHaveCount(0);

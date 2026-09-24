@@ -51,9 +51,9 @@ interface ReadAloudBarProps {
   /**
    * The current follow level — the floor ("progress-only") until the
    * session's probe resolves; the hook resets it at every session end.
-   * Nullable only as defensive rendering: the hook never supplies null.
+   * The hook owns the floor and never supplies null.
    */
-  followLevel: FollowLevel | null;
+  followLevel: FollowLevel;
   /** Copy for the ONE polite transport status region. */
   announcement: string | null;
   /**
@@ -87,12 +87,21 @@ interface ReadAloudBarProps {
 
 /** The follow level as plain reader language (issue #90): what the on-page
  * highlight does as the voice reads. "Shows progress only" is the honest
- * floor for voices that provide no word/sentence boundaries. */
-const FOLLOW_LABELS: Record<FollowLevel, string> = {
+ * floor for voices that provide no word/sentence boundaries. Exported so
+ * the unit + e2e suites assert the LIVE strings (one rename site). */
+export const FOLLOW_LABELS: Record<FollowLevel, string> = {
   word: "Highlights each word",
   sentence: "Highlights each sentence",
   passage: "Highlights each passage",
   "progress-only": "Shows progress only",
+};
+
+/** The primary button's visible name per transport state — the state IS the
+ * accessible name (native button text, no aria-label duplication). */
+const PRIMARY_LABELS: Record<TransportState, string> = {
+  stopped: "Read aloud",
+  playing: "Pause",
+  paused: "Play",
 };
 
 /** The skip controls (issue #43, O3) — one table, one render loop. Each is
@@ -120,7 +129,6 @@ export function ReadAloudBar({
   onSkipSentenceForward,
   onSkipParagraphForward,
 }: ReadAloudBarProps) {
-  const playing = state === "playing";
   const sessionActive = state !== "stopped";
   const skipHandlers: Record<SkipControlKey, (() => void) | undefined> = {
     "skip-sentence-back": onSkipSentenceBack,
@@ -138,7 +146,7 @@ export function ReadAloudBar({
               refusal through the transport region (the honesty constraint —
               never a silent dead-end control). */}
           <button type="button" className="btn btn-quiet readaloud-btn" onClick={onPrimary}>
-            {playing ? "Pause" : sessionActive ? "Play" : "Read aloud"}
+            {PRIMARY_LABELS[state]}
           </button>
           {/* Skip controls (issue #43, O3) — see SKIP_CONTROLS. */}
           {sessionActive &&
@@ -179,7 +187,7 @@ export function ReadAloudBar({
               level in plain language (the floor until a session's probe
               resolves — always present mid-session, never stale) and the
               configured rate. Visible text, never color-only. */}
-          {sessionActive && followLevel !== null && (
+          {sessionActive && (
             <span className="readaloud-follow">{FOLLOW_LABELS[followLevel]}</span>
           )}
           {sessionActive && (

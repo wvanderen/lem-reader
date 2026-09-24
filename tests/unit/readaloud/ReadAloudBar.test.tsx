@@ -7,10 +7,10 @@
 //      paused — never color).
 //   2. Issue #90 — the idle collapse: stopped, the bar is the ONE quiet
 //      entry ("Read aloud") — no Stop, no follow text, no rate — even with
-//      the hook's floor follow level supplied; mid-session the probed follow
-//      level shows as plain TEXT and absent before the first probe of the
-//      session (null). The configured rate shows beside it while a session
-//      exists (issue #43, O1, session-gated by #90).
+//      the hook's floor follow level supplied; mid-session the follow level
+//      shows as plain TEXT, the floor ("Shows progress only") until the
+//      session's probe resolves. The configured rate shows beside it while
+//      a session exists (issue #43, O1, session-gated by #90).
 //   3. Exactly ONE polite role="status" region owns the transport
 //      announcements.
 //   4. Clicks route: primary → onPrimary in every state; Stop always routes
@@ -20,42 +20,39 @@
 //      and route their clicks without touching the transport.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, fireEvent } from "@testing-library/react";
-import { ReadAloudBar } from "../../../src/reader/ReadAloudBar";
-import type { TransportState } from "../../../src/readaloud/types";
+// The label maps are asserted LIVE from the component's own tables — one
+// rename site (the labels never drift out of sync with the bar).
+import { ReadAloudBar, FOLLOW_LABELS } from "../../../src/reader/ReadAloudBar";
+import type { FollowLevel, TransportState } from "../../../src/readaloud/types";
 
 afterEach(cleanup);
 
-function renderBar(state: TransportState, overrides: Partial<Parameters<typeof ReadAloudBar>[0]> = {}) {
+type BarProps = Partial<Parameters<typeof ReadAloudBar>[0]>;
+
+/** Render the bar with the hook's honest defaults (floor follow level,
+ * no announcement) and return the props (spies) + the container. */
+function renderBar(state: TransportState, overrides: BarProps = {}) {
   const props = {
     state,
-    followLevel: null,
+    followLevel: "progress-only" as FollowLevel,
     announcement: null,
     rate: 1,
     onPrimary: vi.fn(),
     onStop: vi.fn(),
     ...overrides,
   };
-  render(<ReadAloudBar {...props} />);
-  return props;
+  const { container } = render(<ReadAloudBar {...props} />);
+  return { ...props, container };
 }
 
 describe("ReadAloudBar — transport buttons", () => {
   it("stopped (idle): the ONE quiet entry 'Read aloud' — no Stop, no follow text, no rate", () => {
     // The hook supplies the floor ("progress-only") even when stopped — the
     // idle collapse must hide it anyway (issue #90's regression case).
-    const { container } = render(
-      <ReadAloudBar
-        rate={1}
-        state="stopped"
-        followLevel="progress-only"
-        announcement={null}
-        onPrimary={() => {}}
-        onStop={() => {}}
-      />,
-    );
+    const { container } = renderBar("stopped", { followLevel: "progress-only" });
     expect(screen.getByRole("button", { name: "Read aloud" })).not.toBeNull();
     expect(screen.queryByRole("button", { name: "Stop" })).toBeNull();
-    expect(container.textContent).not.toContain("Shows progress only");
+    expect(container.textContent).not.toContain(FOLLOW_LABELS["progress-only"]);
     expect(container.textContent).not.toContain("Rate:");
   });
 
@@ -92,64 +89,39 @@ describe("ReadAloudBar — transport buttons", () => {
 });
 
 describe("ReadAloudBar — follow level + the ONE polite region", () => {
-  it("follow level renders as plain text once probed; absent before it and when idle", () => {
-    const { container } = render(
-      <ReadAloudBar
-        rate={1}
-        state="stopped"
-        followLevel={null}
-        announcement={null}
-        onPrimary={() => {}}
-        onStop={() => {}}
-      />,
-    );
-    expect(container.textContent).not.toContain("Highlights");
+  it("follow level renders as plain text mid-session (the floor until the probe), never idle", () => {
+    const idle = renderBar("stopped", { followLevel: "progress-only" });
+    expect(idle.container.textContent).not.toContain("Highlights");
+    expect(idle.container.textContent).not.toContain(FOLLOW_LABELS["progress-only"]);
     cleanup();
 
-    const probed = render(
-      <ReadAloudBar
-        rate={1}
-        state="playing"
-        followLevel="word"
-        announcement="Reading aloud."
-        onPrimary={() => {}}
-        onStop={() => {}}
-      />,
-    );
-    expect(probed.container.textContent).toContain("Highlights each word");
+    // Mid-session before the probe resolves, the hook holds the FLOOR — it
+    // shows as text (never stale, issue #43 O1).
+    const floor = renderBar("playing");
+    expect(floor.container.textContent).toContain(FOLLOW_LABELS["progress-only"]);
+    cleanup();
+
+    const probed = renderBar("playing", {
+      followLevel: "word",
+      announcement: "Reading aloud.",
+    });
+    expect(probed.container.textContent).toContain(FOLLOW_LABELS.word);
   });
 
-  it.each([
-    ["word", "Highlights each word"],
-    ["sentence", "Highlights each sentence"],
-    ["passage", "Highlights each passage"],
-    ["progress-only", "Shows progress only"],
-  ] as const)("label table maps %s → '%s'", (level, label) => {
-    render(
-      <ReadAloudBar
-        rate={1}
-        state="playing"
-        followLevel={level}
-        announcement={null}
-        onPrimary={() => {}}
-        onStop={() => {}}
-      />,
-    );
-    expect(screen.getByText(label)).not.toBeNull();
-    cleanup();
-  });
+  it.each(Object.entries(FOLLOW_LABELS) as [FollowLevel, string][])(
+    "label table maps %s → '%s'",
+    (level, label) => {
+      renderBar("playing", { followLevel: level });
+      expect(screen.getByText(label)).not.toBeNull();
+      cleanup();
+    },
+  );
 
   it("exactly ONE role=status region carries the announcement", () => {
-    const { container } = render(
-      <ReadAloudBar
-        rate={1}
-        state="playing"
-        followLevel="sentence"
-        announcement="Reading aloud."
-        onPrimary={() => {}}
-        onStop={() => {}}
-      />,
-    );
+    const { container } = renderBar("playing", {
+      followLevel: "sentence",
+      announcement: "Reading aloud.",
+    });
     const regions = container.querySelectorAll('[role="status"]');
     expect(regions).toHaveLength(1);
     expect(regions[0]!.getAttribute("aria-live")).toBe("polite");
@@ -188,18 +160,12 @@ describe("ReadAloudBar — jump to spoken position (issue #42)", () => {
   });
 
   it("the jump notice rides the SAME single status region, fresh over the transport copy", () => {
-    const { container } = render(
-      <ReadAloudBar
-        rate={1}
-        state="playing"
-        followLevel="word"
-        announcement="Reading aloud."
-        notice="Jumped to spoken position."
-        onPrimary={() => {}}
-        onStop={() => {}}
-        onJumpToSpoken={() => {}}
-      />,
-    );
+    const { container } = renderBar("playing", {
+      followLevel: "word",
+      announcement: "Reading aloud.",
+      notice: "Jumped to spoken position.",
+      onJumpToSpoken: () => {},
+    });
     const regions = container.querySelectorAll('[role="status"]');
     expect(regions).toHaveLength(1);
     // The notice is the feedback for the reader's LAST action — it takes
@@ -208,18 +174,11 @@ describe("ReadAloudBar — jump to spoken position (issue #42)", () => {
     expect(regions[0]!.textContent).toBe("Jumped to spoken position.");
     cleanup();
 
-    const noNotice = render(
-      <ReadAloudBar
-        rate={1}
-        state="playing"
-        followLevel="word"
-        announcement="Read aloud paused."
-        notice={null}
-        onPrimary={() => {}}
-        onStop={() => {}}
-        onJumpToSpoken={() => {}}
-      />,
-    );
+    const noNotice = renderBar("playing", {
+      followLevel: "word",
+      announcement: "Read aloud paused.",
+      onJumpToSpoken: () => {},
+    });
     const region = noNotice.container.querySelector('[role="status"]');
     expect(region!.textContent).toBe("Read aloud paused.");
   });
@@ -227,29 +186,11 @@ describe("ReadAloudBar — jump to spoken position (issue #42)", () => {
 
 describe("ReadAloudBar — rate text (issue #43, O1; session-gated by #90)", () => {
   it("the rate is visible as text while a session exists, hidden when idle", () => {
-    const stopped = render(
-      <ReadAloudBar
-        rate={1.5}
-        state="stopped"
-        followLevel="progress-only"
-        announcement={null}
-        onPrimary={() => {}}
-        onStop={() => {}}
-      />,
-    );
+    const stopped = renderBar("stopped", { rate: 1.5, followLevel: "progress-only" });
     expect(stopped.container.textContent).not.toContain("Rate:");
     cleanup();
 
-    const playing = render(
-      <ReadAloudBar
-        rate={0.75}
-        state="playing"
-        followLevel="word"
-        announcement={null}
-        onPrimary={() => {}}
-        onStop={() => {}}
-      />,
-    );
+    const playing = renderBar("playing", { rate: 0.75, followLevel: "word" });
     expect(playing.container.textContent).toContain("Rate: 0.75×");
   });
 });

@@ -36,10 +36,10 @@ import {
 } from "../../../src/content/normalizeText";
 // REUSE-DO-NOT-FORK: the shared controllable-fake speechSynthesis harness.
 import { installFakeSpeech, type SpeechMode } from "./_speech";
-
-// LEM_E2E_BASE override — the parallel-wayfinder-sessions discipline
-// (read-nav.spec.ts precedent: point this suite at a session-local server).
-const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
+// Shared plumbing (BASE/clear/tab-walk) + the LIVE follow labels (one
+// rename site — ReadAloudBar's own map).
+import { BASE, clearAllRows, tabWalkFrom } from "./_harness";
+import { FOLLOW_LABELS } from "../../../src/reader/ReadAloudBar";
 
 const ARTICLE = fixtures[0]!;
 const ARTICLE_HREF = `#/article/${ARTICLE.id}`;
@@ -145,35 +145,6 @@ async function openArticle(
   return page;
 }
 
-async function clearAllRows(page: Page): Promise<void> {
-  await page.evaluate(async () => {
-    await new Promise<void>((resolve) => {
-      const req = indexedDB.open("lem-reader");
-      req.onsuccess = () => {
-        const db = req.result;
-        const stores = [
-          "articles",
-          "settings",
-          "location",
-          "highlights",
-          "notes",
-          "books",
-        ];
-        const existing = stores.filter((s) => db.objectStoreNames.contains(s));
-        if (existing.length === 0) {
-          resolve();
-          return;
-        }
-        const tx = db.transaction(existing, "readwrite");
-        for (const s of existing) tx.objectStore(s).clear();
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => resolve();
-      };
-      req.onerror = () => resolve();
-    });
-  });
-}
-
 test.describe("Issue #40 — the read-aloud minimal speakable path", () => {
   test.setTimeout(90_000);
 
@@ -189,7 +160,7 @@ test.describe("Issue #40 — the read-aloud minimal speakable path", () => {
     const entry = bar.getByRole("button", { name: "Read aloud" });
     await expect(entry).toBeEnabled();
     await expect(bar.getByRole("button", { name: "Stop" })).toHaveCount(0);
-    await expect(bar.getByText("Shows progress only")).toHaveCount(0);
+    await expect(bar.getByText(FOLLOW_LABELS["progress-only"])).toHaveCount(0);
     await expect(bar.getByText("Rate: 1×")).toHaveCount(0);
 
     // Focus stays put on play (the app never moves focus; the click is
@@ -225,6 +196,35 @@ test.describe("Issue #40 — the read-aloud minimal speakable path", () => {
       page.getByRole("status").filter({ hasText: "Read aloud stopped." }),
     ).toHaveCount(1);
     await expect(bar.getByRole("button", { name: "Read aloud" })).toBeVisible();
+
+    // Keyboard-reachable end to end with visible focus (issue #90's
+    // acceptance): real Tab presses reach the idle entry from the header,
+    // the Tab-originated focus carries the global :focus-visible ring, and
+    // Enter on it starts the session — no pointer anywhere. WebKit's
+    // sequential navigation skips buttons (the a11y.spec.ts 09-06 engine
+    // divergence), so the Tab WALK runs on chromium + firefox; on webkit
+    // the claim degrades to focusability + Enter activation.
+    const entrySel = ".readaloud-cluster .readaloud-btn";
+    if (test.info().project.name !== "webkit") {
+      expect(
+        await tabWalkFrom(page, ".gear-button", entrySel, 20),
+        "Tab must reach the idle read-aloud entry",
+      ).toBe(true);
+      const ring = await page.evaluate(() => {
+        const el = document.activeElement as HTMLElement | null;
+        return el ? getComputedStyle(el).outlineStyle : "none";
+      });
+      expect(ring, "Tab-originated focus shows the visible focus ring").not.toBe(
+        "none",
+      );
+    } else {
+      await page.locator(entrySel).first().focus();
+      await expect(page.locator(entrySel)).toBeFocused();
+    }
+    await page.keyboard.press("Enter");
+    await expect(
+      bar.getByRole("button", { name: "Pause" }),
+    ).toBeVisible({ timeout: 10_000 });
   });
 
   test("word-capable voice: probe resolves 'word', listening persists and restores", async ({
@@ -244,7 +244,7 @@ test.describe("Issue #40 — the read-aloud minimal speakable path", () => {
     await pressPrimaryWithoutFocus(page);
 
     // Probe: silent (volume 0); the word boundary resolves the follow level.
-    await expect(bar.getByText("Highlights each word")).toBeVisible({
+    await expect(bar.getByText(FOLLOW_LABELS.word)).toBeVisible({
       timeout: 10_000,
     });
 
@@ -292,7 +292,7 @@ test.describe("Issue #40 — the read-aloud minimal speakable path", () => {
 
     // The probe's sentence boundary (then its end) resolves the level well
     // inside the bounded probe budget; playback utterances follow.
-    await expect(bar.getByText("Highlights each sentence")).toBeVisible({
+    await expect(bar.getByText(FOLLOW_LABELS.sentence)).toBeVisible({
       timeout: 10_000,
     });
 
@@ -331,7 +331,7 @@ test.describe("Issue #40 — the read-aloud minimal speakable path", () => {
     // The probe times out (2s) → progress-only; the dropped playback queue
     // trips the first-event stall watchdog → the honest refusal, never a
     // fake "playing" state.
-    await expect(bar.getByText("Shows progress only")).toBeVisible({
+    await expect(bar.getByText(FOLLOW_LABELS["progress-only"])).toBeVisible({
       timeout: 10_000,
     });
     await expect(
@@ -353,7 +353,11 @@ test.describe("Issue #40 — the read-aloud minimal speakable path", () => {
 
     await pressPrimaryWithoutFocus(page);
     await expect(
-      bar.getByText(/Highlights each (word|sentence|passage)/),
+      bar.getByText(
+        new RegExp(
+          [FOLLOW_LABELS.word, FOLLOW_LABELS.sentence, FOLLOW_LABELS.passage].join("|"),
+        ),
+      ),
     ).toBeVisible({
       timeout: 10_000,
     });

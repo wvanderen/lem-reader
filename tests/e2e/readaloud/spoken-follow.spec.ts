@@ -29,37 +29,13 @@ import { normalizeText, graphemeClusters } from "../../../src/content/normalizeT
 // REUSE-DO-NOT-FORK: the shared controllable-fake speechSynthesis harness
 // (extracted verbatim from read-aloud.spec.ts).
 import { installFakeSpeech, type SpeechMode } from "./_speech";
+// Shared plumbing (BASE/clear/play-until-probe).
+import { BASE, clearAllRows, playAndAwaitProbe } from "./_harness";
 
-// LEM_E2E_BASE override — the parallel-wayfinder-sessions discipline
-// (read-nav.spec.ts precedent: point this suite at a session-local server).
-const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
 const ESSAY = bundledFixtures.find((f) => f.id === "essay-long-form")!;
 const ESSAY_HREF = `#/article/${ESSAY.id}`;
 const TOTAL = graphemeClusters(normalizeText(ESSAY), ESSAY.lang).length;
 const CHUNKS = chunkArticleForSpeech(ESSAY);
-
-
-async function clearAllRows(page: Page): Promise<void> {
-  await page.evaluate(async () => {
-    await new Promise<void>((resolve) => {
-      const req = indexedDB.open("lem-reader");
-      req.onsuccess = () => {
-        const db = req.result;
-        const stores = ["articles", "settings", "location", "highlights", "notes", "books"];
-        const existing = stores.filter((s) => db.objectStoreNames.contains(s));
-        if (existing.length === 0) {
-          resolve();
-          return;
-        }
-        const tx = db.transaction(existing, "readwrite");
-        for (const s of existing) tx.objectStore(s).clear();
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => resolve();
-      };
-      req.onerror = () => resolve();
-    });
-  });
-}
 
 /** Open essay-long-form with the fake speech installed (ORDER IS
  * LOAD-BEARING: init script before the first goto — the article URL differs
@@ -122,14 +98,6 @@ async function fireBoundaryAt(page: Page, offset: number): Promise<void> {
       ci,
     );
   }, charIndex);
-}
-
-async function playAndAwaitProbe(page: Page): Promise<void> {
-  const bar = page.locator(".readaloud-bar");
-  await expect(bar).toBeVisible();
-  await bar.getByRole("button", { name: "Read aloud" }).click();
-  await expect(bar.getByText("Highlights each word")).toBeVisible({ timeout: 10_000 });
-  await page.waitForTimeout(150); // the post-cancel settle before chunk 1
 }
 
 /** The spoken marker's rendered text (trimmed — boundary whitespace rides
