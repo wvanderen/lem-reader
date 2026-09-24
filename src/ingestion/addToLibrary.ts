@@ -48,6 +48,7 @@ import { dexieLibrarySource } from "./LibrarySource";
 import { hasBook, saveBook } from "../persistence/booksStore";
 import type { BookAsset } from "../persistence/booksStore";
 import { bytesToBase64 } from "./ingestCopy";
+import { normalizeTags } from "./library/tagText";
 import type { IngestionFailureReason } from "./types";
 import type { Block } from "../content/types";
 
@@ -142,20 +143,16 @@ export function bookAssetsForChapters(
 
 /**
  * cleanTagsForSave — the one input-sanitizing seam for the optional tags
- * riding an addToLibrary call (issue #75, decision #71): trim, drop
- * empties (mirrors the `z.string().min(1)` schema constraint — a stray
- * empty string would produce an invalid row the next read drops, the
- * setArticleTags discipline), and dedupe exact matches. The TagPicker
- * already routes case-insensitive duplicates to the stored casing; this
- * seam only keeps a hand-rolled caller honest.
+ * riding an addToLibrary call (issue #75, decision #71): delegates to the
+ * shared tagText.normalizeTags — trim, drop empties (mirrors the
+ * `z.string().min(1)` schema constraint — a stray empty string would
+ * produce an invalid row the next read drops), and dedupe
+ * case-insensitively (first-seen casing wins — no case twins from a
+ * hand-rolled caller). The TagPicker routes case-insensitive duplicates to
+ * the stored casing; the persisted write seams re-route at save.
  */
 function cleanTagsForSave(tags: readonly string[]): string[] {
-  const seen = new Set<string>();
-  for (const tag of tags) {
-    const trimmed = tag.trim();
-    if (trimmed.length > 0) seen.add(trimmed);
-  }
-  return [...seen];
+  return normalizeTags(tags);
 }
 
 /**

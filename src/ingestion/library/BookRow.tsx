@@ -39,7 +39,7 @@
 import { useMemo, useState } from "react";
 import type { Book, CanonicalArticle } from "../../content/schema";
 import { TagEntry } from "../../reader/TagEntry";
-import { setBookTags } from "../../persistence/booksStore";
+import { setBookTags } from "./tagsStore";
 import {
   deriveBookProgress,
   resolveResumeChapterId,

@@ -300,15 +300,6 @@ export async function removeBook(id: string): Promise<void> {
   );
 }
 
-/**
- * setBookTags — write the tag array for one Book by id (D12-04 — tags live
- * on the Book record, NOT per-chapter). Idempotent primary-key update; a
- * non-existent id is a no-op. Defensively drops empty-string tags before
- * writing to mirror the `z.string().min(1)` schema constraint (the
- * setArticleTags precedent — a stray empty string would corrupt the row
- * against the next BookSchema.safeParse read).
- */
-export async function setBookTags(id: string, tags: string[]): Promise<void> {
-  const cleaned = tags.filter((t) => t.length > 0);
-  await db.books.update(id, { tags: cleaned });
-}
+// setBookTags lives in ingestion/library/tagsStore now (issue #75 review —
+// tagsStore is the ONE tag-write seam; the routing discipline must not be
+// forked across persistence modules).

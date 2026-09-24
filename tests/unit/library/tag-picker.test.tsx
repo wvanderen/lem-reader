@@ -12,7 +12,8 @@
 // jsdom is fine for this component: it owns no layout, no popover API, no
 // fonts. The real-browser suggestion geometry is the e2e suite's job.
 import { describe, expect, it, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { useState } from "react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { TagPicker } from "../../../src/ui/TagPicker";
 import type { TagStat } from "../../../src/ingestion/library/tagsStore";
@@ -116,6 +117,49 @@ describe("TagPicker: keyboard + picking", () => {
     );
     await user.keyboard("{Enter}");
     expect(onChange).toHaveBeenCalledWith(["attention"]);
+  });
+
+  it("ArrowUp reopens the post-commit closed list — Enter then picks (no invisible active)", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    // A STATEFUL host: the commit's selection feeds back into `selected`,
+    // so the reopened list excludes it like every real host does.
+    function Host() {
+      const [selected, setSelected] = useState<string[]>([]);
+      return (
+        <TagPicker
+          stats={STATS}
+          selected={selected}
+          onChange={(next) => {
+            onChange(next);
+            setSelected(next);
+          }}
+          inputId="picker-under-test"
+        />
+      );
+    }
+    render(<Host />);
+    const input = screen.getByRole("combobox") as HTMLInputElement;
+    await user.type(input, "books");
+    const option = within(screen.getByRole("listbox")).getByRole("option", {
+      name: "books",
+    });
+    option.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+    expect(onChange).toHaveBeenCalledWith(["books"]);
+    // Flush the commit's state batch before asserting the closed list.
+    await act(async () => {});
+    // The commit closes the list; focus STAYS on the input — the
+    // closed-but-focused state a bare ArrowUp must recover from (the
+    // pre-fix hole: ArrowUp mutated `active` invisibly, Enter committed
+    // nothing).
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    await user.keyboard("{ArrowUp}"); // wraps to the LAST remaining suggestion
+    const active = within(screen.getByRole("listbox")).getByRole("option", {
+      selected: true,
+    });
+    expect(active.textContent).toBe("attention");
+    await user.keyboard("{Enter}");
+    expect(onChange).toHaveBeenLastCalledWith(["books", "attention"]);
   });
 
   it("Enter on an unmatched draft offers + commits the inline create", async () => {

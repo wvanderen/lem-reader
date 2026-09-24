@@ -124,6 +124,23 @@ describe("deriveTagStats (issue #75 — the ONE count fold)", () => {
     expect(stats.map((s) => s.tag)).toEqual(["zebra", "alpha", "beta"]);
   });
 
+  it("folds casing variants into ONE entry — counts merge, first-seen casing wins (Q7A)", async () => {
+    const { deriveTagStats } = await loadTagsStore();
+    const stats = deriveTagStats(
+      [
+        sampleArticle({ id: "a", tags: ["Essays"] }),
+        sampleArticle({ id: "b", tags: ["essays", "Slow"] }),
+      ],
+      [sampleBook({ tags: ["ESSAYS"] })],
+    );
+    // "essays" variants count together (3); the suggestion order the
+    // picker promises cannot be split by casing.
+    expect(stats).toEqual([
+      { tag: "Essays", count: 3 },
+      { tag: "Slow", count: 1 },
+    ]);
+  });
+
   it("counts never ride into the tag name — the stat is {tag, count} only", async () => {
     const { deriveTagStats } = await loadTagsStore();
     const [stat] = deriveTagStats([sampleArticle({ id: "a", tags: ["one"] })], []);

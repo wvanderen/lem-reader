@@ -19,7 +19,9 @@
 //     the shared .tag-chip-remove anatomy — the .review-scope-chip
 //     precedent from issue #76).
 //
-// Keyboard: ArrowUp/ArrowDown move the active option (wrapping), Enter
+// Keyboard: ArrowUp/ArrowDown move the active option (wrapping) — either
+// arrow OPENS a closed-but-nonempty list first, so both pick paths work
+// from a bare focus (the issue #75 review's ArrowUp-asymmetry fix) — Enter
 // picks, Tab moves on (the listbox is never a trap), Escape is NOT
 // intercepted — the host popover/dialog owns dismissal. Focus management
 // is the house explicit pattern: an explicitly-opened popover may move
@@ -28,6 +30,7 @@
 // React autoFocus prop is banned by lint).
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { TagStat } from "../ingestion/library/tagsStore";
+import { sameTag } from "../ingestion/library/tagText";
 
 export interface TagPickerProps {
   /** The existing tags with usage counts (most-used first). */
@@ -47,8 +50,8 @@ export interface TagPickerProps {
 }
 
 function findExisting(stats: TagStat[], text: string): TagStat | undefined {
-  const lower = text.trim().toLowerCase();
-  return stats.find((s) => s.tag.toLowerCase() === lower);
+  const trimmed = text.trim();
+  return stats.find((s) => sameTag(s.tag, trimmed));
 }
 
 /**
@@ -56,6 +59,8 @@ function findExisting(stats: TagStat[], text: string): TagStat | undefined {
  * tag's stored casing (stats first, then the selection itself — a tag
  * created this session may not be in a stale stats read yet); otherwise
  * the trimmed text joins. Toggling an already-selected tag removes it.
+ * (The tagsStore write seams re-route against the persisted universe, so a
+ * commit that raced a stale stats read still cannot stack a case twin.)
  */
 function toggleTag(
   selected: string[],
@@ -64,10 +69,9 @@ function toggleTag(
 ): string[] {
   const trimmed = text.trim();
   if (trimmed.length === 0) return selected;
-  const lower = trimmed.toLowerCase();
   const existing =
     findExisting(stats, trimmed)?.tag ??
-    selected.find((t) => t.toLowerCase() === lower);
+    selected.find((t) => sameTag(t, trimmed));
   return selected.includes(existing ?? trimmed)
     ? selected.filter((t) => t !== existing)
     : [...selected, existing ?? trimmed];
@@ -103,7 +107,7 @@ export function TagPicker({
           (s) =>
             // Already-selected tags (any casing) never re-appear as
             // suggestions — picking them again would only remove them.
-            !selected.some((t) => t.toLowerCase() === s.tag.toLowerCase()) &&
+            !selected.some((t) => sameTag(t, s.tag)) &&
             (lower.length === 0 || s.tag.toLowerCase().includes(lower)),
         )
         .slice(0, 8),
@@ -124,13 +128,16 @@ export function TagPicker({
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "ArrowDown" && optionCount > 0) {
+    if ((e.key === "ArrowDown" || e.key === "ArrowUp") && optionCount > 0) {
       e.preventDefault();
+      // Either arrow opens a closed-but-nonempty list — ArrowUp must not
+      // mutate `active` invisibly with Enter then committing nothing.
       setOpen(true);
-      setActive((a) => (a + 1) % optionCount);
-    } else if (e.key === "ArrowUp" && optionCount > 0) {
-      e.preventDefault();
-      setActive((a) => (a - 1 + optionCount) % optionCount);
+      setActive((a) =>
+        e.key === "ArrowDown"
+          ? (a + 1) % optionCount
+          : (a - 1 + optionCount) % optionCount,
+      );
     } else if (e.key === "Enter") {
       // Enter NEVER submits a surrounding form (the Add dialog's prevented
       // submits tolerate this; the explicit preventDefault keeps it true).
