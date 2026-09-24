@@ -344,7 +344,7 @@ test("review panel #/highlights: zero serious/critical WCAG 2.2 AA violations (s
 // disclosure animation. axe reports only automatable issues — the manual
 // SR flows stay Phase 13's ACPT gate.
 
-const BOOK_BASE = "http://localhost:5173";
+const BOOK_BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
 
 /** Attach an EPUB to the picker + submit (the epub-intake harness clone,
  * routed through the Add dialog per Plan 16-03). */

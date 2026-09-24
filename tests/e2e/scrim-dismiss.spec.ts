@@ -11,7 +11,8 @@
 import { test, expect } from "@playwright/test";
 import { wipeDatabase } from "./annotations/_fixtures";
 
-const BASE = "http://localhost:5173";
+// LEM_E2E_BASE discipline — parallel-wayfinder-sessions hygiene.
+const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
 
 const FIRST_FIXTURE = "essay-long-form";
 

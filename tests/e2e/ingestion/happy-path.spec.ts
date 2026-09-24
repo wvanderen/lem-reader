@@ -38,10 +38,14 @@
 //      pipeline (safeFetch + extract) is exercised structurally by the SSRF
 //      matrix + the paste-path test; this case proves the UI plumbing.
 import { test, expect } from "@playwright/test";
-import { fixtures, fixtureAssetRegistry } from "../../../src/fixtures";
+// bundledFixtures (NOT `fixtures`): the asset-envelope cell below clones the
+// "figure-heavy" regression-corpus article, which lives in the BUNDLED list —
+// the library `fixtures` export carries only the getting-started starter row
+// (#81 rot family, test-only repair).
+import { bundledFixtures, fixtures, fixtureAssetRegistry } from "../../../src/fixtures";
 import { openAddDialog, pickSource } from "../library/add-dialog";
 
-const BASE = "http://localhost:5173";
+const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
 
 // A representative article HTML payload rich enough to pass Readability's
 // isProbablyReaderable() + the ING-06 confidence thresholds (blockCount >= 3
@@ -202,7 +206,7 @@ test.describe("ingestion happy-path (07-07 SC#1)", () => {
       browserName === "webkit",
       "WebKit engine boundary: Playwright's WebKit cannot put Blob values into IndexedDB (UnknownError) — chromium/firefox carry the proof",
     );
-    const fixtureArticle = fixtures.find((a) => a.id === "figure-heavy")!;
+    const fixtureArticle = bundledFixtures.find((a) => a.id === "figure-heavy")!;
     const article = structuredClone(fixtureArticle) as typeof fixtureArticle;
     article.id = "figure-heavy-asset-e2e";
 

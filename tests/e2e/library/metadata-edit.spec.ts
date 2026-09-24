@@ -35,7 +35,7 @@ import {
 // live behind the header Add button's modal).
 import { openAddDialog, pickSource } from "./add-dialog";
 
-const BASE = "http://localhost:5173";
+const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
 
 /**
  * Build a paste-HTML payload with the given title (+ optional author).
