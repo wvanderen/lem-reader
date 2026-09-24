@@ -2639,7 +2639,11 @@ dialog.edit-metadata {
 }
 
 /* ── Drawer list (reading order — D5-09) ────────────────────────────────────── */
+/* Issue #89 — entries are cards (chrome on .drawer-item), so the list is
+   a grid with a gap; the flat hairline-separated strip is gone. */
 .drawer-list {
+  display: grid;
+  gap: var(--space-md);
   list-style: none;
   margin: 0;
   padding: 0;
@@ -2665,10 +2669,6 @@ dialog.edit-metadata {
 .drawer-entry:disabled {
   cursor: default;
   opacity: 0.7;
-}
-/* Calm list rhythm: hairline between entries. */
-li + li .drawer-entry {
-  border-top: 1px solid var(--hairline);
 }
 .drawer-entry-excerpt {
   display: block;
@@ -4107,19 +4107,13 @@ main#main > .status:empty {
 }
 /* Issue #89 — the DRAWER half of the same treatment: each entry becomes
    the review card's register (raised surface + hairline + --radius-md on
-   the .drawer-item li, set by AnnotationsDrawer.tsx), and the flat-list
-   hairline between entries retires — cards + list gap replace it. */
-.drawer-list {
-  display: grid;
-  gap: var(--space-md);
-}
+   the .drawer-item li, set by AnnotationsDrawer.tsx); the flat-list
+   hairline between entries retired at its source, cards + list gap
+   (.drawer-list, drawer section) replace it. */
 .drawer-item {
   background: var(--surface-raised);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-md);
-}
-li + li .drawer-entry {
-  border-top: 0;
 }
 
 /* Approved LEM book mark: follows the active theme and link hover color. */
