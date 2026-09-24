@@ -2354,10 +2354,12 @@ export function ArticleView({
             allowed at this stage). Position:fixed keeps it out of the
             paginated grid flow, so mounting it can never change
             .page-viewport geometry (the chapter-nav-page precedent). The
-            primary button's name flips between "Play" and "Pause" as state;
-            the ONE polite transport role=status rides inside the bar
-            component. No focus moves on play; the only start is Play.
-            Issue #43: the skip controls + the rate text (O1/O3). */}
+            primary button's name carries the state as text ("Read aloud"
+            idle / "Pause" playing / "Play" paused); idle the bar is the one
+            quiet entry (issue #90). The ONE polite transport role=status
+            rides inside the bar component. No focus moves on play; the only
+            start is the entry button. Issue #43: the skip controls + the
+            rate text (O1/O3). */}
         <ReadAloudBar
           state={readAloudState}
           followLevel={readAloudFollowLevel}

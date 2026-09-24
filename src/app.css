@@ -3342,9 +3342,12 @@ dialog.book-remove-confirm {
  * the .back-to-library/.mark-read-close register. Buttons reuse the quiet
  * button discipline token-for-token (min-height var(--touch), accent on
  * hover only); the primary button's accessible name is its visible text,
- * which flips "Play"/"Pause" with state — never color.
- * .readaloud-follow — the follow level as TEXT (the spoken-word
- * marker itself is not rendered at this stage); .readaloud-rate — the
+ * which carries the state ("Read aloud" idle / "Pause" playing / "Play"
+ * paused) — never color. Issue #90: idle the pill holds the ONE quiet
+ * entry; the full transport (skips, jump, Stop, follow, rate) renders only
+ * while a session exists, so idle reader chrome stays quiet.
+ * .readaloud-follow — the follow level as plain-language TEXT (issue #90:
+ * "Highlights each word…" / "Shows progress only"); .readaloud-rate — the
  * configured rate as TEXT. Both the .page-indicator quiet text register.
  *
  * Zero motion properties (A11Y-06 discipline — trivially reduced-motion

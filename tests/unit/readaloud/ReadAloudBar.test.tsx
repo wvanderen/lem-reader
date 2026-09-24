@@ -2,17 +2,20 @@
 // Issue #40 — RTL component suite for the read-aloud transport bar
 // (MarkReadAndClose.test.tsx house style — semantic component glue ONLY;
 // layout truth stays in Playwright). The acceptance contract pinned here:
-//   1. Real Play/Pause/Stop buttons; the primary button's accessible NAME
-//      flips between "Play" and "Pause" as transport state (visible text,
-//      never color).
-//   2. The probed follow level is visible as TEXT ("Follows: …") — and
-//      absent before the first probe of the session (null). The configured
-//      rate is visible as text whenever the bar is mounted (issue #43, O1).
+//   1. Real buttons; the primary button's accessible NAME carries the state
+//      as visible text ("Read aloud" stopped / "Pause" playing / "Play"
+//      paused — never color).
+//   2. Issue #90 — the idle collapse: stopped, the bar is the ONE quiet
+//      entry ("Read aloud") — no Stop, no follow text, no rate — even with
+//      the hook's floor follow level supplied; mid-session the probed follow
+//      level shows as plain TEXT and absent before the first probe of the
+//      session (null). The configured rate shows beside it while a session
+//      exists (issue #43, O1, session-gated by #90).
 //   3. Exactly ONE polite role="status" region owns the transport
 //      announcements.
-//   4. Clicks route: primary → Play when stopped/paused; Pause when playing;
-//      Stop always routes onStop. (Speech-unavailable refusal is hook
-//      behavior: Play always stays enabled here — the press never dead-ends.)
+//   4. Clicks route: primary → onPrimary in every state; Stop always routes
+//      onStop. (Speech-unavailable refusal is hook behavior: the entry/Play
+//      button always stays enabled here — the press never dead-ends.)
 //   5. Issue #43 (O3): the skip controls render only while a session exists
 //      and route their clicks without touching the transport.
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -37,28 +40,43 @@ function renderBar(state: TransportState, overrides: Partial<Parameters<typeof R
 }
 
 describe("ReadAloudBar — transport buttons", () => {
-  it("stopped: buttons named 'Play' and 'Stop'; Stop disabled", () => {
-    renderBar("stopped");
-    expect(screen.getByRole("button", { name: "Play" })).not.toBeNull();
-    const stop = screen.getByRole("button", { name: "Stop" });
-    expect((stop as HTMLButtonElement).disabled).toBe(true);
+  it("stopped (idle): the ONE quiet entry 'Read aloud' — no Stop, no follow text, no rate", () => {
+    // The hook supplies the floor ("progress-only") even when stopped — the
+    // idle collapse must hide it anyway (issue #90's regression case).
+    const { container } = render(
+      <ReadAloudBar
+        rate={1}
+        state="stopped"
+        followLevel="progress-only"
+        announcement={null}
+        onPrimary={() => {}}
+        onStop={() => {}}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Read aloud" })).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "Stop" })).toBeNull();
+    expect(container.textContent).not.toContain("Shows progress only");
+    expect(container.textContent).not.toContain("Rate:");
   });
 
   it("playing: the primary button's name flips to 'Pause' (state, not color)", () => {
     renderBar("playing");
     expect(screen.getByRole("button", { name: "Pause" })).not.toBeNull();
     expect(screen.queryByRole("button", { name: "Play" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Read aloud" })).toBeNull();
   });
 
   it("paused: the primary button reads 'Play' again (resume affordance)", () => {
     renderBar("paused");
     expect(screen.getByRole("button", { name: "Play" })).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "Read aloud" })).toBeNull();
   });
 
-  it("clicks route: primary when stopped → onPrimary; playing → onPrimary; Stop → onStop", () => {
-    const props = renderBar("stopped");
-    fireEvent.click(screen.getByRole("button", { name: "Play" }));
-    expect(props.onPrimary).toHaveBeenCalledTimes(1);
+  it("clicks route: primary in every state; Stop → onStop while a session exists", () => {
+    const idle = renderBar("stopped");
+    fireEvent.click(screen.getByRole("button", { name: "Read aloud" }));
+    expect(idle.onPrimary).toHaveBeenCalledTimes(1);
+    expect(idle.onStop).not.toHaveBeenCalled();
     cleanup();
 
     const playing = renderBar("playing");
@@ -74,7 +92,7 @@ describe("ReadAloudBar — transport buttons", () => {
 });
 
 describe("ReadAloudBar — follow level + the ONE polite region", () => {
-  it("follow level renders as text once probed; absent before it", () => {
+  it("follow level renders as plain text once probed; absent before it and when idle", () => {
     const { container } = render(
       <ReadAloudBar
         rate={1}
@@ -85,7 +103,7 @@ describe("ReadAloudBar — follow level + the ONE polite region", () => {
         onStop={() => {}}
       />,
     );
-    expect(container.textContent).not.toContain("Follows:");
+    expect(container.textContent).not.toContain("Highlights");
     cleanup();
 
     const probed = render(
@@ -98,14 +116,14 @@ describe("ReadAloudBar — follow level + the ONE polite region", () => {
         onStop={() => {}}
       />,
     );
-    expect(probed.container.textContent).toContain("Follows: word");
+    expect(probed.container.textContent).toContain("Highlights each word");
   });
 
   it.each([
-    ["word", "Follows: word"],
-    ["sentence", "Follows: sentence"],
-    ["passage", "Follows: passage"],
-    ["progress-only", "Follows: progress only"],
+    ["word", "Highlights each word"],
+    ["sentence", "Highlights each sentence"],
+    ["passage", "Highlights each passage"],
+    ["progress-only", "Shows progress only"],
   ] as const)("label table maps %s → '%s'", (level, label) => {
     render(
       <ReadAloudBar
@@ -207,19 +225,19 @@ describe("ReadAloudBar — jump to spoken position (issue #42)", () => {
   });
 });
 
-describe("ReadAloudBar — rate text (issue #43, O1)", () => {
-  it("the rate is visible as text whenever the bar is mounted (stopped included)", () => {
+describe("ReadAloudBar — rate text (issue #43, O1; session-gated by #90)", () => {
+  it("the rate is visible as text while a session exists, hidden when idle", () => {
     const stopped = render(
       <ReadAloudBar
         rate={1.5}
         state="stopped"
-        followLevel={null}
+        followLevel="progress-only"
         announcement={null}
         onPrimary={() => {}}
         onStop={() => {}}
       />,
     );
-    expect(stopped.container.textContent).toContain("Rate: 1.5×");
+    expect(stopped.container.textContent).not.toContain("Rate:");
     cleanup();
 
     const playing = render(

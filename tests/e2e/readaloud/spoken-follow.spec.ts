@@ -30,7 +30,9 @@ import { normalizeText, graphemeClusters } from "../../../src/content/normalizeT
 // (extracted verbatim from read-aloud.spec.ts).
 import { installFakeSpeech, type SpeechMode } from "./_speech";
 
-const BASE = "http://localhost:5173";
+// LEM_E2E_BASE override — the parallel-wayfinder-sessions discipline
+// (read-nav.spec.ts precedent: point this suite at a session-local server).
+const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
 const ESSAY = bundledFixtures.find((f) => f.id === "essay-long-form")!;
 const ESSAY_HREF = `#/article/${ESSAY.id}`;
 const TOTAL = graphemeClusters(normalizeText(ESSAY), ESSAY.lang).length;
@@ -125,8 +127,8 @@ async function fireBoundaryAt(page: Page, offset: number): Promise<void> {
 async function playAndAwaitProbe(page: Page): Promise<void> {
   const bar = page.locator(".readaloud-bar");
   await expect(bar).toBeVisible();
-  await bar.getByRole("button", { name: "Play" }).click();
-  await expect(bar.getByText("Follows: word")).toBeVisible({ timeout: 10_000 });
+  await bar.getByRole("button", { name: "Read aloud" }).click();
+  await expect(bar.getByText("Highlights each word")).toBeVisible({ timeout: 10_000 });
   await page.waitForTimeout(150); // the post-cancel settle before chunk 1
 }
 
