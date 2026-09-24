@@ -62,6 +62,12 @@ import { mapReasonToCopy } from "./ingestCopy";
 // submission arm.
 import { addToLibrary } from "./addToLibrary";
 import type { AddToLibraryOutcome } from "./addToLibrary";
+// Issue #75 (decision #71) — the ONE shared tag picker + its suggestion
+// currency. The optional "Tags (optional)" fieldset captures tags at
+// import; they ride the saved record through the service (never a
+// second write).
+import { TagPicker } from "../ui/TagPicker";
+import type { TagStat } from "./library/tagsStore";
 // The paste-transcript fallback dispatches on the same extractor the
 // server runs (request-free) — the fallback offer appears ONLY for a URL
 // that is actually a YouTube video.
@@ -88,9 +94,16 @@ export type AddDialogProps = {
   /** Invoked after a book success (after onCancel) — LibraryView
    *  invalidates the library snapshot so the new book row appears. */
   onBookAdded: () => void;
+  /**
+   * Issue #75 (decision #71) — the picker-suggestion stats (the ONE
+   * deriveTagStats fold, snapshot-fed from LibraryView). The dialog holds
+   * no snapshot of its own; the host passes the same read model the
+   * library rows render from, so suggestion order cannot drift.
+   */
+  tagStats: TagStat[];
 };
 
-export function AddDialog({ open, onCancel, onBookAdded }: AddDialogProps) {
+export function AddDialog({ open, onCancel, onBookAdded, tagStats }: AddDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   // Capture the previously-focused element (the Add button) on open so
   // the close handler can restore focus (Pitfall 1 — same discipline as
@@ -124,6 +137,11 @@ export function AddDialog({ open, onCancel, onBookAdded }: AddDialogProps) {
   // switches within one dialog session (D16-07).
   const [transcriptTitleValue, setTranscriptTitleValue] = useState("");
   const [transcriptUrlValue, setTranscriptUrlValue] = useState("");
+  // Issue #75 (decision #71) — the optional import-time tags. Session
+  // state like every lifted field (D16-07 — survives source switches);
+  // reset on every open with the rest (D16-08). Applied to the SAVED
+  // record by the service — never a second write after the fact.
+  const [tagsValue, setTagsValue] = useState<string[]>([]);
 
   const submitting = status === "submitting";
   // Live mirror rewritten EVERY render (Pitfall 3 — the LibraryView L236
@@ -170,6 +188,7 @@ export function AddDialog({ open, onCancel, onBookAdded }: AddDialogProps) {
       setTranscriptValue("");
       setTranscriptTitleValue("");
       setTranscriptUrlValue("");
+      setTagsValue([]);
       resetFilePick();
       // Cross-engine focus management (Pitfall 1 + WebKit quirk — the
       // 02-01 lesson): Chromium auto-focuses the first focusable control
@@ -304,7 +323,9 @@ export function AddDialog({ open, onCancel, onBookAdded }: AddDialogProps) {
       which === "url"
         ? ({ kind: "url", url: urlValue } as const)
         : ({ kind: "paste", html: htmlValue } as const);
-    const outcome = await addToLibrary(input);
+    // Issue #75 — the import-time tags ride the saved record (post-save
+    // application is the SERVICE's atomic save, not a follow-up write).
+    const outcome = await addToLibrary(input, tagsValue);
     // The fallback offer: the bot-check refusal for an actual YouTube URL
     // (the server returns youtube-bot-check ONLY from the YouTube branch;
     // the extractor guard keeps the offer honest when the reason ever
@@ -367,12 +388,15 @@ export function AddDialog({ open, onCancel, onBookAdded }: AddDialogProps) {
     setStatus("submitting");
     setMessage("Adding transcript…");
     renderOutcome(
-      await addToLibrary({
-        kind: "transcript-paste",
-        text: transcriptValue,
-        title: trimmedTitle,
-        url: trimmedUrl.length > 0 ? trimmedUrl : undefined,
-      }),
+      await addToLibrary(
+        {
+          kind: "transcript-paste",
+          text: transcriptValue,
+          title: trimmedTitle,
+          url: trimmedUrl.length > 0 ? trimmedUrl : undefined,
+        },
+        tagsValue,
+      ),
     );
   }
 
@@ -417,7 +441,9 @@ export function AddDialog({ open, onCancel, onBookAdded }: AddDialogProps) {
 
     setStatus("submitting");
     setMessage("Reading file…");
-    const outcome = await addToLibrary({ kind: "file", file });
+    // Issue #75 — the import-time tags ride the saved record here too (the
+    // epub arm lands them on the BOOK record, D12-04).
+    const outcome = await addToLibrary({ kind: "file", file }, tagsValue);
     // Uniform reset contract (G2) — the pick clears at every terminal
     // outcome of this arm.
     resetFilePick();
@@ -644,6 +670,25 @@ export function AddDialog({ open, onCancel, onBookAdded }: AddDialogProps) {
             </div>
           </form>
         )}
+
+        {/* Issue #75 (decision #71) — the optional import-time tags. ONE
+            fieldset ABOVE the action row, shared by every source arm (the
+            tags apply to whatever the submission saves — article, paste,
+            file, transcript, or book). The shared TagPicker carries the
+            accessible name (the visually-hidden label); the fieldset's
+            disabled mirrors the source picker's in-flight gate. */}
+        <fieldset className="add-tags-fieldset" disabled={submitting}>
+          <legend>Tags (optional)</legend>
+          <label htmlFor="add-dialog-tags" className="visually-hidden">
+            Add or search a tag
+          </label>
+          <TagPicker
+            stats={tagStats}
+            selected={tagsValue}
+            onChange={setTagsValue}
+            inputId="add-dialog-tags"
+          />
+        </fieldset>
 
         <div className="dialog-actions add-dialog-actions">
           {/* D16-10 — the Cancel control is inert while a submission is in

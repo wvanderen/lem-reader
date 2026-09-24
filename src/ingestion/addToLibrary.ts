@@ -141,17 +141,55 @@ export function bookAssetsForChapters(
 }
 
 /**
+ * cleanTagsForSave — the one input-sanitizing seam for the optional tags
+ * riding an addToLibrary call (issue #75, decision #71): trim, drop
+ * empties (mirrors the `z.string().min(1)` schema constraint — a stray
+ * empty string would produce an invalid row the next read drops, the
+ * setArticleTags discipline), and dedupe exact matches. The TagPicker
+ * already routes case-insensitive duplicates to the stored casing; this
+ * seam only keeps a hand-rolled caller honest.
+ */
+function cleanTagsForSave(tags: readonly string[]): string[] {
+  const seen = new Set<string>();
+  for (const tag of tags) {
+    const trimmed = tag.trim();
+    if (trimmed.length > 0) seen.add(trimmed);
+  }
+  return [...seen];
+}
+
+/**
+ * withTags — returns the record carrying the cleaned tags when any exist,
+ * else the record untouched (an empty tag list must not introduce a field
+ * the ingest result didn't have — the additive `.default([])` hydration
+ * makes both shapes valid, but the untouched pass-through is the honest
+ * no-op).
+ */
+function withTags<T extends { tags?: string[] }>(
+  record: T,
+  tags: readonly string[],
+): T {
+  const cleaned = cleanTagsForSave(tags);
+  return cleaned.length > 0 ? { ...record, tags: cleaned } : record;
+}
+
+/**
  * addToLibrary — the ONE ingest-and-persist policy. One call per dialog
  * submission arm; never throws for policy reasons (see AddToLibraryOutcome).
+ *
+ * Issue #75 (decision #71) — the optional `tags` apply to the SAVED record
+ * (article or book) in the same atomic save; empty/absent saves exactly as
+ * before. Tags never influence dedupe-refusal (D7-07 stays identity-only).
  */
 export async function addToLibrary(
   input: AddToLibraryInput,
+  tags: readonly string[] = [],
 ): Promise<AddToLibraryOutcome> {
   try {
     if (input.kind === "file" && /\.epub$/i.test(input.file.name)) {
-      return await addEpubBook(input.file);
+      return await addEpubBook(input.file, tags);
     }
-    return await saveArticle(await ingestArticleInput(input));
+    return await saveArticle(await ingestArticleInput(input), tags);
   } catch (e) {
     return {
       outcome: "refused",
@@ -194,13 +232,21 @@ async function ingestArticleInput(input: AddToLibraryInput): Promise<IngestionSu
 
 /**
  * saveArticle — the D7-07 dedupe-refuse + D20-04 atomic article save, the
- * ONE home of the policy the three article arms used to repeat.
+ * ONE home of the policy the three article arms used to repeat. The
+ * optional tags ride the SAME atomic save (issue #75, decision #71) — a
+ * saved article is always complete, tags included.
  */
-async function saveArticle(result: IngestionSuccess): Promise<AddToLibraryOutcome> {
+async function saveArticle(
+  result: IngestionSuccess,
+  tags: readonly string[],
+): Promise<AddToLibraryOutcome> {
   if (await dexieLibrarySource.has(result.article.id)) {
     return { outcome: "refused", reason: "already-in-library" };
   }
-  await dexieLibrarySource.save(result.article, result.assets);
+  await dexieLibrarySource.save(
+    withTags(result.article, tags),
+    result.assets,
+  );
   return { outcome: "saved-article", articleId: result.article.id };
 }
 
@@ -208,9 +254,14 @@ async function saveArticle(result: IngestionSuccess): Promise<AddToLibraryOutcom
  * addEpubBook — the book path: binary read → chunked base64 → ingestEpub;
  * book-level dedupe-refuse (hasBook BEFORE saveBook — re-uploading
  * identical bytes produces the same content-hash book id); ONE
- * saveBook transaction with the per-chapter asset attribution.
+ * saveBook transaction with the per-chapter asset attribution. The
+ * optional tags ride the same transaction on the BOOK record (D12-04 —
+ * book tags, never per-chapter; issue #75, decision #71).
  */
-async function addEpubBook(file: File): Promise<AddToLibraryOutcome> {
+async function addEpubBook(
+  file: File,
+  tags: readonly string[],
+): Promise<AddToLibraryOutcome> {
   const bytes = new Uint8Array(await file.arrayBuffer());
   const result = await ingestEpub(bytesToBase64(bytes), file.name);
 
@@ -219,7 +270,7 @@ async function addEpubBook(file: File): Promise<AddToLibraryOutcome> {
   }
 
   await saveBook(
-    result.book,
+    withTags(result.book, tags),
     result.articles,
     bookAssetsForChapters(result.articles, result.assets),
   );

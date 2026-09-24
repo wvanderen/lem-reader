@@ -29,7 +29,8 @@ import { test, expect } from "@playwright/test";
 // forms live behind the header Add button's modal).
 import { openAddDialog, pickSource } from "./add-dialog";
 
-const BASE = "http://localhost:5173";
+// LEM_E2E_BASE discipline — parallel-wayfinder-sessions hygiene.
+const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
 
 // Three distinct paste-HTML articles rich enough to clear the ING-06
 // confidence thresholds + the round-trip anchor gate. Each has a unique
@@ -197,14 +198,15 @@ test.describe("SC#3 + LIB-03 + LIB-04 — search + tag filter + auto-prune", () 
     // popover is display:none — the input is unreachable until shown).
     await page.getByRole("button", { name: "Article tags" }).click();
     await expect(page.locator(".tag-popover")).toBeVisible();
-    // TagEntry: focus input, type "stoic", press Enter (or click Add tag).
-    const tagInput = page.locator("input#tag-entry-new");
+    // TagEntry hosts the shared TagPicker (issue #75 — decision #71):
+    // focus opens the browse list, type + Enter commits (no Add button).
+    const tagInput = page.locator("input#tag-entry-input");
     await tagInput.fill("stoic");
-    await page.getByRole("button", { name: /add tag/i }).click();
+    await tagInput.press("Enter");
 
-    // The chip appears in the TagEntry fieldset (display-only span).
+    // The chip appears as a picker pill (below the input).
     await expect(
-      page.locator(".tag-entry-list .tag-chip-readonly").filter({ hasText: "stoic" }),
+      page.locator(".tag-picker-chips .tag-picker-pill").filter({ hasText: "stoic" }),
     ).toBeVisible();
 
     // Navigate back to #/. TagFilter derives its tags from loadAllTags
@@ -263,10 +265,10 @@ test.describe("SC#3 + LIB-03 + LIB-04 — search + tag filter + auto-prune", () 
     ).toBeVisible({ timeout: 10_000 });
     await page.getByRole("button", { name: "Article tags" }).click();
     await expect(page.locator(".tag-popover")).toBeVisible();
-    await page.locator("input#tag-entry-new").fill("stoic");
-    await page.getByRole("button", { name: /add tag/i }).click();
+    await page.locator("input#tag-entry-input").fill("stoic");
+    await page.locator("input#tag-entry-input").press("Enter");
     await expect(
-      page.locator(".tag-entry-list .tag-chip-readonly").filter({ hasText: "stoic" }),
+      page.locator(".tag-picker-chips .tag-picker-pill").filter({ hasText: "stoic" }),
     ).toBeVisible();
 
     // Back to #/ — chip present.
@@ -286,13 +288,13 @@ test.describe("SC#3 + LIB-03 + LIB-04 — search + tag filter + auto-prune", () 
     await page.getByRole("button", { name: "Article tags" }).click();
     await expect(page.locator(".tag-popover")).toBeVisible();
     await page
-      .locator(".tag-entry-list li")
+      .locator(".tag-picker-chips li")
       .filter({ hasText: "stoic" })
       .locator(".tag-chip-remove")
       .click();
-    // The chip leaves the TagEntry fieldset.
+    // The chip leaves the picker.
     await expect(
-      page.locator(".tag-entry-list .tag-chip-readonly").filter({ hasText: "stoic" }),
+      page.locator(".tag-picker-chips .tag-picker-pill").filter({ hasText: "stoic" }),
     ).toHaveCount(0);
 
     // Back to #/. Auto-prune (D8-08) — the TagFilter chip strip no longer
@@ -361,8 +363,8 @@ test.describe("SC#3 + LIB-03 + LIB-04 — search + tag filter + auto-prune", () 
     await page.waitForURL(/#\/article\//, { timeout: 10_000 });
     await page.getByRole("button", { name: "Article tags" }).click();
     await expect(page.locator(".tag-popover")).toBeVisible();
-    await page.locator("input#tag-entry-new").fill("stoic");
-    await page.getByRole("button", { name: /add tag/i }).click();
+    await page.locator("input#tag-entry-input").fill("stoic");
+    await page.locator("input#tag-entry-input").press("Enter");
     await openLibrary(page);
 
     // Search by tag name — tags are first-class searchable metadata (D8-06).
@@ -474,10 +476,10 @@ test.describe("LIB-09 — filtered-to-zero no-matches feedback (D16-13)", () => 
     ).toBeVisible({ timeout: 10_000 });
     await page.getByRole("button", { name: "Article tags" }).click();
     await expect(page.locator(".tag-popover")).toBeVisible();
-    await page.locator("input#tag-entry-new").fill("stoic");
-    await page.getByRole("button", { name: /add tag/i }).click();
+    await page.locator("input#tag-entry-input").fill("stoic");
+    await page.locator("input#tag-entry-input").press("Enter");
     await expect(
-      page.locator(".tag-entry-list .tag-chip-readonly").filter({ hasText: "stoic" }),
+      page.locator(".tag-picker-chips .tag-picker-pill").filter({ hasText: "stoic" }),
     ).toBeVisible();
 
     // Seed the mid-article location AFTER the tag round-trip so the
@@ -542,10 +544,10 @@ test.describe("LIB-09 — filtered-to-zero no-matches feedback (D16-13)", () => 
     ).toBeVisible({ timeout: 10_000 });
     await page.getByRole("button", { name: "Article tags" }).click();
     await expect(page.locator(".tag-popover")).toBeVisible();
-    await page.locator("input#tag-entry-new").fill("stoic");
-    await page.getByRole("button", { name: /add tag/i }).click();
+    await page.locator("input#tag-entry-input").fill("stoic");
+    await page.locator("input#tag-entry-input").press("Enter");
     await expect(
-      page.locator(".tag-entry-list .tag-chip-readonly").filter({ hasText: "stoic" }),
+      page.locator(".tag-picker-chips .tag-picker-pill").filter({ hasText: "stoic" }),
     ).toBeVisible();
     await openLibrary(page);
 

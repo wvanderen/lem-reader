@@ -29,7 +29,8 @@ import AxeBuilder from "@axe-core/playwright";
 // wedge a later versioned reopen into a blocked upgrade).
 import { makeArticle, prepareFreshPage, seedRows } from "../portability/_portability";
 
-const BASE = "http://localhost:5173";
+// LEM_E2E_BASE discipline — parallel-wayfinder-sessions hygiene.
+const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
 // The seeded Dexie-row article used by the edit-persistence flow (a real
 // ingested row — see the tagsStore note above). Long enough to render.
 const TAGGED_ARTICLE = makeArticle({
@@ -158,12 +159,15 @@ test.describe("tag popover (13-10 — G5)", () => {
     ).toBeVisible();
     await expect(tagsTrigger(page)).toHaveAttribute("aria-expanded", "true");
 
-    // Edit: add a tag through the byte-unchanged TagEntry.
-    await page.locator("input#tag-entry-new").fill("stoic");
-    await page.getByRole("button", { name: /add tag/i }).click();
+    // Edit: add a tag through the shared TagPicker (issue #75 — decision
+    // #71: TagEntry converged on the variant-A picker; type + Enter commits,
+    // the pill chip confirms).
+    const tagInput = page.getByRole("combobox", { name: "Add or search a tag" });
+    await tagInput.fill("stoic");
+    await tagInput.press("Enter");
     await expect(
       page
-        .locator(".tag-entry-list .tag-chip-readonly")
+        .locator(".tag-picker-chips .tag-picker-pill")
         .filter({ hasText: "stoic" }),
     ).toBeVisible();
 

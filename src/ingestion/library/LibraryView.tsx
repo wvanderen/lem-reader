@@ -55,8 +55,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { CanonicalArticle } from "../../content/types";
 import { LibrarySearch } from "./LibrarySearch";
 import { TagFilter } from "./TagFilter";
-import { LibraryRow } from "./LibraryRow";
+import { LibraryRow, rowTagsAnchorName } from "./LibraryRow";
 import { BookRow } from "./BookRow";
+import { RowTagsPopover, type RowTagsTarget } from "./RowTagsPopover";
 import { ContinueReadingStrip } from "./ContinueReadingStrip";
 // Issue #38 — the ambient reading-stats strip + its pure derivations.
 import { ReadingStatsStrip } from "./ReadingStatsStrip";
@@ -70,6 +71,9 @@ import { setArticleReadState } from "../../persistence/locationStore";
 // Issue #3 — the ONE whole-library read model + its invalidation call.
 import { invalidateLibrarySnapshot } from "./librarySnapshot";
 import { useLibrarySnapshot } from "./useLibrarySnapshot";
+// Issue #75 (decision #71) — the count-returning tag fold feeding the ONE
+// shared TagPicker's suggestions on this page (and the row-tags popover).
+import { deriveTagStats } from "./tagsStore";
 // Plan 15-03 (D15-11..14) — the session-scoped return-context seam. PURE
 // module (zero React, zero storage imports); this component owns the IO:
 // lazy-initializer reads at mount (filters always restore — D15-13), ONE
@@ -248,6 +252,11 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
   // opener; every close path (Cancel, Esc, success) mirrors back through
   // AddDialog's onCancel.
   const [addOpen, setAddOpen] = useState(false);
+  // Issue #75 (decision #71) — the row-tags popover target. Non-null ⇒
+  // the popover shows anchored to that row's trigger. onClose clears the
+  // target and invalidates the snapshot (ONE reload per editing session —
+  // the toggles inside the popover wrote through setArticleTags directly).
+  const [tagsTarget, setTagsTarget] = useState<RowTagsTarget | null>(null);
 
   // Plan 15-03 (Pitfall 8) — rewrite EVERY render so the unmount cleanup
   // below always reads the CURRENT context. A StrictMode double render
@@ -428,6 +437,16 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
   // (stale-while-revalidate).
   const timeReadByArticleId = useMemo(
     () => timeReadLabels(deriveLibraryReadingStats(snapshot)),
+    [snapshot],
+  );
+
+  // Issue #75 (decision #71) — the picker-suggestion stats, folded from the
+  // SAME settled snapshot every other fold reads (most-used first, ties
+  // alphabetical; counts never render). Recomputes on snapshot identity
+  // change only — an editing session's toggles refresh at the close
+  // invalidation, the stale-while-revalidate discipline.
+  const tagStats = useMemo(
+    () => deriveTagStats(snapshot.articles, snapshot.books),
     [snapshot],
   );
 
@@ -689,6 +708,21 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
                   // override — OQ1 resolved via gate). Book rows, chapter
                   // sub-rows, and fixture rows get NO onEdit (D17-05/D17-06).
                   onEdit={a.ingestionMeta !== undefined ? () => setEditTarget(a) : undefined}
+                  // Issue #75 (decision #71) — the row-tags trigger rides the
+                  // SAME persistence gate as onEdit (a tag needs a Dexie row
+                  // to land on) and the same effective-title naming rule.
+                  onTags={
+                    a.ingestionMeta !== undefined
+                      ? () =>
+                          setTagsTarget({
+                            id: a.id,
+                            title: effectiveTitle(a),
+                            tags: a.tags ?? [],
+                            anchor: rowTagsAnchorName(a.id),
+                          })
+                      : undefined
+                  }
+                  tagsOpen={tagsTarget?.id === a.id}
                 />
               ))}
               {/* Plan 12-05 — one expandable BookRow per VISIBLE Book (chapters
@@ -857,6 +891,20 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
         open={addOpen}
         onCancel={() => setAddOpen(false)}
         onBookAdded={() => invalidateLibrarySnapshot()}
+        tagStats={tagStats}
+      />
+      {/* Issue #75 (decision #71) — the ONE row-tags popover. Always mounted
+          (a popover="auto" element must exist to show); renders nothing but
+          an empty hidden panel while tagsTarget is null. onClose clears the
+          target and invalidates the snapshot so the rows re-derive with the
+          popover's written tags (the RemoveConfirm onConfirm precedent). */}
+      <RowTagsPopover
+        target={tagsTarget}
+        stats={tagStats}
+        onClose={() => {
+          setTagsTarget(null);
+          invalidateLibrarySnapshot();
+        }}
       />
     </main>
   );
