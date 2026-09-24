@@ -35,7 +35,7 @@ import { fixtures } from "../../../src/fixtures";
 import { ArticleSchema } from "../../../src/content/schema";
 import type { CanonicalArticle } from "../../../src/content/schema";
 
-const BASE = "http://localhost:5173";
+const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
 
 // ── Node-side corpus builders (shipped schemas only — never hand-built rows) ──
 

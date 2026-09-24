@@ -28,7 +28,7 @@ import {
   graphemeClusters,
 } from "../../../src/content/normalizeText";
 
-const BASE = "http://localhost:5173";
+const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
 
 /** Build an ArticleSchema-valid standalone article from plain paragraphs
  * (library-restore.spec.ts makeStandalone discipline — schema-built in

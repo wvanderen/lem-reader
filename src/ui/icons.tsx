@@ -187,6 +187,16 @@ export function JumpToArticleIcon(props: IconProps) {
   );
 }
 
+/** Plus — the Add-to-Library trigger (header icon on Highlights). */
+export function PlusIcon(props: IconProps) {
+  return (
+    <Svg size={20} {...props}>
+      <path d="M12 5v14" />
+      <path d="M5 12h14" />
+    </Svg>
+  );
+}
+
 /** Image — the refused/no-dims figure placeholder. */
 export function ImageIcon(props: IconProps) {
   return (

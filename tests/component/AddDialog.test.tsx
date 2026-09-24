@@ -39,6 +39,8 @@ vi.mock("../../src/ingestion/IngestionClient", () => ({
   ingestMarkdown: vi.fn(),
   ingestPdf: vi.fn(),
   ingestEpub: vi.fn(),
+  ingestPastedTranscript: vi.fn(),
+  browserPreferredLanguages: vi.fn(() => undefined),
   IngestionError: class IngestionError extends Error {
     readonly reason: string;
     constructor(reason: string, message?: string) {
@@ -68,6 +70,7 @@ import {
   ingestUrl,
   ingestHtml,
   ingestEpub,
+  ingestPastedTranscript,
   IngestionError,
   type EpubIngestionSuccess,
 } from "../../src/ingestion/IngestionClient";
@@ -78,6 +81,7 @@ import type { CanonicalArticle } from "../../src/content/types";
 const ingestUrlMock = vi.mocked(ingestUrl);
 const ingestHtmlMock = vi.mocked(ingestHtml);
 const ingestEpubMock = vi.mocked(ingestEpub);
+const ingestPastedTranscriptMock = vi.mocked(ingestPastedTranscript);
 const hasMock = vi.mocked(dexieLibrarySource.has);
 const saveMock = vi.mocked(dexieLibrarySource.save);
 const hasBookMock = vi.mocked(hasBook);
@@ -113,6 +117,7 @@ beforeEach(() => {
   ingestUrlMock.mockReset();
   ingestHtmlMock.mockReset();
   ingestEpubMock.mockReset();
+  ingestPastedTranscriptMock.mockReset();
   hasMock.mockReset();
   saveMock.mockReset();
   hasBookMock.mockReset();
@@ -686,5 +691,151 @@ describe("AddDialog — discoverability hint (issue #60)", () => {
     // The file source's hint (the pattern this mirrors) is untouched.
     const fileHint = document.querySelector("form#add-file-form p.meta");
     expect(fileHint?.textContent).toBe("Accepts .md, .html, PDF, and EPUB books");
+  });
+});
+
+// ── Transcript swap (issue #84, decision #70) ────────────────────────────────
+// The bot-check fallback is an IN-PLACE swap of the content slot: the
+// picker + source forms HIDE (never unmount — the picked file must
+// survive), the transcript flow renders in their position, the ONE
+// bottom submit flips label + form= target, and the stacked second
+// action row is retired. The status card sits ABOVE the form and hosts
+// the refusal copy that explains the swap. "Back to web address" returns
+// with the typed URL intact (D16-11).
+describe("AddDialog — transcript content swap (issue #84)", () => {
+  const YT_URL = "https://www.youtube.com/watch?v=swapTest123";
+
+  async function refuseWithBotCheck() {
+    const user = userEvent.setup();
+    ingestUrlMock.mockRejectedValue(new IngestionError("youtube-bot-check"));
+    renderDialog();
+    await user.type(screen.getByRole("textbox", { name: "Add by URL" }), YT_URL);
+    await user.click(screen.getByRole("button", { name: /^add$/i }));
+    await waitFor(() => {
+      expect(screen.getByRole("status").textContent).toContain(
+        "YouTube is asking for extra verification",
+      );
+    });
+    return { user };
+  }
+
+  it("swaps the content slot: picker + source forms hidden, transcript flow mounted, refusal copy in the top status card", async () => {
+    await refuseWithBotCheck();
+
+    // The status card hosts the bot-check context (the same copy map).
+    expect(screen.getByRole("status").textContent).toContain(
+      "YouTube is asking for extra verification, so this video can't be added right now.",
+    );
+    // The picker + source content hide via the hidden attribute (mount
+    // preservation), and the transcript flow renders instead.
+    const picker = document.querySelector("fieldset.add-source-picker")!;
+    expect(picker.hasAttribute("hidden")).toBe(true);
+    const content = document.querySelector(".add-source-content")!;
+    expect(content.hasAttribute("hidden")).toBe(true);
+    expect(document.getElementById("add-transcript-form")).not.toBeNull();
+    expect(document.getElementById("ingest-transcript-title")).not.toBeNull();
+    // The video URL rides provenance prefilled from the refused URL.
+    expect(
+      (document.getElementById("ingest-transcript-url") as HTMLInputElement).value,
+    ).toBe(YT_URL);
+    // The always-mounted file input SURVIVED the swap (Pattern 3a).
+    expect(document.getElementById("ingest-file")).not.toBeNull();
+  });
+
+  it("the status card renders ABOVE the content slot (the one-anatomy order)", async () => {
+    await refuseWithBotCheck();
+    const status = screen.getByRole("status");
+    const picker = document.querySelector("fieldset.add-source-picker")!;
+    expect(
+      status.compareDocumentPosition(picker) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("the shared bottom submit flips to 'Add transcript' targeting the transcript form; the second action row is retired", async () => {
+    await refuseWithBotCheck();
+
+    const submit = screen.getByRole("button", {
+      name: "Add transcript",
+    }) as HTMLButtonElement;
+    expect(submit.getAttribute("form")).toBe("add-transcript-form");
+    // Disabled while the required title/text are empty (the no-silent-
+    // "Transcript" gate now rides the SHARED button).
+    expect(submit.disabled).toBe(true);
+    // No stacked second action row, no inner duplicate submit, no
+    // "No thanks" — the quiet Back control replaced it.
+    expect(document.querySelector(".add-transcript-actions")).toBeNull();
+    expect(screen.queryByRole("button", { name: "No thanks" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Back to web address" })).toBeTruthy();
+    expect(document.querySelectorAll("button.add-dialog-submit").length).toBe(1);
+  });
+
+  it("Back to web address retires the swap with the typed URL preserved (D16-11)", async () => {
+    const { user } = await refuseWithBotCheck();
+
+    await user.click(screen.getByRole("button", { name: "Back to web address" }));
+
+    // The swap retired: picker + URL form visible again, transcript form
+    // unmounted, URL text intact.
+    expect(
+      document.querySelector("fieldset.add-source-picker")!.hasAttribute("hidden"),
+    ).toBe(false);
+    expect(
+      document.querySelector(".add-source-content")!.hasAttribute("hidden"),
+    ).toBe(false);
+    expect(document.getElementById("add-transcript-form")).toBeNull();
+    expect(
+      (document.getElementById("ingest-url") as HTMLInputElement).value,
+    ).toBe(YT_URL);
+    // The shared submit re-armed for the URL arm.
+    const add = screen.getByRole("button", { name: /^add$/i }) as HTMLButtonElement;
+    expect(add.disabled).toBe(false);
+    // The provenance prefill does not survive the retired offer into a
+    // future swap — it re-prefills from the NEXT refused URL (D16-08's
+    // fresh-session discipline at field level).
+    expect(
+      (document.getElementById("ingest-transcript-url") as HTMLInputElement | null)
+        ?.value ?? "",
+    ).toBe("");
+  });
+
+  it("submits through the shared button: title + text ride ingestPastedTranscript; success closes then navigates (D16-12)", async () => {
+    const user = userEvent.setup();
+    ingestUrlMock.mockRejectedValue(new IngestionError("youtube-bot-check"));
+    renderDialog({
+      onCancel: vi.fn(() => navEvents.push("cancel")),
+    });
+    await user.type(screen.getByRole("textbox", { name: "Add by URL" }), YT_URL);
+    await user.click(screen.getByRole("button", { name: /^add$/i }));
+    await waitFor(() => {
+      expect(screen.getByRole("status").textContent).toContain(
+        "YouTube is asking for extra verification",
+      );
+    });
+
+    ingestPastedTranscriptMock.mockResolvedValue({
+      article: sampleArticle("pasted-swap-id"),
+      confidence: { state: "low" },
+      assets: [],
+    });
+
+    await user.type(screen.getByLabelText("Title"), "Pasted Lecture");
+    await user.type(
+      screen.getByRole("textbox", { name: /paste the transcript/i }),
+      "0:00\nA cue pasted by hand",
+    );
+    expect(
+      (screen.getByRole("button", { name: "Add transcript" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(false);
+    await user.click(screen.getByRole("button", { name: "Add transcript" }));
+
+    await waitFor(() => {
+      expect(navEvents).toEqual(["cancel", "hash:#/article/pasted-swap-id"]);
+    });
+    expect(ingestPastedTranscriptMock).toHaveBeenCalledWith(
+      "0:00\nA cue pasted by hand",
+      "Pasted Lecture",
+      YT_URL,
+    );
   });
 });

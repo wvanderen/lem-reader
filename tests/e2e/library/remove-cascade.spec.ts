@@ -38,7 +38,7 @@ import { test, expect, type Page } from "@playwright/test";
 // live behind the header Add button's modal).
 import { openAddDialog, pickSource } from "./add-dialog";
 
-const BASE = "http://localhost:5173";
+const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
 
 // A representative paste-HTML article rich enough to clear the ING-06
 // confidence thresholds + the round-trip anchor gate. The ingested article's

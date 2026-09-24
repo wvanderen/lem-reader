@@ -63,7 +63,8 @@
 import { test, expect } from "@playwright/test";
 import type { IngestionFailureReason } from "../../../src/ingestion/types";
 
-const INGEST_URL = "http://localhost:5173/api/ingest";
+// LEM_E2E_BASE discipline — parallel-wayfinder-sessions hygiene.
+const INGEST_URL = `${process.env.LEM_E2E_BASE ?? "http://localhost:5173"}/api/ingest`;
 
 /**
  * The SSRF attack-vector corpus. Each entry asserts:

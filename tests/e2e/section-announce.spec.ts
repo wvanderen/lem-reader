@@ -16,7 +16,7 @@
 // none). Reuses BASE + image-stub conventions.
 import { test, expect } from "@playwright/test";
 
-const BASE = "http://localhost:5173";
+const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
 // technical-post carries 3 h2 headings — sufficient for the scroll-spy.
 const FIXTURE = "technical-post";
 

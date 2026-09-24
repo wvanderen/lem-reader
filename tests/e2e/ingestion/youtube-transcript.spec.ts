@@ -16,8 +16,13 @@
 //       specific, dialog open, URL retained, retry enabled, no row added
 //   N5  bot-check — announces immediately, no automatic retry (request
 //       count stays at one)
-//   N5b bot-check fallback — the paste-transcript offer appears, the pasted
-//       text rides the {transcript} envelope, and the article opens
+//   N5b bot-check fallback — the paste-transcript offer appears as an
+//       IN-PLACE swap of the content slot (#84: picker + source forms
+//       hidden, the top status card hosting the refusal, ONE actions row
+//       whose shared submit flips to "Add transcript"), the pasted text
+//       rides the {transcript} envelope, and the article opens
+//   N5c bot-check Back affordance — "Back to web address" retires the
+//       swap with the typed URL intact (D16-11) and the URL arm retries
 //   N6  ASR-only video — ingest succeeds with the low-confidence disclosure
 //   plus the flow-N1 tail: position restore + finished state behave exactly
 //   as for any text article (flows A–L inherit; no special-casing).
@@ -28,7 +33,10 @@ import {
   announcementRegion,
 } from "../annotations/_fixtures";
 
-const BASE = "http://localhost:5173";
+// Issue #84 ride-along (the #81/#94 harness discipline) — the base URL
+// honors LEM_E2E_BASE so parallel sessions can pin a session-local server;
+// the default stays the shared dev server.
+const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
 
 // ── transcript-article builder (ArticleSchema-valid envelopes) ──────────────
 
@@ -482,6 +490,28 @@ test.describe("YouTube ingest end-to-end (issue #41, flow N)", () => {
       "YouTube is asking for extra verification, so this video can't be added right now.",
     );
     await expect(dialog).toBeVisible();
+    // Issue #84 — the swap is IN PLACE: the picker + source forms hide
+    // (mount-preserving), the status card sits ABOVE the swapped flow in
+    // the one-anatomy order, and the stacked second action row is gone.
+    await expect(dialog.locator("fieldset.add-source-picker")).toBeHidden();
+    await expect(dialog.locator(".add-source-content")).toBeHidden();
+    await expect(dialog.locator(".add-transcript-actions")).toHaveCount(0);
+    expect(
+      await dialog.evaluate((dlg) => {
+        const status = dlg.querySelector(".status");
+        const form = dlg.querySelector("#add-transcript-form");
+        return !!(
+          status &&
+          form &&
+          status.compareDocumentPosition(form) & Node.DOCUMENT_POSITION_FOLLOWING
+        );
+      }),
+      "the status card must precede the transcript flow in DOM order",
+    ).toBe(true);
+    // The shared bottom submit flipped to the transcript target (#84).
+    const addTranscript = dialog.locator("button.add-dialog-submit");
+    await expect(addTranscript).toHaveText("Add transcript");
+    await expect(addTranscript).toHaveAttribute("form", "add-transcript-form");
 
     // No automatic retry: exactly ONE ingest request, still one after a beat.
     expect(ingest.requests()).toBe(1);
@@ -547,7 +577,9 @@ test.describe("YouTube ingest end-to-end (issue #41, flow N)", () => {
     // The title field is REQUIRED and gates the submit (the no-silent-
     // "Transcript" rule): empty title → Add transcript disabled, with the
     // calm blocked-save explanation wired to the input via aria-describedby.
-    const addTranscript = dialog.getByRole("button", { name: /add transcript/i });
+    // Issue #84 — "Add transcript" IS the shared bottom submit (the
+    // second action row retired), so the locator rides .add-dialog-submit.
+    const addTranscript = dialog.locator("button.add-dialog-submit");
     const titleInput = dialog.locator("#ingest-transcript-title");
     await expect(titleInput).toHaveAttribute("required", "");
     await expect(titleInput).toHaveAttribute("aria-required", "true");
@@ -573,6 +605,51 @@ test.describe("YouTube ingest end-to-end (issue #41, flow N)", () => {
       url: BOT_URL,
     });
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("Pasted Lecture", {
+      timeout: 10_000,
+    });
+  });
+
+  test("N5c: Back to web address retires the swap with the typed URL intact; the URL arm retries (D16-11)", async ({
+    page,
+  }) => {
+    const BOT_URL = "https://www.youtube.com/watch?v=botCheckVi1";
+    const OK_URL = "https://www.youtube.com/watch?v=okAfterBack1";
+    mockIngest(page, {
+      [BOT_URL]: { ok: false, reason: "youtube-bot-check" },
+      [OK_URL]: okEnvelope(CHAPTERLESS),
+    });
+
+    await page.goto(`${BASE}/#/`);
+    await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible();
+    await addByUrl(page, BOT_URL);
+
+    const dialog = page.locator("dialog.add-dialog");
+    await expect(dialog.locator(".status")).toContainText(
+      "YouTube is asking for extra verification",
+    );
+    await expect(dialog.locator("#add-transcript-form")).toBeVisible();
+
+    // The quiet Back control retires the swap (the retired "No thanks"
+    // action): picker + URL form visible again, transcript flow unmounted.
+    await dialog.getByRole("button", { name: "Back to web address" }).click();
+    await expect(dialog.locator("fieldset.add-source-picker")).toBeVisible();
+    await expect(dialog.locator("#add-transcript-form")).toHaveCount(0);
+
+    // D16-11: the typed URL survived the round-trip and the submit
+    // re-armed for the URL arm.
+    const input = page.getByRole("textbox", { name: /add by url/i });
+    await expect(input).toHaveValue(BOT_URL);
+    await expect(page.getByRole("button", { name: /^add$/i })).toBeEnabled();
+
+    // Focus returned to the URL field — the reader continues where they
+    // left off (the #84 focus rail; programmatic focus, engine-honest).
+    await expect(input).toBeFocused();
+
+    // And the dialog stays keyboard-complete: a fresh URL ingests.
+    await input.fill(OK_URL);
+    await page.getByRole("button", { name: /^add$/i }).click();
+    await page.waitForURL(/#\/article\/yt-e2e-plain$/, { timeout: 15_000 });
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible({
       timeout: 10_000,
     });
   });

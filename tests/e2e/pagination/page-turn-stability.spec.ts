@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-const BASE = "http://localhost:5173";
+const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
 const FIXTURE = "essay-long-form";
 
 interface PaginationSnapshot {

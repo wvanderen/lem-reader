@@ -24,7 +24,7 @@
 // fixtures are bundled JSON).
 import { test, expect, type Page } from "@playwright/test";
 
-const BASE = "http://localhost:5173";
+const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
 
 /**
  * Representative v1.0 row shapes — the exact schemas written by Phase 2/5

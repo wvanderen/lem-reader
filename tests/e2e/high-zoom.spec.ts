@@ -159,7 +159,7 @@ test("320px reflow: body has no horizontal overflow (WCAG 1.4.10)", async ({
 test("Add dialog at 400% zoom + 320px reflow: no overflow at 320px; dialog survives zoom operable", async ({
   page,
 }) => {
-  await page.goto(`http://localhost:5173/#/`);
+  await page.goto(`${process.env.LEM_E2E_BASE ?? "http://localhost:5173"}/#/`);
   await expect(
     page.getByRole("heading", { level: 1, name: "Saved articles" }),
   ).toBeVisible();

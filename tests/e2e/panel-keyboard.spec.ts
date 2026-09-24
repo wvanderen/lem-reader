@@ -19,7 +19,7 @@ import {
 } from "./portability/_portability";
 import { wipeDatabase } from "./annotations/_fixtures";
 
-const BASE = "http://localhost:5173";
+const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
 
 const FIRST_FIXTURE = "essay-long-form";
 

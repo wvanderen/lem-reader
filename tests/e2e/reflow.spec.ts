@@ -17,7 +17,7 @@ import { FIXTURES, wipeDatabase, openArticle } from "./annotations/_fixtures";
 // case below; ADD-04 geometry proof).
 import { openAddDialog, pickSource } from "./library/add-dialog";
 
-const BASE = "http://localhost:5173";
+const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
 const FIRST_FIXTURE = "essay-long-form";
 
 test.describe("Reflow at 320px (A11Y-04)", () => {

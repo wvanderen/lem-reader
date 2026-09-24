@@ -32,7 +32,7 @@ import {
   seedRows,
 } from "../portability/_portability";
 
-const BASE = "http://localhost:5173";
+const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
 /** Corpus fixture proven to paginate to ≥2 pages at default settings. */
 const MULTI_PAGE_FIXTURE = "essay-long-form";
 

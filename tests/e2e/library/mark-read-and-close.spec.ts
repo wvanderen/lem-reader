@@ -32,7 +32,7 @@ import {
   graphemeClusters,
 } from "../../../src/content/normalizeText";
 
-const BASE = "http://localhost:5173";
+const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
 
 /** The sole starter-library fixture is the gesture's corpus. */
 const ARTICLE = fixtures[0]!;

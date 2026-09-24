@@ -21,7 +21,7 @@ import {
   seedRows,
 } from "./portability/_portability";
 
-const BASE = "http://localhost:5173";
+const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
 const FIRST_FIXTURE = "essay-long-form";
 
 test.describe("Reduced motion (A11Y-06)", () => {

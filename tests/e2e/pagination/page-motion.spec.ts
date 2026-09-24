@@ -1,5 +1,8 @@
 import { test, expect } from "@playwright/test";
 
+// LEM_E2E_BASE discipline — parallel-wayfinder-sessions hygiene.
+const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
+
 test("page fade is opt-in, persists, and obeys live reduced motion", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.addInitScript(() => {
@@ -13,7 +16,7 @@ test("page fade is opt-in, persists, and obeys live reduced motion", async ({ pa
     };
   });
   const fades = () => page.evaluate(() => (window as unknown as { turnFades: number }).turnFades);
-  await page.goto("http://localhost:5173/#/article/essay-long-form");
+  await page.goto(`${BASE}/#/article/essay-long-form`);
   const fragment = page.locator(".page-fragment");
   await expect(fragment).toBeVisible();
   await page.getByRole("button", { name: "Next page", exact: true }).click();

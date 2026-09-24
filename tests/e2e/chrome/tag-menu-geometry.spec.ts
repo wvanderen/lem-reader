@@ -41,7 +41,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { prepareFreshPage } from "../portability/_portability";
 
-const BASE = "http://localhost:5173";
+const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
 // The long-form corpus fixture used by the tag-popover spec's export/axe
 // scenarios — no tag writes needed here; geometry only.
 const FIXTURE = "essay-long-form";

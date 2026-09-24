@@ -36,7 +36,13 @@
 
 import { useSettings } from "../settings/SettingsContext";
 import { ModeToggle } from "./ModeToggle";
-import { GearIcon, HighlighterIcon, TagIcon, ContentsIcon } from "../ui/icons";
+import {
+  GearIcon,
+  HighlighterIcon,
+  TagIcon,
+  ContentsIcon,
+  PlusIcon,
+} from "../ui/icons";
 
 interface HeaderProps {
   onOpenSettings: () => void;
@@ -123,6 +129,18 @@ interface HeaderProps {
    * progress save).
    */
   openArticleId: string | null;
+  /**
+   * Issue #84 (decision #70) — whether the Add-to-Library dialog is open.
+   * Drives the highlights Add-trigger's aria-expanded (the gear-button
+   * expanded discipline).
+   */
+  addOpen: boolean;
+  /**
+   * Issue #84 (decision #70) — invoked when the reader clicks the
+   * highlights Add-trigger. App owns the ONE AddDialog session (the same
+   * instance the Library h1-row button opens); Header stays presentational.
+   */
+  onOpenAdd: () => void;
 }
 
 export function Header({
@@ -137,10 +155,12 @@ export function Header({
   onToggleTags,
   tocOpen,
   onToggleToc,
-  destination,
-  readTarget,
-  openArticleId,
-}: HeaderProps) {
+    destination,
+    readTarget,
+    openArticleId,
+    addOpen,
+    onOpenAdd,
+  }: HeaderProps) {
   // Header is a useSettings consumer so the toggle's aria-pressed + glyph
   // reflect the LIVE preference without App prop-drilling. App stays unchanged.
   const { settings } = useSettings();
@@ -233,6 +253,32 @@ export function Header({
         calm --space-sm gap.
       */}
       <div className="header-controls">
+        {/*
+          Issue #84 (decision #70 — Add-to-Library placement): the quiet
+          44×44 header Add icon, FIRST in .header-controls so Highlights
+          reads [add][gear]. Visible ONLY on the Highlights destination —
+          hidden on Library (the h1-row primary button stays Library's ONE
+          Add affordance, D16-03) and on Reader (quiet-chrome; the ≤420px
+          staged-collapse arithmetic is untouched — a 6th 44px control
+          would move the ≈410px threshold). The shell nav stays exactly
+          three text links (D15-08 unrevised — this icon is a control, not
+          a destination). Opens the SAME AddDialog session Library opens
+          (App-level state — decision #70). Mirrors the gear-button
+          anatomy: .btn-icon geometry, aria-haspopup="dialog" +
+          aria-expanded, accent tint only while expanded.
+        */}
+        {destination === "highlights" && (
+          <button
+            type="button"
+            className="btn btn-icon add-trigger"
+            onClick={onOpenAdd}
+            aria-label="Add to Library"
+            aria-haspopup="dialog"
+            aria-expanded={addOpen}
+          >
+            <PlusIcon />
+          </button>
+        )}
         {/*
           Phase 18 Plan 18-02 (D18-02 — the 5th article-scoped trigger): the
           contents trigger, FIRST in the group so Reader reads

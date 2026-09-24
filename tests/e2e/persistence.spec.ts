@@ -17,7 +17,7 @@
 // Reuses BASE + image-stub conventions from the existing e2e suite.
 import { test, expect } from "@playwright/test";
 
-const BASE = "http://localhost:5173";
+const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
 const FIRST_FIXTURE = "essay-long-form";
 
 // Pure-string SVG stub (see open-every-fixture.spec.ts for rationale).
