@@ -2691,40 +2691,20 @@ li + li .drawer-entry {
   font-weight: 600;
   color: var(--ink-soft);
 }
-/* Actions row — quiet text buttons OUTSIDE the jump button so they don't
-   trigger navigation. Sits inline-end. */
+/* Actions row — the card's quiet foot, start-aligned with the content
+   column (issue #89 — one continuous card on both highlight surfaces;
+   see the #89 block at the tail for the card chrome). Buttons stay
+   OUTSIDE the jump button so they don't trigger navigation. */
 .drawer-entry-actions {
   display: flex;
   gap: var(--space-sm);
-  justify-content: flex-end;
+  justify-content: flex-start;
   padding: 0 var(--space-md) var(--space-sm);
 }
-.drawer-entry-action {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--touch);
-  padding-inline: var(--space-sm);
-  background: transparent;
-  border: none;
-  font-family: var(--font-ui);
-  font-size: 14px;
-  line-height: 1;
-  font-weight: 400;
-  color: var(--ink-soft);
-  cursor: pointer;
-}
-.drawer-entry-action:hover {
-  color: var(--accent);
-}
-.drawer-entry-action:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
-}
-.drawer-entry-action:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
+/* Issue #89 — .drawer-entry-action rides .btn-quiet (the shared .btn
+   vocabulary); the bare class remains as the e2e locator hook, so the
+   per-surface button CSS above retired with it. Focus rides the global
+   :focus-visible ring; disabled rides .btn:disabled. */
 
 /* ── Drawer empty-state (reuses .status card geometry) ──────────────────────── */
 .drawer-empty {
@@ -3093,9 +3073,13 @@ dialog.import-preview {
   gap: var(--space-sm);
 }
 /* Issue #77 — .review-row-action rides .btn-quiet. */
-/* The remove affordable hints its consequence on hover only — the label +
- * the alertdialog copy carry the actual warning (never color alone). */
-.review-row-action-remove:hover {
+/* The remove affordance hints its consequence on hover only — the label +
+ * the alertdialog copy carry the actual warning (never color alone).
+ * Issue #89: ONE shared rule for both surfaces' destructive action, and
+ * :not(:disabled) so it outranks .btn-quiet:hover:not(:disabled) (the
+ * pre-#89 rule silently lost that race and the hover stayed accent). */
+.review-row-action-remove:hover:not(:disabled),
+.drawer-entry-action-delete:hover:not(:disabled) {
   color: var(--destructive);
   border-color: var(--destructive);
 }
@@ -4110,15 +4094,32 @@ main#main > .status:empty {
   background: transparent;
   gap: var(--space-sm);
 }
+/* Issue #89 (audit P2-3) — the curation band is the card's quiet FOOT:
+   start-aligned with the content column so the chips continue the text
+   flow, no separating rule (the #77 hairline strip + its ≤639px padding
+   variant retired — the strip read as a detached footer with a dead band).
+   Sibling semantics unchanged: the chips stay outside the whole-row jump
+   button; only the visuals merge. */
 .review-row-actions {
-  padding: var(--space-sm) var(--space-lg);
-  border-block-start: 1px solid var(--hairline);
+  justify-content: flex-start;
+  padding: 0 var(--space-lg) var(--space-sm);
   gap: var(--space-sm);
 }
-@media (max-width: 639px) {
-  .review-row-actions {
-    padding-inline: var(--space-sm);
-  }
+/* Issue #89 — the DRAWER half of the same treatment: each entry becomes
+   the review card's register (raised surface + hairline + --radius-md on
+   the .drawer-item li, set by AnnotationsDrawer.tsx), and the flat-list
+   hairline between entries retires — cards + list gap replace it. */
+.drawer-list {
+  display: grid;
+  gap: var(--space-md);
+}
+.drawer-item {
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+}
+li + li .drawer-entry {
+  border-top: 0;
 }
 
 /* Approved LEM book mark: follows the active theme and link hover color. */

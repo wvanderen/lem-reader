@@ -249,7 +249,7 @@ export function AnnotationsDrawer({
                 : `Go to highlight: ${ariaExcerpt}${noteText ? `; ${truncate(noteText, 60)}` : ""}`;
 
               return (
-                <li key={h.record.id}>
+                <li key={h.record.id} className="drawer-item">
                   <button
                     type="button"
                     className="drawer-entry"
@@ -275,9 +275,14 @@ export function AnnotationsDrawer({
                     )}
                   </button>
                   <span className="drawer-entry-actions">
+                    {/* Issue #89 — the curation cluster rides the shared .btn
+                        vocabulary (the .review-row-action register); the bare
+                        .drawer-entry-action class stays as the e2e locator
+                        hook. Delete hints its consequence on hover (the
+                        shared destructive-hover rule in app.css). */}
                     <button
                       type="button"
-                      className="drawer-entry-action"
+                      className="btn btn-quiet drawer-entry-action"
                       onClick={() => onEditNote(h.record.id)}
                       disabled={isUnresolved}
                     >
@@ -285,7 +290,7 @@ export function AnnotationsDrawer({
                     </button>
                     <button
                       type="button"
-                      className="drawer-entry-action"
+                      className="btn btn-quiet drawer-entry-action drawer-entry-action-delete"
                       onClick={() => onEditNote(h.record.id)}
                     >
                       Delete
