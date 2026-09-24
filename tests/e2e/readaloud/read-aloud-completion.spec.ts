@@ -5,9 +5,11 @@
 // harness (controllable fake installed via addInitScript; playback events
 // are always test-driven) — deterministic across chromium/firefox/webkit.
 //
-// What is pinned here (the issue's acceptance criteria):
-//   1. O1 — the bar shows the rate as text whenever mounted, and the skip
-//      controls render as real buttons while a session exists.
+// What is pinned here (the issue's acceptance criteria, as revised by
+// issue #90 where noted):
+//   1. O1 — the bar shows the rate and follow level as text while a session
+//      exists (idle the bar is the ONE quiet entry, #90), and the skip
+//      controls render as real buttons while that session lives.
 //   2. O3 — Skip sentence backward/forward and Skip paragraph forward make
 //      the voice audibly jump (the live utterance changes to the expected
 //      sentence/paragraph chunk) and the marker hops; a successful skip
@@ -20,15 +22,18 @@
 //      and a 0.5–3 rate control; both apply to SUBSEQUENT playback.
 //   5. O9 — backgrounding during playback stops it (announcement + no
 //      marker), and returning does NOT resume silently — the visible
-//      resume affordance is the bar's Play button.
+//      resume affordance is the bar's entry button.
 import { test, expect, type Page } from "@playwright/test";
 import { bundledFixtures } from "../../../src/fixtures";
 import { chunkArticleForSpeech } from "../../../src/readaloud/chunks";
 import { articleGraphemeIndex } from "../../../src/content/normalizeText";
 // REUSE-DO-NOT-FORK: the shared controllable-fake speechSynthesis harness.
 import { installFakeSpeech, type SpeechMode } from "./_speech";
+// Shared plumbing (BASE/clear/play-until-probe) + the LIVE follow labels
+// (one rename site — ReadAloudBar's own map).
+import { BASE, clearAllRows, playAndAwaitProbe } from "./_harness";
+import { FOLLOW_LABELS } from "../../../src/reader/ReadAloudBar";
 
-const BASE = "http://localhost:5173";
 const ESSAY = bundledFixtures.find((f) => f.id === "essay-long-form")!;
 const TECH = bundledFixtures.find((f) => f.id === "technical-post")!;
 const ESSAY_CHUNKS = chunkArticleForSpeech(ESSAY);
@@ -37,28 +42,6 @@ const TECH_CHUNKS = chunkArticleForSpeech(TECH);
 function firstChunkOfSentence(chunks: typeof ESSAY_CHUNKS, sentenceIndex: number) {
   const i = chunks.findIndex((c) => c.units.sentenceIndex === sentenceIndex);
   return chunks[i]!;
-}
-
-async function clearAllRows(page: Page): Promise<void> {
-  await page.evaluate(async () => {
-    await new Promise<void>((resolve) => {
-      const req = indexedDB.open("lem-reader");
-      req.onsuccess = () => {
-        const db = req.result;
-        const stores = ["articles", "settings", "location", "highlights", "notes", "books"];
-        const existing = stores.filter((s) => db.objectStoreNames.contains(s));
-        if (existing.length === 0) {
-          resolve();
-          return;
-        }
-        const tx = db.transaction(existing, "readwrite");
-        for (const s of existing) tx.objectStore(s).clear();
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => resolve();
-      };
-      req.onerror = () => resolve();
-    });
-  });
 }
 
 /** Open an article with the fake speech installed (ORDER IS LOAD-BEARING:
@@ -77,14 +60,6 @@ async function openArticle(
   await clearAllRows(page);
   await page.goto(`${BASE}/#/article/${articleId}`);
   return page;
-}
-
-async function playAndAwaitProbe(page: Page): Promise<void> {
-  const bar = page.locator(".readaloud-bar");
-  await expect(bar).toBeVisible();
-  await bar.getByRole("button", { name: "Play" }).click();
-  await expect(bar.getByText("Follows: word")).toBeVisible({ timeout: 10_000 });
-  await page.waitForTimeout(150); // the post-cancel settle before chunk 1
 }
 
 /** The text of the CURRENT live playback utterance (null when none). */
@@ -116,8 +91,9 @@ test.describe("Issue #43 — read-aloud completion", () => {
     const bar = page.locator(".readaloud-bar");
     await expect(bar).toBeVisible();
 
-    // Stopped: no skip controls, but the rate is already visible as text.
-    await expect(bar.getByText("Rate: 1×")).toBeVisible();
+    // Stopped (idle, issue #90): the ONE quiet entry — no skip controls, no
+    // rate, no follow text.
+    await expect(bar.getByText("Rate: 1×")).toHaveCount(0);
     await expect(bar.getByRole("button", { name: "Skip sentence backward" })).toHaveCount(0);
 
     await playAndAwaitProbe(page);
@@ -128,11 +104,11 @@ test.describe("Issue #43 — read-aloud completion", () => {
     await expect(bar.getByRole("button", { name: "Skip sentence forward" })).toBeVisible();
     await expect(bar.getByRole("button", { name: "Skip paragraph forward" })).toBeVisible();
     await expect(bar.getByText("Rate: 1×")).toBeVisible();
-    await expect(bar.getByText("Follows: word")).toBeVisible();
+    await expect(bar.getByText(FOLLOW_LABELS.word)).toBeVisible();
 
     await bar.getByRole("button", { name: "Stop" }).click();
     await expect(bar.getByRole("button", { name: "Skip sentence backward" })).toHaveCount(0);
-    await expect(bar.getByText("Rate: 1×")).toBeVisible();
+    await expect(bar.getByText("Rate: 1×")).toHaveCount(0);
   });
 
   test("O3: skip sentence forward/backward audibly jumps and the marker hops — silently", async ({
@@ -279,7 +255,7 @@ test.describe("Issue #43 — read-aloud completion", () => {
     const afterGap = TECH_CHUNKS.find((c) => c.startGrapheme >= codeEnd)!;
     expect(afterGap.startGrapheme).toBeGreaterThan(codeEnd);
 
-    await bar.getByRole("button", { name: "Play" }).click();
+    await bar.getByRole("button", { name: "Read aloud" }).click();
     await page.waitForTimeout(300); // the probe + settle
     const charIndex = afterGap.utf16ToGrapheme.findIndex((v) => v >= 1);
     await expect
@@ -340,14 +316,12 @@ test.describe("Issue #43 — read-aloud completion", () => {
     await expect(
       page.locator(".settings-value").filter({ hasText: "1.25×" }),
     ).toBeVisible();
-    // The bar mirrors the configured rate as text (O1).
     await page.keyboard.press("Escape");
-    await expect(page.locator(".readaloud-bar").getByText("Rate: 1.25×")).toBeVisible({
-      timeout: 10_000,
-    });
 
-    // Subsequent playback carries BOTH applied values.
+    // Subsequent playback carries BOTH applied values — and the bar mirrors
+    // the configured rate as text while the session lives (O1, #90).
     await playAndAwaitProbe(page);
+    await expect(page.locator(".readaloud-bar").getByText("Rate: 1.25×")).toBeVisible();
     await expect
       .poll(async () =>
         page.evaluate(() => {
@@ -394,7 +368,7 @@ test.describe("Issue #43 — read-aloud completion", () => {
         .filter({ hasText: "Read aloud stopped while the reader was in the background." }),
     ).toHaveCount(1);
     await expect(page.locator("mark.spoken-word")).toHaveCount(0);
-    await expect(bar.getByRole("button", { name: "Play" })).toBeVisible();
+    await expect(bar.getByRole("button", { name: "Read aloud" })).toBeVisible();
 
     // Return: nothing resumes silently — no new utterances, still stopped.
     await page.evaluate(() => {
@@ -406,6 +380,6 @@ test.describe("Issue #43 — read-aloud completion", () => {
     });
     await page.waitForTimeout(300);
     expect(await liveUtteranceText(page)).toBeNull();
-    await expect(bar.getByRole("button", { name: "Play" })).toBeVisible();
+    await expect(bar.getByRole("button", { name: "Read aloud" })).toBeVisible();
   });
 });

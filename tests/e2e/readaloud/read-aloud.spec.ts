@@ -6,20 +6,21 @@
 // across chromium/firefox/webkit and CI machines with no voices at all.
 //
 // What is pinned here:
-//   1. Anatomy + honesty: the fixed transport bar mounts with real
-//      Play/Pause/Stop buttons; the primary button's NAME flips with state
-//      (never color); Stop is inert while stopped; exactly one polite
-//      transport status region carries each announcement; play never moves
-//      focus.
-//   2. Word-capable voice: the silent probe resolves "Follows: word";
-//      boundary charIndexes surface as canonical location saves (raw
+//   1. Anatomy + honesty: the fixed transport bar mounts with real buttons;
+//      the primary button's NAME carries the state ("Read aloud" idle →
+//      "Pause" playing → "Play" paused, never color); idle the bar is the
+//      ONE quiet entry (issue #90 — no Stop/follow/rate shell); exactly one
+//      polite transport status region carries each announcement; play never
+//      moves focus.
+//   2. Word-capable voice: the silent probe resolves "Highlights each
+//      word"; boundary charIndexes surface as canonical location saves (raw
 //      IndexedDB location row — the flush discipline, not rendered UI);
 //      leaving and reopening RESTORES the listened position (the
 //      restoration marker's announce copy).
-//   3. Sentence-only voice: probe resolves "Follows: sentence" without
-//      stalling (the acceptance criterion's non-word voice path).
+//   3. Sentence-only voice: probe resolves "Highlights each sentence"
+//      without stalling (the acceptance criterion's non-word voice path).
 //   4. Dead voice: nothing fires — the bounded probe degrades to
-//      "Follows: progress only" and a silently-dropped queue fails HONESTLY
+//      "Shows progress only" and a silently-dropped queue fails HONESTLY
 //      ("Speech didn't start.") instead of faking playback.
 //   5. Finishing by ear: playing from a near-end saved position through the
 //      final chunk persists the ONE end-pin (offset = total) — the same
@@ -35,8 +36,10 @@ import {
 } from "../../../src/content/normalizeText";
 // REUSE-DO-NOT-FORK: the shared controllable-fake speechSynthesis harness.
 import { installFakeSpeech, type SpeechMode } from "./_speech";
-
-const BASE = "http://localhost:5173";
+// Shared plumbing (BASE/clear/tab-walk) + the LIVE follow labels (one
+// rename site — ReadAloudBar's own map).
+import { BASE, clearAllRows, tabWalkFrom } from "./_harness";
+import { FOLLOW_LABELS } from "../../../src/reader/ReadAloudBar";
 
 const ARTICLE = fixtures[0]!;
 const ARTICLE_HREF = `#/article/${ARTICLE.id}`;
@@ -142,35 +145,6 @@ async function openArticle(
   return page;
 }
 
-async function clearAllRows(page: Page): Promise<void> {
-  await page.evaluate(async () => {
-    await new Promise<void>((resolve) => {
-      const req = indexedDB.open("lem-reader");
-      req.onsuccess = () => {
-        const db = req.result;
-        const stores = [
-          "articles",
-          "settings",
-          "location",
-          "highlights",
-          "notes",
-          "books",
-        ];
-        const existing = stores.filter((s) => db.objectStoreNames.contains(s));
-        if (existing.length === 0) {
-          resolve();
-          return;
-        }
-        const tx = db.transaction(existing, "readwrite");
-        for (const s of existing) tx.objectStore(s).clear();
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => resolve();
-      };
-      req.onerror = () => resolve();
-    });
-  });
-}
-
 test.describe("Issue #40 — the read-aloud minimal speakable path", () => {
   test.setTimeout(90_000);
 
@@ -181,11 +155,13 @@ test.describe("Issue #40 — the read-aloud minimal speakable path", () => {
     const bar = page.locator(".readaloud-bar");
     await expect(bar).toBeVisible();
 
-    // Stopped: Play enabled, Stop disabled (nothing to stop).
-    const play = bar.getByRole("button", { name: "Play" });
-    const stop = bar.getByRole("button", { name: "Stop" });
-    await expect(play).toBeEnabled();
-    await expect(stop).toBeDisabled();
+    // Stopped (idle, issue #90): the ONE quiet entry "Read aloud"; no Stop
+    // shell, no follow text, no rate.
+    const entry = bar.getByRole("button", { name: "Read aloud" });
+    await expect(entry).toBeEnabled();
+    await expect(bar.getByRole("button", { name: "Stop" })).toHaveCount(0);
+    await expect(bar.getByText(FOLLOW_LABELS["progress-only"])).toHaveCount(0);
+    await expect(bar.getByText("Rate: 1×")).toHaveCount(0);
 
     // Focus stays put on play (the app never moves focus; the click is
     // delivered programmatically so button-focus cannot mask a steal).
@@ -208,17 +184,47 @@ test.describe("Issue #40 — the read-aloud minimal speakable path", () => {
     ).toHaveCount(1);
 
     // Pause flips the NAME back; the pause announcement lands; Stop (now
-    // meaningful) stops and announces through the same region.
+    // meaningful) stops and announces through the same region — and the
+    // bar collapses back to the idle entry.
     await bar.getByRole("button", { name: "Pause" }).click();
     await expect(bar.getByRole("button", { name: "Play" })).toBeVisible();
     await expect(
       page.getByRole("status").filter({ hasText: "Read aloud paused." }),
     ).toHaveCount(1);
-    await stop.click();
+    await bar.getByRole("button", { name: "Stop" }).click();
     await expect(
       page.getByRole("status").filter({ hasText: "Read aloud stopped." }),
     ).toHaveCount(1);
-    await expect(bar.getByRole("button", { name: "Play" })).toBeVisible();
+    await expect(bar.getByRole("button", { name: "Read aloud" })).toBeVisible();
+
+    // Keyboard-reachable end to end with visible focus (issue #90's
+    // acceptance): real Tab presses reach the idle entry from the header,
+    // the Tab-originated focus carries the global :focus-visible ring, and
+    // Enter on it starts the session — no pointer anywhere. WebKit's
+    // sequential navigation skips buttons (the a11y.spec.ts 09-06 engine
+    // divergence), so the Tab WALK runs on chromium + firefox; on webkit
+    // the claim degrades to focusability + Enter activation.
+    const entrySel = ".readaloud-cluster .readaloud-btn";
+    if (test.info().project.name !== "webkit") {
+      expect(
+        await tabWalkFrom(page, ".gear-button", entrySel, 20),
+        "Tab must reach the idle read-aloud entry",
+      ).toBe(true);
+      const ring = await page.evaluate(() => {
+        const el = document.activeElement as HTMLElement | null;
+        return el ? getComputedStyle(el).outlineStyle : "none";
+      });
+      expect(ring, "Tab-originated focus shows the visible focus ring").not.toBe(
+        "none",
+      );
+    } else {
+      await page.locator(entrySel).first().focus();
+      await expect(page.locator(entrySel)).toBeFocused();
+    }
+    await page.keyboard.press("Enter");
+    await expect(
+      bar.getByRole("button", { name: "Pause" }),
+    ).toBeVisible({ timeout: 10_000 });
   });
 
   test("word-capable voice: probe resolves 'word', listening persists and restores", async ({
@@ -238,7 +244,7 @@ test.describe("Issue #40 — the read-aloud minimal speakable path", () => {
     await pressPrimaryWithoutFocus(page);
 
     // Probe: silent (volume 0); the word boundary resolves the follow level.
-    await expect(bar.getByText("Follows: word")).toBeVisible({
+    await expect(bar.getByText(FOLLOW_LABELS.word)).toBeVisible({
       timeout: 10_000,
     });
 
@@ -282,11 +288,11 @@ test.describe("Issue #40 — the read-aloud minimal speakable path", () => {
   }) => {
     await openArticle(page, "sentence");
     const bar = page.locator(".readaloud-bar");
-    await bar.getByRole("button", { name: "Play" }).click();
+    await bar.getByRole("button", { name: "Read aloud" }).click();
 
     // The probe's sentence boundary (then its end) resolves the level well
     // inside the bounded probe budget; playback utterances follow.
-    await expect(bar.getByText("Follows: sentence")).toBeVisible({
+    await expect(bar.getByText(FOLLOW_LABELS.sentence)).toBeVisible({
       timeout: 10_000,
     });
 
@@ -320,19 +326,19 @@ test.describe("Issue #40 — the read-aloud minimal speakable path", () => {
   }) => {
     await openArticle(page, "dead");
     const bar = page.locator(".readaloud-bar");
-    await bar.getByRole("button", { name: "Play" }).click();
+    await bar.getByRole("button", { name: "Read aloud" }).click();
 
     // The probe times out (2s) → progress-only; the dropped playback queue
     // trips the first-event stall watchdog → the honest refusal, never a
     // fake "playing" state.
-    await expect(bar.getByText("Follows: progress only")).toBeVisible({
+    await expect(bar.getByText(FOLLOW_LABELS["progress-only"])).toBeVisible({
       timeout: 10_000,
     });
     await expect(
       page.getByRole("status").filter({ hasText: "Speech didn't start." }),
     ).toBeVisible({ timeout: 30_000 });
-    // The transport returned to its honest rest state.
-    await expect(bar.getByRole("button", { name: "Play" })).toBeVisible();
+    // The transport returned to its honest rest state (the idle entry).
+    await expect(bar.getByRole("button", { name: "Read aloud" })).toBeVisible();
   });
 
   test("finishing by ear marks the article finished (the end-pin persists)", async ({
@@ -346,7 +352,13 @@ test.describe("Issue #40 — the read-aloud minimal speakable path", () => {
     await expect(bar).toBeVisible();
 
     await pressPrimaryWithoutFocus(page);
-    await expect(bar.getByText(/Follows: (word|sentence|passage)/)).toBeVisible({
+    await expect(
+      bar.getByText(
+        new RegExp(
+          [FOLLOW_LABELS.word, FOLLOW_LABELS.sentence, FOLLOW_LABELS.passage].join("|"),
+        ),
+      ),
+    ).toBeVisible({
       timeout: 10_000,
     });
 
@@ -369,7 +381,7 @@ test.describe("Issue #40 — the read-aloud minimal speakable path", () => {
     await expect(
       page.getByRole("status").filter({ hasText: "Read aloud finished." }),
     ).toBeVisible();
-    await expect(bar.getByRole("button", { name: "Play" })).toBeVisible();
+    await expect(bar.getByRole("button", { name: "Read aloud" })).toBeVisible();
   });
 });
 
