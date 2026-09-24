@@ -10,7 +10,8 @@
 // Mirrors tests/component/ArticleView.test.tsx conventions: vi.mock hoisting,
 // RTL role/label queries, beforeEach mockReset.
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
+import { contrastRatio } from "../../src/settings/customTheme";
 
 // jsdom 25 implements the HTMLDialogElement interface but NOT showModal/close
 // behavior (Pitfall 2). We stub the two methods at the prototype level so the
@@ -23,14 +24,10 @@ beforeEach(() => {
   document.documentElement.style.cssText = "";
   delete document.documentElement.dataset.theme;
 
-  HTMLDialogElement.prototype.showModal = vi.fn(function (
-    this: HTMLDialogElement,
-  ) {
+  HTMLDialogElement.prototype.showModal = vi.fn(function (this: HTMLDialogElement) {
     this.open = true;
   });
-  HTMLDialogElement.prototype.close = vi.fn(function (
-    this: HTMLDialogElement,
-  ) {
+  HTMLDialogElement.prototype.close = vi.fn(function (this: HTMLDialogElement) {
     this.open = false;
     this.dispatchEvent(new Event("close"));
   });
@@ -93,9 +90,7 @@ describe("SettingsPanel — structure + aria (D2-01)", () => {
     const size = screen.getByRole("slider", { name: /Text size/i });
     const measure = screen.getByRole("slider", { name: /Reading width/i });
     expect(size.getAttribute("aria-valuenow")).toBe(String(DEFAULT_SETTINGS.size));
-    expect(measure.getAttribute("aria-valuenow")).toBe(
-      String(DEFAULT_SETTINGS.measure),
-    );
+    expect(measure.getAttribute("aria-valuenow")).toBe(String(DEFAULT_SETTINGS.measure));
     // Visible numeric readouts (UI-SPEC §Interaction 9 — survive forced-colors).
     expect(screen.getByText(`${DEFAULT_SETTINGS.size} px`)).not.toBeNull();
     expect(screen.getByText(`${DEFAULT_SETTINGS.measure} ch`)).not.toBeNull();
@@ -103,12 +98,8 @@ describe("SettingsPanel — structure + aria (D2-01)", () => {
 
   it("the close × carries aria-label='Close reading settings' and the Reset button reads 'Reset to defaults'", () => {
     render(<Harness open={true} onClose={() => undefined} />);
-    expect(
-      screen.getByRole("button", { name: "Close reading settings" }),
-    ).not.toBeNull();
-    expect(
-      screen.getByRole("button", { name: "Reset to defaults" }),
-    ).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Close reading settings" })).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Reset to defaults" })).not.toBeNull();
   });
 });
 
@@ -186,6 +177,176 @@ describe("SettingsPanel — focus-restore call site (Pitfall 1)", () => {
   });
 });
 
+// ── Issue #86 (decision #73) — the custom-theme slot + builder ───────────────
+// jsdom is NOT authoritative for color rendering; these tests pin the
+// APPLICATION wiring only: seeding/resume semantics, the inline token writes
+// applyTheme performs (string-level), the hex commit/draft contract, the
+// contrast guardrail affordances, and the two reset semantics. The real
+// browser proof (labels, focus, visibility, computed colors) lives in
+// tests/e2e/chrome/custom-theme.spec.ts across the three engines.
+describe("SettingsPanel — custom theme builder (issue #86, decision #73)", () => {
+  const inlineToken = (prop: string) => document.documentElement.style.getPropertyValue(prop);
+
+  function builderIn(doc: ParentNode): Element | null {
+    return doc.querySelector("details.custom-theme-builder");
+  }
+
+  it("activating Custom seeds from the then-active preset and mounts the builder", () => {
+    render(<Harness open={true} onClose={() => undefined} />);
+    act(() => {
+      fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
+    });
+    expect(document.documentElement.dataset.theme).toBe("custom");
+    // Seeded from sepia (the D-07 default) — the 5 stored tokens land inline
+    // (decision #73: the inline writes ARE the theme).
+    expect(inlineToken("--surface")).toBe("#fbf8f3");
+    expect(inlineToken("--ink")).toBe("#1f1b16");
+    expect(inlineToken("--accent")).toBe("#6b4423");
+    // Derived tokens resolve too (the 11-prop palette).
+    expect(inlineToken("--highlight")).toMatch(/^#[0-9a-f]{6}$/);
+    expect(builderIn(document)).not.toBeNull();
+    // The disclosure affordance + the five labeled rows.
+    expect(screen.getByText("Customize colors")).not.toBeNull();
+    for (const label of ["Surface", "Raised surface", "Text", "Accent", "Hairline"]) {
+      expect(screen.getByText(label)).not.toBeNull();
+    }
+  });
+
+  it("every color picker and hex field carries an accessible name", () => {
+    render(<Harness open={true} onClose={() => undefined} />);
+    act(() => {
+      fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
+    });
+    for (const label of ["Surface", "Raised surface", "Text", "Accent", "Hairline"]) {
+      expect(screen.getByLabelText(`${label} color`)).not.toBeNull();
+      expect(screen.getByLabelText(`${label} hex value`)).not.toBeNull();
+    }
+  });
+
+  it("a valid hex commit applies the token inline and snaps the field", () => {
+    render(<Harness open={true} onClose={() => undefined} />);
+    act(() => {
+      fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
+    });
+    const hex = screen.getByLabelText("Text hex value") as HTMLInputElement;
+    act(() => {
+      fireEvent.change(hex, { target: { value: "#123456" } });
+    });
+    expect(inlineToken("--ink")).toBe("#123456");
+    expect(hex.value).toBe("#123456");
+  });
+
+  it("an invalid (incomplete) hex leaves the stored token unchanged and keeps the draft", () => {
+    render(<Harness open={true} onClose={() => undefined} />);
+    act(() => {
+      fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
+    });
+    const hex = screen.getByLabelText("Text hex value") as HTMLInputElement;
+    act(() => {
+      fireEvent.change(hex, { target: { value: "#12" } });
+    });
+    expect(inlineToken("--ink")).toBe("#1f1b16");
+    expect(hex.value).toBe("#12");
+  });
+
+  it("switching to a preset and back RESUMES the stored custom theme", () => {
+    render(<Harness open={true} onClose={() => undefined} />);
+    act(() => {
+      fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
+    });
+    act(() => {
+      fireEvent.change(screen.getByLabelText("Text hex value"), {
+        target: { value: "#123456" },
+      });
+    });
+    // To a preset: data-theme flips, the inline palette is REMOVED (the CSS
+    // block owns the preset again), the builder unmounts.
+    act(() => {
+      fireEvent.click(screen.getByRole("radio", { name: "Light" }));
+    });
+    expect(document.documentElement.dataset.theme).toBe("light");
+    expect(inlineToken("--ink")).toBe("");
+    expect(builderIn(document)).toBeNull();
+    // Back to Custom: the STORED record resumes (edit intact) — not a re-seed.
+    act(() => {
+      fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
+    });
+    expect(document.documentElement.dataset.theme).toBe("custom");
+    expect(inlineToken("--ink")).toBe("#123456");
+    expect(inlineToken("--surface")).toBe("#fbf8f3");
+  });
+
+  it("the readout warns below AA and Fix contrast restores the offending pair only", async () => {
+    render(<Harness open={true} onClose={() => undefined} />);
+    act(() => {
+      fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
+    });
+    // Break EXACTLY ONE policed pair: ink = the surface color (text on
+    // surface 1:1). The accent pair still clears AA on the untouched
+    // surface — Fix contrast must move the ink only.
+    act(() => {
+      fireEvent.change(screen.getByLabelText("Text hex value"), {
+        target: { value: "#fbf8f3" },
+      });
+    });
+    expect(await screen.findByText(/hard to read/)).not.toBeNull();
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "Fix contrast" }));
+    });
+    await waitFor(() => {
+      expect(screen.queryByText(/hard to read/)).toBeNull();
+    });
+    // The offender moved; its pair now clears AA; the untouched tokens ride.
+    expect(contrastRatio(inlineToken("--ink"), inlineToken("--surface"))).toBeGreaterThanOrEqual(
+      4.5,
+    );
+    expect(inlineToken("--surface")).toBe("#fbf8f3");
+    expect(inlineToken("--accent")).toBe("#6b4423");
+    expect(inlineToken("--hairline")).toBe("#d9d1c2");
+  });
+
+  it("Reset to base colors restores the seed tokens while staying custom", async () => {
+    render(<Harness open={true} onClose={() => undefined} />);
+    act(() => {
+      fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
+    });
+    act(() => {
+      fireEvent.change(screen.getByLabelText("Text hex value"), {
+        target: { value: "#123456" },
+      });
+    });
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "Reset to base colors" }));
+    });
+    expect(document.documentElement.dataset.theme).toBe("custom");
+    expect(inlineToken("--ink")).toBe("#1f1b16");
+    expect(inlineToken("--surface")).toBe("#fbf8f3");
+  });
+
+  it("the panel-wide Reset drops the custom theme; the next activation re-seeds fresh", () => {
+    render(<Harness open={true} onClose={() => undefined} />);
+    act(() => {
+      fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
+    });
+    act(() => {
+      fireEvent.change(screen.getByLabelText("Text hex value"), {
+        target: { value: "#123456" },
+      });
+    });
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "Reset to defaults" }));
+    });
+    expect(document.documentElement.dataset.theme).toBe("sepia");
+    expect(builderIn(document)).toBeNull();
+    // Re-activation seeds from sepia AGAIN (the edited record was dropped —
+    // decision #73: wholesale Reset, re-seed on next activation).
+    act(() => {
+      fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
+    });
+    expect(inlineToken("--ink")).toBe("#1f1b16");
+  });
+});
+
 // Verify the SettingsContext integration — a radio change rewrites the token.
 // (Live-apply logic lives in SettingsContext; this asserts the wiring.)
 describe("SettingsPanel — live-apply wiring (D2-03)", () => {
@@ -212,9 +373,7 @@ describe("SettingsPanel — live-apply wiring (D2-03)", () => {
     // Per 02-04 gap 2, applyTheme now writes the --font-size custom property
     // (consumed by the body rule via var()) instead of the bare font-size
     // property the body rule overrode.
-    expect(
-      document.documentElement.style.getPropertyValue("--font-size"),
-    ).toBe("18px");
+    expect(document.documentElement.style.getPropertyValue("--font-size")).toBe("18px");
   });
 });
 
@@ -269,9 +428,7 @@ describe("SettingsPanel — read-aloud controls (issue #43, O8)", () => {
   });
 
   it("picking a voice updates the select's live value", async () => {
-    stubSpeech([
-      { voiceURI: "zora", name: "Zora", lang: "fr", localService: true },
-    ]);
+    stubSpeech([{ voiceURI: "zora", name: "Zora", lang: "fr", localService: true }]);
     render(<Harness open={true} onClose={() => undefined} />);
     const select = await screen.findByRole("combobox", { name: "Read-aloud voice" });
     fireEvent.change(select, { target: { value: "zora" } });

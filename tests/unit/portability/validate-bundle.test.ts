@@ -29,15 +29,12 @@
 // fflate's filter reads exactly that metadata value, so the entry "declares"
 // a >200MB originalSize without the test ever materializing 200MB.
 import { beforeEach, describe, expect, it } from "vitest";
-import {
-  ArticleSchema,
-  BookSchema,
-  ReaderSettingsSchema,
-} from "../../../src/content/schema";
+import { ArticleSchema, BookSchema, ReaderSettingsSchema } from "../../../src/content/schema";
 import type { CanonicalArticle, ReaderSettings } from "../../../src/content/schema";
 import { ExportBundleSchema } from "../../../src/portability/bundle";
 import { computeManifest } from "../../../src/portability/manifest";
 import type { Manifest } from "../../../src/portability/manifest";
+import { seedCustomTheme } from "../../../src/settings/customTheme";
 import { zipSync } from "fflate";
 import fakeIndexedDB, { IDBKeyRange } from "fake-indexeddb";
 import { Dexie } from "dexie";
@@ -299,9 +296,7 @@ describe("validateBundle — refusal kinds (09-04 Task 2)", () => {
     if (v3Result.ok) {
       expect(v3Result.bundle.schemaVersion).toBe(3);
       expect(v3Result.bundle.articles[1]?.readerTitle).toBe("My Chosen Title");
-      expect(v3Result.bundle.articles[1]?.readerAuthor).toBe(
-        "My Chosen Author",
-      );
+      expect(v3Result.bundle.articles[1]?.readerAuthor).toBe("My Chosen Author");
     }
 
     // v4 (Phase 20 20-05): a FULLY valid v4 bundle — carrying the assets
@@ -437,12 +432,8 @@ describe("validateBundle — refusal kinds (09-04 Task 2)", () => {
           expect(issue.length).toBeGreaterThan(0);
           expect(issue).toMatch(/: /); // "path: message" form
         }
-        expect(
-          result.refusal.issues.some((i) => i.startsWith("preferences")),
-        ).toBe(true);
-        expect(
-          result.refusal.issues.some((i) => i.startsWith("fixtureIds")),
-        ).toBe(true);
+        expect(result.refusal.issues.some((i) => i.startsWith("preferences"))).toBe(true);
+        expect(result.refusal.issues.some((i) => i.startsWith("fixtureIds"))).toBe(true);
       }
     }
   });
@@ -455,10 +446,7 @@ describe("validateBundle — refusal kinds (09-04 Task 2)", () => {
     // recomputed articles hash no longer matches the claimed manifest.
     const tampered = {
       ...bundle,
-      articles: [
-        ...((bundle.articles as unknown[]).slice(0, 1)),
-        sampleArticle2(),
-      ],
+      articles: [...(bundle.articles as unknown[]).slice(0, 1), sampleArticle2()],
     };
     const file = zipFileOf({
       "bundle.json": bundleJsonOf(tampered),
@@ -485,11 +473,7 @@ describe("validateBundle — refusal kinds (09-04 Task 2)", () => {
     // central directory (the payload is unchanged). The fflate filter cap
     // skips the entry — never inflating it — so the required entry is
     // absent and the function returns a REFUSAL instead of allocating.
-    const bombed = patchDeclaredUncompressedSize(
-      zip,
-      "bundle.json",
-      200_000_001,
-    );
+    const bombed = patchDeclaredUncompressedSize(zip, "bundle.json", 200_000_001);
     const result = await validateBundle(new File([new Uint8Array(bombed)], "x.zip"));
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -535,16 +519,12 @@ describe("validateBundle — round trip (09-04 Task 2)", () => {
     // new Uint8Array(bytes) re-backs the view on a fresh ArrayBuffer —
     // BlobPart requires ArrayBuffer backing under TS 7 (the 09-01
     // sha256Hex typing precedent).
-    const result = await validateBundle(
-      new File([new Uint8Array(bytes)], "x.zip"),
-    );
+    const result = await validateBundle(new File([new Uint8Array(bytes)], "x.zip"));
 
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.bundle.schemaVersion).toBe(5); // writers emit v5 (issue #37)
-      expect(result.bundle.articles.map((a) => a.id)).toEqual([
-        "example-article",
-      ]);
+      expect(result.bundle.articles.map((a) => a.id)).toEqual(["example-article"]);
       expect(result.bundle.preferences).toEqual(samplePrefs());
       expect(result.manifest.algorithm).toBe("sha256");
     }
@@ -565,14 +545,67 @@ describe("validateBundle — round trip (09-04 Task 2)", () => {
     await db.settings.put({ key: "reader-prefs", value: widePrefs });
 
     const bytes = (await buildBundle()).bytes;
-    const result = await validateBundle(
-      new File([new Uint8Array(bytes)], "wide.zip"),
-    );
+    const result = await validateBundle(new File([new Uint8Array(bytes)], "wide.zip"));
 
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.bundle.preferences.measure).toBe(88);
       expect(result.bundle.preferences).toEqual(widePrefs);
     }
+  });
+
+  // Issue #86 acceptance: a custom theme survives the WHOLE portability
+  // pipeline — buildBundle → validateBundle → resolveImportPlan →
+  // applyImport → the local reader-prefs row — byte-stable. The seeded
+  // token carries UPPERCASE hex deliberately: hydration never coerces
+  // (the schema preserves case) and neither may the bundle path.
+  it("round-trips a custom theme byte-stable through buildBundle → validateBundle → applyImport", async () => {
+    const { buildBundle, validateBundle, applyImport } = await loadService();
+    const { detectImportPreview, resolveImportPlan } =
+      await import("../../../src/portability/conflicts");
+    const { db } = await loadDb();
+    const customPrefs = ReaderSettingsSchema.parse({
+      ...samplePrefs(),
+      theme: "custom",
+      customTheme: {
+        baseTheme: "sepia",
+        tokens: { ...seedCustomTheme("sepia").tokens, ink: "#1F1B16" },
+      },
+    });
+    await db.articles.put(sampleArticle());
+    await db.settings.put({ key: "reader-prefs", value: customPrefs });
+
+    const bytes = (await buildBundle()).bytes;
+    const result = await validateBundle(new File([new Uint8Array(bytes)], "custom.zip"));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // The validated preferences block is byte-identical to the stored one
+    // (this is the string the manifest hash was computed over).
+    expect(JSON.stringify(result.bundle.preferences)).toBe(JSON.stringify(customPrefs));
+
+    // Import with the dialog's skip-defaults (overwrite the identical
+    // article) and the reader's "apply preferences" choice ON.
+    const preview = await detectImportPreview(result.bundle);
+    const plan = await resolveImportPlan(
+      result.bundle,
+      preview,
+      {
+        book: "skip",
+        "article-revision": "overwrite",
+        "article-content-divergence": "skip",
+        "article-metadata-override": "skip",
+        "highlight-id": "skip",
+        "note-id": "skip",
+        location: "skip",
+      },
+      true,
+    );
+    await applyImport(plan);
+
+    const row = await db.settings.get("reader-prefs");
+    expect(row?.key).toBe("reader-prefs");
+    expect(JSON.stringify(row?.value)).toBe(JSON.stringify(customPrefs));
+    // Spot-check the case preservation rode the whole way.
+    expect((row?.value as ReaderSettings).customTheme?.tokens.ink).toBe("#1F1B16");
   });
 });

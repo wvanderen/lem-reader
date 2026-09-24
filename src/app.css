@@ -46,8 +46,7 @@
   --radius-pill: 999px;
   /* The ONE elevation token — earned by top-layer surfaces only
      (native <dialog>). No shadows anywhere else. */
-  --shadow-pop:
-    0 1px 2px rgba(31, 27, 22, 0.06), 0 8px 24px rgba(31, 27, 22, 0.1);
+  --shadow-pop: 0 1px 2px rgba(31, 27, 22, 0.06), 0 8px 24px rgba(31, 27, 22, 0.1);
   /* Semantic z ladder — dialogs stay native top-layer (no token needed). */
   --z-content: 1;
   --z-row-actions: 2;
@@ -867,6 +866,92 @@ dialog.settings-panel {
   color: var(--ink);
 }
 
+/* ── Custom-theme builder (issue #86, decision #73) ─────────────────────── */
+/* The disclosure section directly below the Theme fieldset, mounted only
+   while theme === "custom". Native <details>/<summary>; native color inputs
+   paired with small hex text fields (both write the same token); the live
+   contrast readout reuses the global .status role/aria contract, inline
+   like .settings-data .status. Tokens only; no transitions (token swaps are
+   instant — the reduced-motion posture is inherited, A11Y-06). */
+.custom-theme-builder {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin: 0;
+  padding: 0 var(--space-sm);
+}
+.custom-theme-builder summary {
+  display: flex;
+  align-items: center;
+  min-height: var(--touch);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+.custom-theme-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+.custom-theme-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  min-height: var(--touch);
+}
+.custom-theme-token-label {
+  flex: 1;
+  font-family: var(--font-ui);
+  font-size: 16px;
+  color: var(--ink);
+}
+/* The native swatch: hairline chrome, --radius-sm, 44px hit area (A11Y-07). */
+.custom-theme-swatch {
+  flex-shrink: 0;
+  width: var(--touch);
+  height: var(--touch);
+  padding: var(--space-xs);
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+/* The editable hex field: code register, fixed ch width, 44px hit area. */
+.custom-theme-hex {
+  flex-shrink: 0;
+  width: 96px;
+  min-height: var(--touch);
+  padding-inline: var(--space-sm);
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-code);
+  font-size: 14px;
+  color: var(--ink);
+}
+/* The trimmed inline variant of the global .status live region (the
+   .settings-data .status pattern) + the calm warning voice. */
+.custom-theme-builder .status {
+  margin-block: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+}
+.custom-theme-builder .status p.custom-theme-verdict {
+  margin-block: 0;
+  color: var(--ink-soft);
+}
+.custom-theme-builder .status p.custom-theme-warning {
+  margin-block: var(--space-sm) 0;
+  color: var(--ink);
+}
+.custom-theme-builder .status .btn {
+  margin-top: var(--space-sm);
+}
+
 /* Panel footer (Reset) — names the consequence (UI-SPEC §Copywriting line 317). */
 .settings-footer {
   display: flex;
@@ -1162,7 +1247,9 @@ dialog.add-dialog {
   top: 48px; /* immediately under the .app-header (min-height: 48px) */
   left: 0;
   right: 0;
-  z-index: var(--z-chrome); /* above article content, below .app-header (z-index: 10) and
+  z-index: var(
+    --z-chrome
+  ); /* above article content, below .app-header (z-index: 10) and
                  below dialogs (top-layer, unaffected by z-index) */
 }
 /* Full-width fill; transform changes never affect layout. */
@@ -4062,7 +4149,7 @@ main#main > .status:empty {
 .library-stats-strip strong {
   color: var(--ink);
   font-weight: 600;
-}/* Issue #77 — the header triggers (toc / tags / annotations / gear) ride
+} /* Issue #77 — the header triggers (toc / tags / annotations / gear) ride
    the shared .btn-icon vocabulary; these residuals carry only state and
    layout (the expanded tint, the badge anchor point). */
 .toc-trigger[aria-expanded="true"],
@@ -4077,4 +4164,3 @@ main#main > .status:empty {
 .tags-trigger {
   anchor-name: --tags-trigger;
 }
-

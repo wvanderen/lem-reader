@@ -414,7 +414,7 @@ export type Book = z.infer<typeof BookSchema>;
 // (T-02-01 — Tampering V5). applyTheme consumes the inferred type directly.
 // No recursion here — Pitfall 7 (the two-pass recursive Block pattern above)
 // does NOT apply.
-export const ReaderSettingsSchema = z.object({
+const ReaderSettingsObjectSchema = z.object({
   // STATE-04 migration hook: Phase 4 (Plan 04-02, D4-12) bumped the canonical
   // write version from 1 → 2 when readingMode was added. Issue #40 bumps the
   // canonical write version 2 → 3 when the read-aloud preferences (voice +
@@ -426,13 +426,7 @@ export const ReaderSettingsSchema = z.object({
   // preserved).
   schemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   font: z.enum(["serif", "sans", "dyslexic"]),
-  size: z.union([
-    z.literal(16),
-    z.literal(18),
-    z.literal(20),
-    z.literal(22),
-    z.literal(24),
-  ]),
+  size: z.union([z.literal(16), z.literal(18), z.literal(20), z.literal(22), z.literal(24)]),
   // D21-01/D21-02 (POLISH-09) + issue #18 (D22-01): the union is the
   // uniform-6 ladder [40..88] mirroring MEASURE_STEPS in
   // src/settings/tokens.ts (default stays 64). The pre-#18 maximum 72 is
@@ -454,7 +448,30 @@ export const ReaderSettingsSchema = z.object({
     z.literal(88),
   ]),
   spacing: z.enum(["compact", "comfortable", "spacious"]),
-  theme: z.enum(["sepia", "light", "dark"]),
+  // Issue #86 (decision #73) — the enum widens ADDITIVELY with "custom" (no
+  // schemaVersion bump; the readingMode/voice .default() hydration
+  // discipline: a v3 row parses unchanged). "custom" without a valid
+  // customTheme fails the superRefine below → the existing honest corrupt
+  // routing — never a silent fallback to a preset.
+  theme: z.enum(["sepia", "light", "dark", "custom"]),
+  // Issue #86 (decision #73) — the ONE custom theme (no names, no library):
+  // baseTheme names the preset it was seeded from / resets to, and the FIVE
+  // reader-editable tokens. Everything else in the palette is DERIVED at
+  // apply time (src/settings/customTheme.ts) and never stored. Additive
+  // optional: records without the field parse unchanged; hex strings are
+  // strict 6-digit so derivation math and round-trips stay exact.
+  customTheme: z
+    .object({
+      baseTheme: z.enum(["sepia", "light", "dark"]),
+      tokens: z.object({
+        surface: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+        surfaceRaised: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+        ink: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+        accent: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+        hairline: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+      }),
+    })
+    .optional(),
   // Additive preference: older records omit this and retain instant turns.
   animatePageTurns: z.boolean().optional(),
   // D4-12 — readingMode preference. PROJECT.md: "Pagination is the distinctive
@@ -480,7 +497,27 @@ export const ReaderSettingsSchema = z.object({
   voice: z.string().min(1).optional(),
   rate: z.number().min(0.5).max(3).default(1),
 });
+
+// Issue #86 (decision #73) — the cross-field rule: theme "custom" REQUIRES a
+// valid customTheme (the object schema above already rejects invalid hex /
+// base themes). A "custom" row without one is treated as corrupt at every
+// read seam (settingsStore / settingsMirror / the bundle's preferences
+// block) — the honest routing, never a silent preset fallback. The wrap is
+// ZodEffects: every existing import site safeParses THIS name (the object
+// schema stays module-private — unexported until a real shape consumer
+// appears; speculative exports are not kept).
+export const ReaderSettingsSchema = ReaderSettingsObjectSchema.superRefine((s, ctx) => {
+  if (s.theme === "custom" && s.customTheme === undefined) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["customTheme"],
+      message: 'theme "custom" requires a valid customTheme record',
+    });
+  }
+});
 export type ReaderSettings = z.infer<typeof ReaderSettingsSchema>;
+export type CustomTheme = NonNullable<ReaderSettings["customTheme"]>;
+export type CustomThemeTokens = CustomTheme["tokens"];
 
 // ── Reading location (Phase 2 — STATE-01, D-05 substrate, D-06 key) ──────────
 // Persisted at the compound [articleId+revision] key. graphemeOffset is into
