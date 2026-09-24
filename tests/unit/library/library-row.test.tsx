@@ -22,6 +22,7 @@ vi.mock("../../../src/persistence/booksStore", () => ({
 }));
 vi.mock("../../../src/ingestion/library/tagsStore", () => ({
   setArticleTags: vi.fn().mockResolvedValue(undefined),
+  setBookTags: vi.fn().mockResolvedValue(undefined),
 }));
 
 import { LibraryRow } from "../../../src/ingestion/library/LibraryRow";

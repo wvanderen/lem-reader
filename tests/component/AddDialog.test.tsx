@@ -181,6 +181,7 @@ function renderDialog(overrides?: {
       open={overrides?.open ?? true}
       onCancel={onCancel}
       onBookAdded={onBookAdded}
+      tagStats={[]}
     />,
   );
   return { onCancel, onBookAdded, ...utils };
@@ -430,10 +431,10 @@ describe("AddDialog (16-02 Task 2)", () => {
 
     // The parent flips the open prop false → true (the Cancel path).
     rerender(
-      <AddDialog open={false} onCancel={onCancel} onBookAdded={onBookAdded} />,
+      <AddDialog open={false} onCancel={onCancel} onBookAdded={onBookAdded} tagStats={[]} />,
     );
     rerender(
-      <AddDialog open={true} onCancel={onCancel} onBookAdded={onBookAdded} />,
+      <AddDialog open={true} onCancel={onCancel} onBookAdded={onBookAdded} tagStats={[]} />,
     );
 
     const urlRadio = screen.getByRole("radio", {

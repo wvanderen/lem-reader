@@ -449,23 +449,31 @@ describe("booksStore — removeBook cascade (12-03 Task 1)", () => {
   });
 });
 
-// ── setBookTags ──────────────────────────────────────────────────────────────
+// ── setBookTags (lives in tagsStore — the ONE tag-write seam, issue #75) ────
 
-describe("booksStore — setBookTags (12-03 Task 1)", () => {
+describe("setBookTags via the book fixtures (12-03 Task 1; adopted by tagsStore)", () => {
   beforeEach(async () => {
     await wipeDatabase();
   });
 
-  it("round-trips the tag array on the Book record (D12-04) and drops empty strings", async () => {
-    const { saveBook, setBookTags, getBook } = await loadBooksStore();
+  it("round-trips the tag array on the Book record (D12-04), drops empties, routes case-variants", async () => {
+    const { saveBook, getBook } = await loadBooksStore();
+    const { setBookTags } = await (
+      await import("../../../src/ingestion/library/tagsStore")
+    );
     const book = sampleBook();
     await saveBook(book, [sampleChapter()]);
 
     await setBookTags(book.id, ["fiction", "essays"]);
     expect((await getBook(book.id))?.tags).toEqual(["fiction", "essays"]);
 
-    // Defensive empty-string drop (the setArticleTags precedent).
+    // Empty-string drop (the shared normalizeTags discipline).
     await setBookTags(book.id, ["fiction", ""]);
+    expect((await getBook(book.id))?.tags).toEqual(["fiction"]);
+
+    // Case-variant of a persisted tag routes to the stored casing (Q7A) —
+    // the write seam cannot stack a case twin even with stale UI stats.
+    await setBookTags(book.id, ["FICTION"]);
     expect((await getBook(book.id))?.tags).toEqual(["fiction"]);
 
     // Unknown id is a no-op (no throw, no row).

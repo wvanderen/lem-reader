@@ -9,6 +9,8 @@
 //   - Corrupt-row drop (STATE-04): a malformed row does not throw; valid rows'
 //     tags still returned
 //   - setArticleTags on a non-existent id is a no-op (Dexie update returns 0)
+//   - Q7A at the write seam (issue #75 review): case-variants route to the
+//     persisted casing and case-duplicates dedupe within one write
 //
 // Harness mirrors tests/unit/ingestion-client.test.ts L14-90: fake-indexeddb
 // via Dexie.dependencies, wipeDatabase beforeEach, lazy-import of the module
@@ -172,6 +174,29 @@ describe("tagsStore (08-02 Task 2)", () => {
     // Should not throw; the library stays empty.
     await expect(setArticleTags("does-not-exist", ["tag"])).resolves.toBeUndefined();
     expect(await loadAllTags()).toEqual([]);
+  });
+
+  it("setArticleTags routes a case-variant to the persisted casing (Q7A at the write seam)", async () => {
+    const { loadAllTags, setArticleTags } = await loadTagsStore();
+    const { DexieLibrarySource } = await loadLibrarySource();
+    const source = new DexieLibrarySource();
+    await source.save(sampleArticle({ id: "a", tags: ["essays"] }));
+    await source.save(sampleArticle({ id: "b", tags: [] }));
+
+    // A stale/failed picker stats read must not matter: the SEAM routes
+    // against the persisted universe, so no case twin can land on disk.
+    await setArticleTags("b", ["ESSAYS"]);
+    expect(await loadAllTags()).toEqual(["essays"]);
+  });
+
+  it("setArticleTags dedupes case-variants within one write (first-seen casing wins)", async () => {
+    const { loadAllTags, setArticleTags } = await loadTagsStore();
+    const { DexieLibrarySource } = await loadLibrarySource();
+    const source = new DexieLibrarySource();
+    await source.save(sampleArticle({ id: "a", tags: [] }));
+
+    await setArticleTags("a", ["Slow Web", "slow web", "SLOW WEB"]);
+    expect(await loadAllTags()).toEqual(["Slow Web"]);
   });
 
   it("loadAllTags drops corrupt rows silently (STATE-04)", async () => {

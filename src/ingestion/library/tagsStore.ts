@@ -32,6 +32,8 @@
 //       `z.string().min(1)` schema constraint.
 import { db } from "../../persistence/db";
 import { dexieLibrarySource } from "../LibrarySource";
+import { listBooks } from "../../persistence/booksStore";
+import { normalizeTags, routeTagsToStoredCasing } from "./tagText";
 
 /**
  * `loadAllTags` — Derive the distinct tag set from ALL article rows.
@@ -59,22 +61,122 @@ export async function loadAllTags(): Promise<string[]> {
 }
 
 /**
+ * TagStat — one tag's usage count (issue #75, decision #71): the picker's
+ * suggestion currency. Counts NEVER render — they only order suggestions
+ * (most-used first) — and the derivation is in memory, so no Dexie schema,
+ * index, or migration changes (D8-05/D8-08 untouched; auto-prune stays
+ * implicit: a tag no longer carried by any row falls out of the next read).
+ */
+export interface TagStat {
+  tag: string;
+  count: number;
+}
+
+/**
+ * deriveTagStats — THE count-returning tag fold (issue #75, decision #71),
+ * the pure core both suggestion sources share: count each tag across the
+ * given article + book rows (D12-04 — books carry tags too), then order
+ * count-descending with alphabetical tie-breaks. No persistence, no side
+ * effects; the Add-dialog store read and the snapshot host both funnel
+ * through this ONE definition so suggestion order cannot drift between
+ * hosts.
+ *
+ * The fold is CASE-INSENSITIVE (issue #75 review): casing variants of the
+ * same tag fold into ONE entry — "Essays"/"essays" count together — so the
+ * most-used ordering the picker promises cannot be split by casing. The
+ * displayed casing is the first seen in fold order (every write seam routes
+ * to stored casing, so variants only exist in legacy rows).
+ */
+export function deriveTagStats(
+  articles: ReadonlyArray<{ tags?: string[] }>,
+  books: ReadonlyArray<{ tags?: string[] }>,
+): TagStat[] {
+  const counts = new Map<string, { tag: string; count: number }>();
+  const fold = (rows: ReadonlyArray<{ tags?: string[] }>) => {
+    for (const row of rows) {
+      for (const tag of row.tags ?? []) {
+        const key = tag.toLowerCase();
+        const current = counts.get(key);
+        if (current) current.count += 1;
+        else counts.set(key, { tag, count: 1 });
+      }
+    }
+  };
+  fold(articles);
+  fold(books);
+  return [...counts.values()].sort(
+    (a, b) => b.count - a.count || a.tag.localeCompare(b.tag),
+  );
+}
+
+/**
+ * loadTagStats — the store-level suggestion read for hosts that hold no
+ * LibrarySnapshot (the Add dialog and the reader's TagEntry). The
+ * count-returning sibling of `loadAllTags`: same persisted-rows-only
+ * population (dexieLibrarySource.list() — Zod-validated, corrupt rows
+ * dropped, STATE-04), extended with the book rows per D12-04, folded by
+ * the ONE deriveTagStats definition. Books fail-quiet like the snapshot
+ * (a books-load failure routes calmly to zero book rows).
+ */
+export async function loadTagStats(): Promise<TagStat[]> {
+  const [articles, booksResult] = await Promise.all([
+    dexieLibrarySource.list(),
+    listBooks(),
+  ]);
+  const books = booksResult.ok ? booksResult.books : [];
+  return deriveTagStats(articles, books);
+}
+
+/**
+ * routeToStoredCasing — the shared write-seam discipline (issue #75 review):
+ * normalize the input (trim, drop empties, case-insensitive dedupe —
+ * tagText.normalizeTags), then resolve each already-known tag against the
+ * PERSISTED universe (article + book rows via loadTagStats) so a stale or
+ * failed picker stats read can never stack a case twin on disk. The universe
+ * read fail-opens to [] — a suggestion-read failure degrades to the exact
+ * write, it never fails the write.
+ */
+async function routeToStoredCasing(tags: readonly string[]): Promise<string[]> {
+  const cleaned = normalizeTags(tags);
+  if (cleaned.length === 0) return [];
+  let universe: string[] = [];
+  try {
+    universe = (await loadTagStats()).map((s) => s.tag);
+  } catch {
+    universe = [];
+  }
+  return routeTagsToStoredCasing(cleaned, universe);
+}
+
+/**
  * `setArticleTags` — Write the tag array for a single article by id.
  *
  * Idempotent: `db.articles.update(id, { tags })` is a primary-key update; the
  * same call repeated produces the same row state. A non-existent id is a
  * no-op (Dexie `update` returns 0 rows updated; no throw).
  *
- * Defensively drops empty-string tags before writing (`tags.filter(t =>
- * t.length > 0)`) to mirror the `z.string().min(1)` schema constraint — a
- * stray empty string would produce an invalid row that ArticleSchema would
- * reject on the next `dexieLibrarySource.list()` read (STATE-04 corrupt-row
- * drop).
+ * The input runs through `routeToStoredCasing`: trim, drop empties (mirrors
+ * the `z.string().min(1)` schema constraint — a stray empty string would
+ * produce an invalid row that ArticleSchema would reject on the next
+ * `dexieLibrarySource.list()` read, STATE-04 corrupt-row drop), dedupe
+ * case-insensitively, and Q7A-routing to the persisted casing.
  */
 export async function setArticleTags(
   articleId: string,
   tags: string[],
 ): Promise<void> {
-  const cleaned = tags.filter((t) => t.length > 0);
-  await db.articles.update(articleId, { tags: cleaned });
+  const routed = await routeToStoredCasing(tags);
+  await db.articles.update(articleId, { tags: routed });
+}
+
+/**
+ * `setBookTags` — write the tag array for one Book by id (D12-04 — tags live
+ * on the Book record, NOT per-chapter). Adopted here from booksStore (issue
+ * #75 review) so tagsStore is the ONE tag-write seam: the identical
+ * `routeToStoredCasing` discipline as setArticleTags, one universe read.
+ * Idempotent primary-key update; a non-existent id is a no-op.
+ */
+export async function setBookTags(id: string, tags: string[]): Promise<void> {
+  const routed = await routeToStoredCasing(tags);
+  await db.books.update(id, { tags: routed });
 }

@@ -2042,6 +2042,10 @@ dialog.highlight-popover::backdrop {
   position-area: block-end span-inline-end;
   position-try-fallbacks: flip-block, flip-inline;
   inset: auto;
+  /* Issue #75 — same UA-[popover]-overflow:auto override as
+     .row-tags-popover: the TagEntry fieldset now hosts the shared picker,
+     whose suggestion dropdown must paint past the panel edge. */
+  overflow: visible;
   margin: var(--space-xs);
   padding: var(--space-md);
   background: var(--surface-raised);
@@ -2543,6 +2547,169 @@ main#main > .status {
    copy calm and local to the fieldset. */
 .tag-entry .status {
   margin-top: var(--space-xs);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+/* ── Issue #75 (decision #71) — the ONE shared TagPicker ─────────────────── */
+/* One anatomy on every host (row popover, Add dialog, reader TagEntry).
+   Token-only on the Soft Paper vocabulary (issue #77): hairline chrome,
+   --radius-sm control, --radius-md dropdown, --radius-pill chips. The
+   chips' inside-× rides the shared .tag-chip-remove anatomy — the
+   .review-scope-chip precedent (issue #76). No motion properties (static
+   repositioning only; A11Y-06). The input :focus-visible inherits the
+   global 2px ring. */
+.tag-picker {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.tag-picker-input-row {
+  position: relative;
+}
+.tag-picker-input {
+  width: 100%;
+  min-height: var(--touch);
+  padding: var(--space-sm);
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink);
+}
+/* The suggestion dropdown overlays whatever follows (chips, actions) —
+   the positioned element paints above the static siblings in the host
+   panel's own stacking context (both hosts are top-layer surfaces). */
+.tag-picker-suggestions {
+  position: absolute;
+  inset-inline: 0;
+  top: calc(100% + var(--space-xs));
+  margin: 0;
+  padding: var(--space-xs);
+  list-style: none;
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+}
+.tag-picker-suggestion {
+  display: flex;
+  align-items: center;
+  min-height: calc(var(--touch) - 8px);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-xs);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink);
+  cursor: pointer;
+}
+.tag-picker-suggestion.active {
+  background: var(--surface);
+  color: var(--accent);
+}
+.tag-picker-create {
+  color: var(--ink-soft);
+}
+.tag-picker-create.active {
+  color: var(--accent);
+}
+/* Selected tags — pill chips with the × inside, BELOW the input (adding
+   the first tag never shifts the typing anchor). */
+.tag-picker-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  margin: var(--space-sm) 0 0 0;
+  padding: 0;
+  list-style: none;
+}
+.tag-picker-pill {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding-left: var(--space-sm);
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+}
+.tag-picker-pill-text {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tag-picker-pill .tag-picker-pill-remove {
+  min-height: calc(var(--touch) - 8px);
+  min-width: calc(var(--touch) - 8px);
+  border-color: transparent;
+}
+.tag-picker-pill .tag-picker-pill-remove:hover {
+  border-color: transparent;
+}
+
+/* ── Issue #75 — the Add-dialog tags fieldset ────────────────────────────── */
+/* The fieldset is structural only (the .add-source-picker discipline:
+   margin/padding/border zeroed; the dialog's flex gap owns the rhythm). */
+.add-tags-fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.add-tags-fieldset legend {
+  padding: 0;
+  margin-bottom: var(--space-sm);
+  font: 14px/1.45 var(--font-ui);
+  color: var(--ink-soft);
+}
+
+/* ── Issue #75 — the row-tags popover ────────────────────────────────────── */
+/* One shared popover for every library row's tag trigger. Geometry clones
+   .tag-popover (D21-05 anchor positioning, probe-verified on all three
+   pinned engines): top-layer popover="auto", hugging the open row's
+   trigger through position-area with native flip fallbacks, viewport-kept
+   with ZERO JS repositioning. The position-anchor resolves through the
+   --row-tags-anchor custom property (the OPEN row's anchor-name from
+   rowTagsAnchorName). Narrower than the reader's tag popover — a row's
+   trigger sits at the viewport edge more often, and the picker needs less
+   room than the full TagEntry fieldset did. */
+.row-tags-popover {
+  position: fixed;
+  position-anchor: var(--row-tags-anchor);
+  position-area: block-end span-inline-end;
+  position-try-fallbacks: flip-block, flip-inline;
+  inset: auto;
+  /* The UA [popover] rule carries overflow:auto — an absolutely-positioned
+     suggestion dropdown overflowing the panel's content box would be
+     scroll-clipped instead of painting over the page (probe-found). A
+     non-scrolling panel is the honest shape: the content wraps, the
+     dropdown paints outside. */
+  overflow: visible;
+  margin: var(--space-xs);
+  padding: var(--space-md);
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  box-sizing: border-box;
+  width: min(320px, calc(100vw - 2 * var(--space-md)));
+}
+.row-tags-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+}
+.row-tags-footer .status {
+  flex: 1 1 auto;
+  margin: 0;
   font-family: var(--font-ui);
   font-size: 14px;
   line-height: 1.45;
@@ -4172,4 +4339,9 @@ main#main > .status:empty {
 }
 .tags-trigger {
   anchor-name: --tags-trigger;
+}
+/* Issue #75 — the row-tags trigger joins the expanded-tint discipline
+   (the header-trigger rule above): accent while ITS popover is open. */
+.library-row-tag-trigger[aria-expanded="true"] {
+  color: var(--accent);
 }

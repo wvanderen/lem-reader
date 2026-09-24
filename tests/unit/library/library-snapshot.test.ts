@@ -352,8 +352,9 @@ describe("loadLibrarySnapshot — tags fold (Issue #3)", () => {
 
   it("unions article tags with book tags, localeCompare-sorted", async () => {
     await seedStandaloneAndBook();
-    const { setArticleTags } = await import("../../../src/ingestion/library/tagsStore");
-    const { setBookTags } = await loadBooksStore();
+    const { setArticleTags, setBookTags } = await import(
+      "../../../src/ingestion/library/tagsStore"
+    );
     const { loadLibrarySnapshot } = await loadSnapshot();
 
     await setArticleTags("snapshot-standalone", ["zebra", "essay"]);

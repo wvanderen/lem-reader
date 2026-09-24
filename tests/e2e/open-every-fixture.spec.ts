@@ -22,7 +22,7 @@ import { fixtures } from "../../src/fixtures";
 import { DEFAULT_SETTINGS } from "../../src/settings/defaults";
 import { seedRows, prepareFreshPage } from "./portability/_portability";
 
-const BASE = "http://localhost:5173";
+const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
 // Pure-string SVG stub so remote <img> elements load deterministically
 // without network dependence. SVG is text, so no Buffer / @types/node is
 // needed.

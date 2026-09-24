@@ -4,12 +4,23 @@ import { ReadingStateButton } from "./ReadingStateButton";
 import { SourceBadge } from "./SourceBadge";
 import { articleReadingState } from "./readingState";
 import { RowProgress, RowTags } from "./RowAnatomy";
-import { EditIcon, HighlighterIcon, TrashIcon } from "../../ui/icons";
+import { EditIcon, HighlighterIcon, TagIcon, TrashIcon } from "../../ui/icons";
 import {
   effectiveTitle,
   effectiveAuthor,
   videoDuration,
 } from "./effectiveMetadata";
+
+/**
+ * Issue #75 (decision #71) — the per-row anchor-name stem for the shared
+ * row-tags popover (CSS anchor positioning, the .tags-trigger precedent).
+ * The popover's position-anchor is set dynamically to the OPEN row's name;
+ * ids arrive from validated records ([a-z0-9-], the parseHash charset —
+ * T-15-08), so the stem is always a valid custom ident.
+ */
+export function rowTagsAnchorName(id: string): string {
+  return `--row-tags-${id}`;
+}
 
 interface LibraryRowProps {
   /** The article this row represents. */
@@ -42,6 +53,17 @@ interface LibraryRowProps {
    */
   onEdit?: () => void;
   onReadingStateChange?: (read: boolean) => Promise<void>;
+  /**
+   * Issue #75 (decision #71) — the row-tags trigger. When present, the
+   * cluster gains the quiet tag-glyph button opening the anchored row-tags
+   * popover. LibraryView passes it ONLY on Dexie-persisted standalone rows
+   * (the D17-05 onEdit gate — bundled Sample fixtures have nowhere to
+   * persist a tag; book rows keep tags in the expanded editor, D12-04).
+   */
+  onTags?: () => void;
+  /** Issue #75 — whether this row's tags popover is the open one (drives
+   * the aria-expanded reflection + the anchor tint on the trigger). */
+  tagsOpen?: boolean;
   /**
    * Heading level for the row title (Plan 12-05 — BookRow chapter sub-rows).
    * Default 2 keeps the standalone-row markup byte-stable (Pitfall 8-5);
@@ -83,6 +105,8 @@ export function LibraryRow({
   total,
   onRemove,
   onEdit,
+  onTags,
+  tagsOpen,
   onReadingStateChange,
   headingLevel = 2,
   timeReadLabel,
@@ -106,7 +130,7 @@ export function LibraryRow({
   // derivation, read by both the cluster below and the anchor in it.
   const hasHighlights = (highlightCount ?? 0) > 0;
   const hasCluster = Boolean(
-    onReadingStateChange || onEdit || onRemove || hasHighlights,
+    onReadingStateChange || onTags || onEdit || onRemove || hasHighlights,
   );
   return (
     <li className="library-row" key={id}>
@@ -155,6 +179,25 @@ export function LibraryRow({
                 isRead={isFinished}
                 onChange={onReadingStateChange}
               />
+            )}
+            {/* Issue #75 (decision #71) — the row-tags trigger (Q1A: the
+              cluster is the row's action vocabulary). First after mark-read;
+              the CSS anchor naming the row for the shared popover lives on
+              this button (anchor-name is document-scoped, the D21-05
+              precedent). aria-label names the action + the EFFECTIVE title
+              (the D17-09 naming rule). */}
+            {onTags && (
+              <button
+                type="button"
+                className="btn btn-icon library-row-tag-trigger"
+                aria-label={`Tags for ${title}`}
+                aria-haspopup="dialog"
+                aria-expanded={Boolean(tagsOpen)}
+                style={{ anchorName: rowTagsAnchorName(id) } as React.CSSProperties}
+                onClick={onTags}
+              >
+                <TagIcon />
+              </button>
             )}
             {/* Edit-metadata affordance — Plan 17-02 (D17-01). Only when
               onEdit is wired (Dexie-persisted top-level rows only). Sits

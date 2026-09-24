@@ -775,6 +775,7 @@ describe("AddDialog .epub picker arm (12-03 Task 2)", () => {
         open: true,
         onCancel: () => {},
         onBookAdded: () => {},
+        tagStats: [],
       }),
     );
     // The dialog always opens on Web address (D16-08) — switch to the
@@ -829,6 +830,7 @@ describe("AddDialog .epub picker arm (12-03 Task 2)", () => {
         open: true,
         onCancel: () => {},
         onBookAdded: () => {},
+        tagStats: [],
       }),
     );
     await user.click(screen.getByRole("radio", { name: "Upload file" }));
@@ -874,6 +876,7 @@ describe("AddDialog .epub picker arm (12-03 Task 2)", () => {
         open: true,
         onCancel: () => {},
         onBookAdded: () => {},
+        tagStats: [],
       }),
     );
     await user.click(screen.getByRole("radio", { name: "Upload file" }));

@@ -365,14 +365,15 @@ test.describe("ING-05 — EPUB book intake (SC#1)", () => {
     await uploadValidBook(page);
     await reloadLibrary(page);
 
-    // Tag the book via the expanded TagEntry (D12-04 — tags live on the Book).
+    // Tag the book via the expanded TagEntry (D12-04 — tags live on the
+    // Book), now hosting the shared TagPicker (issue #75): type + Enter
+    // commits (no Add button).
     await expandBook(page);
-    await bookRow(page).locator("input#tag-entry-new").fill("essays");
-    await bookRow(page)
-      .getByRole("button", { name: /add tag/i })
-      .click();
+    const bookTagInput = bookRow(page).locator("input#tag-entry-input");
+    await bookTagInput.fill("essays");
+    await bookTagInput.press("Enter");
     await expect(
-      bookRow(page).locator(".tag-entry-list .tag-chip-readonly").filter({
+      bookRow(page).locator(".tag-picker-chips .tag-picker-pill").filter({
         hasText: "essays",
       }),
     ).toBeVisible();
