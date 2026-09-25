@@ -17,14 +17,12 @@ interface StorageBannerProps {
 }
 
 import { CloseIcon } from "../ui/icons";
+// Issue #98 (decision #96) — the ONE polite status-region primitive; the
+// banner composes its own class over the shared .status card.
+import { StatusRegion } from "../ui/StatusRegion";
 export function StorageBanner({ onDismiss }: StorageBannerProps) {
   return (
-    <div
-      className="status storage-banner"
-      role="status"
-      aria-live="polite"
-      aria-atomic="true"
-    >
+    <StatusRegion className="storage-banner">
       <div className="storage-banner-main">
         <h2>Your reading settings can&apos;t be saved right now.</h2>
         <p>
@@ -41,7 +39,7 @@ export function StorageBanner({ onDismiss }: StorageBannerProps) {
         {/* aria-label carries the accessible name; the × glyph is decorative. */}
         <CloseIcon />
       </button>
-    </div>
+    </StatusRegion>
   );
 }
 

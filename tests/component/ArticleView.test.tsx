@@ -276,3 +276,52 @@ describe("ArticleView route-change h1 focus (Plan 14-03 Task 3)", () => {
     });
   });
 });
+
+// Issue #98 (decision #96) — corrupt-location honesty. A persisted location
+// row that fails its Zod parse at restore time ({ok:false, reason:"corrupt"})
+// must surface HONESTLY: the calm visible note in the article-top meta + the
+// same sentence announced through the dedicated visually-hidden status
+// region — while reading proceeds from the top and the view never crashes.
+// The "unavailable"/"unupgradeable" reasons stay the pre-#98 silent
+// fall-through (the StorageBanner covers settings WRITE failures only).
+describe("ArticleView corrupt-location honesty (issue #98)", () => {
+  const CORRUPT_COPY =
+    "Couldn't return to where you were. The saved reading position couldn't be read, so the article opened at the beginning.";
+
+  it("renders the honest note + announce for a corrupt row and keeps the article usable", async () => {
+    openArticleMock.mockResolvedValue(fullArticle());
+    loadLocationMock.mockResolvedValue({ ok: false, reason: "corrupt" });
+    renderWithProvider(<ArticleView {...withProps("stub-article")} />);
+    // No crash: the article itself still renders.
+    await screen.findByRole("heading", { level: 1, name: "Stub Article" });
+    // The visible calm note rides the article-top meta (and the SAME
+    // sentence rides the hidden region below — hence getAllByText).
+    expect(screen.getAllByText(CORRUPT_COPY).length).toBe(2);
+    expect(document.querySelector("p.meta.restore-note")?.textContent).toBe(
+      CORRUPT_COPY,
+    );
+    // The same sentence announces through the dedicated hidden region.
+    const hiddenRegions = Array.from(
+      document.querySelectorAll("main .status.visually-hidden"),
+    );
+    expect(
+      hiddenRegions.some((r) => r.textContent === CORRUPT_COPY),
+      "the corrupt-location sentence must ride a visually-hidden status region",
+    ).toBe(true);
+  });
+
+  it("does NOT surface the note for the silent fall-through reasons", async () => {
+    openArticleMock.mockResolvedValue(fullArticle());
+    loadLocationMock.mockResolvedValue({ ok: false, reason: "unavailable" });
+    renderWithProvider(<ArticleView {...withProps("stub-article")} />);
+    await screen.findByRole("heading", { level: 1, name: "Stub Article" });
+    await act(async () => {});
+    expect(screen.queryByText(CORRUPT_COPY)).toBeNull();
+    const hiddenRegions = Array.from(
+      document.querySelectorAll("main .status.visually-hidden"),
+    );
+    expect(
+      hiddenRegions.some((r) => r.textContent === CORRUPT_COPY),
+    ).toBe(false);
+  });
+});

@@ -5,7 +5,8 @@
 //
 //   - `<main id="main">`                        (byte-stable — skip-link target)
 //   - `<h1>Saved articles</h1>`                 (byte-stable — SC#1, happy-path.spec L93)
-//   - `.status` live region                     (byte-stable copy — FixtureList L45-53)
+//   - `.status` live region                     (aria contract via StatusRegion;
+//     copy names the LIBRARY — issue #96)
 //   - `<ContinueReadingStrip />`                (NEW — returns null when empty)
 //   - `<LibrarySearch />` + `<TagFilter />`     (NEW — D8-06 + D8-07)
 //   - `<ul className="library-list">` of `<LibraryRow />`  (renamed class; row
@@ -104,6 +105,9 @@ import { BookRemoveConfirm } from "./BookRemoveConfirm";
 // abstraction) hosting the single override write (the Dexie articles-table
 // put).
 import { EditMetadataDialog } from "./EditMetadataDialog";
+// Issue #98 (decision #96) — the ONE polite status-region primitive; this
+// page's load region renders through it (the state-kind table's error kind).
+import { StatusRegion } from "../../ui/StatusRegion";
 
 /** A book pending destructive confirmation (Plan 12-05 — BookRow's Remove
  * book trigger is the only setter caller; BookRemoveConfirm consumes it). */
@@ -786,23 +790,26 @@ export function LibraryView({
           </>
         )}
       </section>
-      {/* Plan 16-03 (D16-03, Pitfall 7) — the re-homed library-load .status
-          live region: byte-stable classes, role, aria attributes, and copy
-          ("Opening article…" / the couldn't-open error copy — FixtureList
-          L45-53 verbatim), now a DIRECT child of main following the list
-          region after the add-section dissolution. */}
-      <div className="status" role="status" aria-live="polite" aria-atomic="true">
-        {status === "loading" && <p>Opening article…</p>}
+      {/* Plan 16-03 (D16-03, Pitfall 7) — the re-homed library-load status
+          region: byte-stable classes and aria contract (now via the ONE
+          StatusRegion primitive, issue #98), copy honestly named for the
+          surface it reports on (issue #96): the LIBRARY's load says
+          "Opening your library…" / "Couldn't open your library." — the
+          article route keeps its own byte-stable "Opening article…"
+          copies. Direct child of main following the list region. */}
+      <StatusRegion>
+        {status === "loading" && <p>Opening your library…</p>}
         {status === "error" && (
           <>
-            <h2>Couldn't open this article.</h2>
+            <h2>Couldn&apos;t open your library.</h2>
             <p>
-              The article could not be loaded. Select it again from the list, or try a different
-              article.
+              Your library could not be loaded. Reload the page to try again;
+              if it still fails, check that this browser can use local
+              storage.
             </p>
           </>
         )}
-      </div>
+      </StatusRegion>
       {/* Quick 260908-nk2 — during the initial load the page is short enough
           (header row, switcher, search, tag filter, empty list) that this
           aside sat INSIDE the viewport and the feedback link flashed on

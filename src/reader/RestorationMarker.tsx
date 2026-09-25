@@ -36,6 +36,8 @@
 import { useEffect, useLayoutEffect, useState } from "react";
 import type { CanonicalArticle } from "../content/types";
 import { findScrollTarget } from "./restoreLocation";
+// Issue #98 (decision #96) — the ONE polite status-region primitive.
+import { StatusRegion } from "../ui/StatusRegion";
 
 /** D18-07 (UI-SPEC §Auto-Resolved #10): fade class lands at 3400ms… */
 const FADE_START_MS = 3400;
@@ -145,15 +147,9 @@ export function RestorationMarker(props: RestorationMarkerProps) {
     <>
       {/* The retiring banner's announce discipline, verbatim (D18-05): a
           freshly-inserted polite region announces its initial content on
-          mount — no extra effect needed. */}
-      <div
-        className="visually-hidden"
-        role="status"
-        aria-live="polite"
-        aria-atomic="true"
-      >
-        {ANNOUNCE_COPY}
-      </div>
+          mount — no extra effect needed. Rendered through the ONE
+          StatusRegion primitive (issue #98). */}
+      <StatusRegion className="visually-hidden">{ANNOUNCE_COPY}</StatusRegion>
       {geometry && (
         <div
           className={`restoration-marker${fading ? " is-fading" : ""}`}

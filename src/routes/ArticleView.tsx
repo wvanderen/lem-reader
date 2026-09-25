@@ -29,6 +29,10 @@ import { ArticleBody } from "../content/render/BlockRenderer";
 import type { ArticleBodyHighlight } from "../content/render/BlockRenderer";
 import { loadLocation } from "../persistence/locationStore";
 import { computeTopVisibleOffset, queryBlocks } from "../reader/restoreLocation";
+// Issue #98 (decision #96) — the ONE polite status-region primitive: this
+// route's load/error card and its three visually-hidden announcers render
+// through it (no raw aria-live trio outside the primitive).
+import { StatusRegion } from "../ui/StatusRegion";
 // Issue #5 — the ONE mode-aware passage-jump tail (deep-link, restore,
 // back-nav, TOC, and the D4-10 mode-swap re-anchor all call it) + the D4-07
 // settleFocus discipline.
@@ -168,6 +172,17 @@ type ModeToggleHandler = () => void;
  * stable identity across renders, semantically read-only.
  */
 const EMPTY_HIGHLIGHTS: readonly ArticleBodyHighlight[] = [];
+
+/**
+ * Issue #98 (decision #96) — the corrupt-location honesty copy (ERROR kind
+ * in the StatusRegion state-kind table): the restore did not land, named
+ * calmly, with the truthful consequence (the article opens at the
+ * beginning). Rendered as the article-top .meta note AND announced through
+ * the dedicated visually-hidden status region. Static — never interpolates
+ * storage error detail (calm voice, no jargon).
+ */
+const CORRUPT_LOCATION_COPY =
+  "Couldn't return to where you were. The saved reading position couldn't be read, so the article opened at the beginning.";
 
 export interface ArticleViewProps {
   articleId: string;
@@ -380,6 +395,19 @@ export function ArticleView({
   // annotation announces (mirrors the annotationAnnouncement pattern).
   const [exportingHighlights, setExportingHighlights] = useState(false);
   const [exportAnnouncement, setExportAnnouncement] = useState<string | null>(
+    null,
+  );
+
+  // Issue #98 (decision #96) — corrupt-location honesty. When the saved
+  // location row for this [articleId+revision] fails its Zod parse at
+  // restore time, the reader hears AND sees one calm sentence: the restore
+  // did not land, reading proceeds from the top. `restoreNote` renders the
+  // visible quiet line in the article-top meta; `restoreAnnouncement`
+  // rides its own visually-hidden status region so the two never clobber
+  // the annotation/export announces. Reset per article in the restore
+  // effect below (the only writer).
+  const [restoreNote, setRestoreNote] = useState<string | null>(null);
+  const [restoreAnnouncement, setRestoreAnnouncement] = useState<string | null>(
     null,
   );
 
@@ -1321,13 +1349,27 @@ export function ArticleView({
     // consumes and strips, subsequent mounts / real navigation restore
     // normally.
     if (jumpPendingRef.current) return;
+    // Issue #98 — a fresh article must not inherit the previous article's
+    // corrupt-location note.
+    setRestoreNote(null);
+    setRestoreAnnouncement(null);
     let cancelled = false;
     loadLocation(article.id, article.revision)
       .then((result) => {
         if (cancelled) return;
-        // Three silent fall-through cases (no banner, no error surface):
-        //   - storage failure (result.ok === false) — STATE-05 handles via
-        //     the StorageBanner; reading continues from the top
+        // Fall-through cases (reading continues from the top in all of
+        // them; what differs is HOW HONEST the fall-through is — issue #98):
+        //   - storage failure (result.ok === false, reason "unavailable" or
+        //     "unupgradeable") — reading continues silently from the top.
+        //     The StorageBanner does NOT cover this path (it surfaces
+        //     SettingsContext's WRITE-side failures only); the pre-#98
+        //     comment here claimed it did — corrected.
+        //   - corrupt record (result.ok === false, reason "corrupt") — the
+        //     persisted row failed its Zod parse (STATE-04: never coerced).
+        //     SURFACED HONESTLY: one calm sentence in the article-top meta
+        //     + the same sentence announced politely, then reading proceeds
+        //     from the top. Silence would read as "no saved position" — a
+        //     lie about the reader's own data.
         //   - no saved location (result.location === null) — first open or
         //     revision changed since save (D-06 key isolates)
         //   - findScrollTarget returns null — corpus has no blocks
@@ -1347,6 +1389,14 @@ export function ArticleView({
         // never fight the restore scroll). No cleanup (focusing twice is
         // idempotent — Pitfall 9).
         if (!result.ok || !result.location) {
+          // Issue #98 — the corrupt-record honesty branch. The visible
+          // .meta note lands in articleTopMeta; the announcement rides the
+          // dedicated visually-hidden status region (both already mounted
+          // — the ready branch painted before this effect ran).
+          if (!result.ok && result.reason === "corrupt") {
+            setRestoreNote(CORRUPT_LOCATION_COPY);
+            setRestoreAnnouncement(CORRUPT_LOCATION_COPY);
+          }
           if (hasAppHistory) articleH1Ref.current?.focus();
           return;
         }
@@ -1703,7 +1753,12 @@ export function ArticleView({
   if (status !== "ready" || !article) {
     return (
       <main id="main">
-        <div className="status" role="status" aria-live="polite" aria-atomic="true">
+        {/* The article route's load region — the ONE StatusRegion primitive
+            (issue #98); the copy stays byte-stable ("Opening article…" /
+            the couldn't-open error pair, pinned by component + e2e specs).
+            Issue #96 deliberately leaves the ARTICLE route's copy
+            unchanged — the library view's rename does not extend here. */}
+        <StatusRegion>
           {status === "loading" ? (
             <p>Opening article…</p>
           ) : (
@@ -1716,7 +1771,7 @@ export function ArticleView({
               <p>The article could not be loaded. Select it again from the list, or try a different article.</p>
             </>
           )}
-        </div>
+        </StatusRegion>
       </main>
     );
   }
@@ -1862,6 +1917,12 @@ export function ArticleView({
             ` · Chapter ${chapterOrdinal(chapterContext.book, article.id)} of ${chapterContext.book.chapterArticleIds.length}`}
         </p>
       )}
+      {/* Issue #98 — the corrupt-location honesty note (ERROR kind): the
+          visible, calm consequence line for sighted readers; the same
+          sentence announces politely through the dedicated hidden region
+          below. Sits with the provenance meta — quiet chrome, one
+          sentence, no jargon. */}
+      {restoreNote !== null && <p className="meta restore-note">{restoreNote}</p>}
       {sourceUrl !== undefined && domain !== undefined && (
         <a href={sourceUrl} rel="noopener noreferrer" target="_blank">
           Originally published at {domain}
@@ -1916,29 +1977,28 @@ export function ArticleView({
             deleted.") is written by useAnnotationState via the
             onStatusAnnounce callback wired below. Visually-hidden so it
             announces to AT without visual clutter (mirrors the SectionAnnouncer
-            pattern). */}
-        <div
-          className="visually-hidden"
-          role="status"
-          aria-live="polite"
-          aria-atomic="true"
-        >
+            pattern). Both this and the two regions below are the ONE
+            StatusRegion primitive (issue #98) in its visually-hidden variant. */}
+        <StatusRegion className="visually-hidden">
           {annotationAnnouncement}
-        </div>
+        </StatusRegion>
         {/* Plan 09-05 (D9-06, PORT-03): a SECOND visually-hidden polite
             region for the per-article highlights-export result ("Exported N
             highlights for this article." / "Export didn't complete."). Kept
             separate from the annotation region above so an export announce
             never clobbers an in-flight annotation announce (each live region
             announces its own atomic phrase — D2-13 pattern). */}
-        <div
-          className="visually-hidden"
-          role="status"
-          aria-live="polite"
-          aria-atomic="true"
-        >
+        <StatusRegion className="visually-hidden">
           {exportAnnouncement}
-        </div>
+        </StatusRegion>
+        {/* Issue #98 — the THIRD visually-hidden polite region: the
+            corrupt-location honesty announce at restore time (the visible
+            twin line rides articleTopMeta). Separate from the two regions
+            above so a restore note can never clobber or be clobbered by an
+            annotation/export announce. */}
+        <StatusRegion className="visually-hidden">
+          {restoreAnnouncement}
+        </StatusRegion>
         {/* Phase 18 Plan 18-03 (ORNT-06, D18-05/08): the passive restoration
             marker mounts ONLY when a reopen-restore genuinely landed (the
             restorationMarker state above is set exclusively inside the

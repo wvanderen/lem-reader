@@ -37,17 +37,15 @@ interface PaginationFallbackBannerProps {
 }
 
 import { CloseIcon } from "../ui/icons";
+// Issue #98 (decision #96) — the ONE polite status-region primitive; the
+// banner composes its own class over the shared .status card.
+import { StatusRegion } from "../ui/StatusRegion";
 export function PaginationFallbackBanner({
   onSwitchToPages,
   onDismiss,
 }: PaginationFallbackBannerProps) {
   return (
-    <div
-      className="status pagination-fallback-banner"
-      role="status"
-      aria-live="polite"
-      aria-atomic="true"
-    >
+    <StatusRegion className="pagination-fallback-banner">
       <div className="pagination-fallback-main">
         {/* UI-SPEC §Copywriting line 351 — heading */}
         <h2>This part of the article is too large to fit on one page.</h2>
@@ -82,7 +80,7 @@ export function PaginationFallbackBanner({
           <CloseIcon />
         </button>
       </div>
-    </div>
+    </StatusRegion>
   );
 }
 

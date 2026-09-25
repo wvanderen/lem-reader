@@ -41,7 +41,9 @@
 // getByRole("dialog"); buttons by accessible name (the row affordances'
 // names carry the excerpt prefix — "Edit note: <excerpt>" /
 // "Remove highlight: <excerpt>" — so rows are distinguishable); the
-// announcement via the role="status" region.
+// announcement via the PAGE-level role="status" region (issue #98: the
+// curation dialogs now each carry their own honest-failure StatusRegion,
+// so the page region is scoped as a DIRECT child of main).
 import { test, expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import { BASE, wipeDatabase } from "../annotations/_fixtures";
@@ -315,7 +317,7 @@ test.describe("RECV-01.f review-panel curate (10-05 in-place edit + delete)", ()
       notedRow.locator(".review-note-preview"),
     ).toHaveText(ORIGINAL_NOTE);
     // No announcement fired — nothing was removed.
-    await expect(page.locator("main [role='status']")).not.toContainText(
+    await expect(page.locator("main > [role='status']")).not.toContainText(
       "Highlight removed.",
     );
   });
@@ -345,7 +347,7 @@ test.describe("RECV-01.f review-panel curate (10-05 in-place edit + delete)", ()
     await expect(rowByExcerpt(page, EXCERPT_ORPHAN)).toBeVisible();
 
     // D10-12 exact copy, announced through the role=status live region.
-    await expect(page.locator("main [role='status']")).toContainText(
+    await expect(page.locator("main > [role='status']")).toContainText(
       "Highlight removed.",
     );
 

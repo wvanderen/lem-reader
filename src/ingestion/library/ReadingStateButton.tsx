@@ -73,8 +73,12 @@ export function ReadingStateButton({
         {pending ? <SpinnerIcon /> : <CheckIcon />}
       </button>
       {error && (
-        <p className="meta" role="alert">
-          Couldn’t save reading status. Try again.
+        // Issue #98 (decision #96) — the polite register app-wide: role=
+        // "status" (never role="alert" — a save failure is not an urgent
+        // assertion), and the apostrophe normalized to the repo's ASCII
+        // copy convention. Adjacent to its control (the failure's context).
+        <p className="meta" role="status">
+          Couldn't save reading status. Try again.
         </p>
       )}
     </div>

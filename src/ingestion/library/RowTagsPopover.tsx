@@ -26,6 +26,8 @@ import { useEffect, useRef, useState } from "react";
 import type { TagStat } from "./tagsStore";
 import { setArticleTags } from "./tagsStore";
 import { TagPicker } from "../../ui/TagPicker";
+// Issue #98 (decision #96) — the ONE polite status-region primitive.
+import { StatusRegion } from "../../ui/StatusRegion";
 
 export interface RowTagsTarget {
   /** The article whose tags are being edited. */
@@ -121,11 +123,11 @@ export function RowTagsPopover({ target, stats, onClose }: RowTagsPopoverProps) 
             focusOnMount
           />
           <div className="row-tags-footer">
-            {errorCopy !== null && (
-              <div className="status" role="status" aria-live="polite" aria-atomic="true">
-                <p>{errorCopy}</p>
-              </div>
-            )}
+            {/* Issue #98 — the status region is the ONE StatusRegion
+                primitive and is ALWAYS MOUNTED (a live region must exist
+                before its content changes to announce reliably); idle it
+                renders no children and the per-surface CSS collapses it. */}
+            <StatusRegion>{errorCopy !== null && <p>{errorCopy}</p>}</StatusRegion>
             <button type="button" className="btn btn-quiet row-tags-done" onClick={onClose}>
               Done
             </button>

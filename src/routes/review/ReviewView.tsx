@@ -93,6 +93,9 @@ import { ReviewNoteDialog } from "./ReviewNoteDialog";
 import { DeleteHighlightConfirm } from "./DeleteHighlightConfirm";
 import { BackToLibrary } from "../../reader/BackToLibrary";
 import { JumpToArticleIcon } from "../../ui/icons";
+// Issue #98 (decision #96) — the ONE polite status-region primitive; this
+// page's load/error/empty/announcement region renders through it.
+import { StatusRegion } from "../../ui/StatusRegion";
 
 /** Truncation limits for review rows (the AnnotationsDrawer discipline). */
 const EXCERPT_MAX_CHARS = 120;
@@ -458,11 +461,13 @@ export function ReviewView({
           Highlights
         </h1>
       </header>
-      {/* The .status live region (LibraryView L112-123 twin) carries the
-          loading + error states, both D10-10 empty states, AND the D10-12
-          curation announcements — distinct, honest copies announced
-          politely. */}
-      <div className="status" role="status" aria-live="polite" aria-atomic="true">
+      {/* The status region (LibraryView's twin) carries the loading + error
+          states, both D10-10 empty states, AND the D10-12 curation
+          announcements — distinct, honest copies announced politely. The
+          zero-highlights branch adopts the ONE no-content anatomy (issue
+          #98: outline-level title + one sentence — h2 on this page), the
+          library/drawer empties' anatomy. */}
+      <StatusRegion>
         {announcement !== null && <p>{announcement}</p>}
         {status === "loading" && <p>Opening your highlights…</p>}
         {status === "error" && (
@@ -475,7 +480,10 @@ export function ReviewView({
           </>
         )}
         {status === "ready" && highlights.length === 0 && (
-          <p>No highlights yet. Highlights you make while reading appear here.</p>
+          <>
+            <h2>No highlights yet</h2>
+            <p>Highlights you make while reading appear here.</p>
+          </>
         )}
         {status === "ready" && highlights.length > 0 && derivedEmpty && (
           // Issue #76 (decision #72) — the two zero-matches states share one
@@ -499,7 +507,7 @@ export function ReviewView({
             <p>No highlights match these filters.</p>
           )
         )}
-      </div>
+      </StatusRegion>
       {/* D10-08 filter row — TagFilter chips reused as-is + article select +
           confidence select + sort select. Always mounted so the reader can
           adjust filters even before the load settles (the derivation runs
@@ -670,17 +678,20 @@ export function ReviewView({
           (showModal requires DOM presence). The commit handlers share ONE
           shape (the LibraryView write-path twin): clear the target,
           invalidate the ONE LibrarySnapshot (Issue #8 — re-derive from
-          Dexie, no stale rows), and announce calmly through .status.
-          Cancel closes only. */}
+          Dexie, no stale rows), and announce calmly through the status
+          region. Issue #98 — the announcement is HONEST: the note dialog
+          reports whether the commit succeeded, so "Note saved." can only
+          ever announce a write that landed; a failed commit announces the
+          failure copy instead (never a success lie). Cancel closes only. */}
       <ReviewNoteDialog
         open={noteTarget !== null}
         highlightId={noteTarget?.highlight.id ?? ""}
         articleId={noteTarget?.highlight.articleId ?? ""}
         existing={noteTarget?.note ?? null}
-        onDone={() => {
+        onDone={(saved) => {
           setNoteTarget(null);
           invalidateLibrarySnapshot();
-          setAnnouncement("Note saved.");
+          setAnnouncement(saved ? "Note saved." : "Couldn't save the note. Try again.");
         }}
       />
       <DeleteHighlightConfirm
@@ -694,7 +705,7 @@ export function ReviewView({
         onConfirm={() => {
           setRemoveTarget(null);
           invalidateLibrarySnapshot();
-          // D10-12 exact copy.
+          // D10-12 exact copy — only reachable after the delete resolved.
           setAnnouncement("Highlight removed.");
         }}
         onCancel={() => setRemoveTarget(null)}

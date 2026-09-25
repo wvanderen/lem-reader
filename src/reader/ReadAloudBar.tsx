@@ -45,6 +45,8 @@
 
 import type { FollowLevel, TransportState } from "../readaloud/types";
 import { formatRate } from "../settings/tokens";
+// Issue #98 (decision #96) — the ONE polite status-region primitive.
+import { StatusRegion } from "../ui/StatusRegion";
 
 interface ReadAloudBarProps {
   state: TransportState;
@@ -195,19 +197,14 @@ export function ReadAloudBar({
           )}
         </div>
       </div>
-      {/* The ONE polite transport live region (visually hidden, mirrors the
-          annotation/export announce pattern). The jump notice takes
+      {/* The ONE polite transport live region (visually hidden, the ONE
+          StatusRegion primitive — issue #98). The jump notice takes
           precedence while fresh — it is the feedback for the reader's LAST
           action — and the route clears it the moment the transport next
           announces. */}
-      <div
-        className="visually-hidden"
-        role="status"
-        aria-live="polite"
-        aria-atomic="true"
-      >
+      <StatusRegion className="visually-hidden">
         {notice ?? announcement ?? null}
-      </div>
+      </StatusRegion>
     </>
   );
 }
