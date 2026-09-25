@@ -17,6 +17,9 @@
 // heading.)
 import { useState } from "react";
 import { useSectionSpy } from "./sectionSpy";
+// Issue #98 (decision #96) — the ONE polite status-region primitive; the
+// announcer composes the visually-hidden variant over it.
+import { StatusRegion } from "../ui/StatusRegion";
 
 interface SectionAnnouncerProps {
   /**
@@ -39,13 +42,6 @@ export function SectionAnnouncer({ articleEl }: SectionAnnouncerProps) {
   });
 
   return (
-    <div
-      className="visually-hidden"
-      role="status"
-      aria-live="polite"
-      aria-atomic="true"
-    >
-      {announce}
-    </div>
+    <StatusRegion className="visually-hidden">{announce}</StatusRegion>
   );
 }

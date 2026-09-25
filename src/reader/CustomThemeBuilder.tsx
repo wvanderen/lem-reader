@@ -25,6 +25,8 @@
 // writes; no transitions are added here (A11Y-06).
 import { useEffect, useState } from "react";
 import { useSettings } from "../settings/SettingsContext";
+// Issue #98 (decision #96) — the ONE polite status-region primitive.
+import { StatusRegion } from "../ui/StatusRegion";
 import {
   AA_TEXT_RATIO,
   contrastRatio,
@@ -186,9 +188,10 @@ export function CustomThemeBuilder() {
         ))}
       </div>
       {/* The ONE polite region for the policed pairs (the D2-13 status
-          pattern): verdict lines, the calm warning, and the fix affordance
-          announce together, debounce-aligned. */}
-      <div className="status" role="status" aria-live="polite" aria-atomic="true">
+          pattern, now the ONE StatusRegion primitive — issue #98):
+          verdict lines, the calm warning, and the fix affordance announce
+          together, debounce-aligned. */}
+      <StatusRegion>
         <p className="custom-theme-verdict">{verdictLine("Text on surface", inkRatio)}</p>
         <p className="custom-theme-verdict">{verdictLine("Accent on surface", accentRatio)}</p>
         {anyFailing && (
@@ -202,7 +205,7 @@ export function CustomThemeBuilder() {
             </button>
           </>
         )}
-      </div>
+      </StatusRegion>
       <button type="button" className="btn btn-quiet" onClick={resetToBase}>
         Reset to base colors
       </button>

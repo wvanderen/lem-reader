@@ -34,8 +34,24 @@
 // RemoveConfirm register ("…will also be removed."). The excerpt renders as
 // informational context (aria-describedby, the NotePopover excerpt pattern)
 // so screen-reader users can tell WHICH highlight the dialog is about.
+//
+// Issue #98 (decision #96) — HONEST WRITE FAILURES: a failed delete keeps
+// the dialog open with a calm error line through the ONE StatusRegion
+// primitive, and onConfirm (which closes the target + announces "Highlight
+// removed.") fires ONLY after the write resolves — the panel can never
+// announce a
+// removal that did not happen. The destructive button carries the unified
+// in-flight register while the write runs. Issue #98 review — the
+// pending/writeError state machine and the busy register are the SHARED
+// useHonestWrite hook + BusyButton primitive now; only the write itself
+// (and the copy) stay local here.
 import { useEffect, useRef } from "react";
 import { deleteHighlight } from "../../persistence/highlightsStore";
+// Issue #98 — the ONE polite status-region primitive + the shared
+// honest-write/busy primitives.
+import { StatusRegion } from "../../ui/StatusRegion";
+import { BusyButton } from "../../ui/BusyButton";
+import { useHonestWrite } from "../../ui/honestWrite";
 
 /** Truncation limit for the excerpt context (the NotePopover
  * EXCERPT_MAX_CHARS precedent). Plain string operation — the result renders
@@ -71,6 +87,11 @@ export function DeleteHighlightConfirm({
   // Capture the previously-focused element on open so the close handler can
   // restore focus (Pitfall 1 — same discipline as RemoveConfirm).
   const triggerRef = useRef<HTMLElement | null>(null);
+  // Issue #98 — the write's honest state (the SHARED useHonestWrite hook —
+  // the RemoveConfirm discipline): pending drives the unified busy register;
+  // writeError keeps the dialog open with the calm error line. Both reset on
+  // every fresh open (below).
+  const { pending, writeError, reset: resetWrite, run: runWrite } = useHonestWrite();
   // Mirror the `open` prop at event time so the `close` listener can tell an
   // ESC-originated close (open still true — the parent doesn't know yet, so
   // the listener must route cleanup via onCancel) from the CONTROLLED close
@@ -87,6 +108,8 @@ export function DeleteHighlightConfirm({
     if (open && !dlg.open) {
       triggerRef.current = document.activeElement as HTMLElement | null;
       dlg.showModal(); // browser: focus→first focusable, trap, inert backdrop, Esc closes
+      // Issue #98 — fresh session state (the D16-08 discipline).
+      resetWrite();
       // Cross-engine focus management (Pitfall 1 + WebKit quirk, same as
       // RemoveConfirm): explicitly focus the [data-initial-focus] element so
       // the focus trap and the initial reading position are predictable in
@@ -104,7 +127,7 @@ export function DeleteHighlightConfirm({
     } else if (!open && dlg.open) {
       dlg.close();
     }
-  }, [open]);
+  }, [open, resetWrite]);
 
   // Register the `close` event listener (with cleanup). Restore focus to the
   // captured trigger (Pitfall 1), and — when the close was ESC-originated
@@ -142,19 +165,18 @@ export function DeleteHighlightConfirm({
   // in the destructive button's onClick — never in a catch block or effect.
   // The reader must click "Remove highlight" to fire this; nothing else
   // triggers it.
+  // Issue #98 — honest failure: a rejected delete keeps the dialog open
+  // with the calm error line; onConfirm runs ONLY on success — the panel's
+  // snapshot invalidation + "Highlight removed." announcement therefore
+  // describe a removal that actually happened. ONE call: the Dexie
+  // transaction cascade-deletes the highlight AND its note(s) atomically
+  // (D5-12 / Pitfall 10 — no second notes call). The delete closure stays
+  // in the click handler (Pitfall 8); the shared hook owns only the
+  // pending/error bookkeeping around it.
   const onDestructiveClick = async () => {
-    try {
-      // ONE call: the Dexie transaction cascade-deletes the highlight AND
-      // its note(s) atomically (D5-12 / Pitfall 10 — no second notes call).
-      await deleteHighlight(highlightId);
-    } catch {
-      // Even the destructive path defends itself: if the delete throws, we
-      // still close the dialog so the reader isn't stuck. The panel's
-      // snapshot invalidation re-derivation will reveal the row is still
-      // present; the reader can retry. (No delete retry here — the reader
-      // explicitly consented ONCE.)
+    if (await runWrite(() => deleteHighlight(highlightId))) {
+      onConfirm();
     }
-    onConfirm();
   };
 
   return (
@@ -184,17 +206,24 @@ export function DeleteHighlightConfirm({
             {truncate(excerpt, EXCERPT_MAX_CHARS)}
           </p>
         )}
+        {/* Issue #98 — the honest-failure line. Always-mounted StatusRegion
+            (a live region must pre-exist to announce); idle it renders no
+            children and paints nothing (the shared dialog :empty rules). */}
+        <StatusRegion>
+          {writeError && <p>Couldn't remove this highlight. Try again.</p>}
+        </StatusRegion>
         <div className="dialog-actions library-remove-confirm-actions">
           {/* Destructive action — Pitfall 8: deleteHighlight fires ONLY in
               onDestructiveClick above. The button label names the action
-              unambiguously. */}
-          <button
-            type="button"
+              unambiguously. Issue #98 — the unified in-flight register
+              while the write runs. */}
+          <BusyButton
+            busy={pending}
             className="btn btn-destructive library-remove-destructive"
             onClick={onDestructiveClick}
           >
             Remove highlight
-          </button>
+          </BusyButton>
           {/* Cancel — names the actual outcome: the reader keeps the
               highlight and its note. Carries [data-initial-focus] so the
               explicit focus call lands here on open (NOT on the destructive

@@ -220,6 +220,12 @@ function mockIngest(
 async function libraryRowCount(page: Page): Promise<number> {
   await page.goto(`${BASE}/#/`);
   await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible();
+  // Issue #98 ride-along (test-only): the h1 paints while the library
+  // snapshot load is still in flight, so an immediate .library-row count
+  // races the rows (observed as alternating N4/N5 webkit failures under
+  // parallel load). The view switcher's counts render ONLY at status
+  // ready — gating on "All (N)" makes the count deterministic.
+  await expect(page.getByRole("link", { name: /^All \(\d+\)$/ })).toBeVisible();
   return page.locator(".library-row").count();
 }
 

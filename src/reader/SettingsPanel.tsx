@@ -60,7 +60,12 @@ import {
   renderLibraryHighlights,
 } from "../portability/markdown";
 import type { HighlightEntry, HighlightSection } from "../portability/markdown";
+// Issue #98 (decision #96) — the ONE polite status-region primitive (the
+// "Your data" cluster announces through it) + the shared spinner arc for
+// the unified in-flight register.
 import { CloseIcon } from "../ui/icons";
+import { BusyButton } from "../ui/BusyButton";
+import { StatusRegion } from "../ui/StatusRegion";
 // Issue #86 (decision #73) — the custom-theme slot: seedCustomTheme powers
 // the first-activation seeding in onTheme; the builder is the disclosure
 // section mounted directly below the Theme fieldset while custom is active.
@@ -655,7 +660,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
               <span>Animate page turns</span>
             </label>
             <p id="page-turn-motion-help" className="settings-help">
-              A gentle fade between pages. Follows your device’s reduced-motion setting.
+              A gentle fade between pages. Follows your device's reduced-motion setting.
             </p>
           </fieldset>
 
@@ -734,30 +739,35 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
           <fieldset className="settings-section settings-data">
             <legend>Your data</legend>
             <div className="settings-data-actions">
-              <button
-                type="button"
+              {/* Issue #98 — the unified in-flight register via the shared
+                BusyButton primitive: the active action's button carries the
+                spinner arc (aria-hidden — the accessible name stays the
+                action) + aria-busy; all three disable together (the calm
+                single-flight rule above). */}
+              <BusyButton
                 className="btn btn-quiet settings-data-action"
                 onClick={handleExportBundle}
+                busy={dataBusy === "export-bundle"}
                 disabled={dataActionsDisabled}
               >
                 Export library bundle
-              </button>
-              <button
-                type="button"
+              </BusyButton>
+              <BusyButton
                 className="btn btn-quiet settings-data-action"
                 onClick={() => importFileRef.current?.click()}
+                busy={dataBusy === "import"}
                 disabled={dataActionsDisabled}
               >
                 Import bundle
-              </button>
-              <button
-                type="button"
+              </BusyButton>
+              <BusyButton
                 className="btn btn-quiet settings-data-action"
                 onClick={handleExportHighlights}
+                busy={dataBusy === "export-highlights"}
                 disabled={dataActionsDisabled}
               >
                 Export all highlights
-              </button>
+              </BusyButton>
             </div>
             {/* Visually-hidden file picker (the add-dialog ref discipline) —
               triggered by the Import bundle button; disabled together with
@@ -774,10 +784,11 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
               onChange={handleImportChange}
             />
             {/* The D2-13 pattern: polite/atomic status region carrying every
-              progress, result, and refusal line in calm DOC-06 voice. */}
-            <div className="status" role="status" aria-live="polite" aria-atomic="true">
+              progress, result, and refusal line in calm DOC-06 voice — the
+              ONE StatusRegion primitive (issue #98). */}
+            <StatusRegion>
               {dataMessage !== null && <p>{dataMessage}</p>}
-            </div>
+            </StatusRegion>
           </fieldset>
 
           <div className="settings-footer">

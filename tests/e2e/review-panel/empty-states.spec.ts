@@ -6,10 +6,12 @@
 // Verification-map rows owned by this file (10-VALIDATION.md):
 //   - RECV-01.g — empty states (no highlights vs filters-zero)
 //
-// The two D10-10 branches are DISTINCT copies inside the .status live
-// region (role="status" — SR announcement parity):
-//   1. "No highlights yet. Highlights you make while reading appear here."
-//      — the library genuinely has zero highlight rows.
+// The two D10-10 branches are DISTINCT copies inside the status region
+// (role="status" — SR announcement parity; the ONE StatusRegion primitive,
+// issue #98):
+//   1. The no-content anatomy (issue #98): outline-level title "No
+//      highlights yet" + one sentence "Highlights you make while reading
+//      appear here." — the library genuinely has zero highlight rows.
 //   2. "No highlights match these filters." — a non-empty library filtered
 //      to zero rows (proven against a visible section BEFORE filtering).
 //
@@ -87,17 +89,23 @@ async function seedAndOpenReview(
 }
 
 test.describe("RECV-01.g review-panel empty states (10-04 both branches)", () => {
-  test("no highlights at all: the no-highlights-yet copy in the live region", async ({
+  test("no highlights at all: the no-content anatomy in the live region", async ({
     page,
   }) => {
     // Articles seeded, ZERO highlight rows — the library exists but no
-    // reader has highlighted anything yet.
+    // reader has highlighted anything yet. Issue #98 — the zero state
+    // adopts the ONE no-content anatomy: outline-level title + one
+    // sentence (no icons, no buttons).
     await seedAndOpenReview(page, { articles: [ARTICLE_A, ARTICLE_B] });
 
     await expect(page.locator(".review-row")).toHaveCount(0);
-    await expect(page.locator("main [role='status']")).toHaveText(
-      "No highlights yet. Highlights you make while reading appear here.",
-    );
+    const status = page.locator("main > [role='status']");
+    await expect(
+      status.getByRole("heading", { level: 2, name: "No highlights yet" }),
+    ).toBeVisible();
+    await expect(
+      status.getByText("Highlights you make while reading appear here."),
+    ).toBeVisible();
   });
 
   test("filters matching nothing: the no-match copy against a non-empty library", async ({
@@ -121,11 +129,11 @@ test.describe("RECV-01.g review-panel empty states (10-04 both branches)", () =>
       .selectOption("orphan");
 
     await expect(page.locator(".review-row")).toHaveCount(0);
-    await expect(page.locator("main [role='status']")).toContainText(
+    await expect(page.locator("main > [role='status']")).toContainText(
       "No highlights match these filters.",
     );
     // The copy is DISTINCT from the no-highlights branch.
-    await expect(page.locator("main [role='status']")).not.toContainText(
+    await expect(page.locator("main > [role='status']")).not.toContainText(
       "No highlights yet",
     );
   });
@@ -138,7 +146,7 @@ test.describe("RECV-01.g review-panel empty states (10-04 both branches)", () =>
     // The carrier is the polite, atomic live region — the SAME .status
     // region that carried the no-highlights-yet copy in the first test,
     // proving both D10-10 copies announce from one role=status element.
-    const status = page.locator("main [role='status']");
+    const status = page.locator("main > [role='status']");
     await expect(status).toHaveCount(1);
     await expect(status).toHaveAttribute("aria-live", "polite");
     await expect(status).toHaveAttribute("aria-atomic", "true");

@@ -40,6 +40,8 @@ import { useEffect, useRef, useState } from "react";
 import type { TagStat } from "../ingestion/library/tagsStore";
 import { loadTagStats, setArticleTags } from "../ingestion/library/tagsStore";
 import { TagPicker } from "../ui/TagPicker";
+// Issue #98 (decision #96) — the ONE polite status-region primitive.
+import { StatusRegion } from "../ui/StatusRegion";
 
 interface TagEntryProps {
   /** The article whose tags are being edited. */
@@ -138,19 +140,14 @@ export function TagEntry({ articleId, tags, saveTags }: TagEntryProps) {
         onChange={(next) => void commitTags(next)}
         inputId="tag-entry-input"
       />
-      {/* .status live region mirrors the add dialog's discipline (A11Y-08 —
+      {/* Status region mirrors the add dialog's discipline (A11Y-08 —
           readers using AT hear about save failures). aria-atomic so the SR
-          re-announces the whole phrase on every change. */}
-      {errorCopy !== null && (
-        <div
-          className="status"
-          role="status"
-          aria-live="polite"
-          aria-atomic="true"
-        >
-          <p>{errorCopy}</p>
-        </div>
-      )}
+          re-announces the whole phrase on every change. Issue #98 — it is
+          the ONE StatusRegion primitive and is ALWAYS MOUNTED (a live
+          region must exist before its content changes to announce
+          reliably); idle it renders no children and the per-surface CSS
+          collapses it. */}
+      <StatusRegion>{errorCopy !== null && <p>{errorCopy}</p>}</StatusRegion>
     </fieldset>
   );
 }

@@ -38,10 +38,23 @@
 // as the reader's chosen calendar date across UTC-11..UTC+11 (the display
 // is dateStyle-only), and isoToDateInput inverts losslessly by slicing the
 // first ten characters.
+//
+// Issue #98 (decision #96) — HONEST WRITE FAILURES: a failed put keeps the
+// dialog open with a calm error line through the ONE StatusRegion
+// primitive, and onSaved (which closes + invalidates the snapshot) fires
+// ONLY after the write resolves — the row list can never claim a save that
+// did not land. The Save button carries the unified in-flight register
+// while the put runs (spinner arc + aria-busy + disabled — the
+// ReadingStateButton pattern). The fresh-open reset clears a prior
+// session's error (the D16-08 discipline).
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { CanonicalArticle } from "../../content/types";
 import { db } from "../../persistence/db";
 import { formatIsoDate } from "./formatDate";
+// Issue #98 — the ONE polite status-region primitive + the shared
+// BusyButton in-flight register.
+import { StatusRegion } from "../../ui/StatusRegion";
+import { BusyButton } from "../../ui/BusyButton";
 
 /** isoToDateInput — ISO datetime → the "YYYY-MM-DD" a date input holds. */
 function isoToDateInput(iso: string): string {
@@ -110,6 +123,9 @@ export function EditMetadataDialog({
   const [sourceUrlValue, setSourceUrlValue] = useState("");
   const [titleReset, setTitleReset] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Issue #98 — the honest-failure state: a rejected put keeps the dialog
+  // open with the calm error line (never closes as if it saved).
+  const [saveError, setSaveError] = useState(false);
   // Live mirror rewritten EVERY render (the AddDialog L110-116 discipline):
   // the long-lived `cancel` listener below must read the CURRENT saving
   // state, not a stale closure capture.
@@ -148,6 +164,8 @@ export function EditMetadataDialog({
       setSourceUrlValue(article?.readerSourceUrl ?? "");
       setTitleReset(false);
       setSaving(false);
+      // Issue #98 — a prior session's failed-save error never leaks.
+      setSaveError(false);
       // Cross-engine focus management (Pitfall 1 + WebKit quirk — the
       // 02-01 lesson): explicitly focus [data-initial-focus] — the Cancel
       // button (the non-destructive control; an accidental Enter must not
@@ -230,6 +248,7 @@ export function EditMetadataDialog({
     if (trimmedTitle.length === 0 && !titleReset) return; // blank-and-not-reset: the disabled rule, defensively
     if (trimmedSourceUrl.length > 0 && !isValidHttpUrl(trimmedSourceUrl)) return; // invalid-URL block, defensively — never a silent drop
     setSaving(true);
+    setSaveError(false); // issue #98 — a retry clears the prior failure line
     try {
       // Rule 1 fix: the captured article may ALREADY carry override keys
       // (this dialog reopens on overridden rows) — destructure them OUT of
@@ -255,10 +274,15 @@ export function EditMetadataDialog({
       };
       await db.articles.put(row);
     } catch {
-      // Even the save path defends itself: if the put throws, close calmly
-      // (the RemoveConfirm discipline) — the parent's snapshot
-      // re-derivation shows the unchanged row; the reader can retry.
+      // Issue #98 — honest failure: the dialog stays OPEN with the calm
+      // error line; onSaved (close + snapshot invalidation) never fires,
+      // so nothing downstream claims a save that did not land. The reader
+      // can retry (fields + values untouched) or Cancel.
+      setSaving(false);
+      setSaveError(true);
+      return;
     }
+    setSaving(false);
     onSaved();
   }
 
@@ -409,14 +433,21 @@ export function EditMetadataDialog({
               Enter a full http(s) link, or choose Reset source to keep the original.
             </p>
           )}
+          {/* Issue #98 — the honest-failure line. Always-mounted StatusRegion
+              (a live region must pre-exist to announce); idle it renders no
+              children and paints nothing (the shared dialog rules). */}
+          <StatusRegion>
+            {saveError && <p>Couldn't save this change. Try again.</p>}
+          </StatusRegion>
           <div className="dialog-actions edit-metadata-actions">
-            <button
+            <BusyButton
               type="submit"
+              busy={saving}
               className="btn btn-primary edit-metadata-save"
-              disabled={saveBlocked || saving}
+              disabled={saveBlocked}
             >
               Save
-            </button>
+            </BusyButton>
             {/* Cancel — carries [data-initial-focus] so the explicit focus
                 call lands here on open (NOT on Save — the non-destructive
                 default; an accidental Enter cannot commit a write). */}

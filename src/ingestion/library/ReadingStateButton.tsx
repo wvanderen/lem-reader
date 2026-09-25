@@ -22,6 +22,8 @@
 // name + busy state + the disabled semantics.
 import { useEffect, useState } from "react";
 import { CheckIcon, SpinnerIcon } from "../../ui/icons";
+// Issue #98 — the ONE polite status-region primitive.
+import { StatusRegion } from "../../ui/StatusRegion";
 
 /** Keep storage failures local and keep curation separate from card navigation. */
 export function ReadingStateButton({
@@ -73,9 +75,16 @@ export function ReadingStateButton({
         {pending ? <SpinnerIcon /> : <CheckIcon />}
       </button>
       {error && (
-        <p className="meta" role="alert">
-          Couldn’t save reading status. Try again.
-        </p>
+        // Issue #98 (decision #96) — the polite register app-wide: the ONE
+        // StatusRegion primitive (never role="alert" — a save failure is
+        // not an urgent assertion). The .meta class composes the inline
+        // line register; the shared .reading-state-control .status rules
+        // strip the card chrome (an inline error, not a card), and the
+        // apostrophe follows the repo's ASCII copy convention. Adjacent to
+        // its control (the failure's context).
+        <StatusRegion className="meta">
+          Couldn&apos;t save reading status. Try again.
+        </StatusRegion>
       )}
     </div>
   );

@@ -28,6 +28,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { PaginatedIcon, ScrollingIcon } from "../ui/icons";
+import { StatusRegion } from "../ui/StatusRegion";
 
 export type ReadingMode = "paginated" | "scrolling";
 
@@ -98,15 +99,9 @@ export function ModeToggle({ mode, onToggle }: ModeToggleProps): React.ReactElem
         */}
         {isPaginated ? <PaginatedIcon /> : <ScrollingIcon />}
       </button>
-      {/* Polite live region — mirrors SectionAnnouncer's role="status" pattern. */}
-      <div
-        className="visually-hidden"
-        role="status"
-        aria-live="polite"
-        aria-atomic="true"
-      >
-        {announce}
-      </div>
+      {/* Polite live region — the ONE StatusRegion primitive (issue #98),
+          visually-hidden variant. */}
+      <StatusRegion className="visually-hidden">{announce}</StatusRegion>
     </>
   );
 }

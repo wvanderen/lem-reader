@@ -68,6 +68,11 @@ import type { AddToLibraryOutcome } from "./addToLibrary";
 // second write).
 import { TagPicker } from "../ui/TagPicker";
 import type { TagStat } from "./library/tagsStore";
+// Issue #98 (decision #96) — the ONE polite status-region primitive (this
+// dialog's submission spine announces through it) + the shared BusyButton
+// register (spinner arc + aria-busy + disabled) for the in-flight submit.
+import { StatusRegion } from "../ui/StatusRegion";
+import { BusyButton } from "../ui/BusyButton";
 // The paste-transcript fallback dispatches on the same extractor the
 // server runs (request-free) — the fallback offer appears ONLY for a URL
 // that is actually a YouTube video.
@@ -515,22 +520,21 @@ export function AddDialog({ open, onCancel, onBookAdded, tagStats }: AddDialogPr
       <div className="add-dialog-inner">
         <h2 id="add-dialog-title">Add to your library</h2>
 
-        {/* Issue #84 (decision #70) — the ONE .status live region now sits
+        {/* Issue #84 (decision #70) — the ONE status region now sits
             ABOVE the form (the one-anatomy order: status card → content
-            slot → actions row): role=status / aria-live=polite /
-            aria-atomic=true unchanged, quiet-card styling, collapsed via
-            CSS when idle (:empty). Hosts the submitting progress, every
-            refusal copy, and the bot-check context that explains the
-            transcript swap. Refusals + submitting announce here — article
-            success closes and navigates away, book success closes onto
-            the Library. aria-atomic="true" so the SR re-announces the
-            whole phrase on every change (not just the diff). The region
-            NEVER unmounts (a live region must exist before its content
-            changes to announce reliably) and NEVER renders below the
-            actions row. */}
-        <div className="status" role="status" aria-live="polite" aria-atomic="true">
+            slot → actions row): the ONE StatusRegion primitive (issue
+            #98), quiet-card styling, collapsed via CSS when idle (:empty).
+            Hosts the submitting progress, every refusal copy, and the
+            bot-check context that explains the transcript swap. Refusals +
+            submitting announce here — article success closes and navigates
+            away, book success closes onto the Library. aria-atomic="true"
+            so the SR re-announces the whole phrase on every change (not
+            just the diff). The region NEVER unmounts (a live region must
+            exist before its content changes to announce reliably) and
+            NEVER renders below the actions row. */}
+        <StatusRegion>
           {status !== "idle" && message !== null && <p>{message}</p>}
-        </div>
+        </StatusRegion>
 
         {/* D16-05 — the visible 3-way source-first picker. Native
             fieldset/legend/radio semantics (the SettingsPanel L370-402
@@ -788,21 +792,25 @@ export function AddDialog({ open, onCancel, onBookAdded, tagStats }: AddDialogPr
               existing form= mechanism — the retired second action row's
               submit is gone); disabled rides the transcript gate (required
               title + text). Otherwise it targets the selected source's
-              form with the per-source gate + label, unchanged. */}
-          <button
+              form with the per-source gate + label, unchanged. Issue #98 —
+              the unified busy register via the shared BusyButton primitive
+              while a submission is in flight: the spinner arc PREPENDS the
+              label (aria-hidden — the accessible name stays the action) +
+              aria-busy + disabled (the ReadingStateButton pattern). */}
+          <BusyButton
             type="submit"
+            busy={submitting}
             className="btn btn-primary add-dialog-submit"
             form={transcriptMode ? "add-transcript-form" : `add-${source}-form`}
             disabled={
-              submitting ||
-              (transcriptMode
+              transcriptMode
                 ? transcriptValue.trim().length === 0 ||
                   transcriptTitleValue.trim().length === 0
-                : !sourceSubmitReady[source])
+                : !sourceSubmitReady[source]
             }
           >
             {transcriptMode ? "Add transcript" : SOURCE_SUBMIT_LABEL[source]}
-          </button>
+          </BusyButton>
         </div>
       </div>
     </dialog>

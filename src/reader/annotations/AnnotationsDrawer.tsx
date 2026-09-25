@@ -30,6 +30,9 @@ import { useHighlightOverlay } from "./HighlightOverlay";
 // shared pure helper (first fragment + calm ellipsis for spans).
 import { firstFragmentExcerpt } from "../../annotations/excerpt";
 import { CloseIcon } from "../../ui/icons";
+// Issue #98 (decision #96) — the ONE polite status-region primitive (the
+// drawer's no-content state renders through it).
+import { StatusRegion } from "../../ui/StatusRegion";
 
 /** Truncation limits for drawer entries (UI-SPEC §Interaction 30). */
 const EXCERPT_MAX_CHARS = 120;
@@ -208,13 +211,17 @@ export function AnnotationsDrawer({
         </div>
 
         {sorted.length === 0 ? (
-          <div className="status drawer-empty" role="status">
+          /* The no-content state (issue #98 — the ONE anatomy: outline-level
+             title, here h3 in the drawer, + one sentence; no icons/buttons).
+             Renders through the ONE StatusRegion primitive with the
+             drawer's own class so the card geometry stays drawer-scoped. */
+          <StatusRegion className="drawer-empty">
             <h3>No highlights yet</h3>
             <p>
               Select any text in the article to highlight it. You can add a note
               to any highlight, and come back here to find them.
             </p>
-          </div>
+          </StatusRegion>
         ) : (
           <ol className="drawer-list">
             {sorted.map((h) => {

@@ -57,6 +57,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { PaginatedSurfaceHandle } from "./PaginatedSurface";
+// Issue #98 (decision #96) — the ONE polite status-region primitive.
+import { StatusRegion } from "../ui/StatusRegion";
 
 interface PageTurnControlsProps {
   /**
@@ -237,14 +239,7 @@ export function PageTurnControls({
   }, []);
 
   return (
-    <div
-      className="visually-hidden"
-      role="status"
-      aria-live="polite"
-      aria-atomic="true"
-    >
-      {announce}
-    </div>
+    <StatusRegion className="visually-hidden">{announce}</StatusRegion>
   );
 }
 

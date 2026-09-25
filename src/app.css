@@ -361,6 +361,17 @@ dialog::backdrop {
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
+/* Issue #98 — a StatusRegion composed with .visually-hidden must contribute
+   NOTHING to its host's geometry: the shared .status card chrome (margin/
+   padding/border/background) is stripped for the composition, so hidden
+   announcers can never change the layout of the chrome that carries them
+   (the 320px reader-header wrap budget caught the leaked margin-block). */
+.visually-hidden.status {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
 
 /* ── Base typography (UI-SPEC §Typography; system serif stacks only — no
    web fonts, so document.fonts.ready resolves immediately in Phase 1) ────
@@ -593,6 +604,58 @@ a:hover {
 .status h1,
 .status h2 {
   margin-block: 0 var(--space-sm);
+}
+
+/* ── Issue #98 — StatusRegion always-mounted collapse discipline ──────────
+   The primitive's region NEVER unmounts (a live region must pre-exist to
+   announce reliably); idle it renders no children. Two treatments:
+   1. The tag surfaces (.tag-entry, .row-tags-footer) keep their small card
+      register while announcing; :empty strips the shared card chrome so an
+      idle region paints nothing.
+   2. The dialog + inline-line regions (remove confirms, edit-metadata,
+      review note, the per-row reading-state error) are quiet inline LINES
+      — the shared card chrome is stripped outright (the .settings-data
+      .status treatment); an empty region paints nothing. Issue #98 review
+      — the four identical dialog selectors collapse into :is(). */
+.tag-entry .status:empty,
+.row-tags-footer .status:empty {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  margin-block: 0;
+}
+:is(.library-remove-confirm-inner, .book-remove-confirm-inner, .edit-metadata-inner, .review-note-dialog, .reading-state-control) .status {
+  margin-block: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+}
+:is(.library-remove-confirm-inner, .book-remove-confirm-inner, .edit-metadata-inner, .review-note-dialog, .reading-state-control) .status p {
+  margin-block: 0 var(--space-sm);
+}
+:is(.library-remove-confirm-inner, .book-remove-confirm-inner, .edit-metadata-inner, .review-note-dialog, .reading-state-control) .status:empty {
+  margin-block: 0;
+}
+:is(.library-remove-confirm-inner, .book-remove-confirm-inner, .edit-metadata-inner, .review-note-dialog, .reading-state-control) .status:empty p {
+  margin-block: 0;
+}
+
+/* Issue #98 — the unified in-flight register: a busy .btn shows the wait
+   cursor; its glyph (the SpinnerIcon arc when the component swaps it in)
+   spins under the positive reduced-motion gate. The .reading-state-button
+   rule below predates this shared register and keeps its opacity nuance. */
+.btn[aria-busy="true"] {
+  cursor: wait;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .btn[aria-busy="true"] svg {
+    animation: btn-busy-spin 0.9s linear infinite;
+  }
+  @keyframes btn-busy-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
 }
 
 /* ── Fixture list (UI-SPEC §Component Inventory + §Layout) ─────────────── */
@@ -2438,6 +2501,17 @@ dialog.annotations-drawer {
 .library-empty {
   max-width: 1100px;
   margin: var(--space-lg) auto 0 auto;
+  /* Issue #98 review — the wrapper renders through the ONE StatusRegion
+     primitive now (the drawer-empty twin, the spec's named convergence);
+     the shared card chrome is stripped so the library no-content stays
+     reading-measure page copy on the page surface, not a floating card
+     (the 2026-09-08 gutter discipline). The shared .status typography
+     (h2/p rhythm, soft-ink sentence — the review zero state's exact
+     register) applies unchanged. Geometry: max-width + margin above still
+     win over the base .status rule (later in the file). */
+  padding: 0;
+  background: transparent;
+  border: 0;
 }
 .library-empty h2 {
   margin-block-start: 0;
@@ -4194,20 +4268,11 @@ main#main > .status:empty {
 }
 /* Issue #67 review — pending is visible, not just opacity: the glyph swaps
    to the icons.tsx spinner arc while the write is in flight (the accessible
-   name stays the target action — Quick 260909-ahy). Rotation rides the same
-   positive-gate pattern as the book disclosure animation above; under
-   reduced motion the global reduce gate (top of file) leaves the static arc
+   name stays the target action — Quick 260909-ahy). The spin animation now
+   rides the shared `.btn[aria-busy="true"]` register (issue #98) — the
+   button carries the .btn class, so the shared positive-gate rule spins its
+   glyph; under reduced motion the global reduce gate leaves the static arc
    — still a different shape from the check. */
-@media (prefers-reduced-motion: no-preference) {
-  .reading-state-button[aria-busy="true"] svg {
-    animation: reading-state-spin 0.9s linear infinite;
-  }
-  @keyframes reading-state-spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
-}
 
 /* Highlights: shared page measure, paired fields, one container per quote. */
 .review-header {
