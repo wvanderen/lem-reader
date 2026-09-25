@@ -18,9 +18,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { makeArticle, prepareFreshPage, seedRows } from "../portability/_portability";
 import { openAddDialog, pickSource } from "./add-dialog";
-
-// LEM_E2E_BASE discipline — parallel-wayfinder-sessions hygiene.
-const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
+import { BASE } from "../_base";
 
 const ROW_ARTICLE = {
   ...makeArticle({

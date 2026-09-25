@@ -40,10 +40,8 @@ import type { CanonicalArticle } from "../../src/content/types";
 // assert the bar's LIVE labels (one rename site).
 import { installFakeSpeech } from "./readaloud/_speech";
 import { FOLLOW_LABELS } from "../../src/reader/ReadAloudBar";
+import { BASE } from "./_base";
 
-// Overridable for session-local dev-server runs (the _fixtures.ts
-// LEM_E2E_BASE discipline — parallel-wayfinder-sessions hygiene).
-const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
 const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] as const;
 // Pure-string SVG stub (see open-every-fixture.spec.ts for rationale).
 const PIXEL_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>';
@@ -344,8 +342,6 @@ test("review panel #/highlights: zero serious/critical WCAG 2.2 AA violations (s
 // disclosure animation. axe reports only automatable issues — the manual
 // SR flows stay Phase 13's ACPT gate.
 
-const BOOK_BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
-
 /** Attach an EPUB to the picker + submit (the epub-intake harness clone,
  * routed through the Add dialog per Plan 16-03). */
 async function uploadEbook(page: Page): Promise<void> {
@@ -362,7 +358,7 @@ async function uploadEbook(page: Page): Promise<void> {
 /** Wipe + upload + remount the library with the book row visible. */
 async function seedBookLibrary(page: Page): Promise<void> {
   await wipeDatabase(page);
-  await page.goto(`${BOOK_BASE}/#/`);
+  await page.goto(`${BASE}/#/`);
   await uploadEbook(page);
   // Plan 16-03 (D16-12): book success closes the dialog and the book row
   // appears via the snapshot invalidation — the row is the durable success signal.

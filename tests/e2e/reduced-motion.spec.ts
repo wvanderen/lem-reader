@@ -20,8 +20,8 @@ import {
   makeArticle,
   seedRows,
 } from "./portability/_portability";
+import { BASE } from "./_base";
 
-const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
 const FIRST_FIXTURE = "essay-long-form";
 
 test.describe("Reduced motion (A11Y-06)", () => {

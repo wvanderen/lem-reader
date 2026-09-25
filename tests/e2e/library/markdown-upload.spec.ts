@@ -45,8 +45,7 @@ import { openAddDialog, pickSource } from "./add-dialog";
 // (REUSE-DO-NOT-FORK — both import-from-spec forms were empirically
 // rejected; see the spine's header for the probes).
 import { MARKDOWN_WITH_FRONTMATTER } from "./markdown-payload";
-
-const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
+import { BASE } from "../_base";
 
 // A .md payload WITHOUT YAML front-matter. The D8-17 title-fallback chain
 // falls through to stripMarkdownExtension(filename) → neutral title. The

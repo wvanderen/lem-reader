@@ -72,8 +72,7 @@ import {
   makeArticle,
   seedRows,
 } from "../portability/_portability";
-
-const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
+import { BASE } from "../_base";
 
 // ── Node-side corpus builders (shipped schemas only — never hand-built rows) ──
 

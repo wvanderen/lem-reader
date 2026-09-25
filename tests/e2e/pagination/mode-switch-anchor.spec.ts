@@ -14,8 +14,8 @@
 //   - hash-route navigation + h1-visible sentinel
 import { test, expect } from "@playwright/test";
 import { FIXTURES } from "./fixtures-matrix";
+import { BASE } from "../_base";
 
-const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
 const PIXEL_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>';
 
 test.beforeEach(async ({ page }) => {

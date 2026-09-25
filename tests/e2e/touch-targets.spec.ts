@@ -16,9 +16,8 @@ import {
   type EdgeDestination,
 } from "./_edge-invariant";
 import { FIXTURES, wipeDatabase, openArticle } from "./annotations/_fixtures";
+import { BASE } from "./_base";
 
-// LEM_E2E_BASE discipline — parallel-wayfinder-sessions hygiene.
-const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
 const FIRST_FIXTURE = "essay-long-form";
 
 const MIN = 44;

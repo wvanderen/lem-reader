@@ -28,9 +28,8 @@ import AxeBuilder from "@axe-core/playwright";
 // app's live Dexie connection and the never-closed raw seed connection can
 // wedge a later versioned reopen into a blocked upgrade).
 import { makeArticle, prepareFreshPage, seedRows } from "../portability/_portability";
+import { BASE } from "../_base";
 
-// LEM_E2E_BASE discipline — parallel-wayfinder-sessions hygiene.
-const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
 // The seeded Dexie-row article used by the edit-persistence flow (a real
 // ingested row — see the tagsStore note above). Long enough to render.
 const TAGGED_ARTICLE = makeArticle({

@@ -39,6 +39,7 @@ import {
   assertDestinationInvariant,
   openEdgeDestination,
 } from "./_edge-invariant";
+import { BASE } from "./_base";
 
 // 320 CSS px is the WCAG 1.4.10 reflow breakpoint; 800px height gives the
 // pinned paginated-surface + any full-height sheet room to lay out.
@@ -159,7 +160,7 @@ test("320px reflow: body has no horizontal overflow (WCAG 1.4.10)", async ({
 test("Add dialog at 400% zoom + 320px reflow: no overflow at 320px; dialog survives zoom operable", async ({
   page,
 }) => {
-  await page.goto(`${process.env.LEM_E2E_BASE ?? "http://localhost:5173"}/#/`);
+  await page.goto(`${BASE}/#/`);
   await expect(
     page.getByRole("heading", { level: 1, name: "Saved articles" }),
   ).toBeVisible();

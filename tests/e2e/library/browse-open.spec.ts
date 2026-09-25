@@ -25,8 +25,7 @@ import { fixtures } from "../../../src/fixtures";
 // Plan 16-03 — the shared dialog-opening helper (ADD-01: the intake forms
 // live behind the header Add button's modal).
 import { openAddDialog, pickSource } from "./add-dialog";
-
-const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
+import { BASE } from "../_base";
 
 // A representative paste-HTML article rich enough to pass Readability's
 // isProbablyReaderable() + the ING-06 confidence thresholds (blockCount >= 3

@@ -10,9 +10,7 @@
 // in-flight gate (D16-10) is proven by the AddDialog component tests.
 import { test, expect } from "@playwright/test";
 import { wipeDatabase } from "./annotations/_fixtures";
-
-// LEM_E2E_BASE discipline — parallel-wayfinder-sessions hygiene.
-const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
+import { BASE } from "./_base";
 
 const FIRST_FIXTURE = "essay-long-form";
 

@@ -7,10 +7,8 @@ import { expect, type Page } from "@playwright/test";
 // The follow labels are asserted LIVE from the component's own map — a
 // copy change lands once and every suite follows (one rename site).
 import { FOLLOW_LABELS } from "../../../src/reader/ReadAloudBar";
-
-// LEM_E2E_BASE override — the parallel-wayfinder-sessions discipline
-// (read-nav.spec.ts precedent: point this suite at a session-local server).
-export const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
+import { BASE } from "../_base";
+export { BASE };
 
 /** Wipe every user-data store through raw IndexedDB (the suites run after
  * each other in the same browser; a deterministic empty library first). */

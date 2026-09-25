@@ -38,8 +38,8 @@
 import { test, expect, type Page } from "@playwright/test";
 import { writeFileSync, mkdirSync } from "node:fs";
 import { resolve } from "node:path";
+import { BASE } from "../_base";
 
-const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
 const PIXEL_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>';
 const TMP_DIR = resolve(process.cwd(), ".perf-tmp");
 

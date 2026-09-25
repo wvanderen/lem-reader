@@ -34,8 +34,7 @@ import { test, expect, type Page } from "@playwright/test";
 import { fixtures } from "../../../src/fixtures";
 import { ArticleSchema } from "../../../src/content/schema";
 import type { CanonicalArticle } from "../../../src/content/schema";
-
-const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
+import { BASE } from "../_base";
 
 // ── Node-side corpus builders (shipped schemas only — never hand-built rows) ──
 

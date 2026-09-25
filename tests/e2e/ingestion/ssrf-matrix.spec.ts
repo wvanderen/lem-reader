@@ -62,9 +62,9 @@
 // vector corpus + the type definition below.
 import { test, expect } from "@playwright/test";
 import type { IngestionFailureReason } from "../../../src/ingestion/types";
+import { BASE } from "../_base";
 
-// LEM_E2E_BASE discipline — parallel-wayfinder-sessions hygiene.
-const INGEST_URL = `${process.env.LEM_E2E_BASE ?? "http://localhost:5173"}/api/ingest`;
+const INGEST_URL = `${BASE}/api/ingest`;
 
 /**
  * The SSRF attack-vector corpus. Each entry asserts:

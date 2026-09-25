@@ -1,7 +1,5 @@
 import { test, expect } from "@playwright/test";
-
-// LEM_E2E_BASE discipline — parallel-wayfinder-sessions hygiene.
-const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
+import { BASE } from "../_base";
 
 test("page fade is opt-in, persists, and obeys live reduced motion", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "no-preference" });

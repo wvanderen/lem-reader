@@ -10,8 +10,8 @@
 // Uses real IndexedDB via Dexie — wiped at the start of each test so the
 // first-run state is deterministic. Reuses BASE + image-stub conventions.
 import { test, expect } from "@playwright/test";
+import { BASE } from "./_base";
 
-const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
 const FIXTURE = "essay-long-form";
 const PIXEL_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>';
 

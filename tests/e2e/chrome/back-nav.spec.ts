@@ -25,8 +25,8 @@
 // precedent); image stub keeps loads deterministic; no fixed sleeps for
 // load-bearing assertions (toBeVisible auto-waiting only — Pitfall 8).
 import { test, expect, type Page } from "@playwright/test";
+import { BASE } from "../_base";
 
-const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
 const PIXEL_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>';
 
 test.beforeEach(async ({ page }) => {

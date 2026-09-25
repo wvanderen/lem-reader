@@ -32,11 +32,7 @@ import {
   selectRangeInBlock,
   announcementRegion,
 } from "../annotations/_fixtures";
-
-// Issue #84 ride-along (the #81/#94 harness discipline) — the base URL
-// honors LEM_E2E_BASE so parallel sessions can pin a session-local server;
-// the default stays the shared dev server.
-const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
+import { BASE } from "../_base";
 
 // ── transcript-article builder (ArticleSchema-valid envelopes) ──────────────
 

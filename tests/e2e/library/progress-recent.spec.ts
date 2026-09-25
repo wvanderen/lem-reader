@@ -29,10 +29,9 @@ import {
   normalizeText,
   graphemeClusters,
 } from "../../../src/content/normalizeText";
+import { BASE } from "../_base";
 
 // Overridable for session-local dev-server runs (the _fixtures.ts
-// LEM_E2E_BASE discipline — parallel-wayfinder-sessions hygiene).
-const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
 
 // A representative fixture for hairline + finished assertions. Picked for
 // stable content (won't drift between releases) + a non-trivial grapheme

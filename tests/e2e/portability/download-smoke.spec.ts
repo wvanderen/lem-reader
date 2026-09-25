@@ -12,11 +12,7 @@
 // `acceptDownloads: true` to the playwright.config.ts use block (per the
 // 09-01-PLAN Task 1 action step 4).
 import { test, expect } from "@playwright/test";
-
-// LEM_E2E_BASE override — the parallel-wayfinder-sessions discipline
-// (annotations/_fixtures.ts): a session runs the suite against ITS OWN
-// worktree's Vite while :5173 is held by another session's server.
-const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
+import { BASE } from "../_base";
 
 test.describe("Wave 0 — download capture (A1 / Pitfall 9)", () => {
   test("a synthesized Blob + <a download> click fires a capturable download event", async ({
