@@ -31,8 +31,6 @@ import { makeArticle, prepareFreshPage, seedRows } from "../portability/_portabi
 import { ArticleSchema } from "../../../src/content/schema";
 import type { CanonicalArticle } from "../../../src/content/types";
 
-// LEM_E2E_BASE override (annotations/_fixtures.ts discipline).
-const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
 
 // ── Seeded corpus ────────────────────────────────────────────────────────────
 
@@ -530,6 +528,7 @@ import {
   DEEP_ARTICLE,
   CHAPTER_ARTICLE,
 } from "./_corpus";
+import { BASE } from "../_base";
 
 test.describe("TOC navigation (18-04 — corpus extension)", () => {
   test.beforeEach(async ({ page }) => {

@@ -16,8 +16,8 @@ import { FIXTURES, wipeDatabase, openArticle } from "./annotations/_fixtures";
 // Plan 16-04 — the shared dialog-opening helper (the dialog-open reflow
 // case below; ADD-04 geometry proof).
 import { openAddDialog, pickSource } from "./library/add-dialog";
+import { BASE } from "./_base";
 
-const BASE = "http://localhost:5173";
 const FIRST_FIXTURE = "essay-long-form";
 
 test.describe("Reflow at 320px (A11Y-04)", () => {

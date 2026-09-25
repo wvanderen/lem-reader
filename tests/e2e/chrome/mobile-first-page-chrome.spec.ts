@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
+import { BASE } from "../_base";
 
-const BASE = "http://localhost:5173";
 const FIXTURE = "essay-long-form";
 
 type Rect = { top: number; right: number; bottom: number; left: number; width: number; height: number };

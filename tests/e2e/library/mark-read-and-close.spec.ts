@@ -31,8 +31,7 @@ import {
   normalizeText,
   graphemeClusters,
 } from "../../../src/content/normalizeText";
-
-const BASE = "http://localhost:5173";
+import { BASE } from "../_base";
 
 /** The sole starter-library fixture is the gesture's corpus. */
 const ARTICLE = fixtures[0]!;

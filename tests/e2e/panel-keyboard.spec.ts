@@ -18,8 +18,7 @@ import {
   seedRows,
 } from "./portability/_portability";
 import { wipeDatabase } from "./annotations/_fixtures";
-
-const BASE = "http://localhost:5173";
+import { BASE } from "./_base";
 
 const FIRST_FIXTURE = "essay-long-form";
 

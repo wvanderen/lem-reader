@@ -22,8 +22,8 @@
 // 600ms post-commit settle windows mirroring the corpus specs — no fixed
 // sleeps for load-bearing readiness, which use waitForFunction instead).
 import { test, expect } from "@playwright/test";
+import { BASE } from "../_base";
 
-const BASE = "http://localhost:5173";
 const PIXEL_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>';
 // A long-form corpus fixture with byline + source provenance (so the spot's
 // meta lines render) and enough pages at 360×640 to exercise turns.

@@ -40,8 +40,8 @@
 // expect/expect.poll/waitForFunction only — zero fixed sleeps in this file.
 import { test, expect, type Page } from "@playwright/test";
 import { prepareFreshPage } from "../portability/_portability";
+import { BASE } from "../_base";
 
-const BASE = "http://localhost:5173";
 // The long-form corpus fixture used by the tag-popover spec's export/axe
 // scenarios — no tag writes needed here; geometry only.
 const FIXTURE = "essay-long-form";

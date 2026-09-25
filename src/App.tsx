@@ -21,10 +21,13 @@
 //                       in its destructive onClick — Pitfall 8; never auto)
 // Both mount inside the provider so they read the live storageState. Neither
 // blocks reading (article rendering is independent of Dexie — D2-13).
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LibraryView } from "./ingestion/library/LibraryView";
 import { useLibrarySnapshot } from "./ingestion/library/useLibrarySnapshot";
 import { deriveResumeTargets } from "./ingestion/library/resumeTarget";
+import { invalidateLibrarySnapshot } from "./ingestion/library/librarySnapshot";
+import { deriveTagStats } from "./ingestion/library/tagsStore";
+import { AddDialog } from "./ingestion/AddDialog";
 import { ArticleView } from "./routes/ArticleView";
 import { ReviewView } from "./routes/review/ReviewView";
 import { SkipLink } from "./a11y/SkipLink";
@@ -252,6 +255,16 @@ function AppInner() {
   // ReviewView so their BackToLibrary affordance picks history.back() only
   // when a prior in-app entry provably exists, else the "#/" fallback.
   const [hasAppHistory, setHasAppHistory] = useState(false);
+  // Issue #84 (decision #70) — the Add-to-Library dialog's open state is
+  // APP-LEVEL (the settingsOpen pattern): the dialog is ONE session shared
+  // by both triggers — the header Add icon on Highlights (decision #70's
+  // placement) and the Library h1-row primary button (D16-03, unchanged).
+  // The dialog mounts once at the app shell so the session survives the
+  // destination it was opened from, exactly like the settings panel.
+  const [addOpen, setAddOpen] = useState(false);
+  // ONE stable open handler for BOTH triggers (the header icon and the
+  // Library h1-row button share the identity, issue #84 review).
+  const openAdd = useCallback(() => setAddOpen(true), []);
 
   useEffect(() => {
     // Plan 15-03 (D15-11..14 / Pitfall 3) — the app owns scroll on Back.
@@ -377,6 +390,16 @@ function AppInner() {
     return deriveResumeTargets(librarySnapshot)[0] ?? null;
   }, [libraryStatus, librarySnapshot]);
 
+  // Issue #84 — the picker-suggestion stats for the ONE AddDialog (the
+  // deriveTagStats fold — decision #71), derived from the same app-level
+  // snapshot the Read destination reads. LibraryView derives its own copy
+  // for the row popover/filter from the same broadcast-backed hook, so
+  // suggestion order cannot drift between surfaces.
+  const addTagStats = useMemo(
+    () => deriveTagStats(librarySnapshot.articles, librarySnapshot.books),
+    [librarySnapshot],
+  );
+
   return (
     <>
       <SkipLink />
@@ -395,10 +418,23 @@ function AppInner() {
         destination={destination}
         readTarget={readTarget ? { articleId: readTarget.articleId } : null}
         openArticleId={view.name === "article" ? view.id : null}
+        addOpen={addOpen}
+        onOpenAdd={openAdd}
       />
       <SettingsPanel
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
+      />
+      {/* Issue #84 (decision #70) — the ONE app-level AddDialog. Book
+          success invalidates the library snapshot (the LibraryView wiring
+          precedent) so every mounted surface re-derives; article success
+          closes + navigates internally. The open prop mirrors addOpen;
+          every close path routes through onCancel. */}
+      <AddDialog
+        open={addOpen}
+        onCancel={() => setAddOpen(false)}
+        onBookAdded={() => invalidateLibrarySnapshot()}
+        tagStats={addTagStats}
       />
       <StorageRecoverySurfaces />
       {/* Plan 10-02 — three-view swap: list → review → article (branch
@@ -413,6 +449,8 @@ function AppInner() {
           view={view.view}
           onSwitchView={switchLibraryView}
           warmMount={hasAppHistory}
+          addOpen={addOpen}
+          onOpenAdd={openAdd}
         />
       ) : view.name === "review" ? (
         <ReviewView

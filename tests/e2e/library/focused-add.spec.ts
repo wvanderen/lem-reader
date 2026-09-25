@@ -356,14 +356,24 @@ test.describe("focused Add dialog (ADD-04 — 16-04 Task 1)", () => {
     // invocations during event dispatch.
     await page.evaluate(() => {
       const w = window as unknown as {
-        __focusedAddNav?: { dialogGoneAtHashChange: boolean };
+        __focusedAddNav?: { dialogClosedAtHashChange: boolean };
       };
-      w.__focusedAddNav = { dialogGoneAtHashChange: false };
+      w.__focusedAddNav = { dialogClosedAtHashChange: false };
       window.addEventListener(
         "hashchange",
         () => {
-          const dlg = document.querySelector("dialog.add-dialog");
-          w.__focusedAddNav!.dialogGoneAtHashChange = dlg === null || !document.contains(dlg);
+          const dlg = document.querySelector("dialog.add-dialog") as
+            | HTMLDialogElement
+            | null;
+          // Issue #84 — the dialog mounts at the APP SHELL (the ONE
+          // session shared with the Highlights header icon), so the
+          // element stays in the document after close (the SettingsPanel
+          // mount shape), no longer torn down with LibraryView's subtree.
+          // The Pitfall 6 contract is "no LIVE modal over the reader":
+          // at the router's transition moment the dialog is already
+          // CLOSED (the onCancel→hash-write ordering's browser-level
+          // consequence), not merely invisible.
+          w.__focusedAddNav!.dialogClosedAtHashChange = dlg === null || !dlg.open;
         },
         { once: true },
       );
@@ -379,19 +389,19 @@ test.describe("focused Add dialog (ADD-04 — 16-04 Task 1)", () => {
     ).toBeVisible({ timeout: 10_000 });
 
     // THE Pitfall 6 assertion: at the router's transition moment, the
-    // dialog is already gone from the document — close/teardown before
-    // the reader route, never a live modal over the article view.
+    // dialog is already closed — close-first before the reader route,
+    // never a live modal over the article view.
     const nav = await page.evaluate(
       () =>
         (
           window as unknown as {
-            __focusedAddNav?: { dialogGoneAtHashChange: boolean };
+            __focusedAddNav?: { dialogClosedAtHashChange: boolean };
           }
         ).__focusedAddNav,
     );
     expect(
-      nav?.dialogGoneAtHashChange,
-      "the Add dialog must be torn down by the router's hashchange transition",
+      nav?.dialogClosedAtHashChange,
+      "the Add dialog must be closed by the router's hashchange transition",
     ).toBe(true);
     // And the settled state: dialog closed, reader open at the exact id.
     await expect(page.locator("dialog.add-dialog")).not.toBeVisible();

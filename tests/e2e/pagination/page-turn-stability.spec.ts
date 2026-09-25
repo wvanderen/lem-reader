@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
+import { BASE } from "../_base";
 
-const BASE = "http://localhost:5173";
 const FIXTURE = "essay-long-form";
 
 interface PaginationSnapshot {

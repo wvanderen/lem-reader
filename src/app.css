@@ -1075,8 +1075,10 @@ dialog.add-dialog {
   gap: var(--space-xs);
   min-width: 0;
   margin: 0;
-  padding: 0;
-  border: 0;
+  padding: var(--space-xs);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  background: var(--surface);
 }
 .add-source-picker legend {
   padding: 0;
@@ -1084,29 +1086,45 @@ dialog.add-dialog {
   font: 14px/1.45 var(--font-ui);
   color: var(--ink-soft);
 }
+/* Issue #84 (decision #70) — the picker reads as a SEGMENTED control: one
+   inset-surface container, three adjacent segments, the checked one raised
+   + accented. D16-05 semantics untouched — the native radio stretches
+   invisibly across its whole segment (it stays the full-size hit target,
+   keyboard-navigable, SR-checkable) and the segment's checked/focus
+   styling keys off :has() so state is ALSO conveyed by aria/checked
+   (forced-colors safety — the UI-SPEC contrast contract line 290). */
 .add-source-row {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: var(--space-sm);
   min-height: var(--touch);
   padding: var(--space-sm);
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
   cursor: pointer;
 }
 .add-source-row:has(:checked) {
-  background: var(--surface);
-  border-color: var(--accent);
+  background: var(--surface-raised);
+  border-color: var(--hairline);
   color: var(--accent);
 }
 .add-source-row:hover {
-  border-color: var(--accent);
+  color: var(--accent);
+}
+.add-source-row:has(:focus-visible) {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 .add-source-row input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   margin: 0;
-  accent-color: var(--accent);
-  flex-shrink: 0;
+  opacity: 0;
+  cursor: pointer;
 }
 .add-source-content {
   min-height: 224px;
@@ -1170,52 +1188,57 @@ dialog.add-dialog {
   padding-top: var(--space-md);
   margin-top: 0;
 }
-/* The paste-transcript fallback (the youtube-bot-check companion): a calm
-   guidance paragraph, a textarea, and its own action row — visually a
-   continuation of the dialog's form column, separated by spacing rhythm
-   only (no internal rule lines — the #77 dialog anatomy). */
+/* Issue #84 (decision #70) — the paste-transcript fallback is an IN-PLACE
+   swap of the content slot: the form renders in the SAME position the
+   picker + source forms occupy while they are hidden, one flex-flow
+   sibling among the anatomy's slots (the gap rhythm does the separating —
+   no rule lines, no stacked second action row; the shared bottom Add
+   button flips to "Add transcript"). */
 .add-transcript-form {
-  margin-top: var(--space-md);
-  padding-top: var(--space-md);
+  min-height: 224px;
 }
 .add-transcript-guidance {
   margin: 0;
   font: 14px/1.5 var(--font-ui);
   color: var(--ink-soft);
 }
-.add-transcript-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--space-sm);
+/* The quiet Back control lives at the swapped flow's end, start-aligned —
+   an escape hatch beside the field the reader came from, not a peer of
+   the primary action (which stays in the shared actions row below). */
+.add-dialog-back {
+  align-self: flex-start;
 }
 /* Issue #77 — .add-dialog-submit is .btn-primary, .add-dialog-cancel /
-   .add-remove-file are .btn-quiet. The AddDialog STATUS reorganization
-   itself lands with the #70 build. */
+   .add-remove-file / .add-dialog-back are .btn-quiet. Issue #84 — the
+   STATUS reorganization landed with the #70 build: the live region sits
+   ABOVE the form as a quiet card on the inset surface (radius-md, the
+   cards token). :empty collapses it out of the flex rhythm via negative
+   block margins canceling BOTH surrounding gaps — the region itself never
+   unmounts (a live region must exist before its content changes to
+   announce reliably) and never renders below the actions row. */
 .add-dialog-inner button:disabled {
   opacity: 0.5;
   cursor: default;
 }
 .add-dialog-inner .status {
   margin: 0;
+  padding: var(--space-md);
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
 }
 .add-dialog-inner .status:empty {
   padding: 0;
   border: 0;
-}
-.add-dialog-inner:has(.status:empty) {
-  row-gap: var(--space-lg);
-}
-.add-dialog-inner .status:empty {
-  margin-top: calc(-1 * var(--space-lg));
+  background: transparent;
+  margin-block: calc(-1 * var(--space-lg));
 }
 @media (max-width: 480px) {
   .add-dialog-inner {
     padding: var(--space-lg) var(--space-md);
   }
-  .add-source-row {
-    flex-direction: column;
-    gap: var(--space-xs);
-    text-align: center;
+  .add-source-picker {
+    grid-template-columns: 1fr;
   }
   .add-dialog-actions > button {
     flex: 1;
@@ -4331,7 +4354,8 @@ main#main > .status:empty {
 .toc-trigger[aria-expanded="true"],
 .tags-trigger[aria-expanded="true"],
 .gear-button[aria-expanded="true"],
-.annotations-trigger[aria-expanded="true"] {
+.annotations-trigger[aria-expanded="true"],
+.add-trigger[aria-expanded="true"] {
   color: var(--accent);
 }
 .annotations-trigger {

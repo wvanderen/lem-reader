@@ -40,10 +40,8 @@ import type { CanonicalArticle } from "../../src/content/types";
 // assert the bar's LIVE labels (one rename site).
 import { installFakeSpeech } from "./readaloud/_speech";
 import { FOLLOW_LABELS } from "../../src/reader/ReadAloudBar";
+import { BASE } from "./_base";
 
-// Overridable for session-local dev-server runs (the _fixtures.ts
-// LEM_E2E_BASE discipline — parallel-wayfinder-sessions hygiene).
-const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
 const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] as const;
 // Pure-string SVG stub (see open-every-fixture.spec.ts for rationale).
 const PIXEL_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>';
@@ -88,6 +86,53 @@ test("fixture list: zero serious/critical WCAG 2.2 AA violations", async ({ page
   expect(dialogIds, JSON.stringify(dialogSerious, null, 2)).not.toContain("heading-order");
   expect(dialogIds).not.toContain("list");
   expect(dialogSerious).toEqual([]);
+});
+
+// Issue #84 review follow-up — the two NEW dialog states get the SAME axe
+// bar as the URL state above: the Highlights header Add icon's destination
+// surface, and the transcript-swap state (hidden picker + swapped flow +
+// top status card + the flipped shared submit).
+test("a11y #84: the Highlights destination with the header Add icon is axe-clean", async ({
+  page,
+}) => {
+  await wipeDatabase(page);
+  await page.goto(`${BASE}/#/highlights`);
+  await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+  const trigger = page.locator("button.add-trigger");
+  await expect(trigger).toBeVisible();
+  await expect(trigger).toHaveAttribute("aria-haspopup", "dialog");
+  const results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
+  expect(seriousViolations(results), JSON.stringify(seriousViolations(results), null, 2)).toEqual([]);
+});
+
+test("a11y #84: the Add dialog transcript-swap state is axe-clean", async ({ page }) => {
+  // The same route seam as youtube-transcript.spec.ts N5: the bot-check
+  // refusal for a real YouTube URL is what mounts the swapped flow.
+  await page.route("**/api/ingest", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ ok: false, reason: "youtube-bot-check" }),
+    });
+  });
+  await page.goto(`${BASE}/#/`);
+  await openAddDialog(page);
+  await page.getByRole("textbox", { name: /add by url/i }).fill(
+    "https://www.youtube.com/watch?v=axeSwapVi11",
+  );
+  await page.getByRole("button", { name: /^add$/i }).click();
+  // The swap is live: the refusal moved focus to the required title and
+  // the picker + source forms are hidden — the state under scan.
+  await expect(page.getByRole("textbox", { name: "Title" })).toBeFocused();
+  await expect(
+    page.locator("dialog.add-dialog fieldset.add-source-picker"),
+  ).toBeHidden();
+  const results = await new AxeBuilder({ page })
+    .withTags([...WCAG_TAGS])
+    .include("dialog.add-dialog")
+    .analyze();
+  const serious = seriousViolations(results);
+  expect(serious, JSON.stringify(serious, null, 2)).toEqual([]);
 });
 
 for (const article of fixtures) {
@@ -344,8 +389,6 @@ test("review panel #/highlights: zero serious/critical WCAG 2.2 AA violations (s
 // disclosure animation. axe reports only automatable issues — the manual
 // SR flows stay Phase 13's ACPT gate.
 
-const BOOK_BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
-
 /** Attach an EPUB to the picker + submit (the epub-intake harness clone,
  * routed through the Add dialog per Plan 16-03). */
 async function uploadEbook(page: Page): Promise<void> {
@@ -362,7 +405,7 @@ async function uploadEbook(page: Page): Promise<void> {
 /** Wipe + upload + remount the library with the book row visible. */
 async function seedBookLibrary(page: Page): Promise<void> {
   await wipeDatabase(page);
-  await page.goto(`${BOOK_BASE}/#/`);
+  await page.goto(`${BASE}/#/`);
   await uploadEbook(page);
   // Plan 16-03 (D16-12): book success closes the dialog and the book row
   // appears via the snapshot invalidation — the row is the durable success signal.

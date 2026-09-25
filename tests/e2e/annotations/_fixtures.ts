@@ -26,15 +26,11 @@ import { expect } from "@playwright/test";
 // harnesses via this import.
 import { FIXTURES } from "../pagination/fixtures-matrix";
 import type { TypographyVariant } from "../calibration/fixtures-matrix";
+import { BASE } from "../_base";
+export { BASE };
 
 export { FIXTURES };
 export type { TypographyVariant };
-
-/** The dev-server base. Overridable so a session can run the suite
- * against ITS OWN worktree's Vite while :5173 is held by another
- * session's server (the parallel-wayfinder-sessions discipline):
- *   LEM_E2E_BASE=http://localhost:5321 npx playwright test ... */
-export const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
 
 /** 1×1 SVG image stub so figure loads don't race selection/pagination. */
 export const PIXEL_SVG =

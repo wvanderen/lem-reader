@@ -13,8 +13,8 @@
 // the observation point — it captures the LATEST committed Constraints
 // (only written by a result that passed the font gate + epoch guard).
 import { test, expect } from "@playwright/test";
+import { BASE } from "../_base";
 
-const BASE = "http://localhost:5173";
 const FIXTURE = "essay-long-form";
 const PIXEL_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>';
 

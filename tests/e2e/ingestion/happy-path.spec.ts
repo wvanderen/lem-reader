@@ -44,8 +44,7 @@ import { test, expect } from "@playwright/test";
 // (#81 rot family, test-only repair).
 import { bundledFixtures, fixtures, fixtureAssetRegistry } from "../../../src/fixtures";
 import { openAddDialog, pickSource } from "../library/add-dialog";
-
-const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
+import { BASE } from "../_base";
 
 // A representative article HTML payload rich enough to pass Readability's
 // isProbablyReaderable() + the ING-06 confidence thresholds (blockCount >= 3

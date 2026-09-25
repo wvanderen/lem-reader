@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { BASE } from "../_base";
 
 test("page fade is opt-in, persists, and obeys live reduced motion", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "no-preference" });
@@ -13,7 +14,7 @@ test("page fade is opt-in, persists, and obeys live reduced motion", async ({ pa
     };
   });
   const fades = () => page.evaluate(() => (window as unknown as { turnFades: number }).turnFades);
-  await page.goto("http://localhost:5173/#/article/essay-long-form");
+  await page.goto(`${BASE}/#/article/essay-long-form`);
   const fragment = page.locator(".page-fragment");
   await expect(fragment).toBeVisible();
   await page.getByRole("button", { name: "Next page", exact: true }).click();

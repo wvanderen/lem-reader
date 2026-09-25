@@ -18,8 +18,8 @@
 // (BASE url, image-route pixel-svg fulfillment, indexedDB.deleteDatabase beforeEach).
 import { test, expect } from "@playwright/test";
 import { FIXTURES, VIEWPORTS } from "./fixtures-matrix";
+import { BASE } from "../_base";
 
-const BASE = "http://localhost:5173";
 const PIXEL_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>';
 
 // The aeon.co long-form essay the UAT Test 11 failure reproduced on, at the

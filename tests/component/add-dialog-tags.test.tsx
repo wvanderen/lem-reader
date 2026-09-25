@@ -18,6 +18,8 @@ vi.mock("../../src/ingestion/IngestionClient", () => ({
   ingestMarkdown: vi.fn(),
   ingestPdf: vi.fn(),
   ingestEpub: vi.fn(),
+  ingestPastedTranscript: vi.fn(),
+  browserPreferredLanguages: vi.fn(() => undefined),
   IngestionError: class IngestionError extends Error {
     readonly reason: string;
     constructor(reason: string, message?: string) {

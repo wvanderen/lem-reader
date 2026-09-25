@@ -28,9 +28,7 @@ import { test, expect } from "@playwright/test";
 // Plan 16-03 — the shared dialog-opening helper (ADD-01: the intake
 // forms live behind the header Add button's modal).
 import { openAddDialog, pickSource } from "./add-dialog";
-
-// LEM_E2E_BASE discipline — parallel-wayfinder-sessions hygiene.
-const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
+import { BASE } from "../_base";
 
 // Three distinct paste-HTML articles rich enough to clear the ING-06
 // confidence thresholds + the round-trip anchor gate. Each has a unique

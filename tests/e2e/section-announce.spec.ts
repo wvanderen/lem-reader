@@ -15,8 +15,8 @@
 // Uses technical-post because it carries 3 h2 headings (essay-long-form has
 // none). Reuses BASE + image-stub conventions.
 import { test, expect } from "@playwright/test";
+import { BASE } from "./_base";
 
-const BASE = "http://localhost:5173";
 // technical-post carries 3 h2 headings — sufficient for the scroll-spy.
 const FIXTURE = "technical-post";
 

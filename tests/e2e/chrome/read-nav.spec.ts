@@ -37,12 +37,7 @@ import { wipeDatabase } from "../annotations/_fixtures";
 import { ArticleSchema } from "../../../src/content/schema";
 import type { CanonicalArticle } from "../../../src/content/schema";
 import { normalizeText, graphemeClusters } from "../../../src/content/normalizeText";
-
-/** The dev-server base. Overridable so a session can run this spec
- * against ITS OWN worktree's Vite while :5173 is held by another
- * session's server (the parallel-wayfinder-sessions discipline):
- *   LEM_E2E_BASE=http://localhost:5321 npx playwright test ... */
-const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
+import { BASE } from "../_base";
 
 /**
  * Node-built schema-valid standalones seeded as ARTICLE ROWS (the

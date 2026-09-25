@@ -28,11 +28,8 @@ import {
 import type { TextPositionSelector, TextQuoteSelector } from "../../../src/content/normalizeText";
 import { ExportBundleSchema } from "../../../src/portability/bundle";
 import { computeManifest } from "../../../src/portability/manifest";
-
-// LEM_E2E_BASE override — the parallel-wayfinder-sessions discipline
-// (annotations/_fixtures.ts): a session runs the suite against ITS OWN
-// worktree's Vite while :5173 is held by another session's server.
-export const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
+import { BASE } from "../_base";
+export { BASE };
 
 /** Pure-string SVG stub (open-every-fixture.spec.ts rationale). */
 export const PIXEL_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>';

@@ -103,6 +103,17 @@ export type AddDialogProps = {
   tagStats: TagStat[];
 };
 
+/**
+ * The per-source submit label (D16-05) — the byte-stable anchors the e2e
+ * suite drives. The shared bottom submit reads this map (issue #84) so
+ * the label flip is one lookup, not a per-source ternary cascade.
+ */
+const SOURCE_SUBMIT_LABEL: Record<AddDialogSource, string> = {
+  url: "Add",
+  paste: "Add pasted article",
+  file: "Add file",
+};
+
 export function AddDialog({ open, onCancel, onBookAdded, tagStats }: AddDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   // Capture the previously-focused element (the Add button) on open so
@@ -143,7 +154,52 @@ export function AddDialog({ open, onCancel, onBookAdded, tagStats }: AddDialogPr
   // record by the service — never a second write after the fact.
   const [tagsValue, setTagsValue] = useState<string[]>([]);
 
+  // Issue #84 (decision #70) — the transcript fallback is an IN-PLACE
+  // SWAP of the content slot: while a bot-check offer is live the source
+  // picker + source forms hide and the transcript flow renders instead
+  // (one content slot, never two visible forms; the stacked second action
+  // row retired). The always-mounted file input survives the swap —
+  // `hidden` on the ancestor keeps it MOUNTED (Pattern 3a discipline).
+  const transcriptMode = botCheckUrl !== null;
+  // Focus rails for the swap (the Pitfall-1 discipline): the refusal
+  // moves focus to the transcript title (the field the reader must fill
+  // next — the swap is not silent for keyboard readers); "Back to web
+  // address" returns focus to the URL field (the typed URL is preserved,
+  // D16-11 — the reader continues where they left off). The bot-check
+  // offer only fires from the URL arm, so the field is guaranteed mounted
+  // on the way back (source === "url" throughout the swap).
+  const urlInputRef = useRef<HTMLInputElement>(null);
+  const transcriptTitleRef = useRef<HTMLInputElement>(null);
+  const prevBotCheckRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (botCheckUrl !== null && prevBotCheckRef.current === null) {
+      transcriptTitleRef.current?.focus();
+    }
+    prevBotCheckRef.current = botCheckUrl;
+  }, [botCheckUrl]);
+
+  /**
+   * handleBackToWebAddress — the "Back to web address" quiet control
+   * (issue #84, decision #70): retires the transcript offer (the same
+   * setBotCheckUrl(null) action the retired "No thanks" button ran) and
+   * returns focus to the URL field. rAF lands after React's commit, so
+   * the input is visible again when focused (a pre-commit focus on the
+   * still-hidden input would silently fail).
+   */
+  function handleBackToWebAddress() {
+    setBotCheckUrl(null);
+    requestAnimationFrame(() => urlInputRef.current?.focus());
+  }
+
   const submitting = status === "submitting";
+  // Per-source enabled gate of the shared bottom submit — the SAME rule
+  // each source's own form enforces, as one map lookup (issue #84 review:
+  // the per-source ternary cascade collapses here).
+  const sourceSubmitReady: Record<AddDialogSource, boolean> = {
+    url: urlValue.length > 0,
+    paste: htmlValue.length > 0,
+    file: hasFile,
+  };
   // Live mirror rewritten EVERY render (Pitfall 3 — the LibraryView L236
   // liveContextRef discipline): the long-lived `cancel` listener below
   // must read the CURRENT submitting state, not a stale closure capture.
@@ -459,12 +515,38 @@ export function AddDialog({ open, onCancel, onBookAdded, tagStats }: AddDialogPr
       <div className="add-dialog-inner">
         <h2 id="add-dialog-title">Add to your library</h2>
 
+        {/* Issue #84 (decision #70) — the ONE .status live region now sits
+            ABOVE the form (the one-anatomy order: status card → content
+            slot → actions row): role=status / aria-live=polite /
+            aria-atomic=true unchanged, quiet-card styling, collapsed via
+            CSS when idle (:empty). Hosts the submitting progress, every
+            refusal copy, and the bot-check context that explains the
+            transcript swap. Refusals + submitting announce here — article
+            success closes and navigates away, book success closes onto
+            the Library. aria-atomic="true" so the SR re-announces the
+            whole phrase on every change (not just the diff). The region
+            NEVER unmounts (a live region must exist before its content
+            changes to announce reliably) and NEVER renders below the
+            actions row. */}
+        <div className="status" role="status" aria-live="polite" aria-atomic="true">
+          {status !== "idle" && message !== null && <p>{message}</p>}
+        </div>
+
         {/* D16-05 — the visible 3-way source-first picker. Native
             fieldset/legend/radio semantics (the SettingsPanel L370-402
             discipline); controlled radios (checked from state — never
             uncontrolled; the Firefox persistence quirk, Pitfall 9). NOT a
-            tablist (the D14-22 machinery is deliberately avoided). */}
-        <fieldset className="add-source-picker" disabled={submitting}>
+            tablist (the D14-22 machinery is deliberately avoided).
+            Issue #84 (decision #70) — restyled as a SEGMENTED control
+            (adjacent pill segments, foundation tokens); semantics +
+            verbatim labels are byte-stable anchors. Hidden while the
+            transcript swap is live (`hidden`, not unmount — the picker's
+            radio state must survive a Back round-trip). */}
+        <fieldset
+          className="add-source-picker"
+          disabled={submitting}
+          hidden={transcriptMode}
+        >
           <legend>Add from</legend>
           <label className="add-source-row">
             <input
@@ -503,13 +585,17 @@ export function AddDialog({ open, onCancel, onBookAdded, tagStats }: AddDialogPr
             visible. The URL/paste groups unmount freely: their values
             live in the lifted urlValue/htmlValue state, so switching
             sources never loses typed text. The accessible names + ids are
-            the byte-stable anchors the e2e suite drives. */}
-        <div className="add-source-content">
+            the byte-stable anchors the e2e suite drives.
+            Issue #84 — the whole content slot hides (never unmounts) while
+            the transcript swap is live: the always-mounted file input must
+            keep its picked File across the round-trip (Pattern 3a). */}
+        <div className="add-source-content" hidden={transcriptMode}>
           {source === "url" && (
             <form id="add-url-form" onSubmit={handleUrlSubmit} className="add-url-form">
               <label htmlFor="ingest-url">Add by URL</label>
               <input
                 id="ingest-url"
+                ref={urlInputRef}
                 name="url"
                 type="url"
                 inputMode="url"
@@ -582,15 +668,17 @@ export function AddDialog({ open, onCancel, onBookAdded, tagStats }: AddDialogPr
             )}
           </form>
         </div>
-        {/* The paste-transcript fallback (the youtube-bot-check companion).
-            Appears ONLY after the URL arm was refused with the bot-check
-            reason for an actual YouTube URL. Calm guidance, a required
-            title (the paste is named at ingest — never a fabricated
-            "Transcript"), an optional prefilled video URL (provenance
-            only — never re-fetched), one textarea, one button — the same
-            DOC-06 voice; all copy renders as React text (T-16-06). The
-            submitting/error status reuses the shared live region below. */}
-        {botCheckUrl !== null && (
+        {/* Issue #84 (decision #70) — the paste-transcript fallback is an
+            IN-PLACE SWAP of the content slot: on the youtube-bot-check
+            refusal the picker + source forms hide above and this flow
+            renders in the SAME position (guidance → required title →
+            optional provenance URL → textarea → quiet Back control). The
+            stacked second action row RETIRED — the shared bottom Add
+            button flips label + target to "Add transcript" via the
+            existing form= mechanism. Calm DOC-06 voice; all copy renders
+            as React text (T-16-06). The submitting/error status reuses
+            the shared live region ABOVE. */}
+        {transcriptMode && (
           <form id="add-transcript-form" onSubmit={handleTranscriptSubmit} className="add-transcript-form">
             <p className="add-transcript-guidance">
               You can still add it by hand: open the video on YouTube, open its transcript
@@ -600,6 +688,7 @@ export function AddDialog({ open, onCancel, onBookAdded, tagStats }: AddDialogPr
             <label htmlFor="ingest-transcript-title">Title</label>
             <input
               id="ingest-transcript-title"
+              ref={transcriptTitleRef}
               name="title"
               type="text"
               autoComplete="off"
@@ -615,6 +704,17 @@ export function AddDialog({ open, onCancel, onBookAdded, tagStats }: AddDialogPr
               disabled={submitting}
               onChange={(e) => setTranscriptTitleValue(e.target.value)}
             />
+            {/* Calm inline explanation while Add is blocked on the
+                required title (the D17-04 hint voice; the submit stays
+                disabled — this says WHY, so the blocked state is never
+                silent, especially for screen-reader readers via the
+                title input's aria-describedby). Sits beside the field it
+                explains — the retired action row no longer carries it. */}
+            {transcriptTitleValue.trim().length === 0 && (
+              <p className="add-transcript-guidance" id="ingest-transcript-title-hint">
+                Type a title to enable Add.
+              </p>
+            )}
             <label htmlFor="ingest-transcript-url">Video URL (optional)</label>
             <input
               id="ingest-transcript-url"
@@ -637,37 +737,19 @@ export function AddDialog({ open, onCancel, onBookAdded, tagStats }: AddDialogPr
               disabled={submitting}
               onChange={(e) => setTranscriptValue(e.target.value)}
             />
-            <div className="add-transcript-actions">
-              {/* Calm inline explanation while Add is blocked on the
-                  required title (the D17-04 hint voice; the submit stays
-                  disabled — this says WHY, so the blocked state is never
-                  silent, especially for screen-reader readers via the
-                  title input's aria-describedby). */}
-              {transcriptTitleValue.trim().length === 0 && (
-                <p className="add-transcript-guidance" id="ingest-transcript-title-hint">
-                  Type a title to enable Add.
-                </p>
-              )}
-              <button
-                type="button"
-                className="btn btn-quiet add-dialog-cancel"
-                disabled={submitting}
-                onClick={() => setBotCheckUrl(null)}
-              >
-                No thanks
-              </button>
-              <button
-                type="submit"
-                className="btn btn-primary add-dialog-submit"
-                disabled={
-                  submitting ||
-                  transcriptValue.trim().length === 0 ||
-                  transcriptTitleValue.trim().length === 0
-                }
-              >
-                Add transcript
-              </button>
-            </div>
+            {/* The quiet Back control (decision #70): replaces the retired
+                "No thanks", same setBotCheckUrl(null) action — the typed
+                URL is preserved (D16-11) and focus returns to the URL
+                field. Lives INSIDE the swapped flow; the bottom actions
+                row stays Cancel + the shared submit. */}
+            <button
+              type="button"
+              className="btn btn-quiet add-dialog-back"
+              disabled={submitting}
+              onClick={handleBackToWebAddress}
+            >
+              Back to web address
+            </button>
           </form>
         )}
 
@@ -701,33 +783,26 @@ export function AddDialog({ open, onCancel, onBookAdded, tagStats }: AddDialogPr
           >
             Cancel
           </button>
+          {/* Issue #84 (decision #70) — the ONE shared submit. In transcript
+              mode it flips label AND form= target to "Add transcript" (the
+              existing form= mechanism — the retired second action row's
+              submit is gone); disabled rides the transcript gate (required
+              title + text). Otherwise it targets the selected source's
+              form with the per-source gate + label, unchanged. */}
           <button
             type="submit"
             className="btn btn-primary add-dialog-submit"
-            form={`add-${source}-form`}
+            form={transcriptMode ? "add-transcript-form" : `add-${source}-form`}
             disabled={
               submitting ||
-              (source === "url"
-                ? urlValue.length === 0
-                : source === "paste"
-                  ? htmlValue.length === 0
-                  : !hasFile)
+              (transcriptMode
+                ? transcriptValue.trim().length === 0 ||
+                  transcriptTitleValue.trim().length === 0
+                : !sourceSubmitReady[source])
             }
           >
-            {source === "url" ? "Add" : source === "paste" ? "Add pasted article" : "Add file"}
+            {transcriptMode ? "Add transcript" : SOURCE_SUBMIT_LABEL[source]}
           </button>
-        </div>
-
-        {/* The .status live region (the original control's L450-459 shape —
-            role=status / aria-live=polite / aria-atomic=true). Refusals
-            + the submitting state announce here; article success closes
-            and navigates away, book success closes onto the Library.
-            aria-atomic="true" so the SR re-announces the whole phrase on
-            every change (not just the diff). */}
-        <div className="status" role="status" aria-live="polite" aria-atomic="true">
-          {status === "submitting" && message !== null && <p>{message}</p>}
-          {status === "error" && message !== null && <p>{message}</p>}
-          {status === "success" && message !== null && <p>{message}</p>}
         </div>
       </div>
     </dialog>

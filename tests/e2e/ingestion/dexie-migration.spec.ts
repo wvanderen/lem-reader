@@ -23,8 +23,7 @@
 // location, highlights, notes — articles wrote zero records in v1/v2 because
 // fixtures are bundled JSON).
 import { test, expect, type Page } from "@playwright/test";
-
-const BASE = "http://localhost:5173";
+import { BASE } from "../_base";
 
 /**
  * Representative v1.0 row shapes — the exact schemas written by Phase 2/5

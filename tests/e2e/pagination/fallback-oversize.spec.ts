@@ -17,8 +17,8 @@
 //
 // Harness copied verbatim from tests/e2e/measurement/stale-drop.spec.ts.
 import { test, expect } from "@playwright/test";
+import { BASE } from "../_base";
 
-const BASE = "http://localhost:5173";
 const PIXEL_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>';
 
 test.beforeEach(async ({ page }) => {

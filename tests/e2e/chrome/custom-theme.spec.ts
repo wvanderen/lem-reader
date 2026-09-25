@@ -24,8 +24,7 @@
 //           live — the a11y.spec dialog-scan discipline.
 //
 // Harness reuse (REUSE-DO-NOT-FORK): BASE + wipeDatabase from
-// ../annotations/_fixtures; the axe serious-only gate from a11y.spec; the
-// LEM_E2E_BASE override for parallel-session dev servers.
+// ../annotations/_fixtures; the axe serious-only gate from a11y.spec.
 import { test, expect, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { wipeDatabase, BASE } from "../annotations/_fixtures";

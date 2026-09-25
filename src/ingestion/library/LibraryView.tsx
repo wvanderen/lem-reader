@@ -94,11 +94,11 @@ import { RemoveConfirm } from "./RemoveConfirm";
 // call sites, no shared ConfirmDialog).
 import { BookRemoveConfirm } from "./BookRemoveConfirm";
 // Plan 16-03 (D16-01/D16-02/D16-03) — the focused Add-to-library dialog
-// (built in Plan 16-02): native <dialog>/showModal hosting the ingestion
-// submission spine behind a 3-way source picker. LibraryView owns ONLY the
-// open state + the book-success refresh (article success navigates inside
-// the dialog per D16-12).
-import { AddDialog } from "../AddDialog";
+// (built in Plan 16-02) moved to the APP SHELL (issue #84, decision #70):
+// the ONE session is now shared with the Highlights header Add icon, so
+// LibraryView keeps only the h1-row trigger (D16-03) wired through the
+// addOpen/onOpenAdd props. Book-success refresh rides the app-level
+// invalidation; article success still navigates inside the dialog.
 // Plan 17-02 (D17-01..D17-04) — the reader-owned metadata edit dialog: a
 // structural RemoveConfirm/AddDialog clone (Pitfall 8 — no shared dialog
 // abstraction) hosting the single override write (the Dexie articles-table
@@ -125,6 +125,12 @@ interface LibraryViewProps {
    * cold loads and reloads keep natural browser focus; threaded from
    * App's hasAppHistory). */
   warmMount: boolean;
+  /** Issue #84 (decision #70) — the app-level AddDialog's open state;
+   * drives the h1-row trigger's aria-expanded. */
+  addOpen: boolean;
+  /** Issue #84 (decision #70) — opens the ONE app-level AddDialog (the
+   * same session the Highlights header icon opens). */
+  onOpenAdd: () => void;
 }
 
 // Plan 14-02 (D14-22) — the four switcher links, in order. hrefs stay the
@@ -167,7 +173,13 @@ const EMPTY_COPY: Record<LibraryViewName, { heading: string; body: string }> = {
   },
 };
 
-export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps) {
+export function LibraryView({
+  view,
+  onSwitchView,
+  warmMount,
+  addOpen,
+  onOpenAdd,
+}: LibraryViewProps) {
   // Plan 14-02 Task 3 — the h1 focus target (tabindex=-1 pattern; text and
   // level byte-stable per D14-25) + the previous-view ref for the
   // view-switch effect below.
@@ -246,12 +258,10 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
   // Plan 12-05 — book-level Remove trigger state. BookRemoveConfirm consumes
   // it (the BookRow onRemove callback below is its sole setter caller).
   const [bookRemoveTarget, setBookRemoveTarget] = useState<BookRemoveTarget | null>(null);
-  // Plan 16-03 (D16-03) — the Add dialog's open state, LibraryView-LOCAL
-  // (the trigger is in-page; settingsOpen is App-level only because the
-  // shell header triggers it). The header-row Add button is its sole
-  // opener; every close path (Cancel, Esc, success) mirrors back through
-  // AddDialog's onCancel.
-  const [addOpen, setAddOpen] = useState(false);
+  // Plan 16-03 (D16-03) — the Add dialog's open state moved to the APP
+  // shell (issue #84, decision #70 — the dialog is ONE session shared with
+  // the Highlights header icon); this view keeps only the h1-row trigger,
+  // wired through the addOpen/onOpenAdd props (the settingsOpen pattern).
   // Issue #75 (decision #71) — the row-tags popover target. Non-null ⇒
   // the popover shows anchored to that row's trigger. onClose clears the
   // target and invalidates the snapshot (ONE reload per editing session —
@@ -547,7 +557,7 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
         <button
           type="button"
           className="btn btn-primary library-add-button"
-          onClick={() => setAddOpen(true)}
+          onClick={onOpenAdd}
           aria-haspopup="dialog"
           aria-expanded={addOpen}
         >
@@ -879,20 +889,11 @@ export function LibraryView({ view, onSwitchView, warmMount }: LibraryViewProps)
         }}
         onCancel={() => setBookRemoveTarget(null)}
       />
-      {/* Plan 16-03 (D16-12) — the focused Add dialog mount. Article success
-          needs NO LibraryView involvement (the dialog closes itself via
-          onCancel then navigates to #/article/<id> internally); book success
-          fires onBookAdded AFTER onCancel, invalidating the library snapshot
-          so the list re-derives and the new book row appears (the
-          RemoveConfirm onConfirm wiring precedent). The dialog never
-          unmounts the Library, so the librarySession capture/restore seam
-          above is structurally unaffected (D15-11..14) — do NOT touch it. */}
-      <AddDialog
-        open={addOpen}
-        onCancel={() => setAddOpen(false)}
-        onBookAdded={() => invalidateLibrarySnapshot()}
-        tagStats={tagStats}
-      />
+      {/* Issue #84 (decision #70) — the AddDialog moved to the app shell
+          (ONE session shared with the Highlights header icon); the h1-row
+          Add trigger above opens it through the addOpen/onOpenAdd props.
+          The librarySession capture/restore seam above is structurally
+          unaffected (D15-11..14) — do NOT touch it. */}
       {/* Issue #75 (decision #71) — the ONE row-tags popover. Always mounted
           (a popover="auto" element must exist to show); renders nothing but
           an empty hidden panel while tagsTarget is null. onClose clears the

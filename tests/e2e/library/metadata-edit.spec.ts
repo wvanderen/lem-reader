@@ -34,8 +34,7 @@ import {
 // Plan 16-03 — the shared dialog-opening helper (ADD-01: the intake forms
 // live behind the header Add button's modal).
 import { openAddDialog, pickSource } from "./add-dialog";
-
-const BASE = process.env.LEM_E2E_BASE ?? "http://localhost:5173";
+import { BASE } from "../_base";
 
 /**
  * Build a paste-HTML payload with the given title (+ optional author).
