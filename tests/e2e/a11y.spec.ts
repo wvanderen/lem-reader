@@ -88,6 +88,53 @@ test("fixture list: zero serious/critical WCAG 2.2 AA violations", async ({ page
   expect(dialogSerious).toEqual([]);
 });
 
+// Issue #84 review follow-up — the two NEW dialog states get the SAME axe
+// bar as the URL state above: the Highlights header Add icon's destination
+// surface, and the transcript-swap state (hidden picker + swapped flow +
+// top status card + the flipped shared submit).
+test("a11y #84: the Highlights destination with the header Add icon is axe-clean", async ({
+  page,
+}) => {
+  await wipeDatabase(page);
+  await page.goto(`${BASE}/#/highlights`);
+  await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+  const trigger = page.locator("button.add-trigger");
+  await expect(trigger).toBeVisible();
+  await expect(trigger).toHaveAttribute("aria-haspopup", "dialog");
+  const results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
+  expect(seriousViolations(results), JSON.stringify(seriousViolations(results), null, 2)).toEqual([]);
+});
+
+test("a11y #84: the Add dialog transcript-swap state is axe-clean", async ({ page }) => {
+  // The same route seam as youtube-transcript.spec.ts N5: the bot-check
+  // refusal for a real YouTube URL is what mounts the swapped flow.
+  await page.route("**/api/ingest", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ ok: false, reason: "youtube-bot-check" }),
+    });
+  });
+  await page.goto(`${BASE}/#/`);
+  await openAddDialog(page);
+  await page.getByRole("textbox", { name: /add by url/i }).fill(
+    "https://www.youtube.com/watch?v=axeSwapVi11",
+  );
+  await page.getByRole("button", { name: /^add$/i }).click();
+  // The swap is live: the refusal moved focus to the required title and
+  // the picker + source forms are hidden — the state under scan.
+  await expect(page.getByRole("textbox", { name: "Title" })).toBeFocused();
+  await expect(
+    page.locator("dialog.add-dialog fieldset.add-source-picker"),
+  ).toBeHidden();
+  const results = await new AxeBuilder({ page })
+    .withTags([...WCAG_TAGS])
+    .include("dialog.add-dialog")
+    .analyze();
+  const serious = seriousViolations(results);
+  expect(serious, JSON.stringify(serious, null, 2)).toEqual([]);
+});
+
 for (const article of fixtures) {
   test.describe(`a11y ${article.id}`, () => {
     test("zero serious/critical violations; no heading-order or list violations (Pitfall 10)", async ({

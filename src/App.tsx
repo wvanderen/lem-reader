@@ -21,7 +21,7 @@
 //                       in its destructive onClick — Pitfall 8; never auto)
 // Both mount inside the provider so they read the live storageState. Neither
 // blocks reading (article rendering is independent of Dexie — D2-13).
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LibraryView } from "./ingestion/library/LibraryView";
 import { useLibrarySnapshot } from "./ingestion/library/useLibrarySnapshot";
 import { deriveResumeTargets } from "./ingestion/library/resumeTarget";
@@ -262,6 +262,9 @@ function AppInner() {
   // The dialog mounts once at the app shell so the session survives the
   // destination it was opened from, exactly like the settings panel.
   const [addOpen, setAddOpen] = useState(false);
+  // ONE stable open handler for BOTH triggers (the header icon and the
+  // Library h1-row button share the identity, issue #84 review).
+  const openAdd = useCallback(() => setAddOpen(true), []);
 
   useEffect(() => {
     // Plan 15-03 (D15-11..14 / Pitfall 3) — the app owns scroll on Back.
@@ -416,7 +419,7 @@ function AppInner() {
         readTarget={readTarget ? { articleId: readTarget.articleId } : null}
         openArticleId={view.name === "article" ? view.id : null}
         addOpen={addOpen}
-        onOpenAdd={() => setAddOpen(true)}
+        onOpenAdd={openAdd}
       />
       <SettingsPanel
         open={settingsOpen}
@@ -447,7 +450,7 @@ function AppInner() {
           onSwitchView={switchLibraryView}
           warmMount={hasAppHistory}
           addOpen={addOpen}
-          onOpenAdd={() => setAddOpen(true)}
+          onOpenAdd={openAdd}
         />
       ) : view.name === "review" ? (
         <ReviewView

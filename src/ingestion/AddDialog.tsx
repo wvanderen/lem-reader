@@ -103,6 +103,17 @@ export type AddDialogProps = {
   tagStats: TagStat[];
 };
 
+/**
+ * The per-source submit label (D16-05) — the byte-stable anchors the e2e
+ * suite drives. The shared bottom submit reads this map (issue #84) so
+ * the label flip is one lookup, not a per-source ternary cascade.
+ */
+const SOURCE_SUBMIT_LABEL: Record<AddDialogSource, string> = {
+  url: "Add",
+  paste: "Add pasted article",
+  file: "Add file",
+};
+
 export function AddDialog({ open, onCancel, onBookAdded, tagStats }: AddDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   // Capture the previously-focused element (the Add button) on open so
@@ -181,6 +192,14 @@ export function AddDialog({ open, onCancel, onBookAdded, tagStats }: AddDialogPr
   }
 
   const submitting = status === "submitting";
+  // Per-source enabled gate of the shared bottom submit — the SAME rule
+  // each source's own form enforces, as one map lookup (issue #84 review:
+  // the per-source ternary cascade collapses here).
+  const sourceSubmitReady: Record<AddDialogSource, boolean> = {
+    url: urlValue.length > 0,
+    paste: htmlValue.length > 0,
+    file: hasFile,
+  };
   // Live mirror rewritten EVERY render (Pitfall 3 — the LibraryView L236
   // liveContextRef discipline): the long-lived `cancel` listener below
   // must read the CURRENT submitting state, not a stale closure capture.
@@ -510,9 +529,7 @@ export function AddDialog({ open, onCancel, onBookAdded, tagStats }: AddDialogPr
             changes to announce reliably) and NEVER renders below the
             actions row. */}
         <div className="status" role="status" aria-live="polite" aria-atomic="true">
-          {status === "submitting" && message !== null && <p>{message}</p>}
-          {status === "error" && message !== null && <p>{message}</p>}
-          {status === "success" && message !== null && <p>{message}</p>}
+          {status !== "idle" && message !== null && <p>{message}</p>}
         </div>
 
         {/* D16-05 — the visible 3-way source-first picker. Native
@@ -781,20 +798,10 @@ export function AddDialog({ open, onCancel, onBookAdded, tagStats }: AddDialogPr
               (transcriptMode
                 ? transcriptValue.trim().length === 0 ||
                   transcriptTitleValue.trim().length === 0
-                : source === "url"
-                  ? urlValue.length === 0
-                  : source === "paste"
-                    ? htmlValue.length === 0
-                    : !hasFile)
+                : !sourceSubmitReady[source])
             }
           >
-            {transcriptMode
-              ? "Add transcript"
-              : source === "url"
-                ? "Add"
-                : source === "paste"
-                  ? "Add pasted article"
-                  : "Add file"}
+            {transcriptMode ? "Add transcript" : SOURCE_SUBMIT_LABEL[source]}
           </button>
         </div>
       </div>
