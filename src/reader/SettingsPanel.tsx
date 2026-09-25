@@ -63,7 +63,8 @@ import type { HighlightEntry, HighlightSection } from "../portability/markdown";
 // Issue #98 (decision #96) — the ONE polite status-region primitive (the
 // "Your data" cluster announces through it) + the shared spinner arc for
 // the unified in-flight register.
-import { CloseIcon, SpinnerIcon } from "../ui/icons";
+import { CloseIcon } from "../ui/icons";
+import { BusyButton } from "../ui/BusyButton";
 import { StatusRegion } from "../ui/StatusRegion";
 // Issue #86 (decision #73) — the custom-theme slot: seedCustomTheme powers
 // the first-activation seeding in onTheme; the builder is the disclosure
@@ -738,40 +739,35 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
           <fieldset className="settings-section settings-data">
             <legend>Your data</legend>
             <div className="settings-data-actions">
-              {/* Issue #98 — the unified in-flight register: the active
-                action's button carries the spinner arc (aria-hidden — the
-                accessible name stays the action) + aria-busy; all three
-                disable together (the calm single-flight rule above). */}
-              <button
-                type="button"
+              {/* Issue #98 — the unified in-flight register via the shared
+                BusyButton primitive: the active action's button carries the
+                spinner arc (aria-hidden — the accessible name stays the
+                action) + aria-busy; all three disable together (the calm
+                single-flight rule above). */}
+              <BusyButton
                 className="btn btn-quiet settings-data-action"
                 onClick={handleExportBundle}
-                aria-busy={dataBusy === "export-bundle" || undefined}
+                busy={dataBusy === "export-bundle"}
                 disabled={dataActionsDisabled}
               >
-                {dataBusy === "export-bundle" && <SpinnerIcon />}
                 Export library bundle
-              </button>
-              <button
-                type="button"
+              </BusyButton>
+              <BusyButton
                 className="btn btn-quiet settings-data-action"
                 onClick={() => importFileRef.current?.click()}
-                aria-busy={dataBusy === "import" || undefined}
+                busy={dataBusy === "import"}
                 disabled={dataActionsDisabled}
               >
-                {dataBusy === "import" && <SpinnerIcon />}
                 Import bundle
-              </button>
-              <button
-                type="button"
+              </BusyButton>
+              <BusyButton
                 className="btn btn-quiet settings-data-action"
                 onClick={handleExportHighlights}
-                aria-busy={dataBusy === "export-highlights" || undefined}
+                busy={dataBusy === "export-highlights"}
                 disabled={dataActionsDisabled}
               >
-                {dataBusy === "export-highlights" && <SpinnerIcon />}
                 Export all highlights
-              </button>
+              </BusyButton>
             </div>
             {/* Visually-hidden file picker (the add-dialog ref discipline) —
               triggered by the Import bundle button; disabled together with

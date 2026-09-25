@@ -28,11 +28,16 @@
 // unified in-flight register while the write runs (spinner arc + aria-busy
 // + disabled — the ReadingStateButton pattern). The fresh-open reset clears
 // a prior session's error (the D16-08 discipline).
-import { useEffect, useRef, useState } from "react";
+// Issue #98 review — the pending/writeError state machine and the busy
+// register are the SHARED useHonestWrite hook + BusyButton primitive now;
+// only the write itself (and the copy) stay local to this dialog.
+import { useEffect, useRef } from "react";
 import { dexieLibrarySource } from "../LibrarySource";
-// Issue #98 — the ONE polite status-region primitive + the shared spinner.
+// Issue #98 — the ONE polite status-region primitive + the shared
+// honest-write/busy primitives.
 import { StatusRegion } from "../../ui/StatusRegion";
-import { SpinnerIcon } from "../../ui/icons";
+import { BusyButton } from "../../ui/BusyButton";
+import { useHonestWrite } from "../../ui/honestWrite";
 
 interface RemoveConfirmProps {
   /** When true, the dialog is open via showModal (focus-trapped). */
@@ -58,11 +63,11 @@ export function RemoveConfirm({
   // Capture the previously-focused element on open so the close handler can
   // restore focus (Pitfall 1 — same discipline as WipeConfirm + SettingsPanel).
   const triggerRef = useRef<HTMLElement | null>(null);
-  // Issue #98 — the write's honest state: pending drives the unified busy
-  // register on the destructive button; writeError keeps the dialog open
-  // with the calm error line. Both reset on every fresh open (below).
-  const [pending, setPending] = useState(false);
-  const [writeError, setWriteError] = useState(false);
+  // Issue #98 — the write's honest state (the SHARED useHonestWrite hook):
+  // pending drives the unified busy register on the destructive button;
+  // writeError keeps the dialog open with the calm error line. Both reset
+  // on every fresh open (below).
+  const { pending, writeError, reset: resetWrite, run: runWrite } = useHonestWrite();
 
   // Sync the `open` prop with the underlying <dialog> state.
   useEffect(() => {
@@ -73,8 +78,7 @@ export function RemoveConfirm({
       dlg.showModal(); // browser: focus→first focusable, trap, inert backdrop, Esc closes
       // Issue #98 — fresh session state (the D16-08 discipline): a prior
       // session's failed-write error never leaks into the next open.
-      setPending(false);
-      setWriteError(false);
+      resetWrite();
       // Cross-engine focus management (Pitfall 1 + WebKit quirk, same as
       // WipeConfirm): explicitly focus the [data-initial-focus] element so
       // the focus trap and the initial reading position are predictable in
@@ -92,7 +96,7 @@ export function RemoveConfirm({
     } else if (!open && dlg.open) {
       dlg.close();
     }
-  }, [open]);
+  }, [open, resetWrite]);
 
   // Register the `close` event listener (with cleanup). Restore focus to the
   // captured trigger (Pitfall 1). Deps [onCancel]: the scrim listener below
@@ -134,17 +138,11 @@ export function RemoveConfirm({
   // can retry (the consent to remove stands; the write just didn't land)
   // or cancel.
   const onDestructiveClick = async () => {
-    setPending(true);
-    setWriteError(false);
-    try {
-      await dexieLibrarySource.remove(articleId); // cascade: article + highlights + notes + location
-    } catch {
-      setPending(false);
-      setWriteError(true);
-      return;
+    // The cascade closure stays in the click handler (Pitfall 8); the hook
+    // owns only the pending/error bookkeeping around it.
+    if (await runWrite(() => dexieLibrarySource.remove(articleId))) {
+      onConfirm();
     }
-    setPending(false);
-    onConfirm();
   };
 
   // Silence unused-prop lint: articleTitle is informational and reserved for
@@ -176,16 +174,13 @@ export function RemoveConfirm({
               ONLY in onDestructiveClick above. The button label names the
               consequence unambiguously (UI-SPEC §Copywriting L262). Issue
               #98 — the unified in-flight register while the write runs. */}
-          <button
-            type="button"
+          <BusyButton
+            busy={pending}
             className="btn btn-destructive library-remove-destructive"
             onClick={onDestructiveClick}
-            aria-busy={pending || undefined}
-            disabled={pending}
           >
-            {pending && <SpinnerIcon />}
             Remove article
-          </button>
+          </BusyButton>
           {/* Cancel — names the actual outcome: the reader keeps the article
               and its highlights/notes. Carries [data-initial-focus] so the
               explicit focus call lands here on open (NOT on the destructive

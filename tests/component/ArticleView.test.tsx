@@ -285,8 +285,10 @@ describe("ArticleView route-change h1 focus (Plan 14-03 Task 3)", () => {
 // The "unavailable"/"unupgradeable" reasons stay the pre-#98 silent
 // fall-through (the StorageBanner covers settings WRITE failures only).
 describe("ArticleView corrupt-location honesty (issue #98)", () => {
+  // Issue #98 review — the copy carries a next step (the ERROR kind's law:
+  // named honestly, WITH a next step — never blamed on the reader).
   const CORRUPT_COPY =
-    "Couldn't return to where you were. The saved reading position couldn't be read, so the article opened at the beginning.";
+    "Couldn't return to where you were. The saved reading position couldn't be read, so the article opened at the beginning. You can keep reading, or scroll to find your place.";
 
   it("renders the honest note + announce for a corrupt row and keeps the article usable", async () => {
     openArticleMock.mockResolvedValue(fullArticle());

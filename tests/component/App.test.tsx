@@ -279,5 +279,33 @@ describe("App — feedback aside never flashes during the library load", () => {
         name: "Share feedback on GitHub (opens in a new tab)",
       }),
     ).toBeNull();
+
+    // Issue #98 review — the honest library copy is PINNED (the acceptance
+    // criterion: the copy updates flow through the tests). The load speaks
+    // through the ONE status region with the library-worded string —
+    // never the article route's "Opening article…".
+    expect(screen.getByText("Opening your library…")).not.toBeNull();
+    expect(screen.queryByText("Opening article…")).toBeNull();
+  });
+});
+
+// Issue #98 review — the library load ERROR copy is pinned too: the
+// acceptance criterion names both strings ("Opening your library…" /
+// "Couldn't open your library.") and the review found neither exercised by
+// any test. The error speaks the library-worded failure + its follow-up
+// through the status region (the state-kind table's ERROR kind: named
+// honestly, with a next step).
+describe("App — the library load error speaks the library-worded copy", () => {
+  it("renders 'Couldn't open your library.' + the follow-up sentence", async () => {
+    listArticlesMock.mockRejectedValue(new Error("dexie unavailable"));
+    window.location.hash = "";
+    render(<App />);
+
+    expect(await screen.findByText("Couldn't open your library.")).not.toBeNull();
+    expect(
+      screen.getByText(
+        "Your library could not be loaded. Reload the page to try again; if it still fails, check that this browser can use local storage.",
+      ),
+    ).not.toBeNull();
   });
 });

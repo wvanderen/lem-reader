@@ -30,6 +30,8 @@
 // outside the toolbar). H/N remain the sighted keyboard convenience
 // (screen readers consume bare letters).
 import { useEffect, useRef, useState } from "react";
+// Issue #98 — the ONE polite status-region primitive.
+import { StatusRegion } from "../../ui/StatusRegion";
 import type { ToolbarCaptureResult } from "./HighlightOverlay";
 
 export interface SelectionToolbarProps {
@@ -215,14 +217,15 @@ export function SelectionToolbar({
         top: `${top}px`,
       }}
     >
-      {/* Plan 13-11 (G6): the polite announce-on-appear live region (the
-          repo's established visually-hidden role=status pattern — app.css
-          L154). Rendered whenever the toolbar renders (live regions must
-          pre-exist to announce reliably); the text is set only on the
-          transition into the buttons variant (the effect above). */}
-      <p className="visually-hidden" role="status" aria-live="polite">
-        {announceText}
-      </p>
+      {/* Plan 13-11 (G6): the polite announce-on-appear live region through
+          the ONE StatusRegion primitive (issue #98 — the visually-hidden
+          register composes via className; .visually-hidden.status carries
+          the geometry, and the primitive's "no extra chrome" rule keeps the
+          host's geometry untouched). Rendered whenever the toolbar renders
+          (live regions must pre-exist to announce reliably); the text is
+          set only on the transition into the buttons variant (the effect
+          above). */}
+      <StatusRegion className="visually-hidden">{announceText}</StatusRegion>
       {isValid ? (
         <>
           <button

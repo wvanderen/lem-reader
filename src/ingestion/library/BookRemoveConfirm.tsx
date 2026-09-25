@@ -29,17 +29,21 @@
 // with the chapter count ("Its {N} chapters and their highlights will be
 // removed.") per UI-SPEC §Copywriting — D7-04 calm voice; zero jargon.
 //
-// Issue #98 (decision #96) — HONEST WRITE FAILURES (the RemoveConfirm
-// discipline, kept structurally in sync): a failed cascade keeps the dialog
-// open with a calm error line through the ONE StatusRegion primitive, and
-// onConfirm fires only after the write resolves. The destructive button
-// carries the unified in-flight register while the write runs. The
-// fresh-open reset clears a prior session's error (the D16-08 discipline).
-import { useEffect, useRef, useState } from "react";
+// Issue #98 (decision #96) — HONEST WRITE FAILURES: a failed cascade keeps
+// the dialog open with a calm error line through the ONE StatusRegion
+// primitive, and onConfirm fires only after the write resolves. The
+// destructive button carries the unified in-flight register while the write
+// runs. The fresh-open reset clears a prior session's error (the D16-08
+// discipline). Issue #98 review — the pending/writeError state machine and
+// the busy register are the SHARED useHonestWrite hook + BusyButton
+// primitive now; only the write itself (and the copy) stay local here.
+import { useEffect, useRef } from "react";
 import { removeBook } from "../../persistence/booksStore";
-// Issue #98 — the ONE polite status-region primitive + the shared spinner.
+// Issue #98 — the ONE polite status-region primitive + the shared
+// honest-write/busy primitives.
 import { StatusRegion } from "../../ui/StatusRegion";
-import { SpinnerIcon } from "../../ui/icons";
+import { BusyButton } from "../../ui/BusyButton";
+import { useHonestWrite } from "../../ui/honestWrite";
 
 interface BookRemoveConfirmProps {
   /** When true, the dialog is open via showModal (focus-trapped). */
@@ -68,11 +72,11 @@ export function BookRemoveConfirm({
   // Capture the previously-focused element on open so the close handler can
   // restore focus (Pitfall 1 — same discipline as WipeConfirm + RemoveConfirm).
   const triggerRef = useRef<HTMLElement | null>(null);
-  // Issue #98 — the write's honest state (the RemoveConfirm discipline):
-  // pending drives the unified busy register; writeError keeps the dialog
-  // open with the calm error line. Both reset on every fresh open (below).
-  const [pending, setPending] = useState(false);
-  const [writeError, setWriteError] = useState(false);
+  // Issue #98 — the write's honest state (the SHARED useHonestWrite hook —
+  // the RemoveConfirm discipline): pending drives the unified busy register;
+  // writeError keeps the dialog open with the calm error line. Both reset on
+  // every fresh open (below).
+  const { pending, writeError, reset: resetWrite, run: runWrite } = useHonestWrite();
 
   // Sync the `open` prop with the underlying <dialog> state.
   useEffect(() => {
@@ -82,8 +86,7 @@ export function BookRemoveConfirm({
       triggerRef.current = document.activeElement as HTMLElement | null;
       dlg.showModal(); // browser: focus→first focusable, trap, inert backdrop, Esc closes
       // Issue #98 — fresh session state (the D16-08 discipline).
-      setPending(false);
-      setWriteError(false);
+      resetWrite();
       // Cross-engine focus management (Pitfall 1 + WebKit quirk): explicitly
       // focus the [data-initial-focus] element so the focus trap and the
       // initial reading position are predictable in WebKit. The CANCEL
@@ -101,7 +104,7 @@ export function BookRemoveConfirm({
     } else if (!open && dlg.open) {
       dlg.close();
     }
-  }, [open]);
+  }, [open, resetWrite]);
 
   // Register the `close` event listener (with cleanup). Restore focus to the
   // captured trigger (Pitfall 1). Esc-originated closes route through
@@ -148,20 +151,13 @@ export function BookRemoveConfirm({
   // it. ONE Dexie transaction: book + chapters + highlights + notes +
   // locations all go or none do (booksStore.removeBook).
   // Issue #98 — honest failure: a rejected cascade keeps the dialog open
-  // with the calm error line; onConfirm runs ONLY on success (the
-  // RemoveConfirm discipline, structurally in sync).
+  // with the calm error line; onConfirm runs ONLY on success. The cascade
+  // closure stays in the click handler (Pitfall 8); the shared hook owns
+  // only the pending/error bookkeeping around it.
   const onDestructiveClick = async () => {
-    setPending(true);
-    setWriteError(false);
-    try {
-      await removeBook(bookId); // cascade: book + chapters + highlights + notes + locations
-    } catch {
-      setPending(false);
-      setWriteError(true);
-      return;
+    if (await runWrite(() => removeBook(bookId))) {
+      onConfirm();
     }
-    setPending(false);
-    onConfirm();
   };
 
   return (
@@ -189,16 +185,13 @@ export function BookRemoveConfirm({
               ONLY in onDestructiveClick above. The label names the outcome
               unambiguously (UI-SPEC §Copywriting). Issue #98 — the unified
               in-flight register + the honest-failure line above. */}
-          <button
-            type="button"
+          <BusyButton
+            busy={pending}
             className="btn btn-destructive book-remove-destructive"
             onClick={onDestructiveClick}
-            aria-busy={pending || undefined}
-            disabled={pending}
           >
-            {pending && <SpinnerIcon />}
             Remove book
-          </button>
+          </BusyButton>
           {/* Cancel — names the actual outcome: the reader keeps the book
               and its chapters. Carries [data-initial-focus] so the explicit
               focus call lands here on open (NOT on the destructive button —

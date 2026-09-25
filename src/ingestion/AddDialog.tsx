@@ -69,10 +69,10 @@ import type { AddToLibraryOutcome } from "./addToLibrary";
 import { TagPicker } from "../ui/TagPicker";
 import type { TagStat } from "./library/tagsStore";
 // Issue #98 (decision #96) — the ONE polite status-region primitive (this
-// dialog's submission spine announces through it) + the shared spinner arc
-// for the unified in-flight register.
+// dialog's submission spine announces through it) + the shared BusyButton
+// register (spinner arc + aria-busy + disabled) for the in-flight submit.
 import { StatusRegion } from "../ui/StatusRegion";
-import { SpinnerIcon } from "../ui/icons";
+import { BusyButton } from "../ui/BusyButton";
 // The paste-transcript fallback dispatches on the same extractor the
 // server runs (request-free) — the fallback offer appears ONLY for a URL
 // that is actually a YouTube video.
@@ -793,26 +793,24 @@ export function AddDialog({ open, onCancel, onBookAdded, tagStats }: AddDialogPr
               submit is gone); disabled rides the transcript gate (required
               title + text). Otherwise it targets the selected source's
               form with the per-source gate + label, unchanged. Issue #98 —
-              the unified busy register while a submission is in flight:
-              the spinner arc PREPENDS the label (aria-hidden — the
-              accessible name stays the action) + aria-busy + disabled
-              (the ReadingStateButton pattern). */}
-          <button
+              the unified busy register via the shared BusyButton primitive
+              while a submission is in flight: the spinner arc PREPENDS the
+              label (aria-hidden — the accessible name stays the action) +
+              aria-busy + disabled (the ReadingStateButton pattern). */}
+          <BusyButton
             type="submit"
+            busy={submitting}
             className="btn btn-primary add-dialog-submit"
             form={transcriptMode ? "add-transcript-form" : `add-${source}-form`}
-            aria-busy={submitting || undefined}
             disabled={
-              submitting ||
-              (transcriptMode
+              transcriptMode
                 ? transcriptValue.trim().length === 0 ||
                   transcriptTitleValue.trim().length === 0
-                : !sourceSubmitReady[source])
+                : !sourceSubmitReady[source]
             }
           >
-            {submitting && <SpinnerIcon />}
             {transcriptMode ? "Add transcript" : SOURCE_SUBMIT_LABEL[source]}
-          </button>
+          </BusyButton>
         </div>
       </div>
     </dialog>

@@ -34,10 +34,18 @@ import { classifyStorageError } from "./errors";
  * - `ok: true`     → the load succeeded; `location` is null for first-run /
  *                   mismatched-revision (the saved offset is invalid against
  *                   the article's current revision — silent top-of-article)
- * - `ok: false`    → recovery routing required; `reason` selects the surface:
- *   - `"unavailable"`   → StorageBanner + in-memory defaults (reading continues)
- *   - `"corrupt"`       → WipeConfirm (safeParse rejected the persisted record)
- *   - `"unupgradeable"` → WipeConfirm (Dexie UpgradeError/VersionError)
+ * - `ok: false`    → recovery routing required; `reason` selects the surface
+ *                   (issue #98 — ArticleView owns the honesty register):
+ *   - `"unavailable"`   → silent top-of-article fall-through (reading
+ *                        continues; the StorageBanner covers SettingsContext
+ *                        WRITE failures only — never this load path)
+ *   - `"corrupt"`       → the honest corrupt-location note at restore
+ *                        (safeParse rejected the persisted record; one calm
+ *                        sentence at the article top + the same announced),
+ *                        then top-of-article
+ *   - `"unupgradeable"` → silent top-of-article fall-through (Dexie
+ *                        UpgradeError/VersionError; the settings wipe path —
+ *                        WipeConfirm — covers corrupt SETTINGS, not this)
  */
 export type LocationLoadResult =
   | { ok: true; location: LocationRecord | null }
@@ -81,8 +89,12 @@ export async function loadLocation(
       return { ok: true, location: parsed.data };
     }
     // Persisted record failed Zod validation. STATE-04 contract: never
-    // silently coerce a corrupt offset. Route to WipeConfirm (Pitfall 8 —
-    // db.delete() only fires inside the destructive handler in WipeConfirm.tsx).
+    // silently coerce a corrupt offset. Issue #98: the corrupt reason
+    // surfaces HONESTLY — ArticleView renders the calm corrupt-location
+    // note at the article top and announces the same sentence, then
+    // reading proceeds from the top (silence would read as "no saved
+    // position" — a lie about the reader's own data). The bad row itself
+    // is overwritten by the next location save.
     return { ok: false, reason: "corrupt" };
   } catch (e) {
     return { ok: false, reason: classifyStorageError(e) };
@@ -137,12 +149,13 @@ export async function setArticleReadState(article: CanonicalArticle, read: boole
  * LibraryView to derive the continue-reading strip (D8-09) + the per-row
  * progress hairline.
  *
- * Read discipline mirrors `loadLocation` L63-88 (STATE-04 — Zod safeParse on
+ * Read discipline mirrors `loadLocation` (STATE-04 — Zod safeParse on
  * every row): corrupt rows are DROPPED silently (collected into `valid`), never
  * coerced. A single malformed row must not block the rest of the strip — the
  * reader sees the valid rows; the corrupt row is simply absent (it will be
- * surfaced by WipeConfirm the next time loadLocation is called for that
- * specific [articleId+revision] and fails the same parse).
+ * surfaced by the honest corrupt-location note (issue #98) the next time
+ * loadLocation is called for that specific [articleId+revision] and fails
+ * the same parse).
  *
  * D8-09 (continue-reading strip): callers sort by `savedAt` to derive
  * recency. D8-10 (recently-read = opened): `savedAt` is updated on every open

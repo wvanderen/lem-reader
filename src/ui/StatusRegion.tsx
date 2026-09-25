@@ -28,11 +28,20 @@
 //
 // Rules the primitive makes structural:
 //   - No raw aria-live trio anywhere else in src/ — every polite region is
-//     a StatusRegion. Screen readers hear ONE register app-wide.
+//     a StatusRegion. Screen readers hear ONE register app-wide. (Issue #98
+//     review precision: the one disclosed exception is ArticleView's
+//     first-paint paginated placeholder <p role="status" aria-live="polite">
+//     — a single-line, non-atomic notice riding the PINNED pagination
+//     geometry; moving it under this primitive would perturb the measured
+//     surface the repagination budget protects.)
 //   - The region NEVER unmounts conditionally: a live region must exist
 //     before its content changes to announce reliably. Idle collapse is
 //     CSS (the per-surface :empty variants — .add-dialog-inner .status:empty,
 //     main#main > .status:empty), never `{error && <div role="status">}`.
+//     (The static no-content states — drawer-empty, library-empty, review
+//     zero — are the sanctioned shape exception: they mount as whole
+//     replacement content in a surface ternary, the drawer-empty/#98
+//     precedent.)
 //   - children pass through unchanged; the per-surface classes compose via
 //     className (storage-banner, drawer-empty, visually-hidden, …). The
 //     four CSS collapse/layout variants stay per-surface — this component

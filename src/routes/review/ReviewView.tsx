@@ -89,7 +89,7 @@ import {
   type ReviewSort,
 } from "./reviewFilter";
 import { formatIsoDate } from "../../ingestion/library/formatDate";
-import { ReviewNoteDialog } from "./ReviewNoteDialog";
+import { ReviewNoteDialog, NOTE_SAVE_FAILED_COPY } from "./ReviewNoteDialog";
 import { DeleteHighlightConfirm } from "./DeleteHighlightConfirm";
 import { BackToLibrary } from "../../reader/BackToLibrary";
 import { JumpToArticleIcon } from "../../ui/icons";
@@ -691,7 +691,7 @@ export function ReviewView({
         onDone={(saved) => {
           setNoteTarget(null);
           invalidateLibrarySnapshot();
-          setAnnouncement(saved ? "Note saved." : "Couldn't save the note. Try again.");
+          setAnnouncement(saved ? "Note saved." : NOTE_SAVE_FAILED_COPY);
         }}
       />
       <DeleteHighlightConfirm

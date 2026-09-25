@@ -662,16 +662,21 @@ export function LibraryView({
           // filters hide every row still renders the ul with zero children —
           // a filtered-out view is not an empty view. Plan 12-05: a library
           // holding ONLY book groups is not empty either.
-          // 2026-09-08 user feedback: the copy now sits inside a
-          // .library-empty wrapper joining the shared 1100px centered
-          // measure (the library gutter discipline) — the bare h2/p
-          // previously escaped every sibling's cap and spanned the window
-          // at wide viewports. Element kinds and copy strings stay
-          // byte-stable.
-          <div className="library-empty">
+          // 2026-09-08 user feedback: the copy sits inside a .library-empty
+          // wrapper joining the shared 1100px centered measure (the library
+          // gutter discipline) — the bare h2/p previously escaped every
+          // sibling's cap and spanned the window at wide viewports. Element
+          // kinds and copy strings stay byte-stable.
+          // Issue #98 review — the spec's named convergence lands: the
+          // wrapper renders through the ONE StatusRegion primitive (the
+          // drawer-empty twin), so the no-content state announces politely
+          // through the ONE register when it appears. Its per-surface CSS
+          // strips the shared card chrome — the library no-content stays
+          // reading-measure page copy, not a floating card.
+          <StatusRegion className="library-empty">
             <h2>{EMPTY_COPY[view].heading}</h2>
             <p>{EMPTY_COPY[view].body}</p>
-          </div>
+          </StatusRegion>
         ) : (
           <>
             {/* Plan 15-03 (D15-11) — the delegated launch capture. ONE onClick

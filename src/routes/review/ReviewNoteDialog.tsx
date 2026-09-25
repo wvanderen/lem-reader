@@ -56,6 +56,13 @@ import type { NoteRecord } from "../../content/schema";
 // Issue #98 — the ONE polite status-region primitive.
 import { StatusRegion } from "../../ui/StatusRegion";
 
+/**
+ * Issue #98 review — the honest commit-failure copy, shared with the
+ * panel's close-path announcement (ReviewView's onDone handler). One
+ * sentence, two seams — the constant keeps them from ever diverging.
+ */
+export const NOTE_SAVE_FAILED_COPY = "Couldn't save the note. Try again.";
+
 interface ReviewNoteDialogProps {
   /** When true, the dialog is open via showModal (focus-trapped). */
   open: boolean;
@@ -257,7 +264,7 @@ export function ReviewNoteDialog({
           (a live region must pre-exist to announce); idle it renders no
           children and paints nothing (the shared dialog rules). */}
       <StatusRegion>
-        {writeError && <p>Couldn't save the note. Try again.</p>}
+        {writeError && <p>{NOTE_SAVE_FAILED_COPY}</p>}
       </StatusRegion>
       <div className="highlight-popover-actions">
         {/* Non-destructive default (Pitfall 8): Enter confirms the edit,

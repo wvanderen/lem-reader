@@ -31,7 +31,13 @@ import { loadLocation } from "../persistence/locationStore";
 import { computeTopVisibleOffset, queryBlocks } from "../reader/restoreLocation";
 // Issue #98 (decision #96) — the ONE polite status-region primitive: this
 // route's load/error card and its three visually-hidden announcers render
-// through it (no raw aria-live trio outside the primitive).
+// through it (no raw aria-live trio outside the primitive). One disclosed
+// exception, issue #98 review: the paginated placeholder's <p
+// role="status" aria-live="polite"> at the .page-viewport below — it rides
+// the PINNED first-paint pagination geometry (Plan 13-09: zero new CSS,
+// "pinned by tag"), and a single-line placeholder is not the atomic card
+// register; moving it under the primitive would perturb the measured
+// surface the repagination budget protects.
 import { StatusRegion } from "../ui/StatusRegion";
 // Issue #5 — the ONE mode-aware passage-jump tail (deep-link, restore,
 // back-nav, TOC, and the D4-10 mode-swap re-anchor all call it) + the D4-07
@@ -177,12 +183,14 @@ const EMPTY_HIGHLIGHTS: readonly ArticleBodyHighlight[] = [];
  * Issue #98 (decision #96) — the corrupt-location honesty copy (ERROR kind
  * in the StatusRegion state-kind table): the restore did not land, named
  * calmly, with the truthful consequence (the article opens at the
- * beginning). Rendered as the article-top .meta note AND announced through
- * the dedicated visually-hidden status region. Static — never interpolates
- * storage error detail (calm voice, no jargon).
+ * beginning) and the next step (keep reading or scroll to find your place —
+ * issue #98 review: an ERROR names a next step). Rendered as the
+ * article-top .meta note AND announced through the dedicated
+ * visually-hidden status region. Static — never interpolates storage error
+ * detail (calm voice, no jargon).
  */
 const CORRUPT_LOCATION_COPY =
-  "Couldn't return to where you were. The saved reading position couldn't be read, so the article opened at the beginning.";
+  "Couldn't return to where you were. The saved reading position couldn't be read, so the article opened at the beginning. You can keep reading, or scroll to find your place.";
 
 export interface ArticleViewProps {
   articleId: string;

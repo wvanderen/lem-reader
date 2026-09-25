@@ -51,9 +51,10 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { CanonicalArticle } from "../../content/types";
 import { db } from "../../persistence/db";
 import { formatIsoDate } from "./formatDate";
-// Issue #98 — the ONE polite status-region primitive + the shared spinner.
+// Issue #98 — the ONE polite status-region primitive + the shared
+// BusyButton in-flight register.
 import { StatusRegion } from "../../ui/StatusRegion";
-import { SpinnerIcon } from "../../ui/icons";
+import { BusyButton } from "../../ui/BusyButton";
 
 /** isoToDateInput — ISO datetime → the "YYYY-MM-DD" a date input holds. */
 function isoToDateInput(iso: string): string {
@@ -439,15 +440,14 @@ export function EditMetadataDialog({
             {saveError && <p>Couldn't save this change. Try again.</p>}
           </StatusRegion>
           <div className="dialog-actions edit-metadata-actions">
-            <button
+            <BusyButton
               type="submit"
+              busy={saving}
               className="btn btn-primary edit-metadata-save"
-              aria-busy={saving || undefined}
-              disabled={saveBlocked || saving}
+              disabled={saveBlocked}
             >
-              {saving && <SpinnerIcon />}
               Save
-            </button>
+            </BusyButton>
             {/* Cancel — carries [data-initial-focus] so the explicit focus
                 call lands here on open (NOT on Save — the non-destructive
                 default; an accidental Enter cannot commit a write). */}
