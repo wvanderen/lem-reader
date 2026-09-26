@@ -21,11 +21,17 @@
 //                       in its destructive onClick — Pitfall 8; never auto)
 // Both mount inside the provider so they read the live storageState. Neither
 // blocks reading (article rendering is independent of Dexie — D2-13).
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
-// Type-only: the deriveTagStats runtime is consumed post-fonts/post-idle
-// (issue #101) so the tags store module stays off the every-load chain.
-import type { deriveTagStats } from "./ingestion/library/tagsStore";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArticleView } from "./routes/ArticleView";
+// Issue #101 — the shell's library consumption is deferred (the snapshot
+// graph AND its pure derivation folds load post-fonts/post-idle; see
+// useDeferredLibrarySnapshot). What the shell DOES import statically is
+// bytes: the deferred hook itself and the zero-dependency invalidation bus
+// for the add-followup broadcast.
+import { useDeferredLibrarySnapshot } from "./ingestion/library/useDeferredLibrarySnapshot";
+import { invalidateLibrarySnapshot } from "./ingestion/library/librarySnapshotBus";
+// Type-only (erased — no fetch): the tag-stats shape for the memo below.
+import type { TagStat } from "./ingestion/library/tagStats";
 
 const LibraryView = lazy(() =>
   import("./ingestion/library/LibraryView").then((m) => ({ default: m.LibraryView })),
@@ -389,99 +395,33 @@ function AppInner() {
   // settled (spare chrome, the rail's discipline) or the unfinished set
   // is empty — no disabled state, no library fallback.
   //
-  // Issue #101 — the whole-library read is IDLE-DEFERRED here. The shell's
-  // Read link + the Add picker stats are spare chrome: none of them is a
-  // first-paint concern, but the eager read (IDB open + every store +
-  // the grapheme fold over every article) raced the article route's FIRST
-  // pagination on the cold path — the ACPT-04 cold phase (page load →
-  // first trusted commit) absorbed that contention on every engine. The
-  // read now starts once the browser is idle and re-derives on the ONE
-  // invalidation broadcast (the same discipline as useLibrarySnapshot:
-  // stale-while-revalidate belongs to the consumer, errors route calm —
-  // a failed read just keeps the Read link hidden and the stats empty).
-  const [readTarget, setReadTarget] = useState<{ articleId: string } | null>(null);
-  const [addTagStats, setAddTagStats] = useState<ReturnType<typeof deriveTagStats>>(
-    [],
-  );
-  useEffect(() => {
-    let cancelled = false;
-    const cleanupRef: { current: (() => void) | null } = { current: null };
-    let cancelSchedule: () => void = () => {};
-    const schedule = (cb: () => void): (() => void) => {
-      if (typeof window.requestIdleCallback === "function") {
-        const id = window.requestIdleCallback(() => {
-          if (!cancelled) cb();
-        });
-        return () => window.cancelIdleCallback(id);
-      }
-      const t = window.setTimeout(() => {
-        if (!cancelled) cb();
-      }, 0);
-      return () => window.clearTimeout(t);
-    };
-    const start = () => {
-      // Issue #101 — the whole snapshot subsystem (the read model, the
-      // invalidation bus, and the resume-target derivation) is consumed
-      // ONLY from this post-fonts, post-idle path, so every module in it
-      // dynamically imports HERE and none of it rides the every-load
-      // import chain. Attaching the invalidation listener is part of the
-      // same deferred arm; writes landing before this point are covered by
-      // this initial load (the module re-reads the stores every call).
-      void Promise.all([
-        import("./ingestion/library/librarySnapshot"),
-        import("./ingestion/library/resumeTarget"),
-        import("./ingestion/library/tagsStore"),
-      ])
-        .then(([snapshotModule, resumeModule, tagsModule]) => {
-          if (cancelled) return;
-          const load = () => {
-            snapshotModule
-              .loadLibrarySnapshot()
-              .then((snapshot) => {
-                if (cancelled) return;
-                setReadTarget(
-                  resumeModule.deriveResumeTargets(snapshot)[0] ?? null,
-                );
-                setAddTagStats(
-                  tagsModule.deriveTagStats(snapshot.articles, snapshot.books),
-                );
-              })
-              .catch(() => {
-                /* spare chrome — calm absence, the D2-13 discipline */
-              });
-          };
-          cancelSchedule = schedule(load);
-          cleanupRef.current = snapshotModule.onLibrarySnapshotInvalidated(() => {
-            // The write already implies idle — skip the schedule, reload
-            // directly (the ONE invalidation broadcast, the write-followup).
-            cancelSchedule();
-            load();
-          });
-        })
-        .catch(() => {
-          /* spare chrome — calm absence, the D2-13 discipline */
-        });
-    };
-    // Issue #101 — do NOT let the idle scheduler fire inside the cold
-    // path's fonts-ready wait: the article engine settles fonts BEFORE its
-    // first measurement, and an idle gap there would start the snapshot
-    // fetch + read in the middle of the ACPT-04 cold phase (page load →
-    // first trusted commit). The shell read follows the engine's own
-    // rhythm: fonts settle first, THEN the browser goes idle, THEN the
-    // spare chrome loads. (jsdom has no document.fonts — schedule at once.)
-    if (typeof document.fonts?.ready?.then === "function") {
-      void document.fonts.ready.then(() => {
-        if (!cancelled) start();
-      });
-    } else {
-      start();
+  // Issue #101 — the whole-library read is IDLE-DEFERRED here, through the
+  // ONE deferred twin of the eager hook (useDeferredLibrarySnapshot — the
+  // same loading/stale-while-revalidate/calm-error contract and the same
+  // mount-time invalidation subscription; only the first load's START
+  // moves: fonts settle, then the browser idles, then the snapshot module
+  // and its derivation folds import and read — the deferral owns the
+  // dynamic imports, so none of it rides the every-load chain). The
+  // derivations are the pure folds over the settled snapshot, exactly the
+  // eager path's useMemo shape.
+  const { status: deferredStatus, snapshot: deferredSnapshot, derive } =
+    useDeferredLibrarySnapshot();
+  const readTarget = useMemo(() => {
+    if (deferredStatus !== "ready" || deferredSnapshot === null || derive === null) {
+      return null;
     }
-    return () => {
-      cancelled = true;
-      cancelSchedule();
-      cleanupRef.current?.();
-    };
-  }, []);
+    return derive.deriveResumeTargets(deferredSnapshot)[0] ?? null;
+  }, [deferredStatus, deferredSnapshot, derive]);
+  // Issue #84 — the picker-suggestion stats for the ONE AddDialog (the
+  // deriveTagStats fold — decision #71), derived from the same snapshot the
+  // Read destination reads, so suggestion order cannot drift between
+  // surfaces.
+  const addTagStats = useMemo<TagStat[]>(() => {
+    if (deferredStatus !== "ready" || deferredSnapshot === null || derive === null) {
+      return [];
+    }
+    return derive.deriveTagStats(deferredSnapshot.articles, deferredSnapshot.books);
+  }, [deferredStatus, deferredSnapshot, derive]);
 
   return (
     <>
@@ -520,14 +460,11 @@ function AppInner() {
           <AddDialog
             open={addOpen}
             onCancel={() => setAddOpen(false)}
-            onBookAdded={() => {
-              // Issue #101 — action-time dynamic import (see the shell
-              // snapshot comment above): a book add invalidates the ONE
-              // library read model so every mounted surface re-derives.
-              void import("./ingestion/library/librarySnapshot").then((m) =>
-                m.invalidateLibrarySnapshot(),
-              );
-            }}
+            // Issue #84 — a book add invalidates the ONE library read model
+            // so every mounted surface re-derives. Issue #101 — the call
+            // imports from the zero-dependency bus module: the broadcast
+            // without the snapshot graph.
+            onBookAdded={() => invalidateLibrarySnapshot()}
             tagStats={addTagStats}
           />
         </Suspense>

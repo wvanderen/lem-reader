@@ -20,32 +20,36 @@ vi.mock("../../src/content/repository", () => ({
 // Promise.all; in jsdom (no IndexedDB in this file) the un-mocked seams
 // reject on open, so once the lazy LibraryView chunk lands the snapshot can
 // settle ERROR before the pending-load window can be observed. Stub the
-// persistence seams resolved-empty (the rest of each module stays real via
-// importOriginal) so the PENDING listArticles mock alone owns the load
-// state — the loading-chrome contract this file pins.
+// persistence seams resolved-empty (_librarySeams, the shared helper — the
+// rest of each module stays real via importOriginal) so the PENDING
+// listArticles mock alone owns the load state — the loading-chrome contract
+// this file pins.
 vi.mock("../../src/persistence/locationStore", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../src/persistence/locationStore")>();
-  return { ...actual, loadAllLocations: vi.fn(async () => []) };
+  const { seamsResolvedEmpty } = await import("./_librarySeams");
+  return seamsResolvedEmpty(importOriginal, "loadAllLocations", []);
 });
 vi.mock("../../src/persistence/highlightsStore", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../src/persistence/highlightsStore")>();
-  return { ...actual, loadAllHighlights: vi.fn(async () => []) };
+  const { seamsResolvedEmpty } = await import("./_librarySeams");
+  return seamsResolvedEmpty(importOriginal, "loadAllHighlights", []);
 });
 vi.mock("../../src/persistence/notesStore", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../src/persistence/notesStore")>();
-  return { ...actual, loadAllNotes: vi.fn(async () => []) };
+  const { seamsResolvedEmpty } = await import("./_librarySeams");
+  return seamsResolvedEmpty(importOriginal, "loadAllNotes", []);
 });
 vi.mock("../../src/persistence/readingSessionsStore", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../src/persistence/readingSessionsStore")>();
-  return { ...actual, loadAllReadingSessions: vi.fn(async () => []) };
+  const { seamsResolvedEmpty } = await import("./_librarySeams");
+  return seamsResolvedEmpty(importOriginal, "loadAllReadingSessions", []);
 });
 vi.mock("../../src/persistence/booksStore", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../src/persistence/booksStore")>();
-  return { ...actual, listBooks: vi.fn(async () => ({ ok: true, books: [] })) };
+  const { seamsResolvedEmpty } = await import("./_librarySeams");
+  return seamsResolvedEmpty(importOriginal, "listBooks", {
+    ok: true,
+    books: [],
+  });
 });
 vi.mock("../../src/ingestion/library/tagsStore", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../src/ingestion/library/tagsStore")>();
-  return { ...actual, loadAllTags: vi.fn(async () => []) };
+  const { seamsResolvedEmpty } = await import("./_librarySeams");
+  return seamsResolvedEmpty(importOriginal, "loadAllTags", []);
 });
 
 import { App, parseHash } from "../../src/App";

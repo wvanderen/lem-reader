@@ -74,7 +74,7 @@ import { invalidateLibrarySnapshot } from "./librarySnapshot";
 import { useLibrarySnapshot } from "./useLibrarySnapshot";
 // Issue #75 (decision #71) — the count-returning tag fold feeding the ONE
 // shared TagPicker's suggestions on this page (and the row-tags popover).
-import { deriveTagStats } from "./tagsStore";
+import { deriveTagStats } from "./tagStats";
 // Plan 15-03 (D15-11..14) — the session-scoped return-context seam. PURE
 // module (zero React, zero storage imports); this component owns the IO:
 // lazy-initializer reads at mount (filters always restore — D15-13), ONE

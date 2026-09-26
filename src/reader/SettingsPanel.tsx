@@ -79,9 +79,12 @@ const CustomThemeBuilder = lazy(() =>
 // Issue #8 — the ONE library read model + its invalidation call replace the
 // panel's own export-time re-lists (the four-store Promise.all + fixture
 // merge) and close the import gap: after applyImport lands, the mounted
-// library surfaces re-derive through invalidation. Issue #101 — both are
-// ACTION-TIME dynamic imports: the snapshot graph (books/notes store seams
-// the reader never mounts) stays off the every-load import chain.
+// library surfaces re-derive through invalidation. Issue #101 — the read is
+// an ACTION-TIME dynamic import (the snapshot graph — books/notes store
+// seams the reader never mounts — stays off the every-load import chain),
+// while the invalidation call imports statically from the zero-dependency
+// bus module (the broadcast without the graph).
+import { invalidateLibrarySnapshot } from "../ingestion/library/librarySnapshotBus";
 
 interface SettingsPanelProps {
   open: boolean;
@@ -428,9 +431,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
       // (ArticleView's chapter context, the library view, the review panel)
       // re-derive from the imported rows; nothing stays stale behind the
       // panel.
-      await import("../ingestion/library/librarySnapshot").then((m) =>
-        m.invalidateLibrarySnapshot(),
-      );
+      invalidateLibrarySnapshot();
       const skipped =
         plan.skipped.articles +
         plan.skipped.highlights +
