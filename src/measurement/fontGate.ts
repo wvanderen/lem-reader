@@ -11,7 +11,8 @@
 // is NOT Baseline (MDN "Limited availability"). It MUST NOT be the sole
 // signal — re-awaiting `.ready` is the Baseline-widely-available primitive
 // (MDN). This module is the ONLY font-readiness signal the measurement
-// pipeline consumes.
+// pipeline consumes — and, since the #101 review, the app shell's too
+// (whenFontsReady): no second hand-rolled `document.fonts.ready` gate.
 
 /**
  * Sentinel thrown when a measurement pass is cancelled via its AbortSignal.
@@ -53,4 +54,19 @@ export async function awaitFontsReady(signal: AbortSignal): Promise<void> {
       );
     }),
   ]);
+}
+
+/**
+ * whenFontsReady — the non-measurement consumers' gate (issue #101: the
+ * shell's idle-deferred library read starts only after fonts settle, so an
+ * idle gap can never fire inside the ACPT-04 cold phase's font wait).
+ * Resolves at once where the FontFaceSet API is absent (jsdom, engines
+ * without `document.fonts`) — nothing to wait for there. No abort wiring:
+ * callers gate with their own cancelled flag after the await.
+ */
+export function whenFontsReady(): Promise<void> {
+  if (typeof document.fonts?.ready?.then !== "function") {
+    return Promise.resolve();
+  }
+  return document.fonts.ready.then(() => undefined);
 }

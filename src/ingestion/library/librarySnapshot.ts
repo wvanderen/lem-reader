@@ -230,33 +230,10 @@ export async function loadLibrarySnapshot(): Promise<LibrarySnapshot> {
 }
 
 // ── Invalidation (the one write-followup call) ──────────────────────────────
-// Write paths (remove article/book, add book, edit metadata, read-state
-// changes, review-panel curation, bundle import) call
-// invalidateLibrarySnapshot() after the write lands; subscribed
-// consumers re-run their load. A plain broadcast set — no state, no caching,
-// no third-party store (the AGENTS.md stack rule): the hook below the bus
-// owns whatever reload semantics a surface needs.
-
-const invalidationListeners = new Set<() => void>();
-
-/**
- * invalidateLibrarySnapshot — call ONCE after a library write lands. Every
- * subscribed consumer reloads (stale-while-revalidate semantics belong to
- * the consumer's hook, not to this bus).
- */
-export function invalidateLibrarySnapshot(): void {
-  for (const listener of invalidationListeners) {
-    listener();
-  }
-}
-
-/**
- * onLibrarySnapshotInvalidated — subscribe to invalidation broadcasts.
- * Returns the unsubscribe function (the useEffect cleanup shape).
- */
-export function onLibrarySnapshotInvalidated(listener: () => void): () => void {
-  invalidationListeners.add(listener);
-  return () => {
-    invalidationListeners.delete(listener);
-  };
-}
+// Issue #101 (review follow-up) — the broadcast itself lives in
+// ./librarySnapshotBus now: a zero-dependency module, so write paths on the
+// every-load chain and the deferred consumer's mount-time subscription can
+// reach the ONE call without importing THIS module's graph (the stores, the
+// folds, the grapheme pass). Re-exported here unchanged — every existing
+// import site keeps working.
+export { invalidateLibrarySnapshot, onLibrarySnapshotInvalidated } from "./librarySnapshotBus";

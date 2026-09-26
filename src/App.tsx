@@ -21,15 +21,27 @@
 //                       in its destructive onClick — Pitfall 8; never auto)
 // Both mount inside the provider so they read the live storageState. Neither
 // blocks reading (article rendering is independent of Dexie — D2-13).
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { LibraryView } from "./ingestion/library/LibraryView";
-import { useLibrarySnapshot } from "./ingestion/library/useLibrarySnapshot";
-import { deriveResumeTargets } from "./ingestion/library/resumeTarget";
-import { invalidateLibrarySnapshot } from "./ingestion/library/librarySnapshot";
-import { deriveTagStats } from "./ingestion/library/tagsStore";
-import { AddDialog } from "./ingestion/AddDialog";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArticleView } from "./routes/ArticleView";
-import { ReviewView } from "./routes/review/ReviewView";
+// Issue #101 — the shell's library consumption is deferred (the snapshot
+// graph AND its pure derivation folds load post-fonts/post-idle; see
+// useDeferredLibrarySnapshot). What the shell DOES import statically is
+// bytes: the deferred hook itself and the zero-dependency invalidation bus
+// for the add-followup broadcast.
+import { useDeferredLibrarySnapshot } from "./ingestion/library/useDeferredLibrarySnapshot";
+import { invalidateLibrarySnapshot } from "./ingestion/library/librarySnapshotBus";
+// Type-only (erased — no fetch): the tag-stats shape for the memo below.
+import type { TagStat } from "./ingestion/library/tagStats";
+
+const LibraryView = lazy(() =>
+  import("./ingestion/library/LibraryView").then((m) => ({ default: m.LibraryView })),
+);
+const ReviewView = lazy(() =>
+  import("./routes/review/ReviewView").then((m) => ({ default: m.ReviewView })),
+);
+const AddDialog = lazy(() =>
+  import("./ingestion/AddDialog").then((m) => ({ default: m.AddDialog })),
+);
 import { SkipLink } from "./a11y/SkipLink";
 import { Header } from "./reader/Header";
 import { SettingsPanel } from "./reader/SettingsPanel";
@@ -375,30 +387,41 @@ function AppInner() {
 
   // Issue #82 (decision #68) — the shell Read destination. AppInner
   // consumes the ONE LibrarySnapshot (the same read model every surface
-  // mounts — useLibrarySnapshot's load broadcast keeps all mounts in
-  // step) and derives the resume target through the ONE shared
+  // mounts) and derives the resume target through the ONE shared
   // derivation (deriveResumeTargets — the Continue-Reading rail's SAME
   // entries, first one wins: max savedAt, unfinished-filtered, book-aware
   // via the D12-07 resume chapter; no schema change, readingSessions
   // stays stats-only). Hidden ENTIRELY while the snapshot has not
   // settled (spare chrome, the rail's discipline) or the unfinished set
   // is empty — no disabled state, no library fallback.
-  const { status: libraryStatus, snapshot: librarySnapshot } =
-    useLibrarySnapshot();
+  //
+  // Issue #101 — the whole-library read is IDLE-DEFERRED here, through the
+  // ONE deferred twin of the eager hook (useDeferredLibrarySnapshot — the
+  // same loading/stale-while-revalidate/calm-error contract and the same
+  // mount-time invalidation subscription; only the first load's START
+  // moves: fonts settle, then the browser idles, then the snapshot module
+  // and its derivation folds import and read — the deferral owns the
+  // dynamic imports, so none of it rides the every-load chain). The
+  // derivations are the pure folds over the settled snapshot, exactly the
+  // eager path's useMemo shape.
+  const { status: deferredStatus, snapshot: deferredSnapshot, derive } =
+    useDeferredLibrarySnapshot();
   const readTarget = useMemo(() => {
-    if (libraryStatus !== "ready") return null;
-    return deriveResumeTargets(librarySnapshot)[0] ?? null;
-  }, [libraryStatus, librarySnapshot]);
-
+    if (deferredStatus !== "ready" || deferredSnapshot === null || derive === null) {
+      return null;
+    }
+    return derive.deriveResumeTargets(deferredSnapshot)[0] ?? null;
+  }, [deferredStatus, deferredSnapshot, derive]);
   // Issue #84 — the picker-suggestion stats for the ONE AddDialog (the
-  // deriveTagStats fold — decision #71), derived from the same app-level
-  // snapshot the Read destination reads. LibraryView derives its own copy
-  // for the row popover/filter from the same broadcast-backed hook, so
-  // suggestion order cannot drift between surfaces.
-  const addTagStats = useMemo(
-    () => deriveTagStats(librarySnapshot.articles, librarySnapshot.books),
-    [librarySnapshot],
-  );
+  // deriveTagStats fold — decision #71), derived from the same snapshot the
+  // Read destination reads, so suggestion order cannot drift between
+  // surfaces.
+  const addTagStats = useMemo<TagStat[]>(() => {
+    if (deferredStatus !== "ready" || deferredSnapshot === null || derive === null) {
+      return [];
+    }
+    return derive.deriveTagStats(deferredSnapshot.articles, deferredSnapshot.books);
+  }, [deferredStatus, deferredSnapshot, derive]);
 
   return (
     <>
@@ -429,13 +452,23 @@ function AppInner() {
           success invalidates the library snapshot (the LibraryView wiring
           precedent) so every mounted surface re-derives; article success
           closes + navigates internally. The open prop mirrors addOpen;
-          every close path routes through onCancel. */}
-      <AddDialog
-        open={addOpen}
-        onCancel={() => setAddOpen(false)}
-        onBookAdded={() => invalidateLibrarySnapshot()}
-        tagStats={addTagStats}
-      />
+          every close path routes through onCancel. Issue #101 — the chunk
+          loads on FIRST open (issue #95's mount is the cold-path cost);
+          while closed the dialog renders nothing. */}
+      {addOpen ? (
+        <Suspense fallback={null}>
+          <AddDialog
+            open={addOpen}
+            onCancel={() => setAddOpen(false)}
+            // Issue #84 — a book add invalidates the ONE library read model
+            // so every mounted surface re-derives. Issue #101 — the call
+            // imports from the zero-dependency bus module: the broadcast
+            // without the snapshot graph.
+            onBookAdded={() => invalidateLibrarySnapshot()}
+            tagStats={addTagStats}
+          />
+        </Suspense>
+      ) : null}
       <StorageRecoverySurfaces />
       {/* Plan 10-02 — three-view swap: list → review → article (branch
           order per the plan). ReviewView takes no props (it re-derives its
@@ -444,34 +477,36 @@ function AppInner() {
           gate + D5-11 jump tail + history.replaceState suffix strip).
           The [view] reset effect above fires on review↔article swaps —
           desirable (drawer/count reset). */}
-      {view.name === "list" ? (
-        <LibraryView
-          view={view.view}
-          onSwitchView={switchLibraryView}
-          warmMount={hasAppHistory}
-          addOpen={addOpen}
-          onOpenAdd={openAdd}
-        />
-      ) : view.name === "review" ? (
-        <ReviewView
-          hasAppHistory={hasAppHistory}
-          scopedArticleId={view.articleId}
-        />
-      ) : (
-        <ArticleView
-          articleId={view.id}
-          jumpHighlightId={view.jumpHighlightId}
-          modeToggleHandlerRef={modeToggleHandlerRef}
-          drawerOpen={drawerOpen}
-          onCloseDrawer={() => setDrawerOpen(false)}
-          tagsOpen={tagsOpen}
-          onCloseTags={() => setTagsOpen(false)}
-          tocOpen={tocOpen}
-          onCloseToc={() => setTocOpen(false)}
-          onAnnotationCountChange={setAnnotationCount}
-          hasAppHistory={hasAppHistory}
-        />
-      )}
+      <Suspense fallback={null}>
+        {view.name === "list" ? (
+          <LibraryView
+            view={view.view}
+            onSwitchView={switchLibraryView}
+            warmMount={hasAppHistory}
+            addOpen={addOpen}
+            onOpenAdd={openAdd}
+          />
+        ) : view.name === "review" ? (
+          <ReviewView
+            hasAppHistory={hasAppHistory}
+            scopedArticleId={view.articleId}
+          />
+        ) : (
+          <ArticleView
+            articleId={view.id}
+            jumpHighlightId={view.jumpHighlightId}
+            modeToggleHandlerRef={modeToggleHandlerRef}
+            drawerOpen={drawerOpen}
+            onCloseDrawer={() => setDrawerOpen(false)}
+            tagsOpen={tagsOpen}
+            onCloseTags={() => setTagsOpen(false)}
+            tocOpen={tocOpen}
+            onCloseToc={() => setTocOpen(false)}
+            onAnnotationCountChange={setAnnotationCount}
+            hasAppHistory={hasAppHistory}
+          />
+        )}
+      </Suspense>
     </>
   );
 }

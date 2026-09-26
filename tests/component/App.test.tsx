@@ -16,6 +16,42 @@ vi.mock("../../src/content/repository", () => ({
   openArticle: vi.fn(),
 }));
 
+// Issue #101 — the library snapshot composes EVERY store seam in one
+// Promise.all; in jsdom (no IndexedDB in this file) the un-mocked seams
+// reject on open, so once the lazy LibraryView chunk lands the snapshot can
+// settle ERROR before the pending-load window can be observed. Stub the
+// persistence seams resolved-empty (_librarySeams, the shared helper — the
+// rest of each module stays real via importOriginal) so the PENDING
+// listArticles mock alone owns the load state — the loading-chrome contract
+// this file pins.
+vi.mock("../../src/persistence/locationStore", async (importOriginal) => {
+  const { seamsResolvedEmpty } = await import("./_librarySeams");
+  return seamsResolvedEmpty(importOriginal, "loadAllLocations", []);
+});
+vi.mock("../../src/persistence/highlightsStore", async (importOriginal) => {
+  const { seamsResolvedEmpty } = await import("./_librarySeams");
+  return seamsResolvedEmpty(importOriginal, "loadAllHighlights", []);
+});
+vi.mock("../../src/persistence/notesStore", async (importOriginal) => {
+  const { seamsResolvedEmpty } = await import("./_librarySeams");
+  return seamsResolvedEmpty(importOriginal, "loadAllNotes", []);
+});
+vi.mock("../../src/persistence/readingSessionsStore", async (importOriginal) => {
+  const { seamsResolvedEmpty } = await import("./_librarySeams");
+  return seamsResolvedEmpty(importOriginal, "loadAllReadingSessions", []);
+});
+vi.mock("../../src/persistence/booksStore", async (importOriginal) => {
+  const { seamsResolvedEmpty } = await import("./_librarySeams");
+  return seamsResolvedEmpty(importOriginal, "listBooks", {
+    ok: true,
+    books: [],
+  });
+});
+vi.mock("../../src/ingestion/library/tagsStore", async (importOriginal) => {
+  const { seamsResolvedEmpty } = await import("./_librarySeams");
+  return seamsResolvedEmpty(importOriginal, "loadAllTags", []);
+});
+
 import { App, parseHash } from "../../src/App";
 import { listArticles, openArticle } from "../../src/content/repository";
 import type { CanonicalArticle } from "../../src/content/types";
@@ -234,7 +270,12 @@ describe("App — route hashes still swap the view", () => {
     // Start on the list (empty hash → list on initial mount).
     window.location.hash = "";
     render(<App />);
-    expect(screen.getByRole("heading", { level: 1, name: "Saved articles" })).not.toBeNull();
+    // Issue #101 — LibraryView is a lazy route chunk now, so the h1 lands
+    // one microtask later (the async chunk import); findByRole observes the
+    // SAME contract (library chrome present during the pending load).
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Saved articles" }),
+    ).not.toBeNull();
     // The feedback aside mounts only after the library load settles, so the
     // link is asserted asynchronously — findByRole retries until the mock
     // resolves. Its pending-load ABSENCE is pinned by the never-settling
@@ -265,15 +306,18 @@ describe("App — route hashes still swap the view", () => {
 // settled-state render is already covered by the converted findByRole
 // assertion in the route-swap test above.
 describe("App — feedback aside never flashes during the library load", () => {
-  it("the feedback link is absent from the DOM while the load is pending", () => {
+  it("the feedback link is absent from the DOM while the load is pending", async () => {
     listArticlesMock.mockReturnValue(new Promise(() => {}));
 
     window.location.hash = "";
     render(<App />);
 
-    // The library chrome renders during load (h1 present synchronously) —
-    // this observes the loading state, not an empty mount.
-    expect(screen.getByRole("heading", { level: 1, name: "Saved articles" })).not.toBeNull();
+    // Issue #101 — LibraryView is a lazy route chunk now; await the chrome
+    // (the chunk import resolves while the listArticles promise below never
+    // settles) so the assertions still observe the PENDING-load state.
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Saved articles" }),
+    ).not.toBeNull();
     expect(
       screen.queryByRole("link", {
         name: "Share feedback on GitHub (opens in a new tab)",

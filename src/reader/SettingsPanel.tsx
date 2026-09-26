@@ -34,7 +34,7 @@
 // the highlights export is one loadLibrarySnapshot() call at action time —
 // always the truth at the moment of export), and a landed import calls the
 // ONE invalidateLibrarySnapshot() so mounted surfaces re-derive.
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import { useSettings } from "../settings/SettingsContext";
 import { formatRate, MEASURE_STEPS, RATE_STEPS, SIZE_STEPS } from "../settings/tokens";
@@ -69,16 +69,22 @@ import { StatusRegion } from "../ui/StatusRegion";
 // Issue #86 (decision #73) — the custom-theme slot: seedCustomTheme powers
 // the first-activation seeding in onTheme; the builder is the disclosure
 // section mounted directly below the Theme fieldset while custom is active.
-import { CustomThemeBuilder } from "./CustomThemeBuilder";
+// Issue #101 — the builder is a lazy chunk: it renders ONLY while the custom
+// theme is active, so its module stays off the every-load critical path.
 import { seedCustomTheme } from "../settings/customTheme";
+
+const CustomThemeBuilder = lazy(() =>
+  import("./CustomThemeBuilder").then((m) => ({ default: m.CustomThemeBuilder })),
+);
 // Issue #8 — the ONE library read model + its invalidation call replace the
 // panel's own export-time re-lists (the four-store Promise.all + fixture
 // merge) and close the import gap: after applyImport lands, the mounted
-// library surfaces re-derive through invalidation.
-import {
-  invalidateLibrarySnapshot,
-  loadLibrarySnapshot,
-} from "../ingestion/library/librarySnapshot";
+// library surfaces re-derive through invalidation. Issue #101 — the read is
+// an ACTION-TIME dynamic import (the snapshot graph — books/notes store
+// seams the reader never mounts — stays off the every-load import chain),
+// while the invalidation call imports statically from the zero-dependency
+// bus module (the broadcast without the graph).
+import { invalidateLibrarySnapshot } from "../ingestion/library/librarySnapshotBus";
 
 interface SettingsPanelProps {
   open: boolean;
@@ -314,7 +320,9 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
       // composite article list already carries the same first-seen-wins
       // precedence (ingested shadows same-id fixtures), and
       // highlights/notes/locations arrive settled together with it.
-      const snapshot = await loadLibrarySnapshot();
+      const snapshot = await import("../ingestion/library/librarySnapshot").then((m) =>
+        m.loadLibrarySnapshot(),
+      );
       const entries = collectHighlightEntries(
         snapshot.articles,
         snapshot.highlights,
@@ -646,7 +654,11 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
           {/* Issue #86 (decision #73) — the builder: ONLY while custom is
               selected, directly below the Theme fieldset (inside the shared
               sheet — no nested dialog). */}
-          {settings.theme === "custom" && <CustomThemeBuilder />}
+          {settings.theme === "custom" && (
+            <Suspense fallback={null}>
+              <CustomThemeBuilder />
+            </Suspense>
+          )}
 
           <fieldset className="settings-section">
             <legend>Motion</legend>
