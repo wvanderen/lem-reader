@@ -75,9 +75,11 @@ const CustomThemeBuilder = lazy(() =>
   import("./CustomThemeBuilder").then((m) => ({ default: m.CustomThemeBuilder })),
 );
 // Issue #101 — the preview dialog is a lazy chunk too (its runtime deps are
-// react-only — the conflicts types are erased). It renders only while an
-// import preview is pending; handleImportChange prefetches the module in
-// its validation Promise.all so the dialog never pops in late.
+// react-only — the conflicts types are erased). The chunk fetches only when
+// the first validated preview arms importDialogArmed; handleImportChange
+// prefetches the module in its validation Promise.all so the dialog never
+// pops in late. After that first arm the element stays mounted (closed) so
+// Cancel/Proceed unmounts can't skip the close-event focus restore (A11Y-02).
 const LazyImportPreviewDialog = lazy(() =>
   import("./ImportPreviewDialog").then((m) => ({ default: m.ImportPreviewDialog })),
 );
@@ -273,6 +275,16 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   // while importPreview !== null.
   const [importBundle, setImportBundle] = useState<ExportBundle | null>(null);
   const [importPreview, setImportPreview] = useState<ImportPreviewData | null>(null);
+  // Issue #101 — one-way latch: flips true on the first validated preview and
+  // never back. It decides MOUNT, while importPreview decides OPEN. The split
+  // is the A11Y-02 focus guarantee: removing a showModal()-OPEN <dialog> from
+  // the DOM fires no `close` event, so unmounting on Cancel/Proceed would skip
+  // the dialog's triggerRef focus restore and drop focus to <body>. After the
+  // first arm, the element stays mounted (closed) and every close flows
+  // through open:false → dlg.close() → `close` → focus restored. The MODULE
+  // still stays off the cold path: the lazy chunk fetches only when this latch
+  // first flips, never at panel mount.
+  const [importDialogArmed, setImportDialogArmed] = useState(false);
   // Phase 20 (20-05): the per-asset rows validateBundle verified against
   // their zip entries — carried from the file-pick stage to the Proceed
   // handler so resolveImportPlan can run the no-broken-refs gate + attach
@@ -333,11 +345,13 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
       // highlights/notes/locations arrive settled together with it.
       // Issue #101 — the markdown fold + the snapshot read load together,
       // at action time.
-      const [{ collectHighlightEntries, orderSectionsByRecency, renderLibraryHighlights }, snapshot] =
-        await Promise.all([
-          import("../portability/markdown"),
-          import("../ingestion/library/librarySnapshot").then((m) => m.loadLibrarySnapshot()),
-        ]);
+      const [
+        { collectHighlightEntries, orderSectionsByRecency, renderLibraryHighlights },
+        snapshot,
+      ] = await Promise.all([
+        import("../portability/markdown"),
+        import("../ingestion/library/librarySnapshot").then((m) => m.loadLibrarySnapshot()),
+      ]);
       const entries = collectHighlightEntries(
         snapshot.articles,
         snapshot.highlights,
@@ -409,6 +423,10 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
       const preview = await detectImportPreview(result.bundle, result.assets);
       setImportBundle(result.bundle);
       setImportPreview(preview);
+      // Issue #101 — arm the lazy dialog's mount alongside the preview (the
+      // awaited Promise.all above already landed the chunk, so the Suspense
+      // fallback never shows).
+      setImportDialogArmed(true);
       setImportAssets(result.assets);
       setDataMessage(null);
     } catch {
@@ -828,9 +846,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
             {/* The D2-13 pattern: polite/atomic status region carrying every
               progress, result, and refusal line in calm DOC-06 voice — the
               ONE StatusRegion primitive (issue #98). */}
-            <StatusRegion>
-              {dataMessage !== null && <p>{dataMessage}</p>}
-            </StatusRegion>
+            <StatusRegion>{dataMessage !== null && <p>{dataMessage}</p>}</StatusRegion>
           </fieldset>
 
           <div className="settings-footer">
@@ -850,15 +866,21 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
         settings dialog so the native top layer stacks cleanly and the DOM
         reading order stays un-nested. Issue #101 — the chunk prefetches
         during validation (handleImportChange's Promise.all), so the Suspense
-        fallback never shows in practice; rendering nothing while closed
-        keeps the dialog module off the panel-mount graph. The prefetch is
-        also the honesty guard: EVERY setImportPreview call site sits
-        downstream of that awaited Promise.all, so a chunk fetch failure
-        lands in the handler's catch ("Import didn't complete. Nothing was
-        changed.") BEFORE any preview state exists — a render-time lazy
-        rejection is unreachable, and no preview can ever open silently
+        fallback never shows in practice; the module stays off the panel-mount
+        graph until the FIRST validated preview arms importDialogArmed. From
+        then on the dialog element stays mounted (closed) for the panel's
+        lifetime — mount decides nothing visible, so this is NOT the old
+        always-loaded graph; it is the A11Y-02 focus guarantee: an unmount
+        while showModal()-open fires no `close` event and would strand focus
+        on <body> (the PR-104 review finding). Every close now routes through
+        the open:false → dlg.close() → `close` → triggerRef focus-restore
+        path. The prefetch is also the honesty guard: EVERY setImportPreview
+        call site sits downstream of that awaited Promise.all, so a chunk
+        fetch failure lands in the handler's catch ("Import didn't complete.
+        Nothing was changed.") BEFORE any preview state exists — a render-time
+        lazy rejection is unreachable, and no preview can ever open silently
         half-loaded. */}
-      {importPreview !== null ? (
+      {importDialogArmed ? (
         <Suspense fallback={null}>
           <LazyImportPreviewDialog
             open={importPreview !== null}
