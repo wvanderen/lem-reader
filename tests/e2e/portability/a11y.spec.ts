@@ -12,7 +12,14 @@
 import { test, expect } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { DEFAULT_SETTINGS } from "../../../src/settings/defaults";
-import { buildBundleZip, makeArticle, openSettings, prepareFreshPage } from "./_portability";
+import {
+  buildBundleZip,
+  bundleInput,
+  makeArticle,
+  openSettings,
+  prepareFreshPage,
+  settingsStatus,
+} from "./_portability";
 
 const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] as const;
 
@@ -157,5 +164,59 @@ test.describe("portability surfaces — axe + keyboard", () => {
       (results as AxeResultLike).violations,
       JSON.stringify((results as AxeResultLike).violations, null, 2),
     ).toEqual([]);
+  });
+
+  test("import preview dialog: Cancel import + Proceed restore focus (controlled closes)", async ({
+    page,
+  }) => {
+    // PR-104 review finding: Issue #101's conditional mount unmounted the
+    // dialog while showModal()-open on the Cancel/Proceed paths — a REMOVED
+    // open <dialog> fires no `close` event, so the Pitfall 1 triggerRef focus
+    // restore never ran and focus dropped to <body>. The fix keeps the
+    // element mounted after the first arm; this spec pins BOTH controlled
+    // close paths (the test above exercises Esc only — exactly the hole the
+    // review called out).
+    const focusInsidePanel = () =>
+      page.evaluate(
+        () =>
+          document.activeElement !== null &&
+          document.activeElement.closest("dialog.settings-panel") !== null,
+      );
+
+    await prepareFreshPage(page);
+    const panel = await openSettings(page);
+    const preview = page.locator("dialog.import-preview");
+
+    // (a) Cancel import — a controlled close via the dialog's own button:
+    // focus returns into the settings panel, never body (Pitfall 1).
+    await bundleInput(page).setInputFiles({
+      name: "small-bundle.zip",
+      mimeType: "application/zip",
+      buffer: SMALL_BUNDLE,
+    });
+    await expect(preview).toBeVisible({ timeout: 15_000 });
+    await preview.getByRole("button", { name: "Cancel import" }).click();
+    await expect(preview).not.toBeVisible();
+    await expect(panel).toBeVisible();
+    expect(
+      await focusInsidePanel(),
+      "focus returns into the settings panel after Cancel import",
+    ).toBe(true);
+
+    // (b) Proceed — applyImport runs, the dialog closes in the handler's
+    // finally, and focus is restored through the same close-event path.
+    await bundleInput(page).setInputFiles({
+      name: "small-bundle.zip",
+      mimeType: "application/zip",
+      buffer: SMALL_BUNDLE,
+    });
+    await expect(preview).toBeVisible({ timeout: 15_000 });
+    await preview.getByRole("button", { name: "Import", exact: true }).click();
+    await expect(preview).not.toBeVisible({ timeout: 15_000 });
+    await expect(panel).toBeVisible();
+    expect(await focusInsidePanel(), "focus returns into the settings panel after Proceed").toBe(
+      true,
+    );
+    await expect(settingsStatus(page)).toContainText("Imported");
   });
 });

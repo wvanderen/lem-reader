@@ -44,22 +44,20 @@ import type { ReaderSettings } from "../content/schema";
 // the other Web Speech seams in src/readaloud/webSpeech.ts.
 import { filterVoiceChoices, probeVoices, speechSynthesisAvailable } from "../readaloud/webSpeech";
 import type { VoiceChoice } from "../readaloud/webSpeech";
-// Issue #8 — the CanonicalArticle type import rode the export-highlights
-// fixture-merge fold; the snapshot's composite list replaced it.
-import { ImportPreviewDialog } from "./ImportPreviewDialog";
-import { applyImport, buildBundle, validateBundle } from "../portability/ExportImportService";
+// Issue #101 — the PORTABILITY STACK is action-time dynamic imports: the
+// bundle/zip machinery (ExportImportService → fflate + the manifest +
+// zipSlip gates), the conflict planner, the markdown renderer, and the
+// preview dialog are needed only when the reader actually presses an
+// export/import action — never at panel open (the perf harness's warm
+// trigger drives this panel's size slider, so the panel itself must stay
+// instantly openable on every network). Type imports stay static (erased
+// at runtime); the actions import inside their handlers, riding the
+// cluster's existing busy states while the chunk arrives.
 import type { ImportRefusal } from "../portability/ExportImportService";
-import { detectImportPreview, resolveImportPlan } from "../portability/conflicts";
 import type { ImportPreviewData, Overrides, ValidatedImportAsset } from "../portability/conflicts";
-import { BUNDLE_FILENAME } from "../portability/bundle";
 import type { ExportBundle } from "../portability/bundle";
-import { downloadBlob } from "../portability/download";
-import {
-  collectHighlightEntries,
-  orderSectionsByRecency,
-  renderLibraryHighlights,
-} from "../portability/markdown";
 import type { HighlightEntry, HighlightSection } from "../portability/markdown";
+import { downloadBlob } from "../portability/download";
 // Issue #98 (decision #96) — the ONE polite status-region primitive (the
 // "Your data" cluster announces through it) + the shared spinner arc for
 // the unified in-flight register.
@@ -75,6 +73,15 @@ import { seedCustomTheme } from "../settings/customTheme";
 
 const CustomThemeBuilder = lazy(() =>
   import("./CustomThemeBuilder").then((m) => ({ default: m.CustomThemeBuilder })),
+);
+// Issue #101 — the preview dialog is a lazy chunk too (its runtime deps are
+// react-only — the conflicts types are erased). The chunk fetches only when
+// the first validated preview arms importDialogArmed; handleImportChange
+// prefetches the module in its validation Promise.all so the dialog never
+// pops in late. After that first arm the element stays mounted (closed) so
+// Cancel/Proceed unmounts can't skip the close-event focus restore (A11Y-02).
+const LazyImportPreviewDialog = lazy(() =>
+  import("./ImportPreviewDialog").then((m) => ({ default: m.ImportPreviewDialog })),
 );
 // Issue #8 — the ONE library read model + its invalidation call replace the
 // panel's own export-time re-lists (the four-store Promise.all + fixture
@@ -268,6 +275,16 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   // while importPreview !== null.
   const [importBundle, setImportBundle] = useState<ExportBundle | null>(null);
   const [importPreview, setImportPreview] = useState<ImportPreviewData | null>(null);
+  // Issue #101 — one-way latch: flips true on the first validated preview and
+  // never back. It decides MOUNT, while importPreview decides OPEN. The split
+  // is the A11Y-02 focus guarantee: removing a showModal()-OPEN <dialog> from
+  // the DOM fires no `close` event, so unmounting on Cancel/Proceed would skip
+  // the dialog's triggerRef focus restore and drop focus to <body>. After the
+  // first arm, the element stays mounted (closed) and every close flows
+  // through open:false → dlg.close() → `close` → focus restored. The MODULE
+  // still stays off the cold path: the lazy chunk fetches only when this latch
+  // first flips, never at panel mount.
+  const [importDialogArmed, setImportDialogArmed] = useState(false);
   // Phase 20 (20-05): the per-asset rows validateBundle verified against
   // their zip entries — carried from the file-pick stage to the Proceed
   // handler so resolveImportPlan can run the no-broken-refs gate + attach
@@ -294,6 +311,12 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     setDataBusy("export-bundle");
     setDataMessage("Building your bundle…");
     try {
+      // Issue #101 — the portability chunk loads HERE (action time), not at
+      // panel mount; the cluster's busy state covers the fetch.
+      const [{ buildBundle }, { BUNDLE_FILENAME }] = await Promise.all([
+        import("../portability/ExportImportService"),
+        import("../portability/bundle"),
+      ]);
       // Issue #8 — the summary count is the EXACT article set the bundle
       // serialized (the build's own Dexie-only read; fixtures never ride),
       // so the status line can never disagree with the exported file.
@@ -320,9 +343,15 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
       // composite article list already carries the same first-seen-wins
       // precedence (ingested shadows same-id fixtures), and
       // highlights/notes/locations arrive settled together with it.
-      const snapshot = await import("../ingestion/library/librarySnapshot").then((m) =>
-        m.loadLibrarySnapshot(),
-      );
+      // Issue #101 — the markdown fold + the snapshot read load together,
+      // at action time.
+      const [
+        { collectHighlightEntries, orderSectionsByRecency, renderLibraryHighlights },
+        snapshot,
+      ] = await Promise.all([
+        import("../portability/markdown"),
+        import("../ingestion/library/librarySnapshot").then((m) => m.loadLibrarySnapshot()),
+      ]);
       const entries = collectHighlightEntries(
         snapshot.articles,
         snapshot.highlights,
@@ -375,6 +404,14 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     setDataBusy("import");
     setDataMessage("Reading bundle…");
     try {
+      // Issue #101 — the portability chunk (validate + plan) AND the preview
+      // dialog module load HERE, inside the cluster's busy state — so the
+      // dialog never pops in late when the preview mounts it.
+      const [{ validateBundle }, { detectImportPreview }] = await Promise.all([
+        import("../portability/ExportImportService"),
+        import("../portability/conflicts"),
+        import("./ImportPreviewDialog"),
+      ]);
       const result = await validateBundle(file);
       if (!result.ok) {
         setDataMessage(refusalCopy(result.refusal));
@@ -386,6 +423,10 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
       const preview = await detectImportPreview(result.bundle, result.assets);
       setImportBundle(result.bundle);
       setImportPreview(preview);
+      // Issue #101 — arm the lazy dialog's mount alongside the preview (the
+      // awaited Promise.all above already landed the chunk, so the Suspense
+      // fallback never shows).
+      setImportDialogArmed(true);
       setImportAssets(result.assets);
       setDataMessage(null);
     } catch {
@@ -415,6 +456,13 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     setDataBusy("import");
     setDataMessage("Importing…");
     try {
+      // Issue #101 — the plan/write machinery loads at action time (the
+      // file-pick stage above already landed the chunk in practice; this
+      // own-import keeps the Proceed handler correct standalone).
+      const [{ resolveImportPlan }, { applyImport }] = await Promise.all([
+        import("../portability/conflicts"),
+        import("../portability/ExportImportService"),
+      ]);
       const plan = await resolveImportPlan(
         importBundle,
         importPreview,
@@ -798,9 +846,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
             {/* The D2-13 pattern: polite/atomic status region carrying every
               progress, result, and refusal line in calm DOC-06 voice — the
               ONE StatusRegion primitive (issue #98). */}
-            <StatusRegion>
-              {dataMessage !== null && <p>{dataMessage}</p>}
-            </StatusRegion>
+            <StatusRegion>{dataMessage !== null && <p>{dataMessage}</p>}</StatusRegion>
           </fieldset>
 
           <div className="settings-footer">
@@ -818,13 +864,32 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
         validation success (importPreview !== null); Proceed is the ONLY path
         to applyImport (see the Pitfall 8 handler above). Mounted OUTSIDE the
         settings dialog so the native top layer stacks cleanly and the DOM
-        reading order stays un-nested. */}
-      <ImportPreviewDialog
-        open={importPreview !== null}
-        preview={importPreview}
-        onProceed={handleImportProceed}
-        onCancel={handleImportCancel}
-      />
+        reading order stays un-nested. Issue #101 — the chunk prefetches
+        during validation (handleImportChange's Promise.all), so the Suspense
+        fallback never shows in practice; the module stays off the panel-mount
+        graph until the FIRST validated preview arms importDialogArmed. From
+        then on the dialog element stays mounted (closed) for the panel's
+        lifetime — mount decides nothing visible, so this is NOT the old
+        always-loaded graph; it is the A11Y-02 focus guarantee: an unmount
+        while showModal()-open fires no `close` event and would strand focus
+        on <body> (the PR-104 review finding). Every close now routes through
+        the open:false → dlg.close() → `close` → triggerRef focus-restore
+        path. The prefetch is also the honesty guard: EVERY setImportPreview
+        call site sits downstream of that awaited Promise.all, so a chunk
+        fetch failure lands in the handler's catch ("Import didn't complete.
+        Nothing was changed.") BEFORE any preview state exists — a render-time
+        lazy rejection is unreachable, and no preview can ever open silently
+        half-loaded. */}
+      {importDialogArmed ? (
+        <Suspense fallback={null}>
+          <LazyImportPreviewDialog
+            open={importPreview !== null}
+            preview={importPreview}
+            onProceed={handleImportProceed}
+            onCancel={handleImportCancel}
+          />
+        </Suspense>
+      ) : null}
     </>
   );
 }
