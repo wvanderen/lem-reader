@@ -534,3 +534,196 @@ test.describe("Read nav (#82 — the shell Read destination over the shared resu
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   });
 });
+
+// ── Issue #102 — Read-nav staleness: in-reader progress writes must roll
+// the shell live. The reader's landed location writes fire the ONE
+// invalidateLibrarySnapshot() broadcast (useScrollSave's flush — the
+// singular saveLocation call-site family), so AppInner's deferred snapshot
+// re-derives and the header Read destination appears / rolls / hides
+// WITHOUT a page reload. These cells drive progress through the REAL app
+// save path — open → read (real scroll) → return; finish → roll → hide —
+// the seed-before-load shortcuts in the describe above don't count for
+// this flow (that gap is exactly why the suite missed the bug). A window
+// marker planted after the last reload proves the whole flow ran in ONE
+// document lifetime.
+test.describe("Read nav live roll (#102 — in-reader writes invalidate the shell snapshot)", () => {
+  test.beforeEach(async ({ page }) => {
+    await wipeDatabase(page);
+  });
+
+  /** Plant the no-reload marker AFTER the last real reload of a cell. Any
+   * document reload wipes it — the live-roll proof. */
+  async function plantNoReloadMarker(page: Page): Promise<void> {
+    await page.evaluate(() => {
+      (window as unknown as Record<string, unknown>).__readNavNoReload = "live";
+    });
+  }
+
+  /** The marker must still be set — the flow never reloaded the document. */
+  async function expectNoReload(page: Page, where: string): Promise<void> {
+    const marker = await page.evaluate(
+      () => (window as unknown as Record<string, unknown>).__readNavNoReload,
+    );
+    expect(marker, `${where}: the document must not have reloaded`).toBe("live");
+  }
+
+  /** The view-switcher link with its ready-gated count in the name. */
+  function switcherLink(page: Page, name: string) {
+    return page
+      .getByRole("navigation", { name: "Library views" })
+      .getByRole("link", { name });
+  }
+
+  /** The rail card link for an article id (the Continue-Reading strip). */
+  function railCardFor(page: Page, articleId: string) {
+    return page.locator(
+      `.continue-reading .library-card-link[href="#/article/${articleId}"]`,
+    );
+  }
+
+  test("in-reader progress makes Read appear live; back on Library it is there with no reload", async ({
+    page,
+  }) => {
+    test.setTimeout(60_000);
+    // Boot once AFTER the wipe (real reload — Dexie recreates the schema),
+    // seed scrolling mode + the article row — NO location seed: the
+    // progress must come from the REAL in-reader save path.
+    await page.goto(`${BASE}/#/`);
+    await page.reload();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Saved articles" }),
+    ).toBeVisible();
+    await seedScrollingMode(page);
+    await seedArticleRows(page, [ARTICLE_A]);
+    await page.goto(`${BASE}/#/`);
+    await page.reload();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Saved articles" }),
+    ).toBeVisible();
+
+    // Baseline (the issue repro, step 3's nav shape): nothing opened →
+    // the shell nav is Library/Highlights only.
+    await expect(readLink(page)).toHaveCount(0);
+    // Marker goes in AFTER the last reload — everything below must stay
+    // in this document.
+    await plantNoReloadMarker(page);
+
+    // Open through the REAL app path (the row's launch link), then read:
+    // real scrolls through the reader's own scroll listener. The second
+    // scroll (the cell-2 readToBottom discipline) defeats the mount race
+    // where a lone scrollTo fires before the hook's passive effect has
+    // registered — a real reader's continuous scrolling always lands
+    // post-registration, and latest-wins coalesces the pair into ONE
+    // debounced write.
+    await libraryRowFor(page, A_ID)
+      .locator(`a[href="#/article/${A_ID}"]`)
+      .click();
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await page.evaluate(() => window.scrollTo(0, 600));
+    await page.waitForTimeout(250);
+    await page.evaluate(() => window.scrollTo(0, 600));
+
+    // The debounced location write lands (~1200ms), fires the ONE
+    // invalidation, the shell re-derives — the Read destination appears
+    // LIVE on the Reader, no reload.
+    await expect(readLink(page)).toBeVisible({ timeout: 15_000 });
+    await expect(readLink(page)).toHaveAttribute("href", `#/article/${A_ID}`);
+
+    // Return to the Library via the hash nav (the repro's flow — no
+    // reload, no seeded shortcut).
+    await primaryNav(page).getByRole("link", { name: "Library" }).click();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Saved articles" }),
+    ).toBeVisible();
+    await expectNoReload(page, "back on Library");
+
+    // The shell Read destination persisted the journey: present, pointing
+    // at the article the READER advanced — and the library surfaces agree
+    // (switcher count + the rail entry, the repro's step-3 observations).
+    await expect(readLink(page)).toBeVisible();
+    await expect(readLink(page)).toHaveAttribute("href", `#/article/${A_ID}`);
+    await expect(switcherLink(page, "In progress (1)")).toBeVisible();
+    await expect(railCardFor(page, A_ID)).toBeVisible();
+  });
+
+  test("finishing in-reader rolls Read to the next unfinished live, then hides on the last finish", async ({
+    page,
+  }) => {
+    test.setTimeout(90_000);
+    // Two in-progress seeds (the READNAV-05 shape): A most recent → the
+    // target; B older → the roll destination. Both rows seeded before the
+    // reload; every PROGRESS move below happens in-reader.
+    await page.goto(`${BASE}/#/`);
+    await page.reload();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Saved articles" }),
+    ).toBeVisible();
+    await seedScrollingMode(page);
+    await seedArticleRows(page, [ARTICLE_B, ARTICLE_A]);
+    await seedLocation(
+      page,
+      B_ID,
+      Math.floor(TOTAL_B * 0.2),
+      "2026-01-02T00:00:00.000Z",
+    );
+    await seedLocation(
+      page,
+      A_ID,
+      Math.floor(TOTAL_A * 0.3),
+      "2026-01-03T00:00:00.000Z",
+    );
+    await page.goto(`${BASE}/#/`);
+    await page.reload();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Saved articles" }),
+    ).toBeVisible();
+
+    await expect(readLink(page)).toHaveAttribute("href", `#/article/${A_ID}`);
+
+    // Open the target through the REAL link, let the 30% restore settle
+    // (the READNAV-03 discipline), then read to the absolute bottom — the
+    // reader's scroll-bottom end-pin save.
+    await readLink(page).click();
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await plantNoReloadMarker(page);
+    await page.waitForTimeout(1500);
+    const readToBottom = async () => {
+      await page.evaluate(() =>
+        window.scrollTo(0, document.documentElement.scrollHeight),
+      );
+      await page.waitForTimeout(250);
+      // Re-assert the bottom so the LAST scheduled save is the end-pin
+      // (latest-wins over any restore-straggler scroll events).
+      await page.evaluate(() =>
+        window.scrollTo(0, document.documentElement.scrollHeight),
+      );
+    };
+    await readToBottom();
+
+    // The end-pin write lands (~1200ms), the broadcast re-derives: A is
+    // finished, the SAME derivation rolls the pointer to B — live, on the
+    // Reader, no reload.
+    await expect(readLink(page)).toHaveAttribute("href", `#/article/${B_ID}`, {
+      timeout: 15_000,
+    });
+    await expectNoReload(page, "rolled to B");
+
+    // Finish B the same way — the last finish must HIDE the link live
+    // (the old behavior kept it until a reload).
+    await readLink(page).click();
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await page.waitForTimeout(1500);
+    await readToBottom();
+    await expect(readLink(page)).toHaveCount(0, { timeout: 15_000 });
+    await expectNoReload(page, "hidden after the last finish");
+
+    // Back on the Library the derivation agrees: nothing unfinished.
+    await primaryNav(page).getByRole("link", { name: "Library" }).click();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Saved articles" }),
+    ).toBeVisible();
+    await expect(readLink(page)).toHaveCount(0);
+    await expect(switcherLink(page, "Finished (2)")).toBeVisible();
+    await expectNoReload(page, "library agrees");
+  });
+});
