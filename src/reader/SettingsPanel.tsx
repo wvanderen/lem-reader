@@ -851,7 +851,13 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
         reading order stays un-nested. Issue #101 — the chunk prefetches
         during validation (handleImportChange's Promise.all), so the Suspense
         fallback never shows in practice; rendering nothing while closed
-        keeps the dialog module off the panel-mount graph. */}
+        keeps the dialog module off the panel-mount graph. The prefetch is
+        also the honesty guard: EVERY setImportPreview call site sits
+        downstream of that awaited Promise.all, so a chunk fetch failure
+        lands in the handler's catch ("Import didn't complete. Nothing was
+        changed.") BEFORE any preview state exists — a render-time lazy
+        rejection is unreachable, and no preview can ever open silently
+        half-loaded. */}
       {importPreview !== null ? (
         <Suspense fallback={null}>
           <LazyImportPreviewDialog
