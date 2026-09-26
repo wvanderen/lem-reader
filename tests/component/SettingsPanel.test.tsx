@@ -191,7 +191,7 @@ describe("SettingsPanel — custom theme builder (issue #86, decision #73)", () 
     return doc.querySelector("details.custom-theme-builder");
   }
 
-  it("activating Custom seeds from the then-active preset and mounts the builder", () => {
+  it("activating Custom seeds from the then-active preset and mounts the builder", async () => {
     render(<Harness open={true} onClose={() => undefined} />);
     act(() => {
       fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
@@ -204,31 +204,32 @@ describe("SettingsPanel — custom theme builder (issue #86, decision #73)", () 
     expect(inlineToken("--accent")).toBe("#6b4423");
     // Derived tokens resolve too (the 11-prop palette).
     expect(inlineToken("--highlight")).toMatch(/^#[0-9a-f]{6}$/);
-    expect(builderIn(document)).not.toBeNull();
+    // Issue #101 — the builder is a lazy chunk now; await its disclosure
+    // (the seeding + inline writes above stay synchronous assertions).
+    expect(await screen.findByText("Customize colors")).not.toBeNull();
     // The disclosure affordance + the five labeled rows.
-    expect(screen.getByText("Customize colors")).not.toBeNull();
     for (const label of ["Surface", "Raised surface", "Text", "Accent", "Hairline"]) {
-      expect(screen.getByText(label)).not.toBeNull();
+      expect(await screen.findByText(label)).not.toBeNull();
     }
   });
 
-  it("every color picker and hex field carries an accessible name", () => {
+  it("every color picker and hex field carries an accessible name", async () => {
     render(<Harness open={true} onClose={() => undefined} />);
     act(() => {
       fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
     });
     for (const label of ["Surface", "Raised surface", "Text", "Accent", "Hairline"]) {
-      expect(screen.getByLabelText(`${label} color`)).not.toBeNull();
-      expect(screen.getByLabelText(`${label} hex value`)).not.toBeNull();
+      expect(await screen.findByLabelText(`${label} color`)).not.toBeNull();
+      expect(await screen.findByLabelText(`${label} hex value`)).not.toBeNull();
     }
   });
 
-  it("a valid hex commit applies the token inline and snaps the field", () => {
+  it("a valid hex commit applies the token inline and snaps the field", async () => {
     render(<Harness open={true} onClose={() => undefined} />);
     act(() => {
       fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
     });
-    const hex = screen.getByLabelText("Text hex value") as HTMLInputElement;
+    const hex = (await screen.findByLabelText("Text hex value")) as HTMLInputElement;
     act(() => {
       fireEvent.change(hex, { target: { value: "#123456" } });
     });
@@ -236,12 +237,12 @@ describe("SettingsPanel — custom theme builder (issue #86, decision #73)", () 
     expect(hex.value).toBe("#123456");
   });
 
-  it("an invalid (incomplete) hex leaves the stored token unchanged and keeps the draft", () => {
+  it("an invalid (incomplete) hex leaves the stored token unchanged and keeps the draft", async () => {
     render(<Harness open={true} onClose={() => undefined} />);
     act(() => {
       fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
     });
-    const hex = screen.getByLabelText("Text hex value") as HTMLInputElement;
+    const hex = (await screen.findByLabelText("Text hex value")) as HTMLInputElement;
     act(() => {
       fireEvent.change(hex, { target: { value: "#12" } });
     });
@@ -249,15 +250,14 @@ describe("SettingsPanel — custom theme builder (issue #86, decision #73)", () 
     expect(hex.value).toBe("#12");
   });
 
-  it("switching to a preset and back RESUMES the stored custom theme", () => {
+  it("switching to a preset and back RESUMES the stored custom theme", async () => {
     render(<Harness open={true} onClose={() => undefined} />);
     act(() => {
       fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
     });
+    const hex = await screen.findByLabelText("Text hex value");
     act(() => {
-      fireEvent.change(screen.getByLabelText("Text hex value"), {
-        target: { value: "#123456" },
-      });
+      fireEvent.change(hex, { target: { value: "#123456" } });
     });
     // To a preset: data-theme flips, the inline palette is REMOVED (the CSS
     // block owns the preset again), the builder unmounts.
@@ -284,10 +284,9 @@ describe("SettingsPanel — custom theme builder (issue #86, decision #73)", () 
     // Break EXACTLY ONE policed pair: ink = the surface color (text on
     // surface 1:1). The accent pair still clears AA on the untouched
     // surface — Fix contrast must move the ink only.
+    const hex = await screen.findByLabelText("Text hex value");
     act(() => {
-      fireEvent.change(screen.getByLabelText("Text hex value"), {
-        target: { value: "#fbf8f3" },
-      });
+      fireEvent.change(hex, { target: { value: "#fbf8f3" } });
     });
     expect(await screen.findByText(/hard to read/)).not.toBeNull();
     act(() => {
@@ -310,10 +309,9 @@ describe("SettingsPanel — custom theme builder (issue #86, decision #73)", () 
     act(() => {
       fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
     });
+    const hex = await screen.findByLabelText("Text hex value");
     act(() => {
-      fireEvent.change(screen.getByLabelText("Text hex value"), {
-        target: { value: "#123456" },
-      });
+      fireEvent.change(hex, { target: { value: "#123456" } });
     });
     act(() => {
       fireEvent.click(screen.getByRole("button", { name: "Reset to base colors" }));
@@ -323,15 +321,14 @@ describe("SettingsPanel — custom theme builder (issue #86, decision #73)", () 
     expect(inlineToken("--surface")).toBe("#fbf8f3");
   });
 
-  it("the panel-wide Reset drops the custom theme; the next activation re-seeds fresh", () => {
+  it("the panel-wide Reset drops the custom theme; the next activation re-seeds fresh", async () => {
     render(<Harness open={true} onClose={() => undefined} />);
     act(() => {
       fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
     });
+    const hex = await screen.findByLabelText("Text hex value");
     act(() => {
-      fireEvent.change(screen.getByLabelText("Text hex value"), {
-        target: { value: "#123456" },
-      });
+      fireEvent.change(hex, { target: { value: "#123456" } });
     });
     act(() => {
       fireEvent.click(screen.getByRole("button", { name: "Reset to defaults" }));
