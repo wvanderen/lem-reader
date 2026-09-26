@@ -279,6 +279,15 @@ export function NotePopover(): React.ReactElement | null {
                     updateNote(openPopoverFor, e.currentTarget.value);
                   }
                 }}
+                onKeyDown={(e) => {
+                  // Cmd/Ctrl+Enter saves and closes (the Done path: flush
+                  // the debounced write first, then close — no edit lost).
+                  // Plain Enter/Shift+Enter keep native textarea behavior.
+                  if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                    e.preventDefault();
+                    handleDone();
+                  }
+                }}
                 rows={3}
                 disabled={isUnresolved}
               />
