@@ -279,6 +279,23 @@ export function NotePopover(): React.ReactElement | null {
                     updateNote(openPopoverFor, e.currentTarget.value);
                   }
                 }}
+                onKeyDown={(e) => {
+                  // Cmd/Ctrl+Enter saves and closes (the Done path: flush
+                  // the debounced write first, then close — no edit lost).
+                  // Plain Enter/Shift+Enter keep native textarea behavior.
+                  // The isComposing guard keeps the shortcut from firing when
+                  // Enter CONFIRMS an IME composition (the confirming keyDown
+                  // reports isComposing=true — save-and-close mid-composition
+                  // would discard the in-flight text).
+                  if (
+                    (e.metaKey || e.ctrlKey) &&
+                    e.key === "Enter" &&
+                    !e.nativeEvent.isComposing
+                  ) {
+                    e.preventDefault();
+                    handleDone();
+                  }
+                }}
                 rows={3}
                 disabled={isUnresolved}
               />

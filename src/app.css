@@ -1132,22 +1132,31 @@ dialog.add-dialog {
   gap: var(--space-lg);
   padding: var(--space-xl);
 }
+/* The source picker is a structural fieldset (the .add-tags-fieldset
+   discipline: margin/padding/border zeroed — a grid-on-fieldset rendering
+   glued the legend to the border edge); the segmented container moves to
+   the inner .add-source-segments wrapper so the legend renders as an
+   ordinary label above the box (the "Tags (optional)" precedent). */
 .add-source-picker {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-xs);
   min-width: 0;
   margin: 0;
-  padding: var(--space-xs);
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius-md);
-  background: var(--surface);
+  padding: 0;
+  border: 0;
 }
 .add-source-picker legend {
   padding: 0;
   margin-bottom: var(--space-sm);
   font: 14px/1.45 var(--font-ui);
   color: var(--ink-soft);
+}
+.add-source-segments {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-xs);
+  padding: var(--space-xs);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  background: var(--surface);
 }
 /* Issue #84 (decision #70) — the picker reads as a SEGMENTED control: one
    inset-surface container, three adjacent segments, the checked one raised
@@ -1188,9 +1197,6 @@ dialog.add-dialog {
   margin: 0;
   opacity: 0;
   cursor: pointer;
-}
-.add-source-content {
-  min-height: 224px;
 }
 .add-dialog-inner form {
   display: flex;
@@ -1257,9 +1263,6 @@ dialog.add-dialog {
    sibling among the anatomy's slots (the gap rhythm does the separating —
    no rule lines, no stacked second action row; the shared bottom Add
    button flips to "Add transcript"). */
-.add-transcript-form {
-  min-height: 224px;
-}
 .add-transcript-guidance {
   margin: 0;
   font: 14px/1.5 var(--font-ui);
@@ -1300,7 +1303,7 @@ dialog.add-dialog {
   .add-dialog-inner {
     padding: var(--space-lg) var(--space-md);
   }
-  .add-source-picker {
+  .add-source-segments {
     grid-template-columns: 1fr;
   }
   .add-dialog-actions > button {
@@ -4422,6 +4425,15 @@ main#main > .status:empty {
 .annotations-trigger[aria-expanded="true"],
 .add-trigger[aria-expanded="true"] {
   color: var(--accent);
+}
+/* Quiet-chrome header icons (user feedback 2026-09): inside the app header
+   the icon buttons drop the raised-square chrome and render the glyph
+   alone — the .mode-toggle discipline (transparent bg + border, --ink-soft
+   rest, --accent on hover/open). Scoped to .app-header so out-of-header
+   .btn-icon users (banners, drawers, library rows) keep the raised square. */
+.app-header .btn-icon {
+  background: transparent;
+  border-color: transparent;
 }
 .annotations-trigger {
   position: relative;

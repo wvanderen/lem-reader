@@ -13,15 +13,20 @@
 //   4. The Keep button carries [data-initial-focus] (non-destructive default
 //      — Pitfall 8).
 //   5. The debounced save calls updateNote on each textarea change.
+//   6. Cmd/Ctrl+Enter in the textarea flushes the debounced save + closes
+//      (the Done path — UX polish, PR 106); plain Enter/Shift+Enter keep
+//      native textarea behavior; Enter confirming an IME composition
+//      (isComposing) never triggers the shortcut.
 //
 // Real-browser layout (modal focus scope/trap, showModal/close lifecycle,
 // focus management) is Plan 05-05's Playwright suite + the popover focus-trap
 // spec. jsdom provides the DOM structure; showModal/close are polyfilled.
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
 import { useEffect } from "react";
 import { HighlightOverlayProvider, useHighlightOverlay } from "../../../src/reader/annotations/HighlightOverlay";
 import { NotePopover } from "../../../src/reader/annotations/NotePopover";
+import { saveNote } from "../../../src/persistence/notesStore";
 import type { CanonicalArticle } from "../../../src/content/types";
 import type { Block } from "../../../src/content/types";
 
@@ -293,5 +298,125 @@ describe("NotePopover — native <dialog> + two-step delete confirm (D5-10/D5-12
     // proven: updateNote was called (the value changed), which internally
     // schedules the debounced saveNote. The dual-event flush + Done-button
     // flush are verified by the provider contract.
+  });
+});
+
+describe("NotePopover — Cmd/Ctrl+Enter note save shortcut (PR 106)", () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("Cmd+Enter flushes the debounced save and closes (the Done path)", async () => {
+    render(
+      <HighlightOverlayProvider article={article}>
+        <PopoverOpener highlightId="hl-test-1" />
+        <NotePopover />
+      </HighlightOverlayProvider>,
+    );
+
+    const textarea = (await screen.findByPlaceholderText(
+      "Add a note (optional)",
+    )) as HTMLTextAreaElement;
+
+    // Edit the note — this schedules the debounced save (pending write).
+    await act(async () => {
+      fireEvent.change(textarea, { target: { value: "Saved via shortcut" } });
+    });
+
+    // Cmd+Enter routes through handleDone: flush the pending write BEFORE
+    // closing — no edit lost.
+    await act(async () => {
+      fireEvent.keyDown(textarea, { key: "Enter", metaKey: true });
+    });
+
+    // The flush persisted the updated note.
+    await waitFor(() => {
+      expect(saveNote).toHaveBeenCalled();
+    });
+    const saved = vi.mocked(saveNote).mock.calls[0]?.[0];
+    expect(saved?.text).toBe("Saved via shortcut");
+
+    // The popover closed (edit view unmounted).
+    expect(
+      screen.queryByPlaceholderText("Add a note (optional)"),
+    ).toBeNull();
+  });
+
+  it("Ctrl+Enter also saves and closes", async () => {
+    render(
+      <HighlightOverlayProvider article={article}>
+        <PopoverOpener highlightId="hl-test-1" />
+        <NotePopover />
+      </HighlightOverlayProvider>,
+    );
+
+    const textarea = await screen.findByPlaceholderText("Add a note (optional)");
+
+    await act(async () => {
+      fireEvent.keyDown(textarea, { key: "Enter", ctrlKey: true });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByPlaceholderText("Add a note (optional)")).toBeNull();
+    });
+  });
+
+  it("plain Enter and Shift+Enter keep native behavior (no flush, no close)", async () => {
+    render(
+      <HighlightOverlayProvider article={article}>
+        <PopoverOpener highlightId="hl-test-1" />
+        <NotePopover />
+      </HighlightOverlayProvider>,
+    );
+
+    const textarea = (await screen.findByPlaceholderText(
+      "Add a note (optional)",
+    )) as HTMLTextAreaElement;
+
+    // Edit first so a debounced save is pending — plain Enter must NOT flush
+    // it (the debounce owns the write until Done/Escape/shortcut).
+    await act(async () => {
+      fireEvent.change(textarea, { target: { value: "Pending edit" } });
+    });
+
+    await act(async () => {
+      fireEvent.keyDown(textarea, { key: "Enter" });
+    });
+    await act(async () => {
+      fireEvent.keyDown(textarea, { key: "Enter", shiftKey: true });
+    });
+
+    // Still in the edit view, save not flushed.
+    expect(
+      screen.getByPlaceholderText("Add a note (optional)"),
+    ).toBeTruthy();
+    expect(saveNote).not.toHaveBeenCalled();
+  });
+
+  it("Enter during IME composition (isComposing) does not trigger the shortcut", async () => {
+    render(
+      <HighlightOverlayProvider article={article}>
+        <PopoverOpener highlightId="hl-test-1" />
+        <NotePopover />
+      </HighlightOverlayProvider>,
+    );
+
+    const textarea = await screen.findByPlaceholderText("Add a note (optional)");
+
+    // The keyDown that CONFIRMS an IME composition reports isComposing=true —
+    // save-and-close there would discard the in-flight composition.
+    await act(async () => {
+      fireEvent.keyDown(textarea, {
+        key: "Enter",
+        metaKey: true,
+        isComposing: true,
+      });
+    });
+
+    // Still in the edit view.
+    expect(
+      screen.getByPlaceholderText("Add a note (optional)"),
+    ).toBeTruthy();
+    expect(saveNote).not.toHaveBeenCalled();
   });
 });

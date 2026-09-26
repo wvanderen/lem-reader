@@ -552,37 +552,43 @@ export function AddDialog({ open, onCancel, onBookAdded, tagStats }: AddDialogPr
           hidden={transcriptMode}
         >
           <legend>Add from</legend>
-          <label className="add-source-row">
-            <input
-              type="radio"
-              name="source"
-              value="url"
-              checked={source === "url"}
-              onChange={() => setSource("url")}
-              data-initial-focus
-            />
-            <span>Web address</span>
-          </label>
-          <label className="add-source-row">
-            <input
-              type="radio"
-              name="source"
-              value="paste"
-              checked={source === "paste"}
-              onChange={() => setSource("paste")}
-            />
-            <span>Paste text</span>
-          </label>
-          <label className="add-source-row">
-            <input
-              type="radio"
-              name="source"
-              value="file"
-              checked={source === "file"}
-              onChange={() => setSource("file")}
-            />
-            <span>Upload file</span>
-          </label>
+          {/* The segmented container is an inner wrapper, not the fieldset
+              itself: grid-on-fieldset rendering glued the legend to the
+              border edge (user-reported visual bug). A div is layout-neutral
+              for the native fieldset/legend/radio semantics above/below. */}
+          <div className="add-source-segments">
+            <label className="add-source-row">
+              <input
+                type="radio"
+                name="source"
+                value="url"
+                checked={source === "url"}
+                onChange={() => setSource("url")}
+                data-initial-focus
+              />
+              <span>Web address</span>
+            </label>
+            <label className="add-source-row">
+              <input
+                type="radio"
+                name="source"
+                value="paste"
+                checked={source === "paste"}
+                onChange={() => setSource("paste")}
+              />
+              <span>Paste text</span>
+            </label>
+            <label className="add-source-row">
+              <input
+                type="radio"
+                name="source"
+                value="file"
+                checked={source === "file"}
+                onChange={() => setSource("file")}
+              />
+              <span>Upload file</span>
+            </label>
+          </div>
         </fieldset>
 
         {/* D16-05/D16-07 — only the selected source's input group is
