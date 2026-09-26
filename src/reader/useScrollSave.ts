@@ -14,6 +14,11 @@
 //   - save failures are routed via the optional onStorageError callback so
 //     ArticleView can surface them through the STATE-05 path — reading is
 //     NEVER interrupted (T-02-10 mitigation)
+//   - Issue #102: every LANDED write follows up with the ONE
+//     invalidateLibrarySnapshot() broadcast (the librarySnapshotBus call),
+//     so the shell's Read destination re-derives live — in-reader progress
+//     and finishes roll the header link without a page reload. The write
+//     LANDS first (the .then side); a failed write broadcasts nothing.
 //
 // Offset computation: walks the rendered block elements in document order,
 // finds the topmost visible block (the last whose top edge has scrolled past
@@ -30,6 +35,11 @@ import { computeTopVisibleOffset } from "./restoreLocation";
 import { atScrollBottom, endPinOffset } from "./readingPosition";
 import { saveLocation } from "../persistence/locationStore";
 import { classifyStorageError } from "../persistence/errors";
+// Issue #102 — the write-followup broadcast. The bus module is the
+// zero-dependency split (librarySnapshotBus.ts) precisely so a reader-side
+// seam can fire the ONE invalidation without importing the snapshot graph
+// (the stores, the folds, the grapheme pass) onto the reader's import chain.
+import { invalidateLibrarySnapshot } from "../ingestion/library/librarySnapshotBus";
 
 /** Debounce window for location writes (02-RESEARCH Open Question #2). */
 const SAVE_DEBOUNCE_MS = 1200;
@@ -139,15 +149,47 @@ export function useScrollSave(
    * the visibilitychange-hidden / pagehide listeners). STATE-05: failures
    * route through onStorageError so the caller can surface them — never
    * throws to the reader (T-02-10 mitigation).
+   *
+   * Issue #102 — after the write LANDS, fire the ONE
+   * invalidateLibrarySnapshot() broadcast: the shell's Read destination
+   * (AppInner's deferred snapshot + deriveResumeTargets) must roll live on
+   * in-reader progress — appearing, rolling, or hiding without a page
+   * reload. This flush is the singular saveLocation call-site family (the
+   * debounce timer, the dual-event flush, and saveLocationNow all pass
+   * through here), so one broadcast per landed write covers every path the
+   * back-navigation actually uses. Success-only: a failed write changed no
+   * persisted data, so the snapshot stays truthful (STATE-05 routes the
+   * failure instead). The coalesce discipline holds — the debounce windows
+   * writes to one flush each, so consumers re-derive at most once per
+   * landed write. ACPT-04: the earliest possible write is SAVE_DEBOUNCE_MS
+   * after the article mount (the initial paginated commit schedules, the
+   * debounce lands it) — past the first-trusted-commit window the budget
+   * measures, and the gate was re-run green with this broadcast live.
+   * Stale-while-revalidate belongs to the consumer hook
+   * (useDeferredLibrarySnapshot never clears the settled snapshot), so the
+   * broadcast causes no flash/collapse.
    */
   function flush() {
     const loc = pendingRef.current;
     if (!loc) return;
     pendingRef.current = null;
-    saveLocation(loc).catch((e) => {
-      const reason = classifyStorageError(e);
-      optionsRef.current?.onStorageError?.(reason);
-    });
+    saveLocation(loc)
+      .then(() => {
+        // Two failure domains, kept separate: the .catch below routes WRITE
+        // failures to STATE-05 — the broadcast is not a write, so a throwing
+        // subscriber must never surface as a storage failure (the write
+        // landed; the calm fallback is simply a stale snapshot, the exact
+        // pre-#102 behavior).
+        try {
+          invalidateLibrarySnapshot();
+        } catch {
+          // deliberately swallowed — see the failure-domain note above
+        }
+      })
+      .catch((e) => {
+        const reason = classifyStorageError(e);
+        optionsRef.current?.onStorageError?.(reason);
+      });
   }
 
   /**
