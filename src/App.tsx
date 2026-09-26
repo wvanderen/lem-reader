@@ -44,6 +44,11 @@ const AddDialog = lazy(() =>
 );
 import { SkipLink } from "./a11y/SkipLink";
 import { Header } from "./reader/Header";
+// Issue #101 follow-up: the panel STAYS statically mounted (settings is a
+// core control surface — the perf harness's warm trigger drives its size
+// slider, and a first-open chunk fetch would stall the panel on slow
+// networks). Its heavy PORTABILITY import graph moves to action-time
+// dynamic imports inside SettingsPanel instead (see the D-08 comment there).
 import { SettingsPanel } from "./reader/SettingsPanel";
 import { StorageBanner } from "./reader/StorageBanner";
 import { WipeConfirm } from "./reader/WipeConfirm";
