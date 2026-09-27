@@ -56,6 +56,22 @@ describe("ReadAloudBar — transport buttons", () => {
     expect(container.textContent).not.toContain("Rate:");
   });
 
+  it("idle free-floats: the pill wrapper goes chrome-less until a session exists", () => {
+    const idle = renderBar("stopped");
+    expect(
+      idle.container.querySelector(".readaloud-cluster--idle"),
+    ).not.toBeNull();
+    cleanup();
+
+    const active = renderBar("playing");
+    expect(
+      active.container.querySelector(".readaloud-cluster--idle"),
+    ).toBeNull();
+    expect(
+      active.container.querySelector(".readaloud-cluster"),
+    ).not.toBeNull();
+  });
+
   it("playing: the primary button's name flips to 'Pause' (state, not color)", () => {
     renderBar("playing");
     expect(screen.getByRole("button", { name: "Pause" })).not.toBeNull();

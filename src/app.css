@@ -3600,22 +3600,37 @@ dialog.book-remove-confirm {
  *
  * .readaloud-bar — the fixed compact bar at the bottom of the reader, mounted
  * in BOTH reading modes. The bar box itself never intercepts pointers
- * (pointer-events: none; the cluster re-enables them) so it never blocks
+ * (pointer-events: none; children re-enable them) so it never blocks
  * text selection under it. Fixed positioning takes it out of the paginated
  * grid flow — mounting it can never change .page-viewport geometry (the
  * .chapter-nav-page precedent). Same chrome layer (z-index: 5).
  *
- * .readaloud-cluster — the compact pill: raised surface + hairline border,
- * the .back-to-library/.mark-read-close register. Buttons reuse the quiet
- * button discipline token-for-token (min-height var(--touch), accent on
- * hover only); the primary button's accessible name is its visible text,
- * which carries the state ("Read aloud" idle / "Pause" playing / "Play"
- * paused) — never color. Issue #90: idle the pill holds the ONE quiet
- * entry; the full transport (skips, jump, Stop, follow, rate) renders only
- * while a session exists, so idle reader chrome stays quiet.
- * .readaloud-follow — the follow level as plain-language TEXT (issue #90:
- * "Highlights each word…" / "Shows progress only"); .readaloud-rate — the
- * configured rate as TEXT. Both the .page-indicator quiet text register.
+ * Issue #90 idle anatomy — no card-within-a-card: stopped, the pill wrapper
+ * stays mounted (the primary must keep its DOM position across the idle→
+ * active flip — remounting the pressed button would drop its focus) but
+ * renders CHROME-LESS (.readaloud-cluster--idle: no raised fill, no
+ * hairline), so the entry reads as one free-floating quiet button in the
+ * .back-to-library register. A live session restores the compact pill
+ * (raised surface + hairline border). Buttons reuse the quiet button
+ * discipline token-for-token (min-height var(--touch), accent on hover
+ * only); the primary button's accessible name is its visible text, which
+ * carries the state ("Read aloud" idle / "Pause" playing / "Play" paused)
+ * — never color. .readaloud-follow — the follow level as plain-language
+ * TEXT (issue #90: "Highlights each word…" / "Shows progress only");
+ * .readaloud-rate — the configured rate as TEXT. Both the .page-indicator
+ * quiet text register.
+ *
+ * Expanded-band reservation — the overlap rule: a fixed bar paints over
+ * article text wherever the reader scrolls or paginates content under it.
+ * While a session exists the component publishes the pill's live height as
+ * --readaloud-h on <body> (ResizeObserver — wrap-count aware), and these
+ * rules spend that height so text never hides: scrolling mode pads the
+ * bottom of the scroll flow; paginated mode shrinks the page surface by the
+ * part of the band the 48px calm inset doesn't already cover, so the engine
+ * repaginates the band away (the dvh precedent: the measured page budget
+ * never extends behind an expanded bottom toolbar). Idle clears the
+ * property — the free-floating entry's 48px band already fits both modes'
+ * calm bottom insets, so idle reserves nothing.
  *
  * Zero motion properties (A11Y-06 discipline — trivially reduced-motion
  * safe); :focus-visible inherits the global 2px ring.
@@ -3645,6 +3660,12 @@ dialog.book-remove-confirm {
   border-radius: var(--radius-sm);
   pointer-events: auto;
 }
+/* The idle pill unboxes: the wrapper remains (DOM stability for the pressed
+ * primary) but paints nothing — the entry free-floats, no card-in-card. */
+.readaloud-cluster--idle {
+  background: transparent;
+  border-color: transparent;
+}
 .readaloud-follow,
 .readaloud-rate {
   font-family: var(--font-ui);
@@ -3653,14 +3674,53 @@ dialog.book-remove-confirm {
   color: var(--ink-soft);
   white-space: nowrap;
 }
+/* Scrolling mode: the extra bottom padding lets the last lines scroll clear
+ * ABOVE the expanded bar instead of stopping behind it. */
+body:has(.readaloud-bar--expanded) main#main:not(.paginated-main) {
+  padding-bottom: calc(
+    var(--space-3xl) + var(--readaloud-h, 0px) + var(--space-xs)
+  );
+}
+/* Paginated mode: shrink the pinned surface by the band's intrusion past the
+ * 48px calm inset (clamped at 0 — inset-covered bands reserve nothing) so
+ * the page budget ends at the bar's top edge and the engine repaginates to
+ * it. Keep the fallback and dynamic formulas synchronized with the base
+ * .article-body.paginated-surface rule. */
+body:has(.readaloud-bar--expanded) .article-body.paginated-surface {
+  height: calc(
+    100vh - 48px - 2px - 2 * var(--space-2xl) -
+      max(0px, var(--readaloud-h, 0px) + var(--space-xs) - var(--space-2xl))
+  );
+  height: calc(
+    100dvh - 48px - 2px - 2 * var(--space-2xl) -
+      max(0px, var(--readaloud-h, 0px) + var(--space-xs) - var(--space-2xl))
+  );
+}
+/* The 09-07 25% header cap stays synchronized with the surface formula
+ * above (the cap is 25% of the SAME definite pinned height — never a
+ * percentage, which would resolve against the grid track). */
+body:has(.readaloud-bar--expanded) .article-body.paginated-surface > header {
+  max-height: calc(
+    (100vh - 48px - 2px - 2 * var(--space-2xl)) * 0.25 -
+      max(0px, var(--readaloud-h, 0px) + var(--space-xs) - var(--space-2xl)) *
+        0.25
+  );
+  max-height: calc(
+    (100dvh - 48px - 2px - 2 * var(--space-2xl)) * 0.25 -
+      max(0px, var(--readaloud-h, 0px) + var(--space-xs) - var(--space-2xl)) *
+        0.25
+  );
+}
 /* Bottom-band coexistence: when the transport bar is mounted, the final-page
  * completion button and the chapter nav stack ABOVE it (touch-target band —
- * stack, never overlap). Each selector strictly extends its base rule's
- * specificity, and :has() is structural (no DOM change downstream). */
+ * stack, never overlap). The 56px fallback preserves the pre-measurement
+ * idle height; while a session exists the live --readaloud-h tracks the
+ * wrapped pill. Each selector strictly extends its base rule's specificity,
+ * and :has() is structural (no DOM change downstream). */
 main:has(.readaloud-bar) .mark-read-close-page,
 main:has(.readaloud-bar) .article-body .chapter-nav-page,
 main:has(.readaloud-bar) .article-body:has(.mark-read-close-page) .chapter-nav-page {
-  bottom: calc(var(--space-xs) + 56px);
+  bottom: calc(var(--space-xs) + var(--readaloud-h, 56px));
 }
 
 /* Plan 13-04 (POLISH-03 / D13-13) — the SLIMMED article header anatomy:

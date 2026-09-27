@@ -58,6 +58,9 @@ import { PageTurnControls, isFormField } from "../reader/PageTurnControls";
 import { ProgressHairline } from "../reader/ProgressHairline";
 import { SectionAnnouncer } from "../reader/SectionAnnouncer";
 import { blockGraphemeLength } from "../pagination/anchor";
+// The transport state feeds the latest-ref gate on the anchor-save path
+// (ADR 0001 — see handleAnchorChange).
+import type { TransportState } from "../readaloud/types";
 // Issue #2 — the end-pin policy stays imported for the mark-read gesture;
 // the restore/mode-swap end-LANDING decision moved behind jumpToOffset.
 import { endPinOffset } from "../reader/readingPosition";
@@ -717,6 +720,11 @@ export function ArticleView({
   // this precise offset are in the SAME block, we prefer the precise offset
   // so the reader re-lands on the exact page (not the page before the split).
   const lastPreciseAnchorRef = useRef<number | null>(null);
+  // The read-aloud transport state as a latest-ref (the route's standard
+  // pattern — handleAnchorChange below is declared before useReadAloud runs).
+  // While a session exists the anchor path stops feeding the location save
+  // (ADR 0001 — see handleAnchorChange).
+  const readAloudStateRef = useRef<TransportState>("stopped");
   // Issue #34: the reading-session recorder. articleId null (loading/error)
   // records nothing; the hook registers its own scroll/presence/visibility
   // listeners and reads the continuously-fresh D4-10 anchor (below) for
@@ -755,7 +763,20 @@ export function ArticleView({
     // call here). Latest-wins: the initial page-1 commit's offset-0 save is
     // replaced by the restore turn's offset before the debounce fires, so a
     // reopen-restore never overwrites the reader's saved location with 0.
-    recordProgress(offset);
+    // ADR 0001 (listening is reading) — the session-active gate: while a
+    // read-aloud session exists the LISTENED offset owns the save (it rides
+    // the same debounce through onListenProgress). An anchor commit that
+    // lands mid-session — a refragment re-anchoring the same page (e.g. the
+    // transport band reservation shrinking the paginated surface), or even a
+    // manual turn — carries no fresher intent than the voice's position, and
+    // letting it write would drag the latest-wins save backwards to the page
+    // start. The anchor REF above still updates (mode swaps, play's start
+    // offset, deep links stay coherent); the save family simply hears from
+    // the listened path alone until the session ends, after which turns save
+    // normally again.
+    if (readAloudStateRef.current === "stopped") {
+      recordProgress(offset);
+    }
     // Plan 12-06 (D12-05): mirror the committed page state (the handle reads
     // from refs, so by the time this effect-scoped callback runs the values
     // are post-commit) so the chapter nav's first/last-page gating reacts to
@@ -844,6 +865,7 @@ export function ArticleView({
       saveLocationNow(endPinOffset(article));
     },
   });
+  readAloudStateRef.current = readAloudState;
 
   // The follower hook, AFTER the transport (it consumes readAloudState).
   const follow = useReadAloudFollow({
