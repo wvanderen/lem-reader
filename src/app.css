@@ -1392,12 +1392,20 @@ dialog.add-dialog {
 .article-body.paginated-surface {
   width: var(--measure);
   max-width: 100%;
-  /* Legacy fallback for browsers without dynamic viewport units. */
-  height: calc(100vh - 48px - 2px - 2 * var(--space-2xl));
+  /* The ONE pinned page budget — this height, the 09-07 header cap below,
+     and the read-aloud expanded-band rules all spend it through
+     var(--paginated-budget) so the viewport formulas cannot drift apart.
+     Legacy fallback for browsers without dynamic viewport units; the
+     @supports override below re-points it at 100dvh. A custom-property
+     value is never parse-invalid, so the dvh re-point must be
+     feature-gated — source-order doubling (the old height fallback trick)
+     would make var() consumers invalid at computed-value time on legacy
+     engines instead of falling back. */
+  --paginated-budget: calc(100vh - 48px - 2px - 2 * var(--space-2xl));
+  height: var(--paginated-budget);
   /* Mobile browser chrome changes the visible page height without changing
      legacy `vh`. Size the source geometry box to the dynamic viewport so the
      measured page budget never extends behind an expanded bottom toolbar. */
-  height: calc(100dvh - 48px - 2px - 2 * var(--space-2xl));
   margin-inline: auto;
   /* `hidden` still creates a programmatically scrollable box. VoiceOver can
      scroll that box while traversing past the final visible block, especially
@@ -1425,7 +1433,12 @@ dialog.add-dialog {
      definite pinned height, guaranteeing the reading page ≥ 75% of the
      surface. The header itself becomes a scroll container (below) so its
      interactive content (tags, export) stays reachable at narrow widths. */
-  grid-template-rows: minmax(auto, 25%) minmax(0, 1fr);
+   grid-template-rows: minmax(auto, 25%) minmax(0, 1fr);
+}
+@supports (height: 100dvh) {
+  .article-body.paginated-surface {
+    --paginated-budget: calc(100dvh - 48px - 2px - 2 * var(--space-2xl));
+  }
 }
 
 /* The provenance header occupies the first grid row. Only the remaining row
@@ -1503,8 +1516,9 @@ dialog.add-dialog {
   grid-template-rows: auto minmax(0, 1fr);
 }
 /* The 09-07 25% cap, expressed against the same definite pinned height the
-   .article-body.paginated-surface height formula uses (keep the two
-   formulas in sync). A percentage max-height cannot be used here: on a
+   .article-body.paginated-surface height formula uses — literally the same
+   var(--paginated-budget), so the two can no longer drift. A percentage
+   max-height cannot be used here: on a
    grid item it resolves against the TRACK, not the container (probed —
    cyclic for sizing), which would clamp against the row it is meant to
    cap. Definite-length max-height DOES clamp the auto track's intrinsic
@@ -1512,9 +1526,7 @@ dialog.add-dialog {
    the locked overflow-y:auto rule makes the header scroll (09-07
    semantics exactly). */
 .article-body.paginated-surface > header {
-  /* Keep the fallback and dynamic formulas synchronized with the surface. */
-  max-height: calc((100vh - 48px - 2px - 2 * var(--space-2xl)) * 0.25);
-  max-height: calc((100dvh - 48px - 2px - 2 * var(--space-2xl)) * 0.25);
+  max-height: calc(var(--paginated-budget) * 0.25);
 }
 .article-body.paginated-surface > header .back-to-library {
   position: fixed;
@@ -3684,22 +3696,37 @@ dialog.book-remove-confirm {
  *
  * .readaloud-bar — the fixed compact bar at the bottom of the reader, mounted
  * in BOTH reading modes. The bar box itself never intercepts pointers
- * (pointer-events: none; the cluster re-enables them) so it never blocks
+ * (pointer-events: none; children re-enable them) so it never blocks
  * text selection under it. Fixed positioning takes it out of the paginated
  * grid flow — mounting it can never change .page-viewport geometry (the
  * .chapter-nav-page precedent). Same chrome layer (z-index: 5).
  *
- * .readaloud-cluster — the compact pill: raised surface + hairline border,
- * the .back-to-library/.mark-read-close register. Buttons reuse the quiet
- * button discipline token-for-token (min-height var(--touch), accent on
- * hover only); the primary button's accessible name is its visible text,
- * which carries the state ("Read aloud" idle / "Pause" playing / "Play"
- * paused) — never color. Issue #90: idle the pill holds the ONE quiet
- * entry; the full transport (skips, jump, Stop, follow, rate) renders only
- * while a session exists, so idle reader chrome stays quiet.
- * .readaloud-follow — the follow level as plain-language TEXT (issue #90:
- * "Highlights each word…" / "Shows progress only"); .readaloud-rate — the
- * configured rate as TEXT. Both the .page-indicator quiet text register.
+ * Issue #90 idle anatomy — no card-within-a-card: stopped, the pill wrapper
+ * stays mounted (the primary must keep its DOM position across the idle→
+ * active flip — remounting the pressed button would drop its focus) but
+ * renders CHROME-LESS (.readaloud-cluster--idle: no raised fill, no
+ * hairline), so the entry reads as one free-floating quiet button in the
+ * .back-to-library register. A live session restores the compact pill
+ * (raised surface + hairline border). Buttons reuse the quiet button
+ * discipline token-for-token (min-height var(--touch), accent on hover
+ * only); the primary button's accessible name is its visible text, which
+ * carries the state ("Read aloud" idle / "Pause" playing / "Play" paused)
+ * — never color. .readaloud-follow — the follow level as plain-language
+ * TEXT (issue #90: "Highlights each word…" / "Shows progress only");
+ * .readaloud-rate — the configured rate as TEXT. Both the .page-indicator
+ * quiet text register.
+ *
+ * Expanded-band reservation — the overlap rule: a fixed bar paints over
+ * article text wherever the reader scrolls or paginates content under it.
+ * While a session exists the component publishes the pill's live height as
+ * --readaloud-h on <body> (ResizeObserver — wrap-count aware), and these
+ * rules spend that height so text never hides: scrolling mode pads the
+ * bottom of the scroll flow; paginated mode shrinks the page surface by the
+ * part of the band the 48px calm inset doesn't already cover, so the engine
+ * repaginates the band away (the dvh precedent: the measured page budget
+ * never extends behind an expanded bottom toolbar). Idle clears the
+ * property — the free-floating entry's 48px band already fits both modes'
+ * calm bottom insets, so idle reserves nothing.
  *
  * Zero motion properties (A11Y-06 discipline — trivially reduced-motion
  * safe); :focus-visible inherits the global 2px ring.
@@ -3729,6 +3756,12 @@ dialog.book-remove-confirm {
   border-radius: var(--radius-sm);
   pointer-events: auto;
 }
+/* The idle pill unboxes: the wrapper remains (DOM stability for the pressed
+ * primary) but paints nothing — the entry free-floats, no card-in-card. */
+.readaloud-cluster--idle {
+  background: transparent;
+  border-color: transparent;
+}
 .readaloud-follow,
 .readaloud-rate {
   font-family: var(--font-ui);
@@ -3737,14 +3770,50 @@ dialog.book-remove-confirm {
   color: var(--ink-soft);
   white-space: nowrap;
 }
+/* Scrolling mode: the extra bottom padding lets the last lines scroll clear
+ * ABOVE the expanded bar instead of stopping behind it. */
+body:has(.readaloud-bar--expanded) main#main:not(.paginated-main) {
+  padding-bottom: calc(
+    var(--space-3xl) + var(--readaloud-h, 0px) + var(--space-xs)
+  );
+}
+/* Paginated mode: shrink the pinned surface by the band's intrusion past the
+ * 48px calm inset (clamped at 0 — inset-covered bands reserve nothing) so
+ * the page budget ends at the bar's top edge and the engine repaginates to
+ * it. Both rules spend the ONE --paginated-budget from the base surface
+ * rule — no duplicated viewport formulas to keep in sync. The intrusion is
+ * declared on the surface so the capped header inherits it. */
+body:has(.readaloud-bar--expanded) .article-body.paginated-surface {
+  --readaloud-intrusion: max(
+    0px,
+    var(--readaloud-h, 0px) + var(--space-xs) - var(--space-2xl)
+  );
+  height: calc(var(--paginated-budget) - var(--readaloud-intrusion));
+}
+/* The 09-07 25% header cap stays synchronized with the surface above by
+ * construction — the SAME budget minus the SAME intrusion (the cap is a
+ * fraction of the resulting definite pinned height — never a percentage,
+ * which would resolve against the grid track). */
+body:has(.readaloud-bar--expanded) .article-body.paginated-surface > header {
+  max-height: calc(
+    (var(--paginated-budget) - var(--readaloud-intrusion)) * 0.25
+  );
+}
 /* Bottom-band coexistence: when the transport bar is mounted, the final-page
  * completion button and the chapter nav stack ABOVE it (touch-target band —
- * stack, never overlap). Each selector strictly extends its base rule's
- * specificity, and :has() is structural (no DOM change downstream). */
+ * stack, never overlap). Before any session has published a live height the
+ * fallback is the idle entry's measured band, named here (not inlined) so
+ * the idle anatomy and this offset cannot drift apart silently; while a
+ * session exists the live --readaloud-h tracks the wrapped pill. Each
+ * selector strictly extends its base rule's specificity, and :has() is
+ * structural (no DOM change downstream). */
+body:has(.readaloud-bar) {
+  --readaloud-idle-h: 56px;
+}
 main:has(.readaloud-bar) .mark-read-close-page,
 main:has(.readaloud-bar) .article-body .chapter-nav-page,
 main:has(.readaloud-bar) .article-body:has(.mark-read-close-page) .chapter-nav-page {
-  bottom: calc(var(--space-xs) + 56px);
+  bottom: calc(var(--space-xs) + var(--readaloud-h, var(--readaloud-idle-h)));
 }
 
 /* Plan 13-04 (POLISH-03 / D13-13) — the SLIMMED article header anatomy:

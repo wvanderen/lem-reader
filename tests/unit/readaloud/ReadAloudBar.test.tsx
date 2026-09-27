@@ -18,11 +18,15 @@
 //      button always stays enabled here — the press never dead-ends.)
 //   5. Issue #43 (O3): the skip controls render only while a session exists
 //      and route their clicks without touching the transport.
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, fireEvent } from "@testing-library/react";
 // The label maps are asserted LIVE from the component's own tables — one
 // rename site (the labels never drift out of sync with the bar).
-import { ReadAloudBar, FOLLOW_LABELS } from "../../../src/reader/ReadAloudBar";
+import {
+  ReadAloudBar,
+  FOLLOW_LABELS,
+  READALOUD_HEIGHT_VAR,
+} from "../../../src/reader/ReadAloudBar";
 import type { FollowLevel, TransportState } from "../../../src/readaloud/types";
 
 afterEach(cleanup);
@@ -41,8 +45,8 @@ function renderBar(state: TransportState, overrides: BarProps = {}) {
     onStop: vi.fn(),
     ...overrides,
   };
-  const { container } = render(<ReadAloudBar {...props} />);
-  return { ...props, container };
+  const { container, rerender } = render(<ReadAloudBar {...props} />);
+  return { ...props, container, rerender };
 }
 
 describe("ReadAloudBar — transport buttons", () => {
@@ -54,6 +58,22 @@ describe("ReadAloudBar — transport buttons", () => {
     expect(screen.queryByRole("button", { name: "Stop" })).toBeNull();
     expect(container.textContent).not.toContain(FOLLOW_LABELS["progress-only"]);
     expect(container.textContent).not.toContain("Rate:");
+  });
+
+  it("idle free-floats: the pill wrapper goes chrome-less until a session exists", () => {
+    const idle = renderBar("stopped");
+    expect(
+      idle.container.querySelector(".readaloud-cluster--idle"),
+    ).not.toBeNull();
+    cleanup();
+
+    const active = renderBar("playing");
+    expect(
+      active.container.querySelector(".readaloud-cluster--idle"),
+    ).toBeNull();
+    expect(
+      active.container.querySelector(".readaloud-cluster"),
+    ).not.toBeNull();
   });
 
   it("playing: the primary button's name flips to 'Pause' (state, not color)", () => {
@@ -237,5 +257,90 @@ describe("ReadAloudBar — skip controls (issue #43, O3)", () => {
     expect(skipHandlers.onSkipParagraphForward).toHaveBeenCalledTimes(1);
     expect(props.onPrimary).not.toHaveBeenCalled();
     expect(props.onStop).not.toHaveBeenCalled();
+  });
+});
+
+describe("ReadAloudBar — expanded-band reservation (issue #90)", () => {
+  // setup.ts installs a never-firing RO stub so mounts don't crash; the
+  // band reservation needs DELIVERIES (the PaginatedSurface.test.tsx
+  // controllable-mock precedent — each test file gets a fresh environment,
+  // so the shared stub is unaffected elsewhere). The component's publish
+  // re-reads offsetHeight (never the entries), so fire() only needs to
+  // redeliver the callback.
+  const roInstances: BandResizeObserverMock[] = [];
+  let measuredHeight: number;
+
+  class BandResizeObserverMock {
+    callback: ResizeObserverCallback;
+    constructor(callback: ResizeObserverCallback) {
+      this.callback = callback;
+      roInstances.push(this);
+    }
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+    fire() {
+      this.callback([] as unknown as ResizeObserverEntry[], this as unknown as ResizeObserver);
+    }
+  }
+
+  beforeEach(() => {
+    roInstances.length = 0;
+    measuredHeight = 72;
+    vi.stubGlobal("ResizeObserver", BandResizeObserverMock);
+    // jsdom reports 0 for offsetHeight (it does no layout); pin the
+    // cluster's measured band through the prototype and restore after.
+    Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+      configurable: true,
+      get: () => measuredHeight,
+    });
+  });
+
+  afterEach(() => {
+    delete (HTMLElement.prototype as { offsetHeight?: unknown }).offsetHeight;
+    vi.unstubAllGlobals();
+  });
+
+  it("idle reserves nothing; a live session marks the bar expanded", () => {
+    const idle = renderBar("stopped");
+    expect(document.body.style.getPropertyValue(READALOUD_HEIGHT_VAR)).toBe("");
+    expect(
+      idle.container.querySelector(".readaloud-bar--expanded"),
+    ).toBeNull();
+    cleanup();
+
+    const active = renderBar("playing");
+    expect(
+      active.container.querySelector(".readaloud-bar--expanded"),
+    ).not.toBeNull();
+  });
+
+  it("publishes --readaloud-h live (wrap-count aware) and un-publishes at session end", () => {
+    const playing = renderBar("playing");
+    expect(document.body.style.getPropertyValue(READALOUD_HEIGHT_VAR)).toBe(
+      "72px",
+    );
+
+    // The pill wraps on a narrow viewport → the observer redelivers and the
+    // fresh height wins (the wrap-count-aware contract).
+    measuredHeight = 88;
+    for (const ro of roInstances) ro.fire();
+    expect(document.body.style.getPropertyValue(READALOUD_HEIGHT_VAR)).toBe(
+      "88px",
+    );
+
+    // Session end (state flip, not unmount) un-publishes — idle reserves
+    // nothing.
+    playing.rerender(<ReadAloudBar {...playing} state="stopped" />);
+    expect(document.body.style.getPropertyValue(READALOUD_HEIGHT_VAR)).toBe("");
+  });
+
+  it("unmount mid-session un-publishes (the cleanup path)", () => {
+    renderBar("playing");
+    expect(document.body.style.getPropertyValue(READALOUD_HEIGHT_VAR)).toBe(
+      "72px",
+    );
+    cleanup();
+    expect(document.body.style.getPropertyValue(READALOUD_HEIGHT_VAR)).toBe("");
   });
 });

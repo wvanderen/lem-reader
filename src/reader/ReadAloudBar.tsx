@@ -2,10 +2,22 @@
 // Issue #40 — the minimal speakable path's transport bar: a fixed compact
 // bar at the bottom of the reader with Play / Pause / Stop as REAL buttons.
 // Issue #90 — the bar QUIETS when idle: a stopped reader shows the read-aloud
-// ENTRY as one quiet affordance ("Read aloud"); the full transport (skips,
-// jump, Stop, follow level, rate) exists only while a session does. Keyboard
-// access and SR discoverability are unchanged — the entry is a real, always
-// visible, focusable button (never hover-only).
+// ENTRY as one quiet affordance ("Read aloud"), rendered chrome-less (no
+// pill fill/hairline — no card-within-a-card; the button free-floats). The
+// pill WRAPPER stays mounted so the primary keeps its DOM position across
+// the idle→active flip (a remount would drop the reader's focus). The full
+// transport (skips, jump, Stop, follow level, rate) exists only while a
+// session does. Keyboard access and SR discoverability are unchanged — the
+// entry is a real, always visible, focusable button (never hover-only).
+//
+// Expanded-band reservation: the fixed bar paints over article text wherever
+// the reader scrolls or paginates content under it. While a session exists
+// this component publishes the rendered pill height as the --readaloud-h
+// custom property on <body> (ResizeObserver — wrap-count aware), and app.css
+// spends that height so text never hides: scrolling mode pads the bottom of
+// the scroll flow; paginated mode shrinks the page surface so the engine
+// repaginates the band away. Idle clears the property — the bare entry's
+// 48px band already fits inside both modes' calm bottom insets.
 //
 // Acceptance contract:
 //   - The primary button's NAME carries the state as visible text —
@@ -41,16 +53,17 @@
 // zero motion properties — trivially reduced-motion safe; :focus-visible
 // inherits the global ring). Fixed positioning keeps the bar out of the
 // paginated grid flow so mounting it can never change .page-viewport
-// geometry.
+// geometry; while a session exists the measured --readaloud-h property
+// (above) is what lets app.css give the band its space honestly.
 
+import { useEffect, useRef } from "react";
 import type { FollowLevel, TransportState } from "../readaloud/types";
 import { formatRate } from "../settings/tokens";
 // Issue #98 (decision #96) — the ONE polite status-region primitive.
 import { StatusRegion } from "../ui/StatusRegion";
 
 interface ReadAloudBarProps {
-  state: TransportState;
-  /**
+  state: TransportState;  /**
    * The current follow level — the floor ("progress-only") until the
    * session's probe resolves; the hook resets it at every session end.
    * The hook owns the floor and never supplies null.
@@ -98,6 +111,13 @@ export const FOLLOW_LABELS: Record<FollowLevel, string> = {
   "progress-only": "Shows progress only",
 };
 
+/** The body-level custom property that publishes the expanded band's live
+ * measured height to app.css (the band reservation). app.css consumes it by
+ * literal name alongside the idle fallback (--readaloud-idle-h) — a rename
+ * must land there in the same change. Exported so the suites assert the
+ * LIVE name (one rename site, like FOLLOW_LABELS). */
+export const READALOUD_HEIGHT_VAR = "--readaloud-h";
+
 /** The primary button's visible name per transport state — the state IS the
  * accessible name (native button text, no aria-label duplication). */
 const PRIMARY_LABELS: Record<TransportState, string> = {
@@ -132,15 +152,54 @@ export function ReadAloudBar({
   onSkipParagraphForward,
 }: ReadAloudBarProps) {
   const sessionActive = state !== "stopped";
+  const clusterRef = useRef<HTMLDivElement | null>(null);
   const skipHandlers: Record<SkipControlKey, (() => void) | undefined> = {
     "skip-sentence-back": onSkipSentenceBack,
     "skip-sentence-forward": onSkipSentenceForward,
     "skip-paragraph-forward": onSkipParagraphForward,
   };
+  // Expanded-band reservation — see the header comment. While a session
+  // exists, publish the pill's live rendered height (--readaloud-h on
+  // <body>) so app.css can hold article text clear of the fixed bar; the
+  // cleanup un-publishes at every session end / unmount so the idle bar
+  // reserves nothing. ResizeObserver (not resize events) tracks wrap-count
+  // changes on narrow viewports; no-op where it's unavailable (DOM-emulated
+  // unit tests don't do layout).
+  useEffect(() => {
+    const cluster = clusterRef.current;
+    if (!sessionActive || !cluster || typeof ResizeObserver === "undefined") {
+      return;
+    }
+    const publish = () => {
+      document.body.style.setProperty(
+        READALOUD_HEIGHT_VAR,
+        `${cluster.offsetHeight}px`,
+      );
+    };
+    publish();
+    const observer = new ResizeObserver(publish);
+    observer.observe(cluster);
+    return () => {
+      observer.disconnect();
+      document.body.style.removeProperty(READALOUD_HEIGHT_VAR);
+    };
+  }, [sessionActive]);
   return (
     <>
-      <div className="readaloud-bar">
-        <div className="readaloud-cluster">
+      <div className={sessionActive ? "readaloud-bar readaloud-bar--expanded" : "readaloud-bar"}>
+        {/* The pill wrapper is STRUCTURAL and always mounted: the primary
+            button keeps the same DOM position across the idle→active flip,
+            so the button a reader just pressed is never remounted under it
+            (remounting would drop its focus — the no-focus-movement rule).
+            Idle it renders chrome-LESS (.readaloud-cluster--idle: no fill,
+            no hairline) — the entry reads as one free-floating quiet button,
+            no card-within-a-card. */}
+        <div
+          className={
+            sessionActive ? "readaloud-cluster" : "readaloud-cluster readaloud-cluster--idle"
+          }
+          ref={clusterRef}
+        >
           {/* The primary carries the state as its name: the idle reader sees
               the read-aloud ENTRY ("Read aloud" — issue #90's quiet
               affordance), a live session sees Pause/Play. It stays ENABLED
