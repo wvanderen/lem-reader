@@ -93,14 +93,14 @@ import { ReviewNoteDialog, NOTE_SAVE_FAILED_COPY } from "./ReviewNoteDialog";
 import { DeleteHighlightConfirm } from "./DeleteHighlightConfirm";
 import { BackToLibrary } from "../../reader/BackToLibrary";
 import { JumpToArticleIcon } from "../../ui/icons";
- // Issue #98 (decision #96) — the ONE polite status-region primitive; this
- // page's load/error/empty/announcement region renders through it.
- import { StatusRegion } from "../../ui/StatusRegion";
+// Issue #98 (decision #96) — the ONE polite status-region primitive; this
+// page's load/error/empty/announcement region renders through it.
+import { StatusRegion } from "../../ui/StatusRegion";
 // Issue #107 (the dropped follow-up of decision #72) — the unscoped
 // article slot's searchable combobox: browse = highlighted-only with
 // counts, search finds every article, and a pick navigates into the URL
 // scope (the chip takes over — one slot, two states).
- import { ArticlePicker } from "../../ui/ArticlePicker";
+import { ArticlePicker } from "../../ui/ArticlePicker";
 
 /** Truncation limits for review rows (the AnnotationsDrawer discipline). */
 const EXCERPT_MAX_CHARS = 120;
@@ -355,10 +355,10 @@ export function ReviewView({
   // the article filter is NOT component state: the URL scope
   // (#/highlights?article=<id>) is the ONE article-filter state, so this
   // state carries only tag + confidence.
-  const [filters, setFilters] = useState<{
-    tag: string | null;
-    confidence: ConfidenceFilter;
-  }>({ tag: null, confidence: "all" });
+  const [filters, setFilters] = useState<Omit<ReviewFilters, "articleId">>({
+    tag: null,
+    confidence: "all",
+  });
   // D10-08: Date is the default sort.
   const [sort, setSort] = useState<ReviewSort>("date");
   // Plan 10-05 curation targets: the ReviewEntry under action (null when

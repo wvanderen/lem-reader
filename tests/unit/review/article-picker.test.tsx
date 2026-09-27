@@ -182,6 +182,43 @@ describe("ArticlePicker: search", () => {
     await user.type(input, "Cap Corpus");
     expect(within(screen.getByRole("listbox")).getAllByRole("option")).toHaveLength(8);
   });
+
+  it("a query matching the whole cap of highlighted articles keeps the zero-highlight match visible (decision #72 — findable by search)", async () => {
+    const user = userEvent.setup();
+    const many = Array.from({ length: 12 }, (_, i) =>
+      makeArticle(`m-${i}`, `Cap Corpus ${String(i).padStart(2, "0")}`),
+    );
+    // Zero highlights — absent from the counts fold entirely.
+    const stranded = makeArticle("m-stranded", "Cap Corpus Zero");
+    mountPicker({
+      articles: [...many, stranded],
+      counts: new Map(many.map((a) => [a.id, 1])),
+    });
+    const input = screen.getByRole("combobox") as HTMLInputElement;
+    await user.type(input, "Cap Corpus");
+    const options = within(screen.getByRole("listbox")).getAllByRole("option");
+    // The cap holds at 8 — but the matching zero-count row takes the
+    // reserved last slot instead of being pushed past the cap by the
+    // highlighted head.
+    expect(options).toHaveLength(8);
+    expect(options[0]).toHaveTextContent("1 highlight");
+    expect(options.at(-1)).toHaveTextContent("Cap Corpus Zero0 highlights");
+  });
+
+  it("a query matching only zero-highlight articles fills the cap with honest zeros", async () => {
+    const user = userEvent.setup();
+    const many = Array.from({ length: 12 }, (_, i) =>
+      makeArticle(`m-${i}`, `Cap Corpus ${String(i).padStart(2, "0")}`),
+    );
+    mountPicker({ articles: many, counts: new Map() });
+    const input = screen.getByRole("combobox") as HTMLInputElement;
+    await user.type(input, "Cap Corpus");
+    const options = within(screen.getByRole("listbox")).getAllByRole("option");
+    expect(options).toHaveLength(8);
+    for (const option of options) {
+      expect(option).toHaveTextContent("0 highlights");
+    }
+  });
 });
 
 describe("ArticlePicker: keyboard + picking", () => {
