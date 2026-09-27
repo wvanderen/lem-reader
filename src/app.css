@@ -2753,6 +2753,90 @@ main#main > .status {
   border-color: transparent;
 }
 
+/* ── Issue #107 (decision #72 follow-up) — the ONE searchable ArticlePicker
+   ───────────────────────────────────────────────────────────────────────── */
+/* The review page's unscoped article filter: the TagPicker variant-A
+   register (hairline chrome, --radius-sm control, --radius-md dropdown,
+   token-only, no motion) adapted for single-select. Suggestions carry a
+   visible count at the inline end (the TagPicker counts-never-render rule
+   is a tagging decision, not a picker-family one). */
+.article-picker {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.article-picker-input-row {
+  position: relative;
+}
+.article-picker-input {
+  width: 100%;
+  /* The UA gives <select> border-box but NOT text inputs — without this,
+     width:100% + padding + border overflows the 320px reflow gate by the
+     padding+border width (the .review-select probe lesson's text-input
+     twin). */
+  box-sizing: border-box;
+  min-height: var(--touch);
+  padding: var(--space-sm);
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink);
+}
+.article-picker-suggestions {
+  position: absolute;
+  inset-inline: 0;
+  top: calc(100% + var(--space-xs));
+  z-index: var(--z-popover);
+  margin: 0;
+  padding: var(--space-xs);
+  list-style: none;
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+}
+.article-picker-suggestion {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  min-height: calc(var(--touch) - 8px);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-xs);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink);
+  cursor: pointer;
+}
+.article-picker-suggestion.active {
+  background: var(--surface);
+  color: var(--accent);
+}
+.article-picker-suggestion-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.article-picker-count {
+  flex-shrink: 0;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+.article-picker-suggestion.active .article-picker-count {
+  color: var(--accent);
+}
+/* The honest no-match line — non-interactive, quiet voice. */
+.article-picker-empty {
+  padding: var(--space-xs) var(--space-sm);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+
 /* ── Issue #75 — the Add-dialog tags fieldset ────────────────────────────── */
 /* The fieldset is structural only (the .add-source-picker discipline:
    margin/padding/border zeroed; the dialog's flex gap owns the rhythm). */
@@ -4307,6 +4391,12 @@ main#main > .status:empty {
   width: 100%;
   min-width: 0;
   max-width: 100%;
+}
+/* Issue #107 — the article picker rides the filter row's form-control
+   register: 16px input (the .review-select POLISH-07 register — NOT drift
+   from the 14px TagPicker chrome), full group width like the selects. */
+.review-filter-group .article-picker-input {
+  font-size: 16px;
 }
 /* Issue #76 (decision #72) — the URL-scoped review's scope chip: the ONE
    removable chip in the article slot while #/highlights?article=<id> is

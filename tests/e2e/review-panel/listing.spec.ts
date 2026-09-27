@@ -281,22 +281,31 @@ test.describe("RECV-01.b review-panel listing (10-04 cross-article + filters + s
     ).toHaveCount(0);
   });
 
-  test("article select narrows to one article (and is populated with both titles)", async ({
+  test("article picker: browse carries both titles with counts; picking narrows via the URL scope", async ({
     page,
   }) => {
     await seedCorpusAndOpenReview(page);
 
-    const select = page.getByLabel("Article", { exact: true });
-    // Issue #76 — each option's suggestion label carries the article's
-    // highlight count ("{title} ({n})"). The select lists every article
-    // (fixtures included — the composite library; zero-highlight articles
-    // stay findable), both corpus titles present with their counts.
-    const optionTexts = await select.locator("option").allTextContents();
-    expect(optionTexts).toContain(`${TITLE_A} (2)`);
-    expect(optionTexts).toContain(`${TITLE_B} (1)`);
+    // Issue #107 — the picker's browse list carries the corpus's
+    // highlighted articles with their counts ("{title} {n} highlights");
+    // zero-highlight articles stay out of the browse list (findable by
+    // search only). Both corpus titles present with their counts.
+    const input = page.locator("#review-article-filter");
+    await input.click();
+    const suggestions = page.locator(".article-picker-suggestions");
+    await expect(
+      suggestions.getByRole("option", { name: `${TITLE_A} 2 highlights` }),
+    ).toBeVisible();
+    await expect(
+      suggestions.getByRole("option", { name: `${TITLE_B} 1 highlight` }),
+    ).toBeVisible();
 
-    await select.selectOption({ label: `${TITLE_B} (1)` });
+    // Picking IS scoping (#107): narrowing to B lands the scoped URL —
+    // only B's rows render.
+    await input.fill(TITLE_B);
+    await input.press("Enter");
 
+    await expect(page).toHaveURL(new RegExp(`#\\/highlights\\?article=`));
     await expect(sectionByTitle(page, TITLE_B)).toBeVisible();
     await expect(
       page.getByRole("heading", { level: 2, name: TITLE_A, exact: true }),
