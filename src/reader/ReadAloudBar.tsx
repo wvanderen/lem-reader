@@ -63,8 +63,7 @@ import { formatRate } from "../settings/tokens";
 import { StatusRegion } from "../ui/StatusRegion";
 
 interface ReadAloudBarProps {
-  state: TransportState;
-  /**
+  state: TransportState;  /**
    * The current follow level — the floor ("progress-only") until the
    * session's probe resolves; the hook resets it at every session end.
    * The hook owns the floor and never supplies null.
@@ -111,6 +110,13 @@ export const FOLLOW_LABELS: Record<FollowLevel, string> = {
   passage: "Highlights each passage",
   "progress-only": "Shows progress only",
 };
+
+/** The body-level custom property that publishes the expanded band's live
+ * measured height to app.css (the band reservation). app.css consumes it by
+ * literal name alongside the idle fallback (--readaloud-idle-h) — a rename
+ * must land there in the same change. Exported so the suites assert the
+ * LIVE name (one rename site, like FOLLOW_LABELS). */
+export const READALOUD_HEIGHT_VAR = "--readaloud-h";
 
 /** The primary button's visible name per transport state — the state IS the
  * accessible name (native button text, no aria-label duplication). */
@@ -165,14 +171,17 @@ export function ReadAloudBar({
       return;
     }
     const publish = () => {
-      document.body.style.setProperty("--readaloud-h", `${cluster.offsetHeight}px`);
+      document.body.style.setProperty(
+        READALOUD_HEIGHT_VAR,
+        `${cluster.offsetHeight}px`,
+      );
     };
     publish();
     const observer = new ResizeObserver(publish);
     observer.observe(cluster);
     return () => {
       observer.disconnect();
-      document.body.style.removeProperty("--readaloud-h");
+      document.body.style.removeProperty(READALOUD_HEIGHT_VAR);
     };
   }, [sessionActive]);
   return (
