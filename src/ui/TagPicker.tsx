@@ -1,7 +1,9 @@
 // src/ui/TagPicker.tsx
 // Issue #75 (decision #71) — the ONE shared tag picker: variant A refined,
-// validated live on prototype/tagging-issue-71. One mental model on every
-// host surface (library-row popover, Add dialog, the reader's TagEntry):
+// validated live on prototype/tagging-issue-71, its machinery now shared
+// with the ArticlePicker through useVariantAComboboxState /
+// variantAComboboxInputProps. One mental model on every host surface
+// (library-row popover, Add dialog, the reader's TagEntry):
 //
 //   - Type-to-filter combobox over existing tags, MOST-USED order (the
 //     count-desc fold in tagsStore.deriveTagStats; ties alphabetical).
@@ -19,18 +21,24 @@
 //     the shared .tag-chip-remove anatomy — the .review-scope-chip
 //     precedent from issue #76).
 //
-// Keyboard: ArrowUp/ArrowDown move the active option (wrapping) — either
-// arrow OPENS a closed-but-nonempty list first, so both pick paths work
-// from a bare focus (the issue #75 review's ArrowUp-asymmetry fix) — Enter
-// picks, Tab moves on (the listbox is never a trap), Escape is NOT
-// intercepted — the host popover/dialog owns dismissal. Focus management
-// is the house explicit pattern: an explicitly-opened popover may move
-// focus via focusOnMount, but the picker NEVER focuses itself on mount
-// (the reader's TagEntry is inert at ArticleView mount — Pitfall 8-5; the
-// React autoFocus prop is banned by lint).
-import { useEffect, useMemo, useRef, useState } from "react";
+// Keyboard (the shared register): ArrowUp/ArrowDown move the active option
+// (wrapping) — either arrow OPENS a closed-but-nonempty list first, so
+// both pick paths work from a bare focus (the issue #75 review's
+// ArrowUp-asymmetry fix) — Enter picks, Tab moves on (the listbox is
+// never a trap), Escape is NOT intercepted — the host popover/dialog owns
+// dismissal. Focus management is the house explicit pattern: an
+// explicitly-opened popover may move focus via focusOnMount, but the
+// picker NEVER focuses itself on mount (the reader's TagEntry is inert at
+// ArticleView mount — Pitfall 8-5; the React autoFocus prop is banned by
+// lint).
+import { useEffect, useMemo } from "react";
 import type { TagStat } from "../ingestion/library/tagsStore";
 import { sameTag } from "../ingestion/library/tagText";
+import {
+  useVariantAComboboxState,
+  variantAComboboxInputProps,
+  variantAListboxId,
+} from "./variantACombobox";
 
 export interface TagPickerProps {
   /** The existing tags with usage counts (most-used first). */
@@ -84,21 +92,18 @@ export function TagPicker({
   inputId,
   focusOnMount = false,
 }: TagPickerProps) {
-  const [draft, setDraft] = useState("");
-  const [open, setOpen] = useState(false);
-  const [active, setActive] = useState(0);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const state = useVariantAComboboxState();
+  const { draft, open, active, reset, lower, inputRef } = state;
 
   // Explicit focus management (the house dialog pattern — an
   // explicitly-opened popover may move focus). No autoFocus prop (lint).
   useEffect(() => {
     if (focusOnMount) inputRef.current?.focus();
-  }, [focusOnMount]);
+  }, [focusOnMount, inputRef]);
 
-  const listboxId = `${inputId}-listbox`;
+  const listboxId = variantAListboxId(inputId);
   const createOptionId = `${listboxId}-create`;
 
-  const lower = draft.trim().toLowerCase();
   const exactExists = lower.length > 0 && findExisting(stats, draft) !== undefined;
   const list = useMemo(
     () =>
@@ -121,24 +126,16 @@ export function TagPicker({
 
   function commitPick(text: string) {
     onChange(toggleTag(selected, stats, text));
-    setDraft("");
-    setOpen(false);
-    setActive(0);
+    reset();
     inputRef.current?.focus();
   }
 
-  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if ((e.key === "ArrowDown" || e.key === "ArrowUp") && optionCount > 0) {
-      e.preventDefault();
-      // Either arrow opens a closed-but-nonempty list — ArrowUp must not
-      // mutate `active` invisibly with Enter then committing nothing.
-      setOpen(true);
-      setActive((a) =>
-        e.key === "ArrowDown"
-          ? (a + 1) % optionCount
-          : (a - 1 + optionCount) % optionCount,
-      );
-    } else if (e.key === "Enter") {
+  const inputProps = variantAComboboxInputProps({
+    state,
+    inputId,
+    rootClassName: ".tag-picker",
+    optionCount,
+    onEnter: (e) => {
       // Enter NEVER submits a surrounding form (the Add dialog's prevented
       // submits tolerate this; the explicit preventDefault keeps it true).
       e.preventDefault();
@@ -148,23 +145,17 @@ export function TagPicker({
       } else if (lower.length > 0) {
         commitPick(draft);
       }
-    }
-  }
+    },
+  });
 
   return (
     <div className="tag-picker">
       <div className="tag-picker-input-row">
         <input
-          ref={inputRef}
-          id={inputId}
+          {...inputProps}
           className="tag-picker-input"
-          type="text"
           placeholder="Add or search a tag…"
-          value={draft}
-          autoComplete="off"
-          role="combobox"
           aria-expanded={listOpen}
-          aria-controls={listboxId}
           aria-activedescendant={
             listOpen
               ? active < list.length
@@ -172,25 +163,6 @@ export function TagPicker({
                 : createOptionId
               : undefined
           }
-          onChange={(e) => {
-            setDraft(e.target.value);
-            setOpen(true);
-            setActive(0);
-          }}
-          onFocus={() => {
-            // Focus opens the browse list: with an empty draft it shows the
-            // most-used tags as-is — the click-to-pick path (the reader can
-            // tag without typing at all). The blur handler closes it again.
-            setOpen(true);
-          }}
-          onKeyDown={handleKeyDown}
-          onBlur={(e) => {
-            if (
-              !e.currentTarget.closest(".tag-picker")?.contains(e.relatedTarget as Node | null)
-            ) {
-              setOpen(false);
-            }
-          }}
         />
         {listOpen && (
           <ul className="tag-picker-suggestions" id={listboxId} role="listbox">

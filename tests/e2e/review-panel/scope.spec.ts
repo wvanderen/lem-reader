@@ -268,3 +268,112 @@ test.describe("issue #76 — the per-article review scope", () => {
     await expect(page.locator(".review-row")).toHaveCount(3);
   });
 });
+
+// ── Issue #107 — the unscoped article slot's searchable picker ──────────────
+// The native all-articles <select> stopgap (shipped by #76 "until #75's
+// TagPicker lands") becomes the searchable ArticlePicker: the browse list
+// shows ONLY articles with highlights (count-desc, visible counts), search
+// finds every article including zero-highlight ones, and a pick navigates
+// into the URL scope — the chip takes over (one slot, two states), Back
+// returns unscoped.
+test.describe("issue #107 — the unscoped article picker", () => {
+  test("browse shows highlighted-only with counts; picking navigates into the scope; Back returns", async ({
+    page,
+  }) => {
+    await seedCorpus(page);
+    await page.goto(`${BASE}/#/highlights`);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Highlights" }),
+    ).toBeVisible();
+
+    await page.locator("#review-article-filter").click();
+    const suggestions = page.locator(".article-picker-suggestions");
+    // Exactly the two highlighted articles, count-desc, counts visible —
+    // the zero-highlight fixture row is noise and stays out of the browse
+    // list.
+    await expect(suggestions.getByRole("option")).toHaveCount(2);
+    await expect(
+      suggestions.getByRole("option", {
+        name: `${TITLE_A} 2 highlights`,
+      }),
+    ).toBeVisible();
+    await expect(
+      suggestions.getByRole("option", { name: `${TITLE_B} 1 highlight` }),
+    ).toBeVisible();
+    await expect(
+      suggestions.getByText("Getting started with Lem Reader"),
+    ).toHaveCount(0);
+
+    // Picking IS scoping: Enter commits the active (head) suggestion —
+    // the URL lands scoped, the chip takes over the slot, and only A's
+    // rows render. Back returns to the unscoped picker.
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(new RegExp(`#\\/highlights\\?article=${A_ID}$`));
+    await expect(page.locator(".review-scope-chip")).toContainText(TITLE_A);
+    await expect(page.locator(".review-row")).toHaveCount(2);
+    await page.goBack();
+    await expect(page).toHaveURL(new RegExp(/#\/highlights$/));
+    await expect(page.locator("#review-article-filter")).toBeVisible();
+    await expect(page.locator(".review-scope-chip")).toHaveCount(0);
+  });
+
+  test("search finds a zero-highlight article; scoping to it renders the honest zero", async ({
+    page,
+  }) => {
+    await seedCorpus(page);
+    await page.goto(`${BASE}/#/highlights`);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Highlights" }),
+    ).toBeVisible();
+
+    const input = page.locator("#review-article-filter");
+    await input.click();
+    await input.fill("Getting started");
+    const suggestions = page.locator(".article-picker-suggestions");
+    // The zero-highlight fixture IS findable by search — with its honest 0.
+    await expect(
+      suggestions.getByRole("option", {
+        name: "Getting started with Lem Reader 0 highlights",
+      }),
+    ).toBeVisible();
+
+    await input.press("Enter");
+    await expect(page).toHaveURL(
+      new RegExp(`#\\/highlights\\?article=getting-started$`),
+    );
+    await expect(page.locator(".review-scope-chip")).toContainText(
+      "Getting started with Lem Reader",
+    );
+    // The scoped article exists but carries no highlights — zero rows, and
+    // the filters-miss state stays honest (never a silent full list).
+    await expect(page.locator(".review-row")).toHaveCount(0);
+    await expect(
+      page.getByText("No highlights match these filters."),
+    ).toBeVisible();
+  });
+
+  test("an unmatched search renders the calm no-match line; Escape stays a calm no-op", async ({
+    page,
+  }) => {
+    await seedCorpus(page);
+    await page.goto(`${BASE}/#/highlights`);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Highlights" }),
+    ).toBeVisible();
+
+    const input = page.locator("#review-article-filter");
+    await input.click();
+    await input.fill("zzz-no-such-article");
+    const suggestions = page.locator(".article-picker-suggestions");
+    await expect(
+      suggestions.getByText("No articles match “zzz-no-such-article”"),
+    ).toBeVisible();
+    await expect(suggestions.getByRole("option")).toHaveCount(1);
+
+    // Escape does nothing here (no modal, no hijack): the route holds, the
+    // input keeps focus (the panel-keyboard calm-no-op contract).
+    await page.keyboard.press("Escape");
+    await expect(page).toHaveURL(new RegExp(/#\/highlights$/));
+    await expect(input).toBeFocused();
+  });
+});

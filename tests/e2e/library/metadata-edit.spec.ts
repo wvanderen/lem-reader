@@ -740,19 +740,24 @@ test.describe("META-02 cross-surface — one effective name everywhere (17-05, D
       page.locator(".article-top-meta p.meta"),
     ).toHaveText(CROSS_EFFECTIVE_AUTHOR);
 
-    // 5. REVIEW: the Highlights view's article select option AND the
-    //    section h2 carry the effective title (the 17-03 surface swaps).
+    // 5. REVIEW: the Highlights view's article picker suggestion AND the
+    //    section h2 carry the effective title (the 17-03 surface swaps;
+    //    the native select option became a picker suggestion — #107).
     await page.goto(`${BASE}/#/highlights`);
     await expect(
       page.getByRole("heading", { level: 1, name: "Highlights" }),
     ).toBeVisible({ timeout: 15_000 });
+    // Focus opens the browse list; the suggestion carries the effective
+    // name and the canonical is absent (one name — D17-08/D17-09).
+    await page.locator("#review-article-filter").click();
+    const suggestions = page.locator(".article-picker-suggestions");
     await expect(
-      page.locator("#review-article-filter option", {
+      suggestions.locator(".article-picker-suggestion-text", {
         hasText: CROSS_EFFECTIVE_TITLE,
       }),
     ).toHaveCount(1);
     await expect(
-      page.locator("#review-article-filter option", {
+      suggestions.locator(".article-picker-suggestion-text", {
         hasText: CROSS_CANONICAL_TITLE,
       }),
     ).toHaveCount(0);

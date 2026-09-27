@@ -120,10 +120,12 @@ test.describe("RECV-01.g review-panel empty states (10-04 both branches)", () =>
     ).toBeVisible();
 
     // Article B has no orphan rows, so article=B ∧ confidence=Orphan
-    // matches nothing. Issue #76 — the option label carries the count.
-    await page
-      .getByLabel("Article", { exact: true })
-      .selectOption({ label: `${TITLE_B} (1)` });
+    // matches nothing. Issue #107 — picking B navigates into the scoped
+    // URL (the chip takes over; the confidence filter AND-composes).
+    const articleInput = page.locator("#review-article-filter");
+    await articleInput.fill(TITLE_B);
+    await articleInput.press("Enter");
+    await expect(page.locator(".review-scope-chip")).toBeVisible();
     await page
       .getByLabel("Anchor confidence", { exact: true })
       .selectOption("orphan");

@@ -96,6 +96,11 @@ import { JumpToArticleIcon } from "../../ui/icons";
 // Issue #98 (decision #96) — the ONE polite status-region primitive; this
 // page's load/error/empty/announcement region renders through it.
 import { StatusRegion } from "../../ui/StatusRegion";
+// Issue #107 (the dropped follow-up of decision #72) — the unscoped
+// article slot's searchable combobox: browse = highlighted-only with
+// counts, search finds every article, and a pick navigates into the URL
+// scope (the chip takes over — one slot, two states).
+import { ArticlePicker } from "../../ui/ArticlePicker";
 
 /** Truncation limits for review rows (the AnnotationsDrawer discipline). */
 const EXCERPT_MAX_CHARS = 120;
@@ -312,14 +317,16 @@ function ReviewRow({
  *
  * Issue #76 (decision #72) — URL-borne per-article scope. `scopedArticleId`
  * (parsed by App's parseHash from `#/highlights?article=<id>`) is the ONE
- * URL state: while set, the filter row's article combobox is REPLACED by a
- * removable scope chip (one slot, two states), the "article" sort option
- * hides, and the derivation filters to that article (its orphan rows kept —
- * a vanished article's remaining highlights still render, badged "Article
- * missing"). Tag/confidence/sort stay component state; clearing the scope
+ * article-filter state: while set, the filter row's article slot is the
+ * removable scope chip, the "article" sort option hides, and the
+ * derivation filters to that article (its orphan rows kept — a vanished
+ * article's remaining highlights still render, badged "Article
+ * missing"). Tag/confidence stay component state; clearing the scope
  * navigates to #/highlights (a real history push, so Back returns to the
- * scoped URL) and the unscoped combobox filter resets — a chip clear must
- * never leave a hidden article filter behind.
+ * scoped URL). Issue #107 — while unscoped, the slot is the searchable
+ * ArticlePicker whose pick navigates INTO the scope: the URL owns the
+ * article filter in both states (no hidden component-state filter a chip
+ * clear could ever leave behind).
  */
 export function ReviewView({
   hasAppHistory,
@@ -344,10 +351,12 @@ export function ReviewView({
   const notes = snapshot.notes;
   const allTags = snapshot.tags;
   // D10-08: filters AND-compose; confidence "all" includes ambiguous and
-  // orphan rows (tri-state is never silently filtered away).
-  const [filters, setFilters] = useState<ReviewFilters>({
+  // orphan rows (tri-state is never silently filtered away). Issue #107 —
+  // the article filter is NOT component state: the URL scope
+  // (#/highlights?article=<id>) is the ONE article-filter state, so this
+  // state carries only tag + confidence.
+  const [filters, setFilters] = useState<Omit<ReviewFilters, "articleId">>({
     tag: null,
-    articleId: null,
     confidence: "all",
   });
   // D10-08: Date is the default sort.
@@ -361,20 +370,6 @@ export function ReviewView({
   // region ("Highlight removed." / "Note saved."). Null = nothing to
   // announce (loading/error/empty states own the region then).
   const [announcement, setAnnouncement] = useState<string | null>(null);
-
-  // Issue #76 — scope-transition normalization (review→review hashchange
-  // does NOT remount this component, so Back/Forward between scoped and
-  // unscoped URLs lands here with state intact): scope CLEARED resets the
-  // unscoped combobox filter — a chip clear must never leave a hidden
-  // article filter behind (honesty). The "article"-sort case is handled
-  // synchronously below via effectiveSort (no effect-frame flash).
-  const prevScopedRef = useRef(scopedArticleId);
-  useEffect(() => {
-    if (prevScopedRef.current !== undefined && scopedArticleId === undefined) {
-      setFilters((f) => ({ ...f, articleId: null }));
-    }
-    prevScopedRef.current = scopedArticleId;
-  }, [scopedArticleId]);
 
   // Plan 14-03 Task 1 (D14-02/D14-01/D14-03; content renamed by Plan 15-01
   // / D15-06) — the Highlights destination's title + warm-gated mount
@@ -397,15 +392,17 @@ export function ReviewView({
   // D10-09 — pure derivation in the render body (the filterLibrary
   // pattern): join → classify → filter → group → sort, no effect chains.
   //
-  // Issue #76 — while scoped, the URL scope OWNS the article filter (the
-  // combobox is hidden; any stale component-state articleId is overridden,
-  // never silently composed), and the "article" sort coerces to the Date
-  // default (its option is hidden while scoped — the coercion keeps the
-  // hidden select's value honest across a Back/Forward re-entry).
+  // Issue #107 — the URL scope is the ONE article filter: it composes into
+  // the derivation here (null while unscoped), while the "article" sort
+  // coerces to the Date default while scoped (its option is hidden — the
+  // coercion keeps the hidden select's value honest across a Back/Forward
+  // re-entry).
   const scoped = scopedArticleId !== undefined;
-  const effectiveFilters: ReviewFilters = scoped
-    ? { ...filters, articleId: scopedArticleId }
-    : filters;
+  const effectiveFilters: ReviewFilters = {
+    tag: filters.tag,
+    articleId: scopedArticleId ?? null,
+    confidence: filters.confidence,
+  };
   const effectiveSort: ReviewSort =
     scoped && sort === "article" ? "date" : sort;
   const derivation = deriveReviewSections(
@@ -424,15 +421,8 @@ export function ReviewView({
     : undefined;
   const scopeVanished = scoped && scopedArticle === undefined;
 
-  // Article-filter options ordered by the EFFECTIVE title (Plan 17-03
-  // OQ5 — sort keys use effective values; markdown.ts L253 localeCompare
-  // precedent). Fresh array — inputs are never mutated.
-  const articlesByTitle = [...articles].sort((a, b) =>
-    effectiveTitle(a).localeCompare(effectiveTitle(b)),
-  );
-
-  // Issue #76 — per-article highlight counts for the combobox suggestions
-  // (the ONE fold lives on the snapshot; this is a render-body alias).
+  // Issue #76/#107 — per-article highlight counts for the picker's
+  // suggestions (the ONE fold lives on the snapshot; render-body alias).
   const highlightCountByArticleId = snapshot.highlightCountByArticleId;
 
   // D10-10: the filters-matched-zero case is "both derived lists empty
@@ -518,10 +508,11 @@ export function ReviewView({
           activeTag={filters.tag}
           onSelect={(tag) => setFilters((f) => ({ ...f, tag }))}
         />
-        {/* Issue #76 (decision #72) — the article slot, two states: the
-            combobox while unscoped (every article findable, zero-highlight
-            ones included, each suggestion carrying its count from the ONE
-            snapshot fold); the removable scope chip while URL-scoped. */}
+        {/* Issue #76 + #107 — the article slot, two states: while
+            unscoped, the searchable ArticlePicker (browse = highlighted
+            articles with counts; search finds every article; a pick
+            navigates into the URL scope); while scoped, the removable
+            scope chip. One slot, two states — never both. */}
         {scoped ? (
           <div className="review-filter-group review-scope-group">
             {/* The scoped slot keeps the combobox's visible "Article" label
@@ -565,24 +556,18 @@ export function ReviewView({
             <label className="review-filter-label" htmlFor="review-article-filter">
               Article
             </label>
-            <select
-              id="review-article-filter"
-              className="review-select"
-              value={filters.articleId ?? ""}
-              onChange={(e) =>
-                setFilters((f) => ({
-                  ...f,
-                  articleId: e.target.value === "" ? null : e.target.value,
-                }))
-              }
-            >
-              <option value="">All articles</option>
-              {articlesByTitle.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {effectiveTitle(a)} ({highlightCountByArticleId.get(a.id) ?? 0})
-                </option>
-              ))}
-            </select>
+            {/* Issue #107 — picking IS scoping: the hash push lands on
+                #/highlights?article=<id> (a real history entry, so Back
+                returns to the unscoped picker) and the chip takes over
+                the slot on the remount-free hashchange. */}
+            <ArticlePicker
+              articles={articles}
+              counts={highlightCountByArticleId}
+              inputId="review-article-filter"
+              onPick={(articleId) => {
+                window.location.hash = `#/highlights?article=${articleId}`;
+              }}
+            />
           </div>
         )}
         <div className="review-filter-group">
