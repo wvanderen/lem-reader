@@ -132,3 +132,33 @@ describe("DexieLibrarySource.save — assets default-parameter back-compat (20-0
     expect(await db.assets.count()).toBe(0);
   });
 });
+
+describe("DexieLibrarySource.save — the immutable addedAt stamp (issue #114)", () => {
+  beforeEach(async () => {
+    await wipeDatabase();
+  });
+
+  it("a stamp-less article receives an ISO addedAt on save (newly saved = dated)", async () => {
+    const { DexieLibrarySource } = await loadLibrarySource();
+    const source = new DexieLibrarySource();
+    const article = sampleArticle(); // no addedAt — the ingest-envelope shape
+
+    await source.save(article);
+
+    const row = await source.open(article.id);
+    expect(row?.addedAt).toBeDefined();
+    // Zod-valid ISO datetime (the same shape BookSchema.addedAt carries).
+    expect(row?.addedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/);
+  });
+
+  it("a caller-supplied addedAt survives verbatim — the stamp never moves (immutability)", async () => {
+    const { DexieLibrarySource } = await loadLibrarySource();
+    const source = new DexieLibrarySource();
+    const addedAt = "2026-01-15T12:00:00.000Z";
+    const article = sampleArticle({ addedAt });
+
+    await source.save(article);
+
+    expect((await source.open(article.id))?.addedAt).toBe(addedAt);
+  });
+});

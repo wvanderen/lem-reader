@@ -66,9 +66,10 @@ export interface LibraryFilter {
  * partitions them out upstream; this guard keeps the pure function honest
  * for any caller.)
  *
- * The function does NOT sort; the caller (LibraryView) owns the default sort
- * (recently-added descending per D8-03) because the sort key (`addedAt`) is
- * available at the repository layer, not inside this pure helper.
+ * The function does NOT sort; since issue #114 the caller (LibraryView)
+ * composes these filtered halves through libraryOrder.orderLibraryEntries —
+ * the ONE merged descending addedAt order over articles and books (filters
+ * preserve relative order, so narrowing never changes the order).
  *
  * @param articles The composite library list (fixtures + ingested).
  * @param filter   `{ query, activeTag }` — see `LibraryFilter`.

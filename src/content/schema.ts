@@ -376,6 +376,18 @@ export const ArticleSchema = z.object({
   // mirror — it corrects the "Originally published at {domain}" link only.
   readerPublishedAt: z.string().datetime().optional(),
   readerSourceUrl: httpUrl.optional(),
+  // Issue #114 — the IMMUTABLE added-to-library stamp (Recently added is the
+  // trustworthy default order for the mixed article+book list). Stamped ONCE
+  // at the save seams (DexieLibrarySource.save / saveBook) the moment the row
+  // first enters the library, never updated afterwards; it rides the export/
+  // import bundle via ArticleSchema composition, so the date survives a round
+  // trip. Additive-optional (Pitfall 9): legacy rows and bundled fixtures
+  // omit the field and hydrate to `undefined` — NO historical date is ever
+  // invented; undated rows follow dated ones in stable relative order (the
+  // libraryOrder policy). Not a conflict dimension (metadataDiffers reads
+  // only the reader-override keys), and the v3 Dexie `addedAt` index
+  // (db.ts) already reserved the slot.
+  addedAt: z.string().datetime().optional(),
 });
 
 // Inferred types — also re-exported from types.ts. Schemas are the single

@@ -1585,3 +1585,114 @@ describe("resolveImportPlan — metadata conflicts + merge-on-win (17-04, D17-10
     expect(plan.skipped.articles).toBe(0);
   });
 });
+
+// ── Issue #114 — the immutable addedAt survives import (Recently added) ─────
+
+describe("addedAt across the import plan (issue #114 — the date survives export/import)", () => {
+  it("a new dated article keeps its bundle addedAt — the round-trip stamp is never dropped or re-stamped", async () => {
+    const { detectImportPreview, resolveImportPlan } = await loadConflicts();
+    const dated = sampleArticle({
+      id: "art-dated",
+      addedAt: "2026-09-10T08:30:00.000Z",
+    });
+    const bundle = sampleBundle({ articles: [dated] });
+    const preview = await detectImportPreview(bundle);
+
+    const plan = await resolveImportPlan(bundle, preview, ALL_SKIP, false);
+
+    expect(plan.articlesToWrite).toEqual([dated]);
+    expect(plan.articlesToWrite[0]?.addedAt).toBe("2026-09-10T08:30:00.000Z");
+  });
+
+  it("a new stamp-less article (a legacy export) stays undated — no historical date is invented", async () => {
+    const { detectImportPreview, resolveImportPlan } = await loadConflicts();
+    const legacy = sampleArticle({ id: "art-legacy" }); // no addedAt
+    const bundle = sampleBundle({ articles: [legacy] });
+    const preview = await detectImportPreview(bundle);
+
+    const plan = await resolveImportPlan(bundle, preview, ALL_SKIP, false);
+
+    expect(plan.articlesToWrite).toEqual([legacy]);
+    expect(plan.articlesToWrite[0]?.addedAt).toBeUndefined();
+  });
+
+  it("article-revision overwrite with a stamp-less incoming row → the winner keeps the LOCAL addedAt (library history, not reader content)", async () => {
+    const { detectImportPreview, resolveImportPlan } = await loadConflicts();
+    const { db } = await loadDb();
+    await db.articles.put(
+      sampleArticle({
+        id: "art-dated",
+        revision: 1,
+        addedAt: "2026-01-15T12:00:00.000Z",
+      }),
+    );
+
+    const bundle = sampleBundle({
+      articles: [sampleArticle({ id: "art-dated", revision: 2 })], // no addedAt
+    });
+    const preview = await detectImportPreview(bundle);
+
+    const plan = await resolveImportPlan(
+      bundle,
+      preview,
+      { ...ALL_SKIP, "article-revision": "overwrite" },
+      false,
+    );
+
+    expect(plan.articlesToWrite).toHaveLength(1);
+    expect(plan.articlesToWrite[0]?.revision).toBe(2); // incoming content won
+    expect(plan.articlesToWrite[0]?.addedAt).toBe("2026-01-15T12:00:00.000Z"); // …the local date survives
+  });
+
+  it("article-revision overwrite with BOTH rows dated → the incoming stamp wins (the round-trip truth)", async () => {
+    const { detectImportPreview, resolveImportPlan } = await loadConflicts();
+    const { db } = await loadDb();
+    await db.articles.put(
+      sampleArticle({
+        id: "art-dated",
+        revision: 1,
+        addedAt: "2026-01-15T12:00:00.000Z",
+      }),
+    );
+
+    const bundle = sampleBundle({
+      articles: [
+        sampleArticle({ id: "art-dated", revision: 2, addedAt: "2026-09-01T00:00:00.000Z" }),
+      ],
+    });
+    const preview = await detectImportPreview(bundle);
+
+    const plan = await resolveImportPlan(
+      bundle,
+      preview,
+      { ...ALL_SKIP, "article-revision": "overwrite" },
+      false,
+    );
+
+    expect(plan.articlesToWrite[0]?.addedAt).toBe("2026-09-01T00:00:00.000Z");
+  });
+
+  it("metadata-only take-incoming with a stamp-less incoming row → the written row keeps the LOCAL addedAt (never demoted to undated)", async () => {
+    const { detectImportPreview, resolveImportPlan } = await loadConflicts();
+    const { db } = await loadDb();
+    await db.articles.put(
+      sampleArticle({
+        id: "art-meta",
+        readerTitle: "Local Name",
+        addedAt: "2026-02-20T00:00:00.000Z",
+      }),
+    );
+
+    const incoming = sampleArticle({ id: "art-meta" }); // no addedAt, no overrides
+    const bundle = sampleBundle({ articles: [incoming] });
+    const preview = await detectImportPreview(bundle);
+
+    const plan = await resolveImportPlan(bundle, preview, ALL_SKIP, false, {
+      metadataTakeIncoming: new Set(["art-meta"]),
+    });
+
+    expect(plan.articlesToWrite).toHaveLength(1);
+    expect(plan.articlesToWrite[0]?.readerTitle).toBeUndefined(); // the explicit override removal still applies
+    expect(plan.articlesToWrite[0]?.addedAt).toBe("2026-02-20T00:00:00.000Z");
+  });
+});

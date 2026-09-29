@@ -64,6 +64,8 @@ import { ContinueReadingStrip } from "./ContinueReadingStrip";
 import { ReadingStatsStrip } from "./ReadingStatsStrip";
 import { deriveLibraryReadingStats, timeReadLabels } from "./readingStats";
 import { filterLibrary, filterBooks } from "./libraryFilter";
+// Issue #114 — the ONE merged Recently-added order over articles + books.
+import { orderLibraryEntries } from "./libraryOrder";
 import { effectiveTitle } from "./effectiveMetadata";
 import { articleReadingState, bookReadingState, countByState } from "./readingState";
 import type { LibraryViewName } from "../../App";
@@ -514,14 +516,16 @@ export function LibraryView({
   // keeps existing behavior).
   const visibleItems = filterLibrary(viewArticles, { query, activeTag });
 
-  // Books render addedAt-descending (the plan's addedAt default-sort
-  // extended to books; the article half keeps the composite-library order
-  // locked by the 08-03 deviation — CanonicalArticle carries no addedAt),
-  // then the SAME filter composes over the book half (D12-04 — book/author/
-  // chapter-title haystack + book.tags).
-  const sortedBooks = [...viewBooks].sort((a, b) =>
-    a.addedAt < b.addedAt ? 1 : a.addedAt > b.addedAt ? -1 : 0,
-  );
+  // Issue #114 — ONE merged Recently-added order over BOTH halves. Books
+  // previously rendered addedAt-descending AFTER all articles (the article
+  // half kept the composite-library order — CanonicalArticle carried no
+  // addedAt); newly saved articles now carry the SAME immutable addedAt
+  // stamp (stamped at the save seams), so every view interleaves matching
+  // articles and books by descending addedAt, undated legacy/fixture rows
+  // following in stable relative order (no historical date invented —
+  // libraryOrder.ts). The SAME query/tag composition runs over each half
+  // first (Array.filter preserves relative order), so search and tag
+  // filters narrow the view without changing its order.
   const chapterTitlesByBook = new Map<string, string[]>();
   for (const [bookId, chapters] of chaptersByBook) {
     chapterTitlesByBook.set(
@@ -529,7 +533,8 @@ export function LibraryView({
       chapters.map((c) => c.provenance.title),
     );
   }
-  const visibleBooks = filterBooks(sortedBooks, { query, activeTag }, chapterTitlesByBook);
+  const visibleBooks = filterBooks(viewBooks, { query, activeTag }, chapterTitlesByBook);
+  const orderedEntries = orderLibraryEntries(visibleItems, visibleBooks);
 
   return (
     <main id="main">
@@ -700,69 +705,75 @@ export function LibraryView({
                 if (m) lastLaunchedRef.current = m[1]!;
               }}
             >
-              {visibleItems.map((a) => (
-                <LibraryRow
-                  key={a.id}
-                  article={a}
-                  location={locationsByArticle.get(a.id)}
-                  total={totalsById.get(a.id) ?? 0}
-                  timeReadLabel={timeReadByArticleId.get(a.id)}
-                  highlightCount={snapshot.highlightCountByArticleId.get(a.id)}
-                  onReadingStateChange={async (read) => {
-                    await setArticleReadState(a, read);
-                    invalidateLibrarySnapshot();
-                  }}
-                  onRemove={() =>
-                    setRemoveTarget({
-                      id: a.id,
-                      // Plan 17-02 (D17-09) — the remove-dialog copy shows the
-                      // ONE effective name (effectiveTitle), never a second
-                      // canonical identity the reader no longer sees.
-                      title: effectiveTitle(a),
-                    })
-                  }
-                  // Plan 17-02 (D17-01) — the edit affordance is gated to
-                  // Dexie-persisted rows ONLY (the SourceBadge fixture
-                  // inference: bundled Sample rows have nowhere to persist an
-                  // override — OQ1 resolved via gate). Book rows, chapter
-                  // sub-rows, and fixture rows get NO onEdit (D17-05/D17-06).
-                  onEdit={a.ingestionMeta !== undefined ? () => setEditTarget(a) : undefined}
-                  // Issue #75 (decision #71) — the row-tags trigger rides the
-                  // SAME persistence gate as onEdit (a tag needs a Dexie row
-                  // to land on) and the same effective-title naming rule.
-                  onTags={
-                    a.ingestionMeta !== undefined
-                      ? () =>
-                          setTagsTarget({
-                            id: a.id,
-                            title: effectiveTitle(a),
-                            tags: a.tags ?? [],
-                            anchor: rowTagsAnchorName(a.id),
-                          })
-                      : undefined
-                  }
-                  tagsOpen={tagsTarget?.id === a.id}
-                />
-              ))}
-              {/* Plan 12-05 — one expandable BookRow per VISIBLE Book (chapters
-                nested INSIDE the li, never top-level siblings — the 08-05
-                direct-child lesson). */}
-              {visibleBooks.map((book) => (
-                <BookRow
-                  key={book.id}
-                  book={book}
-                  chapters={chaptersByBook.get(book.id) ?? []}
-                  snapshot={snapshot}
-                  onRemove={() =>
-                    setBookRemoveTarget({
-                      id: book.id,
-                      title: book.title,
-                      chapterCount: book.chapterArticleIds.length,
-                      chapterIds: book.chapterArticleIds,
-                    })
-                  }
-                />
-              ))}
+              {/* Issue #114 — ONE merged list: the ordered entries render in
+                descending addedAt order, a LibraryRow for standalone articles
+                and a BookRow for books (chapters nested INSIDE the li, never
+                top-level siblings — the 08-05 direct-child lesson). */}
+              {orderedEntries.map((entry) =>
+                entry.kind === "article" ? (
+                  <LibraryRow
+                    key={entry.article.id}
+                    article={entry.article}
+                    location={locationsByArticle.get(entry.article.id)}
+                    total={totalsById.get(entry.article.id) ?? 0}
+                    timeReadLabel={timeReadByArticleId.get(entry.article.id)}
+                    highlightCount={snapshot.highlightCountByArticleId.get(entry.article.id)}
+                    onReadingStateChange={async (read) => {
+                      await setArticleReadState(entry.article, read);
+                      invalidateLibrarySnapshot();
+                    }}
+                    onRemove={() =>
+                      setRemoveTarget({
+                        id: entry.article.id,
+                        // Plan 17-02 (D17-09) — the remove-dialog copy shows the
+                        // ONE effective name (effectiveTitle), never a second
+                        // canonical identity the reader no longer sees.
+                        title: effectiveTitle(entry.article),
+                      })
+                    }
+                    // Plan 17-02 (D17-01) — the edit affordance is gated to
+                    // Dexie-persisted rows ONLY (the SourceBadge fixture
+                    // inference: bundled Sample rows have nowhere to persist an
+                    // override — OQ1 resolved via gate). Book rows, chapter
+                    // sub-rows, and fixture rows get NO onEdit (D17-05/D17-06).
+                    onEdit={
+                      entry.article.ingestionMeta !== undefined
+                        ? () => setEditTarget(entry.article)
+                        : undefined
+                    }
+                    // Issue #75 (decision #71) — the row-tags trigger rides the
+                    // SAME persistence gate as onEdit (a tag needs a Dexie row
+                    // to land on) and the same effective-title naming rule.
+                    onTags={
+                      entry.article.ingestionMeta !== undefined
+                        ? () =>
+                            setTagsTarget({
+                              id: entry.article.id,
+                              title: effectiveTitle(entry.article),
+                              tags: entry.article.tags ?? [],
+                              anchor: rowTagsAnchorName(entry.article.id),
+                            })
+                        : undefined
+                    }
+                    tagsOpen={tagsTarget?.id === entry.article.id}
+                  />
+                ) : (
+                  <BookRow
+                    key={entry.book.id}
+                    book={entry.book}
+                    chapters={chaptersByBook.get(entry.book.id) ?? []}
+                    snapshot={snapshot}
+                    onRemove={() =>
+                      setBookRemoveTarget({
+                        id: entry.book.id,
+                        title: entry.book.title,
+                        chapterCount: entry.book.chapterArticleIds.length,
+                        chapterIds: entry.book.chapterArticleIds,
+                      })
+                    }
+                  />
+                ),
+              )}
             </ul>
             {/* Plan 16-01 (D16-13) — the filtered-to-zero feedback branch.
               Rendered ONLY when the view's MEMBERSHIP is non-empty (the

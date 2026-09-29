@@ -565,9 +565,20 @@ function mergeOnWin(
   local: CanonicalArticle,
   takeIncoming: (id: string) => boolean,
 ): CanonicalArticle {
-  if (takeIncoming(incoming.id)) return incoming; // explicit reader choice
+  // Issue #114 — the immutable addedAt never regresses to undated: the
+  // incoming row's stamp wins (it is the round-trip truth); a stamp-less
+  // incoming row (a legacy export) keeps the LOCAL stamp. The added date is
+  // library history — never reader content, never a conflict dimension
+  // (metadataDiffers reads only the reader-override keys). The conditional
+  // spread keeps a both-sides-undated winner byte-identical to the incoming
+  // row (no `addedAt: undefined` key is ever introduced).
+  const addedAt = incoming.addedAt ?? local.addedAt;
+  if (takeIncoming(incoming.id)) {
+    return addedAt !== undefined ? { ...incoming, addedAt } : incoming;
+  }
   return {
     ...incoming,
+    ...(addedAt !== undefined ? { addedAt } : {}),
     readerTitle: local.readerTitle,
     readerAuthor: local.readerAuthor,
     readerPublishedAt: local.readerPublishedAt,
@@ -753,8 +764,12 @@ export async function resolveImportPlan(
       // Metadata-only conflict (D17-11): keep-LOCAL by default; take-incoming
       // (per-item or bulk) writes the incoming row whole — a key-less
       // incoming row removes the local override (explicit reader choice).
+      // Issue #114: the local addedAt is NOT reader metadata — it survives a
+      // take-incoming whose incoming row lacks the stamp. The
+      // always-take-incoming mergeOnWin IS that write: one helper owns both
+      // the override-removal and the addedAt-fallback policy.
       if (takeIncomingMetadata(a.id)) {
-        plan.articlesToWrite.push(a);
+        plan.articlesToWrite.push(mergeOnWin(a, local, () => true));
       } else {
         plan.skipped.articles++; // skip | keep-both (behaves as skip)
       }
