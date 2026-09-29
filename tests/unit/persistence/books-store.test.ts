@@ -277,6 +277,49 @@ describe("booksStore — save/list round-trip (12-03 Task 1)", () => {
     );
   });
 
+  it("saveBook stamps addedAt on chapter articles too — the issue #114 immutable stamp (a stamp-less chapter gets dated; a caller-supplied stamp survives)", async () => {
+    const { saveBook } = await loadBooksStore();
+    const { db } = await loadDb();
+
+    // Stamp-less chapters (the ingest-envelope shape) each receive an ISO
+    // addedAt in the same transaction as the book put.
+    const book = sampleBook({
+      id: "epub-chapterstamp00",
+      chapterArticleIds: ["epub-chapterstamp00-c00", "epub-chapterstamp00-c01"],
+    });
+    await saveBook(book, [
+      sampleChapter({ id: "epub-chapterstamp00-c00" }),
+      sampleChapter({
+        id: "epub-chapterstamp00-c01",
+        ingestionMeta: {
+          source: "epub-chapter",
+          origin: "upload",
+          originalHtmlHash: "sha256:" + "f".repeat(64),
+          extractionConfidence: "high",
+          extractionWarnings: [],
+          bookId: "epub-chapterstamp00",
+          chapterIndex: 1,
+        },
+      }),
+    ]);
+    for (const chapterId of book.chapterArticleIds) {
+      const row = await db.articles.get(chapterId);
+      expect(row?.addedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/);
+    }
+
+    // A chapter that already carries addedAt keeps it verbatim (the stamp
+    // never moves — the save-seam immutability discipline).
+    const datedBook = sampleBook({
+      id: "epub-datedchapter0",
+      chapterArticleIds: ["epub-datedchapter0-c00"],
+    });
+    const fixedAt = "2020-06-01T00:00:00.000Z";
+    await saveBook(datedBook, [
+      sampleChapter({ id: "epub-datedchapter0-c00", addedAt: fixedAt }),
+    ]);
+    expect((await db.articles.get("epub-datedchapter0-c00"))?.addedAt).toBe(fixedAt);
+  });
+
   it("listBooks DROPS a corrupt books row and returns the valid one (safeParse path, T-12-11)", async () => {
     const { db } = await loadDb();
     const { saveBook, listBooks } = await loadBooksStore();

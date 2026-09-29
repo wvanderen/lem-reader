@@ -95,9 +95,18 @@ export class DexieLibrarySource implements ArticleRepository {
    * opens (the saveBook stamp-before-transaction discipline — the closure
    * stays a pure put/delete sequence: no Zod, no crypto, no network inside,
    * the 09-04 rule).
+   *
+   * Issue #114 — the article's IMMUTABLE `addedAt` is stamped HERE, before
+   * the transaction (the saveBook addedAt mechanism, mirrored exactly): the
+   * moment the row first enters the library. A caller-supplied addedAt
+   * (a re-save of an already-dated row) survives verbatim — the stamp never
+   * moves. The stamp rides the export bundle (ArticleSchema composition), so
+   * Recently added ordering survives a round trip.
    */
   async save(article: CanonicalArticle, assets: ValidatedAsset[] = []): Promise<void> {
     const createdAt = new Date().toISOString();
+    const stamped: CanonicalArticle =
+      article.addedAt !== undefined ? article : { ...article, addedAt: createdAt };
     const rows: AssetRecordRow[] = assets.map((asset) => ({
       articleId: article.id,
       assetId: asset.assetId,
@@ -116,7 +125,7 @@ export class DexieLibrarySource implements ArticleRepository {
       // set wholesale — the articleId index exists exactly for this range
       // delete.
       await db.assets.where("articleId").equals(article.id).delete();
-      await db.articles.put(article);
+      await db.articles.put(stamped);
       for (const row of rows) {
         await db.assets.put(row);
       }

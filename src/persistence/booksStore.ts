@@ -162,6 +162,17 @@ export async function saveBook(
   const stamped: Book = book.addedAt
     ? (book as Book)
     : { ...book, addedAt: new Date().toISOString() };
+  // Issue #114 — chapters are articles too: each chapter row receives the
+  // SAME immutable addedAt stamp the single-article save path applies
+  // (LibrarySource.save), BEFORE the transaction (puts-only closure rule).
+  // A caller-supplied addedAt survives verbatim — the stamp never moves.
+  // The book's own addedAt remains the library-list sort key (chapters never
+  // render top-level, D12-01); the per-chapter stamp keeps a partially-
+  // imported chapter honest if it ever surfaces standalone.
+  const addedAt = new Date().toISOString();
+  const stampedArticles: CanonicalArticle[] = articles.map((article) =>
+    article.addedAt !== undefined ? article : { ...article, addedAt },
+  );
   // Stamp + row-build BEFORE the transaction (puts-only closure rule);
   // group the flat asset list per owning chapter article.
   const createdAt = new Date().toISOString();
@@ -185,7 +196,7 @@ export async function saveBook(
   }
   await db.transaction("rw", [db.books, db.articles, db.assets], async () => {
     await db.books.put(stamped);
-    for (const article of articles) {
+    for (const article of stampedArticles) {
       // Denormalize the top-level `bookId` onto the stored row so the v5
       // Dexie index ("...,*tags, bookId") can serve grouping reads
       // (D12-01) + removeBook's live-truth cascade. The CANONICAL contract
