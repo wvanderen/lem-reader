@@ -104,19 +104,46 @@ export type SavedArticleResult = {
 };
 
 /**
+ * SavedBookResult — the saved-book outcome's display payload (issue #113):
+ * the book title, the D12-11 skipped-chapter count, and the first AVAILABLE
+ * chapter's article id — the "Open book" target. Chapters ARE articles (the
+ * same #/article/<id> hash route), so no separate book route is introduced.
+ */
+export type SavedBookResult = {
+  outcome: "saved-book";
+  bookId: string;
+  /** The saved book's canonical title (book.title). */
+  title: string;
+  /** The D12-11 skip-disclosure count (0 when every chapter admitted). */
+  skippedChapterCount: number;
+  /**
+   * The first chapter the reader can open, in the book's declared TOC order
+   * (the same partial-import-tolerant resolution BookRow's title link uses:
+   * first DECLARED chapter that is live, falling back to the first live
+   * article). Undefined when no chapter row is live — "Open book" stays
+   * hidden, the honest nothing-to-open state (BookRow's unlinked-title twin).
+   */
+  firstChapterArticleId?: string;
+};
+
+/**
  * AddToLibraryOutcome — the navigation-ready result of one submission.
  * - `saved-article` → the caller shows the saved-result screen (issue #112):
  *   the display payload is the SavedArticleResult above; "Open article"
  *   navigates to the `articleId` hash anchor.
- * - `saved-book` → the caller closes, refreshes the library, and can
- *   surface the D12-11 skip disclosure from `skippedChapterCount`.
+ * - `saved-book` → the caller shows the SAME saved-result screen (issue
+ *   #113: the dialog stays open; the book never auto-opens — an auto-opened
+ *   chapter would mark the book started and destroy Unread). The payload is
+ *   the SavedBookResult above; "Open book" navigates to
+ *   `firstChapterArticleId`'s hash anchor; the skip count renders the D12-11
+ *   disclosure in the card.
  * - `refused` → the caller stays open and renders the calm DOC-06 phrase
  *   via mapReasonToCopy(reason); `already-in-library` is the D7-07
  *   dedupe-refuse (D16-09 refusal-only — no save ever happened).
  */
 export type AddToLibraryOutcome =
   | SavedArticleResult
-  | { outcome: "saved-book"; bookId: string; skippedChapterCount: number }
+  | SavedBookResult
   | { outcome: "refused"; reason: IngestionFailureReason };
 
 /**
@@ -303,6 +330,14 @@ async function saveArticle(
  * saveBook transaction with the per-chapter asset attribution. The
  * optional tags ride the same transaction on the BOOK record (D12-04 —
  * book tags, never per-chapter; issue #75, decision #71).
+ *
+ * Issue #113 — the outcome carries the saved-result display payload derived
+ * from the SAME envelope that just saved: the book title, the D12-11 skip
+ * count, and the first AVAILABLE chapter id (declared-TOC order first —
+ * BookRow's title-link resolution; the fallback covers a declared id with
+ * no live row). The envelope refuses zero-chapter books upstream (D12-11
+ * epub-empty), so a defined id is the expected shape; the optional field
+ * keeps the nothing-to-open edge honest instead of a dead button.
  */
 async function addEpubBook(
   file: File,
@@ -320,9 +355,14 @@ async function addEpubBook(
     result.articles,
     bookAssetsForChapters(result.articles, result.assets),
   );
+  const liveIds = new Set(result.articles.map((article) => article.id));
   return {
     outcome: "saved-book",
     bookId: result.book.id,
+    title: result.book.title,
     skippedChapterCount: result.skippedCount,
+    firstChapterArticleId:
+      result.book.chapterArticleIds.find((id) => liveIds.has(id)) ??
+      result.articles[0]?.id,
   };
 }

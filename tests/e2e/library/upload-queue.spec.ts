@@ -10,11 +10,13 @@
 //
 // Plan 16-03 migration: every drive opens the Add dialog on the file
 // source first (openAddDialog/pickSource — the forms live behind the
-// header button, ADD-01). Book success now CLOSES the dialog (D16-12) —
-// the G2 reset assertions below read the always-mounted picker through
-// the closed dialog (attached DOM), and the success signal is the book
-// row appearing via the snapshot invalidation (Issue #3). Refusals keep the dialog OPEN (consecutive
-// drives skip the trigger click — the helper is idempotent).
+// header button, ADD-01). Issue #113 (D16-12 as amended): a book success
+// STAYS OPEN on the result screen — the result card is the success signal,
+// the G2 reset already ran (resetFilePick fires at every terminal outcome
+// of the file arm), and the library reflects the book behind the dialog
+// (onSaved → snapshot invalidation, Issue #3). Refusals keep the dialog
+// OPEN too (consecutive drives skip the trigger click — the helper is
+// idempotent).
 //
 // Harness (cloned from tests/e2e/epub-intake.spec.ts + the library-suite
 // markdown-upload.spec.ts conventions):
@@ -40,7 +42,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { BASE, wipeDatabase } from "../annotations/_fixtures";
 import { validBookEpub3, corruptNotEpub } from "../../unit/server/epub-fixtures";
-import { openAddDialog, pickSource } from "./add-dialog";
+import { openAddDialog, pickSource, closeSavedResult } from "./add-dialog";
 
 /** A small .md pick for the remove-before-upload case. Never submitted —
  * the content only needs to be a valid picker selection. */
@@ -123,22 +125,35 @@ test("a completed book upload resets the picker without a page refresh", async (
   await openLibrary(page);
 
   // The canonical 4-chapter book through the REAL pipeline (epub-intake
-  // uploadEpub shape). Plan 16-03 (D16-12): book success CLOSES the
-  // dialog and the book row appears via the snapshot invalidation — the
-  // row IS the success signal now.
+  // uploadEpub shape). Issue #113 (D16-12 as amended): the book success
+  // STAYS OPEN on the result screen — the result card is the success
+  // signal, and the G2 reset already happened (resetFilePick runs at every
+  // terminal outcome of the file arm).
   await uploadEpub(page, "the-synthetic-book.epub", validBookEpub3());
-  await expect(page.locator("li.book-row")).toBeVisible({ timeout: 15_000 });
+  const dialog = page.locator("dialog.add-dialog");
+  await expect(dialog.locator(".add-result")).toBeVisible({ timeout: 15_000 });
 
-  // The exact user-reported G2 path: the book success STAYS on the
-  // library view — NO reload. The picker must already be empty and the
-  // Add file button back to disabled (read through the always-mounted
-  // picker inside the closed dialog — attached DOM, no remount; CSS
-  // locators, not role queries, because a closed dialog's subtree is
-  // display:none and excluded from the accessibility tree).
+  // The exact user-reported G2 path: the result is on screen with NO
+  // reload. The picker must already be empty and the Remove control gone
+  // (resetFilePick cleared the pick in the same outcome tick). The shared
+  // submit is RETIRED in result mode (the outcome action row replaced it —
+  // its absence IS the resting submit state); the fresh-session disabled
+  // gate is asserted after the reopen below. The picker is HIDDEN in
+  // result mode (attached DOM, no remount; CSS locators, not role queries
+  // — the hidden slot is excluded from the accessibility tree).
   const fileInput = page.locator("input#ingest-file");
   expect(await fileInput.evaluate((el) => (el as HTMLInputElement).value)).toBe("");
-  await expect(page.locator(".add-dialog-submit")).toBeDisabled();
+  await expect(page.locator("dialog.add-dialog .add-dialog-submit")).toHaveCount(0);
   await expect(page.locator("button.add-remove-file")).toHaveCount(0);
+
+  // And the library reflects the book WITHOUT waiting for navigation —
+  // Close (the Unread-preserving path) reveals the row already saved
+  // behind the dialog; a REOPENED dialog starts the fresh session with
+  // the submit disabled (the G2 resting gate).
+  await closeSavedResult(page);
+  await expect(page.locator("li.book-row")).toBeVisible({ timeout: 15_000 });
+  await openAddDialog(page);
+  await expect(page.locator(".add-dialog-submit")).toBeDisabled();
 });
 
 test("a refusal clears the pick so re-picking the same file re-fires the picker", async ({

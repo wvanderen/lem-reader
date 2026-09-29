@@ -20,10 +20,12 @@
 //   - D16-08 always-Web-address (fresh session state on every open),
 //   - D16-10 in-flight blocking (Cancel + active submit disabled; the
 //     `cancel` event is gated while submitting),
-//   - D16-12 success arms as amended by issue #112 — article: the dialog
-//     STAYS OPEN on the saved-result screen (title, ingestion limits,
-//     Open article + Add another; onSaved invalidates the snapshot);
-//     book: onCancel() then onSaved() (close onto the Library).
+//   - D16-12 success arms as amended by issues #112/#113 — BOTH stay open
+//     on the saved-result screen: article (title, ingestion limits,
+//     Open article + Add another) and book (title, honest skip count,
+//     Open book + Add another); onSaved invalidates the snapshot for each
+//     while the dialog remains up, and no close/navigation ever happens
+//     on its own (the never-opened item stays Unread).
 //   - scrim dismissal (quick task 260908-o0w): an idle scrim click
 //     (target === the dialog element — the dimmed ::backdrop) fires
 //     onCancel, an inner-wrapper click is inert, and an in-flight
@@ -542,7 +544,7 @@ describe("AddDialog (16-02 Task 2)", () => {
     expect(document.querySelector("dialog.add-dialog")).not.toBeNull();
   });
 
-  it("book success: onCancel() FIRST, then onSaved(); hasBook→saveBook dedupe seam intact", async () => {
+  it("book success STAYS OPEN on the result screen: onSaved fires, no close, no navigation (issue #113)", async () => {
     const user = userEvent.setup();
     ingestEpubMock.mockResolvedValue(sampleBookResult());
     renderDialog({
@@ -557,12 +559,20 @@ describe("AddDialog (16-02 Task 2)", () => {
     );
     await user.click(screen.getByRole("button", { name: "Add file" }));
 
-    // Ordered: the close callback fires BEFORE the snapshot invalidation.
+    // Ordered: onSaved fires while the dialog stays up (the library
+    // reflects the book without waiting for navigation), and NO close or
+    // hash write happens on its own — the never-opened book stays Unread.
     await waitFor(() => {
-      expect(navEvents).toEqual(["cancel", "saved"]);
+      expect(navEvents).toEqual(["saved"]);
     });
     await waitFor(() => expect(hasBookMock).toHaveBeenCalledWith("book-id"));
     expect(saveBookMock).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("Saved to your library.")).not.toBeNull();
+    expect(
+      screen.getByRole("heading", { name: "Sample Book", level: 3 }),
+    ).not.toBeNull();
+    // The honest skip disclosure rides the result card (skippedCount 2).
+    expect(screen.getByText("2 chapters could not be read.")).not.toBeNull();
   });
 });
 
@@ -869,6 +879,209 @@ describe("AddDialog — saved result (issue #112)", () => {
     expect(onSaved).not.toHaveBeenCalled();
     // The submit stays (retry available), the result is not shown.
     expect(screen.getByRole("button", { name: /^add$/i })).not.toBeNull();
+  });
+});
+
+// ── Book saved-result screen (issue #113) ────────────────────────────────────
+// A book save keeps the dialog OPEN on the result screen exactly like an
+// article save: the status region announces "Saved to your library.", the
+// card shows the book title + the D12-11 skip count when anything was
+// skipped, and the actions row becomes Close / Add another / Open book.
+// Closing (Close/Esc/scrim) leaves every chapter unlocated → the book is
+// Unread; Open book close-first navigates to the first AVAILABLE chapter's
+// #/article/<id> hash (a chapter IS an article); Add another runs the ONE
+// resetSession with the dialog kept up. A book refusal NEVER enters result
+// mode.
+describe("AddDialog — book saved result (issue #113)", () => {
+  async function saveEpubBook(overrides?: Partial<EpubIngestionSuccess>) {
+    const user = userEvent.setup();
+    ingestEpubMock.mockResolvedValue({
+      ...sampleBookResult(),
+      skippedCount: 0,
+      ...overrides,
+    });
+    const utils = renderDialog();
+    await user.click(screen.getByRole("radio", { name: "Upload file" }));
+    await user.upload(
+      fileInput(),
+      new File(["PK"], "sample.epub", { type: "application/epub+zip" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Add file" }));
+    await waitFor(() => {
+      expect(screen.getByText("Saved to your library.")).not.toBeNull();
+    });
+    return { user, ...utils };
+  }
+
+  it("the result card shows the book title with Open book + Add another (and Close) actions", async () => {
+    await saveEpubBook();
+
+    expect(
+      screen.getByRole("heading", { name: "Sample Book", level: 3 }),
+    ).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Open book" })).not.toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Add another" }),
+    ).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Close" })).not.toBeNull();
+    // The intake chrome yields to the result; the article-only controls
+    // never render for a book.
+    expect(screen.queryByRole("button", { name: "Open article" })).toBeNull();
+    expect(
+      document.querySelector("fieldset.add-source-picker")!.hasAttribute(
+        "hidden",
+      ),
+    ).toBe(true);
+    expect(
+      document.querySelector("fieldset.add-tags-fieldset")!.hasAttribute(
+        "hidden",
+      ),
+    ).toBe(true);
+  });
+
+  it("a clean save (skippedCount 0) is silent about skips", async () => {
+    await saveEpubBook();
+    expect(screen.queryByText(/could not be read/)).toBeNull();
+    // The card still renders its title + the outcome actions.
+    expect(
+      screen.getByRole("heading", { name: "Sample Book", level: 3 }),
+    ).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Open book" })).not.toBeNull();
+  });
+
+  it("a skipped save discloses the count (the D12-11 byte-stable copy, singular)", async () => {
+    await saveEpubBook({ skippedCount: 1 });
+    expect(screen.getByText("1 chapter could not be read.")).not.toBeNull();
+  });
+
+  it("Open book navigates close-first to the first available chapter (ordered: cancel, then the hash write)", async () => {
+    const user = userEvent.setup();
+    ingestEpubMock.mockResolvedValue(sampleBookResult());
+    renderDialog({
+      onCancel: vi.fn(() => navEvents.push("cancel")),
+      onSaved: vi.fn(),
+    });
+    await user.click(screen.getByRole("radio", { name: "Upload file" }));
+    await user.upload(
+      fileInput(),
+      new File(["PK"], "sample.epub", { type: "application/epub+zip" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Add file" }));
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Open book" })).not.toBeNull();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Open book" }));
+
+    // Ordered: the close callback fires BEFORE the hash write (D16-12);
+    // the target is the first DECLARED live chapter (epub-c01).
+    await waitFor(() => {
+      expect(navEvents).toEqual(["cancel", "hash:#/article/epub-c01"]);
+    });
+  });
+
+  it("Add another resets the session after a book save: fields + result cleared, tags gone, URL field focused", async () => {
+    const user = userEvent.setup();
+    ingestEpubMock.mockResolvedValue(sampleBookResult());
+    render(
+      <AddDialog
+        open={true}
+        onCancel={vi.fn()}
+        onSaved={vi.fn()}
+        tagStats={[{ tag: "essays", count: 2 }]}
+      />,
+    );
+    await user.click(screen.getByRole("radio", { name: "Upload file" }));
+    await user.type(screen.getByLabelText("Add or search a tag"), "essays");
+    await user.keyboard("{Enter}");
+    expect(screen.getByText("essays")).toBeInTheDocument();
+    await user.upload(
+      fileInput(),
+      new File(["PK"], "sample.epub", { type: "application/epub+zip" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Add file" }));
+    await waitFor(() => {
+      expect(screen.getByText("Saved to your library.")).not.toBeNull();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Add another" }));
+
+    // Fresh session (D16-08 shape, dialog still up) — result gone, Web
+    // address checked, the file pick cleared, tags cleared, the status
+    // region collapsed back to idle, focus on the Web address field.
+    await waitFor(() => {
+      expect(screen.queryByText("Saved to your library.")).toBeNull();
+    });
+    expect(document.querySelector(".add-result")).toBeNull();
+    const urlRadio = screen.getByRole("radio", {
+      name: "Web address",
+    }) as HTMLInputElement;
+    expect(urlRadio.checked).toBe(true);
+    expect(fileInput().value).toBe("");
+    expect(screen.queryByText("essays")).not.toBeInTheDocument();
+    expect(
+      document
+        .querySelector("fieldset.add-source-picker")!
+        .hasAttribute("hidden"),
+    ).toBe(false);
+    await waitFor(() => {
+      expect(document.activeElement).toBe(
+        document.getElementById("ingest-url"),
+      );
+    });
+  });
+
+  it("the save landing moves focus to the book title heading (keyboard + SR land on the title)", async () => {
+    await saveEpubBook();
+
+    const heading = screen.getByRole("heading", {
+      name: "Sample Book",
+      level: 3,
+    });
+    expect(document.activeElement).toBe(heading);
+    expect(heading.getAttribute("tabindex")).toBe("-1");
+  });
+
+  it("a book result with no live chapter renders no Open book control (the nothing-to-open edge)", async () => {
+    await saveEpubBook({
+      book: {
+        id: "book-id",
+        title: "Sample Book",
+        chapterArticleIds: ["epub-c01"],
+        addedAt: "2026-08-29T00:00:00.000Z",
+      } as unknown as EpubIngestionSuccess["book"],
+      articles: [],
+    });
+
+    expect(screen.queryByRole("button", { name: "Open book" })).toBeNull();
+    // The other outcome actions stay (Close / Add another remain useful).
+    expect(screen.getByRole("button", { name: "Close" })).not.toBeNull();
+  });
+
+  it("a book dedupe-refuse never enters result mode: calm copy only, no result actions", async () => {
+    const user = userEvent.setup();
+    hasBookMock.mockResolvedValue(true); // book-level dedupe-refuse
+    ingestEpubMock.mockResolvedValue(sampleBookResult());
+    const { onSaved } = renderDialog();
+
+    await user.click(screen.getByRole("radio", { name: "Upload file" }));
+    await user.upload(
+      fileInput(),
+      new File(["PK"], "sample.epub", { type: "application/epub+zip" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Add file" }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/already in your library/i)).not.toBeNull();
+    });
+    // Distinct surfaces: no result card, no outcome actions, no
+    // invalidation broadcast (nothing was saved).
+    expect(document.querySelector(".add-result")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Open book" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Add another" })).toBeNull();
+    expect(onSaved).not.toHaveBeenCalled();
+    // The submit stays (retry available), the result is not shown.
+    expect(screen.getByRole("button", { name: "Add file" })).not.toBeNull();
   });
 });
 

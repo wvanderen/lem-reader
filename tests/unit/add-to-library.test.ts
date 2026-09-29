@@ -409,7 +409,7 @@ describe("addToLibrary — article path (url/paste/file)", () => {
 });
 
 describe("addToLibrary — book path (epub)", () => {
-  it("ingestEpub(base64, filename) → hasBook BEFORE saveBook → saved-book with skippedCount", async () => {
+  it("ingestEpub(base64, filename) → hasBook BEFORE saveBook → saved-book with the result payload (issue #113)", async () => {
     const bytes = new Uint8Array([80, 75]);
     const result = bookSuccess({ skippedCount: 2 });
     ingestEpubMock.mockResolvedValue(result);
@@ -428,8 +428,74 @@ describe("addToLibrary — book path (epub)", () => {
     expect(outcome).toEqual({
       outcome: "saved-book",
       bookId: "book-id",
+      title: "Sample Book",
       skippedChapterCount: 2,
+      firstChapterArticleId: "epub-c01",
     });
+  });
+
+  // Issue #113 — "Open book opens the first available chapter": the
+  // declared-TOC order wins (the BookRow title-link resolution), never the
+  // article load order.
+  it("firstChapterArticleId follows the declared TOC order, not article load order", async () => {
+    ingestEpubMock.mockResolvedValue(
+      bookSuccess({
+        book: {
+          id: "book-id",
+          title: "Sample Book",
+          chapterArticleIds: ["epub-c02", "epub-c01"],
+        } as unknown as EpubIngestionSuccess["book"],
+        articles: [
+          chapter("epub-c01", [paragraph("one.")]),
+          chapter("epub-c02", [paragraph("two.")]),
+        ],
+      }),
+    );
+    const outcome = await addToLibrary({
+      kind: "file",
+      file: new File(["PK"], "book.epub"),
+    });
+
+    expect(outcome.outcome).toBe("saved-book");
+    if (outcome.outcome !== "saved-book") return;
+    expect(outcome.firstChapterArticleId).toBe("epub-c02");
+  });
+
+  // Partial-import tolerance (BookRow's missing-row discipline): a declared
+  // id with no live row falls through to the first LIVE article.
+  it("firstChapterArticleId falls back to the first live article when the declared id has no row", async () => {
+    ingestEpubMock.mockResolvedValue(
+      bookSuccess({
+        book: {
+          id: "book-id",
+          title: "Sample Book",
+          chapterArticleIds: ["epub-c09", "epub-c01"],
+        } as unknown as EpubIngestionSuccess["book"],
+        articles: [chapter("epub-c01", [paragraph("one.")])],
+      }),
+    );
+    const outcome = await addToLibrary({
+      kind: "file",
+      file: new File(["PK"], "book.epub"),
+    });
+
+    expect(outcome.outcome).toBe("saved-book");
+    if (outcome.outcome !== "saved-book") return;
+    expect(outcome.firstChapterArticleId).toBe("epub-c01");
+  });
+
+  it("a clean book save carries skippedChapterCount 0 and the first declared chapter", async () => {
+    ingestEpubMock.mockResolvedValue(bookSuccess({ skippedCount: 0 }));
+    const outcome = await addToLibrary({
+      kind: "file",
+      file: new File(["PK"], "book.epub"),
+    });
+
+    expect(outcome.outcome).toBe("saved-book");
+    if (outcome.outcome !== "saved-book") return;
+    expect(outcome.skippedChapterCount).toBe(0);
+    expect(outcome.title).toBe("Sample Book");
+    expect(outcome.firstChapterArticleId).toBe("epub-c01");
   });
 
   it("book dedupe-refuse: hasBook=true → refused already-in-library, saveBook NEVER called", async () => {
