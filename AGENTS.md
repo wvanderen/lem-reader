@@ -179,3 +179,17 @@ No project skills found. Add skills to any of: `.claude/skills/`, `.agents/skill
 <!-- GSD:skills-end -->
 
 > **Note:** GSD (get-shit-done) was removed on 2026-09-12. The former `/gsd-*` workflow commands no longer exist. Legacy planning artifacts are kept in `.planning/` (see `.planning/DEPRECATED.md`).
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in this repo's GitHub Issues (`wvanderen/lem-reader`), used via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Five canonical triage roles with default label strings. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` at the repo root plus `docs/adr/`. See `docs/agents/domain.md`.
