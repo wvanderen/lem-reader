@@ -256,7 +256,7 @@ test.describe("ING-04 — PDF upload intake (SC#1–SC#3 + D7-07)", () => {
 
     // Issue #112 — "Open article" on the result screen navigates (the
     // UAT Test 2 flow this gap closure pins — previously refused
-    // "Couldn.t reliably read this page").
+    // "Couldn't reliably read this page").
     await openSavedArticle(page, /#\/article\/pdf-/);
     await waitForOpenedArticle(page);
 

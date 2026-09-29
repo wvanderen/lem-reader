@@ -78,7 +78,7 @@ import { mapReasonToCopy } from "./ingestCopy";
 // Issue #4 — the ingest-and-persist policy service; ONE call per
 // submission arm.
 import { addToLibrary } from "./addToLibrary";
-import type { AddToLibraryOutcome } from "./addToLibrary";
+import type { AddToLibraryOutcome, SavedArticleResult } from "./addToLibrary";
 // Issue #112 — the partial-content disclosure heading, shared with the
 // reader view (the ONE copy home; the per-part lines ride the outcome).
 import { PARTIAL_CONTENT_NOTE } from "../routes/extractionNote";
@@ -188,10 +188,7 @@ export function AddDialog({ open, onCancel, onSaved, tagStats }: AddDialogProps)
   // A refused/failure outcome NEVER lands here — refusal copy and the
   // saved result stay distinct. Reset on every open (D16-08) and by
   // "Add another".
-  const [saved, setSaved] = useState<Extract<
-    AddToLibraryOutcome,
-    { outcome: "saved-article" }
-  > | null>(null);
+  const [saved, setSaved] = useState<SavedArticleResult | null>(null);
 
   // Issue #84 (decision #70) — the transcript fallback is an IN-PLACE
   // SWAP of the content slot: while a bot-check offer is live the source

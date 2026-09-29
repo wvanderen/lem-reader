@@ -81,11 +81,33 @@ export type AddToLibraryInput =
   | { kind: "transcript-paste"; text: string; title: string; url?: string };
 
 /**
+ * SavedArticleResult — the saved-article outcome's display payload (issue
+ * #112): title, provenance sourceUrl, and the three extraction-note
+ * disclosures, ALL derived from the SAME row that just saved so the dialog
+ * never re-reads the article or forks the copy derivations.
+ */
+export type SavedArticleResult = {
+  outcome: "saved-article";
+  articleId: string;
+  /** The saved article's canonical title (provenance.title). */
+  title: string;
+  /** The canonical original link (provenance.sourceUrl) — absent for
+   * paste/upload arms (D7-08). Renders the "See the original" link. */
+  sourceUrl?: string;
+  /** The low-confidence disclosure sentence, or undefined for a
+   * confident save (the ONE extractionNote derivation). */
+  note?: string;
+  /** Per-part disclosure lines ([] when nothing fell — ADR-0003). */
+  warnings: string[];
+  /** The degraded-anchoring disclosure, or undefined when reliable. */
+  degraded?: string;
+};
+
+/**
  * AddToLibraryOutcome — the navigation-ready result of one submission.
  * - `saved-article` → the caller shows the saved-result screen (issue #112):
- *   the display payload rides the outcome (title, provenance sourceUrl, and
- *   the three extraction-note disclosures — all derived from the SAME saved
- *   article row); "Open article" navigates to the `articleId` hash anchor.
+ *   the display payload is the SavedArticleResult above; "Open article"
+ *   navigates to the `articleId` hash anchor.
  * - `saved-book` → the caller closes, refreshes the library, and can
  *   surface the D12-11 skip disclosure from `skippedChapterCount`.
  * - `refused` → the caller stays open and renders the calm DOC-06 phrase
@@ -93,22 +115,7 @@ export type AddToLibraryInput =
  *   dedupe-refuse (D16-09 refusal-only — no save ever happened).
  */
 export type AddToLibraryOutcome =
-  | {
-      outcome: "saved-article";
-      articleId: string;
-      /** The saved article's canonical title (provenance.title). */
-      title: string;
-      /** The canonical original link (provenance.sourceUrl) — absent for
-       * paste/upload arms (D7-08). Renders the "See the original" link. */
-      sourceUrl?: string;
-      /** The low-confidence disclosure sentence, or undefined for a
-       * confident save (the ONE extractionNote derivation). */
-      note?: string;
-      /** Per-part disclosure lines ([] when nothing fell — ADR-0003). */
-      warnings: string[];
-      /** The degraded-anchoring disclosure, or undefined when reliable. */
-      degraded?: string;
-    }
+  | SavedArticleResult
   | { outcome: "saved-book"; bookId: string; skippedChapterCount: number }
   | { outcome: "refused"; reason: IngestionFailureReason };
 

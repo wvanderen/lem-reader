@@ -110,7 +110,7 @@ beforeEach(() => {
 // Navigation + callback ordering recorder. The hash setter stub records
 // every write (jsdom doesn't implement location.hash navigation — the
 // the original control's suite L81-90 precedent), and tests push "cancel" /
-// "bookAdded" markers from their onCancel/onSaved spies so the
+// "saved" markers from their onCancel/onSaved spies so the
 // D16-12 ordering (close FIRST, then navigate/callback) is assertable as
 // one ordered array.
 const navEvents: string[] = [];

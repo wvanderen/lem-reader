@@ -44,6 +44,7 @@ Pagination, selection, focus, zoom, reflow, or responsive UI changes should also
 - Do not silently drop unsupported content or silently reattach an uncertain annotation.
 - Honor visible focus, keyboard operation, browser zoom and reflow, and reduced-motion preferences.
 - Keep user data local-first and maintain explicit migrations for persisted schema changes.
+- When two surfaces intentionally compose the same reader copy (today the article view and the Add dialog's saved-result card), keep the small render clones beside their own dialog grammar; promote to a shared component only when a third surface appears.
 
 ## Pull requests
 
