@@ -121,6 +121,54 @@ export function probeRoundTripAnchor(article: CanonicalArticle): AnchorProbeResu
   return "pass";
 }
 
+/**
+ * unsupportedPartsWarning — the count-first extractionWarnings line for
+ * unsupported blocks (ADR-0003), ONE copy source shared verbatim by the EPUB
+ * per-chapter stage and the single-article tail (T-20-10 — never silent, and
+ * never drifting between the two disclosure surfaces).
+ */
+function unsupportedPartsWarning(count: number): string[] {
+  return count > 0
+    ? [
+        `${count} part${count === 1 ? "" : "s"} of the original could not be displayed`,
+      ]
+    : [];
+}
+
+/**
+ * probeAnchorOrThrow — the Stage-7 probe POLICY (ADR-0003) shared by the EPUB
+ * per-chapter stage and the single-article tail: "orphan" throws (the
+ * derive/resolve bug canary stays a hard failure); "pass"/"ambiguous" return
+ * so the caller can stamp annotationsDegraded on "ambiguous".
+ */
+function probeAnchorOrThrow(article: CanonicalArticle): "pass" | "ambiguous" {
+  const anchorProbe = probeRoundTripAnchor(article);
+  if (anchorProbe === "orphan") {
+    throw new IngestionError("round-trip-anchor-failed");
+  }
+  return anchorProbe;
+}
+
+/**
+ * stampIngestionFlags — the post-probe stamp shared by both tails (mutation
+ * safe: the article is local to the request, not yet persisted; Zod parse
+ * does not freeze). Narrow guard: ingestionMeta is `.optional()` on the
+ * schema but always present at both call sites (each `assembled` supplies it).
+ */
+function stampIngestionFlags(
+  article: CanonicalArticle,
+  confidence: ConfidenceResult,
+  anchorProbe: "pass" | "ambiguous",
+): void {
+  if (article.ingestionMeta) {
+    article.ingestionMeta.extractionConfidence =
+      confidence.state === "confident" ? "high" : "low";
+    if (anchorProbe === "ambiguous") {
+      article.ingestionMeta.annotationsDegraded = true;
+    }
+  }
+}
+
 // 260821-ov7 — the plain-text paste reroute predicate + Stage 0.5 reroute.
 // Prod-confirmed root cause (.planning/todos/pending/2026-08-21-fix-prod-ui-paste-ingest-flow.md):
 // the paste textarea receives RENDERED text (a <textarea> holds text, and
@@ -388,11 +436,7 @@ async function ingestEpubBook(input: {
           originalHtmlHash,
           extractionConfidence: "high" as const, // placeholder — stamped post-gate
           extractionWarnings: [
-            ...(unsupportedBlockCount > 0
-              ? [
-                  `${unsupportedBlockCount} part${unsupportedBlockCount === 1 ? "" : "s"} of the original could not be displayed`,
-                ]
-              : []),
+            ...unsupportedPartsWarning(unsupportedBlockCount),
             ...(draft.figureRefusedCount > 0
               ? [
                   `${draft.figureRefusedCount} image${
@@ -409,15 +453,12 @@ async function ingestEpubBook(input: {
       // Stage 6b: VALIDATE — ArticleSchema.parse (unchanged stage).
       const article: CanonicalArticle = ArticleSchema.parse(assembled);
 
-      // Stage 7: ROUND-TRIP ANCHOR PROBE (SC#4, ADR-0003) — the SAME
-      // imported probe, per chapter. "orphan" throws below into the chapter
-      // skip (the bug canary stays a hard failure); "ambiguous" ADMITS the
-      // chapter flagged (annotationsDegraded) instead of skipping it — the
-      // text is readable, so the reader gets it.
-      const anchorProbe = probeRoundTripAnchor(article);
-      if (anchorProbe === "orphan") {
-        throw new IngestionError("round-trip-anchor-failed");
-      }
+      // Stage 7: ROUND-TRIP ANCHOR PROBE (SC#4, ADR-0003) — the SAME imported
+      // probe + policy per chapter (probeAnchorOrThrow): "orphan" throws into
+      // the chapter skip (the bug canary stays a hard failure); "ambiguous"
+      // ADMITS the chapter flagged (annotationsDegraded) instead of skipping
+      // it — the text is readable, so the reader gets it.
+      const anchorProbe = probeAnchorOrThrow(article);
 
       // ING-06 two-state confidence (ADR-0003 — no "unsupported" state to
       // skip on). The adapter's D12-10 admission already established
@@ -427,15 +468,7 @@ async function ingestEpubBook(input: {
         isReaderable: true,
       });
 
-      // Stamp (mutation safe — local to this request; same pattern as the
-      // single-article tail).
-      if (article.ingestionMeta) {
-        article.ingestionMeta.extractionConfidence =
-          confidence.state === "confident" ? "high" : "low";
-        if (anchorProbe === "ambiguous") {
-          article.ingestionMeta.annotationsDegraded = true;
-        }
-      }
+      stampIngestionFlags(article, confidence, anchorProbe);
 
       chapterArticleIds.push(id);
       admitted.push(article);
@@ -973,12 +1006,7 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
     const unsupportedBlockCount = effectiveBlocks.filter(
       (b) => b.kind === "unsupported",
     ).length;
-    const unsupportedBlockWarnings =
-      unsupportedBlockCount > 0
-        ? [
-            `${unsupportedBlockCount} part${unsupportedBlockCount === 1 ? "" : "s"} of the original could not be displayed`,
-          ]
-        : [];
+    const unsupportedBlockWarnings = unsupportedPartsWarning(unsupportedBlockCount);
 
     const assembled = {
       id,
@@ -1018,13 +1046,11 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
 
     // Stage 7: ROUND-TRIP ANCHOR PROBE (SC#1, ADR-0003) — a detector, not a
     // gate. MUST run AFTER ArticleSchema.parse so the probe receives a
-    // validated article. "orphan" still refuses (a derive/resolve asymmetry
-    // bug canary); "ambiguous" means the text is readable but highlight
-    // anchoring may be unreliable — admitted flagged (annotationsDegraded).
-    const anchorProbe = probeRoundTripAnchor(article);
-    if (anchorProbe === "orphan") {
-      throw new IngestionError("round-trip-anchor-failed");
-    }
+    // validated article. Shared policy (probeAnchorOrThrow): "orphan" still
+    // refuses (a derive/resolve asymmetry bug canary); "ambiguous" means the
+    // text is readable but highlight anchoring may be unreliable — admitted
+    // flagged (annotationsDegraded).
+    const anchorProbe = probeAnchorOrThrow(article);
 
     // ING-06 two-state confidence (ADR-0003 — no "unsupported" state):
     // confident enters clean; low enters the library flagged for the
@@ -1046,17 +1072,9 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
       confidence.reason = hasTranscript ? "pasted-transcript" : "asr-caption-track";
     }
 
-    // Stamp the flags onto the article (mutation is safe — the article
-    // is local to this request, not yet persisted; Zod parse does not freeze).
-    // The narrow guard satisfies TS: ingestionMeta is `.optional()` on the
-    // schema but always present here (we always supply it in `assembled`).
-    if (article.ingestionMeta) {
-      article.ingestionMeta.extractionConfidence =
-        confidence.state === "confident" ? "high" : "low";
-      if (anchorProbe === "ambiguous") {
-        article.ingestionMeta.annotationsDegraded = true;
-      }
-    }
+    // Stamp the flags onto the article (the shared stampIngestionFlags —
+    // same narrow-guard discipline as the EPUB chapter stage).
+    stampIngestionFlags(article, confidence, anchorProbe);
 
     return {
       ok: true,

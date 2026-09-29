@@ -23,6 +23,10 @@ import {
 } from "../../../server/ingest";
 import { MAX_INGEST_BODY_BYTES, PDF_MAX_BYTES } from "../../../server/limits";
 import type { Block } from "../../../src/content/schema";
+import {
+  buildContentStream,
+  serializePdf,
+} from "../../fixtures/pdf/generate-synthetic-pdfs";
 
 // ── Synthetic fixture loading (tests/fixtures/pdf — committed corpus) ────────
 const FIXTURES_DIR = join(
@@ -155,6 +159,41 @@ describe("ingest — outline-fixture admission (11-07)", () => {
     expect(headingTexts).toContain("Outlined Document");
     expect(headingTexts).toContain("Second Section");
     expect(article.blocks.length).toBeGreaterThanOrEqual(3);
+  });
+});
+
+// ── ADR-0003 — thin-content admission reaches the PDF path too ───────────────
+describe("ingest — pdf thin-content admission (ADR-0003)", () => {
+  it("a two-block text PDF admits flagged instead of refusing extraction-unsupported", async () => {
+    // Reading-first applies to EVERY text path, not just the web path: the
+    // shared zero-block guard (blocks.length === 0) is the only content-based
+    // refusal left, so a text PDF with fewer blocks than isReaderable's floor
+    // (>= 3) enters the library flagged low — the reader sees the fidelity
+    // note instead of a refusal wall. The adapter REFUSAL classes (scanned,
+    // multi-column, unreadable, too-large) above are untouched.
+    const twoParagraphPdf = serializePdf({
+      pages: [
+        buildContentStream([
+          // Three tight lines merge into ONE paragraph block (blocks < 3 →
+          // isReaderable false), while ≥ 3 items + ≥ 15 chars keep the page
+          // out of the adapter's near-empty/scanned detector class.
+          { x: 60, y: 740, font: "F1", size: 12, text: "A short memo with barely any content." },
+          { x: 60, y: 724, font: "F1", size: 12, text: "One more line of honest, readable text." },
+          { x: 60, y: 708, font: "F1", size: 12, text: "And a third line so the page is not near-empty." },
+        ]),
+      ],
+    });
+    const response = await ingest({
+      pdf: twoParagraphPdf.toString("base64"),
+      filename: "thin-memo.pdf",
+    });
+    expect(response.ok).toBe(true);
+    if (!response.ok || !("article" in response)) {
+      throw new Error("expected ok:true article envelope");
+    }
+    expect(response.article.blocks.length).toBeLessThan(3);
+    expect(response.article.ingestionMeta?.extractionConfidence).toBe("low");
+    expect(response.confidence.state).toBe("low");
   });
 });
 

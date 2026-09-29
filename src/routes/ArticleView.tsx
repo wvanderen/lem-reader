@@ -1914,6 +1914,25 @@ export function ArticleView({
   // string | undefined).
   const effectiveByline = effectiveAuthor(article);
   const effectiveDate = effectivePublishedAt(article);
+  // ADR-0003 notes — the same narrow-guard discipline as the byline consts
+  // above: one derivation per signal, local consts so the guard, the rendered
+  // text, and the map source narrow through the SAME value (bare calls per
+  // JSX expression would widen back to string | undefined / re-derive).
+  const note = extractionNote(article);
+  const warnings = partialContentWarnings(article);
+  const degradedNote = annotationsNote(article);
+  // The "See the original." escape hatch — one JSX derivation shared by the
+  // low-confidence note and the partial-content heading (identical link,
+  // byte-identical copy, by construction).
+  const seeOriginal = sourceUrl && (
+    <>
+      <a href={sourceUrl} rel="noopener noreferrer" target="_blank">
+        See the original
+        <span className="visually-hidden"> (opens in a new tab)</span>
+      </a>
+      .
+    </>
+  );
   const articleTopMeta = (
     <div className="article-top-meta">
       {/* Plan 17-03 (META-02/D17-09): the byline reads the effective author
@@ -1931,45 +1950,31 @@ export function ArticleView({
           the empty state (silence, never a placeholder); ASR transcripts
           carry the caption-specific wording via the ONE copy derivation.
           ADR-0003: the sentence gains the "See the original." escape hatch
-          when the article has a sourceUrl. One derivation, three local
-          consts (the narrow-guard discipline above — a bare call per JSX
-          expression would widen back to string | undefined). */}
-      {extractionNote(article) && (
+          when the article has a sourceUrl. The local-const discipline above
+          applies (one derivation, narrowed through `note` / `seeOriginal`). */}
+      {note && (
         <p className="meta extraction-note">
-          {extractionNote(article)}
-          {sourceUrl && (
-            <>
-              {" "}
-              <a href={sourceUrl} rel="noopener noreferrer" target="_blank">
-                See the original
-                <span className="visually-hidden"> (opens in a new tab)</span>
-              </a>
-              .
-            </>
-          )}
+          {note}
+          {sourceUrl && " "}
+          {seeOriginal}
         </p>
       )}
       {/* ADR-0003 — the partial-content disclosure: the article-level "parts
           fell" sentence with the original-article escape hatch, plus each
           extractionWarning line (image refusals, unsupported parts, transcript
           warnings) as a quiet list. Silence when nothing fell. */}
-      {partialContentWarnings(article).length > 0 && (
+      {warnings.length > 0 && (
         <div className="meta partial-content-note">
           <p className="partial-content-heading">
             {PARTIAL_CONTENT_NOTE}{" "}
-            {sourceUrl && (
-              <>
-                <a href={sourceUrl} rel="noopener noreferrer" target="_blank">
-                  See the original
-                  <span className="visually-hidden"> (opens in a new tab)</span>
-                </a>
-                .
-              </>
-            )}
+            {seeOriginal}
           </p>
           <ul>
-            {partialContentWarnings(article).map((warning) => (
-              <li key={warning}>{warning}</li>
+            {/* Composite key: warnings are free-form strings (three producers)
+                and could in principle repeat — the index suffix keeps keys
+                unique without pretending the text is an id. */}
+            {warnings.map((warning, index) => (
+              <li key={`${warning}-${index}`}>{warning}</li>
             ))}
           </ul>
         </div>
@@ -1977,9 +1982,7 @@ export function ArticleView({
       {/* ADR-0003 — the degraded-anchoring disclosure: the round-trip probe
           found ambiguous samples, so highlight anchoring may be unreliable.
           The text itself is fully readable — one calm sentence, no jargon. */}
-      {annotationsNote(article) && (
-        <p className="meta annotations-note">{annotationsNote(article)}</p>
-      )}
+      {degradedNote && <p className="meta annotations-note">{degradedNote}</p>}
       {/* Plan 12-06 (D12-08): epub-chapter context line — calm book
           provenance below the article provenance, epub-chapter only
           (chapterContext is non-null ONLY when the source is epub-chapter

@@ -33,7 +33,9 @@
 //        multi-column   → refused:pdf-multi-column
 //   2. every admitted entry: block-level agreement ≥ 0.90 against
 //      ground-truth labels AND anchorRoundTrip === true (SC#4a — ingest's
-//      probeRoundTripAnchor passed on the real PDF)
+//      probeRoundTripAnchor ran on the real PDF and did not refuse;
+//      post-ADR-0003 an "ambiguous" probe admits flagged rather than
+//      refusing)
 //   3. non-empty results (refuse-empty — fingerprint.compare.ts L205-211
 //      precedent: never validate or write a placeholder record)
 //
@@ -447,7 +449,9 @@ export interface DerivePaths {
  * on the CURRENT PDF_THRESHOLDS, ArticleSchema.parse, the SC#4a
  * probeRoundTripAnchor probe, confidence). An ok response records
  * "admitted" + agreement against the committed ground-truth labels +
- * anchorRoundTrip: true (ok implies the anchor gate passed). A typed
+ * anchorRoundTrip: true (ok implies the anchor probe ran and did not
+ * refuse — ambiguous admits flagged, annotationsDegraded, per ADR-0003).
+ * A typed
  * refusal records "refused:" + the reason. The CURRENT PDF_THRESHOLDS
  * snapshot rides along so every verdict is auditable against the numbers
  * that produced it. Throws (never writes partial evidence) on corpus

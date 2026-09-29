@@ -300,9 +300,10 @@ export type TranscriptMeta = z.infer<typeof TranscriptMetaSchema>;
 
 /** IngestionMetaSchema — derived per-article metadata written at ingest time.
  * Shape per 07-RESEARCH.md §IngestionMeta/ArticleSource Schema L566-574.
- * `extractionConfidence` carries only "high" | "low" — the "unsupported"
- * three-state outcome (ING-06) is refused at ingest (never reaches persistence);
- * the client sees it as the failure envelope reason `extraction-unsupported`. */
+ * `extractionConfidence` is two-state "high" | "low" (ADR-0003): readable
+ * text is never refused — thin/imperfect extraction admits flagged "low";
+ * the only content-based web refusal left is ZERO extracted blocks (the
+ * client sees that as the failure envelope reason `extraction-unsupported`). */
 export const IngestionMetaSchema = z.object({
   source: ArticleSourceSchema,
   // D7-08 + D8-15: origin discriminator widens additively. "upload" covers
@@ -313,7 +314,7 @@ export const IngestionMetaSchema = z.object({
   sourceUrl: httpUrl.optional(), // D7-08: Provenance.sourceUrl mirror (present for url; absent for paste/upload)
   originalHtmlHash: z.string(), // SHA-256 of fetched/pasted/uploaded source bytes — traceability
   fetchedAt: z.string().datetime().optional(), // ISO-8601 (present for url; absent for paste/upload)
-  extractionConfidence: z.enum(["high", "low"]), // the derived signal; "unsupported" never persists
+  extractionConfidence: z.enum(["high", "low"]), // the derived signal; two-state per ADR-0003 ("low" = admitted flagged)
   extractionWarnings: z.array(z.string()).default([]), // e.g. "3 unsupported blocks omitted"
   // ADR-0003 — true when the round-trip anchor probe found ambiguous samples:
   // the text is fully readable, but highlight anchoring may be unreliable on

@@ -42,8 +42,11 @@
 //      calibration warning sign: fallback on a book whose nav/NCX resolves
 //      means href normalization regressed — Pitfall 1).
 //   4. anchorRoundTrip === true on every admitted entry (the per-chapter
-//      SC#4 probeRoundTripAnchor probe passed inside ingestEpubBook — an ok
-//      book envelope implies it, and the evidence records it explicitly).
+//      SC#4 probeRoundTripAnchor probe ran inside ingestEpubBook and did NOT
+//      refuse — an ok book envelope implies it, and the evidence records it
+//      explicitly. Post-ADR-0003 an "ambiguous" probe admits the chapter
+//      flagged (annotationsDegraded) rather than refusing, so this bar
+//      claims did-not-refuse, not "passed").
 //   5. non-empty results (refuse-empty — the fingerprint.compare.ts
 //      L205-211 precedent: never validate or write a placeholder record).
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
@@ -354,7 +357,8 @@ export interface DerivePaths {
  * probeRoundTripAnchor probe + confidence, book assembly). An ok book
  * envelope records "admitted" + chapterCount (articles.length — the count
  * the reader would save) + fallbackUsed + anchorRoundTrip: true (ok implies
- * every admitted chapter passed the per-chapter anchor gate). A typed
+ * every admitted chapter's anchor probe ran and did not refuse — ambiguous
+ * admits flagged, annotationsDegraded, per ADR-0003). A typed
  * refusal records "refused:" + the reason. fallbackUsed comes from the
  * adapter itself (epubToBooks) because the ingest book envelope does not
  * carry it — derive runs the real adapter path too, so the evidence records

@@ -18,7 +18,7 @@ import {
   SCHEMA_KINDS,
 } from "../../../server/markdownToBlocks";
 import { ArticleSchema, type CanonicalArticle } from "../../../src/content/schema";
-import { probeRoundTripAnchor } from "../../../server/ingest";
+import { ingest, probeRoundTripAnchor } from "../../../server/ingest";
 
 // The 9 schema-allowed block kinds (src/content/schema.ts BlockSchema). Every
 // extracted block MUST have a kind in this tuple — the exhaustive walker has
@@ -618,5 +618,24 @@ describe("markdownToBlocks — caption attachment (issue #19)", () => {
     const fig = blocks[1];
     if (fig?.kind !== "figure") throw new Error("expected figure");
     expect(fig.caption).toEqual([]);
+  });
+});
+
+describe("ingest({ markdown }) — thin-content admission (ADR-0003)", () => {
+  it("a two-block markdown document admits flagged instead of refusing extraction-unsupported", async () => {
+    // Reading-first applies to EVERY text path, not just the web path: the
+    // shared zero-block guard (blocks.length === 0) is the only content-based
+    // refusal left, so a heading + one-paragraph .md upload (isReaderable
+    // false at blocks.length >= 3) enters the library flagged low — the
+    // reader sees the fidelity note instead of a refusal wall.
+    const result = await ingest({
+      markdown: "# A very short note\n\nBarely anything here, but it is text.",
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok || !("article" in result)) throw new Error("expected ok:true article envelope");
+    expect(result.article.blocks).toHaveLength(2);
+    expect(result.article.ingestionMeta?.source).toBe("markdown");
+    expect(result.article.ingestionMeta?.extractionConfidence).toBe("low");
+    expect(result.confidence.state).toBe("low");
   });
 });
