@@ -67,7 +67,7 @@ import {
 } from "./annotations/_fixtures";
 // Plan 16-03 — the shared dialog-opening helper (the forms live behind the
 // header Add button's modal since the add-section dissolution).
-import { openAddDialog, pickSource } from "./library/add-dialog";
+import { openAddDialog, pickSource, openSavedArticle } from "./library/add-dialog";
 
 /** Load a committed synthetic PDF fixture's bytes (11-01 corpus). */
 function pdfFixture(name: string): Buffer {
@@ -126,7 +126,8 @@ async function uploadAndOpen(page: Page): Promise<void> {
     page.getByRole("heading", { level: 1, name: "Saved articles" }),
   ).toBeVisible();
   await uploadPdf(page, "calm-report.pdf", SINGLE_COLUMN_PDF);
-  await page.waitForURL(/#\/article\/pdf-/, { timeout: 15_000 });
+  // Issue #112 — "Open article" on the result screen navigates.
+  await openSavedArticle(page, /#\/article\/pdf-/);
   await waitForOpenedArticle(page);
 }
 
@@ -184,8 +185,9 @@ test.describe("ING-04 — PDF upload intake (SC#1–SC#3 + D7-07)", () => {
       page.locator("dialog.add-dialog .status").filter({ hasText: "Reading file…" }),
     ).toBeVisible();
 
-    // Navigation lands at #/article/pdf-<shortHash> (content-hash id).
-    await page.waitForURL(/#\/article\/pdf-/, { timeout: 15_000 });
+    // Issue #112 — "Open article" on the result screen navigates (the
+    // pdf- prefix asserts the content-hash id shape).
+    await openSavedArticle(page, /#\/article\/pdf-/);
 
     // D11-07 filename channel: no /Info title in the fixture, so the
     // provenance h1 renders stripPdfExtension("calm-report.pdf"). PDF body
@@ -252,9 +254,10 @@ test.describe("ING-04 — PDF upload intake (SC#1–SC#3 + D7-07)", () => {
     // heading via consumeDuplicatedTitle).
     await uploadPdf(page, "outline-notes.pdf", OUTLINE_PDF);
 
-    // Admission navigates to the article (the UAT Test 2 flow this gap
-    // closure pins — previously refused "Couldn't reliably read this page").
-    await page.waitForURL(/#\/article\/pdf-/, { timeout: 15_000 });
+    // Issue #112 — "Open article" on the result screen navigates (the
+    // UAT Test 2 flow this gap closure pins — previously refused
+    // "Couldn.t reliably read this page").
+    await openSavedArticle(page, /#\/article\/pdf-/);
     await waitForOpenedArticle(page);
 
     // D11-07 filename title chain — no Info title on the fixture, so the
@@ -374,9 +377,10 @@ test.describe("ING-04 — PDF upload intake (SC#1–SC#3 + D7-07)", () => {
       page.getByRole("heading", { level: 1, name: "Saved articles" }),
     ).toBeVisible();
 
-    // First upload — succeeds, navigates to #/article/pdf-<id>.
+    // First upload — succeeds; "Open article" navigates to #/article/pdf-<id>
+    // (issue #112 result screen).
     await uploadPdf(page, "calm-report.pdf", SINGLE_COLUMN_PDF);
-    await page.waitForURL(/#\/article\/pdf-/, { timeout: 15_000 });
+    await openSavedArticle(page, /#\/article\/pdf-/);
 
     // Navigate back to #/ and capture the row count (auto-retrying count —
     // the LibraryView load effect resolves async after mount; markdown-

@@ -93,7 +93,7 @@ const STATS: TagStat[] = [
 
 function renderDialog(tagStats: TagStat[] = STATS) {
   return render(
-    <AddDialog open={true} onCancel={vi.fn()} onBookAdded={vi.fn()} tagStats={tagStats} />,
+    <AddDialog open={true} onCancel={vi.fn()} onSaved={vi.fn()} tagStats={tagStats} />,
   );
 }
 
@@ -220,10 +220,10 @@ describe("AddDialog tags: session reset (D16-08)", () => {
     expect(screen.getByText("essays")).toBeInTheDocument();
 
     rerender(
-      <AddDialog open={false} onCancel={vi.fn()} onBookAdded={vi.fn()} tagStats={STATS} />,
+      <AddDialog open={false} onCancel={vi.fn()} onSaved={vi.fn()} tagStats={STATS} />,
     );
     rerender(
-      <AddDialog open={true} onCancel={vi.fn()} onBookAdded={vi.fn()} tagStats={STATS} />,
+      <AddDialog open={true} onCancel={vi.fn()} onSaved={vi.fn()} tagStats={STATS} />,
     );
 
     await waitFor(() =>

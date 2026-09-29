@@ -81,7 +81,7 @@ import { sha256Hex } from "../../../src/portability/manifest";
 // a non-spec module (unit fixture library), safe to import.
 import { FIGURE_PNG_B64, renderedFigureBook } from "../../unit/server/epub-fixtures";
 import { MARKDOWN_WITH_FRONTMATTER } from "../library/markdown-payload";
-import { openAddDialog, pickSource } from "../library/add-dialog";
+import { openAddDialog, pickSource, openSavedArticle } from "../library/add-dialog";
 import {
   announcementRegion,
   countHighlightsInDexie,
@@ -363,7 +363,9 @@ test("ACPT-07 — the v2.1 core flow as one unbroken journey: nothing lost acros
       buffer: Buffer.from(MARKDOWN_WITH_FRONTMATTER, "utf-8"),
     });
     await pageA.getByRole("button", { name: /add file/i }).click();
-    await pageA.waitForURL(/#\/article\/md-/, { timeout: 15_000 });
+    // Issue #112 — "Open article" on the result screen navigates (the
+    // md- id shape asserted on the landed route).
+    await openSavedArticle(pageA, /#\/article\/md-/);
     const idMatch = /#\/article\/(md-[a-z0-9]+)/.exec(pageA.url());
     expect(idMatch, "the article route must carry the md- content-hash id").not.toBeNull();
     const articleId = idMatch![1]!;

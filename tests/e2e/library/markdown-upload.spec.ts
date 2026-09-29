@@ -38,7 +38,7 @@
 // source first via the shared openAddDialog/pickSource helper (the forms
 // live behind the header button — ADD-01); names/ids are unchanged.
 import { test, expect } from "@playwright/test";
-import { openAddDialog, pickSource } from "./add-dialog";
+import { openAddDialog, pickSource, openSavedArticle } from "./add-dialog";
 // Plan 13-06 (Option A): the representative .md payload now lives in the
 // non-spec helper ./markdown-payload.ts so the ACPT-06 core-flow spine
 // reuses the PROVEN bytes without re-registering this spec's cells
@@ -140,7 +140,9 @@ test.describe("SC#4 + ING-03 — markdown + html upload intake", () => {
 
     // Navigation lands at #/article/<id> where <id> starts with "md-"
     // (D8-18 — content-hash slug).
-    await page.waitForURL(/#\/article\/md-/, { timeout: 15_000 });
+    // Issue #112 — "Open article" on the result screen navigates (the
+    // md- prefix asserts the D8-18 content-hash id shape).
+    await openSavedArticle(page, /#\/article\/md-/);
 
     // The ArticleView heading matches the front-matter `title:` field
     // (D8-17 — YAML recognized as metadata). The ArticleView header renders
@@ -197,7 +199,9 @@ test.describe("SC#4 + ING-03 — markdown + html upload intake", () => {
       buffer: Buffer.from(MARKDOWN_WITH_FRONTMATTER, "utf-8"),
     });
     await page.getByRole("button", { name: /add file/i }).click();
-    await page.waitForURL(/#\/article\/md-/, { timeout: 15_000 });
+    // Issue #112 — "Open article" on the result screen navigates (the
+    // md- prefix asserts the D8-18 content-hash id shape).
+    await openSavedArticle(page, /#\/article\/md-/);
 
     // Navigate back to #/ and capture the row count using the auto-retrying
     // toHaveCount (the LibraryView load effect resolves async after mount;
@@ -265,7 +269,9 @@ test.describe("SC#4 + ING-03 — markdown + html upload intake", () => {
       buffer: Buffer.from(MARKDOWN_NO_FRONTMATTER, "utf-8"),
     });
     await page.getByRole("button", { name: /add file/i }).click();
-    await page.waitForURL(/#\/article\/md-/, { timeout: 15_000 });
+    // Issue #112 — "Open article" on the result screen navigates (the
+    // md- prefix asserts the D8-18 content-hash id shape).
+    await openSavedArticle(page, /#\/article\/md-/);
 
     // The article still ingests and renders in ArticleView. The title is
     // derived from the filename via stripMarkdownExtension (D8-17 fallback):
@@ -317,7 +323,9 @@ test.describe("SC#4 + ING-03 — markdown + html upload intake", () => {
 
     // The html-upload id is paste-<shortHash(content)> (it reuses the paste
     // dispatch internally — only the input filename differs).
-    await page.waitForURL(/#\/article\/paste-/, { timeout: 15_000 });
+    // Issue #112 — "Open article" on the result screen navigates (the
+    // paste- prefix asserts the shared-{html}-path id shape).
+    await openSavedArticle(page, /#\/article\/paste-/);
     await expect(
       page
         .getByRole("heading", { level: 1, name: "An HTML Upload Variant" })

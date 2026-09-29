@@ -130,6 +130,46 @@ function articleSuccess(id = "ingested-id", assets: ValidatedAsset[] = []): Inge
   };
 }
 
+/**
+ * Issue #112 — the saved-result display payload expected for the base
+ * sampleArticle (confident save: canonical title + provenance sourceUrl,
+ * note/degraded undefined, warnings []).
+ */
+function expectedSaved(id: string) {
+  return {
+    outcome: "saved-article" as const,
+    articleId: id,
+    title: "Article",
+    sourceUrl: "https://example.com/article",
+    note: undefined,
+    warnings: [] as string[],
+    degraded: undefined,
+  };
+}
+
+/**
+ * Issue #112 — a flagged admission (ADR-0003): low confidence + extraction
+ * warnings + degraded anchoring. The outcome must carry the SAME
+ * disclosure sentences the reader view derives (the ONE copy derivations).
+ */
+function flaggedArticle(id = "flagged-id"): CanonicalArticle {
+  return {
+    ...sampleArticle(id),
+    ingestionMeta: {
+      source: "url",
+      origin: "url",
+      sourceUrl: "https://example.com/article",
+      originalHtmlHash: "sha256:0",
+      extractionConfidence: "low",
+      extractionWarnings: [
+        "1 image could not be fetched",
+        "2 unsupported parts omitted",
+      ],
+      annotationsDegraded: true,
+    },
+  } as unknown as CanonicalArticle;
+}
+
 function sampleAsset(assetId: string): ValidatedAsset {
   return {
     assetId,
@@ -182,7 +222,7 @@ describe("addToLibrary — article path (url/paste/file)", () => {
     expect(hasMock).toHaveBeenCalledWith("ingested-id");
     expect(saveMock).toHaveBeenCalledTimes(1);
     expect(saveMock).toHaveBeenCalledWith(sampleArticle(), []);
-    expect(outcome).toEqual({ outcome: "saved-article", articleId: "ingested-id" });
+    expect(outcome).toEqual(expectedSaved("ingested-id"));
   });
 
   it("url arm carries the validated envelope assets into the atomic save (D20-04)", async () => {
@@ -191,7 +231,44 @@ describe("addToLibrary — article path (url/paste/file)", () => {
     const outcome = await addToLibrary({ kind: "url", url: "https://example.com/figs" });
 
     expect(saveMock).toHaveBeenCalledWith(sampleArticle("with-figures"), [asset]);
-    expect(outcome).toEqual({ outcome: "saved-article", articleId: "with-figures" });
+    expect(outcome).toEqual(expectedSaved("with-figures"));
+  });
+
+  // Issue #112 — the saved-result payload: a flagged admission (ADR-0003)
+  // carries the SAME disclosure sentences the reader view derives — the
+  // ONE extraction-note copy derivations run against the row that JUST
+  // saved, so the dialog can never drift from the reader view's wording.
+  it("flagged save carries the result payload: title, sourceUrl, note, warnings, degraded", async () => {
+    ingestUrlMock.mockResolvedValue({
+      article: flaggedArticle(),
+      confidence: { state: "low" },
+      assets: [],
+    });
+    const outcome = await addToLibrary({ kind: "url", url: "https://example.com/a" });
+
+    expect(outcome).toEqual({
+      outcome: "saved-article",
+      articleId: "flagged-id",
+      title: "Article",
+      sourceUrl: "https://example.com/article",
+      note: "This article may be incomplete or inaccurate — it could not be read reliably.",
+      warnings: [
+        "1 image could not be fetched",
+        "2 unsupported parts omitted",
+      ],
+      degraded: "Highlights may be unreliable on this article.",
+    });
+  });
+
+  it("confident save leaves the result disclosures silent (note undefined, warnings empty)", async () => {
+    ingestUrlMock.mockResolvedValue(articleSuccess());
+    const outcome = await addToLibrary({ kind: "url", url: "https://example.com/a" });
+
+    expect(outcome.outcome).toBe("saved-article");
+    if (outcome.outcome !== "saved-article") return;
+    expect(outcome.note).toBeUndefined();
+    expect(outcome.degraded).toBeUndefined();
+    expect(outcome.warnings).toEqual([]);
   });
 
   // Issue #59 (decisions #56/#57) — the browser language list rides ONLY the
@@ -230,7 +307,7 @@ describe("addToLibrary — article path (url/paste/file)", () => {
     const outcome = await addToLibrary({ kind: "paste", html: "<article>hi</article>" });
 
     expect(ingestHtmlMock).toHaveBeenCalledWith("<article>hi</article>");
-    expect(outcome).toEqual({ outcome: "saved-article", articleId: "pasted-id" });
+    expect(outcome).toEqual(expectedSaved("pasted-id"));
   });
 
   it(".md file: reads text and routes ingestMarkdown(text, filename)", async () => {
@@ -239,7 +316,7 @@ describe("addToLibrary — article path (url/paste/file)", () => {
     const outcome = await addToLibrary({ kind: "file", file });
 
     expect(ingestMarkdownMock).toHaveBeenCalledWith("# Hello", "notes.md");
-    expect(outcome).toEqual({ outcome: "saved-article", articleId: "md-id" });
+    expect(outcome).toEqual(expectedSaved("md-id"));
   });
 
   it(".pdf file: reads bytes, chunked-base64-encodes, routes ingestPdf(b64, filename)", async () => {
@@ -249,7 +326,7 @@ describe("addToLibrary — article path (url/paste/file)", () => {
     const outcome = await addToLibrary({ kind: "file", file });
 
     expect(ingestPdfMock).toHaveBeenCalledWith(bytesToBase64(bytes), "doc.pdf");
-    expect(outcome).toEqual({ outcome: "saved-article", articleId: "pdf-id" });
+    expect(outcome).toEqual(expectedSaved("pdf-id"));
   });
 
   it(".html file: reads text and routes ingestHtml (no filename — the paste pipeline)", async () => {
@@ -258,7 +335,7 @@ describe("addToLibrary — article path (url/paste/file)", () => {
     const outcome = await addToLibrary({ kind: "file", file });
 
     expect(ingestHtmlMock).toHaveBeenCalledWith("<article>x</article>");
-    expect(outcome).toEqual({ outcome: "saved-article", articleId: "html-id" });
+    expect(outcome).toEqual(expectedSaved("html-id"));
   });
 
   it("transcript-paste arm routes ingestPastedTranscript(text, title, url) — the bot-check fallback", async () => {
@@ -275,7 +352,7 @@ describe("addToLibrary — article path (url/paste/file)", () => {
       "My Named Transcript",
       "https://www.youtube.com/watch?v=aircAruvnKk",
     );
-    expect(outcome).toEqual({ outcome: "saved-article", articleId: "yt-pasted" });
+    expect(outcome).toEqual(expectedSaved("yt-pasted"));
   });
 
   it("transcript-paste arm without a url routes ingestPastedTranscript(text, title, undefined)", async () => {
@@ -291,7 +368,7 @@ describe("addToLibrary — article path (url/paste/file)", () => {
       "My Named Transcript",
       undefined,
     );
-    expect(outcome).toEqual({ outcome: "saved-article", articleId: "paste-pasted" });
+    expect(outcome).toEqual(expectedSaved("paste-pasted"));
   });
 
   it("transcript-paste arm dedupe-refuses identically (ONE policy)", async () => {

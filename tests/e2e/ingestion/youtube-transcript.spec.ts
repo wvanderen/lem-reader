@@ -27,7 +27,7 @@
 //   plus the flow-N1 tail: position restore + finished state behave exactly
 //   as for any text article (flows A–L inherit; no special-casing).
 import { test, expect, type Page } from "@playwright/test";
-import { openAddDialog } from "../library/add-dialog";
+import { openAddDialog, openSavedArticle } from "../library/add-dialog";
 import {
   selectRangeInBlock,
   announcementRegion,
@@ -275,8 +275,9 @@ test.describe("YouTube ingest end-to-end (issue #41, flow N)", () => {
     await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible();
     await addByUrl(page, WATCH_URL);
 
-    // The dialog closes and the reader opens on the transcript article.
-    await page.waitForURL(/#\/article\/yt-e2e-chaptered$/, { timeout: 15_000 });
+    // Issue #112 — the save lands on the result screen; "Open article"
+    // navigates to the transcript article.
+    await openSavedArticle(page, /#\/article\/yt-e2e-chaptered$/);
     const h1 = page.getByRole("heading", { level: 1 });
     await expect(h1).toHaveText(CHAPTERED.provenance.title, { timeout: 10_000 });
 
@@ -330,7 +331,7 @@ test.describe("YouTube ingest end-to-end (issue #41, flow N)", () => {
     await page.goto(`${BASE}/#/`);
     await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible();
     await addByUrl(page, WATCH_URL);
-    await page.waitForURL(/#\/article\/yt-e2e-chaptered$/, { timeout: 15_000 });
+    await openSavedArticle(page, /#\/article\/yt-e2e-chaptered$/);
 
     await page.getByRole("button", { name: "Back to library" }).click();
     await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible();
@@ -372,7 +373,7 @@ test.describe("YouTube ingest end-to-end (issue #41, flow N)", () => {
     await page.goto(`${BASE}/#/`);
     await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible();
     await addByUrl(page, CHAPTERED_URL);
-    await page.waitForURL(/#\/article\/yt-e2e-chaptered$/, { timeout: 15_000 });
+    await openSavedArticle(page, /#\/article\/yt-e2e-chaptered$/);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible({ timeout: 10_000 });
     // Default mode is paginated — wait for the first page commit before
     // driving the TOC (the toc-navigation.spec discipline).
@@ -401,7 +402,7 @@ test.describe("YouTube ingest end-to-end (issue #41, flow N)", () => {
     await page.getByRole("button", { name: "Back to library" }).click();
     await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible();
     await addByUrl(page, PLAIN_URL);
-    await page.waitForURL(/#\/article\/yt-e2e-plain$/, { timeout: 15_000 });
+    await openSavedArticle(page, /#\/article\/yt-e2e-plain$/);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible({ timeout: 10_000 });
 
     await page.getByRole("button", { name: "Table of contents" }).click();
@@ -464,10 +465,11 @@ test.describe("YouTube ingest end-to-end (issue #41, flow N)", () => {
     expect(await libraryRowCount(page)).toBe(rowsBefore);
 
     // Retry possible — explicitly: the last refused URL now resolves, and
-    // resubmitting it ingests and opens the reader.
+    // resubmitting it ingests and opens the reader (via the issue #112
+    // result screen's Open article).
     mock.responses[refusals[2]!.url] = okEnvelope(CHAPTERLESS);
     await addByUrl(page, refusals[2]!.url);
-    await page.waitForURL(/#\/article\/yt-e2e-plain$/, { timeout: 15_000 });
+    await openSavedArticle(page, /#\/article\/yt-e2e-plain$/);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible({
       timeout: 10_000,
     });
@@ -598,9 +600,11 @@ test.describe("YouTube ingest end-to-end (issue #41, flow N)", () => {
     await expect(dialog).not.toContainText("Type a title to enable Add.");
     await addTranscript.click();
 
-    // The pasted text rode the {transcript} envelope with the reader-provided
-    // title and the source URL.
-    await page.waitForURL(/#\/article\/yt-e2e-pasted$/, { timeout: 15_000 });
+    // Issue #112 — the pasted-transcript arm is an ARTICLE arm: the save
+    // lands on the result screen; "Open article" navigates. The pasted
+    // text rode the {transcript} envelope with the reader-provided title
+    // and the source URL.
+    await openSavedArticle(page, /#\/article\/yt-e2e-pasted$/);
     expect(transcriptBody).toEqual({
       text: "0:00\nA cue the reader pasted by hand",
       title: "Pasted Lecture",
@@ -650,7 +654,7 @@ test.describe("YouTube ingest end-to-end (issue #41, flow N)", () => {
     // And the dialog stays keyboard-complete: a fresh URL ingests.
     await input.fill(OK_URL);
     await page.getByRole("button", { name: /^add$/i }).click();
-    await page.waitForURL(/#\/article\/yt-e2e-plain$/, { timeout: 15_000 });
+    await openSavedArticle(page, /#\/article\/yt-e2e-plain$/);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible({
       timeout: 10_000,
     });
@@ -668,8 +672,9 @@ test.describe("YouTube ingest end-to-end (issue #41, flow N)", () => {
     await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible();
     await addByUrl(page, ASR_URL);
 
-    // Ingest succeeds — the reader opens like any transcript article.
-    await page.waitForURL(/#\/article\/yt-e2e-asr$/, { timeout: 15_000 });
+    // Ingest succeeds — "Open article" opens the reader like any
+    // transcript article (issue #112).
+    await openSavedArticle(page, /#\/article\/yt-e2e-asr$/);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(
       ASR_ONLY.provenance.title,
       { timeout: 10_000 },
@@ -699,7 +704,7 @@ test.describe("YouTube ingest end-to-end (issue #41, flow N)", () => {
     await page.goto(`${BASE}/#/`);
     await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible();
     await addByUrl(page, WATCH_URL);
-    await page.waitForURL(/#\/article\/yt-e2e-chaptered$/, { timeout: 15_000 });
+    await openSavedArticle(page, /#\/article\/yt-e2e-chaptered$/);
     await expect(page.locator(".page-fragment").first()).toBeVisible();
 
     // Select a range inside the FIRST transcript paragraph (block 0 — the

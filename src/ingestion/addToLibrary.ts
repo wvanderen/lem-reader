@@ -51,6 +51,16 @@ import { bytesToBase64 } from "./ingestCopy";
 import { normalizeTags } from "./library/tagText";
 import type { IngestionFailureReason } from "./types";
 import type { Block } from "../content/types";
+// Issue #112 — the saved-result screen's "ingestion limits" copy is the ONE
+// extraction-note derivation set (the same sentences ArticleView renders):
+// this module derives them once at save time so the dialog never re-reads
+// the article or forks the copy. Pure functions over the model — no cycle
+// (extractionNote imports content/types only).
+import {
+  annotationsNote,
+  extractionNote,
+  partialContentWarnings,
+} from "../routes/extractionNote";
 
 /**
  * AddToLibraryInput — one submission arm of the add dialog. The file arm
@@ -72,8 +82,10 @@ export type AddToLibraryInput =
 
 /**
  * AddToLibraryOutcome — the navigation-ready result of one submission.
- * - `saved-article` → the caller closes and navigates to the reader
- *   (`articleId` is the hash anchor).
+ * - `saved-article` → the caller shows the saved-result screen (issue #112):
+ *   the display payload rides the outcome (title, provenance sourceUrl, and
+ *   the three extraction-note disclosures — all derived from the SAME saved
+ *   article row); "Open article" navigates to the `articleId` hash anchor.
  * - `saved-book` → the caller closes, refreshes the library, and can
  *   surface the D12-11 skip disclosure from `skippedChapterCount`.
  * - `refused` → the caller stays open and renders the calm DOC-06 phrase
@@ -81,7 +93,22 @@ export type AddToLibraryInput =
  *   dedupe-refuse (D16-09 refusal-only — no save ever happened).
  */
 export type AddToLibraryOutcome =
-  | { outcome: "saved-article"; articleId: string }
+  | {
+      outcome: "saved-article";
+      articleId: string;
+      /** The saved article's canonical title (provenance.title). */
+      title: string;
+      /** The canonical original link (provenance.sourceUrl) — absent for
+       * paste/upload arms (D7-08). Renders the "See the original" link. */
+      sourceUrl?: string;
+      /** The low-confidence disclosure sentence, or undefined for a
+       * confident save (the ONE extractionNote derivation). */
+      note?: string;
+      /** Per-part disclosure lines ([] when nothing fell — ADR-0003). */
+      warnings: string[];
+      /** The degraded-anchoring disclosure, or undefined when reliable. */
+      degraded?: string;
+    }
   | { outcome: "saved-book"; bookId: string; skippedChapterCount: number }
   | { outcome: "refused"; reason: IngestionFailureReason };
 
@@ -232,6 +259,13 @@ async function ingestArticleInput(input: AddToLibraryInput): Promise<IngestionSu
  * ONE home of the policy the three article arms used to repeat. The
  * optional tags ride the SAME atomic save (issue #75, decision #71) — a
  * saved article is always complete, tags included.
+ *
+ * Issue #112 — the outcome carries the saved-result display payload derived
+ * from the SAME row that just saved: canonical title, provenance sourceUrl,
+ * and the three extraction-note disclosures (low-confidence sentence,
+ * per-part warnings, degraded anchoring) via the ONE copy derivations the
+ * reader view renders. A confident save carries note/degraded undefined and
+ * warnings [] — the dialog renders silence.
  */
 async function saveArticle(
   result: IngestionSuccess,
@@ -244,7 +278,15 @@ async function saveArticle(
     withTags(result.article, tags),
     result.assets,
   );
-  return { outcome: "saved-article", articleId: result.article.id };
+  return {
+    outcome: "saved-article",
+    articleId: result.article.id,
+    title: result.article.provenance.title,
+    sourceUrl: result.article.provenance.sourceUrl,
+    note: extractionNote(result.article),
+    warnings: partialContentWarnings(result.article),
+    degraded: annotationsNote(result.article),
+  };
 }
 
 /**

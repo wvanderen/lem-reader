@@ -64,7 +64,7 @@ import type {
 import { MARKDOWN_WITH_FRONTMATTER } from "../library/markdown-payload";
 // Plan 16-03 — the shared dialog-opening helper (ADD-01: the intake
 // forms live behind the header Add button's modal).
-import { openAddDialog, pickSource } from "../library/add-dialog";
+import { openAddDialog, pickSource, openSavedArticle } from "../library/add-dialog";
 import {
   announcementRegion,
   countHighlightsInDexie,
@@ -117,7 +117,8 @@ test("ACPT-06 — ingest .md, read, highlight, export, re-import: nothing lost a
       buffer: Buffer.from(MARKDOWN_WITH_FRONTMATTER, "utf-8"),
     });
     await pageA.getByRole("button", { name: /add file/i }).click();
-    await pageA.waitForURL(/#\/article\/md-/, { timeout: 15_000 });
+    // Issue #112 — "Open article" on the result screen navigates.
+    await openSavedArticle(pageA, /#\/article\/md-/);
 
     const idMatch = /#\/article\/(md-[a-z0-9]+)/.exec(pageA.url());
     expect(idMatch, "the article route must carry the md- content-hash id").not.toBeNull();

@@ -33,7 +33,7 @@ import {
 } from "../portability/_portability";
 // Plan 16-03 — the shared dialog-opening helper (ADD-01: the intake forms
 // live behind the header Add button's modal).
-import { openAddDialog, pickSource } from "./add-dialog";
+import { openAddDialog, pickSource, openSavedArticle } from "./add-dialog";
 import { BASE } from "../_base";
 
 /**
@@ -194,7 +194,8 @@ async function seedLocation(
 
 /**
  * ingestPaste — ingest a paste-HTML article via the Add dialog (the real
- * Vite Node middleware) and return after navigation to #/article/<id>.
+ * Vite Node middleware). Issue #112: the save lands on the in-dialog
+ * result screen; "Open article" navigates to #/article/<id>.
  */
 async function ingestPaste(page: Page, html: string) {
   await openAddDialog(page);
@@ -203,7 +204,7 @@ async function ingestPaste(page: Page, html: string) {
     .getByRole("textbox", { name: /paste html/i })
     .fill(html);
   await page.getByRole("button", { name: /add pasted article/i }).click();
-  await page.waitForURL(/#\/article\//, { timeout: 15_000 });
+  await openSavedArticle(page);
 }
 
 /**

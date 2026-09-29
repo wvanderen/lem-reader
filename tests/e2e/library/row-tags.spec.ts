@@ -17,7 +17,7 @@
 // tags persist only on Dexie rows; see tag-popover.spec.ts for the discipline).
 import { test, expect, type Page } from "@playwright/test";
 import { makeArticle, prepareFreshPage, seedRows } from "../portability/_portability";
-import { openAddDialog, pickSource } from "./add-dialog";
+import { openAddDialog, pickSource, closeSavedResult } from "./add-dialog";
 import { BASE } from "../_base";
 
 const ROW_ARTICLE = {
@@ -191,7 +191,9 @@ test.describe("row tags popover (issue #75 — decision #71)", () => {
     await tagInput.fill("fresh");
     await tagInput.press("Enter");
     await page.getByRole("button", { name: /add pasted article/i }).click();
-    await page.waitForURL(/#\/article\//, { timeout: 15_000 });
+    // Issue #112 — the result screen replaces auto-navigation; Close
+    // returns to the library with the never-opened article Unread.
+    await closeSavedResult(page);
 
     await openLibrary(page);
     const row = page.locator(".library-list > li").filter({ hasText: "Tagged At Import" });
