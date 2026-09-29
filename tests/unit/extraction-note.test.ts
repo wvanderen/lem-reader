@@ -5,8 +5,17 @@
 // youtube-ness; ASR transcripts carry the caption-specific wording. The
 // copy is reader-facing product surface pinned byte-for-byte here, in the
 // youtube-copy.test.ts discipline.
+//
+// ADR-0003 extends the table: the partial-content disclosures
+// (partialContentWarnings + PARTIAL_CONTENT_NOTE) and the degraded-anchor
+// disclosure (annotationsNote) are pinned alongside.
 import { describe, expect, it } from "vitest";
-import { extractionNote } from "../../src/routes/extractionNote";
+import {
+  annotationsNote,
+  extractionNote,
+  partialContentWarnings,
+  PARTIAL_CONTENT_NOTE,
+} from "../../src/routes/extractionNote";
 import { ArticleSchema } from "../../src/content/schema";
 import type { CanonicalArticle } from "../../src/content/schema";
 import {
@@ -91,5 +100,44 @@ describe("extractionNote (issue #41, flow N6)", () => {
         /extraction|confidence|asr|zod|schema|revision/,
       );
     }
+  });
+});
+
+describe("partial-content + annotations disclosures (ADR-0003)", () => {
+  it("PARTIAL_CONTENT_NOTE is pinned byte-for-byte", () => {
+    expect(PARTIAL_CONTENT_NOTE).toBe("Some content could not be processed.");
+  });
+
+  it("partialContentWarnings returns the persisted warning lines, in order", () => {
+    const meta = {
+      ...HIGH,
+      extractionWarnings: [
+        "2 parts of the original could not be displayed",
+        "1 image could not be included",
+      ],
+    };
+    expect(partialContentWarnings(makeArticle(meta))).toEqual([
+      "2 parts of the original could not be displayed",
+      "1 image could not be included",
+    ]);
+  });
+
+  it("partialContentWarnings is empty for no-meta and no-warning articles — silence, never a placeholder", () => {
+    expect(partialContentWarnings(makeArticle())).toEqual([]);
+    expect(partialContentWarnings(makeArticle(HIGH))).toEqual([]);
+  });
+
+  it("annotationsNote discloses degraded anchoring, byte-pinned", () => {
+    expect(annotationsNote(makeArticle({ ...HIGH, annotationsDegraded: true }))).toBe(
+      "Highlights may be unreliable on this article.",
+    );
+  });
+
+  it("annotationsNote is silent when anchors are reliable or meta is absent", () => {
+    expect(annotationsNote(makeArticle(HIGH))).toBeUndefined();
+    expect(annotationsNote(makeArticle())).toBeUndefined();
+    expect(
+      annotationsNote(makeArticle({ ...HIGH, annotationsDegraded: false })),
+    ).toBeUndefined();
   });
 });

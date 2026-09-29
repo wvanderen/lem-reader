@@ -153,7 +153,12 @@ import {
   effectivePublishedAt,
   effectiveSourceUrl,
 } from "../ingestion/library/effectiveMetadata";
-import { extractionNote } from "./extractionNote";
+import {
+  annotationsNote,
+  extractionNote,
+  partialContentWarnings,
+  PARTIAL_CONTENT_NOTE,
+} from "./extractionNote";
 // Issue #40 — the minimal speakable read-aloud path: the transport bar
 // (Play/Pause/Stop, fixed bottom) + the engine hook. Listening is reading
 // (ADR 0001): the listened canonical position drives the SAME shared
@@ -1924,9 +1929,56 @@ export function ArticleView({
       )}
       {/* Issue #41 (flow N6) — the low-confidence disclosure. Undefined is
           the empty state (silence, never a placeholder); ASR transcripts
-          carry the caption-specific wording via the ONE copy derivation. */}
+          carry the caption-specific wording via the ONE copy derivation.
+          ADR-0003: the sentence gains the "See the original." escape hatch
+          when the article has a sourceUrl. One derivation, three local
+          consts (the narrow-guard discipline above — a bare call per JSX
+          expression would widen back to string | undefined). */}
       {extractionNote(article) && (
-        <p className="meta extraction-note">{extractionNote(article)}</p>
+        <p className="meta extraction-note">
+          {extractionNote(article)}
+          {sourceUrl && (
+            <>
+              {" "}
+              <a href={sourceUrl} rel="noopener noreferrer" target="_blank">
+                See the original
+                <span className="visually-hidden"> (opens in a new tab)</span>
+              </a>
+              .
+            </>
+          )}
+        </p>
+      )}
+      {/* ADR-0003 — the partial-content disclosure: the article-level "parts
+          fell" sentence with the original-article escape hatch, plus each
+          extractionWarning line (image refusals, unsupported parts, transcript
+          warnings) as a quiet list. Silence when nothing fell. */}
+      {partialContentWarnings(article).length > 0 && (
+        <div className="meta partial-content-note">
+          <p className="partial-content-heading">
+            {PARTIAL_CONTENT_NOTE}{" "}
+            {sourceUrl && (
+              <>
+                <a href={sourceUrl} rel="noopener noreferrer" target="_blank">
+                  See the original
+                  <span className="visually-hidden"> (opens in a new tab)</span>
+                </a>
+                .
+              </>
+            )}
+          </p>
+          <ul>
+            {partialContentWarnings(article).map((warning) => (
+              <li key={warning}>{warning}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {/* ADR-0003 — the degraded-anchoring disclosure: the round-trip probe
+          found ambiguous samples, so highlight anchoring may be unreliable.
+          The text itself is fully readable — one calm sentence, no jargon. */}
+      {annotationsNote(article) && (
+        <p className="meta annotations-note">{annotationsNote(article)}</p>
       )}
       {/* Plan 12-06 (D12-08): epub-chapter context line — calm book
           provenance below the article provenance, epub-chapter only

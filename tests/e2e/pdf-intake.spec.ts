@@ -8,7 +8,7 @@
 // extension-aware client cap → chunked base64 → POST /api/ingest (Vite Node
 // dev middleware — the 07-06 RUNTIME_GUARDRAIL runtime) → server/ingest.ts
 // fourth Stage-1 branch → pdfToBlocks (unpdf) → ArticleSchema.parse →
-// assertRoundTripAnchor → deriveConfidence → stamp → Dexie save →
+// probeRoundTripAnchor → deriveConfidence → stamp → Dexie save →
 // ArticleView open. No test bypasses the UI — every flow drives
 // input#ingest-file via setInputFiles + the Add file button (the plan's
 // no-direct-API-POST acceptance criterion).

@@ -40,7 +40,6 @@ export function mapReasonToCopy(reason: IngestionFailureReason): string {
     case "unsupported-content-type":
       return "This page isn't an article.";
     case "extraction-unsupported":
-    case "extraction-too-low-confidence":
     case "round-trip-anchor-failed":
       return "Couldn't reliably read this page.";
     case "pdf-unreadable":

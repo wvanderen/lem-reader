@@ -240,19 +240,24 @@ describe("ingest — epub skip disclosure (D12-11)", () => {
     ]);
   });
 
-  it("anchorGateFailBook → the anchor-gate-failing chapter is skipped and disclosed; the rest of the book enters", async () => {
+  it("anchorGateFailBook → the anchor-ambiguous chapter enters FLAGGED (ADR-0003); the whole book admits", async () => {
     // The adapter ADMITS both chapters (D12-10 judges block mass); the
     // hostile chapter's periodic text cannot round-trip a TextQuoteSelector
-    // → the PER-CHAPTER stage-level gate skips it (never a whole-book
-    // failure) — the exact D12-11 path this plan wires in.
+    // → the PER-CHAPTER probe reports "ambiguous". ADR-0003: readable text
+    // is never refused — the chapter enters the library flagged with
+    // annotationsDegraded (the reader sees "Highlights may be unreliable on
+    // this article."). Only an "orphan" (a normalization-bug canary) still
+    // skips the chapter.
     const { book, articles, skippedCount } = expectBookEnvelope(
       await ingestEpub(anchorGateFailBook()),
     );
-    expect(articles).toHaveLength(1);
-    expect(skippedCount).toBe(1);
-    expect(book.skippedChapterCount).toBe(1);
-    expect(book.chapterArticleIds).toEqual([`${book.id}-c00`]);
+    expect(articles).toHaveLength(2);
+    expect(skippedCount).toBe(0);
+    expect(book.skippedChapterCount).toBe(0);
+    expect(book.chapterArticleIds).toEqual([`${book.id}-c00`, `${book.id}-c01`]);
     expect(articles[0]?.provenance.title).toBe("Chapter 1. Loomings");
+    expect(articles[0]?.ingestionMeta?.annotationsDegraded).toBeUndefined();
+    expect(articles[1]?.ingestionMeta?.annotationsDegraded).toBe(true);
   });
 });
 

@@ -1,6 +1,6 @@
 // tests/unit/server/ingest-transcript-paste.spec.ts
 // The paste-transcript fallback end-to-end through the shared pipeline
-// (pastedTranscriptToBlocks → ArticleSchema.parse → assertRoundTripAnchor →
+// (pastedTranscriptToBlocks → ArticleSchema.parse → probeRoundTripAnchor →
 // deriveConfidence → stamp). The branch is OFFLINE by construction — no
 // fetch mock, no DNS mock: the pasted text never touches the network, which
 // is exactly the point of the youtube-bot-check fallback.

@@ -33,7 +33,7 @@
 //        multi-column   → refused:pdf-multi-column
 //   2. every admitted entry: block-level agreement ≥ 0.90 against
 //      ground-truth labels AND anchorRoundTrip === true (SC#4a — ingest's
-//      assertRoundTripAnchor passed on the real PDF)
+//      probeRoundTripAnchor passed on the real PDF)
 //   3. non-empty results (refuse-empty — fingerprint.compare.ts L205-211
 //      precedent: never validate or write a placeholder record)
 //
@@ -445,7 +445,7 @@ export interface DerivePaths {
  * record what it actually did. Per file: read bytes → base64 →
  * ingest({pdf, filename}) (the full pipeline: caps, pdfToBlocks detection
  * on the CURRENT PDF_THRESHOLDS, ArticleSchema.parse, the SC#4a
- * assertRoundTripAnchor gate, confidence). An ok response records
+ * probeRoundTripAnchor probe, confidence). An ok response records
  * "admitted" + agreement against the committed ground-truth labels +
  * anchorRoundTrip: true (ok implies the anchor gate passed). A typed
  * refusal records "refused:" + the reason. The CURRENT PDF_THRESHOLDS
@@ -474,7 +474,7 @@ export async function deriveEvidence(
     const response = await ingest({ pdf: b64, filename: entry.file });
     if (response.ok && "article" in response) {
       // Admitted — the SC#4a anchor gate ran INSIDE ingest and passed
-      // (ok implies assertRoundTripAnchor did not refuse). Agreement needs
+      // (ok implies probeRoundTripAnchor did not refuse). Agreement needs
       // ground truth: required for admitted-expected classes, computed
       // opportunistically for any admission (a misclassified scanned doc
       // admitted by the thresholds is exactly the evidence tuning needs).

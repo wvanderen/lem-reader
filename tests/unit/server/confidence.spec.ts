@@ -1,8 +1,9 @@
 // tests/unit/server/confidence.spec.ts
-// Plan 07-03 Task 2 — ING-06 three-state confidence model. Replaces the
-// Wave-0 stub with real table-driven tests over the locked formula from
-// 07-RESEARCH.md §Confidence Thresholds L529-546:
-//   - isProbablyReaderable=false           → unsupported ("page-not-readerable")
+// ING-06 confidence model (ADR-0003: two-state — the "unsupported" state is
+// gone; Readability's pre-check is a flag input, not a veto). Table-driven
+// tests over the locked formula from 07-RESEARCH.md §Confidence Thresholds
+// L529-546, reshaped:
+//   - isProbablyReaderable=false           → low ("page-not-readerable") — flagged
 //   - unsupportedBlockRatio > 0.4          → low ("high-unsupported-ratio") (Pitfall 1)
 //   - blockCount>=3 && textLength>=500     → confident
 //   - else (readerable but thin)           → low ("extraction-thin")
@@ -52,11 +53,11 @@ function articleWith(
 /** A paragraph with ~600 chars of body text (well past the 500 threshold). */
 const LONG_BODY = "This is a sufficiently long paragraph body. ".repeat(14); // ~616 chars
 
-describe("deriveConfidence — ING-06 three-state model (07-03 Task 2)", () => {
-  it("isProbablyReaderable=false → { state: 'unsupported', reason: 'page-not-readerable' }", () => {
+describe("deriveConfidence — ING-06 two-state model (ADR-0003)", () => {
+  it("isProbablyReaderable=false → { state: 'low', reason: 'page-not-readerable' } — flagged, never refused", () => {
     const article = articleWith(5, LONG_BODY);
     const result = deriveConfidence(article, { isReaderable: false });
-    expect(result.state).toBe("unsupported");
+    expect(result.state).toBe("low");
     expect(result.reason).toBe("page-not-readerable");
   });
 
@@ -100,10 +101,10 @@ describe("deriveConfidence — ING-06 three-state model (07-03 Task 2)", () => {
     expect(result.state).toBe("confident");
   });
 
-  it("isReaderable=false short-circuits even with high unsupported ratio", () => {
+  it("isReaderable=false downgrades to low even with high unsupported ratio (flag precedence)", () => {
     const article = articleWith(5, LONG_BODY, { unsupported: 5 });
     const result = deriveConfidence(article, { isReaderable: false });
-    expect(result.state).toBe("unsupported");
+    expect(result.state).toBe("low");
     expect(result.reason).toBe("page-not-readerable");
   });
 });

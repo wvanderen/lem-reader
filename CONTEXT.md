@@ -33,8 +33,12 @@ The deliberate choice to render nothing at zero for incidental chrome (rail, sta
 _Avoid_: hidden state, missing empty state
 
 **Refusal**:
-Ingest declining content it was offered — before or during reading — with a calm reason and the reader's input preserved. A no, not a failure.
+Ingest declining content it was offered — only when there is nothing reliable to show (no extractable text), the content cannot be reached, or safety forbids it — with a calm reason and the reader's input preserved. A no, not a failure. Readable text with rough edges is never refused; it is admitted flagged.
 _Avoid_: error (for ingest declines), rejection
+
+**Flagged**:
+The third ingest outcome, between refusal and confident admission: an article whose text was read enters the library carrying a reader-visible limit — content that could not be processed, unreliable highlights — disclosed in place, never silently. "The article was admitted flagged."
+_Avoid_: partial success, best-effort, degraded (as reader-facing words), warning-only admission
 
 **Error**:
 An operation that failed — loading, saving, importing. Named honestly as a failure of the reader, with a next step, never blamed on the content or the reader.

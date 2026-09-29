@@ -1,38 +1,38 @@
 // server/confidence.ts
-// Plan 07-03 Task 2 — the ING-06 three-state confidence model. Derives the
-// extraction outcome state from the article's block tree + a Readability
-// pre-check signal. Locked formula from 07-RESEARCH.md §Confidence Thresholds
-// L529-546 + 07-CONTEXT.md `<decisions>` L44:
-//   - isProbablyReaderable false           → unsupported ("page-not-readerable")
+// The ING-06 confidence model. Derives the extraction outcome state from the
+// article's block tree + a Readability pre-check signal. Locked formula from
+// 07-RESEARCH.md §Confidence Thresholds L529-546 + 07-CONTEXT.md
+// `<decisions>` L44, reshaped by ADR-0003 (reading-first ingestion):
+//   - isProbablyReaderable false           → low ("page-not-readerable") — flagged, never refused
 //   - unsupportedBlockRatio > 0.4          → low ("high-unsupported-ratio") [Pitfall 1]
 //   - blockCount >= 3 && textLength >= 500 → confident (matches Readability charThreshold)
 //   - else                                 → low ("extraction-thin")
 //
+// ADR-0003: the "unsupported" state is GONE. Readability's pre-check is no
+// longer a veto — a page it dislikes still gets extracted (the zero-block
+// guard in server/ingest.ts handles the truly-empty case), and its weak
+// readability signal downgrades confidence to "low" so the article enters
+// the library flagged with the reader-visible note. Readable text is never
+// refused for being imperfect.
+//
 // Pitfall 2 honored: textLength is computed via the SHARED normalizeText
 // (src/content/normalizeText.ts) — never a fork. Forking would silently
 // orphan every annotation anchor. The IngestionMetaSchema.extractionConfidence
-// field persists only "high" | "low" (07-02); the "unsupported" state is
-// refused upstream (never reaches persistence) — surfaced to the client as
-// IngestionFailureReason "extraction-unsupported".
-//
-// The empirical corpus calibration (RESEARCH.md L544-546) is OUT OF SCOPE for
-// this plan — ship the locked formula; the calibration harness is a later
-// enhancement, not a phase-exit gate.
+// field persists only "high" | "low" (07-02).
 import type { CanonicalArticle } from "../src/content/schema";
 import { normalizeText } from "../src/content/normalizeText";
 
-/** ConfidenceResult — the derived three-state outcome. `reason` is present on
- * the `unsupported` and `low` variants (mapped to a status phrase by the
- * client); the `confident` variant carries no reason. */
+/** ConfidenceResult — the derived two-state outcome. `reason` is present on
+ * the `low` variant; the `confident` variant carries no reason. */
 export interface ConfidenceResult {
-  state: "confident" | "low" | "unsupported";
+  state: "confident" | "low";
   reason?: string;
 }
 
 /** Inputs to deriveConfidence. `isReaderable` is Readability's cheap
- * isProbablyReaderable() pre-check (a strong negative signal — if even
- * Readability won't attempt it, we refuse). Future calibration may add
- * textToContentRatio / linkDensity here. */
+ * isProbablyReaderable() pre-check (a negative signal — a page Readability
+ * dislikes is admitted flagged low, never refused per ADR-0003). Future
+ * calibration may add textToContentRatio / linkDensity here. */
 export interface ConfidenceSignals {
   isReaderable: boolean;
 }
@@ -50,19 +50,18 @@ const MIN_CONFIDENT_BLOCKS = 3;
 const MIN_CONFIDENT_TEXT_LENGTH = 500;
 
 /**
- * deriveConfidence — the locked three-state formula. Pure function; no I/O.
+ * deriveConfidence — the two-state formula (ADR-0003). Pure function; no I/O.
  * Call sites: /server/ingest.ts orchestrator (07-05) runs this AFTER extraction
- * + sanitize to decide whether to surface the article (confident/low) or
- * refuse it (unsupported). The client (07-06) maps state+reason to a calm
- * DOC-06 status phrase (D7-04).
+ * + sanitize to stamp the article confident or low — both enter the library;
+ * low surfaces the reader-visible fidelity note (ING-06, DOC-06 copy).
  */
 export function deriveConfidence(
   article: CanonicalArticle,
   signals: ConfidenceSignals,
 ): ConfidenceResult {
-  // 1. Readability pre-check — the cheapest strong negative signal.
+  // 1. Readability pre-check — a negative signal, not a veto (ADR-0003).
   if (!signals.isReaderable) {
-    return { state: "unsupported", reason: "page-not-readerable" };
+    return { state: "low", reason: "page-not-readerable" };
   }
 
   // 2. Compute the three signals. textLength via the SHARED normalizer

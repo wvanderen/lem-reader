@@ -1,7 +1,7 @@
 // tests/unit/server/ingest-youtube.spec.ts
 // Issue #39 — the ingest orchestrator's YouTube branch, end-to-end through
 // the shared pipeline (transcript fetch → transcriptToBlocks →
-// ArticleSchema.parse → assertRoundTripAnchor → deriveConfidence → stamp).
+// ArticleSchema.parse → probeRoundTripAnchor → deriveConfidence → stamp).
 //
 // Mocking mirrors tests/unit/server/youtube-transcript.spec.ts: node:dns via
 // vi.mock, fetch via vi.stubGlobal, ONE recording router serving the captured
@@ -297,7 +297,7 @@ describe("happy path — manual caption track (fixture-driven)", () => {
     const response = await ingest({ url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" });
     expect(response.ok).toBe(true);
     if (!response.ok || !("article" in response)) return;
-    // assertRoundTripAnchor already gated ingest admission; here we assert
+    // probeRoundTripAnchor already ran inside ingest admission; here we assert
     // the timestamps never entered the normalized text at all (nothing
     // timestamp-bearing reaches the reading surface — decision #26).
     const text = normalizeText(response.article);

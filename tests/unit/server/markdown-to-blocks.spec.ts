@@ -5,7 +5,7 @@
 //   - YAML front-matter extraction (D8-17)
 //   - The D8-17 filename-fallback helper (stripMarkdownExtension)
 //   - Raw-HTML escape (Pitfall 8-2 — strict CommonMark inert-text contract)
-//   - The round-trip anchor gate (Pitfall 8-1 — `assertRoundTripAnchor` does
+//   - The round-trip anchor probe (Pitfall 8-1 — `probeRoundTripAnchor` does
 //     not throw on a representative fixture)
 //
 // The 9-kind contract: every output block has a `kind` in the SCHEMA_KINDS
@@ -18,7 +18,7 @@ import {
   SCHEMA_KINDS,
 } from "../../../server/markdownToBlocks";
 import { ArticleSchema, type CanonicalArticle } from "../../../src/content/schema";
-import { assertRoundTripAnchor } from "../../../server/ingest";
+import { probeRoundTripAnchor } from "../../../server/ingest";
 
 // The 9 schema-allowed block kinds (src/content/schema.ts BlockSchema). Every
 // extracted block MUST have a kind in this tuple — the exhaustive walker has
@@ -452,7 +452,7 @@ describe("markdownToBlocks — Raw-HTML escape (Pitfall 8-2)", () => {
 });
 
 describe("markdownToBlocks — Round-trip anchor gate (Pitfall 8-1)", () => {
-  it("assertRoundTripAnchor does NOT throw on a representative fixture", async () => {
+  it("probeRoundTripAnchor passes on a representative fixture", async () => {
     // Build a minimal but representative CanonicalArticle from the adapter
     // output and run the integration-truth gate. The 5-offset selector
     // sample must resolve to "confident" at every offset (Pitfall 8-1 — the
@@ -492,7 +492,7 @@ describe("markdownToBlocks — Round-trip anchor gate (Pitfall 8-1)", () => {
     });
 
     // MUST not throw — the 5-offset selector sample resolves to "confident".
-    expect(() => assertRoundTripAnchor(article)).not.toThrow();
+    expect(probeRoundTripAnchor(article)).toBe("pass");
   });
 });
 

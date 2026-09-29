@@ -315,6 +315,11 @@ export const IngestionMetaSchema = z.object({
   fetchedAt: z.string().datetime().optional(), // ISO-8601 (present for url; absent for paste/upload)
   extractionConfidence: z.enum(["high", "low"]), // the derived signal; "unsupported" never persists
   extractionWarnings: z.array(z.string()).default([]), // e.g. "3 unsupported blocks omitted"
+  // ADR-0003 — true when the round-trip anchor probe found ambiguous samples:
+  // the text is fully readable, but highlight anchoring may be unreliable on
+  // it. The reader sees "Highlights may be unreliable on this article."
+  // Additive-optional (Pitfall 9): absent = false, existing rows unchanged.
+  annotationsDegraded: z.boolean().optional(),
   // Phase 12 (Plan 12-01 Task 2) — ARCHITECTURE L401-402: epub-chapter
   // articles carry their book + position within it. Additive-optional;
   // existing rows parse unchanged (absent fields — Pitfall 9 backward-compat,

@@ -16,7 +16,7 @@ import { describe, expect, it } from "vitest";
 import type { Connect, ViteDevServer } from "vite";
 import { viteIngestMiddleware } from "../../../dev-server/ingest-middleware";
 import {
-  assertRoundTripAnchor,
+  probeRoundTripAnchor,
   consumeDuplicatedTitle,
   ingest,
   stripPdfExtension,
@@ -247,7 +247,7 @@ describe("stripPdfExtension", () => {
 
 // ── Task 2 — SC#4a round-trip re-proof at integration level ──────────────────
 describe("ingest — pdf round-trip anchor re-proof (SC#4a)", () => {
-  it("re-running assertRoundTripAnchor on the returned article does not throw", async () => {
+  it("re-running probeRoundTripAnchor on the returned article passes", async () => {
     const response = await ingest({
       pdf: fixtureB64("synthetic-single-column.pdf"),
       filename: "calm-report.pdf",
@@ -257,7 +257,7 @@ describe("ingest — pdf round-trip anchor re-proof (SC#4a)", () => {
     // The orchestrator already ran the gate internally (Stage 7); re-running
     // it here proves the PERSISTED article shape round-trips — an admitted
     // PDF is a fixture to the reading engine (SC#4a integration proof).
-    expect(() => assertRoundTripAnchor(response.article)).not.toThrow();
+    expect(probeRoundTripAnchor(response.article)).toBe("pass");
   });
 });
 

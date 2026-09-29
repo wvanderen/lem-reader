@@ -10,7 +10,7 @@
 // normalizeText (selector/highlight/position round-trips are unchanged).
 //
 // Same-station contract as the sibling adapters (D7-03): the orchestrator's
-// downstream stages (ArticleSchema.parse → assertRoundTripAnchor →
+// downstream stages (ArticleSchema.parse → probeRoundTripAnchor →
 // deriveConfidence) run on this output identically to every other format.
 // Only paragraph + heading blocks are ever emitted — the two kinds the
 // pagination engine handles with its eyes closed; the ~600-char budget keeps
