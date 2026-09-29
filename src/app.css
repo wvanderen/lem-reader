@@ -3879,6 +3879,22 @@ main:has(.readaloud-bar) .article-body:has(.mark-read-close-page) .chapter-nav-p
   margin-block: 0;
 }
 
+/* ADR-0003 — the partial-content disclosure: quiet .meta voice, a short
+ * list of what fell (image refusals, unsupported parts). Tokens only; no
+ * borders beyond the article-top-meta hairline it sits inside. */
+.article-top-meta .partial-content-note {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3xs, 2px);
+}
+.article-top-meta .partial-content-note p {
+  margin-block: 0;
+}
+.article-top-meta .partial-content-note ul {
+  margin-block: 0;
+  padding-inline-start: var(--space-md, 18px);
+}
+
 /* Mobile paginated chrome is a structural subheader, not a collection of
  * coincident fixed offsets. The article header owns one real 44px row for
  * Back to library + the quiet title; the decorative page indicator aligns

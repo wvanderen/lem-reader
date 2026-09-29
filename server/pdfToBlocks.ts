@@ -5,7 +5,7 @@
 // (`server/ingest.ts`, wired in 11-03) treats `pdfToBlocks` identically to its
 // siblings downstream — it returns the EXACT same `{ blocks, footnotes, lang,
 // provenancePartial, isReaderable }` shape, and the same `ArticleSchema.parse`
-// + `assertRoundTripAnchor` + `deriveConfidence` stages run on the path.
+// + `probeRoundTripAnchor` + `deriveConfidence` stages run on the path.
 //
 // ──────────────────────────────────────────────────────────────────────────
 // SECURITY BOUNDARY (D8-16 precedent — the doc model IS the boundary):

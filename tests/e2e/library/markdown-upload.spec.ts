@@ -28,7 +28,7 @@
 // Threat register:
 //   - T-8-15 (Tampering, file-extension spoofing) → dispatch-by-extension
 //     only chooses the adapter; both adapters run ArticleSchema.parse +
-//     assertRoundTripAnchor identically. A `.html` mis-dispatched to markdown
+//     probeRoundTripAnchor identically. A `.html` mis-dispatched to markdown
 //     produces escaped HTML blocks which the round-trip gate catches.
 //   - T-8-19 (Repudiation, false-positive verification) → the dedupe-refuse
 //     test asserts BOTH the .status copy ("Already in your library.") AND

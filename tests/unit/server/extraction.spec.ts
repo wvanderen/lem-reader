@@ -16,7 +16,7 @@ import {
   sanitizeExtractedHtml,
   type HtmlToBlocksResult,
 } from "../../../server/htmlToBlocks";
-import { assertRoundTripAnchor } from "../../../server/ingest";
+import { probeRoundTripAnchor } from "../../../server/ingest";
 import { blockNormalizedText } from "../../../src/content/normalizeText";
 
 // The 9 schema-allowed block kinds (src/content/schema.ts BlockSchema). Every
@@ -490,7 +490,7 @@ describe("htmlToBlocks — caption attachment (issue #19)", () => {
     expect(fig.caption).toEqual([]);
   });
 
-  it("an ingested caption-bearing article passes the assertRoundTripAnchor gate (caption offsets align)", () => {
+  it("an ingested caption-bearing article passes the probeRoundTripAnchor check (caption offsets align)", () => {
     const html = wrap(
       "<p><img src=\"https://cdn.example.com/one.png\" alt=\"One\"> The caption anchors over the figcaption substrate.</p>" +
         "<p>Surrounding body text gives the quote selector unique context for the gate.</p>",
@@ -508,7 +508,7 @@ describe("htmlToBlocks — caption attachment (issue #19)", () => {
       blocks,
       footnotes: [],
     };
-    expect(() => assertRoundTripAnchor(article)).not.toThrow();
+    expect(probeRoundTripAnchor(article)).toBe("pass");
   });
 });
 

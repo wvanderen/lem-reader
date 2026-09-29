@@ -5,7 +5,7 @@
 // `markdownToBlocks` and `extractAndNormalize` identically downstream — they
 // return the EXACT same `{ blocks, footnotes, lang, provenancePartial,
 // isReaderable }` shape, and the same `ArticleSchema.parse` +
-// `assertRoundTripAnchor` + `deriveConfidence` stages run on both paths.
+// `probeRoundTripAnchor` + `deriveConfidence` stages run on both paths.
 //
 // ──────────────────────────────────────────────────────────────────────────
 // SECURITY BOUNDARY (D8-16 — Pitfall 8-2):
@@ -30,7 +30,7 @@
 // (whitespace collapse via the same `replace(/\s+/g, " ")`, mark
 // accumulation, leading/trailing ws drop, adjacent same-mark merge). A drift
 // here silently orphans every annotation anchor and trips
-// `assertRoundTripAnchor` on the next ingest.
+// `probeRoundTripAnchor` on the next ingest.
 //
 // Server-only (Pitfall 8-6): `unified` / `remark-parse` / `remark-frontmatter`
 // / `yaml` are ESM-only and never imported by `/src/*` modules at runtime.

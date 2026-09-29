@@ -28,7 +28,7 @@
 //      into the dialog's textarea, submits, and asserts the resulting
 //      ArticleView renders the extracted content. This exercises the FULL
 //      pipeline (extractAndNormalize → htmlToBlocks → ArticleSchema.parse →
-//      assertRoundTripAnchor → deriveConfidence → DexieLibrarySource.save →
+//      probeRoundTripAnchor → deriveConfidence → DexieLibrarySource.save →
 //      ArticleView) end-to-end. Deterministic — no external network
 //      dependency.
 //   2. URL path (page.route mock): fills the URL input with a known URL and
@@ -107,7 +107,7 @@ test.describe("ingestion happy-path (07-07 SC#1)", () => {
     // IngestionClient.ingestHtml → /api/ingest (Vite Node
     // middleware) → server/ingestAdapter → server/ingest → extractAndNormalize
     // (Readability + DOMPurify + htmlToBlocks) → ArticleSchema.parse →
-    // assertRoundTripAnchor → deriveConfidence → DexieLibrarySource.save →
+    // probeRoundTripAnchor → deriveConfidence → DexieLibrarySource.save →
     // navigation to #/article/<id>.
     await openAddDialog(page);
     await pickSource(page, "paste");

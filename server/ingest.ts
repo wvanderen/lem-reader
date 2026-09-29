@@ -1,36 +1,38 @@
 // server/ingest.ts
-// Plan 07-05 — the pipeline orchestrator + inline round-trip anchor gate
-// (SC#1, the integration truth of Phase 7). Composes the /server primitives
-// (safeFetch + extractAndNormalize + markdownToBlocks + pdfToBlocks +
-// epubToBooks + slugifyUrl + deriveConfidence) into the locked staged
-// pipeline, validates
-// the result through ArticleSchema.parse (Zod-at-boundary), and refuses
-// entry to any article whose 5-offset TextQuoteSelector round-trip does not
-// resolve to "confident" (Pitfall 2 — the integration truth).
+// Plan 07-05 — the pipeline orchestrator + inline round-trip anchor probe
+// (SC#1, reshaped by ADR-0003 into a detector, not a gate). Composes the
+// /server primitives (safeFetch + extractAndNormalize + markdownToBlocks +
+// pdfToBlocks + epubToBooks + slugifyUrl + deriveConfidence) into the locked
+// staged pipeline, validates the result through ArticleSchema.parse
+// (Zod-at-boundary), and probes the 5-offset TextQuoteSelector round-trip
+// (Pitfall 2 — the integration truth): "orphan" refuses (a normalization-bug
+// canary), "ambiguous" admits the article flagged (annotationsDegraded).
 //
-// The orchestrator owns three contracts:
+// The orchestrator owns four contracts:
 //   1. Pipeline ordering (must_haves locked sequence):
 //        safeFetch → extractAndNormalize → slugifyUrl(finalUrl) →
-//        ArticleSchema.parse → assertRoundTripAnchor → deriveConfidence
+//        ArticleSchema.parse → probeRoundTripAnchor → deriveConfidence
 //   2. Immutability (D7-07): id = slugifyUrl(finalUrl after redirects) →
 //        re-ingest produces the same id → dedupe-refuse in 07-06.
-//   3. Honesty (ING-06): three-state confidence → unsupported refused /
-//      low enters library flagged / confident normal.
+//   3. Honesty (ING-06 + ADR-0003): two-state confidence → low enters the
+//      library flagged / confident normal; readable text is never refused —
+//      only zero-block extractions and unsafe/unreachable endpoints refuse.
 //   4. Plain-text admission (260821-ov7): a tag-less {html} paste is valid
 //      strict CommonMark — Stage 0.5 reroutes it onto the markdown intake
 //      before Stage-1 dispatch (one place; every client fixed).
 //
-// Pitfall 2 honored (no fork): assertRoundTripAnchor imports normalizeText +
+// Pitfall 2 honored (no fork): probeRoundTripAnchor imports normalizeText +
 // graphemeClusters + deriveQuoteSelector + resolveQuoteSelector from
 // src/content/normalizeText.ts EXACTLY — the same shipped selectors the
 // annotation machinery (Phase 5) uses. Forking here would silently orphan
 // every anchor on every ingested article.
 //
-// Threat register (07-05-PLAN.md `<threat_model>`):
-//   - T-7-21 (Tampering, normalization drift) → assertRoundTripAnchor refuses
-//     entry on any sample that doesn't resolve to confident.
-//   - T-7-22 (Info Disclosure, unsupported enters library) → deriveConfidence
-//     "unsupported" → { ok: false, reason: "extraction-unsupported" }.
+// Threat register (07-05-PLAN.md `<threat_model>`, ADR-0003 amendments):
+//   - T-7-21 (Tampering, normalization drift) → probeRoundTripAnchor reports
+//     any sample that doesn't resolve to confident; orphan refuses entry,
+//     ambiguous admits flagged (annotationsDegraded).
+//   - T-7-22 (Info Disclosure, nothing-to-show enters library) → the
+//     zero-block guard returns { ok: false, reason: "extraction-unsupported" }.
 //   - T-7-23 (Repudiation, generic Error escapes) → catch wraps every throw
 //     to a typed IngestionResponse.
 //   - T-7-24 (Tampering, id drift across re-extraction) → id = slugifyUrl(finalUrl).
@@ -73,17 +75,26 @@ import type {
 import { normalizeForTitleMatch } from "./titleMatch";
 
 /**
- * assertRoundTripAnchor — the SC#1 integration-truth gate. Samples 5 grapheme
- * offsets (0, 25%, 50%, 75%, near-end) on the article's normalized text,
- * derives a TextQuoteSelector at each, and refuses entry if any sample resolves
- * to "ambiguous" or "orphan" via the SHIPPED resolveQuoteSelector (Pitfall 2 —
- * no fork). Runs AFTER ArticleSchema.parse so the gate receives a validated
- * article; runs BEFORE the article is returned so an unround-trippable article
- * never enters the library.
+ * probeRoundTripAnchor — the SC#1 anchor probe (ADR-0003: a detector, not a
+ * gate). Samples 5 grapheme offsets (0, 25%, 50%, 75%, near-end) on the
+ * article's normalized text, derives a TextQuoteSelector at each, and resolves
+ * it via the SHIPPED resolveQuoteSelector (Pitfall 2 — no fork). Runs AFTER
+ * ArticleSchema.parse so the probe receives a validated article.
  *
- * RESEARCH.md §Pattern 4 L326-344 + §Gate 3 L972-973.
+ * Outcomes:
+ *   - "pass"      every sample resolved confidently.
+ *   - "ambiguous" some sample's quote text occurs more than once (e.g. a
+ *                 repeated epigraph or opening) — the TEXT is fully readable;
+ *                 the article is admitted with annotationsDegraded so the
+ *                 reader sees "Highlights may be unreliable on this article."
+ *   - "orphan"    a selector derived from the article itself resolved to
+ *                 nothing — a derive/resolve asymmetry bug, not a content
+ *                 property. Still refused (round-trip-anchor-failed) as a bug
+ *                 canary; this should never fire for real input.
  */
-export function assertRoundTripAnchor(article: CanonicalArticle): void {
+export type AnchorProbeResult = "pass" | "ambiguous" | "orphan";
+
+export function probeRoundTripAnchor(article: CanonicalArticle): AnchorProbeResult {
   const total = graphemeClusters(normalizeText(article), article.lang).length;
 
   // 5 deterministic sample offsets (start, 25%, 50%, 75%, near-end).
@@ -101,11 +112,59 @@ export function assertRoundTripAnchor(article: CanonicalArticle): void {
     const selector = deriveQuoteSelector(article, { start, end });
     const resolved = resolveQuoteSelector(article, selector, { start, end });
     // resolveQuoteSelector returns TextPositionSelector | "ambiguous" | "orphan".
-    // The gate considers ANY non-confident resolution a failure (Pitfall 2 —
-    // the integration truth: an ingested article must be treatable identically
-    // to a fixture for the annotation machinery).
+    // Any non-confident resolution is reported; the CALLER decides policy
+    // (ambiguous → admitted flagged, orphan → refused — ADR-0003).
     if (resolved === "ambiguous" || resolved === "orphan") {
-      throw new IngestionError("round-trip-anchor-failed");
+      return resolved;
+    }
+  }
+  return "pass";
+}
+
+/**
+ * unsupportedPartsWarning — the count-first extractionWarnings line for
+ * unsupported blocks (ADR-0003), ONE copy source shared verbatim by the EPUB
+ * per-chapter stage and the single-article tail (T-20-10 — never silent, and
+ * never drifting between the two disclosure surfaces).
+ */
+function unsupportedPartsWarning(count: number): string[] {
+  return count > 0
+    ? [
+        `${count} part${count === 1 ? "" : "s"} of the original could not be displayed`,
+      ]
+    : [];
+}
+
+/**
+ * probeAnchorOrThrow — the Stage-7 probe POLICY (ADR-0003) shared by the EPUB
+ * per-chapter stage and the single-article tail: "orphan" throws (the
+ * derive/resolve bug canary stays a hard failure); "pass"/"ambiguous" return
+ * so the caller can stamp annotationsDegraded on "ambiguous".
+ */
+function probeAnchorOrThrow(article: CanonicalArticle): "pass" | "ambiguous" {
+  const anchorProbe = probeRoundTripAnchor(article);
+  if (anchorProbe === "orphan") {
+    throw new IngestionError("round-trip-anchor-failed");
+  }
+  return anchorProbe;
+}
+
+/**
+ * stampIngestionFlags — the post-probe stamp shared by both tails (mutation
+ * safe: the article is local to the request, not yet persisted; Zod parse
+ * does not freeze). Narrow guard: ingestionMeta is `.optional()` on the
+ * schema but always present at both call sites (each `assembled` supplies it).
+ */
+function stampIngestionFlags(
+  article: CanonicalArticle,
+  confidence: ConfidenceResult,
+  anchorProbe: "pass" | "ambiguous",
+): void {
+  if (article.ingestionMeta) {
+    article.ingestionMeta.extractionConfidence =
+      confidence.state === "confident" ? "high" : "low";
+    if (anchorProbe === "ambiguous") {
+      article.ingestionMeta.annotationsDegraded = true;
     }
   }
 }
@@ -275,7 +334,7 @@ export function consumeDuplicatedTitle(blocks: Block[], title: string): Block[] 
  * diverges after Stage 1: a book is MANY articles, so the shared single-
  * article tail (title chain → assemble → parse → gate → confidence → stamp)
  * cannot host it. Instead this flow runs the UNCHANGED stages 2+ PER CHAPTER
- * (ArticleSchema.parse → assertRoundTripAnchor → deriveConfidence → stamp —
+ * (ArticleSchema.parse → probeRoundTripAnchor → deriveConfidence → stamp —
  * SC#4 per chapter, the same imported gate, no fork) and returns the book
  * ok-variant envelope.
  *
@@ -352,8 +411,12 @@ async function ingestEpubBook(input: {
       // ride the same contract as every other Stage-1 adapter; provenance
       // carries the BOOK's authors/publishedDate and the chapter's own
       // TOC-derived title). extractionWarnings discloses the 20-06
-      // per-figure refusals (count form matching the single-article stage's
-      // tone — T-20-10, never silent).
+      // per-figure refusals + the ADR-0003 unsupported-part count (count
+      // form matching the single-article stage's tone — T-20-10, never
+      // silent).
+      const unsupportedBlockCount = effectiveBlocks.filter(
+        (b) => b.kind === "unsupported",
+      ).length;
       const assembled = {
         id,
         revision: 1,
@@ -372,14 +435,16 @@ async function ingestEpubBook(input: {
           origin: "upload" as const,
           originalHtmlHash,
           extractionConfidence: "high" as const, // placeholder — stamped post-gate
-          extractionWarnings:
-            draft.figureRefusedCount > 0
+          extractionWarnings: [
+            ...unsupportedPartsWarning(unsupportedBlockCount),
+            ...(draft.figureRefusedCount > 0
               ? [
                   `${draft.figureRefusedCount} image${
                     draft.figureRefusedCount === 1 ? "" : "s"
                   } could not be included`,
                 ]
-              : [],
+              : []),
+          ],
           bookId: bookBase,
           chapterIndex: i,
         },
@@ -388,27 +453,22 @@ async function ingestEpubBook(input: {
       // Stage 6b: VALIDATE — ArticleSchema.parse (unchanged stage).
       const article: CanonicalArticle = ArticleSchema.parse(assembled);
 
-      // Stage 7: ROUND-TRIP ANCHOR GATE (SC#4) — the SAME imported gate,
-      // per chapter (ambiguous|orphan throws below into the chapter skip).
-      assertRoundTripAnchor(article);
+      // Stage 7: ROUND-TRIP ANCHOR PROBE (SC#4, ADR-0003) — the SAME imported
+      // probe + policy per chapter (probeAnchorOrThrow): "orphan" throws into
+      // the chapter skip (the bug canary stays a hard failure); "ambiguous"
+      // ADMITS the chapter flagged (annotationsDegraded) instead of skipping
+      // it — the text is readable, so the reader gets it.
+      const anchorProbe = probeAnchorOrThrow(article);
 
-      // ING-06 three-state confidence (unchanged stage). The adapter's
-      // D12-10 admission already established readerability — the chapter
-      // would not exist as a draft otherwise — so isReaderable:true.
+      // ING-06 two-state confidence (ADR-0003 — no "unsupported" state to
+      // skip on). The adapter's D12-10 admission already established
+      // readerability — the chapter would not exist as a draft otherwise —
+      // so isReaderable:true.
       const confidence: ConfidenceResult = deriveConfidence(article, {
         isReaderable: true,
       });
-      if (confidence.state === "unsupported") {
-        skipped += 1; // honest per-chapter refusal (D12-11) — omitted
-        continue;
-      }
 
-      // Stamp (mutation safe — local to this request; same pattern as the
-      // single-article tail).
-      if (article.ingestionMeta) {
-        article.ingestionMeta.extractionConfidence =
-          confidence.state === "confident" ? "high" : "low";
-      }
+      stampIngestionFlags(article, confidence, anchorProbe);
 
       chapterArticleIds.push(id);
       admitted.push(article);
@@ -501,7 +561,7 @@ function toAssetEnvelope(asset: ImageAsset): AssetEnvelope {
 /**
  * ingest — the 7-stage stateless pipeline orchestrator (RESEARCH.md §Pattern 1
  * L249-279). Runs safeFetch → extractAndNormalize → slugifyUrl →
- * ArticleSchema.parse → assertRoundTripAnchor → deriveConfidence, and returns
+ * ArticleSchema.parse → probeRoundTripAnchor → deriveConfidence, and returns
  * a typed IngestionResponse. Every refusal path produces a typed reason
  * (IngestionError is caught and serialized) so the edge function (07-06) can
  * map it to HTTP 400 cleanly.
@@ -560,7 +620,7 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
   // (dev middleware, Vercel prod api function, future Cloudflare shape all
   // funnel through ingest() per D7-05) in this single orchestrator-owned
   // place. The reroute preserves the exactly-one-of invariant by
-  // construction; downstream (ArticleSchema.parse, assertRoundTripAnchor,
+  // construction; downstream (ArticleSchema.parse, probeRoundTripAnchor,
   // deriveConfidence, persistence, dedupe) is shared and unchanged. The
   // `"html" in input` narrowing makes input.html type-safe with no cast.
   const request: IngestionRequest =
@@ -599,7 +659,7 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
 
     // Stage 1: SOURCE → EXTRACT → NORMALIZE. Three branches share the same
     // output shape so the downstream stages (ArticleSchema.parse +
-    // assertRoundTripAnchor + deriveConfidence) run identically on all paths
+    // probeRoundTripAnchor + deriveConfidence) run identically on all paths
     // — the load-bearing invariant (D7-03 input-source-agnostic pipeline).
     // `MarkdownToBlocksResult` is byte-identical to `ExtractAndNormalizeResult`
     // (both ship `{ blocks, footnotes, lang, provenancePartial, isReaderable }`),
@@ -842,14 +902,15 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
       markdownFilenameHint = filename;
     }
 
-    // ING-06 honest refusal (Rule 2 — auto-added critical guard): if even
-    // Readability wouldn't attempt the page OR extraction yielded zero blocks,
-    // refuse with "extraction-unsupported" BEFORE spending cycles on
-    // ArticleSchema.parse. Without this guard, thin content with no <title>
-    // would surface as the misleading "server-error" (parse fails on the
-    // missing-but-required Provenance.title) instead of the honest
-    // "extraction-unsupported".
-    if (!isReaderable || blocks.length === 0) {
+    // ADR-0003 (reading-first): the ONLY content-based refusal left on the
+    // web path — extraction yielded zero blocks, so there is literally
+    // nothing reliable to show. `isProbablyReaderable` is NO LONGER a veto:
+    // a page Readability dislikes is still extracted and, when blocks
+    // result, admitted flagged (confidence low — "page-not-readerable").
+    // (Historical note: the pre-check veto also guarded thin content with no
+    // <title> from surfacing as the misleading "server-error"; the zero-block
+    // guard keeps that property for the truly empty case.)
+    if (blocks.length === 0) {
       return { ok: false, reason: "extraction-unsupported" };
     }
 
@@ -938,6 +999,15 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
     // v1.0 discipline). The url/paste/markdown chains are untouched.
     const effectiveBlocks = hasPdf ? consumeDuplicatedTitle(blocks, title) : blocks;
 
+    // ADR-0003 — count-first disclosure whenever unsupported blocks are
+    // present: the article-level note ("Some content could not be processed.
+    // See the original.") appears because parts fell, and the inline
+    // <details> disclosures mark WHERE they fell. Never silent.
+    const unsupportedBlockCount = effectiveBlocks.filter(
+      (b) => b.kind === "unsupported",
+    ).length;
+    const unsupportedBlockWarnings = unsupportedPartsWarning(unsupportedBlockCount);
+
     const assembled = {
       id,
       revision: 1,
@@ -958,8 +1028,12 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
         sourceUrl: finalUrl,
         originalHtmlHash,
         fetchedAt,
-        extractionConfidence: "high" as const, // placeholder — stamped post-gate
-        extractionWarnings: [...imageRefusalWarnings, ...transcriptWarnings],
+        extractionConfidence: "high" as const, // placeholder — stamped post-probe
+        extractionWarnings: [
+          ...unsupportedBlockWarnings,
+          ...imageRefusalWarnings,
+          ...transcriptWarnings,
+        ],
         // Issue #39 — the youtube branch's block-keyed timing metadata.
         // Absent for every other source (Pitfall 9 additive-optional).
         ...(transcriptMeta !== undefined ? { transcript: transcriptMeta } : {}),
@@ -970,21 +1044,18 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
     // validation + Pitfall 5 URL scheme guards fire here).
     const article: CanonicalArticle = ArticleSchema.parse(assembled);
 
-    // Stage 7: ROUND-TRIP ANCHOR GATE (SC#1) — refuse entry on ambiguous/orphan.
-    // MUST run AFTER ArticleSchema.parse so the gate receives a validated
-    // article; runs BEFORE the article is returned.
-    assertRoundTripAnchor(article);
+    // Stage 7: ROUND-TRIP ANCHOR PROBE (SC#1, ADR-0003) — a detector, not a
+    // gate. MUST run AFTER ArticleSchema.parse so the probe receives a
+    // validated article. Shared policy (probeAnchorOrThrow): "orphan" still
+    // refuses (a derive/resolve asymmetry bug canary); "ambiguous" means the
+    // text is readable but highlight anchoring may be unreliable — admitted
+    // flagged (annotationsDegraded).
+    const anchorProbe = probeAnchorOrThrow(article);
 
-    // ING-06 honest three-state confidence. deriveConfidence returns
-    // { state: "confident" | "low" | state: "unsupported" } — the "unsupported"
-    // variant is refused here (runs after the gate so an unsupported extraction
-    // that DID round-trip is still refused, never silently admitted to the
-    // library). The "low" variant still succeeds — enters the library flagged
-    // for the reader-visible "may be incomplete" banner (ING-06 three-state).
+    // ING-06 two-state confidence (ADR-0003 — no "unsupported" state):
+    // confident enters clean; low enters the library flagged for the
+    // reader-visible fidelity note. Readable text is never refused here.
     const confidence: ConfidenceResult = deriveConfidence(article, { isReaderable });
-    if (confidence.state === "unsupported") {
-      return { ok: false, reason: "extraction-unsupported" };
-    }
 
     // Issue #39 (decision #26) — an ASR-only transcript NEVER upgrades to
     // trusted: an auto-generated caption track enters the library flagged
@@ -1001,16 +1072,9 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
       confidence.reason = hasTranscript ? "pasted-transcript" : "asr-caption-track";
     }
 
-    // Stamp the confidence onto the article (mutation is safe — the article
-    // is local to this request, not yet persisted; Zod parse does not freeze).
-    // The persisted shape (IngestionMetaSchema) carries only "high" | "low";
-    // the response envelope carries the reader-facing "confident" | "low" state.
-    // The narrow guard satisfies TS: ingestionMeta is `.optional()` on the
-    // schema but always present here (we always supply it in `assembled`).
-    if (article.ingestionMeta) {
-      article.ingestionMeta.extractionConfidence =
-        confidence.state === "confident" ? "high" : "low";
-    }
+    // Stamp the flags onto the article (the shared stampIngestionFlags —
+    // same narrow-guard discipline as the EPUB chapter stage).
+    stampIngestionFlags(article, confidence, anchorProbe);
 
     return {
       ok: true,

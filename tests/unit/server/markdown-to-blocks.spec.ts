@@ -5,7 +5,7 @@
 //   - YAML front-matter extraction (D8-17)
 //   - The D8-17 filename-fallback helper (stripMarkdownExtension)
 //   - Raw-HTML escape (Pitfall 8-2 — strict CommonMark inert-text contract)
-//   - The round-trip anchor gate (Pitfall 8-1 — `assertRoundTripAnchor` does
+//   - The round-trip anchor probe (Pitfall 8-1 — `probeRoundTripAnchor` does
 //     not throw on a representative fixture)
 //
 // The 9-kind contract: every output block has a `kind` in the SCHEMA_KINDS
@@ -18,7 +18,7 @@ import {
   SCHEMA_KINDS,
 } from "../../../server/markdownToBlocks";
 import { ArticleSchema, type CanonicalArticle } from "../../../src/content/schema";
-import { assertRoundTripAnchor } from "../../../server/ingest";
+import { ingest, probeRoundTripAnchor } from "../../../server/ingest";
 
 // The 9 schema-allowed block kinds (src/content/schema.ts BlockSchema). Every
 // extracted block MUST have a kind in this tuple — the exhaustive walker has
@@ -452,7 +452,7 @@ describe("markdownToBlocks — Raw-HTML escape (Pitfall 8-2)", () => {
 });
 
 describe("markdownToBlocks — Round-trip anchor gate (Pitfall 8-1)", () => {
-  it("assertRoundTripAnchor does NOT throw on a representative fixture", async () => {
+  it("probeRoundTripAnchor passes on a representative fixture", async () => {
     // Build a minimal but representative CanonicalArticle from the adapter
     // output and run the integration-truth gate. The 5-offset selector
     // sample must resolve to "confident" at every offset (Pitfall 8-1 — the
@@ -492,7 +492,7 @@ describe("markdownToBlocks — Round-trip anchor gate (Pitfall 8-1)", () => {
     });
 
     // MUST not throw — the 5-offset selector sample resolves to "confident".
-    expect(() => assertRoundTripAnchor(article)).not.toThrow();
+    expect(probeRoundTripAnchor(article)).toBe("pass");
   });
 });
 
@@ -618,5 +618,24 @@ describe("markdownToBlocks — caption attachment (issue #19)", () => {
     const fig = blocks[1];
     if (fig?.kind !== "figure") throw new Error("expected figure");
     expect(fig.caption).toEqual([]);
+  });
+});
+
+describe("ingest({ markdown }) — thin-content admission (ADR-0003)", () => {
+  it("a two-block markdown document admits flagged instead of refusing extraction-unsupported", async () => {
+    // Reading-first applies to EVERY text path, not just the web path: the
+    // shared zero-block guard (blocks.length === 0) is the only content-based
+    // refusal left, so a heading + one-paragraph .md upload (isReaderable
+    // false at blocks.length >= 3) enters the library flagged low — the
+    // reader sees the fidelity note instead of a refusal wall.
+    const result = await ingest({
+      markdown: "# A very short note\n\nBarely anything here, but it is text.",
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok || !("article" in result)) throw new Error("expected ok:true article envelope");
+    expect(result.article.blocks).toHaveLength(2);
+    expect(result.article.ingestionMeta?.source).toBe("markdown");
+    expect(result.article.ingestionMeta?.extractionConfidence).toBe("low");
+    expect(result.confidence.state).toBe("low");
   });
 });

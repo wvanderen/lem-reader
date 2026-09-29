@@ -327,3 +327,100 @@ describe("ArticleView corrupt-location honesty (issue #98)", () => {
     ).toBe(false);
   });
 });
+
+// ADR-0003 (reading-first ingestion) — the flagged-article note region. An
+// admitted-flagged article discloses its limits AT THE TOP of the reading
+// view, in the article-top meta: the low-confidence sentence (with the
+// "See the original" escape hatch when a sourceUrl exists), the
+// partial-content header + per-part warning lines, and the degraded-anchor
+// sentence. Silence for clean articles — never a placeholder.
+describe("ArticleView flagged-article note region (ADR-0003)", () => {
+  const flaggedArticle = (meta: {
+    extractionConfidence: "high" | "low";
+    extractionWarnings: string[];
+    annotationsDegraded?: boolean;
+  }): CanonicalArticle => ({
+    ...fullArticle(),
+    ingestionMeta: {
+      source: "url",
+      originalHtmlHash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      ...meta,
+    },
+  });
+
+  it("renders the low-confidence sentence with a safe See-the-original link when a URL exists", async () => {
+    openArticleMock.mockResolvedValue(
+      flaggedArticle({ extractionConfidence: "low", extractionWarnings: [] }),
+    );
+    renderWithProvider(<ArticleView {...withProps("stub-article")} />);
+    await screen.findByRole("heading", { level: 1, name: "Stub Article" });
+    // The note paragraph carries the sentence PLUS the link, so query the
+    // element and assert on its own text + child anchor.
+    const note = document.querySelector("p.extraction-note");
+    expect(note?.textContent).toContain(
+      "This article may be incomplete or inaccurate — it could not be read reliably.",
+    );
+    const noteLink = note?.querySelector("a");
+    expect(noteLink).not.toBeNull();
+    expect(noteLink?.getAttribute("href")).toBe("https://example.com/posts/stub");
+    expect(noteLink?.getAttribute("target")).toBe("_blank");
+    expect((noteLink?.getAttribute("rel") ?? "")).toContain("noopener");
+  });
+
+  it("renders the partial-content header, the See-the-original link, and each warning line", async () => {
+    openArticleMock.mockResolvedValue(
+      flaggedArticle({
+        extractionConfidence: "high",
+        extractionWarnings: [
+          "2 parts of the original could not be displayed",
+          "1 image could not be included",
+        ],
+      }),
+    );
+    renderWithProvider(<ArticleView {...withProps("stub-article")} />);
+    await screen.findByRole("heading", { level: 1, name: "Stub Article" });
+    const header = document.querySelector(".partial-content-heading");
+    expect(header?.textContent).toContain("Some content could not be processed.");
+    // The escape hatch rides the partial-content header.
+    expect(header?.querySelector("a")?.getAttribute("href")).toBe(
+      "https://example.com/posts/stub",
+    );
+    // Each warning line renders as its own list item.
+    const items = Array.from(
+      document.querySelectorAll(".partial-content-note ul li"),
+    ).map((li) => li.textContent);
+    expect(items).toEqual([
+      "2 parts of the original could not be displayed",
+      "1 image could not be included",
+    ]);
+  });
+
+  it("renders the degraded-anchoring sentence for an annotationsDegraded article", async () => {
+    openArticleMock.mockResolvedValue(
+      flaggedArticle({
+        extractionConfidence: "high",
+        extractionWarnings: [],
+        annotationsDegraded: true,
+      }),
+    );
+    renderWithProvider(<ArticleView {...withProps("stub-article")} />);
+    expect(
+      await screen.findByText("Highlights may be unreliable on this article."),
+    ).not.toBeNull();
+  });
+
+  it("renders NO note lines for a clean confident article — silence, never a placeholder", async () => {
+    openArticleMock.mockResolvedValue(
+      flaggedArticle({ extractionConfidence: "high", extractionWarnings: [] }),
+    );
+    renderWithProvider(<ArticleView {...withProps("stub-article")} />);
+    await screen.findByRole("heading", { level: 1, name: "Stub Article" });
+    expect(screen.queryByText("Some content could not be processed.")).toBeNull();
+    expect(screen.queryByText("Highlights may be unreliable on this article.")).toBeNull();
+    expect(
+      screen.queryByText(
+        "This article may be incomplete or inaccurate — it could not be read reliably.",
+      ),
+    ).toBeNull();
+  });
+});

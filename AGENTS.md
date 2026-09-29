@@ -17,7 +17,7 @@ Lem Reader is a calm, booklike reader for web articles and documents, designed f
 - **Accessibility**: Semantic HTML, keyboard navigation, screen-reader compatibility, zoom, visible focus, and reduced motion are foundational.
 - **Persistence**: Reading position, highlights, notes, library, and preferences are local-first — cross-device via versioned export/import, not accounts.
 - **Security**: The canonical document model is the security boundary — sanitize once at ingest, never `dangerouslySetInnerHTML`; ingestion refuses private/internal/cloud-metadata endpoints (SSRF) and caps sizes/redirects.
-- **Honesty**: No silent garbage — unsupported content refuses calmly with reader-visible reasons; annotations never silently re-attach.
+- **Honesty**: No silent garbage — content that can't be fully processed is admitted with visible limits and a link to the original, or refused calmly when there is nothing reliable to show; annotations never silently re-attach.
 - **Performance**: Repagination must feel responsive and remain stable after fonts settle — enforced by a user-approved CI budget.
 
 <!-- GSD:project-end -->

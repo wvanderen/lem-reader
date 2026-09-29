@@ -206,7 +206,7 @@ test.describe("SC#1 + LIB-01 + LIB-05 — browse + open + source badge", () => {
     // Open the Add dialog on the paste source, then ingest a paste-HTML
     // article through the real Vite Node middleware.
     // This exercises the full pipeline (extractAndNormalize → htmlToBlocks
-    // → ArticleSchema.parse → assertRoundTripAnchor → Dexie save). The
+    // → ArticleSchema.parse → probeRoundTripAnchor → Dexie save). The
     // PASTE_HTML carries a <link rel="canonical"> so the extractor stamps
     // a sourceUrl, which makes the SourceBadge render as a link (LIB-05).
     await openAddDialog(page);

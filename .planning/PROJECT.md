@@ -135,7 +135,7 @@ Accessibility validation now spans the full matrix: keyboard, VoiceOver+Safari (
 - **Accessibility**: Semantic HTML, keyboard navigation, screen-reader compatibility, zoom, visible focus, and reduced motion are foundational.
 - **Persistence**: Reading position, highlights, notes, library, and preferences are local-first — no accounts or sync infrastructure; cross-device via versioned export/import.
 - **Security**: The canonical document model is the security boundary — sanitize once at ingest, never `dangerouslySetInnerHTML`; ingestion refuses private/internal/cloud-metadata endpoints (SSRF) and caps sizes/redirects.
-- **Honesty**: No silent garbage — unsupported content and unreliable extraction refuse calmly with reader-visible reasons; annotations never silently re-attach.
+- **Honesty**: No silent garbage — content that can't be fully processed is admitted with visible limits and a link to the original, or refused calmly when there is nothing reliable to show; annotations never silently re-attach.
 - **Performance**: Repagination stays responsive and stable after fonts settle — enforced by a user-approved CI budget.
 
 ## Key Decisions

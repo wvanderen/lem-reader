@@ -153,7 +153,12 @@ import {
   effectivePublishedAt,
   effectiveSourceUrl,
 } from "../ingestion/library/effectiveMetadata";
-import { extractionNote } from "./extractionNote";
+import {
+  annotationsNote,
+  extractionNote,
+  partialContentWarnings,
+  PARTIAL_CONTENT_NOTE,
+} from "./extractionNote";
 // Issue #40 — the minimal speakable read-aloud path: the transport bar
 // (Play/Pause/Stop, fixed bottom) + the engine hook. Listening is reading
 // (ADR 0001): the listened canonical position drives the SAME shared
@@ -1909,6 +1914,25 @@ export function ArticleView({
   // string | undefined).
   const effectiveByline = effectiveAuthor(article);
   const effectiveDate = effectivePublishedAt(article);
+  // ADR-0003 notes — the same narrow-guard discipline as the byline consts
+  // above: one derivation per signal, local consts so the guard, the rendered
+  // text, and the map source narrow through the SAME value (bare calls per
+  // JSX expression would widen back to string | undefined / re-derive).
+  const note = extractionNote(article);
+  const warnings = partialContentWarnings(article);
+  const degradedNote = annotationsNote(article);
+  // The "See the original." escape hatch — one JSX derivation shared by the
+  // low-confidence note and the partial-content heading (identical link,
+  // byte-identical copy, by construction).
+  const seeOriginal = sourceUrl && (
+    <>
+      <a href={sourceUrl} rel="noopener noreferrer" target="_blank">
+        See the original
+        <span className="visually-hidden"> (opens in a new tab)</span>
+      </a>
+      .
+    </>
+  );
   const articleTopMeta = (
     <div className="article-top-meta">
       {/* Plan 17-03 (META-02/D17-09): the byline reads the effective author
@@ -1924,10 +1948,41 @@ export function ArticleView({
       )}
       {/* Issue #41 (flow N6) — the low-confidence disclosure. Undefined is
           the empty state (silence, never a placeholder); ASR transcripts
-          carry the caption-specific wording via the ONE copy derivation. */}
-      {extractionNote(article) && (
-        <p className="meta extraction-note">{extractionNote(article)}</p>
+          carry the caption-specific wording via the ONE copy derivation.
+          ADR-0003: the sentence gains the "See the original." escape hatch
+          when the article has a sourceUrl. The local-const discipline above
+          applies (one derivation, narrowed through `note` / `seeOriginal`). */}
+      {note && (
+        <p className="meta extraction-note">
+          {note}
+          {sourceUrl && " "}
+          {seeOriginal}
+        </p>
       )}
+      {/* ADR-0003 — the partial-content disclosure: the article-level "parts
+          fell" sentence with the original-article escape hatch, plus each
+          extractionWarning line (image refusals, unsupported parts, transcript
+          warnings) as a quiet list. Silence when nothing fell. */}
+      {warnings.length > 0 && (
+        <div className="meta partial-content-note">
+          <p className="partial-content-heading">
+            {PARTIAL_CONTENT_NOTE}{" "}
+            {seeOriginal}
+          </p>
+          <ul>
+            {/* Composite key: warnings are free-form strings (three producers)
+                and could in principle repeat — the index suffix keeps keys
+                unique without pretending the text is an id. */}
+            {warnings.map((warning, index) => (
+              <li key={`${warning}-${index}`}>{warning}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {/* ADR-0003 — the degraded-anchoring disclosure: the round-trip probe
+          found ambiguous samples, so highlight anchoring may be unreliable.
+          The text itself is fully readable — one calm sentence, no jargon. */}
+      {degradedNote && <p className="meta annotations-note">{degradedNote}</p>}
       {/* Plan 12-06 (D12-08): epub-chapter context line — calm book
           provenance below the article provenance, epub-chapter only
           (chapterContext is non-null ONLY when the source is epub-chapter

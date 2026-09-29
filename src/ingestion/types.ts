@@ -243,9 +243,8 @@ export const IngestionFailureReasonEnum = z.enum([
   "fetch-failed", // network error, DNS unresolved, timeout, abort
   "response-too-large", // content-length cap (RESEARCH.md §Timeout/Cap)
   "unsupported-content-type", // not (text|application)/(xhtml+)?html
-  "extraction-unsupported", // ING-06 — isProbablyReaderable=false → "couldn't read"
-  "extraction-too-low-confidence", // ING-06 — extraction ran but below threshold
-  "round-trip-anchor-failed", // SC#1 — TextQuoteSelector resolution returned ambiguous|orphan
+  "extraction-unsupported", // zero extractable blocks — nothing reliable to show (ADR-0003)
+  "round-trip-anchor-failed", // SC#1 — TextQuoteSelector resolution returned orphan (a normalization-bug canary; ambiguous now admits flagged per ADR-0003)
   "pdf-unreadable", // Phase 11 — parser refusal (corrupt/malformed bytes)
   "pdf-encrypted", // Phase 11 — password-protected document
   "pdf-scanned", // Phase 11 — no text layer (zero extractable text items)

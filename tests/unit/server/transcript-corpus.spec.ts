@@ -8,7 +8,7 @@
 //      segment — decision #26). The budget is the guard that keeps pagination
 //      a no-op for ordinary transcripts.
 //   2. ROUND-TRIP — TextQuoteSelectors derived from the article's normalized
-//      text resolve back confidently (assertRoundTripAnchor — the same gate
+//      text resolve back confidently (probeRoundTripAnchor — the same probe
 //      the ingest pipeline enforces at admission; timestamps never enter the
 //      normalized text, so the D-05 substrate is untouched).
 //   3. NO-OP SHAPE — the reading surface sees ONLY paragraph/heading blocks;
@@ -31,7 +31,7 @@ import {
   normalizeText,
 } from "../../../src/content/normalizeText";
 import { splitParagraphRuns } from "../../../src/pagination/splitBlock";
-import { assertRoundTripAnchor } from "../../../server/ingest";
+import { probeRoundTripAnchor } from "../../../server/ingest";
 import { deriveConfidence } from "../../../server/confidence";
 import {
   TRANSCRIPT_PARAGRAPH_CAP_CHARS,
@@ -243,7 +243,7 @@ describe("transcript corpus — 3-hour ASR + pathological cue (decision #26)", (
 
   it("ROUND-TRIP: the SC#1 anchor gate resolves confidently over the corpus text", () => {
     // The exact gate ingest runs at admission — refuse-on-ambiguous/orphan.
-    expect(() => assertRoundTripAnchor(article)).not.toThrow();
+    expect(probeRoundTripAnchor(article)).toBe("pass");
   });
 
   it("PAGINATION GUARD: the pathological cue SPLITS cleanly (mid-paragraph primitive, offsets preserved)", () => {

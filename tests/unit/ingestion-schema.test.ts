@@ -740,8 +740,8 @@ describe("IngestionResponseSchema", () => {
   });
 });
 
-describe("IngestionFailureReasonEnum (the 24 cataloged reasons)", () => {
-  it("exposes exactly the 24 reasons — the Phase 7 catalog + Phase 11 PDF + Phase 12 EPUB + issue #39 YouTube members slotting in before the dedupe-refuse + catch-all tail", () => {
+describe("IngestionFailureReasonEnum (the 23 cataloged reasons)", () => {
+  it("exposes exactly the 23 reasons — the Phase 7 catalog (ADR-0003: extraction-too-low-confidence removed; never emitted) + Phase 11 PDF + Phase 12 EPUB + issue #39 YouTube members slotting in before the dedupe-refuse + catch-all tail", () => {
     expect(IngestionFailureReasonEnum.options).toEqual([
       "ssrf-blocked-scheme",
       "ssrf-blocked-private-ip",
@@ -750,7 +750,6 @@ describe("IngestionFailureReasonEnum (the 24 cataloged reasons)", () => {
       "response-too-large",
       "unsupported-content-type",
       "extraction-unsupported",
-      "extraction-too-low-confidence",
       "round-trip-anchor-failed",
       // Phase 11 ING-04 — Pattern 7 of 11-RESEARCH.md.
       "pdf-unreadable",
@@ -772,7 +771,7 @@ describe("IngestionFailureReasonEnum (the 24 cataloged reasons)", () => {
       "already-in-library",
       "server-error",
     ]);
-    expect(IngestionFailureReasonEnum.options).toHaveLength(24);
+    expect(IngestionFailureReasonEnum.options).toHaveLength(23);
   });
 
   it("parses each Phase 11 PDF reason (pdf-scanned et al. — the enum accepts all five new members)", () => {

@@ -153,7 +153,7 @@
       "kind": "paragraph",
       "content": [
         {
-          "text": "Lem Reader is intentionally honest about its content scope. It handles the structures common to long-form publishing—headings, prose, links, quotations, lists, figures and captions, footnotes, and code. Complex tables, math, interactive embeds, scanned PDFs, or structurally ambiguous documents may be refused rather than silently converted into confusing text.",
+          "text": "Lem Reader is intentionally honest about its content scope. It handles the structures common to long-form publishing—headings, prose, links, quotations, lists, figures and captions, footnotes, and code. Lem Reader reads what it can. When part of an article can't be processed — interactive embeds, complex tables, some images — the text is still added to your library, with a note at the top of the article and a link to the original, and the parts that fell are marked where they fell. Only content with nothing reliable to show — a scanned PDF, a protected book, an unreachable address — is refused, with a clear reason.",
           "marks": []
         }
       ]

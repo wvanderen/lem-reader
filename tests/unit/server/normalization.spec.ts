@@ -1,19 +1,18 @@
 // tests/unit/server/normalization.spec.ts
-// Plan 07-05 Task 2 — the SC#1 phase-exit gate suite. Replaces the Wave-0
-// stub (the placeholder entries — vitest's deferred-test API — are gone from
-// this file) with the real round-trip anchor gate test exercising the SHIPPED
-// selector machinery (Pitfall 2 — no fork) on:
+// Plan 07-05 Task 2 — the SC#1 phase-exit gate suite (reshaped by ADR-0003:
+// the round-trip anchor GATE is now a PROBE — a detector, not a veto).
+// Exercises the SHIPPED selector machinery (Pitfall 2 — no fork) on:
 //   - v1.0 fixtures (real CanonicalArticle shape)
 //   - extracted samples (real publisher HTML → ingest → round-trip)
-//   - a refusal-engineered case (extreme repetition → "ambiguous" → refused)
+//   - a repetition case (extreme repetition → "ambiguous" → admitted FLAGGED,
+//     never refused — readable text is never refused)
+//   - a duplicated-opening regression (the marxist.com trotsky shape — the
+//     article that motivated ADR-0003)
 //   - the full pipeline end-to-end (ingest({html}) → ok=true)
-//   - a thin-content refusal (ingest("<p>short</p>") → ok=false)
-//
-// Source: 07-PATTERNS.md §tests/unit/server/normalization.spec.ts L524-548
-// (analog: tests/unit/selectors.test.ts L49-63 — the deriveQuoteSelector
-// usage pattern this gate reuses verbatim) + 07-RESEARCH.md §Gate 3 L972-973.
+//   - a zero-extraction refusal (ingest("<p>short</p>") → ok=false — nothing
+//     reliable to show)
 import { describe, expect, it } from "vitest";
-import { assertRoundTripAnchor, ingest } from "../../../server/ingest";
+import { ingest, probeRoundTripAnchor } from "../../../server/ingest";
 import { ArticleSchema, type CanonicalArticle } from "../../../src/content/schema";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -28,7 +27,7 @@ function parseArticle(raw: unknown): CanonicalArticle {
 
 const SOURCE_HTML_DIR = join(__dirname, "../../../scripts/source-html");
 
-describe("normalization / round-trip anchor gate (SC#1)", () => {
+describe("normalization / round-trip anchor probe (SC#1, ADR-0003)", () => {
   it("v1.0 fixture round-trips to confident (real CanonicalArticle shape)", () => {
     // Three v1.0 fixtures spanning the corpus: an essay, a technical post, and
     // an academic article with footnotes. Each has substantial prose → unique
@@ -37,27 +36,29 @@ describe("normalization / round-trip anchor gate (SC#1)", () => {
       parseArticle,
     );
     for (const fixture of fixtures) {
-      expect(() => assertRoundTripAnchor(fixture)).not.toThrow();
+      expect(probeRoundTripAnchor(fixture)).toBe("pass");
     }
   });
 
   it("extracted sample round-trips to confident (real publisher HTML through the pipeline)", async () => {
     const html = readFileSync(join(SOURCE_HTML_DIR, "essay-long-form.html"), "utf-8");
     const result = await ingest({ html });
-    // If extraction succeeded, the round-trip gate MUST pass on the extracted
-    // article (the gate already ran inside ingest; this re-asserts it on the
-    // returned article for defense-in-depth). Two ok-variants since Phase 12
-    // — narrow on the article key.
+    // If extraction succeeded, the probe MUST pass on the extracted article
+    // (the probe already ran inside ingest; this re-asserts it on the returned
+    // article for defense-in-depth). Two ok-variants since Phase 12 — narrow
+    // on the article key.
     if (result.ok && "article" in result) {
-      expect(() => assertRoundTripAnchor(result.article)).not.toThrow();
+      expect(probeRoundTripAnchor(result.article)).toBe("pass");
     }
   });
 
-  it("article with extreme repetition is refused (round-trip-anchor-failed)", () => {
+  it("extreme repetition probes ambiguous — flagged, not refused (ADR-0003)", () => {
     // A single repeated character produces N>1 exact matches for every sampled
     // window; prefix/suffix disambiguation fails because the surrounding text
     // is the SAME pattern at every candidate → resolveQuoteSelector returns
-    // "ambiguous" → assertRoundTripAnchor throws IngestionError.
+    // "ambiguous" → the probe REPORTS it; the text stays readable, so the
+    // article is admitted with annotationsDegraded (asserted at the pipeline
+    // level in the duplicated-opening test below).
     const repeated = "aaaaa ".repeat(50).trim(); // ~299 chars of pure repetition
     const article = parseArticle({
       id: "repeat-test",
@@ -75,7 +76,65 @@ describe("normalization / round-trip anchor gate (SC#1)", () => {
         },
       ],
     });
-    expect(() => assertRoundTripAnchor(article)).toThrow("round-trip-anchor-failed");
+    expect(probeRoundTripAnchor(article)).toBe("ambiguous");
+  });
+
+  it("duplicated opening phrase admits the article flagged (marxist.com regression, ADR-0003)", async () => {
+    // The production case that motivated ADR-0003: marxist.com's "Trotsky's
+    // struggle to rejuvenate the Bolshevik party" extracted perfectly (84
+    // blocks, confidence high) but was refused because the 20-grapheme sample
+    // at offset 0 — "After Lenin had been" — appears twice (the opening is
+    // repeated verbatim in a later summary block). Duplicated-phrase articles
+    // must now enter the library flagged with annotationsDegraded.
+    const filler =
+      "The party apparatus had grown bureaucratic in the years of retreat, and " +
+      "the struggle against this degeneration consumed the final decade of his " +
+      "political life. Each faction fight sharpened the questions of programme, " +
+      "organisation, and the historical destiny of the revolution. ";
+    const opening = `After Lenin had been silenced by illness, the question of the party's future ${
+      filler + filler + filler
+    }`;
+    const html = `<!DOCTYPE html><html><head><title>Trotsky</title></head><body><article>
+      <h1>Trotsky's struggle to rejuvenate the Bolshevik party</h1>
+      <p>${opening}</p>
+      <p>${filler}The summary below repeats the opening for readers in a hurry.</p>
+      <blockquote><p>After Lenin had been silenced by illness, the question of the party's future ${filler}${filler}</p></blockquote>
+      <p>${filler}${filler}That is the lesson the article draws.</p>
+    </article></body></html>`;
+    const result = await ingest({ html });
+    expect(result.ok).toBe(true);
+    if (result.ok && "article" in result) {
+      expect(result.article.ingestionMeta?.annotationsDegraded).toBe(true);
+      expect(result.article.blocks.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("an article with unsupported embeds carries the count-first partial-content warning (ADR-0003)", async () => {
+    // Two unsupported parts (two tables — Readability+DOMPurify strip
+    // iframe/embed entirely, tables survive as unsupported blocks) → the
+    // article-level extractionWarnings line "2 parts of the original could
+    // not be displayed" rides the article (the note region renders it with
+    // the "See the original." link); the inline <details> disclosures mark
+    // WHERE they fell. Never silent.
+    const filler =
+      "The party apparatus had grown bureaucratic in the years of retreat, and " +
+      "the struggle against this degeneration consumed the final decade of his " +
+      "political life. Each faction fight sharpened the questions of programme. ";
+    const html = `<!DOCTYPE html><html><head><title>Tables</title></head><body><article>
+      <h1>An article with tables</h1>
+      <p>${filler + filler + filler}</p>
+      <table><tr><th>Year</th><th>Event</th></tr><tr><td>1923</td><td>The turning point</td></tr></table>
+      <p>${filler + filler}A middle paragraph carries the argument forward.</p>
+      <table><tr><th>Metric</th><th>Value</th></tr><tr><td>Members</td><td>Thousands</td></tr></table>
+      <p>${filler + filler}A closing paragraph lands the point.</p>
+    </article></body></html>`;
+    const result = await ingest({ html });
+    expect(result.ok).toBe(true);
+    if (result.ok && "article" in result) {
+      expect(result.article.ingestionMeta?.extractionWarnings).toContain(
+        "2 parts of the original could not be displayed",
+      );
+    }
   });
 
   it("ingest({ html }) on a v1.0 fixture's source HTML returns ok=true", async () => {
@@ -88,15 +147,27 @@ describe("normalization / round-trip anchor gate (SC#1)", () => {
     }
   });
 
-  it("ingest({ html: '<p>short</p>' }) refuses — thin content does not enter the library", async () => {
+  it("ingest({ html: '<p>short</p>' }) admits flagged — thin text is still text (ADR-0003)", async () => {
+    // The old three-state model refused this (isProbablyReaderable=false →
+    // extraction-unsupported). Reading-first: "short" is readable, so it
+    // enters the library flagged low — the reader sees the fidelity note.
     const result = await ingest({ html: "<p>short</p>" });
+    expect(result.ok).toBe(true);
+    if (result.ok && "article" in result) {
+      expect(result.article.ingestionMeta?.extractionConfidence).toBe("low");
+      expect(result.confidence.state).toBe("low");
+    }
+  });
+
+  it("ingest({ html }) on an empty shell refuses — zero blocks, nothing reliable to show", async () => {
+    // Readability parses null here → zero blocks → the one honest content
+    // refusal left on the web path (ADR-0003).
+    const result = await ingest({
+      html: "<!DOCTYPE html><html><head><title>Empty</title></head><body><div></div></body></html>",
+    });
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect([
-        "extraction-unsupported",
-        "extraction-too-low-confidence",
-        "round-trip-anchor-failed",
-      ]).toContain(result.reason);
+      expect(result.reason).toBe("extraction-unsupported");
     }
   });
 });
