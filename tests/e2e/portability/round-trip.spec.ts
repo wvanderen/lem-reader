@@ -47,7 +47,7 @@ import { computeManifest, sha256Hex } from "../../../src/portability/manifest";
 import { validBookEpub3 } from "../../unit/server/epub-fixtures";
 // Plan 16-03 — the shared dialog-opening helper (ADD-01: the intake
 // forms live behind the header Add button's modal).
-import { openAddDialog, pickSource } from "../library/add-dialog";
+import { openAddDialog, pickSource, closeSavedResult } from "../library/add-dialog";
 import {
   BASE,
   buildBundleZip,
@@ -326,8 +326,14 @@ test("SC#4 books — a book travels machines with its chapters + highlight intac
       buffer: Buffer.from(validBookEpub3()),
     });
     await pageA.getByRole("button", { name: /add file/i }).click();
-    // Plan 16-03 (D16-12): book success closes the dialog and the row
-    // appears via the snapshot invalidation — the durable success signal.
+    // Issue #113 (D16-12 as amended): the book success STAYS OPEN on the
+    // result screen — drive through it (Close, the Unread-preserving
+    // path); the row was already saved behind the dialog via the snapshot
+    // invalidation.
+    await expect(pageA.locator("dialog.add-dialog .add-result")).toBeVisible({
+      timeout: 15_000,
+    });
+    await closeSavedResult(pageA);
     await expect(pageA.locator("li.book-row")).toBeVisible({ timeout: 15_000 });
 
     // ── Machine A: read the saved chapters, highlight chapter 2 ───────────

@@ -27,6 +27,9 @@ import { validBookEpub3 } from "../unit/server/epub-fixtures";
 // live behind the header Add button's modal; the axe scan below targets
 // the OPEN dialog surface).
 import { openAddDialog, pickSource, closeSavedResult } from "./library/add-dialog";
+// Issue #113 — the shared BOOK-envelope mock (the schema-valid ok-variant
+// the client re-validates at the network boundary).
+import { bookEnvelope, mockEpubIngest } from "./library/book-envelope";
 // The D-05 substrate — the SAME normalizeText + graphemeClusters the
 // in-browser derivations use (the 08-05/12-05 deterministic-seed
 // precedent: compute the location offset in Node, never in-page).
@@ -215,6 +218,46 @@ test("a11y #112: the saved-result state is axe-clean (confident AND flagged)", a
     // Dismiss before the next arm — the loop re-opens from the list route.
     await closeSavedResult(page);
   }
+});
+
+// Issue #113 — the BOOK result state gets the SAME axe bar: the card shows
+// the book title + the honest skip disclosure (one skipped chapter live) +
+// the Close / Add another / Open book row. The envelope is a schema-valid
+// book ok-variant from the SHARED builder (the client re-validates the
+// envelope + every article at the network boundary — the
+// book-envelope.ts harness discipline).
+test("a11y #113: the book result state is axe-clean (skip disclosure live)", async ({
+  page,
+}) => {
+  await wipeDatabase(page);
+  await mockEpubIngest(page, {
+    current: bookEnvelope("epub-a11yresult1", "Axe Result Book", 1),
+  });
+  await page.goto(`${BASE}/#/`);
+  await openAddDialog(page);
+  await pickSource(page, "file");
+  await page.locator("input#ingest-file").setInputFiles({
+    name: "axe-book.epub",
+    mimeType: "application/epub+zip",
+    buffer: Buffer.from("PK-mock-bytes"),
+  });
+  await page.getByRole("button", { name: /add file/i }).click();
+  // The state under scan: the result card is up AND the skip disclosure is
+  // live (an absent disclosure would silently weaken the gate).
+  await expect(page.locator("dialog.add-dialog .add-result")).toBeVisible();
+  await expect(
+    page.locator("dialog.add-dialog .add-result .add-result-skips"),
+  ).toHaveText("1 chapter could not be read.");
+  const results = await new AxeBuilder({ page })
+    .withTags([...WCAG_TAGS])
+    .include("dialog.add-dialog")
+    .analyze();
+  const serious = seriousViolations(results);
+  const ids = serious.map((v) => v.id);
+  expect(ids, JSON.stringify(serious, null, 2)).not.toContain("heading-order");
+  expect(ids).not.toContain("list");
+  expect(serious).toEqual([]);
+  await closeSavedResult(page);
 });
 
 for (const article of fixtures) {
@@ -489,8 +532,15 @@ async function seedBookLibrary(page: Page): Promise<void> {
   await wipeDatabase(page);
   await page.goto(`${BASE}/#/`);
   await uploadEbook(page);
-  // Plan 16-03 (D16-12): book success closes the dialog and the book row
-  // appears via the snapshot invalidation — the row is the durable success signal.
+  // Issue #113 (D16-12 as amended): the book success STAYS OPEN on the
+  // result screen — drive through it (Close, the Unread-preserving path)
+  // so the library interactions below are not blocked by the modal; the
+  // row appears via the snapshot invalidation fired while the dialog was
+  // up.
+  await expect(page.locator("dialog.add-dialog .add-result")).toBeVisible({
+    timeout: 15_000,
+  });
+  await closeSavedResult(page);
   await expect(page.locator("li.book-row")).toBeVisible({ timeout: 15_000 });
   await page.reload();
   await expect(

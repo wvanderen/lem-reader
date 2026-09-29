@@ -70,8 +70,27 @@ export async function openSavedArticle(
 }
 
 /**
- * addAnother — the result screen's reset action (issue #112): click "Add
- * another" and wait for the FRESH intake session (the result card gone,
+ * openSavedBook — the book result screen's primary action (issue #113):
+ * click "Open book" and wait for the dialog to leave the top layer AND the
+ * reader route to take over. The book's first AVAILABLE chapter IS an
+ * article (the same #/article/<id> route), so the awaited shape is the
+ * article route; `urlPattern` narrows further when a test pins the id.
+ */
+export async function openSavedBook(
+  page: Page,
+  urlPattern: RegExp = /#\/article\//,
+): Promise<void> {
+  await page
+    .locator("dialog.add-dialog")
+    .getByRole("button", { name: "Open book" })
+    .click();
+  await expect(page.locator("dialog.add-dialog")).not.toBeVisible();
+  await page.waitForURL(urlPattern, { timeout: 15_000 });
+}
+
+/**
+ * addAnother — the result screen's reset action (issues #112/#113): click
+ * "Add another" and wait for the FRESH intake session (the result card gone,
  * the Web address radio checked). The dialog never closed.
  */
 export async function addAnother(page: Page): Promise<void> {
@@ -87,10 +106,10 @@ export async function addAnother(page: Page): Promise<void> {
 }
 
 /**
- * closeSavedResult — dismiss the result screen WITHOUT opening the article
- * (the issue #112 Unread-preserving path): click "Close" and wait for the
- * dialog to leave the top layer. The reader stays on the prior
- * destination; the saved article appears in the library as Unread.
+ * closeSavedResult — dismiss the result screen WITHOUT opening the saved
+ * item (the issues #112/#113 Unread-preserving path): click "Close" and
+ * wait for the dialog to leave the top layer. The reader stays on the prior
+ * destination; the saved article/book appears in the library Unread.
  */
 export async function closeSavedResult(page: Page): Promise<void> {
   await page

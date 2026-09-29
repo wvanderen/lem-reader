@@ -53,8 +53,10 @@ import {
   refusedFigureBook,
 } from "../unit/server/epub-fixtures";
 // Plan 16-03 — the shared dialog-opening helper (the forms live behind the
-// header Add button's modal since the add-section dissolution).
-import { openAddDialog, pickSource } from "./library/add-dialog";
+// header Add button's modal since the add-section dissolution). Issue #113
+// adds closeSavedResult — every SUCCESSFUL book upload now lands on the
+// in-dialog result screen and drives through it.
+import { openAddDialog, pickSource, closeSavedResult } from "./library/add-dialog";
 // The client-side cap for the over-cap refusal gate (the 11-04 earliest-
 // enforcement proof: the picker refuses on file.size BEFORE any read).
 import { EPUB_MAX_BYTES } from "../../src/ingestion/types";
@@ -105,13 +107,34 @@ async function uploadEpub(
   await page.getByRole("button", { name: /add file/i }).click();
 }
 
+/** Issue #113 — a book success STAYS OPEN on the result screen. Wait for
+ * the durable card signal, optionally asserting the in-dialog skip
+ * disclosure, then dismiss WITHOUT opening the book (the Unread-preserving
+ * Close path); the new row is already in the library behind the dialog
+ * (the snapshot invalidated while the dialog was up). */
+async function closeBookResult(
+  page: Page,
+  skipText?: string,
+): Promise<void> {
+  const dialog = page.locator("dialog.add-dialog");
+  await expect(dialog.locator(".add-result")).toBeVisible({ timeout: 15_000 });
+  if (skipText !== undefined) {
+    await expect(
+      dialog.locator(".add-result .add-result-skips"),
+    ).toHaveText(skipText);
+  }
+  await closeSavedResult(page);
+}
+
 /** Upload the canonical 4-chapter book and wait for the durable book
- * success signal. Plan 16-03 (D16-12): a book success CLOSES the dialog
- * and lands on the Library where the new book row now is (onSaved →
- * snapshot invalidation) — the in-dialog success copy is transient by design, so the
- * row itself is the success anchor. */
+ * success signal. Issue #113 (D16-12 as amended): a book success STAYS in
+ * the dialog on the result screen — the card is the success anchor; Close
+ * leaves the never-opened book Unread and returns to the Library where the
+ * new row already is (onSaved → snapshot invalidation fired while the
+ * dialog was up). */
 async function uploadValidBook(page: Page): Promise<void> {
   await uploadEpub(page, "the-synthetic-book.epub", validBookEpub3());
+  await closeBookResult(page);
   await expect(page.locator("li.book-row")).toBeVisible({ timeout: 15_000 });
 }
 
@@ -328,10 +351,13 @@ test.describe("ING-05 — EPUB book intake (SC#1)", () => {
     ).toBeVisible();
 
     // mixedAdmissionBook: 2 readerable chapters + 1 pure-image plate →
-    // skippedCount 1. Plan 16-03 (D16-12): the book success closes the
-    // dialog and the row appears via the snapshot invalidation — the durable skip
-    // disclosure is asserted on the ROW below (never silently missing).
+    // skippedCount 1. Issue #113 (D16-12 as amended): the book success
+    // STAYS in the dialog on the result screen, which discloses the honest
+    // skipped-chapter count at the moment of success; the durable skip
+    // disclosure is asserted again on the ROW below (never silently
+    // missing).
     await uploadEpub(page, "mixed-book.epub", mixedAdmissionBook());
+    await closeBookResult(page, "1 chapter could not be read.");
     await expect(page.locator("li.book-row")).toBeVisible({ timeout: 15_000 });
 
     // …and the LIBRARY grouping discloses it again (D12-11 — never silently
@@ -1327,6 +1353,7 @@ test.describe("20-06 — chapter figures (container extraction)", () => {
     );
     await page.goto(`${BASE}/#/`);
     await uploadEpub(page, "figure-book.epub", renderedFigureBook());
+    await closeBookResult(page);
     await expect(page.locator("li.book-row")).toBeVisible({ timeout: 15_000 });
     await reloadLibrary(page);
 
@@ -1385,6 +1412,7 @@ test.describe("20-06 — chapter figures (container extraction)", () => {
     // sniffed "animated" inside the container (nothing in the calm reader
     // moves on its own), refused per-figure with disclosure.
     await uploadEpub(page, "refused-figure-book.epub", refusedFigureBook());
+    await closeBookResult(page);
     await expect(page.locator("li.book-row")).toBeVisible({ timeout: 15_000 });
     await reloadLibrary(page);
 

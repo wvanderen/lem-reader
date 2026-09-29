@@ -81,7 +81,7 @@ import { sha256Hex } from "../../../src/portability/manifest";
 // a non-spec module (unit fixture library), safe to import.
 import { FIGURE_PNG_B64, renderedFigureBook } from "../../unit/server/epub-fixtures";
 import { MARKDOWN_WITH_FRONTMATTER } from "../library/markdown-payload";
-import { openAddDialog, pickSource, openSavedArticle } from "../library/add-dialog";
+import { openAddDialog, pickSource, openSavedArticle, closeSavedResult } from "../library/add-dialog";
 import {
   announcementRegion,
   countHighlightsInDexie,
@@ -277,10 +277,18 @@ test("ACPT-07 — the v2.1 core flow as one unbroken journey: nothing lost acros
       buffer: Buffer.from(renderedFigureBook()),
     });
     await pageA.getByRole("button", { name: /add file/i }).click();
+    // Issue #113 (D16-12 as amended): the book success STAYS OPEN on the
+    // result screen — drive through it (Close, the Unread-preserving
+    // path) so the library interactions below are not blocked by the
+    // modal; the row was already saved behind the dialog.
     await expect(
-      pageA.locator("li.book-row"),
-      "the EPUB book success signal is its library row (D16-12)",
+      pageA.locator("dialog.add-dialog .add-result"),
+      "the EPUB book success signal is its result card (issue #113)",
     ).toBeVisible({ timeout: 15_000 });
+    await closeSavedResult(pageA);
+    await expect(pageA.locator("li.book-row")).toBeVisible({
+      timeout: 15_000,
+    });
     await reloadLibrary(pageA);
 
     // The chapter id (from the expanded book row's chapter link) + the raw

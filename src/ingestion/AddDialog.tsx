@@ -29,9 +29,9 @@
 //     cleared by an error.
 //   - D16-12: success splits by kind — article shows the saved-result
 //     screen IN the dialog (issue #112: title, ingestion limits, original
-//     link, Open article + Add another); book closes then lands on the
-//     Library via onSaved (the skip disclosure stays durable on the
-//     BookRow).
+//     link, Open article + Add another); book shows the SAME result screen
+//     (issue #113: title, honest skipped-chapter count, Open book + Add
+//     another); the skip disclosure ALSO stays durable on the BookRow.
 //   - Issue #112 — the saved-result screen: an article save NO LONGER
 //     closes + auto-navigates (auto-opening marked the article read and
 //     destroyed Unread). The dialog stays open on a clear result:
@@ -47,6 +47,20 @@
 //     reading-location rule (a never-opened article starts at the top).
 //     A refused/failure outcome NEVER enters result mode — refusal copy
 //     and the saved result stay distinct surfaces.
+//   - Issue #113 — the book arm JOINS the result screen: a book save also
+//     stays open (auto-opening chapter 1 would save a location and mark
+//     the book started, destroying Unread — the #112 argument at book
+//     granularity). The card adds the D12-11 honest skipped-chapter count
+//     when anything was skipped (the byte-stable BookRow sentences); the
+//     actions row becomes Close / Add another / Open book. "Open book"
+//     navigates to the first AVAILABLE chapter's #/article/<id> hash (a
+//     chapter IS an article — the reader's never-opened-chapter rule
+//     starts it at the top); Close/Esc/scrim leave every chapter
+//     unlocated → the book reads Unread in the library. onSaved fires
+//     WHILE the dialog is up, so the library reflects the book without
+//     waiting for navigation. A book with no live chapter (unreachable
+//     through the pipeline — epub-empty refuses upstream) renders no Open
+//     book control — the BookRow unlinked-title honesty.
 //
 // NOTE on class names (the BookRemoveConfirm.tsx L19-23 rule): this dialog
 // uses its OWN .add-dialog* hooks — RemoveConfirm, BookRemoveConfirm, and
@@ -78,7 +92,11 @@ import { mapReasonToCopy } from "./ingestCopy";
 // Issue #4 — the ingest-and-persist policy service; ONE call per
 // submission arm.
 import { addToLibrary } from "./addToLibrary";
-import type { AddToLibraryOutcome, SavedArticleResult } from "./addToLibrary";
+import type {
+  AddToLibraryOutcome,
+  SavedArticleResult,
+  SavedBookResult,
+} from "./addToLibrary";
 // Issue #112 — the partial-content disclosure heading, shared with the
 // reader view (the ONE copy home; the per-part lines ride the outcome).
 import { PARTIAL_CONTENT_NOTE } from "../routes/extractionNote";
@@ -109,8 +127,8 @@ export type AddDialogSource = "url" | "paste" | "file";
  * `onCancel` closes (Cancel button / Esc / scrim — every close path
  * routes through the open-prop mirror, the 09-06 wedge lesson), and
  * `onSaved` fires after ANY successful save (article or book) so the
- * host invalidates the library snapshot (issue #112: article saves call
- * it while the dialog REMAINS open on the result screen).
+ * host invalidates the library snapshot (issues #112/#113: BOTH success
+ * arms call it while the dialog REMAINS open on the result screen).
  */
 export type AddDialogProps = {
   /** When true, the dialog is open via showModal (focus-trapped). */
@@ -182,13 +200,15 @@ export function AddDialog({ open, onCancel, onSaved, tagStats }: AddDialogProps)
   // reset on every open with the rest (D16-08). Applied to the SAVED
   // record by the service — never a second write after the fact.
   const [tagsValue, setTagsValue] = useState<string[]>([]);
-  // Issue #112 — the saved-result payload. Non-null = the dialog is on the
-  // result screen (the content slot, tags fieldset, and transcript swap all
-  // hide; the result card + Close / Add another / Open article render).
-  // A refused/failure outcome NEVER lands here — refusal copy and the
-  // saved result stay distinct. Reset on every open (D16-08) and by
+  // Issue #112/#113 — the saved-result payload. Non-null = the dialog is on
+  // the result screen (the content slot, tags fieldset, and transcript swap
+  // all hide; the result card + Close / Add another / Open article|book
+  // render). A refused/failure outcome NEVER lands here — refusal copy and
+  // the saved result stay distinct. Reset on every open (D16-08) and by
   // "Add another".
-  const [saved, setSaved] = useState<SavedArticleResult | null>(null);
+  const [saved, setSaved] = useState<SavedArticleResult | SavedBookResult | null>(
+    null,
+  );
 
   // Issue #84 (decision #70) — the transcript fallback is an IN-PLACE
   // SWAP of the content slot: while a bot-check offer is live the source
@@ -197,26 +217,33 @@ export function AddDialog({ open, onCancel, onSaved, tagStats }: AddDialogProps)
   // row retired). The always-mounted file input survives the swap —
   // `hidden` on the ancestor keeps it MOUNTED (Pattern 3a discipline).
   const transcriptMode = botCheckUrl !== null;
-  // Issue #112 — result mode: the saved-article outcome is on screen. Every
-  // other content slot (picker, source forms, transcript swap, tags) hides
-  // and the result card takes the content slot's place.
+  // Issue #112/#113 — result mode: a saved-article OR saved-book outcome is
+  // on screen. Every other content slot (picker, source forms, transcript
+  // swap, tags) hides and the result card takes the content slot's place.
   const resultMode = saved !== null;
-  // One derivation per signal (the ArticleView ADR-0003 discipline): does
-  // the outcome carry ANY ingestion-limit disclosure?
+  // The outcome kind narrowed ONCE (the ArticleView ADR-0003 discipline):
+  // the article result carries the extraction-note disclosures + the
+  // provenance link; the book result carries the D12-11 skip count and no
+  // per-article limits. Both share the card shell + action-row grammar.
+  const savedArticle = saved?.outcome === "saved-article" ? saved : null;
+  const savedBook = saved?.outcome === "saved-book" ? saved : null;
+  // One derivation per signal: does the ARTICLE outcome carry ANY
+  // ingestion-limit disclosure?
   const savedHasLimits =
-    saved !== null &&
-    (saved.note !== undefined ||
-      saved.warnings.length > 0 ||
-      saved.degraded !== undefined);
+    savedArticle !== null &&
+    (savedArticle.note !== undefined ||
+      savedArticle.warnings.length > 0 ||
+      savedArticle.degraded !== undefined);
   // The "See the original." escape hatch for the result card (issue #112) —
   // the ArticleView derivation's twin (link + copy byte-identical), derived
-  // once from the outcome's sourceUrl. Rides the limit sentences when any
+  // once from the ARTICLE outcome's sourceUrl. Rides the limit sentences when any
   // exist; a CONFIDENT save with a provenance URL shows it as a quiet
   // standalone provenance line (the AC's "original link" — displayed when
-  // available, never jargon, never a placeholder).
-  const savedSeeOriginal = saved?.sourceUrl ? (
+  // available, never jargon, never a placeholder). Books have no single
+  // provenance URL — the book card's honest disclosure is the skip count.
+  const savedSeeOriginal = savedArticle?.sourceUrl ? (
     <>
-      <a href={saved.sourceUrl} rel="noopener noreferrer" target="_blank">
+      <a href={savedArticle.sourceUrl} rel="noopener noreferrer" target="_blank">
         See the original
         <span className="visually-hidden"> (opens in a new tab)</span>
       </a>
@@ -403,13 +430,13 @@ export function AddDialog({ open, onCancel, onSaved, tagStats }: AddDialogProps)
    * applyOutcome — render ONE service outcome (issue #4). Every refusal
    * routes to a calm DOC-06 phrase via mapReasonToCopy (the dedupe-refuse
    * arrives as reason "already-in-library" — D16-09/D7-07); the two
-   * success arms split per D16-12 as amended by issue #112: the article
-   * arm STAYS OPEN on the saved-result screen (title, ingestion limits,
-   * original link, Open article + Add another) and invalidates the
-   * library snapshot through onSaved while the dialog remains up; the
-   * book arm keeps its close-first landing on the Library via onCancel
-   * then onSaved (the skip disclosure composes from the outcome's
-   * skippedChapterCount and stays durable on the BookRow).
+   * success arms BOTH stay open on the saved-result screen (issue #112 for
+   * articles, issue #113 for books): the status region announces the save,
+   * the result card renders the payload the service derived (article:
+   * extraction limits + original link; book: the honest skipped-chapter
+   * count), and onSaved invalidates the library snapshot WHILE the dialog
+   * remains up — the new item is in the library behind the dialog before
+   * the reader closes it, and the never-opened item stays Unread.
    */
   function applyOutcome(outcome: AddToLibraryOutcome) {
     if (outcome.outcome === "refused") {
@@ -417,27 +444,6 @@ export function AddDialog({ open, onCancel, onSaved, tagStats }: AddDialogProps)
       setMessage(mapReasonToCopy(outcome.reason));
       return;
     }
-    if (outcome.outcome === "saved-book") {
-      setStatus("success");
-      let successCopy = "Book added to your library.";
-      if (outcome.skippedChapterCount > 0) {
-        successCopy +=
-          outcome.skippedChapterCount === 1
-            ? " 1 chapter could not be read."
-            : ` ${outcome.skippedChapterCount} chapters could not be read.`;
-      }
-      setMessage(successCopy);
-      // D16-12 book arm: close FIRST, then land on the Library where the
-      // new book row now is (onSaved invalidates the snapshot).
-      onCancel();
-      onSaved();
-      return;
-    }
-    // Issue #112 article arm: the dialog STAYS OPEN on the result screen.
-    // The status region announces the save (aria-atomic — the whole
-    // phrase), the result card renders the payload the service derived,
-    // and onSaved invalidates the library snapshot NOW — the new article
-    // is in Unread behind the dialog before the reader closes it.
     setStatus("success");
     setMessage("Saved to your library.");
     setSaved(outcome);
@@ -460,22 +466,29 @@ export function AddDialog({ open, onCancel, onSaved, tagStats }: AddDialogProps)
   }
 
   /**
-   * handleOpenArticle — the result screen's primary action (issue #112).
-   * Keeps the D16-12 close-first discipline: onCancel() runs the parent's
-   * open-prop flip (close effect + focus restore to the trigger while it
-   * is still mounted), THEN the hash write navigates to the reader. The
-   * reader follows the existing reading-location rule unchanged — a
-   * never-opened article starts at the top; an already-located one (not
+   * handleOpenSaved — the result screen's primary action (issues #112 and
+   * #113). Keeps the D16-12 close-first discipline: onCancel() runs the
+   * parent's open-prop flip (close effect + focus restore to the trigger
+   * while it is still mounted), THEN the hash write navigates to the
+   * target — the saved article, or the book's first AVAILABLE chapter (a
+   * chapter IS an article: the same #/article/<id> route). The reader
+   * follows the existing reading-location rule unchanged — a never-opened
+   * article/chapter starts at the top; an already-located one (not
    * reachable here — dedupe refuses re-adds) restores its location.
    * Guarded like renderOutcome: a throwing parent callback must not wedge
-   * the dialog.
+   * the dialog. A book result with no live chapter (the honest
+   * nothing-to-open edge — its button never renders) is a silent no-op.
    */
-  function handleOpenArticle() {
+  function handleOpenSaved() {
     if (saved === null) return;
-    const articleId = saved.articleId;
+    const targetId =
+      saved.outcome === "saved-article"
+        ? saved.articleId
+        : saved.firstChapterArticleId;
+    if (targetId === undefined) return;
     try {
       onCancel();
-      window.location.hash = `#/article/${articleId}`;
+      window.location.hash = `#/article/${targetId}`;
     } catch {
       setStatus("error");
       setMessage(mapReasonToCopy("server-error"));
@@ -664,49 +677,62 @@ export function AddDialog({ open, onCancel, onSaved, tagStats }: AddDialogProps)
           {status !== "idle" && message !== null && <p>{message}</p>}
         </StatusRegion>
 
-        {/* Issue #112 — the saved-result card: the saved title (focused on
-            the save landing, tabIndex -1 so the heading is reachable by
-            keyboard + announced by screen readers), then the SAME
-            extraction-note disclosures the reader view renders (the ONE
-            copy derivations, derived by the service at save time), each
-            gaining the "See the original." escape hatch when the article
-            has a sourceUrl. Silence is the confident-save state for LIMITS
-            — never a placeholder — but a confident save with a provenance
-            URL still shows the quiet original link (the AC's "original
-            link", displayed when available). Unmounted entirely when not
-            in result mode (the card is result-STATE, not a persistent
-            slot). */}
+        {/* Issues #112/#113 — the saved-result card: the saved title
+            (focused on the save landing, tabIndex -1 so the heading is
+            reachable by keyboard + announced by screen readers), then the
+            outcome's honest disclosures — for an ARTICLE the SAME
+            extraction-note sentences the reader view renders (the ONE copy
+            derivations, derived by the service at save time), each gaining
+            the "See the original." escape hatch when a sourceUrl exists;
+            for a BOOK the D12-11 skipped-chapter count (the byte-stable
+            BookRow sentences) when anything was skipped. Silence is the
+            confident/no-skip state for LIMITS — never a placeholder — but a
+            confident article save with a provenance URL still shows the
+            quiet original link (the AC's "original link", displayed when
+            available). Unmounted entirely when not in result mode (the card
+            is result-STATE, not a persistent slot). */}
         {saved !== null && (
           <div className="add-result">
             <h3 ref={savedHeadingRef} tabIndex={-1} className="add-result-title">
               {saved.title}
             </h3>
-            {saved.note && (
+            {savedArticle?.note && (
               <p className="meta extraction-note">
-                {saved.note}
-                {saved.sourceUrl && " "}
+                {savedArticle.note}
+                {savedArticle.sourceUrl && " "}
                 {savedSeeOriginal}
               </p>
             )}
-            {saved.warnings.length > 0 && (
+            {savedArticle && savedArticle.warnings.length > 0 && (
               <div className="meta partial-content-note">
                 <p className="partial-content-heading">
                   {PARTIAL_CONTENT_NOTE}
-                  {saved.sourceUrl && " "}
+                  {savedArticle.sourceUrl && " "}
                   {savedSeeOriginal}
                 </p>
                 <ul>
-                  {saved.warnings.map((warning, index) => (
+                  {savedArticle.warnings.map((warning, index) => (
                     <li key={`${warning}-${index}`}>{warning}</li>
                   ))}
                 </ul>
               </div>
             )}
-            {saved.degraded && (
-              <p className="meta annotations-note">{saved.degraded}</p>
+            {savedArticle?.degraded && (
+              <p className="meta annotations-note">{savedArticle.degraded}</p>
             )}
-            {!savedHasLimits && saved.sourceUrl && (
+            {savedArticle && !savedHasLimits && savedArticle.sourceUrl && (
               <p className="meta add-result-source">{savedSeeOriginal}</p>
+            )}
+            {/* Issue #113 — the book result's honest skip disclosure
+                (D12-11): the exact sentences the BookRow renders, shown
+                only when anything was skipped; silence is the
+                all-chapters-admitted state. */}
+            {savedBook && savedBook.skippedChapterCount > 0 && (
+              <p className="meta add-result-skips">
+                {savedBook.skippedChapterCount === 1
+                  ? "1 chapter could not be read."
+                  : `${savedBook.skippedChapterCount} chapters could not be read.`}
+              </p>
             )}
           </div>
         )}
@@ -974,12 +1000,16 @@ export function AddDialog({ open, onCancel, onSaved, tagStats }: AddDialogProps)
         </fieldset>
 
         <div className="dialog-actions add-dialog-actions">
-          {/* Issue #112 — result mode: the outcome's own action row. Close
-              keeps every dismissal path (button, Esc, scrim) returning to
-              the prior destination — the never-opened article stays
+          {/* Issues #112/#113 — result mode: the outcome's own action row.
+              Close keeps every dismissal path (button, Esc, scrim) returning
+              to the prior destination — the never-opened article/book stays
               Unread; Add another runs the ONE resetSession and keeps the
-              dialog up; Open article is the primary (close-first, then
-              the reader route — D16-12). */}
+              dialog up; the primary is Open article (issue #112) or Open
+              book (issue #113 — the first AVAILABLE chapter), both
+              close-first then navigate (D16-12). A book with no live
+              chapter renders no open control (the BookRow unlinked-title
+              honesty — unreachable through the pipeline, epub-empty refuses
+              upstream). */}
           {resultMode ? (
             <>
               <button
@@ -996,13 +1026,16 @@ export function AddDialog({ open, onCancel, onSaved, tagStats }: AddDialogProps)
               >
                 Add another
               </button>
-              <button
-                type="button"
-                className="btn btn-primary add-dialog-open"
-                onClick={handleOpenArticle}
-              >
-                Open article
-              </button>
+              {(savedArticle !== null ||
+                savedBook?.firstChapterArticleId !== undefined) && (
+                <button
+                  type="button"
+                  className="btn btn-primary add-dialog-open"
+                  onClick={handleOpenSaved}
+                >
+                  {savedBook !== null ? "Open book" : "Open article"}
+                </button>
+              )}
             </>
           ) : (
             <>
