@@ -1591,7 +1591,6 @@ describe("resolveImportPlan — metadata conflicts + merge-on-win (17-04, D17-10
 describe("addedAt across the import plan (issue #114 — the date survives export/import)", () => {
   it("a new dated article keeps its bundle addedAt — the round-trip stamp is never dropped or re-stamped", async () => {
     const { detectImportPreview, resolveImportPlan } = await loadConflicts();
-    const { db } = await loadDb();
     const dated = sampleArticle({
       id: "art-dated",
       addedAt: "2026-09-10T08:30:00.000Z",
@@ -1607,7 +1606,6 @@ describe("addedAt across the import plan (issue #114 — the date survives expor
 
   it("a new stamp-less article (a legacy export) stays undated — no historical date is invented", async () => {
     const { detectImportPreview, resolveImportPlan } = await loadConflicts();
-    const { db } = await loadDb();
     const legacy = sampleArticle({ id: "art-legacy" }); // no addedAt
     const bundle = sampleBundle({ articles: [legacy] });
     const preview = await detectImportPreview(bundle);

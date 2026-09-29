@@ -765,13 +765,11 @@ export async function resolveImportPlan(
       // (per-item or bulk) writes the incoming row whole — a key-less
       // incoming row removes the local override (explicit reader choice).
       // Issue #114: the local addedAt is NOT reader metadata — it survives a
-      // take-incoming whose incoming row lacks the stamp (the mergeOnWin
-      // fallback), so a legacy-bundle refresh cannot demote the row to
-      // undated. The conditional spread keeps a both-sides-undated winner
-      // byte-identical to the incoming row.
+      // take-incoming whose incoming row lacks the stamp. The
+      // always-take-incoming mergeOnWin IS that write: one helper owns both
+      // the override-removal and the addedAt-fallback policy.
       if (takeIncomingMetadata(a.id)) {
-        const addedAt = a.addedAt ?? local.addedAt;
-        plan.articlesToWrite.push(addedAt !== undefined ? { ...a, addedAt } : a);
+        plan.articlesToWrite.push(mergeOnWin(a, local, () => true));
       } else {
         plan.skipped.articles++; // skip | keep-both (behaves as skip)
       }

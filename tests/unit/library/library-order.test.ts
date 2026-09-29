@@ -21,9 +21,14 @@
 //     list.
 import { describe, expect, it } from "vitest";
 import { orderLibraryEntries } from "../../../src/ingestion/library/libraryOrder";
-import { ArticleSchema, BookSchema } from "../../../src/content/schema";
-import type { CanonicalArticle, Book } from "../../../src/content/schema";
+import { ArticleSchema, BookSchema, LocationRecordSchema } from "../../../src/content/schema";
+import type { CanonicalArticle, Book, LocationRecord } from "../../../src/content/schema";
 import { filterBooks, filterLibrary } from "../../../src/ingestion/library/libraryFilter";
+import {
+  articleReadingState,
+  bookReadingState,
+} from "../../../src/ingestion/library/readingState";
+import type { ReadingState } from "../../../src/ingestion/library/readingState";
 
 /** A minimal valid standalone article; addedAt added only when supplied. */
 function makeArticle(
@@ -200,5 +205,113 @@ describe("filter composition preserves the Recently-added order (issue #114)", (
     const visibleBooks = filterBooks(books, { query: "tagged", activeTag: null }, new Map());
     const filtered = orderLibraryEntries(visibleArticles, visibleBooks);
     expect(labels(filtered)).toEqual(["a:tagged-new", "b:tagged-book", "a:tagged-old"]);
+  });
+});
+
+describe("variable-precision fractions compare chronologically (issue #114)", () => {
+  it("'.5Z' sorts NEWER than '.55Z' (raw strings would lie: Z > 5)", () => {
+    const entries = orderLibraryEntries(
+      [
+        makeArticle("half", "2026-09-02T00:00:00.5Z"),
+        makeArticle("fifty-five", "2026-09-02T00:00:00.55Z"),
+      ],
+      [],
+    );
+    // 0.5s < 0.55s, so descending = .55Z first, .5Z second.
+    expect(labels(entries)).toEqual(["a:fifty-five", "a:half"]);
+  });
+
+  it("whole-second and .000Z stamps at the same instant tie — stable order, articles before books", () => {
+    const entries = orderLibraryEntries(
+      [makeArticle("whole", "2026-09-02T00:00:00Z")],
+      [makeBook("mills", "2026-09-02T00:00:00.000Z")],
+    );
+    expect(labels(entries)).toEqual(["a:whole", "b:mills"]);
+  });
+});
+
+describe("orderLibraryEntries composes with the reading-state views (issue #114)", () => {
+  // The LibraryView pipeline per view: articleReadingState/bookReadingState
+  // membership → filterLibrary/filterBooks → orderLibraryEntries. This pins
+  // the spec row "All, Unread, In progress, and Finished each show matching
+  // articles and books in one descending added-date order" at the composition
+  // level (the membership derivations themselves are the reading-state.test.ts
+  // truth table).
+  const DATED = {
+    finished: "2026-09-05T00:00:00.000Z",
+    bookUnread: "2026-09-04T00:00:00.000Z",
+    inProgress: "2026-09-03T00:00:00.000Z",
+    articleUnread: "2026-09-01T00:00:00.000Z",
+  };
+
+  function statefulArticle(id: string, addedAt: string): CanonicalArticle {
+    return makeArticle(id, addedAt);
+  }
+
+  function loc(articleId: string, offset: number): LocationRecord {
+    return LocationRecordSchema.parse({
+      schemaVersion: 1,
+      articleId,
+      revision: 1,
+      graphemeOffset: offset,
+      savedAt: "2026-09-06T00:00:00.000Z",
+    });
+  }
+
+  const finishedArticle = statefulArticle("vs-finished", DATED.finished);
+  const inProgressArticle = statefulArticle("vs-progress", DATED.inProgress);
+  const unreadArticle = statefulArticle("vs-unread", DATED.articleUnread);
+  // A book whose single chapter has a 50% location → in-progress.
+  const progressBook = makeBook("vs-book-progress", DATED.bookUnread);
+
+  const locations: LocationRecord[] = [
+    loc("vs-finished", 20), // offset == total → finished
+    loc("vs-progress", 9), // 45% → in-progress
+    loc("vs-book-progress-c00", 10), // 50% → book in-progress
+  ];
+  const latest = new Map(locations.map((l) => [l.articleId, l] as const));
+  const totals = new Map<string, number>([
+    ["vs-finished", 20],
+    ["vs-progress", 20],
+    ["vs-unread", 20],
+    ["vs-book-progress-c00", 20],
+  ]);
+  const textLengthOf = (id: string): number | undefined => totals.get(id);
+  const articleState = (a: CanonicalArticle): ReadingState =>
+    articleReadingState(latest.get(a.id), totals.get(a.id) ?? 0);
+  const bookState = (b: Book): ReadingState =>
+    bookReadingState(b, latest, textLengthOf);
+
+  const allArticles = [finishedArticle, inProgressArticle, unreadArticle];
+  const allBooks = [progressBook];
+
+  it("Unread shows only the never-opened article (the book is started → in-progress)", () => {
+    const viewArticles = allArticles.filter((a) => articleState(a) === "unread");
+    const viewBooks = allBooks.filter((b) => bookState(b) === "unread");
+    expect(labels(orderLibraryEntries(viewArticles, viewBooks))).toEqual(["a:vs-unread"]);
+  });
+
+  it("In progress shows the in-progress article + book in descending order", () => {
+    const viewArticles = allArticles.filter((a) => articleState(a) === "in-progress");
+    const viewBooks = allBooks.filter((b) => bookState(b) === "in-progress");
+    expect(labels(orderLibraryEntries(viewArticles, viewBooks))).toEqual([
+      "b:vs-book-progress",
+      "a:vs-progress",
+    ]);
+  });
+
+  it("Finished shows the finished article alone", () => {
+    const viewArticles = allArticles.filter((a) => articleState(a) === "finished");
+    const viewBooks = allBooks.filter((b) => bookState(b) === "finished");
+    expect(labels(orderLibraryEntries(viewArticles, viewBooks))).toEqual(["a:vs-finished"]);
+  });
+
+  it("All interleaves every member in one descending order", () => {
+    expect(labels(orderLibraryEntries(allArticles, allBooks))).toEqual([
+      "a:vs-finished",
+      "b:vs-book-progress",
+      "a:vs-progress",
+      "a:vs-unread",
+    ]);
   });
 });

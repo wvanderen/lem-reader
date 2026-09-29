@@ -14,10 +14,13 @@
 // Policy edges pinned by tests/unit/library/library-order.test.ts:
 //   - Dated items (articles with addedAt; books always — BookSchema requires
 //     the field) sort by addedAt DESCENDING (newest first).
-//   - ISO-8601 Zulu datetimes compare correctly as plain strings (Zod's
-//     .datetime() admits no offsets by default), so the comparator is a
-//     lexicographic string compare — no Date allocation per comparison.
-//   - Equal dates keep stable relative order (ES2019+ Array.sort is
+//   - Instants compare chronologically, not raw-lexicographically: Zod's
+//     `.datetime()` admits variable-precision fractions (".5Z" vs ".55Z"),
+//     so each stamp's fraction is zero-padded to a fixed width BEFORE the
+//     string compare — one normalization per entry, none per comparison.
+//     First-party stamps are always `toISOString()` (3-digit ms); padding
+//     covers foreign/crafted bundle rows too.
+//   - Equal instants keep stable relative order (ES2019+ Array.sort is
 //     stable): within a kind, input order; across kinds, articles before
 //     books (the merged input order) — deterministic, never layout- or
 //     locale-dependent.
@@ -36,6 +39,28 @@ export type LibraryListEntry =
   | { kind: "article"; article: CanonicalArticle }
   | { kind: "book"; book: Book };
 
+/** Sort-pair: the entry beside its PRE-COMPUTED fixed-width stamp (the
+ * normalization runs once per entry, never inside the comparator). */
+interface DatedEntry {
+  at: string;
+  entry: LibraryListEntry;
+}
+
+/**
+ * normalizedStamp — fixed-width descending-comparable form of an ISO-8601
+ * Zulu datetime. Zod's `.datetime()` default admits `…T00:00:00Z`,
+ * `…T00:00:00.5Z`, `…T00:00:00.000Z`… whose raw strings sort wrong (".5Z"
+ * > ".55Z" because Z > 5). Padding every fraction to 9 digits makes plain
+ * string order equal chronological order. The trailing Z is contract
+ * (offsets are not in the Zod default), so the slice arithmetic is safe.
+ */
+function normalizedStamp(iso: string): string {
+  const dot = iso.indexOf(".");
+  if (dot === -1) return `${iso.slice(0, -1)}.000Z`;
+  const digits = iso.slice(dot + 1, -1);
+  return `${iso.slice(0, dot + 1)}${digits.padEnd(9, "0")}Z`;
+}
+
 /**
  * orderLibraryEntries — the ONE merged Recently-added order (issue #114).
  *
@@ -43,34 +68,36 @@ export type LibraryListEntry =
  *                 undated rows mixed.
  * @param books    The view's Book rows (every row carries addedAt).
  * @returns A new array (inputs not mutated): dated items by addedAt
- *          descending, exact ties stable (articles before books, input order
- *          within each kind), then undated articles in input order.
+ *          descending, exact instants stable (articles before books, input
+ *          order within each kind), then undated articles in input order.
  */
 export function orderLibraryEntries(
   articles: readonly CanonicalArticle[],
   books: readonly Book[],
 ): LibraryListEntry[] {
-  const dated: LibraryListEntry[] = [];
+  const dated: DatedEntry[] = [];
   const undated: LibraryListEntry[] = [];
   // Articles: the kind split. An absent addedAt is the legacy/fixture state —
-  // never invented on (issues #114: "no historical date is invented").
+  // never invented on (issue #114: "no historical date is invented").
   for (const article of articles) {
     if (article.addedAt !== undefined) {
-      dated.push({ kind: "article", article });
+      dated.push({
+        at: normalizedStamp(article.addedAt),
+        entry: { kind: "article", article },
+      });
     } else {
       undated.push({ kind: "article", article });
     }
   }
   // Books: addedAt is REQUIRED by BookSchema, so every book is dated.
   for (const book of books) {
-    dated.push({ kind: "book", book });
+    dated.push({
+      at: normalizedStamp(book.addedAt),
+      entry: { kind: "book", book },
+    });
   }
-  // Descending addedAt; the stable sort keeps exact ties in input order
-  // (articles before books). ISO-8601 Zulu strings sort lexicographically.
-  dated.sort((a, b) => {
-    const aDate = a.kind === "article" ? a.article.addedAt : a.book.addedAt;
-    const bDate = b.kind === "article" ? b.article.addedAt : b.book.addedAt;
-    return (aDate ?? "") < (bDate ?? "") ? 1 : (aDate ?? "") > (bDate ?? "") ? -1 : 0;
-  });
-  return [...dated, ...undated];
+  // Descending instant; the stable sort keeps exact ties in input order
+  // (articles before books).
+  dated.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
+  return dated.map((d) => d.entry).concat(undated);
 }
