@@ -107,7 +107,7 @@ async function uploadEpub(
 
 /** Upload the canonical 4-chapter book and wait for the durable book
  * success signal. Plan 16-03 (D16-12): a book success CLOSES the dialog
- * and lands on the Library where the new book row now is (onBookAdded →
+ * and lands on the Library where the new book row now is (onSaved →
  * snapshot invalidation) — the in-dialog success copy is transient by design, so the
  * row itself is the success anchor. */
 async function uploadValidBook(page: Page): Promise<void> {
@@ -117,7 +117,7 @@ async function uploadValidBook(page: Page): Promise<void> {
 
 /**
  * Remount LibraryView so the freshly-saved book renders. Plan 16-03: the
- * book success path invalidates the library snapshot via onBookAdded (the row appears
+ * book success path invalidates the library snapshot via onSaved (the row appears
  * without a remount — uploadValidBook waits on it), so the reload is a
  * belt-and-suspenders remount for the derivations below (the 08-05
  * precedent, kept for the deterministic one-load-per-mount discipline).

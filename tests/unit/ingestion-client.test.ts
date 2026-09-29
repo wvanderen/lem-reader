@@ -774,7 +774,7 @@ describe("AddDialog .epub picker arm (12-03 Task 2)", () => {
       createElement(AddDialog, {
         open: true,
         onCancel: () => {},
-        onBookAdded: () => {},
+        onSaved: () => {},
         tagStats: [],
       }),
     );
@@ -829,7 +829,7 @@ describe("AddDialog .epub picker arm (12-03 Task 2)", () => {
       createElement(AddDialog, {
         open: true,
         onCancel: () => {},
-        onBookAdded: () => {},
+        onSaved: () => {},
         tagStats: [],
       }),
     );
@@ -875,7 +875,7 @@ describe("AddDialog .epub picker arm (12-03 Task 2)", () => {
       createElement(AddDialog, {
         open: true,
         onCancel: () => {},
-        onBookAdded: () => {},
+        onSaved: () => {},
         tagStats: [],
       }),
     );

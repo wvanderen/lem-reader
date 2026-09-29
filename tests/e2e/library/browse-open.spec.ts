@@ -24,7 +24,7 @@ import { test, expect } from "@playwright/test";
 import { fixtures } from "../../../src/fixtures";
 // Plan 16-03 — the shared dialog-opening helper (ADD-01: the intake forms
 // live behind the header Add button's modal).
-import { openAddDialog, pickSource } from "./add-dialog";
+import { openAddDialog, pickSource, closeSavedResult } from "./add-dialog";
 import { BASE } from "../_base";
 
 // A representative paste-HTML article rich enough to pass Readability's
@@ -216,12 +216,10 @@ test.describe("SC#1 + LIB-01 + LIB-05 — browse + open + source badge", () => {
       .fill(PASTE_HTML_WITH_SOURCE);
     await page.getByRole("button", { name: /add pasted article/i }).click();
 
-    // The Add dialog navigates to #/article/<id> on success; navigate
-    // back to #/ to inspect the library row.
-    await page.waitForURL(/#\/article\//, { timeout: 15_000 });
-    await page.evaluate(() => {
-      window.location.hash = "#/";
-    });
+    // Issue #112 — the save lands on the in-dialog result screen (no
+    // auto-navigation); Close returns to the library destination with the
+    // never-opened article Unread.
+    await closeSavedResult(page);
     await expect(
       page.getByRole("heading", { level: 1, name: "Saved articles" }),
     ).toBeVisible();

@@ -9,9 +9,13 @@
 //
 // ADR-0003 extends this module into the note-copy policy for ALL flagged
 // admissions: partial content (extractionWarnings) and degraded annotations
-// (annotationsDegraded) get their sentences here too — ArticleView owns the
-// render (including the "See the original." link from provenance.sourceUrl),
-// this module owns the copy.
+// (annotationsDegraded) get their sentences here too. TWO render surfaces
+// compose from these derivations: ArticleView owns the reader-view render
+// (including the "See the original." link from provenance.sourceUrl), and
+// since issue #112 the Add dialog's saved-result card composes the SAME
+// sentences from the addToLibrary outcome payload (its link JSX is that
+// surface's structural twin — the dialog-grammar clone discipline, no
+// shared component). This module owns the copy.
 //
 // PURE derivation (the effectiveMetadata.ts discipline): zero React, zero
 // I/O. Undefined/empty is the empty state (confidence "high", no warnings,

@@ -279,9 +279,22 @@ function AppInner() {
   // The dialog mounts once at the app shell so the session survives the
   // destination it was opened from, exactly like the settings panel.
   const [addOpen, setAddOpen] = useState(false);
+  // Issue #112 — once the AddDialog chunk has loaded (the FIRST open),
+  // the dialog STAYS MOUNTED and the open prop mirrors addOpen (the
+  // SettingsPanel mount shape). Unmounting on close would skip the
+  // dialog's own [open]-effect close path (dlg.close() → the close
+  // listener → focus restore to the trigger), stranding keyboard focus
+  // on <body> after EVERY dismissal — Close, Esc, scrim, and Open
+  // article alike. The lazy chunk still loads on first open only
+  // (issue #101's cold-path saving is preserved: while addDialogReady is
+  // false, nothing mounts).
+  const [addDialogReady, setAddDialogReady] = useState(false);
   // ONE stable open handler for BOTH triggers (the header icon and the
   // Library h1-row button share the identity, issue #84 review).
-  const openAdd = useCallback(() => setAddOpen(true), []);
+  const openAdd = useCallback(() => {
+    setAddDialogReady(true);
+    setAddOpen(true);
+  }, []);
 
   useEffect(() => {
     // Plan 15-03 (D15-11..14 / Pitfall 3) — the app owns scroll on Back.
@@ -453,23 +466,26 @@ function AppInner() {
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
       />
-      {/* Issue #84 (decision #70) — the ONE app-level AddDialog. Book
-          success invalidates the library snapshot (the LibraryView wiring
-          precedent) so every mounted surface re-derives; article success
-          closes + navigates internally. The open prop mirrors addOpen;
-          every close path routes through onCancel. Issue #101 — the chunk
-          loads on FIRST open (issue #95's mount is the cold-path cost);
-          while closed the dialog renders nothing. */}
-      {addOpen ? (
+      {/* Issue #84 (decision #70) — the ONE app-level AddDialog, mounted
+          from its FIRST open onward (issue #112 — the open-prop flip owns
+          every close path, focus restore included). ANY successful save
+          invalidates the library snapshot (the LibraryView wiring
+          precedent) so every mounted surface re-derives — issue #112: an
+          article save does this WHILE the dialog stays open on its result
+          screen (the new article is in Unread before the reader closes);
+          a book save does it on its close-first landing. Issue #101 — the
+          chunk loads on FIRST open (issue #95's mount is the cold-path
+          cost); while addDialogReady is false the dialog renders nothing. */}
+      {addDialogReady ? (
         <Suspense fallback={null}>
           <AddDialog
             open={addOpen}
             onCancel={() => setAddOpen(false)}
-            // Issue #84 — a book add invalidates the ONE library read model
-            // so every mounted surface re-derives. Issue #101 — the call
-            // imports from the zero-dependency bus module: the broadcast
-            // without the snapshot graph.
-            onBookAdded={() => invalidateLibrarySnapshot()}
+            // Issue #84/#112 — a save invalidates the ONE library read
+            // model so every mounted surface re-derives. Issue #101 — the
+            // call imports from the zero-dependency bus module: the
+            // broadcast without the snapshot graph.
+            onSaved={() => invalidateLibrarySnapshot()}
             tagStats={addTagStats}
           />
         </Suspense>

@@ -28,7 +28,7 @@
 // "Opening article…" / "Couldn't open this article" surface, not an
 // ingest surface), re-homed as a direct child of main after the list
 // region. Article success navigates from INSIDE the dialog (D16-12);
-// book success invalidates the library snapshot via onBookAdded so the new
+// book success invalidates the library snapshot via onSaved so the new
 // book row appears (the RemoveConfirm onConfirm precedent).
 //
 // Issue #67 (locked IA, variant A — decision recorded 2026-09-21, verdict

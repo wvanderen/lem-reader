@@ -27,9 +27,26 @@
 //   - D16-11: file retry keeps the G2 reset discipline (pick clears at
 //     every terminal outcome; retry = re-pick). URL/paste text is NEVER
 //     cleared by an error.
-//   - D16-12: success splits by kind — article closes then navigates to
-//     #/article/<id>; book closes then lands on the Library via
-//     onBookAdded (the skip disclosure stays durable on the BookRow).
+//   - D16-12: success splits by kind — article shows the saved-result
+//     screen IN the dialog (issue #112: title, ingestion limits, original
+//     link, Open article + Add another); book closes then lands on the
+//     Library via onSaved (the skip disclosure stays durable on the
+//     BookRow).
+//   - Issue #112 — the saved-result screen: an article save NO LONGER
+//     closes + auto-navigates (auto-opening marked the article read and
+//     destroyed Unread). The dialog stays open on a clear result:
+//     StatusRegion announces "Saved to your library.", the result card
+//     shows the saved title + any extraction-note limits + the original
+//     link, and the actions row becomes Close / Add another / Open
+//     article. Closing (Close, Esc, scrim) returns to the prior
+//     destination with the article never opened → Unread. "Add another"
+//     runs the SAME fresh-session reset as a reopen (D16-08) and refocuses
+//     the Web address field. "Open article" keeps the D16-12 close-first
+//     discipline (onCancel, THEN the hash write — focus restore while the
+//     trigger is still mounted), and the reader follows the existing
+//     reading-location rule (a never-opened article starts at the top).
+//     A refused/failure outcome NEVER enters result mode — refusal copy
+//     and the saved result stay distinct surfaces.
 //
 // NOTE on class names (the BookRemoveConfirm.tsx L19-23 rule): this dialog
 // uses its OWN .add-dialog* hooks — RemoveConfirm, BookRemoveConfirm, and
@@ -52,7 +69,7 @@
 // appear once per submission arm) and the outcome union it returns is
 // what this dialog renders its copy from. This file keeps ONLY form
 // chrome, size validation, and the calm refusal copy mapping.
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { EPUB_MAX_BYTES, MAX_PASTED_TRANSCRIPT_CHARS, PDF_MAX_BYTES } from "./types";
 // Plan 16-02 Task 1 — the refusal-copy map lives in ./ingestCopy; this
 // dialog consumes the same export the retired control did (no fork — the
@@ -61,7 +78,10 @@ import { mapReasonToCopy } from "./ingestCopy";
 // Issue #4 — the ingest-and-persist policy service; ONE call per
 // submission arm.
 import { addToLibrary } from "./addToLibrary";
-import type { AddToLibraryOutcome } from "./addToLibrary";
+import type { AddToLibraryOutcome, SavedArticleResult } from "./addToLibrary";
+// Issue #112 — the partial-content disclosure heading, shared with the
+// reader view (the ONE copy home; the per-part lines ride the outcome).
+import { PARTIAL_CONTENT_NOTE } from "../routes/extractionNote";
 // Issue #75 (decision #71) — the ONE shared tag picker + its suggestion
 // currency. The optional "Tags (optional)" fieldset captures tags at
 // import; they ride the saved record through the service (never a
@@ -88,17 +108,21 @@ export type AddDialogSource = "url" | "paste" | "file";
  * LibraryView: `open` mirrors the header-row Add button's state,
  * `onCancel` closes (Cancel button / Esc / scrim — every close path
  * routes through the open-prop mirror, the 09-06 wedge lesson), and
- * `onBookAdded` fires after a book lands so the Library can refresh.
+ * `onSaved` fires after ANY successful save (article or book) so the
+ * host invalidates the library snapshot (issue #112: article saves call
+ * it while the dialog REMAINS open on the result screen).
  */
 export type AddDialogProps = {
   /** When true, the dialog is open via showModal (focus-trapped). */
   open: boolean;
-  /** Invoked by the Cancel button, the cancel event (Esc), and BOTH
-   *  success arms AFTER the save resolves (D16-12 — close first). */
+  /** Invoked by the Cancel/Close button, the cancel event (Esc), and the
+   *  Open article action (D16-12 close-first) — and BOTH success arms'
+   *  close paths. */
   onCancel: () => void;
-  /** Invoked after a book success (after onCancel) — LibraryView
-   *  invalidates the library snapshot so the new book row appears. */
-  onBookAdded: () => void;
+  /** Invoked after ANY successful save — the host invalidates the
+   *  library snapshot so every mounted surface re-derives (the new
+   *  article appears in Unread while the dialog stays open). */
+  onSaved: () => void;
   /**
    * Issue #75 (decision #71) — the picker-suggestion stats (the ONE
    * deriveTagStats fold, snapshot-fed from LibraryView). The dialog holds
@@ -119,7 +143,7 @@ const SOURCE_SUBMIT_LABEL: Record<AddDialogSource, string> = {
   file: "Add file",
 };
 
-export function AddDialog({ open, onCancel, onBookAdded, tagStats }: AddDialogProps) {
+export function AddDialog({ open, onCancel, onSaved, tagStats }: AddDialogProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   // Capture the previously-focused element (the Add button) on open so
   // the close handler can restore focus (Pitfall 1 — same discipline as
@@ -158,6 +182,13 @@ export function AddDialog({ open, onCancel, onBookAdded, tagStats }: AddDialogPr
   // reset on every open with the rest (D16-08). Applied to the SAVED
   // record by the service — never a second write after the fact.
   const [tagsValue, setTagsValue] = useState<string[]>([]);
+  // Issue #112 — the saved-result payload. Non-null = the dialog is on the
+  // result screen (the content slot, tags fieldset, and transcript swap all
+  // hide; the result card + Close / Add another / Open article render).
+  // A refused/failure outcome NEVER lands here — refusal copy and the
+  // saved result stay distinct. Reset on every open (D16-08) and by
+  // "Add another".
+  const [saved, setSaved] = useState<SavedArticleResult | null>(null);
 
   // Issue #84 (decision #70) — the transcript fallback is an IN-PLACE
   // SWAP of the content slot: while a bot-check offer is live the source
@@ -166,6 +197,45 @@ export function AddDialog({ open, onCancel, onBookAdded, tagStats }: AddDialogPr
   // row retired). The always-mounted file input survives the swap —
   // `hidden` on the ancestor keeps it MOUNTED (Pattern 3a discipline).
   const transcriptMode = botCheckUrl !== null;
+  // Issue #112 — result mode: the saved-article outcome is on screen. Every
+  // other content slot (picker, source forms, transcript swap, tags) hides
+  // and the result card takes the content slot's place.
+  const resultMode = saved !== null;
+  // One derivation per signal (the ArticleView ADR-0003 discipline): does
+  // the outcome carry ANY ingestion-limit disclosure?
+  const savedHasLimits =
+    saved !== null &&
+    (saved.note !== undefined ||
+      saved.warnings.length > 0 ||
+      saved.degraded !== undefined);
+  // The "See the original." escape hatch for the result card (issue #112) —
+  // the ArticleView derivation's twin (link + copy byte-identical), derived
+  // once from the outcome's sourceUrl. Rides the limit sentences when any
+  // exist; a CONFIDENT save with a provenance URL shows it as a quiet
+  // standalone provenance line (the AC's "original link" — displayed when
+  // available, never jargon, never a placeholder).
+  const savedSeeOriginal = saved?.sourceUrl ? (
+    <>
+      <a href={saved.sourceUrl} rel="noopener noreferrer" target="_blank">
+        See the original
+        <span className="visually-hidden"> (opens in a new tab)</span>
+      </a>
+      .
+    </>
+  ) : null;
+  // Focus rail for result mode (the Pitfall-1 discipline, the transcript
+  // swap's shape): the save landing moves focus to the result heading, so
+  // keyboard + screen-reader readers land ON the saved title and read the
+  // whole result (announced copy + focused heading) instead of stranding
+  // focus on a now-hidden submit.
+  const savedHeadingRef = useRef<HTMLHeadingElement>(null);
+  const prevSavedRef = useRef<boolean>(false);
+  useEffect(() => {
+    if (saved !== null && !prevSavedRef.current) {
+      savedHeadingRef.current?.focus();
+    }
+    prevSavedRef.current = saved !== null;
+  }, [saved]);
   // Focus rails for the swap (the Pitfall-1 discipline): the refusal
   // moves focus to the transcript title (the field the reader must fill
   // next — the swap is not silent for keyboard readers); "Back to web
@@ -220,11 +290,36 @@ export function AddDialog({ open, onCancel, onBookAdded, tagStats }: AddDialogPr
    * hasFile mirror so Add file returns to disabled. Every terminal
    * outcome of handleFileSubmit, the Remove file control, and the open
    * reset below route through this ONE helper — no scattered clears.
+   * (useCallback + empty deps: only stable setters + the input ref — a
+   * stable identity so the open-effect can depend on resetSession.)
    */
-  function resetFilePick() {
+  const resetFilePick = useCallback(() => {
     if (fileInputRef.current !== null) fileInputRef.current.value = "";
     setHasFile(false);
-  }
+  }, []);
+
+  /**
+   * resetSession — the ONE fresh-session reset (issue #112): exactly the
+   * state the every-open reset used to inline (D16-08 — Web address, no
+   * stale text, no stale pick, no stale swap, no tags) PLUS the saved
+   * result. Invoked BOTH on every open and by "Add another" (which keeps
+   * the dialog open), so the two paths can never drift. (Stable identity
+   * — stable setters only — for the open-effect's dependency array.)
+   */
+  const resetSession = useCallback(() => {
+    setSource("url");
+    setUrlValue("");
+    setHtmlValue("");
+    setStatus("idle");
+    setMessage(null);
+    setBotCheckUrl(null);
+    setTranscriptValue("");
+    setTranscriptTitleValue("");
+    setTranscriptUrlValue("");
+    setTagsValue([]);
+    setSaved(null);
+    resetFilePick();
+  }, [resetFilePick]);
 
   // ── Dialog shell — BookRemoveConfirm clone (L63-86 + the 02-01 lesson) ──
   // Sync the `open` prop with the underlying <dialog> state (idempotent
@@ -239,18 +334,9 @@ export function AddDialog({ open, onCancel, onBookAdded, tagStats }: AddDialogPr
       // showModal moves focus into the dialog.
       triggerRef.current = document.activeElement as HTMLElement | null;
       dlg.showModal(); // browser: focus trap, inert backdrop, Esc fires cancel
-      // D16-08: fresh session state on every open.
-      setSource("url");
-      setUrlValue("");
-      setHtmlValue("");
-      setStatus("idle");
-      setMessage(null);
-      setBotCheckUrl(null);
-      setTranscriptValue("");
-      setTranscriptTitleValue("");
-      setTranscriptUrlValue("");
-      setTagsValue([]);
-      resetFilePick();
+      // D16-08: fresh session state on every open (the #112 saved result
+      // included — a reopened dialog never shows a stale result).
+      resetSession();
       // Cross-engine focus management (Pitfall 1 + WebKit quirk — the
       // 02-01 lesson): Chromium auto-focuses the first focusable control
       // on showModal, WebKit leaves focus on <body>. Explicitly focus
@@ -266,7 +352,7 @@ export function AddDialog({ open, onCancel, onBookAdded, tagStats }: AddDialogPr
     } else if (!open && dlg.open) {
       dlg.close();
     }
-  }, [open]);
+  }, [open, resetSession]);
 
   // Register the `close` + `cancel` listeners (with cleanup) — the
   // BookRemoveConfirm L92-111 clone with the D16-10 in-flight gate.
@@ -317,9 +403,12 @@ export function AddDialog({ open, onCancel, onBookAdded, tagStats }: AddDialogPr
    * applyOutcome — render ONE service outcome (issue #4). Every refusal
    * routes to a calm DOC-06 phrase via mapReasonToCopy (the dedupe-refuse
    * arrives as reason "already-in-library" — D16-09/D7-07); the two
-   * success arms are the D16-12 close-first split: article closes then
-   * navigates to #/article/<id>, book closes then lands on the Library
-   * via onBookAdded (the skip disclosure composes from the outcome's
+   * success arms split per D16-12 as amended by issue #112: the article
+   * arm STAYS OPEN on the saved-result screen (title, ingestion limits,
+   * original link, Open article + Add another) and invalidates the
+   * library snapshot through onSaved while the dialog remains up; the
+   * book arm keeps its close-first landing on the Library via onCancel
+   * then onSaved (the skip disclosure composes from the outcome's
    * skippedChapterCount and stays durable on the BookRow).
    */
   function applyOutcome(outcome: AddToLibraryOutcome) {
@@ -339,23 +428,25 @@ export function AddDialog({ open, onCancel, onBookAdded, tagStats }: AddDialogPr
       }
       setMessage(successCopy);
       // D16-12 book arm: close FIRST, then land on the Library where the
-      // new book row now is.
+      // new book row now is (onSaved invalidates the snapshot).
       onCancel();
-      onBookAdded();
+      onSaved();
       return;
     }
+    // Issue #112 article arm: the dialog STAYS OPEN on the result screen.
+    // The status region announces the save (aria-atomic — the whole
+    // phrase), the result card renders the payload the service derived,
+    // and onSaved invalidates the library snapshot NOW — the new article
+    // is in Unread behind the dialog before the reader closes it.
     setStatus("success");
-    setMessage(null);
-    // D16-12 article arm: close the dialog FIRST (the parent's open-prop
-    // flip runs the close effect + focus restore while the trigger is
-    // still mounted), THEN navigate to the reader.
-    onCancel();
-    window.location.hash = `#/article/${outcome.articleId}`;
+    setMessage("Saved to your library.");
+    setSaved(outcome);
+    onSaved();
   }
 
   /**
    * renderOutcome — applyOutcome guarded: a throw from a parent callback
-   * (onCancel / onBookAdded) must not become an unhandled rejection with
+   * (onCancel / onSaved) must not become an unhandled rejection with
    * the dialog wedged open; it surfaces as the calm catch-all copy, the
    * same surface the pre-service arms' catch blocks gave it.
    */
@@ -366,6 +457,43 @@ export function AddDialog({ open, onCancel, onBookAdded, tagStats }: AddDialogPr
       setStatus("error");
       setMessage(mapReasonToCopy("server-error"));
     }
+  }
+
+  /**
+   * handleOpenArticle — the result screen's primary action (issue #112).
+   * Keeps the D16-12 close-first discipline: onCancel() runs the parent's
+   * open-prop flip (close effect + focus restore to the trigger while it
+   * is still mounted), THEN the hash write navigates to the reader. The
+   * reader follows the existing reading-location rule unchanged — a
+   * never-opened article starts at the top; an already-located one (not
+   * reachable here — dedupe refuses re-adds) restores its location.
+   * Guarded like renderOutcome: a throwing parent callback must not wedge
+   * the dialog.
+   */
+  function handleOpenArticle() {
+    if (saved === null) return;
+    const articleId = saved.articleId;
+    try {
+      onCancel();
+      window.location.hash = `#/article/${articleId}`;
+    } catch {
+      setStatus("error");
+      setMessage(mapReasonToCopy("server-error"));
+    }
+  }
+
+  /**
+   * handleAddAnother — the result screen's reset action (issue #112): the
+   * ONE resetSession (same state as a reopen — D16-08) with the dialog
+   * KEPT OPEN, then focus returns to the Web address field (the first
+   * decision of the next session). rAF lands after React's commit, so the
+   * URL input is visible again when focused (the handleBackToWebAddress
+   * discipline — a pre-commit focus on a still-hidden input silently
+   * fails).
+   */
+  function handleAddAnother() {
+    resetSession();
+    requestAnimationFrame(() => urlInputRef.current?.focus());
   }
 
   /**
@@ -536,6 +664,53 @@ export function AddDialog({ open, onCancel, onBookAdded, tagStats }: AddDialogPr
           {status !== "idle" && message !== null && <p>{message}</p>}
         </StatusRegion>
 
+        {/* Issue #112 — the saved-result card: the saved title (focused on
+            the save landing, tabIndex -1 so the heading is reachable by
+            keyboard + announced by screen readers), then the SAME
+            extraction-note disclosures the reader view renders (the ONE
+            copy derivations, derived by the service at save time), each
+            gaining the "See the original." escape hatch when the article
+            has a sourceUrl. Silence is the confident-save state for LIMITS
+            — never a placeholder — but a confident save with a provenance
+            URL still shows the quiet original link (the AC's "original
+            link", displayed when available). Unmounted entirely when not
+            in result mode (the card is result-STATE, not a persistent
+            slot). */}
+        {saved !== null && (
+          <div className="add-result">
+            <h3 ref={savedHeadingRef} tabIndex={-1} className="add-result-title">
+              {saved.title}
+            </h3>
+            {saved.note && (
+              <p className="meta extraction-note">
+                {saved.note}
+                {saved.sourceUrl && " "}
+                {savedSeeOriginal}
+              </p>
+            )}
+            {saved.warnings.length > 0 && (
+              <div className="meta partial-content-note">
+                <p className="partial-content-heading">
+                  {PARTIAL_CONTENT_NOTE}
+                  {saved.sourceUrl && " "}
+                  {savedSeeOriginal}
+                </p>
+                <ul>
+                  {saved.warnings.map((warning, index) => (
+                    <li key={`${warning}-${index}`}>{warning}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {saved.degraded && (
+              <p className="meta annotations-note">{saved.degraded}</p>
+            )}
+            {!savedHasLimits && saved.sourceUrl && (
+              <p className="meta add-result-source">{savedSeeOriginal}</p>
+            )}
+          </div>
+        )}
+
         {/* D16-05 — the visible 3-way source-first picker. Native
             fieldset/legend/radio semantics (the SettingsPanel L370-402
             discipline); controlled radios (checked from state — never
@@ -544,12 +719,14 @@ export function AddDialog({ open, onCancel, onBookAdded, tagStats }: AddDialogPr
             Issue #84 (decision #70) — restyled as a SEGMENTED control
             (adjacent pill segments, foundation tokens); semantics +
             verbatim labels are byte-stable anchors. Hidden while the
-            transcript swap is live (`hidden`, not unmount — the picker's
-            radio state must survive a Back round-trip). */}
+            transcript swap is live OR the saved result is on screen
+            (issue #112 — result mode hides every intake slot; `hidden`,
+            not unmount — the picker's radio state must survive a Back
+            round-trip). */}
         <fieldset
           className="add-source-picker"
           disabled={submitting}
-          hidden={transcriptMode}
+          hidden={transcriptMode || resultMode}
         >
           <legend>Add from</legend>
           {/* The segmented container is an inner wrapper, not the fieldset
@@ -598,8 +775,14 @@ export function AddDialog({ open, onCancel, onBookAdded, tagStats }: AddDialogPr
             the byte-stable anchors the e2e suite drives.
             Issue #84 — the whole content slot hides (never unmounts) while
             the transcript swap is live: the always-mounted file input must
-            keep its picked File across the round-trip (Pattern 3a). */}
-        <div className="add-source-content" hidden={transcriptMode}>
+            keep its picked File across the round-trip (Pattern 3a).
+            Issue #112 — the slot also hides in result mode (the outcome
+            screen replaces it; the pick survives for "Add another"'s
+            reset, same mount-preservation reasoning). */}
+        <div
+          className="add-source-content"
+          hidden={transcriptMode || resultMode}
+        >
           {source === "url" && (
             <form id="add-url-form" onSubmit={handleUrlSubmit} className="add-url-form">
               <label htmlFor="ingest-url">Add by URL</label>
@@ -687,8 +870,10 @@ export function AddDialog({ open, onCancel, onBookAdded, tagStats }: AddDialogPr
             button flips label + target to "Add transcript" via the
             existing form= mechanism. Calm DOC-06 voice; all copy renders
             as React text (T-16-06). The submitting/error status reuses
-            the shared live region ABOVE. */}
-        {transcriptMode && (
+            the shared live region ABOVE. Issue #112 — the swap yields to
+            the result screen when the transcript paste SAVES (result mode
+            hides the swap; "Add another" retires it wholesale). */}
+        {transcriptMode && !resultMode && (
           <form id="add-transcript-form" onSubmit={handleTranscriptSubmit} className="add-transcript-form">
             <p className="add-transcript-guidance">
               You can still add it by hand: open the video on YouTube, open its transcript
@@ -768,8 +953,14 @@ export function AddDialog({ open, onCancel, onBookAdded, tagStats }: AddDialogPr
             tags apply to whatever the submission saves — article, paste,
             file, transcript, or book). The shared TagPicker carries the
             accessible name (the visually-hidden label); the fieldset's
-            disabled mirrors the source picker's in-flight gate. */}
-        <fieldset className="add-tags-fieldset" disabled={submitting}>
+            disabled mirrors the source picker's in-flight gate. Issue
+            #112 — hidden in result mode (the tags for the JUST-saved
+            article rode the atomic save; "Add another" resets them). */}
+        <fieldset
+          className="add-tags-fieldset"
+          disabled={submitting}
+          hidden={resultMode}
+        >
           <legend>Tags (optional)</legend>
           <label htmlFor="add-dialog-tags" className="visually-hidden">
             Add or search a tag
@@ -783,40 +974,74 @@ export function AddDialog({ open, onCancel, onBookAdded, tagStats }: AddDialogPr
         </fieldset>
 
         <div className="dialog-actions add-dialog-actions">
-          {/* D16-10 — the Cancel control is inert while a submission is in
-              flight (defense in depth alongside the cancel-event gate). */}
-          <button
-            type="button"
-            className="btn btn-quiet add-dialog-cancel"
-            onClick={onCancel}
-            disabled={submitting}
-          >
-            Cancel
-          </button>
-          {/* Issue #84 (decision #70) — the ONE shared submit. In transcript
-              mode it flips label AND form= target to "Add transcript" (the
-              existing form= mechanism — the retired second action row's
-              submit is gone); disabled rides the transcript gate (required
-              title + text). Otherwise it targets the selected source's
-              form with the per-source gate + label, unchanged. Issue #98 —
-              the unified busy register via the shared BusyButton primitive
-              while a submission is in flight: the spinner arc PREPENDS the
-              label (aria-hidden — the accessible name stays the action) +
-              aria-busy + disabled (the ReadingStateButton pattern). */}
-          <BusyButton
-            type="submit"
-            busy={submitting}
-            className="btn btn-primary add-dialog-submit"
-            form={transcriptMode ? "add-transcript-form" : `add-${source}-form`}
-            disabled={
-              transcriptMode
-                ? transcriptValue.trim().length === 0 ||
-                  transcriptTitleValue.trim().length === 0
-                : !sourceSubmitReady[source]
-            }
-          >
-            {transcriptMode ? "Add transcript" : SOURCE_SUBMIT_LABEL[source]}
-          </BusyButton>
+          {/* Issue #112 — result mode: the outcome's own action row. Close
+              keeps every dismissal path (button, Esc, scrim) returning to
+              the prior destination — the never-opened article stays
+              Unread; Add another runs the ONE resetSession and keeps the
+              dialog up; Open article is the primary (close-first, then
+              the reader route — D16-12). */}
+          {resultMode ? (
+            <>
+              <button
+                type="button"
+                className="btn btn-quiet add-dialog-cancel"
+                onClick={onCancel}
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                className="btn btn-quiet add-dialog-add-another"
+                onClick={handleAddAnother}
+              >
+                Add another
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary add-dialog-open"
+                onClick={handleOpenArticle}
+              >
+                Open article
+              </button>
+            </>
+          ) : (
+            <>
+              {/* D16-10 — the Cancel control is inert while a submission is in
+                  flight (defense in depth alongside the cancel-event gate). */}
+              <button
+                type="button"
+                className="btn btn-quiet add-dialog-cancel"
+                onClick={onCancel}
+                disabled={submitting}
+              >
+                Cancel
+              </button>
+              {/* Issue #84 (decision #70) — the ONE shared submit. In transcript
+                  mode it flips label AND form= target to "Add transcript" (the
+                  existing form= mechanism — the retired second action row's
+                  submit is gone); disabled rides the transcript gate (required
+                  title + text). Otherwise it targets the selected source's
+                  form with the per-source gate + label, unchanged. Issue #98 —
+                  the unified busy register via the shared BusyButton primitive
+                  while a submission is in flight: the spinner arc PREPENDS the
+                  label (aria-hidden — the accessible name stays the action) +
+                  aria-busy + disabled (the ReadingStateButton pattern). */}
+              <BusyButton
+                type="submit"
+                busy={submitting}
+                className="btn btn-primary add-dialog-submit"
+                form={transcriptMode ? "add-transcript-form" : `add-${source}-form`}
+                disabled={
+                  transcriptMode
+                    ? transcriptValue.trim().length === 0 ||
+                      transcriptTitleValue.trim().length === 0
+                    : !sourceSubmitReady[source]
+                }
+              >
+                {transcriptMode ? "Add transcript" : SOURCE_SUBMIT_LABEL[source]}
+              </BusyButton>
+            </>
+          )}
         </div>
       </div>
     </dialog>

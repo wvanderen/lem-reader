@@ -48,3 +48,54 @@ export async function pickSource(
         : "Upload file";
   await page.getByRole("radio", { name }).check();
 }
+
+/**
+ * openSavedArticle — the result screen's primary action: click "Open
+ * article" and wait for the dialog to leave the top layer AND the reader
+ * route to take over (the D16-12 close-first ordering's browser-level
+ * consequence — the dialog is closed before the hash write navigates).
+ * The optional `urlPattern` narrows the awaited route (e.g. /#\/article\/md-/
+ * for the markdown id-shape assertions).
+ */
+export async function openSavedArticle(
+  page: Page,
+  urlPattern: RegExp = /#\/article\//,
+): Promise<void> {
+  await page
+    .locator("dialog.add-dialog")
+    .getByRole("button", { name: "Open article" })
+    .click();
+  await expect(page.locator("dialog.add-dialog")).not.toBeVisible();
+  await page.waitForURL(urlPattern, { timeout: 15_000 });
+}
+
+/**
+ * addAnother — the result screen's reset action (issue #112): click "Add
+ * another" and wait for the FRESH intake session (the result card gone,
+ * the Web address radio checked). The dialog never closed.
+ */
+export async function addAnother(page: Page): Promise<void> {
+  await page
+    .locator("dialog.add-dialog")
+    .getByRole("button", { name: "Add another" })
+    .click();
+  await expect(page.locator("dialog.add-dialog .add-result")).toHaveCount(0);
+  await expect(
+    page.locator("dialog.add-dialog fieldset.add-source-picker"),
+  ).toBeVisible();
+  await expect(page.getByRole("radio", { name: "Web address" })).toBeChecked();
+}
+
+/**
+ * closeSavedResult — dismiss the result screen WITHOUT opening the article
+ * (the issue #112 Unread-preserving path): click "Close" and wait for the
+ * dialog to leave the top layer. The reader stays on the prior
+ * destination; the saved article appears in the library as Unread.
+ */
+export async function closeSavedResult(page: Page): Promise<void> {
+  await page
+    .locator("dialog.add-dialog")
+    .getByRole("button", { name: "Close" })
+    .click();
+  await expect(page.locator("dialog.add-dialog")).not.toBeVisible();
+}

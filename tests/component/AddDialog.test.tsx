@@ -20,8 +20,10 @@
 //   - D16-08 always-Web-address (fresh session state on every open),
 //   - D16-10 in-flight blocking (Cancel + active submit disabled; the
 //     `cancel` event is gated while submitting),
-//   - D16-12 success arms (article: onCancel() then #/article/<id>;
-//     book: onCancel() then onBookAdded()),
+//   - D16-12 success arms as amended by issue #112 — article: the dialog
+//     STAYS OPEN on the saved-result screen (title, ingestion limits,
+//     Open article + Add another; onSaved invalidates the snapshot);
+//     book: onCancel() then onSaved() (close onto the Library).
 //   - scrim dismissal (quick task 260908-o0w): an idle scrim click
 //     (target === the dialog element — the dimmed ::backdrop) fires
 //     onCancel, an inner-wrapper click is inert, and an in-flight
@@ -108,7 +110,7 @@ beforeEach(() => {
 // Navigation + callback ordering recorder. The hash setter stub records
 // every write (jsdom doesn't implement location.hash navigation — the
 // the original control's suite L81-90 precedent), and tests push "cancel" /
-// "bookAdded" markers from their onCancel/onBookAdded spies so the
+// "saved" markers from their onCancel/onSaved spies so the
 // D16-12 ordering (close FIRST, then navigate/callback) is assertable as
 // one ordered array.
 const navEvents: string[] = [];
@@ -177,19 +179,19 @@ function sampleBookResult(): EpubIngestionSuccess {
 function renderDialog(overrides?: {
   open?: boolean;
   onCancel?: () => void;
-  onBookAdded?: () => void;
+  onSaved?: () => void;
 }) {
   const onCancel = overrides?.onCancel ?? vi.fn();
-  const onBookAdded = overrides?.onBookAdded ?? vi.fn();
+  const onSaved = overrides?.onSaved ?? vi.fn();
   const utils = render(
     <AddDialog
       open={overrides?.open ?? true}
       onCancel={onCancel}
-      onBookAdded={onBookAdded}
+      onSaved={onSaved}
       tagStats={[]}
     />,
   );
-  return { onCancel, onBookAdded, ...utils };
+  return { onCancel, onSaved, ...utils };
 }
 
 /** The always-mounted file input (Pattern 3a) — by id, not by role: when a
@@ -418,7 +420,7 @@ describe("AddDialog (16-02 Task 2)", () => {
 
   it("cancel → reopen: url radio checked again and the session state is fresh (no memory, D16-08)", async () => {
     const user = userEvent.setup();
-    const { onCancel, onBookAdded, rerender } = renderDialog();
+    const { onCancel, onSaved, rerender } = renderDialog();
 
     // Dirty the session: type a URL, switch to paste, type paste text.
     await user.type(
@@ -436,10 +438,10 @@ describe("AddDialog (16-02 Task 2)", () => {
 
     // The parent flips the open prop false → true (the Cancel path).
     rerender(
-      <AddDialog open={false} onCancel={onCancel} onBookAdded={onBookAdded} tagStats={[]} />,
+      <AddDialog open={false} onCancel={onCancel} onSaved={onSaved} tagStats={[]} />,
     );
     rerender(
-      <AddDialog open={true} onCancel={onCancel} onBookAdded={onBookAdded} tagStats={[]} />,
+      <AddDialog open={true} onCancel={onCancel} onSaved={onSaved} tagStats={[]} />,
     );
 
     const urlRadio = screen.getByRole("radio", {
@@ -517,16 +519,14 @@ describe("AddDialog (16-02 Task 2)", () => {
 
   // ── Success arms (D16-12) ───────────────────────────────────────────────
 
-  it("article success: onCancel() FIRST, then window.location.hash = #/article/<id>", async () => {
+  it("article success STAYS OPEN on the result screen: onSaved fires, no close, no navigation (issue #112)", async () => {
     const user = userEvent.setup();
     ingestUrlMock.mockResolvedValue({
       article: sampleArticle(),
       confidence: { state: "confident" },
       assets: [], // Phase 20 (20-02): envelope re-validation exposes the validated array
     });
-    renderDialog({
-      onCancel: vi.fn(() => navEvents.push("cancel")),
-    });
+    const { onCancel, onSaved } = renderDialog();
 
     await user.type(
       screen.getByRole("textbox", { name: "Add by URL" }),
@@ -534,18 +534,20 @@ describe("AddDialog (16-02 Task 2)", () => {
     );
     await user.click(screen.getByRole("button", { name: /^add$/i }));
 
-    await waitFor(() => {
-      // Ordered: the close callback fires BEFORE the hash write.
-      expect(navEvents).toEqual(["cancel", "hash:#/article/ingested-id"]);
-    });
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+    // The dialog NEVER closes and NEVER navigates on its own — the reader
+    // chooses Open article (the never-opened article stays Unread).
+    expect(onCancel).not.toHaveBeenCalled();
+    expect(navEvents).toEqual([]);
+    expect(document.querySelector("dialog.add-dialog")).not.toBeNull();
   });
 
-  it("book success: onCancel() FIRST, then onBookAdded(); hasBook→saveBook dedupe seam intact", async () => {
+  it("book success: onCancel() FIRST, then onSaved(); hasBook→saveBook dedupe seam intact", async () => {
     const user = userEvent.setup();
     ingestEpubMock.mockResolvedValue(sampleBookResult());
     renderDialog({
       onCancel: vi.fn(() => navEvents.push("cancel")),
-      onBookAdded: vi.fn(() => navEvents.push("bookAdded")),
+      onSaved: vi.fn(() => navEvents.push("saved")),
     });
 
     await user.click(screen.getByRole("radio", { name: "Upload file" }));
@@ -555,12 +557,318 @@ describe("AddDialog (16-02 Task 2)", () => {
     );
     await user.click(screen.getByRole("button", { name: "Add file" }));
 
-    // Ordered: the close callback fires BEFORE the book-added callback.
+    // Ordered: the close callback fires BEFORE the snapshot invalidation.
     await waitFor(() => {
-      expect(navEvents).toEqual(["cancel", "bookAdded"]);
+      expect(navEvents).toEqual(["cancel", "saved"]);
     });
     await waitFor(() => expect(hasBookMock).toHaveBeenCalledWith("book-id"));
     expect(saveBookMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── Saved-result screen (issue #112) ─────────────────────────────────────────
+// An article save keeps the dialog OPEN on a clear result: the status region
+// announces "Saved to your library.", the result card shows the saved title
+// + any ingestion-limit disclosures + the original link, and the actions row
+// becomes Close / Add another / Open article. Closing (Close/Esc/scrim)
+// returns to the prior destination with the never-opened article Unread;
+// Open article close-first navigates (D16-12); Add another runs the ONE
+// resetSession and refocuses the Web address field. A refusal NEVER enters
+// result mode.
+describe("AddDialog — saved result (issue #112)", () => {
+  async function saveUrlArticle(
+    overrides?: Partial<Awaited<ReturnType<typeof ingestUrl>>>,
+  ) {
+    const user = userEvent.setup();
+    ingestUrlMock.mockResolvedValue({
+      article: sampleArticle(),
+      confidence: { state: "confident" },
+      assets: [],
+      ...overrides,
+    });
+    const utils = renderDialog();
+    await user.type(
+      screen.getByRole("textbox", { name: "Add by URL" }),
+      "https://example.com/article",
+    );
+    await user.click(screen.getByRole("button", { name: /^add$/i }));
+    await waitFor(() => {
+      expect(screen.getByText("Saved to your library.")).not.toBeNull();
+    });
+    return { user, ...utils };
+  }
+
+  function flaggedArticleMeta(): Awaited<ReturnType<typeof ingestUrl>>["article"] {
+    return {
+      ...sampleArticle("flagged-id"),
+      ingestionMeta: {
+        source: "url",
+        origin: "url",
+        sourceUrl: "https://example.com/article",
+        originalHtmlHash: "sha256:0",
+        extractionConfidence: "low",
+        extractionWarnings: ["1 image could not be fetched"],
+        annotationsDegraded: true,
+      },
+    } as Awaited<ReturnType<typeof ingestUrl>>["article"];
+  }
+
+  it("the result card shows the saved title with Open article + Add another (and Close) actions", async () => {
+    await saveUrlArticle();
+
+    expect(
+      screen.getByRole("heading", { name: "Article", level: 3 }),
+    ).not.toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Open article" }),
+    ).not.toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Add another" }),
+    ).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Close" })).not.toBeNull();
+    // The intake chrome yields to the result: the shared submit is gone,
+    // the source picker + tags fieldset are hidden.
+    expect(screen.queryByRole("button", { name: /^add$/i })).toBeNull();
+    expect(
+      document
+        .querySelector("fieldset.add-source-picker")!
+        .hasAttribute("hidden"),
+    ).toBe(true);
+    expect(
+      document
+        .querySelector("fieldset.add-tags-fieldset")!
+        .hasAttribute("hidden"),
+    ).toBe(true);
+  });
+
+  it("a confident save is silent about limits (no disclosure lines) but shows the original link when a sourceUrl exists", async () => {
+    await saveUrlArticle();
+
+    // The limit sentences never render for a confident save...
+    expect(document.querySelector(".add-result .extraction-note")).toBeNull();
+    expect(
+      document.querySelector(".add-result .partial-content-note"),
+    ).toBeNull();
+    expect(document.querySelector(".add-result .annotations-note")).toBeNull();
+    // ...but the AC's "original link" shows when a sourceUrl is available
+    // (the quiet standalone provenance line — no limits to attach it to).
+    const source = document.querySelector(".add-result .add-result-source")!;
+    expect(source).not.toBeNull();
+    const link = source.querySelector("a")!;
+    expect(link.getAttribute("href")).toBe("https://example.com/article");
+    expect(link.getAttribute("target")).toBe("_blank");
+    expect(link.textContent).toContain("See the original");
+  });
+
+  it("a confident save with no sourceUrl (paste arm) shows no original link either", async () => {
+    const bare = sampleArticle("bare-id") as Awaited<
+      ReturnType<typeof ingestUrl>
+    >["article"];
+    delete (bare.provenance as { sourceUrl?: string }).sourceUrl;
+    await saveUrlArticle({ article: bare });
+
+    expect(document.querySelector(".add-result .add-result-source")).toBeNull();
+    expect(screen.queryByText("See the original")).toBeNull();
+  });
+
+  it("an operation failure never enters result mode (distinct from the saved result, no snapshot broadcast)", async () => {
+    const user = userEvent.setup();
+    ingestUrlMock.mockRejectedValue(new IngestionError("server-error"));
+    const { onSaved } = renderDialog();
+
+    await user.type(
+      screen.getByRole("textbox", { name: "Add by URL" }),
+      "https://example.com/article",
+    );
+    await user.click(screen.getByRole("button", { name: /^add$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/something went wrong. try again/i)).not.toBeNull();
+    });
+    // Distinct surfaces: no result card, no outcome actions, no
+    // invalidation broadcast (nothing was saved).
+    expect(document.querySelector(".add-result")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Open article" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Add another" })).toBeNull();
+    expect(onSaved).not.toHaveBeenCalled();
+  });
+
+  it("a flagged save discloses the ingestion limits with the original link", async () => {
+    await saveUrlArticle({ article: flaggedArticleMeta() });
+
+    // The low-confidence sentence + the escape hatch (href from the saved
+    // article's provenance, new-tab).
+    const note = document.querySelector(".add-result .extraction-note")!;
+    expect(note.textContent).toContain(
+      "This article may be incomplete or inaccurate",
+    );
+    const link = note.querySelector("a")!;
+    expect(link.getAttribute("href")).toBe("https://example.com/article");
+    expect(link.getAttribute("rel")).toBe("noopener noreferrer");
+    expect(link.textContent).toContain("See the original");
+    // The per-part warning line + the degraded-anchoring sentence.
+    expect(
+      document
+        .querySelector(".add-result .partial-content-heading")!
+        .textContent,
+    ).toContain("Some content could not be processed.");
+    expect(
+      document.querySelector(".add-result .partial-content-note li")!
+        .textContent,
+    ).toBe("1 image could not be fetched");
+    expect(
+      document.querySelector(".add-result .annotations-note")!.textContent,
+    ).toContain("Highlights may be unreliable on this article.");
+  });
+
+  it("Open article navigates close-first (ordered: cancel, then the hash write)", async () => {
+    const user = userEvent.setup();
+    ingestUrlMock.mockResolvedValue({
+      article: sampleArticle(),
+      confidence: { state: "confident" },
+      assets: [],
+    });
+    renderDialog({
+      onCancel: vi.fn(() => navEvents.push("cancel")),
+      onSaved: vi.fn(),
+    });
+    await user.type(
+      screen.getByRole("textbox", { name: "Add by URL" }),
+      "https://example.com/article",
+    );
+    await user.click(screen.getByRole("button", { name: /^add$/i }));
+    await waitFor(() => {
+      expect(screen.getByText("Saved to your library.")).not.toBeNull();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Open article" }));
+
+    // Ordered: the close callback fires BEFORE the hash write (D16-12).
+    await waitFor(() => {
+      expect(navEvents).toEqual(["cancel", "hash:#/article/ingested-id"]);
+    });
+  });
+
+  it("Add another resets the session: source back to Web address, fields + result cleared, URL field focused", async () => {
+    const { user } = await saveUrlArticle();
+
+    await user.click(screen.getByRole("button", { name: "Add another" }));
+
+    // Fresh session (D16-08 shape) — result gone, Web address checked, the
+    // URL field empty, the status region collapsed back to idle.
+    expect(screen.queryByText("Saved to your library.")).toBeNull();
+    expect(document.querySelector(".add-result")).toBeNull();
+    const urlRadio = screen.getByRole("radio", {
+      name: "Web address",
+    }) as HTMLInputElement;
+    expect(urlRadio.checked).toBe(true);
+    expect(
+      (document.getElementById("ingest-url") as HTMLInputElement).value,
+    ).toBe("");
+    // The picker + tags fieldset are visible again.
+    expect(
+      document
+        .querySelector("fieldset.add-source-picker")!
+        .hasAttribute("hidden"),
+    ).toBe(false);
+    expect(
+      document
+        .querySelector("fieldset.add-tags-fieldset")!
+        .hasAttribute("hidden"),
+    ).toBe(false);
+    // Focus rail: the reader's next decision is the Web address field.
+    // The focus hand-off rides a rAF (post-commit), so wait for it.
+    await waitFor(() => {
+      expect(document.activeElement).toBe(
+        document.getElementById("ingest-url"),
+      );
+    });
+  });
+
+  it("Add another clears picked tags (the tags ride resetSession)", async () => {
+    const user = userEvent.setup();
+    ingestUrlMock.mockResolvedValue({
+      article: sampleArticle(),
+      confidence: { state: "confident" },
+      assets: [],
+    });
+    render(
+      <AddDialog
+        open={true}
+        onCancel={vi.fn()}
+        onSaved={vi.fn()}
+        tagStats={[{ tag: "essays", count: 2 }]}
+      />,
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: "Add by URL" }),
+      "https://example.com/tagged",
+    );
+    await user.type(screen.getByLabelText("Add or search a tag"), "essays");
+    await user.keyboard("{Enter}");
+    expect(screen.getByText("essays")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /^add$/i }));
+    await waitFor(() => {
+      expect(screen.getByText("Saved to your library.")).not.toBeNull();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Add another" }));
+
+    await waitFor(() => {
+      expect(screen.queryByText("essays")).not.toBeInTheDocument();
+    });
+  });
+
+  it("the save landing moves focus to the result heading (keyboard + SR land on the title)", async () => {
+    await saveUrlArticle();
+
+    const heading = screen.getByRole("heading", {
+      name: "Article",
+      level: 3,
+    });
+    expect(document.activeElement).toBe(heading);
+    expect(heading.getAttribute("tabindex")).toBe("-1");
+  });
+
+  it("Esc in result mode closes through onCancel (returns to the prior destination)", async () => {
+    const { onCancel } = await saveUrlArticle();
+
+    act(() => {
+      (
+        document.querySelector("dialog.add-dialog") as HTMLDialogElement
+      ).dispatchEvent(new Event("cancel"));
+    });
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it("a refusal never enters result mode: calm copy only, no result actions", async () => {
+    const user = userEvent.setup();
+    hasMock.mockResolvedValue(true); // dedupe-refuse
+    ingestUrlMock.mockResolvedValue({
+      article: sampleArticle(),
+      confidence: { state: "confident" },
+      assets: [],
+    });
+    const { onSaved } = renderDialog();
+
+    await user.type(
+      screen.getByRole("textbox", { name: "Add by URL" }),
+      "https://example.com/article",
+    );
+    await user.click(screen.getByRole("button", { name: /^add$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/already in your library/i)).not.toBeNull();
+    });
+    // Distinct surfaces: no result card, no outcome actions, no
+    // invalidation broadcast (nothing was saved).
+    expect(document.querySelector(".add-result")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Open article" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Add another" })).toBeNull();
+    expect(onSaved).not.toHaveBeenCalled();
+    // The submit stays (retry available), the result is not shown.
+    expect(screen.getByRole("button", { name: /^add$/i })).not.toBeNull();
   });
 });
 
@@ -798,7 +1106,7 @@ describe("AddDialog — transcript content swap (issue #84)", () => {
     ).toBe("");
   });
 
-  it("submits through the shared button: title + text ride ingestPastedTranscript; success closes then navigates (D16-12)", async () => {
+  it("submits through the shared button: title + text ride ingestPastedTranscript; success shows the result screen (issue #112)", async () => {
     const user = userEvent.setup();
     ingestUrlMock.mockRejectedValue(new IngestionError("youtube-bot-check"));
     renderDialog({
@@ -829,9 +1137,20 @@ describe("AddDialog — transcript content swap (issue #84)", () => {
     ).toBe(false);
     await user.click(screen.getByRole("button", { name: "Add transcript" }));
 
+    // Issue #112 — the transcript arm is an ARTICLE arm: the dialog stays
+    // open on the result screen (no close, no navigation). The swapped
+    // transcript flow yields to the result card.
     await waitFor(() => {
-      expect(navEvents).toEqual(["cancel", "hash:#/article/pasted-swap-id"]);
+      expect(screen.getByText("Saved to your library.")).not.toBeNull();
     });
+    expect(navEvents).toEqual([]);
+    expect(
+      screen.getByRole("heading", { name: "Article", level: 3 }),
+    ).not.toBeNull();
+    expect(document.getElementById("add-transcript-form")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Open article" }),
+    ).not.toBeNull();
     expect(ingestPastedTranscriptMock).toHaveBeenCalledWith(
       "0:00\nA cue pasted by hand",
       "Pasted Lecture",

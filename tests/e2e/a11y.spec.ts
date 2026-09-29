@@ -26,7 +26,7 @@ import { validBookEpub3 } from "../unit/server/epub-fixtures";
 // Plan 16-03 — the shared dialog-opening helper (ADD-01: the intake forms
 // live behind the header Add button's modal; the axe scan below targets
 // the OPEN dialog surface).
-import { openAddDialog, pickSource } from "./library/add-dialog";
+import { openAddDialog, pickSource, closeSavedResult } from "./library/add-dialog";
 // The D-05 substrate — the SAME normalizeText + graphemeClusters the
 // in-browser derivations use (the 08-05/12-05 deterministic-seed
 // precedent: compute the location offset in Node, never in-page).
@@ -133,6 +133,88 @@ test("a11y #84: the Add dialog transcript-swap state is axe-clean", async ({ pag
     .analyze();
   const serious = seriousViolations(results);
   expect(serious, JSON.stringify(serious, null, 2)).toEqual([]);
+});
+
+// Issue #112 review follow-up — the saved-result state gets the SAME axe
+// bar as the open + transcript-swap dialog states above (the issue AC5
+// screen-reader pillar). BOTH result renders scan: the confident save
+// (title + quiet provenance line + the Close / Add another / Open article
+// row) and the flagged save (extraction note + partial-content list +
+// degraded note, each carrying the "See the original." escape hatch).
+// Payloads are schema-valid CanonicalArticles via makeArticle + a
+// hand-built IngestionMeta (the client re-validates at the network
+// boundary — the add-result.spec.ts harness discipline).
+test("a11y #112: the saved-result state is axe-clean (confident AND flagged)", async ({
+  page,
+}) => {
+  await wipeDatabase(page);
+  const confident = makeArticle({
+    id: "a11y-saved-confident",
+    title: "Saved Result: Confident",
+    paragraphs: ["Body text."],
+    sourceUrl: "https://example.com/saved-confident",
+  });
+  const flagged: CanonicalArticle = {
+    ...makeArticle({
+      id: "a11y-saved-flagged",
+      title: "Saved Result: Flagged",
+      paragraphs: ["Body text."],
+      sourceUrl: "https://example.com/saved-flagged",
+    }),
+    ingestionMeta: {
+      source: "url",
+      origin: "url",
+      sourceUrl: "https://example.com/saved-flagged",
+      originalHtmlHash: `sha256:${"0".repeat(64)}`,
+      extractionConfidence: "low",
+      extractionWarnings: ["1 unsupported block omitted"],
+      annotationsDegraded: true,
+    },
+  };
+  for (const [payload, renderGuard] of [
+    [confident, ".add-result-source"],
+    [flagged, ".partial-content-note"],
+  ] as const) {
+    await page.route("**/api/ingest", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        // The IngestionResponse ok-variant envelope (add-result.spec.ts's
+        // mockIngest shape — bare articles are refused at the boundary).
+        body: JSON.stringify({
+          ok: true,
+          article: payload,
+          confidence:
+            payload.ingestionMeta?.extractionConfidence === "low"
+              ? { state: "low" }
+              : { state: "confident" },
+        }),
+      });
+    });
+    await page.goto(`${BASE}/#/`);
+    await openAddDialog(page);
+    await page
+      .getByRole("textbox", { name: /add by url/i })
+      .fill(payload.provenance.sourceUrl ?? "");
+    await page.getByRole("button", { name: /^add$/i }).click();
+    // The state under scan: the result card is up AND the expected limit
+    // render is live (an absent disclosure would silently weaken the gate).
+    await expect(page.locator("dialog.add-dialog .add-result")).toBeVisible();
+    await expect(
+      page.locator(`dialog.add-dialog ${renderGuard}`),
+    ).toBeVisible();
+    const results = await new AxeBuilder({ page })
+      .withTags([...WCAG_TAGS])
+      .include("dialog.add-dialog")
+      .analyze();
+    const serious = seriousViolations(results);
+    const ids = serious.map((v) => v.id);
+    expect(ids, JSON.stringify(serious, null, 2)).not.toContain("heading-order");
+    expect(ids).not.toContain("list");
+    expect(serious).toEqual([]);
+    // Dismiss before the next arm — the loop re-opens from the list route.
+    await closeSavedResult(page);
+  }
 });
 
 for (const article of fixtures) {

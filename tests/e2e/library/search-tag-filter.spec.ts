@@ -27,7 +27,7 @@
 import { test, expect } from "@playwright/test";
 // Plan 16-03 — the shared dialog-opening helper (ADD-01: the intake
 // forms live behind the header Add button's modal).
-import { openAddDialog, pickSource } from "./add-dialog";
+import { openAddDialog, pickSource, openSavedArticle } from "./add-dialog";
 import { BASE } from "../_base";
 
 // Three distinct paste-HTML articles rich enough to clear the ING-06
@@ -71,8 +71,9 @@ without distinguishing its origin except via the quiet source badge.</p>
 
 /**
  * Ingest a paste-HTML article via the Add dialog (opened on the paste
- * source — Plan 16-03). Returns after navigation to #/article/<id>
- * completes. Caller is responsible for navigating back to #/ when needed.
+ * source — Plan 16-03). Issue #112: the save lands on the in-dialog
+ * result screen; "Open article" navigates to #/article/<id>. Caller is
+ * responsible for navigating back to #/ when needed.
  */
 async function ingestPaste(page: import("@playwright/test").Page, html: string) {
   await openAddDialog(page);
@@ -81,7 +82,7 @@ async function ingestPaste(page: import("@playwright/test").Page, html: string) 
     .getByRole("textbox", { name: /paste html/i })
     .fill(html);
   await page.getByRole("button", { name: /add pasted article/i }).click();
-  await page.waitForURL(/#\/article\//, { timeout: 15_000 });
+  await openSavedArticle(page);
 }
 
 /**
