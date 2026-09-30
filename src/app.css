@@ -658,19 +658,19 @@ a:hover {
   background: transparent;
   margin-block: 0;
 }
-:is(.library-remove-confirm-inner, .book-remove-confirm-inner, .edit-metadata-inner, .review-note-dialog, .reading-state-control) .status {
+:is(.library-remove-confirm-inner, .book-remove-confirm-inner, .edit-metadata-inner, .review-note-dialog, .review-color-dialog, .reading-state-control) .status {
   margin-block: 0;
   padding: 0;
   background: transparent;
   border: none;
 }
-:is(.library-remove-confirm-inner, .book-remove-confirm-inner, .edit-metadata-inner, .review-note-dialog, .reading-state-control) .status p {
+:is(.library-remove-confirm-inner, .book-remove-confirm-inner, .edit-metadata-inner, .review-note-dialog, .review-color-dialog, .reading-state-control) .status p {
   margin-block: 0 var(--space-sm);
 }
-:is(.library-remove-confirm-inner, .book-remove-confirm-inner, .edit-metadata-inner, .review-note-dialog, .reading-state-control) .status:empty {
+:is(.library-remove-confirm-inner, .book-remove-confirm-inner, .edit-metadata-inner, .review-note-dialog, .review-color-dialog, .reading-state-control) .status:empty {
   margin-block: 0;
 }
-:is(.library-remove-confirm-inner, .book-remove-confirm-inner, .edit-metadata-inner, .review-note-dialog, .reading-state-control) .status:empty p {
+:is(.library-remove-confirm-inner, .book-remove-confirm-inner, .edit-metadata-inner, .review-note-dialog, .review-color-dialog, .reading-state-control) .status:empty p {
   margin-block: 0;
 }
 
@@ -3608,6 +3608,21 @@ dialog.import-preview {
   font-size: 14px;
   color: var(--ink-soft);
   overflow-wrap: anywhere;
+}
+/* Issue #119 — the row's named color line: the decorative swatch dot (the
+   SAME .highlight-color-swatch-* per-theme tokens the reader's picker and
+   marks use) beside the visible text label ("Default" / "Yellow" / … —
+   HIGHLIGHT_COLOR_LABELS; color is never the sole identifier, A11Y-05).
+   Renders on EVERY row — confident, ambiguous, orphan-tail alike (color
+   never depends on re-anchoring). */
+.review-row-color {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink-soft);
 }
 /* Short date — quiet metadata at the row foot. */
 .review-date {

@@ -503,6 +503,31 @@ test("review panel #/highlights: zero serious/critical WCAG 2.2 AA violations (s
   expect(ids, JSON.stringify(serious, null, 2)).not.toContain("heading-order");
   expect(ids).not.toContain("list");
   expect(serious).toEqual([]);
+
+  // Issue #119 — with the row's color dialog OPEN (the "Change color"
+  // affordance hosting the reader's HighlightColorEntry picker), the modal
+  // must hold the same bar: the labelled radio group (color never the sole
+  // identifier), the dialog's accessible name, the fieldset/legend
+  // grouping, and the :modal contract the note-popover cell pins.
+  await page
+    .getByRole("button", { name: /^Change color: / })
+    .first()
+    .click();
+  const colorDialog = page.getByRole("dialog", { name: "Change color" });
+  await expect(colorDialog).toBeVisible();
+  await expect(
+    colorDialog.getByRole("radio", { name: "Default" }),
+  ).toBeChecked();
+  const colorResults = await new AxeBuilder({ page })
+    .withTags([...WCAG_TAGS])
+    .analyze();
+  const colorSerious = seriousViolations(colorResults);
+  expect(colorSerious, JSON.stringify(colorSerious, null, 2)).toEqual([]);
+  const colorIsModal = await colorDialog.evaluate((el) => el.matches(":modal"));
+  expect(
+    colorIsModal,
+    "color dialog is modal (:modal — showModal opened it)",
+  ).toBe(true);
 });
 
 // ── Plan 12-06 (ING-05): the book + chapter surfaces ────────────────────────

@@ -180,12 +180,15 @@ test.describe("RECV-01.e review-panel tri-state (10-04 honest surfacing)", () =>
     ).toHaveCount(0);
     // And the curation affordances are present (D10-11 — orphans are
     // curatable in place even without an article). The actions cluster is
-    // a SIBLING of the .review-row body inside the row's <li>.
+    // a SIBLING of the .review-row body inside the row's <li>. Issue #119:
+    // the cluster is now THREE affordances — Edit note / Change color /
+    // Remove highlight (color, like notes, is keyed to highlightId alone
+    // and never gated on anchor status).
     await expect(
       orphanSection.locator("li.review-item").filter({
         hasText: EXCERPT_ORPHAN,
       }).locator("button.review-row-action"),
-    ).toHaveCount(2);
+    ).toHaveCount(3);
   });
 
   test("never silently hidden: All shows unresolved rows; Orphan/Ambiguous narrow correctly", async ({

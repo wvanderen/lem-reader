@@ -48,10 +48,12 @@
 //     curatable in place. "Edit note" opens ReviewNoteDialog (notes are
 //     keyed to highlightId, so no article is needed); "Remove highlight"
 //     opens DeleteHighlightConfirm (cascade-honest copy, destructive write
-//     ONLY in its Proceed onClick). Both commits invalidate the ONE
-//     LibrarySnapshot (Issue #8 — re-derive from Dexie, never a stale row)
-//     and announce calmly in .status ("Highlight removed." / "Note
-//     saved.").
+//     ONLY in its Proceed onClick). Issue #119: "Change color" opens
+//     ReviewColorDialog (the reader's own HighlightColorEntry picker;
+//     commit-per-pick, never gated on anchor status). All commits
+//     invalidate the ONE LibrarySnapshot (Issue #8 — re-derive from Dexie,
+//     never a stale row) and announce calmly in .status ("Highlight
+//     removed." / "Note saved." / "Color saved.").
 //
 // Threat register (10-02-PLAN.md <threat_model>):
 //   - T-10-02b (stored XSS): every quote/note/title/host string renders as
@@ -91,6 +93,15 @@ import {
 import { formatIsoDate } from "../../ingestion/library/formatDate";
 import { ReviewNoteDialog, NOTE_SAVE_FAILED_COPY } from "./ReviewNoteDialog";
 import { DeleteHighlightConfirm } from "./DeleteHighlightConfirm";
+// Issue #119 — the in-place highlight-color editor: the SAME picker component
+// the reader's NotePopover hosts, wrapped in this surface's dialog grammar.
+import { ReviewColorDialog } from "./ReviewColorDialog";
+// Issue #119 — the ONE color write seam (the same seam the reader's picker
+// commits through) + the shared named-color labels (A11Y-05 — the review row
+// and dialog carry the visible text label, never color alone).
+import { setHighlightColor } from "../../persistence/highlightsStore";
+import type { HighlightColor } from "../../content/schema";
+import { HIGHLIGHT_COLOR_LABELS } from "../../annotations/highlightColors";
 import { BackToLibrary } from "../../reader/BackToLibrary";
 import { JumpToArticleIcon } from "../../ui/icons";
 // Issue #98 (decision #96) — the ONE polite status-region primitive; this
@@ -170,11 +181,23 @@ function sourceHost(article: CanonicalArticle): string | null {
  * rows, and never part of the accessible name.
  *
  * Plan 10-05 (D10-11): EVERY row — section or orphan, any tri-state —
- * carries the two curation affordances as siblings of the row body (never
+ * carries the curation affordances as siblings of the row body (never
  * nested inside the jump button: interactive content cannot nest). The
  * buttons' aria-labels prefix the visible text with the quote excerpt so
  * screen-reader rows are distinguishable (the accessible name contains the
  * visible label — WCAG 2.5.3 Label in Name).
+ *
+ * Issue #119 — every row shows its named highlight color as a visible text
+ * label beside a decorative swatch (the shared HIGHLIGHT_COLOR_LABELS
+ * vocabulary — "Default" and the four named choices, exactly the reader's
+ * state; color is never the sole identifier, A11Y-05). The line renders on
+ * EVERY row — confident, ambiguous, orphan-tail alike — because color never
+ * depends on re-anchoring (the #118 discipline). A NAMED color also prefixes
+ * the jump button's accessible name ("Go to Yellow highlight: …") mirroring
+ * the reader's highlightAriaLabelForText vocabulary; Default keeps the
+ * shipped copy byte-unchanged. The third curation affordance ("Change
+ * color") opens ReviewColorDialog — the picker stays editable on ambiguous
+ * and orphaned rows, and the edit touches ONLY the color field.
  *
  * All text renders as React text children (T-10-02b/T-10-05a — escaping by
  * default; stored/imported text never becomes markup).
@@ -183,10 +206,12 @@ function ReviewRow({
   entry,
   onEditNote,
   onRemove,
+  onChangeColor,
 }: {
   entry: ReviewEntry;
   onEditNote: (entry: ReviewEntry) => void;
   onRemove: (entry: ReviewEntry) => void;
+  onChangeColor: (entry: ReviewEntry) => void;
 }) {
   // Plan 19-02 (D19-10): excerpts derive from the FIRST FRAGMENT of the
   // stored quote via the shared pure helper — per-surface caps unchanged
@@ -232,6 +257,17 @@ function ReviewRow({
           {truncate(noteText, NOTE_MAX_CHARS)}
         </span>
       )}
+      {/* Issue #119 — the named color, visible text + decorative swatch
+          (A11Y-05). The swatch classes ride the SAME per-theme tokens the
+          reader's picker and marks use, so review shows exactly the color
+          state the reader shows. */}
+      <span className="review-row-color">
+        <span
+          aria-hidden="true"
+          className={`highlight-color-swatch highlight-color-swatch-${entry.highlight.color}`}
+        />
+        {HIGHLIGHT_COLOR_LABELS[entry.highlight.color]}
+      </span>
       {badgeText !== null && (
         <span className={`review-badge review-badge-${entry.status}`}>
           {badgeText}
@@ -253,6 +289,17 @@ function ReviewRow({
         onClick={() => onEditNote(entry)}
       >
         Edit note
+      </button>
+      {/* Issue #119 — the labeled way to change the named color. Never
+          gated on anchor status: ambiguous and orphan rows recolor exactly
+          like confident rows (the edit is a field-scoped color write). */}
+      <button
+        type="button"
+        className="btn btn-quiet review-row-action review-row-action-color"
+        aria-label={`Change color: ${ariaExcerpt}`}
+        onClick={() => onChangeColor(entry)}
+      >
+        Change color
       </button>
       <button
         type="button"
@@ -276,10 +323,18 @@ function ReviewRow({
     );
   }
 
-  // The jump button's aria-label mirrors the drawer-entry pattern.
+  // The jump button's aria-label mirrors the drawer-entry pattern. Issue
+  // #119 — a NAMED color names itself in the accessible name ("Go to Yellow
+  // highlight: …", the reader's highlightAriaLabelForText vocabulary) so
+  // screen readers hear the choice the row shows; Default keeps the shipped
+  // copy byte-unchanged.
+  const colorNoun =
+    entry.highlight.color === "default"
+      ? "highlight"
+      : `${HIGHLIGHT_COLOR_LABELS[entry.highlight.color]} highlight`;
   const ariaLabel = isUnresolved
-    ? `Go to highlight: ${ariaExcerpt}. This highlight can't be located, so jumping is disabled.`
-    : `Go to highlight: ${ariaExcerpt}${
+    ? `Go to ${colorNoun}: ${ariaExcerpt}. This highlight can't be located, so jumping is disabled.`
+    : `Go to ${colorNoun}: ${ariaExcerpt}${
         noteText ? `; ${truncate(noteText, ARIA_MAX_CHARS)}` : ""
       }`;
 
@@ -366,6 +421,10 @@ export function ReviewView({
   // the note dialog opens for ANY row — orphan rows included (D10-11).
   const [noteTarget, setNoteTarget] = useState<ReviewEntry | null>(null);
   const [removeTarget, setRemoveTarget] = useState<ReviewEntry | null>(null);
+  // Issue #119 — the row whose color is being edited (null = dialog closed).
+  // Like notes, color is keyed to highlightId alone, so the dialog opens for
+  // ANY row — ambiguous and orphan-tail rows included.
+  const [colorTarget, setColorTarget] = useState<ReviewEntry | null>(null);
   // D10-12: the calm curation result announced through the .status live
   // region ("Highlight removed." / "Note saved."). Null = nothing to
   // announce (loading/error/empty states own the region then).
@@ -430,6 +489,20 @@ export function ReviewView({
   // derivation so the .status branch below stays honest).
   const derivedEmpty =
     derivation.sections.length === 0 && derivation.orphanEntries.length === 0;
+
+  // Issue #119 — the color dialog's CURRENT color derives from the FRESH
+  // snapshot record (found by the immutable highlight id), never from the
+  // captured target entry: after each landed pick the ONE invalidate re-
+  // derives the snapshot and this prop re-matches the persisted row, so the
+  // controlled radio can never diverge from disk. A failed pick writes
+  // nothing and invalidates nothing — the radio stays on the persisted
+  // color (the HighlightColorEntry inline failure copy explains why).
+  const colorTargetRecord =
+    colorTarget !== null
+      ? highlights.find((h) => h.id === colorTarget.highlight.id)
+      : undefined;
+  const colorDialogColor: HighlightColor =
+    colorTargetRecord?.color ?? colorTarget?.highlight.color ?? "default";
 
   return (
     <main id="main">
@@ -631,6 +704,7 @@ export function ReviewView({
                     entry={entry}
                     onEditNote={setNoteTarget}
                     onRemove={setRemoveTarget}
+                    onChangeColor={setColorTarget}
                   />
                 </li>
               ))}
@@ -653,6 +727,7 @@ export function ReviewView({
                   entry={entry}
                   onEditNote={setNoteTarget}
                   onRemove={setRemoveTarget}
+                  onChangeColor={setColorTarget}
                 />
               </li>
             ))}
@@ -694,6 +769,36 @@ export function ReviewView({
           setAnnouncement("Highlight removed.");
         }}
         onCancel={() => setRemoveTarget(null)}
+      />
+      {/* Issue #119 — the color editor. Same wiring shape as the note
+          dialog, with the commit-per-pick contract: saveColor routes
+          through the ONE setHighlightColor seam, and ONLY a resolved write
+          invalidates the snapshot and announces "Color saved." — a failed
+          pick leaves the dialog open with HighlightColorEntry's inline
+          "Couldn't save color." status and never announces success. Every
+          close path (Done, Esc, scrim) merely dismisses: picks have already
+          committed. The color prop derives from the FRESH snapshot record
+          (above), so the controlled radio re-matches disk after every
+          landed pick — reader and review share one record, one seam, one
+          vocabulary, and cannot drift. */}
+      <ReviewColorDialog
+        open={colorTarget !== null}
+        color={colorDialogColor}
+        saveColor={async (color) => {
+          if (colorTarget === null) return;
+          await setHighlightColor(colorTarget.highlight.id, color);
+          invalidateLibrarySnapshot();
+          setAnnouncement("Color saved.");
+        }}
+        excerpt={
+          colorTarget
+            ? firstFragmentExcerpt(
+                colorTarget.highlight.quote.exact,
+                CONFIRM_EXCERPT_MAX_CHARS,
+              )
+            : ""
+        }
+        onClose={() => setColorTarget(null)}
       />
     </main>
   );
