@@ -24,22 +24,23 @@
 // injection surface. The renderer already forbids dangerouslySetInnerHTML
 // (Phase 1, react/no-danger — preserved).
 //
-// Issue #86 (decision #73) — the custom theme: when theme === "custom" the
+// Issue #86 (decision #73), extended by issue #120 — the custom themes:
+// while a custom slot is active (theme "custom-light" / "custom-dark") the
 // inline writes ARE the theme — applyTheme resolves the FULL 15-token
-// palette (5 stored + 10 derived incl. issue #118's four named highlight
-// fills, src/settings/customTheme.ts) onto
-// documentElement, because [data-theme="custom"] overrides no tokens in CSS
-// (first paint before hydration paints the seeded :root defaults — accepted
-// by decision #73). When the theme is a preset the SAME property list is
-// REMOVED again, so the [data-theme] CSS blocks own the palette (inline
-// writes would otherwise out-rank the stylesheet forever — one stale inline
-// --surface would poison every later preset). A "custom" setting without a
-// customTheme record (unrepresentable through the schema's superRefine, but
-// defended here) takes the removal path: the :root palette paints, never a
-// half-written theme.
+// palette from the ACTIVE SLOT's 5 stored tokens (5 stored + 10 derived
+// incl. issue #118's four named highlight fills, src/settings/customTheme.ts)
+// onto documentElement, because [data-theme="custom-*"] overrides no tokens
+// in CSS (first paint before hydration paints the seeded :root defaults —
+// accepted by decision #73). When the theme is a preset the SAME property
+// list is REMOVED again, so the [data-theme] CSS blocks own the palette
+// (inline writes would otherwise out-rank the stylesheet forever — one
+// stale inline --surface would poison every later preset). An active slot
+// without its record (unrepresentable through the schema's superRefine,
+// but defended here) takes the removal path: the :root palette paints,
+// never a half-written theme.
 import type { ReaderSettings } from "../content/schema";
 import { FONT_STACKS, SPACING_PRESETS } from "./tokens";
-import { CUSTOM_COLOR_PROPS, resolveCustomTheme } from "./customTheme";
+import { CUSTOM_COLOR_PROPS, activeSlotTheme, resolveCustomTheme } from "./customTheme";
 
 export function applyTheme(s: ReaderSettings): void {
   const root = document.documentElement;
@@ -51,9 +52,10 @@ export function applyTheme(s: ReaderSettings): void {
   root.style.setProperty("--letter-spacing", preset.letterSpacing);
   root.style.setProperty("--word-spacing", preset.wordSpacing);
   root.style.setProperty("--measure", `${s.measure}ch`); // .article-body max-width
-  // Issue #86 — the custom palette writes (or their removal, above).
-  if (s.theme === "custom" && s.customTheme !== undefined) {
-    const resolved = resolveCustomTheme(s.customTheme.tokens);
+  // Issues #86/#120 — the custom palette writes (or their removal, above).
+  const activeCustom = activeSlotTheme(s);
+  if (activeCustom !== undefined) {
+    const resolved = resolveCustomTheme(activeCustom.tokens);
     for (const prop of CUSTOM_COLOR_PROPS) {
       root.style.setProperty(prop, resolved[prop]);
     }

@@ -432,19 +432,46 @@ export type Book = z.infer<typeof BookSchema>;
 // (T-02-01 — Tampering V5). applyTheme consumes the inferred type directly.
 // No recursion here — Pitfall 7 (the two-pass recursive Block pattern above)
 // does NOT apply.
+// Issue #120 — ONE record shape shared by both custom slots (the issue #86
+// customTheme record, unchanged): baseTheme names the preset the slot was
+// seeded from / resets to, and the FIVE reader-editable tokens. Kept
+// module-private (the #86 discipline — unexported until a real shape
+// consumer appears); the inferred types below are the public surface.
+const CustomThemeRecordSchema = z.object({
+  baseTheme: z.enum(["sepia", "light", "dark"]),
+  tokens: z.object({
+    surface: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+    surfaceRaised: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+    ink: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+    accent: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+    hairline: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+  }),
+});
+
 const ReaderSettingsObjectSchema = z.object({
   // STATE-04 migration hook: Phase 4 (Plan 04-02, D4-12) bumped the canonical
   // write version from 1 → 2 when readingMode was added. Issue #40 bumps the
   // canonical write version 2 → 3 when the read-aloud preferences (voice +
   // rate, below) were added. Issue #115 bumps the canonical write version
   // 3 → 4 when the library sort preference (librarySort, below) was added.
-  // The union accepts ALL FOUR literals so that an existing v1 row (no
-  // readingMode field), a v2 row (no voice/rate fields), and a v3 row (no
-  // librarySort field) hydrate via the .default()s below on read — Pitfall 9
-  // (NO Dexie store change; the settings store is key-value, Dexie is opaque
-  // to the value shape). v5 and above forward-reject (V5 boundary discipline
-  // preserved).
-  schemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
+  // Issue #120 bumps the canonical write version 4 → 5 when the ONE custom
+  // theme slot split into the TWO independent custom-light/custom-dark slots
+  // (the legacy shape itself migrates pre-parse at every settings-entry seam
+  // — src/settings/settingsMigration.ts, the D21-03 clampLegacyMeasure
+  // discipline — so no row ever fails parse for carrying the old shape).
+  // The union accepts ALL FIVE literals so that an existing v1 row (no
+  // readingMode field), a v2 row (no voice/rate fields), a v3 row (no
+  // librarySort field), and a v4 row (the pre-#120 custom-theme shape)
+  // hydrate on read — Pitfall 9 (NO Dexie store change; the settings store
+  // is key-value, Dexie is opaque to the value shape). v6 and above
+  // forward-reject (V5 boundary discipline preserved).
+  schemaVersion: z.union([
+    z.literal(1),
+    z.literal(2),
+    z.literal(3),
+    z.literal(4),
+    z.literal(5),
+  ]),
   font: z.enum(["serif", "sans", "dyslexic"]),
   size: z.union([z.literal(16), z.literal(18), z.literal(20), z.literal(22), z.literal(24)]),
   // D21-01/D21-02 (POLISH-09) + issue #18 (D22-01): the union is the
@@ -468,30 +495,30 @@ const ReaderSettingsObjectSchema = z.object({
     z.literal(88),
   ]),
   spacing: z.enum(["compact", "comfortable", "spacious"]),
-  // Issue #86 (decision #73) — the enum widens ADDITIVELY with "custom" (no
+  // Issue #86 (decision #73) — the enum widened ADDITIVELY with "custom" (no
   // schemaVersion bump; the readingMode/voice .default() hydration
   // discipline: a v3 row parses unchanged). "custom" without a valid
   // customTheme fails the superRefine below → the existing honest corrupt
   // routing — never a silent fallback to a preset.
-  theme: z.enum(["sepia", "light", "dark", "custom"]),
-  // Issue #86 (decision #73) — the ONE custom theme (no names, no library):
-  // baseTheme names the preset it was seeded from / resets to, and the FIVE
-  // reader-editable tokens. Everything else in the palette is DERIVED at
-  // apply time (src/settings/customTheme.ts) and never stored. Additive
-  // optional: records without the field parse unchanged; hex strings are
-  // strict 6-digit so derivation math and round-trips stay exact.
-  customTheme: z
-    .object({
-      baseTheme: z.enum(["sepia", "light", "dark"]),
-      tokens: z.object({
-        surface: z.string().regex(/^#[0-9a-fA-F]{6}$/),
-        surfaceRaised: z.string().regex(/^#[0-9a-fA-F]{6}$/),
-        ink: z.string().regex(/^#[0-9a-fA-F]{6}$/),
-        accent: z.string().regex(/^#[0-9a-fA-F]{6}$/),
-        hairline: z.string().regex(/^#[0-9a-fA-F]{6}$/),
-      }),
-    })
-    .optional(),
+  // Issue #120 — "custom" SPLITS into the two independently saved, manually
+  // selected slots "custom-light" and "custom-dark" (each seeds/resets from
+  // its MATCHING preset — light/dark — so a slot's disposition is coherent
+  // by construction; there is still NO automatic system-theme switching).
+  // The legacy "custom" literal left the enum: rows carrying it are mapped
+  // pre-parse by migrateReaderSettings at every settings-entry seam (see
+  // above), so the honest corrupt routing only ever sees canonical shapes.
+  theme: z.enum(["sepia", "light", "dark", "custom-light", "custom-dark"]),
+  // Issue #120 — the TWO custom slots. Each is the SAME record shape issue
+  // #86 stored (baseTheme names the preset the slot was seeded from / resets
+  // to; the FIVE reader-editable tokens). Everything else in the palette is
+  // DERIVED at apply time (src/settings/customTheme.ts) and never stored.
+  // Additive optionals: records without either field parse unchanged; hex
+  // strings are strict 6-digit so derivation math and round-trips stay
+  // exact. A legacy `customTheme` record rides into its disposition slot
+  // (dark-seeded → custom-dark, otherwise custom-light) via
+  // migrateReaderSettings; the OTHER slot starts from its matching preset.
+  customLightTheme: CustomThemeRecordSchema.optional(),
+  customDarkTheme: CustomThemeRecordSchema.optional(),
   // Additive preference: older records omit this and retain instant turns.
   animatePageTurns: z.boolean().optional(),
   // D4-12 — readingMode preference. PROJECT.md: "Pagination is the distinctive
@@ -528,25 +555,35 @@ const ReaderSettingsObjectSchema = z.object({
   librarySort: z.enum(["recently-added", "title", "recently-opened"]).default("recently-added"),
 });
 
-// Issue #86 (decision #73) — the cross-field rule: theme "custom" REQUIRES a
-// valid customTheme (the object schema above already rejects invalid hex /
-// base themes). A "custom" row without one is treated as corrupt at every
-// read seam (settingsStore / settingsMirror / the bundle's preferences
-// block) — the honest routing, never a silent preset fallback. The wrap is
-// ZodEffects: every existing import site safeParses THIS name (the object
-// schema stays module-private — unexported until a real shape consumer
-// appears; speculative exports are not kept).
+// Issue #86 (decision #73), extended by issue #120 — the cross-field rules:
+// an active custom slot REQUIRES its record (the record schema above already
+// rejects invalid hex / base themes). A "custom-light" row without
+// customLightTheme — or a "custom-dark" row without customDarkTheme — is
+// treated as corrupt at every read seam (settingsStore / settingsMirror /
+// the bundle's preferences block) — the honest routing, never a silent
+// preset fallback. The wrap is ZodEffects: every existing import site
+// safeParses THIS name (the object schema stays module-private — unexported
+// until a real shape consumer appears; speculative exports are not kept).
 export const ReaderSettingsSchema = ReaderSettingsObjectSchema.superRefine((s, ctx) => {
-  if (s.theme === "custom" && s.customTheme === undefined) {
+  if (s.theme === "custom-light" && s.customLightTheme === undefined) {
     ctx.addIssue({
       code: "custom",
-      path: ["customTheme"],
-      message: 'theme "custom" requires a valid customTheme record',
+      path: ["customLightTheme"],
+      message: 'theme "custom-light" requires a valid customLightTheme record',
+    });
+  }
+  if (s.theme === "custom-dark" && s.customDarkTheme === undefined) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["customDarkTheme"],
+      message: 'theme "custom-dark" requires a valid customDarkTheme record',
     });
   }
 });
 export type ReaderSettings = z.infer<typeof ReaderSettingsSchema>;
-export type CustomTheme = NonNullable<ReaderSettings["customTheme"]>;
+/** The two independently saved custom slots (issue #120). */
+export type CustomThemeSlot = "custom-light" | "custom-dark";
+export type CustomTheme = z.infer<typeof CustomThemeRecordSchema>;
 export type CustomThemeTokens = CustomTheme["tokens"];
 
 // ── Reading location (Phase 2 — STATE-01, D-05 substrate, D-06 key) ──────────

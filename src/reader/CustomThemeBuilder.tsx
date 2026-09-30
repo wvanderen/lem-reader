@@ -1,10 +1,12 @@
 // src/reader/CustomThemeBuilder.tsx
-// The custom-theme builder (issue #86, decision #73): the disclosure section
-// directly below the Theme fieldset, rendered ONLY while
-// settings.theme === "custom". Five color rows — a native <input type="color">
-// paired with a small editable hex text field, both writing the same token —
-// the live contrast readout for the two policed pairs, the one-tap
-// "Fix contrast" nudge, and the quiet "Reset to base colors" restore.
+// The custom-theme builder (issue #86, decision #73; issue #120): the
+// disclosure section directly below the Theme fieldset, rendered ONLY while
+// a custom slot is active (theme "custom-light" / "custom-dark"). It edits
+// the ACTIVE slot's five color rows — a native <input type="color"> paired
+// with a small editable hex text field, both writing the same token — the
+// live contrast readout for the two policed pairs, the one-tap "Fix
+// contrast" nudge, and the quiet "Reset to base colors" restore. The OTHER
+// slot's saved record never rides an edit.
 //
 // Every change live-applies through useSettings().update (D2-03, no Save
 // step): SettingsContext's effect calls applyTheme, which writes the resolved
@@ -29,11 +31,13 @@ import { useSettings } from "../settings/SettingsContext";
 import { StatusRegion } from "../ui/StatusRegion";
 import {
   AA_TEXT_RATIO,
+  activeSlotTheme,
   contrastRatio,
   fixContrastPairs,
   seedCustomTheme,
+  slotThemePatch,
 } from "../settings/customTheme";
-import type { CustomThemeTokens } from "../content/schema";
+import type { CustomThemeSlot, CustomThemeTokens } from "../content/schema";
 
 /** The five editable rows, in stored order. `key` is the CustomThemeTokens
  * field name; `label` is the visible row text and the accessible-name stem. */
@@ -135,20 +139,26 @@ function TokenRow({
 
 export function CustomThemeBuilder() {
   const { settings, update } = useSettings();
-  const customTheme = settings.customTheme;
-  // Hooks run unconditionally (rules of hooks); the early return below only
-  // guards the render. The builder is mounted only under theme === "custom",
-  // where the schema's superRefine guarantees customTheme is present — the
-  // guard keeps TS honest without inventing fallback state.
+  // Issue #120 — the builder edits the ACTIVE slot only (the slot selected
+  // in the Theme fieldset); the other slot's record rides untouched. Hooks
+  // run unconditionally (rules of hooks); the early return below only
+  // guards the render. The builder is mounted only under an active custom
+  // slot, where the schema's superRefine guarantees the slot's record is
+  // present — the guard keeps TS honest without inventing fallback state.
+  const slot: CustomThemeSlot | undefined =
+    settings.theme === "custom-light"
+      ? "custom-light"
+      : settings.theme === "custom-dark"
+        ? "custom-dark"
+        : undefined;
+  const customTheme = activeSlotTheme(settings);
   const tokens = customTheme?.tokens;
   const settled = useDebouncedValue(tokens, READOUT_DEBOUNCE_MS);
 
-  if (!customTheme || !tokens) return null;
+  if (!customTheme || slot === undefined || !tokens) return null;
 
   const setToken = (key: keyof CustomThemeTokens, hex: string) => {
-    update({
-      customTheme: { ...customTheme, tokens: { ...tokens, [key]: hex } },
-    });
+    update(slotThemePatch(slot, { ...customTheme, tokens: { ...tokens, [key]: hex } }));
   };
 
   // The readout (visible text AND the polite live region) renders from the
@@ -161,13 +171,11 @@ export function CustomThemeBuilder() {
   const anyFailing = inkRatio < AA_TEXT_RATIO || accentRatio < AA_TEXT_RATIO;
 
   const fixContrast = () => {
-    update({
-      customTheme: { ...customTheme, tokens: fixContrastPairs(tokens) },
-    });
+    update(slotThemePatch(slot, { ...customTheme, tokens: fixContrastPairs(tokens) }));
   };
 
   const resetToBase = () => {
-    update({ customTheme: seedCustomTheme(customTheme.baseTheme) });
+    update(slotThemePatch(slot, seedCustomTheme(customTheme.baseTheme)));
   };
 
   return (

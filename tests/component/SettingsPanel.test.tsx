@@ -80,9 +80,12 @@ describe("SettingsPanel — structure + aria (D2-01)", () => {
     for (const name of ["Compact", "Comfortable", "Spacious"]) {
       expect(screen.getByRole("radio", { name })).not.toBeNull();
     }
-    for (const name of ["Sepia", "Light", "Dark"]) {
+    // Issue #120 — the theme group carries the three presets PLUS the two
+    // independently saved custom slots (no single "Custom" radio anymore).
+    for (const name of ["Sepia", "Light", "Dark", "Custom light", "Custom dark"]) {
       expect(screen.getByRole("radio", { name })).not.toBeNull();
     }
+    expect(screen.queryByRole("radio", { name: "Custom" })).toBeNull();
   });
 
   it("renders the size and reading-width ranges with the default readouts", () => {
@@ -177,32 +180,34 @@ describe("SettingsPanel — focus-restore call site (Pitfall 1)", () => {
   });
 });
 
-// ── Issue #86 (decision #73) — the custom-theme slot + builder ───────────────
+// ── Issues #86/#120 — the TWO custom slots + builder ─────────────────────────
 // jsdom is NOT authoritative for color rendering; these tests pin the
-// APPLICATION wiring only: seeding/resume semantics, the inline token writes
-// applyTheme performs (string-level), the hex commit/draft contract, the
-// contrast guardrail affordances, and the two reset semantics. The real
-// browser proof (labels, focus, visibility, computed colors) lives in
-// tests/e2e/chrome/custom-theme.spec.ts across the three engines.
-describe("SettingsPanel — custom theme builder (issue #86, decision #73)", () => {
+// APPLICATION wiring only: per-slot seeding/resume semantics, slot
+// independence, the inline token writes applyTheme performs (string-level),
+// the hex commit/draft contract, the contrast guardrail affordances, and the
+// two reset semantics. The real browser proof (labels, focus, visibility,
+// computed colors) lives in tests/e2e/chrome/custom-theme.spec.ts across the
+// three engines.
+describe("SettingsPanel — custom theme builder (issues #86/#120)", () => {
   const inlineToken = (prop: string) => document.documentElement.style.getPropertyValue(prop);
 
   function builderIn(doc: ParentNode): Element | null {
     return doc.querySelector("details.custom-theme-builder");
   }
 
-  it("activating Custom seeds from the then-active preset and mounts the builder", async () => {
+  it("activating Custom light seeds from its MATCHING preset and mounts the builder", async () => {
     render(<Harness open={true} onClose={() => undefined} />);
     act(() => {
-      fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
+      fireEvent.click(screen.getByRole("radio", { name: "Custom light" }));
     });
-    expect(document.documentElement.dataset.theme).toBe("custom");
-    // Seeded from sepia (the D-07 default) — the 5 stored tokens land inline
-    // (decision #73: the inline writes ARE the theme).
-    expect(inlineToken("--surface")).toBe("#fbf8f3");
-    expect(inlineToken("--ink")).toBe("#1f1b16");
+    expect(document.documentElement.dataset.theme).toBe("custom-light");
+    // Seeded from the LIGHT preset (issue #120: a slot seeds from its
+    // matching preset, not the previously active theme) — the 5 stored
+    // tokens land inline (decision #73: the inline writes ARE the theme).
+    expect(inlineToken("--surface")).toBe("#fcfcfa");
+    expect(inlineToken("--ink")).toBe("#1a1a1a");
     expect(inlineToken("--accent")).toBe("#6b4423");
-    // Derived tokens resolve too (the 11-prop palette).
+    // Derived tokens resolve too (the 15-prop palette).
     expect(inlineToken("--highlight")).toMatch(/^#[0-9a-f]{6}$/);
     // Issue #101 — the builder is a lazy chunk now; await its disclosure
     // (the seeding + inline writes above stay synchronous assertions).
@@ -213,10 +218,22 @@ describe("SettingsPanel — custom theme builder (issue #86, decision #73)", () 
     }
   });
 
+  it("activating Custom dark seeds from its MATCHING preset (the slots never share a record)", async () => {
+    render(<Harness open={true} onClose={() => undefined} />);
+    act(() => {
+      fireEvent.click(screen.getByRole("radio", { name: "Custom dark" }));
+    });
+    expect(document.documentElement.dataset.theme).toBe("custom-dark");
+    expect(inlineToken("--surface")).toBe("#1b1814");
+    expect(inlineToken("--ink")).toBe("#ede6d9");
+    expect(inlineToken("--accent")).toBe("#c49a6c");
+    expect(await screen.findByText("Customize colors")).not.toBeNull();
+  });
+
   it("every color picker and hex field carries an accessible name", async () => {
     render(<Harness open={true} onClose={() => undefined} />);
     act(() => {
-      fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
+      fireEvent.click(screen.getByRole("radio", { name: "Custom light" }));
     });
     for (const label of ["Surface", "Raised surface", "Text", "Accent", "Hairline"]) {
       expect(await screen.findByLabelText(`${label} color`)).not.toBeNull();
@@ -227,7 +244,7 @@ describe("SettingsPanel — custom theme builder (issue #86, decision #73)", () 
   it("a valid hex commit applies the token inline and snaps the field", async () => {
     render(<Harness open={true} onClose={() => undefined} />);
     act(() => {
-      fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
+      fireEvent.click(screen.getByRole("radio", { name: "Custom light" }));
     });
     const hex = (await screen.findByLabelText("Text hex value")) as HTMLInputElement;
     act(() => {
@@ -240,20 +257,20 @@ describe("SettingsPanel — custom theme builder (issue #86, decision #73)", () 
   it("an invalid (incomplete) hex leaves the stored token unchanged and keeps the draft", async () => {
     render(<Harness open={true} onClose={() => undefined} />);
     act(() => {
-      fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
+      fireEvent.click(screen.getByRole("radio", { name: "Custom light" }));
     });
     const hex = (await screen.findByLabelText("Text hex value")) as HTMLInputElement;
     act(() => {
       fireEvent.change(hex, { target: { value: "#12" } });
     });
-    expect(inlineToken("--ink")).toBe("#1f1b16");
+    expect(inlineToken("--ink")).toBe("#1a1a1a");
     expect(hex.value).toBe("#12");
   });
 
-  it("switching to a preset and back RESUMES the stored custom theme", async () => {
+  it("switching to a preset and back RESUMES that slot's stored record", async () => {
     render(<Harness open={true} onClose={() => undefined} />);
     act(() => {
-      fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
+      fireEvent.click(screen.getByRole("radio", { name: "Custom light" }));
     });
     const hex = await screen.findByLabelText("Text hex value");
     act(() => {
@@ -267,26 +284,59 @@ describe("SettingsPanel — custom theme builder (issue #86, decision #73)", () 
     expect(document.documentElement.dataset.theme).toBe("light");
     expect(inlineToken("--ink")).toBe("");
     expect(builderIn(document)).toBeNull();
-    // Back to Custom: the STORED record resumes (edit intact) — not a re-seed.
+    // Back to Custom light: the STORED record resumes (edit intact) — not a
+    // re-seed.
     act(() => {
-      fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
+      fireEvent.click(screen.getByRole("radio", { name: "Custom light" }));
     });
-    expect(document.documentElement.dataset.theme).toBe("custom");
+    expect(document.documentElement.dataset.theme).toBe("custom-light");
     expect(inlineToken("--ink")).toBe("#123456");
-    expect(inlineToken("--surface")).toBe("#fbf8f3");
+    expect(inlineToken("--surface")).toBe("#fcfcfa");
+  });
+
+  it("the two slots are independent: edits in one never ride into the other", async () => {
+    render(<Harness open={true} onClose={() => undefined} />);
+    // Edit the light slot.
+    act(() => {
+      fireEvent.click(screen.getByRole("radio", { name: "Custom light" }));
+    });
+    let hex = await screen.findByLabelText("Text hex value");
+    act(() => {
+      fireEvent.change(hex, { target: { value: "#123456" } });
+    });
+    // Switch to the dark slot: it seeds from the DARK preset (the light
+    // slot's edit does not bleed in).
+    act(() => {
+      fireEvent.click(screen.getByRole("radio", { name: "Custom dark" }));
+    });
+    expect(document.documentElement.dataset.theme).toBe("custom-dark");
+    expect(inlineToken("--ink")).toBe("#ede6d9");
+    expect(inlineToken("--surface")).toBe("#1b1814");
+    // Edit the dark slot too.
+    hex = await screen.findByLabelText("Text hex value");
+    act(() => {
+      fireEvent.change(hex, { target: { value: "#654321" } });
+    });
+    expect(inlineToken("--ink")).toBe("#654321");
+    // Back to the light slot: ITS edit resumes untouched.
+    act(() => {
+      fireEvent.click(screen.getByRole("radio", { name: "Custom light" }));
+    });
+    expect(inlineToken("--ink")).toBe("#123456");
+    expect(inlineToken("--surface")).toBe("#fcfcfa");
   });
 
   it("the readout warns below AA and Fix contrast restores the offending pair only", async () => {
     render(<Harness open={true} onClose={() => undefined} />);
     act(() => {
-      fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
+      fireEvent.click(screen.getByRole("radio", { name: "Custom light" }));
     });
     // Break EXACTLY ONE policed pair: ink = the surface color (text on
     // surface 1:1). The accent pair still clears AA on the untouched
     // surface — Fix contrast must move the ink only.
     const hex = await screen.findByLabelText("Text hex value");
     act(() => {
-      fireEvent.change(hex, { target: { value: "#fbf8f3" } });
+      fireEvent.change(hex, { target: { value: "#fcfcfa" } });
     });
     expect(await screen.findByText(/hard to read/)).not.toBeNull();
     act(() => {
@@ -299,15 +349,15 @@ describe("SettingsPanel — custom theme builder (issue #86, decision #73)", () 
     expect(contrastRatio(inlineToken("--ink"), inlineToken("--surface"))).toBeGreaterThanOrEqual(
       4.5,
     );
-    expect(inlineToken("--surface")).toBe("#fbf8f3");
+    expect(inlineToken("--surface")).toBe("#fcfcfa");
     expect(inlineToken("--accent")).toBe("#6b4423");
-    expect(inlineToken("--hairline")).toBe("#d9d1c2");
+    expect(inlineToken("--hairline")).toBe("#ddd9d0");
   });
 
-  it("Reset to base colors restores the seed tokens while staying custom", async () => {
+  it("Reset to base colors restores the slot's seed tokens while staying custom", async () => {
     render(<Harness open={true} onClose={() => undefined} />);
     act(() => {
-      fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
+      fireEvent.click(screen.getByRole("radio", { name: "Custom light" }));
     });
     const hex = await screen.findByLabelText("Text hex value");
     act(() => {
@@ -316,31 +366,45 @@ describe("SettingsPanel — custom theme builder (issue #86, decision #73)", () 
     act(() => {
       fireEvent.click(screen.getByRole("button", { name: "Reset to base colors" }));
     });
-    expect(document.documentElement.dataset.theme).toBe("custom");
-    expect(inlineToken("--ink")).toBe("#1f1b16");
-    expect(inlineToken("--surface")).toBe("#fbf8f3");
+    expect(document.documentElement.dataset.theme).toBe("custom-light");
+    expect(inlineToken("--ink")).toBe("#1a1a1a");
+    expect(inlineToken("--surface")).toBe("#fcfcfa");
   });
 
-  it("the panel-wide Reset drops the custom theme; the next activation re-seeds fresh", async () => {
+  it("the panel-wide Reset drops BOTH slots; each re-activation re-seeds fresh", async () => {
     render(<Harness open={true} onClose={() => undefined} />);
     act(() => {
-      fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
+      fireEvent.click(screen.getByRole("radio", { name: "Custom light" }));
     });
-    const hex = await screen.findByLabelText("Text hex value");
+    let hex = await screen.findByLabelText("Text hex value");
     act(() => {
       fireEvent.change(hex, { target: { value: "#123456" } });
+    });
+    act(() => {
+      fireEvent.click(screen.getByRole("radio", { name: "Custom dark" }));
+    });
+    hex = await screen.findByLabelText("Text hex value");
+    act(() => {
+      fireEvent.change(hex, { target: { value: "#654321" } });
     });
     act(() => {
       fireEvent.click(screen.getByRole("button", { name: "Reset to defaults" }));
     });
     expect(document.documentElement.dataset.theme).toBe("sepia");
     expect(builderIn(document)).toBeNull();
-    // Re-activation seeds from sepia AGAIN (the edited record was dropped —
-    // decision #73: wholesale Reset, re-seed on next activation).
+    // Re-activation seeds from the matching presets AGAIN (the edited
+    // records were dropped — decision #73: wholesale Reset, re-seed on next
+    // activation).
     act(() => {
-      fireEvent.click(screen.getByRole("radio", { name: "Custom" }));
+      fireEvent.click(screen.getByRole("radio", { name: "Custom light" }));
     });
-    expect(inlineToken("--ink")).toBe("#1f1b16");
+    expect(inlineToken("--ink")).toBe("#1a1a1a");
+    expect(inlineToken("--surface")).toBe("#fcfcfa");
+    act(() => {
+      fireEvent.click(screen.getByRole("radio", { name: "Custom dark" }));
+    });
+    expect(inlineToken("--ink")).toBe("#ede6d9");
+    expect(inlineToken("--surface")).toBe("#1b1814");
   });
 });
 

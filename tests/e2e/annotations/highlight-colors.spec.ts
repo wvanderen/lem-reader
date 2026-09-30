@@ -289,13 +289,14 @@ test.describe("highlight colors in the reader (issue #118)", () => {
     await page.getByRole("button", { name: "Reading settings" }).click();
     const settings = page.locator("dialog.settings-panel");
     await expect(settings).toBeVisible();
-    await settings.getByRole("radio", { name: "Dark" }).click();
+    await settings.getByRole("radio", { name: "Dark", exact: true }).click();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
     await assertFillMatchesToken();
 
-    // Custom theme: the derived palette's inline writes own the tokens.
-    await settings.getByRole("radio", { name: "Custom" }).click();
-    await expect(page.locator("html")).toHaveAttribute("data-theme", "custom");
+    // Custom dark slot (issue #120): the derived palette's inline writes own
+    // the tokens.
+    await settings.getByRole("radio", { name: "Custom dark" }).click();
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "custom-dark");
     await assertFillMatchesToken();
   });
 

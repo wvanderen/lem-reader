@@ -134,7 +134,7 @@ test.describe("STATE-02 + Pitfall 4 persistence", () => {
     // Open the settings panel and switch theme to Dark (UI-SPEC line 316).
     await page.getByRole("button", { name: "Reading settings" }).click();
     await expect(page.locator("dialog.settings-panel")).toBeVisible();
-    await page.getByRole("radio", { name: "Dark" }).click();
+    await page.getByRole("radio", { name: "Dark", exact: true }).click();
 
     // Live-apply: data-theme flips immediately (D2-03).
     await expectDataTheme(page, "dark");
@@ -162,7 +162,7 @@ test.describe("STATE-02 + Pitfall 4 persistence", () => {
 
     // Open the panel and switch to Light theme.
     await page.getByRole("button", { name: "Reading settings" }).click();
-    await page.getByRole("radio", { name: "Light" }).click();
+    await page.getByRole("radio", { name: "Light", exact: true }).click();
     await expectDataTheme(page, "light");
 
     // Close the panel and IMMEDIATELY simulate the reader tabbing away —

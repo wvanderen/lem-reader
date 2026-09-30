@@ -19,9 +19,9 @@ import { DEFAULT_SETTINGS } from "../../src/settings/defaults";
 // may or may not validate; Zod is the authority, not TS here).
 function validSettings(overrides: Record<string, unknown> = {}): unknown {
   return {
-    // The canonical v4 write shape (issue #115). Tests of legacy v1/v2/v3
+    // The canonical v5 write shape (issue #120). Tests of legacy v1..v4
     // rows pass an explicit schemaVersion override.
-    schemaVersion: 4,
+    schemaVersion: 5,
     font: "serif",
     size: 18,
     measure: 64,
@@ -54,7 +54,7 @@ describe("ReaderSettingsSchema accepts valid combinations", () => {
   it("parses the D-07 default baseline and round-trips every field", () => {
     const parsed = ReaderSettingsSchema.parse(validSettings());
     expect(parsed).toEqual(DEFAULT_SETTINGS);
-    expect(parsed.schemaVersion).toBe(4);
+    expect(parsed.schemaVersion).toBe(5);
     expect(parsed.readingMode).toBe("paginated");
     expect(parsed.librarySort).toBe("recently-added");
   });
@@ -133,10 +133,12 @@ describe("ReaderSettingsSchema.parse rejects out-of-contract records", () => {
   it.each([
     // schemaVersion — STATE-04 hook. After the 04-02 bump the schema accepted
     // v1+v2; issue #40 (read-aloud voice + rate) added v3 as the canonical
-    // write version; issue #115 (the library sort preference) adds v4 as the
-    // canonical write version. v1/v2/v3 legacy rows hydrate via .defaults;
-    // v5+ forward-rejects (V5 boundary discipline).
-    ["non-literal schemaVersion (STATE-04 hook — v5 forward-rejects)", { schemaVersion: 5 }],
+    // write version; issue #115 (the library sort preference) adds v4;
+    // issue #120 (the two independent custom slots) adds v5 as the canonical
+    // write version. v1..v4 legacy rows hydrate (and the pre-#120 custom
+    // shape migrates pre-parse — settingsMigration.ts); v6+ forward-rejects
+    // (V5 boundary discipline).
+    ["non-literal schemaVersion (STATE-04 hook — v6 forward-rejects)", { schemaVersion: 6 }],
     ["schemaVersion as string", { schemaVersion: "1" }],
     ["missing schemaVersion", { schemaVersion: undefined }],
     ["unknown font value", { font: "comic-sans" }],
@@ -205,8 +207,8 @@ describe("ReaderSettingsSchema hydrates readingMode for legacy v1 rows (D4-12, P
     expect(parsed.schemaVersion).toBe(2);
   });
 
-  it("DEFAULT_SETTINGS mirrors the v4 canonical shape (schemaVersion 4 + readingMode paginated + read-aloud defaults + library sort default)", () => {
-    expect(DEFAULT_SETTINGS.schemaVersion).toBe(4);
+  it("DEFAULT_SETTINGS mirrors the v5 canonical shape (schemaVersion 5 + readingMode paginated + read-aloud defaults + library sort default + no custom slot records)", () => {
+    expect(DEFAULT_SETTINGS.schemaVersion).toBe(5);
     expect(DEFAULT_SETTINGS.readingMode).toBe("paginated");
     // Issue #40 — the read-aloud defaults: no picked voice (platform
     // default) and the 1× rate multiplier.
@@ -216,6 +218,11 @@ describe("ReaderSettingsSchema hydrates readingMode for legacy v1 rows (D4-12, P
     // order (issue #114's descending addedAt): existing readers see no
     // behavior change on upgrade.
     expect(DEFAULT_SETTINGS.librarySort).toBe("recently-added");
+    // Issue #120 — the default baseline carries NEITHER custom slot (the
+    // D-07 sepia preset is the theme); a slot's record appears on first
+    // activation or when the migration places one.
+    expect(DEFAULT_SETTINGS.customLightTheme).toBeUndefined();
+    expect(DEFAULT_SETTINGS.customDarkTheme).toBeUndefined();
     // Round-trip DEFAULT_SETTINGS through parse — proves the literal satisfies
     // the schema exactly (no missing/extra fields).
     expect(ReaderSettingsSchema.parse(DEFAULT_SETTINGS)).toEqual(DEFAULT_SETTINGS);

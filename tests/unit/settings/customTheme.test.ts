@@ -314,31 +314,65 @@ const V3_RECORD: ReaderSettings = {
   rate: 1,
 };
 
-describe("ReaderSettingsSchema hydration — the custom-theme widening (#86)", () => {
-  it("a v3 record without customTheme parses unchanged (additive widening)", () => {
+describe("ReaderSettingsSchema hydration — the two custom slots (#120)", () => {
+  it("a v3 record without either slot record parses unchanged (additive widening)", () => {
     const parsed = ReaderSettingsSchema.safeParse(V3_RECORD);
     expect(parsed.success).toBe(true);
   });
 
-  it("theme 'custom' + a valid customTheme parses, carrying the tokens", () => {
+  it("theme 'custom-light' + a valid record parses, carrying the tokens", () => {
     const record: ReaderSettings = {
       ...V3_RECORD,
-      theme: "custom",
-      customTheme: seedCustomTheme("dark"),
+      theme: "custom-light",
+      customLightTheme: seedCustomTheme("light"),
     };
     const parsed = ReaderSettingsSchema.safeParse(record);
     expect(parsed.success).toBe(true);
     if (parsed.success) {
-      expect(parsed.data.customTheme).toEqual(seedCustomTheme("dark"));
-      expect(parsed.data.customTheme?.baseTheme).toBe("dark");
+      expect(parsed.data.customLightTheme).toEqual(seedCustomTheme("light"));
+      expect(parsed.data.customLightTheme?.baseTheme).toBe("light");
     }
   });
 
-  it("theme 'custom' WITHOUT customTheme fails parse (the corrupt routing precondition)", () => {
-    const record = { ...V3_RECORD, theme: "custom" };
+  it("theme 'custom-dark' + a valid record parses, carrying the tokens", () => {
+    const record: ReaderSettings = {
+      ...V3_RECORD,
+      theme: "custom-dark",
+      customDarkTheme: seedCustomTheme("dark"),
+    };
     const parsed = ReaderSettingsSchema.safeParse(record);
-    expect(parsed.success).toBe(false);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.customDarkTheme).toEqual(seedCustomTheme("dark"));
+    }
   });
+
+  it("an inactive slot may carry a record while the OTHER slot is active (issue #120 — both saved)", () => {
+    const record: ReaderSettings = {
+      ...V3_RECORD,
+      theme: "custom-dark",
+      customLightTheme: seedCustomTheme("sepia"),
+      customDarkTheme: seedCustomTheme("dark"),
+    };
+    const parsed = ReaderSettingsSchema.safeParse(record);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.customLightTheme).toEqual(seedCustomTheme("sepia"));
+      expect(parsed.data.customDarkTheme).toEqual(seedCustomTheme("dark"));
+    }
+  });
+
+  it.each([
+    ["custom-light", "customLightTheme"],
+    ["custom-dark", "customDarkTheme"],
+  ] as const)(
+    "theme '%s' WITHOUT its slot record fails parse (the corrupt routing precondition)",
+    (theme, field) => {
+      const record = { ...V3_RECORD, theme };
+      expect(record).not.toHaveProperty(field);
+      expect(ReaderSettingsSchema.safeParse(record).success).toBe(false);
+    },
+  );
 
   it.each([
     ["5-digit hex", "#1234"],
@@ -348,8 +382,8 @@ describe("ReaderSettingsSchema hydration — the custom-theme widening (#86)", (
   ])("an invalid token value (%s) fails parse", (_label, hex) => {
     const record: ReaderSettings = {
       ...V3_RECORD,
-      theme: "custom",
-      customTheme: {
+      theme: "custom-light",
+      customLightTheme: {
         baseTheme: "sepia",
         tokens: { ...PRESET_SEEDS.sepia, surface: hex },
       },
@@ -360,8 +394,8 @@ describe("ReaderSettingsSchema hydration — the custom-theme widening (#86)", (
   it("an invalid baseTheme fails parse", () => {
     const record = {
       ...V3_RECORD,
-      theme: "custom",
-      customTheme: {
+      theme: "custom-light",
+      customLightTheme: {
         baseTheme: "custom",
         tokens: PRESET_SEEDS.sepia,
       },
@@ -372,8 +406,8 @@ describe("ReaderSettingsSchema hydration — the custom-theme widening (#86)", (
   it("uppercase hex parses (never coerced on read; the UI commits lowercase)", () => {
     const record: ReaderSettings = {
       ...V3_RECORD,
-      theme: "custom",
-      customTheme: {
+      theme: "custom-light",
+      customLightTheme: {
         baseTheme: "sepia",
         tokens: { ...PRESET_SEEDS.sepia, ink: "#1F1B16" },
       },
@@ -381,15 +415,20 @@ describe("ReaderSettingsSchema hydration — the custom-theme widening (#86)", (
     const parsed = ReaderSettingsSchema.safeParse(record);
     expect(parsed.success).toBe(true);
     if (parsed.success) {
-      expect(parsed.data.customTheme?.tokens.ink).toBe("#1F1B16");
+      expect(parsed.data.customLightTheme?.tokens.ink).toBe("#1F1B16");
     }
   });
 
-  it("round-trips a custom-theme record value-stable through JSON", () => {
+  it("round-trips a both-slots record value-stable through JSON", () => {
     const record: ReaderSettings = {
       ...V3_RECORD,
-      theme: "custom",
-      customTheme: seedCustomTheme("light"),
+      schemaVersion: 5,
+      theme: "custom-dark",
+      customLightTheme: seedCustomTheme("light"),
+      customDarkTheme: {
+        baseTheme: "dark",
+        tokens: { ...PRESET_SEEDS.dark, accent: "#C49A6C" },
+      },
     };
     const json = JSON.stringify(record);
     const parsed = ReaderSettingsSchema.parse(JSON.parse(json));
@@ -400,11 +439,13 @@ describe("ReaderSettingsSchema hydration — the custom-theme widening (#86)", (
     expect(JSON.stringify(ReaderSettingsSchema.parse(parsed))).toBe(JSON.stringify(parsed));
   });
 
-  it("a v5 export bundle carries a custom theme (the preferences block composition)", () => {
+  it("a v5 export bundle carries BOTH custom slots (the preferences block composition)", () => {
     const record: ReaderSettings = {
       ...V3_RECORD,
-      theme: "custom",
-      customTheme: seedCustomTheme("sepia"),
+      schemaVersion: 5,
+      theme: "custom-light",
+      customLightTheme: seedCustomTheme("light"),
+      customDarkTheme: seedCustomTheme("dark"),
     };
     const bundle = {
       schemaVersion: 5,
@@ -423,7 +464,8 @@ describe("ReaderSettingsSchema hydration — the custom-theme widening (#86)", (
     const parsed = ExportBundleSchema.safeParse(bundle);
     expect(parsed.success).toBe(true);
     if (parsed.success) {
-      expect(parsed.data.preferences.customTheme).toEqual(seedCustomTheme("sepia"));
+      expect(parsed.data.preferences.customLightTheme).toEqual(seedCustomTheme("light"));
+      expect(parsed.data.preferences.customDarkTheme).toEqual(seedCustomTheme("dark"));
     }
   });
 });

@@ -23,7 +23,7 @@
 // for settings.
 import { ReaderSettingsSchema } from "../content/schema";
 import type { ReaderSettings } from "../content/schema";
-import { clampLegacyMeasure } from "./legacyMeasure";
+import { migrateReaderSettings } from "./settingsMigration";
 
 /** The localStorage key carrying the mirrored ReaderSettings record.
  * Versioned so a future mirror shape change can migrate or invalidate
@@ -42,13 +42,13 @@ export function readSettingsMirror(): ReaderSettings | null {
     const raw = window.localStorage.getItem(SETTINGS_MIRROR_KEY);
     if (!raw) return null;
     const value: unknown = JSON.parse(raw);
-    // D21-03 (POLISH-09) + issue #18 (D22-01): clamp the enumerated legacy
-    // measure value (72 → 70, the nearest lower step of the extended ladder)
-    // on the parsed JSON BEFORE safeParse so a mirror painted with the legacy
-    // maximum stays a useful hint at 70 (not null → Dexie double-work, and a
-    // non-step first paint). Null-on-doubt holds for every other invalid
-    // value (the map contains exactly {72: 70}).
-    const parsed = ReaderSettingsSchema.safeParse(clampLegacyMeasure(value));
+    // D21-03 (POLISH-09) + issue #18 (D22-01) + issue #120: normalize the
+    // parsed JSON BEFORE safeParse — clamp the enumerated legacy measure
+    // value (72 → 70) and migrate the pre-#120 one-slot custom theme into
+    // the two-slot shape — so a mirror painted with a legacy record stays a
+    // useful hint (not null → Dexie double-work). Null-on-doubt holds for
+    // every other invalid value.
+    const parsed = ReaderSettingsSchema.safeParse(migrateReaderSettings(value));
     return parsed.success ? parsed.data : null;
   } catch {
     // Corrupt JSON, blocked storage — anything. The mirror is a hint;

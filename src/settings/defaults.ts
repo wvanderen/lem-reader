@@ -13,7 +13,11 @@ export const DEFAULT_SETTINGS: ReaderSettings = {
   // engine (the Reading-settings controls arrive with the completion ticket).
   // Issue #115 — the library sort preference bumps the canonical write
   // version 3 → 4.
-  schemaVersion: 4, // STATE-04 — bumped from 3 → 4 in issue #115
+  // Issue #120 — the independent Custom light / Custom dark slots bump the
+  // canonical write version 4 → 5. Neither slot is set by default (the
+  // D-07 sepia baseline carries no custom record; a slot's record appears
+  // on first activation or when the #120 migration places one).
+  schemaVersion: 5, // STATE-04 — bumped from 4 → 5 in issue #120
   font: "serif", // D-07 warm-paper serif
   size: 18, // D-07 default body size
   measure: 64, // D-07 calm measure

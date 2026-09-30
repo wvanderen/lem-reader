@@ -554,22 +554,28 @@ describe("validateBundle — round trip (09-04 Task 2)", () => {
     }
   });
 
-  // Issue #86 acceptance: a custom theme survives the WHOLE portability
-  // pipeline — buildBundle → validateBundle → resolveImportPlan →
-  // applyImport → the local reader-prefs row — byte-stable. The seeded
-  // token carries UPPERCASE hex deliberately: hydration never coerces
-  // (the schema preserves case) and neither may the bundle path.
-  it("round-trips a custom theme byte-stable through buildBundle → validateBundle → applyImport", async () => {
+  // Issue #86 acceptance, extended by issue #120: BOTH custom slots survive
+  // the WHOLE portability pipeline — buildBundle → validateBundle →
+  // resolveImportPlan → applyImport → the local reader-prefs row —
+  // byte-stable and independently edited. The seeded token carries
+  // UPPERCASE hex deliberately: hydration never coerces (the schema
+  // preserves case) and neither may the bundle path.
+  it("round-trips both custom slots byte-stable through buildBundle → validateBundle → applyImport", async () => {
     const { buildBundle, validateBundle, applyImport } = await loadService();
     const { detectImportPreview, resolveImportPlan } =
       await import("../../../src/portability/conflicts");
     const { db } = await loadDb();
     const customPrefs = ReaderSettingsSchema.parse({
       ...samplePrefs(),
-      theme: "custom",
-      customTheme: {
-        baseTheme: "sepia",
-        tokens: { ...seedCustomTheme("sepia").tokens, ink: "#1F1B16" },
+      schemaVersion: 5,
+      theme: "custom-dark",
+      customLightTheme: {
+        baseTheme: "light",
+        tokens: { ...seedCustomTheme("light").tokens, ink: "#1A1A1A" },
+      },
+      customDarkTheme: {
+        baseTheme: "dark",
+        tokens: { ...seedCustomTheme("dark").tokens, ink: "#EDE6D9" },
       },
     });
     await db.articles.put(sampleArticle());
@@ -605,7 +611,9 @@ describe("validateBundle — round trip (09-04 Task 2)", () => {
     const row = await db.settings.get("reader-prefs");
     expect(row?.key).toBe("reader-prefs");
     expect(JSON.stringify(row?.value)).toBe(JSON.stringify(customPrefs));
-    // Spot-check the case preservation rode the whole way.
-    expect((row?.value as ReaderSettings).customTheme?.tokens.ink).toBe("#1F1B16");
+    // Spot-check the case preservation rode the whole way — in BOTH slots.
+    const imported = (row?.value as ReaderSettings);
+    expect(imported.customLightTheme?.tokens.ink).toBe("#1A1A1A");
+    expect(imported.customDarkTheme?.tokens.ink).toBe("#EDE6D9");
   });
 });

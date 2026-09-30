@@ -45,7 +45,7 @@ import { loadAllReadingSessions } from "../persistence/readingSessionsStore";
 import { loadSettings } from "../persistence/settingsStore";
 import { MAX_ARTICLE_ASSET_BYTES, MAX_ASSET_BYTES } from "../ingestion/types";
 import { DEFAULT_SETTINGS } from "../settings/defaults";
-import { clampLegacyMeasure } from "../settings/legacyMeasure";
+import { migrateReaderSettings } from "../settings/settingsMigration";
 import { ExportBundleSchema, resolveAppVersion } from "./bundle";
 import type { ExportBundle, AssetExportMeta } from "./bundle";
 import { computeManifest, emptyBlockHash, sha256Hex } from "./manifest";
@@ -324,28 +324,41 @@ export async function validateBundle(file: File): Promise<BundleValidationResult
     };
   }
 
-  // 4.5 D21-03 (POLISH-09) + issue #18 (D22-01): clamp the enumerated
-  //     legacy measure value (72 → 70, the nearest lower step of the
-  //     extended ladder) on the RAW preferences block BEFORE the full
-  //     schema parse — a v2.1-era bundle whose preferences carry the
-  //     pre-truthful-range maximum re-imports calmly instead of failing
-  //     the measure union (which would refuse the whole bundle). Bounded
-  //     map: only the known legacy value maps; garbage still fails parse
-  //     → the invalid refusal below (STATE-04 / V5 / T-21-01).
+  // 4.5 Pre-parse normalization of the RAW preferences block (D21-03
+  //     POLISH-09 + issue #18, extended by issue #120) BEFORE the full
+  //     schema parse:
+  //     - the enumerated legacy measure value (72 → 70, the nearest lower
+  //       step of the extended ladder) re-imports calmly instead of failing
+  //       the measure union (which would refuse the whole bundle);
+  //     - the pre-#120 ONE-slot custom shape (theme "custom" + customTheme)
+  //       maps into the two-slot shape (dark-seeded → custom-dark,
+  //       otherwise custom-light; the other slot seeded from its matching
+  //       preset) so an old bundle re-imports instead of failing the theme
+  //       enum.
+  //     Bounded transforms: anything else passes through untouched so
+  //     garbage still fails parse → the invalid refusal below (STATE-04 /
+  //     V5 / T-21-01). Both flags also gate the manifest legacy-shape
+  //     tolerance in step 6.
   const rawPrefs =
     raw !== null && typeof raw === "object"
       ? (raw as { preferences?: unknown }).preferences
       : undefined;
-  const legacyMeasurePreferences =
+  const legacyMeasureApplied =
     rawPrefs !== null &&
     typeof rawPrefs === "object" &&
-    (rawPrefs as { measure?: unknown }).measure === 72
-      ? rawPrefs
-      : undefined;
-  if (legacyMeasurePreferences !== undefined) {
+    (rawPrefs as { measure?: unknown }).measure === 72;
+  const legacyCustomApplied =
+    rawPrefs !== null &&
+    typeof rawPrefs === "object" &&
+    (rawPrefs as { theme?: unknown }).theme === "custom";
+  if (
+    rawPrefs !== null &&
+    typeof rawPrefs === "object" &&
+    (legacyMeasureApplied || legacyCustomApplied)
+  ) {
     raw = {
       ...(raw as object),
-      preferences: clampLegacyMeasure(legacyMeasurePreferences),
+      preferences: migrateReaderSettings(rawPrefs),
     };
   }
 
@@ -387,22 +400,46 @@ export async function validateBundle(file: File): Promise<BundleValidationResult
   if (claimedBlocks.readingSessions === undefined) {
     claimedBlocks.readingSessions = emptyHash;
   }
-  // D21-03 (POLISH-09) manifest legacy-value tolerance: when the pre-parse
-  // clamp mapped the enumerated legacy value (72 → 70), a v2.1-era
-  // exporter's claimed preferences hash was computed over the block WITH
-  // the legacy value (it was in-union at export time) — it can never equal
-  // the recomputed (clamped) hash. Accept the export-era hash as the
-  // preferences-block match: recompute it from the parsed block with
-  // measure back-mapped to 72 (same schema key order per the determinism
-  // contract above). Every other block — and every other preferences
-  // modification — still mismatches (T-9-03; the manifest is a corruption
-  // DETECTION surface, not a security boundary — manifest.ts).
+  // D21-03 (POLISH-09) + issue #120 manifest legacy-shape tolerance: when
+  // the pre-parse normalization mapped a legacy value/shape (the measure
+  // clamp and/or the custom-slot migration), the exporter's claimed
+  // preferences hash was computed over the block WITH the legacy shape (it
+  // was in-union at export time) — it can never equal the recomputed
+  // (normalized) hash. Accept the export-era hash as the preferences-block
+  // match: recompute it from the parsed block back-mapped to the export-era
+  // shape (measure → 72; theme → "custom" with customTheme = the record
+  // that migrated into the active slot; the synthesized other-slot seed
+  // dropped) in the export-era SCHEMA KEY ORDER (the determinism contract
+  // — JSON.stringify speaks insertion order). Every other block — and every
+  // other preferences modification — still mismatches (T-9-03; the
+  // manifest is a corruption DETECTION surface, not a security boundary —
+  // manifest.ts).
   if (
-    legacyMeasurePreferences !== undefined &&
+    (legacyMeasureApplied || legacyCustomApplied) &&
     claimedBlocks.preferences !== recomputed.blocks.preferences
   ) {
+    const p = parsed.data.preferences;
+    const legacyView: Record<string, unknown> = {
+      schemaVersion: p.schemaVersion,
+      font: p.font,
+      size: p.size,
+      measure: legacyMeasureApplied ? 72 : p.measure,
+      spacing: p.spacing,
+      theme: legacyCustomApplied ? "custom" : p.theme,
+      ...(legacyCustomApplied
+        ? {
+            customTheme:
+              p.theme === "custom-dark" ? p.customDarkTheme : p.customLightTheme,
+          }
+        : {}),
+      animatePageTurns: p.animatePageTurns,
+      readingMode: p.readingMode,
+      voice: p.voice,
+      rate: p.rate,
+      librarySort: p.librarySort,
+    };
     const legacyHash = await sha256Hex(
-      new TextEncoder().encode(JSON.stringify({ ...parsed.data.preferences, measure: 72 })),
+      new TextEncoder().encode(JSON.stringify(legacyView)),
     );
     if (claimedBlocks.preferences === legacyHash) {
       claimedBlocks.preferences = recomputed.blocks.preferences;

@@ -28,6 +28,7 @@ vi.mock("../../src/persistence/settingsStore", () => ({
 
 import { SettingsProvider, useSettings } from "../../src/settings/SettingsContext";
 import { DEFAULT_SETTINGS } from "../../src/settings/defaults";
+import { PRESET_SEEDS } from "../../src/settings/customTheme";
 import { loadSettings, saveSettings } from "../../src/persistence/settingsStore";
 import type { ReaderSettings } from "../../src/content/schema";
 
@@ -233,6 +234,42 @@ describe("SettingsContext (02-02 persistence + STATE-05)", () => {
     // The hydrated theme/font are applied to <html> via applyTheme.
     expect(readTokens().theme).toBe("dark");
     expect(readTokens().fontBody).toContain("system-ui");
+  });
+
+  it("hydrates an ACTIVE custom slot and writes its resolved palette inline (issue #120)", async () => {
+    // The shape a pre-#120 device hydrates after the settingsMigration seam
+    // runs: the legacy record lives in Custom dark, the other slot seeded.
+    const persisted: ReaderSettings = {
+      ...DEFAULT_SETTINGS,
+      schemaVersion: 4,
+      theme: "custom-dark",
+      customLightTheme: { baseTheme: "light", tokens: { ...PRESET_SEEDS.light } },
+      customDarkTheme: {
+        baseTheme: "dark",
+        tokens: { ...PRESET_SEEDS.dark, ink: "#EDE6D9" },
+      },
+    };
+    loadMock.mockResolvedValue({ ok: true, settings: persisted });
+
+    render(
+      <SettingsProvider>
+        <Probe />
+      </SettingsProvider>,
+    );
+
+    await waitFor(() => {
+      expect(latest?.settings).toEqual(persisted);
+    });
+    const root = document.documentElement;
+    expect(root.dataset.theme).toBe("custom-dark");
+    // The ACTIVE slot's stored tokens land inline (the inline writes ARE
+    // the theme — decision #73) in the canonical lowercase form derivation
+    // speaks (the stored record keeps its case; resolveCustomTheme is the
+    // one caseless boundary).
+    expect(root.style.getPropertyValue("--ink")).toBe("#ede6d9");
+    expect(root.style.getPropertyValue("--surface")).toBe("#1b1814");
+    // The derived half of the palette resolved too.
+    expect(root.style.getPropertyValue("--highlight")).toMatch(/^#[0-9a-f]{6}$/);
   });
 
   it("routes storageState to 'unavailable' when loadSettings returns ok:false reason unavailable", async () => {

@@ -64,12 +64,13 @@ import { downloadBlob } from "../portability/download";
 import { CloseIcon } from "../ui/icons";
 import { BusyButton } from "../ui/BusyButton";
 import { StatusRegion } from "../ui/StatusRegion";
-// Issue #86 (decision #73) — the custom-theme slot: seedCustomTheme powers
-// the first-activation seeding in onTheme; the builder is the disclosure
-// section mounted directly below the Theme fieldset while custom is active.
+// Issue #86 (decision #73) — the custom-theme slots (issue #120: TWO
+// independently saved slots): seedCustomTheme powers the first-activation
+// seeding in onTheme; the builder is the disclosure section mounted directly
+// below the Theme fieldset while a custom slot is active.
 // Issue #101 — the builder is a lazy chunk: it renders ONLY while the custom
 // theme is active, so its module stays off the every-load critical path.
-import { seedCustomTheme } from "../settings/customTheme";
+import { seedCustomTheme, SLOT_BASE_THEME } from "../settings/customTheme";
 
 const CustomThemeBuilder = lazy(() =>
   import("./CustomThemeBuilder").then((m) => ({ default: m.CustomThemeBuilder })),
@@ -211,22 +212,31 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   const onSize = (size: ReaderSettings["size"]) => update({ size });
   const onMeasure = (measure: ReaderSettings["measure"]) => update({ measure });
   const onSpacing = (spacing: ReaderSettings["spacing"]) => update({ spacing });
-  // Issue #86 (decision #73) — the ONE custom slot: activating Custom from a
-  // preset resumes the STORED custom theme when there is one; the FIRST
-  // activation seeds it from the then-active preset (baseTheme + its 5
-  // tokens). Re-selecting Custom while already on it is a no-op. Leaving
-  // Custom keeps the stored record for the next activation (decision #73).
+  // Issue #86 (decision #73), extended by issue #120 — the TWO custom
+  // slots: activating Custom light / Custom dark resumes that slot's STORED
+  // record when there is one; the FIRST activation seeds it from its
+  // MATCHING preset (light/dark — SLOT_BASE_THEME). Re-selecting the slot
+  // while already on it is a value-level no-op. Leaving a slot keeps its
+  // stored record for the next activation, and the two slots never touch
+  // each other's records.
   const onTheme = (theme: ReaderSettings["theme"]) => {
-    if (theme !== "custom" || settings.theme === "custom") {
-      update({ theme });
+    if (theme === "custom-light") {
+      update({
+        theme,
+        customLightTheme:
+          settings.customLightTheme ?? seedCustomTheme(SLOT_BASE_THEME["custom-light"]),
+      });
       return;
     }
-    update({
-      theme: "custom",
-      // The guard above narrowed settings.theme off "custom" — it IS a
-      // preset base here, so seeding from it is total.
-      customTheme: settings.customTheme ?? seedCustomTheme(settings.theme),
-    });
+    if (theme === "custom-dark") {
+      update({
+        theme,
+        customDarkTheme:
+          settings.customDarkTheme ?? seedCustomTheme(SLOT_BASE_THEME["custom-dark"]),
+      });
+      return;
+    }
+    update({ theme });
   };
   const onRate = (rate: number) => update({ rate });
   const onVoice = (voiceURI: string) => update({ voice: voiceURI === "" ? undefined : voiceURI });
@@ -684,25 +694,37 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
               />
               <span>Dark</span>
             </label>
-            {/* Issue #86 (decision #73) — the 4th slot: ONE custom theme.
-                Seeding/resume lives in onTheme; the builder disclosure rides
-                directly below this fieldset while custom is active. */}
+            {/* Issues #86/#120 — the two custom slots: independently
+                saved, manually selected (NO automatic system-theme
+                switching). Seeding/resume lives in onTheme; the builder
+                disclosure rides directly below this fieldset while either
+                slot is active. */}
             <label className="settings-row">
               <input
                 type="radio"
                 name="theme"
-                value="custom"
-                checked={settings.theme === "custom"}
-                onChange={() => onTheme("custom")}
+                value="custom-light"
+                checked={settings.theme === "custom-light"}
+                onChange={() => onTheme("custom-light")}
               />
-              <span>Custom</span>
+              <span>Custom light</span>
+            </label>
+            <label className="settings-row">
+              <input
+                type="radio"
+                name="theme"
+                value="custom-dark"
+                checked={settings.theme === "custom-dark"}
+                onChange={() => onTheme("custom-dark")}
+              />
+              <span>Custom dark</span>
             </label>
           </fieldset>
 
-          {/* Issue #86 (decision #73) — the builder: ONLY while custom is
+          {/* Issues #86/#120 — the builder: ONLY while a custom slot is
               selected, directly below the Theme fieldset (inside the shared
               sheet — no nested dialog). */}
-          {settings.theme === "custom" && (
+          {(settings.theme === "custom-light" || settings.theme === "custom-dark") && (
             <Suspense fallback={null}>
               <CustomThemeBuilder />
             </Suspense>
