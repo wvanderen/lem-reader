@@ -37,7 +37,9 @@
 //     to a typed IngestionResponse.
 //   - T-7-24 (Tampering, id drift across re-extraction) → id = slugifyUrl(finalUrl).
 import { createHash } from "node:crypto";
-import { safeFetch, type FetchedContent } from "./safeFetch";
+import { safeFetch, safeFeedFetch, type FetchedContent } from "./safeFetch";
+import { parseFeedXml } from "./parseFeed";
+import { normalizeFeedUrl } from "../src/discover/feedUrl";
 import { extractAndNormalize, type ExtractAndNormalizeResult } from "./htmlToBlocks";
 import { markdownToBlocks, stripMarkdownExtension } from "./markdownToBlocks";
 import { pdfToBlocks } from "./pdfToBlocks";
@@ -71,7 +73,9 @@ import type {
   IngestionFailureReason,
   IngestionRequest,
   IngestionResponse,
+  FeedPreview,
 } from "../src/ingestion/types";
+import { FeedPreviewSchema } from "../src/ingestion/types";
 import { normalizeForTitleMatch } from "./titleMatch";
 
 /**
@@ -559,6 +563,44 @@ function toAssetEnvelope(asset: ImageAsset): AssetEnvelope {
 }
 
 /**
+ * ingestFeed — the feed-candidate flow (issue #121; the sixth Stage-1
+ * branch's dedicated flow, the ingestEpubBook shape). ONE SSRF-guarded
+ * fetch (safeFeedFetch — the third SafeFetchProfile over the ONE pipeline),
+ * ONE hardened parse (parseFeedXml — bounded XML/item limits, `feed-unreadable`
+ * on anything that is not readable RSS/Atom), then the normalized feed URL
+ * (the import merge key — normalizeFeedUrl over the post-redirect finalUrl)
+ * and the Zod-at-boundary FeedPreviewSchema.parse self-check (the exporter's
+ * ArticleSchema.parse discipline applied to the preview envelope — a parse
+ * failure here is a pipeline bug surfaced as the calm server-error catch-all
+ * below, never a malformed preview). NO article stages run: a feed candidate
+ * is a preview payload, not saved content — the subscription save happens
+ * client-side after this response validates.
+ */
+async function ingestFeed(feedUrl: string): Promise<IngestionResponse> {
+  const fetched = await safeFeedFetch(feedUrl);
+  // Feed profile invariant: the core returns a string body for "text"
+  // (the safeFetch document-profile narrowing discipline).
+  const xml = fetched.body as string;
+  // The fallback title for an untitled channel: the final URL's hostname
+  // (the article title chain's hostname fallback).
+  let host = fetched.finalUrl;
+  try {
+    host = new URL(fetched.finalUrl).hostname;
+  } catch {
+    // unreachable for an http(s) URL — the fetch validated it; calm guard
+  }
+  const parsed = parseFeedXml(xml, host);
+  const normalizedUrl = normalizeFeedUrl(fetched.finalUrl) ?? fetched.finalUrl;
+  const feed: FeedPreview = FeedPreviewSchema.parse({
+    url: normalizedUrl,
+    title: parsed.title,
+    ...(parsed.description !== undefined ? { description: parsed.description } : {}),
+    items: parsed.items,
+  });
+  return { ok: true, feed };
+}
+
+/**
  * ingest — the 7-stage stateless pipeline orchestrator (RESEARCH.md §Pattern 1
  * L249-279). Runs safeFetch → extractAndNormalize → slugifyUrl →
  * ArticleSchema.parse → probeRoundTripAnchor → deriveConfidence, and returns
@@ -567,7 +609,8 @@ function toAssetEnvelope(asset: ImageAsset): AssetEnvelope {
  * map it to HTTP 400 cleanly.
  *
  * Input is input-source-agnostic (D7-03): exactly one of {url} | {html} |
- * {markdown} | {pdf} | {epub}. The url path runs safeFetch (SSRF guard); the
+ * {markdown} | {pdf} | {epub} | {transcript} | {feedUrl}. The url path runs
+ * safeFetch (SSRF guard); the
  * html path synthesizes the pipeline input directly with finalUrl=undefined
  * (no fetch, no SSRF surface); the markdown + pdf paths mirror that shape
  * through their sibling adapters (Stage-1 extraction only — stages 2+ are
@@ -595,13 +638,15 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
   const inputHasPdf = "pdf" in input && input.pdf !== undefined;
   const inputHasEpub = "epub" in input && input.epub !== undefined;
   const inputHasTranscript = "transcript" in input && input.transcript !== undefined;
+  const inputHasFeedUrl = "feedUrl" in input && input.feedUrl !== undefined;
   if (
     (inputHasUrl ? 1 : 0) +
       (inputHasHtml ? 1 : 0) +
       (inputHasMarkdown ? 1 : 0) +
       (inputHasPdf ? 1 : 0) +
       (inputHasEpub ? 1 : 0) +
-      (inputHasTranscript ? 1 : 0) !==
+      (inputHasTranscript ? 1 : 0) +
+      (inputHasFeedUrl ? 1 : 0) !==
     1
   ) {
     throw new IngestionError("server-error");
@@ -645,8 +690,23 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
   // The source URL (when the dialog supplies one) is NESTED inside the
   // variant, so it never collides with the top-level {url} dispatch above.
   const hasTranscript = "transcript" in request && request.transcript !== undefined;
+  // Issue #121 — the Discover subscription candidate: the sixth Stage-1
+  // branch (a URL that never enters the article pipeline — like the YouTube
+  // branch, it dispatches on shape, and like the EPUB branch it returns its
+  // own ok-variant envelope).
+  const hasFeedUrl = "feedUrl" in request && request.feedUrl !== undefined;
 
   try {
+    // Stage 1, sixth branch — FEED (issue #121). Returns the feed ok-variant
+    // envelope from its own dedicated flow; its refusals (feed-unreadable +
+    // the shared SSRF/size/content-type catalog) throw IngestionError and
+    // serialize through the SAME catch envelope below (T-7-23). Placed with
+    // the EPUB branch so the four single-article branches and the shared
+    // stages 2+ tail stay byte-stable for existing formats.
+    if (hasFeedUrl) {
+      return await ingestFeed((request as { feedUrl: string }).feedUrl);
+    }
+
     // Stage 1, fifth branch — EPUB (Phase 12 Plan 12-04). Returns the book
     // ok-variant envelope from its own dedicated flow; its refusals
     // (epub-too-large / epub-protected / epub-unreadable / epub-empty)

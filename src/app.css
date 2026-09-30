@@ -4241,10 +4241,11 @@ main:has(.readaloud-bar) .article-body:has(.mark-read-close-page) .chapter-nav-p
         whole slack sits between them at 320px) + shell-nav gap --space-xs.
    Result at 320×640: ~10px slack, no wrap, no overlap, no overflow.
    Issue #82 note: the third data-driven Read link widens shell-nav by
-   ~35px in flow; on the Reader the ≤420px staged collapse (below) still
-   takes the links out of flow through the tightest band, and the
-   read-nav row-budget e2e re-sweeps 320–810px with a target present to
-   keep the single-row claim honest.
+   ~35px in flow, and issue #121's Discover link by another ~52px; on the
+   Reader the staged collapse (below) still takes the links out of flow
+   through the tightest band (recalibrated 420px → 460px by issue #121),
+   and the read-nav row-budget e2e re-sweeps 320–810px with a target
+   present to keep the single-row claim honest.
    Zero new transition/animation/scroll-behavior properties (A11Y-06). */
 @media (max-width: 639px) {
   .app-wordmark {
@@ -4405,15 +4406,19 @@ main:has(.readaloud-bar) .article-body:has(.mark-read-close-page) .chapter-nav-p
 }
 
 /* ════════════════════════════════════════════════════════════════════════
- * Phase 18 Plan 18-02 Task 3 — ≤420px staged destination collapse (UI-SPEC
- * §Layout "The ≤639px five-button geometry decision", SANCTIONED)
+ * Phase 18 Plan 18-02 Task 3 — staged destination collapse in Reader
+ * (UI-SPEC §Layout "The ≤639px five-button geometry decision", SANCTIONED;
+ * breakpoint recalibrated by issue #121)
  *
  * The 5th article-scoped button (D18-02) makes the Reader header row
  * arithmetically impossible below ≈378px (controls ≈254px + shell-nav
- * ≈122px + padding); Issue #82's third data-driven Read link widens
- * shell-nav to ≈156px in flow, moving the impossible threshold to ≈410px —
- * the ≤420px collapse still covers the whole infeasible band with margin,
- * so the breakpoint itself is unchanged. The sanctioned relief: at ≤420px
+ * ≈122px + padding); Issue #82's third data-driven Read link widened
+ * shell-nav to ≈156px in flow, moving the impossible threshold to ≈410px,
+ * and Issue #121's Discover link widens it again to ≈208px in flow,
+ * moving the threshold to ≈452px (READNAV-07 sweep evidence: the reader
+ * row overflows at 421px, fits by 461px). The collapse breakpoint moves
+ * 420px → 460px so the staged collapse still covers the whole infeasible
+ * band with margin. The sanctioned relief: at ≤460px
  * AND Reader only, the
  * shell-nav links receive the SAME visually-hidden clip treatment the
  * ≤639px wordmark collapse uses (identical declarations read from that
@@ -4431,7 +4436,7 @@ main:has(.readaloud-bar) .article-body:has(.mark-read-close-page) .chapter-nav-p
  * fix). No gap/padding changes (the Phase 15 relief ladder is exhausted).
  * Zero transition/animation properties (A11Y-06).
  * ════════════════════════════════════════════════════════════════════════ */
-@media (max-width: 420px) {
+@media (max-width: 460px) {
   .app-header[data-destination="reader"] .shell-nav a {
     position: absolute;
     width: 1px;
@@ -4443,8 +4448,8 @@ main:has(.readaloud-bar) .article-body:has(.mark-read-close-page) .chapter-nav-p
 }
 /* Strengthen-only companion (closes the latent Phase 15 gap in passing,
  * UI-SPEC §Layout): a :focus-visible rule UN-CLIPS every collapsed
- * destination link — the ≤639px wordmark AND the ≤420px Reader shell-nav
- * links — restoring the visible box (static position, auto box, visible
+ * destination link — the ≤639px wordmark AND the Reader staged shell-nav
+ * collapse — restoring the visible box (static position, auto box, visible
  * overflow, auto clip) so a focused destination is never an invisible
  * focus target for sighted keyboard users. The restored box re-enters the
  * flex flow: at extreme widths the (sanctioned) deficit shows as real
@@ -4459,7 +4464,7 @@ main:has(.readaloud-bar) .article-body:has(.mark-read-close-page) .chapter-nav-p
     white-space: normal;
   }
 }
-@media (max-width: 420px) {
+@media (max-width: 460px) {
   .app-header[data-destination="reader"] .shell-nav a:focus-visible {
     position: static;
     width: auto;
@@ -4890,3 +4895,182 @@ main#main > .status:empty {
 .library-row-tag-trigger[aria-expanded="true"] {
   color: var(--accent);
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+ * Issue #121 — the Discover destination (#/discover).
+ * The LibraryView twin: header row → announcement .status → subscribe form
+ * → no-content state or subscription list. Every selector consumes custom
+ * properties only (the three themes re-theme automatically); token-only
+ * spacing; zero motion properties; the shared 1100px centered measure
+ * (the G1 discipline — main#main > .status already centers itself).
+ * ════════════════════════════════════════════════════════════════════════ */
+
+/* The subscribe form — the surface's always-visible first action. The
+   controls pair on one row from 640px up; below that they stack full-width
+   (the WCAG 1.4.10 reflow contract — the input keeps its own width, never
+   squeezed). */
+.discover-subscribe-form {
+  max-width: 1100px;
+  margin: var(--space-lg) auto 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+.discover-subscribe-controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+@media (min-width: 640px) {
+  .discover-subscribe-controls {
+    flex-direction: row;
+    align-items: stretch;
+  }
+  .discover-subscribe-controls input {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .discover-subscribe-button {
+    flex: 0 0 auto;
+  }
+}
+
+/* The no-content / error state — the .library-empty twin: the shared card
+   chrome stripped so the state stays reading-measure page copy (the
+   library-empty discipline), h2/p rhythm from the shared .status rules. */
+.discover-empty {
+  max-width: 1100px;
+  margin: var(--space-lg) auto 0 auto;
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+.discover-empty h2 {
+  margin-block-start: 0;
+}
+
+/* The subscription list — the .library-list single-column row anatomy. */
+.discover-list {
+  list-style: none;
+  margin: var(--space-xl) auto;
+  padding: 0;
+  max-width: 1100px;
+  display: grid;
+  gap: var(--space-sm);
+}
+.discover-row > article {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-sm) var(--space-md);
+  padding: var(--space-lg);
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+}
+.discover-row-main {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+.discover-row h2 {
+  margin-block: 0;
+}
+.discover-row-actions {
+  flex: 0 0 auto;
+}
+.discover-feed-url {
+  margin: var(--space-xs) 0 0 0;
+}
+.discover-feed-description {
+  margin: var(--space-sm) 0 0 0;
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+
+/* The bounded recent-item previews. Images are decorative (alt="") and
+   sized by CSS so a hostile aspect ratio can never drive horizontal
+   overflow (the reflow contract): a fixed thumb column from 480px, a
+   full-width band under it below. */
+.discover-items {
+  list-style: none;
+  margin: var(--space-md) 0 0 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-md);
+}
+.discover-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--hairline);
+}
+@media (min-width: 480px) {
+  .discover-item {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+  .discover-item-image {
+    flex: 0 0 auto;
+    width: 96px;
+    height: 96px;
+    object-fit: cover;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--hairline);
+  }
+}
+@media (max-width: 479.98px) {
+  .discover-item-image {
+    width: 100%;
+    max-height: 160px;
+    object-fit: cover;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--hairline);
+  }
+}
+.discover-item-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.discover-item-title {
+  margin-block: 0;
+  font-size: 1rem;
+  line-height: 1.4;
+}
+.discover-item-title a {
+  overflow-wrap: anywhere;
+}
+.discover-item-date {
+  margin: var(--space-2xs, var(--space-xs)) 0 0 0;
+}
+.discover-item-excerpt {
+  margin: var(--space-xs) 0 0 0;
+  color: var(--ink-soft);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+/* ── DiscoverRemoveConfirm alertdialog (issue #121) ──────────────────────
+   Structural clone of .book-remove-confirm: OWN .discover-remove-confirm*
+   hooks (strict-mode dialog locators), same centered modal shell, and the
+   destructive accent rides .btn-destructive. */
+dialog.discover-remove-confirm {
+  margin: 0;
+  padding: 0;
+  width: calc(100vw - var(--space-xl));
+  max-width: 480px;
+  overflow: auto;
+}
+.discover-remove-confirm-inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+}
+.discover-remove-confirm-inner p {
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+/* .discover-remove-confirm-actions rides .dialog-actions. */

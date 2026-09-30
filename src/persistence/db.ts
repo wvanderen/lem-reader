@@ -10,7 +10,7 @@
 //
 // Index syntax: "primaryKey, index1, index2, &uniqueIndex, [compound+index]"
 import { Dexie, type Table } from "dexie";
-import type { Book, HighlightColor } from "../content/schema";
+import type { Book, HighlightColor, FeedItemPreview } from "../content/schema";
 
 /** Shape of a row in the `settings` store (composite reader-prefs record). */
 export interface SettingsRecord {
@@ -109,6 +109,24 @@ export interface ReadingSessionRecordRow {
   activeSeconds: number; // idle-capped active time (integer seconds)
 }
 
+/** Shape of a row in the `subscriptions` store (issue #121 — the Discover
+ * destination). ONE row per subscribed feed: mirrors SubscriptionRecordSchema
+ * (src/content/schema.ts — the HighlightRecordRow/HighlightRecordSchema twin
+ * discipline). The primary key is the per-subscription uuid; the `feedUrl`
+ * index (the NORMALIZED validated feed URL) powers the dedupe-refuse lookup
+ * before every save and the import merge ("merges a duplicate by normalized
+ * validated feed URL"). The bounded recent-item previews ride the row as its
+ * local cache — nothing re-fetches on import. */
+export interface SubscriptionRecordRow {
+  schemaVersion: 1;
+  id: string; // crypto.randomUUID() — the per-subscription primary key
+  feedUrl: string; // normalized — the merge/dedupe key
+  title: string; // the feed's own name
+  description?: string;
+  items: FeedItemPreview[];
+  subscribedAt: string; // ISO-8601
+}
+
 export class LemReaderDB extends Dexie {
   // Declared table properties give TypeScript a handle on the stores reserved
   // by the version blocks below. Without these, `db.settings.get(...)` would
@@ -175,6 +193,13 @@ export class LemReaderDB extends Dexie {
   // assignment annotation mirrors the assets! precedent; runtime-unaffected
   // (Dexie resolves the store by name from the v7 declaration below).
   readingSessions!: Table<ReadingSessionRecordRow, string>;
+  // Issue #121 (the Discover destination): the subscriptions table stores
+  // one row per subscribed feed keyed by the per-subscription uuid. The
+  // `feedUrl` index powers the dedupe-refuse lookup + the import merge by
+  // normalized feed URL. Definite-assignment annotation mirrors the
+  // readingSessions! precedent; runtime-unaffected (Dexie resolves the
+  // store by name from the v8 declaration below).
+  subscriptions!: Table<SubscriptionRecordRow, string>;
 
   constructor() {
     super("lem-reader");
@@ -320,6 +345,33 @@ export class LemReaderDB extends Dexie {
       books: "id, title, *tags",
       assets: "[articleId+assetId], articleId",
       readingSessions: "id, articleId, startedAt",
+    });
+    // ── Issue #121 (the Discover destination + Pitfall 9): the eighth
+    // version block is an APPEND. ──
+    // v1..v7 byte-unchanged. v8 adds the NEW `subscriptions` store — one row
+    // per subscribed feed (issue #121): primary key `id` (the
+    // per-subscription uuid), the `feedUrl` index powering the
+    // dedupe-refuse lookup before every save and the import merge ("merges
+    // a duplicate by normalized validated feed URL"). NO `.upgrade()`
+    // callback — a new store that starts EMPTY; Dexie creates it on next
+    // open without row migration (the v3/v4/v5/v6/v7 additive precedent).
+    // The v7 → v8 upgrade therefore preserves every existing row untouched
+    // (articles, highlights, notes, locations, books, assets, settings,
+    // reading sessions) — proven by
+    // tests/unit/persistence/subscriptions-migration.spec.ts. The remaining
+    // stores are re-declared at their existing shapes because Dexie
+    // requires the full stores object at each version; their values match
+    // v7 verbatim.
+    this.version(8).stores({
+      articles: "id, revision, source, addedAt, *tags, bookId",
+      settings: "key",
+      location: "[articleId+revision]",
+      highlights: "id, [articleId+revision]",
+      notes: "id, highlightId",
+      books: "id, title, *tags",
+      assets: "[articleId+assetId], articleId",
+      readingSessions: "id, articleId, startedAt",
+      subscriptions: "id, feedUrl",
     });
   }
 }

@@ -72,11 +72,39 @@ export function mapReasonToCopy(reason: IngestionFailureReason): string {
       return "This video is age-restricted, so its transcript can't be fetched.";
     case "youtube-bot-check":
       return "YouTube is asking for extra verification, so this video can't be added right now.";
+    // Issue #121 — the feed candidate refusal. Calm DOC-06 string; pinned
+    // byte-for-byte by tests/unit/feed-copy.test.ts. The Discover surface
+    // maps this through mapFeedReasonToCopy below, which re-words the
+    // page-shaped generic phrases for the feed context (one catalog, one
+    // per-surface voice — no second reason enum).
+    case "feed-unreadable":
+      return "This feed couldn't be read — it may be malformed or not a feed.";
     case "already-in-library":
       return "Already in your library.";
     case "server-error":
     default:
       return "Something went wrong. Try again.";
+  }
+}
+
+/**
+ * mapFeedReasonToCopy — the Discover surface's feed-aware copy mapping
+ * (issue #121). Delegates EVERY cataloged reason to mapReasonToCopy except
+ * the four whose shipped phrases assume an article page ("page", "article"):
+ * a feed candidate refused for content-type, size, or reachability gets the
+ * same calm voice pointed at the feed. Everything else (SSRF blocks,
+ * already-in-library, server-error) is already feed-neutral.
+ */
+export function mapFeedReasonToCopy(reason: IngestionFailureReason): string {
+  switch (reason) {
+    case "unsupported-content-type":
+      return "This address isn't an RSS or Atom feed.";
+    case "response-too-large":
+      return "This feed is too large.";
+    case "fetch-failed":
+      return "Couldn't reach this feed.";
+    default:
+      return mapReasonToCopy(reason);
   }
 }
 

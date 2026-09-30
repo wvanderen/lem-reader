@@ -42,6 +42,7 @@ import { loadAllHighlights } from "../persistence/highlightsStore";
 import { loadAllNotes } from "../persistence/notesStore";
 import { loadAllLocations } from "../persistence/locationStore";
 import { loadAllReadingSessions } from "../persistence/readingSessionsStore";
+import { loadAllSubscriptions } from "../persistence/subscriptionsStore";
 import { loadSettings } from "../persistence/settingsStore";
 import { MAX_ARTICLE_ASSET_BYTES, MAX_ASSET_BYTES } from "../ingestion/types";
 import { DEFAULT_SETTINGS } from "../settings/defaults";
@@ -100,6 +101,7 @@ export async function buildBundle(): Promise<ExportBuild> {
     booksResult,
     assetRows,
     readingSessions,
+    subscriptions,
   ] = await Promise.all([
     dexieLibrarySource.list(), // Dexie articles ONLY — fixtures never ride
     loadAllHighlights(),
@@ -123,6 +125,10 @@ export async function buildBundle(): Promise<ExportBuild> {
     // Plain-array whole-library read with calm corrupt-row drops (the
     // loadAllHighlights/loadAllLocations precedent) — a single corrupt
     // history row never blocks the reader's export.
+    loadAllSubscriptions(), // Issue #121 — feed subscriptions ride the v6 bundle.
+    // Plain-array whole-library read with calm corrupt-row drops (the
+    // loadAllReadingSessions precedent); the bounded previews ride INSIDE
+    // each row — the bundle carries the cache, import never re-fetches.
   ]);
   const preferences = settingsResult.ok ? settingsResult.settings : DEFAULT_SETTINGS;
   // Writers ALWAYS emit the books field on v2 (empty array on a book-free
@@ -170,13 +176,15 @@ export async function buildBundle(): Promise<ExportBuild> {
   const fixtureIds = bundledFixtures.filter((f) => referenced.has(f.id)).map((f) => f.id);
 
   const bundle = ExportBundleSchema.parse({
-    // Phase 12 (12-07) + Phase 17 (17-04) + Phase 20 (20-05) + issue #37:
-    // writers emit v5 — reader-owned metadata overrides ride each article
-    // row via ArticleSchema composition (D17-12), image assets ride the
-    // assets metadata array + raw zip entries (IMG-04), and visit history
-    // rides the readingSessions array; the 1|2|3|4|5 union read stays in
-    // bundle.ts; a v6+ bundle is refused by the peek below (D9-04).
-    schemaVersion: 5 as const,
+    // Phase 12 (12-07) + Phase 17 (17-04) + Phase 20 (20-05) + issue #37 +
+    // issue #121: writers emit v6 — reader-owned metadata overrides ride
+    // each article row via ArticleSchema composition (D17-12), image assets
+    // ride the assets metadata array + raw zip entries (IMG-04), visit
+    // history rides the readingSessions array, and feed subscriptions ride
+    // the subscriptions array (previews inside each row); the 1|..|6 union
+    // read stays in bundle.ts; a v7+ bundle is refused by the peek below
+    // (D9-04).
+    schemaVersion: 6 as const,
     exportedAt: new Date().toISOString(),
     appVersion: resolveAppVersion(),
     articles,
@@ -193,6 +201,10 @@ export async function buildBundle(): Promise<ExportBuild> {
     // the field's presence is the v5 write contract (the books/assets
     // precedent).
     readingSessions,
+    // ALWAYS present on v6 writes (empty array on a subscription-free
+    // library) — the field's presence is the v6 write contract (the
+    // books/assets/readingSessions precedent).
+    subscriptions,
   });
 
   const manifest = await computeManifest(bundle);
@@ -306,7 +318,8 @@ export async function validateBundle(file: File): Promise<BundleValidationResult
   //    (books-capable) parse. Phase 17 (17-04): > 2 → > 3 — v3 bundles
   //    (metadata-override-capable) parse. Phase 20 (20-05): > 3 → > 4 — v4
   //    bundles (asset-capable) parse. Issue #37: > 4 → > 5 — v5 bundles
-  //    (reading-session-capable) parse; v6+ still refuses loudly (D9-04).
+  //    (reading-session-capable) parse. Issue #121: > 5 → > 6 — v6 bundles
+  //    (subscription-capable) parse; v7+ still refuses loudly (D9-04).
   let raw: unknown;
   try {
     raw = JSON.parse(strFromU8(bundleBytes));
@@ -317,7 +330,7 @@ export async function validateBundle(file: File): Promise<BundleValidationResult
     };
   }
   const peeked = (raw as { schemaVersion?: unknown }).schemaVersion;
-  if (typeof peeked === "number" && peeked > 5) {
+  if (typeof peeked === "number" && peeked > 6) {
     return {
       ok: false,
       refusal: { kind: "newer-schema-version", bundleVersion: peeked },
@@ -378,7 +391,8 @@ export async function validateBundle(file: File): Promise<BundleValidationResult
   //    so old bundles never false-positive as corrupted; a v4 bundle with
   //    actual assets still mismatches (tampering stays detected). Issue
   //    #37: v1..v4 claimed manifests likewise predate the readingSessions
-  //    block — same absent-key shim, same tampering semantics.
+  //    block — same absent-key shim, same tampering semantics. Issue #121:
+  //    v1..v5 claimed manifests likewise predate the subscriptions block.
   const recomputed = await computeManifest(parsed.data);
   let claimed: Manifest | undefined;
   try {
@@ -395,6 +409,9 @@ export async function validateBundle(file: File): Promise<BundleValidationResult
   }
   if (claimedBlocks.readingSessions === undefined) {
     claimedBlocks.readingSessions = emptyHash;
+  }
+  if (claimedBlocks.subscriptions === undefined) {
+    claimedBlocks.subscriptions = emptyHash;
   }
   // D21-03 (POLISH-09) + issue #120 manifest legacy-shape tolerance: when
   // the pre-parse normalization mapped a legacy value/shape (the measure
@@ -632,15 +649,25 @@ export async function applyImport(plan: ResolvedImportPlan): Promise<void> {
     for (const session of plan.sessionsToWrite) {
       await db.readingSessions.put(session);
     }
+    // Issue #121: feed subscriptions are record data like any other block —
+    // the plan's merge already resolved feedUrl duplicates (a duplicate
+    // feedUrl keeps the LOCAL row and its cache; a colliding incoming id
+    // was minted fresh), so these are plain puts of the
+    // SubscriptionRecordRow shape (identical field-for-field to the
+    // bundle's records). The bounded previews ride inside each row.
+    for (const subscription of plan.subscriptionsToWrite) {
+      await db.subscriptions.put(subscription);
+    }
     if (plan.applyPreferences && plan.preferences !== undefined) {
       await db.settings.put({ key: READER_PREFS_KEY, value: plan.preferences });
     }
   };
 
   if (plan.applyPreferences) {
-    // EIGHT tables (articles/highlights/notes/location/readingSessions/
-    // settings/books/assets) — the readonly-array overload (the tuple
-    // overloads stop at FIVE; the 12-07 lesson, now on both branches).
+    // NINE tables (articles/highlights/notes/location/readingSessions/
+    // settings/books/assets/subscriptions) — the readonly-array overload
+    // (the tuple overloads stop at FIVE; the 12-07 lesson, now on both
+    // branches).
     await db.transaction(
       "rw",
       [
@@ -652,14 +679,24 @@ export async function applyImport(plan: ResolvedImportPlan): Promise<void> {
         db.settings,
         db.books,
         db.assets,
+        db.subscriptions,
       ],
       applyPuts,
     );
   } else {
-    // SEVEN tables without settings — the same array-overload form.
+    // EIGHT tables without settings — the same array-overload form.
     await db.transaction(
       "rw",
-      [db.articles, db.highlights, db.notes, db.location, db.readingSessions, db.books, db.assets],
+      [
+        db.articles,
+        db.highlights,
+        db.notes,
+        db.location,
+        db.readingSessions,
+        db.books,
+        db.assets,
+        db.subscriptions,
+      ],
       applyPuts,
     );
   }

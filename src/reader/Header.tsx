@@ -102,14 +102,16 @@ interface HeaderProps {
   onToggleToc: () => void;
   /**
    * Plan 15-02 (D15-01/D15-02): the active destination, derived in App from
-   * the view (list → "library", review → "highlights", article → "reader").
-   * Drives the shell-nav aria-current discipline (D15-09): the Library link
-   * carries aria-current="page" iff destination === "library", the
-   * Highlights link iff destination === "highlights", and the brand link
-   * NEVER carries it. Phase 18 also renders it as the data-destination
-   * styling hook on .app-header (the ≤420px staged Reader collapse).
+   * the view (list → "library", review → "highlights", discover →
+   * "discover", article → "reader"). Drives the shell-nav aria-current
+   * discipline (D15-09): the Library link carries aria-current="page" iff
+   * destination === "library", the Discover link iff destination ===
+   * "discover", the Highlights link iff destination === "highlights", and
+   * the brand link NEVER carries it. Phase 18 also renders it as the
+   * data-destination styling hook on .app-header (the ≤420px staged Reader
+   * collapse).
    */
-  destination: "library" | "highlights" | "reader";
+  destination: "library" | "discover" | "highlights" | "reader";
   /**
    * Issue #82 (decision #68) — the resume target for the shell Read
    * destination, derived in App from the ONE LibrarySnapshot through the
@@ -212,6 +214,18 @@ export function Header({
             aria-current={destination === "library" ? "page" : undefined}
           >
             Library
+          </a>
+          {/*
+            Issue #121 — the Discover destination link. A VISIBLE TEXT link
+            at every width (D15-17 — no icon-only links; the shell nav never
+            collapses its destinations), between Library and Highlights so
+            the reading destinations keep their order.
+          */}
+          <a
+            href="#/discover"
+            aria-current={destination === "discover" ? "page" : undefined}
+          >
+            Discover
           </a>
           <a
             href="#/highlights"

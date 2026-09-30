@@ -709,3 +709,59 @@ export const ReadingSessionRecordSchema = z.object({
   activeSeconds: z.number().int().min(0), // idle-capped active time (floored)
 });
 export type ReadingSessionRecord = z.infer<typeof ReadingSessionRecordSchema>;
+
+// ── Feed subscriptions (issue #121 — the Discover destination) ──────────────
+// ONE row per subscribed feed, keyed by a per-subscription uuid primary key;
+// the MERGE key at import is the NORMALIZED feed URL, never the row id (the
+// reading-sessions merge precedent — recorded data, no reader-authored
+// conflict decision). The bounded recent-item previews are PART of the
+// record: they are the subscription's local cache (import keeps the local
+// cache and never re-fetches — the honesty constraint "no network during
+// import" is structural because nothing in the import path fetches).
+//
+// Bounds live HERE next to the schemas that enforce them (the schema is the
+// STATE-04 trust boundary shared by the server pipeline, the Dexie store,
+// and the bundle): a hostile feed cannot smuggle unbounded text or item
+// counts into a persisted row. The server TRUNCATES to these bounds at
+// parse time; the schema refuses anything over them at every read.
+
+/** MAX_FEED_ITEMS — the bounded recent-preview count per subscription. The
+ * Discover surface shows recent items, not an archive; 30 covers every real
+ * feed's visible window with headroom while bounding the persisted row. */
+export const MAX_FEED_ITEMS = 30;
+
+/** MAX_FEED_TEXT_CHARS — the per-field text cap for feed titles,
+ * descriptions, and excerpts (and each preview's title/excerpt). Feeds
+ * routinely embed full article HTML in description/content; the excerpt is
+ * a PREVIEW, bounded here and truncated server-side at parse time. */
+export const MAX_FEED_TEXT_CHARS = 2048;
+
+/** FeedItemPreview — ONE bounded recent-item preview. Every field is
+ * optional-but-title except the URLs, which are httpUrl-refined (the SAME
+ * refinement as provenance sourceUrl — a `javascript:` or `data:` link
+ * never reaches a rendered anchor). The server supplies datePublished ONLY
+ * when it parses as a real date (ISO-8601; "date when supplied" — honesty). */
+export const FeedItemPreviewSchema = z.object({
+  title: z.string().min(1).max(MAX_FEED_TEXT_CHARS),
+  link: httpUrl.optional(),
+  datePublished: z.string().datetime().optional(), // ISO-8601 when supplied
+  excerpt: z.string().max(MAX_FEED_TEXT_CHARS).optional(),
+  image: httpUrl.optional(),
+});
+export type FeedItemPreview = z.infer<typeof FeedItemPreviewSchema>;
+
+/** SubscriptionRecord — one saved feed subscription + its local preview
+ * cache. `feedUrl` is the NORMALIZED validated feed URL (lowercased
+ * scheme/host, default port dropped, fragment dropped — the import merge
+ * key); `subscribedAt` is the save-time stamp; `items` is the bounded cache
+ * captured at subscribe time (never re-fetched on import). */
+export const SubscriptionRecordSchema = z.object({
+  schemaVersion: z.literal(1), // STATE-04 migration hook
+  id: z.string(), // crypto.randomUUID() at save — the row identity
+  feedUrl: httpUrl, // normalized — the import merge key
+  title: z.string().min(1).max(MAX_FEED_TEXT_CHARS), // the feed's own name
+  description: z.string().max(MAX_FEED_TEXT_CHARS).optional(),
+  items: z.array(FeedItemPreviewSchema).max(MAX_FEED_ITEMS),
+  subscribedAt: z.string().datetime(), // ISO-8601
+});
+export type SubscriptionRecord = z.infer<typeof SubscriptionRecordSchema>;

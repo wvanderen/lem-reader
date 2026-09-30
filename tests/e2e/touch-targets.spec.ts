@@ -207,6 +207,32 @@ test.describe("Touch targets ≥ 44×44px (A11Y-07)", () => {
             .getByRole("link", { name: "Highlights" }),
       },
     ],
+    discover: [
+      {
+        desc: "feed URL input",
+        locator: (page) =>
+          page.getByRole("textbox", { name: "Subscribe to a feed" }),
+      },
+      {
+        desc: "Subscribe button",
+        locator: (page) => page.getByRole("button", { name: "Subscribe" }),
+        width: true,
+      },
+      {
+        desc: "shell-nav Library link",
+        locator: (page) =>
+          page
+            .getByRole("navigation", { name: "Primary" })
+            .getByRole("link", { name: "Library" }),
+      },
+      {
+        desc: "shell-nav Highlights link",
+        locator: (page) =>
+          page
+            .getByRole("navigation", { name: "Primary" })
+            .getByRole("link", { name: "Highlights" }),
+      },
+    ],
     highlights: [
       {
         desc: "article filter combobox",

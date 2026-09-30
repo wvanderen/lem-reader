@@ -39,6 +39,11 @@ const LibraryView = lazy(() =>
 const ReviewView = lazy(() =>
   import("./routes/review/ReviewView").then((m) => ({ default: m.ReviewView })),
 );
+// Issue #121 — the Discover destination (#/discover): the feed-subscription
+// surface, lazy like every other route view (the cold-path discipline).
+const DiscoverView = lazy(() =>
+  import("./routes/discover/DiscoverView").then((m) => ({ default: m.DiscoverView })),
+);
 const AddDialog = lazy(() =>
   import("./ingestion/AddDialog").then((m) => ({ default: m.AddDialog })),
 );
@@ -85,7 +90,10 @@ type View =
       name: "review";
       legacyAlias?: true;
       articleId?: string;
-    };
+    }
+  // Issue #121 — the Discover destination: the closed-literal #/discover
+  // route (no query grammar — a subscription is not URL-scoped state).
+  | { name: "discover" };
 
 function parseHash(): View {
   // Grammar order matters (10-RESEARCH Pattern 1): the /h/ suffix form
@@ -124,6 +132,11 @@ function parseHash(): View {
     // D15-07 legacy alias — the caller (onHash / the mount effect)
     // rewrites the URL to the canonical #/highlights via replaceState.
     return { name: "review", legacyAlias: true };
+  }
+  // Issue #121 — the Discover destination: another closed literal in the
+  // allowlist (no value is ever interpolated — the T-15-01 discipline).
+  if (window.location.hash === "#/discover") {
+    return { name: "discover" };
   }
   // Plan 14-02 (D14-12/D14-16) — view segments: a CLOSED literal allowlist
   // (each hash is compared === against one of the four view constants;
@@ -394,14 +407,17 @@ function AppInner() {
   // Plan 15-02 (D15-01/D15-02): the shell destination derived from the view.
   // ANY of the four list views is the Library destination (views are
   // state-within-destination — D14-13); review is the Highlights
-  // destination (D15-06); article is Reader. Header stays presentational —
+  // destination (D15-06); discover is the Discover destination (issue
+  // #121); article is Reader. Header stays presentational —
   // it consumes this for the shell-nav aria-current discipline (D15-09).
   const destination =
     view.name === "list"
       ? "library"
       : view.name === "review"
         ? "highlights"
-        : "reader";
+        : view.name === "discover"
+          ? "discover"
+          : "reader";
 
   // Issue #82 (decision #68) — the shell Read destination. AppInner
   // consumes the ONE LibrarySnapshot (the same read model every surface
@@ -512,6 +528,8 @@ function AppInner() {
             hasAppHistory={hasAppHistory}
             scopedArticleId={view.articleId}
           />
+        ) : view.name === "discover" ? (
+          <DiscoverView hasAppHistory={hasAppHistory} />
         ) : (
           <ArticleView
             articleId={view.id}

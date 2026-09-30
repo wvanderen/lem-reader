@@ -28,9 +28,15 @@ import { z } from "zod";
 import { ArticleSchema, type CanonicalArticle } from "../content/schema";
 import type { Book } from "../content/schema";
 import { sha256Hex } from "../portability/manifest";
-import { AssetEnvelopeSchema, IngestionResponseSchema, MAX_PREFERRED_LANGUAGES } from "./types";
+import {
+  AssetEnvelopeSchema,
+  FeedPreviewSchema,
+  IngestionResponseSchema,
+  MAX_PREFERRED_LANGUAGES,
+} from "./types";
 import type {
   AssetEnvelope,
+  FeedPreview,
   IngestionFailureReason,
   IngestionResponse,
 } from "./types";
@@ -342,6 +348,62 @@ export async function ingestPastedTranscript(
       ...(url !== undefined ? { url } : {}),
     },
   });
+}
+
+/**
+ * discoverFeed — POST {feedUrl} to /api/ingest and re-validate the feed
+ * preview envelope (issue #121). The Discover subscription candidate: the
+ * server runs the SAME SSRF-guarded safeFeedFetch + bounded parse and
+ * returns the FeedPreview ok-variant; this wrapper re-validates it through
+ * the widened IngestionResponseSchema (the T-12-10 full-envelope parse —
+ * the network is a trust boundary, STATE-04) and returns the validated
+ * preview. NO persistence happens here: the caller saves the subscription
+ * only after this response validates (an invalid candidate is refused
+ * without saving — the D7-07 save-after-validate discipline).
+ *
+ * Throws `IngestionError` with the typed `.reason` on any ok:false response
+ * OR on a non-2xx HTTP status; a malformed envelope throws ZodError (the
+ * caller's catch-all surfaces the calm server-error copy).
+ */
+export async function discoverFeed(feedUrl: string): Promise<FeedPreview> {
+  const res = await fetch("/api/ingest", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ feedUrl }),
+  });
+
+  // Parse the response body as IngestionResponse. A non-JSON body (e.g. an
+  // HTML 502 page from a misconfigured proxy) throws here; surface it as
+  // the catch-all server-error.
+  let json: IngestionResponse;
+  try {
+    json = (await res.json()) as IngestionResponse;
+  } catch {
+    throw new IngestionError("server-error");
+  }
+
+  // The full envelope parse (the ingestEpub pattern) — validates the feed
+  // ok-variant, or the refusal, against the committed contract.
+  const parsed = IngestionResponseSchema.parse(json);
+
+  // Typed refusal: ok:false carries the cataloged reason.
+  if (!parsed.ok) {
+    throw new IngestionError(parsed.reason);
+  }
+
+  // HTTP non-2xx with an ok:true body is a contract violation — refuse
+  // rather than trust a partial payload.
+  if (!res.ok) {
+    throw new IngestionError("server-error");
+  }
+
+  // An article/book envelope on a feed call is a contract violation for
+  // THIS call (the 12-01 narrowing rule, mirrored from ingest()).
+  if (!("feed" in parsed)) {
+    throw new IngestionError("server-error");
+  }
+
+  return FeedPreviewSchema.parse(parsed.feed);
 }
 
 /**

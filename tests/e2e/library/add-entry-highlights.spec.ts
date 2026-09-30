@@ -72,11 +72,12 @@ test.describe("Add entry points (#84 — the Highlights header Add icon)", () =>
     await expect(trigger).toHaveAttribute("aria-label", "Add to Library");
     await expect(trigger).toHaveAttribute("aria-haspopup", "dialog");
     await expect(trigger).toHaveAttribute("aria-expanded", "false");
-    // D15-08 unrevised: the shell nav stays exactly three text links
-    // (Library / Highlights / Read) — the icon is a control, never a
-    // destination link.
+    // D15-08 unrevised: the shell nav stays text links only — the icon is a
+    // control, never a destination link. Issue #121 adds Discover, so the
+    // wiped library (Read hidden) shows exactly three: Library / Discover /
+    // Highlights.
     const navLinks = page.locator("nav.shell-nav a");
-    await expect(navLinks).toHaveCount(2); // empty library: Read is hidden
+    await expect(navLinks).toHaveCount(3); // empty library: Read is hidden
 
     // Reader: quiet chrome — no Add icon next to the reading controls.
     await page.goto(`${BASE}/#/article/${fixtures[0]!.id}`);
