@@ -70,7 +70,13 @@ import { StatusRegion } from "../ui/StatusRegion";
 // below the Theme fieldset while a custom slot is active.
 // Issue #101 — the builder is a lazy chunk: it renders ONLY while the custom
 // theme is active, so its module stays off the every-load critical path.
-import { seedCustomTheme, SLOT_BASE_THEME } from "../settings/customTheme";
+import {
+  activeSlotOf,
+  activeSlotTheme,
+  seedCustomTheme,
+  slotThemePatch,
+  SLOT_BASE_THEME,
+} from "../settings/customTheme";
 
 const CustomThemeBuilder = lazy(() =>
   import("./CustomThemeBuilder").then((m) => ({ default: m.CustomThemeBuilder })),
@@ -212,31 +218,23 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   const onSize = (size: ReaderSettings["size"]) => update({ size });
   const onMeasure = (measure: ReaderSettings["measure"]) => update({ measure });
   const onSpacing = (spacing: ReaderSettings["spacing"]) => update({ spacing });
-  // Issue #86 (decision #73), extended by issue #120 — the TWO custom
-  // slots: activating Custom light / Custom dark resumes that slot's STORED
-  // record when there is one; the FIRST activation seeds it from its
-  // MATCHING preset (light/dark — SLOT_BASE_THEME). Re-selecting the slot
-  // while already on it is a value-level no-op. Leaving a slot keeps its
-  // stored record for the next activation, and the two slots never touch
-  // each other's records.
+  // Issues #86/#120 — the TWO custom slots: activating Custom light /
+  // Custom dark resumes that slot's STORED record when there is one; the
+  // FIRST activation seeds it from its MATCHING preset (light/dark —
+  // SLOT_BASE_THEME). Re-selecting the slot while already on it is a
+  // value-level no-op. Leaving a slot keeps its stored record for the next
+  // activation, and the two slots never touch each other's records.
   const onTheme = (theme: ReaderSettings["theme"]) => {
-    if (theme === "custom-light") {
-      update({
-        theme,
-        customLightTheme:
-          settings.customLightTheme ?? seedCustomTheme(SLOT_BASE_THEME["custom-light"]),
-      });
+    const slot = activeSlotOf(theme);
+    if (slot === undefined) {
+      update({ theme });
       return;
     }
-    if (theme === "custom-dark") {
-      update({
-        theme,
-        customDarkTheme:
-          settings.customDarkTheme ?? seedCustomTheme(SLOT_BASE_THEME["custom-dark"]),
-      });
-      return;
-    }
-    update({ theme });
+    // activeSlotTheme over the OVERRIDDEN theme reads exactly the slot the
+    // reader is activating — a stored record resumes, an empty slot seeds
+    // from its matching preset.
+    const stored = activeSlotTheme({ ...settings, theme });
+    update({ theme, ...slotThemePatch(slot, stored ?? seedCustomTheme(SLOT_BASE_THEME[slot])) });
   };
   const onRate = (rate: number) => update({ rate });
   const onVoice = (voiceURI: string) => update({ voice: voiceURI === "" ? undefined : voiceURI });

@@ -31,13 +31,14 @@ import { useSettings } from "../settings/SettingsContext";
 import { StatusRegion } from "../ui/StatusRegion";
 import {
   AA_TEXT_RATIO,
+  activeSlotOf,
   activeSlotTheme,
   contrastRatio,
   fixContrastPairs,
   seedCustomTheme,
   slotThemePatch,
 } from "../settings/customTheme";
-import type { CustomThemeSlot, CustomThemeTokens } from "../content/schema";
+import type { CustomThemeTokens } from "../content/schema";
 
 /** The five editable rows, in stored order. `key` is the CustomThemeTokens
  * field name; `label` is the visible row text and the accessible-name stem. */
@@ -145,12 +146,7 @@ export function CustomThemeBuilder() {
   // guards the render. The builder is mounted only under an active custom
   // slot, where the schema's superRefine guarantees the slot's record is
   // present — the guard keeps TS honest without inventing fallback state.
-  const slot: CustomThemeSlot | undefined =
-    settings.theme === "custom-light"
-      ? "custom-light"
-      : settings.theme === "custom-dark"
-        ? "custom-dark"
-        : undefined;
+  const slot = activeSlotOf(settings.theme);
   const customTheme = activeSlotTheme(settings);
   const tokens = customTheme?.tokens;
   const settled = useDebouncedValue(tokens, READOUT_DEBOUNCE_MS);

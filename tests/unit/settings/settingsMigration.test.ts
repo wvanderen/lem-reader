@@ -132,6 +132,12 @@ describe("migrateReaderSettings — the legacy one-slot custom theme", () => {
     expect(out.customDarkTheme).toEqual(seedCustomTheme("dark"));
   });
 
+  it("the migrated slot keeps its ORIGINAL baseTheme (a sepia seeding resets to sepia in Custom light — deliberate preservation: the slot's tokens and reset base ride verbatim, only the slot label and the other slot's seed are new)", () => {
+    const out = migrateReaderSettings({ ...LEGACY_CUSTOM_SEPIA }) as Record<string, unknown>;
+    expect(out.theme).toBe("custom-light");
+    expect((out.customLightTheme as { baseTheme: string }).baseTheme).toBe("sepia");
+  });
+
   it("carries every OTHER field untouched (schemaVersion included — parse never mutates it)", () => {
     const out = migrateReaderSettings({ ...LEGACY_CUSTOM_RECORD }) as Record<string, unknown>;
     expect(out.schemaVersion).toBe(4);

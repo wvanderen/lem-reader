@@ -64,6 +64,13 @@ export const SLOT_BASE_THEME: Record<CustomThemeSlot, CustomBaseTheme> = {
   "custom-dark": "dark",
 };
 
+/** Issue #120 — the theme literal of an active custom slot, or undefined
+ * for a preset theme (the ONE switch over the two slots; every consumer
+ * derives from here). */
+export function activeSlotOf(theme: ReaderSettings["theme"]): CustomThemeSlot | undefined {
+  return theme === "custom-light" ? "custom-light" : theme === "custom-dark" ? "custom-dark" : undefined;
+}
+
 /** The slot record currently ACTIVE in `s` (undefined for a preset theme —
  * or for a slot that carries no record, which the schema's superRefine
  * makes unrepresentable while active). */

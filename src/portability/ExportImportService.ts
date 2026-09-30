@@ -343,19 +343,11 @@ export async function validateBundle(file: File): Promise<BundleValidationResult
     raw !== null && typeof raw === "object"
       ? (raw as { preferences?: unknown }).preferences
       : undefined;
-  const legacyMeasureApplied =
-    rawPrefs !== null &&
-    typeof rawPrefs === "object" &&
-    (rawPrefs as { measure?: unknown }).measure === 72;
-  const legacyCustomApplied =
-    rawPrefs !== null &&
-    typeof rawPrefs === "object" &&
-    (rawPrefs as { theme?: unknown }).theme === "custom";
-  if (
-    rawPrefs !== null &&
-    typeof rawPrefs === "object" &&
-    (legacyMeasureApplied || legacyCustomApplied)
-  ) {
+  const isRecord = (v: unknown): v is Record<string, unknown> =>
+    v !== null && typeof v === "object";
+  const legacyMeasureApplied = isRecord(rawPrefs) && rawPrefs.measure === 72;
+  const legacyCustomApplied = isRecord(rawPrefs) && rawPrefs.theme === "custom";
+  if (isRecord(rawPrefs) && (legacyMeasureApplied || legacyCustomApplied)) {
     raw = {
       ...(raw as object),
       preferences: migrateReaderSettings(rawPrefs),
