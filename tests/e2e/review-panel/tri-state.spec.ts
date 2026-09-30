@@ -161,8 +161,8 @@ test.describe("RECV-01.e review-panel tri-state (10-04 honest surfacing)", () =>
     await expect(orphanSection.locator("button.review-row")).toHaveCount(0);
     // And the curation affordances are present (D10-11 — orphans are
     // curatable in place even without an article). The actions cluster is
-    // a SIBLING of the .review-row body inside the row's <li>. Issue #117
-    // — the cluster grew to THREE affordances: Edit note / Edit tags /
+    // a SIBLING of the .review-row body inside the row's <li>. Issues #117 and #119
+    // — the cluster grew to FOUR affordances: Edit note / Change color / Edit tags /
     // Remove highlight (tags are keyed to highlightId, so orphans carry
     // the tags editor too).
     await expect(
@@ -172,10 +172,15 @@ test.describe("RECV-01.e review-panel tri-state (10-04 honest surfacing)", () =>
           hasText: EXCERPT_ORPHAN,
         })
         .locator("button.review-row-action"),
-    ).toHaveCount(3);
+    ).toHaveCount(4);
     await expect(
       orphanSection.getByRole("button", {
         name: `Edit tags: ${EXCERPT_ORPHAN}`,
+      }),
+    ).toBeVisible();
+    await expect(
+      orphanSection.getByRole("button", {
+        name: `Change color: ${EXCERPT_ORPHAN}`,
       }),
     ).toBeVisible();
   });

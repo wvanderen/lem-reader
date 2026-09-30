@@ -32,6 +32,8 @@ interface HighlightColorEntryProps {
   /** The current color on the highlight's record ("default" hydration
    * handled by the schema — this prop is always a closed-set id). */
   color: HighlightColor;
+  /** Optional confirmation announced inside the picker after a successful write. */
+  successCopy?: string;
   /** Commit one color pick (routes through updateHighlightColor — the ONE
    * highlightsStore seam; the closure carries the highlight id). Rejects on
    * persistence failure (rethrow path). */
@@ -45,18 +47,20 @@ interface HighlightColorEntryProps {
 export function HighlightColorEntry({
   color,
   saveColor,
+  successCopy,
 }: HighlightColorEntryProps) {
-  const [errorCopy, setErrorCopy] = useState<string | null>(null);
+  const [statusCopy, setStatusCopy] = useState<string | null>(null);
 
   async function commit(next: HighlightColor) {
-    setErrorCopy(null);
+    setStatusCopy(null);
     try {
       await saveColor(next);
+      setStatusCopy(successCopy ?? null);
     } catch {
       // Dexie write failure — the row stays unchanged on disk and the hook
       // has rolled the optimistic color back, so the radio below re-matches
       // the persisted record. Calm voice.
-      setErrorCopy("Couldn't save color.");
+      setStatusCopy("Couldn't save color.");
     }
   }
 
@@ -87,11 +91,11 @@ export function HighlightColorEntry({
           </label>
         ))}
       </div>
-      {/* Status region (A11Y-08 — save failures are announced politely).
+      {/* Status region (A11Y-08 — save feedback is announced politely).
           Issue #98 — the ONE StatusRegion primitive, ALWAYS MOUNTED (a live
           region must exist before its content changes to announce reliably);
           idle it renders no children and the per-surface CSS collapses it. */}
-      <StatusRegion>{errorCopy !== null && <p>{errorCopy}</p>}</StatusRegion>
+      <StatusRegion>{statusCopy !== null && <p>{statusCopy}</p>}</StatusRegion>
     </fieldset>
   );
 }
