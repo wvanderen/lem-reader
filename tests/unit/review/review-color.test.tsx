@@ -167,6 +167,7 @@ vi.mock("../../../src/ingestion/library/librarySnapshot", async (importOriginal)
     ...actual,
     invalidateLibrarySnapshot: vi.fn(() => {
       mockData.version += 1;
+      actual.invalidateLibrarySnapshot();
     }),
   };
 });
@@ -188,12 +189,18 @@ function buildSnapshot(): LibrarySnapshot {
   };
 }
 
-vi.mock("../../../src/ingestion/library/useLibrarySnapshot", () => ({
-  useLibrarySnapshot: () => ({
-    status: "ready" as const,
-    snapshot: buildSnapshot(),
-  }),
-}));
+vi.mock("../../../src/ingestion/library/useLibrarySnapshot", async () => {
+  const { useSyncExternalStore } = await import("react");
+  const { onLibrarySnapshotInvalidated } = await import(
+    "../../../src/ingestion/library/librarySnapshot"
+  );
+  return {
+    useLibrarySnapshot: () => {
+      useSyncExternalStore(onLibrarySnapshotInvalidated, () => mockData.version);
+      return { status: "ready" as const, snapshot: buildSnapshot() };
+    },
+  };
+});
 
 const { setHighlightColorMock } = vi.hoisted(() => ({
   setHighlightColorMock: vi.fn(),
@@ -319,7 +326,8 @@ describe("ReviewView highlight colors (issue #119)", () => {
     expect(setHighlightColorMock).toHaveBeenCalledWith(HL_CONFIDENT.id, "green");
     // Announced ONLY after the write resolved (the honest-announcement
     // contract) and the ONE snapshot invalidated for the re-derive.
-    await screen.findByText("Color saved.");
+    await within(dialog).findByText("Color saved.");
+    expect(within(dialog).getByRole("status").textContent).toBe("Color saved.");
     expect(invalidateLibrarySnapshot).toHaveBeenCalled();
 
     // The mocked re-derive (mockData.colors mutated by the seam stub) lands
@@ -344,7 +352,8 @@ describe("ReviewView highlight colors (issue #119)", () => {
     await user.click(colorRadio(dialog, "Yellow"));
 
     expect(setHighlightColorMock).toHaveBeenCalledWith(HL_ORPHAN.id, "yellow");
-    await screen.findByText("Color saved.");
+    await within(dialog).findByText("Color saved.");
+    expect(within(dialog).getByRole("status").textContent).toBe("Color saved.");
 
     await waitFor(() => {
       const row = rowByExcerpt(ANCHOR_ORPHAN.quote.exact)!;
@@ -362,7 +371,8 @@ describe("ReviewView highlight colors (issue #119)", () => {
     await user.click(colorRadio(dialog, "Pink"));
 
     expect(setHighlightColorMock).toHaveBeenCalledWith(HL_AMBIG.id, "pink");
-    await screen.findByText("Color saved.");
+    await within(dialog).findByText("Color saved.");
+    expect(within(dialog).getByRole("status").textContent).toBe("Color saved.");
 
     await waitFor(() => {
       const row = rowByExcerpt(AMBIGUOUS_SENTENCE)!;
@@ -382,6 +392,22 @@ describe("ReviewView highlight colors (issue #119)", () => {
     await waitFor(() => {
       expect(screen.queryByRole("dialog", { name: "Change color" })).toBeNull();
     });
+  });
+
+
+  it("a new editing session clears an earlier highlight's save failure", async () => {
+    setHighlightColorMock.mockRejectedValueOnce(new Error("QuotaExceededError"));
+    renderReview();
+    const { user, dialog } = await openColorDialog(ANCHOR_CONFIDENT.quote.exact);
+    await user.click(colorRadio(dialog, "Pink"));
+    await within(dialog).findByText("Couldn't save color.");
+    await user.click(within(dialog).getByRole("button", { name: "Done" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Change color" })).toBeNull();
+    });
+    const next = await openColorDialog(ANCHOR_ORPHAN.quote.exact);
+    expect(within(next.dialog).queryByText("Couldn't save color.")).toBeNull();
+    expect(within(next.dialog).getByRole("status").textContent).toBe("");
   });
 
   it("a failed pick surfaces the inline status, announces nothing, invalidates nothing", async () => {

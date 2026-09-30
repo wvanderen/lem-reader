@@ -773,8 +773,8 @@ export function ReviewView({
       {/* Issue #119 — the color editor. Same wiring shape as the note
           dialog, with the commit-per-pick contract: saveColor routes
           through the ONE setHighlightColor seam, and ONLY a resolved write
-          invalidates the snapshot and announces "Color saved." — a failed
-          pick leaves the dialog open with HighlightColorEntry's inline
+          invalidates the snapshot; the picker announces "Color saved." inside
+          the modal — a failed pick leaves the dialog open with HighlightColorEntry's inline
           "Couldn't save color." status and never announces success. Every
           close path (Done, Esc, scrim) merely dismisses: picks have already
           committed. The color prop derives from the FRESH snapshot record
@@ -788,7 +788,6 @@ export function ReviewView({
           if (colorTarget === null) return;
           await setHighlightColor(colorTarget.highlight.id, color);
           invalidateLibrarySnapshot();
-          setAnnouncement("Color saved.");
         }}
         excerpt={
           colorTarget

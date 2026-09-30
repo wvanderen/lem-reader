@@ -153,9 +153,9 @@ test.describe("issue #119 review-panel highlight colors", () => {
     await expect(dialog.getByRole("radio", { name: "Green" })).toBeChecked();
 
     // The row re-derives WITHOUT any reload (snapshot invalidation) and the
-    // page's status region announces the landed write politely.
+    // dialog's status region announces the landed write politely.
     await expect(row.locator(".review-row-color")).toHaveText("Green");
-    await expect(page.locator("main > [role='status']")).toContainText("Color saved.");
+    await expect(dialog.getByRole("status")).toContainText("Color saved.");
     // Dismiss the picker before leaving the row (the modal scope otherwise
     // keeps the background inert).
     await dialog.getByRole("button", { name: "Done" }).click();
@@ -211,7 +211,7 @@ test.describe("issue #119 review-panel highlight colors", () => {
     await expect(orphanRow.locator(".review-row-color")).toHaveText("Pink");
     // The landed write is announced politely here too (the same honest
     // announcement contract the confident row's cell pins).
-    await expect(page.locator("main > [role='status']")).toContainText("Color saved.");
+    await expect(dialog.getByRole("status")).toContainText("Color saved.");
     // Anchor status untouched: the badge vocabulary survives byte-stable,
     // as does the attached note (the write is field-scoped to color).
     await expect(orphanRow.locator(".review-badge-orphan")).toHaveText("Article missing");

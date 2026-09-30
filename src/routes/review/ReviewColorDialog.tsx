@@ -33,8 +33,8 @@
 // color." in its own StatusRegion — announced INSIDE the open dialog). The
 // saveColor closure routes through the ONE highlightsStore seam
 // (setHighlightColor); ReviewView's closure invalidates the ONE Library
-// Snapshot and announces "Color saved." only after the write resolves — a
-// failed pick never announces success.
+// Snapshot after the write resolves; the picker announces "Color saved."
+// inside the modal — a failed pick never announces success.
 //
 // Anchor status is untouched by construction: color edits field-scope ONE
 // row field; the tri-state status is always re-derived from quote/position
@@ -171,7 +171,15 @@ export function ReviewColorDialog({
           commit-per-pick with the inline honest-failure status. Not gated on
           anchor status: color never depends on re-anchoring, so this dialog
           opens for confident, ambiguous, AND orphan rows alike. */}
-      <HighlightColorEntry color={color} saveColor={saveColor} />
+      {/* A fresh picker per editing session prevents previous failures or
+          late completions from appearing on another highlight. */}
+      {open && (
+        <HighlightColorEntry
+          color={color}
+          saveColor={saveColor}
+          successCopy="Color saved."
+        />
+      )}
       <div className="highlight-popover-actions">
         {/* Pure dismissal — every pick has already committed through
             saveColor; there is nothing to commit on close (the note
