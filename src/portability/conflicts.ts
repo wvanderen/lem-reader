@@ -29,8 +29,10 @@ import { loadAllHighlights } from "../persistence/highlightsStore";
 import { loadAllNotes } from "../persistence/notesStore";
 import { loadAllLocations } from "../persistence/locationStore";
 import { loadAllReadingSessions } from "../persistence/readingSessionsStore";
+import { loadAllSubscriptions } from "../persistence/subscriptionsStore";
 import { listBooks } from "../persistence/booksStore";
 import { db } from "../persistence/db";
+import { normalizeFeedUrl } from "../discover/feedUrl";
 import { bundledFixtures } from "../fixtures";
 import { figureAssetIds } from "../content/assets/AssetProvider";
 import { graphemeClusters, normalizeText } from "../content/normalizeText";
@@ -44,6 +46,7 @@ import type {
   NoteRecord,
   ReaderSettings,
   ReadingSessionRecord,
+  SubscriptionRecord,
 } from "../content/schema";
 import type { AssetExportMeta, ExportBundle } from "./bundle";
 
@@ -214,6 +217,15 @@ export interface ResolvedImportPlan {
    * reader decision, so there is no conflict kind and no skip count (the
    * Phase 20 assets ride-along precedent). */
   sessionsToWrite: ReadingSessionRecord[];
+  /** Issue #121 — the incoming subscription rows that MERGE into the
+   * receiving Discover list by the NORMALIZED VALIDATED FEED URL: a feedUrl
+   * already present locally keeps the LOCAL row (its local preview cache is
+   * never clobbered by the incoming one) and contributes nothing here; a
+   * new feedUrl always writes, under the incoming id — or a freshly minted
+   * uuid when that id is already taken locally by a DIFFERENT feed (id
+   * collisions must never silently re-point a row). No network request
+   * happens anywhere in this merge — the previews ride inside the rows. */
+  subscriptionsToWrite: SubscriptionRecord[];
   preferences?: ReaderSettings;
   applyPreferences: boolean;
   idRewrites: Map<string, string>;
@@ -670,16 +682,26 @@ export async function resolveImportPlan(
 ): Promise<ResolvedImportPlan> {
   // Same loaders as detectImportPreview — the write-free re-read — plus
   // the local session-id set (issue #37; the preview carries no session
-  // data because sessions never conflict and need no reader decision).
-  const [localArticles, localHighlights, localNotes, localLocations, localBooksResult, localSessions] =
-    await Promise.all([
-      dexieLibrarySource.list(),
-      loadAllHighlights(),
-      loadAllNotes(),
-      loadAllLocations(),
-      listBooks(),
-      loadAllReadingSessions(),
-    ]);
+  // data because sessions never conflict and need no reader decision) and
+  // the local subscription rows (issue #121 — the merge keys on the
+  // NORMALIZED feed URL, not the row id).
+  const [
+    localArticles,
+    localHighlights,
+    localNotes,
+    localLocations,
+    localBooksResult,
+    localSessions,
+    localSubscriptions,
+  ] = await Promise.all([
+    dexieLibrarySource.list(),
+    loadAllHighlights(),
+    loadAllNotes(),
+    loadAllLocations(),
+    listBooks(),
+    loadAllReadingSessions(),
+    loadAllSubscriptions(),
+  ]);
   const localBooks = localBooksResult.ok ? localBooksResult.books : [];
 
   const localArticleById = new Map(localArticles.map((a) => [a.id, a]));
@@ -688,6 +710,17 @@ export async function resolveImportPlan(
   const localNoteIds = new Set(localNotes.map((n) => n.id));
   const localLocationByKey = new Map(localLocations.map((l) => [locationKey(l), l]));
   const localSessionIds = new Set(localSessions.map((s) => s.id));
+  // Issue #121 — local subscriptions keyed by normalized feedUrl (defensive
+  // re-normalization: rows are normalized at save, but the merge key is
+  // normalized at BOTH sides of every comparison) and by id (for collision
+  // minting below).
+  const localSubscriptionByFeedUrl = new Map<string, SubscriptionRecord>();
+  for (const s of localSubscriptions) {
+    const key = normalizeFeedUrl(s.feedUrl);
+    if (key !== null) localSubscriptionByFeedUrl.set(key, s);
+  }
+  const localSubscriptionIds = new Set(localSubscriptions.map((s) => s.id));
+  const planSubscriptionFeedUrls = new Set<string>();
 
   const plan: ResolvedImportPlan = {
     booksToWrite: [],
@@ -697,6 +730,7 @@ export async function resolveImportPlan(
     locationsToWrite: [],
     assetsToWrite: [],
     sessionsToWrite: [],
+    subscriptionsToWrite: [],
     applyPreferences,
     idRewrites: new Map<string, string>(),
     skipped: { books: 0, articles: 0, highlights: 0, notes: 0, locations: 0 },
@@ -860,6 +894,44 @@ export async function resolveImportPlan(
       plan.sessionsToWrite.push(session);
     }
     // else: same-visit uuid already local — calm no-op (keep local).
+  }
+
+  // ── Issue #121: feed subscriptions merge by the NORMALIZED VALIDATED
+  // FEED URL. A feedUrl already present locally keeps the LOCAL row — its
+  // local preview cache is never clobbered by the incoming one (the cache
+  // is the reader's own captured state; the ride-along has no reader
+  // decision, the reading-sessions precedent). A new feedUrl always
+  // writes; when the incoming ROW ID collides locally with a DIFFERENT
+  // feed, a fresh uuid is minted so the put can never silently re-point a
+  // local row. NO network request happens here or downstream — the bounded
+  // previews ride inside the rows (the honesty constraint is structural:
+  // nothing in the import path fetches).
+  for (const subscription of bundle.subscriptions ?? []) {
+    const incomingKey = normalizeFeedUrl(subscription.feedUrl);
+    if (incomingKey !== null && localSubscriptionByFeedUrl.has(incomingKey)) {
+      continue; // same feed already local — keep the LOCAL row + its cache
+    }
+    if (incomingKey === null) {
+      // Unreachable through a validated bundle (httpUrl refinement) — a
+      // non-http(s) feedUrl never parses. Refuse the ROW calmly rather
+      // than write an un-mergeable key: the ride-along has no reader
+      // decision to surface it against, and never-coerce (STATE-04)
+      // forbids persisting a row whose merge key cannot normalize.
+      continue;
+    }
+    // An over-determined bundle carrying the same feedUrl twice must not
+    // double-write either — the FIRST incoming row wins (the first-seen
+    // merge shape, LibrarySource L173-190 precedent).
+    if (!planSubscriptionFeedUrls.has(incomingKey)) {
+      let id = subscription.id;
+      while (localSubscriptionIds.has(id)) {
+        id = crypto.randomUUID();
+      }
+      const row = { ...subscription, id, feedUrl: incomingKey };
+      localSubscriptionIds.add(id);
+      plan.subscriptionsToWrite.push(row);
+      planSubscriptionFeedUrls.add(incomingKey);
+    }
   }
 
   return plan;

@@ -221,11 +221,12 @@ export async function assertEdgeInvariant(
 // ONE helper file owns the invariant — extended, never forked (D6-09).
 
 /** The non-reader destinations every edge spec's destination cells cover. */
-export type EdgeDestination = "library" | "highlights" | "add-dialog";
+export type EdgeDestination = "library" | "discover" | "highlights" | "add-dialog";
 
 /** The destination list edge specs iterate for their destination cells. */
 export const DESTINATIONS: readonly EdgeDestination[] = [
   "library",
+  "discover",
   "highlights",
   "add-dialog",
 ];
@@ -285,6 +286,23 @@ export async function openEdgeDestination(
     ).toBeVisible();
     await expect(
       page.getByText("The Harbor Master's Ledger").first(),
+    ).toBeVisible();
+    return;
+  }
+
+  if (destination === "discover") {
+    // Issue #121 — the real navigation path (the shell-nav Discover link,
+    // never a bare deep link); the wiped library shows the no-content
+    // state under the always-visible subscribe form.
+    await page
+      .getByRole("navigation", { name: "Primary" })
+      .getByRole("link", { name: "Discover" })
+      .click();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Discover" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "No subscriptions yet." }),
     ).toBeVisible();
     return;
   }
@@ -379,6 +397,38 @@ export async function assertDestinationInvariant(
       {
         desc: "tag filter chip",
         locator: page.locator(".tag-filter .tag-chip").first(),
+      },
+      {
+        desc: "shell-nav Highlights link",
+        locator: page
+          .getByRole("navigation", { name: "Primary" })
+          .getByRole("link", { name: "Highlights" }),
+      },
+    );
+  } else if (destination === "discover") {
+    // Issue #121 — the Discover destination's canonical functions: the
+    // subscribe form (label + url input + submit) and the shell-nav
+    // siblings. The no-content state is asserted by openEdgeDestination;
+    // the invariant below holds over the EMPTY surface (the strictest
+    // reflow condition).
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Discover" }),
+      `${label}: discover h1 missing`,
+    ).toBeVisible();
+    required.push(
+      {
+        desc: "feed URL input",
+        locator: page.getByRole("textbox", { name: "Subscribe to a feed" }),
+      },
+      {
+        desc: "Subscribe button",
+        locator: page.getByRole("button", { name: "Subscribe" }),
+      },
+      {
+        desc: "shell-nav Library link",
+        locator: page
+          .getByRole("navigation", { name: "Primary" })
+          .getByRole("link", { name: "Library" }),
       },
       {
         desc: "shell-nav Highlights link",

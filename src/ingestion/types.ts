@@ -10,7 +10,14 @@
 // `httpUrl` live in `src/content/schema.ts` and are re-used here, NOT
 // re-declared (mirrors the v1.0 convention — schemas are authoritative).
 import { z } from "zod";
-import { ArticleSchema, BookSchema, httpUrl } from "../content/schema";
+import {
+  ArticleSchema,
+  BookSchema,
+  FeedItemPreviewSchema,
+  MAX_FEED_ITEMS,
+  MAX_FEED_TEXT_CHARS,
+  httpUrl,
+} from "../content/schema";
 
 /**
  * MAX_PREFERRED_LANGUAGES — the count cap for the url variant's optional
@@ -107,6 +114,15 @@ export const IngestionRequestSchema = z.union([
       title: z.string().trim().min(1),
       url: httpUrl.optional(),
     }),
+  }),
+  // Issue #121 — the Discover subscription candidate: one RSS/Atom feed
+  // URL. The SAME httpUrl refinement as the url variant (single source of
+  // truth), the SAME SSRF-guarded fetch pipeline (safeFeedFetch — the
+  // document profile's sibling, never a fork), and the SAME refusal
+  // envelope: an invalid candidate is refused WITHOUT saving anything —
+  // persistence happens client-side only after a validated response.
+  z.object({
+    feedUrl: httpUrl,
   }),
 ]);
 export type IngestionRequest = z.infer<typeof IngestionRequestSchema>;
@@ -262,16 +278,40 @@ export const IngestionFailureReasonEnum = z.enum([
   "youtube-unavailable-private", // removed or private — indistinguishable reader-side
   "youtube-age-gated", // LOGIN_REQUIRED age verification
   "youtube-bot-check", // LOGIN_REQUIRED "confirm you're not a bot"
+  // Issue #121 — the feed candidate was fetched but is not readable as RSS
+  // or Atom: malformed XML, a hostile DTD, or XML with no feed structure
+  // (no channel/feed root). The non-XML content-type refusal reuses the
+  // cataloged `unsupported-content-type` (the Discover surface maps it to
+  // feed-specific copy — one catalog, per-surface voice).
+  "feed-unreadable",
   "already-in-library", // D7-07 — save-once-read-forever dedupe-refuse
   "server-error", // catch-all for unexpected exceptions (5xx)
 ]);
 export type IngestionFailureReason = z.infer<typeof IngestionFailureReasonEnum>;
 
+/** FeedPreviewSchema — the wire shape of ONE accepted feed candidate
+ * (issue #121). `url` is the NORMALIZED post-redirect feed URL (the import
+ * merge key — normalizeFeedUrl over safeFetch's finalUrl); `title` is the
+ * feed's own channel/feed name; `items` is the bounded recent-preview cache
+ * the Discover surface renders and the subscription persists. Composed from
+ * the record schemas in ../content/schema (never re-declared — the schemas
+ * are the trust boundary); bounds are enforced here so a hostile server
+ * response cannot smuggle oversized/overcounted rows past the client
+ * re-validation (STATE-04 — the ArticleSchema.parse discipline). */
+export const FeedPreviewSchema = z.object({
+  url: httpUrl,
+  title: z.string().min(1).max(MAX_FEED_TEXT_CHARS),
+  description: z.string().max(MAX_FEED_TEXT_CHARS).optional(),
+  items: z.array(FeedItemPreviewSchema).max(MAX_FEED_ITEMS),
+});
+export type FeedPreview = z.infer<typeof FeedPreviewSchema>;
+
 /** IngestionResponse — discriminated envelope. Single-article success carries
  * the validated `CanonicalArticle` plus the two-state `confidence` derived
  * signal (confident | low); book success (Phase 12) carries the validated
  * `Book` plus its chapter articles (min 1) and the D12-11 skip disclosure
- * count. Failure carries the cataloged reason. `extractionConfidence:
+ * count; feed success (issue #121) carries the validated `FeedPreview`.
+ * Failure carries the cataloged reason. `extractionConfidence:
  * "unsupported"` never reaches this envelope — it is refused upstream as
  * `extraction-unsupported`. The article(s) are RE-VALIDATED through
  * ArticleSchema here (Zod-at-boundary — defense-in-depth; the server also
@@ -305,6 +345,13 @@ export const IngestionResponseSchema = z.union([
     // way (the 20-06 EPUB container path emits chapter assets on this
     // envelope; default [] until then).
     assets: z.array(AssetEnvelopeSchema).default([]),
+  }),
+  // Issue #121 — the feed ok-variant. No assets, no confidence: a feed
+  // candidate is a preview payload, not saved content — the SUBSCRIPTION
+  // save happens client-side after this response validates.
+  z.object({
+    ok: z.literal(true),
+    feed: FeedPreviewSchema,
   }),
   z.object({
     ok: z.literal(false),

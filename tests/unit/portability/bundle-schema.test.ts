@@ -180,20 +180,21 @@ describe("ExportBundleSchema (D9-04 envelope)", () => {
     }
   });
 
-  it("rejects schemaVersion 6 (forward-compat gate — no silent partial import); v5 parses since issue #37", () => {
-    // Issue #37: the union widened to 1|2|3|4|5 — the forward-compat
-    // gate moved to v6 (the 12-07/17-04/20-05 version-bump
+  it("rejects schemaVersion 7 (forward-compat gate — no silent partial import); v6 parses since issue #121", () => {
+    // Issue #121: the union widened to 1|..|6 — the forward-compat
+    // gate moved to v7 (the 12-07/17-04/20-05/#37 version-bump
     // assertion-update precedent).
-    const v5 = ExportBundleSchema.safeParse({
-      ...sampleBundle(),
-      schemaVersion: 5,
-    });
-    expect(v5.success).toBe(true);
     const v6 = ExportBundleSchema.safeParse({
       ...sampleBundle(),
       schemaVersion: 6,
+      subscriptions: [],
     });
-    expect(v6.success).toBe(false);
+    expect(v6.success).toBe(true);
+    const v7 = ExportBundleSchema.safeParse({
+      ...sampleBundle(),
+      schemaVersion: 7,
+    });
+    expect(v7.success).toBe(false);
   });
 
   // ── Phase 17 (17-04 Task 1): v3 — overrides ride ArticleSchema ──────────

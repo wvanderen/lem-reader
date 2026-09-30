@@ -108,6 +108,62 @@ test("a11y #84: the Highlights destination with the header Add icon is axe-clean
   expect(seriousViolations(results), JSON.stringify(seriousViolations(results), null, 2)).toEqual([]);
 });
 
+// Issue #121 — the Discover destination gets the SAME axe bar, in BOTH of
+// its states: the no-content state (empty library) and the subscription
+// surface (list rows + bounded previews + remove controls), the latter
+// reached through the real subscribe flow against a browser-level canned
+// feed envelope (no real feed host is contacted).
+test("a11y #121: the Discover destination is axe-clean (empty state and subscription surface)", async ({
+  page,
+}) => {
+  await wipeDatabase(page);
+  // Empty state.
+  await page.goto(`${BASE}/#/discover`);
+  await expect(page.getByRole("heading", { level: 1, name: "Discover" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "No subscriptions yet." })).toBeVisible();
+  const emptyResults = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
+  expect(
+    seriousViolations(emptyResults),
+    JSON.stringify(seriousViolations(emptyResults), null, 2),
+  ).toEqual([]);
+
+  // The subscription surface: subscribe via a canned feed envelope.
+  await page.route("**/api/ingest", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        feed: {
+          url: "https://journal.example.com/feed.xml",
+          title: "The Calm Reader Journal",
+          description: "Essays on quiet interfaces",
+          items: [
+            {
+              title: "On stable reading positions",
+              link: "https://journal.example.com/stable-positions",
+              datePublished: "2026-09-20T15:00:00.000Z",
+              excerpt: "Why the page should not move under the reader's eye.",
+            },
+          ],
+        },
+      }),
+    }),
+  );
+  await page
+    .getByRole("textbox", { name: "Subscribe to a feed" })
+    .fill("https://journal.example.com/feed.xml");
+  await page.getByRole("button", { name: "Subscribe" }).click();
+  await expect(
+    page.getByRole("heading", { level: 2, name: "The Calm Reader Journal" }),
+  ).toBeVisible();
+  const listResults = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
+  expect(
+    seriousViolations(listResults),
+    JSON.stringify(seriousViolations(listResults), null, 2),
+  ).toEqual([]);
+});
+
 test("a11y #84: the Add dialog transcript-swap state is axe-clean", async ({ page }) => {
   // The same route seam as youtube-transcript.spec.ts N5: the bot-check
   // refusal for a real YouTube URL is what mounts the swapped flow.

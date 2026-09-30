@@ -741,7 +741,7 @@ describe("IngestionResponseSchema", () => {
 });
 
 describe("IngestionFailureReasonEnum (the 23 cataloged reasons)", () => {
-  it("exposes exactly the 23 reasons — the Phase 7 catalog (ADR-0003: extraction-too-low-confidence removed; never emitted) + Phase 11 PDF + Phase 12 EPUB + issue #39 YouTube members slotting in before the dedupe-refuse + catch-all tail", () => {
+  it("exposes exactly the 24 reasons — the Phase 7 catalog (ADR-0003: extraction-too-low-confidence removed; never emitted) + Phase 11 PDF + Phase 12 EPUB + issue #39 YouTube + issue #121 feed members slotting in before the dedupe-refuse + catch-all tail", () => {
     expect(IngestionFailureReasonEnum.options).toEqual([
       "ssrf-blocked-scheme",
       "ssrf-blocked-private-ip",
@@ -767,11 +767,14 @@ describe("IngestionFailureReasonEnum (the 23 cataloged reasons)", () => {
       "youtube-unavailable-private",
       "youtube-age-gated",
       "youtube-bot-check",
+      // Issue #121 — the feed candidate refusal (non-XML reuses
+      // unsupported-content-type; only the unreadable-XML member is new).
+      "feed-unreadable",
       // ..."already-in-library" and "server-error" stay last.
       "already-in-library",
       "server-error",
     ]);
-    expect(IngestionFailureReasonEnum.options).toHaveLength(23);
+    expect(IngestionFailureReasonEnum.options).toHaveLength(24);
   });
 
   it("parses each Phase 11 PDF reason (pdf-scanned et al. — the enum accepts all five new members)", () => {

@@ -191,3 +191,38 @@ export const TRANSCRIPT_TIMEOUT_MS = 30_000;
  * response ~1-2MB; the ANDROID `next` variant measured 14MB live on
  * 2026-09-16, which is exactly the pathological shape this cap refuses. */
 export const TRANSCRIPT_MAX_BYTES = 5 * 1024 * 1024;
+
+// ── Feed intake caps (issue #121 — the Discover subscription candidate) ─────
+// The bounded-XML discipline applied to RSS/Atom: the fetch profile mirrors
+// the document-fetch constants; the XML/item bounds live in
+// src/content/schema.ts (MAX_FEED_ITEMS / MAX_FEED_TEXT_CHARS — the record
+// schemas enforce them at every read) and are imported + re-exported here
+// so server modules keep importing every cap from ONE module (the
+// PDF_MAX_BYTES three-enforcement-point pattern).
+
+// The record-level feed bounds live in src/content/schema.ts for the same
+// /src→/server import-direction reason as PDF_MAX_BYTES above. Imported +
+// re-exported here so server/parseFeed imports every cap from ONE module.
+import { MAX_FEED_ITEMS, MAX_FEED_TEXT_CHARS } from "../src/content/schema";
+export { MAX_FEED_ITEMS, MAX_FEED_TEXT_CHARS };
+
+/** Feed fetch timeout (AbortSignal cap) — mirrors REQUEST_TIMEOUT_MS: a
+ * feed is one network round-trip like a document fetch, so the same
+ * generosity/tightness tradeoff applies. */
+export const FEED_TIMEOUT_MS = 30_000;
+
+/** Maximum feed response body size — mirrors MAX_RESPONSE_BYTES (5MB).
+ * Real feeds run 10KB–1MB (bounded preview windows); 5MB caps pathological
+ * XML without rejecting legitimate feeds. Checked against Content-Length
+ * BEFORE the body read (Measure 7 — no body leak on refusal). */
+export const FEED_MAX_BYTES = 5 * 1024 * 1024;
+
+/** Content-type allowlist for the feed fetch profile — ANY XML subtype.
+ * Substring-matched against the declared header (the SafeFetchProfile
+ * contract): `+xml` covers application/rss+xml, application/atom+xml, and
+ * every other RFC 3023 XML subtype registration; the two plain
+ * registrations (`application/xml`, `text/xml`) are listed explicitly since
+ * neither contains the `+xml` suffix. HTML challenge pages, JSON, and
+ * octet-stream refuse pre-read (the Discover surface carries the feed-aware
+ * copy). */
+export const FEED_CONTENT_TYPES = ["+xml", "application/xml", "text/xml"];

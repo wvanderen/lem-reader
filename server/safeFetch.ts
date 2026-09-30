@@ -43,6 +43,9 @@ import {
   ALLOWED_CONTENT_TYPES,
   PRIVATE_RANGES,
   METADATA_HOSTNAMES,
+  FEED_TIMEOUT_MS,
+  FEED_MAX_BYTES,
+  FEED_CONTENT_TYPES,
 } from "./limits";
 
 /** The fetched-document shape returned by safeFetch. `hash` is the SHA-256 of
@@ -356,4 +359,23 @@ export async function safeFetch(rawUrl: string, hopDepth = 0): Promise<FetchedCo
     contentType: result.contentType,
     hash,
   };
+}
+
+/**
+ * safeFeedFetch — the SSRF-safe FEED fetcher (issue #121; the third
+ * SafeFetchProfile over the ONE pipeline — never a fork, D20-12). Same 9
+ * measures, same per-hop redirect re-validation, same pre-read
+ * content-length cap and Measure-7 no-body-read-on-refusal guarantee; the
+ * profile differs only in its constants: the XML-subtype content-type
+ * allowlist (FEED_CONTENT_TYPES), FEED_TIMEOUT_MS, and FEED_MAX_BYTES,
+ * reading text. The result is the raw XML string — parsing/admission is
+ * server/parseFeed's job (headers lie; the parse decides the feed is real).
+ */
+export async function safeFeedFetch(rawUrl: string): Promise<SafeFetchResult> {
+  return await safeFetchCore(rawUrl, {
+    allowedContentTypes: FEED_CONTENT_TYPES,
+    timeoutMs: FEED_TIMEOUT_MS,
+    maxBytes: FEED_MAX_BYTES,
+    bodyKind: "text",
+  });
 }

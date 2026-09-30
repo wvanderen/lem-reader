@@ -1,16 +1,17 @@
 // tests/e2e/chrome/shell-nav.spec.ts
 // Plan 15-02 — the persistent application shell (D15-01/D15-02): a
-// nav.shell-nav[aria-label="Primary"] with up to three text links (Library →
-// #/, Highlights → #/highlights, and the data-driven Read destination added
-// by decision #68 / issue #82 — D15-08 revised) inside the existing 48px
-// app-header on ALL three destinations, the brand link home (D15-05), the
-// ModeToggle joining the articleMounted gate (D15-15), and the ≤639px
-// wordmark collapse + narrow tuning (D15-17).
+// nav.shell-nav[aria-label="Primary"] with up to four text links (Library →
+// #/, Discover → #/discover (issue #121), Highlights → #/highlights, and
+// the data-driven Read destination added by decision #68 / issue #82 —
+// D15-08 revised) inside the existing 48px app-header on ALL destinations,
+// the brand link home (D15-05), the ModeToggle joining the articleMounted
+// gate (D15-15), and the ≤639px wordmark collapse + narrow tuning
+// (D15-17).
 //
 // The Read link's FULL behavior (appear/use/roll/hide, aria-current,
 // row-budget sweep) lives in read-nav.spec.ts; this file pins the
 // fresh-library baseline: with no unfinished target the Read link is
-// hidden ENTIRELY, so a wiped library shows exactly two links.
+// hidden ENTIRELY, so a wiped library shows exactly three links.
 //
 // Requirements owned by this file:
 //   - NAV-01 — direct Library ↔ Highlights navigation through the shell
@@ -111,17 +112,18 @@ test.describe("shell nav (15-02 — NAV-01/NAV-02/NAV-05)", () => {
 
   // (1) Persistent shell — D15-02: one shell, one rule. The Primary nav and
   // its text links render on every destination. D15-08 (revised by decision
-  // #68): exactly THREE text links when an unfinished resume target exists;
+  // #68): exactly FOUR text links when an unfinished resume target exists;
   // the data-driven Read link is hidden ENTIRELY otherwise (no disabled
   // state, no library fallback). A wiped library has no target → exactly
-  // two links on all three destinations, and parking in the reader with no
-  // saved location does not conjure one (destination links are text links
-  // at every width — D15-17).
-  test("(1) Primary nav renders Library + Highlights (exactly 2 links, no target) on all three destinations", async ({
+  // three links (Library, Discover — issue #121, Highlights) on every
+  // destination, and parking in the reader with no saved location does not
+  // conjure one (destination links are text links at every width — D15-17).
+  test("(1) Primary nav renders Library + Discover + Highlights (exactly 3 links, no target) on all destinations", async ({
     page,
   }) => {
     for (const url of [
       `${BASE}/`,
+      `${BASE}/#/discover`,
       `${BASE}/#/highlights`,
       `${BASE}/#/article/${FIXTURES[0]}`,
     ]) {
@@ -129,6 +131,7 @@ test.describe("shell nav (15-02 — NAV-01/NAV-02/NAV-05)", () => {
       const nav = primaryNav(page);
       await expect(nav).toBeVisible();
       await expect(nav.getByRole("link", { name: "Library" })).toBeVisible();
+      await expect(nav.getByRole("link", { name: "Discover" })).toBeVisible();
       await expect(
         nav.getByRole("link", { name: "Highlights" }),
       ).toBeVisible();
@@ -139,20 +142,22 @@ test.describe("shell nav (15-02 — NAV-01/NAV-02/NAV-05)", () => {
       ).toHaveCount(0);
       await expect(
         nav.getByRole("link"),
-        "D15-08 — exactly two destination links with no resume target",
-      ).toHaveCount(2);
+        "D15-08 — exactly three destination links with no resume target",
+      ).toHaveCount(3);
     }
   });
 
   // (2) aria-current discipline — D15-09: exactly one shell-nav link carries
   // aria-current="page", matching the ACTIVE destination. ANY list view is
-  // the Library destination (#/ AND #/unread); #/highlights reverses the
-  // polarity; the Reader carries neither. The brand link NEVER carries the
-  // attribute — its semantic role is app-home, not a destination.
+  // the Library destination (#/ AND #/unread); #/discover is the Discover
+  // destination (issue #121); #/highlights reverses the polarity; the
+  // Reader carries neither. The brand link NEVER carries the attribute —
+  // its semantic role is app-home, not a destination.
   test("(2) aria-current follows the destination; the brand never carries it", async ({
     page,
   }) => {
     const library = primaryNav(page).getByRole("link", { name: "Library" });
+    const discover = primaryNav(page).getByRole("link", { name: "Discover" });
     const highlights = shellHighlightsLink(page);
 
     // ANY list view = the Library destination.
@@ -162,8 +167,18 @@ test.describe("shell nav (15-02 — NAV-01/NAV-02/NAV-05)", () => {
         page.getByRole("heading", { level: 1, name: "Saved articles" }),
       ).toBeVisible();
       await expect(library).toHaveAttribute("aria-current", "page");
+      expect(await discover.getAttribute("aria-current")).toBeNull();
       expect(await highlights.getAttribute("aria-current")).toBeNull();
     }
+
+    // The Discover destination (issue #121) carries its own polarity.
+    await page.goto(`${BASE}/#/discover`);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Discover" }),
+    ).toBeVisible();
+    await expect(discover).toHaveAttribute("aria-current", "page");
+    expect(await library.getAttribute("aria-current")).toBeNull();
+    expect(await highlights.getAttribute("aria-current")).toBeNull();
 
     // The Highlights destination reverses the polarity.
     await page.goto(`${BASE}/#/highlights`);
@@ -172,17 +187,20 @@ test.describe("shell nav (15-02 — NAV-01/NAV-02/NAV-05)", () => {
     ).toBeVisible();
     await expect(highlights).toHaveAttribute("aria-current", "page");
     expect(await library.getAttribute("aria-current")).toBeNull();
+    expect(await discover.getAttribute("aria-current")).toBeNull();
 
     // In the Reader NEITHER destination link is current.
     await page.goto(`${BASE}/#/article/${FIXTURES[0]}`);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     expect(await library.getAttribute("aria-current")).toBeNull();
+    expect(await discover.getAttribute("aria-current")).toBeNull();
     expect(await highlights.getAttribute("aria-current")).toBeNull();
 
     // D15-09 — the brand link carries no aria-current on ANY destination.
     const brand = brandLink(page);
     for (const url of [
       `${BASE}/`,
+      `${BASE}/#/discover`,
       `${BASE}/#/highlights`,
       `${BASE}/#/article/${FIXTURES[0]}`,
     ]) {

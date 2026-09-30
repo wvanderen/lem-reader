@@ -57,6 +57,25 @@
 //     duplication, no clobbering); no new ConflictKind and no reader
 //     choice (the Phase 20 assets ride-along precedent — a visit row is
 //     recorded history, not a reader-authored decision).
+//   - Issue #121 (the Discover destination) — the sixth application of the
+//     union discipline: schemaVersion is the 1|..|6 UNION. A v6 bundle
+//     carries the library's feed subscriptions as a subscriptions array
+//     composing SubscriptionRecordSchema — one row per subscribed feed
+//     whose bounded recent-item previews ride INSIDE the row as its local
+//     cache (import makes NO network request — restoring a cache never
+//     re-fetches). v1..v5 bundles parse exactly as before (subscriptions
+//     hydrates to undefined); a v7+ bundle forward-rejects (D9-04
+//     preserved; the validateBundle peek threshold moved to > 6), and
+//     writers emit schemaVersion 6 with an ALWAYS-present subscriptions
+//     array (empty on a subscription-free library — the
+//     presence-is-the-contract precedent). Subscriptions MERGE on import
+//     by the NORMALIZED VALIDATED FEED URL — a feedUrl already present
+//     locally keeps the LOCAL row (its local cache is never clobbered by
+//     the incoming one); a new feedUrl always writes (under a minted id
+//     when the incoming id collides locally with a DIFFERENT feed); no new
+//     ConflictKind and no reader choice (the reading-sessions ride-along
+//     precedent — a subscription is recorded data, not a reader-authored
+//     conflict decision).
 //
 // This module COMPOSES the existing record schemas — no record shape is
 // re-declared here (REUSE-DO-NOT-FORK; the schemas are the STATE-04 trust
@@ -70,6 +89,7 @@ import {
   NoteRecordSchema,
   ReaderSettingsSchema,
   ReadingSessionRecordSchema,
+  SubscriptionRecordSchema,
 } from "../content/schema";
 
 /**
@@ -107,18 +127,20 @@ export const AssetExportMetaSchema = z.object({
 export type AssetExportMeta = z.infer<typeof AssetExportMetaSchema>;
 
 export const ExportBundleSchema = z.object({
-  // PORT-01/02 versioning hook — the 1|2|3|4|5 union reads all five
-  // generations; v6+ forward-rejects (D9-04). Phase 17 (17-04): v3 carries
+  // PORT-01/02 versioning hook — the 1|..|6 union reads all six
+  // generations; v7+ forward-rejects (D9-04). Phase 17 (17-04): v3 carries
   // reader-owned metadata overrides (readerTitle/readerAuthor) inside each
   // article row via ArticleSchema composition (D17-12). Phase 20 (20-05):
   // v4 carries the assets metadata array (raw bytes ride the zip). Issue
-  // #37: v5 carries the readingSessions array.
+  // #37: v5 carries the readingSessions array. Issue #121: v6 carries the
+  // subscriptions array (previews ride inside each row).
   schemaVersion: z.union([
     z.literal(1),
     z.literal(2),
     z.literal(3),
     z.literal(4),
     z.literal(5),
+    z.literal(6),
   ]),
   exportedAt: z.string().datetime(), // ISO-8601
   appVersion: z.string(), // diagnostic only (D9-04)
@@ -141,6 +163,13 @@ export const ExportBundleSchema = z.object({
   // ReadingSessionRecordSchema — one append-only row per visit (decision
   // #24); the per-visit uuid primary key is the merge key at import.
   readingSessions: z.array(ReadingSessionRecordSchema).optional(),
+  // Issue #121 — absent on v1..v5 bundles (hydrates to undefined); ALWAYS
+  // present on v6 writes (empty array on a subscription-free library — the
+  // presence-is-the-contract precedent). Composes SubscriptionRecordSchema
+  // — one row per subscribed feed whose bounded recent-item previews ride
+  // INSIDE the row as its local cache; the NORMALIZED feed URL is the merge
+  // key at import (a duplicate feedUrl keeps the LOCAL row and its cache).
+  subscriptions: z.array(SubscriptionRecordSchema).optional(),
 });
 export type ExportBundle = z.infer<typeof ExportBundleSchema>;
 

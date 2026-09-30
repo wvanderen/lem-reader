@@ -21,8 +21,9 @@
 //     state).
 //   - READNAV-07 — row budget: the 48px header stays one row (no wrap,
 //     no overflow, no group overlap) at 320–810px on Library AND Reader
-//     with the third link in flow (the wordmark collapse + the ≤420px
-//     Reader staged collapse absorb the tight bands).
+//     with the destination links in flow (the wordmark collapse + the
+//     Reader staged collapse — recalibrated 420px → 460px by issue #121 —
+//     absorb the tight bands).
 //   - READNAV-08 — keyboard reachability + visible focus (the global
 //     :focus-visible ring) on the new link.
 //
@@ -271,9 +272,12 @@ function rowGeometry(page: Page) {
 }
 
 /** The widths of the 320–810 acceptance sweep (#82): the tightest bands
- * on both sides of the two sanctioned collapses (≤420px Reader staged
+ * on both sides of the two sanctioned collapses (the Reader staged
  * clip; ≤639px wordmark collapse). */
-const SWEEP_WIDTHS = [320, 375, 420, 421, 450, 480, 639, 640, 810] as const;
+// Issue #121 — 461 pins the re-entry point of the recalibrated Reader
+// staged collapse (420px → 460px): the first width where the destination
+// links return to flow and the row must still hold.
+const SWEEP_WIDTHS = [320, 375, 420, 421, 450, 461, 480, 639, 640, 810] as const;
 
 test.describe("Read nav (#82 — the shell Read destination over the shared resume-target derivation)", () => {
   test.beforeEach(async ({ page }) => {
