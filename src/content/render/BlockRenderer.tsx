@@ -27,7 +27,6 @@ import type { Block, CanonicalArticle } from "../types";
 import type { HighlightColor } from "../schema";
 import { Fragment, memo, useMemo, useState } from "react";
 import { InlineList } from "./InlineRenderer";
-import { highlightAriaLabelForText } from "./InlineRenderer";
 import type { TextPositionSelector } from "../normalizeText";
 import { BLOCK_SEPARATOR } from "../normalizeText";
 import type { CodeSegment, HighlightSlice } from "../../annotations/highlightRanges";
@@ -47,9 +46,9 @@ import {
 // mark anatomy itself is the shared SpokenMark (one copy for both twins).
 import { isSpokenMarkerId, spokenMarkerEntry } from "../../annotations/spokenMarker";
 import { SpokenMark } from "./SpokenMark";
-// Issue #118 — the ONE shared mark className helper (the #42/#118 shared
-// module beside the color-label vocabulary).
-import { highlightClassName } from "../../annotations/highlightColors";
+// Issue #118 — the ONE shared mark-trait helpers (className + aria-label),
+// used verbatim by the InlineRenderer prose twin.
+import { highlightAriaLabelForText, highlightClassName } from "../../annotations/highlightColors";
 // Issue #42: the article-global spoken range type shared with the paginated
 // twin (fragmentRenderer) — the same GraphemeRange the slicer clips with.
 import type { GraphemeRange } from "../../annotations/unifiedHighlightSlicer";
@@ -307,19 +306,22 @@ export function BlockView({
                 );
               }
               const status = seg.entry.status ?? "confident";
-              const unresolved = status !== "confident";
-              // Issue #118 — the named-color modifier rides the ONE shared
-              // className helper (the InlineRenderer prose twin).
-              const color = seg.entry.color ?? "default";
-              const className = highlightClassName(color, seg.entry.hasNote, unresolved);
+              // Issue #118 — the named-color modifier + the announced label
+              // ride the ONE shared traits helpers (the InlineRenderer prose
+              // twin); unresolved derives from the status inside them.
+              const traits = {
+                color: seg.entry.color ?? "default",
+                hasNote: seg.entry.hasNote,
+                status,
+              };
               return (
                 <mark
                   key={i}
                   id={seg.isFirst === true ? `hl-${seg.entry.id}` : undefined}
-                  className={className}
+                  className={highlightClassName(traits)}
                   data-highlight-id={seg.entry.id}
                   tabIndex={0}
-                  aria-label={highlightAriaLabelForText(seg.text, seg.entry.hasNote, status, color)}
+                  aria-label={highlightAriaLabelForText(seg.text, traits)}
                   aria-haspopup="dialog"
                 >
                   {seg.text}
@@ -544,9 +546,10 @@ export const ArticleBody = memo(
           position: h.resolvedPosition!,
           hasNote: h.note !== null && h.note.text.length > 0,
           status: h.status,
-          // Issue #118 — `?? "default"`: pre-#118 in-memory records omit
-          // the key (the tags hydration discipline).
-          color: h.record.color ?? "default",
+          // Issue #118 — the hydrated record's color is typed non-optional
+          // (the schema's `.default("default")` parse output), so the
+          // context-mapped highlight carries the field directly.
+          color: h.record.color,
         }));
     }
     // Issue #42: the synthetic spoken-word entry joins the SAME slicing

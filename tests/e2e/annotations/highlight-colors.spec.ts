@@ -128,6 +128,15 @@ test.describe("highlight colors in the reader (issue #118)", () => {
     // A fresh highlight is Default — no color modifier on the mark.
     await expect(popover.getByRole("radio", { name: "Default" })).toBeChecked();
 
+    // Pagination geometry baseline: the pick below must not reflow the
+    // article (the color fill swap touches no layout property), so the
+    // page indicator's "N of M" text is byte-identical across the pick.
+    // The load-bearing invariant is the TOTAL M — compared across the pick
+    // AND across the reload below.
+    const indicator = page.locator(".page-indicator");
+    const indicatorBefore = await indicator.textContent();
+    const totalBefore = indicatorBefore?.match(/of (.+)$/)?.[1];
+
     await popover.getByRole("radio", { name: "Green" }).click();
     await popover.locator(".highlight-popover-done").click();
     await expect(popover).not.toBeVisible();
@@ -136,6 +145,10 @@ test.describe("highlight colors in the reader (issue #118)", () => {
     await expect
       .poll(async () => (await readFirstHighlightRow(page))?.color)
       .toBe("green");
+
+    // Geometry invariance: same page count after the pick (AC: the color
+    // changes no anchors, no reading order, no fragmentation).
+    await expect(indicator).toHaveText(indicatorBefore ?? "");
 
     // Paginated mode: the mark renders the modifier + the announced name.
     const mark = page.locator("mark.highlight").first();
@@ -151,14 +164,20 @@ test.describe("highlight colors in the reader (issue #118)", () => {
     await expect(scrollingMark).toHaveClass(/color-green/);
     await expect(scrollingMark).toHaveAttribute("aria-label", /^Green highlight/);
 
-    // Full reload → the persisted record re-renders the color (paginated
-    // default mode restored).
+    // Full reload → the persisted record re-renders the color (the reload
+    // restores the last-saved mode — possibly scrolling — so return to
+    // paginated if needed before reading the indicator).
     await page.reload();
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     const reloaded = page.locator("mark.highlight").first();
     await expect(reloaded).toBeVisible();
     await expect(reloaded).toHaveClass(/color-green/);
     await expect(reloaded).toHaveAttribute("aria-label", /^Green highlight/);
+    if (!(await indicator.isVisible())) {
+      await switchMode(page);
+    }
+    // Geometry invariance across the pick AND the reload: same page count.
+    await expect(indicator).toContainText(`of ${totalBefore}`);
   });
 
   test("keyboard path: focused mark + Enter opens the popover; native radio arrows change the color", async ({

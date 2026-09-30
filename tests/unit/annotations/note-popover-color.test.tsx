@@ -49,8 +49,10 @@ const article: CanonicalArticle = {
 // ── Stubs ────────────────────────────────────────────────────────────────────
 
 const mockData = vi.hoisted(() => ({
-  // The shape mirrors HighlightRecordRow — `color?` so tests can exercise
-  // both the colored record and the pre-#118 row without the field.
+  // The RAW row shape mirrors what Dexie returns — `color?` so tests can
+  // exercise both the colored row and the pre-#118 row without the field.
+  // Hydration happens in the loadHighlights stub below via the REAL schema
+  // (the store's read path), not a render-side fallback.
   highlightRecord: {
     schemaVersion: 1 as const,
     id: "hl-test-1",
@@ -72,17 +74,28 @@ const mockData = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("../../../src/persistence/highlightsStore", () => ({
-  loadHighlights: vi.fn().mockResolvedValue({
-    ok: true,
-    highlights: [mockData.highlightRecord],
-  }),
-  saveHighlight: vi.fn().mockResolvedValue(undefined),
-  deleteHighlight: vi.fn().mockResolvedValue(undefined),
-  // Issue #118 — the ONE color write seam (stubbed; the call shape is the
-  // assertion target).
-  setHighlightColor: vi.fn().mockResolvedValue(undefined),
-}));
+vi.mock(
+  "../../../src/persistence/highlightsStore",
+  async () => {
+    const { HighlightRecordSchema } = await import(
+      "../../../src/content/schema"
+    );
+    return {
+      loadHighlights: vi.fn(async () => ({
+        ok: true,
+        // The real store safeParses every row on the read path; the stub
+        // hydrates through the SAME schema so a pre-#118 row (no color key)
+        // tests the boundary hydration, exactly as production does.
+        highlights: [HighlightRecordSchema.parse(mockData.highlightRecord)],
+      })),
+      saveHighlight: vi.fn().mockResolvedValue(undefined),
+      deleteHighlight: vi.fn().mockResolvedValue(undefined),
+      // Issue #118 — the ONE color write seam (stubbed; the call shape is the
+      // assertion target).
+      setHighlightColor: vi.fn().mockResolvedValue(undefined),
+    };
+  },
+);
 
 vi.mock("../../../src/persistence/notesStore", () => ({
   loadNote: vi.fn().mockResolvedValue(null),
@@ -286,5 +299,28 @@ describe("NotePopover color picker (issue #118)", () => {
     // The host's StatusRegion (polite live region) announces the failure
     // locally — the StorageBanner behind the modal backdrop is not enough.
     await screen.findByText("Couldn't save color.");
+  });
+
+  it("a failed write ROLLS the optimistic pick back to the persisted color", async () => {
+    const { setHighlightColor } = await import(
+      "../../../src/persistence/highlightsStore"
+    );
+    vi.mocked(setHighlightColor).mockRejectedValueOnce(
+      new Error("QuotaExceededError"),
+    );
+    const user = userEvent.setup();
+    renderPopover();
+
+    const dialog = await screen.findByRole("dialog", { name: "Highlight note" });
+    await user.click(colorRadio(dialog, "Pink"));
+
+    // The optimistic pick reverts: the checked radio re-matches the row the
+    // disk kept (Default) — no divergent selection survives the failure
+    // (the visible mark rolls back with the same record).
+    await screen.findByText("Couldn't save color.");
+    await waitFor(() => {
+      expect(colorRadio(dialog, "Default").checked).toBe(true);
+      expect(colorRadio(dialog, "Pink").checked).toBe(false);
+    });
   });
 });

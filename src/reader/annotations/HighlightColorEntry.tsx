@@ -19,7 +19,9 @@
 // rethrows; this host catches the rethrow and surfaces the calm inline
 // "Couldn't save color." copy in its own StatusRegion so the failure is
 // announced INSIDE the modal popover (the banner behind the backdrop is
-// not enough while the reader is mid-edit).
+// not enough while the reader is mid-edit). The hook also ROLLS BACK the
+// optimistic color on failure, so this fully-controlled picker's checked
+// radio re-matches the persisted row — no divergent selection.
 import { useState } from "react";
 import type { HighlightColor } from "../../content/schema";
 import { HIGHLIGHT_COLOR_CHOICES } from "../../annotations/highlightColors";
@@ -28,19 +30,12 @@ import { StatusRegion } from "../../ui/StatusRegion";
 
 interface HighlightColorEntryProps {
   /** The current color on the highlight's record ("default" hydration
-   * handled by the host — this prop is always a closed-set id). */
+   * handled by the schema — this prop is always a closed-set id). */
   color: HighlightColor;
   /** Commit one color pick (routes through updateHighlightColor — the ONE
    * highlightsStore seam; the closure carries the highlight id). Rejects on
    * persistence failure (rethrow path). */
   saveColor: (color: HighlightColor) => Promise<void>;
-  /**
-   * The radio group's name. Hosts mounting more than one group in the same
-   * document must pass a unique name (duplicate names merge into one group
-   * and arrow keys would jump between them — the TagEntry inputId
-   * discipline). Defaults to the popover's own id.
-   */
-  name?: string;
 }
 
 /**
@@ -50,7 +45,6 @@ interface HighlightColorEntryProps {
 export function HighlightColorEntry({
   color,
   saveColor,
-  name = "highlight-popover-color",
 }: HighlightColorEntryProps) {
   const [errorCopy, setErrorCopy] = useState<string | null>(null);
 
@@ -59,9 +53,9 @@ export function HighlightColorEntry({
     try {
       await saveColor(next);
     } catch {
-      // Dexie write failure — the row stays unchanged on disk; the record's
-      // optimistic mirror may diverge until the next ArticleView mount (the
-      // TagEntry contract). Calm voice.
+      // Dexie write failure — the row stays unchanged on disk and the hook
+      // has rolled the optimistic color back, so the radio below re-matches
+      // the persisted record. Calm voice.
       setErrorCopy("Couldn't save color.");
     }
   }
@@ -77,7 +71,7 @@ export function HighlightColorEntry({
           >
             <input
               type="radio"
-              name={name}
+              name="highlight-popover-color"
               value={choice.id}
               checked={color === choice.id}
               onChange={() => void commit(choice.id)}

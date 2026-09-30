@@ -15,11 +15,10 @@
 // highlight stays active — D5-07). NO parallel renderer is forked (DOC-02
 // reading order + D-05 offset integrity depend on reusing this same output).
 import type { InlineRun } from "../types";
-import type { HighlightColor } from "../schema";
 import type { HighlightSlice } from "../../annotations/highlightRanges";
-// Issue #118 — the shared color-label vocabulary (aria prefixes + picker)
-// + the ONE mark className helper (this prose path + the code twin).
-import { HIGHLIGHT_COLOR_LABELS, highlightClassName } from "../../annotations/highlightColors";
+// Issue #118 — the shared mark-trait helpers (the ONE className + aria-label
+// copy contract, shared with the code twin in BlockRenderer).
+import { highlightAriaLabelForText, highlightClassName } from "../../annotations/highlightColors";
 // Issue #42: the synthetic spoken-word marker rides the SAME slicer output
 // as annotation marks, but branches on the reserved id into an aria-hidden,
 // non-focusable <mark> — per-word updates never enter the accessibility
@@ -54,51 +53,17 @@ function Inline({ run }: { run: InlineRun }) {
   return <>{node}</>;
 }
 
-/**
- * Build the aria-label for a highlighted slice (UI-SPEC §Copywriting).
- * Confident: "Highlight: {excerpt}" / "Highlight with note: {excerpt}".
- * Ambiguous: "Highlight that couldn't be matched: {excerpt}" (D5-04 —
- *   the reader is told the anchor is uncertain so they understand the
- *   dashed-outline marker + the disabled drawer jump).
- * Orphan: "Highlight that couldn't be relocated: {excerpt}".
- * A NAMED color (issue #118) prefixes its display name — "Yellow
- * highlight: …" — so the choice is never conveyed by color alone.
- */
+/** The per-slice aria-label: the shared §Copywriting derivation (the ONE
+ * copy in highlightColors.ts) fed from the slice's bundled traits. */
 function highlightAriaLabel(slice: HighlightSlice): string {
   return highlightAriaLabelForText(
     slice.runs.map((r) => r.text).join(""),
-    slice.hasNote,
-    slice.status,
-    slice.color,
+    {
+      color: slice.color ?? "default",
+      hasNote: slice.hasNote,
+      status: slice.status,
+    },
   );
-}
-
-/**
- * The text-based form of the per-slice aria-label derivation, shared with
- * the code-segment mark path (Plan 19-03 — one copy site for the §Copywriting
- * contract; the excerpt is slice/segment-local text capped at 80 chars).
- * `color` (issue #118) is optional and defaults to "default" (no prefix).
- */
-export function highlightAriaLabelForText(
-  text: string,
-  hasNote: boolean,
-  status: "confident" | "ambiguous" | "orphan",
-  color: HighlightColor = "default",
-): string {
-  const excerpt = text.slice(0, 80);
-  // Issue #118 — a NAMED color prefixes its display name ("Yellow
-  // highlight: …"); Default keeps the calm unprefixed copy byte-unchanged.
-  const base =
-    color === "default"
-      ? "Highlight"
-      : `${HIGHLIGHT_COLOR_LABELS[color]} highlight`;
-  if (status === "ambiguous") {
-    return `${base} that couldn't be matched: ${excerpt}`;
-  }
-  if (status === "orphan") {
-    return `${base} that couldn't be relocated: ${excerpt}`;
-  }
-  return `${base}${hasNote ? " with note" : ""}: ${excerpt}`;
 }
 
 export function InlineList({
@@ -160,12 +125,14 @@ export function InlineList({
         // (.unresolved — Pitfall 7 never silent re-attach). Issue #118 adds
         // the named-color modifier (`color-<name>`; Default renders bare).
         // The states stay distinguishable by SHAPE alone (A11Y-05
-        // forced-colors safety — color is never the sole identifier). The
-        // className construction is the ONE shared helper (the code-twin
-        // mark in BlockRenderer uses it verbatim).
-        const unresolved = slice.status !== "confident";
-        const color = slice.color ?? "default";
-        const className = highlightClassName(color, slice.hasNote, unresolved);
+        // forced-colors safety — color is never the sole identifier). Both
+        // modifiers ride the ONE shared traits helpers (the code-twin mark
+        // in BlockRenderer uses them verbatim).
+        const className = highlightClassName({
+          color: slice.color ?? "default",
+          hasNote: slice.hasNote,
+          status: slice.status,
+        });
         return (
           <mark
             key={i}

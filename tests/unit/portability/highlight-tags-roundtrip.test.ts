@@ -90,6 +90,8 @@ const TAGGED_HIGHLIGHT = {
   quote: { prefix: "", exact: "Round trip body text.", suffix: "" },
   createdAt: "2026-09-10T00:00:00.000Z",
   tags: ["essays", "to-revisit"],
+  // #118's field with its schema default — a parsed record always carries it.
+  color: "default" as const,
 };
 
 const TAGGED_NOTE = {
@@ -258,7 +260,10 @@ describe("highlight tags survive export → import (issue #116)", () => {
     const { dexieLibrarySource } = await import("../../../src/ingestion/LibrarySource");
     const { saveHighlight } = await loadStores();
     await dexieLibrarySource.save(sampleArticle());
-    await saveHighlight({
+    // The pre-#116 writer emitted this exact shape; saveHighlight does not
+    // re-parse on write (store contract), so the cast simulates the old row
+    // landing in Dexie un-hydrated — the export self-check is what hydrates.
+    const PRE_TAGS_ROW = {
       schemaVersion: 1,
       id: "hl-untagged-old",
       articleId: "art-tag-roundtrip",
@@ -267,7 +272,8 @@ describe("highlight tags survive export → import (issue #116)", () => {
       quote: { prefix: "", exact: "Round trip body text.", suffix: "" },
       createdAt: "2026-09-10T00:00:00.000Z",
       // NO tags field — the old row shape.
-    });
+    } as unknown as Parameters<typeof saveHighlight>[0];
+    await saveHighlight(PRE_TAGS_ROW);
 
     const { buildBundle, validateBundle, applyImport } = await loadService();
     const { detectImportPreview, resolveImportPlan } = await loadConflicts();

@@ -232,7 +232,10 @@ describe("highlight colors survive export → import (issue #118)", () => {
     const { dexieLibrarySource } = await import("../../../src/ingestion/LibrarySource");
     const { saveHighlight } = await loadStores();
     await dexieLibrarySource.save(sampleArticle());
-    await saveHighlight({
+    // The pre-#118 writer emitted this exact shape; saveHighlight does not
+    // re-parse on write (store contract), so the cast simulates the old row
+    // landing in Dexie un-hydrated — the export self-check is what hydrates.
+    const PRE_COLOR_ROW = {
       schemaVersion: 1,
       id: "hl-uncolored-old",
       articleId: "art-color-roundtrip",
@@ -241,7 +244,8 @@ describe("highlight colors survive export → import (issue #118)", () => {
       quote: { prefix: "", exact: "Round trip body text.", suffix: "" },
       createdAt: "2026-09-20T00:00:00.000Z",
       // NO color field — the old row shape.
-    });
+    } as unknown as Parameters<typeof saveHighlight>[0];
+    await saveHighlight(PRE_COLOR_ROW);
 
     const { buildBundle, validateBundle, applyImport } = await loadService();
     const { detectImportPreview, resolveImportPlan } = await loadConflicts();

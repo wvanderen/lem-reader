@@ -626,12 +626,16 @@ export const HighlightRecordSchema = z.object({
   tags: z.array(z.string().min(1)).default([]).optional(),
   // Issue #118 — the named highlight color (Default + 4 named choices).
   // Additive with the SAME Pitfall-9 discipline as tags: rows written before
-  // this field omit it and hydrate to "default" via .default("default)";
-  // consumers read `color ?? "default"` for in-memory records built before
-  // the hydration point. Color is VISUAL ORGANIZATION ONLY — separate from
+  // this field omit it and hydrate to "default" via .default("default").
+  // Deliberately NOT `.optional()` (the tags field keeps its own shipped
+  // contract): `.default()` alone makes the PARSE OUTPUT always a closed-set
+  // id — the hydrated record's type guarantees `color: HighlightColor`, so
+  // consumers read `record.color` directly and the compiler enforces the
+  // hydration invariant instead of trusting every consumer to remember
+  // `color ?? "default"`. Color is VISUAL ORGANIZATION ONLY — separate from
   // tags and from anchor status, so it never gates editability or anchoring
   // and never participates in selector math.
-  color: HighlightColorSchema.default("default").optional(),
+  color: HighlightColorSchema.default("default"),
 });
 export type HighlightRecord = z.infer<typeof HighlightRecordSchema>;
 

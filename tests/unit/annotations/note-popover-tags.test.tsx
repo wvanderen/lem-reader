@@ -74,14 +74,23 @@ const mockData = vi.hoisted(() => ({
   ],
 }));
 
-vi.mock("../../../src/persistence/highlightsStore", () => ({
-  loadHighlights: vi.fn().mockResolvedValue({
-    ok: true,
-    highlights: [mockData.highlightRecord],
-  }),
-  saveHighlight: vi.fn().mockResolvedValue(undefined),
-  deleteHighlight: vi.fn().mockResolvedValue(undefined),
-}));
+vi.mock("../../../src/persistence/highlightsStore", async () => {
+  const { HighlightRecordSchema } = await import("../../../src/content/schema");
+  return {
+    loadHighlights: vi.fn(async () => ({
+      ok: true,
+      // The real store safeParses every row on the read path; the stub
+      // hydrates through the SAME schema so the pre-#116 row (no tags key)
+      // exercises the boundary hydration, exactly as production does.
+      highlights: [HighlightRecordSchema.parse(mockData.highlightRecord)],
+    })),
+    saveHighlight: vi.fn().mockResolvedValue(undefined),
+    deleteHighlight: vi.fn().mockResolvedValue(undefined),
+    // Issue #118 added the color write seam to this module; the tags tests
+    // don't exercise it but the hook imports it, so keep the seam present.
+    setHighlightColor: vi.fn().mockResolvedValue(undefined),
+  };
+});
 
 vi.mock("../../../src/persistence/notesStore", () => ({
   loadNote: vi.fn().mockResolvedValue(null),

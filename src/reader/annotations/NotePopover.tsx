@@ -350,7 +350,7 @@ export function NotePopover(): React.ReactElement | null {
             {resolved && (
               <HighlightColorEntry
                 key={resolved.record.id}
-                color={resolved.record.color ?? "default"}
+                color={resolved.record.color}
                 saveColor={(next) =>
                   updateHighlightColor(resolved.record.id, next)
                 }
