@@ -25,6 +25,7 @@
 //      records (unlike books: highlights/notes hang off articles, and feed
 //      previews are inert display data).
 import { db } from "./db";
+import type { SubscriptionRecordRow } from "./db";
 import { SubscriptionRecordSchema } from "../content/schema";
 import type { SubscriptionRecord } from "../content/schema";
 import { classifyStorageError } from "./errors";
@@ -45,8 +46,26 @@ export type SubscriptionsLoadResult =
   | { ok: false; reason: "unavailable" | "corrupt" | "unupgradeable" };
 
 /**
+ * validRows — the ONE Zod-at-boundary row filter every read shares (STATE-04):
+ * each row must parse through SubscriptionRecordSchema; a corrupt row is
+ * dropped calmly, never coerced (the loadAllHighlights precedent — a single
+ * malformed row must not block the rest of the store).
+ */
+function validRows(rows: SubscriptionRecordRow[]): SubscriptionRecord[] {
+  const valid: SubscriptionRecord[] = [];
+  for (const row of rows) {
+    const parsed = SubscriptionRecordSchema.safeParse(row);
+    if (parsed.success) {
+      valid.push(parsed.data);
+    }
+    // else: drop the corrupt row calmly — STATE-04 says never coerce.
+  }
+  return valid;
+}
+
+/**
  * listSubscriptions — load every subscription row, Zod-validated (STATE-04).
- * Corrupt rows are dropped silently; a single malformed row must not block
+ * Corrupt rows are dropped calmly; a single malformed row must not block
  * the Discover surface. Never throws — a Dexie-level failure routes through
  * classifyStorageError into the discriminated `{ok: false, reason}` arm so
  * the surface can route recovery (the booksStore precedent). Rows arrive in
@@ -54,16 +73,7 @@ export type SubscriptionsLoadResult =
  */
 export async function listSubscriptions(): Promise<SubscriptionsLoadResult> {
   try {
-    const rows = await db.subscriptions.toArray();
-    const valid: SubscriptionRecord[] = [];
-    for (const row of rows) {
-      const parsed = SubscriptionRecordSchema.safeParse(row);
-      if (parsed.success) {
-        valid.push(parsed.data);
-      }
-      // else: drop the corrupt row silently — STATE-04 says never coerce.
-    }
-    return { ok: true, subscriptions: valid };
+    return { ok: true, subscriptions: validRows(await db.subscriptions.toArray()) };
   } catch (e) {
     return { ok: false, reason: classifyStorageError(e) };
   }
@@ -78,16 +88,7 @@ export async function listSubscriptions(): Promise<SubscriptionsLoadResult> {
  * the caller).
  */
 export async function loadAllSubscriptions(): Promise<SubscriptionRecord[]> {
-  const rows = await db.subscriptions.toArray();
-  const valid: SubscriptionRecord[] = [];
-  for (const row of rows) {
-    const parsed = SubscriptionRecordSchema.safeParse(row);
-    if (parsed.success) {
-      valid.push(parsed.data);
-    }
-    // else: drop the corrupt row silently — STATE-04 says never coerce.
-  }
-  return valid;
+  return validRows(await db.subscriptions.toArray());
 }
 
 /**

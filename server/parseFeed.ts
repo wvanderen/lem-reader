@@ -246,18 +246,21 @@ function resolveItemImage(item: Record<string, unknown>): string | undefined {
 
 /** toPreview — one admitted item → the bounded FeedItemPreview, or null when
  * the item has no title (a preview without a title is not previewable —
- * skipped, never fabricated). */
+ * skipped, never fabricated). `excerptKeys` is the feed-shape's ordered
+ * excerpt sources (RSS description → content:encoded; Atom summary →
+ * content), derived ONCE per feed by the caller. */
 function toPreview(
   item: Record<string, unknown>,
-  keys: { excerptKeys: string[]; isAtom: boolean },
+  excerptKeys: string[],
+  isAtom: boolean,
 ): FeedItemPreview | null {
   const title = textOf(item["title"]);
   if (title === undefined) return null;
-  const link = keys.isAtom ? resolveAtomLink(item) : resolveRssLink(item);
-  const dateRaw = keys.isAtom ? item["published"] ?? item["updated"] : item["pubDate"] ?? item["date"];
+  const link = isAtom ? resolveAtomLink(item) : resolveRssLink(item);
+  const dateRaw = isAtom ? item["published"] ?? item["updated"] : item["pubDate"] ?? item["date"];
   const datePublished = toDateIso(dateRaw);
   let excerpt: string | undefined;
-  for (const key of keys.excerptKeys) {
+  for (const key of excerptKeys) {
     excerpt = stripToExcerpt(item[key]);
     if (excerpt !== undefined) break;
   }
@@ -275,10 +278,13 @@ function toPreview(
  * parseFeedXml — parse fetched feed XML into the bounded ParsedFeed.
  * Recognizes RSS 2.0 (rss.channel.item) and Atom (feed.entry); anything
  * else — malformed XML, hostile DTDs, non-feed XML (including an HTML
- * challenge page that slipped a text/xml header), a feed with NO items
- * shape at all — refuses `feed-unreadable`. `fallbackTitle` is the
- * hostname the caller derived from the final URL (the article title
- * chain's hostname fallback) for channels that ship no title.
+ * challenge page that slipped a text/xml header) — refuses
+ * `feed-unreadable`. A STRUCTURALLY VALID feed with zero items is accepted
+ * with an empty items array (the Discover surface renders its honest
+ * no-recent-items line) — the refusal is for payloads with no recognizable
+ * feed shape, not for quiet feeds. `fallbackTitle` is the hostname the
+ * caller derived from the final URL (the article title chain's hostname
+ * fallback) for channels that ship no title.
  */
 export function parseFeedXml(text: string, fallbackTitle: string): ParsedFeed {
   if (declaresEntities(text)) {
@@ -310,24 +316,22 @@ export function parseFeedXml(text: string, fallbackTitle: string): ParsedFeed {
   const isAtom = atomFeed !== undefined;
   const source = isAtom ? atomFeed! : channel!;
   const rawItems = asArray(source["item"]).concat(isAtom ? asArray(source["entry"]) : []);
-  const title =
-    textOf(source["title"]) ??
-    fallbackTitle.trim().slice(0, MAX_FEED_TEXT_CHARS) ??
-    "";
+  // The channel/feed name, falling back to the caller's hostname fallback
+  // (the article title chain's hostname step).
+  const title = textOf(source["title"]) ?? fallbackTitle.trim().slice(0, MAX_FEED_TEXT_CHARS);
   if (title.length === 0) {
     throw new IngestionError("feed-unreadable", "This feed has no name.");
   }
   const description = stripToExcerpt(source["description"] ?? source["subtitle"]);
 
   const items: FeedItemPreview[] = [];
+  // RSS excerpt order: description → content:encoded (removeNSPrefix
+  // collapses the namespace). Atom: summary → content. Derived ONCE per
+  // feed, not per item.
+  const excerptKeys = isAtom ? ["summary", "content"] : ["description", "encoded"];
   for (const raw of rawItems) {
     if (!isRecord(raw)) continue;
-    const preview = toPreview(raw, {
-      // RSS excerpt order: description → content:encoded (removeNSPrefix
-      // collapses the namespace). Atom: summary → content.
-      excerptKeys: isAtom ? ["summary", "content"] : ["description", "encoded"],
-      isAtom,
-    });
+    const preview = toPreview(raw, excerptKeys, isAtom);
     if (preview !== null) {
       items.push(preview);
     }

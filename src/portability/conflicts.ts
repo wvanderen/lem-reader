@@ -904,16 +904,24 @@ export async function resolveImportPlan(
     if (incomingKey !== null && localSubscriptionByFeedUrl.has(incomingKey)) {
       continue; // same feed already local — keep the LOCAL row + its cache
     }
+    if (incomingKey === null) {
+      // Unreachable through a validated bundle (httpUrl refinement) — a
+      // non-http(s) feedUrl never parses. Refuse the ROW calmly rather
+      // than write an un-mergeable key: the ride-along has no reader
+      // decision to surface it against, and never-coerce (STATE-04)
+      // forbids persisting a row whose merge key cannot normalize.
+      continue;
+    }
     // An over-determined bundle carrying the same feedUrl twice must not
     // double-write either — the FIRST incoming row wins (the first-seen
     // merge shape, LibrarySource L173-190 precedent).
-    if (incomingKey === null || !planSubscriptionFeedUrls.has(incomingKey)) {
+    if (!planSubscriptionFeedUrls.has(incomingKey)) {
       let row = subscription;
       if (localSubscriptionIds.has(subscription.id)) {
         row = { ...subscription, id: crypto.randomUUID() };
       }
       plan.subscriptionsToWrite.push(row);
-      if (incomingKey !== null) planSubscriptionFeedUrls.add(incomingKey);
+      planSubscriptionFeedUrls.add(incomingKey);
     }
   }
 

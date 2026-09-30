@@ -590,7 +590,15 @@ async function ingestFeed(feedUrl: string): Promise<IngestionResponse> {
     // unreachable for an http(s) URL — the fetch validated it; calm guard
   }
   const parsed = parseFeedXml(xml, host);
-  const normalizedUrl = normalizeFeedUrl(fetched.finalUrl) ?? fetched.finalUrl;
+  // The merge key MUST be the normalized URL. safeFetch's scheme allowlist
+  // guarantees an http(s) finalUrl, which normalizeFeedUrl always accepts —
+  // a null here is a pipeline bug, so it refuses loudly (the
+  // round-trip-anchor canary philosophy) instead of silently demoting the
+  // merge key to the raw URL.
+  const normalizedUrl = normalizeFeedUrl(fetched.finalUrl);
+  if (normalizedUrl === null) {
+    throw new IngestionError("server-error", "feed finalUrl failed normalization");
+  }
   const feed: FeedPreview = FeedPreviewSchema.parse({
     url: normalizedUrl,
     title: parsed.title,
