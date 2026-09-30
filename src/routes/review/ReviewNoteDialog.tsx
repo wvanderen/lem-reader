@@ -12,10 +12,12 @@
 //   - Native <dialog> + showModal(): the browser supplies the modal-dialog
 //     accessibility context (focus scope + background inert + the "modal
 //     shown" AT event VoiceOver needs), the focus trap, and Esc-to-close.
-//   - Open path captures document.activeElement into triggerRef BEFORE
+//   - Open path captures document.activeElement into the trigger BEFORE
 //     showModal (Pitfall 1 — showModal does not auto-restore focus).
-//   - The `close` event listener restores triggerRef.current?.focus() on
-//     EVERY close path (Pitfall 1 / A11Y-02).
+//   - The `close` event listener restores the trigger's focus on EVERY
+//     close path (Pitfall 1 / A11Y-02).
+//  (These three now come from the shared ./useDialogSession lifecycle — the
+//   ReviewTagsDialog twin; the commit path below stays grep-isolated here.)
 //   - The textarea value renders as a React text child — NEVER raw HTML
 //     (Pitfall 8 note XSS; react/no-danger + lint:no-danger enforced
 //     repo-wide; T-10-05a).
@@ -50,11 +52,15 @@
 // write already failed once) reports saved=false so the panel announces
 // the honest failure instead of "Note saved.". "Note saved." can only ever
 // announce a write that landed.
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { deleteNote, saveNote } from "../../persistence/notesStore";
 import type { NoteRecord } from "../../content/schema";
 // Issue #98 — the ONE polite status-region primitive.
 import { StatusRegion } from "../../ui/StatusRegion";
+// The shared dialog-session lifecycle (open/close sync, Pitfall 1 trigger
+// capture + restore, exactly-once close-report guard) — the ReviewTagsDialog
+// twin. The write path stays HERE (the commit-once + retry discipline).
+import { useDialogSession } from "./useDialogSession";
 
 /**
  * Issue #98 review — the honest commit-failure copy, shared with the
@@ -88,12 +94,6 @@ export function ReviewNoteDialog({
   existing,
   onDone,
 }: ReviewNoteDialogProps) {
-  const dialogRef = useRef<HTMLDialogElement | null>(null);
-  // The trigger element that opened the dialog (the row's Edit note button).
-  // Captured on open so the `close` listener can restore focus to it
-  // (Pitfall 1 — mirrors NotePopover/SettingsPanel/RemoveConfirm).
-  const triggerRef = useRef<HTMLElement | null>(null);
-
   // Local textarea state — seeded fresh from `existing` on every open (a
   // prior canceled session never leaks into the next one; the
   // ImportPreviewDialog fresh-choices reset precedent). Rendered as a React
@@ -115,45 +115,26 @@ export function ReviewNoteDialog({
   // work). Reserved for future per-article copy (RemoveConfirm precedent).
   void articleId;
 
-  // Sync the `open` prop with the underlying <dialog> state (the NotePopover
-  // L99-131 clone shape).
-  useEffect(() => {
-    const dlg = dialogRef.current;
-    if (!dlg) return;
-    if (open && !dlg.open) {
-      // Fresh session state BEFORE showModal: seed the textarea and arm the
-      // commit guard (a canceled prior session never leaks). Issue #98 —
-      // including a prior session's failed-write error.
+  // Fresh session state BEFORE showModal (the hook calls this after the
+  // trigger capture): seed the textarea and arm the commit guard (a canceled
+  // prior session never leaks), clear a prior session's failed-write error,
+  // then focus the textarea + select the existing text so the reader can
+  // edit or replace in one gesture (D5-10, UI-SPEC §29). Explicit focus:
+  // showModal does not reliably focus the first control in WebKit
+  // (Pitfall 1 cross-engine quirk).
+  const handleOpen = useCallback(
+    (dlg: HTMLDialogElement) => {
       setText(existing?.text ?? "");
       setWriteError(false);
       committedRef.current = false;
-      // Capture the trigger BEFORE showModal moves focus into the dialog
-      // (Pitfall 1).
-      triggerRef.current = document.activeElement as HTMLElement | null;
-      try {
-        dlg.showModal();
-      } catch {
-        // showModal throws if the element is already in the top layer or if
-        // the browser doesn't support <dialog>. Either way the editor is in
-        // the DOM; the close path is guarded by dlg.open below.
-      }
-      // Focus the textarea (D5-10 — focus → textarea on open) + select the
-      // existing text so the reader can edit or replace in one gesture
-      // (UI-SPEC §29). Explicit focus: showModal does not reliably focus
-      // the first control in WebKit (Pitfall 1 cross-engine quirk).
       const textarea = dlg.querySelector<HTMLTextAreaElement>("textarea");
       if (textarea) {
         textarea.focus();
         textarea.select();
       }
-    } else if (!open && dlg.open) {
-      // State-driven close (Done committed → onDone() → parent flipped the
-      // open prop). dlg.close() fires the `close` event → the listener
-      // below runs the guarded commit (a no-op after Done) + restores
-      // focus to the trigger.
-      dlg.close();
-    }
-  }, [open, existing]);
+    },
+    [existing],
+  );
 
   // ── THE ONE COMMIT PATH (Pitfall 7) ─────────────────────────────────────
   // Invoked from BOTH the Done button onClick AND the dialog close listener;
@@ -199,29 +180,27 @@ export function ReviewNoteDialog({
     return "saved";
   }, [text, highlightId, existing]);
 
-  // Register the `close` event listener (with cleanup). Native <dialog>
-  // fires `close` on EVERY close path — Escape (browser-default) and the
-  // state-driven dlg.close() above. On close: route through the single
+  // The shared dialog-session lifecycle: the dialog ref (bound below), the
+  // Pitfall 1 trigger capture + restore on every close path, and the
+  // open/close prop sync. The close-path report routes through the single
   // commit (Pitfall 7 — an Esc never loses edits; the no-op after Done's
-  // guarded commit reports "handled" and does NOT re-report the outcome)
-  // and restore focus to the captured trigger (Pitfall 1). Issue #98 —
-  // a resolved close reports the outcome ("saved"/"failed") so the panel
-  // never announces "Note saved." for a write that did not land. onDone
-  // still fires on every RESOLVED close path (the parent's target state
-  // must never wedge).
-  useEffect(() => {
-    const dlg = dialogRef.current;
-    if (!dlg) return;
-    const handleClose = () => {
-      triggerRef.current?.focus();
+  // guarded commit reports "handled" and does NOT re-report the outcome).
+  // Issue #98 — a resolved close reports the outcome ("saved"/"failed") so
+  // the panel never announces "Note saved." for a write that did not land.
+  // onDone still fires on every RESOLVED close path (the parent's target
+  // state must never wedge). NoteDialog's Done deliberately does NOT use the
+  // hook's reportClose guard: on a failed Done the dialog STAYS OPEN and the
+  // next Done must retry (the commit guard re-arms), so a failed session is
+  // still unreported.
+  const { dialogRef } = useDialogSession(open, {
+    onOpen: handleOpen,
+    onClose: useCallback(() => {
       void commit().then((outcome) => {
         if (outcome === "handled") return;
         onDone(outcome === "saved");
       });
-    };
-    dlg.addEventListener("close", handleClose);
-    return () => dlg.removeEventListener("close", handleClose);
-  }, [commit, onDone]);
+    }, [commit, onDone]),
+  });
 
   /** Done button — routes through the same single commit. Issue #98: on
    * success the commit's onDone(true) flips the parent's open prop (the

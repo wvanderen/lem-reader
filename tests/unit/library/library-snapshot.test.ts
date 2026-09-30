@@ -83,9 +83,7 @@ async function loadReadingPosition() {
 
 type ArticleInput = Parameters<typeof ArticleSchema.parse>[0];
 
-function sampleArticle(
-  overrides: Partial<ArticleInput> = {},
-): CanonicalArticle {
+function sampleArticle(overrides: Partial<ArticleInput> = {}): CanonicalArticle {
   return ArticleSchema.parse({
     id: "snapshot-article",
     revision: 1,
@@ -97,9 +95,7 @@ function sampleArticle(
       retrievedAt: "2026-09-01T00:00:00.000Z",
       originalHtmlHash: "sha256:" + "0".repeat(64),
     },
-    blocks: [
-      { kind: "paragraph", content: [{ text: "Body text.", marks: [] }] },
-    ],
+    blocks: [{ kind: "paragraph", content: [{ text: "Body text.", marks: [] }] }],
     footnotes: [],
     ingestionMeta: {
       source: "url",
@@ -194,10 +190,7 @@ function sampleNote(highlightId: string, text = "A note."): NoteRecord {
   });
 }
 
-function sampleSession(
-  id: string,
-  articleId: string,
-): ReadingSessionRecord {
+function sampleSession(id: string, articleId: string): ReadingSessionRecord {
   return ReadingSessionRecordSchema.parse({
     schemaVersion: 1,
     id,
@@ -250,15 +243,11 @@ describe("loadLibrarySnapshot — partition (Issue #3)", () => {
       expect(article.ingestionMeta?.bookId).toBeUndefined();
     }
     const chapters = snapshot.chaptersByBook.get("epub-abc123def456");
-    expect(chapters?.map((c) => c.id)).toEqual([
-      "epub-abc123def456-c00",
-      "epub-abc123def456-c01",
-    ]);
+    expect(chapters?.map((c) => c.id)).toEqual(["epub-abc123def456-c00", "epub-abc123def456-c01"]);
     expect(snapshot.books.map((b) => b.id)).toEqual(["epub-abc123def456"]);
     // Every chapter member appears in exactly one partition arm.
     expect(snapshot.articles.length).toBe(
-      snapshot.standaloneArticles.length +
-        [...snapshot.chaptersByBook.values()].flat().length,
+      snapshot.standaloneArticles.length + [...snapshot.chaptersByBook.values()].flat().length,
     );
   });
 });
@@ -352,9 +341,8 @@ describe("loadLibrarySnapshot — tags fold (Issue #3)", () => {
 
   it("unions article tags with book tags, localeCompare-sorted", async () => {
     await seedStandaloneAndBook();
-    const { setArticleTags, setBookTags } = await import(
-      "../../../src/ingestion/library/tagsStore"
-    );
+    const { setArticleTags, setBookTags } =
+      await import("../../../src/ingestion/library/tagsStore");
     const { loadLibrarySnapshot } = await loadSnapshot();
 
     await setArticleTags("snapshot-standalone", ["zebra", "essay"]);
@@ -429,9 +417,7 @@ describe("loadLibrarySnapshot — highlight-count fold (issue #76)", () => {
     expect(snapshot.highlightCountByArticleId.get(standaloneId)).toBe(2);
     expect(snapshot.highlightCountByArticleId.get("epub-abc123def456-c00")).toBe(1);
     // An article with no highlights is simply absent (≥ 1 gates the row entry).
-    expect(
-      snapshot.highlightCountByArticleId.has("epub-abc123def456-c01"),
-    ).toBe(false);
+    expect(snapshot.highlightCountByArticleId.has("epub-abc123def456-c01")).toBe(false);
   });
 
   it("an annotation-free library yields an empty fold", async () => {
@@ -440,6 +426,67 @@ describe("loadLibrarySnapshot — highlight-count fold (issue #76)", () => {
     const snapshot = await loadLibrarySnapshot();
 
     expect(snapshot.highlightCountByArticleId.size).toBe(0);
+  });
+});
+
+describe("loadLibrarySnapshot — highlight-tag vocabulary fold (issue #117)", () => {
+  beforeEach(async () => {
+    await wipeDatabase();
+  });
+
+  /** A tagged variant of sampleHighlight (tags ride the HighlightRecord). */
+  function taggedHighlight(articleId: string, id: string, tags: string[]): HighlightRecord {
+    return HighlightRecordSchema.parse({
+      ...sampleHighlight(articleId, id),
+      tags,
+    });
+  }
+
+  it("carries every tag held by ≥1 highlight, localeCompare-sorted — never article/book tags alone", async () => {
+    const standaloneId = await seedStandaloneAndBook();
+    const { saveHighlight } = await import("../../../src/persistence/highlightsStore");
+    const { loadLibrarySnapshot } = await loadSnapshot();
+    // The standalone article itself is seeded with a tag ("essay") that NO
+    // highlight carries — the fold must stay annotation-only.
+    await saveHighlight(taggedHighlight(standaloneId, "hl-t1", ["margin", "essay"]));
+    await saveHighlight(taggedHighlight(standaloneId, "hl-t2", ["revisit"]));
+
+    const snapshot = await loadLibrarySnapshot();
+
+    // "essay" IS here — but only because hl-t1 carries it as an
+    // annotation tag (the pure-fold test below proves the article's own
+    // tags contribute nothing).
+    expect(snapshot.highlightTags).toEqual(["essay", "margin", "revisit"]);
+  });
+
+  it("case-insensitively dedupes highlight-local casings (first-seen wins) — never two chips for one tag", async () => {
+    const standaloneId = await seedStandaloneAndBook();
+    const { saveHighlight } = await import("../../../src/persistence/highlightsStore");
+    const { loadLibrarySnapshot, highlightTagVocabulary } = await loadSnapshot();
+    await saveHighlight(taggedHighlight(standaloneId, "hl-c1", ["Margin"]));
+    await saveHighlight(taggedHighlight(standaloneId, "hl-c2", ["margin"]));
+
+    const snapshot = await loadLibrarySnapshot();
+
+    expect(snapshot.highlightTags).toEqual(["Margin"]); // first-seen casing
+    // The pure fold, pinned directly (the highlightCountByArticle
+    // discipline): ci-dedupe + sort in one definition.
+    expect(
+      highlightTagVocabulary([
+        taggedHighlight("a", "h1", ["zebra", "Margin"]),
+        taggedHighlight("b", "h2", ["margin"]),
+        taggedHighlight("c", "h3", []),
+      ]),
+    ).toEqual(["Margin", "zebra"]);
+  });
+
+  it("an annotation-free library yields an empty fold (EMPTY snapshot parity)", async () => {
+    const { loadLibrarySnapshot, EMPTY_LIBRARY_SNAPSHOT } = await loadSnapshot();
+
+    const snapshot = await loadLibrarySnapshot();
+
+    expect(snapshot.highlightTags).toEqual([]);
+    expect(snapshot.highlightTags).toEqual(EMPTY_LIBRARY_SNAPSHOT.highlightTags);
   });
 });
 
@@ -488,9 +535,7 @@ describe("loadLibrarySnapshot — reading sessions (issue #38)", () => {
 
   it("carries every persisted reading session (the stats strip's payload)", async () => {
     const standaloneId = await seedStandaloneAndBook();
-    const { putReadingSession } = await import(
-      "../../../src/persistence/readingSessionsStore"
-    );
+    const { putReadingSession } = await import("../../../src/persistence/readingSessionsStore");
     const { loadLibrarySnapshot } = await loadSnapshot();
 
     await putReadingSession(sampleSession("visit-1", standaloneId));
@@ -498,10 +543,7 @@ describe("loadLibrarySnapshot — reading sessions (issue #38)", () => {
 
     const snapshot = await loadLibrarySnapshot();
 
-    expect(snapshot.readingSessions.map((s) => s.id)).toEqual([
-      "visit-1",
-      "visit-2",
-    ]);
+    expect(snapshot.readingSessions.map((s) => s.id)).toEqual(["visit-1", "visit-2"]);
   });
 
   it("a session-free library yields an empty array (EMPTY snapshot parity)", async () => {
@@ -514,9 +556,7 @@ describe("loadLibrarySnapshot — reading sessions (issue #38)", () => {
 
   it("drops corrupt session rows without blocking the snapshot (STATE-04 agreement)", async () => {
     const standaloneId = await seedStandaloneAndBook();
-    const { putReadingSession } = await import(
-      "../../../src/persistence/readingSessionsStore"
-    );
+    const { putReadingSession } = await import("../../../src/persistence/readingSessionsStore");
     const { loadLibrarySnapshot } = await loadSnapshot();
     const { db } = await loadDb();
 
@@ -542,8 +582,7 @@ describe("loadLibrarySnapshot — reading sessions (issue #38)", () => {
 
 describe("invalidateLibrarySnapshot — the one write-followup call (Issue #3)", () => {
   it("notifies subscribers exactly once until unsubscribed", async () => {
-    const { invalidateLibrarySnapshot, onLibrarySnapshotInvalidated } =
-      await loadSnapshot();
+    const { invalidateLibrarySnapshot, onLibrarySnapshotInvalidated } = await loadSnapshot();
 
     let calls = 0;
     const unsubscribe = onLibrarySnapshotInvalidated(() => {

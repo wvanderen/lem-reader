@@ -43,8 +43,7 @@ const GHOST_ARTICLE_ID = "ghost-article";
 
 // A sentence that appears VERBATIM in paragraphs 2 and 4 (nothing else in
 // the corpus repeats it) — the ambiguity trigger.
-const AMBIG_SENTENCE =
-  "The tide keeps its own minutes, and the ferry waits for none of them.";
+const AMBIG_SENTENCE = "The tide keeps its own minutes, and the ferry waits for none of them.";
 
 const PARAGRAPHS = [
   "The tern light station logged three arrivals before breakfast: a coal barge riding low, a mail packet flying the company pennant, and a single rowing boat whose occupant refused the harbor line and beached himself with great ceremony on the shingle below the tower.",
@@ -72,9 +71,7 @@ const AMBIG_POSITION = {
 // Seed-time verification through the SHIPPED resolver — the corpus is only
 // usable if this actually classifies ambiguous (guards prose drift).
 if (resolveQuoteSelector(ARTICLE, AMBIG_QUOTE, AMBIG_POSITION) !== "ambiguous") {
-  throw new Error(
-    "corpus invariant: the duplicated sentence must resolve ambiguous",
-  );
+  throw new Error("corpus invariant: the duplicated sentence must resolve ambiguous");
 }
 const EXCERPT_AMBIG = AMBIG_SENTENCE;
 
@@ -106,17 +103,11 @@ test.beforeEach(async ({ page }) => {
 async function seedAndOpenReview(page: Page): Promise<void> {
   await page.goto(`${BASE}/#/`);
   await page.reload();
-  await expect(
-    page.getByRole("heading", { name: "Saved articles" }),
-  ).toBeVisible();
-  await expect(
-    page.getByText("Getting started with Lem Reader").first(),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible();
+  await expect(page.getByText("Getting started with Lem Reader").first()).toBeVisible();
   await seedRows(page, CORPUS_ROWS);
   await page.goto(`${BASE}/#/highlights`);
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Highlights" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
 }
 
 test.describe("RECV-01.e review-panel tri-state (10-04 honest surfacing)", () => {
@@ -126,21 +117,15 @@ test.describe("RECV-01.e review-panel tri-state (10-04 honest surfacing)", () =>
     await seedAndOpenReview(page);
 
     // The ambiguous row renders its badge (exact D10-07 copy).
-    await expect(page.locator(".review-badge-ambiguous")).toHaveText(
-      "Uncertain anchor",
-    );
+    await expect(page.locator(".review-badge-ambiguous")).toHaveText("Uncertain anchor");
     // The confident row renders NO badge at all (scoped to its row).
     const confidentRow = page.locator("section.review-section .review-row", {
       hasText: EXCERPT_CONFIDENT,
     });
     await expect(confidentRow.first()).toBeVisible();
-    await expect(
-      confidentRow.first().locator(".review-badge"),
-    ).toHaveCount(0);
+    await expect(confidentRow.first().locator(".review-badge")).toHaveCount(0);
     // The legend line under the filter row is visible.
-    await expect(page.locator(".review-legend")).toHaveText(
-      "No badge means anchored confidently.",
-    );
+    await expect(page.locator(".review-legend")).toHaveText("No badge means anchored confidently.");
   });
 
   test("orphan tail: 'Highlights without an article' carries the ghost row, no jump affordance", async ({
@@ -164,9 +149,7 @@ test.describe("RECV-01.e review-panel tri-state (10-04 honest surfacing)", () =>
       hasText: EXCERPT_ORPHAN,
     });
     await expect(orphanRow).toBeVisible();
-    await expect(orphanRow.locator(".review-badge")).toHaveText(
-      "Article missing",
-    );
+    await expect(orphanRow.locator(".review-badge")).toHaveText("Article missing");
 
     // No JUMP affordance inside the orphan section — the row body is a
     // static div, so there is no .review-row button (hence no enabled
@@ -175,20 +158,31 @@ test.describe("RECV-01.e review-panel tri-state (10-04 honest surfacing)", () =>
     // original button-count-0 assertion pinned the pre-curation DOM; the
     // intent (orphan rows are not jumpable) is preserved via the
     // button.review-row count.
-    await expect(
-      orphanSection.locator("button.review-row"),
-    ).toHaveCount(0);
+    await expect(orphanSection.locator("button.review-row")).toHaveCount(0);
     // And the curation affordances are present (D10-11 — orphans are
     // curatable in place even without an article). The actions cluster is
-    // a SIBLING of the .review-row body inside the row's <li>. Issue #119:
-    // the cluster is now THREE affordances — Edit note / Change color /
-    // Remove highlight (color, like notes, is keyed to highlightId alone
-    // and never gated on anchor status).
+    // a SIBLING of the .review-row body inside the row's <li>. Issues #117 and #119
+    // — the cluster grew to FOUR affordances: Edit note / Change color / Edit tags /
+    // Remove highlight (tags are keyed to highlightId, so orphans carry
+    // the tags editor too).
     await expect(
-      orphanSection.locator("li.review-item").filter({
-        hasText: EXCERPT_ORPHAN,
-      }).locator("button.review-row-action"),
-    ).toHaveCount(3);
+      orphanSection
+        .locator("li.review-item")
+        .filter({
+          hasText: EXCERPT_ORPHAN,
+        })
+        .locator("button.review-row-action"),
+    ).toHaveCount(4);
+    await expect(
+      orphanSection.getByRole("button", {
+        name: `Edit tags: ${EXCERPT_ORPHAN}`,
+      }),
+    ).toBeVisible();
+    await expect(
+      orphanSection.getByRole("button", {
+        name: `Change color: ${EXCERPT_ORPHAN}`,
+      }),
+    ).toBeVisible();
   });
 
   test("never silently hidden: All shows unresolved rows; Orphan/Ambiguous narrow correctly", async ({
@@ -201,38 +195,24 @@ test.describe("RECV-01.e review-panel tri-state (10-04 honest surfacing)", () =>
     await expect(confidence).toHaveValue("all");
     // …and BOTH unresolved rows stay visible under it (SC#4 — never
     // silently filtered away).
-    await expect(
-      page.locator(".review-row", { hasText: EXCERPT_AMBIG }),
-    ).toBeVisible();
-    await expect(
-      page.locator(".review-row", { hasText: EXCERPT_ORPHAN }),
-    ).toBeVisible();
+    await expect(page.locator(".review-row", { hasText: EXCERPT_AMBIG })).toBeVisible();
+    await expect(page.locator(".review-row", { hasText: EXCERPT_ORPHAN })).toBeVisible();
 
     // Orphan narrows to ONLY the orphan group.
     await confidence.selectOption("orphan");
     await expect(page.locator("section.review-section-orphan")).toBeVisible();
-    await expect(
-      page.locator("section.review-section:not(.review-section-orphan)"),
-    ).toHaveCount(0);
-    await expect(
-      page.locator(".review-row", { hasText: EXCERPT_ORPHAN }),
-    ).toBeVisible();
-    await expect(
-      page.locator(".review-row", { hasText: EXCERPT_CONFIDENT }),
-    ).toHaveCount(0);
+    await expect(page.locator("section.review-section:not(.review-section-orphan)")).toHaveCount(0);
+    await expect(page.locator(".review-row", { hasText: EXCERPT_ORPHAN })).toBeVisible();
+    await expect(page.locator(".review-row", { hasText: EXCERPT_CONFIDENT })).toHaveCount(0);
 
     // Ambiguous narrows to ONLY the ambiguous row.
     await confidence.selectOption("ambiguous");
     await expect(page.locator(".review-badge-ambiguous")).toBeVisible();
-    await expect(
-      page.locator(".review-row", { hasText: EXCERPT_ORPHAN }),
-    ).toHaveCount(0);
+    await expect(page.locator(".review-row", { hasText: EXCERPT_ORPHAN })).toHaveCount(0);
     await expect(page.locator("section.review-section-orphan")).toHaveCount(0);
   });
 
-  test("ambiguous rows are not jumpable: the jump control is disabled", async ({
-    page,
-  }) => {
+  test("ambiguous rows are not jumpable: the jump control is disabled", async ({ page }) => {
     await seedAndOpenReview(page);
 
     // ReviewView renders unresolved SECTION rows as disabled buttons with

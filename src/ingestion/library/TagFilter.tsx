@@ -29,26 +29,40 @@ interface TagFilterProps {
    * future "clear" affordance).
    */
   onSelect: (tag: string | null) => void;
+  /**
+   * Issue #117 — optional VISIBLE name for hosts that show more than one
+   * tag dimension (the review panel's "Article tag" / "Highlight tag"
+   * filters). Renders the legend visibly in the host's label register and
+   * names each chip ("Filter by article tag: …"). Absent = the shipped
+   * visually-hidden "Filter by tag" legend + chip names — the LibraryView
+   * host is byte-unchanged.
+   */
+  name?: string;
 }
 
-export function TagFilter({ tags, activeTag, onSelect }: TagFilterProps) {
+export function TagFilter({ tags, activeTag, onSelect, name }: TagFilterProps) {
   if (tags.length === 0) return null;
+  const named = name !== undefined;
   return (
-    <fieldset className="tag-filter">
-      <legend className="visually-hidden">Filter by tag</legend>
+    <fieldset className={named ? "tag-filter tag-filter-named" : "tag-filter"}>
+      <legend className={named ? "tag-filter-legend" : "visually-hidden"}>
+        {name ?? "Filter by tag"}
+      </legend>
       {tags.map((tag) => {
         const isActive = activeTag === tag;
+        // One label template per state; the dimension word is the visible
+        // name VERBATIM (never case-mangled — a multi-case host name reads
+        // as written) or the shipped unnamed "tag".
+        const label = isActive
+          ? `${named ? `Active ${name} filter` : "Active filter"}: ${tag}. Activate to clear.`
+          : `Filter by ${name ?? "tag"}: ${tag}`;
         return (
           <button
             key={tag}
             type="button"
             className="tag-chip"
             aria-pressed={isActive}
-            aria-label={
-              isActive
-                ? `Active filter: ${tag}. Activate to clear.`
-                : `Filter by tag: ${tag}`
-            }
+            aria-label={label}
             onClick={() => onSelect(isActive ? null : tag)}
           >
             {tag}

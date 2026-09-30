@@ -18,28 +18,15 @@
 // findAllOccurrences machinery — NO Dexie, NO React, NO IO (reviewFilter.ts is
 // a pure module; Node is authoritative for pure logic).
 import { describe, expect, it } from "vitest";
-import {
-  deriveReviewSections,
-  type ReviewFilters,
-} from "../../src/routes/review/reviewFilter";
-import {
-  ArticleSchema,
-  HighlightRecordSchema,
-  NoteRecordSchema,
-} from "../../src/content/schema";
-import type {
-  CanonicalArticle,
-  HighlightRecord,
-} from "../../src/content/schema";
+import { deriveReviewSections, type ReviewFilters } from "../../src/routes/review/reviewFilter";
+import { ArticleSchema, HighlightRecordSchema, NoteRecordSchema } from "../../src/content/schema";
+import type { CanonicalArticle, HighlightRecord } from "../../src/content/schema";
 import {
   deriveQuoteSelector,
   graphemeClusters,
   normalizeText,
 } from "../../src/content/normalizeText";
-import type {
-  TextPositionSelector,
-  TextQuoteSelector,
-} from "../../src/content/normalizeText";
+import type { TextPositionSelector, TextQuoteSelector } from "../../src/content/normalizeText";
 import { findAllOccurrences } from "../../src/annotations/resolution";
 
 // ── Fixture construction (schema-validated, single source of truth) ──────────
@@ -147,6 +134,8 @@ function makeHighlight(opts: {
   articleId: string;
   anchor: { position: TextPositionSelector; quote: TextQuoteSelector };
   createdAt: string;
+  /** Issue #117 — the highlight's OWN tags (the annotation-tag namespace). */
+  tags?: string[];
 }): HighlightRecord {
   return HighlightRecordSchema.parse({
     schemaVersion: 1,
@@ -156,6 +145,7 @@ function makeHighlight(opts: {
     position: opts.anchor.position,
     quote: opts.anchor.quote,
     createdAt: opts.createdAt,
+    ...(opts.tags !== undefined ? { tags: opts.tags } : {}),
   });
 }
 
@@ -202,30 +192,40 @@ const hlEarly = makeHighlight({
   articleId: "zebra-piece",
   anchor: uniqueAnchor(zebra, "quiet harbor opens"),
   createdAt: "2026-01-20T10:00:00.000Z", // OLDER entry, LOWER position.start
+  // pre-#116 row shape: NO tags field (the hydration knob — reads as []).
 });
 const hlLate = makeHighlight({
   id: "hl-zebra-late",
   articleId: "zebra-piece",
   anchor: uniqueAnchor(zebra, "lanterns glow along"),
   createdAt: "2026-02-01T10:00:00.000Z", // NEWEST zebra entry, HIGHER start
+  tags: ["margin"],
 });
 const hlAlpha = makeHighlight({
   id: "hl-alpha",
   articleId: "alpha-piece",
   anchor: uniqueAnchor(alpha, "cartographer of clouds"),
   createdAt: "2026-03-01T10:00:00.000Z", // newest in the whole corpus
+  // Same NAME as an article tag — the dimension-independence knob: this is
+  // a HIGHLIGHT-local "essay", and alpha-piece ALSO carries the article
+  // tag "essay" (see the issue #117 describe below).
+  tags: ["essay"],
 });
 const hlAmbiguous = makeHighlight({
   id: "hl-twin-ambiguous",
   articleId: "twin-piece",
   anchor: contextFreeAnchor(AMBIGUOUS_SENTENCE),
   createdAt: "2026-01-15T10:00:00.000Z",
+  // Capital-M twin of hlLate's "margin" — the sameTag knob (highlight-local
+  // casings are NOT folded across rows).
+  tags: ["Margin"],
 });
 const hlGhost = makeHighlight({
   id: "hl-ghost",
   articleId: "ghost-article", // absent article — the D10-05 orphan knob
   anchor: uniqueAnchor(zebra, "market fills with voices"),
   createdAt: "2026-01-10T10:00:00.000Z",
+  tags: ["margin"], // an orphan CAN match its own annotation tag (issue #117)
 });
 
 const noteOnAlpha = NoteRecordSchema.parse({
@@ -241,7 +241,8 @@ const sampleHighlights = [hlEarly, hlLate, hlAlpha, hlAmbiguous, hlGhost];
 const sampleNotes = [noteOnAlpha];
 
 const noFilters: ReviewFilters = {
-  tag: null,
+  articleTag: null,
+  highlightTag: null,
   articleId: null,
   confidence: "all",
 };
@@ -262,14 +263,9 @@ describe("deriveReviewSections — join + tri-state classification", () => {
     expect(derivation.orphanEntries[0]!.status).toBe("orphan");
     expect(derivation.orphanEntries[0]!.article).toBeUndefined();
     // Every highlight is accounted for exactly once — never dropped.
-    const sectionEntryCount = derivation.sections.reduce(
-      (n, s) => n + s.entries.length,
-      0,
-    );
+    const sectionEntryCount = derivation.sections.reduce((n, s) => n + s.entries.length, 0);
     expect(sectionEntryCount).toBe(4); // hl-early, hl-late, hl-alpha, hl-ambiguous
-    expect(
-      derivation.sections.some((s) => s.key === "ghost-article"),
-    ).toBe(false);
+    expect(derivation.sections.some((s) => s.key === "ghost-article")).toBe(false);
   });
 
   it("quote matching the article body exactly once → status 'confident'", () => {
@@ -280,12 +276,8 @@ describe("deriveReviewSections — join + tri-state classification", () => {
       noFilters,
       "date",
     );
-    const alphaSection = derivation.sections.find(
-      (s) => s.article.id === "alpha-piece",
-    );
-    const entry = alphaSection?.entries.find(
-      (e) => e.highlight.id === "hl-alpha",
-    );
+    const alphaSection = derivation.sections.find((s) => s.article.id === "alpha-piece");
+    const entry = alphaSection?.entries.find((e) => e.highlight.id === "hl-alpha");
     expect(entry?.status).toBe("confident");
   });
 
@@ -297,12 +289,8 @@ describe("deriveReviewSections — join + tri-state classification", () => {
       noFilters,
       "date",
     );
-    const twinSection = derivation.sections.find(
-      (s) => s.article.id === "twin-piece",
-    );
-    const entry = twinSection?.entries.find(
-      (e) => e.highlight.id === "hl-twin-ambiguous",
-    );
+    const twinSection = derivation.sections.find((s) => s.article.id === "twin-piece");
+    const entry = twinSection?.entries.find((e) => e.highlight.id === "hl-twin-ambiguous");
     expect(entry?.status).toBe("ambiguous");
   });
 
@@ -310,18 +298,10 @@ describe("deriveReviewSections — join + tri-state classification", () => {
     const drifted = makeHighlight({
       id: "hl-drifted",
       articleId: "zebra-piece",
-      anchor: contextFreeAnchor(
-        "this passage was edited away from the article body entirely",
-      ),
+      anchor: contextFreeAnchor("this passage was edited away from the article body entirely"),
       createdAt: "2026-01-05T10:00:00.000Z",
     });
-    const derivation = deriveReviewSections(
-      [zebra],
-      [drifted],
-      [],
-      noFilters,
-      "date",
-    );
+    const derivation = deriveReviewSections([zebra], [drifted], [], noFilters, "date");
     expect(derivation.sections).toHaveLength(1);
     expect(derivation.sections[0]!.entries).toHaveLength(1);
     expect(derivation.sections[0]!.entries[0]!.status).toBe("orphan");
@@ -329,13 +309,7 @@ describe("deriveReviewSections — join + tri-state classification", () => {
   });
 
   it("multiple highlights on one article each classify through the shared per-article clusters (D10-13 memoized path)", () => {
-    const derivation = deriveReviewSections(
-      [zebra],
-      [hlEarly, hlLate],
-      [],
-      noFilters,
-      "date",
-    );
+    const derivation = deriveReviewSections([zebra], [hlEarly, hlLate], [], noFilters, "date");
     const statuses = derivation.sections[0]!.entries.map((e) => e.status);
     expect(statuses).toEqual(["confident", "confident"]);
   });
@@ -348,16 +322,10 @@ describe("deriveReviewSections — join + tri-state classification", () => {
       noFilters,
       "date",
     );
-    const alphaSection = derivation.sections.find(
-      (s) => s.article.id === "alpha-piece",
-    );
-    const withNote = alphaSection?.entries.find(
-      (e) => e.highlight.id === "hl-alpha",
-    );
+    const alphaSection = derivation.sections.find((s) => s.article.id === "alpha-piece");
+    const withNote = alphaSection?.entries.find((e) => e.highlight.id === "hl-alpha");
     expect(withNote?.note?.text).toBe("Remember this passage");
-    const zebraSection = derivation.sections.find(
-      (s) => s.article.id === "zebra-piece",
-    );
+    const zebraSection = derivation.sections.find((s) => s.article.id === "zebra-piece");
     for (const entry of zebraSection?.entries ?? []) {
       expect(entry.note).toBeUndefined();
     }
@@ -372,12 +340,10 @@ describe("deriveReviewSections — filters", () => {
       sampleArticles,
       sampleHighlights,
       sampleNotes,
-      { tag: null, articleId: null, confidence: "all" },
+      { articleTag: null, highlightTag: null, articleId: null, confidence: "all" },
       "date",
     );
-    const statuses = derivation.sections
-      .flatMap((s) => s.entries.map((e) => e.status))
-      .sort();
+    const statuses = derivation.sections.flatMap((s) => s.entries.map((e) => e.status)).sort();
     expect(statuses).toEqual(["ambiguous", "confident", "confident", "confident"]);
     expect(derivation.orphanEntries.map((e) => e.status)).toEqual(["orphan"]);
   });
@@ -387,7 +353,7 @@ describe("deriveReviewSections — filters", () => {
       sampleArticles,
       sampleHighlights,
       sampleNotes,
-      { tag: null, articleId: null, confidence: "orphan" },
+      { articleTag: null, highlightTag: null, articleId: null, confidence: "orphan" },
       "date",
     );
     expect(derivation.sections).toEqual([]); // no article-backed orphan in this corpus
@@ -395,12 +361,12 @@ describe("deriveReviewSections — filters", () => {
     expect(derivation.orphanEntries[0]!.highlight.id).toBe("hl-ghost");
   });
 
-  it("tag filter keeps only highlights whose article carries the tag; orphans (no article) are excluded while a tag filter is active", () => {
+  it("article tag filter keeps only highlights whose article carries the tag; orphans (no article) are excluded while the filter is active (pre-#117 meaning preserved)", () => {
     const derivation = deriveReviewSections(
       sampleArticles,
       sampleHighlights,
       sampleNotes,
-      { tag: "stoic", articleId: null, confidence: "all" },
+      { articleTag: "stoic", highlightTag: null, articleId: null, confidence: "all" },
       "date",
     );
     expect(derivation.sections).toHaveLength(1);
@@ -417,22 +383,20 @@ describe("deriveReviewSections — filters", () => {
       sampleArticles,
       sampleHighlights,
       sampleNotes,
-      { tag: null, articleId: "alpha-piece", confidence: "all" },
+      { articleTag: null, highlightTag: null, articleId: "alpha-piece", confidence: "all" },
       "date",
     );
     expect(derivation.sections).toHaveLength(1);
-    expect(derivation.sections[0]!.entries.map((e) => e.highlight.id)).toEqual([
-      "hl-alpha",
-    ]);
+    expect(derivation.sections[0]!.entries.map((e) => e.highlight.id)).toEqual(["hl-alpha"]);
     expect(derivation.orphanEntries).toEqual([]);
   });
 
-  it("tag + articleId + confidence AND together (empty when incompatible)", () => {
+  it("articleTag + articleId + confidence AND together (empty when incompatible)", () => {
     const impossible = deriveReviewSections(
       sampleArticles,
       sampleHighlights,
       sampleNotes,
-      { tag: "stoic", articleId: "alpha-piece", confidence: "all" },
+      { articleTag: "stoic", highlightTag: null, articleId: "alpha-piece", confidence: "all" },
       "date",
     );
     expect(impossible.sections).toEqual([]);
@@ -442,7 +406,12 @@ describe("deriveReviewSections — filters", () => {
       sampleArticles,
       sampleHighlights,
       sampleNotes,
-      { tag: "essay", articleId: "zebra-piece", confidence: "confident" },
+      {
+        articleTag: "essay",
+        highlightTag: null,
+        articleId: "zebra-piece",
+        confidence: "confident",
+      },
       "date",
     );
     expect(compatible.sections).toHaveLength(1);
@@ -450,6 +419,166 @@ describe("deriveReviewSections — filters", () => {
       "hl-zebra-late",
       "hl-zebra-early",
     ]);
+  });
+});
+
+// ── Highlight-tag dimension (issue #117 — the annotation-tag namespace) ──────
+//
+// The corpus knobs (see the fixture comments above): hlLate "margin"
+// (confident), hlAmbiguous "Margin" (ambiguous — the case twin), hlGhost
+// "margin" (orphan — its OWN annotation tag), hlAlpha "essay" (highlight-
+// local tag sharing a name with the ARTICLE tag on zebra/alpha), hlEarly
+// no tags field (pre-#116 hydration).
+
+describe("deriveReviewSections — highlight tag filter (issue #117)", () => {
+  it("highlightTag keeps highlights whose OWN tags carry it — every tri-state (confident, ambiguous, orphan)", () => {
+    const derivation = deriveReviewSections(
+      sampleArticles,
+      sampleHighlights,
+      sampleNotes,
+      { articleTag: null, highlightTag: "margin", articleId: null, confidence: "all" },
+      "date",
+    );
+    // zebra keeps ONLY hlLate (its "margin"); twin keeps ONLY hlAmbiguous;
+    // alpha drops (its highlight tag is "essay"); hlEarly drops (no tags).
+    expect(derivation.sections).toHaveLength(2);
+    const ids = derivation.sections.map((s) => ({
+      article: s.article.id,
+      entries: s.entries.map((e) => e.highlight.id),
+    }));
+    expect(ids).toEqual([
+      { article: "zebra-piece", entries: ["hl-zebra-late"] },
+      { article: "twin-piece", entries: ["hl-twin-ambiguous"] },
+    ]);
+    // The orphan tail keeps the ghost — its OWN annotation tag matches.
+    expect(derivation.orphanEntries.map((e) => e.highlight.id)).toEqual(["hl-ghost"]);
+  });
+
+  it("an orphan can still match its own annotation tag (never needs its article)", () => {
+    const derivation = deriveReviewSections(
+      [], // NO articles at all — every row is orphan-tail
+      [hlGhost, hlEarly],
+      [],
+      { articleTag: null, highlightTag: "margin", articleId: null, confidence: "all" },
+      "date",
+    );
+    expect(derivation.sections).toEqual([]);
+    expect(derivation.orphanEntries.map((e) => e.highlight.id)).toEqual(["hl-ghost"]);
+  });
+
+  it("highlightTag matches case-insensitively (sameTag — 'margin' matches the stored 'Margin')", () => {
+    const derivation = deriveReviewSections(
+      sampleArticles,
+      [hlAmbiguous], // tagged "Margin", capital M
+      [],
+      { articleTag: null, highlightTag: "margin", articleId: null, confidence: "all" },
+      "date",
+    );
+    expect(derivation.sections).toHaveLength(1);
+    expect(derivation.sections[0]!.entries.map((e) => e.highlight.id)).toEqual([
+      "hl-twin-ambiguous",
+    ]);
+  });
+
+  it("articleTag NEVER consults highlight tags — a highlight-local 'essay' on an untagged article stays out", () => {
+    // twin-piece carries NO article tags, but its highlight does carry the
+    // highlight-local "essay". The article-tag dimension must not match it.
+    const byArticleTag = deriveReviewSections(
+      sampleArticles,
+      sampleHighlights,
+      sampleNotes,
+      { articleTag: "essay", highlightTag: null, articleId: null, confidence: "all" },
+      "date",
+    );
+    // Same matches as the pre-#117 tag filter: zebra + alpha (the articles
+    // carrying "essay"), twin absent, orphan absent — byte-identical rows.
+    expect(byArticleTag.sections.map((s) => s.article.id).sort()).toEqual([
+      "alpha-piece",
+      "zebra-piece",
+    ]);
+    expect(byArticleTag.orphanEntries).toEqual([]); // ghost's "margin" is no article's tag
+
+    // And an articleTag no article carries matches NOTHING — not even the
+    // rows whose HIGHLIGHTS carry it.
+    const noArticleCarriesIt = deriveReviewSections(
+      sampleArticles,
+      sampleHighlights,
+      sampleNotes,
+      { articleTag: "margin", highlightTag: null, articleId: null, confidence: "all" },
+      "date",
+    );
+    expect(noArticleCarriesIt.sections).toEqual([]);
+    expect(noArticleCarriesIt.orphanEntries).toEqual([]);
+  });
+
+  it("highlightTag NEVER consults article tags — the article's 'essay' does not surface its untagged highlights", () => {
+    const derivation = deriveReviewSections(
+      sampleArticles,
+      sampleHighlights,
+      sampleNotes,
+      { articleTag: null, highlightTag: "essay", articleId: null, confidence: "all" },
+      "date",
+    );
+    // ONLY hlAlpha carries the highlight-local "essay" — zebra's rows (its
+    // ARTICLE is tagged "essay") stay out.
+    expect(derivation.sections).toHaveLength(1);
+    expect(derivation.sections[0]!.article.id).toBe("alpha-piece");
+    expect(derivation.sections[0]!.entries.map((e) => e.highlight.id)).toEqual(["hl-alpha"]);
+  });
+
+  it("articleTag + highlightTag AND-compose (same article dimension pair)", () => {
+    // zebra carries article "stoic"; only hlLate carries highlight
+    // "margin" — the pair keeps exactly that row.
+    const pair = deriveReviewSections(
+      sampleArticles,
+      sampleHighlights,
+      sampleNotes,
+      { articleTag: "stoic", highlightTag: "margin", articleId: null, confidence: "all" },
+      "date",
+    );
+    expect(pair.sections).toHaveLength(1);
+    expect(pair.sections[0]!.article.id).toBe("zebra-piece");
+    expect(pair.sections[0]!.entries.map((e) => e.highlight.id)).toEqual(["hl-zebra-late"]);
+    expect(pair.orphanEntries).toEqual([]); // articleTag active — orphans drop
+
+    // Incompatible pair (article tag on zebra ∧ highlight tag only alpha
+    // carries): empty.
+    const impossible = deriveReviewSections(
+      sampleArticles,
+      sampleHighlights,
+      sampleNotes,
+      { articleTag: "stoic", highlightTag: "essay", articleId: null, confidence: "all" },
+      "date",
+    );
+    expect(impossible.sections).toEqual([]);
+    expect(impossible.orphanEntries).toEqual([]);
+  });
+
+  it("highlightTag composes with confidence — including the unresolved tri-states", () => {
+    // Ambiguous ∧ "margin" → only hlAmbiguous (in its section).
+    const ambiguous = deriveReviewSections(
+      sampleArticles,
+      sampleHighlights,
+      sampleNotes,
+      { articleTag: null, highlightTag: "margin", articleId: null, confidence: "ambiguous" },
+      "date",
+    );
+    expect(ambiguous.sections).toHaveLength(1);
+    expect(ambiguous.sections[0]!.entries.map((e) => e.highlight.id)).toEqual([
+      "hl-twin-ambiguous",
+    ]);
+    expect(ambiguous.orphanEntries).toEqual([]);
+
+    // Orphan ∧ "margin" → only the ghost, in the tail.
+    const orphan = deriveReviewSections(
+      sampleArticles,
+      sampleHighlights,
+      sampleNotes,
+      { articleTag: null, highlightTag: "margin", articleId: null, confidence: "orphan" },
+      "date",
+    );
+    expect(orphan.sections).toEqual([]);
+    expect(orphan.orphanEntries.map((e) => e.highlight.id)).toEqual(["hl-ghost"]);
   });
 });
 
@@ -470,9 +599,7 @@ describe("deriveReviewSections — sorts", () => {
       "zebra-piece",
       "twin-piece",
     ]);
-    const zebraSection = derivation.sections.find(
-      (s) => s.article.id === "zebra-piece",
-    );
+    const zebraSection = derivation.sections.find((s) => s.article.id === "zebra-piece");
     expect(zebraSection?.entries.map((e) => e.highlight.id)).toEqual([
       "hl-zebra-late", // 2026-02-01 — newest first
       "hl-zebra-early", // 2026-01-20
@@ -492,9 +619,7 @@ describe("deriveReviewSections — sorts", () => {
       "Twin piece",
       "Zebra piece",
     ]);
-    const zebraSection = derivation.sections.find(
-      (s) => s.article.id === "zebra-piece",
-    );
+    const zebraSection = derivation.sections.find((s) => s.article.id === "zebra-piece");
     expect(zebraSection?.entries.map((e) => e.highlight.id)).toEqual([
       "hl-zebra-early", // lower position.start — reading order
       "hl-zebra-late",
@@ -514,9 +639,7 @@ describe("deriveReviewSections — sorts", () => {
       "zebra-piece",
       "alpha-piece",
     ]);
-    const zebraSection = derivation.sections.find(
-      (s) => s.article.id === "zebra-piece",
-    );
+    const zebraSection = derivation.sections.find((s) => s.article.id === "zebra-piece");
     expect(zebraSection?.entries.map((e) => e.highlight.id)).toEqual([
       "hl-zebra-early",
       "hl-zebra-late",
@@ -548,7 +671,7 @@ describe("deriveReviewSections — purity", () => {
       sampleArticles,
       sampleHighlights,
       sampleNotes,
-      { tag: "essay", articleId: null, confidence: "all" },
+      { articleTag: "essay", highlightTag: null, articleId: null, confidence: "all" },
       "article",
     );
     expect(sampleArticles).toEqual(articlesSnapshot);
@@ -636,10 +759,7 @@ describe("deriveReviewSections — chapter-bearing library (Pitfall 8)", () => {
       "date",
     );
     const baselineSections = baseline.sections.length; // twin, zebra, alpha = 3
-    const baselineEntries = baseline.sections.reduce(
-      (n, s) => n + s.entries.length,
-      0,
-    );
+    const baselineEntries = baseline.sections.reduce((n, s) => n + s.entries.length, 0);
 
     const combined = deriveReviewSections(
       [...sampleArticles, ...chapterArticles],
@@ -653,9 +773,7 @@ describe("deriveReviewSections — chapter-bearing library (Pitfall 8)", () => {
     // carrying exactly its one highlight — a many-chapter book multiplies
     // rows exactly as the same count of standalone articles would.
     expect(combined.sections).toHaveLength(baselineSections + 3);
-    expect(combined.sections.reduce((n, s) => n + s.entries.length, 0)).toBe(
-      baselineEntries + 3,
-    );
+    expect(combined.sections.reduce((n, s) => n + s.entries.length, 0)).toBe(baselineEntries + 3);
     for (const chapter of chapterArticles) {
       const section = combined.sections.find((s) => s.key === chapter.id);
       expect(section, `section for ${chapter.id}`).toBeDefined();
@@ -693,14 +811,12 @@ describe("deriveReviewSections — chapter-bearing library (Pitfall 8)", () => {
       [...sampleArticles, ...chapterArticles],
       [...sampleHighlights, ...chapterHighlights],
       sampleNotes,
-      { tag: "voyage", articleId: null, confidence: "all" },
+      { articleTag: "voyage", highlightTag: null, articleId: null, confidence: "all" },
       "date",
     );
     expect(combined.sections).toHaveLength(1);
     expect(combined.sections[0]!.article.id).toBe(`${CHAPTER_BOOK_ID}-c00`);
-    expect(combined.sections[0]!.entries.map((e) => e.highlight.id)).toEqual([
-      "hl-chapter-1",
-    ]);
+    expect(combined.sections[0]!.entries.map((e) => e.highlight.id)).toEqual(["hl-chapter-1"]);
   });
 
   it("articleId filter isolates one chapter of the book like any standalone article", () => {
@@ -709,16 +825,15 @@ describe("deriveReviewSections — chapter-bearing library (Pitfall 8)", () => {
       [...sampleHighlights, ...chapterHighlights],
       sampleNotes,
       {
-        tag: null,
+        articleTag: null,
+        highlightTag: null,
         articleId: `${CHAPTER_BOOK_ID}-c01`,
         confidence: "all",
       },
       "date",
     );
     expect(combined.sections).toHaveLength(1);
-    expect(combined.sections[0]!.article.provenance.title).toBe(
-      "Chapter 2. The Carpet-Bag",
-    );
+    expect(combined.sections[0]!.article.provenance.title).toBe("Chapter 2. The Carpet-Bag");
     expect(combined.sections[0]!.entries).toHaveLength(1);
   });
 });
