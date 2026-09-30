@@ -12,9 +12,9 @@
 //   - D10-05: never-drop — every highlight appears exactly once. An absent
 //     article means status "orphan" with the row KEPT (orphanEntries tail,
 //     the D9-09 markdown-export rule extended to the panel).
-//   - D10-08: filters AND-compose (tag + articleId + confidence); confidence
-//     "all" includes ambiguous and orphan rows — tri-state is never silently
-//     filtered away.
+//   - D10-08: filters AND-compose (articleTag + highlightTag + articleId +
+//     confidence); confidence "all" includes ambiguous and orphan rows —
+//     tri-state is never silently filtered away.
 //   - D10-13: tri-state re-derivation runs through the SHIPPED
 //     resolveQuoteSelectorInText (src/annotations/resolution.ts — the
 //     canonical D5-02 core, REUSE-DO-NOT-FORK) with per-article memoized
@@ -37,11 +37,12 @@
 import { resolveQuoteSelectorInText } from "../../annotations/resolution";
 import { MemoizedArticleText } from "../../portability/conflicts";
 import { effectiveTitle } from "../../ingestion/library/effectiveMetadata";
-import type {
-  CanonicalArticle,
-  HighlightRecord,
-  NoteRecord,
-} from "../../content/schema";
+// Issue #117 — the ONE case-insensitive tag comparison (tagText.sameTag —
+// the Q7A discipline) backs the highlight-tag dimension: highlight tags are
+// highlight-local casings (the write seam folds only against the library
+// vocabulary), so two rows may carry "Margin" and "margin".
+import { sameTag } from "../../ingestion/library/tagText";
+import type { CanonicalArticle, HighlightRecord, NoteRecord } from "../../content/schema";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -54,11 +55,26 @@ export type ConfidenceValue = "confident" | "ambiguous" | "orphan";
 /** Confidence filter value; "all" passes every status (D10-08). */
 export type ConfidenceFilter = "all" | ConfidenceValue;
 
-/** The filter shape consumed by deriveReviewSections — AND-composed (D10-08). */
+/**
+ * The filter shape consumed by deriveReviewSections — AND-composed (D10-08).
+ * Issue #117 splits the ONE tag dimension into two clearly named ones:
+ */
 export interface ReviewFilters {
-  /** Single-tag filter; null = no tag filter. Orphans have no article to
-   * carry a tag, so they drop out ONLY while a tag filter is active. */
-  tag: string | null;
+  /**
+   * Single-select ARTICLE-tag filter; null = no filter. Byte-identical
+   * meaning to the pre-#117 `tag` field (exact match on the article's own
+   * tags): orphans have no article to carry a tag, so they drop out ONLY
+   * while this filter is active — existing article-tag searches return
+   * the same matches as before.
+   */
+  articleTag: string | null;
+  /**
+   * Single-select HIGHLIGHT-tag filter; null = no filter (issue #117).
+   * Matches the highlight's OWN tags (case-insensitive, sameTag — the
+   * annotation-tag namespace is highlight-local), so an orphan can still
+   * match its own annotation tag. Never consults the article's tags.
+   */
+  highlightTag: string | null;
   /** Restrict to one article's highlights; null = no article filter. */
   articleId: string | null;
   /** Tri-state filter; "all" never silently filters ambiguous/orphan rows. */
@@ -107,7 +123,9 @@ export interface ReviewDerivation {
  *       per-article memoized clusters (D10-13). Non-string results map to
  *       "confident" (the conflicts.ts resolveHighlightStatus mapping).
  *       An absent article → "orphan", row KEPT.
- *   (c) FILTER — tag ∧ articleId ∧ confidence, AND-composed (D10-08).
+ *   (c) FILTER — articleTag ∧ highlightTag ∧ articleId ∧ confidence,
+ *       AND-composed (D10-08; the two tag dimensions are independent —
+ *       issue #117).
  *   (d) GROUP — article-backed entries under their article; article-less
  *       entries into orphanEntries.
  *   (e) SORT — date: sections by newest entry createdAt descending
@@ -131,9 +149,7 @@ export function deriveReviewSections(
 ): ReviewDerivation {
   // (a) JOIN — the markdown.ts collectHighlightEntries shape (Map.get only).
   const articleById = new Map(articles.map((a) => [a.id, a] as const));
-  const noteByHighlightId = new Map(
-    notes.map((n) => [n.highlightId, n] as const),
-  );
+  const noteByHighlightId = new Map(notes.map((n) => [n.highlightId, n] as const));
 
   // (b) CLASSIFY — memoized tri-state (D10-13): one MemoizedArticleText per
   // call means normalizeText/graphemeClusters run once per article id, not
@@ -153,25 +169,32 @@ export function deriveReviewSections(
         article.lang,
         highlight.position,
       );
-      status =
-        resolved === "ambiguous" || resolved === "orphan"
-          ? resolved
-          : "confident";
+      status = resolved === "ambiguous" || resolved === "orphan" ? resolved : "confident";
     }
-    const entry: ReviewEntry = article
-      ? { highlight, status, article }
-      : { highlight, status };
+    const entry: ReviewEntry = article ? { highlight, status, article } : { highlight, status };
     if (note) entry.note = note;
     entries.push(entry);
   }
 
   // (c) FILTER — AND-composed (D10-08): every active filter must pass.
+  // (Hoisted narrowings — property narrowing does not survive callbacks.)
+  const { articleTag, highlightTag } = filters;
   const filtered = entries.filter((entry) => {
-    if (filters.tag !== null) {
-      // Orphans have no article to carry a tag — they drop out only while a
-      // tag filter is active (they have no article to match against).
+    if (articleTag !== null) {
+      // The pre-#117 meaning, byte-identical: exact match on the ARTICLE's
+      // own tags. Orphans have no article to carry a tag — they drop out
+      // only while this filter is active.
       if (!entry.article) return false;
-      if (!(entry.article.tags ?? []).includes(filters.tag)) return false;
+      if (!(entry.article.tags ?? []).includes(articleTag)) return false;
+    }
+    if (highlightTag !== null) {
+      // Issue #117 — the highlight's OWN tags (never the article's):
+      // case-insensitive (sameTag) because highlight-local casings are not
+      // folded across rows. No article requirement — an orphan can still
+      // match its own annotation tag.
+      if (!(entry.highlight.tags ?? []).some((t) => sameTag(t, highlightTag))) {
+        return false;
+      }
     }
     if (filters.articleId !== null) {
       if (entry.highlight.articleId !== filters.articleId) return false;
@@ -216,18 +239,12 @@ export function deriveReviewSections(
       }
       return newest;
     };
-    sections.sort((a, b) =>
-      newestCreatedAt(a) < newestCreatedAt(b) ? 1 : -1,
-    );
+    sections.sort((a, b) => (newestCreatedAt(a) < newestCreatedAt(b) ? 1 : -1));
     for (const section of sections) {
-      section.entries.sort((a, b) =>
-        a.highlight.createdAt < b.highlight.createdAt ? 1 : -1,
-      );
+      section.entries.sort((a, b) => (a.highlight.createdAt < b.highlight.createdAt ? 1 : -1));
     }
   } else if (sort === "article") {
-    sections.sort((a, b) =>
-      effectiveTitle(a.article).localeCompare(effectiveTitle(b.article)),
-    );
+    sections.sort((a, b) => effectiveTitle(a.article).localeCompare(effectiveTitle(b.article)));
     for (const section of sections) {
       section.entries.sort(byPositionStart);
     }

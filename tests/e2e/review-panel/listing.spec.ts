@@ -65,8 +65,7 @@ const B_ID = "review-zeta-corpus";
 const TITLE_A = "Alpha Grafton Field Notes";
 const TITLE_B = "Zeta Harbor Ledger";
 const TAG_A = "essay";
-const NOTE_TEXT =
-  "Cross-check this figure against the sensors before the warden's evening review.";
+const NOTE_TEXT = "Cross-check this figure against the sensors before the warden's evening review.";
 
 const PARAGRAPHS_A = [
   "The grafton field station kept its ledgers in alphabetical order, a habit begun by the first warden and never questioned since. Every morning the surveyors copied the overnight readings into the alpha book, and every evening the warden checked their arithmetic by candlelight, correcting mistakes with a steady hand and an unhurried frown.",
@@ -162,26 +161,17 @@ test.beforeEach(async ({ page }) => {
 /** Reload-boot the app so Dexie re-declares the v4 schema after the wipe
  * (the 10-03 schema-declaring reload), seed the corpus, then open
  * #/highlights and wait for the panel h1. */
-async function seedCorpusAndOpenReview(
-  page: Page,
-  rows: SeedRows = CORPUS_ROWS,
-): Promise<void> {
+async function seedCorpusAndOpenReview(page: Page, rows: SeedRows = CORPUS_ROWS): Promise<void> {
   await page.goto(`${BASE}/#/`);
   await page.reload();
-  await expect(
-    page.getByRole("heading", { name: "Saved articles" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible();
   // A fixture row renders only once listArticles() has completed — the
   // deterministic "Dexie is open + schema declared" signal (the library is
   // a fixtures ∪ ingested union, so it is never empty).
-  await expect(
-    page.getByText("Getting started with Lem Reader").first(),
-  ).toBeVisible();
+  await expect(page.getByText("Getting started with Lem Reader").first()).toBeVisible();
   await seedRows(page, rows);
   await page.goto(`${BASE}/#/highlights`);
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Highlights" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
 }
 
 /** The grouped section for one article title (h2 = provenance.title; these
@@ -196,17 +186,14 @@ function sectionByTitle(page: Page, title: string) {
 /** In-DOM order of every section heading (article sections + any orphan
  * tail — this corpus has no orphans). */
 async function sectionHeadingTexts(page: Page): Promise<string[]> {
-  return (await page.locator("section.review-section > h2").allTextContents())
-    .map((t) => t.trim());
+  return (await page.locator("section.review-section > h2").allTextContents()).map((t) => t.trim());
 }
 
 /** In-DOM order of the row quote excerpts within one article's section. */
-async function quoteTextsInSection(
-  page: Page,
-  title: string,
-): Promise<string[]> {
-  return (await sectionByTitle(page, title).locator(".review-quote").allTextContents())
-    .map((t) => t.trim());
+async function quoteTextsInSection(page: Page, title: string): Promise<string[]> {
+  return (await sectionByTitle(page, title).locator(".review-quote").allTextContents()).map((t) =>
+    t.trim(),
+  );
 }
 
 test.describe("RECV-01.b review-panel listing (10-04 cross-article + filters + sorts)", () => {
@@ -233,23 +220,17 @@ test.describe("RECV-01.b review-panel listing (10-04 cross-article + filters + s
     ] as const;
     for (const [title, excerpt] of placements) {
       await expect(
-        sectionByTitle(page, title)
-          .locator(".review-row", { hasText: excerpt })
-          .first(),
+        sectionByTitle(page, title).locator(".review-row", { hasText: excerpt }).first(),
       ).toBeVisible();
     }
 
     // Metadata: the noted row shows its note preview text.
     await expect(
-      sectionByTitle(page, TITLE_A)
-        .locator(".review-row", { hasText: NOTE_TEXT })
-        .first(),
+      sectionByTitle(page, TITLE_A).locator(".review-row", { hasText: NOTE_TEXT }).first(),
     ).toBeVisible();
 
     // Metadata: every row shows a (non-empty) date.
-    const dates = await page
-      .locator(".review-row .review-date")
-      .allTextContents();
+    const dates = await page.locator(".review-row .review-date").allTextContents();
     expect(dates, "one .review-date per row").toHaveLength(3);
     for (const d of dates) {
       expect(d.trim().length).toBeGreaterThan(0);
@@ -259,26 +240,21 @@ test.describe("RECV-01.b review-panel listing (10-04 cross-article + filters + s
     // A2 (createdAt 08-12) precedes A1 (08-11). The position-order
     // assertion deliberately does NOT live here; it lives under the
     // Position sort in the sort test, whose contract is position.
-    expect(await quoteTextsInSection(page, TITLE_A)).toEqual([
-      EXCERPT_A2,
-      EXCERPT_A1,
-    ]);
+    expect(await quoteTextsInSection(page, TITLE_A)).toEqual([EXCERPT_A2, EXCERPT_A1]);
   });
 
   test("tag chip narrows to the tagged article's rows", async ({ page }) => {
     await seedCorpusAndOpenReview(page);
 
-    await page.getByRole("button", { name: `Filter by tag: ${TAG_A}` }).click();
+    await page.getByRole("button", { name: `Filter by article tag: ${TAG_A}` }).click();
 
     // Article A's section and both rows remain…
     await expect(sectionByTitle(page, TITLE_A)).toBeVisible();
-    await expect(
-      sectionByTitle(page, TITLE_A).locator(".review-row"),
-    ).toHaveCount(2);
+    await expect(sectionByTitle(page, TITLE_A).locator(".review-row")).toHaveCount(2);
     // …and article B is gone entirely (section heading absent).
-    await expect(
-      page.getByRole("heading", { level: 2, name: TITLE_B, exact: true }),
-    ).toHaveCount(0);
+    await expect(page.getByRole("heading", { level: 2, name: TITLE_B, exact: true })).toHaveCount(
+      0,
+    );
   });
 
   test("article picker: browse carries both titles with counts; picking narrows via the URL scope", async ({
@@ -296,9 +272,7 @@ test.describe("RECV-01.b review-panel listing (10-04 cross-article + filters + s
     await expect(
       suggestions.getByRole("option", { name: `${TITLE_A} 2 highlights` }),
     ).toBeVisible();
-    await expect(
-      suggestions.getByRole("option", { name: `${TITLE_B} 1 highlight` }),
-    ).toBeVisible();
+    await expect(suggestions.getByRole("option", { name: `${TITLE_B} 1 highlight` })).toBeVisible();
 
     // Picking IS scoping (#107): narrowing to B lands the scoped URL —
     // only B's rows render.
@@ -307,9 +281,9 @@ test.describe("RECV-01.b review-panel listing (10-04 cross-article + filters + s
 
     await expect(page).toHaveURL(new RegExp(`#\\/highlights\\?article=`));
     await expect(sectionByTitle(page, TITLE_B)).toBeVisible();
-    await expect(
-      page.getByRole("heading", { level: 2, name: TITLE_A, exact: true }),
-    ).toHaveCount(0);
+    await expect(page.getByRole("heading", { level: 2, name: TITLE_A, exact: true })).toHaveCount(
+      0,
+    );
     await expect(page.locator(".review-row")).toHaveCount(1);
   });
 
@@ -325,7 +299,7 @@ test.describe("RECV-01.b review-panel listing (10-04 cross-article + filters + s
     // Compose: tag "essay" (keeps only A's rows) ∧ confidence "Ambiguous"
     // (keeps only ambiguous rows) — no seeded row satisfies BOTH, so zero
     // rows render (the no-match empty copy is owned by empty-states.spec).
-    await page.getByRole("button", { name: `Filter by tag: ${TAG_A}` }).click();
+    await page.getByRole("button", { name: `Filter by article tag: ${TAG_A}` }).click();
     await confidence.selectOption({ label: "Ambiguous" });
     await expect(page.locator(".review-row")).toHaveCount(0);
     await expect(page.getByRole("heading", { level: 2 })).toHaveCount(0);
@@ -356,10 +330,7 @@ test.describe("RECV-01.b review-panel listing (10-04 cross-article + filters + s
     // the newest-first DOM order asserted under the default Date sort).
     await sort.selectOption("position");
     expect(await sectionHeadingTexts(page)).toEqual([TITLE_A, TITLE_B]);
-    expect(await quoteTextsInSection(page, TITLE_A)).toEqual([
-      EXCERPT_A1,
-      EXCERPT_A2,
-    ]);
+    expect(await quoteTextsInSection(page, TITLE_A)).toEqual([EXCERPT_A1, EXCERPT_A2]);
   });
 });
 
@@ -393,16 +364,18 @@ test.describe("POLISH-10 (D21-07) review-block token conformance (21-03)", () =>
 
     // Row padding: the PRIMARY row register (24px = --space-lg, matching
     // .library-row / .book-row) on the block + inline axes.
-    const pad = await page.locator(".review-row").first().evaluate((el) => {
-      const cs = getComputedStyle(el);
-      return {
-        top: cs.paddingTop,
-        bottom: cs.paddingBottom,
-        inline:
-          cs.getPropertyValue("padding-inline-start") ||
-          cs.getPropertyValue("padding-left"),
-      };
-    });
+    const pad = await page
+      .locator(".review-row")
+      .first()
+      .evaluate((el) => {
+        const cs = getComputedStyle(el);
+        return {
+          top: cs.paddingTop,
+          bottom: cs.paddingBottom,
+          inline:
+            cs.getPropertyValue("padding-inline-start") || cs.getPropertyValue("padding-left"),
+        };
+      });
     expect(parseFloat(pad.top)).toBeCloseTo(24, 1);
     expect(parseFloat(pad.bottom)).toBeCloseTo(24, 1);
     expect(parseFloat(pad.inline)).toBeCloseTo(24, 1);
