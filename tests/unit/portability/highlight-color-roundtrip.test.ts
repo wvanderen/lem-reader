@@ -1,25 +1,19 @@
-// tests/unit/portability/highlight-tags-roundtrip.test.ts
-// Issue #116 — highlight tags survive export → import under the existing
-// highlight-ID conflict policy. The acceptance rows under test:
-//   - "Older highlights hydrate with no tags" (covered in
-//     highlight-schema.test.ts — the additive schema hydration)
-//   - "Export/import preserves tags under the existing highlight-ID
-//     conflict policy"
-//
-// Pipeline under test (the real seams, no mocks) — mirrors
-// added-at-roundtrip.test.ts:
-//   saveHighlight/saveNote (the persistence seams) → buildBundle (the
-//   exporter's Zod self-check) → validateBundle (unzip + manifest + parse)
-//   → resolveImportPlan → applyImport (the one-transaction put) →
-//   loadAllHighlights (the Zod-at-boundary read).
-//
-// The three policies:
-//   - default skip on a FRESH device → the tagged highlight lands whole.
-//   - keep-both on a clashing id → the MINTED id carries the incoming tags
-//     (the record spread in the keep-both path) and the note follows the
-//     rewritten highlightId (Pitfall 7).
+// tests/unit/portability/highlight-color-roundtrip.test.ts
+// Issue #118 — the named highlight color survives export → import under the
+// existing highlight-ID conflict policy (D9-14). The additive-field
+// discipline is the issue #116 tags twin — this file mirrors
+// highlight-tags-roundtrip.test.ts with the color field:
+//   - default skip on a FRESH device → the colored highlight lands whole.
+//   - keep-both on a clashing id → the MINTED id carries the incoming color
+//     (the record spread in the keep-both path).
 //   - overwrite on a clashing id → the same-id put carries the INCOMING
-//     tags (the local tags are replaced).
+//     color (the local color is replaced).
+//   - a pre-#118 row (no color field) exports + re-imports hydrated to
+//     "default" (the exporter's Zod self-check).
+//
+// Pipeline under test (the real seams, no mocks): saveHighlight →
+// buildBundle → validateBundle → resolveImportPlan → applyImport →
+// loadAllHighlights.
 import { beforeEach, describe, expect, it } from "vitest";
 import { ArticleSchema } from "../../../src/content/schema";
 import type { CanonicalArticle } from "../../../src/content/schema";
@@ -50,20 +44,20 @@ async function loadConflicts() {
 }
 async function loadStores() {
   const highlights = await import("../../../src/persistence/highlightsStore");
-  const notes = await import("../../../src/persistence/notesStore");
-  return { ...highlights, ...notes };
+  return { ...highlights };
 }
 
-function sampleArticle(): CanonicalArticle {  return ArticleSchema.parse({
-    id: "art-tag-roundtrip",
+function sampleArticle(): CanonicalArticle {
+  return ArticleSchema.parse({
+    id: "art-color-roundtrip",
     revision: 1,
     lang: "en",
     provenance: {
-      sourceUrl: "https://example.com/tag-roundtrip",
-      title: "Tag Round Trip Article",
+      sourceUrl: "https://example.com/color-roundtrip",
+      title: "Color Round Trip Article",
       author: "An Author",
-      retrievedAt: "2026-09-10T00:00:00.000Z",
-      originalHtmlHash: "sha256:" + "d".repeat(64),
+      retrievedAt: "2026-09-20T00:00:00.000Z",
+      originalHtmlHash: "sha256:" + "c".repeat(64),
     },
     blocks: [
       { kind: "paragraph", content: [{ text: "Round trip body text.", marks: [] }] },
@@ -72,34 +66,25 @@ function sampleArticle(): CanonicalArticle {  return ArticleSchema.parse({
     ingestionMeta: {
       source: "url",
       origin: "url",
-      sourceUrl: "https://example.com/tag-roundtrip",
-      originalHtmlHash: "sha256:" + "d".repeat(64),
-      fetchedAt: "2026-09-10T00:00:00.000Z",
+      sourceUrl: "https://example.com/color-roundtrip",
+      originalHtmlHash: "sha256:" + "c".repeat(64),
+      fetchedAt: "2026-09-20T00:00:00.000Z",
       extractionConfidence: "high",
       extractionWarnings: [],
     },
   });
 }
 
-const TAGGED_HIGHLIGHT = {
+const COLORED_HIGHLIGHT = {
   schemaVersion: 1 as const,
-  id: "hl-tagged-1",
-  articleId: "art-tag-roundtrip",
+  id: "hl-colored-1",
+  articleId: "art-color-roundtrip",
   revision: 1,
   position: { start: 0, end: 18 },
   quote: { prefix: "", exact: "Round trip body text.", suffix: "" },
-  createdAt: "2026-09-10T00:00:00.000Z",
-  tags: ["essays", "to-revisit"],
-  // #118's field with its schema default — a parsed record always carries it.
-  color: "default" as const,
-};
-
-const TAGGED_NOTE = {
-  schemaVersion: 1 as const,
-  id: "nt-tagged-1",
-  highlightId: "hl-tagged-1",
-  text: "The note shares the highlight's tags — none of its own.",
-  updatedAt: "2026-09-10T00:00:00.000Z",
+  createdAt: "2026-09-20T00:00:00.000Z",
+  tags: [],
+  color: "green" as const,
 };
 
 /** The D9-14 default — skip every kind (nothing conflicts on a fresh device). */
@@ -113,13 +98,12 @@ const ALL_SKIP = {
   location: "skip",
 } as const;
 
-/** Seed device A: the article + the tagged highlight + its note. */
+/** Seed device A: the article + the colored highlight. */
 async function seedLibrary(): Promise<void> {
   const { dexieLibrarySource } = await import("../../../src/ingestion/LibrarySource");
-  const { saveHighlight, saveNote } = await loadStores();
+  const { saveHighlight } = await loadStores();
   await dexieLibrarySource.save(sampleArticle());
-  await saveHighlight(TAGGED_HIGHLIGHT);
-  await saveNote(TAGGED_NOTE);
+  await saveHighlight(COLORED_HIGHLIGHT);
 }
 
 async function exportToFreshDevice() {
@@ -135,30 +119,26 @@ async function exportToFreshDevice() {
   return validation.bundle;
 }
 
-describe("highlight tags survive export → import (issue #116)", () => {
+describe("highlight colors survive export → import (issue #118)", () => {
   beforeEach(async () => {
     await wipeDatabase();
   });
 
-  it("the exported bundle carries the tags; a fresh import lands them whole", async () => {
+  it("the exported bundle carries the color; a fresh import lands it whole", async () => {
     await seedLibrary();
 
-    // Export: the Zod self-check in buildBundle parses the highlights block,
-    // so the tags must already round-trip the envelope.
-    const { buildBundle } = await loadService();
+    const { buildBundle, validateBundle, applyImport } = await loadService();
+    const { detectImportPreview, resolveImportPlan } = await loadConflicts();
     const { bytes } = await buildBundle();
 
-    // Fresh device.
     await wipeDatabase();
-    const { validateBundle, applyImport } = await loadService();
-    const { detectImportPreview, resolveImportPlan } = await loadConflicts();
-
     const validation = await validateBundle(
       new File([new Uint8Array(bytes)], "lem-reader-bundle-v1.zip", { type: "application/zip" }),
     );
     expect(validation.ok).toBe(true);
     if (!validation.ok) return;
-    expect(validation.bundle.highlights[0]?.tags).toEqual(["essays", "to-revisit"]);
+    // The envelope's Zod self-check carries the named color verbatim.
+    expect(validation.bundle.highlights[0]?.color).toBe("green");
 
     const preview = await detectImportPreview(validation.bundle);
     const plan = await resolveImportPlan(
@@ -172,24 +152,20 @@ describe("highlight tags survive export → import (issue #116)", () => {
     expect(plan.highlightsToWrite).toHaveLength(1);
     await applyImport(plan);
 
-    const { loadAllHighlights, loadNote } = await loadStores();
+    const { loadAllHighlights } = await loadStores();
     const rows = await loadAllHighlights();
     expect(rows).toHaveLength(1);
-    expect(rows[0]?.id).toBe("hl-tagged-1");
-    expect(rows[0]?.tags).toEqual(["essays", "to-revisit"]);
-    // The note re-attached to the same highlight id (no tags of its own).
-    const note = await loadNote("hl-tagged-1");
-    expect(note?.text).toContain("shares the highlight's tags");
+    expect(rows[0]?.id).toBe("hl-colored-1");
+    expect(rows[0]?.color).toBe("green");
   });
 
-  it("keep-both mints a new id that CARRIES the tags; the note follows the rewrite", async () => {
+  it("keep-both mints a new id that CARRIES the color (the record spread)", async () => {
     await seedLibrary();
     const bundle = await exportToFreshDevice();
 
-    // Seed the SAME highlight id locally (the clash) with DIFFERENT tags.
-    const { saveHighlight, saveNote } = await loadStores();
-    await saveHighlight({ ...TAGGED_HIGHLIGHT, tags: ["local-only"] });
-    await saveNote(TAGGED_NOTE);
+    // Seed the SAME highlight id locally (the clash) with a DIFFERENT color.
+    const { saveHighlight } = await loadStores();
+    await saveHighlight({ ...COLORED_HIGHLIGHT, color: "pink" });
 
     const { detectImportPreview, resolveImportPlan } = await loadConflicts();
     const { applyImport } = await loadService();
@@ -197,40 +173,36 @@ describe("highlight tags survive export → import (issue #116)", () => {
     const plan = await resolveImportPlan(
       bundle,
       preview,
-      { ...ALL_SKIP, "highlight-id": "keep-both", "note-id": "keep-both" },
+      { ...ALL_SKIP, "highlight-id": "keep-both" },
       false,
       undefined,
       undefined,
     );
 
-    // The incoming highlight was rewritten to a fresh id.
-    const minted = plan.highlightsToWrite.find((h) => h.id !== "hl-tagged-1");
+    const minted = plan.highlightsToWrite.find((h) => h.id !== "hl-colored-1");
     expect(minted).toBeDefined();
-    expect(plan.idRewrites.get("hl-tagged-1")).toBe(minted?.id);
-    // The minted row carries the incoming tags verbatim (the record spread).
-    expect(minted?.tags).toEqual(["essays", "to-revisit"]);
-    // The incoming note follows the rewritten highlightId (Pitfall 7).
-    const rewrittenNote = plan.notesToWrite.find((n) => n.id !== "nt-tagged-1");
-    expect(rewrittenNote?.highlightId).toBe(minted?.id);
+    expect(plan.idRewrites.get("hl-colored-1")).toBe(minted?.id);
+    // The minted row carries the incoming color verbatim.
+    expect(minted?.color).toBe("green");
 
     await applyImport(plan);
 
     const { loadAllHighlights } = await loadStores();
     const rows = await loadAllHighlights();
     expect(rows).toHaveLength(2);
-    const local = rows.find((h) => h.id === "hl-tagged-1");
+    const local = rows.find((h) => h.id === "hl-colored-1");
     const incoming = rows.find((h) => h.id === minted?.id);
-    expect(local?.tags).toEqual(["local-only"]);
-    expect(incoming?.tags).toEqual(["essays", "to-revisit"]);
+    expect(local?.color).toBe("pink");
+    expect(incoming?.color).toBe("green");
   });
 
-  it("overwrite replaces the local row's tags with the incoming tags (same id)", async () => {
+  it("overwrite replaces the local row's color with the incoming color (same id)", async () => {
     await seedLibrary();
     const bundle = await exportToFreshDevice();
 
-    // Local row drifted: same id, different tags.
+    // Local row drifted: same id, different color.
     const { saveHighlight } = await loadStores();
-    await saveHighlight({ ...TAGGED_HIGHLIGHT, tags: ["drifted"] });
+    await saveHighlight({ ...COLORED_HIGHLIGHT, color: "yellow" });
 
     const { detectImportPreview, resolveImportPlan } = await loadConflicts();
     const { applyImport } = await loadService();
@@ -249,31 +221,31 @@ describe("highlight tags survive export → import (issue #116)", () => {
     const { loadAllHighlights } = await loadStores();
     const rows = await loadAllHighlights();
     expect(rows).toHaveLength(1);
-    expect(rows[0]?.id).toBe("hl-tagged-1");
-    expect(rows[0]?.tags).toEqual(["essays", "to-revisit"]);
+    expect(rows[0]?.id).toBe("hl-colored-1");
+    expect(rows[0]?.color).toBe("green");
   });
 
-  it("a pre-#116 highlight (no tags on the row) exports + re-imports as a no-tag row", async () => {
-    // The pre-#116 writer never emitted a tags field; the exporter's Zod
-    // self-check hydrates the old shape to [] and the importer lands it as
-    // an ordinary no-tag highlight.
+  it("a pre-#118 highlight (no color on the row) exports + re-imports hydrated to default", async () => {
+    // The pre-#118 writer never emitted a color field; the exporter's Zod
+    // self-check hydrates the old shape to "default" and the importer lands
+    // it as an ordinary Default highlight.
     const { dexieLibrarySource } = await import("../../../src/ingestion/LibrarySource");
     const { saveHighlight } = await loadStores();
     await dexieLibrarySource.save(sampleArticle());
-    // The pre-#116 writer emitted this exact shape; saveHighlight does not
+    // The pre-#118 writer emitted this exact shape; saveHighlight does not
     // re-parse on write (store contract), so the cast simulates the old row
     // landing in Dexie un-hydrated — the export self-check is what hydrates.
-    const PRE_TAGS_ROW = {
+    const PRE_COLOR_ROW = {
       schemaVersion: 1,
-      id: "hl-untagged-old",
-      articleId: "art-tag-roundtrip",
+      id: "hl-uncolored-old",
+      articleId: "art-color-roundtrip",
       revision: 1,
       position: { start: 0, end: 18 },
       quote: { prefix: "", exact: "Round trip body text.", suffix: "" },
-      createdAt: "2026-09-10T00:00:00.000Z",
-      // NO tags field — the old row shape.
+      createdAt: "2026-09-20T00:00:00.000Z",
+      // NO color field — the old row shape.
     } as unknown as Parameters<typeof saveHighlight>[0];
-    await saveHighlight(PRE_TAGS_ROW);
+    await saveHighlight(PRE_COLOR_ROW);
 
     const { buildBundle, validateBundle, applyImport } = await loadService();
     const { detectImportPreview, resolveImportPlan } = await loadConflicts();
@@ -285,8 +257,7 @@ describe("highlight tags survive export → import (issue #116)", () => {
     );
     expect(validation.ok).toBe(true);
     if (!validation.ok) return;
-    // The envelope self-check hydrated the missing field to [].
-    expect(validation.bundle.highlights[0]?.tags).toEqual([]);
+    expect(validation.bundle.highlights[0]?.color).toBe("default");
 
     const preview = await detectImportPreview(validation.bundle);
     const plan = await resolveImportPlan(
@@ -301,7 +272,7 @@ describe("highlight tags survive export → import (issue #116)", () => {
     const { loadAllHighlights } = await loadStores();
     const rows = await loadAllHighlights();
     expect(rows).toHaveLength(1);
-    expect(rows[0]?.id).toBe("hl-untagged-old");
-    expect(rows[0]?.tags).toEqual([]);
+    expect(rows[0]?.id).toBe("hl-uncolored-old");
+    expect(rows[0]?.color).toBe("default");
   });
 });

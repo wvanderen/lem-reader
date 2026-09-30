@@ -24,7 +24,7 @@
 // (D2-13 — fixtures are bundled JSON; the article is always readable).
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CanonicalArticle } from "../../content/types";
-import type { HighlightRecord, NoteRecord } from "../../content/schema";
+import type { HighlightColor, HighlightRecord, NoteRecord } from "../../content/schema";
 import {
   deriveQuoteSelector,
   resolveQuoteSelector,
@@ -43,6 +43,9 @@ import {
 // Issue #116 — the ONE tag-write seam (mirrors TagEntry's setArticleTags
 // write-through; already in the reader graph via src/reader/TagEntry.tsx).
 import { setHighlightTags } from "../../ingestion/library/tagsStore";
+// Issue #118 — the named-color write seam (the setHighlightTags twin, minus
+// the casing routing: the color vocabulary is the closed schema enum).
+import { setHighlightColor } from "../../persistence/highlightsStore";
 import { classifyStorageError } from "../../persistence/errors";
 
 /** D5-02 tri-state — drives Plan 05-04 ambiguous/orphan surfacing. */
@@ -121,13 +124,29 @@ export interface UseAnnotationStateResult {
    * attached note needs no update — it shares the highlight's tags by
    * construction.
    *
-   * Failure contract (STATE-05 + the host's local surface): the error is
-   * classified and routed to onStorageError (StorageBanner) AND rethrown so
-   * the TagEntry host's StatusRegion can show its inline "Couldn't save
-   * tag." copy inside the modal popover — the banner alone would sit behind
-   * the dialog backdrop while the reader is mid-edit.
+   * Failure contract (STATE-05 + the host's local surface): the optimistic
+   * edit ROLLS BACK to the persisted value, the error is classified and
+   * routed to onStorageError (StorageBanner) AND rethrown so the TagEntry
+   * host's StatusRegion can show its inline "Couldn't save tag." copy
+   * inside the modal popover — the banner alone would sit behind the dialog
+   * backdrop while the reader is mid-edit.
    */
   updateHighlightTags: (id: string, tags: string[]) => Promise<void>;
+  /**
+   * Set the named color on a highlight (issue #118). In-memory state updates
+   * optimistically; the persistence write is commit-per-change (a color pick
+   * is a discrete event — the TagEntry discipline, no debounce) through the
+   * ONE highlightsStore seam. Color never gates editability or anchoring —
+   * it stays settable on ambiguous/orphaned highlights exactly like tags.
+   *
+   * Failure contract (the shared commitHighlightEdit contract): the
+   * optimistic color ROLLS BACK to the persisted value (the mark + the
+   * picker's checked radio re-match the row the disk kept), the error is
+   * classified and routed to onStorageError (StorageBanner) AND rethrown so
+   * the picker host's StatusRegion can show its inline "Couldn't save
+   * color." copy inside the modal popover.
+   */
+  updateHighlightColor: (id: string, color: HighlightColor) => Promise<void>;
   storageState: AnnotationStorageState;
 }
 
@@ -145,8 +164,15 @@ export function useAnnotationState(
   const [highlights, setHighlights] = useState<ResolvedHighlight[]>([]);
   const [storageState, setStorageState] = useState<AnnotationStorageState>("ok");
 
-  // Only the latest edit may replace optimistic tags with persisted casing.
-  const latestTagEdits = useRef(new Map<string, symbol>());
+  // Ref mirror of the committed state so a commit can capture the pre-edit
+  // field value for its failure rollback (no impure reads inside setState
+  // updaters).
+  const highlightsRef = useRef(highlights);
+  highlightsRef.current = highlights;
+
+  // Only the latest edit per {field, highlight} may mirror or roll back —
+  // a superseded in-flight write must not clobber a newer pick.
+  const latestRecordEdits = useRef(new Map<string, symbol>());
 
   // Ref-stable callbacks so the load effect doesn't re-run on callback identity
   // drift (mirrors SettingsContext.tsx L67-68 pendingRef pattern).
@@ -249,6 +275,12 @@ export function useAnnotationState(
         // spine's raw-row equality check). Consumers still read `tags ?? []`
         // for pre-#116 rows, which omit the key.
         tags: [],
+        // Issue #118 — new records carry the DEFAULT color explicitly so a
+        // row is byte-stable across export → import (the same discipline as
+        // tags above: the exporter's Zod self-check hydrates the additive
+        // field on every parsed record). Consumers read `color ?? "default"`
+        // for pre-#118 rows, which omit the key.
+        color: "default",
       };
       // Optimistic prepend — same-revision capture is always "confident".
       const resolved: ResolvedHighlight = {
@@ -407,47 +439,122 @@ export function useAnnotationState(
     [scheduleNoteSave],
   );
 
+  /**
+   * ONE commit-per-change record-edit contract (issues #116 tags + #118
+   * color — previously two verbatim copies of this shape). An edit symbol
+   * keyed `${field}:${id}` gates every post-write state touch so only the
+   * latest edit per field wins. The optimistic field edit mirrors
+   * immediately; then:
+   *   - success + `mirror`: the seam's authoritative value mirrors back,
+   *     gated on still-latest (tags: the routed stored casings);
+   *   - failure (still-latest-gated): the optimistic edit ROLLS BACK to the
+   *     captured pre-edit value so the record re-matches the persisted row —
+   *     the visible mark + picker never keep a value the disk refused —
+   *     then the error is classified + routed to StorageBanner (STATE-05)
+   *     and RETHROWN so the host's inline StatusRegion fires inside the
+   *     modal popover.
+   */
+  const commitHighlightEdit = useCallback(
+    async <T,>(args: {
+      key: string;
+      applyOptimistic: (prev: ResolvedHighlight[]) => ResolvedHighlight[];
+      seam: () => Promise<T>;
+      mirror?: (routed: T) => void;
+      rollback: () => void;
+    }): Promise<void> => {
+      const edit = Symbol();
+      latestRecordEdits.current.set(args.key, edit);
+      setHighlights(args.applyOptimistic);
+      try {
+        const routed = await args.seam();
+        if (args.mirror && latestRecordEdits.current.get(args.key) === edit) {
+          args.mirror(routed);
+        }
+      } catch (e) {
+        if (latestRecordEdits.current.get(args.key) === edit) {
+          args.rollback();
+        }
+        const reason = classifyStorageError(e);
+        setStorageState(reason);
+        callbacksRef.current.onStorageError?.(reason);
+        throw e;
+      } finally {
+        if (latestRecordEdits.current.get(args.key) === edit) {
+          latestRecordEdits.current.delete(args.key);
+        }
+      }
+    },
+    [],
+  );
+
   // Issue #116 — commit-per-change highlight-tag write (the TagEntry
-  // discipline: optimistic mirror + fire-and-forget seam write). The catch
-  // routes to StorageBanner (STATE-05) and RETHROWS so the TagEntry host's
-  // own StatusRegion fires inside the modal popover — see the interface doc.
+  // discipline: optimistic mirror + fire-and-forget seam write) through the
+  // shared contract above. See the interface doc for the failure contract.
   const updateHighlightTags = useCallback(
     async (id: string, tags: string[]): Promise<void> => {
-      const edit = Symbol();
-      latestTagEdits.current.set(id, edit);
-      // Optimistic in-memory record update so the picker's chips reflect
-      // immediately (the record is the single source for the popover UI).
-      setHighlights((prev) =>
-        prev.map((h) =>
-          h.record.id === id ? { ...h, record: { ...h.record, tags } } : h,
-        ),
-      );
-      try {
+      const previous =
+        highlightsRef.current.find((h) => h.record.id === id)?.record.tags ??
+        [];
+      await commitHighlightEdit({
+        key: `tags:${id}`,
+        applyOptimistic: (prev) =>
+          prev.map((h) =>
+            h.record.id === id ? { ...h, record: { ...h.record, tags } } : h,
+          ),
         // setHighlightTags normalizes + routes to the persisted casing
         // (tagsStore.ts) before touching the highlight row only; the routed
         // array mirrors the exact written casings back into the record.
-        const routed = await setHighlightTags(id, tags);
-        if (latestTagEdits.current.get(id) === edit) {
+        seam: () => setHighlightTags(id, tags),
+        mirror: (routed) =>
           setHighlights((prev) =>
             prev.map((h) =>
               h.record.id === id
                 ? { ...h, record: { ...h.record, tags: routed } }
                 : h,
             ),
-          );
-        }
-      } catch (e) {
-        const reason = classifyStorageError(e);
-        setStorageState(reason);
-        callbacksRef.current.onStorageError?.(reason);
-        throw e;
-      } finally {
-        if (latestTagEdits.current.get(id) === edit) {
-          latestTagEdits.current.delete(id);
-        }
-      }
+          ),
+        rollback: () =>
+          setHighlights((prev) =>
+            prev.map((h) =>
+              h.record.id === id
+                ? { ...h, record: { ...h.record, tags: previous } }
+                : h,
+            ),
+          ),
+      });
     },
-    [],
+    [commitHighlightEdit],
+  );
+
+  // Issue #118 — commit-per-change highlight-color write through the shared
+  // contract above (the updateHighlightTags twin). See the interface doc for
+  // the failure contract — the rollback is what keeps the rendered mark + the
+  // picker's checked radio matched to the persisted row after a failed write.
+  const updateHighlightColor = useCallback(
+    async (id: string, color: HighlightColor): Promise<void> => {
+      const previous =
+        highlightsRef.current.find((h) => h.record.id === id)?.record.color ??
+        "default";
+      await commitHighlightEdit({
+        key: `color:${id}`,
+        // Optimistic in-memory record update so the picker's selection + the
+        // rendered <mark> modifier reflect immediately.
+        applyOptimistic: (prev) =>
+          prev.map((h) =>
+            h.record.id === id ? { ...h, record: { ...h.record, color } } : h,
+          ),
+        seam: () => setHighlightColor(id, color),
+        rollback: () =>
+          setHighlights((prev) =>
+            prev.map((h) =>
+              h.record.id === id
+                ? { ...h, record: { ...h.record, color: previous } }
+                : h,
+            ),
+          ),
+      });
+    },
+    [commitHighlightEdit],
   );
 
   return {
@@ -457,6 +564,7 @@ export function useAnnotationState(
     updateNote,
     flushNoteSave,
     updateHighlightTags,
+    updateHighlightColor,
     storageState,
   };
 }

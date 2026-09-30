@@ -93,7 +93,8 @@ const dbTransactionMock = mockedDb.transaction;
 const notesWhereEqualsMock = mockedDb.notes.where().equals;
 const notesDeleteMock = notesWhereEqualsMock().delete;
 
-/** A valid HighlightRecord row as it would come back from Dexie. */
+/** A valid HighlightRecord row as it would come back from Dexie (post-parse,
+ * so the #118 additive color is present with its hydrated default). */
 function validRow(overrides: Partial<HighlightRecord> = {}): HighlightRecord {
   return {
     schemaVersion: 1,
@@ -103,6 +104,7 @@ function validRow(overrides: Partial<HighlightRecord> = {}): HighlightRecord {
     position: { start: 10, end: 20 },
     quote: { prefix: "alpha ", exact: "highlighted text", suffix: " omega" },
     createdAt: "2026-08-07T00:00:00.000Z",
+    color: "default",
     ...overrides,
   };
 }

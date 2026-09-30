@@ -112,6 +112,39 @@ describe("HighlightRecordSchema.tags (issue #116)", () => {
   });
 });
 
+// ── HighlightRecordSchema.color (issue #118 — named highlight colors) ────────
+
+describe("HighlightRecordSchema.color (issue #118)", () => {
+  it("hydrates an older row with NO color field to \"default\" (Pitfall 9 additive)", () => {
+    // Rows written before #118 omit the field entirely — the read boundary
+    // hydrates them to "default" so every consumer sees the Default fill
+    // until the reader explicitly changes it (the tags discipline).
+    const parsed = HighlightRecordSchema.parse(validHighlight());
+    expect(parsed.color).toBe("default");
+  });
+
+  it.each([
+    ["default", "default"],
+    ["yellow", "yellow"],
+    ["green", "green"],
+    ["blue", "blue"],
+    ["pink", "pink"],
+  ])("parses + round-trips color %s verbatim", (value, expected) => {
+    const parsed = HighlightRecordSchema.parse(validHighlight({ color: value }));
+    expect(parsed.color).toBe(expected);
+  });
+
+  it("rejects a color outside the closed vocabulary (T-05-03 tampering)", () => {
+    expect(() =>
+      HighlightRecordSchema.parse(validHighlight({ color: "red" })),
+    ).toThrow();
+  });
+
+  it("rejects a non-string color", () => {
+    expect(() => HighlightRecordSchema.parse(validHighlight({ color: 7 }))).toThrow();
+  });
+});
+
 // ── HighlightRecordSchema reject matrix (T-05-03 — Tampering V5) ─────────────
 
 describe("HighlightRecordSchema rejects invalid records", () => {

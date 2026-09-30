@@ -10,7 +10,7 @@
 //
 // Index syntax: "primaryKey, index1, index2, &uniqueIndex, [compound+index]"
 import { Dexie, type Table } from "dexie";
-import type { Book } from "../content/schema";
+import type { Book, HighlightColor } from "../content/schema";
 
 /** Shape of a row in the `settings` store (composite reader-prefs record). */
 export interface SettingsRecord {
@@ -36,9 +36,10 @@ export interface LocationRecordRow {
  * `[articleId+revision]` is queried as an array range for cross-revision
  * lookup (D5-01). The row does NOT carry a literal "[articleId+revision]"
  * field — Dexie derives the compound key from `articleId` + `revision`.
- * `tags` (issue #116) is a plain non-indexed row field — NO Dexie version
- * bump (only INDEXED properties require a version-block declaration; no
- * query keys on annotation tags; the readerTitle precedent). */
+ * `tags` (issue #116) and `color` (issue #118) are plain non-indexed row
+ * fields — NO Dexie version bump (only INDEXED properties require a
+ * version-block declaration; no query keys on annotation tags or the named
+ * highlight color; the readerTitle precedent). */
 export interface HighlightRecordRow {
   schemaVersion: 1;
   id: string;
@@ -48,6 +49,7 @@ export interface HighlightRecordRow {
   quote: { prefix: string; exact: string; suffix: string };
   createdAt: string;
   tags?: string[];
+  color?: HighlightColor;
 }
 
 /** Shape of a row in the `notes` store (Phase 5 — ANNO-02, STATE-03).

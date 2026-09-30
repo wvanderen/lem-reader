@@ -154,4 +154,69 @@ describe("highlight overlay rendering — <mark> into ArticleBody (D5-15)", () =
     // aria-label includes "with note" (UI-SPEC §Copywriting).
     expect(mark?.getAttribute("aria-label")?.includes("with note")).toBe(true);
   });
+
+  // ── Issue #118 — the named-color modifier on the <mark> ────────────────────
+
+  it("renders the named-color modifier class + prefixed aria-label (issue #118)", () => {
+    const art = article([paragraph("Hello world.")]);
+    const hl: ArticleBodyHighlight = {
+      ...makeEntry("hl-green", 6, 11),
+      color: "green",
+    };
+    const { container } = render(
+      <ArticleBody article={art} highlights={[hl]} />,
+    );
+
+    const mark = container.querySelector("mark.highlight");
+    expect(mark).not.toBeNull();
+    expect(mark?.classList.contains("color-green")).toBe(true);
+    // Color is never the sole identifier — the aria-label carries the name
+    // (UI-SPEC §Copywriting + A11Y-05).
+    expect(mark?.getAttribute("aria-label")?.startsWith("Green highlight")).toBe(
+      true,
+    );
+    // The semantic identity is unchanged: same id/data attribute/tab order.
+    expect(mark?.getAttribute("data-highlight-id")).toBe("hl-green");
+    expect(mark?.getAttribute("tabindex")).toBe("0");
+  });
+
+  it("Default (and a color-omitting caller) renders NO color modifier — byte-unchanged", () => {
+    const art = article([paragraph("Hello world.")]);
+    const explicit: ArticleBodyHighlight = {
+      ...makeEntry("hl-explicit", 0, 5),
+      color: "default",
+    };
+    const { container, rerender } = render(
+      <ArticleBody article={art} highlights={[explicit]} />,
+    );
+    const markExplicit = container.querySelector("mark.highlight");
+    expect(markExplicit?.className).toBe("highlight");
+
+    // A legacy caller omitting the field regresses nothing.
+    rerender(<ArticleBody article={art} highlights={[makeEntry("hl-omit", 0, 5)]} />);
+    const markOmit = container.querySelector("mark.highlight");
+    expect(markOmit?.className).toBe("highlight");
+    expect(markOmit?.getAttribute("aria-label")?.startsWith("Highlight")).toBe(true);
+  });
+
+  it("an unresolved named-color mark keeps the dashed-outline treatment (color never overrides the cue)", () => {
+    const art = article([paragraph("Hello world.")]);
+    const hl: ArticleBodyHighlight = {
+      ...makeEntry("hl-orphan", 6, 11),
+      status: "orphan",
+      color: "pink",
+    };
+    const { container } = render(
+      <ArticleBody article={art} highlights={[hl]} />,
+    );
+
+    const mark = container.querySelector("mark.highlight");
+    expect(mark).not.toBeNull();
+    expect(mark?.classList.contains("color-pink")).toBe(true);
+    expect(mark?.classList.contains("unresolved")).toBe(true);
+    // The aria-label names BOTH the color and the uncertainty (D5-04 × #118).
+    expect(mark?.getAttribute("aria-label")).toMatch(
+      /^Pink highlight that couldn't be relocated: /,
+    );
+  });
 });

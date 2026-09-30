@@ -1,8 +1,9 @@
 // src/settings/customTheme.ts
 // The custom-theme color domain (issue #86, decision #73): one Custom slot,
-// 5 reader-editable tokens, and SIX derived tokens that are never stored
-// or edited. All math is pure and deterministic — the same token set always
-// resolves to the same 11-color palette, in tests and in the browser.
+// 5 reader-editable tokens, and TEN derived tokens that are never stored
+// or edited (issue #118 added the four named highlight fills). All math is
+// pure and deterministic — the same token set always resolves to the same
+// 15-color palette, in tests and in the browser.
 //
 // Derivation contract (decision #73, from the #86 build ticket):
 //   --ink-soft         from ink — ink's hue/chroma, lightness walked toward
@@ -27,6 +28,12 @@
 //                      deeper toward the AA boundary so the spoken marker
 //                      stays shade-distinct from the annotation fill
 //                      (issue #42) while D5-14 still holds.
+//   --highlight-yellow/-green/-blue/-pink (issue #118)
+//                      FIXED HUES (not the accent's) through the SAME
+//                      compliant lightness band, so every named highlight
+//                      fill keeps D5-14 by construction in custom themes —
+//                      the ink-on-fill AA guarantee extends to the whole
+//                      named vocabulary.
 //   --destructive      FIXED per the chosen surface's light/dark disposition
 //                      (#9b2c2c light / #e07a7a dark — the preset literals).
 //
@@ -57,12 +64,16 @@ export const CUSTOM_COLOR_PROPS = [
   "--destructive",
   "--hairline",
   "--highlight",
+  "--highlight-yellow",
+  "--highlight-green",
+  "--highlight-blue",
+  "--highlight-pink",
   "--spoken-highlight",
 ] as const;
 
 export type CustomColorProp = (typeof CUSTOM_COLOR_PROPS)[number];
 
-/** The resolved 11-token palette — CSS property name → sRGB hex. */
+/** The resolved 15-token palette — CSS property name → sRGB hex. */
 export type ResolvedCustomTheme = Record<CustomColorProp, string>;
 
 /** The 5-token seeds, byte-matching the [data-theme] blocks in src/app.css.
@@ -217,6 +228,18 @@ const INK_SOFT_MAX_TRAVEL = 0.65;
 /** Marker fills keep a calm chroma regardless of accent saturation (D5-14's
  * calm warm-marker spirit; the preset fills sit at ≤ ~0.09 chroma). */
 const MARKER_CHROMA_CAP = 0.12;
+/** Issue #118 — the named fills' chroma: hue-identifiable yet calm (inside
+ * the marker-chroma spirit; the lightness band does the AA work). */
+const NAMED_MARKER_CHROMA = 0.1;
+/** Issue #118 — the four named hues as FIXED OKLCH hue angles (degrees —
+ * converted to radians at use). NOT the accent's hue: a named Yellow must
+ * stay yellow whatever accent the reader chose. */
+const NAMED_HIGHLIGHT_HUES = {
+  yellow: 100,
+  green: 145,
+  blue: 262,
+  pink: 350,
+} as const;
 /** Annotation/spoken fills: fractions of the surface→AA-boundary segment. */
 const HIGHLIGHT_FRACTION = 0.35;
 const SPOKEN_FRACTION = 0.6;
@@ -371,7 +394,7 @@ function canonicalTokens(tokens: CustomThemeTokens): CustomThemeTokens {
 }
 
 /**
- * Resolve the full 11-token palette from the 5 stored tokens. Pure: same
+ * Resolve the full 15-token palette from the 5 stored tokens. Pure: same
  * input, same output — the unit tests pin the derived-pair guarantees
  * (D5-14, focus visibility, placeholder AA) across light, dark, and
  * saturated seeds.
@@ -419,6 +442,29 @@ export function resolveCustomTheme(rawTokens: CustomThemeTokens): ResolvedCustom
   const highlight = okLchToHex({ ...band, L: highlightL });
   const spokenHighlight = okLchToHex({ ...band, L: spokenL });
 
+  // Issue #118 — the named fills: each FIXED hue through the SAME compliant
+  // lightness band (the AA*1.02 target), so every named marker keeps D5-14
+  // by construction (pinned by highlight-color-contrast.test.ts). The fills
+  // share the Default fill's lightness, so they stay calm and shade-equal —
+  // distinguished by hue exactly as in the preset themes.
+  const namedFills = {} as Record<keyof typeof NAMED_HIGHLIGHT_HUES, string>;
+  for (const [name, hueDeg] of Object.entries(NAMED_HIGHLIGHT_HUES)) {
+    const namedBand: OkLch = {
+      L: surfaceLch.L,
+      C: NAMED_MARKER_CHROMA,
+      h: (hueDeg * Math.PI) / 180,
+    };
+    namedFills[name as keyof typeof NAMED_HIGHLIGHT_HUES] = okLchToHex({
+      ...namedBand,
+      L: markerLightnessPair(
+        surfaceLch.L,
+        tokens.ink,
+        namedBand,
+        AA_TEXT_RATIO * 1.02,
+      ).highlightL,
+    });
+  }
+
   const destructive =
     surfaceDisposition(tokens.surface) === "light" ? DESTRUCTIVE_LIGHT : DESTRUCTIVE_DARK;
 
@@ -433,6 +479,10 @@ export function resolveCustomTheme(rawTokens: CustomThemeTokens): ResolvedCustom
     "--destructive": destructive,
     "--hairline": tokens.hairline,
     "--highlight": highlight,
+    "--highlight-yellow": namedFills.yellow,
+    "--highlight-green": namedFills.green,
+    "--highlight-blue": namedFills.blue,
+    "--highlight-pink": namedFills.pink,
     "--spoken-highlight": spokenHighlight,
   };
 }

@@ -174,6 +174,25 @@ describe("_test_sliceHighlightsForEntry — D5-16 cross-fragment intersection ma
     expect(slicesOrph[0]!.status).toBe("orphan");
   });
 
+  it("threads the named color (issue #118) so BOTH fragments of a page-split mark carry it", () => {
+    // A highlight split by a page boundary keeps its named color on each
+    // fragment's slice — the fill survives page turns in paginated mode.
+    // Like status, the color is pass-through: it never participates in the
+    // intersection math.
+    const h: ArticleBodyHighlight = {
+      ...highlightAt("hl-color", 40, 60),
+      color: "blue",
+    };
+
+    const slicesA = _test_sliceHighlightsForEntry([h], article, 0, 0, 50, "en");
+    const slicesB = _test_sliceHighlightsForEntry([h], article, 0, 50, 100, "en");
+
+    expect(slicesA).toHaveLength(1);
+    expect(slicesA[0]!.color).toBe("blue");
+    expect(slicesB).toHaveLength(1);
+    expect(slicesB[0]!.color).toBe("blue");
+  });
+
   it("preserves a 3-fragment split with no gaps and no overlaps (multi-page highlight)", () => {
     // Synthetic 3-page article: block 0 has 300 graphemes; pages are 100 each.
     const big = articleWithOneParagraph(300);

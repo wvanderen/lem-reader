@@ -16,6 +16,9 @@
 // reading order + D-05 offset integrity depend on reusing this same output).
 import type { InlineRun } from "../types";
 import type { HighlightSlice } from "../../annotations/highlightRanges";
+// Issue #118 — the shared mark-trait helpers (the ONE className + aria-label
+// copy contract, shared with the code twin in BlockRenderer).
+import { highlightAriaLabelForText, highlightClassName } from "../../annotations/highlightColors";
 // Issue #42: the synthetic spoken-word marker rides the SAME slicer output
 // as annotation marks, but branches on the reserved id into an aria-hidden,
 // non-focusable <mark> — per-word updates never enter the accessibility
@@ -50,41 +53,17 @@ function Inline({ run }: { run: InlineRun }) {
   return <>{node}</>;
 }
 
-/**
- * Build the aria-label for a highlighted slice (UI-SPEC §Copywriting).
- * Confident: "Highlight: {excerpt}" / "Highlight with note: {excerpt}".
- * Ambiguous: "Highlight that couldn't be matched: {excerpt}" (D5-04 —
- *   the reader is told the anchor is uncertain so they understand the
- *   dashed-outline marker + the disabled drawer jump).
- * Orphan: "Highlight that couldn't be relocated: {excerpt}".
- */
+/** The per-slice aria-label: the shared §Copywriting derivation (the ONE
+ * copy in highlightColors.ts) fed from the slice's bundled traits. */
 function highlightAriaLabel(slice: HighlightSlice): string {
   return highlightAriaLabelForText(
     slice.runs.map((r) => r.text).join(""),
-    slice.hasNote,
-    slice.status,
+    {
+      color: slice.color ?? "default",
+      hasNote: slice.hasNote,
+      status: slice.status,
+    },
   );
-}
-
-/**
- * The text-based form of the per-slice aria-label derivation, shared with
- * the code-segment mark path (Plan 19-03 — one copy site for the §Copywriting
- * contract; the excerpt is slice/segment-local text capped at 80 chars).
- */
-export function highlightAriaLabelForText(
-  text: string,
-  hasNote: boolean,
-  status: "confident" | "ambiguous" | "orphan",
-): string {
-  const excerpt = text.slice(0, 80);
-  if (status === "ambiguous") {
-    return `Highlight that couldn't be matched: ${excerpt}`;
-  }
-  if (status === "orphan") {
-    return `Highlight that couldn't be relocated: ${excerpt}`;
-  }
-  const prefix = hasNote ? "Highlight with note:" : "Highlight:";
-  return `${prefix} ${excerpt}`;
 }
 
 export function InlineList({
@@ -140,13 +119,20 @@ export function InlineList({
             </SpokenMark>
           );
         }
-        // Highlighted slice — wrap in <mark class="highlight">. The modifier
-        // reflects the D5-02 tri-state (Plan 05-04): confident → bare fill;
+        // Highlighted slice — wrap in <mark class="highlight">. The modifiers
+        // reflect the D5-02 tri-state (Plan 05-04): confident → bare fill;
         // hasNote → dotted underline; ambiguous/orphan → dashed outline
-        // (.unresolved — Pitfall 7 never silent re-attach). The three shapes
-        // are distinguishable by SHAPE alone (A11Y-05 forced-colors safety).
-        const unresolved = slice.status !== "confident";
-        const className = `highlight${slice.hasNote ? " has-note" : ""}${unresolved ? " unresolved" : ""}`;
+        // (.unresolved — Pitfall 7 never silent re-attach). Issue #118 adds
+        // the named-color modifier (`color-<name>`; Default renders bare).
+        // The states stay distinguishable by SHAPE alone (A11Y-05
+        // forced-colors safety — color is never the sole identifier). Both
+        // modifiers ride the ONE shared traits helpers (the code-twin mark
+        // in BlockRenderer uses them verbatim).
+        const className = highlightClassName({
+          color: slice.color ?? "default",
+          hasNote: slice.hasNote,
+          status: slice.status,
+        });
         return (
           <mark
             key={i}

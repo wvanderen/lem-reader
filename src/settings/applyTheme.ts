@@ -25,8 +25,9 @@
 // (Phase 1, react/no-danger — preserved).
 //
 // Issue #86 (decision #73) — the custom theme: when theme === "custom" the
-// inline writes ARE the theme — applyTheme resolves the FULL 11-token
-// palette (5 stored + 6 derived, src/settings/customTheme.ts) onto
+// inline writes ARE the theme — applyTheme resolves the FULL 15-token
+// palette (5 stored + 10 derived incl. issue #118's four named highlight
+// fills, src/settings/customTheme.ts) onto
 // documentElement, because [data-theme="custom"] overrides no tokens in CSS
 // (first paint before hydration paints the seeded :root defaults — accepted
 // by decision #73). When the theme is a preset the SAME property list is
