@@ -124,6 +124,13 @@ export interface HighlightOverlayValue {
    */
   flushNoteSave: () => void;
   /**
+   * Replace the tag array on a highlight (issue #116). In-memory state
+   * updates optimistically; the write runs through the ONE tagsStore seam
+   * (existing library vocabulary, highlight row only). The attached note
+   * shares the highlight's tags — no separate note tag set.
+   */
+  updateHighlightTags: (id: string, tags: string[]) => Promise<void>;
+  /**
    * The highlight id whose NotePopover is open, or null. Owned here so the
    * SelectionToolbar + NotePopover coordinate through one source of truth.
    */
@@ -233,6 +240,7 @@ export function HighlightOverlayProvider({
       deleteHighlight: state.deleteHighlight,
       updateNote: state.updateNote,
       flushNoteSave: state.flushNoteSave,
+      updateHighlightTags: state.updateHighlightTags,
       openPopoverFor,
       setOpenPopoverFor,
       storageState: state.storageState,

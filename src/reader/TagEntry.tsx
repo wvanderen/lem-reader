@@ -44,7 +44,13 @@ import { TagPicker } from "../ui/TagPicker";
 import { StatusRegion } from "../ui/StatusRegion";
 
 interface TagEntryProps {
-  /** The article whose tags are being edited. */
+  /**
+   * The id of the row whose tags are being edited. Named for the default
+   * host (the article row — setArticleTags); override hosts pass their own
+   * row id here and route the write through `saveTags` (BookRow → book id,
+   * issue #116's NotePopover → highlight id), so the value is only consumed
+   * by the DEFAULT write path.
+   */
   articleId: string;
   /** The current tag array on the article row. */
   tags: string[];
@@ -58,6 +64,14 @@ interface TagEntryProps {
    * setArticleTags path runs exactly as before.
    */
   saveTags?: (tags: string[]) => Promise<void>;
+  /**
+   * Id for the picker's combobox input (issue #116). Hosts that mount more
+   * than one TagEntry in the same document MUST pass a unique id — duplicate
+   * DOM ids break label/combobox wiring. Defaults to the original reader
+   * id so the ArticleView/BookRow hosts (and their e2e anchors) are
+   * byte-unchanged.
+   */
+  inputId?: string;
 }
 
 /**
@@ -65,7 +79,7 @@ interface TagEntryProps {
  * live region. Renders INSIDE ArticleView's tag popover / BookRow's
  * expanded region. INERT at mount (Pitfall 8-5).
  */
-export function TagEntry({ articleId, tags, saveTags }: TagEntryProps) {
+export function TagEntry({ articleId, tags, saveTags, inputId = "tag-entry-input" }: TagEntryProps) {
   // Local mirror of the tag array so the UI updates immediately on
   // add/remove without waiting for the parent's next render. The Dexie
   // write is fire-and-forget (errors land in errorCopy); the parent does
@@ -131,14 +145,14 @@ export function TagEntry({ articleId, tags, saveTags }: TagEntryProps) {
   return (
     <fieldset className="tag-entry" onFocusCapture={ensureStats}>
       <legend>Tags</legend>
-      <label htmlFor="tag-entry-input" className="visually-hidden">
+      <label htmlFor={inputId} className="visually-hidden">
         Add or search a tag
       </label>
       <TagPicker
         stats={stats}
         selected={localTags}
         onChange={(next) => void commitTags(next)}
-        inputId="tag-entry-input"
+        inputId={inputId}
       />
       {/* Status region mirrors the add dialog's discipline (A11Y-08 —
           readers using AT hear about save failures). aria-atomic so the SR

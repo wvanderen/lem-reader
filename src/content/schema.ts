@@ -600,6 +600,16 @@ export const HighlightRecordSchema = z.object({
   position: TextPositionSelectorSchema, // D5-03: grapheme range (primary anchor)
   quote: TextQuoteSelectorSchema, // D5-03: prefix/exact/suffix (recovery substrate)
   createdAt: z.string().datetime(), // ISO-8601
+  // Issue #116 — per-highlight annotation tags (issue #75's Q7A machinery,
+  // D8-05's per-row namespace applied to highlights). Additive: rows written
+  // before this field omit it and hydrate to `[]` via `.default([])` (Pitfall
+  // 9 — the exact ArticleSchema.tags mechanism above). Consumers still read
+  // `tags ?? []`: the field is type-optional, and in-memory records built
+  // before the hydration point may omit the key.
+  // The attached note has NO independent tag set — the note shares the
+  // highlight's tags by construction (1:1 via highlightId), so tagging never
+  // touches article or book rows.
+  tags: z.array(z.string().min(1)).default([]).optional(),
 });
 export type HighlightRecord = z.infer<typeof HighlightRecordSchema>;
 

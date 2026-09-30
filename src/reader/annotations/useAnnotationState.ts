@@ -40,6 +40,9 @@ import {
   saveNote,
   deleteNote,
 } from "../../persistence/notesStore";
+// Issue #116 — the ONE tag-write seam (mirrors TagEntry's setArticleTags
+// write-through; already in the reader graph via src/reader/TagEntry.tsx).
+import { setHighlightTags } from "../../ingestion/library/tagsStore";
 import { classifyStorageError } from "../../persistence/errors";
 
 /** D5-02 tri-state — drives Plan 05-04 ambiguous/orphan surfacing. */
@@ -108,6 +111,23 @@ export interface UseAnnotationStateResult {
    * on visibilitychange-hidden + pagehide) so no edit is lost.
    */
   flushNoteSave: () => void;
+  /**
+   * Replace the tag array on a highlight (issue #116). The in-memory record
+   * updates optimistically; the persistence write is commit-per-change (tag
+   * picks are discrete events — the TagEntry discipline, no debounce) and
+   * runs through the ONE tagsStore seam so the existing library vocabulary's
+   * stored casing wins (the routed casings are mirrored back into the
+   * record once the write lands). Never touches article or book rows. The
+   * attached note needs no update — it shares the highlight's tags by
+   * construction.
+   *
+   * Failure contract (STATE-05 + the host's local surface): the error is
+   * classified and routed to onStorageError (StorageBanner) AND rethrown so
+   * the TagEntry host's StatusRegion can show its inline "Couldn't save
+   * tag." copy inside the modal popover — the banner alone would sit behind
+   * the dialog backdrop while the reader is mid-edit.
+   */
+  updateHighlightTags: (id: string, tags: string[]) => Promise<void>;
   storageState: AnnotationStorageState;
 }
 
@@ -219,6 +239,13 @@ export function useAnnotationState(
         position,
         quote,
         createdAt: new Date().toISOString(),
+        // Issue #116 — new records carry the field (empty) so a row is
+        // byte-stable across export → import: the exporter's Zod self-check
+        // hydrates the additive field to [] on every parsed record, and the
+        // re-imported row must deep-equal the local one (the portability
+        // spine's raw-row equality check). Consumers still read `tags ?? []`
+        // for pre-#116 rows, which omit the key.
+        tags: [],
       };
       // Optimistic prepend — same-revision capture is always "confident".
       const resolved: ResolvedHighlight = {
@@ -377,12 +404,50 @@ export function useAnnotationState(
     [scheduleNoteSave],
   );
 
+  // Issue #116 — commit-per-change highlight-tag write (the TagEntry
+  // discipline: optimistic mirror + fire-and-forget seam write). The catch
+  // routes to StorageBanner (STATE-05) and RETHROWS so the TagEntry host's
+  // own StatusRegion fires inside the modal popover — see the interface doc.
+  const updateHighlightTags = useCallback(
+    async (id: string, tags: string[]): Promise<void> => {
+      // Optimistic in-memory record update so the picker's chips reflect
+      // immediately (the record is the single source for the popover UI).
+      setHighlights((prev) =>
+        prev.map((h) =>
+          h.record.id === id ? { ...h, record: { ...h.record, tags } } : h,
+        ),
+      );
+      try {
+        // setHighlightTags normalizes + routes to the persisted casing
+        // (tagsStore.ts) before touching the highlight row only; the routed
+        // array mirrors the exact written casings back into the record.
+        const routed = await setHighlightTags(id, tags);
+        if (routed) {
+          setHighlights((prev) =>
+            prev.map((h) =>
+              h.record.id === id
+                ? { ...h, record: { ...h.record, tags: routed } }
+                : h,
+            ),
+          );
+        }
+      } catch (e) {
+        const reason = classifyStorageError(e);
+        setStorageState(reason);
+        callbacksRef.current.onStorageError?.(reason);
+        throw e;
+      }
+    },
+    [],
+  );
+
   return {
     highlights,
     createHighlight,
     deleteHighlight,
     updateNote,
     flushNoteSave,
+    updateHighlightTags,
     storageState,
   };
 }

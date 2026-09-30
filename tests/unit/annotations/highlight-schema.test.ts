@@ -78,6 +78,40 @@ describe("HighlightRecordSchema accepts valid records", () => {
   });
 });
 
+// ── HighlightRecordSchema.tags (issue #116 — annotation tags) ────────────────
+
+describe("HighlightRecordSchema.tags (issue #116)", () => {
+  it("hydrates an older row with NO tags field to [] (Pitfall 9 additive)", () => {
+    // Rows written before #116 omit the field entirely — the read boundary
+    // hydrates them to [] so every consumer sees a no-tag highlight.
+    const parsed = HighlightRecordSchema.parse(validHighlight());
+    expect(parsed.tags).toEqual([]);
+  });
+
+  it("parses + round-trips a tagged record verbatim", () => {
+    const parsed = HighlightRecordSchema.parse(
+      validHighlight({ tags: ["essays", "to-revisit"] }),
+    );
+    expect(parsed.tags).toEqual(["essays", "to-revisit"]);
+  });
+
+  it("rejects an empty-string tag (z.string().min(1) — a stray empty would corrupt the row)", () => {
+    expect(() => HighlightRecordSchema.parse(validHighlight({ tags: ["ok", ""] }))).toThrow();
+  });
+
+  it("rejects a non-array tags field", () => {
+    expect(() =>
+      HighlightRecordSchema.parse(validHighlight({ tags: "essays" })),
+    ).toThrow();
+  });
+
+  it("rejects a non-string tag entry", () => {
+    expect(() =>
+      HighlightRecordSchema.parse(validHighlight({ tags: [42] })),
+    ).toThrow();
+  });
+});
+
 // ── HighlightRecordSchema reject matrix (T-05-03 — Tampering V5) ─────────────
 
 describe("HighlightRecordSchema rejects invalid records", () => {
