@@ -141,3 +141,44 @@ export async function setBookTags(id: string, tags: string[]): Promise<void> {
   const routed = await routeToStoredCasing(tags);
   await db.books.update(id, { tags: routed });
 }
+
+const pendingHighlightTagWrites = new Map<string, Promise<void>>();
+
+/**
+ * `setHighlightTags` — write the tag array for one HighlightRecord by id
+ * (issue #116 — the per-highlight annotation-tag namespace). The SAME
+ * `routeToStoredCasing` discipline as setArticleTags/setBookTags: the input
+ * normalizes (trim, drop empties, case-insensitive dedupe) and resolves
+ * against the EXISTING library vocabulary (article + book rows) so a tag the
+ * library already knows keeps its stored casing; an unknown tag is a new
+ * highlight-local tag (cross-highlight casing is NOT folded — the vocabulary
+ * stays the library's, per the issue's scoping). Article and book rows are
+ * NEVER touched — annotation tags live only on the highlight row (the D8-05
+ * per-row namespace applied to highlights). Idempotent primary-key update; a
+ * non-existent id is a no-op (Dexie `update` returns 0 rows updated; no
+ * throw). Returns the ROUTED array as written, so the caller's optimistic
+ * in-memory state can mirror the exact persisted casings.
+ */
+export function setHighlightTags(
+  highlightId: string,
+  tags: string[],
+): Promise<string[]> {
+  // Include vocabulary reads in the queue: an empty selection otherwise
+  // overtakes an earlier addition while it is resolving stored casing.
+  const selection = [...tags];
+  const previous = pendingHighlightTagWrites.get(highlightId) ?? Promise.resolve();
+  const write = previous.then(async () => {
+    const routed = await routeToStoredCasing(selection);
+    await db.highlights.update(highlightId, { tags: routed });
+    return routed;
+  });
+  // A failed save must not prevent later edits from being persisted.
+  const settled = write.then(() => {}, () => {});
+  pendingHighlightTagWrites.set(highlightId, settled);
+  void settled.then(() => {
+    if (pendingHighlightTagWrites.get(highlightId) === settled) {
+      pendingHighlightTagWrites.delete(highlightId);
+    }
+  });
+  return write;
+}

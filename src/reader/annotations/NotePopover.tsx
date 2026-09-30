@@ -49,11 +49,22 @@
 // (`<textarea value={text} />` + excerpt as `<p>{excerpt}</p>`). NEVER raw
 // HTML. The `react/no-danger` ESLint rule (enabled since Phase 1) statically
 // forbids the raw-HTML prop.
+//
+// Issue #116 — the popover is the highlight's READER DETAILS surface: the
+// shared TagPicker (via TagEntry with a saveTags override) edits the
+// highlight's tags beside the note. The note has NO independent tag set —
+// it shares the highlight's tags by construction. Tags stay EDITABLE when
+// the anchor is ambiguous/orphaned (unlike the note textarea, tagging does
+// not depend on re-anchoring); the write runs through tagsStore's ONE
+// seam and never touches article or book tag assignments.
 import { useEffect, useRef, useState } from "react";
 import { useHighlightOverlay } from "./HighlightOverlay";
 // Plan 19-02 (D19-10) — the excerpt derivation routes through the ONE
 // shared pure helper (first fragment + calm ellipsis for spans).
 import { firstFragmentExcerpt } from "../../annotations/excerpt";
+// Issue #116 — the ONE shared tag entry (TagPicker host): same fieldset +
+// legend + picker + StatusRegion anatomy as the article/book surfaces.
+import { TagEntry } from "../TagEntry";
 
 /** Excerpt cap for the popover context block (UI-SPEC §Interaction 29) —
  * Plan 19-02: the cap parameter feeding the shared firstFragmentExcerpt
@@ -68,6 +79,7 @@ export function NotePopover(): React.ReactElement | null {
     setOpenPopoverFor,
     updateNote,
     flushNoteSave,
+    updateHighlightTags,
     deleteHighlight,
   } = useHighlightOverlay();
 
@@ -300,6 +312,25 @@ export function NotePopover(): React.ReactElement | null {
                 disabled={isUnresolved}
               />
             </div>
+            {/* Issue #116 — the highlight's tags, edited through the ONE
+                shared TagPicker. The key forces a fresh local mirror when the
+                popover re-points at a different highlight; the saveTags
+                override routes the commit to updateHighlightTags (the
+                tagsStore seam — highlight row only). The fieldset has NO
+                isUnresolved gate: tagging never depends on the anchor, so
+                tags stay editable for ambiguous/orphaned highlights (the
+                note textarea above keeps its D5-04 disabled state). */}
+            {resolved && (
+              <TagEntry
+                key={resolved.record.id}
+                recordId={resolved.record.id}
+                tags={resolved.record.tags ?? []}
+                saveTags={(next) =>
+                  updateHighlightTags(resolved.record.id, next)
+                }
+                inputId="highlight-popover-tags-input"
+              />
+            )}
             <div className="highlight-popover-actions">
               <button
                 type="button"

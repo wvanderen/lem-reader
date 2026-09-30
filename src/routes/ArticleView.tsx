@@ -2457,7 +2457,7 @@ export function ArticleView({
           aria-label="Article tags"
           className="tag-popover"
         >
-          <TagEntry articleId={article.id} tags={article.tags ?? []} />
+          <TagEntry recordId={article.id} tags={article.tags ?? []} />
         </div>
         {/* Phase 18 Plan 18-02: the TOC panel — popover="manual", NON-modal
             (no dialog role, no modal state, no popup hint — Pitfall 3; the

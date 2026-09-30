@@ -15,7 +15,7 @@
 // Harness mirrors tests/unit/ingestion-client.test.ts L14-90: fake-indexeddb
 // via Dexie.dependencies, wipeDatabase beforeEach, lazy-import of the module
 // under test so it picks up the fake DB.
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ArticleSchema } from "../../src/content/schema";
 import type { CanonicalArticle } from "../../src/content/types";
 import fakeIndexedDB, { IDBKeyRange } from "fake-indexeddb";
@@ -224,5 +224,153 @@ describe("tagsStore (08-02 Task 2)", () => {
     const tags = await loadAllTags();
     // Only the valid row's tag survives; the corrupt row is dropped silently.
     expect(tags).toEqual(["from-valid"]);
+  });
+});
+
+// ── setHighlightTags (issue #116 — the per-highlight annotation namespace) ───
+
+/** A schema-valid HighlightRecordRow for direct db.highlights.put seeding. */
+function sampleHighlightRow(overrides: Record<string, unknown> = {}) {
+  return {
+    schemaVersion: 1 as const,
+    id: "hl-tag-seed-1",
+    articleId: "test-article-slug",
+    revision: 1,
+    position: { start: 0, end: 5 },
+    quote: { prefix: "", exact: "Hello", suffix: " world." },
+    createdAt: "2026-09-10T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
+async function seedHighlight(overrides: Record<string, unknown> = {}): Promise<void> {
+  const { db } = await import("../../src/persistence/db");
+  await db.highlights.put(sampleHighlightRow(overrides));
+}
+
+describe("setHighlightTags (issue #116)", () => {
+  beforeEach(async () => {
+    await wipeDatabase();
+  });
+
+  it("writes tags on the highlight row, visible on the next validated read", async () => {
+    const { setHighlightTags } = await loadTagsStore();
+    const { loadAllHighlights } = await import("../../src/persistence/highlightsStore");
+    await seedHighlight();
+
+    await setHighlightTags("hl-tag-seed-1", ["important", "to-revisit"]);
+
+    const rows = await loadAllHighlights();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.tags).toEqual(["important", "to-revisit"]);
+  });
+
+  it("routes a case-variant to the persisted library casing (Q7A at the write seam)", async () => {
+    const { setHighlightTags, loadAllTags } = await loadTagsStore();
+    const { DexieLibrarySource } = await loadLibrarySource();
+    const { loadAllHighlights } = await import("../../src/persistence/highlightsStore");
+    const source = new DexieLibrarySource();
+    await source.save(sampleArticle({ id: "a", tags: ["essays"] }));
+    await seedHighlight();
+
+    // The library knows "essays" — the highlight write must route to the
+    // stored casing instead of stacking a case twin.
+    await setHighlightTags("hl-tag-seed-1", ["ESSAYS"]);
+    const rows = await loadAllHighlights();
+    expect(rows[0]?.tags).toEqual(["essays"]);
+    // The library vocabulary is unchanged (one casing, one article carrier).
+    expect(await loadAllTags()).toEqual(["essays"]);
+  });
+
+  it("an unknown tag lands on the highlight ONLY — article rows are never touched", async () => {
+    const { setHighlightTags, loadAllTags } = await loadTagsStore();
+    const { DexieLibrarySource } = await loadLibrarySource();
+    const { loadAllHighlights } = await import("../../src/persistence/highlightsStore");
+    const source = new DexieLibrarySource();
+    await source.save(sampleArticle({ id: "a", tags: [] }));
+    await seedHighlight();
+
+    await setHighlightTags("hl-tag-seed-1", ["annotation-only-tag"]);
+
+    // The highlight carries it…
+    const rows = await loadAllHighlights();
+    expect(rows[0]?.tags).toEqual(["annotation-only-tag"]);
+    // …and the library vocabulary (article + book rows) does NOT — tagging a
+    // highlight never changes article or book tag assignments.
+    expect(await loadAllTags()).toEqual([]);
+  });
+
+  it("normalizes: trims, drops empties, dedupes case-variants (first-seen casing wins)", async () => {
+    const { setHighlightTags } = await loadTagsStore();
+    const { loadAllHighlights } = await import("../../src/persistence/highlightsStore");
+    await seedHighlight();
+
+    await setHighlightTags("hl-tag-seed-1", ["  Slow Web  ", "", "slow web", "keep"]);
+    const rows = await loadAllHighlights();
+    expect(rows[0]?.tags).toEqual(["Slow Web", "keep"]);
+  });
+
+  it("an empty array clears the highlight's tags", async () => {
+    const { setHighlightTags } = await loadTagsStore();
+    const { loadAllHighlights } = await import("../../src/persistence/highlightsStore");
+    await seedHighlight({ tags: ["old"] });
+
+    await setHighlightTags("hl-tag-seed-1", []);
+    const rows = await loadAllHighlights();
+    expect(rows[0]?.tags).toEqual([]);
+  });
+
+  it("keeps a removal after an addition whose vocabulary read is delayed", async () => {
+    const { setHighlightTags } = await loadTagsStore();
+    const { dexieLibrarySource } = await loadLibrarySource();
+    const { loadAllHighlights } = await import("../../src/persistence/highlightsStore");
+    await seedHighlight();
+    let release!: () => void;
+    let started!: () => void;
+    const reading = new Promise<void>((resolve) => { started = resolve; });
+    const delay = new Promise<void>((resolve) => { release = resolve; });
+    const read = vi.spyOn(dexieLibrarySource, "list").mockImplementationOnce(async () => {
+      started();
+      await delay;
+      return [];
+    });
+    try {
+      const addition = setHighlightTags("hl-tag-seed-1", ["temporary"]);
+      await reading;
+      const removal = setHighlightTags("hl-tag-seed-1", []);
+      release();
+      await Promise.all([addition, removal]);
+      expect((await loadAllHighlights())[0]?.tags).toEqual([]);
+    } finally {
+      release();
+      read.mockRestore();
+    }
+  });
+
+  it("allows a later edit after a failed write", async () => {
+    const { setHighlightTags } = await loadTagsStore();
+    const { db } = await import("../../src/persistence/db");
+    await seedHighlight();
+    const update = vi.spyOn(db.highlights, "update").mockRejectedValueOnce(new Error("save failed"));
+    try {
+      const failure = setHighlightTags("hl-tag-seed-1", []);
+      const retry = setHighlightTags("hl-tag-seed-1", ["retry"]);
+      await expect(failure).rejects.toThrow("save failed");
+      await retry;
+      expect((await db.highlights.get("hl-tag-seed-1"))?.tags).toEqual(["retry"]);
+    } finally {
+      update.mockRestore();
+    }
+  });
+
+  it("on a non-existent highlight id is a no-op (no throw, library unchanged)", async () => {
+    const { setHighlightTags } = await loadTagsStore();
+    // Resolves with the routed array (the write contract); the missing row
+    // means nothing was written (Dexie update returned 0 rows).
+    await expect(
+      setHighlightTags("does-not-exist", ["tag"]),
+    ).resolves.toEqual(["tag"]);
+    const { loadAllHighlights } = await import("../../src/persistence/highlightsStore");
+    expect(await loadAllHighlights()).toEqual([]);
   });
 });

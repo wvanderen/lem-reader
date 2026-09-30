@@ -34,7 +34,7 @@ beforeEach(() => {
 
 describe("TagEntry on the shared picker", () => {
   it("renders the fieldset with the picker, inert at mount (Pitfall 8-5)", () => {
-    render(<TagEntry articleId="a1" tags={["existing"]} />);
+    render(<TagEntry recordId="a1" tags={["existing"]} />);
     expect(screen.getByText("Tags")).toBeInTheDocument();
     expect(screen.getByText("existing")).toBeInTheDocument();
     expect(screen.getByLabelText("Add or search a tag")).not.toHaveFocus();
@@ -44,7 +44,7 @@ describe("TagEntry on the shared picker", () => {
 
   it("first focus triggers the lazy stats load (suggestions appear)", async () => {
     const user = userEvent.setup();
-    render(<TagEntry articleId="a1" tags={[]} />);
+    render(<TagEntry recordId="a1" tags={[]} />);
     await user.click(screen.getByLabelText("Add or search a tag"));
     await waitFor(() => {
       const options = within(screen.getByRole("listbox")).getAllByRole("option");
@@ -54,7 +54,7 @@ describe("TagEntry on the shared picker", () => {
 
   it("commits write through setArticleTags per change (routed casing)", async () => {
     const user = userEvent.setup();
-    render(<TagEntry articleId="a1" tags={["existing"]} />);
+    render(<TagEntry recordId="a1" tags={["existing"]} />);
     const input = screen.getByLabelText("Add or search a tag");
     await user.click(input); // the focus that triggers ensureStats
     await user.type(input, "essays");
@@ -67,7 +67,7 @@ describe("TagEntry on the shared picker", () => {
   it("the book override routes commits to saveTags (D12-04)", async () => {
     const saveTags = vi.fn().mockResolvedValue(undefined);
     const user = userEvent.setup();
-    render(<TagEntry articleId="book-1" tags={[]} saveTags={saveTags} />);
+    render(<TagEntry recordId="book-1" tags={[]} saveTags={saveTags} />);
     const input = screen.getByLabelText("Add or search a tag");
     await user.click(input);
     await user.type(input, "books");
@@ -79,7 +79,7 @@ describe("TagEntry on the shared picker", () => {
   it("a write failure lands in the calm .status region", async () => {
     setArticleTagsMock.mockRejectedValue(new Error("quota"));
     const user = userEvent.setup();
-    render(<TagEntry articleId="a1" tags={[]} />);
+    render(<TagEntry recordId="a1" tags={[]} />);
     const input = screen.getByLabelText("Add or search a tag");
     await user.click(input);
     await user.type(input, "essays");

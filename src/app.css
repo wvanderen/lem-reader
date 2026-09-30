@@ -2117,6 +2117,16 @@ dialog.highlight-popover::backdrop {
   color: var(--ink);
 }
 
+/* ── Issue #116 — the highlight's tag entry inside the popover ─────────────── */
+/* The shared .tag-entry fieldset (article-header styling) keeps its anatomy;
+   only the article-header margin is zeroed — the dialog's flex-column gap
+   already spaces the section. The picker's chips + input ride the shared
+   .tag-picker rules; the narrow dialog constrains nothing further (the
+   picker is min-width:0 and the dialog caps at 380px). */
+dialog.highlight-popover .tag-entry {
+  margin-block: 0;
+}
+
 /* ── Annotations trigger (D5-09, UI-SPEC §Interaction 30) ───────────────────── */
 /* Mirrors .gear-button geometry EXACTLY: 44×44 hit area, transparent bg,
    --ink-soft default, --accent ONLY when [aria-expanded="true"]. The header

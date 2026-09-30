@@ -35,7 +35,10 @@ export interface LocationRecordRow {
  * Mirrors HighlightRecordSchema (src/content/schema.ts); the compound index
  * `[articleId+revision]` is queried as an array range for cross-revision
  * lookup (D5-01). The row does NOT carry a literal "[articleId+revision]"
- * field — Dexie derives the compound key from `articleId` + `revision`. */
+ * field — Dexie derives the compound key from `articleId` + `revision`.
+ * `tags` (issue #116) is a plain non-indexed row field — NO Dexie version
+ * bump (only INDEXED properties require a version-block declaration; no
+ * query keys on annotation tags; the readerTitle precedent). */
 export interface HighlightRecordRow {
   schemaVersion: 1;
   id: string;
@@ -44,6 +47,7 @@ export interface HighlightRecordRow {
   position: { start: number; end: number };
   quote: { prefix: string; exact: string; suffix: string };
   createdAt: string;
+  tags?: string[];
 }
 
 /** Shape of a row in the `notes` store (Phase 5 — ANNO-02, STATE-03).
