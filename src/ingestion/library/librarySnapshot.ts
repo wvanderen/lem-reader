@@ -43,6 +43,14 @@
 //                             (the D12-04 chip list: a tag on a book must
 //                             surface as a filterable chip; loadAllTags keeps
 //                             its persisted-rows-only derivation).
+//   - highlightTags         — issue #117 — THE highlight-tag vocabulary fold:
+//                             every tag carried by ≥1 HighlightRecord,
+//                             case-insensitively deduped (first-seen casing
+//                             wins — highlight-local casings are NOT folded
+//                             at the write seam), localeCompare-sorted (the
+//                             review panel's Highlight-tag chip list; the
+//                             article/book `tags` fold above stays
+//                             annotation-free).
 //   - highlights + notes    — EVERY persisted annotation record (the review
 //                             view's join input and the highlights export's
 //                             payload; loadAllHighlights/loadAllNotes keep
@@ -74,6 +82,9 @@ import { loadAllNotes } from "../../persistence/notesStore";
 import { loadAllReadingSessions } from "../../persistence/readingSessionsStore";
 import { listBooks } from "../../persistence/booksStore";
 import { loadAllTags } from "./tagsStore";
+// Issue #117 — the ONE pure tag-text vocabulary backs the highlight-tag
+// fold (the tagText module header's "every seam that touches tag strings").
+import { normalizeTags } from "./tagText";
 import { latestLocationByArticle } from "../../reader/readingPosition";
 
 /**
@@ -104,6 +115,10 @@ export interface LibrarySnapshot {
   highlightCountByArticleId: Map<string, number>;
   /** Article tags ∪ book tags, localeCompare-sorted (the D12-04 chip list). */
   tags: string[];
+  /** Issue #117 — THE highlight-tag vocabulary fold: every tag carried by
+   * ≥1 highlight row, case-insensitively deduped (first-seen casing wins),
+   * localeCompare-sorted (the review panel's Highlight-tag chips). */
+  highlightTags: string[];
   /** EVERY persisted HighlightRecord (the review view's rows + the
    * highlights export's payload; corrupt rows already dropped at the seam). */
   highlights: HighlightRecord[];
@@ -127,10 +142,28 @@ export const EMPTY_LIBRARY_SNAPSHOT: LibrarySnapshot = {
   totalsByArticleId: new Map(),
   highlightCountByArticleId: new Map(),
   tags: [],
+  highlightTags: [],
   highlights: [],
   notes: [],
   readingSessions: [],
 };
+
+/**
+ * THE highlight-tag vocabulary fold (issue #117) — one pass over the
+ * highlight rows collecting every tag carried by ≥1 record. Composes the
+ * ONE pure tag-text vocabulary (normalizeTags — trim, drop empties,
+ * case-insensitive dedupe with the first-seen casing winning): highlight
+ * tags are highlight-local (the write seam routes casing against the
+ * LIBRARY vocabulary only, never across highlights), so two rows may
+ * carry "Margin" and "margin" — the chip list must never show both.
+ * Named + exported like its sibling fold `highlightCountByArticle`: one
+ * definition, pinned directly by the fold unit suite, consumed through
+ * the snapshot.
+ */
+export function highlightTagVocabulary(highlights: readonly HighlightRecord[]): string[] {
+  const tags = highlights.flatMap((h) => h.tags ?? []);
+  return normalizeTags(tags).sort((a, b) => a.localeCompare(b));
+}
 
 /**
  * THE per-article highlight-count fold (issue #76, decision #72) — one pass
@@ -138,9 +171,7 @@ export const EMPTY_LIBRARY_SNAPSHOT: LibrarySnapshot = {
  * sibling fold `latestLocationByArticle`: one definition, pinned directly
  * by the fold unit suite, consumed through the snapshot.
  */
-export function highlightCountByArticle(
-  highlights: HighlightRecord[],
-): Map<string, number> {
+export function highlightCountByArticle(highlights: HighlightRecord[]): Map<string, number> {
   const counts = new Map<string, number>();
   for (const highlight of highlights) {
     counts.set(highlight.articleId, (counts.get(highlight.articleId) ?? 0) + 1);
@@ -204,6 +235,10 @@ export async function loadLibrarySnapshot(): Promise<LibrarySnapshot> {
   // the library rows' review entry + the review combobox counts read it).
   const highlightCountByArticleId = highlightCountByArticle(highlights);
 
+  // Issue #117 — THE highlight-tag vocabulary fold (one pass per load; the
+  // review panel's Highlight-tag chips read it).
+  const highlightTags = highlightTagVocabulary(highlights);
+
   // Chip list = article tags ∪ book tags (D12-04), the loadAllTags
   // localeCompare discipline (moved verbatim from LibraryView).
   const tagSet = new Set<string>(tags);
@@ -223,6 +258,7 @@ export async function loadLibrarySnapshot(): Promise<LibrarySnapshot> {
     totalsByArticleId,
     highlightCountByArticleId,
     tags: [...tagSet].sort((a, b) => a.localeCompare(b)),
+    highlightTags,
     highlights,
     notes,
     readingSessions,

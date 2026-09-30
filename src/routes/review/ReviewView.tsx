@@ -66,13 +66,10 @@ import { TagFilter } from "../../ingestion/library/TagFilter";
 // Plan 14-03 Task 1 (D14-02) — the review destination's document.title via
 // the ONE shared helper (never string-built here; the helper owns the
 // suffix, separator, and 64-char truncation).
-import { setDocumentTitle } from "../../ingestion/library/pageMeta";// Plan 17-03 (META-02/D17-09) — the review surfaces (select option labels,
+import { setDocumentTitle } from "../../ingestion/library/pageMeta"; // Plan 17-03 (META-02/D17-09) — the review surfaces (select option labels,
 // options sort, section h2) carry the ONE effective title: the reader-owned
 // override when present, canonical as fallback. One name, one order.
-import {
-  effectiveTitle,
-  effectiveSourceUrl,
-} from "../../ingestion/library/effectiveMetadata";
+import { effectiveTitle, effectiveSourceUrl } from "../../ingestion/library/effectiveMetadata";
 // Issue #8 — the ONE library read model + its invalidation call replace the
 // view's own whole-library load and refreshKey state machine.
 import { invalidateLibrarySnapshot } from "../../ingestion/library/librarySnapshot";
@@ -90,6 +87,8 @@ import {
 } from "./reviewFilter";
 import { formatIsoDate } from "../../ingestion/library/formatDate";
 import { ReviewNoteDialog, NOTE_SAVE_FAILED_COPY } from "./ReviewNoteDialog";
+// Issue #117 — the in-place highlight-tag editor + its shared failure copy.
+import { ReviewTagsDialog, TAGS_SAVE_FAILED_COPY } from "./ReviewTagsDialog";
 import { DeleteHighlightConfirm } from "./DeleteHighlightConfirm";
 import { BackToLibrary } from "../../reader/BackToLibrary";
 import { JumpToArticleIcon } from "../../ui/icons";
@@ -182,10 +181,12 @@ function sourceHost(article: CanonicalArticle): string | null {
 function ReviewRow({
   entry,
   onEditNote,
+  onEditTags,
   onRemove,
 }: {
   entry: ReviewEntry;
   onEditNote: (entry: ReviewEntry) => void;
+  onEditTags: (entry: ReviewEntry) => void;
   onRemove: (entry: ReviewEntry) => void;
 }) {
   // Plan 19-02 (D19-10): excerpts derive from the FIRST FRAGMENT of the
@@ -228,14 +229,10 @@ function ReviewRow({
     <>
       <span className="review-quote">{excerpt}</span>
       {noteText.length > 0 && (
-        <span className="review-note-preview">
-          {truncate(noteText, NOTE_MAX_CHARS)}
-        </span>
+        <span className="review-note-preview">{truncate(noteText, NOTE_MAX_CHARS)}</span>
       )}
       {badgeText !== null && (
-        <span className={`review-badge review-badge-${entry.status}`}>
-          {badgeText}
-        </span>
+        <span className={`review-badge review-badge-${entry.status}`}>{badgeText}</span>
       )}
       {foot}
     </>
@@ -244,6 +241,10 @@ function ReviewRow({
   // The curation cluster — siblings of the row body (D10-11). Accessible
   // names carry the quote excerpt prefix so rows are distinguishable in a
   // screen-reader list; the prefix includes the visible label (2.5.3).
+  // Issue #117 — "Edit tags" joins the cluster between the two existing
+  // affordances (destructive stays last); like the note, tags are keyed to
+  // highlightId, so EVERY row — ambiguous/orphaned included — carries it,
+  // and nothing about the dialog implies the anchor was repaired.
   const actions = (
     <div className="review-row-actions">
       <button
@@ -253,6 +254,14 @@ function ReviewRow({
         onClick={() => onEditNote(entry)}
       >
         Edit note
+      </button>
+      <button
+        type="button"
+        className="btn btn-quiet review-row-action review-row-action-tags"
+        aria-label={`Edit tags: ${ariaExcerpt}`}
+        onClick={() => onEditTags(entry)}
+      >
+        Edit tags
       </button>
       <button
         type="button"
@@ -279,9 +288,7 @@ function ReviewRow({
   // The jump button's aria-label mirrors the drawer-entry pattern.
   const ariaLabel = isUnresolved
     ? `Go to highlight: ${ariaExcerpt}. This highlight can't be located, so jumping is disabled.`
-    : `Go to highlight: ${ariaExcerpt}${
-        noteText ? `; ${truncate(noteText, ARIA_MAX_CHARS)}` : ""
-      }`;
+    : `Go to highlight: ${ariaExcerpt}${noteText ? `; ${truncate(noteText, ARIA_MAX_CHARS)}` : ""}`;
 
   return (
     <>
@@ -354,9 +361,14 @@ export function ReviewView({
   // orphan rows (tri-state is never silently filtered away). Issue #107 —
   // the article filter is NOT component state: the URL scope
   // (#/highlights?article=<id>) is the ONE article-filter state, so this
-  // state carries only tag + confidence.
+  // state carries only the two tag dimensions + confidence. Issue #117 —
+  // the ONE tag dimension split into two clearly named singles: articleTag
+  // (the pre-#117 meaning, byte-identical matches) + highlightTag (the
+  // highlight's OWN tags — an orphan can still match its own annotation
+  // tag).
   const [filters, setFilters] = useState<Omit<ReviewFilters, "articleId">>({
-    tag: null,
+    articleTag: null,
+    highlightTag: null,
     confidence: "all",
   });
   // D10-08: Date is the default sort.
@@ -364,7 +376,11 @@ export function ReviewView({
   // Plan 10-05 curation targets: the ReviewEntry under action (null when
   // the corresponding dialog is closed). Notes are keyed to highlightId, so
   // the note dialog opens for ANY row — orphan rows included (D10-11).
+  // Issue #117 — tags are keyed to highlightId too: the tags dialog opens
+  // for ANY row, ambiguous/orphaned included, and its copy never implies
+  // the anchor was repaired.
   const [noteTarget, setNoteTarget] = useState<ReviewEntry | null>(null);
+  const [tagsTarget, setTagsTarget] = useState<ReviewEntry | null>(null);
   const [removeTarget, setRemoveTarget] = useState<ReviewEntry | null>(null);
   // D10-12: the calm curation result announced through the .status live
   // region ("Highlight removed." / "Note saved."). Null = nothing to
@@ -399,12 +415,12 @@ export function ReviewView({
   // re-entry).
   const scoped = scopedArticleId !== undefined;
   const effectiveFilters: ReviewFilters = {
-    tag: filters.tag,
+    articleTag: filters.articleTag,
+    highlightTag: filters.highlightTag,
     articleId: scopedArticleId ?? null,
     confidence: filters.confidence,
   };
-  const effectiveSort: ReviewSort =
-    scoped && sort === "article" ? "date" : sort;
+  const effectiveSort: ReviewSort = scoped && sort === "article" ? "date" : sort;
   const derivation = deriveReviewSections(
     articles,
     highlights,
@@ -416,9 +432,7 @@ export function ReviewView({
   // Issue #76 — scope resolution: the scoped article's record (its
   // EFFECTIVE title names the chip) and whether it vanished (deleted, or
   // the URL id never existed — one mechanism, the chip says so either way).
-  const scopedArticle = scoped
-    ? articles.find((a) => a.id === scopedArticleId)
-    : undefined;
+  const scopedArticle = scoped ? articles.find((a) => a.id === scopedArticleId) : undefined;
   const scopeVanished = scoped && scopedArticle === undefined;
 
   // Issue #76/#107 — per-article highlight counts for the picker's
@@ -428,8 +442,7 @@ export function ReviewView({
   // D10-10: the filters-matched-zero case is "both derived lists empty
   // while the stored highlight set is non-empty" (computed after the
   // derivation so the .status branch below stays honest).
-  const derivedEmpty =
-    derivation.sections.length === 0 && derivation.orphanEntries.length === 0;
+  const derivedEmpty = derivation.sections.length === 0 && derivation.orphanEntries.length === 0;
 
   return (
     <main id="main">
@@ -464,8 +477,7 @@ export function ReviewView({
           <>
             <h2>Couldn't open your highlights.</h2>
             <p>
-              Your highlights could not be loaded. Go back to the library and
-              open this page again.
+              Your highlights could not be loaded. Go back to the library and open this page again.
             </p>
           </>
         )}
@@ -475,17 +487,16 @@ export function ReviewView({
             <p>Highlights you make while reading appear here.</p>
           </>
         )}
-        {status === "ready" && highlights.length > 0 && derivedEmpty && (
+        {status === "ready" &&
+          highlights.length > 0 &&
+          derivedEmpty &&
           // Issue #76 (decision #72) — the two zero-matches states share one
           // gate (rows exist, none survive the derivation): the vanished-
           // scope calm empty state with its back-to-all affordance, or the
           // plain filter miss.
-          scopeVanished ? (
+          (scopeVanished ? (
             <div className="review-scope-empty">
-              <p>
-                This article is no longer in your library, and no highlights
-                remain for it.
-              </p>
+              <p>This article is no longer in your library, and no highlights remain for it.</p>
               {/* the calm back-to-all affordance for a vanished scope: a
                   real link to the unscoped review (a history push, so Back
                   returns to the scoped URL). */}
@@ -495,18 +506,29 @@ export function ReviewView({
             </div>
           ) : (
             <p>No highlights match these filters.</p>
-          )
-        )}
+          ))}
       </StatusRegion>
-      {/* D10-08 filter row — TagFilter chips reused as-is + article select +
-          confidence select + sort select. Always mounted so the reader can
-          adjust filters even before the load settles (the derivation runs
-          over whatever is loaded). */}
+      {/* D10-08 filter row — the two clearly named single-select tag
+          dimensions (issue #117) + article select + confidence select +
+          sort select, AND-composed. Always mounted so the reader can adjust
+          filters even before the load settles (the derivation runs over
+          whatever is loaded). Article-tag chips read the library vocabulary
+          (snapshot.tags — article ∪ book tags, the pre-#117 chip list);
+          Highlight-tag chips read the ONE highlight-tag vocabulary fold
+          (snapshot.highlightTags). Either renders nothing at zero tags
+          (spare-chrome silence — no backfill copy). */}
       <div className="review-filter-row">
         <TagFilter
+          name="Article tag"
           tags={allTags}
-          activeTag={filters.tag}
-          onSelect={(tag) => setFilters((f) => ({ ...f, tag }))}
+          activeTag={filters.articleTag}
+          onSelect={(articleTag) => setFilters((f) => ({ ...f, articleTag }))}
+        />
+        <TagFilter
+          name="Highlight tag"
+          tags={snapshot.highlightTags}
+          activeTag={filters.highlightTag}
+          onSelect={(highlightTag) => setFilters((f) => ({ ...f, highlightTag }))}
         />
         {/* Issue #76 + #107 — the article slot, two states: while
             unscoped, the searchable ArticlePicker (browse = highlighted
@@ -527,13 +549,8 @@ export function ReviewView({
               className="review-scope-chip"
               aria-labelledby="review-scope-label review-scope-chip-text"
             >
-              <span
-                className="review-scope-chip-text"
-                id="review-scope-chip-text"
-              >
-                {scopedArticle !== undefined
-                  ? effectiveTitle(scopedArticle)
-                  : "(deleted article)"}
+              <span className="review-scope-chip-text" id="review-scope-chip-text">
+                {scopedArticle !== undefined ? effectiveTitle(scopedArticle) : "(deleted article)"}
               </span>
               {/* The chip's inside-× clear (the TagEntry chip-remove
                   anatomy): keyboard-complete, navigates to the unscoped
@@ -620,9 +637,7 @@ export function ReviewView({
           <section className="review-section" key={section.key}>
             <h2>
               {effectiveTitle(section.article)}
-              {host !== null && (
-                <span className="review-section-host"> · {host}</span>
-              )}
+              {host !== null && <span className="review-section-host"> · {host}</span>}
             </h2>
             <ul className="review-section-list">
               {section.entries.map((entry) => (
@@ -630,6 +645,7 @@ export function ReviewView({
                   <ReviewRow
                     entry={entry}
                     onEditNote={setNoteTarget}
+                    onEditTags={setTagsTarget}
                     onRemove={setRemoveTarget}
                   />
                 </li>
@@ -652,6 +668,7 @@ export function ReviewView({
                 <ReviewRow
                   entry={entry}
                   onEditNote={setNoteTarget}
+                  onEditTags={setTagsTarget}
                   onRemove={setRemoveTarget}
                 />
               </li>
@@ -659,7 +676,8 @@ export function ReviewView({
           </ul>
         </section>
       )}
-      {/* Plan 10-05 curation wiring. Both dialogs are always mounted
+      {/* Plan 10-05 curation wiring (+ issue #117's tags editor). All three
+          dialogs are always mounted
           (showModal requires DOM presence). The commit handlers share ONE
           shape (the LibraryView write-path twin): clear the target,
           invalidate the ONE LibrarySnapshot (Issue #8 — re-derive from
@@ -677,6 +695,23 @@ export function ReviewView({
           setNoteTarget(null);
           invalidateLibrarySnapshot();
           setAnnouncement(saved ? "Note saved." : NOTE_SAVE_FAILED_COPY);
+        }}
+      />
+      {/* Issue #117 — the highlight-tag editor twin. Always mounted
+          (showModal requires DOM presence). The commit discipline is the
+          RowTagsPopover one: writes land per picker change; the panel's
+          invalidation + honest announcement happen ONCE on close ("Tags
+          saved." only after a write that landed; an untouched session
+          closes silently — nothing was written, nothing is announced). */}
+      <ReviewTagsDialog
+        open={tagsTarget !== null}
+        highlightId={tagsTarget?.highlight.id ?? ""}
+        tags={tagsTarget?.highlight.tags ?? []}
+        onDone={(outcome) => {
+          setTagsTarget(null);
+          if (outcome === "untouched") return;
+          invalidateLibrarySnapshot();
+          setAnnouncement(outcome === "saved" ? "Tags saved." : TAGS_SAVE_FAILED_COPY);
         }}
       />
       <DeleteHighlightConfirm
