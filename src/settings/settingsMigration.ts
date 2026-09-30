@@ -6,7 +6,8 @@
 // discipline (src/settings/legacyMeasure.ts), which this module COMPOSES.
 //
 // Issue #120 — the legacy ONE-slot custom theme (theme "custom" +
-// customTheme, the issue #86 shape) maps into the TWO independently saved
+// customTheme, the issue #86 shape, including while a preset is active)
+// maps into the TWO independently saved
 // slots:
 //   - a dark-seeded record (baseTheme "dark") migrates into Custom dark;
 //   - any other seeded record (baseTheme "sepia"/"light") migrates into
@@ -44,7 +45,7 @@ export function migrateReaderSettings(raw: unknown): unknown {
   const clamped = clampLegacyMeasure(raw);
   if (clamped === null || typeof clamped !== "object") return clamped;
   const row = clamped as Record<string, unknown>;
-  if (row.theme !== "custom") return row;
+  if (!["custom", "sepia", "light", "dark"].includes(row.theme as string)) return row;
   const legacy = row.customTheme;
   if (legacy === null || typeof legacy !== "object") return row;
   // The carried record is passed through VERBATIM (case included) — the
@@ -53,13 +54,13 @@ export function migrateReaderSettings(raw: unknown): unknown {
   const migrated: Record<string, unknown> = { ...row };
   delete migrated.customTheme;
   if (record.baseTheme === "dark") {
-    migrated.theme = "custom-dark";
+    if (row.theme === "custom") migrated.theme = "custom-dark";
     migrated.customDarkTheme = record;
     if (migrated.customLightTheme === undefined) {
       migrated.customLightTheme = seedCustomTheme("light");
     }
   } else {
-    migrated.theme = "custom-light";
+    if (row.theme === "custom") migrated.theme = "custom-light";
     migrated.customLightTheme = record;
     if (migrated.customDarkTheme === undefined) {
       migrated.customDarkTheme = seedCustomTheme("dark");

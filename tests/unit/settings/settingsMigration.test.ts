@@ -44,10 +44,7 @@ vi.mock("../../../src/persistence/db", () => {
 
 import { migrateReaderSettings } from "../../../src/settings/settingsMigration";
 import { PRESET_SEEDS, seedCustomTheme } from "../../../src/settings/customTheme";
-import {
-  readSettingsMirror,
-  SETTINGS_MIRROR_KEY,
-} from "../../../src/settings/settingsMirror";
+import { readSettingsMirror, SETTINGS_MIRROR_KEY } from "../../../src/settings/settingsMirror";
 import { loadSettings } from "../../../src/persistence/settingsStore";
 import { db } from "../../../src/persistence/db";
 
@@ -179,7 +176,10 @@ describe("migrateReaderSettings — the legacy one-slot custom theme", () => {
   });
 
   it.each([
-    ["a preset row", { ...LEGACY_CUSTOM_RECORD, theme: "sepia" }],
+    [
+      "a preset row without a saved palette",
+      { ...LEGACY_CUSTOM_RECORD, theme: "sepia", customTheme: undefined },
+    ],
     ["a garbage theme", { ...LEGACY_CUSTOM_RECORD, theme: "solarized" }],
   ])("%s passes through UNCHANGED (same reference)", (_label, row) => {
     expect(migrateReaderSettings(row)).toBe(row);
@@ -211,7 +211,9 @@ describe("migrateReaderSettings — the legacy one-slot custom theme", () => {
 describe("the migrated record parses through ReaderSettingsSchema", () => {
   it("the dark arm parses with both slots present", async () => {
     const { ReaderSettingsSchema } = await import("../../../src/content/schema");
-    const parsed = ReaderSettingsSchema.safeParse(migrateReaderSettings({ ...LEGACY_CUSTOM_RECORD }));
+    const parsed = ReaderSettingsSchema.safeParse(
+      migrateReaderSettings({ ...LEGACY_CUSTOM_RECORD }),
+    );
     expect(parsed.success).toBe(true);
     if (parsed.success) {
       expect(parsed.data.theme).toBe("custom-dark");
@@ -222,7 +224,9 @@ describe("the migrated record parses through ReaderSettingsSchema", () => {
 
   it("the sepia arm parses with both slots present", async () => {
     const { ReaderSettingsSchema } = await import("../../../src/content/schema");
-    const parsed = ReaderSettingsSchema.safeParse(migrateReaderSettings({ ...LEGACY_CUSTOM_SEPIA }));
+    const parsed = ReaderSettingsSchema.safeParse(
+      migrateReaderSettings({ ...LEGACY_CUSTOM_SEPIA }),
+    );
     expect(parsed.success).toBe(true);
     if (parsed.success) {
       expect(parsed.data.theme).toBe("custom-light");
@@ -258,10 +262,7 @@ describe("loadSettings migrates the legacy custom theme calmly (issue #120 seam 
 
 describe("readSettingsMirror migrates the legacy custom theme calmly (issue #120 seam 2)", () => {
   it("a painted pre-#120 mirror returns parsed two-slot settings (not null)", () => {
-    window.localStorage.setItem(
-      SETTINGS_MIRROR_KEY,
-      JSON.stringify(LEGACY_CUSTOM_SEPIA),
-    );
+    window.localStorage.setItem(SETTINGS_MIRROR_KEY, JSON.stringify(LEGACY_CUSTOM_SEPIA));
     const settings = readSettingsMirror();
     expect(settings).not.toBeNull();
     expect(settings?.theme).toBe("custom-light");
@@ -316,9 +317,7 @@ function sampleArticle(): CanonicalArticle {
       retrievedAt: "2026-08-01T00:00:00.000Z",
       originalHtmlHash: "sha256:" + "a".repeat(64),
     },
-    blocks: [
-      { kind: "paragraph", content: [{ text: "Example paragraph text.", marks: [] }] },
-    ],
+    blocks: [{ kind: "paragraph", content: [{ text: "Example paragraph text.", marks: [] }] }],
     footnotes: [],
   });
 }
@@ -334,7 +333,7 @@ async function legacyPreferencesHash(record: typeof LEGACY_CUSTOM_RECORD): Promi
     size: record.size,
     measure: record.measure,
     spacing: record.spacing,
-    theme: "custom",
+    theme: record.theme,
     customTheme: record.customTheme,
     animatePageTurns: record.animatePageTurns,
     readingMode: record.readingMode,
@@ -349,8 +348,8 @@ async function legacyPreferencesHash(record: typeof LEGACY_CUSTOM_RECORD): Promi
  * legacy one-slot custom shape, and the claimed manifest honestly hashes
  * that LEGACY block (exactly what an exporter running the pre-#120 schema
  * produced). */
-async function legacyCustomBundle(claimedPreferencesHash?: string) {
-  const hash = claimedPreferencesHash ?? (await legacyPreferencesHash(LEGACY_CUSTOM_RECORD));
+async function legacyCustomBundle(claimedPreferencesHash?: string, record = LEGACY_CUSTOM_RECORD) {
+  const hash = claimedPreferencesHash ?? (await legacyPreferencesHash(record));
   const rawBundle = {
     schemaVersion: 5 as const,
     exportedAt: "2026-09-01T00:00:00.000Z",
@@ -359,7 +358,7 @@ async function legacyCustomBundle(claimedPreferencesHash?: string) {
     locations: [],
     highlights: [],
     notes: [],
-    preferences: { ...LEGACY_CUSTOM_RECORD },
+    preferences: { ...record },
     fixtureIds: [],
     books: [],
     assets: [],
@@ -368,7 +367,7 @@ async function legacyCustomBundle(claimedPreferencesHash?: string) {
   // The current-writer manifest over the MIGRATED preferences — every block
   // hashes as today, then the claimed preferences hash is swapped for the
   // export-era (legacy-shape) hash below.
-  const migrated = migrateReaderSettings({ ...LEGACY_CUSTOM_RECORD });
+  const migrated = migrateReaderSettings({ ...record });
   const parsed = await import("../../../src/portability/bundle").then((m) =>
     m.ExportBundleSchema.parse({ ...rawBundle, preferences: migrated }),
   );
@@ -451,4 +450,55 @@ describe("validateBundle migrates the legacy custom theme calmly (issue #120 sea
       expect(result.refusal.kind).toBe("invalid");
     }
   });
+});
+
+describe("inactive legacy custom palettes", () => {
+  for (const theme of ["sepia", "light", "dark"]) {
+    for (const baseTheme of ["sepia", "light", "dark"] as const) {
+      const record = {
+        ...LEGACY_CUSTOM_RECORD,
+        theme,
+        customTheme: {
+          baseTheme,
+          tokens: {
+            surface: "#123456",
+            surfaceRaised: "#234567",
+            ink: "#ABCDEF",
+            accent: "#456789",
+            hairline: "#56789A",
+          },
+        },
+      };
+      const slotKey = baseTheme === "dark" ? "customDarkTheme" : "customLightTheme";
+      const otherKey = baseTheme === "dark" ? "customLightTheme" : "customDarkTheme";
+      const otherBase = baseTheme === "dark" ? "light" : "dark";
+
+      it(`preserves ${baseTheme}-seeded edits with ${theme} active through store and mirror`, async () => {
+        settingsGet.mockResolvedValue({ key: "reader-prefs", value: record });
+        const loaded = await loadSettings();
+        expect(loaded.ok).toBe(true);
+        if (!loaded.ok) throw new Error("Legacy settings failed to load");
+        expect(loaded.settings.theme).toBe(theme);
+        expect(loaded.settings[slotKey]).toEqual(record.customTheme);
+        expect(loaded.settings[otherKey]).toEqual(seedCustomTheme(otherBase));
+        window.localStorage.setItem(SETTINGS_MIRROR_KEY, JSON.stringify(record));
+        expect(readSettingsMirror()).toEqual(loaded.settings);
+      });
+
+      it(`imports ${baseTheme}-seeded edits with ${theme} active and rejects tampering`, async () => {
+        const { validateBundle } = await loadService();
+        const result = await validateBundle(await legacyCustomBundle(undefined, record));
+        expect(result.ok).toBe(true);
+        if (!result.ok) throw new Error("Legacy bundle failed to import");
+        expect(result.bundle.preferences.theme).toBe(theme);
+        expect(result.bundle.preferences[slotKey]).toEqual(record.customTheme);
+        expect(result.bundle.preferences[otherKey]).toEqual(seedCustomTheme(otherBase));
+        const tampered = await validateBundle(await legacyCustomBundle("0".repeat(64), record));
+        expect(tampered).toMatchObject({
+          ok: false,
+          refusal: { kind: "corrupted", failedBlocks: ["preferences"] },
+        });
+      });
+    }
+  }
 });

@@ -330,7 +330,8 @@ export async function validateBundle(file: File): Promise<BundleValidationResult
   //     - the enumerated legacy measure value (72 → 70, the nearest lower
   //       step of the extended ladder) re-imports calmly instead of failing
   //       the measure union (which would refuse the whole bundle);
-  //     - the pre-#120 ONE-slot custom shape (theme "custom" + customTheme)
+  //     - the pre-#120 ONE-slot custom shape (including a saved palette
+  //       while a preset is selected)
   //       maps into the two-slot shape (dark-seeded → custom-dark,
   //       otherwise custom-light; the other slot seeded from its matching
   //       preset) so an old bundle re-imports instead of failing the theme
@@ -346,7 +347,10 @@ export async function validateBundle(file: File): Promise<BundleValidationResult
   const isRecord = (v: unknown): v is Record<string, unknown> =>
     v !== null && typeof v === "object";
   const legacyMeasureApplied = isRecord(rawPrefs) && rawPrefs.measure === 72;
-  const legacyCustomApplied = isRecord(rawPrefs) && rawPrefs.theme === "custom";
+  const legacyCustomApplied =
+    isRecord(rawPrefs) &&
+    ["custom", "sepia", "light", "dark"].includes(rawPrefs.theme as string) &&
+    isRecord(rawPrefs.customTheme);
   if (isRecord(rawPrefs) && (legacyMeasureApplied || legacyCustomApplied)) {
     raw = {
       ...(raw as object),
@@ -399,8 +403,8 @@ export async function validateBundle(file: File): Promise<BundleValidationResult
   // was in-union at export time) — it can never equal the recomputed
   // (normalized) hash. Accept the export-era hash as the preferences-block
   // match: recompute it from the parsed block back-mapped to the export-era
-  // shape (measure → 72; theme → "custom" with customTheme = the record
-  // that migrated into the active slot; the synthesized other-slot seed
+  // shape (measure → 72; original theme with customTheme = the record
+  // that migrated into its disposition slot; the synthesized other-slot seed
   // dropped) in the export-era SCHEMA KEY ORDER (the determinism contract
   // — JSON.stringify speaks insertion order). Every other block — and every
   // other preferences modification — still mismatches (T-9-03; the
@@ -417,11 +421,13 @@ export async function validateBundle(file: File): Promise<BundleValidationResult
       size: p.size,
       measure: legacyMeasureApplied ? 72 : p.measure,
       spacing: p.spacing,
-      theme: legacyCustomApplied ? "custom" : p.theme,
+      theme: legacyCustomApplied ? rawPrefs.theme : p.theme,
       ...(legacyCustomApplied
         ? {
             customTheme:
-              p.theme === "custom-dark" ? p.customDarkTheme : p.customLightTheme,
+              isRecord(rawPrefs.customTheme) && rawPrefs.customTheme.baseTheme === "dark"
+                ? p.customDarkTheme
+                : p.customLightTheme,
           }
         : {}),
       animatePageTurns: p.animatePageTurns,
@@ -430,9 +436,7 @@ export async function validateBundle(file: File): Promise<BundleValidationResult
       rate: p.rate,
       librarySort: p.librarySort,
     };
-    const legacyHash = await sha256Hex(
-      new TextEncoder().encode(JSON.stringify(legacyView)),
-    );
+    const legacyHash = await sha256Hex(new TextEncoder().encode(JSON.stringify(legacyView)));
     if (claimedBlocks.preferences === legacyHash) {
       claimedBlocks.preferences = recomputed.blocks.preferences;
     }
