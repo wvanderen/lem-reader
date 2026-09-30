@@ -43,7 +43,6 @@ interface TagFilterProps {
 export function TagFilter({ tags, activeTag, onSelect, name }: TagFilterProps) {
   if (tags.length === 0) return null;
   const named = name !== undefined;
-  const lowerName = name?.toLowerCase();
   return (
     <fieldset className={named ? "tag-filter tag-filter-named" : "tag-filter"}>
       <legend className={named ? "tag-filter-legend" : "visually-hidden"}>
@@ -51,21 +50,19 @@ export function TagFilter({ tags, activeTag, onSelect, name }: TagFilterProps) {
       </legend>
       {tags.map((tag) => {
         const isActive = activeTag === tag;
+        // One label template per state; the dimension word is the visible
+        // name VERBATIM (never case-mangled — a multi-case host name reads
+        // as written) or the shipped unnamed "tag".
+        const label = isActive
+          ? `${named ? `Active ${name} filter` : "Active filter"}: ${tag}. Activate to clear.`
+          : `Filter by ${name ?? "tag"}: ${tag}`;
         return (
           <button
             key={tag}
             type="button"
             className="tag-chip"
             aria-pressed={isActive}
-            aria-label={
-              isActive
-                ? named
-                  ? `Active ${lowerName} filter: ${tag}. Activate to clear.`
-                  : `Active filter: ${tag}. Activate to clear.`
-                : named
-                  ? `Filter by ${lowerName}: ${tag}`
-                  : `Filter by tag: ${tag}`
-            }
+            aria-label={label}
             onClick={() => onSelect(isActive ? null : tag)}
           >
             {tag}

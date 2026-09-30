@@ -1,12 +1,13 @@
 // src/routes/review/ReviewTagsDialog.tsx
 // Issue #117 — the review panel's in-place HIGHLIGHT-tag editor. The
-// ReviewNoteDialog twin in mechanism (native <dialog> + showModal: the
-// browser supplies the modal accessibility context, the focus trap, and
-// Esc-to-close; the trigger is captured BEFORE showModal and focus is
-// restored on EVERY close path — Pitfall 1) with the RowTagsPopover commit
-// discipline (every picker change writes through the ONE setHighlightTags
-// seam immediately, so no edit is ever lost on any close path; the panel's
-// snapshot invalidation waits for CLOSE — one reload per editing session).
+// ReviewNoteDialog twin in mechanism — the shared dialog-session lifecycle
+// (native <dialog> + showModal: the browser supplies the modal accessibility
+// context, the focus trap, and Esc-to-close; the trigger is captured BEFORE
+// showModal and focus is restored on EVERY close path — Pitfall 1) now lives
+// in ./useDialogSession — with the RowTagsPopover commit discipline (every
+// picker change writes through the ONE setHighlightTags seam immediately, so
+// no edit is ever lost on any close path; the panel's snapshot invalidation
+// waits for CLOSE — one reload per editing session).
 //
 // Like NotePopover (issue #116), the editor is the ONE shared TagEntry
 // host: fieldset + legend + TagPicker + StatusRegion + lazy suggestion
@@ -29,9 +30,12 @@
 // announces the shared failure copy instead. A later successful write
 // heals an earlier failure (the write is the whole normalized array, so
 // the last write is authoritative).
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { setHighlightTags } from "../../ingestion/library/tagsStore";
 import { TagEntry } from "../../reader/TagEntry";
+// The shared dialog-session lifecycle (open/close sync, Pitfall 1 trigger
+// capture + restore, exactly-once report guard) — the ReviewNoteDialog twin.
+import { useDialogSession } from "./useDialogSession";
 
 /**
  * Issue #117 — the honest commit-failure copy, shared with the panel's
@@ -59,12 +63,6 @@ interface ReviewTagsDialogProps {
 }
 
 export function ReviewTagsDialog({ open, highlightId, tags, onDone }: ReviewTagsDialogProps) {
-  const dialogRef = useRef<HTMLDialogElement | null>(null);
-  // The trigger element that opened the dialog (the row's Edit tags
-  // button). Captured on open so the `close` listener can restore focus
-  // (Pitfall 1 — mirrors ReviewNoteDialog/NotePopover).
-  const triggerRef = useRef<HTMLElement | null>(null);
-
   // Session-scoped bookkeeping:
   //   session (state) — bumped per open; keys TagEntry so every session
   //                  seeds a FRESH local mirror from the record (a canceled
@@ -75,46 +73,41 @@ export function ReviewTagsDialog({ open, highlightId, tags, onDone }: ReviewTags
   //                  re-render (a snapshot reload), losing the draft.
   //   outcome (ref)  — the honest per-session write outcome (last write
   //                  wins; a successful retry heals an earlier failure).
-  //   reported (ref) — exactly-once onDone guard per session (true
-  //                  initially: nothing to report before the first open;
-  //                  re-armed on every open transition).
   //   pendingWrite (ref) — the latest write's settlement. Done/Escape
   //                  AWAIT it before reporting, so a close racing an
   //                  in-flight write can never report "untouched" for an
   //                  edit that is about to land (WebKit e2e pinned this).
+  // The dialog ref, the trigger capture/restore, and the exactly-once
+  // report guard live in the shared useDialogSession lifecycle.
   const [session, setSession] = useState(0);
   const outcomeRef = useRef<ReviewTagsOutcome>("untouched");
-  const reportedRef = useRef(true);
   const pendingWriteRef = useRef<Promise<void>>(Promise.resolve());
 
-  // Sync the `open` prop with the underlying <dialog> state (the
-  // ReviewNoteDialog clone shape).
-  useEffect(() => {
-    const dlg = dialogRef.current;
-    if (!dlg) return;
-    if (open && !dlg.open) {
-      // Fresh session state BEFORE showModal: re-key TagEntry (fresh seed),
-      // arm the honest outcome + the exactly-once report guard, and capture
-      // the trigger BEFORE showModal moves focus into the dialog (Pitfall 1).
-      setSession((s) => s + 1);
-      outcomeRef.current = "untouched";
-      reportedRef.current = false;
-      pendingWriteRef.current = Promise.resolve();
-      triggerRef.current = document.activeElement as HTMLElement | null;
-      try {
-        dlg.showModal();
-      } catch {
-        // showModal throws if the element is already in the top layer or if
-        // the browser doesn't support <dialog>. Either way the editor is in
-        // the DOM; the close path is guarded by dlg.open below.
-      }
-    } else if (!open && dlg.open) {
-      // State-driven close (Done reported → onDone() → parent flipped the
-      // open prop). dlg.close() fires the `close` event → the listener
-      // below restores focus (the guarded report is a no-op after Done).
-      dlg.close();
-    }
-  }, [open]);
+  // Fresh session state BEFORE showModal (the hook calls this after the
+  // trigger capture): re-key TagEntry (fresh seed), arm the honest outcome,
+  // and reset the write settlement. Focus is NOT here — the session-keyed
+  // TagEntry remount replaces the input node, so focus waits for the effect
+  // below (the explicitly-opened-host exception; TagEntry itself stays
+  // inert at mount by design).
+  const handleOpen = useCallback(() => {
+    setSession((s) => s + 1);
+    outcomeRef.current = "untouched";
+    pendingWriteRef.current = Promise.resolve();
+  }, []);
+
+  // The close-path report: the session's honest outcome AFTER the latest
+  // write settles — a close racing an in-flight write must never report
+  // "untouched" for an edit that is about to land (the write-through
+  // fire-starts before the vocabulary + Dexie reads resolve, so the race
+  // is real). Shared by the `close` listener and Done via the hook's guard.
+  const reportOutcome = useCallback(() => {
+    void pendingWriteRef.current.then(() => onDone(outcomeRef.current));
+  }, [onDone]);
+
+  const { dialogRef, reportClose } = useDialogSession(open, {
+    onOpen: handleOpen,
+    onClose: reportOutcome,
+  });
 
   // Focus the picker input AFTER the session-keyed TagEntry remount settles
   // (the open effect's setSession re-render replaces the input node — a
@@ -128,35 +121,7 @@ export function ReviewTagsDialog({ open, highlightId, tags, onDone }: ReviewTags
     const dlg = dialogRef.current;
     if (!dlg || !dlg.open) return;
     dlg.querySelector<HTMLInputElement>("input#review-tags-input")?.focus();
-  }, [open, session]);
-
-  // Register the `close` event listener (with cleanup). Native <dialog>
-  // fires `close` on EVERY close path — Escape (browser-default) and the
-  // state-driven dlg.close() above. On close: restore focus to the captured
-  // trigger and report the session outcome exactly once (Done already
-  // reported — the guard makes that path a no-op here), AFTER the latest
-  // write settles so the reported outcome is the write's truth.
-  useEffect(() => {
-    const dlg = dialogRef.current;
-    if (!dlg) return;
-    const handleClose = () => {
-      triggerRef.current?.focus();
-      if (reportedRef.current) return;
-      reportedRef.current = true;
-      void pendingWriteRef.current.then(() => onDone(outcomeRef.current));
-    };
-    dlg.addEventListener("close", handleClose);
-    return () => dlg.removeEventListener("close", handleClose);
-  }, [onDone]);
-
-  /** Done button — report the honest outcome (after the latest write
-   * settles); the parent's open-prop flip routes the actual close through
-   * the sync effect + close listener. */
-  const handleDone = () => {
-    if (reportedRef.current) return;
-    reportedRef.current = true;
-    void pendingWriteRef.current.then(() => onDone(outcomeRef.current));
-  };
+  }, [open, session, dialogRef]);
 
   /** The ONE write path — TagEntry's commitTags calls this on every picker
    * change (write-through, the RowTagsPopover discipline). Tracks the
@@ -164,11 +129,9 @@ export function ReviewTagsDialog({ open, highlightId, tags, onDone }: ReviewTags
    * so TagEntry surfaces its calm "Couldn't save tag." line in the
    * dialog's own StatusRegion (A11Y-08) while the panel announces the
    * session failure on close. The write's SETTLEMENT is also tracked
-   * (pendingWriteRef) so Done/Escape can await it before reporting — a
-   * close racing an in-flight write must never report "untouched" for an
-   * edit that is about to land (the write-through fire-starts before the
-   * vocabulary + Dexie reads resolve, so the race is real). Never throws
-   * to a caller that doesn't catch. */
+   * (pendingWriteRef) so the close-path report (reportOutcome) can await it
+   * before reporting — see that comment for the race it closes. Never
+   * throws to a caller that doesn't catch. */
   const handleSaveTags = (next: string[]): Promise<void> => {
     const write = (async () => {
       try {
@@ -215,7 +178,7 @@ export function ReviewTagsDialog({ open, highlightId, tags, onDone }: ReviewTags
         <button
           type="button"
           className="btn btn-quiet highlight-popover-done"
-          onClick={handleDone}
+          onClick={reportClose}
           data-initial-focus
         >
           Done
