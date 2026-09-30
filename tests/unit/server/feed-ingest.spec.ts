@@ -432,3 +432,196 @@ describe("feed candidate — hostile payloads refuse (issue #121)", () => {
     expect(response.feed.items[0]!.image).toBeUndefined();
   });
 });
+
+// Issue #122 — the Atom-specific regression suite. The parser is one
+// shape-agnostic pipeline (never a fork), so these cells pin the Atom
+// branch's CONTRACT: common link/date forms, malformed entries, the
+// bounded output, and the never-trust-feed-HTML excerpt discipline —
+// through the REAL ingest({feedUrl}) orchestrator.
+describe("feed candidate — Atom link/date forms, malformed entries, and limits (issue #122)", () => {
+  function stubAtom(body: string): Promise<Awaited<ReturnType<typeof ingest>>> {
+    fetchMock.mockResolvedValueOnce(
+      fakeResponse({
+        url: "https://feeds.example.com/atom-case.xml",
+        headers: {
+          "content-type": "application/atom+xml",
+          "content-length": String(body.length),
+        },
+        body,
+      }),
+    );
+    return ingest({ feedUrl: "https://feeds.example.com/atom-case.xml" });
+  }
+
+  it("prefers rel=alternate over rel=self regardless of order; a rel-self-only entry falls back to it", async () => {
+    const body = `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"><title>Links</title>
+      <entry>
+        <title>Alternate after self</title>
+        <link rel="self" href="https://links.example.com/one-self"/>
+        <link rel="alternate" href="https://links.example.com/one"/>
+      </entry>
+      <entry>
+        <title>Self only</title>
+        <link rel="self" href="https://links.example.com/two-self"/>
+      </entry>
+    </feed>`;
+    const response = await stubAtom(body);
+    expect(response.ok).toBe(true);
+    if (!response.ok || !("feed" in response)) return;
+    expect(response.feed.items[0]!.link).toBe("https://links.example.com/one");
+    expect(response.feed.items[1]!.link).toBe("https://links.example.com/two-self");
+  });
+
+  it("takes the first of several alternate links; an entry without links has none", async () => {
+    const body = `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"><title>Links</title>
+      <entry>
+        <title>Two alternates</title>
+        <link rel="alternate" type="text/html" href="https://links.example.com/html"/>
+        <link rel="alternate" type="application/pdf" href="https://links.example.com/pdf"/>
+      </entry>
+      <entry><title>No links at all</title><summary>Bare entry.</summary></entry>
+    </feed>`;
+    const response = await stubAtom(body);
+    expect(response.ok).toBe(true);
+    if (!response.ok || !("feed" in response)) return;
+    expect(response.feed.items[0]!.link).toBe("https://links.example.com/html");
+    expect(response.feed.items[1]!.link).toBeUndefined();
+  });
+
+  it("skips non-http(s) link hrefs (javascript: href never attaches; the http(s) sibling still wins)", async () => {
+    const body = `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"><title>Hostile links</title>
+      <entry>
+        <title>Hostile alternate, honest self</title>
+        <link rel="alternate" href="javascript:alert(1)"/>
+        <link rel="self" href="https://links.example.com/ok"/>
+      </entry>
+      <entry>
+        <title>Only hostile links</title>
+        <link rel="alternate" href="javascript:alert(1)"/>
+        <link rel="self" href="data:text/html,x"/>
+      </entry>
+    </feed>`;
+    const response = await stubAtom(body);
+    expect(response.ok).toBe(true);
+    if (!response.ok || !("feed" in response)) return;
+    expect(response.feed.items[0]!.link).toBe("https://links.example.com/ok");
+    expect(response.feed.items[1]!.link).toBeUndefined();
+  });
+
+  it("prefers published over updated; a timezone-offset stamp normalizes to UTC", async () => {
+    const body = `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"><title>Dates</title>
+      <entry>
+        <title>Both stamps</title>
+        <published>2024-10-03T12:00:00+02:00</published>
+        <updated>2024-11-01T00:00:00Z</updated>
+      </entry>
+      <entry>
+        <title>Updated only</title>
+        <updated>2024-10-04T09:00:00Z</updated>
+      </entry>
+    </feed>`;
+    const response = await stubAtom(body);
+    expect(response.ok).toBe(true);
+    if (!response.ok || !("feed" in response)) return;
+    expect(response.feed.items[0]!.datePublished).toBe("2024-10-03T10:00:00.000Z");
+    expect(response.feed.items[1]!.datePublished).toBe("2024-10-04T09:00:00.000Z");
+  });
+
+  it("omits an unparseable date instead of fabricating one", async () => {
+    const body = `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"><title>Dates</title>
+      <entry><title>Garbage stamp</title><published>not a date</published></entry>
+    </feed>`;
+    const response = await stubAtom(body);
+    expect(response.ok).toBe(true);
+    if (!response.ok || !("feed" in response)) return;
+    expect(response.feed.items[0]!.datePublished).toBeUndefined();
+  });
+
+  it("an empty published element never masks a valid updated (the first PARSEABLE date wins)", async () => {
+    const body = `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"><title>Dates</title>
+      <entry>
+        <title>Empty published</title>
+        <published></published>
+        <updated>2024-10-05T08:00:00Z</updated>
+      </entry>
+    </feed>`;
+    const response = await stubAtom(body);
+    expect(response.ok).toBe(true);
+    if (!response.ok || !("feed" in response)) return;
+    expect(response.feed.items[0]!.datePublished).toBe("2024-10-05T08:00:00.000Z");
+  });
+
+  it("reduces HTML summary/content to a plain-text excerpt (feed HTML is never trusted markup)", async () => {
+    const body = `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"><title>Excerpts</title>
+      <entry>
+        <title>HTML summary</title>
+        <summary type="html">&lt;p&gt;Intro &lt;em&gt;with emphasis&lt;/em&gt;&lt;/p&gt;</summary>
+      </entry>
+      <entry>
+        <title>CDATA content</title>
+        <content type="html"><![CDATA[<p>Body &amp; more <a href="https://x.example.com">link</a></p>]]></content>
+      </entry>
+    </feed>`;
+    const response = await stubAtom(body);
+    expect(response.ok).toBe(true);
+    if (!response.ok || !("feed" in response)) return;
+    expect(response.feed.items[0]!.excerpt).toBe("Intro with emphasis");
+    expect(response.feed.items[1]!.excerpt).toBe("Body & more link");
+  });
+
+  it("drops Atom entries without a title and keeps the titled ones", async () => {
+    const body = `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"><title>Untitled entries</title>
+      <entry><link rel="alternate" href="https://u.example.com/1"/><summary>No title here</summary></entry>
+      <entry><title>Real entry</title><link rel="alternate" href="https://u.example.com/2"/></entry>
+    </feed>`;
+    const response = await stubAtom(body);
+    expect(response.ok).toBe(true);
+    if (!response.ok || !("feed" in response)) return;
+    expect(response.feed.items).toHaveLength(1);
+    expect(response.feed.items[0]!.title).toBe("Real entry");
+  });
+
+  it("accepts a structurally valid Atom feed with zero entries (an honest quiet feed)", async () => {
+    const response = await stubAtom(
+      `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"><title>Quiet Atom</title></feed>`,
+    );
+    expect(response.ok).toBe(true);
+    if (!response.ok || !("feed" in response)) return;
+    expect(response.feed.title).toBe("Quiet Atom");
+    expect(response.feed.items).toEqual([]);
+  });
+
+  it.each([
+    [
+      "malformed Atom XML (unclosed entry)",
+      `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"><title>Broken</title><entry><title>E</title>`,
+    ],
+    [
+      "entity-declaring DTD in an Atom feed",
+      `<?xml version="1.0"?><!DOCTYPE feed [<!ENTITY a "b">]><feed><title>&a;</title></feed>`,
+    ],
+    [
+      "non-feed XML under an Atom content type",
+      `<?xml version="1.0"?><catalog><book><title>Not a feed</title></book></catalog>`,
+    ],
+  ])("refuses %s → feed-unreadable", async (_label, body) => {
+    const response = await stubAtom(body);
+    expect(response).toEqual({ ok: false, reason: "feed-unreadable" });
+  });
+
+  it("slices Atom entries to MAX_FEED_ITEMS and truncates long summaries to MAX_FEED_TEXT_CHARS", async () => {
+    const floodEntries = Array.from({ length: MAX_FEED_ITEMS + 10 }, (_, i) => {
+      const longSummary = `<summary>${"译文".repeat(MAX_FEED_TEXT_CHARS)} — entry ${i}</summary>`;
+      return `<entry><title>Atom flood ${i}</title>${longSummary}</entry>`;
+    }).join("\n");
+    const body = `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom"><title>Atom Flood</title>${floodEntries}</feed>`;
+    const response = await stubAtom(body);
+    expect(response.ok).toBe(true);
+    if (!response.ok || !("feed" in response)) return;
+    expect(response.feed.items).toHaveLength(MAX_FEED_ITEMS);
+    for (const item of response.feed.items) {
+      expect(item.title.length).toBeLessThanOrEqual(MAX_FEED_TEXT_CHARS);
+      expect(item.excerpt!.length).toBeLessThanOrEqual(MAX_FEED_TEXT_CHARS);
+    }
+  });
+});
