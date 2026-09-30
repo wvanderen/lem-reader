@@ -1,3 +1,4 @@
+import { seedStoreRows } from "./seedStoreRows";
 // tests/e2e/library/sort-control.spec.ts
 // Issue #115 — the library sort control (Recently added / Title / Recently
 // opened) in real browsers, across the 3-engine matrix:
@@ -255,81 +256,14 @@ const visibleEssays = filterLibrary(ALL_STANDALONE, { query: SEARCH_QUERY, activ
 const TAG = "essay";
 const taggedEssays = filterLibrary(ALL_STANDALONE, { query: "", activeTag: TAG });
 
-// ── Seeding helpers (raw IndexedDB puts — the reading-views discipline) ───────
-
-async function seedLocation(page: Page, row: LocationRecord): Promise<void> {
-  await page.evaluate(async (location) => {
-    await new Promise<void>((resolve, reject) => {
-      const req = indexedDB.open("lem-reader");
-      req.onsuccess = () => {
-        const db = req.result;
-        if (!db.objectStoreNames.contains("location")) {
-          resolve();
-          return;
-        }
-        const tx = db.transaction("location", "readwrite");
-        tx.objectStore("location").put(location);
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-      };
-      req.onerror = () => reject(req.error);
-    });
-  }, row);
-}
-
-async function seedBook(page: Page, book: Book): Promise<void> {
-  await page.evaluate(async (row) => {
-    await new Promise<void>((resolve, reject) => {
-      const req = indexedDB.open("lem-reader");
-      req.onsuccess = () => {
-        const db = req.result;
-        if (!db.objectStoreNames.contains("books")) {
-          resolve();
-          return;
-        }
-        const tx = db.transaction("books", "readwrite");
-        tx.objectStore("books").put(row);
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-      };
-      req.onerror = () => reject(req.error);
-    });
-  }, book);
-}
-
-async function seedArticleRows(page: Page, articles: CanonicalArticle[]): Promise<void> {
-  const rows = articles.map((a) => ({
-    ...a,
-    ...(a.ingestionMeta?.bookId ? { bookId: a.ingestionMeta.bookId } : {}),
-  }));
-  await page.evaluate(async (seed) => {
-    await new Promise<void>((resolve, reject) => {
-      const req = indexedDB.open("lem-reader");
-      req.onsuccess = () => {
-        const db = req.result;
-        if (!db.objectStoreNames.contains("articles")) {
-          resolve();
-          return;
-        }
-        const tx = db.transaction("articles", "readwrite");
-        for (const row of seed) tx.objectStore("articles").put(row);
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-      };
-      req.onerror = () => reject(req.error);
-    });
-  }, rows);
-}
-
-/** Seed books → articles → locations (MUST run before the view opens). */
 async function seedCorpus(page: Page): Promise<void> {
-  for (const book of CORPUS_BOOKS) {
-    await seedBook(page, book);
-  }
-  await seedArticleRows(page, CORPUS_ARTICLES);
-  for (const l of CORPUS_LOCATIONS) {
-    await seedLocation(page, l);
-  }
+  await seedStoreRows(page, "books", CORPUS_BOOKS);
+  // Chapter rows carry the denormalized bookId used by the articles index.
+  await seedStoreRows(page, "articles", CORPUS_ARTICLES.map((article) => ({
+    ...article,
+    ...(article.ingestionMeta?.bookId ? { bookId: article.ingestionMeta.bookId } : {}),
+  })));
+  await seedStoreRows(page, "location", CORPUS_LOCATIONS);
 }
 
 /**

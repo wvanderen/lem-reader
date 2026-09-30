@@ -95,7 +95,7 @@ interface DatedEntry {
  */
 function normalizedStamp(iso: string): string {
   const dot = iso.indexOf(".");
-  if (dot === -1) return `${iso.slice(0, -1)}.000Z`;
+  if (dot === -1) return `${iso.slice(0, -1)}.000000000Z`;
   const digits = iso.slice(dot + 1, -1);
   return `${iso.slice(0, dot + 1)}${digits.padEnd(9, "0")}Z`;
 }

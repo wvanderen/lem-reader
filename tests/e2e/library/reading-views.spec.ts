@@ -1,3 +1,4 @@
+import { seedStoreRows } from "./seedStoreRows";
 // tests/e2e/library/reading-views.spec.ts
 // Plan 14-04 Task 1 — the 3-engine views/counts/empty/membership agreement
 // matrix (LIB-07 + LIB-08 browser truth; plain test() blocks inherit the
@@ -17,14 +18,9 @@
 //                     raw IndexedDB clear-rows — NOW INCLUDING the v5
 //                     "books" store (the cloned list predates it). Clear-
 //                     rows, never deleteDatabase (the webkit race).
-//   - seedLocation:   cloned verbatim (raw put into the location store).
-//   - seedBook:       NEW — BookSchema.parse in Node, raw put into "books".
-//   - seedArticleRows: NEW — ArticleSchema.parse in Node; chapter rows carry
-//                     BOTH ingestionMeta.bookId AND the denormalized
-//                     top-level bookId (the 12-03 v5 index contract — the
-//                     booksStore.saveBook write shape). Schema-building in
-//                     Node guarantees the store-seam Zod read never drops a
-//                     seeded row.
+//   - seedStoreRows:  shared raw IndexedDB puts for locations, books, articles.
+//                     Schema-valid fixtures are built in Node; chapter rows
+//                     carry the denormalized top-level bookId used by the index.
 //
 // Seeding discipline: seed BEFORE openView (the progress-recent openLibrary
 // comment — the LibraryView load effect runs once per mount; openView's
@@ -106,7 +102,7 @@ function makeStandalone(
 
 /** Build an ArticleSchema-valid epub-chapter article bound to a book
  * (ingestionMeta.bookId is the CANONICAL FK the library partitions on;
- * seedArticleRows additionally denormalizes the top-level bookId below). */
+ * seedCorpus additionally denormalizes the top-level bookId below). */
 function makeChapter(
   id: string,
   title: string,
@@ -440,109 +436,14 @@ function expectedRowsFor(view: ViewName): number {
   return standaloneRows + bookRows;
 }
 
-// ── Seeding helpers (raw IndexedDB puts — the seedLocation discipline) ───────
-
-/** seedLocation — cloned VERBATIM from progress-recent.spec.ts (raw put into
- * the location store; the compound key [articleId+revision] is supplied by
- * the row's own articleId + revision fields). */
-async function seedLocation(
-  page: Page,
-  articleId: string,
-  graphemeOffset: number,
-  savedAt: string,
-): Promise<void> {
-  await page.evaluate(
-    async ({ articleId, graphemeOffset, savedAt }) => {
-      const location = {
-        schemaVersion: 1 as const,
-        articleId,
-        revision: 1,
-        graphemeOffset,
-        savedAt,
-      };
-      await new Promise<void>((resolve, reject) => {
-        const req = indexedDB.open("lem-reader");
-        req.onsuccess = () => {
-          const db = req.result;
-          if (!db.objectStoreNames.contains("location")) {
-            resolve();
-            return;
-          }
-          const tx = db.transaction("location", "readwrite");
-          tx.objectStore("location").put(location);
-          tx.oncomplete = () => resolve();
-          tx.onerror = () => reject(tx.error);
-        };
-        req.onerror = () => reject(req.error);
-      });
-    },
-    { articleId, graphemeOffset, savedAt },
-  );
-}
-
-/** seedBook — write ONE BookSchema-valid row (built in Node) into the v5
- * books store via a raw put. */
-async function seedBook(page: Page, book: Book): Promise<void> {
-  await page.evaluate(async (row) => {
-    await new Promise<void>((resolve, reject) => {
-      const req = indexedDB.open("lem-reader");
-      req.onsuccess = () => {
-        const db = req.result;
-        if (!db.objectStoreNames.contains("books")) {
-          resolve();
-          return;
-        }
-        const tx = db.transaction("books", "readwrite");
-        tx.objectStore("books").put(row);
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-      };
-      req.onerror = () => reject(req.error);
-    });
-  }, book);
-}
-
-/** seedArticleRows — write ArticleSchema-valid article rows (built in Node)
- * into the articles store. Chapter rows carry BOTH ingestionMeta.bookId AND
- * the denormalized top-level bookId (the booksStore.saveBook write shape —
- * the 12-03 v5 index contract). */
-async function seedArticleRows(
-  page: Page,
-  articles: CanonicalArticle[],
-): Promise<void> {
-  const rows = articles.map((a) => ({
-    ...a,
-    ...(a.ingestionMeta?.bookId ? { bookId: a.ingestionMeta.bookId } : {}),
-  }));
-  await page.evaluate(async (rows) => {
-    await new Promise<void>((resolve, reject) => {
-      const req = indexedDB.open("lem-reader");
-      req.onsuccess = () => {
-        const db = req.result;
-        if (!db.objectStoreNames.contains("articles")) {
-          resolve();
-          return;
-        }
-        const tx = db.transaction("articles", "readwrite");
-        for (const row of rows) tx.objectStore("articles").put(row);
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-      };
-      req.onerror = () => reject(req.error);
-    });
-  }, rows);
-}
-
-/** Seed the full corpus (books → chapter/standalone article rows →
- * locations). MUST run BEFORE openView (seed-before-open discipline). */
 async function seedCorpus(page: Page): Promise<void> {
-  for (const book of CORPUS_BOOKS) {
-    await seedBook(page, book);
-  }
-  await seedArticleRows(page, CORPUS_ARTICLES);
-  for (const l of CORPUS_LOCATIONS) {
-    await seedLocation(page, l.articleId, l.graphemeOffset, l.savedAt);
-  }
+  await seedStoreRows(page, "books", CORPUS_BOOKS);
+  // Chapter rows carry the denormalized bookId used by the articles index.
+  await seedStoreRows(page, "articles", CORPUS_ARTICLES.map((article) => ({
+    ...article,
+    ...(article.ingestionMeta?.bookId ? { bookId: article.ingestionMeta.bookId } : {}),
+  })));
+  await seedStoreRows(page, "location", CORPUS_LOCATIONS);
 }
 
 /**

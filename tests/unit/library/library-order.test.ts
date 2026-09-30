@@ -498,6 +498,35 @@ describe("orderLibraryEntries by recently-opened (issue #115)", () => {
     return { latestLocationByArticleId: new Map(locations.map((l) => [l.articleId, l] as const)) };
   }
 
+  it("orders fractional activity after whole seconds, including a book's latest chapter", () => {
+    const entries = orderLibraryEntries(
+      [makeArticle("whole"), makeArticle("middle")],
+      [makeBook("book", "2026-09-01T00:00:00Z", ["whole-chapter", "later-chapter"])],
+      "recently-opened",
+      ctx(
+        loc("whole", 0, "2026-09-06T00:00:00Z"),
+        loc("middle", 0, "2026-09-06T00:00:00.00005Z"),
+        loc("whole-chapter", 0, "2026-09-06T00:00:00Z"),
+        loc("later-chapter", 0, "2026-09-06T00:00:00.0001Z"),
+      ),
+    );
+    expect(labels(entries)).toEqual(["b:book", "a:middle", "a:whole"]);
+  });
+
+  it("keeps equal instants stable across absent and explicit fractions", () => {
+    const entries = orderLibraryEntries(
+      [makeArticle("fraction"), makeArticle("whole")],
+      [makeBook("book", "2026-09-01T00:00:00Z")],
+      "recently-opened",
+      ctx(
+        loc("fraction", 0, "2026-09-06T00:00:00.000Z"),
+        loc("whole", 0, "2026-09-06T00:00:00Z"),
+        loc("book-c00", 0, "2026-09-06T00:00:00Z"),
+      ),
+    );
+    expect(labels(entries)).toEqual(["a:fraction", "a:whole", "b:book"]);
+  });
+
   it("orders opened items by latest activity descending, articles and books interleaved", () => {
     const entries = orderLibraryEntries(
       [makeArticle("article-opened", "2026-09-01T00:00:00.000Z")],
