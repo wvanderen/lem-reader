@@ -142,6 +142,8 @@ export async function setBookTags(id: string, tags: string[]): Promise<void> {
   await db.books.update(id, { tags: routed });
 }
 
+const pendingHighlightTagWrites = new Map<string, Promise<void>>();
+
 /**
  * `setHighlightTags` — write the tag array for one HighlightRecord by id
  * (issue #116 — the per-highlight annotation-tag namespace). The SAME
@@ -157,11 +159,26 @@ export async function setBookTags(id: string, tags: string[]): Promise<void> {
  * throw). Returns the ROUTED array as written, so the caller's optimistic
  * in-memory state can mirror the exact persisted casings.
  */
-export async function setHighlightTags(
+export function setHighlightTags(
   highlightId: string,
   tags: string[],
 ): Promise<string[]> {
-  const routed = await routeToStoredCasing(tags);
-  await db.highlights.update(highlightId, { tags: routed });
-  return routed;
+  // Include vocabulary reads in the queue: an empty selection otherwise
+  // overtakes an earlier addition while it is resolving stored casing.
+  const selection = [...tags];
+  const previous = pendingHighlightTagWrites.get(highlightId) ?? Promise.resolve();
+  const write = previous.then(async () => {
+    const routed = await routeToStoredCasing(selection);
+    await db.highlights.update(highlightId, { tags: routed });
+    return routed;
+  });
+  // A failed save must not prevent later edits from being persisted.
+  const settled = write.then(() => {}, () => {});
+  pendingHighlightTagWrites.set(highlightId, settled);
+  void settled.then(() => {
+    if (pendingHighlightTagWrites.get(highlightId) === settled) {
+      pendingHighlightTagWrites.delete(highlightId);
+    }
+  });
+  return write;
 }

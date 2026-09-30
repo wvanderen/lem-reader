@@ -145,6 +145,9 @@ export function useAnnotationState(
   const [highlights, setHighlights] = useState<ResolvedHighlight[]>([]);
   const [storageState, setStorageState] = useState<AnnotationStorageState>("ok");
 
+  // Only the latest edit may replace optimistic tags with persisted casing.
+  const latestTagEdits = useRef(new Map<string, symbol>());
+
   // Ref-stable callbacks so the load effect doesn't re-run on callback identity
   // drift (mirrors SettingsContext.tsx L67-68 pendingRef pattern).
   const callbacksRef = useRef(callbacks);
@@ -410,6 +413,8 @@ export function useAnnotationState(
   // own StatusRegion fires inside the modal popover — see the interface doc.
   const updateHighlightTags = useCallback(
     async (id: string, tags: string[]): Promise<void> => {
+      const edit = Symbol();
+      latestTagEdits.current.set(id, edit);
       // Optimistic in-memory record update so the picker's chips reflect
       // immediately (the record is the single source for the popover UI).
       setHighlights((prev) =>
@@ -422,7 +427,7 @@ export function useAnnotationState(
         // (tagsStore.ts) before touching the highlight row only; the routed
         // array mirrors the exact written casings back into the record.
         const routed = await setHighlightTags(id, tags);
-        if (routed) {
+        if (latestTagEdits.current.get(id) === edit) {
           setHighlights((prev) =>
             prev.map((h) =>
               h.record.id === id
@@ -436,6 +441,10 @@ export function useAnnotationState(
         setStorageState(reason);
         callbacksRef.current.onStorageError?.(reason);
         throw e;
+      } finally {
+        if (latestTagEdits.current.get(id) === edit) {
+          latestTagEdits.current.delete(id);
+        }
       }
     },
     [],

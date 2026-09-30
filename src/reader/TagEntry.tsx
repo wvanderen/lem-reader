@@ -44,15 +44,9 @@ import { TagPicker } from "../ui/TagPicker";
 import { StatusRegion } from "../ui/StatusRegion";
 
 interface TagEntryProps {
-  /**
-   * The id of the row whose tags are being edited. Named for the default
-   * host (the article row — setArticleTags); override hosts pass their own
-   * row id here and route the write through `saveTags` (BookRow → book id,
-   * issue #116's NotePopover → highlight id), so the value is only consumed
-   * by the DEFAULT write path.
-   */
-  articleId: string;
-  /** The current tag array on the article row. */
+  /** Record being edited; callback-backed hosts choose their own write target. */
+  recordId: string;
+  /** The current tag array on the record. */
   tags: string[];
   /**
    * Optional persistence override (Plan 12-05 — D12-04 book tags). When
@@ -79,7 +73,7 @@ interface TagEntryProps {
  * live region. Renders INSIDE ArticleView's tag popover / BookRow's
  * expanded region. INERT at mount (Pitfall 8-5).
  */
-export function TagEntry({ articleId, tags, saveTags, inputId = "tag-entry-input" }: TagEntryProps) {
+export function TagEntry({ recordId, tags, saveTags, inputId = "tag-entry-input" }: TagEntryProps) {
   // Local mirror of the tag array so the UI updates immediately on
   // add/remove without waiting for the parent's next render. The Dexie
   // write is fire-and-forget (errors land in errorCopy); the parent does
@@ -133,7 +127,7 @@ export function TagEntry({ articleId, tags, saveTags, inputId = "tag-entry-input
       if (saveTags) {
         await saveTags(next);
       } else {
-        await setArticleTags(articleId, next);
+        await setArticleTags(recordId, next);
       }
     } catch {
       // Dexie write failure — the article row stays unchanged on disk; the

@@ -210,7 +210,7 @@ export function BookRow({
                 override routes commits to setBookTags (tags on chapters are
                 out of scope per the D12-04 decision). */}
             <TagEntry
-              articleId={book.id}
+              recordId={book.id}
               tags={book.tags ?? []}
               saveTags={(tags) => setBookTags(book.id, tags)}
             />

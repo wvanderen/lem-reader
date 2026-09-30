@@ -14,10 +14,11 @@
 // Semantic-only (RTL + user-event, jsdom). The popover mounting harness
 // mirrors note-popover-confirm.test.tsx (dialog polyfill + store stubs).
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { act, render, renderHook, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useEffect } from "react";
 import { HighlightOverlayProvider, useHighlightOverlay } from "../../../src/reader/annotations/HighlightOverlay";
+import { useAnnotationState } from "../../../src/reader/annotations/useAnnotationState";
 import { NotePopover } from "../../../src/reader/annotations/NotePopover";
 import type { CanonicalArticle } from "../../../src/content/types";
 import type { Block } from "../../../src/content/types";
@@ -94,7 +95,7 @@ vi.mock("../../../src/ingestion/library/tagsStore", () => ({
   loadTagStats: vi.fn().mockResolvedValue(mockData.stats),
   setArticleTags: vi.fn().mockResolvedValue(undefined),
   setBookTags: vi.fn().mockResolvedValue(undefined),
-  setHighlightTags: vi.fn().mockResolvedValue(undefined),
+  setHighlightTags: vi.fn(async (_id: string, tags: string[]) => tags),
   deriveTagStats: vi.fn().mockReturnValue([]),
 }));
 
@@ -326,4 +327,32 @@ describe("NotePopover tags (issue #116)", () => {
     // One combobox (the highlight's), no per-note tag surface.
     expect(screen.getAllByRole("combobox")).toHaveLength(1);
   });
+});
+
+
+it("does not mirror an older save over a newer optimistic tag edit", async () => {
+  const { setHighlightTags } = await import("../../../src/ingestion/library/tagsStore");
+  let finishAddition!: (tags: string[]) => void;
+  let finishRemoval!: (tags: string[]) => void;
+  vi.mocked(setHighlightTags)
+    .mockImplementationOnce(() => new Promise((resolve) => { finishAddition = resolve; }))
+    .mockImplementationOnce(() => new Promise((resolve) => { finishRemoval = resolve; }));
+  const { result } = renderHook(() => useAnnotationState(article, {}));
+  await waitFor(() => expect(result.current.highlights).toHaveLength(1));
+  let addition!: Promise<void>;
+  let removal!: Promise<void>;
+  act(() => {
+    addition = result.current.updateHighlightTags("hl-test-1", ["temporary"]);
+    removal = result.current.updateHighlightTags("hl-test-1", []);
+  });
+  await act(async () => {
+    finishAddition(["temporary"]);
+    await addition;
+  });
+  expect(result.current.highlights[0]?.record.tags).toEqual([]);
+  await act(async () => {
+    finishRemoval([]);
+    await removal;
+  });
+  expect(result.current.highlights[0]?.record.tags).toEqual([]);
 });

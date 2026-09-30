@@ -323,7 +323,7 @@ export function NotePopover(): React.ReactElement | null {
             {resolved && (
               <TagEntry
                 key={resolved.record.id}
-                articleId={resolved.record.id}
+                recordId={resolved.record.id}
                 tags={resolved.record.tags ?? []}
                 saveTags={(next) =>
                   updateHighlightTags(resolved.record.id, next)

@@ -15,7 +15,7 @@
 // Harness mirrors tests/unit/ingestion-client.test.ts L14-90: fake-indexeddb
 // via Dexie.dependencies, wipeDatabase beforeEach, lazy-import of the module
 // under test so it picks up the fake DB.
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ArticleSchema } from "../../src/content/schema";
 import type { CanonicalArticle } from "../../src/content/types";
 import fakeIndexedDB, { IDBKeyRange } from "fake-indexeddb";
@@ -318,6 +318,49 @@ describe("setHighlightTags (issue #116)", () => {
     await setHighlightTags("hl-tag-seed-1", []);
     const rows = await loadAllHighlights();
     expect(rows[0]?.tags).toEqual([]);
+  });
+
+  it("keeps a removal after an addition whose vocabulary read is delayed", async () => {
+    const { setHighlightTags } = await loadTagsStore();
+    const { dexieLibrarySource } = await loadLibrarySource();
+    const { loadAllHighlights } = await import("../../src/persistence/highlightsStore");
+    await seedHighlight();
+    let release!: () => void;
+    let started!: () => void;
+    const reading = new Promise<void>((resolve) => { started = resolve; });
+    const delay = new Promise<void>((resolve) => { release = resolve; });
+    const read = vi.spyOn(dexieLibrarySource, "list").mockImplementationOnce(async () => {
+      started();
+      await delay;
+      return [];
+    });
+    try {
+      const addition = setHighlightTags("hl-tag-seed-1", ["temporary"]);
+      await reading;
+      const removal = setHighlightTags("hl-tag-seed-1", []);
+      release();
+      await Promise.all([addition, removal]);
+      expect((await loadAllHighlights())[0]?.tags).toEqual([]);
+    } finally {
+      release();
+      read.mockRestore();
+    }
+  });
+
+  it("allows a later edit after a failed write", async () => {
+    const { setHighlightTags } = await loadTagsStore();
+    const { db } = await import("../../src/persistence/db");
+    await seedHighlight();
+    const update = vi.spyOn(db.highlights, "update").mockRejectedValueOnce(new Error("save failed"));
+    try {
+      const failure = setHighlightTags("hl-tag-seed-1", []);
+      const retry = setHighlightTags("hl-tag-seed-1", ["retry"]);
+      await expect(failure).rejects.toThrow("save failed");
+      await retry;
+      expect((await db.highlights.get("hl-tag-seed-1"))?.tags).toEqual(["retry"]);
+    } finally {
+      update.mockRestore();
+    }
   });
 
   it("on a non-existent highlight id is a no-op (no throw, library unchanged)", async () => {
