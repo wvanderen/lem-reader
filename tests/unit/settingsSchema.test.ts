@@ -19,9 +19,9 @@ import { DEFAULT_SETTINGS } from "../../src/settings/defaults";
 // may or may not validate; Zod is the authority, not TS here).
 function validSettings(overrides: Record<string, unknown> = {}): unknown {
   return {
-    // The canonical v3 write shape (issue #40). Tests of legacy v1/v2 rows
-    // pass an explicit schemaVersion override.
-    schemaVersion: 3,
+    // The canonical v4 write shape (issue #115). Tests of legacy v1/v2/v3
+    // rows pass an explicit schemaVersion override.
+    schemaVersion: 4,
     font: "serif",
     size: 18,
     measure: 64,
@@ -30,6 +30,7 @@ function validSettings(overrides: Record<string, unknown> = {}): unknown {
     readingMode: "paginated",
     animatePageTurns: false,
     rate: 1,
+    librarySort: "recently-added",
     ...overrides,
   };
 }
@@ -53,8 +54,9 @@ describe("ReaderSettingsSchema accepts valid combinations", () => {
   it("parses the D-07 default baseline and round-trips every field", () => {
     const parsed = ReaderSettingsSchema.parse(validSettings());
     expect(parsed).toEqual(DEFAULT_SETTINGS);
-    expect(parsed.schemaVersion).toBe(3);
+    expect(parsed.schemaVersion).toBe(4);
     expect(parsed.readingMode).toBe("paginated");
+    expect(parsed.librarySort).toBe("recently-added");
   });
 
   it("preserves motion opt-in and accepts legacy settings without it", () => {
@@ -130,10 +132,11 @@ describe("ReaderSettingsSchema accepts valid combinations", () => {
 describe("ReaderSettingsSchema.parse rejects out-of-contract records", () => {
   it.each([
     // schemaVersion — STATE-04 hook. After the 04-02 bump the schema accepted
-    // v1+v2; issue #40 (read-aloud voice + rate) adds v3 as the canonical
-    // write version. v1/v2 legacy rows hydrate via .defaults; v4+
-    // forward-rejects (V5 boundary discipline).
-    ["non-literal schemaVersion (STATE-04 hook — v4 forward-rejects)", { schemaVersion: 4 }],
+    // v1+v2; issue #40 (read-aloud voice + rate) added v3 as the canonical
+    // write version; issue #115 (the library sort preference) adds v4 as the
+    // canonical write version. v1/v2/v3 legacy rows hydrate via .defaults;
+    // v5+ forward-rejects (V5 boundary discipline).
+    ["non-literal schemaVersion (STATE-04 hook — v5 forward-rejects)", { schemaVersion: 5 }],
     ["schemaVersion as string", { schemaVersion: "1" }],
     ["missing schemaVersion", { schemaVersion: undefined }],
     ["unknown font value", { font: "comic-sans" }],
@@ -158,6 +161,13 @@ describe("ReaderSettingsSchema.parse rejects out-of-contract records", () => {
     // never reaching the renderer.
     ["unknown readingMode value (T-04-04)", { readingMode: "evil" }],
     ["readingMode as number", { readingMode: 0 }],
+    // librarySort — #115 closed enum (T-02-01 tampering reject). The
+    // .default hydrates "recently-added" only when the field is ABSENT; an
+    // explicit bad value must fail parse → STATE-05 routing, never reaching
+    // the renderer (the readingMode discipline).
+    ["unknown librarySort value (T-02-01)", { librarySort: "newest" }],
+    ["librarySort as number", { librarySort: 0 }],
+    ["librarySort as empty string", { librarySort: "" }],
   ])("throws when %s", (_label, override) => {
     expect(() => ReaderSettingsSchema.parse(validSettings(override))).toThrow();
   });
@@ -195,17 +205,74 @@ describe("ReaderSettingsSchema hydrates readingMode for legacy v1 rows (D4-12, P
     expect(parsed.schemaVersion).toBe(2);
   });
 
-  it("DEFAULT_SETTINGS mirrors the v3 canonical shape (schemaVersion 3 + readingMode paginated + read-aloud defaults)", () => {
-    expect(DEFAULT_SETTINGS.schemaVersion).toBe(3);
+  it("DEFAULT_SETTINGS mirrors the v4 canonical shape (schemaVersion 4 + readingMode paginated + read-aloud defaults + library sort default)", () => {
+    expect(DEFAULT_SETTINGS.schemaVersion).toBe(4);
     expect(DEFAULT_SETTINGS.readingMode).toBe("paginated");
     // Issue #40 — the read-aloud defaults: no picked voice (platform
     // default) and the 1× rate multiplier.
     expect(DEFAULT_SETTINGS.voice).toBeUndefined();
     expect(DEFAULT_SETTINGS.rate).toBe(1);
+    // Issue #115 — the library sort default IS the shipped pre-control
+    // order (issue #114's descending addedAt): existing readers see no
+    // behavior change on upgrade.
+    expect(DEFAULT_SETTINGS.librarySort).toBe("recently-added");
     // Round-trip DEFAULT_SETTINGS through parse — proves the literal satisfies
     // the schema exactly (no missing/extra fields).
     expect(ReaderSettingsSchema.parse(DEFAULT_SETTINGS)).toEqual(DEFAULT_SETTINGS);
   });
+});
+
+// ── Issue #115 — v3→v4 value-shape evolution (the library sort preference) ──
+// Pitfall 9 (the readingMode/voice/rate mechanism): a v1/v2/v3 row lacking
+// librarySort hydrates "recently-added" via the schema default on read;
+// schemaVersion is NOT mutated by parse. A v4 row carries the choice
+// explicitly; the closed enum rejects every other value at the read
+// boundary (T-02-01).
+
+describe("ReaderSettingsSchema hydrates librarySort for legacy v1..v3 rows (issue #115, Pitfall 9)", () => {
+  it("a v3 row missing librarySort hydrates 'recently-added' and keeps its version", () => {
+    // A real pre-#115 row written by the v3 canonical shape (issue #40).
+    const legacyRow = {
+      schemaVersion: 3,
+      font: "serif",
+      size: 18,
+      measure: 64,
+      spacing: "comfortable",
+      theme: "sepia",
+      readingMode: "paginated",
+      rate: 1,
+    };
+    const parsed = ReaderSettingsSchema.parse(legacyRow);
+    expect(parsed.schemaVersion).toBe(3); // schemaVersion is NOT mutated by parse
+    expect(parsed.librarySort).toBe("recently-added"); // .default fires
+  });
+
+  it("a v1 row missing every later field hydrates librarySort alongside readingMode/voice/rate", () => {
+    const legacyRow = {
+      schemaVersion: 1,
+      font: "serif",
+      size: 18,
+      measure: 64,
+      spacing: "comfortable",
+      theme: "sepia",
+    };
+    const parsed = ReaderSettingsSchema.parse(legacyRow);
+    expect(parsed.schemaVersion).toBe(1);
+    expect(parsed.readingMode).toBe("paginated");
+    expect(parsed.rate).toBe(1);
+    expect(parsed.librarySort).toBe("recently-added");
+  });
+
+  it.each(["title", "recently-opened"] as const)(
+    "a v4 row carries the explicit choice %s",
+    (choice) => {
+      const parsed = ReaderSettingsSchema.parse(
+        validSettings({ schemaVersion: 4, librarySort: choice }),
+      );
+      expect(parsed.schemaVersion).toBe(4);
+      expect(parsed.librarySort).toBe(choice);
+    },
+  );
 });
 
 // ── Issue #40 — v2→v3 value-shape evolution (read-aloud voice + rate) ───────
@@ -392,6 +459,7 @@ describe("applyTheme writes :root tokens from validated settings", () => {
       theme: "dark",
       readingMode: "paginated",
       rate: 1,
+      librarySort: "recently-added",
     });
     const root = document.documentElement;
     expect(root.dataset.theme).toBe("dark");

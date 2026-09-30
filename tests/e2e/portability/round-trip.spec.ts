@@ -120,7 +120,9 @@ test("SC#4 — export on machine A re-imports on machine B with offsets intact",
     /** The seeded reader preferences — distinctive values so machine B's
      * applyPreferences write is observable (fresh device ⇒ default true).
      * Issue #40 — the read-aloud rate rides the canonical record; its
-     * default 1 appears in every export (the seeded literal predates it). */
+     * default 1 appears in every export (the seeded literal predates it).
+     * Issue #115 — the library sort rides the same way; its schema default
+     * "recently-added" hydrates at the export's Zod read boundary. */
     const seededPrefs = {
       schemaVersion: 2,
       font: "sans",
@@ -130,6 +132,7 @@ test("SC#4 — export on machine A re-imports on machine B with offsets intact",
       theme: "dark",
       readingMode: "paginated",
       rate: 1,
+      librarySort: "recently-added",
     };
 
     await seedRows(pageA, {

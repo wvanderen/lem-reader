@@ -28,6 +28,7 @@ import type { ReaderSettings } from "../../../src/content/schema";
  * (theme dark, font sans, size 22, readingMode scrolling — the round-trip
  * precedent from round-trip.spec.ts L111-127). */
 const NON_DEFAULT: ReaderSettings = {
+  librarySort: "recently-added", // issue #115 — the additive preference
   schemaVersion: 2,
   font: "sans",
   size: 22,
@@ -116,8 +117,8 @@ describe("readSettingsMirror", () => {
       JSON.stringify({ ...NON_DEFAULT, theme: "neon" }),
     ],
     [
-      "unknown schemaVersion (v4 forward-reject)",
-      JSON.stringify({ ...NON_DEFAULT, schemaVersion: 4 }),
+      "unknown schemaVersion (v5 forward-reject)",
+      JSON.stringify({ ...NON_DEFAULT, schemaVersion: 5 }),
     ],
     [
       "non-object stored value",

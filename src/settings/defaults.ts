@@ -11,7 +11,9 @@ export const DEFAULT_SETTINGS: ReaderSettings = {
   // the honest default until the reader picks one) and rate defaults to the
   // schema's 1× multiplier; both are applied to playback by the read-aloud
   // engine (the Reading-settings controls arrive with the completion ticket).
-  schemaVersion: 3, // STATE-04 — bumped from 2 → 3 in issue #40
+  // Issue #115 — the library sort preference bumps the canonical write
+  // version 3 → 4.
+  schemaVersion: 4, // STATE-04 — bumped from 3 → 4 in issue #115
   font: "serif", // D-07 warm-paper serif
   size: 18, // D-07 default body size
   measure: 64, // D-07 calm measure
@@ -21,4 +23,5 @@ export const DEFAULT_SETTINGS: ReaderSettings = {
   readingMode: "paginated", // D4-12 — paginated default per PROJECT.md
   voice: undefined, // read-aloud: the platform default voice
   rate: 1, // read-aloud: the 1× speech rate multiplier
+  librarySort: "recently-added", // #115 — the shipped pre-control order (#114)
 };

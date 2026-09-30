@@ -112,6 +112,7 @@ export const ACTIVE_MATRIX: readonly TypographyVariant[] = process.env
  * orthogonal to measurement — calibration does not vary it).
  */
 export const DEFAULT_CALIBRATION_SETTINGS: ReaderSettings = {
+  librarySort: "recently-added", // issue #115 — the additive preference
   schemaVersion: 1,
   font: "serif",
   size: 18,

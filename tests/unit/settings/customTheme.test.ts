@@ -301,6 +301,7 @@ describe("seedCustomTheme (first-activation seeding)", () => {
 
 /** A fully-populated v3 record in schema-field order (byte-stability). */
 const V3_RECORD: ReaderSettings = {
+  librarySort: "recently-added", // issue #115 — the additive preference
   schemaVersion: 3,
   font: "serif",
   size: 18,
