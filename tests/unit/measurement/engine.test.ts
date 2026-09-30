@@ -280,6 +280,7 @@ describe("MeasurementEngine — V7 error classification", () => {
 
 /** A deterministic ReaderSettings stub for the dispatch's geometry reads. */
 const settingsStub: ReaderSettings = {
+  librarySort: "recently-added", // issue #115 — the additive preference
   schemaVersion: 2,
   font: "serif",
   size: 18,

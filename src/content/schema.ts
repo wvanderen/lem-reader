@@ -436,13 +436,15 @@ const ReaderSettingsObjectSchema = z.object({
   // STATE-04 migration hook: Phase 4 (Plan 04-02, D4-12) bumped the canonical
   // write version from 1 → 2 when readingMode was added. Issue #40 bumps the
   // canonical write version 2 → 3 when the read-aloud preferences (voice +
-  // rate, below) were added. The union accepts ALL THREE literals so that an
-  // existing v1 row (no readingMode field) and a v2 row (no voice/rate
-  // fields) hydrate via the .default()s below on read — Pitfall 9 (NO Dexie
-  // store change; the settings store is key-value, Dexie is opaque to the
-  // value shape). v4 and above forward-reject (V5 boundary discipline
+  // rate, below) were added. Issue #115 bumps the canonical write version
+  // 3 → 4 when the library sort preference (librarySort, below) was added.
+  // The union accepts ALL FOUR literals so that an existing v1 row (no
+  // readingMode field), a v2 row (no voice/rate fields), and a v3 row (no
+  // librarySort field) hydrate via the .default()s below on read — Pitfall 9
+  // (NO Dexie store change; the settings store is key-value, Dexie is opaque
+  // to the value shape). v5 and above forward-reject (V5 boundary discipline
   // preserved).
-  schemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+  schemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
   font: z.enum(["serif", "sans", "dyslexic"]),
   size: z.union([z.literal(16), z.literal(18), z.literal(20), z.literal(22), z.literal(24)]),
   // D21-01/D21-02 (POLISH-09) + issue #18 (D22-01): the union is the
@@ -514,6 +516,16 @@ const ReaderSettingsObjectSchema = z.object({
   //     hydrates v1/v2 rows (Pitfall 9, the readingMode mechanism above).
   voice: z.string().min(1).optional(),
   rate: z.number().min(0.5).max(3).default(1),
+  // Issue #115 — the library list sort preference (the v3 → v4 bump). The
+  // LibraryView toolbar's sort control writes through SettingsContext.update;
+  // the choice survives visits (Dexie + the localStorage mirror) and travels
+  // in the export/import bundle's ALWAYS-present preferences block (D9-12 —
+  // ReaderSettingsSchema composition, the voice/rate mechanism). .default(
+  // "recently-added") hydrates v1..v3 rows (Pitfall 9): the shipped pre-#115
+  // order IS Recently added (issue #114), so the default changes nothing for
+  // existing readers. Closed enum (T-02-01): an out-of-union value fails
+  // parse → the honest corrupt routing, never a silent fallback order.
+  librarySort: z.enum(["recently-added", "title", "recently-opened"]).default("recently-added"),
 });
 
 // Issue #86 (decision #73) — the cross-field rule: theme "custom" REQUIRES a

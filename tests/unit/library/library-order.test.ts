@@ -4,6 +4,10 @@
 // discipline: no React, no Dexie — the reading-state.test.ts fixture
 // discipline: schema-parse builders, boundary-named cases).
 //
+// Issue #115 extends the truth table with the Title and Recently-opened
+// orders (the dispatching orderLibraryEntries call; the two-argument call
+// stays byte-stable).
+//
 // Acceptance rows pinned here:
 //   - Articles + books interleave in ONE descending addedAt order (every
 //     reading-state view; chapters never enter the list — they stay inside
@@ -19,6 +23,11 @@
 //     and therefore order-preserving) upstream of orderLibraryEntries yields
 //     the same relative sequence as ordering first and filtering the merged
 //     list.
+//   - #115 Title: reader-visible effective titles ascending; override wins;
+//     ties deterministic (addedAt descending, undated last, stable).
+//   - #115 Recently opened: latest activity descending (article location /
+//     book's latest chapter location); offset-zero counts as opened; the
+//     never-opened tail rides the Recently-added order.
 import { describe, expect, it } from "vitest";
 import { orderLibraryEntries } from "../../../src/ingestion/library/libraryOrder";
 import { ArticleSchema, BookSchema, LocationRecordSchema } from "../../../src/content/schema";
@@ -313,5 +322,308 @@ describe("orderLibraryEntries composes with the reading-state views (issue #114)
       "a:vs-progress",
       "a:vs-unread",
     ]);
+  });
+});
+
+// ── Issue #115 — the Title order ─────────────────────────────────────────────
+// Reader-visible EFFECTIVE titles ascending (effectiveTitle — the reader-
+// owned override wins, D17-09); deterministic ties fall through to the
+// Recently-added comparator (addedAt descending, undated last), and full
+// ties keep stable input order (articles before books). The dispatching
+// call passes "title" as the third argument.
+
+describe("orderLibraryEntries by title (issue #115)", () => {
+  it("orders mixed articles + books by title ascending", () => {
+    const entries = orderLibraryEntries(
+      [
+        makeArticle("mid", "2026-09-02T00:00:00.000Z", {
+          provenance: {
+            sourceUrl: "https://example.com/mid",
+            title: "Middling essay",
+            retrievedAt: "2026-09-01T00:00:00.000Z",
+            originalHtmlHash: "sha256:" + "0".repeat(64),
+          },
+        }),
+        makeArticle("first", "2026-09-04T00:00:00.000Z", {
+          provenance: {
+            sourceUrl: "https://example.com/first",
+            title: "A first essay",
+            retrievedAt: "2026-09-01T00:00:00.000Z",
+            originalHtmlHash: "sha256:" + "0".repeat(64),
+          },
+        }),
+      ],
+      [
+        makeBook("last-book", "2026-09-03T00:00:00.000Z"),
+        makeBook("zebra-book", "2026-08-30T00:00:00.000Z"),
+      ].map((b) =>
+        b.id === "zebra-book"
+          ? {
+              ...b,
+              title: "Zebra anthology",
+            }
+          : { ...b, title: "Later anthology" },
+      ),
+    );
+    // Added order (Zebra, first/mid, Later) is irrelevant — title governs:
+    // "A first essay" < "Later anthology" < "Middling essay" < "Zebra anthology".
+    expect(labels(entries)).toEqual([
+      "a:first",
+      "b:last-book",
+      "a:mid",
+      "b:zebra-book",
+    ]);
+  });
+
+  it("sorts by the READER-VISIBLE effective title — the readerTitle override wins over the canonical title", () => {
+    const entries = orderLibraryEntries(
+      [
+        // Canonical title "Article aaa" but renamed to "Zebra renamed" —
+        // the row must sort under Z, never under its old name.
+        makeArticle("renamed", "2026-09-01T00:00:00.000Z", {
+          readerTitle: "Zebra renamed",
+        }),
+        makeArticle("plain", "2026-09-02T00:00:00.000Z", {
+          provenance: {
+            sourceUrl: "https://example.com/plain",
+            title: "Article plain",
+            retrievedAt: "2026-09-01T00:00:00.000Z",
+            originalHtmlHash: "sha256:" + "0".repeat(64),
+          },
+        }),
+      ],
+      [],
+    );
+    expect(labels(entries)).toEqual(["a:plain", "a:renamed"]);
+  });
+
+  it("breaks title ties deterministically through addedAt descending (newer first)", () => {
+    const entries = orderLibraryEntries(
+      [
+        makeArticle("same-older", "2026-09-01T00:00:00.000Z", {
+          provenance: {
+            sourceUrl: "https://example.com/same",
+            title: "Twin titles",
+            retrievedAt: "2026-09-01T00:00:00.000Z",
+            originalHtmlHash: "sha256:" + "0".repeat(64),
+          },
+        }),
+        makeArticle("same-newer", "2026-09-03T00:00:00.000Z", {
+          provenance: {
+            sourceUrl: "https://example.com/same",
+            title: "Twin titles",
+            retrievedAt: "2026-09-01T00:00:00.000Z",
+            originalHtmlHash: "sha256:" + "0".repeat(64),
+          },
+        }),
+      ],
+      [],
+    );
+    expect(labels(entries)).toEqual(["a:same-newer", "a:same-older"]);
+  });
+
+  it("an undated article with a tied title follows the dated one (no invented date)", () => {
+    const entries = orderLibraryEntries(
+      [
+        makeArticle("undated-twin", undefined, {
+          provenance: {
+            sourceUrl: "https://example.com/twin",
+            title: "Twin titles",
+            retrievedAt: "2026-09-01T00:00:00.000Z",
+            originalHtmlHash: "sha256:" + "0".repeat(64),
+          },
+        }),
+        makeArticle("dated-twin", "2026-09-01T00:00:00.000Z", {
+          provenance: {
+            sourceUrl: "https://example.com/twin",
+            title: "Twin titles",
+            retrievedAt: "2026-09-01T00:00:00.000Z",
+            originalHtmlHash: "sha256:" + "0".repeat(64),
+          },
+        }),
+      ],
+      [],
+    );
+    expect(labels(entries)).toEqual(["a:dated-twin", "a:undated-twin"]);
+  });
+
+  it("full ties (equal title AND equal addedAt) stay stable: articles before books, input order within a kind", () => {
+    const entries = orderLibraryEntries(
+      [
+        makeArticle("twin-b", "2026-09-02T00:00:00.000Z", {
+          provenance: {
+            sourceUrl: "https://example.com/twin",
+            title: "Shared name",
+            retrievedAt: "2026-09-01T00:00:00.000Z",
+            originalHtmlHash: "sha256:" + "0".repeat(64),
+          },
+        }),
+        makeArticle("twin-a", "2026-09-02T00:00:00.000Z", {
+          provenance: {
+            sourceUrl: "https://example.com/twin",
+            title: "Shared name",
+            retrievedAt: "2026-09-01T00:00:00.000Z",
+            originalHtmlHash: "sha256:" + "0".repeat(64),
+          },
+        }),
+      ],
+      [makeBook("twin-book", "2026-09-02T00:00:00.000Z")].map((b) => ({
+        ...b,
+        title: "Shared name",
+      })),
+    );
+    expect(labels(entries)).toEqual(["a:twin-b", "a:twin-a", "b:twin-book"]);
+  });
+});
+
+// ── Issue #115 — the Recently-opened order ───────────────────────────────────
+// Latest reading activity descending: an article's latest saved location,
+// a book's latest CHAPTER location (max savedAt across chapters). PRESENCE
+// is the opened predicate — an offset-zero location counts (D14-18 Unread
+// parity). Never-opened items follow ALL opened ones in the Recently-added
+// order. Equal stamps tie stably (articles before books).
+
+describe("orderLibraryEntries by recently-opened (issue #115)", () => {
+  function loc(articleId: string, offset: number, savedAt: string): LocationRecord {
+    return LocationRecordSchema.parse({
+      schemaVersion: 1,
+      articleId,
+      revision: 1,
+      graphemeOffset: offset,
+      savedAt,
+    });
+  }
+
+  function ctx(...locations: LocationRecord[]): { latestLocationByArticleId: Map<string, LocationRecord> } {
+    return { latestLocationByArticleId: new Map(locations.map((l) => [l.articleId, l] as const)) };
+  }
+
+  it("orders opened items by latest activity descending, articles and books interleaved", () => {
+    const entries = orderLibraryEntries(
+      [makeArticle("article-opened", "2026-09-01T00:00:00.000Z")],
+      [makeBook("book-opened", "2026-09-04T00:00:00.000Z")],
+      "recently-opened",
+      ctx(
+        loc("article-opened", 5, "2026-09-06T00:00:00.000Z"),
+        loc("book-opened-c00", 2, "2026-09-05T00:00:00.000Z"),
+      ),
+    );
+    // The ARTICLE opened most recently wins despite the book being added
+    // later — activity, not addedAt, governs this order.
+    expect(labels(entries)).toEqual(["a:article-opened", "b:book-opened"]);
+  });
+
+  it("a book's sort key is its LATEST chapter location (max savedAt across chapters)", () => {
+    const book = makeBook("chatty", "2026-09-01T00:00:00.000Z", [
+      "chatty-c00",
+      "chatty-c01",
+      "chatty-c02",
+    ]);
+    const entries = orderLibraryEntries(
+      [makeArticle("rival", "2026-09-02T00:00:00.000Z")],
+      [book],
+      "recently-opened",
+      ctx(
+        loc("rival", 5, "2026-09-05T00:00:00.000Z"),
+        loc("chatty-c00", 5, "2026-09-02T00:00:00.000Z"),
+        loc("chatty-c02", 5, "2026-09-07T00:00:00.000Z"), // the latest
+        loc("chatty-c01", 5, "2026-09-03T00:00:00.000Z"),
+      ),
+    );
+    // The book's c02 activity (09-07) beats the rival article (09-05).
+    expect(labels(entries)).toEqual(["b:chatty", "a:rival"]);
+  });
+
+  it("an offset-ZERO location counts as opened (D14-18 Unread parity)", () => {
+    const entries = orderLibraryEntries(
+      [
+        makeArticle("zero-opened", "2026-09-01T00:00:00.000Z"),
+        makeArticle("never", "2026-09-02T00:00:00.000Z"),
+      ],
+      [],
+      "recently-opened",
+      ctx(loc("zero-opened", 0, "2026-09-06T00:00:00.000Z")),
+    );
+    // Opened at offset 0 → sorted among the opened; the never-opened row
+    // follows the tail even though its addedAt is NEWER.
+    expect(labels(entries)).toEqual(["a:zero-opened", "a:never"]);
+  });
+
+  it("never-opened items follow ALL opened ones in the Recently-added order (addedAt descending)", () => {
+    const entries = orderLibraryEntries(
+      [
+        makeArticle("new-never", "2026-09-08T00:00:00.000Z"),
+        makeArticle("opened", "2026-09-02T00:00:00.000Z"),
+        makeArticle("old-never", "2026-09-03T00:00:00.000Z"),
+        makeArticle("legacy-never"), // undated — the tail's tail
+      ],
+      [makeBook("never-book", "2026-09-05T00:00:00.000Z")],
+      "recently-opened",
+      ctx(loc("opened", 4, "2026-09-06T00:00:00.000Z")),
+    );
+    // One opened item first, then the never-opened tail by descending
+    // addedAt with the undated legacy row last.
+    expect(labels(entries)).toEqual([
+      "a:opened",
+      "a:new-never",
+      "b:never-book",
+      "a:old-never",
+      "a:legacy-never",
+    ]);
+  });
+
+  it("a book whose chapters were never opened is never-opened (presence per chapter, not per book row)", () => {
+    const entries = orderLibraryEntries(
+      [],
+      [makeBook("untouched", "2026-09-01T00:00:00.000Z")],
+      "recently-opened",
+      ctx(loc("some-other-article", 1, "2026-09-06T00:00:00.000Z")),
+    );
+    expect(labels(entries)).toEqual(["b:untouched"]);
+  });
+
+  it("equal activity stamps tie stably — articles before books, input order within a kind", () => {
+    const entries = orderLibraryEntries(
+      [
+        makeArticle("tie-a", "2026-09-01T00:00:00.000Z"),
+        makeArticle("tie-b", "2026-09-02T00:00:00.000Z"),
+      ],
+      [makeBook("tie-book", "2026-09-03T00:00:00.000Z")],
+      "recently-opened",
+      ctx(
+        loc("tie-a", 1, "2026-09-06T00:00:00.000Z"),
+        loc("tie-b", 1, "2026-09-06T00:00:00.000Z"),
+        loc("tie-book-c00", 1, "2026-09-06T00:00:00.000Z"),
+      ),
+    );
+    expect(labels(entries)).toEqual(["a:tie-a", "a:tie-b", "b:tie-book"]);
+  });
+
+  it("degrades to the Recently-added order when the context is absent (defensive, never a crash)", () => {
+    const entries = orderLibraryEntries(
+      [makeArticle("b", "2026-09-02T00:00:00.000Z")],
+      [makeBook("a", "2026-09-03T00:00:00.000Z")],
+      "recently-opened",
+      undefined,
+    );
+    expect(labels(entries)).toEqual(["b:a", "a:b"]);
+  });
+
+  it("composes with the reading-state views: the Finished view shows recently-finished first", () => {
+    // A finished view holding two finished items: the one whose location
+    // savedAt is later leads regardless of addedAt.
+    const olderAdded = makeArticle("fin-old", "2026-09-01T00:00:00.000Z");
+    const newerAdded = makeArticle("fin-new", "2026-09-05T00:00:00.000Z");
+    const view = [olderAdded, newerAdded];
+    const entries = orderLibraryEntries(
+      view,
+      [],
+      "recently-opened",
+      ctx(
+        loc("fin-old", 20, "2026-09-09T00:00:00.000Z"),
+        loc("fin-new", 20, "2026-09-07T00:00:00.000Z"),
+      ),
+    );
+    expect(labels(entries)).toEqual(["a:fin-old", "a:fin-new"]);
   });
 });

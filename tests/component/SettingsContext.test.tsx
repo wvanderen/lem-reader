@@ -207,6 +207,7 @@ describe("SettingsContext (D2-03 live-apply)", () => {
 describe("SettingsContext (02-02 persistence + STATE-05)", () => {
   it("hydrates settings from loadSettings() on mount (STATE-02)", async () => {
     const persisted: ReaderSettings = {
+  librarySort: "recently-added", // issue #115 — the additive preference
       schemaVersion: 1,
       font: "sans",
       size: 22,
@@ -263,6 +264,7 @@ describe("SettingsContext (02-02 persistence + STATE-05)", () => {
       theme: "dark",
       rate: 1,
       readingMode: "scrolling",
+      librarySort: "recently-added",
     };
     window.localStorage.setItem(
       "lem-settings-mirror-v1",

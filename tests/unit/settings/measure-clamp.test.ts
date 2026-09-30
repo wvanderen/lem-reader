@@ -76,9 +76,14 @@ const LEGACY_MAX_RECORD = {
  * remaps the legacy maximum onto the nearest lower step of the extended
  * uniform-6 ladder). The RAW clamp never adds fields; the Dexie/mirror SEAM
  * expectations below additionally carry the issue #40 read-aloud default
- * (rate 1) because those paths go through the Zod read boundary. */
+ * (rate 1) and the issue #115 library-sort default because those paths go
+ * through the Zod read boundary. */
 const CLAMPED_RECORD = { ...LEGACY_MAX_RECORD, measure: 70 };
-const CLAMPED_RECORD_PARSED = { ...CLAMPED_RECORD, rate: 1 };
+const CLAMPED_RECORD_PARSED = {
+  ...CLAMPED_RECORD,
+  rate: 1,
+  librarySort: "recently-added",
+} as const;
 
 beforeEach(() => {
   settingsGet.mockReset();

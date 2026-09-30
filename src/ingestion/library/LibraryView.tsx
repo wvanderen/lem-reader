@@ -64,8 +64,18 @@ import { ContinueReadingStrip } from "./ContinueReadingStrip";
 import { ReadingStatsStrip } from "./ReadingStatsStrip";
 import { deriveLibraryReadingStats, timeReadLabels } from "./readingStats";
 import { filterLibrary, filterBooks } from "./libraryFilter";
-// Issue #114 — the ONE merged Recently-added order over articles + books.
-import { orderLibraryEntries } from "./libraryOrder";
+// Issue #114/#115 — the ONE merged library order over articles + books,
+// dispatched on the reader's persisted LibrarySortKind.
+import {
+  orderLibraryEntries,
+  type LibrarySortKind,
+} from "./libraryOrder";
+// Issue #115 — the sort control (Recently added / Title / Recently opened).
+import { LibrarySortSelect } from "./LibrarySortSelect";
+// Issue #115 — the persisted preference the control reads and writes. The
+// context lives at the app root (AppInner is inside SettingsProvider), so
+// the choice survives visits and rides the export/import bundle (D9-12).
+import { useSettings } from "../../settings/SettingsContext";
 import { effectiveTitle } from "./effectiveMetadata";
 import { articleReadingState, bookReadingState, countByState } from "./readingState";
 import type { LibraryViewName } from "../../App";
@@ -245,6 +255,13 @@ export function LibraryView({
   // partition (standaloneArticles/chaptersByBook, D12-01), and both folds
   // (latest-location, grapheme totals).
   const { status, snapshot } = useLibrarySnapshot();
+  // Issue #115 — the persisted library sort. The context hydrates from the
+  // localStorage mirror on first paint and Dexie on mount; librarySort's
+  // schema default ("recently-added") keeps pre-#115 rows byte-behaved.
+  // Changes write through SettingsContext.update (debounced Dexie save +
+  // mirror + bundle travel).
+  const { settings, update } = useSettings();
+  const librarySort: LibrarySortKind = settings.librarySort;
   // Plan 15-03 (D15-13) — filters restore on ALL return paths (view match
   // gates ONLY scroll + row focus). Lazy initializers read the session
   // snapshot ONCE at mount; cold loads (null peek) keep today's defaults.
@@ -534,7 +551,17 @@ export function LibraryView({
     );
   }
   const visibleBooks = filterBooks(viewBooks, { query, activeTag }, chapterTitlesByBook);
-  const orderedEntries = orderLibraryEntries(visibleItems, visibleBooks);
+  // Issue #115 — the reader's chosen order over the filtered halves. The
+  // Recently-opened order consumes the snapshot's ONE latest-location fold
+  // (offset-zero locations count as opened — the D14-18 Unread parity);
+  // the other orders ignore it. Filters upstream already preserve relative
+  // order, so narrowing never changes the chosen order's shape.
+  const orderedEntries = orderLibraryEntries(
+    visibleItems,
+    visibleBooks,
+    librarySort,
+    { latestLocationByArticleId: locationsByArticle },
+  );
 
   return (
     <main id="main">
@@ -632,6 +659,13 @@ export function LibraryView({
         </nav>
         <LibrarySearch query={query} onQueryChange={setQuery} />
         <TagFilter tags={allTags} activeTag={activeTag} onSelect={setActiveTag} />
+        {/* Issue #115 — the sort control closes the toolbar band. The choice
+            persists via SettingsContext (visits + export/import); the list
+            below reorders in place. */}
+        <LibrarySortSelect
+          sort={librarySort}
+          onSortChange={(next) => update({ librarySort: next })}
+        />
       </div>
       {/* (3) Continue reading — the compact rail (issue #67, variant A):
           slim cards — the stretched title link, the "Chapter N of M" line

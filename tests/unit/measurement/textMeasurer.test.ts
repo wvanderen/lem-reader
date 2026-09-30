@@ -89,6 +89,7 @@ const { prepareMock, layoutMock, prepareWithSegmentsMock, layoutWithLinesMock } 
   mocks;
 
 const baseSettings: ReaderSettings = {
+  librarySort: "recently-added", // issue #115 — the additive preference
   schemaVersion: 1,
   font: "serif",
   size: 18,

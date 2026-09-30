@@ -43,6 +43,7 @@ const settingsGet = vi.mocked(db.settings.get);
 const settingsPut = vi.mocked(db.settings.put);
 
 const validSettings: ReaderSettings = {
+  librarySort: "recently-added", // issue #115 — the additive preference
   schemaVersion: 1,
   font: "sans",
   size: 20,
