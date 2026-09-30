@@ -348,4 +348,67 @@ describe("subscriptions bundle v6 (issue #121)", () => {
     await applyImport(plan);
     expect(await loadAllSubscriptions()).toEqual([]);
   });
+
+  it("an Atom subscription rides the SAME merge, export, and import as RSS (issue #122): duplicate by normalized feed URL keeps LOCAL; round-trip restores both formats (no network)", async () => {
+    const { buildBundle, validateBundle, applyImport } = await loadService();
+    const { detectImportPreview, resolveImportPlan } = await loadConflicts();
+    const { db } = await loadDb();
+    await db.open();
+    const { saveSubscription, loadAllSubscriptions } = await loadSubscriptionsStore();
+
+    // LOCAL: an Atom subscription with the reader-captured (fresher) cache.
+    const localAtom = sampleSubscription({
+      id: "sub-atom-local",
+      feedUrl: "https://atom.example.com/feed.xml",
+      title: "Atom Journal",
+      items: [
+        {
+          title: "Atom entry one",
+          link: "https://atom.example.com/one",
+          datePublished: "2024-10-03T10:00:00.000Z",
+          excerpt: "From the local Atom cache.",
+        },
+      ],
+    });
+    await db.articles.put(sampleArticle());
+    await saveSubscription(localAtom);
+
+    // BUNDLE: the same Atom feed under a fragment-carrying spelling with a
+    // STALE cache (keeps LOCAL), plus a genuinely new RSS feed (writes).
+    const staleAtomDuplicate = sampleSubscription({
+      id: "sub-atom-incoming",
+      feedUrl: "https://atom.example.com/feed.xml#latest",
+      title: "Atom Journal (stale)",
+      items: [{ title: "Stale Atom entry" }],
+    });
+    const incomingRss = sampleSubscription({
+      id: "sub-rss-incoming",
+      feedUrl: "https://journal.example.com/rss.xml",
+      title: "RSS Journal",
+    });
+    const result = await validateBundle(
+      await bundleFile([sampleArticle()], [staleAtomDuplicate, incomingRss]),
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const preview = await detectImportPreview(result.bundle, result.assets);
+    const plan = await resolveImportPlan(result.bundle, preview, ALL_SKIP, false);
+    expect(plan.subscriptionsToWrite.map((s) => s.id)).toEqual(["sub-rss-incoming"]);
+    await applyImport(plan);
+
+    // Export → wipe → import restores BOTH formats byte-identically, with
+    // fetch stubbed to throw (the previews ride inside the rows).
+    const bytes = (await buildBundle()).bytes;
+    await wipeDatabase();
+    await db.open();
+    const rt = await validateBundle(new File([new Uint8Array(bytes)], "atom-rt.zip"));
+    expect(rt.ok).toBe(true);
+    if (!rt.ok) return;
+    const rtPreview = await detectImportPreview(rt.bundle, rt.assets);
+    const rtPlan = await resolveImportPlan(rt.bundle, rtPreview, ALL_SKIP, false);
+    await applyImport(rtPlan);
+    const rows = await loadAllSubscriptions();
+    expect(rows).toHaveLength(2);
+    expect(rows).toEqual(expect.arrayContaining([localAtom, incomingRss]));
+  });
 });

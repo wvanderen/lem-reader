@@ -257,10 +257,18 @@ function toPreview(
   const title = textOf(item["title"]);
   if (title === undefined) return null;
   const link = isAtom ? resolveAtomLink(item) : resolveRssLink(item);
-  const dateRaw = isAtom
-    ? (item["published"] ?? item["updated"])
-    : (item["pubDate"] ?? item["date"]);
-  const datePublished = toDateIso(dateRaw);
+  // The FIRST date that actually parses wins (issue #122): a present-but-
+  // empty element (e.g. <published></published>) never masks the shape's
+  // fallback (updated/date) — honesty means "date when SUPPLIED READABLY",
+  // not "date when the tag exists".
+  const dateCandidates = isAtom
+    ? [item["published"], item["updated"]]
+    : [item["pubDate"], item["date"]];
+  let datePublished: string | undefined;
+  for (const candidate of dateCandidates) {
+    datePublished = toDateIso(candidate);
+    if (datePublished !== undefined) break;
+  }
   let excerpt: string | undefined;
   for (const key of excerptKeys) {
     excerpt = stripToExcerpt(item[key]);
