@@ -24,7 +24,7 @@
 // (D2-13 — fixtures are bundled JSON; the article is always readable).
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CanonicalArticle } from "../../content/types";
-import type { HighlightRecord, NoteRecord } from "../../content/schema";
+import type { HighlightColor, HighlightRecord, NoteRecord } from "../../content/schema";
 import {
   deriveQuoteSelector,
   resolveQuoteSelector,
@@ -43,6 +43,9 @@ import {
 // Issue #116 — the ONE tag-write seam (mirrors TagEntry's setArticleTags
 // write-through; already in the reader graph via src/reader/TagEntry.tsx).
 import { setHighlightTags } from "../../ingestion/library/tagsStore";
+// Issue #118 — the named-color write seam (the setHighlightTags twin, minus
+// the casing routing: the color vocabulary is the closed schema enum).
+import { setHighlightColor } from "../../persistence/highlightsStore";
 import { classifyStorageError } from "../../persistence/errors";
 
 /** D5-02 tri-state — drives Plan 05-04 ambiguous/orphan surfacing. */
@@ -128,6 +131,19 @@ export interface UseAnnotationStateResult {
    * the dialog backdrop while the reader is mid-edit.
    */
   updateHighlightTags: (id: string, tags: string[]) => Promise<void>;
+  /**
+   * Set the named color on a highlight (issue #118). In-memory state updates
+   * optimistically; the persistence write is commit-per-change (a color pick
+   * is a discrete event — the TagEntry discipline, no debounce) through the
+   * ONE highlightsStore seam. Color never gates editability or anchoring —
+   * it stays settable on ambiguous/orphaned highlights exactly like tags.
+   *
+   * Failure contract (mirrors updateHighlightTags): the error is classified
+   * and routed to onStorageError (StorageBanner) AND rethrown so the picker
+   * host's StatusRegion can show its inline "Couldn't save color." copy
+   * inside the modal popover.
+   */
+  updateHighlightColor: (id: string, color: HighlightColor) => Promise<void>;
   storageState: AnnotationStorageState;
 }
 
@@ -249,6 +265,12 @@ export function useAnnotationState(
         // spine's raw-row equality check). Consumers still read `tags ?? []`
         // for pre-#116 rows, which omit the key.
         tags: [],
+        // Issue #118 — new records carry the DEFAULT color explicitly so a
+        // row is byte-stable across export → import (the same discipline as
+        // tags above: the exporter's Zod self-check hydrates the additive
+        // field on every parsed record). Consumers read `color ?? "default"`
+        // for pre-#118 rows, which omit the key.
+        color: "default",
       };
       // Optimistic prepend — same-revision capture is always "confident".
       const resolved: ResolvedHighlight = {
@@ -450,6 +472,32 @@ export function useAnnotationState(
     [],
   );
 
+  // Issue #118 — commit-per-change highlight-color write (the TagEntry
+  // discipline: optimistic mirror + fire-and-forget seam write). The catch
+  // routes to StorageBanner (STATE-05) and RETHROWS so the picker host's own
+  // StatusRegion fires inside the modal popover — the updateHighlightTags
+  // failure contract verbatim.
+  const updateHighlightColor = useCallback(
+    async (id: string, color: HighlightColor): Promise<void> => {
+      // Optimistic in-memory record update so the picker's selection + the
+      // rendered <mark> modifier reflect immediately.
+      setHighlights((prev) =>
+        prev.map((h) =>
+          h.record.id === id ? { ...h, record: { ...h.record, color } } : h,
+        ),
+      );
+      try {
+        await setHighlightColor(id, color);
+      } catch (e) {
+        const reason = classifyStorageError(e);
+        setStorageState(reason);
+        callbacksRef.current.onStorageError?.(reason);
+        throw e;
+      }
+    },
+    [],
+  );
+
   return {
     highlights,
     createHighlight,
@@ -457,6 +505,7 @@ export function useAnnotationState(
     updateNote,
     flushNoteSave,
     updateHighlightTags,
+    updateHighlightColor,
     storageState,
   };
 }

@@ -21,6 +21,7 @@
 // Pure domain logic — no DOM, no React, no side effects. jsdom-safe.
 import type { InlineRun } from "../content/types";
 import type { TextPositionSelector } from "../content/normalizeText";
+import type { HighlightColor } from "../content/schema";
 import { graphemeClusters } from "../content/normalizeText";
 import { inlineStreamGraphemeLength, splitParagraphRuns } from "../pagination/splitBlock";
 
@@ -37,6 +38,13 @@ export interface HighlightSliceEntry {
    * nothing.
    */
   status?: "confident" | "ambiguous" | "orphan";
+  /**
+   * Issue #118 — the named color choice (visual organization only). Absent
+   * on the synthetic spoken-marker entry; defaults to "default" at the
+   * render site so existing call sites that omit the field regress nothing
+   * (the `status ?? "confident"` discipline).
+   */
+  color?: HighlightColor;
 }
 
 /** A run slice produced by sliceRunsForHighlights. */
@@ -53,6 +61,13 @@ export interface HighlightSlice {
    * mark.highlight.unresolved. "confident" for gap slices (no modifier).
    */
   status: "confident" | "ambiguous" | "orphan";
+  /**
+   * Issue #118 — the owning highlight's named color, threaded to the render
+   * site for the `color-<name>` modifier class. Absent on gap slices and
+   * when the owning entry omitted the field (render reads
+   * `color ?? "default"`; "default" itself renders bare — no modifier).
+   */
+  color?: HighlightColor;
   /**
    * Phase 19 Plan 19-03 (Pitfall 2 — first-slice-only DOM id): true only on
    * the highlight's FIRST slice in document order — the one slice allowed to
@@ -128,6 +143,7 @@ export function sliceRunsForHighlights(
     id: string;
     hasNote: boolean;
     status: "confident" | "ambiguous" | "orphan";
+    color?: HighlightColor;
     hlStart: number;
   }[] = [];
   for (const h of highlights) {
@@ -140,6 +156,7 @@ export function sliceRunsForHighlights(
         id: h.id,
         hasNote: h.hasNote,
         status: h.status ?? "confident",
+        color: h.color,
         hlStart: h.position.start,
       });
     }
@@ -205,6 +222,7 @@ export function sliceRunsForHighlights(
         highlightId: inter.id,
         hasNote: inter.hasNote,
         status: inter.status,
+        color: inter.color,
         isFirst: inter.hlStart >= blockGlobalStart,
       });
     }

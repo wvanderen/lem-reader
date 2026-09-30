@@ -305,6 +305,9 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
             position: h.resolvedPosition!,
             hasNote: h.note !== null && h.note.text.length > 0,
             status: h.status,
+            // Issue #118 — `?? "default"`: pre-#118 in-memory records omit
+            // the key (the BlockRenderer context-mapping discipline).
+            color: h.record.color ?? "default",
           }))
       : undefined;
 

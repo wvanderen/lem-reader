@@ -24,6 +24,7 @@
 // absent or empty, ArticleBody renders exactly as before (existing tests
 // regress nothing).
 import type { Block, CanonicalArticle } from "../types";
+import type { HighlightColor } from "../schema";
 import { Fragment, memo, useMemo, useState } from "react";
 import { InlineList } from "./InlineRenderer";
 import { highlightAriaLabelForText } from "./InlineRenderer";
@@ -77,6 +78,13 @@ export interface ArticleBodyHighlight {
   hasNote: boolean;
   /** D5-02 tri-state — drives the unresolved marker (D5-04). */
   status: "confident" | "ambiguous" | "orphan";
+  /**
+   * Issue #118 — the named color choice, threaded to the render site for
+   * the `color-<name>` modifier class. Optional so existing callers that
+   * omit it render the Default fill (regress nothing — the `status`
+   * discipline above).
+   */
+  color?: HighlightColor;
 }
 
 /**
@@ -297,7 +305,10 @@ export function BlockView({
               }
               const status = seg.entry.status ?? "confident";
               const unresolved = status !== "confident";
-              const className = `highlight${seg.entry.hasNote ? " has-note" : ""}${unresolved ? " unresolved" : ""}`;
+              // Issue #118 — the named-color modifier (default renders bare;
+              // the InlineRenderer prose-twin discipline).
+              const color = seg.entry.color ?? "default";
+              const className = `highlight${color !== "default" ? ` color-${color}` : ""}${seg.entry.hasNote ? " has-note" : ""}${unresolved ? " unresolved" : ""}`;
               return (
                 <mark
                   key={i}
@@ -305,7 +316,7 @@ export function BlockView({
                   className={className}
                   data-highlight-id={seg.entry.id}
                   tabIndex={0}
-                  aria-label={highlightAriaLabelForText(seg.text, seg.entry.hasNote, status)}
+                  aria-label={highlightAriaLabelForText(seg.text, seg.entry.hasNote, status, color)}
                   aria-haspopup="dialog"
                 >
                   {seg.text}
@@ -530,6 +541,9 @@ export const ArticleBody = memo(
           position: h.resolvedPosition!,
           hasNote: h.note !== null && h.note.text.length > 0,
           status: h.status,
+          // Issue #118 — `?? "default"`: pre-#118 in-memory records omit
+          // the key (the tags hydration discipline).
+          color: h.record.color ?? "default",
         }));
     }
     // Issue #42: the synthetic spoken-word entry joins the SAME slicing

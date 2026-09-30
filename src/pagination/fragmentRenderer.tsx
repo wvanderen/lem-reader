@@ -344,6 +344,10 @@ function sliceHighlightsForEntry(
         },
         hasNote: h.hasNote,
         status: h.status,
+        // Issue #118 — the named color rides the entry-local translation
+        // verbatim (visual organization; never participates in the
+        // intersection math above).
+        color: h.color,
       });
     }
   }

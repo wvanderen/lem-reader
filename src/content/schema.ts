@@ -589,6 +589,20 @@ export const TextQuoteSelectorSchema = z.object({
   suffix: z.string(),
 });
 
+/** The named highlight-color vocabulary (issue #118): the Default fill plus
+ * exactly four named colors. The closed set is the single source of truth —
+ * the Zod enum below, the UI picker, the CSS tokens, and the custom-theme
+ * derivation all key off these literal ids. */
+export const HIGHLIGHT_COLOR_NAMES = [
+  "default",
+  "yellow",
+  "green",
+  "blue",
+  "pink",
+] as const;
+export type HighlightColor = (typeof HIGHLIGHT_COLOR_NAMES)[number];
+export const HighlightColorSchema = z.enum(HIGHLIGHT_COLOR_NAMES);
+
 /** HighlightRecord — one durable highlight (D5-03 dual-selector persistence).
  * schemaVersion for STATE-04 migration; id is crypto.randomUUID() at the call
  * site (05-RESEARCH.md Open Question #2 — no collision with fn-N footnote ids). */
@@ -610,6 +624,14 @@ export const HighlightRecordSchema = z.object({
   // highlight's tags by construction (1:1 via highlightId), so tagging never
   // touches article or book rows.
   tags: z.array(z.string().min(1)).default([]).optional(),
+  // Issue #118 — the named highlight color (Default + 4 named choices).
+  // Additive with the SAME Pitfall-9 discipline as tags: rows written before
+  // this field omit it and hydrate to "default" via .default("default)";
+  // consumers read `color ?? "default"` for in-memory records built before
+  // the hydration point. Color is VISUAL ORGANIZATION ONLY — separate from
+  // tags and from anchor status, so it never gates editability or anchoring
+  // and never participates in selector math.
+  color: HighlightColorSchema.default("default").optional(),
 });
 export type HighlightRecord = z.infer<typeof HighlightRecordSchema>;
 

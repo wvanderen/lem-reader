@@ -148,6 +148,7 @@ function makeApi(overrides?: {
     updateNote: vi.fn(),
     flushNoteSave: vi.fn(),
     updateHighlightTags: vi.fn(async () => {}),
+    updateHighlightColor: vi.fn(async () => {}),
     openPopoverFor: null,
     setOpenPopoverFor: vi.fn(),
     storageState: "ok",

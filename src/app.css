@@ -18,6 +18,15 @@
      --ink on --highlight ≥ 4.5:1 in every theme (~13:1 Sepia). Reserved for
      <mark> inside the article body only — never on chrome. */
   --highlight: #f5e6c8;
+  /* Issue #118 — the four NAMED highlight fills (Default above + these).
+     Same D5-14 contract: --ink on every named fill ≥ 4.5:1 in every theme
+     (pinned by tests/unit/annotations/highlight-color-contrast.test.ts —
+     the customTheme.test.ts discipline). Calm pastels on the warm paper,
+     hue-distinct from the cream Default and from each other. */
+  --highlight-yellow: #eedd9e;
+  --highlight-green: #dce8c6;
+  --highlight-blue: #ccd9e6;
+  --highlight-pink: #ecd1d1;
   /* Issue #42: the synthetic spoken-word marker fill — a warm tan (not the
      annotation yellow), paired with a solid accent underline so the marker
      is shape-distinct from annotation fills (A11Y-05). */
@@ -103,6 +112,12 @@
   --hairline: #ddd9d0;
   /* Phase 5 D5-14: warm pale yellow for the brighter Light surface (~14:1). */
   --highlight: #f7eaa6;
+  /* Issue #118 — named fills (Light): brighter pastels; the named Yellow is
+     a more saturated gold than the cream Default so the two never blur. */
+  --highlight-yellow: #f2df7e;
+  --highlight-green: #d7e8c0;
+  --highlight-blue: #c9d8ec;
+  --highlight-pink: #efd2d2;
   /* Issue #42: spoken-word marker fill (Light theme). */
   --spoken-highlight: #e6ddd0;
 }
@@ -120,6 +135,13 @@
   /* Phase 5 D5-14: warm golden-brown, lighter + warmer than the dark surface
      so the marker reads as a highlight (~7.5:1). */
   --highlight: #5c4a23;
+  /* Issue #118 — named fills (dark): deep hue-true companions of the dark
+     golden Default — dark enough for the LIGHT ink to keep ≥ 4.5:1 on each
+     (5.5:1–8.6:1), light enough to read as marks on the dark surface. */
+  --highlight-yellow: #6b5a10;
+  --highlight-green: #2e4a2a;
+  --highlight-blue: #2c3f5c;
+  --highlight-pink: #5c3340;
   /* Issue #42: spoken-word marker fill (dark theme — deeper brown than the
      annotation fill, reads as a shadow under the voice). */
   --spoken-highlight: #443624;
@@ -159,6 +181,18 @@ body {
     text-decoration: underline;
     text-decoration-color: CanvasText;
     text-underline-offset: 2px;
+  }
+  /* Issue #118 — the named-color fills collapse to the SAME system Highlight
+     pair under forced colors (hue cannot survive the forced palette). The
+     visible text label on every picker control + the shape-distinct states
+     below keep each choice identifiable without color (A11Y-05). :not(
+     .unresolved) keeps the dashed-outline uncertainty cue winning where
+     both modifiers meet (the base-rule source-order discipline). */
+  mark.highlight.color-yellow:not(.unresolved),
+  mark.highlight.color-green:not(.unresolved),
+  mark.highlight.color-blue:not(.unresolved),
+  mark.highlight.color-pink:not(.unresolved) {
+    background-color: Highlight;
   }
   /* Plan 05-04 (D5-04 / A11Y-05): the unresolved variant (ambiguous/orphan)
      MUST keep its dashed-outline SHAPE under forced colors. The base rule's
@@ -1849,10 +1883,12 @@ dialog.add-dialog {
  *
  * mark.highlight (D5-15): the inline <mark> overlay renders INTO the existing
  * BlockRenderer/InlineRenderer output (no parallel renderer — DOC-02 reading
- * order + D-05 offset integrity preserved). Single calm --highlight fill per
- * D5-14 (never multi-color); the .has-note modifier adds a dotted underline
- * (shape-distinct, not color-alone — A11Y-05 forced-colors safety); the
- * .unresolved modifier swaps fill → dashed outline (D5-04 ambiguous/orphan).
+ * order + D-05 offset integrity preserved). The calm --highlight fill per
+ * D5-14, EXTENDED by issue #118 with four NAMED fills (one token per name,
+ * same ≥ 4.5:1 ink-on-fill contract — see the .color-* rules below); the
+ * .has-note modifier adds a dotted underline (shape-distinct, not color-alone
+ * — A11Y-05 forced-colors safety); the .unresolved modifier swaps fill →
+ * dashed outline (D5-04 ambiguous/orphan).
  *
  * .selection-toolbar (D5-05): a conditionally-rendered position:fixed element
  * (NOT a popover/dialog). z-index: 8 (above content at 1 + hairline/chevrons
@@ -1883,6 +1919,28 @@ mark.highlight {
 mark.highlight:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
+}
+
+/* Issue #118 — the named-color modifiers: one token per name per theme
+   (D5-14's ≥ 4.5:1 ink-on-fill contract extended to every named fill —
+   pinned by highlight-color-contrast.test.ts). RULE ORDER MATTERS: these
+   sit BEFORE the .has-note/.unresolved modifiers so an unresolved mark
+   (equal specificity, later source) keeps its transparent + dashed-outline
+   treatment regardless of its color — color never overrides the uncertainty
+   cue (Pitfall 7) nor the note glyph (shape stays the carrier, A11Y-05).
+   The fill swap is the ONLY change: no layout property is touched, so page
+   geometry + pagination measurements stay byte-stable on a color pick. */
+mark.highlight.color-yellow {
+  background-color: var(--highlight-yellow);
+}
+mark.highlight.color-green {
+  background-color: var(--highlight-green);
+}
+mark.highlight.color-blue {
+  background-color: var(--highlight-blue);
+}
+mark.highlight.color-pink {
+  background-color: var(--highlight-pink);
 }
 
 /* D5-14 note-bearing glyph: dotted underline (shape-distinct from a normal
@@ -2125,6 +2183,120 @@ dialog.highlight-popover::backdrop {
    picker is min-width:0 and the dialog caps at 380px). */
 dialog.highlight-popover .tag-entry {
   margin-block: 0;
+}
+
+/* ── Issue #118 — the highlight's named-color picker inside the popover ───── */
+/* The HighlightColorEntry fieldset (the TagEntry anatomy applied to the
+   closed color vocabulary): boxed hairline fieldset + legend + a wrapping
+   radio-pill row + the always-mounted StatusRegion. Every pill carries its
+   VISIBLE text label beside a decorative swatch dot — color is never the
+   sole identifier (A11Y-05; native radios keep the checked state legible
+   in forced-colors). The radio inputs ride .visually-hidden styling but
+   stay focusable + label-clickable; :has(.highlight-color-input:
+   focus-visible) restores the visible focus ring on the pill. */
+.highlight-color-entry {
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+}
+dialog.highlight-popover .highlight-color-entry {
+  margin-block: 0;
+}
+.highlight-color-entry legend {
+  padding-inline: var(--space-xs);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  font-weight: 600;
+  color: var(--ink);
+}
+.highlight-color-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  margin-top: var(--space-xs);
+}
+/* One pill = label wrapping its native radio. --surface-raised + hairline
+   chrome at rest (the .tag-picker-pill register); the selected pill swaps
+   to the accent border + --surface so the checked state reads as quiet
+   chrome, not a color chip. Min-height keeps a calm touch target inside
+   the 380px-capped dialog. */
+.highlight-color-choice {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: calc(var(--touch) - 16px);
+  padding-inline: var(--space-sm);
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+.highlight-color-choice.selected {
+  background: var(--surface);
+  border-color: var(--accent);
+}
+.highlight-color-choice:has(.highlight-color-input:focus-visible) {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+/* The native radio OVERLAYS the whole pill (inset 0, opacity 0): invisible
+   as chrome yet the actual hit target at every point of the pill — clicks,
+   label toggling, native focus, and forced-colors rendering all keep
+   working, and no sibling span can intercept pointer events (a clipped 1px
+   input under the swatch is unclickable in real browsers). */
+.highlight-color-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+/* Decorative swatch dot — mirrors the SAME per-theme token the mark uses
+   (Default = --highlight). Hairline edge so light fills read on light
+   surfaces. aria-hidden in the JSX: presentation only. */
+.highlight-color-swatch {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--hairline);
+  background: var(--highlight);
+}
+.highlight-color-swatch-yellow {
+  background: var(--highlight-yellow);
+}
+.highlight-color-swatch-green {
+  background: var(--highlight-green);
+}
+.highlight-color-swatch-blue {
+  background: var(--highlight-blue);
+}
+.highlight-color-swatch-pink {
+  background: var(--highlight-pink);
+}
+.highlight-color-label {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.highlight-color-choice.selected .highlight-color-label {
+  color: var(--ink);
+}
+/* The .status live region inside the entry reuses the global .status rule —
+   the .tag-entry .status inline variant verbatim (calm, local to the
+   fieldset). */
+.highlight-color-entry .status {
+  margin-top: var(--space-xs);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink-soft);
 }
 
 /* ── Annotations trigger (D5-09, UI-SPEC §Interaction 30) ───────────────────── */

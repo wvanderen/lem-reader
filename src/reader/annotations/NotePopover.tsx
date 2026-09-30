@@ -57,6 +57,12 @@
 // the anchor is ambiguous/orphaned (unlike the note textarea, tagging does
 // not depend on re-anchoring); the write runs through tagsStore's ONE
 // seam and never touches article or book tag assignments.
+//
+// Issue #118 — the same surface hosts the named-color picker
+// (HighlightColorEntry): Default + four named choices, commit-per-change
+// through updateHighlightColor (the ONE highlightsStore seam). Color is
+// visual organization — separate from tags and anchor status — so the
+// picker is NOT gated on isUnresolved either.
 import { useEffect, useRef, useState } from "react";
 import { useHighlightOverlay } from "./HighlightOverlay";
 // Plan 19-02 (D19-10) — the excerpt derivation routes through the ONE
@@ -65,6 +71,9 @@ import { firstFragmentExcerpt } from "../../annotations/excerpt";
 // Issue #116 — the ONE shared tag entry (TagPicker host): same fieldset +
 // legend + picker + StatusRegion anatomy as the article/book surfaces.
 import { TagEntry } from "../TagEntry";
+// Issue #118 — the named-color picker (the TagEntry anatomy applied to the
+// closed color vocabulary: fieldset + legend + radio pills + StatusRegion).
+import { HighlightColorEntry } from "./HighlightColorEntry";
 
 /** Excerpt cap for the popover context block (UI-SPEC §Interaction 29) —
  * Plan 19-02: the cap parameter feeding the shared firstFragmentExcerpt
@@ -80,6 +89,7 @@ export function NotePopover(): React.ReactElement | null {
     updateNote,
     flushNoteSave,
     updateHighlightTags,
+    updateHighlightColor,
     deleteHighlight,
   } = useHighlightOverlay();
 
@@ -329,6 +339,21 @@ export function NotePopover(): React.ReactElement | null {
                   updateHighlightTags(resolved.record.id, next)
                 }
                 inputId="highlight-popover-tags-input"
+              />
+            )}
+            {/* Issue #118 — the named-color picker. The key forces a fresh
+                error-mirror when the popover re-points at a different
+                highlight (the TagEntry discipline); saveColor routes to
+                updateHighlightColor (the highlightsStore seam). NO
+                isUnresolved gate: the color choice never depends on the
+                anchor, exactly like tags above. */}
+            {resolved && (
+              <HighlightColorEntry
+                key={resolved.record.id}
+                color={resolved.record.color ?? "default"}
+                saveColor={(next) =>
+                  updateHighlightColor(resolved.record.id, next)
+                }
               />
             )}
             <div className="highlight-popover-actions">

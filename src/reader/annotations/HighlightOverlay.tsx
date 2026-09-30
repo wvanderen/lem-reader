@@ -44,6 +44,7 @@ import {
 } from "react";
 import type { ReactNode } from "react";
 import type { CanonicalArticle } from "../../content/types";
+import type { HighlightColor } from "../../content/schema";
 import type { TextPositionSelector } from "../../content/normalizeText";
 import { captureSelection } from "../../annotations/capture";
 import type { CaptureResult } from "../../annotations/capture";
@@ -130,6 +131,13 @@ export interface HighlightOverlayValue {
    * shares the highlight's tags — no separate note tag set.
    */
   updateHighlightTags: (id: string, tags: string[]) => Promise<void>;
+  /**
+   * Set the named color on a highlight (issue #118). In-memory state updates
+   * optimistically; the write runs through the ONE highlightsStore seam.
+   * Color never gates editability or anchoring — it stays settable on
+   * ambiguous/orphaned highlights exactly like tags.
+   */
+  updateHighlightColor: (id: string, color: HighlightColor) => Promise<void>;
   /**
    * The highlight id whose NotePopover is open, or null. Owned here so the
    * SelectionToolbar + NotePopover coordinate through one source of truth.
@@ -241,6 +249,7 @@ export function HighlightOverlayProvider({
       updateNote: state.updateNote,
       flushNoteSave: state.flushNoteSave,
       updateHighlightTags: state.updateHighlightTags,
+      updateHighlightColor: state.updateHighlightColor,
       openPopoverFor,
       setOpenPopoverFor,
       storageState: state.storageState,

@@ -30,7 +30,7 @@
 // note are removed together).
 import { db } from "./db";
 import { HighlightRecordSchema } from "../content/schema";
-import type { HighlightRecord } from "../content/schema";
+import type { HighlightColor, HighlightRecord } from "../content/schema";
 import { classifyStorageError } from "./errors";
 
 /**
@@ -107,6 +107,24 @@ export async function deleteHighlight(highlightId: string): Promise<void> {
     await db.highlights.delete(highlightId);
     await db.notes.where("highlightId").equals(highlightId).delete();
   });
+}
+
+/**
+ * `setHighlightColor` — write the named color for one HighlightRecord by id
+ * (issue #118). The color is a plain non-indexed row field (no Dexie version
+ * bump — the tags precedent), written through the highlights persistence
+ * seam so every write path funnels through ONE module. Color picks are
+ * discrete commit-per-change events (no debounce needed — the TagEntry
+ * discipline); rapid picks are separate idempotent updates, last write wins.
+ * Idempotent primary-key update; a non-existent id is a no-op (Dexie
+ * `update` returns 0 rows updated; no throw). Throws propagate to the
+ * caller (useAnnotationState) for STATE-05 routing.
+ */
+export async function setHighlightColor(
+  highlightId: string,
+  color: HighlightColor,
+): Promise<void> {
+  await db.highlights.update(highlightId, { color });
 }
 
 /**
