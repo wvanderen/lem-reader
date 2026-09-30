@@ -47,6 +47,9 @@ import {
 // mark anatomy itself is the shared SpokenMark (one copy for both twins).
 import { isSpokenMarkerId, spokenMarkerEntry } from "../../annotations/spokenMarker";
 import { SpokenMark } from "./SpokenMark";
+// Issue #118 — the ONE shared mark className helper (the #42/#118 shared
+// module beside the color-label vocabulary).
+import { highlightClassName } from "../../annotations/highlightColors";
 // Issue #42: the article-global spoken range type shared with the paginated
 // twin (fragmentRenderer) — the same GraphemeRange the slicer clips with.
 import type { GraphemeRange } from "../../annotations/unifiedHighlightSlicer";
@@ -305,10 +308,10 @@ export function BlockView({
               }
               const status = seg.entry.status ?? "confident";
               const unresolved = status !== "confident";
-              // Issue #118 — the named-color modifier (default renders bare;
-              // the InlineRenderer prose-twin discipline).
+              // Issue #118 — the named-color modifier rides the ONE shared
+              // className helper (the InlineRenderer prose twin).
               const color = seg.entry.color ?? "default";
-              const className = `highlight${color !== "default" ? ` color-${color}` : ""}${seg.entry.hasNote ? " has-note" : ""}${unresolved ? " unresolved" : ""}`;
+              const className = highlightClassName(color, seg.entry.hasNote, unresolved);
               return (
                 <mark
                   key={i}

@@ -17,8 +17,9 @@
 import type { InlineRun } from "../types";
 import type { HighlightColor } from "../schema";
 import type { HighlightSlice } from "../../annotations/highlightRanges";
-// Issue #118 — the shared color-label vocabulary (aria prefixes + picker).
-import { HIGHLIGHT_COLOR_LABELS } from "../../annotations/highlightColors";
+// Issue #118 — the shared color-label vocabulary (aria prefixes + picker)
+// + the ONE mark className helper (this prose path + the code twin).
+import { HIGHLIGHT_COLOR_LABELS, highlightClassName } from "../../annotations/highlightColors";
 // Issue #42: the synthetic spoken-word marker rides the SAME slicer output
 // as annotation marks, but branches on the reserved id into an aria-hidden,
 // non-focusable <mark> — per-word updates never enter the accessibility
@@ -159,10 +160,12 @@ export function InlineList({
         // (.unresolved — Pitfall 7 never silent re-attach). Issue #118 adds
         // the named-color modifier (`color-<name>`; Default renders bare).
         // The states stay distinguishable by SHAPE alone (A11Y-05
-        // forced-colors safety — color is never the sole identifier).
+        // forced-colors safety — color is never the sole identifier). The
+        // className construction is the ONE shared helper (the code-twin
+        // mark in BlockRenderer uses it verbatim).
         const unresolved = slice.status !== "confident";
         const color = slice.color ?? "default";
-        const className = `highlight${color !== "default" ? ` color-${color}` : ""}${slice.hasNote ? " has-note" : ""}${unresolved ? " unresolved" : ""}`;
+        const className = highlightClassName(color, slice.hasNote, unresolved);
         return (
           <mark
             key={i}

@@ -6,8 +6,9 @@
 // (NotePopover), so a color is NEVER identified by color alone (A11Y-05 —
 // the text label is always present in controls, always spoken for marks).
 //
-// Pure data — no DOM, no React. jsdom-safe.
+// Pure data + one pure string helper — no DOM, no React. jsdom-safe.
 import type { HighlightColor } from "../content/schema";
+import { HIGHLIGHT_COLOR_NAMES } from "../content/schema";
 
 /** Display label per color id (title case, one word — calm chrome copy). */
 export const HIGHLIGHT_COLOR_LABELS: Record<HighlightColor, string> = {
@@ -19,14 +20,27 @@ export const HIGHLIGHT_COLOR_LABELS: Record<HighlightColor, string> = {
 };
 
 /** The picker's ordered choice list: Default first (the no-change state),
- * then the four named colors in schema order. */
+ * then the four named colors in schema order — DERIVED from the closed
+ * names + labels so the vocabulary is enumerated exactly once. */
 export const HIGHLIGHT_COLOR_CHOICES: ReadonlyArray<{
   id: HighlightColor;
   label: string;
-}> = [
-  { id: "default", label: HIGHLIGHT_COLOR_LABELS.default },
-  { id: "yellow", label: HIGHLIGHT_COLOR_LABELS.yellow },
-  { id: "green", label: HIGHLIGHT_COLOR_LABELS.green },
-  { id: "blue", label: HIGHLIGHT_COLOR_LABELS.blue },
-  { id: "pink", label: HIGHLIGHT_COLOR_LABELS.pink },
-];
+}> = HIGHLIGHT_COLOR_NAMES.map((id) => ({
+  id,
+  label: HIGHLIGHT_COLOR_LABELS[id],
+}));
+
+/**
+ * The <mark> modifier-class string shared by BOTH render surfaces (the
+ * InlineRenderer prose path + the BlockRenderer code path — the
+ * highlightAriaLabelForText discipline applied to the className). Pure:
+ * `"highlight"` / `"highlight color-green has-note"` — Default renders
+ * bare, hasNote/unresolved append their shape-distinct modifiers (A11Y-05).
+ */
+export function highlightClassName(
+  color: HighlightColor,
+  hasNote: boolean,
+  unresolved: boolean,
+): string {
+  return `highlight${color !== "default" ? ` color-${color}` : ""}${hasNote ? " has-note" : ""}${unresolved ? " unresolved" : ""}`;
+}

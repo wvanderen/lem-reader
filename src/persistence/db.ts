@@ -10,7 +10,7 @@
 //
 // Index syntax: "primaryKey, index1, index2, &uniqueIndex, [compound+index]"
 import { Dexie, type Table } from "dexie";
-import type { Book } from "../content/schema";
+import type { Book, HighlightColor } from "../content/schema";
 
 /** Shape of a row in the `settings` store (composite reader-prefs record). */
 export interface SettingsRecord {
@@ -49,7 +49,7 @@ export interface HighlightRecordRow {
   quote: { prefix: string; exact: string; suffix: string };
   createdAt: string;
   tags?: string[];
-  color?: "default" | "yellow" | "green" | "blue" | "pink";
+  color?: HighlightColor;
 }
 
 /** Shape of a row in the `notes` store (Phase 5 — ANNO-02, STATE-03).
