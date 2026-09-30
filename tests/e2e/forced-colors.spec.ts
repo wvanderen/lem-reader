@@ -134,8 +134,8 @@ test.describe("Forced colors (A11Y-05)", () => {
     await expect(sepia).toBeChecked();
 
     // Selecting "Dark" updates the checked state.
-    await page.getByRole("radio", { name: "Dark" }).click();
-    await expect(page.getByRole("radio", { name: "Dark" })).toBeChecked();
+    await page.getByRole("radio", { name: "Dark", exact: true }).click();
+    await expect(page.getByRole("radio", { name: "Dark", exact: true })).toBeChecked();
     await expect(sepia).not.toBeChecked();
   });
 

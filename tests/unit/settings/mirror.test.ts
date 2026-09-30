@@ -117,8 +117,8 @@ describe("readSettingsMirror", () => {
       JSON.stringify({ ...NON_DEFAULT, theme: "neon" }),
     ],
     [
-      "unknown schemaVersion (v5 forward-reject)",
-      JSON.stringify({ ...NON_DEFAULT, schemaVersion: 5 }),
+      "unknown schemaVersion (v6 forward-reject)",
+      JSON.stringify({ ...NON_DEFAULT, schemaVersion: 6 }),
     ],
     [
       "non-object stored value",

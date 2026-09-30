@@ -25,7 +25,7 @@ import { db } from "./db";
 import { ReaderSettingsSchema } from "../content/schema";
 import type { ReaderSettings } from "../content/schema";
 import { DEFAULT_SETTINGS } from "../settings/defaults";
-import { clampLegacyMeasure } from "../settings/legacyMeasure";
+import { migrateReaderSettings } from "../settings/settingsMigration";
 import { classifyStorageError } from "./errors";
 
 /** The composite-record key in the Dexie `settings` store (D2 discretion). */
@@ -61,12 +61,13 @@ export async function loadSettings(): Promise<SettingsLoadResult> {
       // first time. This is NOT an error state.
       return { ok: true, settings: DEFAULT_SETTINGS };
     }
-    // D21-03 (POLISH-09) + issue #18 (D22-01): clamp the enumerated legacy
-    // measure value (72 → 70, the nearest lower step of the extended ladder)
-    // on the raw row BEFORE safeParse so a stored legacy maximum loads calmly
-    // — never the corrupt path. The map contains exactly {72: 70}; every
-    // other invalid value still fails parse below (STATE-04 holds).
-    const parsed = ReaderSettingsSchema.safeParse(clampLegacyMeasure(raw.value));
+    // D21-03 (POLISH-09) + issue #18 (D22-01) + issue #120: normalize the
+    // raw row BEFORE safeParse — clamp the enumerated legacy measure value
+    // (72 → 70) and migrate the pre-#120 one-slot custom theme into the
+    // two-slot shape — so stored legacy rows load calmly (never the corrupt
+    // path). Bounded transforms: every other invalid value still fails
+    // parse below (STATE-04 holds).
+    const parsed = ReaderSettingsSchema.safeParse(migrateReaderSettings(raw.value));
     if (parsed.success) {
       return { ok: true, settings: parsed.data };
     }

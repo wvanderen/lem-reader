@@ -86,9 +86,11 @@ describe("librarySort travels in the versioned bundle (issue #115)", () => {
     );
     expect(validation.ok).toBe(true);
     if (!validation.ok) return;
-    // The parsed bundle carries the choice with its v4 write version.
+    // The parsed bundle carries the choice with its v5 write version
+    // (issue #120 bumped the canonical write version 4 → 5; the pin rides
+    // DEFAULT_SETTINGS by construction).
     expect(validation.bundle.preferences.librarySort).toBe("title");
-    expect(validation.bundle.preferences.schemaVersion).toBe(4);
+    expect(validation.bundle.preferences.schemaVersion).toBe(5);
 
     const preview = await detectImportPreview(validation.bundle);
     const plan = await resolveImportPlan(
@@ -106,7 +108,7 @@ describe("librarySort travels in the versioned bundle (issue #115)", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.settings.librarySort).toBe("title");
-    expect(result.settings.schemaVersion).toBe(4);
+    expect(result.settings.schemaVersion).toBe(5);
   });
 
   it("the preferences block is ALWAYS exported — even on a settings-read failure (D9-12)", async () => {

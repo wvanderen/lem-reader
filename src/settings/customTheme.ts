@@ -1,9 +1,17 @@
 // src/settings/customTheme.ts
-// The custom-theme color domain (issue #86, decision #73): one Custom slot,
-// 5 reader-editable tokens, and TEN derived tokens that are never stored
-// or edited (issue #118 added the four named highlight fills). All math is
-// pure and deterministic — the same token set always resolves to the same
-// 15-color palette, in tests and in the browser.
+// The custom-theme color domain (issue #86, decision #73; issue #120): TWO
+// independently saved custom slots — Custom light and Custom dark — each
+// carrying 5 reader-editable tokens and TEN derived tokens that are never
+// stored or edited (issue #118 added the four named highlight fills). All
+// math is pure and deterministic — the same token set always resolves to the
+// same 15-color palette, in tests and in the browser.
+//
+// Slots (issue #120): each slot's matching PRESET names its disposition —
+// Custom light seeds/resets from the light preset, Custom dark from the
+// dark preset — so a slot's light/dark coherence holds by construction.
+// There is NO automatic system-theme switching: both slots are selected
+// manually, exactly like the three presets. The pre-#120 ONE-slot record
+// migrates at the settings-entry seams (src/settings/settingsMigration.ts).
 //
 // Derivation contract (decision #73, from the #86 build ticket):
 //   --ink-soft         from ink — ink's hue/chroma, lightness walked toward
@@ -44,14 +52,51 @@
 // Security (the applyTheme.ts posture): these functions map validated hex
 // tokens through closed math to hex output — no string reaches CSS that did
 // not round-trip through the hex grammar.
-import type { CustomTheme, CustomThemeTokens } from "../content/schema";
+import type { CustomTheme, CustomThemeSlot, CustomThemeTokens, ReaderSettings } from "../content/schema";
 
 /** The three preset themes a custom theme can be seeded from / reset to. */
 export type CustomBaseTheme = CustomTheme["baseTheme"];
 
-/** The CSS custom properties applyTheme owns when theme === "custom". The
- * inline writes ARE the theme ([data-theme="custom"] overrides no tokens in
- * CSS); the SAME list is removed when leaving custom so the preset
+/** Issue #120 — the preset each custom slot seeds from / resets to (its
+ * MATCHING preset — the slot's name names its disposition). */
+export const SLOT_BASE_THEME: Record<CustomThemeSlot, CustomBaseTheme> = {
+  "custom-light": "light",
+  "custom-dark": "dark",
+};
+
+/** Issue #120 — the theme literal of an active custom slot, or undefined
+ * for a preset theme (the ONE switch over the two slots; every consumer
+ * derives from here). */
+export function activeSlotOf(theme: ReaderSettings["theme"]): CustomThemeSlot | undefined {
+  return theme === "custom-light" ? "custom-light" : theme === "custom-dark" ? "custom-dark" : undefined;
+}
+
+/** The slot record currently ACTIVE in `s` (undefined for a preset theme —
+ * or for a slot that carries no record, which the schema's superRefine
+ * makes unrepresentable while active). */
+export function activeSlotTheme(
+  s: Pick<ReaderSettings, "theme" | "customLightTheme" | "customDarkTheme">,
+): CustomTheme | undefined {
+  return s.theme === "custom-light"
+    ? s.customLightTheme
+    : s.theme === "custom-dark"
+      ? s.customDarkTheme
+      : undefined;
+}
+
+/** The settings patch that stores `record` in `slot` (typed so the
+ * computed-key union never widens to string index signatures). */
+export function slotThemePatch(
+  slot: CustomThemeSlot,
+  record: CustomTheme,
+): Partial<ReaderSettings> {
+  return slot === "custom-light" ? { customLightTheme: record } : { customDarkTheme: record };
+}
+
+/** The CSS custom properties applyTheme owns while a custom slot is active
+ * (issue #120 — theme "custom-light"/"custom-dark"). The
+ * inline writes ARE the theme ([data-theme="custom-*"] overrides no tokens
+ * in CSS); the SAME list is removed when leaving custom so the preset
  * [data-theme] blocks own the palette again. */
 export const CUSTOM_COLOR_PROPS = [
   "--surface",
@@ -104,8 +149,12 @@ export const PRESET_SEEDS: Record<CustomBaseTheme, CustomThemeTokens> = {
   },
 };
 
-/** First Custom activation seeds from the then-active preset (decision #73:
- * no names, no library — one slot, re-seeded after a wholesale Reset). */
+/** Issue #120 — a slot's FIRST activation (or post-Reset re-activation)
+ * seeds from its MATCHING preset (SLOT_BASE_THEME), and "Reset to base
+ * colors" restores the slot's own seeded base. The pre-#120 "seed from the
+ * then-active preset" behavior narrowed to this deterministic rule: a slot
+ * labeled light/dark must START light/dark for its disposition to mean
+ * anything; the reader then edits any of the five tokens freely. */
 export function seedCustomTheme(base: CustomBaseTheme): CustomTheme {
   return { baseTheme: base, tokens: { ...PRESET_SEEDS[base] } };
 }
