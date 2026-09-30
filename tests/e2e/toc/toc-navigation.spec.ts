@@ -860,3 +860,140 @@ test.describe("TOC navigation (18-04 — corpus extension)", () => {
     expect(paginatedLanding!.tag).toBe("h4");
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Reopen-restore regression — the ToC showed the FIRST chapter after a
+// restore onto a mid-section page. Root cause: in paginated mode the shared
+// sectionSpy only notified when the visible .page-fragment contained a
+// heading; a mid-section page has NONE, so the initial page-1 detection
+// (the first chapter) stayed current until the reader crossed a heading on a
+// later page. The spy now derives the CONTAINING section (the last heading
+// before the fragment's first block) for headingless fragments. Proves the
+// reader-facing fix in a REAL browser: seed a deep location on a headingless
+// page, reopen, and the ToC's aria-current names the containing section.
+// ═══════════════════════════════════════════════════════════════════════════
+test.describe("TOC reopen-restore aria-current (headingless-page regression)", () => {
+  /** TOC_ARTICLE's heading block indexes: Alpha h2 (0), Beta h2 (4),
+   *  Nested-under-beta h3 (8), Gamma h2 (11). */
+  const HEADING_BLOCK_INDEXES = [0, 4, 8, 11];
+
+  /** Seed a raw LocationRecord for the given article (the persistence.spec
+   *  seedLocation shape, parameterized by articleId). */
+  async function seedLocation(
+    page: Page,
+    articleId: string,
+    graphemeOffset: number,
+  ): Promise<void> {
+    await page.evaluate(
+      async ({ id, offset }) => {
+        await new Promise<void>((resolve, reject) => {
+          const request = indexedDB.open("lem-reader");
+          request.onsuccess = () => {
+            const database = request.result;
+            const transaction = database.transaction("location", "readwrite");
+            transaction.objectStore("location").put({
+              schemaVersion: 1,
+              articleId: id,
+              revision: 1,
+              graphemeOffset: offset,
+              savedAt: new Date().toISOString(),
+            });
+            transaction.oncomplete = () => resolve();
+            transaction.onerror = () => reject(transaction.error);
+          };
+          request.onerror = () => reject(request.error);
+        });
+      },
+      { id: articleId, offset: graphemeOffset },
+    );
+  }
+
+  test("(o) a saved location on a headingless mid-section page opens with that section current — never the first chapter", async ({
+    page,
+  }) => {
+    test.setTimeout(60_000);
+    await openArticle(page, TOC_ARTICLE.id);
+    await expect(page.locator(".page-fragment").first()).toBeVisible();
+
+    // From the DEV pagination hook: pick the LAST page whose entries are all
+    // non-heading blocks (a headingless mid-"Gamma section" page at this
+    // viewport), and compute its first entry's article-global D-05 offset
+    // (per-block lengths + the 1-grapheme "\n" BLOCK_SEPARATOR — the same
+    // prefix sums pageStartGlobalOffset reads).
+    const target = await page.evaluate((headingIndexes) => {
+      const dev = (window as unknown as Record<string, unknown>)[
+        "__lemPagination"
+      ] as {
+        pages: { blocks: { blockIndex: number; startGrapheme: number }[] }[];
+        pagesLength: number;
+        blockGraphemeLengths: number[];
+      };
+      const headings = new Set(headingIndexes);
+      let pageIdx = -1;
+      for (let i = dev.pagesLength - 1; i >= 1; i--) {
+        const entries = dev.pages[i]!.blocks;
+        if (
+          entries.length > 0 &&
+          entries.every((e) => !headings.has(e.blockIndex))
+        ) {
+          pageIdx = i;
+          break;
+        }
+      }
+      if (pageIdx < 0) return null;
+      const first = dev.pages[pageIdx]!.blocks[0]!;
+      let offset = first.startGrapheme;
+      for (let b = 0; b < first.blockIndex; b++) {
+        offset += dev.blockGraphemeLengths[b]! + 1; // + BLOCK_SEPARATOR
+      }
+      return { pageIdx, offset };
+    }, HEADING_BLOCK_INDEXES);
+    expect(
+      target,
+      "corpus must derive a headingless deep page at this viewport",
+    ).not.toBeNull();
+
+    // Let the app's own initial page-1 location save land first (the 1200ms
+    // debounce; latest-wins) so the seeded deep row survives the reload's
+    // pagehide flush. Then seed + reopen.
+    await page.waitForTimeout(1400);
+    await seedLocation(page, TOC_ARTICLE.id, target!.offset);
+    await page.reload();
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await page.waitForFunction(
+      (expectedIdx) => {
+        const dev = (window as unknown as Record<string, unknown>)[
+          "__lemPagination"
+        ] as { currentPageIdx: number } | undefined;
+        return dev !== undefined && dev.currentPageIdx === expectedIdx;
+      },
+      target!.pageIdx,
+      { timeout: 10_000 },
+    );
+
+    // Precondition: the restored page genuinely has no heading — the exact
+    // shape that used to keep page 1's chapter current.
+    const fragmentHeadingCount = await page.evaluate(() => {
+      const fragment = document.querySelector(".page-fragment");
+      if (!fragment) return -1;
+      return fragment.querySelectorAll("h2, h3, h4, h5, h6").length;
+    });
+    expect(fragmentHeadingCount).toBe(0);
+
+    // The ToC's aria-current names the CONTAINING section (Gamma), never
+    // "Alpha section" (the first chapter) or the Top entry.
+    await openToc(page);
+    await expect
+      .poll(
+        async () =>
+          (
+            await page
+              .getByRole("navigation", { name: "Table of contents" })
+              .locator('[aria-current="true"]')
+              .textContent()
+          ) ?? "",
+        { timeout: 3_000 },
+      )
+      .toContain("Gamma section");
+  });
+});

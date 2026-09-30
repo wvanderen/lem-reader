@@ -46,12 +46,16 @@ export interface UseSectionSpyOptions {
    * PINNED paginated surface nothing ever scrolls past the 48px sentinel
    * (page fragments sit below the pinned header), so "paginated" derives
    * the current heading from the page instead: the FIRST connected heading
-   * on the visible .page-fragment (the section the reader opened onto);
-   * a fragment with no headings keeps the previous current (the section
-   * continuing across the page break). Fragment swaps are detected by a
-   * childList MutationObserver — page turns fire no window scroll and
-   * IntersectionObserver removal callbacks are not guaranteed for elements
-   * that were outside the sentinel band.
+   * on the visible .page-fragment (the section the reader opened onto); a
+   * fragment with no headings derives the section CONTAINING the page —
+   * the last heading (article order) strictly before the fragment's first
+   * block — so sequential turns keep "the section continuing across the
+   * page break" AND jumps/restores onto a mid-section page report the
+   * containing section instead of whatever was last current (the
+   * reopen-restore bug: page 1's heading stayed current). Fragment swaps
+   * are detected by a childList MutationObserver — page turns fire no
+   * window scroll and IntersectionObserver removal callbacks are not
+   * guaranteed for elements that were outside the sentinel band.
    */
   mode?: "scrolling" | "paginated";
   /**
@@ -123,17 +127,58 @@ export function useSectionSpy({
       // an effect-time heading SNAPSHOT goes stale on every page turn (the
       // fragment's headings are swapped for new, never-observed elements).
       // Rule: the FIRST connected heading on the visible .page-fragment is
-      // the section the reader opened onto; no heading on the fragment keeps
-      // the previous current (the section continuing across the break). The
-      // hidden .article-body-measurement clone is never INSIDE a fragment,
-      // so the query cannot see it (Pitfall 7 discipline by construction).
+      // the section the reader opened onto; a fragment with NO headings
+      // derives the section that CONTAINS the page — the last heading
+      // (article order) strictly before the fragment's first block (the
+      // restore/jump half below). The hidden .article-body-measurement clone
+      // is never INSIDE a fragment, so the fragment-scoped query cannot see
+      // it (Pitfall 7 discipline by construction).
       const detectPaginated = () => {
         const fragment = articleEl.querySelector(".page-fragment");
         if (!fragment) return;
         const first = Array.from(
           fragment.querySelectorAll<HTMLHeadingElement>(selector),
         ).find((h) => h.isConnected);
-        if (first) notify(first);
+        if (first) {
+          notify(first);
+          return;
+        }
+        // No heading on the visible fragment: notify with the section that
+        // CONTAINS the page — the LAST heading (article order, by
+        // data-block-index) strictly before the fragment's first block.
+        // "Keep whatever was last current" cannot serve JUMPS: a
+        // reopen-restore (or drawer navigate-back, or a follower turn)
+        // lands on a mid-section page whose previous current belongs to an
+        // UNRELATED page — the reopen-restore bug had page 1's first
+        // chapter stay current after the restore turn. Containment gives
+        // the sequential-turn case the same answer the keep-previous rule
+        // intended (the section continuing across the page break) and the
+        // jump case the correct one. In paginated mode the only connected
+        // full-body heading set is the hidden .article-body-measurement
+        // clone — read for IDENTITY ONLY (data-block-index + text); it is
+        // never focused, never a destination (destination resolution stays
+        // with the consumers, which strip the clone).
+        const firstBlock = fragment.querySelector<HTMLElement>(
+          "[data-block-index]",
+        );
+        const firstBlockIdx = Number(firstBlock?.dataset.blockIndex);
+        if (!firstBlock || !Number.isFinite(firstBlockIdx)) return;
+        let containing: HTMLHeadingElement | null = null;
+        let containingIdx = -1;
+        for (const heading of Array.from(
+          articleEl.querySelectorAll<HTMLHeadingElement>(selector),
+        )) {
+          if (!heading.isConnected) continue;
+          const idx = Number(heading.dataset.blockIndex);
+          // Selector matches without a block identity (the synthetic
+          // "Page N begins" h2 carries no data-block-index) never qualify.
+          if (!Number.isFinite(idx) || idx >= firstBlockIdx) continue;
+          if (idx > containingIdx) {
+            containingIdx = idx;
+            containing = heading;
+          }
+        }
+        if (containing) notify(containing);
       };
       detectPaginated();
       // Fragment swaps are childList mutations under the article (one

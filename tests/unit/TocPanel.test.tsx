@@ -225,6 +225,186 @@ describe("TocPanel: aria-current (D18-12)", () => {
   });
 });
 
+// ── 4b: paginated aria-current — headingless fragment derives the CONTAINING
+// section (the reopen-restore regression: page 1's first chapter used to stay
+// current after the restore turn landed on a mid-section page with no
+// headings) ─────────────────────────────────────────────────────────────────
+
+describe("TocPanel: paginated aria-current on headingless fragments (D18-12 restore rule)", () => {
+  const article = parseArticle({
+    ...baseArticle,
+    blocks: [
+      para("Intro."),
+      heading(2, "Alpha section"),
+      para("Alpha body."),
+      heading(2, "Beta section"),
+      para("Beta body one."),
+      para("Beta body two."),
+      heading(2, "Gamma section"),
+      para("Gamma body."),
+    ],
+  });
+
+  /**
+   * The paginated DOM contract: the visible .page-fragment (one page's
+   * blocks) + the hidden .article-body-measurement clone (the full body —
+   * the only connected full-heading set in paginated mode). Every block
+   * element carries its article data-block-index.
+   */
+  function buildPaginatedArticleEl(
+    fragmentBlockIndexes: number[],
+  ): HTMLElement {
+    const articleEl = document.createElement("article");
+    const clone = document.createElement("div");
+    clone.className = "article-body-measurement";
+    const blockTag = (idx: number): string => {
+      const block = article.blocks[idx]!;
+      return block.kind === "heading" ? `h${(block as { level: number }).level}` : "p";
+    };
+    const blockText = (idx: number): string => {
+      const block = article.blocks[idx]!;
+      return (block as { content: { text: string }[] }).content
+        .map((r) => r.text)
+        .join("");
+    };
+    article.blocks.forEach((_, idx) => {
+      const el = document.createElement(blockTag(idx));
+      el.dataset.blockIndex = String(idx);
+      el.textContent = blockText(idx);
+      clone.append(el);
+    });
+    const fragment = document.createElement("section");
+    fragment.className = "page-fragment";
+    for (const idx of fragmentBlockIndexes) {
+      const el = document.createElement(blockTag(idx));
+      el.dataset.blockIndex = String(idx);
+      el.textContent = blockText(idx);
+      fragment.append(el);
+    }
+    articleEl.append(clone, fragment);
+    return articleEl;
+  }
+
+  function currentEntries(container: HTMLElement): NodeListOf<Element> {
+    return container.querySelectorAll('[aria-current="true"]');
+  }
+
+  it("a fragment with a heading keeps the FIRST-heading rule (page-top tail of a previous section does not win)", () => {
+    vi.useFakeTimers();
+    try {
+      // Fragment: Alpha tail (p 2) then Beta's h2 (3) — the first heading
+      // on the page is Beta, and that is the pinned page-turn rule.
+      const articleEl = buildPaginatedArticleEl([2, 3]);
+      document.body.append(articleEl);
+      const { container } = mountPanel(article, {
+        articleEl,
+        mode: "paginated",
+      });
+      act(() => {
+        vi.advanceTimersByTime(300);
+      });
+      const current = currentEntries(container);
+      expect(current).toHaveLength(1);
+      expect(current[0]!.textContent).toBe("Beta section");
+      articleEl.remove();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a headingless fragment derives the CONTAINING section, not the first chapter (reopen-restore regression)", () => {
+    vi.useFakeTimers();
+    try {
+      // A mid-Beta page: only paragraph 4 — no heading on the fragment.
+      // Containment must report Beta (the last heading before block 4),
+      // never Alpha (page 1's first chapter — the bug's stale value).
+      const articleEl = buildPaginatedArticleEl([4]);
+      document.body.append(articleEl);
+      const { container } = mountPanel(article, {
+        articleEl,
+        mode: "paginated",
+      });
+      act(() => {
+        vi.advanceTimersByTime(300);
+      });
+      const current = currentEntries(container);
+      expect(current).toHaveLength(1);
+      expect(current[0]!.textContent).toBe("Beta section");
+      expect(current[0]!.textContent).not.toBe("Alpha section");
+      articleEl.remove();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a fragment swap from a heading page to a headingless page corrects aria-current (the restore turn)", async () => {
+    vi.useFakeTimers();
+    try {
+      // Page 1 with Alpha's heading mounts first (the initial pagination
+      // commit) — aria-current lands on Alpha…
+      const articleEl = buildPaginatedArticleEl([1, 2]);
+      document.body.append(articleEl);
+      const { container } = mountPanel(article, {
+        articleEl,
+        mode: "paginated",
+      });
+      act(() => {
+        vi.advanceTimersByTime(300);
+      });
+      expect(currentEntries(container)[0]!.textContent).toBe("Alpha section");
+
+      // …then the restore turn swaps the fragment to a headingless mid-Beta
+      // page. The spy's MutationObserver re-detects; containment must move
+      // aria-current to Beta (previously it stayed stuck on Alpha).
+      const fragment = articleEl.querySelector(".page-fragment")!;
+      const betaTail = document.createElement("p");
+      betaTail.dataset.blockIndex = "4";
+      betaTail.textContent = "Beta body one.";
+      await act(async () => {
+        fragment.replaceChildren(betaTail);
+        // Flush the MutationObserver's microtask delivery (jsdom delivers
+        // MO records in a microtask checkpoint — a few awaited hops drain
+        // the queue deterministically without timer dependence).
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      act(() => {
+        vi.advanceTimersByTime(300);
+      });
+      const current = currentEntries(container);
+      expect(current).toHaveLength(1);
+      expect(current[0]!.textContent).toBe("Beta section");
+      articleEl.remove();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a headingless fragment before the FIRST heading leaves Top current", () => {
+    vi.useFakeTimers();
+    try {
+      // The article's opening page: intro paragraph only (block 0) — no
+      // heading contains it, so the Top entry keeps aria-current.
+      const articleEl = buildPaginatedArticleEl([0]);
+      document.body.append(articleEl);
+      const { container } = mountPanel(article, {
+        articleEl,
+        mode: "paginated",
+      });
+      act(() => {
+        vi.advanceTimersByTime(300);
+      });
+      const current = currentEntries(container);
+      expect(current).toHaveLength(1);
+      expect(current[0]!.textContent).toBe("Top of article");
+      articleEl.remove();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 // ── 6: headingless honesty (D18-13) ─────────────────────────────────────────
 
 describe("TocPanel: headingless state (D18-13)", () => {
