@@ -114,15 +114,14 @@ const ATOM_FIXTURE = `<?xml version="1.0" encoding="utf-8"?>
 </feed>`;
 
 describe("feed candidate — SSRF refusals through ingest({feedUrl}) (issue #121)", () => {
-  it.each([
-    "file:///etc/feeds.xml",
-    "ftp://feeds.example.com/feed.xml",
-    "data:text/xml,<rss/>",
-  ])("refuses non-http(s) scheme %s → ssrf-blocked-scheme", async (url) => {
-    const response = await ingest({ feedUrl: url });
-    expect(response).toEqual({ ok: false, reason: "ssrf-blocked-scheme" });
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
+  it.each(["file:///etc/feeds.xml", "ftp://feeds.example.com/feed.xml", "data:text/xml,<rss/>"])(
+    "refuses non-http(s) scheme %s → ssrf-blocked-scheme",
+    async (url) => {
+      const response = await ingest({ feedUrl: url });
+      expect(response).toEqual({ ok: false, reason: "ssrf-blocked-scheme" });
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
 
   it.each([
     ["http://169.254.169.254/latest/meta-data/", "ssrf-blocked-metadata"],
@@ -237,7 +236,10 @@ describe("feed candidate — bounded parsing (issue #121)", () => {
     fetchMock.mockResolvedValueOnce(
       fakeResponse({
         url: "https://feeds.example.com/journal.xml",
-        headers: { "content-type": "application/rss+xml", "content-length": String(RSS_FIXTURE.length) },
+        headers: {
+          "content-type": "application/rss+xml",
+          "content-length": String(RSS_FIXTURE.length),
+        },
         body: RSS_FIXTURE,
       }),
     );
@@ -267,7 +269,10 @@ describe("feed candidate — bounded parsing (issue #121)", () => {
     fetchMock.mockResolvedValueOnce(
       fakeResponse({
         url: "https://feeds.example.com/atom.xml",
-        headers: { "content-type": "application/atom+xml", "content-length": String(ATOM_FIXTURE.length) },
+        headers: {
+          "content-type": "application/atom+xml",
+          "content-length": String(ATOM_FIXTURE.length),
+        },
         body: ATOM_FIXTURE,
       }),
     );
@@ -322,7 +327,10 @@ describe("feed candidate — bounded parsing (issue #121)", () => {
     fetchMock.mockResolvedValueOnce(
       fakeResponse({
         url: "https://feeds.example.com/untitled.xml",
-        headers: { "content-type": "application/rss+xml", "content-length": String(untitled.length) },
+        headers: {
+          "content-type": "application/rss+xml",
+          "content-length": String(untitled.length),
+        },
         body: untitled,
       }),
     );
@@ -336,7 +344,10 @@ describe("feed candidate — bounded parsing (issue #121)", () => {
     fetchMock.mockResolvedValueOnce(
       fakeResponse({
         url: "https://feeds.example.com:443/journal.xml#frag",
-        headers: { "content-type": "application/rss+xml", "content-length": String(RSS_FIXTURE.length) },
+        headers: {
+          "content-type": "application/rss+xml",
+          "content-length": String(RSS_FIXTURE.length),
+        },
         body: RSS_FIXTURE,
       }),
     );
@@ -349,11 +360,22 @@ describe("feed candidate — bounded parsing (issue #121)", () => {
 
 describe("feed candidate — hostile payloads refuse (issue #121)", () => {
   it.each([
-    ["malformed XML", "<?xml version=\"1.0\"?><rss><channel><title"],
+    ["malformed XML", '<?xml version="1.0"?><rss><channel><title'],
+    [
+      "missing closing tags",
+      "<rss><channel><title>Broken</title><item><title>Article</title></item>",
+    ],
+    ["mismatched closing tags", "<rss><channel><title>Broken</title></feed></rss>"],
     ["PI tag not closed", "<?xml this is not xml <<<"],
-    ["entity-declaring DTD", `<?xml version="1.0"?><!DOCTYPE rss [<!ENTITY a "b">]><rss version="2.0"><channel><title>&a;</title></channel></rss>`],
+    [
+      "entity-declaring DTD",
+      `<?xml version="1.0"?><!DOCTYPE rss [<!ENTITY a "b">]><rss version="2.0"><channel><title>&a;</title></channel></rss>`,
+    ],
     ["HTML under a text/xml header", "<!DOCTYPE html><html><body><p>Not a feed</p></body></html>"],
-    ["non-feed XML", '<?xml version="1.0"?><catalog><book><title>Not a feed</title></book></catalog>'],
+    [
+      "non-feed XML",
+      '<?xml version="1.0"?><catalog><book><title>Not a feed</title></book></catalog>',
+    ],
     ["empty body", ""],
   ])("refuses %s → feed-unreadable", async (_label, body) => {
     fetchMock.mockResolvedValueOnce(
@@ -375,7 +397,10 @@ describe("feed candidate — hostile payloads refuse (issue #121)", () => {
     fetchMock.mockResolvedValueOnce(
       fakeResponse({
         url: "https://feeds.example.com/untitled-items.xml",
-        headers: { "content-type": "application/rss+xml", "content-length": String(untitledItems.length) },
+        headers: {
+          "content-type": "application/rss+xml",
+          "content-length": String(untitledItems.length),
+        },
         body: untitledItems,
       }),
     );
@@ -393,7 +418,10 @@ describe("feed candidate — hostile payloads refuse (issue #121)", () => {
     fetchMock.mockResolvedValueOnce(
       fakeResponse({
         url: "https://feeds.example.com/hostile-links.xml",
-        headers: { "content-type": "application/rss+xml", "content-length": String(hostileLinks.length) },
+        headers: {
+          "content-type": "application/rss+xml",
+          "content-length": String(hostileLinks.length),
+        },
         body: hostileLinks,
       }),
     );

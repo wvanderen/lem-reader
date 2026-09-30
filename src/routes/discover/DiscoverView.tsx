@@ -62,10 +62,7 @@ function hostOf(feedUrl: string): string {
 
 /** Apply one subscribe outcome to the form state (the applyOutcome shape —
  * copy lives here; the policy lives in subscribe.ts). */
-function applyOutcome(
-  outcome: SubscribeOutcome,
-  announce: (message: string) => void,
-): void {
+function applyOutcome(outcome: SubscribeOutcome, announce: (message: string) => void): void {
   switch (outcome.outcome) {
     case "subscribed":
       announce(`Subscribed to ${outcome.subscription.title}.`);
@@ -129,14 +126,18 @@ export function DiscoverView({ hasAppHistory }: { hasAppHistory: boolean }) {
     if (submitting || urlValue.trim().length === 0) return;
     setSubmitting(true);
     setMessage("Fetching feed…");
-    const outcome = await subscribeToFeed(urlValue);
-    setSubmitting(false);
-    applyOutcome(outcome, setMessage);
-    if (outcome.outcome === "subscribed") {
-      // Success clears the input (a fresh subscribe is ready — the D16-08
-      // fresh-session discipline); a refusal NEVER does (D16-11).
-      setUrlValue("");
-      await reload();
+    try {
+      const outcome = await subscribeToFeed(urlValue);
+      applyOutcome(outcome, setMessage);
+      if (outcome.outcome === "subscribed") {
+        // A refusal or save failure preserves the address for retry.
+        setUrlValue("");
+        await reload();
+      }
+    } catch {
+      setMessage("Couldn't save this subscription. Try again.");
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -152,9 +153,7 @@ export function DiscoverView({ hasAppHistory }: { hasAppHistory: boolean }) {
       </header>
       {/* The ONE announcement region — submitting progress, refusal copy,
           saves, removals. Collapsed via CSS when idle (:empty). */}
-      <StatusRegion>
-        {message !== null && <p>{message}</p>}
-      </StatusRegion>
+      <StatusRegion>{message !== null && <p>{message}</p>}</StatusRegion>
       {/* The subscribe form — always visible, the surface's first action.
           Native label + url input (the AddDialog URL arm's anatomy). */}
       <form className="discover-subscribe-form" onSubmit={handleSubscribe}>
@@ -273,12 +272,10 @@ export function DiscoverView({ hasAppHistory }: { hasAppHistory: boolean }) {
             ))}
           </ul>
         </section>
-      ) : (
-        /* (d) Loading — spare chrome: the form is up; the list region
+      ) : /* (d) Loading — spare chrome: the form is up; the list region
                stays silent until the read settles (the StatusRegion loading
                copy would double-announce against the header). */
-        null
-      )}
+      null}
       <DiscoverRemoveConfirm
         open={removeTarget !== null}
         subscriptionId={removeTarget?.id ?? ""}

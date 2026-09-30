@@ -22,10 +22,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { zipSync, unzipSync, strFromU8 } from "fflate";
 import { ArticleSchema, SubscriptionRecordSchema } from "../../../src/content/schema";
-import type {
-  CanonicalArticle,
-  SubscriptionRecord,
-} from "../../../src/content/schema";
+import type { CanonicalArticle, SubscriptionRecord } from "../../../src/content/schema";
 import { ExportBundleSchema } from "../../../src/portability/bundle";
 import type { Overrides } from "../../../src/portability/conflicts";
 import { computeManifest } from "../../../src/portability/manifest";
@@ -72,9 +69,7 @@ function sampleArticle(id = "art-subscription-rt01"): CanonicalArticle {
       retrievedAt: "2026-09-01T00:00:00.000Z",
       originalHtmlHash: "sha256:" + "6".repeat(64),
     },
-    blocks: [
-      { kind: "paragraph", content: [{ text: "Body text here.", marks: [] }] },
-    ],
+    blocks: [{ kind: "paragraph", content: [{ text: "Body text here.", marks: [] }] }],
     footnotes: [],
   });
 }
@@ -176,9 +171,7 @@ describe("subscriptions bundle v6 (issue #121)", () => {
     const { db } = await loadDb();
     await db.open();
     await db.articles.put(sampleArticle());
-    await loadSubscriptionsStore().then((s) =>
-      s.saveSubscription(sampleSubscription()),
-    );
+    await loadSubscriptionsStore().then((s) => s.saveSubscription(sampleSubscription()));
 
     let entries = unzipSync((await buildBundle()).bytes);
     let bundleJson = JSON.parse(strFromU8(entries["bundle.json"]!)) as {
@@ -272,10 +265,37 @@ describe("subscriptions bundle v6 (issue #121)", () => {
     await applyImport(plan);
 
     // The local row is untouched; the incoming feed landed under the mint.
-    expect((await getSubscriptionByFeedUrl("https://journal.example.com/feed.xml"))?.id).toBe("sub-a");
+    expect((await getSubscriptionByFeedUrl("https://journal.example.com/feed.xml"))?.id).toBe(
+      "sub-a",
+    );
+    expect((await getSubscriptionByFeedUrl("https://elsewhere.example.com/feed.xml"))?.id).toBe(
+      minted.id,
+    );
+  });
+
+  it("preserves distinct incoming feeds with the same id and normalizes saved URLs", async () => {
+    const { validateBundle, applyImport } = await loadService();
+    const { detectImportPreview, resolveImportPlan } = await loadConflicts();
+    const { db } = await loadDb();
+    await db.open();
+    const { loadAllSubscriptions, hasSubscriptionForFeed } = await loadSubscriptionsStore();
+    const incoming = [
+      sampleSubscription({ feedUrl: "https://JOURNAL.example.com:443/feed.xml#section" }),
+      sampleSubscription({ feedUrl: "https://other.example.com/feed.xml" }),
+    ];
+    const result = await validateBundle(await bundleFile([], incoming));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const preview = await detectImportPreview(result.bundle, result.assets);
+    const plan = await resolveImportPlan(result.bundle, preview, ALL_SKIP, false);
+    await applyImport(plan);
+    const rows = await loadAllSubscriptions();
+    expect(rows).toHaveLength(2);
+    expect(new Set(rows.map((row) => row.id)).size).toBe(2);
+    expect(await hasSubscriptionForFeed("https://journal.example.com/feed.xml")).toBe(true);
     expect(
-      (await getSubscriptionByFeedUrl("https://elsewhere.example.com/feed.xml"))?.id,
-    ).toBe(minted.id);
+      rows.find((row) => row.feedUrl === "https://journal.example.com/feed.xml")?.items,
+    ).toEqual(incoming[0]!.items);
   });
 
   it("round-trip: export → wipe → import restores the subscription AND its preview cache (no network)", async () => {

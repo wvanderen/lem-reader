@@ -257,7 +257,9 @@ function toPreview(
   const title = textOf(item["title"]);
   if (title === undefined) return null;
   const link = isAtom ? resolveAtomLink(item) : resolveRssLink(item);
-  const dateRaw = isAtom ? item["published"] ?? item["updated"] : item["pubDate"] ?? item["date"];
+  const dateRaw = isAtom
+    ? (item["published"] ?? item["updated"])
+    : (item["pubDate"] ?? item["date"]);
   const datePublished = toDateIso(dateRaw);
   let excerpt: string | undefined;
   for (const key of excerptKeys) {
@@ -295,7 +297,7 @@ export function parseFeedXml(text: string, fallbackTitle: string): ParsedFeed {
   }
   let root: unknown;
   try {
-    root = feedXmlParser.parse(text);
+    root = feedXmlParser.parse(text, true);
   } catch {
     throw new IngestionError(
       "feed-unreadable",
@@ -307,7 +309,8 @@ export function parseFeedXml(text: string, fallbackTitle: string): ParsedFeed {
   }
 
   // Recognize the feed structure. RSS 2.0: rss → channel. Atom: feed.
-  const channel = isRecord(root["rss"]) && isRecord(root["rss"]["channel"]) ? root["rss"]["channel"] : undefined;
+  const channel =
+    isRecord(root["rss"]) && isRecord(root["rss"]["channel"]) ? root["rss"]["channel"] : undefined;
   const atomFeed = isRecord(root["feed"]) ? root["feed"] : undefined;
   if (channel === undefined && atomFeed === undefined) {
     throw new IngestionError("feed-unreadable", "This address is not an RSS or Atom feed.");

@@ -685,16 +685,23 @@ export async function resolveImportPlan(
   // data because sessions never conflict and need no reader decision) and
   // the local subscription rows (issue #121 — the merge keys on the
   // NORMALIZED feed URL, not the row id).
-  const [localArticles, localHighlights, localNotes, localLocations, localBooksResult, localSessions, localSubscriptions] =
-    await Promise.all([
-      dexieLibrarySource.list(),
-      loadAllHighlights(),
-      loadAllNotes(),
-      loadAllLocations(),
-      listBooks(),
-      loadAllReadingSessions(),
-      loadAllSubscriptions(),
-    ]);
+  const [
+    localArticles,
+    localHighlights,
+    localNotes,
+    localLocations,
+    localBooksResult,
+    localSessions,
+    localSubscriptions,
+  ] = await Promise.all([
+    dexieLibrarySource.list(),
+    loadAllHighlights(),
+    loadAllNotes(),
+    loadAllLocations(),
+    listBooks(),
+    loadAllReadingSessions(),
+    loadAllSubscriptions(),
+  ]);
   const localBooks = localBooksResult.ok ? localBooksResult.books : [];
 
   const localArticleById = new Map(localArticles.map((a) => [a.id, a]));
@@ -916,10 +923,12 @@ export async function resolveImportPlan(
     // double-write either — the FIRST incoming row wins (the first-seen
     // merge shape, LibrarySource L173-190 precedent).
     if (!planSubscriptionFeedUrls.has(incomingKey)) {
-      let row = subscription;
-      if (localSubscriptionIds.has(subscription.id)) {
-        row = { ...subscription, id: crypto.randomUUID() };
+      let id = subscription.id;
+      while (localSubscriptionIds.has(id)) {
+        id = crypto.randomUUID();
       }
+      const row = { ...subscription, id, feedUrl: incomingKey };
+      localSubscriptionIds.add(id);
       plan.subscriptionsToWrite.push(row);
       planSubscriptionFeedUrls.add(incomingKey);
     }
