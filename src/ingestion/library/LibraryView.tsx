@@ -242,12 +242,21 @@ export function LibraryView({
   // scrollY to 0 BEFORE the hashchange handler runs (probed on chromium:
   // ["hashchange:0","scroll:0"]). So this ref tracks the reader's real
   // scroll via a PASSIVE listener (mounted below) and the capture reads
-  // the REF. The reset scroll EVENT fires only after the hashchange —
-  // after this component unmounted and removed its listener — so the
-  // poisoned 0 can never reach the ref. Non-click departures (browser
-  // Back from the library) do not fragment-scroll at all; their events
-  // keep the ref live too.
+  // the REF. Issue #125 re-probe: the reset scroll EVENT now reliably
+  // lands BETWEEN the hashchange and this component's unmount commit (the
+  // poisoned 0 reaches the ref before the cleanup reads it), so the
+  // tracker freezes at the ACTIVATION offset instead: a capture-phase
+  // click on a destination-leaving link snapshots scrollY before the
+  // browser's fragment scroll can run, the passive listener ignores
+  // events while the lock holds, and the lock releases on a hashchange
+  // that stays within the library's list views (brand-link view switch —
+  // no unmount, tracking resumes from the post-navigation truth).
+  // Modifier-activations (Cmd/Ctrl/Shift/Alt-click) never navigate this
+  // tab and never lock. Non-click departures (browser Back from the
+  // library) do not fragment-scroll at all; their events keep the ref
+  // live too.
   const scrollTopRef = useRef(0);
+  const navLockRef = useRef(false);
   // Issue #3 — the ONE library read model. status + snapshot come from the
   // hook (the ONE loading/status machine); the old per-field useState set,
   // the totalsById memo, the [refreshKey] load effect, and the render-body
@@ -326,11 +335,43 @@ export function LibraryView({
   // session-scoped in module state only.
   useEffect(() => {
     const onScroll = () => {
+      if (navLockRef.current) return; // frozen at the activation offset
       scrollTopRef.current = window.scrollY;
     };
+    // Capture phase — BEFORE the browser's default fragment navigation
+    // scrolls to the (unmatched) target. The LIST-view hashes below are
+    // the ones that keep this instance mounted; every other "#/" hash
+    // unmounts the library, so the frozen offset is the capture.
+    const onNavActivate = (event: MouseEvent) => {
+      if (event.defaultPrevented) return;
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      const target = event.target instanceof Element ? event.target.closest("a[href]") : null;
+      const href = target?.getAttribute("href") ?? null;
+      if (href === null) return;
+      if (
+        href !== "#/highlights" &&
+        href !== "#/discover" &&
+        !href.startsWith("#/article/")
+      ) {
+        return;
+      }
+      navLockRef.current = true;
+      scrollTopRef.current = window.scrollY;
+    };
+    // A hashchange that stays on a list view did NOT unmount this
+    // instance (brand-link view switch) — release the lock so tracking
+    // resumes from the post-navigation truth.
+    const LIST_HASHES = new Set(["", "#/", "#/unread", "#/in-progress", "#/finished"]);
+    const onHash = () => {
+      if (LIST_HASHES.has(window.location.hash)) navLockRef.current = false;
+    };
     window.addEventListener("scroll", onScroll, { passive: true });
+    document.addEventListener("click", onNavActivate, true);
+    window.addEventListener("hashchange", onHash);
     return () => {
       window.removeEventListener("scroll", onScroll);
+      document.removeEventListener("click", onNavActivate, true);
+      window.removeEventListener("hashchange", onHash);
       if (!reachedReadyRef.current) return; // simulated/pre-ready unmount
       captureLibraryContext({
         ...liveContextRef.current,

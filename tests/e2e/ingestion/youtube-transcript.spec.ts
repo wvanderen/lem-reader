@@ -681,9 +681,11 @@ test.describe("YouTube ingest end-to-end (issue #41, flow N)", () => {
     );
 
     // The low-confidence disclosure rides the provenance block — honest
-    // fidelity, never a silent upgrade to trusted.
+    // fidelity, never a silent upgrade to trusted. ADR-0003: the sentence
+    // gains the "See the original." escape hatch because the ingested
+    // transcript carries a sourceUrl (one derivation with the reader view).
     await expect(page.locator(".article-top-meta .extraction-note")).toHaveText(
-      "Transcribed from auto-generated captions, so the wording may not be exact.",
+      "Transcribed from auto-generated captions, so the wording may not be exact. See the original (opens in a new tab).",
     );
 
     // The row still presents like any YouTube row (badge + duration).

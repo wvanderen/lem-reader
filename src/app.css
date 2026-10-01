@@ -1237,6 +1237,16 @@ dialog.add-dialog {
   flex-direction: column;
   gap: var(--space-md);
 }
+/* D16 source-switch stability (issue #125): the three source arms have
+   different natural heights, and the centered dialog re-centers on every
+   switch — geometry the reader is mid-typing inside. The content slot
+   reserves the tallest arm's height so switching sources keeps the
+   dialog's box (and the footer) still. 224px covers the tallest arm
+   (paste: label + 152px textarea); taller arms (zoom, narrow wrap) simply
+   grow past it. */
+.add-source-content {
+  min-height: 224px;
+}
 /* Author display rules must never override the native hidden state. */
 .add-dialog-inner [hidden] {
   display: none;

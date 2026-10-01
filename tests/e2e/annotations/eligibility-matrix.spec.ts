@@ -783,8 +783,18 @@ test.describe("ANNO-12 eligibility matrix — D19-11 review row shape", () => {
     // confident-row shape this cell proves. Seed the two canonical rows
     // into Dexie first (the seedImageryArticle discipline: mount the app
     // once so the declared schema exists, then put rows) so both spans
-    // stay confident + article-backed jumpable rows.
+    // stay confident + article-backed jumpable rows. Issue #125 webkit
+    // triage: the seed follows the 10-03 harness discipline (goto →
+    // RELOAD → the schema-declared fixture-row signal → seed) — the
+    // beforeEach wipe's deleteDatabase completes the moment webkit's Dexie
+    // closes on versionchange, so seeding straight after a same-document
+    // goto can land on a store-less v1 db as a silent no-op (the review
+    // rows then classify orphan and this cell sees div rows).
     await page.goto(`${BASE}/`);
+    await page.reload();
+    await expect(
+      page.getByText("Getting started with Lem Reader").first(),
+    ).toBeVisible();
     await seedRows(page, {
       articles: [
         bundledFixtures.find((a) => a.id === ESSAY) as unknown as Record<string, unknown>,
