@@ -24,7 +24,7 @@
 // discipline); the network guard aborts and RECORDS every request that
 // leaves the dev origin, so "no unexpected network access" is asserted,
 // not assumed.
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { ArticleSchema } from "../../../src/content/schema";
 import {
   BASE,
@@ -133,6 +133,34 @@ const ATOM_SUB = {
   subscribedAt: "2026-09-22T10:00:00.000Z",
 };
 
+/** Seed local subscriptions through one strict transaction boundary. */
+async function seedSubscriptions(page: Page, rows: Array<typeof RSS_SUB | typeof ATOM_SUB>) {
+  await page.evaluate(async (rows) => {
+    await new Promise<void>((resolve, reject) => {
+      const request = indexedDB.open("lem-reader");
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains("subscriptions")) {
+          db.close();
+          reject(new Error("Subscriptions store is missing"));
+          return;
+        }
+        const transaction = db.transaction("subscriptions", "readwrite");
+        for (const row of rows) transaction.objectStore("subscriptions").put(row);
+        transaction.oncomplete = () => {
+          db.close();
+          resolve();
+        };
+        transaction.onabort = () => {
+          db.close();
+          reject(transaction.error);
+        };
+      };
+    });
+  }, rows);
+}
+
 test("RI-RT — reader-improvements fields survive the real export → import journey", async ({
   browser,
 }) => {
@@ -158,28 +186,7 @@ test("RI-RT — reader-improvements fields survive the real export → import jo
       ],
       settings: [{ key: "reader-prefs", value: SEEDED_PREFS }],
     });
-    // The subscriptions store (Dexie v8) — raw puts, the seedArticleRows
-    // discipline; schema-valid by construction through the shipped shapes.
-    await pageA.evaluate(
-      async (rows) => {
-        await new Promise<void>((resolve, reject) => {
-          const req = indexedDB.open("lem-reader");
-          req.onsuccess = () => {
-            const db = req.result;
-            if (!db.objectStoreNames.contains("subscriptions")) {
-              resolve();
-              return;
-            }
-            const tx = db.transaction("subscriptions", "readwrite");
-            for (const row of rows) tx.objectStore("subscriptions").put(row);
-            tx.oncomplete = () => resolve();
-            tx.onerror = () => reject(tx.error);
-          };
-          req.onerror = () => reject(req.error);
-        });
-      },
-      [RSS_SUB, ATOM_SUB],
-    );
+    await seedSubscriptions(pageA, [RSS_SUB, ATOM_SUB]);
 
     // ── Machine A: export through the real UI ─────────────────────────────
     const panelA = await openSettings(pageA);
@@ -198,9 +205,7 @@ test("RI-RT — reader-improvements fields survive the real export → import jo
       Object.fromEntries(
         (bundle.subscriptions as Array<Record<string, unknown>>).map((s) => [s.id, s]),
       ),
-    ).toEqual(
-      Object.fromEntries([RSS_SUB, ATOM_SUB].map((s) => [s.id, s])),
-    );
+    ).toEqual(Object.fromEntries([RSS_SUB, ATOM_SUB].map((s) => [s.id, s])));
     expect(bundle.preferences).toEqual(SEEDED_PREFS);
     const articles = bundle.articles as Array<{
       id: string;
@@ -239,12 +244,18 @@ test("RI-RT — reader-improvements fields survive the real export → import jo
     });
     await pageB.route("**/*", (route) => {
       const url = route.request().url();
-      if (!url.startsWith(BASE)) {
+      if (new URL(url).origin !== new URL(BASE).origin) {
         offOrigin.push(url);
         return route.abort();
       }
-      return route.continue();
+      return route.fallback();
     });
+
+    // Prove the catch-all delegates to the ingest guard before relying on
+    // its zero-call assertion. This deliberate probe must never hit the server.
+    await pageB.evaluate(() => fetch("/api/ingest", { method: "POST" }).catch(() => null));
+    expect(ingestCalls).toBe(1);
+    ingestCalls = 0;
 
     const panelB = await openSettings(pageB);
     await panelB.locator('input[type="file"][accept=".zip"]').setInputFiles(bundlePath!);
@@ -324,12 +335,8 @@ test("RI-RT — reader-improvements fields survive the real export → import jo
     await expect(
       pageB.getByRole("heading", { level: 3, name: "The Calm Reader Journal" }),
     ).toBeVisible();
-    await expect(
-      pageB.getByRole("heading", { level: 3, name: "The Morning Wire" }),
-    ).toBeVisible();
-    await expect(
-      pageB.getByRole("heading", { level: 2, name: "Latest articles" }),
-    ).toBeVisible();
+    await expect(pageB.getByRole("heading", { level: 3, name: "The Morning Wire" })).toBeVisible();
+    await expect(pageB.getByRole("heading", { level: 2, name: "Latest articles" })).toBeVisible();
     expect(offOrigin, `off-origin requests overall: ${offOrigin.join(", ")}`).toEqual([]);
   } finally {
     await machineA.close();
@@ -370,23 +377,7 @@ test("RI-RT — a pre-#121 (schemaVersion 5) bundle imports without touching loc
     await prepareFreshPage(pageB);
     // Machine B already has a LOCAL subscription (subscribed after export
     // was generated elsewhere — the merge scenario's local-wins side).
-    await pageB.evaluate(async (row) => {
-      await new Promise<void>((resolve, reject) => {
-        const req = indexedDB.open("lem-reader");
-        req.onsuccess = () => {
-          const db = req.result;
-          if (!db.objectStoreNames.contains("subscriptions")) {
-            resolve();
-            return;
-          }
-          const tx = db.transaction("subscriptions", "readwrite");
-          tx.objectStore("subscriptions").put(row);
-          tx.oncomplete = () => resolve();
-          tx.onerror = () => reject(tx.error);
-        };
-        req.onerror = () => reject(req.error);
-      });
-    }, RSS_SUB);
+    await seedSubscriptions(pageB, [RSS_SUB]);
 
     const panelB = await openSettings(pageB);
     await panelB.locator('input[type="file"][accept=".zip"]').setInputFiles({
