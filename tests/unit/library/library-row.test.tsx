@@ -131,6 +131,11 @@ describe("LibraryRow — the per-article review entry (issue #76)", () => {
     expect(screen.queryByRole("link", { name: /Review/ })).toBeNull();
   });
 
+  it("keeps the disabled action when no highlight count is stored yet", () => {
+    render(<LibraryRow article={makeArticle()} total={100} headingLevel={3} />);
+    expect(screen.getByRole("button", { name: "No highlights for Row Article" })).toBeDisabled();
+  });
+
   it("the entry alone earns the action cluster (chapter sub-rows have no other buttons)", () => {
     render(
       <LibraryRow

@@ -26,7 +26,13 @@ const MIN = 44;
 async function bbox(page: import("@playwright/test").Locator) {
   const box = await page.boundingBox();
   if (!box) throw new Error("element has no bounding box (not visible?)");
-  return box;
+  // Firefox can report a CSS 44px height as 43.999999 after scrolling.
+  // Normalize floating-point noise without relaxing the 44px contract.
+  return {
+    ...box,
+    width: Math.round(box.width * 1000) / 1000,
+    height: Math.round(box.height * 1000) / 1000,
+  };
 }
 
 test.describe("Touch targets ≥ 44×44px (A11Y-07)", () => {

@@ -1,7 +1,7 @@
 // tests/e2e/chrome/back-nav.spec.ts
 // POLISH-05 / D13-15 — the standardized "Back to library" affordance,
-// proven on BOTH mount points (ArticleView's article header + ReviewView's
-// review header) across all 3 engines (plain test() inherits the matrix):
+// proven in the article header across all 3 engines, alongside the
+// Highlights shell-navigation alternative (plain test() inherits the matrix):
 //
 //   (a) in-app return from an article — library → article → Back →
 //       history.back() lands on the library at exactly "#/"
@@ -11,8 +11,8 @@
 //       navigated away from the app origin (Pitfall 7 — history.back() on a
 //       deep-link tab would exit the app; the fallback makes that
 //       unreachable)
-//   (c) review panel — both the in-app return (library → review → Back)
-//       and the deep-link fallback (fresh #/highlights → Back → #/)
+//   (c) Highlights — no Back control; shell Library navigation returns
+//       to the library, with Clear filters confined to the filter area
 //   (d) keyboard — the control is a role=button with accessible name
 //       "Back to library", Tab-reachable from the page top in DOM order
 //       (chromium + firefox; webkit skips links/buttons in sequential
@@ -37,9 +37,7 @@ test.beforeEach(async ({ page }) => {
 
 /**
  * The shared back affordance (role + accessible name — the a11y contract).
- * Issue #76 (decision #72): the REVIEW mount relabels to the honest "Back"
- * (entries arrive from article pages as often as from the library); the
- * article mount keeps the byte-stable "Back to library".
+ * The article retains "Back to library"; Highlights uses shell navigation.
  */
 function backToLibrary(page: Page, name = "Back to library") {
   return page.getByRole("button", { name });
@@ -119,45 +117,13 @@ test("(b) deep link: fresh article URL → Back to library lands at #/ without l
   expect(new URL(page.url()).origin).toBe(appOrigin);
 });
 
-test("(c) in-app: library → review panel → Back returns to the library", async ({
-  page,
-}) => {
-  await page.goto(`${BASE}/#/`);
-  await expect(libraryHeading(page)).toBeVisible({ timeout: 10_000 });
-
-  // The shell Highlights link (Plan 15-02 / OQ1 — the D10-02 in-page button
-  // is gone; nav Primary holds the sole library→highlights entry).
-  await page
-    .getByRole("navigation", { name: "Primary" })
-    .getByRole("link", { name: "Highlights" })
-    .click();
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Highlights" }),
-  ).toBeVisible({ timeout: 10_000 });
-  // Issue #76 (decision #72) — the review mount's honest relabel.
-  await expect(backToLibrary(page, "Back")).toBeVisible();
-
-  // history.back() on the REVIEW mount → the prior "#/" entry.
-  await backToLibrary(page, "Back").click();
-  await expect(libraryHeading(page)).toBeVisible({ timeout: 10_000 });
-  await expect(page).toHaveURL(/#\/$/);
-});
-
-test("(c) deep link: fresh #/highlights → Back falls back to #/ (Enter activation)", async ({
-  page,
-}) => {
-  // Fresh context direct goto — the review mount's deep-link fallback, and
-  // keyboard activation (focused button + Enter) covers the review mount's
-  // operability without a pointer. Issue #76: the review mount's accessible
-  // name is the relabeled "Back".
+test("(c) Highlights uses shell navigation instead of a Back control", async ({ page }) => {
   await page.goto(`${BASE}/#/highlights`);
-  await expect(backToLibrary(page, "Back")).toBeVisible({ timeout: 10_000 });
-
-  await backToLibrary(page, "Back").focus();
-  await expect(backToLibrary(page, "Back")).toBeFocused();
-  await page.keyboard.press("Enter");
-
-  await expect(libraryHeading(page)).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Back", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Clear filters" })).toBeVisible();
+  await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Library" }).click();
+  await expect(libraryHeading(page)).toBeVisible();
   await expect(page).toHaveURL(/#\/$/);
 });
 

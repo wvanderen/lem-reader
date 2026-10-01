@@ -124,9 +124,6 @@ export function LibraryRow({
   // The review link needs stored highlights; at zero, a disabled action
   // keeps the cluster positions stable.
   const hasHighlights = (highlightCount ?? 0) > 0;
-  const hasCluster = Boolean(
-    onReadingStateChange || onTags || onEdit || onRemove || highlightCount !== undefined,
-  );
   return (
     <li className="library-row" key={id}>
       <article>
@@ -166,96 +163,89 @@ export function LibraryRow({
           <RowProgress finished={isFinished} progress={ratio} />
         </div>
         {/* Issue #67 — the icon action cluster: mark-read · edit · trash,
-            one arrangement for every row kind. Rendered only when at least
-            one action is wired (chapter sub-rows carry none). */}
-        {hasCluster && (
-          <div className="library-row-actions">
-            {onReadingStateChange && (
-              <ReadingStateButton
-                title={title}
-                isRead={isFinished}
-                onChange={onReadingStateChange}
-              />
-            )}
-            {/* Issue #75 (decision #71) — the row-tags trigger (Q1A: the
+            one arrangement for every row kind. Always includes the highlights action, disabled until highlights exist. */}
+        <div className="library-row-actions">
+          {onReadingStateChange && (
+            <ReadingStateButton title={title} isRead={isFinished} onChange={onReadingStateChange} />
+          )}
+          {/* Issue #75 (decision #71) — the row-tags trigger (Q1A: the
               cluster is the row's action vocabulary). First after mark-read;
               the CSS anchor naming the row for the shared popover lives on
               this button (anchor-name is document-scoped, the D21-05
               precedent). aria-label names the action + the EFFECTIVE title
               (the D17-09 naming rule). */}
-            {onTags && (
-              <button
-                type="button"
-                className="btn btn-icon library-row-tag-trigger"
-                aria-label={`Tags for ${title}`}
-                aria-haspopup="dialog"
-                aria-expanded={Boolean(tagsOpen)}
-                style={{ anchorName: rowTagsAnchorName(id) } as React.CSSProperties}
-                onClick={onTags}
-              >
-                <TagIcon />
-              </button>
-            )}
-            {/* Edit-metadata affordance — Plan 17-02 (D17-01). Only when
+          {onTags && (
+            <button
+              type="button"
+              className="btn btn-icon library-row-tag-trigger"
+              aria-label={`Tags for ${title}`}
+              aria-haspopup="dialog"
+              aria-expanded={Boolean(tagsOpen)}
+              style={{ anchorName: rowTagsAnchorName(id) } as React.CSSProperties}
+              onClick={onTags}
+            >
+              <TagIcon />
+            </button>
+          )}
+          {/* Edit-metadata affordance — Plan 17-02 (D17-01). Only when
               onEdit is wired (Dexie-persisted top-level rows only). Sits
               between mark-read and remove in the cluster; the aria-label
               template names the action + the EFFECTIVE title (the one name
               the reader sees). */}
-            {onEdit && (
-              <button
-                type="button"
-                className="btn btn-icon library-row-edit"
-                aria-label={`Edit metadata for ${title}`}
-                onClick={onEdit}
-              >
-                <EditIcon />
-              </button>
-            )}
-            {/* Issue #76 (decision #72) — the per-article review entry: an
+          {onEdit && (
+            <button
+              type="button"
+              className="btn btn-icon library-row-edit"
+              aria-label={`Edit metadata for ${title}`}
+              onClick={onEdit}
+            >
+              <EditIcon />
+            </button>
+          )}
+          {/* Issue #76 (decision #72) — the per-article review entry: an
               anchor (native middle/new-tab semantics, the row-link
               precedent) to the URL-scoped review. At zero, render a disabled button. The count is visible and
               included in the accessible name; the glyph is decorative. Sits between edit
               and remove so the destructive control stays last. */}
-            {hasHighlights ? (
-              <a
-                className="btn btn-icon library-row-highlights"
-                href={`#/highlights?article=${id}`}
-                aria-label={`Review ${highlightCount} ${
-                  highlightCount === 1 ? "highlight" : "highlights"
-                } for ${title}`}
-              >
-                <HighlighterIcon />
-                <span className="library-highlight-count" aria-hidden="true">
-                  {highlightCount}
-                </span>
-              </a>
-            ) : (
-              <button
-                type="button"
-                className="btn btn-icon library-row-highlights"
-                disabled
-                aria-label={`No highlights for ${title}`}
-              >
-                <HighlighterIcon />
-              </button>
-            )}
-            {/* Remove affordance — only when onRemove is wired (Plan 04). The
+          {hasHighlights ? (
+            <a
+              className="btn btn-icon library-row-highlights"
+              href={`#/highlights?article=${id}`}
+              aria-label={`Review ${highlightCount} ${
+                highlightCount === 1 ? "highlight" : "highlights"
+              } for ${title}`}
+            >
+              <HighlighterIcon />
+              <span className="library-highlight-count" aria-hidden="true">
+                {highlightCount}
+              </span>
+            </a>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-icon library-row-highlights"
+              disabled
+              aria-label={`No highlights for ${title}`}
+            >
+              <HighlighterIcon />
+            </button>
+          )}
+          {/* Remove affordance — only when onRemove is wired (Plan 04). The
               glyph is the inline-SVG waste-bin below (Phase 13 G3 — real icon,
               not an emoji character); aria-label carries the accessible name
               and locates this button for the remove-cascade + dialog-centering
               specs, so its template stays byte-stable. */}
-            {onRemove && (
-              <button
-                type="button"
-                className="btn btn-icon library-row-remove"
-                aria-label={`Remove ${title} from library`}
-                onClick={onRemove}
-              >
-                <TrashIcon />
-              </button>
-            )}
-          </div>
-        )}
+          {onRemove && (
+            <button
+              type="button"
+              className="btn btn-icon library-row-remove"
+              aria-label={`Remove ${title} from library`}
+              onClick={onRemove}
+            >
+              <TrashIcon />
+            </button>
+          )}
+        </div>
       </article>
     </li>
   );

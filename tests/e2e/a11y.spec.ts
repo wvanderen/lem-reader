@@ -1282,3 +1282,23 @@ test("a11y 16-04: open Add dialog is axe-clean; picker arrow-key walkthrough; vi
     );
   }
 });
+
+test("expanded book chapter highlight actions fit at 320px", async ({ page }) => {
+  const payload = bookEnvelope("epub-polish", "Narrow Book", 0);
+  await mockEpubIngest(page, { current: payload });
+  await seedBookLibrary(page);
+  const chapter = payload.articles[0];
+  if (!chapter) throw new Error("Narrow-book fixture requires a chapter");
+  const anchor = confidentHighlightOn(chapter, { start: 0, length: 5 });
+  await seedRows(page, { highlights: [highlightRow(chapter.id, anchor, "hl-polish")] });
+  await page.reload();
+  await page.setViewportSize({ width: 320, height: 800 });
+  await page.locator("li.book-row .book-toggle").click();
+  const link = page.getByRole("link", { name: /Review 1 highlight for Chapter 1/ });
+  await expect(link).toBeVisible();
+  const geometry = await page.evaluate(() => ({
+    width: document.body.clientWidth,
+    scroll: document.body.scrollWidth,
+  }));
+  expect(geometry.scroll).toBeLessThanOrEqual(geometry.width + 1);
+});
