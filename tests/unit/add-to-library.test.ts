@@ -381,7 +381,11 @@ describe("addToLibrary — article path (url/paste/file)", () => {
       url: "https://youtu.be/aircAruvnKk",
     });
 
-    expect(outcome).toEqual({ outcome: "refused", reason: "already-in-library" });
+    expect(outcome).toEqual({
+      outcome: "refused",
+      reason: "already-in-library",
+      existingArticleId: "yt-pasted",
+    });
     expect(saveMock).not.toHaveBeenCalled();
   });
 
@@ -390,7 +394,30 @@ describe("addToLibrary — article path (url/paste/file)", () => {
     ingestUrlMock.mockResolvedValue(articleSuccess());
     const outcome = await addToLibrary({ kind: "url", url: "https://example.com/a" });
 
-    expect(outcome).toEqual({ outcome: "refused", reason: "already-in-library" });
+    expect(outcome).toEqual({
+      outcome: "refused",
+      reason: "already-in-library",
+      existingArticleId: "ingested-id",
+    });
+    expect(saveMock).not.toHaveBeenCalled();
+  });
+
+  // Issue #124 — the duplicate refusal carries the EXISTING row's canonical
+  // id (the server-derived slug the has() check just tested) so Discover's
+  // inline adder can offer "Open" on the row that is already there. The id
+  // is display metadata only: the save seam is never reached, so the
+  // existing row's content and annotations cannot be overwritten.
+  it("dedupe-refuse's existingArticleId is the id has() checked (the inline Open target)", async () => {
+    hasMock.mockResolvedValue(true);
+    ingestUrlMock.mockResolvedValue(articleSuccess("example-com-redirected"));
+    const outcome = await addToLibrary({ kind: "url", url: "https://example.com/aliased" });
+
+    expect(hasMock).toHaveBeenCalledWith("example-com-redirected");
+    expect(outcome).toEqual({
+      outcome: "refused",
+      reason: "already-in-library",
+      existingArticleId: "example-com-redirected",
+    });
     expect(saveMock).not.toHaveBeenCalled();
   });
 
@@ -403,7 +430,11 @@ describe("addToLibrary — article path (url/paste/file)", () => {
     });
 
     expect(hasMock).toHaveBeenCalledWith("md-id");
-    expect(outcome).toEqual({ outcome: "refused", reason: "already-in-library" });
+    expect(outcome).toEqual({
+      outcome: "refused",
+      reason: "already-in-library",
+      existingArticleId: "md-id",
+    });
     expect(saveMock).not.toHaveBeenCalled();
   });
 });

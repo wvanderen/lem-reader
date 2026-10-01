@@ -309,7 +309,9 @@ test.describe("Discover (issues #121 + #123)", () => {
     expect(await timelineTitles(page)).toHaveLength(4);
 
     // No per-item dismissal exists; the timeline is a window, not a queue.
-    await expect(page.locator(".discover-item button")).toHaveCount(0);
+    // The per-item controls that DO exist are issue #124's inline add
+    // affordances: one + per LINKED entry (2 here), none on linkless ones.
+    await expect(page.locator(".discover-item button")).toHaveCount(2);
     expect(ingest.calls()).toBeGreaterThanOrEqual(2);
   });
 
@@ -662,6 +664,313 @@ test.describe("Discover (issues #121 + #123)", () => {
     ).toBeVisible();
 
     // The WCAG 1.4.10 reflow contract: no horizontal overflow.
+    const overflow = await page.evaluate(() => ({
+      scrollW: document.body.scrollWidth,
+      clientW: document.body.clientWidth,
+    }));
+    expect(overflow.scrollW).toBeLessThanOrEqual(overflow.clientW + 1);
+  });
+
+  // ── Issue #124 — the inline add: + ingests the LINKED page ─────────────
+
+  /** A canned ARTICLE ok-envelope (the guarded pipeline's article variant),
+   * shaped like the kept-article fixture above (client-side ArticleSchema
+   * re-validation is part of the real path this drives). */
+  function articleEnvelope(id: string, title: string, sourceUrl: string, text: string) {
+    return {
+      ok: true,
+      article: {
+        id,
+        revision: 1,
+        lang: "en",
+        provenance: {
+          sourceUrl,
+          title,
+          retrievedAt: "2026-09-20T00:00:00.000Z",
+          originalHtmlHash: `sha256:${"3".repeat(64)}`,
+        },
+        blocks: [
+          {
+            kind: "paragraph",
+            content: [{ text, marks: [] }],
+          },
+        ],
+        footnotes: [],
+      },
+      confidence: { state: "confident" },
+    };
+  }
+
+  test("inline add: + ingests the linked page, announces, swaps to In library + Open, and never auto-opens (the addition stays Unread)", async ({
+    page,
+  }) => {
+    await stubIngestByFeed(page, {
+      "https://journal.example.com/feed.xml": FEED_OK,
+      "https://journal.example.com/stable-positions": articleEnvelope(
+        "journal-example-com-stable-positions",
+        "On stable reading positions",
+        "https://journal.example.com/stable-positions",
+        "The page should not move under the reader's eye.",
+      ),
+    });
+    await page.goto(`${BASE}/#/discover`);
+    await subscribe(page, "https://journal.example.com/feed.xml");
+
+    const save = page.getByRole("button", { name: "Save On stable reading positions" });
+    await expect(save).toBeVisible();
+
+    // The + hit area meets the 44px touch-target contract (A11Y-07; the
+    // edge-matrix cell cannot measure it — that harness opens the EMPTY
+    // surface — so the size is pinned here, on the real populated surface).
+    const box = await save.boundingBox();
+    expect(box?.height).toBeGreaterThanOrEqual(44);
+    expect(box?.width).toBeGreaterThanOrEqual(44);
+
+    // Keyboard activation (the screen-reader/keyboard status condition):
+    // Enter on the + saves, and the ONE status region announces calmly.
+    await save.focus();
+    await page.keyboard.press("Enter");
+    await expect(
+      page.getByRole("status").filter({ hasText: "Saved to your library." }),
+    ).toBeVisible();
+
+    // The preview swaps to the saved state: In library + Open (in-app hash
+    // anchor) — and the URL is STILL Discover (no auto-open).
+    await expect(page.getByText("In library")).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "Open On stable reading positions" }),
+    ).toHaveAttribute("href", "#/article/journal-example-com-stable-positions");
+    await expect(page).toHaveURL(/#\/discover$/);
+
+    // Open is the reader's choice; it navigates in-app to the article.
+    await page.getByRole("link", { name: "Open On stable reading positions" }).click();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "On stable reading positions" }),
+    ).toBeVisible();
+
+    // Back to the library: the addition is listed under Unread (a
+    // never-opened addition — reading it here WOULD have moved it).
+    await primaryNav(page).getByRole("link", { name: "Library" }).click();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Saved articles" }),
+    ).toBeVisible();
+    await page.getByRole("link", { name: /^Unread \(\d+\)$/ }).click();
+    await expect(
+      page.getByRole("link", { name: "On stable reading positions" }),
+    ).toBeVisible();
+  });
+
+  test("duplicate links: the same article in two feeds resolves to ONE library item and both previews read In library", async ({
+    page,
+  }) => {
+    await stubIngestByFeed(page, {
+      "https://journal.example.com/feed.xml": FEED_OK,
+      // The wire syndicates the journal's story: a DIFFERENT feed, a
+      // DIFFERENT preview title, the SAME link.
+      "https://other.example.com/rss.xml": {
+        ok: true,
+        feed: {
+          url: "https://other.example.com/rss.xml",
+          title: "The Morning Wire",
+          items: [
+            {
+              title: "Stable positions, syndicated",
+              link: "https://journal.example.com/stable-positions",
+              datePublished: "2026-09-21T08:00:00.000Z",
+            },
+          ],
+        },
+      },
+      "https://journal.example.com/stable-positions": articleEnvelope(
+        "journal-example-com-stable-positions",
+        "On stable reading positions",
+        "https://journal.example.com/stable-positions",
+        "The page should not move under the reader's eye.",
+      ),
+    });
+    await page.goto(`${BASE}/#/discover`);
+    await subscribe(page, "https://journal.example.com/feed.xml");
+    await subscribe(page, "https://other.example.com/rss.xml");
+
+    // Save from the journal's copy.
+    await page
+      .getByRole("button", { name: "Save On stable reading positions" })
+      .click();
+    await expect(
+      page.getByRole("status").filter({ hasText: "Saved to your library." }),
+    ).toBeVisible();
+
+    // ONE save covers both copies: the wire's twin shares the link, so the
+    // same saved identity resolves it — no second ingest ever fires for it
+    // (2 feed fetches + 1 page ingest), and no second row can exist.
+    // Both Discover copies read In library + Open against the SAME id.
+    await expect(page.locator(".discover-item .discover-item-open")).toHaveCount(2);
+    await expect(page.locator(".discover-item .discover-item-save")).toHaveCount(0);
+
+    // One saved row in the library — not one per feed copy.
+    await primaryNav(page).getByRole("link", { name: "Library" }).click();
+    await expect(page.locator(".library-card-link", { hasText: "stable reading positions" })).toHaveCount(1);
+
+    // The shared saved state survives a fresh reload (the snapshot
+    // derivation, not session state): both copies still read In library.
+    await primaryNav(page).getByRole("link", { name: "Discover" }).click();
+    await page.reload();
+    await expect(page.locator(".discover-item .discover-item-open")).toHaveCount(2);
+    await expect(page.locator(".discover-item .discover-item-saved")).toHaveCount(2);
+  });
+
+  test("redirect identity: an aliased link resolves to the SAME article — one item, and a duplicate attempt overwrites nothing", async ({
+    page,
+  }) => {
+    // Two feeds carry DIFFERENT links for one story; the pipeline
+    // canonicalizes both to the same article id (the server-derived slug
+    // of the post-redirect URL). The second response carries REWRITTEN
+    // content under the same id — a faithful dedupe MUST refuse it.
+    await stubIngestByFeed(page, {
+      "https://journal.example.com/feed.xml": {
+        ok: true,
+        feed: {
+          url: "https://journal.example.com/feed.xml",
+          title: "The Calm Reader Journal",
+          items: [
+            {
+              title: "Shared story",
+              link: "https://journal.example.com/story?utm_source=feed",
+              datePublished: "2026-09-20T15:00:00.000Z",
+            },
+          ],
+        },
+      },
+      "https://other.example.com/rss.xml": {
+        ok: true,
+        feed: {
+          url: "https://other.example.com/rss.xml",
+          title: "The Morning Wire",
+          items: [
+            {
+              title: "Shared story",
+              link: "https://journal.example.com/story-direct",
+              datePublished: "2026-09-20T15:00:00.000Z",
+            },
+          ],
+        },
+      },
+      "https://journal.example.com/story?utm_source=feed": articleEnvelope(
+        "journal-example-com-story",
+        "Shared story",
+        "https://journal.example.com/story",
+        "First copy of the story.",
+      ),
+      "https://journal.example.com/story-direct": articleEnvelope(
+        "journal-example-com-story",
+        "Shared story",
+        "https://journal.example.com/story",
+        "Rewritten copy that must never land.",
+      ),
+    });
+    await page.goto(`${BASE}/#/discover`);
+    await subscribe(page, "https://journal.example.com/feed.xml");
+    await subscribe(page, "https://other.example.com/rss.xml");
+
+    // Save from the journal's aliased link.
+    const journalSave = page.getByRole("button", { name: "Save Shared story" }).first();
+    await journalSave.click();
+    await expect(
+      page.getByRole("status").filter({ hasText: "Saved to your library." }),
+    ).toBeVisible();
+
+    // Press + on the OTHER feed's copy: the pipeline lands on the same
+    // article id, the dedupe-refuse fires (annotations/content untouched),
+    // and the refusal's canonical id resolves the preview to In library +
+    // Open — pointing at the SAME article.
+    await page.getByRole("button", { name: "Save Shared story" }).last().click();
+    await expect(
+      page.getByRole("status").filter({ hasText: "Already in your library." }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "Open Shared story" }),
+    ).toHaveCount(2);
+    const openHref = await page
+      .getByRole("link", { name: "Open Shared story" })
+      .first()
+      .getAttribute("href");
+    expect(openHref).toBe("#/article/journal-example-com-story");
+
+    // The library holds ONE story, carrying the FIRST-saved content.
+    await primaryNav(page).getByRole("link", { name: "Library" }).click();
+    await expect(page.getByRole("link", { name: "Shared story" })).toHaveCount(1);
+    await page.getByRole("link", { name: "Shared story" }).click();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Shared story" }),
+    ).toBeVisible();
+    // (The reader renders the pagination + scrolling twins of every block,
+    // and the inactive twin is visually hidden — attachment, not visibili-
+    // ty, is the twin-proof assertion here.)
+    await expect(page.getByText("First copy of the story.").first()).toBeAttached();
+    await expect(page.getByText("Rewritten copy that must never land.")).toHaveCount(0);
+  });
+
+  test("refusal: a page that cannot be saved refuses calmly inline and stays retryable", async ({
+    page,
+  }) => {
+    let broken = true;
+    await page.route("**/api/ingest", (route) => {
+      if (route.request().method() !== "POST") return route.fallback();
+      const body = route.request().postDataJSON() as { feedUrl?: string; url?: string };
+      if (body.url === "https://journal.example.com/stable-positions") {
+        return fulfillJson(
+          route,
+          broken
+            ? { ok: false, reason: "unsupported-content-type" }
+            : articleEnvelope(
+                "journal-example-com-stable-positions",
+                "On stable reading positions",
+                "https://journal.example.com/stable-positions",
+                "The page should not move under the reader's eye.",
+              ),
+        );
+      }
+      if (body.feedUrl === "https://journal.example.com/feed.xml") {
+        return fulfillJson(route, FEED_OK);
+      }
+      return fulfillJson(route, { ok: false, reason: "fetch-failed" }, 200);
+    });
+    await page.goto(`${BASE}/#/discover`);
+    await subscribe(page, "https://journal.example.com/feed.xml");
+
+    // The calm page-voice refusal — not an error, no crash; the + remains.
+    await page
+      .getByRole("button", { name: "Save On stable reading positions" })
+      .click();
+    await expect(
+      page.getByRole("status").filter({ hasText: "This page isn't an article." }),
+    ).toBeVisible();
+    await expect(page.getByText("In library")).toHaveCount(0);
+
+    // Retry after the page becomes saveable: the SAME control recovers.
+    broken = false;
+    await page
+      .getByRole("button", { name: "Save On stable reading positions" })
+      .click();
+    await expect(
+      page.getByRole("status").filter({ hasText: "Saved to your library." }),
+    ).toBeVisible();
+    await expect(page.getByText("In library")).toBeVisible();
+  });
+
+  test("narrow screens: the inline add controls stay inside the 320px viewport (the reflow contract)", async ({
+    page,
+  }) => {
+    await stubIngestByFeed(page, {
+      "https://journal.example.com/feed.xml": FEED_OK,
+    });
+    await page.setViewportSize(NARROW);
+    await page.goto(`${BASE}/#/discover`);
+    await subscribe(page, "https://journal.example.com/feed.xml");
+
+    await expect(
+      page.getByRole("button", { name: "Save On stable reading positions" }),
+    ).toBeVisible();
     const overflow = await page.evaluate(() => ({
       scrollW: document.body.scrollWidth,
       clientW: document.body.clientWidth,
