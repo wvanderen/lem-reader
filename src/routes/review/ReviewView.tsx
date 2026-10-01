@@ -101,7 +101,6 @@ import { ReviewColorDialog } from "./ReviewColorDialog";
 import { setHighlightColor } from "../../persistence/highlightsStore";
 import type { HighlightColor } from "../../content/schema";
 import { HIGHLIGHT_COLOR_LABELS } from "../../annotations/highlightColors";
-import { BackToLibrary } from "../../reader/BackToLibrary";
 import { JumpToArticleIcon } from "../../ui/icons";
 // Issue #98 (decision #96) — the ONE polite status-region primitive; this
 // page's load/error/empty/announcement region renders through it.
@@ -429,6 +428,7 @@ export function ReviewView({
     confidence: "all",
   });
   // D10-08: Date is the default sort.
+  const [searchReset, setSearchReset] = useState(0);
   const [sort, setSort] = useState<ReviewSort>("date");
   // Plan 10-05 curation targets: the ReviewEntry under action (null when
   // the corresponding dialog is closed). Notes are keyed to highlightId, so
@@ -520,15 +520,6 @@ export function ReviewView({
   return (
     <main id="main">
       <header className="review-header">
-        {/* Plan 13-04 (POLISH-05 / D13-15) — the shared back affordance at
-            the review header start, identical anatomy to ArticleView's
-            mount (the same component). App's in-app flag drives
-            history.back() vs the "#/" fallback (Pitfall 7). Issue #76
-            (decision #72): the review mount relabels to the honest "Back" —
-            entries arrive from article pages as often as from the library,
-            so the copy must not promise a destination it did not come
-            from. */}
-        <BackToLibrary hasAppHistory={hasAppHistory} label="Back" />
         {/* One h1 per page (D10-01) — skip-link parity via main#main.
             Plan 14-03 Task 1: gains ONLY tabIndex={-1} + the focus ref;
             Plan 15-01 (D15-06): text renamed to "Highlights", level
@@ -651,6 +642,7 @@ export function ReviewView({
                 returns to the unscoped picker) and the chip takes over
                 the slot on the remount-free hashchange. */}
             <ArticlePicker
+              key={searchReset}
               articles={articles}
               counts={highlightCountByArticleId}
               inputId="review-article-filter"
@@ -699,6 +691,14 @@ export function ReviewView({
             <option value="position">Position</option>
           </select>
         </div>
+        <button type="button" className="btn btn-quiet review-clear-filters"
+          onClick={() => {
+            setFilters({ articleTag: null, highlightTag: null, confidence: "all" });
+            setSearchReset((n) => n + 1);
+            window.location.hash = "#/highlights";
+          }}>
+          Clear filters
+        </button>
       </div>
       {/* D10-07 legend — explains the badge vocabulary quietly. */}
       <p className="review-legend">No badge means anchored confidently.</p>

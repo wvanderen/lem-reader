@@ -1,3 +1,4 @@
+import { expandSettingsGroup } from "../settings";
 // tests/e2e/annotations/highlight-colors.spec.ts
 // Issue #118 — named highlight colors in the reader. The picker rides the
 // highlight's popover (the reader-details editor); the marks render the
@@ -287,6 +288,7 @@ test.describe("highlight colors in the reader (issue #118)", () => {
 
     // Dark preset via the REAL settings dialog (the radio drives applyTheme).
     await page.getByRole("button", { name: "Reading settings" }).click();
+    await expandSettingsGroup(page, "Appearance");
     const settings = page.locator("dialog.settings-panel");
     await expect(settings).toBeVisible();
     await settings.getByRole("radio", { name: "Dark", exact: true }).click();

@@ -1,3 +1,4 @@
+import { expandSettingsGroup } from "./settings";
 // tests/e2e/touch-targets.spec.ts
 // A11Y-07 — every interactive control in the new chrome has a ≥ 44 × 44 px hit
 // area (UI-SPEC §Spacing exceptions; iOS HIG / WCAG 2.5.5 target-size). The
@@ -53,6 +54,7 @@ test.describe("Touch targets ≥ 44×44px (A11Y-07)", () => {
   test("every control inside the open panel meets 44×44px", async ({ page }) => {
     await page.goto(`${BASE}/#/article/${FIRST_FIXTURE}`);
     await page.getByRole("button", { name: "Reading settings" }).click();
+    await expandSettingsGroup(page, "Appearance");
     await expect(page.locator("dialog.settings-panel")).toBeVisible();
 
     const failures: string[] = [];

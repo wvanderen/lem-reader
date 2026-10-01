@@ -1,3 +1,4 @@
+import { expandSettingsGroup } from "../settings";
 // tests/e2e/readaloud/spoken-follow.spec.ts
 // Issue #42 e2e leg — the spoken-word marker + the follow behaviors in a
 // REAL browser. The speechSynthesis fake is the read-aloud.spec.ts harness
@@ -181,6 +182,7 @@ test.describe("Issue #42 — spoken word + follow behaviors", () => {
     // Opt IN to the fade — the project default is off, and this test exists
     // to prove the reduced-motion gate (not the setting) kills the fade.
     await page.getByRole("button", { name: "Reading settings" }).click();
+    await expandSettingsGroup(page, "Appearance");
     await page.getByRole("checkbox", { name: "Animate page turns" }).check();
     await page.keyboard.press("Escape");
 

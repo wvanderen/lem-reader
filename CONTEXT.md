@@ -47,3 +47,11 @@ _Avoid_: refusal (for operation failures)
 **Status region**:
 The one polite, atomic live-region card that carries loading, error, and announcement copy on a surface. One per surface seam; it pre-exists so announcements are heard.
 _Avoid_: toast, notification, alert (for non-urgent states)
+
+**Article tag**:
+A label attached to an article, used to organize the library and filter highlights by their article.
+_Avoid_: highlight tag (when the label belongs to the article)
+
+**Highlight tag**:
+A label attached to an individual highlight, independent of the article's tags.
+_Avoid_: article tag (when the label belongs to the highlight)

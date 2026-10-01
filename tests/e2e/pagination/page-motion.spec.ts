@@ -1,3 +1,4 @@
+import { expandSettingsGroup } from "../settings";
 import { test, expect } from "@playwright/test";
 import { BASE } from "../_base";
 
@@ -21,6 +22,7 @@ test("page fade is opt-in, persists, and obeys live reduced motion", async ({ pa
   await expect(fragment).toHaveAttribute("aria-label", "Page 2");
   expect(await fades()).toBe(0);
   await page.getByRole("button", { name: "Reading settings" }).click();
+  await expandSettingsGroup(page, "Appearance");
   const toggle = page.getByRole("checkbox", { name: "Animate page turns" });
   await expect(toggle).not.toBeChecked();
   await toggle.check();
@@ -39,6 +41,7 @@ test("page fade is opt-in, persists, and obeys live reduced motion", async ({ pa
   await expect(fragment).toBeVisible();
   expect(await fades()).toBe(0);
   await page.getByRole("button", { name: "Reading settings" }).click();
+  await expandSettingsGroup(page, "Appearance");
   await expect(toggle).toBeChecked();
   await toggle.scrollIntoViewIfNeeded();
   await page.screenshot({ path: "/tmp/lem-motion-settings.png", fullPage: true });
@@ -49,6 +52,7 @@ test("page fade is opt-in, persists, and obeys live reduced motion", async ({ pa
   expect(await fades()).toBe(0);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole("button", { name: "Reading settings" }).click();
+  await expandSettingsGroup(page, "Appearance");
   await toggle.scrollIntoViewIfNeeded();
   await expect(toggle).toBeVisible();
   await expect(page.locator("#page-turn-motion-help")).toBeVisible();

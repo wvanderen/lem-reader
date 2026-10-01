@@ -197,3 +197,19 @@ describe("ReviewView tags announcement glue (issue #117 review follow-up)", () =
     expect(invalidateLibrarySnapshot).not.toHaveBeenCalled();
   });
 });
+
+it("clears filters and article search while preserving sorting, without a Back control", async () => {
+  const user = userEvent.setup();
+  render(<ReviewView hasAppHistory={false} />);
+  await user.selectOptions(screen.getByLabelText("Sort"), "position");
+  await user.selectOptions(screen.getByLabelText("Anchor confidence"), "orphan");
+  await user.type(screen.getByRole("combobox", { name: "Article" }), "missing");
+  await user.click(screen.getByRole("button", { name: "Filter by Highlight tag: essays" }));
+  await user.click(screen.getByRole("button", { name: "Clear filters" }));
+  expect(screen.getByLabelText("Anchor confidence")).toHaveValue("all");
+  expect(screen.getByLabelText("Sort")).toHaveValue("position");
+  expect(screen.getByRole("combobox", { name: "Article" })).toHaveValue("");
+  expect(screen.getByRole("button", { name: "Filter by Highlight tag: essays" })).toHaveAttribute("aria-pressed", "false");
+  expect(screen.queryByRole("button", { name: "Back" })).toBeNull();
+  expect(window.location.hash).toBe("#/highlights");
+});

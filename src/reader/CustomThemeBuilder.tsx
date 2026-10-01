@@ -199,20 +199,19 @@ export function CustomThemeBuilder() {
         <p className="custom-theme-verdict">{verdictLine("Text on surface", inkRatio)}</p>
         <p className="custom-theme-verdict">{verdictLine("Accent on surface", accentRatio)}</p>
         {anyFailing && (
-          <>
-            <p className="custom-theme-warning">Some colors are hard to read on your surface.</p>
-            {/* Every change live-applies — the button only ever fires the
-                explicit nudge the reader asked for (decision #73: nothing is
-                silently adjusted). */}
-            <button type="button" className="btn btn-quiet" onClick={fixContrast}>
-              Fix contrast
-            </button>
-          </>
+          <p className="custom-theme-warning">Some colors are hard to read on your surface.</p>
         )}
       </StatusRegion>
-      <button type="button" className="btn btn-quiet" onClick={resetToBase}>
-        Reset to base colors
-      </button>
+      <div className="custom-theme-actions">
+        {anyFailing && (
+          <button type="button" className="btn btn-quiet" onClick={fixContrast}>
+            Fix contrast
+          </button>
+        )}
+        <button type="button" className="btn btn-quiet" onClick={resetToBase}>
+          Reset to base colors
+        </button>
+      </div>
     </details>
   );
 }

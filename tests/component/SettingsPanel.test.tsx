@@ -45,9 +45,17 @@ function Harness({ open, onClose }: { open: boolean; onClose: () => void }) {
   );
 }
 
+function renderExpanded(ui: React.ReactElement) {
+  const view = render(ui);
+  for (const summary of view.container.querySelectorAll(".settings-group > summary")) {
+    if (!(summary.parentElement as HTMLDetailsElement).open) fireEvent.click(summary);
+  }
+  return view;
+}
+
 describe("SettingsPanel — structure + aria (D2-01)", () => {
   it("renders a native <dialog> with aria-labelledby='settings-title'", () => {
-    render(<Harness open={true} onClose={() => undefined} />);
+    renderExpanded(<Harness open={true} onClose={() => undefined} />);
     const dlg = document.querySelector("dialog.settings-panel");
     expect(dlg).not.toBeNull();
     expect(dlg?.getAttribute("aria-labelledby")).toBe("settings-title");
@@ -58,7 +66,7 @@ describe("SettingsPanel — structure + aria (D2-01)", () => {
   });
 
   it("renders the five fieldset/legend sections with verbatim copy (UI-SPEC §Copywriting)", () => {
-    render(<Harness open={true} onClose={() => undefined} />);
+    renderExpanded(<Harness open={true} onClose={() => undefined} />);
     const legends = Array.from(document.querySelectorAll("legend")).map(
       (el) => el.textContent?.trim() ?? "",
     );
@@ -72,7 +80,7 @@ describe("SettingsPanel — structure + aria (D2-01)", () => {
   });
 
   it("renders every Typeface/Spacing/Theme radio option verbatim", () => {
-    render(<Harness open={true} onClose={() => undefined} />);
+    renderExpanded(<Harness open={true} onClose={() => undefined} />);
     // RTL can query radios by role + name (the <span> text inside the label).
     for (const name of ["Serif", "Sans", "Dyslexia-friendly"]) {
       expect(screen.getByRole("radio", { name })).not.toBeNull();
@@ -89,7 +97,7 @@ describe("SettingsPanel — structure + aria (D2-01)", () => {
   });
 
   it("renders the size and reading-width ranges with the default readouts", () => {
-    render(<Harness open={true} onClose={() => undefined} />);
+    renderExpanded(<Harness open={true} onClose={() => undefined} />);
     const size = screen.getByRole("slider", { name: /Text size/i });
     const measure = screen.getByRole("slider", { name: /Reading width/i });
     expect(size.getAttribute("aria-valuenow")).toBe(String(DEFAULT_SETTINGS.size));
@@ -100,7 +108,7 @@ describe("SettingsPanel — structure + aria (D2-01)", () => {
   });
 
   it("the close × carries aria-label='Close reading settings' and the Reset button reads 'Reset to defaults'", () => {
-    render(<Harness open={true} onClose={() => undefined} />);
+    renderExpanded(<Harness open={true} onClose={() => undefined} />);
     expect(screen.getByRole("button", { name: "Close reading settings" })).not.toBeNull();
     expect(screen.getByRole("button", { name: "Reset to defaults" })).not.toBeNull();
   });
@@ -108,7 +116,7 @@ describe("SettingsPanel — structure + aria (D2-01)", () => {
 
 describe("SettingsPanel — open/close state", () => {
   it("calls showModal() when open flips false→true and close() when it flips back", () => {
-    const { rerender } = render(<Harness open={false} onClose={() => undefined} />);
+    const { rerender } = renderExpanded(<Harness open={false} onClose={() => undefined} />);
     const dlg = document.querySelector("dialog.settings-panel") as HTMLDialogElement;
     expect(dlg.open).toBe(false);
     expect(HTMLDialogElement.prototype.showModal).not.toHaveBeenCalled();
@@ -124,7 +132,7 @@ describe("SettingsPanel — open/close state", () => {
 
   it("fires onClose when the dialog 'close' event dispatches (Esc/scrim)", () => {
     const onClose = vi.fn();
-    render(<Harness open={true} onClose={onClose} />);
+    renderExpanded(<Harness open={true} onClose={onClose} />);
     const dlg = document.querySelector("dialog.settings-panel") as HTMLDialogElement;
     // Simulate the browser firing `close` (Esc / scrim click / × click).
     dlg.dispatchEvent(new Event("close"));
@@ -142,7 +150,7 @@ describe("SettingsPanel — open/close state", () => {
 describe("SettingsPanel — backdrop scrim dismissal (260908-o0w)", () => {
   it("a click whose target is the dialog element itself calls onClose", () => {
     const onClose = vi.fn();
-    render(<Harness open={true} onClose={onClose} />);
+    renderExpanded(<Harness open={true} onClose={onClose} />);
     const dlg = screen.getByRole("dialog", {
       name: "Reading settings",
     }) as HTMLDialogElement;
@@ -152,7 +160,7 @@ describe("SettingsPanel — backdrop scrim dismissal (260908-o0w)", () => {
 
   it("a bubbling click on the .settings-panel-inner wrapper does NOT call onClose", () => {
     const onClose = vi.fn();
-    render(<Harness open={true} onClose={onClose} />);
+    renderExpanded(<Harness open={true} onClose={onClose} />);
     const dlg = screen.getByRole("dialog", {
       name: "Reading settings",
     }) as HTMLDialogElement;
@@ -196,7 +204,7 @@ describe("SettingsPanel — custom theme builder (issues #86/#120)", () => {
   }
 
   it("activating Custom light seeds from its MATCHING preset and mounts the builder", async () => {
-    render(<Harness open={true} onClose={() => undefined} />);
+    renderExpanded(<Harness open={true} onClose={() => undefined} />);
     act(() => {
       fireEvent.click(screen.getByRole("radio", { name: "Custom light" }));
     });
@@ -219,7 +227,7 @@ describe("SettingsPanel — custom theme builder (issues #86/#120)", () => {
   });
 
   it("activating Custom dark seeds from its MATCHING preset (the slots never share a record)", async () => {
-    render(<Harness open={true} onClose={() => undefined} />);
+    renderExpanded(<Harness open={true} onClose={() => undefined} />);
     act(() => {
       fireEvent.click(screen.getByRole("radio", { name: "Custom dark" }));
     });
@@ -231,7 +239,7 @@ describe("SettingsPanel — custom theme builder (issues #86/#120)", () => {
   });
 
   it("every color picker and hex field carries an accessible name", async () => {
-    render(<Harness open={true} onClose={() => undefined} />);
+    renderExpanded(<Harness open={true} onClose={() => undefined} />);
     act(() => {
       fireEvent.click(screen.getByRole("radio", { name: "Custom light" }));
     });
@@ -242,7 +250,7 @@ describe("SettingsPanel — custom theme builder (issues #86/#120)", () => {
   });
 
   it("a valid hex commit applies the token inline and snaps the field", async () => {
-    render(<Harness open={true} onClose={() => undefined} />);
+    renderExpanded(<Harness open={true} onClose={() => undefined} />);
     act(() => {
       fireEvent.click(screen.getByRole("radio", { name: "Custom light" }));
     });
@@ -255,7 +263,7 @@ describe("SettingsPanel — custom theme builder (issues #86/#120)", () => {
   });
 
   it("an invalid (incomplete) hex leaves the stored token unchanged and keeps the draft", async () => {
-    render(<Harness open={true} onClose={() => undefined} />);
+    renderExpanded(<Harness open={true} onClose={() => undefined} />);
     act(() => {
       fireEvent.click(screen.getByRole("radio", { name: "Custom light" }));
     });
@@ -268,7 +276,7 @@ describe("SettingsPanel — custom theme builder (issues #86/#120)", () => {
   });
 
   it("switching to a preset and back RESUMES that slot's stored record", async () => {
-    render(<Harness open={true} onClose={() => undefined} />);
+    renderExpanded(<Harness open={true} onClose={() => undefined} />);
     act(() => {
       fireEvent.click(screen.getByRole("radio", { name: "Custom light" }));
     });
@@ -295,7 +303,7 @@ describe("SettingsPanel — custom theme builder (issues #86/#120)", () => {
   });
 
   it("the two slots are independent: edits in one never ride into the other", async () => {
-    render(<Harness open={true} onClose={() => undefined} />);
+    renderExpanded(<Harness open={true} onClose={() => undefined} />);
     // Edit the light slot.
     act(() => {
       fireEvent.click(screen.getByRole("radio", { name: "Custom light" }));
@@ -327,7 +335,7 @@ describe("SettingsPanel — custom theme builder (issues #86/#120)", () => {
   });
 
   it("the readout warns below AA and Fix contrast restores the offending pair only", async () => {
-    render(<Harness open={true} onClose={() => undefined} />);
+    renderExpanded(<Harness open={true} onClose={() => undefined} />);
     act(() => {
       fireEvent.click(screen.getByRole("radio", { name: "Custom light" }));
     });
@@ -355,7 +363,7 @@ describe("SettingsPanel — custom theme builder (issues #86/#120)", () => {
   });
 
   it("Reset to base colors restores the slot's seed tokens while staying custom", async () => {
-    render(<Harness open={true} onClose={() => undefined} />);
+    renderExpanded(<Harness open={true} onClose={() => undefined} />);
     act(() => {
       fireEvent.click(screen.getByRole("radio", { name: "Custom light" }));
     });
@@ -372,7 +380,7 @@ describe("SettingsPanel — custom theme builder (issues #86/#120)", () => {
   });
 
   it("the panel-wide Reset drops BOTH slots; each re-activation re-seeds fresh", async () => {
-    render(<Harness open={true} onClose={() => undefined} />);
+    renderExpanded(<Harness open={true} onClose={() => undefined} />);
     act(() => {
       fireEvent.click(screen.getByRole("radio", { name: "Custom light" }));
     });
@@ -412,7 +420,7 @@ describe("SettingsPanel — custom theme builder (issues #86/#120)", () => {
 // (Live-apply logic lives in SettingsContext; this asserts the wiring.)
 describe("SettingsPanel — live-apply wiring (D2-03)", () => {
   it("selecting the 'Dark' radio writes data-theme='dark' on <html>", () => {
-    render(<Harness open={true} onClose={() => undefined} />);
+    renderExpanded(<Harness open={true} onClose={() => undefined} />);
     const dark = screen.getByRole("radio", { name: "Dark" });
     act(() => {
       fireEvent.click(dark);
@@ -421,7 +429,7 @@ describe("SettingsPanel — live-apply wiring (D2-03)", () => {
   });
 
   it("clicking Reset to defaults restores the D-07 baseline tokens", () => {
-    render(<Harness open={true} onClose={() => undefined} />);
+    renderExpanded(<Harness open={true} onClose={() => undefined} />);
     // Perturb state first.
     act(() => {
       fireEvent.click(screen.getByRole("radio", { name: "Dark" }));
@@ -450,7 +458,7 @@ describe("SettingsPanel — read-aloud controls (issue #43, O8)", () => {
   }
 
   it("without speechSynthesis the section degrades to a calm help line (no dead controls)", () => {
-    render(<Harness open={true} onClose={() => undefined} />);
+    renderExpanded(<Harness open={true} onClose={() => undefined} />);
     expect(screen.getByText("Read aloud isn't available in this browser.")).not.toBeNull();
     expect(screen.queryByRole("combobox", { name: "Read-aloud voice" })).toBeNull();
     expect(screen.queryByRole("slider", { name: "Read-aloud rate" })).toBeNull();
@@ -461,7 +469,7 @@ describe("SettingsPanel — read-aloud controls (issue #43, O8)", () => {
       { voiceURI: "cloud", name: "Cloud Voice", lang: "en", localService: false },
       { voiceURI: "zora", name: "Zora", lang: "fr", localService: true },
     ]);
-    render(<Harness open={true} onClose={() => undefined} />);
+    renderExpanded(<Harness open={true} onClose={() => undefined} />);
     const select = screen.getByRole("combobox", { name: "Read-aloud voice" });
     // The probed list arrived: the system default + the LOCAL voice only.
     await screen.findByRole("option", { name: "Zora (fr)" });
@@ -475,7 +483,7 @@ describe("SettingsPanel — read-aloud controls (issue #43, O8)", () => {
 
   it("the rate control spans 0.5–3 and applies a stepped change", async () => {
     stubSpeech([]);
-    render(<Harness open={true} onClose={() => undefined} />);
+    renderExpanded(<Harness open={true} onClose={() => undefined} />);
     const rate = screen.getByRole("slider", { name: "Read-aloud rate" });
     expect(rate.getAttribute("min")).toBe("0.5");
     expect(rate.getAttribute("max")).toBe("3");
@@ -490,9 +498,26 @@ describe("SettingsPanel — read-aloud controls (issue #43, O8)", () => {
 
   it("picking a voice updates the select's live value", async () => {
     stubSpeech([{ voiceURI: "zora", name: "Zora", lang: "fr", localService: true }]);
-    render(<Harness open={true} onClose={() => undefined} />);
+    renderExpanded(<Harness open={true} onClose={() => undefined} />);
     const select = await screen.findByRole("combobox", { name: "Read-aloud voice" });
     fireEvent.change(select, { target: { value: "zora" } });
     expect((select as HTMLSelectElement).value).toBe("zora");
   });
+});
+
+it("starts with Reading open and preserves independent disclosure choices while mounted", () => {
+  const { rerender } = render(<Harness open={true} onClose={() => undefined} />);
+  const reading = screen.getByText("Reading", { selector: "summary" }).parentElement as HTMLDetailsElement;
+  const appearance = screen.getByText("Appearance", { selector: "summary" }).parentElement as HTMLDetailsElement;
+  const data = screen.getByText("Your data", { selector: "summary" }).parentElement as HTMLDetailsElement;
+  expect(reading.open).toBe(true);
+  expect(appearance.open).toBe(false);
+  expect(data.open).toBe(false);
+  fireEvent.click(appearance.querySelector("summary")!);
+  expect(appearance.open).toBe(true);
+  expect(reading.open).toBe(true);
+  rerender(<Harness open={false} onClose={() => undefined} />);
+  rerender(<Harness open={true} onClose={() => undefined} />);
+  expect(appearance.open).toBe(true);
+  expect(data.open).toBe(false);
 });

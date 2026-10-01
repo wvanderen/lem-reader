@@ -2715,7 +2715,7 @@ dialog.annotations-drawer {
   padding: var(--space-xs) var(--space-sm);
   background: var(--surface-raised);
   border: 1px solid var(--hairline);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-pill);
   font-family: var(--font-ui);
   font-size: 14px;
   line-height: 1.45;
@@ -4743,7 +4743,7 @@ main#main > .status:empty {
   gap: var(--space-md) var(--space-lg);
 }
 .review-filter-row > .tag-filter {
-  flex-basis: 100%;
+  flex: 1 1 240px;
   margin: 0;
 }
 .review-filter-group {
@@ -5211,3 +5211,97 @@ dialog.discover-remove-confirm {
   line-height: 1.5;
 }
 /* .discover-remove-confirm-actions rides .dialog-actions. */
+
+
+/* October polish: retain semantic groups without nested visual cards. */
+dialog.highlight-popover .tag-entry,
+dialog.highlight-popover .highlight-color-entry {
+  min-inline-size: 0;
+  margin-inline: 0;
+  padding: 0;
+  border: 0;
+}
+dialog.highlight-popover .tag-entry legend,
+dialog.highlight-popover .highlight-color-entry legend {
+  padding-inline: 0;
+  margin-block-end: var(--space-sm);
+}
+.tag-picker-input {
+  box-sizing: border-box;
+}
+.highlight-color-entry .status:empty {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-height: 0;
+}
+.highlight-popover-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  align-items: center;
+}
+.highlight-popover-actions .highlight-popover-done {
+  margin-inline-start: auto;
+}
+.library-row-highlights {
+  position: relative;
+}
+.library-highlight-count {
+  position: absolute;
+  inset-block-start: -6px;
+  inset-inline-end: -6px;
+  min-width: 18px;
+  padding-inline: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--ink);
+  color: var(--surface);
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.library-row-main .finished-mark {
+  margin-block: var(--space-sm) 0;
+  gap: var(--space-xs);
+}
+.finished-mark svg {
+  width: 16px;
+  height: 16px;
+}
+.library-row-tags .tag-chip-readonly {
+  min-height: 28px;
+  padding-block: 2px;
+}
+.settings-group {
+  border-block-start: 1px solid var(--hairline);
+  padding-block: var(--space-md);
+}
+.settings-group > summary {
+  min-height: var(--touch);
+  align-content: center;
+  font-family: var(--font-ui);
+  font-weight: 600;
+  cursor: pointer;
+}
+.settings-group[open] > summary {
+  margin-block-end: var(--space-md);
+}
+.custom-theme-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-block-start: var(--space-sm);
+}
+.library-row-actions .btn {
+  box-sizing: border-box;
+}
+.library-row-actions {
+  display: grid;
+  grid-template-columns: repeat(5, var(--touch));
+}
+.library-row-actions .reading-state-control { grid-column: 1; }
+.library-row-tag-trigger { grid-column: 2; }
+.library-row-edit { grid-column: 3; }
+.library-row-highlights { grid-column: 4; }
+.library-row-remove { grid-column: 5; }
