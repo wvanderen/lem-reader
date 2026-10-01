@@ -13,9 +13,14 @@
 //      subscription is refused calmly, never double-saved (the D7-07
 //      dedupe-refuse discipline at feed granularity).
 //   2. The bounded recent-item previews ride the row as its LOCAL CACHE —
-//      they are captured once at subscribe time and travel in export/
-//      import; nothing ever re-fetches a feed to restore a cache (import
-//      makes no network request — structural, not promised).
+//      captured at subscribe time, replaced only by the Discover surface's
+//      EXPLICIT refresh moments (issue #123: opening Discover and the
+//      reader's Refresh/Retry request — never a background poll), and
+//      carried in export/import; IMPORT makes no network request and keeps
+//      the local row when a feedUrl already exists (structural honesty, not
+//      a promise to upgrade). `lastFetchedAt` (issue #123) advances only on
+//      a successful refresh, so a failed refresh keeps the honest
+//      last-known-good stamp for the stale state.
 //   3. Zod-at-boundary on read (STATE-04): every row passes
 //      SubscriptionRecordSchema.safeParse; corrupt rows are dropped calmly
 //      (the loadAllHighlights/loadAllReadingSessions precedent). Dexie-level
@@ -113,9 +118,7 @@ export async function getSubscriptionByFeedUrl(
  * never calls saveSubscription.
  */
 export async function hasSubscriptionForFeed(feedUrl: string): Promise<boolean> {
-  return (
-    (await db.subscriptions.where("feedUrl").equals(feedUrl).first()) !== undefined
-  );
+  return (await db.subscriptions.where("feedUrl").equals(feedUrl).first()) !== undefined;
 }
 
 /**
@@ -138,4 +141,10 @@ export async function saveSubscription(record: SubscriptionRecord): Promise<void
  */
 export async function deleteSubscription(id: string): Promise<void> {
   await db.subscriptions.delete(id);
+}
+
+/** Update a refreshed cache only while its subscription still exists.
+ * Dexie's update is atomic and never inserts a deleted row. */
+export async function updateSubscription(record: SubscriptionRecord): Promise<boolean> {
+  return (await db.subscriptions.update(record.id, record)) > 0;
 }

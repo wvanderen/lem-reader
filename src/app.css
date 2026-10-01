@@ -4897,12 +4897,14 @@ main#main > .status:empty {
 }
 
 /* ════════════════════════════════════════════════════════════════════════
- * Issue #121 — the Discover destination (#/discover).
+ * Issue #121 + #123 — the Discover destination (#/discover).
  * The LibraryView twin: header row → announcement .status → subscribe form
- * → no-content state or subscription list. Every selector consumes custom
- * properties only (the three themes re-theme automatically); token-only
- * spacing; zero motion properties; the shared 1100px centered measure
- * (the G1 discipline — main#main > .status already centers itself).
+ * → no-content state, or the unified newest-first timeline (toolbar: the
+ * single-feed filter + Refresh; stale notices; item entries) plus the
+ * per-feed management rows. Every selector consumes custom properties only
+ * (the three themes re-theme automatically); token-only spacing; zero
+ * motion properties; the shared 1100px centered measure (the G1 discipline
+ * — main#main > .status already centers itself).
  * ════════════════════════════════════════════════════════════════════════ */
 
 /* The subscribe form — the surface's always-visible first action. The
@@ -4935,6 +4937,96 @@ main#main > .status:empty {
   }
 }
 
+/* The timeline head — the section heading rides the shared 1100px measure
+   beside the feed controls (issue #123); flex-wrap lets the controls drop
+   under the heading when the band gets tight. */
+.discover-timeline-head {
+  max-width: 1100px;
+  margin: var(--space-xl) auto 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-sm) var(--space-md);
+}
+.discover-timeline-head h2 {
+  margin-block: 0;
+}
+
+/* The feed controls (issue #123): the single-feed filter (native select —
+   one Tab stop) + the manual Refresh. The select mirrors the .library-sort
+   select anatomy (surface, hairline, --font-ui 14px, --touch minimum);
+   below 640px the controls stack full-width (the WCAG 1.4.10 reflow
+   contract — a long feed title can never drive horizontal overflow). */
+.discover-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-sm);
+}
+.discover-filter {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs, var(--space-xs));
+  min-width: 0;
+}
+.discover-filter label {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+.discover-filter select {
+  min-height: var(--touch);
+  max-width: 100%;
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink);
+  cursor: pointer;
+}
+.discover-refresh-button {
+  flex: 0 0 auto;
+}
+@media (max-width: 639.98px) {
+  .discover-toolbar {
+    flex: 1 1 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .discover-filter select {
+    width: 100%;
+  }
+}
+
+/* The stale state (issue #123): one calm notice per failed feed — hairline
+   card, soft ink, the ONE reason catalog's copy + the honest last-known-good
+   time, with Retry beside it. No alert styling: a failed refresh is a
+   state, not an alarm. */
+.discover-refresh-notice {
+  max-width: 1100px;
+  margin: var(--space-md) auto 0 auto;
+  padding: var(--space-sm) var(--space-md);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+}
+.discover-refresh-notice p {
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
 /* The no-content / error state — the .library-empty twin: the shared card
    chrome stripped so the state stays reading-measure page copy (the
    library-empty discipline), h2/p rhythm from the shared .status rules. */
@@ -4949,10 +5041,11 @@ main#main > .status:empty {
   margin-block-start: 0;
 }
 
-/* The subscription list — the .library-list single-column row anatomy. */
+/* The subscription management list (issue #123 — "Your feeds") — the
+   .library-list single-column row anatomy. */
 .discover-list {
   list-style: none;
-  margin: var(--space-xl) auto;
+  margin: var(--space-md) auto var(--space-xl) auto;
   padding: 0;
   max-width: 1100px;
   display: grid;
@@ -4973,8 +5066,10 @@ main#main > .status:empty {
   flex: 1 1 320px;
   min-width: 0;
 }
-.discover-row h2 {
+.discover-row h3 {
   margin-block: 0;
+  font-size: 1rem;
+  line-height: 1.4;
 }
 .discover-row-actions {
   flex: 0 0 auto;
@@ -4987,25 +5082,36 @@ main#main > .status:empty {
   color: var(--ink-soft);
   line-height: 1.5;
 }
+.discover-feed-updated {
+  margin: var(--space-xs) 0 0 0;
+}
 
-/* The bounded recent-item previews. Images are decorative (alt="") and
-   sized by CSS so a hostile aspect ratio can never drive horizontal
-   overflow (the reflow contract): a fixed thumb column from 480px, a
-   full-width band under it below. */
-.discover-items {
+/* The unified newest-first timeline (issue #123): one list across every
+   feed, hairline-separated entries, riding the shared 1100px measure. */
+.discover-timeline {
   list-style: none;
-  margin: var(--space-md) 0 0 0;
+  margin: var(--space-md) auto var(--space-xl) auto;
   padding: 0;
+  max-width: 1100px;
   display: grid;
-  gap: var(--space-md);
+}
+.discover-timeline-empty {
+  max-width: 1100px;
+  margin: var(--space-md) auto var(--space-xl) auto;
 }
 .discover-item {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
-  padding-top: var(--space-md);
+  padding-block: var(--space-md);
   border-top: 1px solid var(--hairline);
 }
+.discover-item-feed {
+  margin: 0;
+}
+/* Images are decorative (alt="") and sized by CSS so a hostile aspect
+   ratio can never drive horizontal overflow (the reflow contract): a
+   fixed thumb column from 480px, a full-width band under it below. */
 @media (min-width: 480px) {
   .discover-item {
     flex-direction: row;

@@ -366,11 +366,19 @@ export async function ingestPastedTranscript(
  * caller's catch-all surfaces the calm server-error copy).
  */
 export async function discoverFeed(feedUrl: string): Promise<FeedPreview> {
-  const res = await fetch("/api/ingest", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ feedUrl }),
-  });
+  let res: Response;
+  try {
+    res = await fetch("/api/ingest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ feedUrl }),
+    });
+  } catch {
+    // A raw network failure (offline, DNS, abort) is the cataloged
+    // "fetch-failed" — the honest "Couldn't reach this feed." copy, not
+    // the catch-all server-error (issue #123 stale-state voice).
+    throw new IngestionError("fetch-failed");
+  }
 
   // Parse the response body as IngestionResponse. A non-JSON body (e.g. an
   // HTML 502 page from a misconfigured proxy) throws here; surface it as

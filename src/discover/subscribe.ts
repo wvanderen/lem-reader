@@ -58,6 +58,7 @@ export async function subscribeToFeed(rawUrl: string): Promise<SubscribeOutcome>
   if (await hasSubscriptionForFeed(feed.url)) {
     return { outcome: "already-subscribed" };
   }
+  const subscribedAt = new Date().toISOString();
   const record = SubscriptionRecordSchema.parse({
     schemaVersion: 1,
     id: crypto.randomUUID(),
@@ -65,7 +66,10 @@ export async function subscribeToFeed(rawUrl: string): Promise<SubscribeOutcome>
     title: feed.title,
     ...(feed.description !== undefined ? { description: feed.description } : {}),
     items: feed.items,
-    subscribedAt: new Date().toISOString(),
+    subscribedAt,
+    // Issue #123 — subscribe IS a successful fetch: the last-known-good
+    // stamp starts here, before any refresh.
+    lastFetchedAt: subscribedAt,
   });
   await saveSubscription(record);
   return { outcome: "subscribed", subscription: record };
