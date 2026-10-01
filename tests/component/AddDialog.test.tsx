@@ -56,12 +56,18 @@ vi.mock("../../src/ingestion/IngestionClient", () => ({
 }));
 
 // Mock DexieLibrarySource so the test never touches IndexedDB.
-vi.mock("../../src/ingestion/LibrarySource", () => ({
-  dexieLibrarySource: {
-    has: vi.fn(),
-    save: vi.fn(),
-  },
-}));
+vi.mock("../../src/ingestion/LibrarySource", () => {
+  const save = vi.fn();
+  return {
+    dexieLibrarySource: {
+      has: vi.fn(), save,
+      saveIfAbsent: vi.fn(async (...args) => {
+        await save(...args);
+        return true;
+      }),
+    },
+  };
+});
 
 // Mock booksStore (the book-level dedupe/save seams, D7-07 at book level).
 vi.mock("../../src/persistence/booksStore", () => ({

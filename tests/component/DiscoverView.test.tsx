@@ -53,7 +53,7 @@ vi.mock("../../src/discover/saveItem", async (importOriginal) => ({
 // invalidation bus, so a save's invalidateLibrarySnapshot() re-derives the
 // snapshot exactly as the live hook does.
 const { snapshotState, snapshotReloadWith } = vi.hoisted(() => {
-  const state = { articles: [] as unknown[], version: 0 };
+  const state = { articles: [] as unknown[], version: 0, status: "ready" as "ready" | "error" };
   return {
     snapshotState: state,
     snapshotReloadWith: (articles: unknown[]) => {
@@ -64,14 +64,13 @@ const { snapshotState, snapshotReloadWith } = vi.hoisted(() => {
 });
 vi.mock("../../src/ingestion/library/useLibrarySnapshot", async () => {
   const { useSyncExternalStore } = await import("react");
-  const { EMPTY_LIBRARY_SNAPSHOT, onLibrarySnapshotInvalidated } = await import(
-    "../../src/ingestion/library/librarySnapshot"
-  );
+  const { EMPTY_LIBRARY_SNAPSHOT, onLibrarySnapshotInvalidated } =
+    await import("../../src/ingestion/library/librarySnapshot");
   return {
     useLibrarySnapshot: () => {
       useSyncExternalStore(onLibrarySnapshotInvalidated, () => snapshotState.version);
       return {
-        status: "ready" as const,
+        status: snapshotState.status,
         snapshot: {
           ...EMPTY_LIBRARY_SNAPSHOT,
           articles: snapshotState.articles,
@@ -138,6 +137,7 @@ function articleRow(id: string, sourceUrl: string): CanonicalArticle {
 }
 
 beforeEach(() => {
+  snapshotState.status = "ready";
   vi.clearAllMocks();
   snapshotReloadWith([]);
   vi.mocked(updateSubscription).mockResolvedValue(true);
@@ -231,6 +231,7 @@ describe("DiscoverView — the unified timeline (issue #123)", () => {
 
 describe("DiscoverView — refresh moments (issue #123)", () => {
   beforeEach(() => {
+    snapshotState.status = "ready";
     vi.useFakeTimers({ shouldAdvanceTime: true });
   });
   afterEach(() => {
@@ -335,6 +336,7 @@ describe("DiscoverView — removal (issue #123)", () => {
   // behavior — stub the two methods at the prototype level (the AddDialog
   // suite precedent).
   beforeEach(() => {
+    snapshotState.status = "ready";
     HTMLDialogElement.prototype.showModal = vi.fn(function (this: HTMLDialogElement) {
       this.open = true;
     });
@@ -594,6 +596,7 @@ describe("DiscoverView — inline add (issue #124)", () => {
     await user.keyboard("{Enter}");
     expect(await screen.findByText("Saved to your library.")).toBeVisible();
     expect(screen.getByText("In library")).toBeVisible();
+    expect(screen.getByRole("link", { name: "Open A dated item" })).toHaveFocus();
   });
 });
 
@@ -641,4 +644,39 @@ it("shows Retry for an opening save failure while displaying other successful re
   expect(await screen.findByRole("button", { name: "Retry Feed A" })).toBeVisible();
   expect(screen.getByRole("link", { name: /Fresh article/ })).toBeVisible();
   expect(screen.getByRole("link", { name: /A dated item/ })).toBeVisible();
+});
+
+it("discloses failed library reads and retains a confirmed save until a fresh snapshot settles", async () => {
+  snapshotState.status = "error";
+  vi.mocked(listSubscriptions).mockResolvedValue({ ok: true, subscriptions: [SUB_A] });
+  vi.mocked(saveFeedItem).mockResolvedValue({ outcome: "saved", articleId: "saved-id" });
+  render(<DiscoverView hasAppHistory={false} />);
+  await screen.findByText("Latest articles");
+  expect(screen.getByText("Couldn't check your library. Try again.")).toBeVisible();
+  await userEvent.click(screen.getByRole("button", { name: "Save A dated item" }));
+  expect(await screen.findByRole("link", { name: "Open A dated item" })).toHaveAttribute(
+    "href",
+    "#/article/saved-id",
+  );
+  snapshotState.status = "ready";
+  snapshotReloadWith([articleRow("saved-id", "https://a.example.com/a1")]);
+  await userEvent.click(screen.getByRole("button", { name: "Retry library check" }));
+  await waitFor(() =>
+    expect(screen.queryByText("Couldn't check your library. Try again.")).toBeNull(),
+  );
+  expect(screen.getByRole("link", { name: "Open A dated item" })).toBeVisible();
+});
+
+it("returns focus to the activated preview when the same link appears in two feeds", async () => {
+  const second = { ...SUB_B, items: [{ ...SUB_A.items[0], title: "Syndicated item" }] };
+  vi.mocked(listSubscriptions).mockResolvedValue({ ok: true, subscriptions: [SUB_A, second] });
+  vi.mocked(saveFeedItem).mockImplementation(async (link) => {
+    snapshotReloadWith([articleRow("shared-id", link)]);
+    return { outcome: "saved", articleId: "shared-id" };
+  });
+  render(<DiscoverView hasAppHistory={false} />);
+  const save = await screen.findByRole("button", { name: "Save Syndicated item" });
+  save.focus();
+  await userEvent.keyboard("{Enter}");
+  expect(await screen.findByRole("link", { name: "Open Syndicated item" })).toHaveFocus();
 });

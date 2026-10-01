@@ -22,21 +22,18 @@
 //      policy reasons (addToLibrary folds every policy failure into
 //      `refused`); the view renders copy from it only.
 //
-// The pre-press "In library" state is a SEPARATE pure derivation:
-// savedArticleIdForLink matches a library snapshot against a feed item's
-// link so an already-saved preview renders "In library" + "Open" without
-// any press. Identity by sourceUrl is exact-string: an article whose
-// ingest was REDIRECTED to a different canonical URL carries the final
-// URL as its sourceUrl, so a feed link that merely aliases it stays a +
-// until pressed — and the press resolves honestly through the pipeline
-// (contract 2) instead of the view guessing redirects client-side.
+// Saved-state derivation uses the canonical source URL and previously
+// resolved input URLs. These aliases are local provenance metadata and
+// survive navigation and export/import; unresolved links still use the
+// guarded pipeline rather than guessing redirects in the view.
+import { dexieLibrarySource } from "../ingestion/LibrarySource";
 import { addToLibrary } from "../ingestion/addToLibrary";
 import type { CanonicalArticle } from "../content/schema";
 import type { IngestionFailureReason } from "../ingestion/types";
 
 /** The outcome union the Discover view renders copy from (the
  * SubscribeOutcome shape — never throws for policy reasons). */
-export type SaveItemOutcome =
+export type SaveItemOutcome = (
   | { outcome: "saved"; articleId: string }
   | {
       outcome: "already-in-library";
@@ -46,7 +43,8 @@ export type SaveItemOutcome =
        * already-in-library copy without an Open affordance. */
       articleId?: string;
     }
-  | { outcome: "refused"; reason: IngestionFailureReason };
+  | { outcome: "refused"; reason: IngestionFailureReason }
+) & { sourceAliasError?: true };
 
 /**
  * saveFeedItem — ingest the linked page through the guarded pipeline and
@@ -55,12 +53,29 @@ export type SaveItemOutcome =
  */
 export async function saveFeedItem(link: string): Promise<SaveItemOutcome> {
   const outcome = await addToLibrary({ kind: "url", url: link });
+  const articleId =
+    outcome.outcome === "saved-article"
+      ? outcome.articleId
+      : outcome.outcome === "refused"
+        ? outcome.existingArticleId
+        : undefined;
+  let sourceAliasError: true | undefined;
+  if (articleId !== undefined) {
+    try {
+      await dexieLibrarySource.rememberSourceUrl(articleId, link);
+    } catch {
+      // The article already exists: a metadata write failure must never
+      // describe the successful article save as failed.
+      sourceAliasError = true;
+    }
+  }
+  const metadata = sourceAliasError ? { sourceAliasError } : {};
   if (outcome.outcome === "saved-article") {
-    return { outcome: "saved", articleId: outcome.articleId };
+    return { outcome: "saved", articleId: outcome.articleId, ...metadata };
   }
   if (outcome.outcome === "refused") {
     return outcome.reason === "already-in-library"
-      ? { outcome: "already-in-library", articleId: outcome.existingArticleId }
+      ? { outcome: "already-in-library", articleId: outcome.existingArticleId, ...metadata }
       : { outcome: "refused", reason: outcome.reason };
   }
   // The url arm never yields saved-book (books ride the epub file arm) —
@@ -80,7 +95,8 @@ export function savedArticleIdForLink(
   link: string,
 ): string | undefined {
   for (const article of articles) {
-    if (article.provenance.sourceUrl === link) return article.id;
+    if (article.provenance.sourceUrl === link || article.provenance.sourceAliases?.includes(link))
+      return article.id;
   }
   return undefined;
 }

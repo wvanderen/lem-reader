@@ -15,6 +15,10 @@
 //     id-less edge when it does not. Nothing is ever re-saved.
 //   - Other refusals pass their typed reason through; the union never
 //     throws for policy reasons.
+import { dexieLibrarySource } from "../../../src/ingestion/LibrarySource";
+vi.mock("../../../src/ingestion/LibrarySource", () => ({
+  dexieLibrarySource: { rememberSourceUrl: vi.fn(async () => {}) },
+}));
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 vi.mock("../../../src/ingestion/addToLibrary", () => ({
@@ -23,10 +27,7 @@ vi.mock("../../../src/ingestion/addToLibrary", () => ({
 
 import { addToLibrary } from "../../../src/ingestion/addToLibrary";
 import type { AddToLibraryOutcome } from "../../../src/ingestion/addToLibrary";
-import {
-  saveFeedItem,
-  savedArticleIdForLink,
-} from "../../../src/discover/saveItem";
+import { saveFeedItem, savedArticleIdForLink } from "../../../src/discover/saveItem";
 import type { CanonicalArticle } from "../../../src/content/types";
 
 const addToLibraryMock = vi.mocked(addToLibrary);
@@ -35,10 +36,7 @@ beforeEach(() => {
   addToLibraryMock.mockReset();
 });
 
-function libraryArticle(
-  id: string,
-  sourceUrl?: string,
-): CanonicalArticle {
+function libraryArticle(id: string, sourceUrl?: string): CanonicalArticle {
   return {
     id,
     provenance: {
@@ -118,9 +116,7 @@ describe("saveFeedItem — the + press policy", () => {
       title: "B",
       skippedChapterCount: 0,
     });
-    await expect(saveFeedItem("https://example.com/x")).rejects.toThrow(
-      /saved-book/,
-    );
+    await expect(saveFeedItem("https://example.com/x")).rejects.toThrow(/saved-book/);
   });
 });
 
@@ -147,9 +143,7 @@ describe("savedArticleIdForLink — the pre-press In library derivation", () => 
       libraryArticle("pasted-with-url", "https://example.com/the-page"),
     ];
     // An exact match still wins even when other rows lack a sourceUrl.
-    expect(savedArticleIdForLink(articles, "https://example.com/the-page")).toBe(
-      "pasted-with-url",
-    );
+    expect(savedArticleIdForLink(articles, "https://example.com/the-page")).toBe("pasted-with-url");
   });
 
   it("the first matching row wins (identity is the slug — two rows cannot honestly share a sourceUrl)", () => {
@@ -159,4 +153,22 @@ describe("savedArticleIdForLink — the pre-press In library derivation", () => 
     ];
     expect(savedArticleIdForLink(articles, "https://example.com/the-page")).toBe("first");
   });
+});
+
+it("reports an alias metadata failure without turning an already-saved article into a refusal", async () => {
+  addToLibraryMock.mockResolvedValue({ outcome: "saved-article", articleId: "saved-id" } as never);
+  vi.mocked(dexieLibrarySource.rememberSourceUrl).mockRejectedValueOnce(
+    new Error("Storage failed"),
+  );
+  expect(await saveFeedItem("https://example.com/alias")).toEqual({
+    outcome: "saved",
+    articleId: "saved-id",
+    sourceAliasError: true,
+  });
+});
+
+it("derives saved state from a remembered redirect alias", () => {
+  const article = libraryArticle("canonical-id", "https://example.com/canonical");
+  article.provenance.sourceAliases = ["https://example.com/alias"];
+  expect(savedArticleIdForLink([article], "https://example.com/alias")).toBe("canonical-id");
 });

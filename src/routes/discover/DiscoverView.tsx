@@ -136,10 +136,7 @@ function applyOutcome(outcome: SubscribeOutcome, announce: (message: string) => 
  * saved page and a resolved duplicate BOTH leave the preview reading
  * "In library"; refusals use the PAGE voice (the saved thing is an
  * article, not a feed). */
-function applySaveOutcome(
-  outcome: SaveItemOutcome,
-  announce: (message: string) => void,
-): void {
+function applySaveOutcome(outcome: SaveItemOutcome, announce: (message: string) => void): void {
   switch (outcome.outcome) {
     case "saved":
       announce("Saved to your library.");
@@ -340,11 +337,12 @@ export function DiscoverView({ hasAppHistory }: { hasAppHistory: boolean }) {
   // ── Inline save state (issue #124) ─────────────────────────────────────
   // The ONE library snapshot backs the pre-press "In library" state (an
   // article whose sourceUrl IS a preview's link renders In library + Open
-  // with no press). resolvedIds carries the SESSION's press resolutions
-  // (link → the canonical id the pipeline returned) — the redirect-aliased
-  // rows a sourceUrl match cannot see, resolved honestly by the press.
-  const { snapshot } = useLibrarySnapshot();
-  const [resolvedIds, setResolvedIds] = useState<Record<string, string>>({});
+  // with no press). Resolved aliases ride the same snapshot; session
+  // outcomes bridge the asynchronous reload, including failed reads.
+  const { snapshot, status: libraryStatus } = useLibrarySnapshot();
+  const [resolvedIds, setResolvedIds] = useState<
+    Record<string, { articleId: string; snapshot: typeof snapshot }>
+  >({});
   const [savingLinks, setSavingLinks] = useState<ReadonlySet<string>>(new Set());
   // The overlap guard: state alone races across renders (two clicks in one
   // tick), so the in-flight check is a ref — the refresh pattern's twin,
@@ -359,16 +357,31 @@ export function DiscoverView({ hasAppHistory }: { hasAppHistory: boolean }) {
     [snapshot.articles],
   );
 
-  /** The "In library" id for a linked preview: this session's press
-   * resolution first (while its row exists), else the library snapshot's
-   * sourceUrl match. */
+  const saveFocusRef = useRef<{
+    link: string;
+    button: HTMLButtonElement;
+    row: Element | null;
+  } | null>(null);
+
+  /** Keep confirmed outcomes until a fresh successful snapshot can
+   * establish whether the row still exists. */
+
   const savedIdFor = (link: string): string | undefined => {
     const resolved = resolvedIds[link];
-    if (resolved !== undefined && savedIds.has(resolved)) return resolved;
+    if (
+      resolved !== undefined &&
+      (savedIds.has(resolved.articleId) ||
+        resolved.snapshot === snapshot ||
+        libraryStatus === "error")
+    )
+      return resolved.articleId;
     return savedArticleIdForLink(snapshot.articles, link);
   };
 
-  async function handleSaveItem(link: string) {
+  async function handleSaveItem(link: string, button: HTMLButtonElement) {
+    if (document.activeElement === button) {
+      saveFocusRef.current = { link, button, row: button.closest(".discover-item") };
+    }
     if (savingInFlightRef.current.has(link)) return;
     savingInFlightRef.current.add(link);
     setSavingLinks(new Set(savingInFlightRef.current));
@@ -376,20 +389,25 @@ export function DiscoverView({ hasAppHistory }: { hasAppHistory: boolean }) {
     try {
       const outcome = await saveFeedItem(link);
       applySaveOutcome(outcome, setMessage);
+      if (outcome.sourceAliasError) {
+        setMessage(
+          "The article is in your library, but couldn't remember this feed link. You may need to save this preview again on a future visit.",
+        );
+      }
+      if (outcome.outcome === "refused") saveFocusRef.current = null;
       if (outcome.outcome === "saved") {
-        setResolvedIds((prev) => ({ ...prev, [link]: outcome.articleId }));
+        setResolvedIds((prev) => ({ ...prev, [link]: { articleId: outcome.articleId, snapshot } }));
         // The ONE write-followup call (the AddDialog onSaved discipline):
         // the snapshot re-derives, so the saved state survives leaving
         // Discover and coming back even without a session resolution.
         invalidateLibrarySnapshot();
-      } else if (
-        outcome.outcome === "already-in-library" &&
-        outcome.articleId !== undefined
-      ) {
+      } else if (outcome.outcome === "already-in-library" && outcome.articleId !== undefined) {
         const { articleId } = outcome;
-        setResolvedIds((prev) => ({ ...prev, [link]: articleId }));
+        setResolvedIds((prev) => ({ ...prev, [link]: { articleId, snapshot } }));
+        invalidateLibrarySnapshot();
       }
     } catch {
+      saveFocusRef.current = null;
       setMessage("Couldn't save this page. Try again.");
     } finally {
       savingInFlightRef.current.delete(link);
@@ -416,7 +434,17 @@ export function DiscoverView({ hasAppHistory }: { hasAppHistory: boolean }) {
       {/* The ONE announcement region — submitting progress, refusal copy,
           saves, removals, refresh outcomes. Collapsed via CSS when idle
           (:empty). */}
-      <StatusRegion>{message !== null && <p>{message}</p>}</StatusRegion>
+      <StatusRegion>
+        {message !== null && <p>{message}</p>}
+        {libraryStatus === "error" && (
+          <>
+            <p>Couldn't check your library. Try again.</p>
+            <button className="btn btn-quiet" onClick={invalidateLibrarySnapshot}>
+              Retry library check
+            </button>
+          </>
+        )}
+      </StatusRegion>
       {/* The subscribe form — always visible, the surface's first action.
           Native label + url input (the AddDialog URL arm's anatomy). */}
       <form className="discover-subscribe-form" onSubmit={handleSubscribe}>
@@ -583,6 +611,16 @@ export function DiscoverView({ hasAppHistory }: { hasAppHistory: boolean }) {
                                 <span className="discover-item-saved">In library</span>
                                 <a
                                   className="btn btn-quiet discover-item-open"
+                                  ref={(node) => {
+                                    const pending = saveFocusRef.current;
+                                    if (!node || pending?.link !== link || node.closest(".discover-item") !== pending.row) return;
+                                    if (
+                                      document.activeElement === pending.button ||
+                                      document.activeElement === document.body
+                                    )
+                                      node.focus();
+                                    saveFocusRef.current = null;
+                                  }}
                                   href={`#/article/${savedId}`}
                                   aria-label={`Open ${item.title}`}
                                 >
@@ -594,7 +632,7 @@ export function DiscoverView({ hasAppHistory }: { hasAppHistory: boolean }) {
                                 busy={savingLinks.has(link)}
                                 className="btn btn-icon discover-item-save"
                                 aria-label={`Save ${item.title}`}
-                                onClick={() => void handleSaveItem(link)}
+                                onClick={(event) => void handleSaveItem(link, event.currentTarget)}
                               >
                                 <PlusIcon />
                               </BusyButton>

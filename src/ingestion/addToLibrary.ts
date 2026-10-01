@@ -328,10 +328,17 @@ async function saveArticle(
       existingArticleId: result.article.id,
     };
   }
-  await dexieLibrarySource.save(
+  const inserted = await dexieLibrarySource.saveIfAbsent(
     withTags(result.article, tags),
     result.assets,
   );
+  if (!inserted) {
+    return {
+      outcome: "refused",
+      reason: "already-in-library",
+      existingArticleId: result.article.id,
+    };
+  }
   return {
     outcome: "saved-article",
     articleId: result.article.id,

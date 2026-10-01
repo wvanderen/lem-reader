@@ -742,6 +742,8 @@ test.describe("Discover (issues #121 + #123)", () => {
     ).toHaveAttribute("href", "#/article/journal-example-com-stable-positions");
     await expect(page).toHaveURL(/#\/discover$/);
 
+    await expect(page.getByRole("link", { name: "Open On stable reading positions" })).toBeFocused();
+
     // Open is the reader's choice; it navigates in-app to the article.
     await page.getByRole("link", { name: "Open On stable reading positions" }).click();
     await expect(
@@ -895,6 +897,10 @@ test.describe("Discover (issues #121 + #123)", () => {
       .first()
       .getAttribute("href");
     expect(openHref).toBe("#/article/journal-example-com-story");
+
+    await page.reload();
+    await expect(page.getByRole("link", { name: "Open Shared story" })).toHaveCount(2);
+    await expect(page.locator(".discover-item-save")).toHaveCount(0);
 
     // The library holds ONE story, carrying the FIRST-saved content.
     await primaryNav(page).getByRole("link", { name: "Library" }).click();
