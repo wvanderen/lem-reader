@@ -8,9 +8,15 @@
 //      gets the first fragment + exactly one U+2026 — including when the
 //      fragment itself exceeds the cap (cap ellipsis and continuation
 //      ellipsis are the SAME single character, never two).
+// The review-row redesign adds the display-half cells: fullQuoteDisplay
+// renders the ENTIRE stored span with the spaced ellipsis marker at each
+// block boundary — no cap, no truncation, single-fragment passthrough.
 // Mirrors the pure-module test style of overlap.test.ts.
 import { describe, expect, it } from "vitest";
-import { firstFragmentExcerpt } from "../../../src/annotations/excerpt";
+import { firstFragmentExcerpt, fullQuoteDisplay } from "../../../src/annotations/excerpt";
+import { ArticleSchema } from "../../../src/content/schema";
+import type { Block } from "../../../src/content/schema";
+import { graphemeClusters, normalizeText } from "../../../src/content/normalizeText";
 import { BLOCK_SEPARATOR } from "../../../src/content/normalizeText";
 
 /** The calm ellipsis — exactly one U+2026 (the only legal form). */
@@ -41,9 +47,7 @@ describe("firstFragmentExcerpt — D19-10 excerpt honesty", () => {
   });
 
   it("derives the FIRST FRAGMENT + exactly one ellipsis for a multi-block span (continuation)", () => {
-    const exact = ["opening fragment", "second block", "third block"].join(
-      BLOCK_SEPARATOR,
-    );
+    const exact = ["opening fragment", "second block", "third block"].join(BLOCK_SEPARATOR);
     const out = firstFragmentExcerpt(exact, 120);
     expect(out).toBe("opening fragment" + ELLIPSIS);
     // Later blocks never leak into the excerpt.
@@ -71,5 +75,115 @@ describe("firstFragmentExcerpt — D19-10 excerpt honesty", () => {
     const out = firstFragmentExcerpt("", 120);
     expect(out).toBe("");
     expect(out).not.toContain(ELLIPSIS);
+  });
+});
+
+function displayBlocks(blocks: Block[], exact?: string): string {
+  const article = ArticleSchema.parse({
+    id: "quote-display",
+    revision: 1,
+    lang: "en",
+    provenance: {
+      title: "Quotes",
+      retrievedAt: "2026-01-01T00:00:00.000Z",
+      originalHtmlHash: "0".repeat(64),
+    },
+    blocks,
+  });
+  const text = normalizeText(article);
+  const quote = exact ?? text;
+  const start = graphemeClusters(text.slice(0, text.indexOf(quote)), "en").length;
+  return fullQuoteDisplay(quote, article, {
+    start,
+    end: start + graphemeClusters(quote, "en").length,
+  });
+}
+
+function displayParagraphs(exact: string): string {
+  return displayBlocks(
+    exact
+      .split(BLOCK_SEPARATOR)
+      .map((text) => ({ kind: "paragraph", content: [{ text, marks: [] }] })),
+  );
+}
+
+describe("fullQuoteDisplay — the review row's full-span display", () => {
+  it("passes a single-fragment exact through byte-unchanged (no marker, no cap)", () => {
+    const exact = "A calm opening sentence.";
+    expect(displayParagraphs(exact)).toBe(exact);
+  });
+
+  it("joins two fragments with exactly one spaced ellipsis marker at the block boundary", () => {
+    const exact = ["first block text", "second block text"].join(BLOCK_SEPARATOR);
+    const out = displayParagraphs(exact);
+    expect(out).toBe("first block text \u2026 second block text");
+    expect(ellipsisCount(out)).toBe(1);
+  });
+
+  it("renders EVERY fragment in order — no length cap, no dropped tail", () => {
+    const exact = ["alpha", "beta", "gamma", "delta"].join(BLOCK_SEPARATOR);
+    const out = displayParagraphs(exact);
+    expect(out).toBe("alpha \u2026 beta \u2026 gamma \u2026 delta");
+    expect(ellipsisCount(out)).toBe(3);
+    expect(out.endsWith("delta")).toBe(true);
+  });
+
+  it("preserves fragment-internal text verbatim (no whitespace normalization)", () => {
+    const source = "  padded  \ntrailing   ";
+    expect(displayBlocks([{ kind: "code-block", source }])).toBe(source);
+  });
+
+  it("preserves multiline code within one block, including a partial selection", () => {
+    const source = "😀 prefix\nconst x = 1;\nreturn x;\ntail";
+    const exact = "const x = 1;\nreturn x;";
+    expect(displayBlocks([{ kind: "code-block", source }], exact)).toBe(exact);
+  });
+
+  it("marks structural boundaries while preserving code newlines in nested blocks", () => {
+    expect(
+      displayBlocks([
+        { kind: "paragraph", content: [{ text: "before", marks: [] }] },
+        { kind: "blockquote", children: [{ kind: "code-block", source: "one\ntwo" }] },
+        { kind: "paragraph", content: [{ text: "after", marks: [] }] },
+      ]),
+    ).toBe("before … one\ntwo … after");
+  });
+
+  it("preserves code newlines within list items across sibling boundaries", () => {
+    expect(
+      displayBlocks([
+        {
+          kind: "bulleted-list",
+          items: [
+            { content: [{ kind: "paragraph", content: [{ text: "first", marks: [] }] }] },
+            { content: [{ kind: "code-block", source: "one\ntwo" }] },
+            { content: [{ kind: "paragraph", content: [{ text: "last", marks: [] }] }] },
+          ],
+        },
+      ]),
+    ).toBe("first … one\ntwo … last");
+  });
+
+  it("preserves stored text when a recovered range no longer matches it", () => {
+    const article = ArticleSchema.parse({
+      id: "changed-quote",
+      revision: 2,
+      lang: "en",
+      provenance: {
+        title: "Changed",
+        retrievedAt: "2026-01-01T00:00:00.000Z",
+        originalHtmlHash: "0".repeat(64),
+      },
+      blocks: [{ kind: "paragraph", content: [{ text: "changed" }] }],
+    });
+    expect(fullQuoteDisplay("one\ntwo", article, { start: 0, end: 7 })).toBe("one\ntwo");
+  });
+
+  it("preserves uncertain or article-less quotes without guessing boundaries", () => {
+    expect(fullQuoteDisplay("one\ntwo")).toBe("one\ntwo");
+  });
+
+  it("never invents content for an empty exact (returns empty)", () => {
+    expect(fullQuoteDisplay("")).toBe("");
   });
 });

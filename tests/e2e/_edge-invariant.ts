@@ -331,7 +331,7 @@ export async function openEdgeDestination(
       page.getByRole("heading", { level: 1, name: "Highlights" }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: /^Go to highlight:/ }).first(),
+      page.getByRole("link", { name: /^Go to highlight:/ }).first(),
     ).toBeVisible();
     return;
   }
@@ -456,9 +456,9 @@ export async function assertDestinationInvariant(
         locator: page.getByRole("combobox", { name: "Sort" }),
       },
       {
-        desc: "row jump button",
+        desc: "row jump link",
         locator: page
-          .getByRole("button", { name: /^Go to highlight:/ })
+          .getByRole("link", { name: /^Go to highlight:/ })
           .first(),
       },
       {

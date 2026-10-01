@@ -187,6 +187,15 @@ export function JumpToArticleIcon(props: IconProps) {
   );
 }
 
+/** Droplet — change-highlight-color affordance (the review panel). */
+export function DropletIcon(props: IconProps) {
+  return (
+    <Svg size={20} {...props}>
+      <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z" />
+    </Svg>
+  );
+}
+
 /** Plus — the Add-to-Library trigger (header icon on Highlights). */
 export function PlusIcon(props: IconProps) {
   return (

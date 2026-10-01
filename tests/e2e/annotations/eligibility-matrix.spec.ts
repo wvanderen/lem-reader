@@ -766,30 +766,34 @@ test.describe("ANNO-12 eligibility matrix — backwards drag (Pitfall 9)", () =>
 });
 
 test.describe("ANNO-12 eligibility matrix — D19-11 review row shape", () => {
-  test("D19-11: the review row for a multi-block span shows NO block-count badge + the first-fragment excerpt with the SINGLE ellipsis", async ({
+  test("D19-11: the review row for a multi-block span shows NO block-count badge + the FULL span display (spaced ellipsis joins) while the jump name keeps the first-fragment excerpt", async ({
     page,
   }) => {
     // Two spans in two articles: (a) essay block 0 → 1 (a PROSE span whose
-    // first fragment exceeds the 120-char cap — cap + continuation
-    // collapse to exactly ONE ellipsis); (b) figure-heavy marker →
-    // paragraph (a span whose first fragment "[1]" is WITHIN the cap — the
-    // clean continuation ellipsis).
+    // full display joins its two fragments with the single spaced ellipsis
+    // marker); (b) figure-heavy marker → paragraph (a span whose first
+    // fragment "[1]" leads the full display, two boundary markers total).
+    //
+    // Review-row redesign vocabulary: the row's center-stage quote renders
+    // the ENTIRE stored span (every fragment, " … " at each block boundary,
+    // no cap, no trailing ellipsis); the CAPPED first-fragment derivation
+    // survives in the accessible names (jump + curation buttons — D19-10).
     //
     // Issue #81 rot repair: the b13eba5 Getting Started split shrank the
     // library composite's fixture tier to `libraryFixtures`, so highlights
     // on regression-corpus members classify ORPHAN at review (their
-    // articles are no longer listed) — orphan rows render `div.review-row`
-    // WITH the "Article missing" badge, which would falsify every
-    // confident-row shape this cell proves. Seed the two canonical rows
-    // into Dexie first (the seedImageryArticle discipline: mount the app
-    // once so the declared schema exists, then put rows) so both spans
-    // stay confident + article-backed jumpable rows. Issue #125 webkit
-    // triage: the seed follows the 10-03 harness discipline (goto →
-    // RELOAD → the schema-declared fixture-row signal → seed) — the
-    // beforeEach wipe's deleteDatabase completes the moment webkit's Dexie
-    // closes on versionchange, so seeding straight after a same-document
-    // goto can land on a store-less v1 db as a silent no-op (the review
-    // rows then classify orphan and this cell sees div rows).
+    // articles are no longer listed) — orphan rows render with the
+    // "Article missing" badge, which would falsify every confident-row
+    // shape this cell proves. Seed the two canonical rows into Dexie first
+    // (the seedImageryArticle discipline: mount the app once so the
+    // declared schema exists, then put rows) so both spans stay confident +
+    // article-backed jumpable rows. Issue #125 webkit triage: the seed
+    // follows the 10-03 harness discipline (goto → RELOAD → the
+    // schema-declared fixture-row signal → seed) — the beforeEach wipe's
+    // deleteDatabase completes the moment webkit's Dexie closes on
+    // versionchange, so seeding straight after a same-document goto can
+    // land on a store-less v1 db as a silent no-op (the review rows then
+    // classify orphan and this cell sees orphan rows).
     await page.goto(`${BASE}/`);
     await page.reload();
     await expect(
@@ -823,34 +827,39 @@ test.describe("ANNO-12 eligibility matrix — D19-11 review row shape", () => {
     await expect(
       page.getByRole("heading", { level: 1, name: "Highlights" }),
     ).toBeVisible();
-    const rows = page.locator("button.review-row");
+    const rows = page.locator("li.review-item");
     await expect(rows).toHaveCount(2);
     // D19-11: NO block-count badge — confident rows carry NO badge element
     // and no "×N blocks" vocabulary anywhere.
     await expect(page.locator(".review-badge")).toHaveCount(0);
     await expect(rows.filter({ hasText: /\d+\s+blocks?/i })).toHaveCount(0);
-    // The prose row: first-fragment excerpt — starts at the article's
-    // opening words, ends with the SINGLE U+2026 (never three dots).
+    // The prose row: FULL-span display — starts at the article's opening
+    // words, carries the single spaced ellipsis marker at the block
+    // boundary, and does NOT end with an ellipsis (nothing is truncated).
     const proseQuote = page.locator(".review-quote").filter({
       hasText: /In January/,
     });
     await expect(proseQuote).toHaveCount(1);
     const proseText = (await proseQuote.textContent()) ?? "";
     expect(proseText.startsWith("In January")).toBeTruthy();
-    expect(proseText.endsWith("\u2026")).toBeTruthy();
-    expect(proseText.endsWith("\u2026\u2026")).toBeFalsy();
+    expect(proseText).toContain(" \u2026 ");
+    expect(proseText.endsWith("\u2026")).toBeFalsy();
     expect(proseText.endsWith("...")).toBeFalsy();
-    // The marker row: first fragment "[1]" + the single ellipsis, exactly.
+    // The marker row: full display starts at the "[1]" marker fragment and
+    // carries every fragment — no trailing ellipsis.
     const markerQuote = page.locator(".review-quote").filter({
       hasText: /^\[1\]/,
     });
     await expect(markerQuote).toHaveCount(1);
-    expect((await markerQuote.textContent()) ?? "").toBe("[1]\u2026");
-    // The jump affordance's accessible name carries the same first-fragment
-    // excerpt (aria derives through the ONE helper — 19-02).
-    await expect(rows.filter({ hasText: /\[1\]/ })).toHaveCount(1);
-    const markerRow = rows.filter({ hasText: /\[1\]/ });
-    await expect(markerRow).toHaveAttribute(
+    const markerText = (await markerQuote.textContent()) ?? "";
+    expect(markerText.startsWith("[1] \u2026 ")).toBeTruthy();
+    expect(markerText.endsWith("\u2026")).toBeFalsy();
+    // The jump affordance's accessible name still carries the FIRST-FRAGMENT
+    // excerpt (aria derives through the ONE capped helper — 19-02; the
+    // review-row redesign keeps that voice for every accessible name).
+    await expect(rows.filter({ hasText: "[1]" })).toHaveCount(1);
+    const markerRow = rows.filter({ hasText: "[1]" });
+    await expect(markerRow.locator("a.review-jump")).toHaveAttribute(
       "aria-label",
       /^Go to highlight: \[1\]\u2026/,
     );

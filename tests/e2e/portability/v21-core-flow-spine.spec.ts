@@ -511,7 +511,7 @@ test("ACPT-07 — the v2.1 core flow as one unbroken journey: nothing lost acros
       pageA.getByRole("heading", { level: 1, name: "Highlights" }),
     ).toBeVisible({ timeout: 10_000 });
     const rowButton = pageA
-      .getByRole("button", { name: /^Go to highlight:/ })
+      .getByRole("link", { name: /^Go to highlight:/ })
       .first();
     await expect(rowButton, "the cross-block highlight is a confident, jumpable row").toBeEnabled();
     await rowButton.click();

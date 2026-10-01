@@ -557,7 +557,7 @@ test("review panel #/highlights: zero serious/critical WCAG 2.2 AA violations (s
   // The seeded row rendered (the panel's load effect settled) before axe
   // samples the tree — an empty panel would silently weaken the gate.
   await expect(
-    page.getByRole("button", { name: /^Go to highlight:/ }).first(),
+    page.getByRole("link", { name: /^Go to highlight:/ }).first(),
   ).toBeVisible();
   const results = await new AxeBuilder({ page })
     .withTags([...WCAG_TAGS])
@@ -576,7 +576,7 @@ test("review panel #/highlights: zero serious/critical WCAG 2.2 AA violations (s
   // identifier), the dialog's accessible name, the fieldset/legend
   // grouping, and the :modal contract the note-popover cell pins.
   await page
-    .getByRole("button", { name: /^Change color: / })
+    .getByRole("button", { name: /^Change color, currently / })
     .first()
     .click();
   const colorDialog = page.getByRole("dialog", { name: "Change color" });

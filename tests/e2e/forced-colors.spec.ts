@@ -231,10 +231,10 @@ test.describe("Forced colors (A11Y-05)", () => {
     await expect(page.locator(".review-badge").first()).toContainText(
       "Article missing",
     );
-    // Operable under emulation: the confident row's jump button opens the
+    // Operable under emulation: the confident row's jump link opens the
     // article (a real reader click path).
     const rowButton = page
-      .getByRole("button", { name: /^Go to highlight:/ })
+      .getByRole("link", { name: /^Go to highlight:/ })
       .first();
     await expect(rowButton).toBeEnabled();
     await rowButton.click();

@@ -42,6 +42,7 @@ import { effectiveTitle } from "../../ingestion/library/effectiveMetadata";
 // highlight-local casings (the write seam folds only against the library
 // vocabulary), so two rows may carry "Margin" and "margin".
 import { sameTag } from "../../ingestion/library/tagText";
+import type { TextPositionSelector } from "../../content/normalizeText";
 import type { CanonicalArticle, HighlightRecord, NoteRecord } from "../../content/schema";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -88,6 +89,8 @@ export interface ReviewEntry {
   note?: NoteRecord;
   status: ConfidenceValue;
   article?: CanonicalArticle;
+  /** Current resolved range; display verifies exact text before using its boundaries. */
+  resolvedPosition?: TextPositionSelector;
 }
 
 /** One article's group of entries. `key` is the article id (stable for
@@ -160,6 +163,7 @@ export function deriveReviewSections(
     const article = articleById.get(highlight.articleId); // Map.get — T-10-01a
     const note = noteByHighlightId.get(highlight.id);
     let status: ConfidenceValue;
+    let resolvedPosition: ReviewEntry["resolvedPosition"];
     if (!article) {
       status = "orphan"; // absent article → orphan, row KEPT (D10-05)
     } else {
@@ -169,9 +173,11 @@ export function deriveReviewSections(
         article.lang,
         highlight.position,
       );
+      if (typeof resolved !== "string") resolvedPosition = resolved;
       status = resolved === "ambiguous" || resolved === "orphan" ? resolved : "confident";
     }
     const entry: ReviewEntry = article ? { highlight, status, article } : { highlight, status };
+    if (resolvedPosition) entry.resolvedPosition = resolvedPosition;
     if (note) entry.note = note;
     entries.push(entry);
   }

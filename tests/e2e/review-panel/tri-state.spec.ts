@@ -36,6 +36,9 @@ import {
   type SeedRows,
 } from "../portability/_portability";
 import { resolveQuoteSelector } from "../../../src/content/normalizeText";
+// The SHIPPED excerpt derivation — the aria-label excerpt is asserted
+// through the same pure helper the row renders with (REUSE-DO-NOT-FORK).
+import { firstFragmentExcerpt } from "../../../src/annotations/excerpt";
 
 const ARTICLE_ID = "review-tri-state-corpus";
 const TITLE = "Tern Lightkeeper Logbook";
@@ -116,10 +119,11 @@ test.describe("RECV-01.e review-panel tri-state (10-04 honest surfacing)", () =>
   }) => {
     await seedAndOpenReview(page);
 
-    // The ambiguous row renders its badge (exact D10-07 copy).
+    // The ambiguous row renders its badge (exact D10-07 copy; the badge
+    // lives on the card's foot line — inside the li.review-item).
     await expect(page.locator(".review-badge-ambiguous")).toHaveText("Uncertain anchor");
-    // The confident row renders NO badge at all (scoped to its row).
-    const confidentRow = page.locator("section.review-section .review-row", {
+    // The confident row renders NO badge at all (scoped to its card).
+    const confidentRow = page.locator("section.review-section li.review-item", {
       hasText: EXCERPT_CONFIDENT,
     });
     await expect(confidentRow.first()).toBeVisible();
@@ -144,26 +148,26 @@ test.describe("RECV-01.e review-panel tri-state (10-04 honest surfacing)", () =>
     const orphanSection = page.locator("section.review-section-orphan");
 
     // D10-03: the orphan row shows the quote itself, and is badged with the
-    // orphan vocabulary.
-    const orphanRow = orphanSection.locator(".review-row", {
+    // orphan vocabulary (the badge rides the card's foot line — inside the
+    // li.review-item).
+    const orphanRow = orphanSection.locator("li.review-item", {
       hasText: EXCERPT_ORPHAN,
     });
     await expect(orphanRow).toBeVisible();
     await expect(orphanRow.locator(".review-badge")).toHaveText("Article missing");
 
-    // No JUMP affordance inside the orphan section — the row body is a
-    // static div, so there is no .review-row button (hence no enabled
-    // one). Updated by Plan 10-05: the curation affordances (Edit note /
-    // Remove highlight) DO render on orphan rows by design (D10-11) — the
-    // original button-count-0 assertion pinned the pre-curation DOM; the
-    // intent (orphan rows are not jumpable) is preserved via the
-    // button.review-row count.
-    await expect(orphanSection.locator("button.review-row")).toHaveCount(0);
+    // No JUMP affordance inside the orphan section — the orphan-tail row
+    // renders no jump affordance at all (D10-03/D10-05; review-row
+    // redesign: the jump lives in the action cluster, so its absence is
+    // pinned via .review-jump). The curation affordances (Edit note /
+    // Change color / Edit tags / Remove highlight) DO render on orphan
+    // rows by design (D10-11).
+    await expect(orphanSection.locator(".review-jump")).toHaveCount(0);
     // And the curation affordances are present (D10-11 — orphans are
     // curatable in place even without an article). The actions cluster is
     // a SIBLING of the .review-row body inside the row's <li>. Issues #117 and #119
-    // — the cluster grew to FOUR affordances: Edit note / Change color / Edit tags /
-    // Remove highlight (tags are keyed to highlightId, so orphans carry
+    // — the cluster carries FOUR icon buttons: Edit note / Change color / Edit
+    // tags / Remove highlight (tags are keyed to highlightId, so orphans carry
     // the tags editor too).
     await expect(
       orphanSection
@@ -180,7 +184,7 @@ test.describe("RECV-01.e review-panel tri-state (10-04 honest surfacing)", () =>
     ).toBeVisible();
     await expect(
       orphanSection.getByRole("button", {
-        name: `Change color: ${EXCERPT_ORPHAN}`,
+        name: `Change color, currently Default: ${EXCERPT_ORPHAN}`,
       }),
     ).toBeVisible();
   });
@@ -212,17 +216,22 @@ test.describe("RECV-01.e review-panel tri-state (10-04 honest surfacing)", () =>
     await expect(page.locator("section.review-section-orphan")).toHaveCount(0);
   });
 
-  test("ambiguous rows are not jumpable: the jump control is disabled", async ({ page }) => {
+  test("ambiguous rows are not jumpable: the jump control renders disabled", async ({ page }) => {
     await seedAndOpenReview(page);
 
-    // ReviewView renders unresolved SECTION rows as disabled buttons with
-    // aria-disabled (the AnnotationsDrawer precedent) — assert the reader
-    // cannot activate the ambiguous row's jump control.
-    const ambiguousRow = page.locator("button.review-row", {
-      hasText: EXCERPT_AMBIG,
-    });
-    await expect(ambiguousRow).toHaveCount(1);
-    await expect(ambiguousRow).toBeDisabled();
-    await expect(ambiguousRow).toHaveAttribute("aria-disabled", "true");
+    // ReviewView renders the ambiguous row's jump as a DISABLED placeholder
+    // at the action cluster's first position (the LibraryRow disabled-action
+    // discipline — geometry stays stable), with the honest "can't be
+    // located" copy in its accessible name. Assert the reader cannot
+    // activate it.
+    const ambiguousJump = page
+      .locator("li.review-item", { hasText: EXCERPT_AMBIG })
+      .locator("button.review-jump");
+    await expect(ambiguousJump).toHaveCount(1);
+    await expect(ambiguousJump).toBeDisabled();
+    await expect(ambiguousJump).toHaveAttribute(
+      "aria-label",
+      `Go to highlight: ${firstFragmentExcerpt(EXCERPT_AMBIG, 60)}. This highlight can't be located, so jumping is disabled.`,
+    );
   });
 });

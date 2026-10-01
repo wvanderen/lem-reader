@@ -28,12 +28,12 @@
 //     "Highlights without an article" (the markdown.ts
 //     UNMATCHED_SECTION_HEADING vocabulary — the interactive twin of the
 //     Phase 9 highlights export).
-//   - D10-03: confident rows jump via a whole-row button to
-//     #/article/<id>/h/<highlightId> (plain hash assignment pushes a
-//     history entry so browser-back returns here). Ambiguous/orphan rows
-//     are NOT jumpable — disabled with aria-disabled, mirroring the
-//     AnnotationsDrawer L184-189 precedent. Orphan-tail rows carry no jump
-//     affordance at all (no article to jump to).
+//   - D10-03: confident rows jump to #/article/<id>/h/<highlightId> —
+//     since the review-row redesign, via the jump link's stretched
+//     overlay (a native anchor: a real history entry, so browser-back
+//     returns here). Ambiguous rows are NOT jumpable — the jump renders
+//     disabled at the same cluster position; orphan-tail rows carry no
+//     jump affordance at all (no article to jump to).
 //   - D10-07: a tri-state badge renders ONLY on ambiguous/orphan rows
 //     ("Uncertain anchor" / "Article missing" — calm, distinct copy); the
 //     legend line under the filter row says "No badge means anchored
@@ -77,9 +77,10 @@ import { effectiveTitle, effectiveSourceUrl } from "../../ingestion/library/effe
 import { invalidateLibrarySnapshot } from "../../ingestion/library/librarySnapshot";
 import { useLibrarySnapshot } from "../../ingestion/library/useLibrarySnapshot";
 // Plan 19-02 (D19-10) — every stored-quote excerpt derivation routes through
-// the ONE shared pure helper: a cross-block span describes itself as its
-// first fragment + a calm ellipsis, never a truncated multi-block blob.
-import { firstFragmentExcerpt } from "../../annotations/excerpt";
+// the ONE shared pure helper: aria-labels describe a cross-block span as its
+// first fragment + a calm ellipsis, never a truncated multi-block blob. The
+// row's center-stage quote renders through the twin full-span derivation.
+import { firstFragmentExcerpt, fullQuoteDisplay } from "../../annotations/excerpt";
 import {
   deriveReviewSections,
   type ConfidenceFilter,
@@ -101,7 +102,17 @@ import { ReviewColorDialog } from "./ReviewColorDialog";
 import { setHighlightColor } from "../../persistence/highlightsStore";
 import type { HighlightColor } from "../../content/schema";
 import { HIGHLIGHT_COLOR_LABELS } from "../../annotations/highlightColors";
-import { JumpToArticleIcon } from "../../ui/icons";
+// Review-row redesign — the icon action cluster (the LibraryRow anatomy):
+// TagIcon/TrashIcon/EditIcon are the shared glyphs; DropletIcon names the
+// color editor; JumpToArticleIcon is the row's jump affordance, whose
+// stretched overlay makes the whole card navigable.
+import {
+  DropletIcon,
+  EditIcon,
+  JumpToArticleIcon,
+  TagIcon,
+  TrashIcon,
+} from "../../ui/icons";
 // Issue #98 (decision #96) — the ONE polite status-region primitive; this
 // page's load/error/empty/announcement region renders through it.
 import { StatusRegion } from "../../ui/StatusRegion";
@@ -112,7 +123,6 @@ import { StatusRegion } from "../../ui/StatusRegion";
 import { ArticlePicker } from "../../ui/ArticlePicker";
 
 /** Truncation limits for review rows (the AnnotationsDrawer discipline). */
-const EXCERPT_MAX_CHARS = 120;
 const NOTE_MAX_CHARS = 200;
 const ARIA_MAX_CHARS = 60;
 /** Plan 19-02 (D19-10) — the DeleteHighlightConfirm excerpt prop derives
@@ -156,46 +166,42 @@ function sourceHost(article: CanonicalArticle): string | null {
 }
 
 /**
- * Plan 21-03 (POLISH-10 / D21-06) — north-east "open in article context"
- * glyph for jump-capable rows, so the whole-row jump's destination is
- * understandable at a glance. Clones the LibraryRow TrashIcon/EditIcon
- * anatomy exactly (20×20, 24-unit viewBox, currentColor stroke, round
- * caps/joins, aria-hidden + focusable=false): decorative — the row
- * button's "Go to highlight: …" aria-label stays the whole accessible
- * name (the SVG adds nothing to it).
- */
-
-/**
- * One review row. Section rows (entry.article defined) render the
- * whole-row jump button — enabled ONLY when status is "confident"
- * (D10-03; ambiguous/orphan render it disabled with aria-disabled, the
- * AnnotationsDrawer L184-189 rule). Orphan-tail rows (no article) render
- * a static div — no jump affordance at all, but the same first-class row
- * anatomy.
+ * One review row — the review-row redesign. The card (li.review-item, styled
+ * in app.css) carries the highlight's color as an inline-start stripe; the
+ * row body is the content column: the FULL stored quote center stage (the
+ * entire quote.exact, block fragments joined by the spaced ellipsis marker
+ * — no length cap; the highlight IS this surface's content), then a quiet
+ * meta line (date · tri-state badge), then the optional note preview. The
+ * four curation affordances render as 44px icon buttons in a right-aligned
+ * cluster (the LibraryRow anatomy), preceded by the jump affordance:
  *
- * Plan 21-03 (POLISH-10 / D21-06): confident (jump-capable) rows carry a
- * quiet open-in-reader glyph at the foot line's inline end — decorative
- * (aria-hidden), never rendered on orphan-tail or disabled/unresolved
- * rows, and never part of the accessible name.
+ *   - Confident (article-backed) rows: the jump is a real <a> whose
+ *     stretched ::after overlay covers the whole card — the entire surface
+ *     navigates to #/article/<id>/h/<highlightId> (native anchor semantics:
+ *     a history push, so browser-back returns here; the D10-03 destination
+ *     vocabulary is unchanged).
+ *   - Ambiguous rows (article exists, quote unresolvable): the jump renders
+ *     DISABLED at the same cluster position (the LibraryRow disabled-action
+ *     placeholder discipline — geometry stays stable) with the honest
+ *     "can't be located" copy in its accessible name. NOT jumpable (D10-03).
+ *   - Orphan-tail rows (no article): no jump affordance at all.
  *
- * Plan 10-05 (D10-11): EVERY row — section or orphan, any tri-state —
- * carries the curation affordances as siblings of the row body (never
- * nested inside the jump button: interactive content cannot nest). The
- * buttons' aria-labels prefix the visible text with the quote excerpt so
- * screen-reader rows are distinguishable (the accessible name contains the
- * visible label — WCAG 2.5.3 Label in Name).
+ * Plan 21-03 (POLISH-10 / D21-06) superseded in shape, kept in spirit: the
+ * open-in-reader glyph still marks exactly the jump-capable rows — it now
+ * RIDES the jump link (decorative, aria-hidden, tinted on card hover) and
+ * never renders on orphan-tail rows; ambiguous rows carry it disabled.
  *
- * Issue #119 — every row shows its named highlight color as a visible text
- * label beside a decorative swatch (the shared HIGHLIGHT_COLOR_LABELS
- * vocabulary — "Default" and the four named choices, exactly the reader's
- * state; color is never the sole identifier, A11Y-05). The line renders on
- * EVERY row — confident, ambiguous, orphan-tail alike — because color never
- * depends on re-anchoring (the #118 discipline). A NAMED color also prefixes
- * the jump button's accessible name ("Go to Yellow highlight: …") mirroring
- * the reader's highlightAriaLabelForText vocabulary; Default keeps the
- * shipped copy byte-unchanged. The third curation affordance ("Change
- * color") opens ReviewColorDialog — the picker stays editable on ambiguous
- * and orphaned rows, and the edit touches ONLY the color field.
+ * Plan 10-05 (D10-11): EVERY row — orphans included — is curatable in
+ * place. The buttons' aria-labels prefix the visible action with the quote
+ * excerpt so screen-reader rows are distinguishable (WCAG 2.5.3 Label in
+ * Name); the color button additionally names the row's CURRENT color (the
+ * stripe is decorative, so the named color lives in the accessible name —
+ * A11Y-05: color is never the sole identifier).
+ *
+ * Issue #119 — the named color also drives the stripe class (the shared
+ * per-theme --highlight* tokens; exactly the reader's state). Color never
+ * depends on re-anchoring (the #118 discipline), so the stripe renders on
+ * EVERY row — confident, ambiguous, orphan-tail alike.
  *
  * All text renders as React text children (T-10-02b/T-10-05a — escaping by
  * default; stored/imported text never becomes markup).
@@ -213,15 +219,17 @@ function ReviewRow({
   onRemove: (entry: ReviewEntry) => void;
   onChangeColor: (entry: ReviewEntry) => void;
 }) {
-  // Plan 19-02 (D19-10): excerpts derive from the FIRST FRAGMENT of the
-  // stored quote via the shared pure helper — per-surface caps unchanged
-  // (visible 120 / aria 60). A complete single-fragment highlight gets NO
-  // ellipsis; the ellipsis appears only on genuine continuation or length
-  // truncation (excerpt honesty rule).
-  const excerpt = firstFragmentExcerpt(entry.highlight.quote.exact, EXCERPT_MAX_CHARS);
+  // D19-10 (display half): the row shows the ENTIRE stored span — block
+  // boundaries verified against the current article, no cap. The capped
+  // first-fragment derivation (60 chars) remains the ONE voice for every
+  // accessible name below.
+  const quoteText = fullQuoteDisplay(
+    entry.highlight.quote.exact,
+    entry.article,
+    entry.resolvedPosition,
+  );
   const ariaExcerpt = firstFragmentExcerpt(entry.highlight.quote.exact, ARIA_MAX_CHARS);
   const noteText = entry.note?.text ?? "";
-  const isUnresolved = entry.status !== "confident";
   const jumpable = entry.status === "confident" && entry.article !== undefined;
   // D10-07 badge vocabulary — calm, distinct copy announced as row content.
   // Section rows whose article exists but whose quote no longer resolves
@@ -233,138 +241,105 @@ function ReviewRow({
         ? "Article missing"
         : null;
 
-  // Plan 21-03 (POLISH-10 / D21-06) — the row-foot line. ONLY jump-capable
-  // (confident + article-backed) rows carry the quiet open-in-reader glyph
-  // at the date line's inline end; every other row — orphan-tail, ambiguous,
-  // orphan — keeps the bare date span so those row shapes stay byte-stable.
-  const foot = jumpable ? (
-    <span className="review-row-foot">
-      <span className="review-date">{formatDate(entry.highlight.createdAt)}</span>
-      {/* D21-06 — the layout hook rides the shared module's className prop
-          (the hover-tint selector in app.css); restored — issue #77's tree
-          dropped it and the D21-06 e2e pins it. */}
-      <JumpToArticleIcon className="review-jump-glyph" />
-    </span>
-  ) : (
-    <span className="review-date">{formatDate(entry.highlight.createdAt)}</span>
-  );
-
   const content = (
-    <>
-      <span className="review-quote">{excerpt}</span>
+    <div className="review-row">
+      <blockquote className="review-quote">{quoteText}</blockquote>
       {noteText.length > 0 && (
         <span className="review-note-preview">{truncate(noteText, NOTE_MAX_CHARS)}</span>
       )}
-      {/* Issue #119 — the named color, visible text + decorative swatch
-          (A11Y-05). The swatch classes ride the SAME per-theme tokens the
-          reader's picker and marks use, so review shows exactly the color
-          state the reader shows. */}
-      <span className="review-row-color">
-        <span
-          aria-hidden="true"
-          className={`highlight-color-swatch highlight-color-swatch-${entry.highlight.color}`}
-        />
-        {HIGHLIGHT_COLOR_LABELS[entry.highlight.color]}
-      </span>
-      {badgeText !== null && (
-        <span className={`review-badge review-badge-${entry.status}`}>{badgeText}</span>
-      )}
-      {foot}
-    </>
+    </div>
   );
 
-  // The curation cluster — siblings of the row body (D10-11). Accessible
+  // The jump affordance — first position in the action cluster. Confident
+  // rows render the real link (its CSS ::after stretches over the whole
+  // card); ambiguous rows render the disabled placeholder with the honest
+  // copy; orphan-tail rows render nothing (D10-03/D10-05).
+  const jump = jumpable ? (
+    <a
+      className="btn btn-icon review-jump"
+      href={`#/article/${entry.highlight.articleId}/h/${entry.highlight.id}`}
+      aria-label={`Go to highlight: ${ariaExcerpt}`}
+    >
+      {/* D21-06 — the layout hook rides the shared module's className prop
+          (the card-hover tint selector in app.css). T-10-02c: the href is
+          template-built from validated record ids only — the hashchange
+          consumer re-parses through the same App.tsx grammar. */}
+      <JumpToArticleIcon className="review-jump-glyph" />
+    </a>
+  ) : entry.article !== undefined ? (
+    <button
+      type="button"
+      className="btn btn-icon review-jump"
+      disabled
+      aria-label={`Go to highlight: ${ariaExcerpt}. This highlight can't be located, so jumping is disabled.`}
+    >
+      <JumpToArticleIcon className="review-jump-glyph" />
+    </button>
+  ) : null;
+
+  // The curation cluster — right-aligned icon buttons (the LibraryRow
+  // anatomy), the jump first and the destructive control last. Accessible
   // names carry the quote excerpt prefix so rows are distinguishable in a
-  // screen-reader list; the prefix includes the visible label (2.5.3).
-  // Issue #117 — "Edit tags" joins the cluster between the two existing
-  // affordances (destructive stays last); like the note, tags are keyed to
-  // highlightId, so EVERY row — ambiguous/orphaned included — carries it,
-  // and nothing about the dialog implies the anchor was repaired.
+  // screen-reader list; the prefix includes the visible action (2.5.3).
+  // Issue #117 — tags are keyed to highlightId, so EVERY row — ambiguous/
+  // orphaned included — carries the editor. Issue #119 — the color button
+  // names the row's current color (the stripe is decorative; A11Y-05).
   const actions = (
     <div className="review-row-actions">
+      {jump}
       <button
         type="button"
-        className="btn btn-quiet review-row-action review-row-action-note"
+        className="btn btn-icon review-row-action review-row-action-note"
         aria-label={`Edit note: ${ariaExcerpt}`}
         onClick={() => onEditNote(entry)}
       >
-        Edit note
+        <EditIcon />
       </button>
-      {/* Issue #119 — the labeled way to change the named color. Never
-          gated on anchor status: ambiguous and orphan rows recolor exactly
-          like confident rows (the edit is a field-scoped color write). */}
       <button
         type="button"
-        className="btn btn-quiet review-row-action review-row-action-color"
-        aria-label={`Change color: ${ariaExcerpt}`}
+        className="btn btn-icon review-row-action review-row-action-color"
+        aria-label={`Change color, currently ${
+          HIGHLIGHT_COLOR_LABELS[entry.highlight.color]
+        }: ${ariaExcerpt}`}
         onClick={() => onChangeColor(entry)}
       >
-        Change color
+        <DropletIcon />
       </button>
       <button
         type="button"
-        className="btn btn-quiet review-row-action review-row-action-tags"
+        className="btn btn-icon review-row-action review-row-action-tags"
         aria-label={`Edit tags: ${ariaExcerpt}`}
         onClick={() => onEditTags(entry)}
       >
-        Edit tags
+        <TagIcon />
       </button>
       <button
         type="button"
-        className="btn btn-quiet review-row-action review-row-action-remove"
+        className="btn btn-icon review-row-action review-row-action-remove"
         aria-label={`Remove highlight: ${ariaExcerpt}`}
         onClick={() => onRemove(entry)}
       >
-        Remove highlight
+        <TrashIcon />
       </button>
     </div>
   );
 
-  // Orphan-tail rows (D10-05): no article → NO jump affordance at all
-  // (the curation affordances above still render — D10-11).
-  if (entry.article === undefined) {
-    return (
-      <>
-        <div className="review-row">{content}</div>
-        {actions}
-      </>
-    );
-  }
-
-  // The jump button's aria-label mirrors the drawer-entry pattern. Issue
-  // #119 — a NAMED color names itself in the accessible name ("Go to Yellow
-  // highlight: …", the reader's highlightAriaLabelForText vocabulary) so
-  // screen readers hear the choice the row shows; Default keeps the shipped
-  // copy byte-unchanged.
-  const colorNoun =
-    entry.highlight.color === "default"
-      ? "highlight"
-      : `${HIGHLIGHT_COLOR_LABELS[entry.highlight.color]} highlight`;
-  const ariaLabel = isUnresolved
-    ? `Go to ${colorNoun}: ${ariaExcerpt}. This highlight can't be located, so jumping is disabled.`
-    : `Go to ${colorNoun}: ${ariaExcerpt}${
-        noteText ? `; ${truncate(noteText, ARIA_MAX_CHARS)}` : ""
-      }`;
-
   return (
     <>
-      <button
-        type="button"
-        className="review-row"
-        aria-label={ariaLabel}
-        disabled={isUnresolved}
-        aria-disabled={isUnresolved ? "true" : undefined}
-        onClick={() => {
-          // T-10-02c: template-built from validated record ids only — the
-          // hashchange consumer re-parses through the same App.tsx grammar.
-          if (jumpable) {
-            window.location.hash = `#/article/${entry.highlight.articleId}/h/${entry.highlight.id}`;
-          }
-        }}
-      >
-        {content}
-      </button>
-      {actions}
+      {content}
+      {/* One foot line: date · badge at the inline start, the icon cluster
+          at the inline end — no dead band between meta and actions. Both
+          halves are non-interactive text + the shared cluster (the date and
+          badge sit under the jump overlay like the library row's meta). */}
+      <div className="review-row-foot">
+        <div className="review-row-meta">
+          <span className="review-date">{formatDate(entry.highlight.createdAt)}</span>
+          {badgeText !== null && (
+            <span className={`review-badge review-badge-${entry.status}`}>{badgeText}</span>
+          )}
+        </div>
+        {actions}
+      </div>
     </>
   );
 }
@@ -714,7 +689,10 @@ export function ReviewView({
             </h2>
             <ul className="review-section-list">
               {section.entries.map((entry) => (
-                <li key={entry.highlight.id} className="review-item">
+                <li
+                  key={entry.highlight.id}
+                  className={`review-item review-item-color-${entry.highlight.color}`}
+                >
                   <ReviewRow
                     entry={entry}
                     onEditNote={setNoteTarget}
@@ -738,7 +716,10 @@ export function ReviewView({
           <h2>Highlights without an article</h2>
           <ul className="review-section-list">
             {derivation.orphanEntries.map((entry) => (
-              <li key={entry.highlight.id} className="review-item">
+              <li
+                key={entry.highlight.id}
+                className={`review-item review-item-color-${entry.highlight.color}`}
+              >
                 <ReviewRow
                   entry={entry}
                   onEditNote={setNoteTarget}

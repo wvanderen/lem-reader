@@ -231,12 +231,12 @@ test.describe("annotation tags in Highlights review (issue #117)", () => {
     // "margin" ∧ Ambiguous → only the ambiguous row, still badged.
     await confidence.selectOption({ label: "Ambiguous" });
     await expect(page.locator(".review-row")).toHaveCount(1);
-    await expect(page.locator(".review-row").first()).toContainText("Uncertain anchor");
+    await expect(page.locator("li.review-item").first()).toContainText("Uncertain anchor");
 
     // "margin" ∧ Orphan → only the orphan tail row ("Article missing").
     await confidence.selectOption({ label: "Orphan" });
     await expect(page.locator(".review-row")).toHaveCount(1);
-    await expect(page.locator(".review-row").first()).toContainText("Article missing");
+    await expect(page.locator("li.review-item").first()).toContainText("Article missing");
   });
 
   test("edit tags on the ORPHAN row: write-through, honest announcement, chip surfaces, reload persists", async ({
@@ -270,7 +270,7 @@ test.describe("annotation tags in Highlights review (issue #117)", () => {
     // tag chip, and it matches the orphan's own row.
     await page.getByRole("button", { name: "Filter by highlight tag: revisit" }).click();
     await expect(page.locator(".review-row")).toHaveCount(1);
-    await expect(page.locator(".review-row").first()).toContainText("Article missing");
+    await expect(page.locator("li.review-item").first()).toContainText("Article missing");
 
     // Persistence: the tag survives a full reload (Dexie truth).
     await page.reload();
@@ -299,13 +299,16 @@ test.describe("annotation tags in Highlights review (issue #117)", () => {
     await expect(dialog).toBeHidden();
     await expect(page.locator("main > [role='status']")).toContainText("Tags saved.");
 
-    // The row is STILL ambiguous — badge intact, jump still disabled. The
-    // tag edit changed nothing about the anchor.
-    const ambiguousRow = page.locator(".review-row", {
+    // The row is STILL ambiguous — badge intact (on the card's foot line),
+    // jump placeholder still disabled. The tag edit changed nothing about
+    // the anchor.
+    const ambiguousRow = page.locator("li.review-item", {
       hasText: AMBIG_SENTENCE,
     });
     await expect(ambiguousRow).toContainText("Uncertain anchor");
-    await expect(ambiguousRow).toBeDisabled();
+    await expect(
+      page.locator("li.review-item", { hasText: AMBIG_SENTENCE }).locator("button.review-jump"),
+    ).toBeDisabled();
 
     // Composition after the edit: highlight tag "revisit" ∧ Ambiguous →
     // exactly this row.
@@ -388,7 +391,7 @@ test.describe("annotation tags in Highlights review (issue #117)", () => {
     // invalidation re-derived the chip vocabulary).
     await page.getByRole("button", { name: "Filter by highlight tag: keyboard-tag" }).click();
     await expect(page.locator(".review-row")).toHaveCount(1);
-    await expect(page.locator(".review-row").first()).toContainText("Article missing");
+    await expect(page.locator("li.review-item").first()).toContainText("Article missing");
   });
 
   test("narrow layout: both tag filters wrap without overflow; chips + dialog stay operable at 375px", async ({
@@ -402,6 +405,21 @@ test.describe("annotation tags in Highlights review (issue #117)", () => {
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     );
     expect(overflow).toBeLessThanOrEqual(1);
+
+    // The wrapped action cluster stays at the footer's inline end.
+    const geometry = await page.locator(".review-item").first().evaluate(card => {
+      const foot = card.querySelector<HTMLElement>(".review-row-foot")!;
+      const actions = card.querySelector<HTMLElement>(".review-row-actions")!;
+      const meta = card.querySelector<HTMLElement>(".review-row-meta")!;
+      return {
+        actionsRight: actions.getBoundingClientRect().right,
+        contentRight: foot.getBoundingClientRect().right - parseFloat(getComputedStyle(foot).paddingRight),
+        actionsTop: actions.getBoundingClientRect().top,
+        metaBottom: meta.getBoundingClientRect().bottom,
+      };
+    });
+    expect(geometry.actionsTop).toBeGreaterThanOrEqual(geometry.metaBottom);
+    expect(Math.abs(geometry.actionsRight - geometry.contentRight)).toBeLessThanOrEqual(1);
 
     // Both named legends + their chips remain visible and operable.
     await expect(page.locator(".tag-filter-legend", { hasText: "Article tag" })).toBeVisible();

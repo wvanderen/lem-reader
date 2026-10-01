@@ -2,7 +2,8 @@
 // Issue #119 — highlight colors in the Highlights review panel. The review
 // surface must show and edit the SAME named color (+ Default state) as the
 // reader, including when the text anchor is ambiguous or orphaned. Cells:
-//   1. Confident row: shows "Default" first; "Change color" opens the
+//   1. Confident row: shows the Default stripe first; the Change-color
+//      icon button (its aria-label names the current color) opens the
 //      reader's picker (labelled radios + the excerpt context); picking
 //      Green re-derives the row WITHOUT a reload, announces "Color
 //      saved." politely, the READER mark re-renders .color-green (reader
@@ -130,12 +131,17 @@ test.describe("issue #119 review-panel highlight colors", () => {
   }) => {
     await seedAndOpenReview(page);
 
-    // The row shows the reader's Default state as visible text.
+    // The row shows the reader's Default state as its color stripe (the
+    // review-row redesign: the stripe carries the color; its NAME lives in
+    // the Change-color button's accessible name).
     const row = rowByExcerpt(page, EXCERPT_CONFIDENT);
-    await expect(row.locator(".review-row-color")).toHaveText("Default");
+    await expect(row).toHaveClass(/review-item-color-default/);
 
-    // The labeled way to change it.
-    await page.getByRole("button", { name: `Change color: ${EXCERPT_CONFIDENT}` }).click();
+    // The labeled way to change it (the aria-label names action + current
+    // color + excerpt).
+    await page
+      .getByRole("button", { name: `Change color, currently Default: ${EXCERPT_CONFIDENT}` })
+      .click();
     const dialog = page.getByRole("dialog", { name: "Change color" });
     await expect(dialog).toBeVisible();
     // Which highlight is being recolored (the excerpt context).
@@ -154,7 +160,7 @@ test.describe("issue #119 review-panel highlight colors", () => {
 
     // The row re-derives WITHOUT any reload (snapshot invalidation) and the
     // dialog's status region announces the landed write politely.
-    await expect(row.locator(".review-row-color")).toHaveText("Green");
+    await expect(row).toHaveClass(/review-item-color-green/);
     await expect(dialog.getByRole("status")).toContainText("Color saved.");
     // Dismiss the picker before leaving the row (the modal scope otherwise
     // keeps the background inert).
@@ -162,20 +168,18 @@ test.describe("issue #119 review-panel highlight colors", () => {
     await expect(dialog).toBeHidden();
 
     // Reader/review sync: the same record drives the reader's mark. Jump
-    // through the row (the accessible name now carries the named color) —
+    // through the row's jump link (the shared Go-to-highlight template) —
     // the reader renders .color-green on the mark.
-    await page.getByRole("button", { name: `Go to Green highlight: ${EXCERPT_CONFIDENT}` }).click();
+    await page.getByRole("link", { name: `Go to highlight: ${EXCERPT_CONFIDENT}` }).click();
     const mark = page.locator("mark.highlight").first();
     await expect(mark).toHaveClass(/color-green/);
 
     // Persistence proof (the sanctioned reload double-check): review still
-    // shows Green from the persisted record.
+    // shows the Green stripe from the persisted record.
     await page.goto(`${BASE}/#/highlights`);
     await page.reload();
     await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
-    await expect(rowByExcerpt(page, EXCERPT_CONFIDENT).locator(".review-row-color")).toHaveText(
-      "Green",
-    );
+    await expect(rowByExcerpt(page, EXCERPT_CONFIDENT)).toHaveClass(/review-item-color-green/);
 
     // Export/import sync: the review edit rides the REAL UI bundle export —
     // the exported highlight row carries the color the panel wrote (the #118
@@ -199,16 +203,18 @@ test.describe("issue #119 review-panel highlight colors", () => {
 
     const orphanRow = rowByExcerpt(page, EXCERPT_ORPHAN);
     const ambigRow = rowByExcerpt(page, AMBIG_SENTENCE);
-    await expect(orphanRow.locator(".review-row-color")).toHaveText("Default");
-    await expect(ambigRow.locator(".review-row-color")).toHaveText("Default");
+    await expect(orphanRow).toHaveClass(/review-item-color-default/);
+    await expect(ambigRow).toHaveClass(/review-item-color-default/);
 
     // ── Orphan row → Pink ──────────────────────────────────────────────
-    await page.getByRole("button", { name: `Change color: ${EXCERPT_ORPHAN}` }).click();
+    await page
+      .getByRole("button", { name: `Change color, currently Default: ${EXCERPT_ORPHAN}` })
+      .click();
     const dialog = page.getByRole("dialog", { name: "Change color" });
     await expect(dialog).toBeVisible();
     await dialog.getByRole("radio", { name: "Pink" }).click();
     await expect(dialog.getByRole("radio", { name: "Pink" })).toBeChecked();
-    await expect(orphanRow.locator(".review-row-color")).toHaveText("Pink");
+    await expect(orphanRow).toHaveClass(/review-item-color-pink/);
     // The landed write is announced politely here too (the same honest
     // announcement contract the confident row's cell pins).
     await expect(dialog.getByRole("status")).toContainText("Color saved.");
@@ -223,29 +229,28 @@ test.describe("issue #119 review-panel highlight colors", () => {
     await expect(page.getByRole("dialog", { name: "Change color" })).toBeHidden();
 
     // ── Ambiguous row → Yellow ─────────────────────────────────────────
-    await page.getByRole("button", { name: `Change color: ${AMBIG_SENTENCE}` }).click();
+    await page
+      .getByRole("button", { name: `Change color, currently Default: ${AMBIG_SENTENCE}` })
+      .click();
     const ambigDialog = page.getByRole("dialog", { name: "Change color" });
     await expect(ambigDialog).toBeVisible();
     await ambigDialog.getByRole("radio", { name: "Yellow" }).click();
-    await expect(ambigRow.locator(".review-row-color")).toHaveText("Yellow");
+    await expect(ambigRow).toHaveClass(/review-item-color-yellow/);
     await expect(ambigRow.locator(".review-badge-ambiguous")).toHaveText("Uncertain anchor");
-    // The disabled jump keeps its honest name (now color-prefixed) — the
-    // anchor status is derived, never stored, so recoloring cannot move it.
+    // The disabled jump keeps its honest name (color-independent — the
+    // stripe + color button carry the choice) — the anchor status is
+    // derived, never stored, so recoloring cannot move it.
     await expect(
       page.getByRole("button", {
-        name: `Go to Yellow highlight: ${AMBIG_SENTENCE}. This highlight can't be located, so jumping is disabled.`,
+        name: `Go to highlight: ${AMBIG_SENTENCE}. This highlight can't be located, so jumping is disabled.`,
       }),
     ).toBeDisabled();
 
     // Persistence proof for BOTH unresolved rows.
     await page.reload();
     await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
-    await expect(rowByExcerpt(page, EXCERPT_ORPHAN).locator(".review-row-color")).toHaveText(
-      "Pink",
-    );
-    await expect(rowByExcerpt(page, AMBIG_SENTENCE).locator(".review-row-color")).toHaveText(
-      "Yellow",
-    );
+    await expect(rowByExcerpt(page, EXCERPT_ORPHAN)).toHaveClass(/review-item-color-pink/);
+    await expect(rowByExcerpt(page, AMBIG_SENTENCE)).toHaveClass(/review-item-color-yellow/);
     await expect(rowByExcerpt(page, EXCERPT_ORPHAN).locator(".review-note-preview")).toHaveText(
       NOTE_ORPHAN.text,
     );

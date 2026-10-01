@@ -2,15 +2,16 @@
 // Issue #119 — highlight colors in the Highlights review panel. The review
 // surface must show and edit the SAME named color (+ Default state) the
 // reader shows, including on ambiguous and orphaned rows:
-//   - every row carries a VISIBLE text color label beside a decorative
-//     swatch (color never the sole identifier — A11Y-05)
-//   - "Change color" opens ReviewColorDialog hosting the reader's OWN
-//     HighlightColorEntry picker (Default + the four named choices, labelled
-//     radios)
+//   - every row carries its named color as the card's stripe class (the
+//     review-row redesign; the NAME additionally lives in the Change-color
+//     button's accessible name — color never the sole identifier, A11Y-05)
+//   - the Change-color icon button opens ReviewColorDialog hosting the
+//     reader's OWN HighlightColorEntry picker (Default + the four named
+//     choices, labelled radios)
 //   - a pick commits through the ONE highlightsStore seam
 //     (setHighlightColor), invalidates the ONE LibrarySnapshot, and
 //     announces "Color saved." only after the write lands; the fresh
-//     snapshot re-checks the radio and re-renders the row line (sync)
+//     snapshot re-checks the radio and re-renders the stripe (sync)
 //   - the picker is NOT gated on anchor status — ambiguous and orphan-tail
 //     rows recolor identically, and the edit touches only the color field
 //     (badge + note survive untouched)
@@ -244,7 +245,9 @@ function colorRadio(dialog: HTMLElement, label: string): HTMLInputElement {
 
 async function openColorDialog(excerpt: string) {
   const user = userEvent.setup();
-  await user.click(screen.getByRole("button", { name: `Change color: ${excerpt}` }));
+  await user.click(
+    screen.getByRole("button", { name: `Change color, currently Default: ${excerpt}` }),
+  );
   const dialog = await screen.findByRole("dialog", { name: "Change color" });
   return { user, dialog };
 }
@@ -266,7 +269,7 @@ describe("ReviewView highlight colors (issue #119)", () => {
     mockData.version = 0;
   });
 
-  it("every row shows its named color as VISIBLE text (Default initially), on all three anchor states", () => {
+  it("every row carries its color stripe (Default initially), on all three anchor states", () => {
     renderReview();
 
     for (const excerpt of [
@@ -276,25 +279,30 @@ describe("ReviewView highlight colors (issue #119)", () => {
     ]) {
       const row = rowByExcerpt(excerpt);
       expect(row).toBeTruthy();
-      const colorLine = row!.querySelector(".review-row-color");
-      expect(colorLine?.textContent).toBe("Default");
-      // The decorative swatch rides the shared per-theme token classes.
-      expect(colorLine?.querySelector(".highlight-color-swatch-default")).toBeTruthy();
+      // The stripe rides the shared per-theme token class (the review-row
+      // redesign; the named color also lives in the Change-color button's
+      // accessible name — asserted in the dialog cells below).
+      expect(row!.classList.contains("review-item-color-default")).toBe(true);
     }
   });
 
-  it("a seeded named color renders its label (the same named state as the reader)", () => {
+  it("a seeded named color renders its stripe (the same named state as the reader)", () => {
     mockData.colors[HL_CONFIDENT.id] = "yellow";
     renderReview();
 
     const row = rowByExcerpt(ANCHOR_CONFIDENT.quote.exact);
-    expect(row!.querySelector(".review-row-color")?.textContent).toBe("Yellow");
-    expect(row!.querySelector(".highlight-color-swatch-yellow")).toBeTruthy();
-    // The jump button's accessible name carries the named color (the
-    // reader's highlightAriaLabelForText vocabulary).
+    expect(row!.classList.contains("review-item-color-yellow")).toBe(true);
+    // The jump link's accessible name keeps the ONE Go-to-highlight
+    // template (color-independent — the color button carries the name).
+    expect(
+      screen.getByRole("link", {
+        name: `Go to highlight: ${ANCHOR_CONFIDENT.quote.exact}`,
+      }),
+    ).toBeTruthy();
+    // …and the color button names the CURRENT color.
     expect(
       screen.getByRole("button", {
-        name: `Go to Yellow highlight: ${ANCHOR_CONFIDENT.quote.exact}`,
+        name: `Change color, currently Yellow: ${ANCHOR_CONFIDENT.quote.exact}`,
       }),
     ).toBeTruthy();
   });
@@ -302,7 +310,13 @@ describe("ReviewView highlight colors (issue #119)", () => {
   it("Change color opens the reader's picker: five labelled radios, current state checked", async () => {
     mockData.colors[HL_AMBIG.id] = "blue";
     renderReview();
-    const { dialog } = await openColorDialog(AMBIGUOUS_SENTENCE);
+    // The button's accessible name names the CURRENT color (Blue — seeded
+    // above), so the row is operable without seeing the stripe.
+    const user = userEvent.setup();
+    await user.click(
+      screen.getByRole("button", { name: `Change color, currently Blue: ${AMBIGUOUS_SENTENCE}` }),
+    );
+    const dialog = await screen.findByRole("dialog", { name: "Change color" });
 
     // The reader's OWN picker anatomy — fieldset legend + all five choices,
     // each a labelled radio (A11Y-05), the persisted color checked.
@@ -331,17 +345,17 @@ describe("ReviewView highlight colors (issue #119)", () => {
     expect(invalidateLibrarySnapshot).toHaveBeenCalled();
 
     // The mocked re-derive (mockData.colors mutated by the seam stub) lands
-    // on the next render: the row's color line, the radio, and the jump
+    // on the next render: the row's stripe, the radio, and the color
     // button's accessible name all re-match the persisted color.
     await waitFor(() => {
-      expect(
-        rowByExcerpt(ANCHOR_CONFIDENT.quote.exact)!.querySelector(".review-row-color")?.textContent,
-      ).toBe("Green");
+      expect(rowByExcerpt(ANCHOR_CONFIDENT.quote.exact)!.classList.contains("review-item-color-green")).toBe(
+        true,
+      );
       expect(colorRadio(dialog, "Green").checked).toBe(true);
     });
     expect(
       screen.getByRole("button", {
-        name: `Go to Green highlight: ${ANCHOR_CONFIDENT.quote.exact}`,
+        name: `Change color, currently Green: ${ANCHOR_CONFIDENT.quote.exact}`,
       }),
     ).toBeTruthy();
   });
@@ -357,7 +371,7 @@ describe("ReviewView highlight colors (issue #119)", () => {
 
     await waitFor(() => {
       const row = rowByExcerpt(ANCHOR_ORPHAN.quote.exact)!;
-      expect(row.querySelector(".review-row-color")?.textContent).toBe("Yellow");
+      expect(row.classList.contains("review-item-color-yellow")).toBe(true);
       // Anchor status untouched: the badge is still there, still orphan
       // vocabulary; the note preview is byte-identical.
       expect(row.querySelector(".review-badge-orphan")?.textContent).toBe("Article missing");
@@ -376,11 +390,11 @@ describe("ReviewView highlight colors (issue #119)", () => {
 
     await waitFor(() => {
       const row = rowByExcerpt(AMBIGUOUS_SENTENCE)!;
-      expect(row.querySelector(".review-row-color")?.textContent).toBe("Pink");
+      expect(row.classList.contains("review-item-color-pink")).toBe(true);
       expect(row.querySelector(".review-badge-ambiguous")?.textContent).toBe("Uncertain anchor");
     });
     const jump = screen.getByRole("button", {
-      name: `Go to Pink highlight: ${AMBIGUOUS_SENTENCE}. This highlight can't be located, so jumping is disabled.`,
+      name: `Go to highlight: ${AMBIGUOUS_SENTENCE}. This highlight can't be located, so jumping is disabled.`,
     });
     expect(jump).toBeTruthy();
   });
