@@ -207,3 +207,13 @@ export function ImageIcon(props: IconProps) {
     </Svg>
   );
 }
+
+/** Undo — mark a finished article as unread. */
+export function UndoIcon(props: IconProps) {
+  return (
+    <Svg size={24} {...props}>
+      <path d="M9 4 4 9l5 5" />
+      <path d="M4 9h9a6 6 0 0 1 0 12" />
+    </Svg>
+  );
+}

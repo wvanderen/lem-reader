@@ -21,7 +21,7 @@
 // window); sighted readers get the spinner, screen readers get a stable
 // name + busy state + the disabled semantics.
 import { useEffect, useState } from "react";
-import { CheckIcon, SpinnerIcon } from "../../ui/icons";
+import { CheckIcon, SpinnerIcon, UndoIcon } from "../../ui/icons";
 // Issue #98 — the ONE polite status-region primitive.
 import { StatusRegion } from "../../ui/StatusRegion";
 
@@ -58,6 +58,7 @@ export function ReadingStateButton({
         disabled={pending}
         aria-busy={pending || undefined}
         aria-label={`${label}: ${title}`}
+        title={label}
         onClick={async () => {
           setPending(true);
           setError(false);
@@ -72,7 +73,7 @@ export function ReadingStateButton({
           }
         }}
       >
-        {pending ? <SpinnerIcon /> : <CheckIcon />}
+        {pending ? <SpinnerIcon /> : effectiveRead ? <UndoIcon /> : <CheckIcon />}
       </button>
       {error && (
         // Issue #98 (decision #96) — the polite register app-wide: the ONE
@@ -82,9 +83,7 @@ export function ReadingStateButton({
         // strip the card chrome (an inline error, not a card), and the
         // apostrophe follows the repo's ASCII copy convention. Adjacent to
         // its control (the failure's context).
-        <StatusRegion className="meta">
-          Couldn&apos;t save reading status. Try again.
-        </StatusRegion>
+        <StatusRegion className="meta">Couldn&apos;t save reading status. Try again.</StatusRegion>
       )}
     </div>
   );

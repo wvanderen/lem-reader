@@ -699,7 +699,6 @@ export function LibraryView({
           ))}
         </nav>
         <LibrarySearch query={query} onQueryChange={setQuery} />
-        <TagFilter tags={allTags} activeTag={activeTag} onSelect={setActiveTag} />
         {/* Issue #115 — the sort control closes the toolbar band. The choice
             persists via SettingsContext (visits + export/import); the list
             below reorders in place. */}
@@ -707,6 +706,7 @@ export function LibraryView({
           sort={librarySort}
           onSortChange={(next) => update({ librarySort: next })}
         />
+        <TagFilter tags={allTags} activeTag={activeTag} onSelect={setActiveTag} />
       </div>
       {/* (3) Continue reading — the compact rail (issue #67, variant A):
           slim cards — the stretched title link, the "Chapter N of M" line

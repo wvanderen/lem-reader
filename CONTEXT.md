@@ -4,6 +4,10 @@ A calm, booklike reader for web articles and documents: long-form content is nor
 
 ## Language
 
+**Starter article**:
+Getting Started with Lem Reader, the optional introductory article supplied with a new library.
+_Avoid_: permanent fixture, mandatory tutorial
+
 **Read-aloud**:
 The reader feature that speaks an article's text while showing where speech is.
 _Avoid_: TTS mode, text-to-speech, narrator

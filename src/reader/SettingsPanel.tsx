@@ -34,6 +34,7 @@
 // the highlights export is one loadLibrarySnapshot() call at action time —
 // always the truth at the moment of export), and a landed import calls the
 // ONE invalidateLibrarySnapshot() so mounted surfaces re-derive.
+import { RestoreStarterButton } from "./RestoreStarterButton";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import { useSettings } from "../settings/SettingsContext";
@@ -828,6 +829,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
             All buttons type="button" (the panel avoids form submission). */}
             <fieldset className="settings-section settings-data">
               <legend>Your data</legend>
+              <RestoreStarterButton />
               <div className="settings-data-actions">
                 {/* Issue #98 — the unified in-flight register via the shared
                 BusyButton primitive: the active action's button carries the

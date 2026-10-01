@@ -228,6 +228,7 @@ export interface ResolvedImportPlan {
   subscriptionsToWrite: SubscriptionRecord[];
   preferences?: ReaderSettings;
   applyPreferences: boolean;
+  starterRemoved?: boolean;
   idRewrites: Map<string, string>;
   skipped: {
     books: number;
@@ -732,6 +733,7 @@ export async function resolveImportPlan(
     sessionsToWrite: [],
     subscriptionsToWrite: [],
     applyPreferences,
+    starterRemoved: bundle.starterRemoved,
     idRewrites: new Map<string, string>(),
     skipped: { books: 0, articles: 0, highlights: 0, notes: 0, locations: 0 },
   };
