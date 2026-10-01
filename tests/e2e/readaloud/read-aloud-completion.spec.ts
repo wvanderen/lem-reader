@@ -1,3 +1,4 @@
+import { expandSettingsGroup } from "../settings";
 // tests/e2e/readaloud/read-aloud-completion.spec.ts
 // Issue #43 e2e leg — read-aloud completion: the skip controls, the
 // spoken-channel content rules, the settings voice/rate controls, and the
@@ -299,6 +300,7 @@ test.describe("Issue #43 — read-aloud completion", () => {
     // Open Reading settings: the voice picker offers the system default and
     // the LOCAL stub voice; the remote cloud voice is filtered out.
     await page.getByRole("button", { name: "Reading settings" }).click();
+    await expandSettingsGroup(page, "Read-aloud");
     const voiceSelect = page.getByRole("combobox", { name: "Read-aloud voice" });
     await expect(voiceSelect).toBeVisible();
     await expect(voiceSelect.getByRole("option", { name: "System default voice" })).toHaveCount(1);

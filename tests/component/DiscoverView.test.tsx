@@ -680,3 +680,15 @@ it("returns focus to the activated preview when the same link appears in two fee
   await userEvent.keyboard("{Enter}");
   expect(await screen.findByRole("link", { name: "Open Syndicated item" })).toHaveFocus();
 });
+
+
+it("replaces the save icon with one spinner while ingestion is pending", async () => {
+  vi.mocked(listSubscriptions).mockResolvedValue({ ok: true, subscriptions: [SUB_A] });
+  vi.mocked(saveFeedItem).mockReturnValue(new Promise(() => {}));
+  render(<DiscoverView hasAppHistory={false} />);
+  const button = await screen.findByRole("button", { name: "Save A dated item" });
+  await userEvent.click(button);
+  expect(button).toHaveAttribute("aria-busy", "true");
+  expect(button).toBeDisabled();
+  expect(button.querySelectorAll("svg")).toHaveLength(1);
+});

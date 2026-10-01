@@ -356,20 +356,20 @@ export function NotePopover(): React.ReactElement | null {
                 }
               />
             )}
-            <div className="highlight-popover-actions">
-              <button
-                type="button"
-                className="btn btn-quiet highlight-popover-done"
-                onClick={handleDone}
-              >
-                Done
-              </button>
+            <div className="highlight-popover-actions dialog-actions">
               <button
                 type="button"
                 className="btn btn-destructive highlight-popover-delete"
                 onClick={handleDeleteStart}
               >
                 Delete
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary highlight-popover-done"
+                onClick={handleDone}
+              >
+                Done
               </button>
             </div>
            </>

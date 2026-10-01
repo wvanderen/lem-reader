@@ -8,6 +8,7 @@
 // the pre-extraction markup (the e2e class pins — .library-row-tags,
 // .tag-chip-readonly, .finished-mark, .library-row-progress,
 // .library-progress-label — are the contract).
+import { CheckIcon } from "../../ui/icons";
 import { ProgressHairline } from "../../reader/ProgressHairline";
 import { percentRead } from "./readingState";
 
@@ -36,15 +37,14 @@ export function RowTags({ tags }: { tags: readonly string[] }) {
  *                 block cannot disagree with counts or membership).
  * @param progress The 0..1 progress ratio feeding the label + hairline.
  */
-export function RowProgress({
-  finished,
-  progress,
-}: {
-  finished: boolean;
-  progress: number;
-}) {
+export function RowProgress({ finished, progress }: { finished: boolean; progress: number }) {
   if (finished) {
-    return <p className="meta finished-mark">Finished</p>;
+    return (
+      <p className="meta finished-mark">
+        <CheckIcon />
+        Finished
+      </p>
+    );
   }
   if (progress <= 0) return null;
   return (

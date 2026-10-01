@@ -1,3 +1,4 @@
+import { expandSettingsGroup } from "./settings";
 // tests/e2e/touch-targets.spec.ts
 // A11Y-07 — every interactive control in the new chrome has a ≥ 44 × 44 px hit
 // area (UI-SPEC §Spacing exceptions; iOS HIG / WCAG 2.5.5 target-size). The
@@ -25,7 +26,13 @@ const MIN = 44;
 async function bbox(page: import("@playwright/test").Locator) {
   const box = await page.boundingBox();
   if (!box) throw new Error("element has no bounding box (not visible?)");
-  return box;
+  // Firefox can report a CSS 44px height as 43.999999 after scrolling.
+  // Normalize floating-point noise without relaxing the 44px contract.
+  return {
+    ...box,
+    width: Math.round(box.width * 1000) / 1000,
+    height: Math.round(box.height * 1000) / 1000,
+  };
 }
 
 test.describe("Touch targets ≥ 44×44px (A11Y-07)", () => {
@@ -53,6 +60,7 @@ test.describe("Touch targets ≥ 44×44px (A11Y-07)", () => {
   test("every control inside the open panel meets 44×44px", async ({ page }) => {
     await page.goto(`${BASE}/#/article/${FIRST_FIXTURE}`);
     await page.getByRole("button", { name: "Reading settings" }).click();
+    await expandSettingsGroup(page, "Appearance");
     await expect(page.locator("dialog.settings-panel")).toBeVisible();
 
     const failures: string[] = [];

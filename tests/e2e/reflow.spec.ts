@@ -1,3 +1,4 @@
+import { expandSettingsGroup } from "./settings";
 // tests/e2e/reflow.spec.ts
 // A11Y-04 — content and controls remain visible, operable, and within a single
 // column at 320 CSS px (the WCAG reflow breakpoint) and at 200% browser zoom,
@@ -74,7 +75,8 @@ test.describe("Reflow at 320px (A11Y-04)", () => {
     const dlg = page.locator("dialog.settings-panel");
     await expect(dlg).toBeVisible();
 
-    // All five fieldset sections present and visible.
+    await expandSettingsGroup(page, "Appearance");
+    // Reading and Appearance controls stay reachable at 320px.
     for (const legend of [
       "Typeface",
       "Text size",

@@ -1,3 +1,4 @@
+import { expandSettingsGroup } from "./settings";
 // tests/e2e/persistence.spec.ts
 // STATE-02 + dual-flush Pitfall 4 e2e coverage (02-02 Task 2). Proves in a
 // REAL browser (Chromium / Firefox / WebKit — playwright.config.ts) that:
@@ -133,6 +134,7 @@ test.describe("STATE-02 + Pitfall 4 persistence", () => {
 
     // Open the settings panel and switch theme to Dark (UI-SPEC line 316).
     await page.getByRole("button", { name: "Reading settings" }).click();
+    await expandSettingsGroup(page, "Appearance");
     await expect(page.locator("dialog.settings-panel")).toBeVisible();
     await page.getByRole("radio", { name: "Dark", exact: true }).click();
 
@@ -162,6 +164,7 @@ test.describe("STATE-02 + Pitfall 4 persistence", () => {
 
     // Open the panel and switch to Light theme.
     await page.getByRole("button", { name: "Reading settings" }).click();
+    await expandSettingsGroup(page, "Appearance");
     await page.getByRole("radio", { name: "Light", exact: true }).click();
     await expectDataTheme(page, "light");
 
@@ -209,6 +212,7 @@ test.describe("STATE-02 + Pitfall 4 persistence", () => {
     // Open the settings panel — the happy-path controls are present and
     // operable; the recovery surfaces do NOT interfere with reading.
     await page.getByRole("button", { name: "Reading settings" }).click();
+    await expandSettingsGroup(page, "Appearance");
     await expect(page.locator("dialog.settings-panel")).toBeVisible();
     await expect(page.getByRole("radio", { name: "Sepia" })).toBeVisible();
 

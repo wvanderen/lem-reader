@@ -1,3 +1,4 @@
+import { expandSettingsGroup } from "../settings";
 // tests/e2e/chrome/custom-theme.spec.ts
 // Issues #86/#120 (decision #73 + the two-slot split) — the custom-theme
 // builder, proven in the real browser (jsdom owns no layout/color truth —
@@ -48,6 +49,7 @@ const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22a", "wcag2
 async function openSettings(page: Page): Promise<void> {
   await page.goto(`${BASE}/#/`);
   await page.getByRole("button", { name: "Reading settings" }).click();
+  await expandSettingsGroup(page, "Appearance");
   await expect(page.locator("dialog.settings-panel")).toBeVisible();
 }
 
@@ -369,6 +371,7 @@ test.describe("Custom theme builder (#86/#120 — two custom slots, 5 tokens eac
     expect(reloaded.surface).toBe("#fcfcfa");
 
     await page.getByRole("button", { name: "Reading settings" }).click();
+    await expandSettingsGroup(page, "Appearance");
     await expect(page.locator("dialog.settings-panel")).toBeVisible();
     await activateSlot(page, "Custom dark");
     const darkResumed = await page.evaluate(() => ({
@@ -411,6 +414,7 @@ test.describe("Custom theme builder (#86/#120 — two custom slots, 5 tokens eac
     // hydration never coerces), and Custom light exists with ITS
     // matching-preset record.
     await page.getByRole("button", { name: "Reading settings" }).click();
+    await expandSettingsGroup(page, "Appearance");
     await expect(page.locator("dialog.settings-panel")).toBeVisible();
     await expect(page.getByRole("radio", { name: "Custom dark" })).toBeChecked();
     await expect(page.getByLabel("Text hex value")).toHaveValue("#EDE6D9");

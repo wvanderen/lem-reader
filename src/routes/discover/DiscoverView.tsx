@@ -634,7 +634,7 @@ export function DiscoverView({ hasAppHistory }: { hasAppHistory: boolean }) {
                                 aria-label={`Save ${item.title}`}
                                 onClick={(event) => void handleSaveItem(link, event.currentTarget)}
                               >
-                                <PlusIcon />
+                                {!savingLinks.has(link) && <PlusIcon />}
                               </BusyButton>
                             )}
                           </div>

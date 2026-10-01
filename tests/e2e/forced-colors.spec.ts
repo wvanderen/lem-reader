@@ -1,3 +1,4 @@
+import { expandSettingsGroup } from "./settings";
 // tests/e2e/forced-colors.spec.ts
 // A11Y-05 — under forced-colors (Windows High Contrast mode), state and meaning
 // must survive without relying on color alone (UI-SPEC §Color contrast contract
@@ -81,6 +82,7 @@ test.describe("Forced colors (A11Y-05)", () => {
   }) => {
     await page.goto(`${BASE}/#/article/${FIRST_FIXTURE}`);
     await page.getByRole("button", { name: "Reading settings" }).click();
+    await expandSettingsGroup(page, "Appearance");
     const dlg = page.locator("dialog.settings-panel");
     await expect(dlg).toBeVisible();
 
@@ -128,6 +130,7 @@ test.describe("Forced colors (A11Y-05)", () => {
   }) => {
     await page.goto(`${BASE}/#/article/${FIRST_FIXTURE}`);
     await page.getByRole("button", { name: "Reading settings" }).click();
+    await expandSettingsGroup(page, "Appearance");
     // The default-selected theme radio is "Sepia" — its checked state conveys
     // selection independent of the marker color.
     const sepia = page.getByRole("radio", { name: "Sepia" });

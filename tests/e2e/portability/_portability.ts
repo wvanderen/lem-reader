@@ -1,3 +1,4 @@
+import { expandSettingsGroup } from "../settings";
 // tests/e2e/portability/_portability.ts
 // Plan 09-06 — shared helpers for the portability phase-exit e2e gates.
 //
@@ -92,6 +93,7 @@ export async function prepareFreshPage(page: Page): Promise<void> {
 export async function openSettings(page: Page): Promise<Locator> {
   const panel = page.locator("dialog.settings-panel");
   await page.getByRole("button", { name: "Reading settings" }).click();
+  await expandSettingsGroup(page, "Your data");
   await expect(panel).toBeVisible();
   return panel;
 }

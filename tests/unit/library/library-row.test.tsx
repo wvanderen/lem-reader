@@ -114,6 +114,7 @@ describe("LibraryRow — the per-article review entry (issue #76)", () => {
     render(<LibraryRow article={makeArticle()} total={100} highlightCount={3} />);
     const link = screen.getByLabelText("Review 3 highlights for Row Article");
     expect(link).toHaveClass("library-row-highlights");
+    expect(link).toHaveTextContent("3");
     expect(link).toHaveAttribute("href", "#/highlights?article=row-article");
   });
 
@@ -124,23 +125,15 @@ describe("LibraryRow — the per-article review entry (issue #76)", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders nothing at 0 and when undefined (the gate IS the zero state)", () => {
-    const zero = render(
-      <LibraryRow article={makeArticle()} total={100} highlightCount={0} />,
-    );
-    expect(
-      zero.container.querySelector(".library-row-highlights"),
-    ).toBeNull();
-    expect(
-      zero.container.querySelector(".library-row-actions"),
-    ).toBeNull();
-    zero.unmount();
-    const absent = render(
-      <LibraryRow article={makeArticle()} total={100} />,
-    );
-    expect(
-      absent.container.querySelector(".library-row-highlights"),
-    ).toBeNull();
+  it("keeps a disabled highlights action at zero", () => {
+    render(<LibraryRow article={makeArticle()} total={100} highlightCount={0} />);
+    expect(screen.getByRole("button", { name: "No highlights for Row Article" })).toBeDisabled();
+    expect(screen.queryByRole("link", { name: /Review/ })).toBeNull();
+  });
+
+  it("keeps the disabled action when no highlight count is stored yet", () => {
+    render(<LibraryRow article={makeArticle()} total={100} headingLevel={3} />);
+    expect(screen.getByRole("button", { name: "No highlights for Row Article" })).toBeDisabled();
   });
 
   it("the entry alone earns the action cluster (chapter sub-rows have no other buttons)", () => {

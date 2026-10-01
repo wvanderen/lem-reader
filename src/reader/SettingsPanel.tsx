@@ -541,334 +541,344 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
             </button>
           </div>
 
-          <fieldset className="settings-section">
-            <legend>Typeface</legend>
-            <label className="settings-row">
-              <input
-                type="radio"
-                name="font"
-                value="serif"
-                checked={settings.font === "serif"}
-                onChange={() => onFont("serif")}
-              />
-              <span>Serif</span>
-            </label>
-            <label className="settings-row">
-              <input
-                type="radio"
-                name="font"
-                value="sans"
-                checked={settings.font === "sans"}
-                onChange={() => onFont("sans")}
-              />
-              <span>Sans</span>
-            </label>
-            <label className="settings-row">
-              <input
-                type="radio"
-                name="font"
-                value="dyslexic"
-                checked={settings.font === "dyslexic"}
-                onChange={() => onFont("dyslexic")}
-              />
-              <span>Dyslexia-friendly</span>
-            </label>
-          </fieldset>
+          <details className="settings-group" open>
+            <summary>Reading</summary>
+            <fieldset className="settings-section">
+              <legend>Typeface</legend>
+              <label className="settings-row">
+                <input
+                  type="radio"
+                  name="font"
+                  value="serif"
+                  checked={settings.font === "serif"}
+                  onChange={() => onFont("serif")}
+                />
+                <span>Serif</span>
+              </label>
+              <label className="settings-row">
+                <input
+                  type="radio"
+                  name="font"
+                  value="sans"
+                  checked={settings.font === "sans"}
+                  onChange={() => onFont("sans")}
+                />
+                <span>Sans</span>
+              </label>
+              <label className="settings-row">
+                <input
+                  type="radio"
+                  name="font"
+                  value="dyslexic"
+                  checked={settings.font === "dyslexic"}
+                  onChange={() => onFont("dyslexic")}
+                />
+                <span>Dyslexia-friendly</span>
+              </label>
+            </fieldset>
 
-          <fieldset className="settings-section">
-            <legend>
-              Text size <span className="settings-value">{settings.size} px</span>
-            </legend>
-            {/* Stepped range over SIZE_STEPS — min/max bound the slider, step
+            <fieldset className="settings-section">
+              <legend>
+                Text size <span className="settings-value">{settings.size} px</span>
+              </legend>
+              {/* Stepped range over SIZE_STEPS — min/max bound the slider, step
               matches the gap between consecutive steps so arrow keys land on a
               valid value. aria-valuenow carries the current value for AT. */}
-            <input
-              type="range"
-              name="size"
-              min={SIZE_STEPS[0]}
-              max={SIZE_STEPS[SIZE_STEPS.length - 1]}
-              step={SIZE_STEPS[1] - SIZE_STEPS[0]}
-              value={settings.size}
-              aria-label="Text size"
-              aria-valuenow={settings.size}
-              aria-valuemin={SIZE_STEPS[0]}
-              aria-valuemax={SIZE_STEPS[SIZE_STEPS.length - 1]}
-              onChange={(e) => {
-                const next = Number(e.currentTarget.value);
-                if (SIZE_STEPS.includes(next as (typeof SIZE_STEPS)[number])) {
-                  onSize(next as ReaderSettings["size"]);
-                }
-              }}
-            />
-          </fieldset>
+              <input
+                type="range"
+                name="size"
+                min={SIZE_STEPS[0]}
+                max={SIZE_STEPS[SIZE_STEPS.length - 1]}
+                step={SIZE_STEPS[1] - SIZE_STEPS[0]}
+                value={settings.size}
+                aria-label="Text size"
+                aria-valuenow={settings.size}
+                aria-valuemin={SIZE_STEPS[0]}
+                aria-valuemax={SIZE_STEPS[SIZE_STEPS.length - 1]}
+                onChange={(e) => {
+                  const next = Number(e.currentTarget.value);
+                  if (SIZE_STEPS.includes(next as (typeof SIZE_STEPS)[number])) {
+                    onSize(next as ReaderSettings["size"]);
+                  }
+                }}
+              />
+            </fieldset>
 
-          <fieldset className="settings-section">
-            <legend>
-              Reading width <span className="settings-value">{settings.measure} ch</span>
-            </legend>
-            <input
-              type="range"
-              name="measure"
-              min={MEASURE_STEPS[0]}
-              max={MEASURE_STEPS[MEASURE_STEPS.length - 1]}
-              step={MEASURE_STEPS[1] - MEASURE_STEPS[0]}
-              value={settings.measure}
-              aria-label="Reading width"
-              aria-valuenow={settings.measure}
-              aria-valuemin={MEASURE_STEPS[0]}
-              aria-valuemax={MEASURE_STEPS[MEASURE_STEPS.length - 1]}
-              onChange={(e) => {
-                const next = Number(e.currentTarget.value);
-                if (MEASURE_STEPS.includes(next as (typeof MEASURE_STEPS)[number])) {
-                  onMeasure(next as ReaderSettings["measure"]);
-                }
-              }}
-            />
-          </fieldset>
+            <fieldset className="settings-section">
+              <legend>
+                Reading width <span className="settings-value">{settings.measure} ch</span>
+              </legend>
+              <input
+                type="range"
+                name="measure"
+                min={MEASURE_STEPS[0]}
+                max={MEASURE_STEPS[MEASURE_STEPS.length - 1]}
+                step={MEASURE_STEPS[1] - MEASURE_STEPS[0]}
+                value={settings.measure}
+                aria-label="Reading width"
+                aria-valuenow={settings.measure}
+                aria-valuemin={MEASURE_STEPS[0]}
+                aria-valuemax={MEASURE_STEPS[MEASURE_STEPS.length - 1]}
+                onChange={(e) => {
+                  const next = Number(e.currentTarget.value);
+                  if (MEASURE_STEPS.includes(next as (typeof MEASURE_STEPS)[number])) {
+                    onMeasure(next as ReaderSettings["measure"]);
+                  }
+                }}
+              />
+            </fieldset>
 
-          <fieldset className="settings-section">
-            <legend>Spacing</legend>
-            <label className="settings-row">
-              <input
-                type="radio"
-                name="spacing"
-                value="compact"
-                checked={settings.spacing === "compact"}
-                onChange={() => onSpacing("compact")}
-              />
-              <span>Compact</span>
-            </label>
-            <label className="settings-row">
-              <input
-                type="radio"
-                name="spacing"
-                value="comfortable"
-                checked={settings.spacing === "comfortable"}
-                onChange={() => onSpacing("comfortable")}
-              />
-              <span>Comfortable</span>
-            </label>
-            <label className="settings-row">
-              <input
-                type="radio"
-                name="spacing"
-                value="spacious"
-                checked={settings.spacing === "spacious"}
-                onChange={() => onSpacing("spacious")}
-              />
-              <span>Spacious</span>
-            </label>
-          </fieldset>
-
-          <fieldset className="settings-section">
-            <legend>Theme</legend>
-            <label className="settings-row">
-              <input
-                type="radio"
-                name="theme"
-                value="sepia"
-                checked={settings.theme === "sepia"}
-                onChange={() => onTheme("sepia")}
-              />
-              <span>Sepia</span>
-            </label>
-            <label className="settings-row">
-              <input
-                type="radio"
-                name="theme"
-                value="light"
-                checked={settings.theme === "light"}
-                onChange={() => onTheme("light")}
-              />
-              <span>Light</span>
-            </label>
-            <label className="settings-row">
-              <input
-                type="radio"
-                name="theme"
-                value="dark"
-                checked={settings.theme === "dark"}
-                onChange={() => onTheme("dark")}
-              />
-              <span>Dark</span>
-            </label>
-            {/* Issues #86/#120 — the two custom slots: independently
+            <fieldset className="settings-section">
+              <legend>Spacing</legend>
+              <label className="settings-row">
+                <input
+                  type="radio"
+                  name="spacing"
+                  value="compact"
+                  checked={settings.spacing === "compact"}
+                  onChange={() => onSpacing("compact")}
+                />
+                <span>Compact</span>
+              </label>
+              <label className="settings-row">
+                <input
+                  type="radio"
+                  name="spacing"
+                  value="comfortable"
+                  checked={settings.spacing === "comfortable"}
+                  onChange={() => onSpacing("comfortable")}
+                />
+                <span>Comfortable</span>
+              </label>
+              <label className="settings-row">
+                <input
+                  type="radio"
+                  name="spacing"
+                  value="spacious"
+                  checked={settings.spacing === "spacious"}
+                  onChange={() => onSpacing("spacious")}
+                />
+                <span>Spacious</span>
+              </label>
+            </fieldset>
+          </details>
+          <details className="settings-group">
+            <summary>Appearance</summary>
+            <fieldset className="settings-section">
+              <legend>Theme</legend>
+              <label className="settings-row">
+                <input
+                  type="radio"
+                  name="theme"
+                  value="sepia"
+                  checked={settings.theme === "sepia"}
+                  onChange={() => onTheme("sepia")}
+                />
+                <span>Sepia</span>
+              </label>
+              <label className="settings-row">
+                <input
+                  type="radio"
+                  name="theme"
+                  value="light"
+                  checked={settings.theme === "light"}
+                  onChange={() => onTheme("light")}
+                />
+                <span>Light</span>
+              </label>
+              <label className="settings-row">
+                <input
+                  type="radio"
+                  name="theme"
+                  value="dark"
+                  checked={settings.theme === "dark"}
+                  onChange={() => onTheme("dark")}
+                />
+                <span>Dark</span>
+              </label>
+              {/* Issues #86/#120 — the two custom slots: independently
                 saved, manually selected (NO automatic system-theme
                 switching). Seeding/resume lives in onTheme; the builder
                 disclosure rides directly below this fieldset while either
                 slot is active. */}
-            <label className="settings-row">
-              <input
-                type="radio"
-                name="theme"
-                value="custom-light"
-                checked={settings.theme === "custom-light"}
-                onChange={() => onTheme("custom-light")}
-              />
-              <span>Custom light</span>
-            </label>
-            <label className="settings-row">
-              <input
-                type="radio"
-                name="theme"
-                value="custom-dark"
-                checked={settings.theme === "custom-dark"}
-                onChange={() => onTheme("custom-dark")}
-              />
-              <span>Custom dark</span>
-            </label>
-          </fieldset>
+              <label className="settings-row">
+                <input
+                  type="radio"
+                  name="theme"
+                  value="custom-light"
+                  checked={settings.theme === "custom-light"}
+                  onChange={() => onTheme("custom-light")}
+                />
+                <span>Custom light</span>
+              </label>
+              <label className="settings-row">
+                <input
+                  type="radio"
+                  name="theme"
+                  value="custom-dark"
+                  checked={settings.theme === "custom-dark"}
+                  onChange={() => onTheme("custom-dark")}
+                />
+                <span>Custom dark</span>
+              </label>
+            </fieldset>
 
-          {/* Issues #86/#120 — the builder: ONLY while a custom slot is
+            {/* Issues #86/#120 — the builder: ONLY while a custom slot is
               selected, directly below the Theme fieldset (inside the shared
               sheet — no nested dialog). */}
-          {(settings.theme === "custom-light" || settings.theme === "custom-dark") && (
-            <Suspense fallback={null}>
-              <CustomThemeBuilder />
-            </Suspense>
-          )}
+            {(settings.theme === "custom-light" || settings.theme === "custom-dark") && (
+              <Suspense fallback={null}>
+                <CustomThemeBuilder />
+              </Suspense>
+            )}
 
-          <fieldset className="settings-section">
-            <legend>Motion</legend>
-            <label className="settings-row">
-              <input
-                type="checkbox"
-                checked={settings.animatePageTurns ?? false}
-                onChange={(e) => update({ animatePageTurns: e.currentTarget.checked })}
-                aria-describedby="page-turn-motion-help"
-              />
-              <span>Animate page turns</span>
-            </label>
-            <p id="page-turn-motion-help" className="settings-help">
-              A gentle fade between pages. Follows your device's reduced-motion setting.
-            </p>
-          </fieldset>
-
-          {/* Issue #43 (O8) — the read-aloud voice control: the probed,
+            <fieldset className="settings-section">
+              <legend>Motion</legend>
+              <label className="settings-row">
+                <input
+                  type="checkbox"
+                  checked={settings.animatePageTurns ?? false}
+                  onChange={(e) => update({ animatePageTurns: e.currentTarget.checked })}
+                  aria-describedby="page-turn-motion-help"
+                />
+                <span>Animate page turns</span>
+              </label>
+              <p id="page-turn-motion-help" className="settings-help">
+                A gentle fade between pages. Follows your device's reduced-motion setting.
+              </p>
+            </fieldset>
+          </details>
+          <details className="settings-group">
+            <summary>Read-aloud</summary>
+            {/* Issue #43 (O8) — the read-aloud voice control: the probed,
               filtered local-voice list (system default first; a stored voice
               the filter hid is appended so the control always shows the live
               truth). Native <select>: keyboard/SR operable, role + name +
               value announced by the platform. */}
-          {speechAvailable ? (
-            <>
-              <fieldset className="settings-section">
-                <legend>Read-aloud voice</legend>
-                <select
-                  aria-label="Read-aloud voice"
-                  className="settings-select"
-                  value={settings.voice ?? ""}
-                  onChange={(e) => onVoice(e.currentTarget.value)}
-                >
-                  <option value="">System default voice</option>
-                  {voiceOptions.map((v) => (
-                    <option key={v.voiceURI} value={v.voiceURI}>
-                      {v.name} ({v.lang})
-                    </option>
-                  ))}
-                  {storedVoiceMissing && <option value={settings.voice}>{storedVoiceLabel}</option>}
-                </select>
-                <p className="settings-help">
-                  Voices installed on this device. Reading aloud falls back to the system default
-                  when a saved voice is missing.
-                </p>
-              </fieldset>
+            {speechAvailable ? (
+              <>
+                <fieldset className="settings-section">
+                  <legend>Read-aloud voice</legend>
+                  <select
+                    aria-label="Read-aloud voice"
+                    className="settings-select"
+                    value={settings.voice ?? ""}
+                    onChange={(e) => onVoice(e.currentTarget.value)}
+                  >
+                    <option value="">System default voice</option>
+                    {voiceOptions.map((v) => (
+                      <option key={v.voiceURI} value={v.voiceURI}>
+                        {v.name} ({v.lang})
+                      </option>
+                    ))}
+                    {storedVoiceMissing && (
+                      <option value={settings.voice}>{storedVoiceLabel}</option>
+                    )}
+                  </select>
+                  <p className="settings-help">
+                    Voices installed on this device. Reading aloud falls back to the system default
+                    when a saved voice is missing.
+                  </p>
+                </fieldset>
 
-              {/* Issue #43 (O8) — the read-aloud rate: stepped 0.5–3
+                {/* Issue #43 (O8) — the read-aloud rate: stepped 0.5–3
                   (RATE_STEPS, arrow keys land on a valid step), the same
                   stepped-range pattern as Text size. Applies to subsequent
                   playback — the honest boundary the help line names. */}
+                <fieldset className="settings-section">
+                  <legend>
+                    Read-aloud rate{" "}
+                    <span className="settings-value">{formatRate(settings.rate)}×</span>
+                  </legend>
+                  <input
+                    type="range"
+                    name="readaloud-rate"
+                    min={RATE_STEPS[0]}
+                    max={RATE_STEPS[RATE_STEPS.length - 1]}
+                    step={RATE_STEPS[1] - RATE_STEPS[0]}
+                    value={settings.rate}
+                    aria-label="Read-aloud rate"
+                    aria-valuenow={settings.rate}
+                    aria-valuemin={RATE_STEPS[0]}
+                    aria-valuemax={RATE_STEPS[RATE_STEPS.length - 1]}
+                    aria-valuetext={`${formatRate(settings.rate)} times`}
+                    onChange={(e) => {
+                      const next = Number(e.currentTarget.value);
+                      if (RATE_STEPS.includes(next as (typeof RATE_STEPS)[number])) {
+                        onRate(next);
+                      }
+                    }}
+                  />
+                  <p className="settings-help">Applies when reading aloud starts again.</p>
+                </fieldset>
+              </>
+            ) : (
               <fieldset className="settings-section">
-                <legend>
-                  Read-aloud rate{" "}
-                  <span className="settings-value">{formatRate(settings.rate)}×</span>
-                </legend>
-                <input
-                  type="range"
-                  name="readaloud-rate"
-                  min={RATE_STEPS[0]}
-                  max={RATE_STEPS[RATE_STEPS.length - 1]}
-                  step={RATE_STEPS[1] - RATE_STEPS[0]}
-                  value={settings.rate}
-                  aria-label="Read-aloud rate"
-                  aria-valuenow={settings.rate}
-                  aria-valuemin={RATE_STEPS[0]}
-                  aria-valuemax={RATE_STEPS[RATE_STEPS.length - 1]}
-                  aria-valuetext={`${formatRate(settings.rate)} times`}
-                  onChange={(e) => {
-                    const next = Number(e.currentTarget.value);
-                    if (RATE_STEPS.includes(next as (typeof RATE_STEPS)[number])) {
-                      onRate(next);
-                    }
-                  }}
-                />
-                <p className="settings-help">Applies when reading aloud starts again.</p>
+                <legend>Read aloud</legend>
+                <p className="settings-help">Read aloud isn't available in this browser.</p>
               </fieldset>
-            </>
-          ) : (
-            <fieldset className="settings-section">
-              <legend>Read aloud</legend>
-              <p className="settings-help">Read aloud isn't available in this browser.</p>
-            </fieldset>
-          )}
-
-          {/* Plan 09-05 (D9-10) — the "Your data" cluster: the three
+            )}
+          </details>
+          <details className="settings-group">
+            <summary>Your data</summary>
+            {/* Plan 09-05 (D9-10) — the "Your data" cluster: the three
             whole-library data actions + the import file picker + the status
             live region. Conceptually grouped with the wipe action (which
             stays recovery-routed in App.tsx — 09-PATTERNS.md correction).
             All buttons type="button" (the panel avoids form submission). */}
-          <fieldset className="settings-section settings-data">
-            <legend>Your data</legend>
-            <div className="settings-data-actions">
-              {/* Issue #98 — the unified in-flight register via the shared
+            <fieldset className="settings-section settings-data">
+              <legend>Your data</legend>
+              <div className="settings-data-actions">
+                {/* Issue #98 — the unified in-flight register via the shared
                 BusyButton primitive: the active action's button carries the
                 spinner arc (aria-hidden — the accessible name stays the
                 action) + aria-busy; all three disable together (the calm
                 single-flight rule above). */}
-              <BusyButton
-                className="btn btn-quiet settings-data-action"
-                onClick={handleExportBundle}
-                busy={dataBusy === "export-bundle"}
-                disabled={dataActionsDisabled}
-              >
-                Export library bundle
-              </BusyButton>
-              <BusyButton
-                className="btn btn-quiet settings-data-action"
-                onClick={() => importFileRef.current?.click()}
-                busy={dataBusy === "import"}
-                disabled={dataActionsDisabled}
-              >
-                Import bundle
-              </BusyButton>
-              <BusyButton
-                className="btn btn-quiet settings-data-action"
-                onClick={handleExportHighlights}
-                busy={dataBusy === "export-highlights"}
-                disabled={dataActionsDisabled}
-              >
-                Export all highlights
-              </BusyButton>
-            </div>
-            {/* Visually-hidden file picker (the add-dialog ref discipline) —
+                <BusyButton
+                  className="btn btn-quiet settings-data-action"
+                  onClick={handleExportBundle}
+                  busy={dataBusy === "export-bundle"}
+                  disabled={dataActionsDisabled}
+                >
+                  Export library bundle
+                </BusyButton>
+                <BusyButton
+                  className="btn btn-quiet settings-data-action"
+                  onClick={() => importFileRef.current?.click()}
+                  busy={dataBusy === "import"}
+                  disabled={dataActionsDisabled}
+                >
+                  Import bundle
+                </BusyButton>
+                <BusyButton
+                  className="btn btn-quiet settings-data-action"
+                  onClick={handleExportHighlights}
+                  busy={dataBusy === "export-highlights"}
+                  disabled={dataActionsDisabled}
+                >
+                  Export all highlights
+                </BusyButton>
+              </div>
+              {/* Visually-hidden file picker (the add-dialog ref discipline) —
               triggered by the Import bundle button; disabled together with
               it. tabIndex -1 keeps the hidden input off the Tab ring (the
               button is the keyboard path). */}
-            <input
-              ref={importFileRef}
-              type="file"
-              accept=".zip"
-              className="visually-hidden"
-              aria-label="Bundle file"
-              tabIndex={-1}
-              disabled={dataActionsDisabled}
-              onChange={handleImportChange}
-            />
-            {/* The D2-13 pattern: polite/atomic status region carrying every
+              <input
+                ref={importFileRef}
+                type="file"
+                accept=".zip"
+                className="visually-hidden"
+                aria-label="Bundle file"
+                tabIndex={-1}
+                disabled={dataActionsDisabled}
+                onChange={handleImportChange}
+              />
+              {/* The D2-13 pattern: polite/atomic status region carrying every
               progress, result, and refusal line in calm DOC-06 voice — the
               ONE StatusRegion primitive (issue #98). */}
-            <StatusRegion>{dataMessage !== null && <p>{dataMessage}</p>}</StatusRegion>
-          </fieldset>
-
+              <StatusRegion>{dataMessage !== null && <p>{dataMessage}</p>}</StatusRegion>
+            </fieldset>
+          </details>
           <div className="settings-footer">
             {/* The Reset button's accessible name conveys the consequence (D2-04,
               UI-SPEC §Copywriting line 317); applyTheme + SettingsContext state

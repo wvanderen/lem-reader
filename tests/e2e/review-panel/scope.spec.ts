@@ -377,3 +377,16 @@ test.describe("issue #107 — the unscoped article picker", () => {
     await expect(input).toBeFocused();
   });
 });
+
+test("Clear filters removes article scope and confidence while keeping the chosen sort", async ({ page }) => {
+  await seedCorpus(page);
+  await page.goto(`${BASE}/#/highlights?article=${A_ID}`);
+  await page.getByLabel("Sort", { exact: true }).selectOption("position");
+  await page.getByLabel("Anchor confidence").selectOption("orphan");
+  await page.getByRole("button", { name: "Clear filters" }).click();
+  await expect(page).toHaveURL(/#\/highlights$/);
+  await expect(page.getByRole("combobox", { name: "Article", exact: true })).toHaveValue("");
+  await expect(page.getByLabel("Anchor confidence")).toHaveValue("all");
+  await expect(page.getByLabel("Sort", { exact: true })).toHaveValue("position");
+  await expect(page.locator(".review-row")).toHaveCount(3);
+});
