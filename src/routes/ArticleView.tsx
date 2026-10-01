@@ -1440,6 +1440,12 @@ export function ArticleView({
         // idempotent — Pitfall 9).
         const restoredStarter = starterRestoreFocusRef.current;
         starterRestoreFocusRef.current = false;
+        if (restoredStarter) {
+          // Explicit restoration announces the article from its heading,
+          // even if an import supplied a saved position while it was hidden.
+          articleH1Ref.current?.focus();
+          return;
+        }
         if (!result.ok || !result.location) {
           // Issue #98 — the corrupt-record honesty branch. The visible
           // .meta note lands in articleTopMeta; the announcement rides the
@@ -1449,7 +1455,7 @@ export function ArticleView({
             setRestoreNote(CORRUPT_LOCATION_COPY);
             setRestoreAnnouncement(CORRUPT_LOCATION_COPY);
           }
-          if (hasAppHistory || restoredStarter) articleH1Ref.current?.focus();
+          if (hasAppHistory) articleH1Ref.current?.focus();
           return;
         }
         const loc = result.location;
