@@ -177,7 +177,7 @@ describe("buildBundle — v4 asset emission (20-05 Task 1)", () => {
     await wipeDatabase();
   });
 
-  it("emits schemaVersion 6 (writers emit v6 since issue #121) with per-asset meta and a raw zip entry at assets/<articleId>/<assetId>", async () => {
+  it("emits schemaVersion 7 (writers preserve starter removal) with per-asset meta and a raw zip entry at assets/<articleId>/<assetId>", async () => {
     const { buildBundle } = await loadService();
     const { db } = await loadDb();
     await db.articles.put(figureArticle());
@@ -192,7 +192,7 @@ describe("buildBundle — v4 asset emission (20-05 Task 1)", () => {
     // Writers emit v6 since issue #121 (the 12-07/17-04/20-05/#37
     // version-bump assertion-update precedent); the assets meta block
     // rides unchanged.
-    expect(bundleJson.schemaVersion).toBe(6);
+    expect(bundleJson.schemaVersion).toBe(7);
 
     // The assets meta block: one row, canonical service-generated entry name,
     // honest sha256 + byteLength over the actual bytes.
@@ -240,7 +240,7 @@ describe("buildBundle — v4 asset emission (20-05 Task 1)", () => {
     const result = await validateBundle(new File([new Uint8Array(bytes)], "x.zip"));
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.bundle.schemaVersion).toBe(6);
+      expect(result.bundle.schemaVersion).toBe(7);
       expect(result.bundle.assets).toHaveLength(1);
       expect(result.bundle.assets?.[0]?.entry).toBe(FIGURE_ENTRY);
     }
@@ -337,26 +337,26 @@ describe("union read + forward refusal (20-05 Task 1)", () => {
     expect(bare.success).toBe(true);
   });
 
-  it("rejects schemaVersion 7 at the schema (forward-compat gate); v6 parses since issue #121", () => {
+  it("rejects schemaVersion 8 at the schema (forward-compat gate); v6 parses since issue #121", () => {
     const v6 = ExportBundleSchema.safeParse({
       ...sampleBundle(),
       schemaVersion: 6,
       subscriptions: [],
     });
     expect(v6.success).toBe(true);
-    const v7 = ExportBundleSchema.safeParse({
+    const v8 = ExportBundleSchema.safeParse({
       ...sampleBundle(),
-      schemaVersion: 7,
+      schemaVersion: 8,
     });
-    expect(v7.success).toBe(false);
+    expect(v8.success).toBe(false);
   });
 
-  it("peeks a v7 bundle BEFORE the full parse and refuses newer-schema-version calmly", async () => {
+  it("peeks a v8 bundle BEFORE the full parse and refuses newer-schema-version calmly", async () => {
     const { validateBundle } = await loadService();
-    // schemaVersion 7 AND other damage — the calm newer-version refusal wins.
+    // schemaVersion 8 AND other damage — the calm newer-version refusal wins.
     const damaged: Record<string, unknown> = {
       ...sampleBundle(),
-      schemaVersion: 7,
+      schemaVersion: 8,
       articles: "not-an-array",
     };
     const result = await validateBundle(
@@ -369,7 +369,7 @@ describe("union read + forward refusal (20-05 Task 1)", () => {
     if (!result.ok) {
       expect(result.refusal).toEqual({
         kind: "newer-schema-version",
-        bundleVersion: 7,
+        bundleVersion: 8,
       });
     }
   });

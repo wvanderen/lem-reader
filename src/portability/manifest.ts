@@ -36,7 +36,8 @@ export type Manifest = {
     | "preferences"
     | "assets"
     | "readingSessions"
-    | "subscriptions",
+    | "subscriptions"
+    | "starterRemoved",
     string
   >;
 };
@@ -91,6 +92,7 @@ export async function computeManifest(bundle: ExportBundle): Promise<Manifest> {
       assets: await entry(bundle.assets ?? []),
       readingSessions: await entry(bundle.readingSessions ?? []),
       subscriptions: await entry(bundle.subscriptions ?? []),
+      starterRemoved: await entry(bundle.starterRemoved ?? []),
     },
   };
 }

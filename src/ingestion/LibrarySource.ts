@@ -26,6 +26,11 @@
 //   - T-7-29 (Info Disclosure, cascade-delete misses highlights/notes/
 //     locations) → remove(id) runs a Dexie transaction across all four
 //     stores; commits atomically or rolls back.
+import {
+  STARTER_ARTICLE_ID,
+  STARTER_CHOICE_KEY,
+  isStarterRemoved,
+} from "../persistence/starterArticleStore";
 import { db } from "../persistence/db";
 import type { AssetRecordRow } from "../persistence/db";
 import { ArticleSchema, type CanonicalArticle } from "../content/schema";
@@ -197,7 +202,15 @@ export class DexieLibrarySource implements ArticleRepository {
     // standardized form).
     await db.transaction(
       "rw",
-      [db.articles, db.highlights, db.notes, db.location, db.assets, db.readingSessions],
+      [
+        db.articles,
+        db.highlights,
+        db.notes,
+        db.location,
+        db.assets,
+        db.readingSessions,
+        db.settings,
+      ],
       async () => {
         // Collect the to-be-deleted highlight ids BEFORE deleting them so
         // the notes cascade has the FK set. Within a Dexie transaction,
@@ -211,6 +224,9 @@ export class DexieLibrarySource implements ArticleRepository {
         ).map((k) => (Array.isArray(k) ? k[0] : k));
 
         await db.articles.delete(id);
+        if (id === STARTER_ARTICLE_ID) {
+          await db.settings.put({ key: STARTER_CHOICE_KEY, value: true });
+        }
 
         // Highlights: delete every row for this article across all revisions.
         await db.highlights
@@ -267,15 +283,16 @@ export const dexieLibrarySource = new DexieLibrarySource();
  */
 export const compositeLibraryRepository: ArticleRepository = {
   async list() {
-    const [fixtureList, ingestedList] = await Promise.all([
-      Promise.resolve([...libraryFixtures]),
+    const [starterRemoved, ingestedList] = await Promise.all([
+      isStarterRemoved(),
       dexieLibrarySource.list(),
     ]);
     const seen = new Set<string>();
     const merged: CanonicalArticle[] = [];
     // Ingested first — wins on id collision (D7-07: reader's local library
     // takes precedence over bundled fixtures).
-    for (const a of [...ingestedList, ...fixtureList]) {
+    for (const a of [...ingestedList, ...libraryFixtures]) {
+      if (starterRemoved && a.id === STARTER_ARTICLE_ID) continue;
       if (!seen.has(a.id)) {
         seen.add(a.id);
         merged.push(a);
@@ -285,6 +302,7 @@ export const compositeLibraryRepository: ArticleRepository = {
   },
 
   async open(id) {
+    if (id === STARTER_ARTICLE_ID && (await isStarterRemoved())) return null;
     const ingested = await dexieLibrarySource.open(id);
     if (ingested) return ingested;
     return bundledFixtures.find((a) => a.id === id) ?? null;

@@ -32,6 +32,7 @@
 // fflate import discipline (D9-02, tree-shaking per the fflate README):
 // ONLY the four named identifiers zipSync, unzipSync, strToU8, strFromU8
 // may ever be imported from "fflate" in src/ — nothing else.
+import { STARTER_CHOICE_KEY, isStarterRemoved } from "../persistence/starterArticleStore";
 import { zipSync, unzipSync, strToU8, strFromU8 } from "fflate";
 import { bundledFixtures } from "../fixtures";
 import { dexieLibrarySource } from "../ingestion/LibrarySource";
@@ -102,6 +103,7 @@ export async function buildBundle(): Promise<ExportBuild> {
     assetRows,
     readingSessions,
     subscriptions,
+    starterRemoved,
   ] = await Promise.all([
     dexieLibrarySource.list(), // Dexie articles ONLY — fixtures never ride
     loadAllHighlights(),
@@ -125,7 +127,8 @@ export async function buildBundle(): Promise<ExportBuild> {
     // Plain-array whole-library read with calm corrupt-row drops (the
     // loadAllHighlights/loadAllLocations precedent) — a single corrupt
     // history row never blocks the reader's export.
-    loadAllSubscriptions(), // Issue #121 — feed subscriptions ride the v6 bundle.
+    loadAllSubscriptions(), // Feed subscriptions ride the v6 bundle.
+    isStarterRemoved(), // The explicit starter choice rides the v7 bundle.
     // Plain-array whole-library read with calm corrupt-row drops (the
     // loadAllReadingSessions precedent); the bounded previews ride INSIDE
     // each row — the bundle carries the cache, import never re-fetches.
@@ -177,14 +180,8 @@ export async function buildBundle(): Promise<ExportBuild> {
 
   const bundle = ExportBundleSchema.parse({
     // Phase 12 (12-07) + Phase 17 (17-04) + Phase 20 (20-05) + issue #37 +
-    // issue #121: writers emit v6 — reader-owned metadata overrides ride
-    // each article row via ArticleSchema composition (D17-12), image assets
-    // ride the assets metadata array + raw zip entries (IMG-04), visit
-    // history rides the readingSessions array, and feed subscriptions ride
-    // the subscriptions array (previews inside each row); the 1|..|6 union
-    // read stays in bundle.ts; a v7+ bundle is refused by the peek below
-    // (D9-04).
-    schemaVersion: 6 as const,
+    // Version 7 preserves starter removal; versions 1–6 remain readable.
+    schemaVersion: 7 as const,
     exportedAt: new Date().toISOString(),
     appVersion: resolveAppVersion(),
     articles,
@@ -205,6 +202,7 @@ export async function buildBundle(): Promise<ExportBuild> {
     // library) — the field's presence is the v6 write contract (the
     // books/assets/readingSessions precedent).
     subscriptions,
+    starterRemoved,
   });
 
   const manifest = await computeManifest(bundle);
@@ -319,7 +317,7 @@ export async function validateBundle(file: File): Promise<BundleValidationResult
   //    (metadata-override-capable) parse. Phase 20 (20-05): > 3 → > 4 — v4
   //    bundles (asset-capable) parse. Issue #37: > 4 → > 5 — v5 bundles
   //    (reading-session-capable) parse. Issue #121: > 5 → > 6 — v6 bundles
-  //    (subscription-capable) parse; v7+ still refuses loudly (D9-04).
+  //    (subscription-capable) parse. v7 carries starter removal; v8+ refuses.
   let raw: unknown;
   try {
     raw = JSON.parse(strFromU8(bundleBytes));
@@ -330,7 +328,7 @@ export async function validateBundle(file: File): Promise<BundleValidationResult
     };
   }
   const peeked = (raw as { schemaVersion?: unknown }).schemaVersion;
-  if (typeof peeked === "number" && peeked > 6) {
+  if (typeof peeked === "number" && peeked > 7) {
     return {
       ok: false,
       refusal: { kind: "newer-schema-version", bundleVersion: peeked },
@@ -412,6 +410,9 @@ export async function validateBundle(file: File): Promise<BundleValidationResult
   }
   if (claimedBlocks.subscriptions === undefined) {
     claimedBlocks.subscriptions = emptyHash;
+  }
+  if (claimedBlocks.starterRemoved === undefined && parsed.data.schemaVersion < 7) {
+    claimedBlocks.starterRemoved = emptyHash;
   }
   // D21-03 (POLISH-09) + issue #120 manifest legacy-shape tolerance: when
   // the pre-parse normalization mapped a legacy value/shape (the measure
@@ -601,6 +602,21 @@ export async function applyImport(plan: ResolvedImportPlan): Promise<void> {
   // on the other, and the tuple overloads stop at five (the STATE 12-07
   // lesson; the saveBook/removeBook array-form standardization).
   const applyPuts = async (): Promise<void> => {
+    // A removal/restoration choice always wins locally. Older installations
+    // with saved content also keep their default starter choice.
+    if (plan.starterRemoved !== undefined && !(await db.settings.get(STARTER_CHOICE_KEY))) {
+      const existing =
+        (await db.articles.count()) +
+        (await db.books.count()) +
+        (await db.highlights.count()) +
+        (await db.location.count()) +
+        (await db.readingSessions.count()) +
+        (await db.subscriptions.count());
+      await db.settings.put({
+        key: STARTER_CHOICE_KEY,
+        value: existing > 0 ? false : plan.starterRemoved,
+      });
+    }
     for (const book of plan.booksToWrite) {
       await db.books.put(book);
     }
@@ -663,7 +679,7 @@ export async function applyImport(plan: ResolvedImportPlan): Promise<void> {
     }
   };
 
-  if (plan.applyPreferences) {
+  if (plan.applyPreferences || plan.starterRemoved !== undefined) {
     // NINE tables (articles/highlights/notes/location/readingSessions/
     // settings/books/assets/subscriptions) — the readonly-array overload
     // (the tuple overloads stop at FIVE; the 12-07 lesson, now on both

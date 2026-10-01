@@ -127,8 +127,8 @@ export const AssetExportMetaSchema = z.object({
 export type AssetExportMeta = z.infer<typeof AssetExportMetaSchema>;
 
 export const ExportBundleSchema = z.object({
-  // PORT-01/02 versioning hook — the 1|..|6 union reads all six
-  // generations; v7+ forward-rejects (D9-04). Phase 17 (17-04): v3 carries
+  // PORT-01/02 versioning hook — the 1|..|7 union reads all seven
+  // generations; v8+ forward-rejects (D9-04). Phase 17 (17-04): v3 carries
   // reader-owned metadata overrides (readerTitle/readerAuthor) inside each
   // article row via ArticleSchema composition (D17-12). Phase 20 (20-05):
   // v4 carries the assets metadata array (raw bytes ride the zip). Issue
@@ -141,6 +141,7 @@ export const ExportBundleSchema = z.object({
     z.literal(4),
     z.literal(5),
     z.literal(6),
+    z.literal(7),
   ]),
   exportedAt: z.string().datetime(), // ISO-8601
   appVersion: z.string(), // diagnostic only (D9-04)
@@ -170,6 +171,11 @@ export const ExportBundleSchema = z.object({
   // INSIDE the row as its local cache; the NORMALIZED feed URL is the merge
   // key at import (a duplicate feedUrl keeps the LOCAL row and its cache).
   subscriptions: z.array(SubscriptionRecordSchema).optional(),
+  // Required on v7; older bundles leave the destination choice untouched.
+  starterRemoved: z.boolean().optional(),
+}).refine((bundle) => bundle.schemaVersion < 7 || bundle.starterRemoved !== undefined, {
+  message: "Version 7 bundles must include the starter article choice",
+  path: ["starterRemoved"],
 });
 export type ExportBundle = z.infer<typeof ExportBundleSchema>;
 

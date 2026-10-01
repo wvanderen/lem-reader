@@ -21,6 +21,9 @@
 //      RestorationMarker (Plan 18-03 — the passive transient cue that
 //      replaced the retired ResumeBanner, D18-06: reopen-restore only,
 //      never blocks or shifts content, auto-clears at 4s).
+import { RestoreStarterButton } from "../reader/RestoreStarterButton";
+import { STARTER_ARTICLE_ID, isStarterRemoved } from "../persistence/starterArticleStore";
+import { onLibrarySnapshotInvalidated } from "../ingestion/library/librarySnapshotBus";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { openArticle } from "../content/repository";
 import type { CanonicalArticle } from "../content/types";
@@ -310,6 +313,12 @@ export function ArticleView({
   onAnnotationCountChange,
   hasAppHistory,
 }: ArticleViewProps) {
+  const [starterRemoved, setStarterRemoved] = useState(false);
+  const [articleReload, setArticleReload] = useState(0);
+  useEffect(() => {
+    if (articleId !== STARTER_ARTICLE_ID || !starterRemoved) return;
+    return onLibrarySnapshotInvalidated(() => setArticleReload((value) => value + 1));
+  }, [articleId, starterRemoved]);
   const [article, setArticle] = useState<CanonicalArticle | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   // Phase 18 Plan 18-03 (ORNT-06, D18-05/08): the restoration marker mount
@@ -1172,9 +1181,14 @@ export function ArticleView({
     // behavior every library open already gets.
     currentAnchorOffsetRef.current = 0;
     lastPreciseAnchorRef.current = null;
-    openArticle(articleId)
-      .then((a) => {
+    setStarterRemoved(false);
+    Promise.all([
+      openArticle(articleId),
+      articleId === STARTER_ARTICLE_ID ? isStarterRemoved() : Promise.resolve(false),
+    ])
+      .then(([a, removed]) => {
         if (cancelled) return;
+        setStarterRemoved(removed);
         setArticle(a);
         setStatus(a ? "ready" : "error");
         // Plan 12-06 (D12-08 + D12-05) + Issue #8 — the epub-chapter
@@ -1190,7 +1204,7 @@ export function ArticleView({
     return () => {
       cancelled = true;
     };
-  }, [articleId]);
+  }, [articleId, articleReload]);
 
   // Plan 14-03 Task 2 (D14-02/D14-06/D14-07 — Pitfall 8) — the
   // per-destination title effect, keyed on ALL THREE truth inputs so
@@ -1207,7 +1221,7 @@ export function ArticleView({
   // code by construction).
   useEffect(() => {
     if (status === "error") {
-      setDocumentTitle("Couldn't open this article");
+      setDocumentTitle(starterRemoved ? "Getting Started is unavailable" : "Couldn't open this article");
       return;
     }
     if (!article) return; // loading transient — no write
@@ -1227,7 +1241,7 @@ export function ArticleView({
       // override is the one name; canonical is the fallback).
       setDocumentTitle(effectiveTitle(article));
     }
-  }, [article, chapterContext, status]);
+  }, [article, chapterContext, status, starterRemoved]);
 
   // Plan 14-03 Task 3 (D14-01/D14-06) — the two route-change h1 focus
   // targets (tabindex=-1 pattern; texts and levels byte-stable).
@@ -1238,6 +1252,7 @@ export function ArticleView({
   // mount effect).
   const articleH1Ref = useRef<HTMLHeadingElement>(null);
   const errorH1Ref = useRef<HTMLHeadingElement>(null);
+  const starterRestoreFocusRef = useRef(false);
 
   // Plan 10-03 (D10-03 / RECV-01.c + .i — deep-link jump): coordination
   // refs shared with the location-restore effect below.
@@ -1423,6 +1438,8 @@ export function ArticleView({
         // the h1: the restored position is the orientation (D14-10 —
         // never fight the restore scroll). No cleanup (focusing twice is
         // idempotent — Pitfall 9).
+        const restoredStarter = starterRestoreFocusRef.current;
+        starterRestoreFocusRef.current = false;
         if (!result.ok || !result.location) {
           // Issue #98 — the corrupt-record honesty branch. The visible
           // .meta note lands in articleTopMeta; the announcement rides the
@@ -1432,7 +1449,7 @@ export function ArticleView({
             setRestoreNote(CORRUPT_LOCATION_COPY);
             setRestoreAnnouncement(CORRUPT_LOCATION_COPY);
           }
-          if (hasAppHistory) articleH1Ref.current?.focus();
+          if (hasAppHistory || restoredStarter) articleH1Ref.current?.focus();
           return;
         }
         const loc = result.location;
@@ -1801,12 +1818,15 @@ export function ArticleView({
               {/* Plan 14-03 Task 3 (D14-06): gains ONLY tabIndex={-1} + the
                   focus ref — text and level byte-stable (period kept). */}
               <h1 ref={errorH1Ref} tabIndex={-1}>
-                Couldn't open this article.
+                {starterRemoved ? "Getting Started is unavailable." : "Couldn't open this article."}
               </h1>
-              <p>The article could not be loaded. Select it again from the list, or try a different article.</p>
+              <p>{starterRemoved ? "You removed Getting Started from your library. Restore it to read it again." : "The article could not be loaded. Select it again from the list, or try a different article."}</p>
             </>
           )}
         </StatusRegion>
+        {starterRemoved && (
+          <RestoreStarterButton onRestored={() => { starterRestoreFocusRef.current = true; }} />
+        )}
       </main>
     );
   }

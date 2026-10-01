@@ -2607,6 +2607,7 @@ dialog.annotations-drawer {
   max-width: none;
 }
 .library-toolbar .tag-filter {
+  flex-basis: 100%;
   margin: 0;
   max-width: none;
 }
@@ -2692,13 +2693,12 @@ dialog.annotations-drawer {
 /* Issue #117 — the NAMED tag filter (hosts that show more than one tag
    dimension: the review panel's "Article tag" / "Highlight tag"). The
    legend renders VISIBLY in the host label register (.review-filter-label
-   tokens) and the fieldset stacks it over the wrapping chips — the
-   .review-filter-group column rhythm. The unnamed variant above is
+   tokens), above a horizontal row of wrapping chips. The unnamed variant above is
    byte-unchanged (LibraryView). Forced-colors safe: the legend is plain
    text; chip state keeps its aria-pressed attribute rule below. */
 .tag-filter-named {
-  flex-direction: column;
-  align-items: flex-start;
+  flex-direction: row;
+  align-items: center;
   gap: var(--space-xs);
 }
 .tag-filter-legend {
@@ -4744,7 +4744,9 @@ main#main > .status:empty {
   gap: var(--space-md) var(--space-lg);
 }
 .review-filter-row > .tag-filter {
-  flex: 1 1 240px;
+  flex: 0 0 100%;
+  min-width: 0;
+  max-width: none;
   margin: 0;
 }
 .review-filter-group {
@@ -5327,4 +5329,9 @@ dialog.highlight-popover .highlight-color-entry legend {
 }
 .settings-group > .settings-section ~ .settings-section {
   margin-block-start: var(--space-lg);
+}
+
+/* Keep the highlight badge above adjacent row controls. */
+.library-row-actions a.library-row-highlights {
+  z-index: calc(var(--z-row-actions) + 1);
 }

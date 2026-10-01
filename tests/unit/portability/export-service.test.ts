@@ -313,7 +313,7 @@ describe("buildBundle (09-04 Task 1)", () => {
     const entries = await buildEntries();
 
     const bundle = ExportBundleSchema.parse(JSON.parse(strFromU8(entries["bundle.json"]!)));
-    expect(bundle.schemaVersion).toBe(6); // writers emit v6 (issue #121)
+    expect(bundle.schemaVersion).toBe(7); // writers preserve starter removal
     expect(bundle.articles).toHaveLength(2);
     expect(bundle.articles.map((a) => a.id).sort()).toEqual([
       "art-plain",
@@ -378,7 +378,7 @@ describe("buildBundle (09-04 Task 1)", () => {
 
   // ── Phase 12 (12-07 Task 1): books ride the v2 bundle ────────────────────
 
-  it("emits schemaVersion 6 with the books array and chapters among articles carrying ingestionMeta.bookId", async () => {
+  it("emits schemaVersion 7 with the books array and chapters among articles carrying ingestionMeta.bookId", async () => {
     const { db } = await loadDb();
     const book = sampleBook();
     const chapter0 = sampleChapter();
@@ -408,7 +408,7 @@ describe("buildBundle (09-04 Task 1)", () => {
     // since 12-07; the version bumped to 4 for assets — 20-05, to 5
     // for reading sessions — issue #37, and to 6 for subscriptions —
     // issue #121).
-    expect(bundle.schemaVersion).toBe(6);
+    expect(bundle.schemaVersion).toBe(7);
     expect(bundle.books).toEqual([book]);
 
     // Chapters ride articles as ordinary articles — ingestionMeta.bookId
@@ -428,7 +428,7 @@ describe("buildBundle (09-04 Task 1)", () => {
     const entries = await buildEntries();
 
     const bundle = ExportBundleSchema.parse(JSON.parse(strFromU8(entries["bundle.json"]!)));
-    expect(bundle.schemaVersion).toBe(6); // writers emit v6 (issue #121)
+    expect(bundle.schemaVersion).toBe(7); // writers preserve starter removal
     expect(bundle.books).toEqual([]);
   });
 
