@@ -154,8 +154,14 @@ test("a11y #121: the Discover destination is axe-clean (empty state and subscrip
     .getByRole("textbox", { name: "Subscribe to a feed" })
     .fill("https://journal.example.com/feed.xml");
   await page.getByRole("button", { name: "Subscribe" }).click();
+  // Issue #123 anatomy: the ONE unified timeline announces through the
+  // level-2 "Latest articles" region heading; the feed's own name is a
+  // level-3 heading inside "Your feeds" (the feed controls section).
   await expect(
-    page.getByRole("heading", { level: 2, name: "The Calm Reader Journal" }),
+    page.getByRole("heading", { level: 2, name: "Latest articles" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { level: 3, name: "The Calm Reader Journal" }),
   ).toBeVisible();
   const listResults = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
   expect(
@@ -527,9 +533,13 @@ test("review panel #/highlights: zero serious/critical WCAG 2.2 AA violations (s
     ],
   });
   const anchor = confidentHighlightOn(article);
+  // Issue #117 — the seeded row carries a TAG so the tag dialog below
+  // opens with a real pill (the picker's populated state, not a stub).
   await seedRows(page, {
     articles: [article],
-    highlights: [highlightRow("a11y-review-corpus", anchor, "hl-a11y-review-1")],
+    highlights: [
+      { ...highlightRow("a11y-review-corpus", anchor, "hl-a11y-review-1"), tags: ["margin"] },
+    ],
     notes: [
       {
         schemaVersion: 1,
@@ -584,6 +594,103 @@ test("review panel #/highlights: zero serious/critical WCAG 2.2 AA violations (s
     colorIsModal,
     "color dialog is modal (:modal — showModal opened it)",
   ).toBe(true);
+
+  // Issue #125 (AC3) — the review TAG dialog (#117's ReviewTagsDialog)
+  // gets the same modal-surface bar: opened on the seeded tagged row, with
+  // the existing pill mounted, the dialog holds zero serious/critical
+  // violations and the :modal contract.
+  await colorDialog.getByRole("button", { name: "Done" }).click();
+  await expect(colorDialog).toBeHidden();
+  await page.getByRole("button", { name: /^Edit tags: / }).first().click();
+  const tagsDialog = page.getByRole("dialog", { name: "Edit tags" });
+  await expect(tagsDialog).toBeVisible();
+  await expect(
+    tagsDialog.locator(".tag-picker-pill-text", { hasText: "margin" }),
+  ).toBeVisible();
+  const tagsResults = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
+  const tagsSerious = seriousViolations(tagsResults);
+  expect(tagsSerious, JSON.stringify(tagsSerious, null, 2)).toEqual([]);
+  const tagsIsModal = await tagsDialog.evaluate((el) => el.matches(":modal"));
+  expect(
+    tagsIsModal,
+    "tag dialog is modal (:modal — showModal opened it)",
+  ).toBe(true);
+});
+
+// Issue #125 (AC3) — the Library SORT control (#115) is part of the
+// toolbar axe scans by DOM membership, but the sorted surface gets its
+// own named gate here: a mixed corpus (articles + a BOOK row, the #114
+// mixed-library shape) scanned while the sort select is present and a
+// non-default choice is active, so the scanned tree is the sorted one.
+test("a11y #115/#125: the library under a non-default sort is axe-clean (mixed corpus)", async ({
+  page,
+}) => {
+  await wipeDatabase(page);
+  await page.goto(`${BASE}/#/`);
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible();
+  await expect(page.getByText("Getting started with Lem Reader").first()).toBeVisible();
+
+  const corpus = ["mizzen", "augarde", "kestrel"].map((seed, i) =>
+    makeArticle({
+      id: `a11y-sort-${seed}`,
+      title: `Sort Corpus ${String.fromCharCode(90 - i)} — ${seed}`,
+      paragraphs: [
+        `The ${seed} corpus row stands in for the mixed library's article half, carrying enough prose for the list rows to render their full anatomy under the sorted order.`,
+      ],
+    }),
+  );
+  await seedRows(page, { articles: corpus });
+
+  await page.goto(`${BASE}/#/`);
+  await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible();
+  const sortSelect = page.locator("#library-sort");
+  await expect(sortSelect).toBeVisible();
+  await sortSelect.selectOption({ label: "Title" });
+  await expect(sortSelect).toHaveValue("title");
+
+  const results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
+  const serious = seriousViolations(results);
+  const ids = serious.map((v) => v.id);
+  expect(ids, JSON.stringify(serious, null, 2)).not.toContain("heading-order");
+  expect(ids).not.toContain("list");
+  expect(serious).toEqual([]);
+});
+
+// Issue #125 (AC3) — COMPACT NAVIGATION: the primary nav at the 320px
+// narrow cell (the shell-nav NARROW discipline) gets the axe bar in both
+// of its reachable destinations — the library (switcher + search + sort
+// toolbar) and Discover (the subscription surface) — so the compact
+// chrome is not just visible and operable but clean under WCAG 2.2 AA.
+test.describe("compact navigation (320px)", () => {
+  test.use({ viewport: { width: 320, height: 640 } });
+
+  test("a11y #125: the narrow library chrome is axe-clean", async ({ page }) => {
+    await page.goto(`${BASE}/#/`);
+    await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible();
+    // The nav links are visible at the narrow cell (the shell-nav NARROW
+    // contract the compact-nav keyboard cells pin) — assert before scanning
+    // so a collapsed surface can't silently weaken the gate.
+    await expect(
+      page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Discover" }),
+    ).toBeVisible();
+    const results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
+    const serious = seriousViolations(results);
+    const ids = serious.map((v) => v.id);
+    expect(ids, JSON.stringify(serious, null, 2)).not.toContain("heading-order");
+    expect(ids).not.toContain("list");
+    expect(serious).toEqual([]);
+  });
+
+  test("a11y #125: narrow Discover is axe-clean (empty state)", async ({ page }) => {
+    await wipeDatabase(page);
+    await page.goto(`${BASE}/#/discover`);
+    await expect(page.getByRole("heading", { level: 1, name: "Discover" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "No subscriptions yet." })).toBeVisible();
+    const results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
+    const serious = seriousViolations(results);
+    expect(serious, JSON.stringify(serious, null, 2)).toEqual([]);
+  });
 });
 
 // ── Plan 12-06 (ING-05): the book + chapter surfaces ────────────────────────

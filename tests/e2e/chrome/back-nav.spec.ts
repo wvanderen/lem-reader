@@ -182,13 +182,15 @@ test("(d) keyboard: Back to library is Tab-reachable from the article top and En
     // Plan 18-03 adjacency sweep (Rule 1 — stale budget, pre-existing from
     // 18-02): the walk cap was calibrated to the pre-18-02 four-button
     // article-scoped header; D18-02's locked 5th button (contents, FIRST in
-    // the group) inserted one focusable, so DOM order to the back affordance
-    // is now skip-link → wordmark → Library → Highlights → contents → tags
-    // → annotations → mode → gear → back-to-library = 9 presses. The
-    // assertion's contract (Tab-reachability in DOM order within a bounded
-    // walk) is unchanged — only the bound tracks the sanctioned anatomy.
+    // the group) inserted one focusable. Issue #121 then inserted the
+    // Discover destination between Library and Highlights in the primary
+    // nav, so DOM order to the back affordance is now skip-link → wordmark
+    // → Library → Discover → Highlights → contents → tags → annotations →
+    // mode → gear → back-to-library = 10 presses. The assertion's contract
+    // (Tab-reachability in DOM order within a bounded walk) is unchanged —
+    // only the bound tracks the sanctioned anatomy.
     expect(
-      await tabWalkUntil(page, "button.back-to-library", 9),
+      await tabWalkUntil(page, "button.back-to-library", 10),
       "Tab from the skip link must reach Back to library in DOM order",
     ).toBe(true);
     // Enter while focused → history.back() (the in-app path) → library.

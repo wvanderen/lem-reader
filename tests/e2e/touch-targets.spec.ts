@@ -91,30 +91,32 @@ test.describe("Touch targets ≥ 44×44px (A11Y-07)", () => {
 
     // Every radio option. The hit area is the LABEL row (.settings-row), not
     // the 13px glyph — assert the label box, not input.boundingBox.
-    for (const name of [
+    // {name, value} pairs: accessible names and input values part ways for
+    // "Dyslexia-friendly" (value dyslexic) and the #120 custom slots
+    // (custom-light / custom-dark), and exact matching keeps "Light" from
+    // also resolving "Custom light" (strict-mode).
+    for (const { name, value } of [
       // Typeface
-      "Serif",
-      "Sans",
-      "Dyslexia-friendly",
+      { name: "Serif", value: "serif" },
+      { name: "Sans", value: "sans" },
+      { name: "Dyslexia-friendly", value: "dyslexic" },
       // Spacing
-      "Compact",
-      "Comfortable",
-      "Spacious",
+      { name: "Compact", value: "compact" },
+      { name: "Comfortable", value: "comfortable" },
+      { name: "Spacious", value: "spacious" },
       // Theme
-      "Sepia",
-      "Light",
-      "Dark",
+      { name: "Sepia", value: "sepia" },
+      { name: "Light", value: "light" },
+      { name: "Dark", value: "dark" },
+      { name: "Custom light", value: "custom-light" },
+      { name: "Custom dark", value: "custom-dark" },
     ]) {
-      const radio = page.getByRole("radio", { name });
-      // RTL queries the <input>, but its label row carries the hit area.
-      // Find the enclosing label via XPath from the input.
-      const label = page.locator(`label:has(input[type='radio'][value='${name.toLowerCase()}'])`);
-      // For "Dyslexia-friendly" the value is 'dyslexic', not the label text.
-      // Easier: find the label by its text content (the <span> inside it).
-      const labelByText = page.locator(`label.settings-row`, {
-        hasText: name,
-      });
-      const lbl = (await labelByText.count()) > 0 ? labelByText : label;
+      const radio = page.getByRole("radio", { name, exact: true });
+      // The label row carries the hit area (the input itself is the 13px
+      // glyph); the value pins the row even when names share substrings.
+      const lbl = page.locator(
+        `label.settings-row:has(input[type='radio'][value='${value}'])`,
+      );
       const b = await bbox(lbl.first());
       if (b.height < MIN) {
         failures.push(`radio '${name}' label row: height ${b.height}px < ${MIN}px`);
