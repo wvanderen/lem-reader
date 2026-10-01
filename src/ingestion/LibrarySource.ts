@@ -154,7 +154,7 @@ export class DexieLibrarySource implements ArticleRepository {
    * migration because no store or index changes. Removed rows stay removed. */
   async rememberSourceUrl(articleId: string, url: string): Promise<void> {
     await db.transaction("rw", db.articles, async () => {
-      const article = await db.articles.get(articleId);
+      const article = await this.open(articleId);
       if (!article || article.provenance.sourceUrl === url) return;
       const aliases = article.provenance.sourceAliases ?? [];
       if (aliases.includes(url)) return;
