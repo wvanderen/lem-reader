@@ -1,9 +1,10 @@
 // src/routes/discover/DiscoverView.tsx
-// Issues #121 + #123 — the Discover destination route view (#/discover): the
-// accessible RSS/Atom subscription surface. The LibraryView/ReviewView twin:
-// same page shape (<main id="main"> + one h1 + .status live region), the
-// h1 focus-on-in-app-navigation discipline, and the state-kind vocabulary
-// (no-content state, refusal, error) through the ONE StatusRegion primitive.
+// Issues #121 + #123 + #124 — the Discover destination route view
+// (#/discover): the accessible RSS/Atom subscription surface. The
+// LibraryView/ReviewView twin: same page shape (<main id="main"> + one h1
+// + .status live region), the h1 focus-on-in-app-navigation discipline,
+// and the state-kind vocabulary (no-content state, refusal, error) through
+// the ONE StatusRegion primitive.
 //
 // Locked shapes rendered here:
 //   - The subscribe form is ALWAYS visible (empty state or not — the form
@@ -30,6 +31,18 @@
 //     Remove. Item titles with links are EXTERNAL anchors: target="_blank"
 //     + rel="noopener noreferrer" + the "(opens in a new tab)"
 //     visually-hidden suffix (the AddDialog see-original discipline).
+//   - Issue #124 — each linked preview carries ONE + affordance that saves
+//     the LINKED PAGE through the guarded pipeline (saveFeedItem — never
+//     the feed summary or cached feed text) without leaving Discover. A
+//     saved preview swaps the + for the calm "In library" mark and an
+//     "Open" in-app link (hash anchor, the AddDialog open-saved twin); the
+//     article never AUTO-opens (a never-opened addition stays Unread), a
+//     refusal announces calmly and leaves the + retryable, and a duplicate
+//     press resolves to the EXISTING row (the already-in-library refusal's
+//     canonical id — one library item across feeds and redirect aliases,
+//     annotations never overwritten). Pre-existing saves render the same
+//     "In library" + "Open" state from the ONE library snapshot
+//     (savedArticleIdForLink, exact sourceUrl match) — no press needed.
 //   - Removal is destructive-confirm: DiscoverRemoveConfirm owns the ONLY
 //     deleteSubscription call site (the Pitfall 8 discipline). Removing a
 //     subscription deletes its row — its previews/cache only; articles,
@@ -53,6 +66,7 @@ import { formatIsoDate } from "../../ingestion/library/formatDate";
 // through it.
 import { StatusRegion } from "../../ui/StatusRegion";
 import { BusyButton } from "../../ui/BusyButton";
+import { PlusIcon } from "../../ui/icons";
 // The ONE subscribe-and-persist policy (validate → fetch → dedupe → save).
 import { subscribeToFeed } from "../../discover/subscribe";
 import type { SubscribeOutcome } from "../../discover/subscribe";
@@ -60,9 +74,20 @@ import type { SubscribeOutcome } from "../../discover/subscribe";
 // calm failure otherwise) and the ONE deterministic timeline policy.
 import { refreshSubscription } from "../../discover/refresh";
 import { buildTimeline, filterTimeline, feedItemKey } from "../../discover/timeline";
-// The feed-aware copy voice (calm DOC-06, one catalog, per-surface wording).
-import { mapFeedReasonToCopy } from "../../ingestion/ingestCopy";
+// Issue #124 — the ONE save-one-feed-item policy (the + press ingests the
+// LINKED PAGE through the guarded pipeline) and the pre-press "In
+// library" derivation over the ONE library snapshot.
+import { saveFeedItem, savedArticleIdForLink } from "../../discover/saveItem";
+import type { SaveItemOutcome } from "../../discover/saveItem";
+// The feed-aware copy voice (calm DOC-06, one catalog, per-surface wording)
+// and the page-voice catalog for the + save's refusals (the saved thing is
+// an ARTICLE page, not a feed).
+import { mapFeedReasonToCopy, mapReasonToCopy } from "../../ingestion/ingestCopy";
 import type { IngestionFailureReason } from "../../ingestion/types";
+// The ONE library read model — the pre-existing "In library" state and the
+// write-followup invalidation (the AddDialog onSaved discipline).
+import { useLibrarySnapshot } from "../../ingestion/library/useLibrarySnapshot";
+import { invalidateLibrarySnapshot } from "../../ingestion/library/librarySnapshotBus";
 // The ONE list read + the ONE delete seam.
 import { listSubscriptions } from "../../persistence/subscriptionsStore";
 import type { SubscriptionRecord } from "../../content/schema";
@@ -102,6 +127,28 @@ function applyOutcome(outcome: SubscribeOutcome, announce: (message: string) => 
       break;
     case "refused":
       announce(mapFeedReasonToCopy(outcome.reason));
+      break;
+  }
+}
+
+/** Apply one + press's save outcome to the shared announcement region
+ * (issue #124 — copy lives here; the policy lives in saveItem.ts). A
+ * saved page and a resolved duplicate BOTH leave the preview reading
+ * "In library"; refusals use the PAGE voice (the saved thing is an
+ * article, not a feed). */
+function applySaveOutcome(
+  outcome: SaveItemOutcome,
+  announce: (message: string) => void,
+): void {
+  switch (outcome.outcome) {
+    case "saved":
+      announce("Saved to your library.");
+      break;
+    case "already-in-library":
+      announce("Already in your library.");
+      break;
+    case "refused":
+      announce(mapReasonToCopy(outcome.reason));
       break;
   }
 }
@@ -289,6 +336,54 @@ export function DiscoverView({ hasAppHistory }: { hasAppHistory: boolean }) {
   // ── Removal state ──────────────────────────────────────────────────────
   const [removeTarget, setRemoveTarget] = useState<SubscriptionRecord | null>(null);
 
+  // ── Inline save state (issue #124) ─────────────────────────────────────
+  // The ONE library snapshot backs the pre-press "In library" state (an
+  // article whose sourceUrl IS a preview's link renders In library + Open
+  // with no press). resolvedIds carries the SESSION's press resolutions
+  // (link → the canonical id the pipeline returned) — the redirect-aliased
+  // rows a sourceUrl match cannot see, resolved honestly by the press.
+  const { snapshot } = useLibrarySnapshot();
+  const [resolvedIds, setResolvedIds] = useState<Record<string, string>>({});
+  const [savingLinks, setSavingLinks] = useState<ReadonlySet<string>>(new Set());
+  // The overlap guard: state alone races across renders (two clicks in one
+  // tick), so the in-flight check is a ref — the refresh pattern's twin,
+  // per link (independent previews may save concurrently).
+  const savingInFlightRef = useRef<Set<string>>(new Set());
+
+  /** The "In library" id for a linked preview: this session's press
+   * resolution first, else the library snapshot's sourceUrl match. */
+  const savedIdFor = (link: string): string | undefined =>
+    resolvedIds[link] ?? savedArticleIdForLink(snapshot.articles, link);
+
+  async function handleSaveItem(link: string) {
+    if (savingInFlightRef.current.has(link)) return;
+    savingInFlightRef.current.add(link);
+    setSavingLinks(new Set(savingInFlightRef.current));
+    setMessage("Saving to your library…");
+    try {
+      const outcome = await saveFeedItem(link);
+      applySaveOutcome(outcome, setMessage);
+      if (outcome.outcome === "saved") {
+        setResolvedIds((prev) => ({ ...prev, [link]: outcome.articleId }));
+        // The ONE write-followup call (the AddDialog onSaved discipline):
+        // the snapshot re-derives, so the saved state survives leaving
+        // Discover and coming back even without a session resolution.
+        invalidateLibrarySnapshot();
+      } else if (
+        outcome.outcome === "already-in-library" &&
+        outcome.articleId !== undefined
+      ) {
+        const { articleId } = outcome;
+        setResolvedIds((prev) => ({ ...prev, [link]: articleId }));
+      }
+    } catch {
+      setMessage("Couldn't save this page. Try again.");
+    } finally {
+      savingInFlightRef.current.delete(link);
+      setSavingLinks(new Set(savingInFlightRef.current));
+    }
+  }
+
   const visibleEntries = filterTimeline(
     buildTimeline(subscriptions),
     filterId === "" ? null : filterId,
@@ -417,44 +512,86 @@ export function DiscoverView({ hasAppHistory }: { hasAppHistory: boolean }) {
             ))}
             {visibleEntries.length > 0 ? (
               <ul className="discover-timeline">
-                {visibleEntries.map((entry) => (
-                  <li
-                    key={JSON.stringify([entry.subscription.id, feedItemKey(entry.item)])}
-                    className="discover-item"
-                  >
-                    {entry.item.image && (
-                      <img
-                        className="discover-item-image"
-                        src={entry.item.image}
-                        alt=""
-                        loading="lazy"
-                        decoding="async"
-                        referrerPolicy="no-referrer"
-                      />
-                    )}
-                    <div className="discover-item-body">
-                      <p className="meta discover-item-feed">{entry.subscription.title}</p>
-                      <h3 className="discover-item-title">
-                        {entry.item.link ? (
-                          <a href={entry.item.link} target="_blank" rel="noopener noreferrer">
-                            {entry.item.title}
-                            <span className="visually-hidden"> (opens in a new tab)</span>
-                          </a>
-                        ) : (
-                          entry.item.title
+                {visibleEntries.map((entry) => {
+                  const { item } = entry;
+                  const link = item.link;
+                  const savedId = link ? savedIdFor(link) : undefined;
+                  return (
+                    <li
+                      key={JSON.stringify([entry.subscription.id, feedItemKey(item)])}
+                      className="discover-item"
+                    >
+                      {item.image && (
+                        <img
+                          className="discover-item-image"
+                          src={item.image}
+                          alt=""
+                          loading="lazy"
+                          decoding="async"
+                          referrerPolicy="no-referrer"
+                        />
+                      )}
+                      <div className="discover-item-body">
+                        <p className="meta discover-item-feed">{entry.subscription.title}</p>
+                        <h3 className="discover-item-title">
+                          {item.link ? (
+                            <a href={item.link} target="_blank" rel="noopener noreferrer">
+                              {item.title}
+                              <span className="visually-hidden"> (opens in a new tab)</span>
+                            </a>
+                          ) : (
+                            item.title
+                          )}
+                        </h3>
+                        {item.datePublished && (
+                          <p className="meta discover-item-date">
+                            {formatIsoDate(item.datePublished)}
+                          </p>
                         )}
-                      </h3>
-                      {entry.item.datePublished && (
-                        <p className="meta discover-item-date">
-                          {formatIsoDate(entry.item.datePublished)}
-                        </p>
-                      )}
-                      {entry.item.excerpt && (
-                        <p className="discover-item-excerpt">{entry.item.excerpt}</p>
-                      )}
-                    </div>
-                  </li>
-                ))}
+                        {item.excerpt && <p className="discover-item-excerpt">{item.excerpt}</p>}
+                        {/* Issue #124 — the inline add affordance. A linked
+                            preview carries exactly one of: the + press
+                            (ingests the LINKED PAGE through the guarded
+                            pipeline; never the feed summary or cached feed
+                            text), or the saved state — the calm "In
+                            library" mark + the "Open" in-app link. Open
+                            NEVER fires automatically: the hash anchor is a
+                            plain link the reader chooses, so a never-
+                            opened addition stays Unread. A refusal keeps
+                            the + (retryable, D16-11); a duplicate resolves
+                            to the EXISTING row's id — one library item,
+                            annotations never overwritten. Linkless
+                            previews offer neither: there is no page to
+                            save, and the absence is the honest state. */}
+                        {link && (
+                          <div className="discover-item-actions">
+                            {savedId ? (
+                              <>
+                                <span className="discover-item-saved">In library</span>
+                                <a
+                                  className="btn btn-quiet discover-item-open"
+                                  href={`#/article/${savedId}`}
+                                  aria-label={`Open ${item.title}`}
+                                >
+                                  Open
+                                </a>
+                              </>
+                            ) : (
+                              <BusyButton
+                                busy={savingLinks.has(link)}
+                                className="btn btn-icon discover-item-save"
+                                aria-label={`Save ${item.title}`}
+                                onClick={() => void handleSaveItem(link)}
+                              >
+                                <PlusIcon />
+                              </BusyButton>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             ) : (
               <p className="meta discover-timeline-empty">

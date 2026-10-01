@@ -5157,6 +5157,27 @@ main#main > .status:empty {
   overflow-wrap: anywhere;
 }
 
+/* ── Issue #124 — the inline add affordance: the + press (ingests the
+   linked page through the guarded pipeline) and the saved state it swaps
+   to. The + rides .btn-icon (the 44×44 raised square); "Open" rides
+   .btn-quiet (min-height var(--touch)); the "In library" mark is the
+   .meta voice — quiet confirmation, never a push. */
+.discover-item-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-top: var(--space-xs);
+}
+.discover-item-saved {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+.discover-item-open {
+  min-height: var(--touch);
+}
+
 /* ── DiscoverRemoveConfirm alertdialog (issue #121) ──────────────────────
    Structural clone of .book-remove-confirm: OWN .discover-remove-confirm*
    hooks (strict-mode dialog locators), same centered modal shell, and the
