@@ -205,6 +205,7 @@ export const Provenance = z.object({
   // sourceUrl is absent (07-06). originalHtmlHash still provides traceability
   // for paste-sourced articles.
   sourceUrl: httpUrl.optional(), // scheme-allow-listed when present (Pitfall 5)
+  sourceAliases: z.array(httpUrl).optional(), // resolved input URLs; additive local metadata
   title: z.string().min(1),
   author: z.string().optional(),
   publishedAt: z.string().datetime().optional(),

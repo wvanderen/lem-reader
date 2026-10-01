@@ -33,6 +33,33 @@ import { bundledFixtures, libraryFixtures } from "../fixtures";
 import type { ArticleRepository } from "../content/repository";
 import type { ValidatedAsset } from "./IngestionClient";
 
+/** Build immutable rows before opening a write transaction. */
+function articleRowsForSave(article: CanonicalArticle, assets: ValidatedAsset[]) {
+  const createdAt = new Date().toISOString();
+  const stamped: CanonicalArticle =
+    article.addedAt !== undefined ? article : { ...article, addedAt: createdAt };
+  const rows: AssetRecordRow[] = assets.map((asset) => ({
+    articleId: article.id,
+    assetId: asset.assetId,
+    contentType: asset.contentType,
+    byteLength: asset.byteLength,
+    // TS 7 BlobPart strictness (the 09-01 BufferSource lesson): copy
+    // into a fresh ArrayBuffer-backed Uint8Array (the Blob constructor
+    // copies the bytes anyway).
+    data: new Blob([new Uint8Array(asset.bytes)], {
+      type: asset.contentType,
+    }),
+    createdAt,
+  }));
+  return { stamped, rows };
+}
+
+async function writeArticleRows(stamped: CanonicalArticle, rows: AssetRecordRow[]) {
+  await db.assets.where("articleId").equals(stamped.id).delete();
+  await db.articles.put(stamped);
+  for (const row of rows) await db.assets.put(row);
+}
+
 /**
  * DexieLibrarySource — Dexie-backed ArticleRepository + write surface.
  *
@@ -40,7 +67,8 @@ import type { ValidatedAsset } from "./IngestionClient";
  * rows are dropped, never silently coerced). save/has/remove are the write
  * surface used by the add dialog (07-06 Task 2):
  *   - save(article): `db.articles.put(article)` — idempotent upsert by id.
- *   - has(id): the D7-07 dedupe-refuse check.
+ *   - saveIfAbsent(article, assets): atomic dedupe-refuse and insertion.
+ *   - has(id): the D7-07 preflight dedupe-refuse check.
  *   - remove(id): D5-12 cascade-delete across articles + highlights + notes
  *     + location in a single Dexie transaction.
  */
@@ -104,31 +132,35 @@ export class DexieLibrarySource implements ArticleRepository {
    * Recently added ordering survives a round trip.
    */
   async save(article: CanonicalArticle, assets: ValidatedAsset[] = []): Promise<void> {
-    const createdAt = new Date().toISOString();
-    const stamped: CanonicalArticle =
-      article.addedAt !== undefined ? article : { ...article, addedAt: createdAt };
-    const rows: AssetRecordRow[] = assets.map((asset) => ({
-      articleId: article.id,
-      assetId: asset.assetId,
-      contentType: asset.contentType,
-      byteLength: asset.byteLength,
-      // TS 7 BlobPart strictness (the 09-01 BufferSource lesson): copy
-      // into a fresh ArrayBuffer-backed Uint8Array (the Blob constructor
-      // copies the bytes anyway).
-      data: new Blob([new Uint8Array(asset.bytes)], {
-        type: asset.contentType,
-      }),
-      createdAt,
-    }));
+    const { stamped, rows } = articleRowsForSave(article, assets);
     await db.transaction("rw", db.articles, db.assets, async () => {
-      // Upsert replacement FIRST (D20-07): re-ingest replaces the asset
-      // set wholesale — the articleId index exists exactly for this range
-      // delete.
-      await db.assets.where("articleId").equals(article.id).delete();
-      await db.articles.put(stamped);
-      for (const row of rows) {
-        await db.assets.put(row);
-      }
+      await writeArticleRows(stamped, rows);
+    });
+  }
+
+  /** Insert once under the same write lock as the existence check.
+   * Concurrent ingests cannot replace the winner's content or assets. */
+  async saveIfAbsent(article: CanonicalArticle, assets: ValidatedAsset[] = []): Promise<boolean> {
+    const { stamped, rows } = articleRowsForSave(article, assets);
+    return db.transaction("rw", db.articles, db.assets, async () => {
+      if (await db.articles.get(article.id)) return false;
+      await writeArticleRows(stamped, rows);
+      return true;
+    });
+  }
+
+  /** Remember a successfully resolved URL without changing article content.
+   * Optional provenance metadata survives export/import; older rows need no
+   * migration because no store or index changes. Removed rows stay removed. */
+  async rememberSourceUrl(articleId: string, url: string): Promise<void> {
+    await db.transaction("rw", db.articles, async () => {
+      const article = await this.open(articleId);
+      if (!article || article.provenance.sourceUrl === url) return;
+      const aliases = article.provenance.sourceAliases ?? [];
+      if (aliases.includes(url)) return;
+      await db.articles.update(articleId, {
+        provenance: { ...article.provenance, sourceAliases: [...aliases, url] },
+      });
     });
   }
 

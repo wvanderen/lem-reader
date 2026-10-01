@@ -44,6 +44,7 @@ vi.mock("../../src/ingestion/LibrarySource", () => ({
   dexieLibrarySource: {
     has: vi.fn(),
     save: vi.fn(),
+    saveIfAbsent: vi.fn(),
   },
 }));
 
@@ -68,10 +69,7 @@ import {
 } from "../../src/ingestion/IngestionClient";
 import { dexieLibrarySource } from "../../src/ingestion/LibrarySource";
 import { hasBook, saveBook } from "../../src/persistence/booksStore";
-import {
-  addToLibrary,
-  bookAssetsForChapters,
-} from "../../src/ingestion/addToLibrary";
+import { addToLibrary, bookAssetsForChapters } from "../../src/ingestion/addToLibrary";
 import { bytesToBase64 } from "../../src/ingestion/ingestCopy";
 import type { CanonicalArticle, Block } from "../../src/content/types";
 
@@ -102,6 +100,10 @@ beforeEach(() => {
   // Default: not in the library (article + book arms); saves resolve.
   hasMock.mockResolvedValue(false);
   saveMock.mockResolvedValue(undefined);
+  vi.mocked(dexieLibrarySource.saveIfAbsent).mockImplementation(async (...args) => {
+    await saveMock(...args);
+    return true;
+  });
   hasBookMock.mockResolvedValue(false);
   saveBookMock.mockResolvedValue(undefined);
 });
@@ -161,10 +163,7 @@ function flaggedArticle(id = "flagged-id"): CanonicalArticle {
       sourceUrl: "https://example.com/article",
       originalHtmlHash: "sha256:0",
       extractionConfidence: "low",
-      extractionWarnings: [
-        "1 image could not be fetched",
-        "2 unsupported parts omitted",
-      ],
+      extractionWarnings: ["1 image could not be fetched", "2 unsupported parts omitted"],
       annotationsDegraded: true,
     },
   } as unknown as CanonicalArticle;
@@ -252,10 +251,7 @@ describe("addToLibrary — article path (url/paste/file)", () => {
       title: "Article",
       sourceUrl: "https://example.com/article",
       note: "This article may be incomplete or inaccurate — it could not be read reliably.",
-      warnings: [
-        "1 image could not be fetched",
-        "2 unsupported parts omitted",
-      ],
+      warnings: ["1 image could not be fetched", "2 unsupported parts omitted"],
       degraded: "Highlights may be unreliable on this article.",
     });
   });
@@ -381,7 +377,11 @@ describe("addToLibrary — article path (url/paste/file)", () => {
       url: "https://youtu.be/aircAruvnKk",
     });
 
-    expect(outcome).toEqual({ outcome: "refused", reason: "already-in-library" });
+    expect(outcome).toEqual({
+      outcome: "refused",
+      reason: "already-in-library",
+      existingArticleId: "yt-pasted",
+    });
     expect(saveMock).not.toHaveBeenCalled();
   });
 
@@ -390,7 +390,30 @@ describe("addToLibrary — article path (url/paste/file)", () => {
     ingestUrlMock.mockResolvedValue(articleSuccess());
     const outcome = await addToLibrary({ kind: "url", url: "https://example.com/a" });
 
-    expect(outcome).toEqual({ outcome: "refused", reason: "already-in-library" });
+    expect(outcome).toEqual({
+      outcome: "refused",
+      reason: "already-in-library",
+      existingArticleId: "ingested-id",
+    });
+    expect(saveMock).not.toHaveBeenCalled();
+  });
+
+  // Issue #124 — the duplicate refusal carries the EXISTING row's canonical
+  // id (the server-derived slug the has() check just tested) so Discover's
+  // inline adder can offer "Open" on the row that is already there. The id
+  // is display metadata only: the save seam is never reached, so the
+  // existing row's content and annotations cannot be overwritten.
+  it("dedupe-refuse's existingArticleId is the id has() checked (the inline Open target)", async () => {
+    hasMock.mockResolvedValue(true);
+    ingestUrlMock.mockResolvedValue(articleSuccess("example-com-redirected"));
+    const outcome = await addToLibrary({ kind: "url", url: "https://example.com/aliased" });
+
+    expect(hasMock).toHaveBeenCalledWith("example-com-redirected");
+    expect(outcome).toEqual({
+      outcome: "refused",
+      reason: "already-in-library",
+      existingArticleId: "example-com-redirected",
+    });
     expect(saveMock).not.toHaveBeenCalled();
   });
 
@@ -403,7 +426,11 @@ describe("addToLibrary — article path (url/paste/file)", () => {
     });
 
     expect(hasMock).toHaveBeenCalledWith("md-id");
-    expect(outcome).toEqual({ outcome: "refused", reason: "already-in-library" });
+    expect(outcome).toEqual({
+      outcome: "refused",
+      reason: "already-in-library",
+      existingArticleId: "md-id",
+    });
     expect(saveMock).not.toHaveBeenCalled();
   });
 });
@@ -600,4 +627,18 @@ describe("bookAssetsForChapters (pure attribution)", () => {
       { articleId: "c1", ...b },
     ]);
   });
+});
+
+it("refuses when a concurrent insert wins after the initial existence check", async () => {
+  ingestUrlMock.mockResolvedValue({
+    article: sampleArticle(),
+    assets: [],
+  } as unknown as IngestionSuccess);
+  vi.mocked(dexieLibrarySource.saveIfAbsent).mockResolvedValueOnce(false);
+  expect(await addToLibrary({ kind: "url", url: "https://example.com/alias" })).toEqual({
+    outcome: "refused",
+    reason: "already-in-library",
+    existingArticleId: "ingested-id",
+  });
+  expect(saveMock).not.toHaveBeenCalled();
 });

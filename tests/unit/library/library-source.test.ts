@@ -48,9 +48,7 @@ async function loadDb() {
   return await import("../../../src/persistence/db");
 }
 
-function sampleArticle(
-  overrides: Partial<CanonicalArticle> = {},
-): CanonicalArticle {
+function sampleArticle(overrides: Partial<CanonicalArticle> = {}): CanonicalArticle {
   return ArticleSchema.parse({
     id: "library-source-article",
     revision: 1,
@@ -62,9 +60,7 @@ function sampleArticle(
       retrievedAt: "2026-08-31T00:00:00.000Z",
       originalHtmlHash: "sha256:" + "0".repeat(64),
     },
-    blocks: [
-      { kind: "paragraph", content: [{ text: "Body text.", marks: [] }] },
-    ],
+    blocks: [{ kind: "paragraph", content: [{ text: "Body text.", marks: [] }] }],
     footnotes: [],
     ingestionMeta: {
       source: "url",
@@ -160,5 +156,54 @@ describe("DexieLibrarySource.save — the immutable addedAt stamp (issue #114)",
     await source.save(article);
 
     expect((await source.open(article.id))?.addedAt).toBe(addedAt);
+  });
+});
+
+describe("concurrent saves and resolved source URLs", () => {
+  beforeEach(wipeDatabase);
+
+  it("concurrent inserts preserve the winner's content and assets", async () => {
+    const { DexieLibrarySource } = await loadLibrarySource();
+    const { db } = await loadDb();
+    const source = new DexieLibrarySource();
+    const first = sampleArticle();
+    const second = {
+      ...first,
+      blocks: [{ kind: "paragraph" as const, content: [{ text: "Replacement", marks: [] }] }],
+    };
+    const asset = {
+      assetId: "img-123456789abc",
+      contentType: "image/png" as const,
+      byteLength: 1,
+      bytes: new Uint8Array([1]),
+    };
+    expect(
+      await Promise.all([source.saveIfAbsent(first, [asset]), source.saveIfAbsent(second)]),
+    ).toEqual([true, false]);
+    expect((await source.open(first.id))?.blocks).toEqual(first.blocks);
+    expect(await db.assets.count()).toBe(1);
+  });
+
+  it("remembers aliases without replacing content and does not resurrect removed rows", async () => {
+    const { DexieLibrarySource } = await loadLibrarySource();
+    const source = new DexieLibrarySource();
+    const article = sampleArticle();
+    await source.save(article);
+    await Promise.all([
+      source.rememberSourceUrl(article.id, "https://example.com/alias-a"),
+      source.rememberSourceUrl(article.id, "https://example.com/alias-b"),
+    ]);
+    const saved = await source.open(article.id);
+    expect(saved?.provenance.sourceAliases).toEqual([
+      "https://example.com/alias-a",
+      "https://example.com/alias-b",
+    ]);
+    expect(saved?.blocks).toEqual(article.blocks);
+    expect(ArticleSchema.parse(saved).provenance.sourceAliases).toEqual(
+      saved?.provenance.sourceAliases,
+    );
+    await source.remove(article.id);
+    await source.rememberSourceUrl(article.id, "https://example.com/alias-a");
+    expect(await source.open(article.id)).toBeNull();
   });
 });

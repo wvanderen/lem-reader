@@ -1,9 +1,10 @@
 // src/routes/discover/DiscoverView.tsx
-// Issues #121 + #123 — the Discover destination route view (#/discover): the
-// accessible RSS/Atom subscription surface. The LibraryView/ReviewView twin:
-// same page shape (<main id="main"> + one h1 + .status live region), the
-// h1 focus-on-in-app-navigation discipline, and the state-kind vocabulary
-// (no-content state, refusal, error) through the ONE StatusRegion primitive.
+// Issues #121 + #123 + #124 — the Discover destination route view
+// (#/discover): the accessible RSS/Atom subscription surface. The
+// LibraryView/ReviewView twin: same page shape (<main id="main"> + one h1
+// + .status live region), the h1 focus-on-in-app-navigation discipline,
+// and the state-kind vocabulary (no-content state, refusal, error) through
+// the ONE StatusRegion primitive.
 //
 // Locked shapes rendered here:
 //   - The subscribe form is ALWAYS visible (empty state or not — the form
@@ -30,6 +31,18 @@
 //     Remove. Item titles with links are EXTERNAL anchors: target="_blank"
 //     + rel="noopener noreferrer" + the "(opens in a new tab)"
 //     visually-hidden suffix (the AddDialog see-original discipline).
+//   - Issue #124 — each linked preview carries ONE + affordance that saves
+//     the LINKED PAGE through the guarded pipeline (saveFeedItem — never
+//     the feed summary or cached feed text) without leaving Discover. A
+//     saved preview swaps the + for the calm "In library" mark and an
+//     "Open" in-app link (hash anchor, the AddDialog open-saved twin); the
+//     article never AUTO-opens (a never-opened addition stays Unread), a
+//     refusal announces calmly and leaves the + retryable, and a duplicate
+//     press resolves to the EXISTING row (the already-in-library refusal's
+//     canonical id — one library item across feeds and redirect aliases,
+//     annotations never overwritten). Pre-existing saves render the same
+//     "In library" + "Open" state from the ONE library snapshot
+//     (savedArticleIdForLink, exact sourceUrl match) — no press needed.
 //   - Removal is destructive-confirm: DiscoverRemoveConfirm owns the ONLY
 //     deleteSubscription call site (the Pitfall 8 discipline). Removing a
 //     subscription deletes its row — its previews/cache only; articles,
@@ -42,7 +55,7 @@
 //     (the repo-wide no-danger rule). Feed images render as plain <img>
 //     with alt="" (decorative — the title carries the meaning) and
 //     referrerPolicy="no-referrer".
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 // Plan 14-03 Task 1 (D14-03) — the destination's document.title via the ONE
 // shared helper (never string-built here).
 import { setDocumentTitle } from "../../ingestion/library/pageMeta";
@@ -53,6 +66,7 @@ import { formatIsoDate } from "../../ingestion/library/formatDate";
 // through it.
 import { StatusRegion } from "../../ui/StatusRegion";
 import { BusyButton } from "../../ui/BusyButton";
+import { PlusIcon } from "../../ui/icons";
 // The ONE subscribe-and-persist policy (validate → fetch → dedupe → save).
 import { subscribeToFeed } from "../../discover/subscribe";
 import type { SubscribeOutcome } from "../../discover/subscribe";
@@ -60,9 +74,20 @@ import type { SubscribeOutcome } from "../../discover/subscribe";
 // calm failure otherwise) and the ONE deterministic timeline policy.
 import { refreshSubscription } from "../../discover/refresh";
 import { buildTimeline, filterTimeline, feedItemKey } from "../../discover/timeline";
-// The feed-aware copy voice (calm DOC-06, one catalog, per-surface wording).
-import { mapFeedReasonToCopy } from "../../ingestion/ingestCopy";
+// Issue #124 — the ONE save-one-feed-item policy (the + press ingests the
+// LINKED PAGE through the guarded pipeline) and the pre-press "In
+// library" derivation over the ONE library snapshot.
+import { saveFeedItem, savedArticleIdForLink } from "../../discover/saveItem";
+import type { SaveItemOutcome } from "../../discover/saveItem";
+// The feed-aware copy voice (calm DOC-06, one catalog, per-surface wording)
+// and the page-voice catalog for the + save's refusals (the saved thing is
+// an ARTICLE page, not a feed).
+import { mapFeedReasonToCopy, mapReasonToCopy } from "../../ingestion/ingestCopy";
 import type { IngestionFailureReason } from "../../ingestion/types";
+// The ONE library read model — the pre-existing "In library" state and the
+// write-followup invalidation (the AddDialog onSaved discipline).
+import { useLibrarySnapshot } from "../../ingestion/library/useLibrarySnapshot";
+import { invalidateLibrarySnapshot } from "../../ingestion/library/librarySnapshotBus";
 // The ONE list read + the ONE delete seam.
 import { listSubscriptions } from "../../persistence/subscriptionsStore";
 import type { SubscriptionRecord } from "../../content/schema";
@@ -102,6 +127,26 @@ function applyOutcome(outcome: SubscribeOutcome, announce: (message: string) => 
       break;
     case "refused":
       announce(mapFeedReasonToCopy(outcome.reason));
+      break;
+  }
+}
+
+/** Apply one + press's save outcome to the shared announcement region
+ * (issue #124 — copy lives here; the policy lives in saveItem.ts). A
+ * saved page and a resolved duplicate BOTH leave the preview reading
+ * "In library"; refusals use the PAGE voice (the saved thing is an
+ * article, not a feed). */
+function applySaveOutcome(outcome: SaveItemOutcome, announce: (message: string) => void): void {
+  switch (outcome.outcome) {
+    case "saved":
+      announce("Saved to your library.");
+      break;
+    case "already-in-library":
+      // The ONE catalog's phrase (no second home for the copy).
+      announce(mapReasonToCopy("already-in-library"));
+      break;
+    case "refused":
+      announce(mapReasonToCopy(outcome.reason));
       break;
   }
 }
@@ -289,6 +334,87 @@ export function DiscoverView({ hasAppHistory }: { hasAppHistory: boolean }) {
   // ── Removal state ──────────────────────────────────────────────────────
   const [removeTarget, setRemoveTarget] = useState<SubscriptionRecord | null>(null);
 
+  // ── Inline save state (issue #124) ─────────────────────────────────────
+  // The ONE library snapshot backs the pre-press "In library" state (an
+  // article whose sourceUrl IS a preview's link renders In library + Open
+  // with no press). Resolved aliases ride the same snapshot; session
+  // outcomes bridge the asynchronous reload, including failed reads.
+  const { snapshot, status: libraryStatus } = useLibrarySnapshot();
+  const [resolvedIds, setResolvedIds] = useState<
+    Record<string, { articleId: string; snapshot: typeof snapshot }>
+  >({});
+  const [savingLinks, setSavingLinks] = useState<ReadonlySet<string>>(new Set());
+  // The overlap guard: state alone races across renders (two clicks in one
+  // tick), so the in-flight check is a ref — the refresh pattern's twin,
+  // per link (independent previews may save concurrently).
+  const savingInFlightRef = useRef<Set<string>>(new Set());
+
+  // The live row ids — a session resolution survives only while its row
+  // still exists: a mid-session removal (LibraryView, ReviewView) re-opens
+  // the + honestly instead of leaving a dead Open link behind.
+  const savedIds = useMemo(
+    () => new Set(snapshot.articles.map((article) => article.id)),
+    [snapshot.articles],
+  );
+
+  const saveFocusRef = useRef<{
+    link: string;
+    button: HTMLButtonElement;
+    row: Element | null;
+  } | null>(null);
+
+  /** Keep confirmed outcomes until a fresh successful snapshot can
+   * establish whether the row still exists. */
+
+  const savedIdFor = (link: string): string | undefined => {
+    const resolved = resolvedIds[link];
+    if (
+      resolved !== undefined &&
+      (savedIds.has(resolved.articleId) ||
+        resolved.snapshot === snapshot ||
+        libraryStatus === "error")
+    )
+      return resolved.articleId;
+    return savedArticleIdForLink(snapshot.articles, link);
+  };
+
+  async function handleSaveItem(link: string, button: HTMLButtonElement) {
+    if (document.activeElement === button) {
+      saveFocusRef.current = { link, button, row: button.closest(".discover-item") };
+    }
+    if (savingInFlightRef.current.has(link)) return;
+    savingInFlightRef.current.add(link);
+    setSavingLinks(new Set(savingInFlightRef.current));
+    setMessage("Saving to your library…");
+    try {
+      const outcome = await saveFeedItem(link);
+      applySaveOutcome(outcome, setMessage);
+      if (outcome.sourceAliasError) {
+        setMessage(
+          "The article is in your library, but couldn't remember this feed link. You may need to save this preview again on a future visit.",
+        );
+      }
+      if (outcome.outcome === "refused") saveFocusRef.current = null;
+      if (outcome.outcome === "saved") {
+        setResolvedIds((prev) => ({ ...prev, [link]: { articleId: outcome.articleId, snapshot } }));
+        // The ONE write-followup call (the AddDialog onSaved discipline):
+        // the snapshot re-derives, so the saved state survives leaving
+        // Discover and coming back even without a session resolution.
+        invalidateLibrarySnapshot();
+      } else if (outcome.outcome === "already-in-library" && outcome.articleId !== undefined) {
+        const { articleId } = outcome;
+        setResolvedIds((prev) => ({ ...prev, [link]: { articleId, snapshot } }));
+        invalidateLibrarySnapshot();
+      }
+    } catch {
+      saveFocusRef.current = null;
+      setMessage("Couldn't save this page. Try again.");
+    } finally {
+      savingInFlightRef.current.delete(link);
+      setSavingLinks(new Set(savingInFlightRef.current));
+    }
+  }
+
   const visibleEntries = filterTimeline(
     buildTimeline(subscriptions),
     filterId === "" ? null : filterId,
@@ -308,7 +434,17 @@ export function DiscoverView({ hasAppHistory }: { hasAppHistory: boolean }) {
       {/* The ONE announcement region — submitting progress, refusal copy,
           saves, removals, refresh outcomes. Collapsed via CSS when idle
           (:empty). */}
-      <StatusRegion>{message !== null && <p>{message}</p>}</StatusRegion>
+      <StatusRegion>
+        {message !== null && <p>{message}</p>}
+        {libraryStatus === "error" && (
+          <>
+            <p>Couldn't check your library. Try again.</p>
+            <button className="btn btn-quiet" onClick={invalidateLibrarySnapshot}>
+              Retry library check
+            </button>
+          </>
+        )}
+      </StatusRegion>
       {/* The subscribe form — always visible, the surface's first action.
           Native label + url input (the AddDialog URL arm's anatomy). */}
       <form className="discover-subscribe-form" onSubmit={handleSubscribe}>
@@ -417,44 +553,96 @@ export function DiscoverView({ hasAppHistory }: { hasAppHistory: boolean }) {
             ))}
             {visibleEntries.length > 0 ? (
               <ul className="discover-timeline">
-                {visibleEntries.map((entry) => (
-                  <li
-                    key={JSON.stringify([entry.subscription.id, feedItemKey(entry.item)])}
-                    className="discover-item"
-                  >
-                    {entry.item.image && (
-                      <img
-                        className="discover-item-image"
-                        src={entry.item.image}
-                        alt=""
-                        loading="lazy"
-                        decoding="async"
-                        referrerPolicy="no-referrer"
-                      />
-                    )}
-                    <div className="discover-item-body">
-                      <p className="meta discover-item-feed">{entry.subscription.title}</p>
-                      <h3 className="discover-item-title">
-                        {entry.item.link ? (
-                          <a href={entry.item.link} target="_blank" rel="noopener noreferrer">
-                            {entry.item.title}
-                            <span className="visually-hidden"> (opens in a new tab)</span>
-                          </a>
-                        ) : (
-                          entry.item.title
+                {visibleEntries.map((entry) => {
+                  const { item } = entry;
+                  const link = item.link;
+                  const savedId = link ? savedIdFor(link) : undefined;
+                  return (
+                    <li
+                      key={JSON.stringify([entry.subscription.id, feedItemKey(item)])}
+                      className="discover-item"
+                    >
+                      {item.image && (
+                        <img
+                          className="discover-item-image"
+                          src={item.image}
+                          alt=""
+                          loading="lazy"
+                          decoding="async"
+                          referrerPolicy="no-referrer"
+                        />
+                      )}
+                      <div className="discover-item-body">
+                        <p className="meta discover-item-feed">{entry.subscription.title}</p>
+                        <h3 className="discover-item-title">
+                          {link ? (
+                            <a href={link} target="_blank" rel="noopener noreferrer">
+                              {item.title}
+                              <span className="visually-hidden"> (opens in a new tab)</span>
+                            </a>
+                          ) : (
+                            item.title
+                          )}
+                        </h3>
+                        {item.datePublished && (
+                          <p className="meta discover-item-date">
+                            {formatIsoDate(item.datePublished)}
+                          </p>
                         )}
-                      </h3>
-                      {entry.item.datePublished && (
-                        <p className="meta discover-item-date">
-                          {formatIsoDate(entry.item.datePublished)}
-                        </p>
-                      )}
-                      {entry.item.excerpt && (
-                        <p className="discover-item-excerpt">{entry.item.excerpt}</p>
-                      )}
-                    </div>
-                  </li>
-                ))}
+                        {item.excerpt && <p className="discover-item-excerpt">{item.excerpt}</p>}
+                        {/* Issue #124 — the inline add affordance. A linked
+                            preview carries exactly one of: the + press
+                            (ingests the LINKED PAGE through the guarded
+                            pipeline; never the feed summary or cached feed
+                            text), or the saved state — the calm "In
+                            library" mark + the "Open" in-app link. Open
+                            NEVER fires automatically: the hash anchor is a
+                            plain link the reader chooses, so a never-
+                            opened addition stays Unread. A refusal keeps
+                            the + (retryable, D16-11); a duplicate resolves
+                            to the EXISTING row's id — one library item,
+                            annotations never overwritten. Linkless
+                            previews offer neither: there is no page to
+                            save, and the absence is the honest state. */}
+                        {link && (
+                          <div className="discover-item-actions">
+                            {savedId ? (
+                              <>
+                                <span className="discover-item-saved">In library</span>
+                                <a
+                                  className="btn btn-quiet discover-item-open"
+                                  ref={(node) => {
+                                    const pending = saveFocusRef.current;
+                                    if (!node || pending?.link !== link || node.closest(".discover-item") !== pending.row) return;
+                                    if (
+                                      document.activeElement === pending.button ||
+                                      document.activeElement === document.body
+                                    )
+                                      node.focus();
+                                    saveFocusRef.current = null;
+                                  }}
+                                  href={`#/article/${savedId}`}
+                                  aria-label={`Open ${item.title}`}
+                                >
+                                  Open
+                                </a>
+                              </>
+                            ) : (
+                              <BusyButton
+                                busy={savingLinks.has(link)}
+                                className="btn btn-icon discover-item-save"
+                                aria-label={`Save ${item.title}`}
+                                onClick={(event) => void handleSaveItem(link, event.currentTarget)}
+                              >
+                                <PlusIcon />
+                              </BusyButton>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             ) : (
               <p className="meta discover-timeline-empty">

@@ -139,12 +139,24 @@ export type SavedBookResult = {
  *   disclosure in the card.
  * - `refused` → the caller stays open and renders the calm DOC-06 phrase
  *   via mapReasonToCopy(reason); `already-in-library` is the D7-07
- *   dedupe-refuse (D16-09 refusal-only — no save ever happened).
+ *   dedupe-refuse (D16-09 refusal-only — no save ever happened). Issue
+ *   #124: an article-path duplicate carries `existingArticleId` — the
+ *   canonical id of the row ALREADY in the library (the server-derived
+ *   slug the refusal just checked). Display metadata only: it lets an
+ *   inline adder (Discover's + affordance) offer "Open" on the existing
+ *   row; it never re-saves, never overwrites, and is absent for refusals
+ *   where no id is known.
  */
 export type AddToLibraryOutcome =
   | SavedArticleResult
   | SavedBookResult
-  | { outcome: "refused"; reason: IngestionFailureReason };
+  | {
+      outcome: "refused";
+      reason: IngestionFailureReason;
+      /** The already-saved article's canonical id (article-path
+       * `already-in-library` only — see the module header). */
+      existingArticleId?: string;
+    };
 
 /**
  * assetRefBodiesInBlocks — collect the `asset:img-<12hex>` reference BODIES
@@ -306,12 +318,27 @@ async function saveArticle(
   tags: readonly string[],
 ): Promise<AddToLibraryOutcome> {
   if (await dexieLibrarySource.has(result.article.id)) {
-    return { outcome: "refused", reason: "already-in-library" };
+    // Issue #124 — the refusal carries the existing row's canonical id so
+    // an inline adder can offer "Open" on it. The row itself is NEVER
+    // touched here (D7-07/D16-09): no save, no overwrite, no annotation
+    // orphaning.
+    return {
+      outcome: "refused",
+      reason: "already-in-library",
+      existingArticleId: result.article.id,
+    };
   }
-  await dexieLibrarySource.save(
+  const inserted = await dexieLibrarySource.saveIfAbsent(
     withTags(result.article, tags),
     result.assets,
   );
+  if (!inserted) {
+    return {
+      outcome: "refused",
+      reason: "already-in-library",
+      existingArticleId: result.article.id,
+    };
+  }
   return {
     outcome: "saved-article",
     articleId: result.article.id,

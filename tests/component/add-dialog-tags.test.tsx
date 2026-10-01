@@ -30,12 +30,18 @@ vi.mock("../../src/ingestion/IngestionClient", () => ({
   },
 }));
 
-vi.mock("../../src/ingestion/LibrarySource", () => ({
-  dexieLibrarySource: {
-    has: vi.fn(),
-    save: vi.fn(),
-  },
-}));
+vi.mock("../../src/ingestion/LibrarySource", () => {
+  const save = vi.fn();
+  return {
+    dexieLibrarySource: {
+      has: vi.fn(), save,
+      saveIfAbsent: vi.fn(async (...args) => {
+        await save(...args);
+        return true;
+      }),
+    },
+  };
+});
 
 vi.mock("../../src/persistence/booksStore", () => ({
   hasBook: vi.fn(),
