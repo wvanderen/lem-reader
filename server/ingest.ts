@@ -1084,7 +1084,15 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
         sourceUrl: provenancePartial.sourceUrl ?? finalUrl,
         title,
         author: provenancePartial.author,
-        publishedAt: provenancePartial.publishedAt,
+        // The raw meta string (`article:published_time`) varies by CMS —
+        // WordPress emits the offset form ("2026-09-22T14:53:08+00:00"),
+        // which the schema's UTC-only .datetime() refinement rejects, and a
+        // ZodError here surfaced as the catch-all "server-error" refusal for
+        // perfectly readable articles. Normalize once at the shared assembly
+        // point (the EPUB chapter stage's toIsoDatetimeOrNull precedent):
+        // parseable → ISO Z; unparseable → omitted (tolerant, never a
+        // refusal — Rule 1).
+        publishedAt: toIsoDatetimeOrNull(provenancePartial.publishedAt),
         retrievedAt,
         originalHtmlHash,
       },
