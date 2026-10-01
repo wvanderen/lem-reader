@@ -47,10 +47,14 @@
 // Plan 21-03 (POLISH-10 / D21-06) — the glyph-visibility cells: the corpus
 // gains an AMBIGUOUS row + a ghost-article ORPHAN row (tri-state.spec.ts's
 // seed shapes, verified through the SHIPPED resolver at module load) so this
-// spec asserts the visible open-in-reader glyph on EXACTLY the jump-capable
-// rows: present + named-by-template on the confident row, absent on the
-// disabled ambiguous row (aria-disabled intact) and the static orphan row.
-// Existing jump assertions are untouched and re-run green (strengthen-only).
+// spec asserts the open-in-reader glyph on EXACTLY the rows with a jump
+// control: present + named-by-template (enabled) on the confident row,
+// disabled on the ambiguous placeholder, absent entirely on the static
+// orphan row (review-row redesign: the glyph rides the jump link in the
+// action cluster; the whole-card stretched overlay replaces the old
+// whole-row button).
+// Existing jump assertions keep their meaning with the role swapped to
+// link (strengthen-only).
 import { test, expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import { BASE, wipeDatabase } from "../annotations/_fixtures";
@@ -363,10 +367,12 @@ test.describe("RECV-01.c review-panel jump bidirectional (10-06 click-from-row l
     await expect(
       page.getByRole("heading", { level: 1, name: "Highlights" }),
     ).toBeVisible();
-    // The confident row's jump button — enabled (D10-03: only confident
-    // rows are jumpable; ambiguous/orphan render disabled + aria-disabled).
+    // The confident row's jump link — enabled (D10-03: only confident
+    // rows are jumpable; ambiguous renders the disabled placeholder,
+    // orphan-tail none). Review-row redesign: the jump is a real <a> in
+    // the action cluster whose stretched overlay covers the card.
     const rowButton = page
-      .getByRole("button", { name: /^Go to highlight:/ })
+      .getByRole("link", { name: /^Go to highlight:/ })
       .first();
     await expect(rowButton).toBeVisible();
     await expect(rowButton).toBeEnabled();
@@ -434,7 +440,7 @@ test.describe("RECV-01.c review-panel jump bidirectional (10-06 click-from-row l
 });
 
 test.describe("POLISH-10 (D21-06) glyph visibility — jump affordance on exactly the jump-capable rows", () => {
-  test("confident row carries the visible glyph + template name; ambiguous/orphan rows carry none and keep their disabled shape", async ({
+  test("confident row carries the visible glyph + template name; ambiguous keeps a disabled placeholder; orphan carries none", async ({
     page,
   }) => {
     await seedCorpus(page);
@@ -445,36 +451,33 @@ test.describe("POLISH-10 (D21-06) glyph visibility — jump affordance on exactl
 
     // The CONFIDENT row: still located by role + the Go-to-highlight name
     // template (the glyph is decorative — aria-hidden — so the accessible
-    // name is byte-stable)…
-    const confidentRow = page.getByRole("button", {
+    // name is byte-stable; review-row redesign: role link, not button)…
+    const confidentRow = page.getByRole("link", {
       name: /^Go to highlight: /,
     }).first();
     await expect(confidentRow).toBeVisible();
     await expect(confidentRow).toBeEnabled();
     // …and it contains exactly one VISIBLE open-in-reader glyph (svg
-    // descendant of the row button).
+    // descendant of the jump link).
     const glyph = confidentRow.locator("svg.review-jump-glyph");
     await expect(glyph).toHaveCount(1);
     await expect(glyph).toBeVisible();
 
-    // The AMBIGUOUS row: disabled + aria-disabled byte-stable (D10-03) and
-    // NO glyph (unresolved rows never render the affordance).
-    const ambiguousRow = page.locator("button.review-row", {
-      hasText: AMBIG_SENTENCE,
-    });
-    await expect(ambiguousRow).toHaveCount(1);
-    await expect(ambiguousRow).toBeDisabled();
-    await expect(ambiguousRow).toHaveAttribute("aria-disabled", "true");
-    await expect(
-      ambiguousRow.locator("svg.review-jump-glyph"),
-    ).toHaveCount(0);
+    // The AMBIGUOUS row: the jump renders as a DISABLED placeholder at the
+    // same cluster position (the LibraryRow disabled-action discipline)
+    // with the honest can't-locate copy in its accessible name (D10-03).
+    const ambiguousJump = page
+      .locator("li.review-item", { hasText: AMBIG_SENTENCE })
+      .locator("button.review-jump");
+    await expect(ambiguousJump).toHaveCount(1);
+    await expect(ambiguousJump).toBeDisabled();
 
-    // The ORPHAN-TAIL row: a static div (no button in the orphan section,
-    // the tri-state shape) and NO glyph (no destination to signal).
+    // The ORPHAN-TAIL row: NO jump affordance at all (no destination to
+    // signal — the cluster carries only the four curation icons).
     const orphanSection = page.locator("section.review-section-orphan");
     await expect(orphanSection).toBeVisible();
     await expect(
-      orphanSection.locator("button.review-row"),
+      orphanSection.locator(".review-jump"),
     ).toHaveCount(0);
     const orphanRow = orphanSection.locator(".review-row", {
       hasText: EXCERPT_GHOST,

@@ -3596,90 +3596,79 @@ dialog.import-preview {
   gap: var(--space-sm);
 }
 
-/* Row (D10-03) — the whole-row jump button (the .drawer-entry pattern) and
-   the static orphan-tail twin (identical anatomy, no jump affordance).
-   Plan 21-03 (POLISH-10 / D21-07): padding conforms to the PRIMARY row
-   register — var(--space-lg), matching .library-row / .book-row (the
-   enumerated deviation candidate resolves as conform). */
+/* Row body (D10-03, review-row redesign) — the card's content column: the
+   full quote center stage, then the optional note preview. Date, badge,
+   and the action cluster share ONE foot line below (the .review-row-foot
+   register). The card visuals (surface + hairline + color stripe) live on
+   the .review-item wrapper. Padding conforms to the PRIMARY row register —
+   var(--space-lg), matching .library-row / .book-row (D21-07). */
 .review-row {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: var(--space-xs);
+  gap: var(--space-sm);
   width: 100%;
   box-sizing: border-box;
-  min-height: var(--touch);
   padding: var(--space-lg);
   text-align: start;
-  background: var(--surface-raised);
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius-md);
   font-family: var(--font-ui);
   font-size: 16px;
   color: var(--ink);
-  cursor: pointer;
 }
 /* Focus ring inherits the global :focus-visible 2px rule (app.css L131) —
    no selector needed here (and the block keeps .review-*-only selectors). */
-.review-row:disabled {
-  cursor: default;
-  opacity: 0.75;
-}
 
-/* Quote excerpt — blockquote styling (serif italic on the raised card). */
+/* Quote — center stage: a blockquote (native semantics for quoted matter)
+   in the reader's serif italic voice, sized above the chrome register so
+   the highlight itself leads the card. Full stored span — no cap; block
+   fragments arrive pre-joined with spaced ellipsis markers. */
 .review-quote {
+  margin: 0;
   font-family: var(--font-body);
   font-style: italic;
+  font-size: 19px;
+  line-height: 1.5;
   color: var(--ink);
   overflow-wrap: anywhere;
 }
-/* Note preview line — quiet .meta voice under the quote. */
+/* One foot line: date · badge at the inline start, the icon cluster at the
+   inline end (space-between) — the meta row and the action row share one
+   baseline so the card carries no dead band. Wraps on narrow viewports
+   (the cluster drops below the date, right-aligned). */
+.review-row-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-xs) var(--space-md);
+  padding: 0 var(--space-lg) var(--space-sm);
+}
+/* The quiet meta items (date · tri-state badge) — inline row on the foot's
+   start side. */
+.review-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-xs) var(--space-md);
+}
+/* Note preview line — quiet .meta voice under the meta line. */
 .review-note-preview {
   font-family: var(--font-ui);
   font-size: 14px;
   color: var(--ink-soft);
   overflow-wrap: anywhere;
 }
-/* Issue #119 — the row's named color line: the decorative swatch dot (the
-   SAME .highlight-color-swatch-* per-theme tokens the reader's picker and
-   marks use) beside the visible text label ("Default" / "Yellow" / … —
-   HIGHLIGHT_COLOR_LABELS; color is never the sole identifier, A11Y-05).
-   Renders on EVERY row — confident, ambiguous, orphan-tail alike (color
-   never depends on re-anchoring). */
-.review-row-color {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-family: var(--font-ui);
-  font-size: 14px;
-  line-height: 1.45;
-  color: var(--ink-soft);
-}
-/* Short date — quiet metadata at the row foot. */
+/* Short date — quiet metadata on the meta line. */
 .review-date {
   font-family: var(--font-ui);
   font-size: 14px;
   color: var(--ink-soft);
 }
-/* Plan 21-03 (POLISH-10 / D21-06) — the confident row's foot line: date at
-   inline-start, the quiet open-in-reader glyph at the date line's inline
-   end. Renders ONLY inside jump-capable rows (never orphan-tail or
-   disabled/unresolved rows — ReviewView keeps those rows byte-stable).
-   color: --ink-soft is the glyph's REST state (inherited via currentColor);
-   tokens only, zero motion properties. */
-.review-row-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-xs);
-  width: 100%;
-  color: var(--ink-soft);
-}
-/* The glyph takes the accent on row hover — the .tags-trigger /
-   .library-row-edit rest/hover grammar (the glyph signals the jump; shape +
-   the Go-to-highlight name carry the meaning, so color is never
-   load-bearing). One additive tokens-only selector; color only. */
-.review-row:hover .review-jump-glyph {
+/* The open-in-reader glyph takes the accent while the CARD is hovered —
+   the .tags-trigger / .library-row-edit rest/hover grammar (the glyph
+   signals the jump; shape + the Go-to-highlight name carry the meaning,
+   so color is never load-bearing). Tokens only, zero motion properties. */
+.review-item:hover .review-jump-glyph {
   color: var(--accent);
 }
 
@@ -3717,16 +3706,21 @@ dialog.import-preview {
   flex-direction: column;
   gap: var(--space-xs);
 }
-/* The quiet action cluster — right-aligned, hairline buttons sized to the
- * touch target; never nested inside the jump button (interactive content
- * cannot nest), so they sit as siblings under the card. */
+/* The quiet action cluster — the icon cells (the LibraryRow anatomy): the
+ * jump affordance first, then note · color · tags, the destructive control
+ * last; never nested inside the jump link (interactive content cannot
+ * nest). The cluster rides the foot line's inline-end side; its padding
+ * lives on .review-row-foot. */
 .review-row-actions {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: var(--space-sm);
+  align-items: center;
+  gap: var(--space-xs);
 }
-/* Issue #77 — .review-row-action rides .btn-quiet. */
+/* Review-row redesign — .review-row-action rides .btn-icon (was #77's
+   .btn-quiet text register); the shared destructive hover below keeps the
+   consequence hint. */
 /* The remove affordance hints its consequence on hover only — the label +
  * the alertdialog copy carry the actual warning (never color alone).
  * Issue #89: ONE shared rule for both surfaces' destructive action, and
@@ -4815,27 +4809,52 @@ main#main > .status:empty {
 .review-section-list {
   gap: var(--space-md);
 }
+/* Review-row redesign — the card. The li carries the visuals (the #89
+   merged-card register), the highlight's COLOR STRIPE (border-inline-start,
+   the SAME per-theme --highlight* tokens the reader's picker and marks use
+   — the review-row redesign replaces the old swatch-dot + text-label line;
+   the color name lives in the Change-color button's accessible name so
+   color is never the sole identifier, A11Y-05), and anchors the jump
+   link's stretched overlay (position + isolation: the .library-row
+   pattern). The stripe renders on EVERY row — confident, ambiguous,
+   orphan-tail alike (color never depends on re-anchoring, the #118
+   discipline). */
 .review-item {
   gap: 0;
+  position: relative;
+  isolation: isolate;
   background: var(--surface-raised);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-md);
+  border-inline-start: 5px solid var(--highlight);
 }
-.review-item > .review-row {
-  border: 0;
-  background: transparent;
-  gap: var(--space-sm);
+.review-item-color-yellow {
+  border-inline-start-color: var(--highlight-yellow);
 }
-/* Issue #89 (audit P2-3) — the curation band is the card's quiet FOOT:
-   start-aligned with the content column so the chips continue the text
-   flow, no separating rule (the #77 hairline strip + its ≤639px padding
-   variant retired — the strip read as a detached footer with a dead band).
-   Sibling semantics unchanged: the chips stay outside the whole-row jump
-   button; only the visuals merge. */
-.review-row-actions {
-  justify-content: flex-start;
-  padding: 0 var(--space-lg) var(--space-sm);
-  gap: var(--space-sm);
+.review-item-color-green {
+  border-inline-start-color: var(--highlight-green);
+}
+.review-item-color-blue {
+  border-inline-start-color: var(--highlight-blue);
+}
+.review-item-color-pink {
+  border-inline-start-color: var(--highlight-pink);
+}
+/* The stretched jump overlay (the .library-card-link pattern): the jump
+   link's ::after covers the whole card so the entire surface navigates;
+   the curation icons ride ABOVE it via the shared z-order (below). The
+   link itself stays static — the overlay must resolve against the
+   positioned .review-item, exactly like the library title link. */
+.review-jump::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-content);
+  border-radius: var(--radius-md);
+}
+.review-row-action {
+  position: relative;
+  z-index: var(--z-row-actions);
 }
 /* Issue #89 — the DRAWER half of the same treatment: each entry becomes
    the review card's register (raised surface + hairline + --radius-md on

@@ -8,9 +8,12 @@
 //      gets the first fragment + exactly one U+2026 — including when the
 //      fragment itself exceeds the cap (cap ellipsis and continuation
 //      ellipsis are the SAME single character, never two).
+// The review-row redesign adds the display-half cells: fullQuoteDisplay
+// renders the ENTIRE stored span with the spaced ellipsis marker at each
+// block boundary — no cap, no truncation, single-fragment passthrough.
 // Mirrors the pure-module test style of overlap.test.ts.
 import { describe, expect, it } from "vitest";
-import { firstFragmentExcerpt } from "../../../src/annotations/excerpt";
+import { firstFragmentExcerpt, fullQuoteDisplay } from "../../../src/annotations/excerpt";
 import { BLOCK_SEPARATOR } from "../../../src/content/normalizeText";
 
 /** The calm ellipsis — exactly one U+2026 (the only legal form). */
@@ -41,9 +44,7 @@ describe("firstFragmentExcerpt — D19-10 excerpt honesty", () => {
   });
 
   it("derives the FIRST FRAGMENT + exactly one ellipsis for a multi-block span (continuation)", () => {
-    const exact = ["opening fragment", "second block", "third block"].join(
-      BLOCK_SEPARATOR,
-    );
+    const exact = ["opening fragment", "second block", "third block"].join(BLOCK_SEPARATOR);
     const out = firstFragmentExcerpt(exact, 120);
     expect(out).toBe("opening fragment" + ELLIPSIS);
     // Later blocks never leak into the excerpt.
@@ -71,5 +72,36 @@ describe("firstFragmentExcerpt — D19-10 excerpt honesty", () => {
     const out = firstFragmentExcerpt("", 120);
     expect(out).toBe("");
     expect(out).not.toContain(ELLIPSIS);
+  });
+});
+
+describe("fullQuoteDisplay — the review row's full-span display", () => {
+  it("passes a single-fragment exact through byte-unchanged (no marker, no cap)", () => {
+    const exact = "A calm opening sentence.";
+    expect(fullQuoteDisplay(exact)).toBe(exact);
+  });
+
+  it("joins two fragments with exactly one spaced ellipsis marker at the block boundary", () => {
+    const exact = ["first block text", "second block text"].join(BLOCK_SEPARATOR);
+    const out = fullQuoteDisplay(exact);
+    expect(out).toBe("first block text \u2026 second block text");
+    expect(ellipsisCount(out)).toBe(1);
+  });
+
+  it("renders EVERY fragment in order — no length cap, no dropped tail", () => {
+    const exact = ["alpha", "beta", "gamma", "delta"].join(BLOCK_SEPARATOR);
+    const out = fullQuoteDisplay(exact);
+    expect(out).toBe("alpha \u2026 beta \u2026 gamma \u2026 delta");
+    expect(ellipsisCount(out)).toBe(3);
+    expect(out.endsWith("delta")).toBe(true);
+  });
+
+  it("preserves fragment-internal text verbatim (no whitespace normalization)", () => {
+    const exact = ["  padded  ", "trailing   "].join(BLOCK_SEPARATOR);
+    expect(fullQuoteDisplay(exact)).toBe("  padded   \u2026 trailing   ");
+  });
+
+  it("never invents content for an empty exact (returns empty)", () => {
+    expect(fullQuoteDisplay("")).toBe("");
   });
 });

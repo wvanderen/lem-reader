@@ -272,7 +272,7 @@ test.describe("ANNO-08 span capture (D19) — 19-01", () => {
       page.getByRole("heading", { level: 1, name: "Highlights" }),
     ).toBeVisible();
     await page
-      .getByRole("button", { name: /^Go to highlight:/ })
+      .getByRole("link", { name: /^Go to highlight:/ })
       .first()
       .click();
 

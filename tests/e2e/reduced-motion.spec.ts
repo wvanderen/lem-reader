@@ -154,7 +154,7 @@ test.describe("Reduced motion (A11Y-06)", () => {
       page.getByRole("heading", { level: 1, name: "Highlights" }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: /^Go to highlight:/ }).first(),
+      page.getByRole("link", { name: /^Go to highlight:/ }).first(),
     ).toBeVisible();
     // The spec's own idiom (see "opening the panel does not animate"): NO
     // element on the route declares an animation name under the gate.
@@ -167,9 +167,9 @@ test.describe("Reduced motion (A11Y-06)", () => {
       animated,
       "no element on #/highlights should declare an animation under reduced-motion",
     ).toBe(false);
-    // Operable: the confident row's jump button opens the article.
+    // Operable: the confident row's jump link opens the article.
     const rowButton = page
-      .getByRole("button", { name: /^Go to highlight:/ })
+      .getByRole("link", { name: /^Go to highlight:/ })
       .first();
     await expect(rowButton).toBeEnabled();
     await rowButton.click();

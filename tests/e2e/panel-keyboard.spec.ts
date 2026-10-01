@@ -168,7 +168,7 @@ test.describe("Review panel keyboard reachability (RECV-01.i)", () => {
       page.getByRole("heading", { level: 1, name: "Highlights" }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: /^Go to highlight:/ }).first(),
+      page.getByRole("link", { name: /^Go to highlight:/ }).first(),
     ).toBeVisible();
 
     // Walk Tab from the top of the document and require the expected
@@ -196,7 +196,7 @@ test.describe("Review panel keyboard reachability (RECV-01.i)", () => {
             { desc: "article filter combobox", id: "review-article-filter" },
             { desc: "confidence filter combobox", id: "review-confidence-filter" },
             { desc: "sort select", id: "review-sort" },
-            { desc: "row jump button", id: "", labelPrefix: "Go to highlight:" },
+            { desc: "row jump link", id: "", labelPrefix: "Go to highlight:" },
           ];
     let reached = 0;
     for (let tab = 0; tab < 20 && reached < expected.length; tab++) {
@@ -223,10 +223,10 @@ test.describe("Review panel keyboard reachability (RECV-01.i)", () => {
     ).toBe(expected.length);
 
     // The programmatic-focus contract on ALL engines (the WebKit
-    // forced-colors precedent): every expected control — row jump button
+    // forced-colors precedent): every expected control — row jump link
     // included — accepts focus, in DOM order.
     const rowButton = page
-      .getByRole("button", { name: /^Go to highlight:/ })
+      .getByRole("link", { name: /^Go to highlight:/ })
       .first();
     for (const target of [
       page.locator("#review-article-filter"),
@@ -349,7 +349,7 @@ test.describe("Destination keyboard arm (ACPT-08 — D21-14)", () => {
     await expect(page).toHaveURL(/#\/highlights$/);
 
     const rowButton = page
-      .getByRole("button", { name: /^Go to highlight:/ })
+      .getByRole("link", { name: /^Go to highlight:/ })
       .first();
     await rowButton.focus();
     await expect(rowButton).toBeFocused();

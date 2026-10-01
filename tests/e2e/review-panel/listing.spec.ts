@@ -229,8 +229,9 @@ test.describe("RECV-01.b review-panel listing (10-04 cross-article + filters + s
       sectionByTitle(page, TITLE_A).locator(".review-row", { hasText: NOTE_TEXT }).first(),
     ).toBeVisible();
 
-    // Metadata: every row shows a (non-empty) date.
-    const dates = await page.locator(".review-row .review-date").allTextContents();
+    // Metadata: every row shows a (non-empty) date (on the card's foot
+    // line — a sibling of the icon cluster inside the li).
+    const dates = await page.locator("li.review-item .review-date").allTextContents();
     expect(dates, "one .review-date per row").toHaveLength(3);
     for (const d of dates) {
       expect(d.trim().length).toBeGreaterThan(0);

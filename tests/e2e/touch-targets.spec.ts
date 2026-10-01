@@ -258,9 +258,9 @@ test.describe("Touch targets ≥ 44×44px (A11Y-07)", () => {
         locator: (page) => page.getByRole("combobox", { name: "Sort" }),
       },
       {
-        desc: "row jump button",
+        desc: "row jump link",
         locator: (page) =>
-          page.getByRole("button", { name: /^Go to highlight:/ }).first(),
+          page.getByRole("link", { name: /^Go to highlight:/ }).first(),
         width: true,
       },
     ],

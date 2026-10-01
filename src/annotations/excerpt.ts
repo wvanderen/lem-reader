@@ -1,13 +1,20 @@
 // src/annotations/excerpt.ts
-// First-fragment excerpt derivation for highlight quote surfaces (D19-10).
+// Excerpt derivations for highlight quote surfaces (D19-10).
 //
 // Pure domain logic — no DOM, no React, no side effects (the overlap.ts
 // small-pure-module discipline). A cross-block highlight's stored
 // quote.exact contains BLOCK_SEPARATOR newlines between block fragments;
-// excerpt surfaces (review row + its aria-labels, drawer, popover,
-// delete-confirm) describe the span as its FIRST FRAGMENT plus a calm
-// ellipsis — never a truncated multi-block blob. Rows stay compact and
-// scannable; the full span is visible in the reader.
+// two derivations serve the two surface families:
+//
+//   - firstFragmentExcerpt — the compact excerpt (review aria-labels,
+//     drawer, popover, delete-confirm): the span describes itself as its
+//     FIRST FRAGMENT plus a calm ellipsis — never a truncated multi-block
+//     blob. Names stay short and scannable.
+//   - fullQuoteDisplay — the review row's center-stage quote (the
+//     review-row redesign): the ENTIRE stored span, with each block
+//     boundary rendered as the same calm ellipsis marker so the reader
+//     can see material was skipped between fragments. No length cap —
+//     the highlight IS this surface's content.
 //
 // Excerpt honesty rule (19-UI-SPEC §Typography, locked): the ellipsis is
 // the SINGLE character U+2026, appended ONLY when the highlight genuinely
@@ -39,17 +46,27 @@ const ELLIPSIS = "\u2026";
  */
 export function firstFragmentExcerpt(exact: string, maxChars: number): string {
   const separatorIndex = exact.indexOf(BLOCK_SEPARATOR);
-  const firstFragment =
-    separatorIndex === -1 ? exact : exact.slice(0, separatorIndex);
+  const firstFragment = separatorIndex === -1 ? exact : exact.slice(0, separatorIndex);
   // Case 2: the length cap itself appends the ellipsis when it shortens
   // the fragment.
   const truncated = firstFragment.length > maxChars;
-  const capped = truncated
-    ? firstFragment.slice(0, maxChars) + ELLIPSIS
-    : firstFragment;
+  const capped = truncated ? firstFragment.slice(0, maxChars) + ELLIPSIS : firstFragment;
   // Case 3: a genuine continuation appends the ellipsis AFTER the cap —
   // but only when the cap did not already append one (exactly one
   // U+2026 in the over-cap continuation case).
   const continues = separatorIndex !== -1;
   return continues && !truncated ? capped + ELLIPSIS : capped;
+}
+
+/**
+ * Derive the FULL-span display text for the review row's center-stage
+ * quote (the review-row redesign). Every stored fragment renders, in
+ * order, with NO length cap; each BLOCK_SEPARATOR becomes one spaced
+ * ellipsis marker (" … ") so a cross-block span visibly admits the
+ * skipped material between its fragments (the honesty rule's display
+ * half — the marker lies about nothing: it sits exactly where blocks
+ * were jumped). A single-fragment span passes through byte-unchanged.
+ */
+export function fullQuoteDisplay(exact: string): string {
+  return exact.split(BLOCK_SEPARATOR).join(` ${ELLIPSIS} `);
 }
