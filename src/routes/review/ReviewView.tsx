@@ -220,10 +220,14 @@ function ReviewRow({
   onChangeColor: (entry: ReviewEntry) => void;
 }) {
   // D19-10 (display half): the row shows the ENTIRE stored span — block
-  // fragments joined by the spaced ellipsis marker, no cap. The capped
+  // boundaries verified against the current article, no cap. The capped
   // first-fragment derivation (60 chars) remains the ONE voice for every
   // accessible name below.
-  const quoteText = fullQuoteDisplay(entry.highlight.quote.exact);
+  const quoteText = fullQuoteDisplay(
+    entry.highlight.quote.exact,
+    entry.article,
+    entry.resolvedPosition,
+  );
   const ariaExcerpt = firstFragmentExcerpt(entry.highlight.quote.exact, ARIA_MAX_CHARS);
   const noteText = entry.note?.text ?? "";
   const jumpable = entry.status === "confident" && entry.article !== undefined;

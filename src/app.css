@@ -3624,6 +3624,7 @@ dialog.import-preview {
    fragments arrive pre-joined with spaced ellipsis markers. */
 .review-quote {
   margin: 0;
+  white-space: pre-wrap;
   font-family: var(--font-body);
   font-style: italic;
   font-size: 19px;
@@ -3712,6 +3713,7 @@ dialog.import-preview {
  * nest). The cluster rides the foot line's inline-end side; its padding
  * lives on .review-row-foot. */
 .review-row-actions {
+  margin-inline-start: auto;
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
