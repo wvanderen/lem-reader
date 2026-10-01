@@ -55,7 +55,7 @@
 //     (the repo-wide no-danger rule). Feed images render as plain <img>
 //     with alt="" (decorative — the title carries the meaning) and
 //     referrerPolicy="no-referrer".
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 // Plan 14-03 Task 1 (D14-03) — the destination's document.title via the ONE
 // shared helper (never string-built here).
 import { setDocumentTitle } from "../../ingestion/library/pageMeta";
@@ -145,7 +145,8 @@ function applySaveOutcome(
       announce("Saved to your library.");
       break;
     case "already-in-library":
-      announce("Already in your library.");
+      // The ONE catalog's phrase (no second home for the copy).
+      announce(mapReasonToCopy("already-in-library"));
       break;
     case "refused":
       announce(mapReasonToCopy(outcome.reason));
@@ -350,10 +351,22 @@ export function DiscoverView({ hasAppHistory }: { hasAppHistory: boolean }) {
   // per link (independent previews may save concurrently).
   const savingInFlightRef = useRef<Set<string>>(new Set());
 
+  // The live row ids — a session resolution survives only while its row
+  // still exists: a mid-session removal (LibraryView, ReviewView) re-opens
+  // the + honestly instead of leaving a dead Open link behind.
+  const savedIds = useMemo(
+    () => new Set(snapshot.articles.map((article) => article.id)),
+    [snapshot.articles],
+  );
+
   /** The "In library" id for a linked preview: this session's press
-   * resolution first, else the library snapshot's sourceUrl match. */
-  const savedIdFor = (link: string): string | undefined =>
-    resolvedIds[link] ?? savedArticleIdForLink(snapshot.articles, link);
+   * resolution first (while its row exists), else the library snapshot's
+   * sourceUrl match. */
+  const savedIdFor = (link: string): string | undefined => {
+    const resolved = resolvedIds[link];
+    if (resolved !== undefined && savedIds.has(resolved)) return resolved;
+    return savedArticleIdForLink(snapshot.articles, link);
+  };
 
   async function handleSaveItem(link: string) {
     if (savingInFlightRef.current.has(link)) return;
@@ -534,8 +547,8 @@ export function DiscoverView({ hasAppHistory }: { hasAppHistory: boolean }) {
                       <div className="discover-item-body">
                         <p className="meta discover-item-feed">{entry.subscription.title}</p>
                         <h3 className="discover-item-title">
-                          {item.link ? (
-                            <a href={item.link} target="_blank" rel="noopener noreferrer">
+                          {link ? (
+                            <a href={link} target="_blank" rel="noopener noreferrer">
                               {item.title}
                               <span className="visually-hidden"> (opens in a new tab)</span>
                             </a>

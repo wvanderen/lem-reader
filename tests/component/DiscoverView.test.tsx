@@ -49,19 +49,35 @@ vi.mock("../../src/discover/saveItem", async (importOriginal) => ({
 // Issue #124 — the ONE library snapshot hook is mocked to a controllable
 // article list (the view reads snapshot.articles for the pre-press
 // "In library" state; the real hook's Dexie graph is out of scope here —
-// the review-view suites' mock precedent).
-const { snapshotState } = vi.hoisted(() => ({
-  snapshotState: { articles: [] as CanonicalArticle[] },
-}));
+// the review-view suites' mock precedent). The mock SUBSCRIBES to the real
+// invalidation bus, so a save's invalidateLibrarySnapshot() re-derives the
+// snapshot exactly as the live hook does.
+const { snapshotState, snapshotReloadWith } = vi.hoisted(() => {
+  const state = { articles: [] as unknown[], version: 0 };
+  return {
+    snapshotState: state,
+    snapshotReloadWith: (articles: unknown[]) => {
+      state.articles = articles;
+      state.version += 1;
+    },
+  };
+});
 vi.mock("../../src/ingestion/library/useLibrarySnapshot", async () => {
-  const { EMPTY_LIBRARY_SNAPSHOT } = await import(
+  const { useSyncExternalStore } = await import("react");
+  const { EMPTY_LIBRARY_SNAPSHOT, onLibrarySnapshotInvalidated } = await import(
     "../../src/ingestion/library/librarySnapshot"
   );
   return {
-    useLibrarySnapshot: () => ({
-      status: "ready" as const,
-      snapshot: { ...EMPTY_LIBRARY_SNAPSHOT, articles: snapshotState.articles },
-    }),
+    useLibrarySnapshot: () => {
+      useSyncExternalStore(onLibrarySnapshotInvalidated, () => snapshotState.version);
+      return {
+        status: "ready" as const,
+        snapshot: {
+          ...EMPTY_LIBRARY_SNAPSHOT,
+          articles: snapshotState.articles,
+        } as unknown as import("../../src/ingestion/library/librarySnapshot").LibrarySnapshot,
+      };
+    },
   };
 });
 
@@ -112,9 +128,18 @@ function timelineTitles(): string[] {
     .map((h) => (h.textContent ?? "").replace(" (opens in a new tab)", ""));
 }
 
+/** A minimal library row for the snapshot mock (only what
+ * savedArticleIdForLink reads: id + provenance.sourceUrl). */
+function articleRow(id: string, sourceUrl: string): CanonicalArticle {
+  return {
+    id,
+    provenance: { sourceUrl, title: id },
+  } as unknown as CanonicalArticle;
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
-  snapshotState.articles = [];
+  snapshotReloadWith([]);
   vi.mocked(updateSubscription).mockResolvedValue(true);
   // The default fetch is URL-aware: a refresh updates each row with the
   // FEED'S OWN name, so a shared canned title would rename everything.
@@ -397,9 +422,11 @@ describe("DiscoverView — inline add (issue #124)", () => {
   it("the + press ingests the LINKED PAGE through the policy, announces the save, and swaps to In library + Open without navigating", async () => {
     const user = userEvent.setup();
     vi.mocked(listSubscriptions).mockResolvedValue({ ok: true, subscriptions: [SUB_A] });
-    vi.mocked(saveFeedItem).mockResolvedValue({
-      outcome: "saved",
-      articleId: "a-example-com-a1",
+    // The real flow: save → invalidateLibrarySnapshot() → the snapshot
+    // reload now carries the row. The mock models both halves.
+    vi.mocked(saveFeedItem).mockImplementation(async (link) => {
+      snapshotReloadWith([articleRow("a-example-com-a1", link)]);
+      return { outcome: "saved", articleId: "a-example-com-a1" };
     });
     render(<DiscoverView hasAppHistory={false} />);
     await screen.findByText("Latest articles");
@@ -425,6 +452,10 @@ describe("DiscoverView — inline add (issue #124)", () => {
   it("a duplicate press resolves to the EXISTING row (one library item; annotations untouched by the no-save policy)", async () => {
     const user = userEvent.setup();
     vi.mocked(listSubscriptions).mockResolvedValue({ ok: true, subscriptions: [SUB_A] });
+    // The row is ALREADY in the library under a DIFFERENT sourceUrl (the
+    // redirect alias — what makes the + resolvable only by pressing), so
+    // the preview still shows + until the pipeline resolves the press.
+    snapshotReloadWith([articleRow("already-there-id", "https://canonical.example.com/a1")]);
     vi.mocked(saveFeedItem).mockResolvedValue({
       outcome: "already-in-library",
       articleId: "already-there-id",
@@ -478,9 +509,9 @@ describe("DiscoverView — inline add (issue #124)", () => {
     const retry = screen.getByRole("button", { name: "Save A dated item" });
     expect(retry).toBeEnabled();
 
-    vi.mocked(saveFeedItem).mockResolvedValueOnce({
-      outcome: "saved",
-      articleId: "a-example-com-a1",
+    vi.mocked(saveFeedItem).mockImplementation(async (link) => {
+      snapshotReloadWith([articleRow("a-example-com-a1", link)]);
+      return { outcome: "saved", articleId: "a-example-com-a1" };
     });
     await user.click(retry);
     expect(await screen.findByText("Saved to your library.")).toBeVisible();
@@ -492,12 +523,7 @@ describe("DiscoverView — inline add (issue #124)", () => {
   });
 
   it("a preview already in the library renders In library + Open with no press (the snapshot derivation)", async () => {
-    snapshotState.articles = [
-      {
-        id: "a-example-com-a1",
-        provenance: { sourceUrl: "https://a.example.com/a1", title: "A dated item" },
-      } as unknown as CanonicalArticle,
-    ];
+    snapshotReloadWith([articleRow("a-example-com-a1", "https://a.example.com/a1")]);
     vi.mocked(listSubscriptions).mockResolvedValue({ ok: true, subscriptions: [SUB_A] });
     render(<DiscoverView hasAppHistory={false} />);
     await screen.findByText("Latest articles");
@@ -509,6 +535,30 @@ describe("DiscoverView — inline add (issue #124)", () => {
     );
     expect(screen.queryByRole("button", { name: "Save A dated item" })).toBeNull();
     expect(saveFeedItem).not.toHaveBeenCalled();
+  });
+
+  it("a mid-session library removal re-opens the + (a saved-state resolution never outlives its row)", async () => {
+    const user = userEvent.setup();
+    vi.mocked(listSubscriptions).mockResolvedValue({ ok: true, subscriptions: [SUB_A] });
+    vi.mocked(saveFeedItem).mockImplementation(async (link) => {
+      snapshotReloadWith([articleRow("a-example-com-a1", link)]);
+      return { outcome: "saved", articleId: "a-example-com-a1" };
+    });
+    const { rerender } = render(<DiscoverView hasAppHistory={false} />);
+    await screen.findByText("Latest articles");
+    await user.click(screen.getByRole("button", { name: "Save A dated item" }));
+    await screen.findByText("In library");
+
+    // The article is removed elsewhere mid-session: the invalidation
+    // broadcast reloads the snapshot (asynchronously, in the real hook —
+    // the synchronous mock rerenders with the reloaded articles).
+    snapshotReloadWith([]);
+    rerender(<DiscoverView hasAppHistory={false} />);
+
+    // The preview is honest again: the + is back, no dead Open link.
+    expect(screen.getByRole("button", { name: "Save A dated item" })).toBeVisible();
+    expect(screen.queryByText("In library")).toBeNull();
+    expect(screen.queryByRole("link", { name: "Open A dated item" })).toBeNull();
   });
 
   it("a linkless preview offers no save control (there is no page to save)", async () => {
@@ -531,9 +581,9 @@ describe("DiscoverView — inline add (issue #124)", () => {
   it("the + is keyboard-reachable after the title link and Enter activates the save", async () => {
     const user = userEvent.setup();
     vi.mocked(listSubscriptions).mockResolvedValue({ ok: true, subscriptions: [SUB_A] });
-    vi.mocked(saveFeedItem).mockResolvedValue({
-      outcome: "saved",
-      articleId: "a-example-com-a1",
+    vi.mocked(saveFeedItem).mockImplementation(async (link) => {
+      snapshotReloadWith([articleRow("a-example-com-a1", link)]);
+      return { outcome: "saved", articleId: "a-example-com-a1" };
     });
     render(<DiscoverView hasAppHistory={false} />);
     await screen.findByText("Latest articles");
