@@ -18,6 +18,7 @@ import {
   hasSubscriptionForFeed,
   listSubscriptions,
   saveSubscription,
+  updateSubscription,
 } from "../../src/persistence/subscriptionsStore";
 import type { FeedPreview } from "../../src/ingestion/types";
 import type { FeedItemPreview, SubscriptionRecord } from "../../src/content/schema";
@@ -30,6 +31,7 @@ vi.mock("../../src/persistence/subscriptionsStore", () => ({
   listSubscriptions: vi.fn(async () => ({ ok: true, subscriptions: [] })),
   hasSubscriptionForFeed: vi.fn(),
   saveSubscription: vi.fn(),
+  updateSubscription: vi.fn(),
   deleteSubscription: vi.fn(),
 }));
 
@@ -82,6 +84,7 @@ function timelineTitles(): string[] {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(updateSubscription).mockResolvedValue(true);
   // The default fetch is URL-aware: a refresh updates each row with the
   // FEED'S OWN name, so a shared canned title would rename everything.
   vi.mocked(discoverFeed).mockImplementation(async (url: string) => {
@@ -145,10 +148,7 @@ describe("DiscoverView — the unified timeline (issue #123)", () => {
     await user.selectOptions(filter, "Feed B");
     expect(timelineTitles()).toEqual(["B newer item", "B undated item"]);
 
-    await user.selectOptions(
-      filter,
-      screen.getByRole("option", { name: "All feeds" }),
-    );
+    await user.selectOptions(filter, screen.getByRole("option", { name: "All feeds" }));
     expect(timelineTitles()).toEqual(["B newer item", "A dated item", "B undated item"]);
   });
 
@@ -235,9 +235,7 @@ describe("DiscoverView — refresh moments (issue #123)", () => {
     expect(screen.getByRole("button", { name: "Retry Feed A" })).toBeVisible();
     expect(screen.getByText("A dated item")).toBeVisible();
     expect(screen.getByRole("heading", { name: "Feed A" })).toBeVisible();
-    expect(
-      await screen.findByText("Couldn't refresh Feed A. Showing saved items."),
-    ).toBeVisible();
+    expect(await screen.findByText("Couldn't refresh Feed A. Showing saved items.")).toBeVisible();
     expect(discoverFeed).toHaveBeenCalledTimes(1);
   });
 
@@ -255,9 +253,7 @@ describe("DiscoverView — refresh moments (issue #123)", () => {
     });
     render(<DiscoverView hasAppHistory={false} />);
     await screen.findByText("Latest articles");
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Retry Feed A" })).toBeVisible(),
-    );
+    await waitFor(() => expect(screen.getByRole("button", { name: "Retry Feed A" })).toBeVisible());
     // Feed B refreshed cleanly — no notice for it.
     expect(screen.queryByRole("button", { name: "Retry Feed B" })).toBeNull();
     const callsBefore = vi.mocked(discoverFeed).mock.calls.length;
@@ -266,9 +262,7 @@ describe("DiscoverView — refresh moments (issue #123)", () => {
       feedPreview({ url, title: url === "https://a.example.com/feed.xml" ? "Feed A" : "Feed B" }),
     );
     await user.click(screen.getByRole("button", { name: "Retry Feed A" }));
-    await waitFor(() =>
-      expect(screen.queryByRole("button", { name: "Retry Feed A" })).toBeNull(),
-    );
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Retry Feed A" })).toBeNull());
     // ONLY the failed feed was re-fetched.
     expect(vi.mocked(discoverFeed).mock.calls.length).toBe(callsBefore + 1);
     expect(discoverFeed).toHaveBeenLastCalledWith("https://a.example.com/feed.xml");
@@ -331,9 +325,7 @@ describe("DiscoverView — keyboard access (issue #123)", () => {
     vi.mocked(discoverFeed).mockRejectedValue(new IngestionError("fetch-failed"));
     render(<DiscoverView hasAppHistory={false} />);
     await screen.findByText("Latest articles");
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Retry Feed A" })).toBeVisible(),
-    );
+    await waitFor(() => expect(screen.getByRole("button", { name: "Retry Feed A" })).toBeVisible());
 
     screen.getByRole("textbox", { name: "Subscribe to a feed" }).focus();
     await userEvent.tab();
@@ -365,4 +357,50 @@ describe("DiscoverView — subscribe form resilience (issue #121)", () => {
       expect(input).toHaveValue("");
     },
   );
+});
+
+it("keeps the focused article when opening refresh prepends an item", async () => {
+  vi.mocked(listSubscriptions).mockResolvedValue({ ok: true, subscriptions: [SUB_A] });
+  let finish!: (value: FeedPreview) => void;
+  vi.mocked(discoverFeed).mockReturnValueOnce(
+    new Promise((resolve) => {
+      finish = resolve;
+    }),
+  );
+  render(<DiscoverView hasAppHistory={false} />);
+  const link = await screen.findByRole("link", { name: /A dated item/ });
+  link.focus();
+  finish(
+    feedPreview({
+      items: [
+        {
+          title: "New article",
+          link: "https://a.example.com/new",
+          datePublished: "2026-09-30T00:00:00.000Z",
+        },
+      ],
+    }),
+  );
+  await screen.findByRole("link", { name: /New article/ });
+  expect(link).toHaveFocus();
+  expect(link).toHaveAttribute("href", "https://a.example.com/a1");
+});
+
+it("shows Retry for an opening save failure while displaying other successful refreshes", async () => {
+  vi.mocked(listSubscriptions).mockResolvedValue({ ok: true, subscriptions: [SUB_A, SUB_B] });
+  vi.mocked(updateSubscription).mockImplementation(async (record) => {
+    if (record.id === "a") throw new Error("storage full");
+    return true;
+  });
+  vi.mocked(discoverFeed).mockImplementation(async (url) =>
+    feedPreview({
+      url,
+      title: url === SUB_A.feedUrl ? "Feed A" : "Feed B",
+      items: [{ title: "Fresh article", link: "https://example.com/fresh" }],
+    }),
+  );
+  render(<DiscoverView hasAppHistory={false} />);
+  expect(await screen.findByRole("button", { name: "Retry Feed A" })).toBeVisible();
+  expect(screen.getByRole("link", { name: /Fresh article/ })).toBeVisible();
+  expect(screen.getByRole("link", { name: /A dated item/ })).toBeVisible();
 });

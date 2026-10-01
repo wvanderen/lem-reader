@@ -127,7 +127,7 @@ export function filterTimeline(
  * same story seen twice (titles are schema min(1) so a linkless entry
  * always has one).
  */
-function feedItemKey(item: FeedItemPreview): string {
+export function feedItemKey(item: FeedItemPreview): string {
   return item.link ?? `title:${item.title}`;
 }
 

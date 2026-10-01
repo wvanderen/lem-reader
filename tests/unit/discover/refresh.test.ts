@@ -12,11 +12,11 @@ vi.mock("../../../src/ingestion/IngestionClient", async (importOriginal) => ({
   discoverFeed: vi.fn(),
 }));
 vi.mock("../../../src/persistence/subscriptionsStore", () => ({
-  saveSubscription: vi.fn(),
+  updateSubscription: vi.fn(),
 }));
 
 import { discoverFeed, IngestionError } from "../../../src/ingestion/IngestionClient";
-import { saveSubscription } from "../../../src/persistence/subscriptionsStore";
+import { updateSubscription } from "../../../src/persistence/subscriptionsStore";
 import { refreshSubscription } from "../../../src/discover/refresh";
 import type { FeedPreview } from "../../../src/ingestion/types";
 import type { SubscriptionRecord } from "../../../src/content/schema";
@@ -43,7 +43,7 @@ function feedPreview(partial: Partial<FeedPreview>): FeedPreview {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(saveSubscription).mockResolvedValue(undefined);
+  vi.mocked(updateSubscription).mockResolvedValue(true);
 });
 
 describe("refreshSubscription (issue #123)", () => {
@@ -62,8 +62,8 @@ describe("refreshSubscription (issue #123)", () => {
     const result = await refreshSubscription(RECORD);
     expect(result.outcome).toBe("refreshed");
     if (result.outcome !== "refreshed") return;
-    expect(saveSubscription).toHaveBeenCalledTimes(1);
-    const saved = vi.mocked(saveSubscription).mock.calls[0]![0]!;
+    expect(updateSubscription).toHaveBeenCalledTimes(1);
+    const saved = vi.mocked(updateSubscription).mock.calls[0]![0]!;
     expect(saved.id).toBe(RECORD.id);
     expect(saved.feedUrl).toBe(RECORD.feedUrl);
     expect(saved.subscribedAt).toBe(RECORD.subscribedAt);
@@ -81,27 +81,35 @@ describe("refreshSubscription (issue #123)", () => {
   });
 
   it("keeps the description when the feed still supplies one", async () => {
-    vi.mocked(discoverFeed).mockResolvedValue(
-      feedPreview({ description: "The new description" }),
-    );
+    vi.mocked(discoverFeed).mockResolvedValue(feedPreview({ description: "The new description" }));
     const result = await refreshSubscription(RECORD);
     if (result.outcome !== "refreshed") throw new Error("expected refreshed");
     expect(result.subscription.description).toBe("The new description");
   });
 
   it("persists NOTHING on a refused fetch — the cache and stamp survive untouched", async () => {
-    vi.mocked(discoverFeed).mockRejectedValue(
-      new IngestionError("fetch-failed", "offline"),
-    );
+    vi.mocked(discoverFeed).mockRejectedValue(new IngestionError("fetch-failed", "offline"));
     const result = await refreshSubscription(RECORD);
     expect(result).toEqual({ outcome: "failed", reason: "fetch-failed" });
-    expect(saveSubscription).not.toHaveBeenCalled();
+    expect(updateSubscription).not.toHaveBeenCalled();
   });
 
   it("routes an unexpected throw to the calm server-error arm, still writing nothing", async () => {
     vi.mocked(discoverFeed).mockRejectedValue(new Error("boom"));
     const result = await refreshSubscription(RECORD);
     expect(result).toEqual({ outcome: "failed", reason: "server-error" });
-    expect(saveSubscription).not.toHaveBeenCalled();
+    expect(updateSubscription).not.toHaveBeenCalled();
   });
+});
+
+it("returns a per-feed failure when cache persistence fails", async () => {
+  vi.mocked(discoverFeed).mockResolvedValue(feedPreview({}));
+  vi.mocked(updateSubscription).mockRejectedValueOnce(new Error("storage full"));
+  expect(await refreshSubscription(RECORD)).toEqual({ outcome: "failed", reason: "server-error" });
+});
+
+it("does not report a deleted subscription as refreshed", async () => {
+  vi.mocked(discoverFeed).mockResolvedValue(feedPreview({}));
+  vi.mocked(updateSubscription).mockResolvedValueOnce(false);
+  expect(await refreshSubscription(RECORD)).toEqual({ outcome: "removed" });
 });

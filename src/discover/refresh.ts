@@ -23,7 +23,7 @@
 //   5. No background polling lives here — the Discover surface calls this
 //      exactly when the reader opens Discover or requests Refresh/Retry.
 import { discoverFeed, IngestionError } from "../ingestion/IngestionClient";
-import { saveSubscription } from "../persistence/subscriptionsStore";
+import { updateSubscription } from "../persistence/subscriptionsStore";
 import { SubscriptionRecordSchema } from "../content/schema";
 import type { SubscriptionRecord } from "../content/schema";
 import type { IngestionFailureReason } from "../ingestion/types";
@@ -33,7 +33,8 @@ import { mergeFeedItems } from "./timeline";
  * SubscribeOutcome shape — never throws for policy reasons). */
 export type RefreshOutcome =
   | { outcome: "refreshed"; subscription: SubscriptionRecord }
-  | { outcome: "failed"; reason: IngestionFailureReason };
+  | { outcome: "failed"; reason: IngestionFailureReason }
+  | { outcome: "removed" };
 
 /**
  * refreshSubscription — fetch → merge → persist for ONE subscription.
@@ -44,28 +45,26 @@ export type RefreshOutcome =
  * SubscriptionRecordSchema.parse (Zod-at-boundary — the subscribe.ts
  * discipline) and put back under its SAME id.
  */
-export async function refreshSubscription(
-  record: SubscriptionRecord,
-): Promise<RefreshOutcome> {
+export async function refreshSubscription(record: SubscriptionRecord): Promise<RefreshOutcome> {
   let feed;
   try {
     feed = await discoverFeed(record.feedUrl);
+    const updated = SubscriptionRecordSchema.parse({
+      schemaVersion: record.schemaVersion,
+      id: record.id,
+      feedUrl: record.feedUrl,
+      title: feed.title,
+      ...(feed.description !== undefined ? { description: feed.description } : {}),
+      items: mergeFeedItems(record.items, feed.items),
+      subscribedAt: record.subscribedAt,
+      lastFetchedAt: new Date().toISOString(),
+    });
+    if (!(await updateSubscription(updated))) return { outcome: "removed" };
+    return { outcome: "refreshed", subscription: updated };
   } catch (e) {
     if (e instanceof IngestionError) {
       return { outcome: "failed", reason: e.reason };
     }
     return { outcome: "failed", reason: "server-error" };
   }
-  const updated = SubscriptionRecordSchema.parse({
-    schemaVersion: record.schemaVersion,
-    id: record.id,
-    feedUrl: record.feedUrl,
-    title: feed.title,
-    ...(feed.description !== undefined ? { description: feed.description } : {}),
-    items: mergeFeedItems(record.items, feed.items),
-    subscribedAt: record.subscribedAt,
-    lastFetchedAt: new Date().toISOString(),
-  });
-  await saveSubscription(updated);
-  return { outcome: "refreshed", subscription: updated };
 }

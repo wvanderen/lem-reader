@@ -59,7 +59,7 @@ import type { SubscribeOutcome } from "../../discover/subscribe";
 // Issue #123 — the ONE refresh-and-persist policy (fetch → merge → save,
 // calm failure otherwise) and the ONE deterministic timeline policy.
 import { refreshSubscription } from "../../discover/refresh";
-import { buildTimeline, filterTimeline } from "../../discover/timeline";
+import { buildTimeline, filterTimeline, feedItemKey } from "../../discover/timeline";
 // The feed-aware copy voice (calm DOC-06, one catalog, per-surface wording).
 import { mapFeedReasonToCopy } from "../../ingestion/ingestCopy";
 import type { IngestionFailureReason } from "../../ingestion/types";
@@ -232,7 +232,7 @@ export function DiscoverView({ hasAppHistory }: { hasAppHistory: boolean }) {
         if (target === undefined) return;
         if (outcome.outcome === "refreshed") {
           refreshedById.set(target.id, outcome.subscription);
-        } else {
+        } else if (outcome.outcome === "failed") {
           failures.set(target.id, outcome.reason);
         }
       });
@@ -354,7 +354,10 @@ export function DiscoverView({ hasAppHistory }: { hasAppHistory: boolean }) {
         /* (c) The subscription surface — ONE newest-first timeline across
                every feed (issue #123), then the per-feed management rows. */
         <>
-          <section className="library-section discover-section" aria-labelledby="discover-timeline-heading">
+          <section
+            className="library-section discover-section"
+            aria-labelledby="discover-timeline-heading"
+          >
             <div className="discover-timeline-head">
               <h2 id="discover-timeline-heading">Latest articles</h2>
               {/* The feed controls: the single-feed filter (a native
@@ -398,17 +401,15 @@ export function DiscoverView({ hasAppHistory }: { hasAppHistory: boolean }) {
                 data-feed-id={subscription.id}
               >
                 <p>
-                  {mapFeedReasonToCopy(reason)} Showing saved items
-                  from {formatIsoDate(lastGoodUpdateOf(subscription))}.
+                  {mapFeedReasonToCopy(reason)} Showing saved items from{" "}
+                  {formatIsoDate(lastGoodUpdateOf(subscription))}.
                 </p>
                 <button
                   type="button"
                   className="btn btn-quiet"
                   aria-label={`Retry ${subscription.title}`}
                   disabled={refreshing}
-                  onClick={() =>
-                    void runRefresh({ announce: true, targets: [subscription] })
-                  }
+                  onClick={() => void runRefresh({ announce: true, targets: [subscription] })}
                 >
                   Retry
                 </button>
@@ -418,7 +419,7 @@ export function DiscoverView({ hasAppHistory }: { hasAppHistory: boolean }) {
               <ul className="discover-timeline">
                 {visibleEntries.map((entry) => (
                   <li
-                    key={`${entry.subscription.id}:${entry.index}`}
+                    key={JSON.stringify([entry.subscription.id, feedItemKey(entry.item)])}
                     className="discover-item"
                   >
                     {entry.item.image && (
@@ -435,11 +436,7 @@ export function DiscoverView({ hasAppHistory }: { hasAppHistory: boolean }) {
                       <p className="meta discover-item-feed">{entry.subscription.title}</p>
                       <h3 className="discover-item-title">
                         {entry.item.link ? (
-                          <a
-                            href={entry.item.link}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
+                          <a href={entry.item.link} target="_blank" rel="noopener noreferrer">
                             {entry.item.title}
                             <span className="visually-hidden"> (opens in a new tab)</span>
                           </a>
@@ -467,7 +464,10 @@ export function DiscoverView({ hasAppHistory }: { hasAppHistory: boolean }) {
               </p>
             )}
           </section>
-          <section className="library-section discover-section" aria-labelledby="discover-feeds-heading">
+          <section
+            className="library-section discover-section"
+            aria-labelledby="discover-feeds-heading"
+          >
             <h2 id="discover-feeds-heading">Your feeds</h2>
             <ul className="discover-list">
               {subscriptions.map((subscription) => (

@@ -118,9 +118,7 @@ export async function getSubscriptionByFeedUrl(
  * never calls saveSubscription.
  */
 export async function hasSubscriptionForFeed(feedUrl: string): Promise<boolean> {
-  return (
-    (await db.subscriptions.where("feedUrl").equals(feedUrl).first()) !== undefined
-  );
+  return (await db.subscriptions.where("feedUrl").equals(feedUrl).first()) !== undefined;
 }
 
 /**
@@ -143,4 +141,10 @@ export async function saveSubscription(record: SubscriptionRecord): Promise<void
  */
 export async function deleteSubscription(id: string): Promise<void> {
   await db.subscriptions.delete(id);
+}
+
+/** Update a refreshed cache only while its subscription still exists.
+ * Dexie's update is atomic and never inserts a deleted row. */
+export async function updateSubscription(record: SubscriptionRecord): Promise<boolean> {
+  return (await db.subscriptions.update(record.id, record)) > 0;
 }

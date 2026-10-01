@@ -83,7 +83,9 @@ describe("subscriptionsStore (issue #121)", () => {
       // Missing title + items — invalid per SubscriptionRecordSchema.
       feedUrl: "https://corrupt.example.com/feed.xml",
     } as unknown as SubscriptionRecord);
-    await store.saveSubscription(sampleSubscription({ id: "sub-b", feedUrl: "https://b.example.com/feed.xml" }));
+    await store.saveSubscription(
+      sampleSubscription({ id: "sub-b", feedUrl: "https://b.example.com/feed.xml" }),
+    );
 
     const listed = await store.listSubscriptions();
     expect(listed.ok).toBe(true);
@@ -109,7 +111,9 @@ describe("subscriptionsStore (issue #121)", () => {
   it("deleteSubscription removes exactly its row and is a calm no-op on an absent id", async () => {
     const { store } = await loadStores();
     await store.saveSubscription(sampleSubscription());
-    await store.saveSubscription(sampleSubscription({ id: "sub-b", feedUrl: "https://b.example.com/feed.xml" }));
+    await store.saveSubscription(
+      sampleSubscription({ id: "sub-b", feedUrl: "https://b.example.com/feed.xml" }),
+    );
 
     await store.deleteSubscription("sub-a");
     let listed = await store.listSubscriptions();
@@ -174,4 +178,14 @@ describe("subscriptionsStore (issue #121)", () => {
     expect((await db.highlights.toArray()).map((h) => h.id)).toEqual(["kept-highlight"]);
     expect((await db.notes.toArray()).map((n) => n.id)).toEqual(["kept-note"]);
   });
+});
+
+it("a late refresh update cannot recreate a removed subscription", async () => {
+  const { store } = await loadStores();
+  const record = sampleSubscription();
+  await store.saveSubscription(record);
+  expect(await store.updateSubscription({ ...record, title: "Refreshed" })).toBe(true);
+  await store.deleteSubscription(record.id);
+  expect(await store.updateSubscription(record)).toBe(false);
+  expect(await store.loadAllSubscriptions()).toEqual([]);
 });
