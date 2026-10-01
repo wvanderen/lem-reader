@@ -116,7 +116,8 @@ export interface ReadingSessionRecordRow {
  * index (the NORMALIZED validated feed URL) powers the dedupe-refuse lookup
  * before every save and the import merge ("merges a duplicate by normalized
  * validated feed URL"). The bounded recent-item previews ride the row as its
- * local cache — nothing re-fetches on import. */
+ * local cache — refreshed only by the Discover surface's explicit refresh
+ * moments (issue #123); nothing re-fetches on import. */
 export interface SubscriptionRecordRow {
   schemaVersion: 1;
   id: string; // crypto.randomUUID() — the per-subscription primary key
@@ -125,6 +126,7 @@ export interface SubscriptionRecordRow {
   description?: string;
   items: FeedItemPreview[];
   subscribedAt: string; // ISO-8601
+  lastFetchedAt?: string; // ISO-8601 — last SUCCESSFUL fetch (issue #123)
 }
 
 export class LemReaderDB extends Dexie {

@@ -1,5 +1,5 @@
 // src/routes/discover/DiscoverView.tsx
-// Issue #121 — the Discover destination route view (#/discover): the
+// Issues #121 + #123 — the Discover destination route view (#/discover): the
 // accessible RSS/Atom subscription surface. The LibraryView/ReviewView twin:
 // same page shape (<main id="main"> + one h1 + .status live region), the
 // h1 focus-on-in-app-navigation discipline, and the state-kind vocabulary
@@ -12,14 +12,29 @@
 //   - Refusals are a calm NO (input preserved), never an error: a refused
 //     candidate saved nothing (subscribe.ts owns validate → fetch → dedupe
 //     → save; this view renders copy only).
-//   - Each subscription renders its feed name (h2), its normalized feed
-//     link, and its bounded recent previews — title, date when supplied,
-//     excerpt, optional image — exactly the cache captured at subscribe
-//     time. Item titles with links are EXTERNAL anchors: target="_blank" +
-//     rel="noopener noreferrer" + the "(opens in a new tab)" visually-hidden
-//     suffix (the AddDialog see-original discipline).
+//   - Issue #123 — ONE unified newest-first timeline across every
+//     subscription (buildTimeline: the deterministic order — dated entries
+//     first, undated entries at a pure-function-of-the-cache position),
+//     labeled with the feed name on every entry, narrowed by a single-feed
+//     filter (a native select — one Tab stop, keyboard-native).
+//   - Issue #123 — refresh happens ONLY at the reader's moments: once when
+//     Discover opens (with subscriptions) and on the Refresh/Retry request.
+//     No background polling, no per-item dismissal — the timeline is the
+//     feed's window, not a queue to triage.
+//   - Issue #123 — a failed/offline refresh persists nothing: the cached
+//     previews and the last-successful-update stamp (lastFetchedAt, falling
+//     back to subscribedAt) stay on screen behind a calm stale notice with
+//     Retry; established subscriptions remain listed.
+//   - Each feed also keeps its management row (the "Your feeds" list): the
+//     feed's own name, its normalized feed link, the updated stamp, and
+//     Remove. Item titles with links are EXTERNAL anchors: target="_blank"
+//     + rel="noopener noreferrer" + the "(opens in a new tab)"
+//     visually-hidden suffix (the AddDialog see-original discipline).
 //   - Removal is destructive-confirm: DiscoverRemoveConfirm owns the ONLY
-//     deleteSubscription call site (the Pitfall 8 discipline).
+//     deleteSubscription call site (the Pitfall 8 discipline). Removing a
+//     subscription deletes its row — its previews/cache only; articles,
+//     reading locations, and annotations are keyed by article identity and
+//     are never touched (the store's no-cascade contract).
 //
 // Threat register:
 //   - T-16-06 (stored XSS in feed text) → every feed string renders as a
@@ -41,8 +56,13 @@ import { BusyButton } from "../../ui/BusyButton";
 // The ONE subscribe-and-persist policy (validate → fetch → dedupe → save).
 import { subscribeToFeed } from "../../discover/subscribe";
 import type { SubscribeOutcome } from "../../discover/subscribe";
+// Issue #123 — the ONE refresh-and-persist policy (fetch → merge → save,
+// calm failure otherwise) and the ONE deterministic timeline policy.
+import { refreshSubscription } from "../../discover/refresh";
+import { buildTimeline, filterTimeline } from "../../discover/timeline";
 // The feed-aware copy voice (calm DOC-06, one catalog, per-surface wording).
 import { mapFeedReasonToCopy } from "../../ingestion/ingestCopy";
+import type { IngestionFailureReason } from "../../ingestion/types";
 // The ONE list read + the ONE delete seam.
 import { listSubscriptions } from "../../persistence/subscriptionsStore";
 import type { SubscriptionRecord } from "../../content/schema";
@@ -58,6 +78,13 @@ function hostOf(feedUrl: string): string {
   } catch {
     return feedUrl;
   }
+}
+
+/** The last-successful-update stamp a row can honestly show: the last
+ * SUCCESSFUL fetch, falling back to the subscribe-time fetch (issue #123
+ * — a failed refresh never advances the stamp). */
+function lastGoodUpdateOf(subscription: SubscriptionRecord): string {
+  return subscription.lastFetchedAt ?? subscription.subscribedAt;
 }
 
 /** Apply one subscribe outcome to the form state (the applyOutcome shape —
@@ -84,23 +111,44 @@ export function DiscoverView({ hasAppHistory }: { hasAppHistory: boolean }) {
   const [loadStatus, setLoadStatus] = useState<LoadStatus>("loading");
   const [subscriptions, setSubscriptions] = useState<SubscriptionRecord[]>([]);
 
-  const reload = async () => {
+  /** Re-read the store and swap the list in; returns the loaded (sorted)
+   * list so the mount effect can hand the SAME rows to the opening
+   * refresh without a second read ("" on error). */
+  const reload = async (): Promise<SubscriptionRecord[]> => {
     const result = await listSubscriptions();
     if (result.ok) {
-      setSubscriptions(
-        [...result.subscriptions].sort((a, b) => b.subscribedAt.localeCompare(a.subscribedAt)),
+      const loaded = [...result.subscriptions].sort((a, b) =>
+        b.subscribedAt.localeCompare(a.subscribedAt),
       );
+      setSubscriptions(loaded);
       setLoadStatus("ready");
-    } else {
-      setLoadStatus("error");
+      return loaded;
     }
+    setLoadStatus("error");
+    return [];
   };
 
+  // The mount-only load + the refresh-on-OPENING moment (issue #123): the
+  // initial read IS the opening — when it lands with subscriptions, they
+  // refresh exactly once. A feed subscribed DURING this visit was fetched
+  // seconds ago, so a mid-visit list change never triggers a refresh; and
+  // no interval exists anywhere — opening and the reader's explicit
+  // Refresh/Retry are the only fetch moments.
   useEffect(() => {
-    void reload();
-    // The mount-only load; `reload` closes over stable setters only, and a
-    // re-run on every render would churn the list region (the LibraryView
-    // mount-only load-effect shape).
+    let cancelled = false;
+    void (async () => {
+      const loaded = await reload();
+      if (!cancelled && loaded.length > 0) {
+        void runRefresh({ announce: false, targets: loaded });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // Mount-only: `reload`/`runRefresh` close over stable setters + refs,
+    // and the loaded list rides in explicitly (a re-run on every render
+    // would churn the list region — the LibraryView load-effect shape).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Plan 14-03 Task 1 (the ReviewView twin): the h1 focus announces the
@@ -118,7 +166,8 @@ export function DiscoverView({ hasAppHistory }: { hasAppHistory: boolean }) {
   const [urlValue, setUrlValue] = useState("");
   const [submitting, setSubmitting] = useState(false);
   // The shared announcement region: submitting progress, refusals, saves,
-  // and removals. Never unmounts (a live region must pre-exist).
+  // removals, and refresh outcomes. Never unmounts (a live region must
+  // pre-exist).
   const [message, setMessage] = useState<string | null>(null);
 
   async function handleSubscribe(e: React.FormEvent<HTMLFormElement>) {
@@ -141,8 +190,113 @@ export function DiscoverView({ hasAppHistory }: { hasAppHistory: boolean }) {
     }
   }
 
+  // ── Refresh state (issue #123) ─────────────────────────────────────────
+  // Per-feed refresh failures — the STALE STATE. A feed absent from this
+  // map refreshed cleanly; a feed present in it keeps its cached previews
+  // and its last-successful-update stamp on screen with a Retry control.
+  const [refreshErrors, setRefreshErrors] = useState<Record<string, IngestionFailureReason>>({});
+  const [refreshing, setRefreshing] = useState(false);
+  // The overlap guard: state alone races across renders (two clicks in one
+  // tick), so the in-flight check is a ref — the BusyButton pattern's
+  // companion for non-form actions.
+  const refreshInFlightRef = useRef(false);
+
+  /** What one refresh run should fetch: every feed (the Refresh button) or
+   * an explicit list (the opening refresh and the per-feed Retry). */
+  interface RefreshRequest {
+    announce: boolean;
+    targets?: SubscriptionRecord[];
+  }
+
+  const runRefresh = async ({ announce, targets: targetsOverride }: RefreshRequest) => {
+    const targets = targetsOverride ?? subscriptions;
+    if (refreshInFlightRef.current || targets.length === 0) return;
+    refreshInFlightRef.current = true;
+    setRefreshing(true);
+    const firstTarget = targets[0];
+    if (announce) {
+      setMessage(
+        targets.length === 1 && firstTarget
+          ? `Refreshing ${firstTarget.title}…`
+          : "Refreshing feeds…",
+      );
+    }
+    try {
+      const outcomes = await Promise.all(
+        targets.map((subscription) => refreshSubscription(subscription)),
+      );
+      const refreshedById = new Map<string, SubscriptionRecord>();
+      const failures = new Map<string, IngestionFailureReason>();
+      outcomes.forEach((outcome, i) => {
+        const target = targets[i];
+        if (target === undefined) return;
+        if (outcome.outcome === "refreshed") {
+          refreshedById.set(target.id, outcome.subscription);
+        } else {
+          failures.set(target.id, outcome.reason);
+        }
+      });
+      // Refreshed rows swap in from the outcomes (already persisted by the
+      // policy); everything else — including rows this run didn't target —
+      // stays exactly as it was (the failed-refresh contract).
+      setSubscriptions((prev) => prev.map((s) => refreshedById.get(s.id) ?? s));
+      // The stale state is PER-FEED and scoped to this run's targets: a
+      // retried feed clears its notice on success and keeps it on failure;
+      // feeds outside the run are untouched.
+      setRefreshErrors((prev) => {
+        const next = { ...prev };
+        for (const target of targets) {
+          const failure = failures.get(target.id);
+          if (failure === undefined) delete next[target.id];
+          else next[target.id] = failure;
+        }
+        return next;
+      });
+      const failureCount = failures.size;
+      if (failureCount > 0) {
+        if (failureCount === targets.length) {
+          setMessage(
+            targets.length === 1 && firstTarget
+              ? `Couldn't refresh ${firstTarget.title}. Showing saved items.`
+              : "Couldn't refresh your feeds. Showing saved items.",
+          );
+        } else {
+          setMessage("Some feeds couldn't be refreshed. Showing saved items for those.");
+        }
+      } else if (announce) {
+        // A silent (on-open) success stays silent — the updated timeline IS
+        // the feedback; only a requested refresh announces. The copy names
+        // the scope: one retried feed, or the whole timeline.
+        setMessage(
+          targets.length === subscriptions.length || !firstTarget
+            ? "Feeds refreshed."
+            : `Refreshed ${firstTarget.title}.`,
+        );
+      }
+    } catch {
+      if (announce) setMessage("Couldn't refresh your feeds. Try again.");
+    } finally {
+      refreshInFlightRef.current = false;
+      setRefreshing(false);
+    }
+  };
+
+  // ── Single-feed filter state (issue #123) ──────────────────────────────
+  // "" selects every feed; otherwise the subscription id. Removing the
+  // filtered feed resets to the unfiltered timeline.
+  const [filterId, setFilterId] = useState("");
+
   // ── Removal state ──────────────────────────────────────────────────────
   const [removeTarget, setRemoveTarget] = useState<SubscriptionRecord | null>(null);
+
+  const visibleEntries = filterTimeline(
+    buildTimeline(subscriptions),
+    filterId === "" ? null : filterId,
+  );
+  const failedEntries = subscriptions.flatMap((subscription) => {
+    const reason = refreshErrors[subscription.id];
+    return reason === undefined ? [] : [{ subscription, reason }];
+  });
 
   return (
     <main id="main">
@@ -152,7 +306,8 @@ export function DiscoverView({ hasAppHistory }: { hasAppHistory: boolean }) {
         </h1>
       </header>
       {/* The ONE announcement region — submitting progress, refusal copy,
-          saves, removals. Collapsed via CSS when idle (:empty). */}
+          saves, removals, refresh outcomes. Collapsed via CSS when idle
+          (:empty). */}
       <StatusRegion>{message !== null && <p>{message}</p>}</StatusRegion>
       {/* The subscribe form — always visible, the surface's first action.
           Native label + url input (the AddDialog URL arm's anatomy). */}
@@ -196,82 +351,160 @@ export function DiscoverView({ hasAppHistory }: { hasAppHistory: boolean }) {
           <p>Subscribe to an RSS or Atom feed to see its latest articles here.</p>
         </StatusRegion>
       ) : loadStatus === "ready" ? (
-        /* (c) The subscription list — newest first; each row carries the
-               feed name, the normalized feed link, and the bounded recent
-               previews (title, date when supplied, excerpt, optional
-               image). */
-        <section className="library-section discover-section" aria-label="Your subscriptions">
-          <ul className="discover-list">
-            {subscriptions.map((subscription) => (
-              <li key={subscription.id} className="discover-row">
-                <article aria-labelledby={`discover-feed-title-${subscription.id}`}>
-                  <div className="discover-row-main">
-                    <h2 id={`discover-feed-title-${subscription.id}`}>{subscription.title}</h2>
-                    <p className="meta discover-feed-url">
-                      <a href={subscription.feedUrl} target="_blank" rel="noopener noreferrer">
-                        {hostOf(subscription.feedUrl)}
-                        <span className="visually-hidden"> (opens in a new tab)</span>
-                      </a>
-                    </p>
-                    {subscription.description && (
-                      <p className="discover-feed-description">{subscription.description}</p>
-                    )}
-                    {subscription.items.length > 0 ? (
-                      <ul className="discover-items">
-                        {subscription.items.map((item, index) => (
-                          <li key={index} className="discover-item">
-                            {item.image && (
-                              <img
-                                className="discover-item-image"
-                                src={item.image}
-                                alt=""
-                                loading="lazy"
-                                decoding="async"
-                                referrerPolicy="no-referrer"
-                              />
-                            )}
-                            <div className="discover-item-body">
-                              <h3 className="discover-item-title">
-                                {item.link ? (
-                                  <a href={item.link} target="_blank" rel="noopener noreferrer">
-                                    {item.title}
-                                    <span className="visually-hidden"> (opens in a new tab)</span>
-                                  </a>
-                                ) : (
-                                  item.title
-                                )}
-                              </h3>
-                              {item.datePublished && (
-                                <p className="meta discover-item-date">
-                                  {formatIsoDate(item.datePublished)}
-                                </p>
-                              )}
-                              {item.excerpt && (
-                                <p className="discover-item-excerpt">{item.excerpt}</p>
-                              )}
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="meta">No recent items in this feed.</p>
-                    )}
-                  </div>
-                  <div className="discover-row-actions">
-                    <button
-                      type="button"
-                      className="btn btn-quiet discover-remove-button"
-                      aria-label={`Remove ${subscription.title}`}
-                      onClick={() => setRemoveTarget(subscription)}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </article>
-              </li>
+        /* (c) The subscription surface — ONE newest-first timeline across
+               every feed (issue #123), then the per-feed management rows. */
+        <>
+          <section className="library-section discover-section" aria-labelledby="discover-timeline-heading">
+            <div className="discover-timeline-head">
+              <h2 id="discover-timeline-heading">Latest articles</h2>
+              {/* The feed controls: the single-feed filter (a native
+                  select — one Tab stop, keyboard-native) + the manual
+                  refresh. No polling loop exists anywhere behind them. */}
+              <div className="discover-toolbar">
+                <div className="discover-filter">
+                  <label htmlFor="discover-feed-filter">Filter by feed</label>
+                  <select
+                    id="discover-feed-filter"
+                    value={filterId}
+                    onChange={(e) => setFilterId(e.target.value)}
+                  >
+                    <option value="">All feeds</option>
+                    {subscriptions.map((subscription) => (
+                      <option key={subscription.id} value={subscription.id}>
+                        {subscription.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <BusyButton
+                  busy={refreshing}
+                  className="btn discover-refresh-button"
+                  disabled={subscriptions.length === 0}
+                  onClick={() => void runRefresh({ announce: true })}
+                >
+                  Refresh
+                </BusyButton>
+              </div>
+            </div>
+            {/* The stale state (issue #123): one calm notice per feed whose
+                last refresh failed — the reason copy from the ONE catalog,
+                the honest last-successful-update time, and Retry (which
+                re-fetches the failed feeds only). Cached previews stay
+                visible in the timeline beneath. */}
+            {failedEntries.map(({ subscription, reason }) => (
+              <div
+                key={subscription.id}
+                className="discover-refresh-notice"
+                data-feed-id={subscription.id}
+              >
+                <p>
+                  {mapFeedReasonToCopy(reason)} Showing saved items
+                  from {formatIsoDate(lastGoodUpdateOf(subscription))}.
+                </p>
+                <button
+                  type="button"
+                  className="btn btn-quiet"
+                  aria-label={`Retry ${subscription.title}`}
+                  disabled={refreshing}
+                  onClick={() =>
+                    void runRefresh({ announce: true, targets: [subscription] })
+                  }
+                >
+                  Retry
+                </button>
+              </div>
             ))}
-          </ul>
-        </section>
+            {visibleEntries.length > 0 ? (
+              <ul className="discover-timeline">
+                {visibleEntries.map((entry) => (
+                  <li
+                    key={`${entry.subscription.id}:${entry.index}`}
+                    className="discover-item"
+                  >
+                    {entry.item.image && (
+                      <img
+                        className="discover-item-image"
+                        src={entry.item.image}
+                        alt=""
+                        loading="lazy"
+                        decoding="async"
+                        referrerPolicy="no-referrer"
+                      />
+                    )}
+                    <div className="discover-item-body">
+                      <p className="meta discover-item-feed">{entry.subscription.title}</p>
+                      <h3 className="discover-item-title">
+                        {entry.item.link ? (
+                          <a
+                            href={entry.item.link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            {entry.item.title}
+                            <span className="visually-hidden"> (opens in a new tab)</span>
+                          </a>
+                        ) : (
+                          entry.item.title
+                        )}
+                      </h3>
+                      {entry.item.datePublished && (
+                        <p className="meta discover-item-date">
+                          {formatIsoDate(entry.item.datePublished)}
+                        </p>
+                      )}
+                      {entry.item.excerpt && (
+                        <p className="discover-item-excerpt">{entry.item.excerpt}</p>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="meta discover-timeline-empty">
+                {filterId === ""
+                  ? "No recent items in your feeds."
+                  : "No recent items from this feed."}
+              </p>
+            )}
+          </section>
+          <section className="library-section discover-section" aria-labelledby="discover-feeds-heading">
+            <h2 id="discover-feeds-heading">Your feeds</h2>
+            <ul className="discover-list">
+              {subscriptions.map((subscription) => (
+                <li key={subscription.id} className="discover-row">
+                  <article aria-labelledby={`discover-feed-title-${subscription.id}`}>
+                    <div className="discover-row-main">
+                      <h3 id={`discover-feed-title-${subscription.id}`}>{subscription.title}</h3>
+                      <p className="meta discover-feed-url">
+                        <a href={subscription.feedUrl} target="_blank" rel="noopener noreferrer">
+                          {hostOf(subscription.feedUrl)}
+                          <span className="visually-hidden"> (opens in a new tab)</span>
+                        </a>
+                      </p>
+                      {subscription.description && (
+                        <p className="discover-feed-description">{subscription.description}</p>
+                      )}
+                      {/* The last-successful-update stamp (issue #123). */}
+                      <p className="meta discover-feed-updated">
+                        Updated {formatIsoDate(lastGoodUpdateOf(subscription))}
+                      </p>
+                    </div>
+                    <div className="discover-row-actions">
+                      <button
+                        type="button"
+                        className="btn btn-quiet discover-remove-button"
+                        aria-label={`Remove ${subscription.title}`}
+                        onClick={() => setRemoveTarget(subscription)}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </article>
+                </li>
+              ))}
+            </ul>
+          </section>
+        </>
       ) : /* (d) Loading — spare chrome: the form is up; the list region
                stays silent until the read settles (the StatusRegion loading
                copy would double-announce against the header). */
@@ -281,8 +514,17 @@ export function DiscoverView({ hasAppHistory }: { hasAppHistory: boolean }) {
         subscriptionId={removeTarget?.id ?? ""}
         feedTitle={removeTarget?.title ?? ""}
         onConfirm={async () => {
+          const removedId = removeTarget?.id;
           setRemoveTarget(null);
           setMessage("Subscription removed.");
+          if (removedId !== undefined && filterId === removedId) setFilterId("");
+          // The failed feed's stale notice goes with its row.
+          setRefreshErrors((prev) => {
+            if (removedId === undefined) return prev;
+            const next = { ...prev };
+            delete next[removedId];
+            return next;
+          });
           await reload();
         }}
         onCancel={() => setRemoveTarget(null)}

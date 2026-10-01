@@ -715,9 +715,12 @@ export type ReadingSessionRecord = z.infer<typeof ReadingSessionRecordSchema>;
 // the MERGE key at import is the NORMALIZED feed URL, never the row id (the
 // reading-sessions merge precedent — recorded data, no reader-authored
 // conflict decision). The bounded recent-item previews are PART of the
-// record: they are the subscription's local cache (import keeps the local
-// cache and never re-fetches — the honesty constraint "no network during
-// import" is structural because nothing in the import path fetches).
+// record: they are the subscription's local cache. The cache is captured at
+// subscribe time and re-fetched ONLY by the Discover surface's explicit
+// refresh moments (issue #123: on opening Discover and on the reader's
+// Refresh/Retry request — never a background poll). IMPORT itself still
+// never fetches — the honesty constraint "no network during import" is
+// structural because nothing in the import path fetches.
 //
 // Bounds live HERE next to the schemas that enforce them (the schema is the
 // STATE-04 trust boundary shared by the server pipeline, the Dexie store,
@@ -754,7 +757,14 @@ export type FeedItemPreview = z.infer<typeof FeedItemPreviewSchema>;
  * cache. `feedUrl` is the NORMALIZED validated feed URL (lowercased
  * scheme/host, default port dropped, fragment dropped — the import merge
  * key); `subscribedAt` is the save-time stamp; `items` is the bounded cache
- * captured at subscribe time (never re-fetched on import). */
+ * captured at subscribe time and replaced only by an explicit refresh
+ * (issue #123). `lastFetchedAt` is the LAST SUCCESSFUL fetch stamp (set at
+ * subscribe — subscribe itself fetches — and advanced only when a refresh
+ * both returns and persists; a failed refresh never touches it, so the
+ * stale state can show the honest last-known-good time). Additive-optional
+ * (issue #123): pre-#123 rows and v1..v6 bundles parse unchanged (the
+ * readerTitle mechanism — a non-indexed additive field needs no Dexie
+ * version bump). */
 export const SubscriptionRecordSchema = z.object({
   schemaVersion: z.literal(1), // STATE-04 migration hook
   id: z.string(), // crypto.randomUUID() at save — the row identity
@@ -763,5 +773,6 @@ export const SubscriptionRecordSchema = z.object({
   description: z.string().max(MAX_FEED_TEXT_CHARS).optional(),
   items: z.array(FeedItemPreviewSchema).max(MAX_FEED_ITEMS),
   subscribedAt: z.string().datetime(), // ISO-8601
+  lastFetchedAt: z.string().datetime().optional(), // ISO-8601 — issue #123
 });
 export type SubscriptionRecord = z.infer<typeof SubscriptionRecordSchema>;
