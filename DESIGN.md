@@ -173,6 +173,13 @@ Mat Board-on-paper fill (surface inside dialogs), 1px hairline, 8px radius, 44px
 ### Highlight Marks (signature)
 The annotation system speaks in classification tints: a default brass-paper tint plus yellow/green/blue/pink shelf-label fills, each carrying theme ink at ≥4.5:1 (test-enforced). State is shape-cued beyond color: solid fill, dotted underline for note-bearing, dashed outline for unresolved. The spoken-word marker is a separate tan fill with a solid accent underline — position, not annotation.
 
+### Custom Themes (the reader-built room)
+The two custom slots (Custom light / Custom dark) let the reader repaint the room without losing the wayfinding grammar. The builder groups nine rows: the five surface seeds (Surface, Raised surface, Text, Accent, Hairline) and — under a "Reading room" group — the four chrome tokens (Band, Band text, Lit board, Brass). An untouched chrome row shows its DERIVED value; editing a row simply stores it ("Reset to base colors" returns everything to derived). The accent is the room's hue anchor: the band and lit board take the accent's hue at the register's enamel lightness, the brass is the accent-hue metal, and the band text stays the near-white signage register.
+
+**The Two Registers Rule.** Derivation follows the surface's light/dark disposition, never the slot's name: a light-disposition surface builds Daylight's register (dark enamel band, deep quiet metal), a dark one builds Night's (darker band, bright lit metal). The same accent on the two slots yields two different rooms — on purpose.
+
+**The Custom Contrast Contract.** The derived/stored chrome is held to the same audit as the presets, test-enforced: band text ≥ 4.5:1 on the band, on the lit board, and on the solid fill; secondary band text ≥ 4.5:1 on the band; brass ≥ 3:1 on both paper surfaces; lit brass ≥ 3:1 on the band. The live readout reports every policed pair; "Fix contrast" nudges only a failing pair's own stored token Derived board text and lit brass adapt to their grounds. Arbitrary paper colors can make simultaneous brass contrast impossible; the readout keeps reporting any remaining failure.
+
 ### Dialogs
 Raised paper card, 16px radius, 2px brass top rule, the one elevation token, deep-green scrim (`rgba(16,24,20,.55)`). Native `<dialog>` top-layer only.
 

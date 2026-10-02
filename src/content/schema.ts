@@ -434,10 +434,17 @@ export type Book = z.infer<typeof BookSchema>;
 // No recursion here — Pitfall 7 (the two-pass recursive Block pattern above)
 // does NOT apply.
 // Issue #120 — ONE record shape shared by both custom slots (the issue #86
-// customTheme record, unchanged): baseTheme names the preset the slot was
-// seeded from / resets to, and the FIVE reader-editable tokens. Kept
-// module-private (the #86 discipline — unexported until a real shape
-// consumer appears); the inferred types below are the public surface.
+// customTheme record): baseTheme names the preset the slot was seeded from /
+// resets to, and the reader-editable tokens. Kept module-private (the #86
+// discipline — unexported until a real shape consumer appears); the inferred
+// types below are the public surface.
+// Issue #146 — the surface extends ADDITIVELY with the four Wayfinder chrome
+// tokens (board / boardText / lit / brass — issue #86's five seeds plus the
+// Reading Room's enamel band, its lit current-location board, and its metal
+// rules). OPTIONAL fields: a pre-#146 record (five tokens, no chrome fields)
+// parses byte-unchanged — NO schemaVersion bump. An absent chrome token is
+// DERIVED at apply time (src/settings/customTheme.ts, derive-until-edited);
+// only an edited token is stored.
 const CustomThemeRecordSchema = z.object({
   baseTheme: z.enum(["sepia", "light", "dark"]),
   tokens: z.object({
@@ -446,6 +453,10 @@ const CustomThemeRecordSchema = z.object({
     ink: z.string().regex(/^#[0-9a-fA-F]{6}$/),
     accent: z.string().regex(/^#[0-9a-fA-F]{6}$/),
     hairline: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+    board: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+    boardText: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+    lit: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+    brass: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
   }),
 });
 

@@ -34,6 +34,12 @@ import { expandSettingsGroup } from "../settings";
 //           hydrates into Custom dark (dark-seeded) with the edited tokens
 //           byte-exact; the OTHER slot starts from its matching preset;
 //           there is no automatic system-theme switching anywhere.
+//   CT-09 — the #146 chrome: a non-green accent renders a matching band,
+//           lit board, and metal — never the preset enamel — in BOTH slots,
+//           each keeping its own light/dark register; the chrome pairs are
+//           policed by the readout + Fix contrast (CT-03's second half), and
+//           pre-#146 records (no chrome fields) derive their chrome on read
+//           with no migration.
 //
 // Harness reuse (REUSE-DO-NOT-FORK): BASE + wipeDatabase from
 // ../annotations/_fixtures; the axe serious-only gate from a11y.spec.
@@ -66,9 +72,31 @@ async function activateSlot(page: Page, name: "Custom light" | "Custom dark"): P
 /** Seed a pre-#120 reader-prefs row directly into Dexie (raw IndexedDB —
  * the seedHighlightRecord discipline in ../annotations/_fixtures.ts). The
  * record carries ONE deliberately uppercase edited token so the byte-exact
- * migration (storage-layer case preservation) is visible. */
+ * migration (storage-layer case preservation) is visible. The SETTINGS store
+ * may not exist yet on a cold boot (the app's Dexie upgrade races the test's
+ * own open — firefox observed), so wait for the store before seeding: never
+ * create the DB empty from the test side. */
 async function seedLegacyCustomRow(page: Page): Promise<void> {
   await page.evaluate(async () => {
+    const openDb = (): Promise<IDBDatabase> =>
+      new Promise<IDBDatabase>((resolve, reject) => {
+        const req = indexedDB.open("lem-reader");
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    const sleep = (ms: number): Promise<void> =>
+      new Promise<void>((resolve) => setTimeout(resolve, ms));
+    // Poll for the app-created store (the app's Dexie boot creates it).
+    let db = await openDb();
+    for (let i = 0; !db.objectStoreNames.contains("settings") && i < 100; i++) {
+      db.close();
+      await sleep(50);
+      db = await openDb();
+    }
+    if (!db.objectStoreNames.contains("settings")) {
+      db.close();
+      throw new Error("the settings store never appeared — the app did not boot its Dexie schema");
+    }
     const legacyRow = {
       key: "reader-prefs",
       value: {
@@ -94,11 +122,6 @@ async function seedLegacyCustomRow(page: Page): Promise<void> {
         librarySort: "recently-added",
       },
     };
-    const db = await new Promise<IDBDatabase>((resolve, reject) => {
-      const req = indexedDB.open("lem-reader");
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-    });
     const tx = db.transaction("settings", "readwrite");
     tx.objectStore("settings").put(legacyRow);
     await new Promise<void>((resolve, reject) => {
@@ -148,12 +171,15 @@ test.describe("Custom theme builder (#86/#120 — two custom slots, 5 tokens eac
     await expect(page.getByRole("radio", { name: "Custom light" })).toBeChecked();
 
     // The disclosure toggles from the keyboard (native <details> semantics).
+    // The direct-child selector targets the SURFACE row group (#146 added a
+    // second .custom-theme-rows inside the Reading room fieldset).
+    const surfaceRows = page.locator(".custom-theme-builder > .custom-theme-rows");
     const summary = page.locator("details.custom-theme-builder summary");
     await summary.focus();
     await page.keyboard.press("Enter");
-    await expect(page.locator(".custom-theme-rows")).toBeHidden();
+    await expect(surfaceRows).toBeHidden();
     await page.keyboard.press("Enter");
-    await expect(page.locator(".custom-theme-rows")).toBeVisible();
+    await expect(surfaceRows).toBeVisible();
     // Focus on the summary shows the global visible-focus ring.
     const ring = await summary.evaluate((el) => {
       const s = getComputedStyle(el);
@@ -163,8 +189,20 @@ test.describe("Custom theme builder (#86/#120 — two custom slots, 5 tokens eac
     expect(parseInt(ring.width, 10)).toBeGreaterThanOrEqual(2);
 
     // Every color picker + hex field is labeled AND focusable (exact match —
-    // "Surface color" must not also hit "Raised surface color").
-    for (const label of ["Surface", "Raised surface", "Text", "Accent", "Hairline"]) {
+    // "Surface color" must not also hit "Raised surface color", and since
+    // #146 "Text hex value" must not hit "Band text hex value").
+    for (const label of [
+      "Surface",
+      "Raised surface",
+      "Text",
+      "Accent",
+      "Hairline",
+      // Issue #146 — the Reading room chrome group.
+      "Band",
+      "Band text",
+      "Lit board",
+      "Brass",
+    ]) {
       const swatch = page.getByLabel(`${label} color`, { exact: true });
       const hex = page.getByLabel(`${label} hex value`, { exact: true });
       await expect(swatch).toBeVisible();
@@ -174,10 +212,13 @@ test.describe("Custom theme builder (#86/#120 — two custom slots, 5 tokens eac
       await hex.focus();
       await expect(hex).toBeFocused();
     }
+    // The chrome rows carry ONE accessible group name (#146 — the native
+    // fieldset legend).
+    await expect(page.locator("fieldset.custom-theme-group legend")).toHaveText("Reading room");
 
     // The hex fields commit from the keyboard too (the live-apply proof of
     // the fill lives in CT-02).
-    await page.getByLabel("Text hex value").fill("#123456");
+    await page.getByLabel("Text hex value", { exact: true }).fill("#123456");
   });
 
   // CT-02 — live apply: the inline palette IS the theme.
@@ -206,6 +247,27 @@ test.describe("Custom theme builder (#86/#120 — two custom slots, 5 tokens eac
     expect(inline.focusRing).toMatch(/^#[0-9a-f]{6}$/);
     // The computed paint follows the inline write (rgb(18, 52, 86) = #123456).
     expect(inline.bodyPaint).toBe("rgb(18, 52, 86)");
+
+    // Issue #146 — the chrome resolves inline too, and the BAND follows the
+    // accent: a crimson accent repaints the band (never the preset enamel).
+    const bandBefore = await page.evaluate(() =>
+      document.documentElement.style.getPropertyValue("--board"),
+    );
+    await page.getByLabel("Accent hex value", { exact: true }).fill("#a12345");
+    const chrome = await page.evaluate(() => ({
+      board: document.documentElement.style.getPropertyValue("--board"),
+      boardText: document.documentElement.style.getPropertyValue("--board-text"),
+      lit: document.documentElement.style.getPropertyValue("--lit"),
+      brass: document.documentElement.style.getPropertyValue("--brass"),
+      bandPaint: getComputedStyle(document.querySelector(".app-header") as Element).backgroundColor,
+    }));
+    for (const value of [chrome.board, chrome.boardText, chrome.lit, chrome.brass]) {
+      expect(value).toMatch(/^#[0-9a-f]{6}$/);
+    }
+    expect(chrome.board).not.toBe(bandBefore);
+    expect(chrome.board).not.toBe("#1d3128"); // not the Daylight literal
+    // The enamel band's computed paint follows (rgb(29, 49, 40) = #1d3128).
+    expect(chrome.bandPaint).not.toBe("rgb(29, 49, 40)");
   });
 
   // CT-03 — the guardrail: warn calmly, fix the offending pair only.
@@ -216,7 +278,7 @@ test.describe("Custom theme builder (#86/#120 — two custom slots, 5 tokens eac
     await activateSlot(page, "Custom light");
 
     // Break ONE pair: ink = the surface color.
-    await page.getByLabel("Text hex value").fill("#f7f7f5");
+    await page.getByLabel("Text hex value", { exact: true }).fill("#f7f7f5");
     await expect(page.locator(".custom-theme-builder .custom-theme-warning")).toBeVisible();
 
     await page.getByRole("button", { name: "Fix contrast" }).click();
@@ -252,6 +314,43 @@ test.describe("Custom theme builder (#86/#120 — two custom slots, 5 tokens eac
     expect(verdict.accent).toBe("#22604a"); // untouched
     expect(verdict.hairline).toBe("#d5d8d2"); // untouched
     expect(verdict.ink).not.toBe("#f7f7f5"); // the offender moved
+
+    // Issue #146 — the chrome pairs are policed the same way: a near-white
+    // band under the derived near-white band text warns, and the fix moves
+    // the BAND (its stored side) while nothing else is written.
+    await page.getByLabel("Band hex value", { exact: true }).fill("#f5f5f0");
+    await expect(page.locator(".custom-theme-builder .custom-theme-warning")).toBeVisible();
+    const boardBefore = await page.evaluate(() =>
+      document.documentElement.style.getPropertyValue("--board"),
+    );
+    await page.getByRole("button", { name: "Fix contrast" }).click();
+    await expect(page.locator(".custom-theme-builder .custom-theme-warning")).toBeHidden();
+    const chromeFix = await page.evaluate(() => {
+      const lin = (c: number): number => {
+        const s = c / 255;
+        return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+      };
+      const lum = (hex: string): number => {
+        const n = parseInt(hex.slice(1), 16);
+        return 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
+      };
+      const ratio = (a: string, b: string): number => {
+        const la = lum(a);
+        const lb = lum(b);
+        return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+      };
+      const style = document.documentElement.style;
+      return {
+        board: style.getPropertyValue("--board"),
+        boardText: style.getPropertyValue("--board-text"),
+        ink: style.getPropertyValue("--ink"),
+        pairRatio: ratio(style.getPropertyValue("--board-text"), style.getPropertyValue("--board")),
+      };
+    });
+    expect(chromeFix.pairRatio).toBeGreaterThanOrEqual(4.5); // the pair cleared
+    expect(chromeFix.board).not.toBe("#f5f5f0"); // the band moved
+    expect(chromeFix.board).not.toBe(boardBefore);
+    expect(chromeFix.boardText).toMatch(/^#[0-9a-f]{6}$/); // the band text stayed derived
   });
 
   // CT-04 — persistence: Dexie truth survives reload; the mirror hint makes
@@ -262,7 +361,7 @@ test.describe("Custom theme builder (#86/#120 — two custom slots, 5 tokens eac
   test("the custom theme survives a reload (CT-04)", async ({ page }) => {
     await openSettings(page);
     await activateSlot(page, "Custom light");
-    await page.getByLabel("Text hex value").fill("#123456");
+    await page.getByLabel("Text hex value", { exact: true }).fill("#123456");
     // Let the debounced save land before tearing the page down.
     await page.waitForTimeout(700);
 
@@ -284,7 +383,7 @@ test.describe("Custom theme builder (#86/#120 — two custom slots, 5 tokens eac
   }) => {
     await openSettings(page);
     await activateSlot(page, "Custom light");
-    await page.getByLabel("Text hex value").fill("#123456");
+    await page.getByLabel("Text hex value", { exact: true }).fill("#123456");
 
     // Builder-level: tokens restore, the slot STAYS custom.
     await page.getByRole("button", { name: "Reset to base colors" }).click();
@@ -298,7 +397,7 @@ test.describe("Custom theme builder (#86/#120 — two custom slots, 5 tokens eac
 
     // Panel-wide: BOTH records drop; a fresh activation re-seeds (the edited
     // value must NOT resume).
-    await page.getByLabel("Text hex value").fill("#123456");
+    await page.getByLabel("Text hex value", { exact: true }).fill("#123456");
     await page.getByRole("button", { name: "Reset to defaults" }).click();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
     await expect(page.locator("details.custom-theme-builder")).toHaveCount(0);
@@ -337,17 +436,19 @@ test.describe("Custom theme builder (#86/#120 — two custom slots, 5 tokens eac
 
     // Edit the LIGHT slot.
     await activateSlot(page, "Custom light");
-    await page.getByLabel("Text hex value").fill("#123456");
+    await page.getByLabel("Text hex value", { exact: true }).fill("#123456");
 
     // Switch to the DARK slot: it seeds from ITS matching preset (the light
     // edit does not bleed in), and editing it leaves the light record alone.
+    // (Night's Wayfinder seeds — #e6e9e4/#141a17; the pre-ADR-0005 values
+    // #ede6d9/#1b1814 left here by the redesign are repaired.)
     await activateSlot(page, "Custom dark");
     const darkSeed = await page.evaluate(() => ({
       ink: document.documentElement.style.getPropertyValue("--ink"),
       surface: document.documentElement.style.getPropertyValue("--surface"),
     }));
-    expect(darkSeed.ink).toBe("#ede6d9");
-    expect(darkSeed.surface).toBe("#1b1814");
+    expect(darkSeed.ink).toBe("#e6e9e4");
+    expect(darkSeed.surface).toBe("#141a17");
     await page.getByLabel("Surface hex value", { exact: true }).fill("#223344");
 
     // Back to the light slot: ITS edit resumes untouched.
@@ -379,7 +480,7 @@ test.describe("Custom theme builder (#86/#120 — two custom slots, 5 tokens eac
       ink: document.documentElement.style.getPropertyValue("--ink"),
       surface: document.documentElement.style.getPropertyValue("--surface"),
     }));
-    expect(darkResumed.ink).toBe("#ede6d9");
+    expect(darkResumed.ink).toBe("#e6e9e4");
     expect(darkResumed.surface).toBe("#223344");
   });
 
@@ -418,7 +519,7 @@ test.describe("Custom theme builder (#86/#120 — two custom slots, 5 tokens eac
     await expandSettingsGroup(page, "Appearance");
     await expect(page.locator("dialog.settings-panel")).toBeVisible();
     await expect(page.getByRole("radio", { name: "Custom dark" })).toBeChecked();
-    await expect(page.getByLabel("Text hex value")).toHaveValue("#EDE6D9");
+    await expect(page.getByLabel("Text hex value", { exact: true })).toHaveValue("#EDE6D9");
 
     await activateSlot(page, "Custom light");
     const lightSlot = await page.evaluate(() => ({
@@ -434,5 +535,53 @@ test.describe("Custom theme builder (#86/#120 — two custom slots, 5 tokens eac
       document.documentElement.style.getPropertyValue("--ink"),
     );
     expect(darkResumed).toBe("#ede6d9");
+  });
+
+  // CT-09 — the #146 headline: a custom theme with a NON-GREEN accent
+  // renders a matching band and lit board — not the preset enamel — in BOTH
+  // slots, and each slot keeps its own register (the light slot builds the
+  // Daylight register, the dark slot Night's). The migrated pre-#120 record
+  // of CT-08 (no chrome fields) proves the no-migration path: its chrome
+  // derives on read.
+  test("a non-green accent renders a matching band in BOTH slots, register-aware (CT-09)", async ({
+    page,
+  }) => {
+    test.setTimeout(60_000);
+    await openSettings(page);
+
+    // Custom light: crimson accent → the band/lit board/metal follow.
+    await activateSlot(page, "Custom light");
+    await page.getByLabel("Accent hex value", { exact: true }).fill("#a12345");
+    const lightRoom = await page.evaluate(() => ({
+      board: document.documentElement.style.getPropertyValue("--board"),
+      lit: document.documentElement.style.getPropertyValue("--lit"),
+      brass: document.documentElement.style.getPropertyValue("--brass"),
+    }));
+    expect(lightRoom.board).toMatch(/^#[0-9a-f]{6}$/);
+    expect(lightRoom.board).not.toBe("#1d3128"); // not the preset enamel
+    expect(lightRoom.lit).not.toBe("#2c4a3b"); // not the preset lit board
+    expect(lightRoom.brass).not.toBe("#8a6a24"); // the accent-hue metal
+
+    // Custom dark: the SAME accent, Night's register — a darker band and a
+    // brighter metal than the light slot's (never the light register).
+    await activateSlot(page, "Custom dark");
+    await page.getByLabel("Accent hex value", { exact: true }).fill("#a12345");
+    const darkRoom = await page.evaluate(() => ({
+      board: document.documentElement.style.getPropertyValue("--board"),
+      lit: document.documentElement.style.getPropertyValue("--lit"),
+      brass: document.documentElement.style.getPropertyValue("--brass"),
+    }));
+    expect(darkRoom.board).not.toBe("#1d3128");
+    expect(darkRoom.brass).not.toBe("#8a6a24");
+    // Register split: same accent, different rooms.
+    expect(darkRoom.board).not.toBe(lightRoom.board);
+    expect(darkRoom.brass).not.toBe(lightRoom.brass);
+
+    // Back to the light slot: ITS room resumes untouched.
+    await activateSlot(page, "Custom light");
+    const lightResumed = await page.evaluate(() =>
+      document.documentElement.style.getPropertyValue("--board"),
+    );
+    expect(lightResumed).toBe(lightRoom.board);
   });
 });
