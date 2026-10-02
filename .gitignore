@@ -51,3 +51,8 @@ corpus/epub/*
 # committed (debug session vercel-ingest-500: per-file @vercel/node
 # transpile cannot resolve extensionless relative ESM imports)
 /api/
+
+# Impeccable session evidence + throwaway capture helpers (ADR 0005 round).
+# The durable artifacts — design.json, surfaces/ briefs — ARE committed.
+.impeccable/review/
+.impeccable/capture*.mjs

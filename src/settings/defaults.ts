@@ -22,7 +22,8 @@ export const DEFAULT_SETTINGS: ReaderSettings = {
   size: 18, // D-07 default body size
   measure: 64, // D-07 calm measure
   spacing: "comfortable", // D-07 line-height 1.6
-  theme: "sepia", // D-07 warm-paper == D2-09 default theme
+  theme: "light", // ADR 0005 — Daylight is the default; "sepia" remains the
+  // stored value for the Warm paper theme, so persisted settings survive
   animatePageTurns: false,
   readingMode: "paginated", // D4-12 — paginated default per PROJECT.md
   voice: undefined, // read-aloud: the platform default voice

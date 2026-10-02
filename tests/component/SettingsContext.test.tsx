@@ -100,7 +100,7 @@ describe("SettingsContext (D2-03 live-apply)", () => {
     );
     const tokens = readTokens();
     expect(tokens.theme).toBe(DEFAULT_SETTINGS.theme);
-    expect(tokens.fontBody).toContain("Iowan Old Style"); // serif stack
+    expect(tokens.fontBody).toContain("Literata"); // serif stack
     expect(tokens.fontSizeToken).toBe(`${DEFAULT_SETTINGS.size}px`);
     expect(tokens.measure).toBe(`${DEFAULT_SETTINGS.measure}ch`);
     expect(latest?.storageState).toBe("ok");
@@ -112,13 +112,13 @@ describe("SettingsContext (D2-03 live-apply)", () => {
         <Probe />
       </SettingsProvider>,
     );
-    expect(readTokens().fontBody).toContain("Iowan Old Style");
+    expect(readTokens().fontBody).toContain("Literata");
 
     act(() => latest?.update({ font: "sans" }));
 
     expect(latest?.settings.font).toBe("sans");
     expect(readTokens().fontBody).toContain("system-ui");
-    expect(readTokens().fontBody).not.toContain("Iowan Old Style");
+    expect(readTokens().fontBody).not.toContain("Literata");
   });
 
   it("update({theme:'dark'}) writes data-theme='dark' on <html>", () => {
@@ -127,7 +127,7 @@ describe("SettingsContext (D2-03 live-apply)", () => {
         <Probe />
       </SettingsProvider>,
     );
-    expect(readTokens().theme).toBe("sepia");
+    expect(readTokens().theme).toBe("light");
 
     act(() => latest?.update({ theme: "dark" }));
 
@@ -166,10 +166,10 @@ describe("SettingsContext (D2-03 live-apply)", () => {
     act(() => latest?.reset());
     expect(latest?.settings).toEqual(DEFAULT_SETTINGS);
     const tokens = readTokens();
-    expect(tokens.theme).toBe("sepia");
+    expect(tokens.theme).toBe("light");
     expect(tokens.fontSizeToken).toBe("18px");
     expect(tokens.measure).toBe("64ch");
-    expect(tokens.fontBody).toContain("Iowan Old Style");
+    expect(tokens.fontBody).toContain("Literata");
   });
 
   it("update merges a patch (does NOT replace the whole record)", () => {
@@ -267,7 +267,7 @@ describe("SettingsContext (02-02 persistence + STATE-05)", () => {
     // speaks (the stored record keeps its case; resolveCustomTheme is the
     // one caseless boundary).
     expect(root.style.getPropertyValue("--ink")).toBe("#ede6d9");
-    expect(root.style.getPropertyValue("--surface")).toBe("#1b1814");
+    expect(root.style.getPropertyValue("--surface")).toBe("#141a17");
     // The derived half of the palette resolved too.
     expect(root.style.getPropertyValue("--highlight")).toMatch(/^#[0-9a-f]{6}$/);
   });

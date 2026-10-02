@@ -671,21 +671,21 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                 <input
                   type="radio"
                   name="theme"
-                  value="sepia"
-                  checked={settings.theme === "sepia"}
-                  onChange={() => onTheme("sepia")}
+                  value="light"
+                  checked={settings.theme === "light"}
+                  onChange={() => onTheme("light")}
                 />
-                <span>Sepia</span>
+                <span>Daylight</span>
               </label>
               <label className="settings-row">
                 <input
                   type="radio"
                   name="theme"
-                  value="light"
-                  checked={settings.theme === "light"}
-                  onChange={() => onTheme("light")}
+                  value="sepia"
+                  checked={settings.theme === "sepia"}
+                  onChange={() => onTheme("sepia")}
                 />
-                <span>Light</span>
+                <span>Warm paper</span>
               </label>
               <label className="settings-row">
                 <input
@@ -695,7 +695,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                   checked={settings.theme === "dark"}
                   onChange={() => onTheme("dark")}
                 />
-                <span>Dark</span>
+                <span>Night</span>
               </label>
               {/* Issues #86/#120 — the two custom slots: independently
                 saved, manually selected (NO automatic system-theme

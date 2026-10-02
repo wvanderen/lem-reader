@@ -2,18 +2,19 @@
 // Token maps for the four typography knobs (font family, size step, measure
 // step, spacing preset). These are the closed sets that ReaderSettingsSchema
 // enumerates — single source of truth for applyTheme + the SettingsPanel
-// controls. The `serif` string MUST byte-match `--font-body` in app.css
-// (lines 29–30) so the live-apply preview and the CSS default render
-// identically on first paint.
+// controls. The `serif` string MUST byte-match `--font-body` in app.css so
+// the live-apply preview and the CSS default render identically on first
+// paint.
 //
-// All stacks are SYSTEM-ONLY (no web fonts in Phase 2). D2-06 Option A: the
-// dyslexia-friendly stack is a wide system-stack approximation (Verdana/
-// Tahoma/Segoe UI/Geneva/sans-serif), font-load-safe — no `document.fonts.ready`
-// gate required this phase.
+// ADR 0005: the reading voice is the self-hosted Literata (public/fonts/,
+// OFL) with system serifs as fallbacks — font-display: swap keeps first
+// paint on the fallback and the pagination engine awaits
+// document.fonts.ready, so settling stays inside the existing contract.
+// `sans` and `dyslexic` remain system-only and font-load-safe.
 
 export const FONT_STACKS = {
   serif:
-    "'Iowan Old Style', 'Source Serif Pro', 'Source Serif 4', Georgia, Charter, 'Times New Roman', serif",
+    '"Literata", "Source Serif 4", Georgia, Charter, "Times New Roman", serif',
   sans: "system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
   dyslexic: "Verdana, Tahoma, 'Segoe UI', Geneva, sans-serif", // D2-06 Option A — font-load-safe
 } as const;

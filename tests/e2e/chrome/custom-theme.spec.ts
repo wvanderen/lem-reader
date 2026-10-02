@@ -127,10 +127,11 @@ test.describe("Custom theme builder (#86/#120 — two custom slots, 5 tokens eac
     await openSettings(page);
 
     // The radios are reachable: focus the group's first radio and walk down
-    // with arrow keys (Sepia → Light → Dark → Custom light → Custom dark).
-    const sepia = page.getByRole("radio", { name: "Sepia" });
-    await sepia.focus();
-    await expect(sepia).toBeFocused();
+    // with arrow keys (Daylight → Warm paper → Night → Custom light → Custom
+    // dark).
+    const daylight = page.getByRole("radio", { name: "Daylight" });
+    await daylight.focus();
+    await expect(daylight).toBeFocused();
     await page.keyboard.press("ArrowDown");
     await page.keyboard.press("ArrowDown");
     await page.keyboard.press("ArrowDown");
@@ -199,7 +200,7 @@ test.describe("Custom theme builder (#86/#120 — two custom slots, 5 tokens eac
     }));
     expect(inline.theme).toBe("custom-light");
     expect(inline.surface).toBe("#123456");
-    expect(inline.ink).toBe("#1a1a1a"); // the untouched light-seed token rides
+    expect(inline.ink).toBe("#1c1f1d"); // the untouched light-seed token rides
     // The derived palette resolved (hex literals on <html>).
     expect(inline.highlight).toMatch(/^#[0-9a-f]{6}$/);
     expect(inline.focusRing).toMatch(/^#[0-9a-f]{6}$/);
@@ -215,7 +216,7 @@ test.describe("Custom theme builder (#86/#120 — two custom slots, 5 tokens eac
     await activateSlot(page, "Custom light");
 
     // Break ONE pair: ink = the surface color.
-    await page.getByLabel("Text hex value").fill("#fcfcfa");
+    await page.getByLabel("Text hex value").fill("#f7f7f5");
     await expect(page.locator(".custom-theme-builder .custom-theme-warning")).toBeVisible();
 
     await page.getByRole("button", { name: "Fix contrast" }).click();
@@ -247,10 +248,10 @@ test.describe("Custom theme builder (#86/#120 — two custom slots, 5 tokens eac
       };
     });
     expect(verdict.pairRatio).toBeGreaterThanOrEqual(4.5);
-    expect(verdict.surface).toBe("#fcfcfa"); // untouched
-    expect(verdict.accent).toBe("#6b4423"); // untouched
-    expect(verdict.hairline).toBe("#ddd9d0"); // untouched
-    expect(verdict.ink).not.toBe("#fcfcfa"); // the offender moved
+    expect(verdict.surface).toBe("#f7f7f5"); // untouched
+    expect(verdict.accent).toBe("#22604a"); // untouched
+    expect(verdict.hairline).toBe("#d5d8d2"); // untouched
+    expect(verdict.ink).not.toBe("#f7f7f5"); // the offender moved
   });
 
   // CT-04 — persistence: Dexie truth survives reload; the mirror hint makes
@@ -274,7 +275,7 @@ test.describe("Custom theme builder (#86/#120 — two custom slots, 5 tokens eac
       surface: document.documentElement.style.getPropertyValue("--surface"),
     }));
     expect(inline.ink).toBe("#123456");
-    expect(inline.surface).toBe("#fcfcfa");
+    expect(inline.surface).toBe("#f7f7f5");
   });
 
   // CT-05 — the two resets: builder-level restore vs panel-wide drop.
@@ -292,14 +293,14 @@ test.describe("Custom theme builder (#86/#120 — two custom slots, 5 tokens eac
       ink: document.documentElement.style.getPropertyValue("--ink"),
       surface: document.documentElement.style.getPropertyValue("--surface"),
     }));
-    expect(restored.ink).toBe("#1a1a1a");
-    expect(restored.surface).toBe("#fcfcfa");
+    expect(restored.ink).toBe("#1c1f1d");
+    expect(restored.surface).toBe("#f7f7f5");
 
     // Panel-wide: BOTH records drop; a fresh activation re-seeds (the edited
     // value must NOT resume).
     await page.getByLabel("Text hex value").fill("#123456");
     await page.getByRole("button", { name: "Reset to defaults" }).click();
-    await expect(page.locator("html")).toHaveAttribute("data-theme", "sepia");
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
     await expect(page.locator("details.custom-theme-builder")).toHaveCount(0);
 
     await page.getByRole("radio", { name: "Custom light" }).click();
@@ -307,7 +308,7 @@ test.describe("Custom theme builder (#86/#120 — two custom slots, 5 tokens eac
     const reseeded = await page.evaluate(() =>
       document.documentElement.style.getPropertyValue("--ink"),
     );
-    expect(reseeded).toBe("#1a1a1a");
+    expect(reseeded).toBe("#1c1f1d");
   });
 
   // CT-06 — axe on the open dialog with the builder live (the a11y.spec
@@ -356,7 +357,7 @@ test.describe("Custom theme builder (#86/#120 — two custom slots, 5 tokens eac
       surface: document.documentElement.style.getPropertyValue("--surface"),
     }));
     expect(lightResumed.ink).toBe("#123456");
-    expect(lightResumed.surface).toBe("#fcfcfa");
+    expect(lightResumed.surface).toBe("#f7f7f5");
 
     // Reload: the ACTIVE slot's appearance restores exactly — and the other
     // slot's record is still its own (reopen + spot-check).
@@ -368,7 +369,7 @@ test.describe("Custom theme builder (#86/#120 — two custom slots, 5 tokens eac
       surface: document.documentElement.style.getPropertyValue("--surface"),
     }));
     expect(reloaded.ink).toBe("#123456");
-    expect(reloaded.surface).toBe("#fcfcfa");
+    expect(reloaded.surface).toBe("#f7f7f5");
 
     await page.getByRole("button", { name: "Reading settings" }).click();
     await expandSettingsGroup(page, "Appearance");
@@ -424,8 +425,8 @@ test.describe("Custom theme builder (#86/#120 — two custom slots, 5 tokens eac
       surface: document.documentElement.style.getPropertyValue("--surface"),
       ink: document.documentElement.style.getPropertyValue("--ink"),
     }));
-    expect(lightSlot.surface).toBe("#fcfcfa"); // the light preset seed
-    expect(lightSlot.ink).toBe("#1a1a1a");
+    expect(lightSlot.surface).toBe("#f7f7f5"); // the light preset seed
+    expect(lightSlot.ink).toBe("#1c1f1d");
 
     // Back to the dark slot: the migrated record resumes (not a re-seed).
     await activateSlot(page, "Custom dark");
