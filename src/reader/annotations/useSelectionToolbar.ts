@@ -95,7 +95,7 @@ export function useSelectionToolbar({
     rect: DOMRect;
     capture: ToolbarCaptureResult;
   } | null>(null);
-  const savingRef = useRef(false);
+  const pendingSavesRef = useRef(0);
   const generationRef = useRef(0);
   const lastValidRangeRef = useRef<Range | null>(null);
   // Event-time mirrors for the window keydown listener (registered once per
@@ -143,7 +143,7 @@ export function useSelectionToolbar({
     async (withNote: boolean): Promise<void> => {
       const api = highlightApiRef.current;
       const readingRoot = readingRootRef.current;
-      if (!api || !readingRoot || savingRef.current) return;
+      if (!api || !readingRoot || pendingSavesRef.current > 0) return;
       if (saved) {
         if (withNote) api.setOpenPopoverFor(saved.id);
         setSaved(null);
@@ -201,6 +201,7 @@ export function useSelectionToolbar({
   // Tab-past dismissal mechanism in Chromium, where the live selection
   // survives the focus move so selectionchange never fires a collapse.
   const dismissFromFocusExit = useCallback(() => {
+    generationRef.current += 1;
     clearToolbarState();
     setSaved(null);
   }, [clearToolbarState]);
@@ -208,15 +209,37 @@ export function useSelectionToolbar({
   const savedRef = useRef(saved);
   savedRef.current = saved;
 
+  const handleUndo = useCallback(() => {
+    const current = savedRef.current;
+    if (!current) return;
+    void highlightApiRef.current?.deleteHighlight(current.id);
+    dismissFromFocusExit();
+  }, [highlightApiRef, dismissFromFocusExit]);
+
   useEffect(() => {
     if (!article || !articleEl) return;
     const onKey = (event: KeyboardEvent) => {
       if (isFormField(event.target)) return;
       const key = event.key;
-      if (key === "Escape" && savedRef.current) {
-        void highlightApiRef.current?.deleteHighlight(savedRef.current.id);
+      // Keyboard selection shaping must invalidate pending pointer feedback.
+      if (
+        event.shiftKey &&
+        [
+          "ArrowLeft",
+          "ArrowRight",
+          "ArrowUp",
+          "ArrowDown",
+          "Home",
+          "End",
+          "PageUp",
+          "PageDown",
+        ].includes(key)
+      ) {
+        generationRef.current += 1;
         setSaved(null);
-        clearToolbarState();
+      }
+      if (key === "Escape" && savedRef.current) {
+        handleUndo();
         return;
       }
       // Enter/Space on a focused <mark> (D5-10 / UI-SPEC §Interaction 29)
@@ -308,6 +331,7 @@ export function useSelectionToolbar({
     readingRootRef,
     highlightApiRef,
     dismissFromFocusExit,
+    handleUndo,
     clearToolbarState,
   ]);
 
@@ -322,7 +346,7 @@ export function useSelectionToolbar({
       }
     };
     const onPointerUp = async (event: PointerEvent) => {
-      if (event.button !== 0 || savingRef.current) return;
+      if (event.button !== 0) return;
       const root = readingRootRef.current;
       const api = highlightApiRef.current;
       const selection = window.getSelection();
@@ -340,30 +364,37 @@ export function useSelectionToolbar({
       if (!root.contains(range.startContainer) || !root.contains(range.endContainer)) return;
       const capture = api.captureCurrentSelection(root);
       if (!capture.ok) return;
+      // Copy boundaries before awaiting: DOM Range objects remain live.
+      const { startContainer, startOffset, endContainer, endOffset } = range;
       const rect = range.getBoundingClientRect();
       const generation = generationRef.current;
-      savingRef.current = true;
+      pendingSavesRef.current += 1;
       try {
         const result = await api.createHighlightFromSelection(root);
         if (!result.ok || generation !== generationRef.current) return;
         // Do not clear a newer selection made while persistence was pending.
         const current = window.getSelection();
-        if (
-          current?.rangeCount &&
-          current.getRangeAt(0).startContainer === range.startContainer &&
-          current.getRangeAt(0).startOffset === range.startOffset &&
-          current.getRangeAt(0).endContainer === range.endContainer &&
-          current.getRangeAt(0).endOffset === range.endOffset
-        ) {
+        if (current?.rangeCount && !current.isCollapsed) {
+          const currentRange = current.getRangeAt(0);
+          if (
+            currentRange.startContainer !== startContainer ||
+            currentRange.startOffset !== startOffset ||
+            currentRange.endContainer !== endContainer ||
+            currentRange.endOffset !== endOffset
+          )
+            return;
           current.removeAllRanges();
         }
         clearToolbarState();
         setSaved({ id: result.highlightId, rect, capture });
       } finally {
-        savingRef.current = false;
+        pendingSavesRef.current -= 1;
       }
     };
-    const dismissSaved = () => setSaved(null);
+    const dismissSaved = () => {
+      generationRef.current += 1;
+      setSaved(null);
+    };
     window.addEventListener("resize", dismissSaved);
     document.addEventListener("scroll", dismissSaved, true);
     document.addEventListener("pointerdown", onPointerDown);
@@ -376,13 +407,6 @@ export function useSelectionToolbar({
       document.removeEventListener("pointerup", onPointerUp);
     };
   }, [article, articleEl, readingRootRef, highlightApiRef, clearToolbarState]);
-
-  const handleUndo = useCallback(() => {
-    if (!saved) return;
-    void highlightApiRef.current?.deleteHighlight(saved.id);
-    setSaved(null);
-    clearToolbarState();
-  }, [saved, highlightApiRef, clearToolbarState]);
 
   // UI-SPEC §Interaction 24: selectionchange tracking for the toolbar.
   // rAF-throttled (coalesce — one update per frame) so rapid selection
