@@ -1,10 +1,11 @@
 // src/settings/customTheme.ts
 // The custom-theme color domain (issue #86, decision #73; issue #120): TWO
 // independently saved custom slots — Custom light and Custom dark — each
-// carrying 5 reader-editable tokens and TEN derived tokens that are never
-// stored or edited (issue #118 added the four named highlight fills). All
-// math is pure and deterministic — the same token set always resolves to the
-// same 15-color palette, in tests and in the browser.
+// carrying the reader-editable tokens and the DERIVED tokens that are never
+// stored unless edited (issue #118 added the four named highlight fills;
+// issue #146 added the Wayfinder chrome). All math is pure and deterministic
+// — the same token set always resolves to the same palette, in tests and in
+// the browser.
 //
 // Slots (issue #120): each slot's matching PRESET names its disposition —
 // Custom light seeds/resets from the light preset, Custom dark from the
@@ -44,6 +45,34 @@
 //                      named vocabulary.
 //   --destructive      FIXED per the chosen surface's light/dark disposition
 //                      (#9b2c2c light / #e07a7a dark — the preset literals).
+//
+// Issue #146 — the Wayfinder chrome (ADR 0005's enamel vocabulary). Four
+// chrome tokens are EDITABLE (stored only once the reader touches them —
+// derive-until-edited, so pre-#146 records parse and render with no
+// migration); four stay derived-only:
+//   --board / --lit    the enamel classification band and the lit
+//                      current-location board — the ACCENT's hue at the
+//                      register's board lightness (dark enamel on a light
+//                      slot; Night's darker wall register on a dark slot —
+//                      a dark-disposition slot never reuses the light
+//                      register). The band is walked clear of the band text
+//                      (≥ 4.5:1) when a register default lands short.
+//   --board-text       the signage white — near-white at the board's hue
+//                      family; also --lit-text (the presets pair them).
+//                      Stored boardText re-pins the whole text side.
+//   --brass            the ACCENT-hue metal — accent's hue at the register's
+//                      metal lightness, walked to ≥ 3:1 non-text on the
+//                      paper. (The presets keep a fixed gold; custom rooms
+//                      match the reader's accent per issue #146.)
+//   --brass-bright     the lit metal — brass's hue/chroma at the register's
+//                      lit lightness, walked to ≥ 3:1 on the band.
+//   --board-soft       secondary board labels — the band family, dimmed.
+//   --accent-strong    the solid fill — the accent itself when it already
+//                      clears 4.5:1 behind the band text (every light-
+//                      register preset: accent-strong IS accent); on a dark
+//                      slot the accent is pinned to the register's fill
+//                      lightness and walked clear of the band text, so the
+//                      Night-style fill stays dark enough for its white.
 //
 // OKLCH stays internal (decision #73: "the reader never sees the term"):
 // every resolved value is an sRGB hex string, so the contrast readout, the
@@ -97,7 +126,10 @@ export function slotThemePatch(
  * (issue #120 — theme "custom-light"/"custom-dark"). The
  * inline writes ARE the theme ([data-theme="custom-*"] overrides no tokens
  * in CSS); the SAME list is removed when leaving custom so the preset
- * [data-theme] blocks own the palette again. */
+ * [data-theme] blocks own the palette again. Issue #146 appends the
+ * Wayfinder chrome (ADR 0005's band / lit board / brass vocabulary) — while
+ * a custom slot is active the chrome is resolved + written inline too, never
+ * left to fall through to the default theme's literals. */
 export const CUSTOM_COLOR_PROPS = [
   "--surface",
   "--surface-raised",
@@ -114,12 +146,34 @@ export const CUSTOM_COLOR_PROPS = [
   "--highlight-blue",
   "--highlight-pink",
   "--spoken-highlight",
+  // Issue #146 — the Wayfinder chrome (app.css declaration order).
+  "--accent-strong",
+  "--board",
+  "--board-text",
+  "--board-soft",
+  "--lit",
+  "--lit-text",
+  "--brass",
+  "--brass-bright",
 ] as const;
 
 export type CustomColorProp = (typeof CUSTOM_COLOR_PROPS)[number];
 
-/** The resolved 15-token palette — CSS property name → sRGB hex. */
+/** The resolved 23-token palette — CSS property name → sRGB hex. */
 export type ResolvedCustomTheme = Record<CustomColorProp, string>;
+
+/** Issue #146 — the four EDITABLE chrome tokens (the stored-record field
+ * names; the other four chrome tokens stay derived-only). */
+export type ChromeTokenKey = "board" | "boardText" | "lit" | "brass";
+
+/** The one chrome-key → CSS-property map (the builder rows and the fix
+ * pairs both read it — a third encoding would be a drift bug). */
+export const CHROME_TOKEN_PROPS: Record<ChromeTokenKey, CustomColorProp> = {
+  board: "--board",
+  boardText: "--board-text",
+  lit: "--lit",
+  brass: "--brass",
+};
 
 /** The 5-token seeds, byte-matching the [data-theme] blocks in src/app.css.
  * Drift is pinned by tests/unit/settings/customTheme.test.ts (the
@@ -301,6 +355,37 @@ const SEARCH_STEPS = 40;
 /** The fixed destructive reds (the preset literals, decision #73). */
 const DESTRUCTIVE_LIGHT = "#9b2c2c";
 const DESTRUCTIVE_DARK = "#e07a7a";
+/**
+ * Issue #146 — the Wayfinder chrome registers (ADR 0005). Every constant is
+ * register-keyed: a slot whose SURFACE is light builds the Daylight register
+ * (dark enamel band, quiet deep metal), a dark surface builds Night's
+ * (darker band, bright lit metal) — a dark-disposition slot never reuses the
+ * light register. The values sit ON the preset chrome (see the OKLCH table in
+ * tests/unit/settings/customTheme.test.ts): deriving from a preset's own
+ * seeds lands within a whisker of that preset's literal band/lit/brass.
+ */
+/** Board + lit lightness/chroma — the enamel band and its lit step. */
+const BOARD_L = { light: 0.29, dark: 0.19 } as const;
+const BOARD_C_CAP = 0.032;
+const LIT_L_DELTA = { light: 0.09, dark: 0.13 } as const;
+const LIT_C_CAP = 0.05;
+/** Signage white (also --lit-text): near-white at the band's hue family. */
+const BOARD_TEXT_L = { light: 0.965, dark: 0.954 } as const;
+const BOARD_TEXT_C = 0.005;
+/** Secondary board labels — the band family, dimmed. */
+const BOARD_SOFT_L = { light: 0.82, dark: 0.74 } as const;
+const BOARD_SOFT_C = 0.022;
+/** The metal: accent-hue brass at the register's quiet/lit lightness. */
+const BRASS_L = { light: 0.52, dark: 0.73 } as const;
+const BRASS_C_CAP = 0.1;
+const BRASS_BRIGHT_L = { light: 0.72, dark: 0.785 } as const;
+/** Dark-register solid fill pin (Night's accent-strong register). */
+const ACCENT_STRONG_L = 0.36;
+const ACCENT_STRONG_C = 0.055;
+/** Derivation/fix walk targets: a hair over the audited contract (4.5:1
+ * text, 3:1 non-text) so engine rounding cannot re-land a derived pair
+ * under it (the FIX_TARGET_RATIO discipline). */
+const CHROME_NON_TEXT_TARGET = 3.3;
 
 function clampL(L: number): number {
   return Math.min(1, Math.max(0, L));
@@ -431,7 +516,9 @@ function markerLightnessPair(
 /** The canonical lowercase view of the stored tokens. The schema preserves
  * case on read (hydration never coerces) and the UI commits lowercase —
  * this ONE boundary makes derivation and fixing caseless, so no call site
- * re-lowercases token by token. */
+ * re-lowercases token by token. The issue #146 chrome fields are spread only
+ * when PRESENT: an absent field stays absent (the derive-until-edited
+ * marker), never an undefined-valued key. */
 function canonicalTokens(tokens: CustomThemeTokens): CustomThemeTokens {
   return {
     surface: tokens.surface.toLowerCase(),
@@ -439,14 +526,19 @@ function canonicalTokens(tokens: CustomThemeTokens): CustomThemeTokens {
     ink: tokens.ink.toLowerCase(),
     accent: tokens.accent.toLowerCase(),
     hairline: tokens.hairline.toLowerCase(),
+    ...(tokens.board !== undefined ? { board: tokens.board.toLowerCase() } : {}),
+    ...(tokens.boardText !== undefined ? { boardText: tokens.boardText.toLowerCase() } : {}),
+    ...(tokens.lit !== undefined ? { lit: tokens.lit.toLowerCase() } : {}),
+    ...(tokens.brass !== undefined ? { brass: tokens.brass.toLowerCase() } : {}),
   };
 }
 
 /**
- * Resolve the full 15-token palette from the 5 stored tokens. Pure: same
- * input, same output — the unit tests pin the derived-pair guarantees
- * (D5-14, focus visibility, placeholder AA) across light, dark, and
- * saturated seeds.
+ * Resolve the full 23-token palette from the stored tokens (the five seeds,
+ * plus any chrome token the reader has edited — issue #146's
+ * derive-until-edited). Pure: same input, same output — the unit tests pin
+ * the derived-pair guarantees (D5-14, focus visibility, placeholder AA, the
+ * #146 chrome pairs) across light, dark, and saturated seeds.
  */
 export function resolveCustomTheme(rawTokens: CustomThemeTokens): ResolvedCustomTheme {
   const tokens = canonicalTokens(rawTokens);
@@ -517,6 +609,96 @@ export function resolveCustomTheme(rawTokens: CustomThemeTokens): ResolvedCustom
   const destructive =
     surfaceDisposition(tokens.surface) === "light" ? DESTRUCTIVE_LIGHT : DESTRUCTIVE_DARK;
 
+  // ── Issue #146 — the Wayfinder chrome (derive-until-edited) ──────────────
+  // The register follows the SURFACE's disposition, so a reader who walks a
+  // slot's surface across the light/dark line gets the other register's
+  // chrome on the very next resolve (never Daylight's enamel on Night walls).
+  // Each stored chrome token IS the resolved value; only absent ones derive.
+  const register = surfaceDisposition(tokens.surface);
+
+  // --board-text: the signage white (also --lit-text — the presets pair
+  // them); near-white at the accent's hue family so the board text belongs
+  // to the room's palette.
+  const boardText = tokens.boardText ?? okLchToHex({
+    L: BOARD_TEXT_L[register],
+    C: BOARD_TEXT_C,
+    h: accentLch.h,
+  });
+
+  // --board: the enamel band — the accent's hue at the register's board
+  // lightness, walked clear of the band text when the register default
+  // lands short of AA (pinned constants keep every preset-seed band
+  // compliant, so the walk is a no-op there).
+  const board = tokens.board ?? walkAwayFrom(
+    okLchToHex({
+      L: BOARD_L[register],
+      C: Math.min(accentLch.C, BOARD_C_CAP),
+      h: accentLch.h,
+    }),
+    boardText,
+    FIX_TARGET_RATIO,
+  );
+  const boardLch = hexToOkLch(board);
+
+  // --lit: the lit current-location board — the band one step lighter, same
+  // material, walked clear of the band text the same way. --lit-text is the
+  // band text (byte-for-byte, as in every preset).
+  const lit = tokens.lit ?? walkAwayFrom(
+    okLchToHex({
+      L: clampL(boardLch.L + LIT_L_DELTA[register]),
+      C: Math.min(boardLch.C, LIT_C_CAP),
+      h: boardLch.h,
+    }),
+    boardText,
+    FIX_TARGET_RATIO,
+  );
+
+  // --board-soft: secondary board labels — the band family, dimmed.
+  const boardSoft = okLchToHex({
+    L: BOARD_SOFT_L[register],
+    C: Math.min(boardLch.C, BOARD_SOFT_C),
+    h: boardLch.h,
+  });
+
+  // --brass: the accent-hue metal at the register's quiet lightness, walked
+  // to ≥ 3:1 non-text on the paper (the rules/edges contract).
+  const brass = tokens.brass ?? walkAwayFrom(
+    okLchToHex({
+      L: BRASS_L[register],
+      C: Math.min(accentLch.C, BRASS_C_CAP),
+      h: accentLch.h,
+    }),
+    tokens.surface,
+    CHROME_NON_TEXT_TARGET,
+  );
+  const brassLch = hexToOkLch(brass);
+
+  // --brass-bright: the lit metal — brass's own material at the register's
+  // lit lightness, walked to ≥ 3:1 on the band (the band rule / current
+  // mark grounds).
+  const brassBright = walkAwayFrom(
+    okLchToHex({ L: BRASS_BRIGHT_L[register], C: brassLch.C, h: brassLch.h }),
+    board,
+    CHROME_NON_TEXT_TARGET,
+  );
+
+  // --accent-strong: the solid fill behind board-text. A light-register
+  // accent is usually already dark enough (the presets: accent-strong IS
+  // accent, byte-for-byte); a dark-register accent is pinned to the fill
+  // register first (Night's dark-fill discipline), then either way walked
+  // clear of the board text.
+  const accentStrong = walkAwayFrom(
+    register === "light"
+      ? tokens.accent
+      : okLchToHex({
+          L: Math.min(accentLch.L, ACCENT_STRONG_L),
+          C: Math.min(accentLch.C, ACCENT_STRONG_C),
+          h: accentLch.h,
+        }),
+    boardText,
+    FIX_TARGET_RATIO,
+  );
+
   return {
     "--surface": tokens.surface,
     "--surface-raised": tokens.surfaceRaised,
@@ -533,14 +715,45 @@ export function resolveCustomTheme(rawTokens: CustomThemeTokens): ResolvedCustom
     "--highlight-blue": namedFills.blue,
     "--highlight-pink": namedFills.pink,
     "--spoken-highlight": spokenHighlight,
+    "--accent-strong": accentStrong,
+    "--board": board,
+    "--board-text": boardText,
+    "--board-soft": boardSoft,
+    "--lit": lit,
+    "--lit-text": boardText,
+    "--brass": brass,
+    "--brass-bright": brassBright,
   };
 }
 
 /**
- * "Fix contrast": nudge ONE token so ONE policed pair clears AA — the ink
- * pair fixes via ink, the accent pair via accent; every other token rides
+ * "Fix contrast": nudge the policed pairs back over their thresholds, each
+ * failing pair via its OWN token — every non-offending token rides
  * unchanged. Returns an equal-values copy when nothing fails. The result is
  * canonical lowercase throughout (the same contract as resolveCustomTheme).
+ *
+ * Issue #146 — the policed set extends to the Wayfinder chrome pairs (the
+ * extended ADR 0005 palette audit). Each fixable pair moves the pair's
+ * STORED side (the text token wins ties); a pair whose both sides are
+ * derived passes by construction, so the fix only ever moves a token the
+ * reader (or an earlier fix in this same pass) owns:
+ *   band pair (board-text/board ≥ 4.5)
+ *        → boardText when stored, else board
+ *   lit pair (band-text/lit ≥ 4.5)
+ *        → lit (its text side IS the band text, designated above)
+ *   brass pair (brass/surface ≥ 3 non-text)
+ *        → brass
+ *   lit-brass pair (brass-bright/board ≥ 3 non-text)
+ *        → board (the metal derives from brass, designated above)
+ * The solid-fill pair (band-text/accent-strong ≥ 4.5) is deliberately NOT
+ * here: BOTH its tokens are either derived or shared with the band pair, so
+ * a fix would tug-of-war another policed pair — and the derivation
+ * guarantees the pair anyway (accent-strong is walked clear of the band
+ * text on every resolve, and a walk direction is always reachable against
+ * a text color). It stays audited (the unit palette audit) and readout-
+ * reported; same for the lit-brass walk inside the derivation itself.
+ * A fix may therefore PROMOTE a derived token into the record (an explicit
+ * fix is an edit); absent fields are never invented when nothing fails.
  */
 export function fixContrastPairs(rawTokens: CustomThemeTokens): CustomThemeTokens {
   const tokens = canonicalTokens(rawTokens);
@@ -550,6 +763,38 @@ export function fixContrastPairs(rawTokens: CustomThemeTokens): CustomThemeToken
   }
   if (contrastRatio(tokens.accent, tokens.surface) < AA_TEXT_RATIO) {
     next.accent = walkAwayFrom(tokens.accent, tokens.surface, FIX_TARGET_RATIO);
+  }
+
+  // Issue #146 — the fixable chrome pairs. `effective` reads each EDITABLE
+  // chrome value the way resolveCustomTheme resolves it (stored ?? derived),
+  // AFTER any earlier fix in this pass — so stored-side fixes compose. (A
+  // token that stayed UNSTORED keeps its pre-pass derived value here; the
+  // derivation's own contrast walks re-guarantee every audited pair on the
+  // next resolve, so the residual gap — if any — is degenerate-only.)
+  const resolved = resolveCustomTheme(tokens);
+  const effective = (key: ChromeTokenKey): string => next[key] ?? resolved[CHROME_TOKEN_PROPS[key]];
+
+  // Band text on band — the stored side moves (text wins ties).
+  if (contrastRatio(effective("boardText"), effective("board")) < AA_TEXT_RATIO) {
+    if (next.boardText !== undefined) {
+      next.boardText = walkAwayFrom(effective("boardText"), effective("board"), FIX_TARGET_RATIO);
+    } else {
+      next.board = walkAwayFrom(effective("board"), effective("boardText"), FIX_TARGET_RATIO);
+    }
+  }
+  // Band text on the lit board — the lit ground moves.
+  if (contrastRatio(effective("boardText"), effective("lit")) < AA_TEXT_RATIO) {
+    next.lit = walkAwayFrom(effective("lit"), effective("boardText"), FIX_TARGET_RATIO);
+  }
+  // Brass on the paper — non-text 3:1.
+  if (contrastRatio(effective("brass"), tokens.surface) < AA_NON_TEXT_RATIO) {
+    next.brass = walkAwayFrom(effective("brass"), tokens.surface, CHROME_NON_TEXT_TARGET);
+  }
+  // Lit brass on the band — the band ground moves (the metal itself derives
+  // from brass and re-walks on the next resolve).
+  const brassBright = resolved["--brass-bright"];
+  if (contrastRatio(brassBright, effective("board")) < AA_NON_TEXT_RATIO) {
+    next.board = walkAwayFrom(effective("board"), brassBright, CHROME_NON_TEXT_TARGET);
   }
   return next;
 }

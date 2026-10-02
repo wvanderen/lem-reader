@@ -1,25 +1,37 @@
 // src/reader/CustomThemeBuilder.tsx
-// The custom-theme builder (issue #86, decision #73; issue #120): the
+// The custom-theme builder (issue #86, decision #73; issues #120/#146): the
 // disclosure section directly below the Theme fieldset, rendered ONLY while
 // a custom slot is active (theme "custom-light" / "custom-dark"). It edits
-// the ACTIVE slot's five color rows — a native <input type="color"> paired
-// with a small editable hex text field, both writing the same token — the
-// live contrast readout for the two policed pairs, the one-tap "Fix
-// contrast" nudge, and the quiet "Reset to base colors" restore. The OTHER
-// slot's saved record never rides an edit.
+// the ACTIVE slot's color rows — a native <input type="color"> paired with
+// a small editable hex text field, both writing the same token — the live
+// contrast readout for the policed pairs, the one-tap "Fix contrast" nudge,
+// and the quiet "Reset to base colors" restore. The OTHER slot's saved
+// record never rides an edit.
+//
+// Issue #146 — the rows group in two calm sets: the five SURFACE seeds
+// (surface, raised, text, accent, hairline) and, under a "Reading room"
+// group, the four Wayfinder CHROME tokens (Band, Band text, Lit board,
+// Brass — ADR 0005's enamel vocabulary). A chrome row displays the token's
+// EFFECTIVE value — the stored color once edited, the derived color before
+// that (derive-until-edited: editing a row simply stores it; "Reset to base
+// colors" drops it back to derived). The A11Y-05 rule carries over: every
+// row is named by its visible text label, never by its swatch color alone.
 //
 // Every change live-applies through useSettings().update (D2-03, no Save
 // step): SettingsContext's effect calls applyTheme, which writes the resolved
-// 11-token palette inline on documentElement; persistence rides the existing
+// 23-token palette inline on documentElement; persistence rides the existing
 // debounced save (Pitfall 5). The readout is DEBOUNCE-ALIGNED — it renders
 // from a 400ms-settled copy of the tokens (the save debounce cadence), so a
 // fast typing burst never spams the polite live region.
 //
-// Contrast guardrail semantics (decision #73): the readout is a non-blocking
-// live region for the policed pairs (text on surface; accent on surface).
-// Below-AA renders a calm warning plus "Fix contrast", which nudges the
-// OFFENDING token only (src/settings/customTheme.ts fixContrastPairs). The
-// reader may override and keep reading — nothing is silently adjusted.
+// Contrast guardrail semantics (decision #73, extended by #146): the readout
+// is a non-blocking live region for the policed pairs — text on surface,
+// accent on surface, band text on band, band text on the lit board, band
+// text on the solid fill (4.5:1 each), brass on the paper and lit brass on
+// the band (3:1 non-text). Below-threshold renders a calm warning plus
+// "Fix contrast", which nudges the OFFENDING token only
+// (src/settings/customTheme.ts fixContrastPairs). The reader may override
+// and keep reading — nothing is silently adjusted.
 //
 // Semantics: a native <details>/<summary> disclosure (keyboard-operable for
 // free), native color inputs — no ARIA re-implementation anywhere. The
@@ -30,20 +42,25 @@ import { useSettings } from "../settings/SettingsContext";
 // Issue #98 (decision #96) — the ONE polite status-region primitive.
 import { StatusRegion } from "../ui/StatusRegion";
 import {
+  AA_NON_TEXT_RATIO,
   AA_TEXT_RATIO,
+  CHROME_TOKEN_PROPS,
   activeSlotOf,
   activeSlotTheme,
   contrastRatio,
   fixContrastPairs,
+  resolveCustomTheme,
   seedCustomTheme,
   slotThemePatch,
 } from "../settings/customTheme";
+import type { ChromeTokenKey } from "../settings/customTheme";
 import type { CustomThemeTokens } from "../content/schema";
 
-/** The five editable rows, in stored order. `key` is the CustomThemeTokens
- * field name; `label` is the visible row text and the accessible-name stem. */
+/** The five surface-seed rows, in stored order. `key` is the REQUIRED
+ * CustomThemeTokens field name (the chrome keys are the optional group
+ * below); `label` is the visible row text and the accessible-name stem. */
 const TOKEN_ROWS: ReadonlyArray<{
-  key: keyof CustomThemeTokens;
+  key: "surface" | "surfaceRaised" | "ink" | "accent" | "hairline";
   label: string;
 }> = [
   { key: "surface", label: "Surface" },
@@ -51,6 +68,21 @@ const TOKEN_ROWS: ReadonlyArray<{
   { key: "ink", label: "Text" },
   { key: "accent", label: "Accent" },
   { key: "hairline", label: "Hairline" },
+];
+
+/** Issue #146 — the four Wayfinder chrome rows (the "Reading room" group):
+ * the enamel classification band, its signage white, the lit
+ * current-location board, and the metal rules. `key` is the OPTIONAL
+ * CustomThemeTokens field — absent means "currently derived"; the row's CSS
+ * property comes from the ONE shared CHROME_TOKEN_PROPS map. */
+const CHROME_ROWS: ReadonlyArray<{
+  key: ChromeTokenKey;
+  label: string;
+}> = [
+  { key: "board", label: "Band" },
+  { key: "boardText", label: "Band text" },
+  { key: "lit", label: "Lit board" },
+  { key: "brass", label: "Brass" },
 ];
 
 const READOUT_DEBOUNCE_MS = 400; // the SettingsContext save cadence (Pitfall 5)
@@ -74,9 +106,11 @@ function normalizeHex(raw: string): string | null {
   return digits ? `#${digits.toLowerCase()}` : null;
 }
 
-/** "{name}: {ratio}:1 — {verdict}" — the calm readout line for one pair. */
-function verdictLine(name: string, ratio: number): string {
-  return `${name}: ${ratio.toFixed(1)}:1 — ${ratio >= AA_TEXT_RATIO ? "good" : "below AA"}`;
+/** "{name}: {ratio}:1 — {verdict}" — the calm readout line for one pair.
+ * `min` is the pair's contract: 4.5:1 for text, 3:1 for non-text (both are
+ * WCAG AA — 1.4.3 and 1.4.11). */
+function verdictLine(name: string, ratio: number, min: number = AA_TEXT_RATIO): string {
+  return `${name}: ${ratio.toFixed(1)}:1 — ${ratio >= min ? "good" : "below AA"}`;
 }
 
 /** One color row: visible label + native color picker + editable hex field.
@@ -162,9 +196,25 @@ export function CustomThemeBuilder() {
   // (The builder only mounts with tokens present, so settled is defined; the
   // ?? tokens fallback keeps types honest without an assertion.)
   const readout = settled ?? tokens;
+  const readoutResolved = resolveCustomTheme(readout);
   const inkRatio = contrastRatio(readout.ink, readout.surface);
   const accentRatio = contrastRatio(readout.accent, readout.surface);
-  const anyFailing = inkRatio < AA_TEXT_RATIO || accentRatio < AA_TEXT_RATIO;
+  const bandTextRatio = contrastRatio(readoutResolved["--board-text"], readoutResolved["--board"]);
+  const litRatio = contrastRatio(readoutResolved["--board-text"], readoutResolved["--lit"]);
+  const fillRatio = contrastRatio(
+    readoutResolved["--board-text"],
+    readoutResolved["--accent-strong"],
+  );
+  const brassRatio = contrastRatio(readoutResolved["--brass"], readout.surface);
+  const brassBrightRatio = contrastRatio(readoutResolved["--brass-bright"], readoutResolved["--board"]);
+  const anyFailing =
+    inkRatio < AA_TEXT_RATIO ||
+    accentRatio < AA_TEXT_RATIO ||
+    bandTextRatio < AA_TEXT_RATIO ||
+    litRatio < AA_TEXT_RATIO ||
+    fillRatio < AA_TEXT_RATIO ||
+    brassRatio < AA_NON_TEXT_RATIO ||
+    brassBrightRatio < AA_NON_TEXT_RATIO;
 
   const fixContrast = () => {
     update(slotThemePatch(slot, { ...customTheme, tokens: fixContrastPairs(tokens) }));
@@ -174,11 +224,17 @@ export function CustomThemeBuilder() {
     update(slotThemePatch(slot, seedCustomTheme(customTheme.baseTheme)));
   };
 
+  // The chrome rows display each token's EFFECTIVE value — the stored color
+  // once edited, the derived color before that — resolved from the LIVE
+  // tokens (rows are controls, not the live region; they follow every edit
+  // instantly, exactly like the five seed rows above).
+  const liveResolved = resolveCustomTheme(tokens);
+
   return (
     <details className="custom-theme-builder" open>
       <summary>Customize colors</summary>
       <p className="settings-help">
-        Choose five colors; the rest of the theme adapts automatically.
+        Choose your colors; the rest of the room adapts automatically.
       </p>
       <div className="custom-theme-rows">
         {TOKEN_ROWS.map(({ key, label }) => (
@@ -191,15 +247,43 @@ export function CustomThemeBuilder() {
           />
         ))}
       </div>
+      {/* Issue #146 — the Wayfinder chrome group: four more rows under one
+          named fieldset, so the five-row calm above holds. The help copy's
+          promise extends here: an untouched row shows the derived value. */}
+      <fieldset className="custom-theme-group">
+        <legend>Reading room</legend>
+        <div className="custom-theme-rows">
+          {CHROME_ROWS.map(({ key, label }) => (
+            <TokenRow
+              key={key}
+              idStem={key}
+              label={label}
+              value={liveResolved[CHROME_TOKEN_PROPS[key]]}
+              onChange={(hex) => setToken(key, hex)}
+            />
+          ))}
+        </div>
+      </fieldset>
       {/* The ONE polite region for the policed pairs (the D2-13 status
           pattern, now the ONE StatusRegion primitive — issue #98):
           verdict lines, the calm warning, and the fix affordance announce
-          together, debounce-aligned. */}
+          together, debounce-aligned. #146 extends the policed set with the
+          chrome pairs (band text, lit board, solid fill, brass — the
+          extended ADR 0005 palette audit). */}
       <StatusRegion>
         <p className="custom-theme-verdict">{verdictLine("Text on surface", inkRatio)}</p>
         <p className="custom-theme-verdict">{verdictLine("Accent on surface", accentRatio)}</p>
+        <p className="custom-theme-verdict">{verdictLine("Band text on band", bandTextRatio)}</p>
+        <p className="custom-theme-verdict">{verdictLine("Band text on lit board", litRatio)}</p>
+        <p className="custom-theme-verdict">{verdictLine("Band text on solid fill", fillRatio)}</p>
+        <p className="custom-theme-verdict">
+          {verdictLine("Brass on surface", brassRatio, AA_NON_TEXT_RATIO)}
+        </p>
+        <p className="custom-theme-verdict">
+          {verdictLine("Lit brass on band", brassBrightRatio, AA_NON_TEXT_RATIO)}
+        </p>
         {anyFailing && (
-          <p className="custom-theme-warning">Some colors are hard to read on your surface.</p>
+          <p className="custom-theme-warning">Some color pairs are below the contrast guidelines.</p>
         )}
       </StatusRegion>
       <div className="custom-theme-actions">

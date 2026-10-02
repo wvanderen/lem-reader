@@ -249,6 +249,89 @@ describe("SettingsPanel — custom theme builder (issues #86/#120)", () => {
     }
   });
 
+  // Issue #146 — the Wayfinder chrome rows group under one named fieldset so
+  // the five-row calm holds; every new row keeps the A11Y-05 rule (a visible
+  // text label, never the swatch color alone).
+  it("groups the four Reading room chrome rows under a 'Reading room' fieldset (#146)", async () => {
+    renderExpanded(<Harness open={true} onClose={() => undefined} />);
+    act(() => {
+      fireEvent.click(screen.getByRole("radio", { name: "Custom light" }));
+    });
+    await screen.findByText("Customize colors");
+    const group = document.querySelector("fieldset.custom-theme-group");
+    expect(group).not.toBeNull();
+    expect(group?.querySelector("legend")?.textContent).toBe("Reading room");
+    for (const label of ["Band", "Band text", "Lit board", "Brass"]) {
+      expect(await screen.findByLabelText(`${label} color`)).not.toBeNull();
+      expect(await screen.findByLabelText(`${label} hex value`)).not.toBeNull();
+    }
+  });
+
+  it("an untouched chrome row shows its DERIVED value; editing stores it (#146 derive-until-edited)", async () => {
+    renderExpanded(<Harness open={true} onClose={() => undefined} />);
+    act(() => {
+      fireEvent.click(screen.getByRole("radio", { name: "Custom light" }));
+    });
+    // The derived band (resolved from the light seeds, not the :root literal).
+    const band = (await screen.findByLabelText("Band hex value")) as HTMLInputElement;
+    expect(band.value).toMatch(/^#[0-9a-f]{6}$/);
+    expect(band.value).not.toBe("#1d3128"); // derived, not the Daylight literal copied
+    // Editing writes the token through — inline on <html>.
+    act(() => {
+      fireEvent.change(band, { target: { value: "#223344" } });
+    });
+    expect(inlineToken("--board")).toBe("#223344");
+    expect(band.value).toBe("#223344");
+  });
+
+  it("a non-green accent repaints the band inline — never the preset enamel (#146)", async () => {
+    renderExpanded(<Harness open={true} onClose={() => undefined} />);
+    act(() => {
+      fireEvent.click(screen.getByRole("radio", { name: "Custom light" }));
+    });
+    const before = inlineToken("--board");
+    const accent = (await screen.findByLabelText("Accent hex value")) as HTMLInputElement;
+    act(() => {
+      fireEvent.change(accent, { target: { value: "#a12345" } });
+    });
+    expect(inlineToken("--accent")).toBe("#a12345");
+    const after = inlineToken("--board");
+    expect(after).toMatch(/^#[0-9a-f]{6}$/);
+    expect(after).not.toBe(before); // the band followed the accent
+    expect(after).not.toBe("#1d3128"); // ...and is not the preset enamel
+  });
+
+  it("a below-AA band pair warns and Fix contrast moves the band only (#146)", async () => {
+    renderExpanded(<Harness open={true} onClose={() => undefined} />);
+    act(() => {
+      fireEvent.click(screen.getByRole("radio", { name: "Custom light" }));
+    });
+    // Break EXACTLY the band pair: a near-white band under the derived
+    // near-white band text.
+    const band = (await screen.findByLabelText("Band hex value")) as HTMLInputElement;
+    act(() => {
+      fireEvent.change(band, { target: { value: "#f5f5f0" } });
+    });
+    expect(await screen.findByText(/below the contrast guidelines/)).not.toBeNull();
+
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "Fix contrast" }));
+    });
+    await waitFor(() => {
+      expect(screen.queryByText(/below the contrast guidelines/)).toBeNull();
+    });
+    // The band moved (offender); the band text stayed DERIVED (nothing was
+    // invented); the other policed pairs ride untouched.
+    const fixedBoard = inlineToken("--board");
+    expect(fixedBoard).not.toBe("#f5f5f0");
+    expect(contrastRatio(inlineToken("--board-text"), fixedBoard)).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio(inlineToken("--brass"), inlineToken("--surface"))).toBeGreaterThanOrEqual(
+      3,
+    );
+    expect(inlineToken("--surface")).toBe("#f7f7f5");
+    expect(inlineToken("--accent")).toBe("#22604a");
+  });
+
   it("a valid hex commit applies the token inline and snaps the field", async () => {
     renderExpanded(<Harness open={true} onClose={() => undefined} />);
     act(() => {
@@ -346,12 +429,12 @@ describe("SettingsPanel — custom theme builder (issues #86/#120)", () => {
     act(() => {
       fireEvent.change(hex, { target: { value: "#f7f7f5" } });
     });
-    expect(await screen.findByText(/hard to read/)).not.toBeNull();
+    expect(await screen.findByText(/below the contrast guidelines/)).not.toBeNull();
     act(() => {
       fireEvent.click(screen.getByRole("button", { name: "Fix contrast" }));
     });
     await waitFor(() => {
-      expect(screen.queryByText(/hard to read/)).toBeNull();
+      expect(screen.queryByText(/below the contrast guidelines/)).toBeNull();
     });
     // The offender moved; its pair now clears AA; the untouched tokens ride.
     expect(contrastRatio(inlineToken("--ink"), inlineToken("--surface"))).toBeGreaterThanOrEqual(

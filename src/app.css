@@ -1135,13 +1135,16 @@ dialog.settings-panel {
   color: var(--ink);
 }
 
-/* ── Custom-theme builder (issue #86, decision #73) ─────────────────────── */
+/* ── Custom-theme builder (issues #86/#120; #146) ────────────────────────── */
 /* The disclosure section directly below the Theme fieldset, mounted only
-   while theme === "custom". Native <details>/<summary>; native color inputs
-   paired with small hex text fields (both write the same token); the live
-   contrast readout reuses the global .status role/aria contract, inline
-   like .settings-data .status. Tokens only; no transitions (token swaps are
-   instant — the reduced-motion posture is inherited, A11Y-06). */
+   while a custom slot is active. Native <details>/<summary>; native color
+   inputs paired with small hex text fields (both write the same token); the
+   live contrast readout reuses the global .status role/aria contract, inline
+   like .settings-data .status. #146 adds the "Reading room" fieldset — the
+   four Wayfinder chrome rows (band / band text / lit board / brass) grouped
+   under one named legend so the five-row calm above holds. Tokens only; no
+   transitions (token swaps are instant — the reduced-motion posture is
+   inherited, A11Y-06). */
 .custom-theme-builder {
   display: flex;
   flex-direction: column;
@@ -1164,6 +1167,24 @@ dialog.settings-panel {
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
+}
+/* Issue #146 — the "Reading room" chrome group: a native fieldset so the
+   four chrome rows carry one accessible group name. The legend speaks the
+   signage register (spaced caps, CSS-uppercased — never the DOM text). */
+.custom-theme-group {
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+.custom-theme-group legend {
+  padding: 0;
+  margin-block-end: var(--space-xs);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
+  color: var(--ink-soft);
 }
 .custom-theme-row {
   display: flex;

@@ -10,15 +10,24 @@
 //     surface;
 //   - --ink-soft (POLISH-11's placeholder pair) keeps ≥ 4.5:1 against the
 //     surface;
-//   - the destructive red is fixed per the surface's light/dark disposition.
+//   - the destructive red is fixed per the surface's light/dark disposition;
+//   - issue #146 — the Wayfinder chrome pairs (the extended ADR 0005 palette
+//     audit): band text on band and on the lit board ≥ 4.5:1, brass on the
+//     paper and lit brass on the band ≥ 3:1 non-text, band text on
+//     accent-strong ≥ 4.5:1 — with the derive-until-edited storage contract
+//     and the register (light/dark disposition) split.
 // All math is pure, so these assertions are engine-independent truth — the
 // e2e layer (tests/e2e/chrome/custom-theme.spec.ts) proves the same math
 // reaches the DOM through applyTheme's inline writes.
 //
 // The preset-seed drift guard mirrors tests/unit/settings/mirror.test.ts's
 // extraction-anchor discipline: PRESET_SEEDS must byte-match the
-// [data-theme] blocks in src/app.css, so a token change that forgets the
-// seeds fails here.
+// [data-theme] blocks in src/app.css, so a token change that forgets
+// the seeds fails there. Issue #146 extends the discipline to the chrome:
+// the DERIVED chrome is checked against the same preset blocks within tight
+// OKLCH tolerances (the derivation's register constants sit ON the preset
+// values), and every preset block must keep declaring all eight chrome
+// tokens.
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -128,7 +137,7 @@ const DERIVATION_SEEDS = [
 ];
 
 describe("resolveCustomTheme — derived-pair guarantees (D5-14 et al.)", () => {
-  it.each(DERIVATION_SEEDS)("$label: resolves exactly the 11 palette props", ({ tokens }) => {
+  it.each(DERIVATION_SEEDS)("$label: resolves exactly the 23 palette props", ({ tokens }) => {
     const resolved = resolveCustomTheme(tokens);
     expect(Object.keys(resolved).sort()).toEqual([...CUSTOM_COLOR_PROPS].sort());
   });
@@ -241,6 +250,220 @@ describe("resolveCustomTheme — degenerate pairs", () => {
   });
 });
 
+// ── Issue #146 — the Wayfinder chrome (derive-until-edited) ──────────────────
+
+/** The chrome audit's seed families: everything in DERIVATION_SEEDS plus the
+ * degenerate broken ink/surface pair (the chrome constants must hold even
+ * there — the walks are best-effort but the audited pairs still pass). */
+const CHROME_SEEDS = [
+  ...DERIVATION_SEEDS,
+  {
+    label: "degenerate broken ink/surface pair",
+    tokens: {
+      surface: "#555555",
+      surfaceRaised: "#666666",
+      ink: "#444444",
+      accent: "#556677",
+      hairline: "#888888",
+    },
+    disposition: "dark" as const,
+  },
+];
+
+describe("resolveCustomTheme — the Wayfinder chrome pairs (#146, the extended ADR 0005 audit)", () => {
+  it.each(CHROME_SEEDS)("$label: every audited chrome pair passes in its slot", ({ tokens }) => {
+    const r = resolveCustomTheme(tokens);
+    // Text pairs on the boards (WCAG 1.4.3).
+    expect(contrastRatio(r["--board-text"], r["--board"])).toBeGreaterThanOrEqual(AA_TEXT_RATIO);
+    expect(contrastRatio(r["--lit-text"], r["--lit"])).toBeGreaterThanOrEqual(AA_TEXT_RATIO);
+    // The solid fill behind the band text (WCAG 1.4.3).
+    expect(contrastRatio(r["--board-text"], r["--accent-strong"])).toBeGreaterThanOrEqual(
+      AA_TEXT_RATIO,
+    );
+    // Non-text metal on its grounds (WCAG 1.4.11).
+    expect(contrastRatio(r["--brass"], r["--surface"])).toBeGreaterThanOrEqual(AA_NON_TEXT_RATIO);
+    expect(contrastRatio(r["--brass-bright"], r["--board"])).toBeGreaterThanOrEqual(
+      AA_NON_TEXT_RATIO,
+    );
+  });
+
+  it.each(CHROME_SEEDS)("$label: lit-text IS the band text (byte-for-byte, as in the presets)", ({
+    tokens,
+  }) => {
+    const r = resolveCustomTheme(tokens);
+    expect(r["--lit-text"]).toBe(r["--board-text"]);
+  });
+
+  it.each(CHROME_SEEDS)("$label: derivation is deterministic across the chrome too", ({ tokens }) => {
+    expect(resolveCustomTheme(tokens)).toEqual(resolveCustomTheme(tokens));
+  });
+
+  it("stored chrome tokens ride byte-stable (lowercased) and override derivation", () => {
+    const stored = {
+      ...PRESET_SEEDS.light,
+      board: "#1A2B3C",
+      boardText: "#EEDDCC",
+      lit: "#24403A",
+      brass: "#5A4A10",
+    };
+    const r = resolveCustomTheme(stored);
+    expect(r["--board"]).toBe("#1a2b3c");
+    expect(r["--board-text"]).toBe("#eeddcc");
+    expect(r["--lit"]).toBe("#24403a");
+    expect(r["--lit-text"]).toBe("#eeddcc"); // lit-text is the band text, stored side included
+    expect(r["--brass"]).toBe("#5a4a10");
+  });
+
+  it("editing ONE chrome token leaves the untouched chrome derived", () => {
+    const stored = { ...PRESET_SEEDS.light, brass: "#5A4A10" };
+    const r = resolveCustomTheme(stored);
+    const plain = resolveCustomTheme(PRESET_SEEDS.light);
+    expect(r["--brass"]).toBe("#5a4a10");
+    expect(r["--board"]).toBe(plain["--board"]);
+    expect(r["--board-text"]).toBe(plain["--board-text"]);
+    expect(r["--lit"]).toBe(plain["--lit"]);
+    expect(r["--accent-strong"]).toBe(plain["--accent-strong"]);
+  });
+
+  it("a non-green accent repaints the band, the lit board, and the metal — not the preset enamel", () => {
+    const crimson = resolveCustomTheme({ ...PRESET_SEEDS.light, accent: "#a12345" });
+    const plain = resolveCustomTheme(PRESET_SEEDS.light);
+    expect(crimson["--board"]).not.toBe(plain["--board"]);
+    expect(crimson["--lit"]).not.toBe(plain["--lit"]);
+    expect(crimson["--brass"]).not.toBe(plain["--brass"]);
+    // The audited pairs still hold in the repainted room.
+    expect(contrastRatio(crimson["--board-text"], crimson["--board"])).toBeGreaterThanOrEqual(
+      AA_TEXT_RATIO,
+    );
+    expect(contrastRatio(crimson["--brass"], crimson["--surface"])).toBeGreaterThanOrEqual(
+      AA_NON_TEXT_RATIO,
+    );
+  });
+
+  it("the register follows the surface disposition — a dark slot never reuses the light register", () => {
+    // Same accent, flipped surface: the band goes darker AND the metal goes
+    // bright (Night's register), never Daylight's deep-on-paper pair.
+    const lightRegister = resolveCustomTheme(PRESET_SEEDS.light);
+    const darkRegister = resolveCustomTheme({
+      ...PRESET_SEEDS.light,
+      surface: PRESET_SEEDS.dark.surface,
+    });
+    expect(surfaceDisposition(PRESET_SEEDS.light.surface)).toBe("light");
+    expect(surfaceDisposition(PRESET_SEEDS.dark.surface)).toBe("dark");
+    expect(relativeLuminance(darkRegister["--board"])).toBeLessThan(
+      relativeLuminance(lightRegister["--board"]),
+    );
+    expect(relativeLuminance(darkRegister["--brass"])).toBeGreaterThan(
+      relativeLuminance(lightRegister["--brass"]),
+    );
+    // The dark register's bright metal out-shines its own quiet metal.
+    expect(relativeLuminance(darkRegister["--brass-bright"])).toBeGreaterThan(
+      relativeLuminance(darkRegister["--brass"]),
+    );
+  });
+
+  it.each(["sepia", "light"] as const)(
+    "light-register accent-strong IS the accent (byte-for-byte — the preset discipline; %s)",
+    (base) => {
+      const r = resolveCustomTheme(PRESET_SEEDS[base]);
+      expect(r["--accent-strong"]).toBe(PRESET_SEEDS[base].accent.toLowerCase());
+    },
+  );
+});
+
+// ── Issue #146 — the chrome drift guard (the app.css preset blocks) ──────────
+
+/** Test-owned OKLCH (the audit side speaks hex; tolerances speak OKLCH). */
+function oklchOf(hex: string): { L: number; C: number; h: number } {
+  const n = Number.parseInt(hex.slice(1), 16);
+  const toLinear = (c: number): number => {
+    const s = c / 255;
+    return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  };
+  const lin: [number, number, number] = [
+    toLinear((n >> 16) & 0xff),
+    toLinear((n >> 8) & 0xff),
+    toLinear(n & 0xff),
+  ];
+  const l = Math.cbrt(0.4122214708 * lin[0] + 0.5363325363 * lin[1] + 0.0514459929 * lin[2]);
+  const m = Math.cbrt(0.2119034982 * lin[0] + 0.6806995451 * lin[1] + 0.1073969566 * lin[2]);
+  const s = Math.cbrt(0.0883024619 * lin[0] + 0.2817188376 * lin[1] + 0.6299787005 * lin[2]);
+  const L = 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s;
+  const a = 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s;
+  const b = 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s;
+  return { L, C: Math.hypot(a, b), h: (Math.atan2(b, a) * 180) / Math.PI };
+}
+
+describe("derived chrome drift guard — the app.css preset blocks (#146)", () => {
+  const css = readFileSync(resolve(process.cwd(), "src/app.css"), "utf-8");
+  const sepiaStart = css.indexOf('[data-theme="sepia"]');
+  const lightStart = css.indexOf('[data-theme="light"]');
+  const darkStart = css.indexOf('[data-theme="dark"]');
+  const darkBlockEnd = css.indexOf("body {", darkStart);
+  const blocks = {
+    sepia: [sepiaStart, lightStart] as const,
+    light: [lightStart, darkStart] as const,
+    dark: [darkStart, darkBlockEnd] as const,
+  };
+
+  // Bare token names — cssToken prepends the "--" itself.
+  const CHROME_PROPS = [
+    "board",
+    "board-text",
+    "board-soft",
+    "lit",
+    "lit-text",
+    "brass",
+    "brass-bright",
+    "accent-strong",
+  ] as const;
+
+  it("every preset block declares all eight chrome tokens (no forgotten theme)", () => {
+    for (const [base, [from, to]] of Object.entries(blocks)) {
+      for (const prop of CHROME_PROPS) {
+        expect(() => cssToken(css, from, to, prop), `${base} --${prop}`).not.toThrow();
+      }
+    }
+  });
+
+  it.each([
+    ["sepia", "sepia"],
+    ["light", "light"],
+    ["dark", "dark"],
+  ] as const)("seed '%s' derives chrome within the preset block's tolerance", (seed, block) => {
+    const [from, to] = blocks[block];
+    const derived = resolveCustomTheme(PRESET_SEEDS[seed]);
+    for (const prop of CHROME_PROPS) {
+      const cssProp = `--${prop}` as keyof typeof derived;
+      const presetHex = cssToken(css, from, to, prop);
+      const p = oklchOf(presetHex);
+      const d = oklchOf(derived[cssProp]);
+      // The derivation's register constants sit ON the preset values: tight
+      // lightness/chroma tolerances (brass gets a hair more room — its
+      // lightness tracks the register, not the byte).
+      expect(Math.abs(d.L - p.L), `${cssProp} lightness`).toBeLessThanOrEqual(0.05);
+      expect(Math.abs(d.C - p.C), `${cssProp} chroma`).toBeLessThanOrEqual(0.04);
+      // Hue is only meaningful above the near-neutral floor (the signage
+      // whites' chroma is ~0.005 — hue there is noise).
+      if (Math.min(d.C, p.C) > 0.03) {
+        const hueGap = Math.abs(((d.h - p.h + 540) % 360) - 180);
+        // Brass + brass-bright deliberately follow the ACCENT's hue (the
+        // #146 "matching room" contract) — the presets' fixed gold is the
+        // one documented divergence; every other chromatic chrome token
+        // must keep the preset's hue family.
+        const isMetal = prop === "brass" || prop === "brass-bright";
+        if (!isMetal) {
+          expect(hueGap, `${cssProp} hue`).toBeLessThanOrEqual(12);
+        } else {
+          const accentHue = oklchOf(PRESET_SEEDS[seed].accent).h;
+          const accentGap = Math.abs(((d.h - accentHue + 540) % 360) - 180);
+          expect(accentGap, `${cssProp} accent-hue metal`).toBeLessThanOrEqual(12);
+        }
+      }
+    }
+  });
+});
+
 // ── fixContrastPairs ─────────────────────────────────────────────────────────
 
 describe("fixContrastPairs (the one-tap nudge)", () => {
@@ -280,6 +503,98 @@ describe("fixContrastPairs (the one-tap nudge)", () => {
     expect(contrastRatio(fixed.ink, fixed.surface)).toBeGreaterThan(
       contrastRatio(tokens.ink, tokens.surface),
     );
+  });
+});
+
+// ── fixContrastPairs — the chrome pairs (#146) ───────────────────────────────
+
+describe("fixContrastPairs — the Wayfinder chrome pairs (#146)", () => {
+  it("a pastel band fixes via the band; no band text is invented", () => {
+    const pastel = { ...PRESET_SEEDS.light, board: "#f5f5f0" };
+    const before = resolveCustomTheme(pastel);
+    expect(contrastRatio(before["--board-text"], before["--board"])).toBeLessThan(AA_TEXT_RATIO);
+
+    const fixed = fixContrastPairs(pastel);
+    expect(fixed.board).toBeDefined();
+    expect(fixed.board).not.toBe(pastel.board); // the offender moved
+    expect(fixed.boardText).toBeUndefined(); // nothing invented
+    expect(fixed.surface).toBe(pastel.surface); // every other token rides
+    expect(fixed.ink).toBe(pastel.ink);
+    expect(fixed.accent).toBe(pastel.accent);
+    expect(fixed.hairline).toBe(pastel.hairline);
+
+    const after = resolveCustomTheme(fixed);
+    expect(contrastRatio(after["--board-text"], after["--board"])).toBeGreaterThanOrEqual(
+      AA_TEXT_RATIO,
+    );
+  });
+
+  it("a stored band text fixes via the band text (the stored side, text wins ties)", () => {
+    const darkText = { ...PRESET_SEEDS.dark, board: "#10150f", boardText: "#333333" };
+    const before = resolveCustomTheme(darkText);
+    expect(contrastRatio(before["--board-text"], before["--board"])).toBeLessThan(AA_TEXT_RATIO);
+
+    const fixed = fixContrastPairs(darkText);
+    expect(fixed.boardText).toBeDefined();
+    expect(fixed.boardText).not.toBe(darkText.boardText);
+    expect(fixed.board).toBe(darkText.board); // the stored band rides
+
+    const after = resolveCustomTheme(fixed);
+    expect(contrastRatio(after["--board-text"], after["--board"])).toBeGreaterThanOrEqual(
+      AA_TEXT_RATIO,
+    );
+  });
+
+  it("a failing brass pair fixes via brass only", () => {
+    const badBrass = { ...PRESET_SEEDS.light, brass: "#f0f0ee" };
+    const before = resolveCustomTheme(badBrass);
+    expect(contrastRatio(before["--brass"], before["--surface"])).toBeLessThan(AA_NON_TEXT_RATIO);
+
+    const fixed = fixContrastPairs(badBrass);
+    expect(fixed.brass).toBeDefined();
+    expect(fixed.brass).not.toBe(badBrass.brass);
+    expect(fixed.board).toBeUndefined();
+    expect(fixed.boardText).toBeUndefined();
+    expect(fixed.lit).toBeUndefined();
+
+    const after = resolveCustomTheme(fixed);
+    expect(contrastRatio(after["--brass"], after["--surface"])).toBeGreaterThanOrEqual(
+      AA_NON_TEXT_RATIO,
+    );
+  });
+
+  it("a near-white band fixes via the band; the derived lit brass follows on re-resolve", () => {
+    const nearWhite = { ...PRESET_SEEDS.light, board: "#fafaf8" };
+    const before = resolveCustomTheme(nearWhite);
+    expect(contrastRatio(before["--board-text"], before["--board"])).toBeLessThan(AA_TEXT_RATIO);
+
+    const fixed = fixContrastPairs(nearWhite);
+    expect(fixed.board).toBeDefined();
+    expect(fixed.board).not.toBe(nearWhite.board); // the band walked back toward enamel
+    expect(fixed.boardText).toBeUndefined(); // nothing invented
+
+    // The walked band carries BOTH its policed partners: the band text
+    // (4.5:1), and the lit metal — which re-walks against the new band on
+    // the next resolve (3:1, by derivation).
+    const after = resolveCustomTheme(fixed);
+    expect(contrastRatio(after["--board-text"], after["--board"])).toBeGreaterThanOrEqual(
+      AA_TEXT_RATIO,
+    );
+    expect(contrastRatio(after["--brass-bright"], after["--board"])).toBeGreaterThanOrEqual(
+      AA_NON_TEXT_RATIO,
+    );
+  });
+
+  it("a compliant record with chrome fields stays value-equal (no chrome writes)", () => {
+    const compliant = {
+      ...PRESET_SEEDS.sepia,
+      board: "#1d3128",
+      boardText: "#f2f4f1",
+      lit: "#2c4a3b",
+      brass: "#7d5f1e",
+    };
+    const fixed = fixContrastPairs(compliant);
+    expect(fixed).toEqual(compliant);
   });
 });
 
@@ -471,5 +786,85 @@ describe("ReaderSettingsSchema hydration — the two custom slots (#120)", () =>
       expect(parsed.data.preferences.customLightTheme).toEqual(seedCustomTheme("light"));
       expect(parsed.data.preferences.customDarkTheme).toEqual(seedCustomTheme("dark"));
     }
+  });
+
+  // ── Issue #146 — the additive chrome fields ────────────────────────────────
+
+  it("a pre-#146 record (five tokens, no chrome fields) parses unchanged and derives its chrome", () => {
+    const record: ReaderSettings = {
+      ...V3_RECORD,
+      schemaVersion: 5,
+      theme: "custom-light",
+      customLightTheme: seedCustomTheme("light"),
+    };
+    const parsed = ReaderSettingsSchema.safeParse(record);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      const tokens = parsed.data.customLightTheme?.tokens;
+      if (tokens === undefined) throw new Error("customLightTheme tokens missing after parse");
+      expect(tokens).not.toHaveProperty("board");
+      expect(tokens).not.toHaveProperty("boardText");
+      expect(tokens).not.toHaveProperty("lit");
+      expect(tokens).not.toHaveProperty("brass");
+      // No migration: the derived chrome resolves from the five seeds alone.
+      const resolved = resolveCustomTheme(tokens);
+      for (const prop of ["--board", "--board-text", "--lit", "--brass"] as const) {
+        expect(resolved[prop]).toMatch(/^#[0-9a-f]{6}$/);
+      }
+    }
+  });
+
+  it("a record with edited chrome fields parses, carrying them (uppercase preserved)", () => {
+    const record: ReaderSettings = {
+      ...V3_RECORD,
+      schemaVersion: 5,
+      theme: "custom-dark",
+      customDarkTheme: {
+        baseTheme: "dark",
+        tokens: { ...PRESET_SEEDS.dark, board: "#0E1A14", brass: "#C49A6C" },
+      },
+    };
+    const parsed = ReaderSettingsSchema.safeParse(record);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.customDarkTheme?.tokens.board).toBe("#0E1A14");
+      expect(parsed.data.customDarkTheme?.tokens.brass).toBe("#C49A6C");
+      expect(parsed.data.customDarkTheme?.tokens).not.toHaveProperty("boardText");
+      expect(parsed.data.customDarkTheme?.tokens).not.toHaveProperty("lit");
+    }
+  });
+
+  it.each(["board", "boardText", "lit", "brass"] as const)(
+    "an invalid chrome hex on %s fails parse",
+    (field) => {
+      const record = {
+        ...V3_RECORD,
+        schemaVersion: 5,
+        theme: "custom-light" as const,
+        customLightTheme: {
+          baseTheme: "light" as const,
+          tokens: { ...PRESET_SEEDS.light, [field]: "#12345" },
+        },
+      };
+      expect(ReaderSettingsSchema.safeParse(record).success).toBe(false);
+    },
+  );
+
+  it("a bundle carrying edited chrome fields round-trips value-stable", () => {
+    const record: ReaderSettings = {
+      ...V3_RECORD,
+      schemaVersion: 5,
+      theme: "custom-light",
+      customLightTheme: {
+        baseTheme: "light",
+        tokens: { ...PRESET_SEEDS.light, board: "#1A2B3C", lit: "#2A3B4C" },
+      },
+    };
+    const json = JSON.stringify(record);
+    const parsed = ReaderSettingsSchema.parse(JSON.parse(json));
+    expect(parsed).toEqual(record);
+    // Parse is IDEMPOTENT in serialized form (Zod re-emits keys in schema
+    // order) — the existing round-trip discipline, now with chrome fields.
+    expect(JSON.stringify(ReaderSettingsSchema.parse(parsed))).toBe(JSON.stringify(parsed));
   });
 });

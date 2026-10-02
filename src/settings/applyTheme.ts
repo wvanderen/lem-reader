@@ -24,20 +24,22 @@
 // injection surface. The renderer already forbids dangerouslySetInnerHTML
 // (Phase 1, react/no-danger — preserved).
 //
-// Issue #86 (decision #73), extended by issue #120 — the custom themes:
-// while a custom slot is active (theme "custom-light" / "custom-dark") the
-// inline writes ARE the theme — applyTheme resolves the FULL 15-token
-// palette from the ACTIVE SLOT's 5 stored tokens (5 stored + 10 derived
-// incl. issue #118's four named highlight fills, src/settings/customTheme.ts)
-// onto documentElement, because [data-theme="custom-*"] overrides no tokens
-// in CSS (first paint before hydration paints the seeded :root defaults —
-// accepted by decision #73). When the theme is a preset the SAME property
-// list is REMOVED again, so the [data-theme] CSS blocks own the palette
-// (inline writes would otherwise out-rank the stylesheet forever — one
-// stale inline --surface would poison every later preset). An active slot
-// without its record (unrepresentable through the schema's superRefine,
-// but defended here) takes the removal path: the :root palette paints,
-// never a half-written theme.
+// Issue #86 (decision #73), extended by issues #120/#146 — the custom
+// themes: while a custom slot is active (theme "custom-light" /
+// "custom-dark") the inline writes ARE the theme — applyTheme resolves the
+// FULL palette from the ACTIVE SLOT's stored tokens (the 5 seeds + edited
+// chrome, plus every derived token incl. issue #118's four named highlight
+// fills and issue #146's eight Wayfinder chrome tokens — 23 inline writes,
+// src/settings/customTheme.ts) onto documentElement, because
+// [data-theme="custom-*"] overrides no tokens in CSS (first paint before
+// hydration paints the seeded :root defaults — accepted by decision #73).
+// When the theme is a preset the SAME property list is REMOVED again, so
+// the [data-theme] CSS blocks own the palette (inline writes would
+// otherwise out-rank the stylesheet forever — one stale inline --surface
+// would poison every later preset). An active slot without its record
+// (unrepresentable through the schema's superRefine, but defended here)
+// takes the removal path: the :root palette paints, never a half-written
+// theme.
 import type { ReaderSettings } from "../content/schema";
 import { FONT_STACKS, SPACING_PRESETS } from "./tokens";
 import { CUSTOM_COLOR_PROPS, activeSlotTheme, resolveCustomTheme } from "./customTheme";
