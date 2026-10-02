@@ -65,6 +65,8 @@ export interface SelectionToolbarController {
   captureResult: ToolbarCaptureResult | null;
   /** Activate "Highlight" (bare) — toolbar button + H shortcut. */
   handleHighlight: () => void;
+  savedHighlight: boolean;
+  handleUndo: () => void;
   /** Activate "Highlight + note" — toolbar button + N shortcut. */
   handleHighlightAndNote: () => void;
   /** Focus-exit dismissal (the toolbar's focusout → this). */
@@ -81,22 +83,28 @@ export function useSelectionToolbar({
   // selection (ok / overlap / empty / empty-span / ineligible /
   // boundary-ineligible / measurement-body — Phase 19 vocabulary).
   const [selectionRect, setSelectionRect] = useState<DOMRect | null>(null);
-  const [captureResult, setCaptureResult] =
-    useState<ToolbarCaptureResult | null>(null);
+  const [captureResult, setCaptureResult] = useState<ToolbarCaptureResult | null>(null);
   // Plan 13-11 (G6): the saved live Range from the last VALID selection.
   // Gecko/WebKit collapse the document selection synchronously whenever DOM
   // focus moves, so the toolbar's keyboard activation path cannot rely on
   // the live selection. Cleared in every branch that clears
   // selectionRect/captureResult so it can never resurrect a stale
   // selection. The clone is the ONLY persisted selection state.
+  const [saved, setSaved] = useState<{
+    id: string;
+    rect: DOMRect;
+    capture: ToolbarCaptureResult;
+  } | null>(null);
+  const savingRef = useRef(false);
+  const generationRef = useRef(0);
   const lastValidRangeRef = useRef<Range | null>(null);
   // Event-time mirrors for the window keydown listener (registered once per
   // article mount — NO state deps; the Tab branches read refs at EVENT time,
   // never a stale closure).
   const captureOkRef = useRef(false);
-  captureOkRef.current = captureResult?.ok === true;
+  captureOkRef.current = saved !== null || captureResult?.ok === true;
   const toolbarRectActiveRef = useRef<DOMRect | null>(null);
-  toolbarRectActiveRef.current = selectionRect;
+  toolbarRectActiveRef.current = saved?.rect ?? selectionRect;
 
   /** The exact trio every clear-branch clears. */
   const clearToolbarState = useCallback(() => {
@@ -110,6 +118,8 @@ export function useSelectionToolbar({
   // across an article transition.
   useEffect(() => {
     clearToolbarState();
+    setSaved(null);
+    generationRef.current += 1;
   }, [article, clearToolbarState]);
 
   /**
@@ -133,7 +143,12 @@ export function useSelectionToolbar({
     async (withNote: boolean): Promise<void> => {
       const api = highlightApiRef.current;
       const readingRoot = readingRootRef.current;
-      if (!api || !readingRoot) return;
+      if (!api || !readingRoot || savingRef.current) return;
+      if (saved) {
+        if (withNote) api.setOpenPopoverFor(saved.id);
+        setSaved(null);
+        return;
+      }
       const selection = window.getSelection();
       if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
         const active = document.activeElement;
@@ -149,8 +164,7 @@ export function useSelectionToolbar({
           return;
         }
       }
-      const result: CreateFromSelectionResult =
-        await api.createHighlightFromSelection(readingRoot);
+      const result: CreateFromSelectionResult = await api.createHighlightFromSelection(readingRoot);
       if (!result.ok) return; // invalid selection — toolbar shows the hint
       // Clear the selection so the <mark> renders cleanly, then the toolbar
       // state so it dismisses on highlight creation (UI-SPEC §Interaction
@@ -165,7 +179,7 @@ export function useSelectionToolbar({
         api.setOpenPopoverFor(result.highlightId);
       }
     },
-    [highlightApiRef, readingRootRef, clearToolbarState],
+    [highlightApiRef, readingRootRef, clearToolbarState, saved],
   );
 
   /** Stable `() => void` wrappers for the toolbar buttons + keydown refs. */
@@ -188,20 +202,28 @@ export function useSelectionToolbar({
   // survives the focus move so selectionchange never fires a collapse.
   const dismissFromFocusExit = useCallback(() => {
     clearToolbarState();
+    setSaved(null);
   }, [clearToolbarState]);
+
+  const savedRef = useRef(saved);
+  savedRef.current = saved;
 
   useEffect(() => {
     if (!article || !articleEl) return;
     const onKey = (event: KeyboardEvent) => {
       if (isFormField(event.target)) return;
       const key = event.key;
+      if (key === "Escape" && savedRef.current) {
+        void highlightApiRef.current?.deleteHighlight(savedRef.current.id);
+        setSaved(null);
+        clearToolbarState();
+        return;
+      }
       // Enter/Space on a focused <mark> (D5-10 / UI-SPEC §Interaction 29)
       // opens the inline note popover via setOpenPopoverFor.
       if (key === "Enter" || key === " ") {
         const target = event.target as HTMLElement | null;
-        const mark = target?.closest?.(
-          "mark.highlight[data-highlight-id]",
-        ) as HTMLElement | null;
+        const mark = target?.closest?.("mark.highlight[data-highlight-id]") as HTMLElement | null;
         if (mark) {
           event.preventDefault();
           const id = mark.getAttribute("data-highlight-id");
@@ -234,21 +256,15 @@ export function useSelectionToolbar({
         const articleNode = readingRootRef.current;
         const inReadingContext =
           active === document.body ||
-          (activeEl !== null &&
-            articleNode !== null &&
-            articleNode.contains(activeEl));
-        const insideToolbar =
-          activeEl !== null &&
-          activeEl.closest(".selection-toolbar") !== null;
+          (activeEl !== null && articleNode !== null && articleNode.contains(activeEl));
+        const insideToolbar = activeEl !== null && activeEl.closest(".selection-toolbar") !== null;
         if (
           captureOkRef.current &&
           toolbarRectActiveRef.current !== null &&
           inReadingContext &&
           !insideToolbar
         ) {
-          const toolbarBtn = document.querySelector<HTMLElement>(
-            ".selection-toolbar button",
-          );
+          const toolbarBtn = document.querySelector<HTMLElement>(".selection-toolbar button");
           if (toolbarBtn) {
             event.preventDefault();
             toolbarBtn.focus();
@@ -264,11 +280,7 @@ export function useSelectionToolbar({
           const toolbarRoot = document.querySelector(".selection-toolbar");
           const toolbarButtons = toolbarRoot?.querySelectorAll("button");
           const lastBtn = toolbarButtons?.[toolbarButtons.length - 1];
-          if (
-            activeEl !== null &&
-            lastBtn instanceof Element &&
-            lastBtn.contains(activeEl)
-          ) {
+          if (activeEl !== null && lastBtn instanceof Element && lastBtn.contains(activeEl)) {
             dismissFromFocusExit();
           }
         }
@@ -296,7 +308,81 @@ export function useSelectionToolbar({
     readingRootRef,
     highlightApiRef,
     dismissFromFocusExit,
+    clearToolbarState,
   ]);
+
+  // Save only on a completed primary pointer gesture, never while dragging
+  // or extending a keyboard selection. Reuse the canonical capture boundary.
+  useEffect(() => {
+    if (!article || !articleEl) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!(event.target instanceof Element) || !event.target.closest(".selection-toolbar")) {
+        generationRef.current += 1;
+        setSaved(null);
+      }
+    };
+    const onPointerUp = async (event: PointerEvent) => {
+      if (event.button !== 0 || savingRef.current) return;
+      const root = readingRootRef.current;
+      const api = highlightApiRef.current;
+      const selection = window.getSelection();
+      if (
+        !root ||
+        !api ||
+        !selection ||
+        selection.isCollapsed ||
+        !selection.rangeCount ||
+        !(event.target instanceof Node) ||
+        !root.contains(event.target)
+      )
+        return;
+      const range = selection.getRangeAt(0);
+      if (!root.contains(range.startContainer) || !root.contains(range.endContainer)) return;
+      const capture = api.captureCurrentSelection(root);
+      if (!capture.ok) return;
+      const rect = range.getBoundingClientRect();
+      const generation = generationRef.current;
+      savingRef.current = true;
+      try {
+        const result = await api.createHighlightFromSelection(root);
+        if (!result.ok || generation !== generationRef.current) return;
+        // Do not clear a newer selection made while persistence was pending.
+        const current = window.getSelection();
+        if (
+          current?.rangeCount &&
+          current.getRangeAt(0).startContainer === range.startContainer &&
+          current.getRangeAt(0).startOffset === range.startOffset &&
+          current.getRangeAt(0).endContainer === range.endContainer &&
+          current.getRangeAt(0).endOffset === range.endOffset
+        ) {
+          current.removeAllRanges();
+        }
+        clearToolbarState();
+        setSaved({ id: result.highlightId, rect, capture });
+      } finally {
+        savingRef.current = false;
+      }
+    };
+    const dismissSaved = () => setSaved(null);
+    window.addEventListener("resize", dismissSaved);
+    document.addEventListener("scroll", dismissSaved, true);
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("pointerup", onPointerUp);
+    return () => {
+      generationRef.current += 1;
+      window.removeEventListener("resize", dismissSaved);
+      document.removeEventListener("scroll", dismissSaved, true);
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("pointerup", onPointerUp);
+    };
+  }, [article, articleEl, readingRootRef, highlightApiRef, clearToolbarState]);
+
+  const handleUndo = useCallback(() => {
+    if (!saved) return;
+    void highlightApiRef.current?.deleteHighlight(saved.id);
+    setSaved(null);
+    clearToolbarState();
+  }, [saved, highlightApiRef, clearToolbarState]);
 
   // UI-SPEC §Interaction 24: selectionchange tracking for the toolbar.
   // rAF-throttled (coalesce — one update per frame) so rapid selection
@@ -323,10 +409,7 @@ export function useSelectionToolbar({
           // while activeElement is inside the toolbar, the dismissal only
           // when the incoming focus target is outside it.
           const active = document.activeElement;
-          if (
-            active instanceof Element &&
-            active.closest(".selection-toolbar") !== null
-          ) {
+          if (active instanceof Element && active.closest(".selection-toolbar") !== null) {
             return; // the toolbar stays mounted while it owns focus
           }
           clearToolbarState();
@@ -346,9 +429,7 @@ export function useSelectionToolbar({
         }
         // Skip selections inside the hidden measurement body (D5-08 — should
         // never happen due to user-select:none, but defend).
-        const measurementBody = articleNode.querySelector(
-          ".article-body-measurement",
-        );
+        const measurementBody = articleNode.querySelector(".article-body-measurement");
         if (
           measurementBody &&
           (measurementBody.contains(range.startContainer) ||
@@ -380,8 +461,10 @@ export function useSelectionToolbar({
   }, [article, articleEl, readingRootRef, highlightApiRef, clearToolbarState]);
 
   return {
-    selectionRect,
-    captureResult,
+    selectionRect: saved?.rect ?? selectionRect,
+    captureResult: saved?.capture ?? captureResult,
+    savedHighlight: saved !== null,
+    handleUndo,
     handleHighlight,
     handleHighlightAndNote,
     dismissFromFocusExit,

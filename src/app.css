@@ -5556,3 +5556,11 @@ dialog.highlight-popover .highlight-color-entry legend {
 .library-row-actions a.library-row-highlights {
   z-index: calc(var(--z-row-actions) + 1);
 }
+
+.selection-toolbar-saved {
+  align-self: center;
+  padding-left: var(--space-md);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--ink-soft);
+}

@@ -200,6 +200,8 @@ function Harness({
       <SelectionToolbar
         selectionRect={ctl.selectionRect}
         captureResult={ctl.captureResult}
+        savedHighlight={ctl.savedHighlight}
+        onUndo={ctl.handleUndo}
         onHighlight={ctl.handleHighlight}
         onHighlightAndNote={ctl.handleHighlightAndNote}
         onFocusExit={ctl.dismissFromFocusExit}
@@ -623,5 +625,57 @@ describe("useSelectionToolbar — article lifecycle", () => {
     fireSelectionChange();
     flushRaf();
     await waitFor(() => expect(queryToolbar()).not.toBeNull());
+  });
+});
+
+
+describe("completed pointer selection", () => {
+  function releasePointer() {
+    const event = new Event("pointerup", { bubbles: true });
+    Object.defineProperty(event, "button", { value: 0 });
+    document.querySelector('[data-testid="reading-root"] p')!.dispatchEvent(event);
+  }
+
+  it("saves on release, keeps Undo through selection collapse, and deletes only that mark", async () => {
+    const api = makeApi();
+    const view = renderHarness(api);
+    selectInRoot(6, 19);
+    fireEvent(document, new Event("selectionchange"));
+    flushRaf();
+    await waitFor(() => expect(view.getByRole("button", { name: "Highlight", exact: true })).toBeTruthy());
+    fireEvent(
+      document.querySelector('[data-testid="reading-root"] p')!,
+      Object.assign(new Event("pointerup", { bubbles: true }), { button: 0 }),
+    );
+    await waitFor(() => expect(view.getByRole("button", { name: "Undo" })).toBeTruthy());
+    expect(api.createCalls).toBe(1);
+    expect(view.getByText("Highlight saved. Undo available.")).toBeTruthy();
+    fireEvent(document, new Event("selectionchange"));
+    flushRaf();
+    fireEvent.click(view.getByRole("button", { name: "Undo" }));
+    expect(api.deleteHighlight).toHaveBeenCalledWith("hl-new");
+    expect(queryToolbar()).toBeNull();
+  });
+
+  it("Add note opens the saved highlight without creating another", async () => {
+    const api = makeApi();
+    const view = renderHarness(api);
+    selectInRoot(6, 19);
+    releasePointer();
+    await waitFor(() => expect(view.getByRole("button", { name: "Add note" })).toBeTruthy());
+    fireEvent.click(view.getByRole("button", { name: "Add note" }));
+    expect(api.setOpenPopoverFor).toHaveBeenCalledWith("hl-new");
+    expect(api.createCalls).toBe(1);
+  });
+
+  it("does not save while shaping a selection or for invalid content", () => {
+    const api = makeApi({ captureResult: { ok: false, reason: "overlap" } });
+    renderHarness(api);
+    selectInRoot(6, 19);
+    fireSelectionChange();
+    flushRaf();
+    expect(api.createCalls).toBe(0);
+    releasePointer();
+    expect(api.createCalls).toBe(0);
   });
 });
