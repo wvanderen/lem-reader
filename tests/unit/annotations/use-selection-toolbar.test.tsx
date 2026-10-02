@@ -25,7 +25,7 @@ import {
   beforeEach,
   beforeAll,
 } from "vitest";
-import { render, cleanup, fireEvent, waitFor } from "@testing-library/react";
+import { render, cleanup, fireEvent, waitFor, act } from "@testing-library/react";
 import { useCallback, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useSelectionToolbar } from "../../../src/reader/annotations/useSelectionToolbar";
@@ -200,6 +200,8 @@ function Harness({
       <SelectionToolbar
         selectionRect={ctl.selectionRect}
         captureResult={ctl.captureResult}
+        savedHighlight={ctl.savedHighlight}
+        onUndo={ctl.handleUndo}
         onHighlight={ctl.handleHighlight}
         onHighlightAndNote={ctl.handleHighlightAndNote}
         onFocusExit={ctl.dismissFromFocusExit}
@@ -623,5 +625,153 @@ describe("useSelectionToolbar — article lifecycle", () => {
     fireSelectionChange();
     flushRaf();
     await waitFor(() => expect(queryToolbar()).not.toBeNull());
+  });
+});
+
+
+describe("completed pointer selection", () => {
+  function releasePointer() {
+    const event = new Event("pointerup", { bubbles: true });
+    Object.defineProperty(event, "button", { value: 0 });
+    document.querySelector('[data-testid="reading-root"] p')!.dispatchEvent(event);
+  }
+
+  it("saves on release, keeps Undo through selection collapse, and deletes only that mark", async () => {
+    const api = makeApi();
+    const view = renderHarness(api);
+    selectInRoot(6, 19);
+    fireEvent(document, new Event("selectionchange"));
+    flushRaf();
+    await waitFor(() =>
+      expect(view.getByRole("button", { name: /^Highlight$/ })).toBeTruthy(),
+    );
+    fireEvent(
+      document.querySelector('[data-testid="reading-root"] p')!,
+      Object.assign(new Event("pointerup", { bubbles: true }), { button: 0 }),
+    );
+    await waitFor(() => expect(view.getByRole("button", { name: "Undo" })).toBeTruthy());
+    expect(api.createCalls).toBe(1);
+    await waitFor(() => expect(view.getByText("Highlight saved. Undo available.")).toBeTruthy());
+    fireEvent(document, new Event("selectionchange"));
+    flushRaf();
+    fireEvent.click(view.getByRole("button", { name: "Undo" }));
+    expect(api.deleteHighlight).toHaveBeenCalledWith("hl-new");
+    expect(queryToolbar()).toBeNull();
+  });
+
+  it("Add note opens the saved highlight without creating another", async () => {
+    const api = makeApi();
+    const view = renderHarness(api);
+    selectInRoot(6, 19);
+    releasePointer();
+    await waitFor(() => expect(view.getByRole("button", { name: "Add note" })).toBeTruthy());
+    fireEvent.click(view.getByRole("button", { name: "Add note" }));
+    expect(api.setOpenPopoverFor).toHaveBeenCalledWith("hl-new");
+    expect(api.createCalls).toBe(1);
+  });
+
+  it("does not save while shaping a selection or for invalid content", () => {
+    const api = makeApi({ captureResult: { ok: false, reason: "overlap" } });
+    renderHarness(api);
+    selectInRoot(6, 19);
+    fireSelectionChange();
+    flushRaf();
+    expect(api.createCalls).toBe(0);
+    releasePointer();
+    expect(api.createCalls).toBe(0);
+  });
+});
+
+describe("pending pointer saves", () => {
+  function deferredSave(api: FakeApi) {
+    let resolve!: (result: CreateFromSelectionResult) => void;
+    const promise = new Promise<CreateFromSelectionResult>((done) => {
+      resolve = done;
+    });
+    vi.mocked(api.createHighlightFromSelection).mockImplementationOnce(() => promise);
+    return async (id = "hl-first") => {
+      await act(async () => {
+        resolve({ ok: true, highlightId: id, position: { start: 6, end: 19 } });
+        await promise;
+      });
+    };
+  }
+
+  function release() {
+    fireEvent(
+      document.querySelector('[data-testid="reading-root"] p')!,
+      Object.assign(new Event("pointerup", { bubbles: true }), { button: 0 }),
+    );
+  }
+
+  it.each(["live range", "replacement range"])(
+    "preserves a newer keyboard selection (%s)",
+    async (kind) => {
+      const api = makeApi();
+      const finish = deferredSave(api);
+      const view = renderHarness(api);
+      selectInRoot(6, 19);
+      release();
+      if (kind === "live range")
+        window
+          .getSelection()!
+          .getRangeAt(0)
+          .setEnd(window.getSelection()!.getRangeAt(0).endContainer, 24);
+      else selectInRoot(20, 24);
+      fireEvent(document, new Event("selectionchange"));
+      act(() => flushRaf());
+      await finish();
+      expect(window.getSelection()!.isCollapsed).toBe(false);
+      expect(window.getSelection()!.getRangeAt(0).endOffset).toBe(24);
+      expect(view.getByRole("button", { name: /^Highlight$/ })).toBeTruthy();
+      expect(view.queryByRole("button", { name: "Undo" })).toBeNull();
+    },
+  );
+
+  it("saves a second completed pointer selection while the first is pending", async () => {
+    const api = makeApi();
+    const finish = deferredSave(api);
+    const view = renderHarness(api);
+    selectInRoot(6, 19);
+    release();
+    fireEvent.pointerDown(document.querySelector('[data-testid="reading-root"] p')!);
+    selectInRoot(20, 24);
+    release();
+    await waitFor(() => expect(view.getByRole("button", { name: "Undo" })).toBeTruthy());
+    expect(api.createHighlightFromSelection).toHaveBeenCalledTimes(2);
+    await finish();
+    fireEvent.click(view.getByRole("button", { name: "Undo" }));
+    expect(api.deleteHighlight).toHaveBeenCalledWith("hl-new");
+    expect(api.deleteHighlight).not.toHaveBeenCalledWith("hl-first");
+  });
+
+  it.each(["scroll", "resize", "focus exit"])(
+    "does not restore feedback after %s during saving",
+    async (dismissal) => {
+      const api = makeApi();
+      const finish = deferredSave(api);
+      const view = renderHarness(api);
+      selectInRoot(6, 19);
+      fireEvent(document, new Event("selectionchange"));
+      act(() => flushRaf());
+      release();
+      if (dismissal === "focus exit") {
+        view.getByRole("button", { name: /^Highlight$/ }).focus();
+        view.getByTestId("outside").focus();
+      } else fireEvent(dismissal === "resize" ? window : document, new Event(dismissal));
+      await finish();
+      expect(view.queryByRole("button", { name: "Undo" })).toBeNull();
+    },
+  );
+
+  it("Escape uses the same saved-highlight Undo action", async () => {
+    const api = makeApi();
+    const view = renderHarness(api);
+    selectInRoot(6, 19);
+    release();
+    await waitFor(() => expect(view.getByRole("button", { name: "Undo" })).toBeTruthy());
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(api.deleteHighlight).toHaveBeenCalledExactlyOnceWith("hl-new");
+    expect(queryToolbar()).toBeNull();
   });
 });

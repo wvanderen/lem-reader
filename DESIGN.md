@@ -173,6 +173,8 @@ Mat Board-on-paper fill (surface inside dialogs), 1px hairline, 8px radius, 44px
 ### Highlight Marks (signature)
 The annotation system speaks in classification tints: a default brass-paper tint plus yellow/green/blue/pink shelf-label fills, each carrying theme ink at ≥4.5:1 (test-enforced). State is shape-cued beyond color: solid fill, dotted underline for note-bearing, dashed outline for unresolved. The spoken-word marker is a separate tan fill with a solid accent underline — position, not annotation.
 
+Completing a valid primary pointer selection saves a highlight and places “Highlighted”, “Undo”, and “Add note” feedback beside the selected passage. While that feedback is available, Undo or Escape removes the new highlight; Add note opens its note editor. Keyboard selections retain the explicit Highlight and Highlight + note actions, accessible through the toolbar or the H and N shortcuts.
+
 ### Custom Themes (the reader-built room)
 The two custom slots (Custom light / Custom dark) let the reader repaint the room without losing the wayfinding grammar. The builder groups nine rows: the five surface seeds (Surface, Raised surface, Text, Accent, Hairline) and — under a "Reading room" group — the four chrome tokens (Band, Band text, Lit board, Brass). An untouched chrome row shows its DERIVED value; editing a row simply stores it ("Reset to base colors" returns everything to derived). The accent is the room's hue anchor: the band and lit board take the accent's hue at the register's enamel lightness, the brass is the accent-hue metal, and the band text stays the near-white signage register.
 

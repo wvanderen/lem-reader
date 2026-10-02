@@ -49,6 +49,8 @@ export interface SelectionToolbarProps {
   captureResult: ToolbarCaptureResult | null;
   /** Activate "Highlight" (bare). */
   onHighlight: () => void;
+  savedHighlight?: boolean;
+  onUndo?: () => void;
   /** Activate "Highlight + note" (creates + opens note popover in Plan 05-03). */
   onHighlightAndNote: () => void;
   /**
@@ -95,8 +97,7 @@ function computePosition(
 
   // Vertical: place --space-sm above the selection top, or flip below if too
   // close to the viewport top.
-  const flipBelow =
-    selectionRect.top < FLIP_BELOW_THRESHOLD_PX + toolbarHeight + GUTTER;
+  const flipBelow = selectionRect.top < FLIP_BELOW_THRESHOLD_PX + toolbarHeight + GUTTER;
   const top = flipBelow
     ? selectionRect.bottom + GUTTER
     : selectionRect.top - GUTTER - toolbarHeight;
@@ -108,6 +109,8 @@ export function SelectionToolbar({
   selectionRect,
   captureResult,
   onHighlight,
+  savedHighlight = false,
+  onUndo,
   onHighlightAndNote,
   onFocusExit,
 }: SelectionToolbarProps): React.ReactElement | null {
@@ -129,16 +132,12 @@ export function SelectionToolbar({
     const rect = el.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return;
     setMeasuredSize((prev) => {
-      if (
-        prev !== null &&
-        prev.width === rect.width &&
-        prev.height === rect.height
-      ) {
+      if (prev !== null && prev.width === rect.width && prev.height === rect.height) {
         return prev; // no change — bail to avoid re-render loop
       }
       return { width: rect.width, height: rect.height };
     });
-  }, [isHint]);
+  }, [isHint, savedHighlight]);
 
   // Plan 13-11 (G6 — announce-on-appear): the text for the visually-hidden
   // polite live region below. Set ONLY on the transition into the buttons
@@ -150,13 +149,18 @@ export function SelectionToolbar({
   // region (D5-12 copy unchanged).
   const [announceText, setAnnounceText] = useState<string | null>(null);
   const prevButtonsVariantRef = useRef(false);
+  const prevSavedHighlightRef = useRef(false);
   const buttonsVariant = captureResult?.ok === true;
   useEffect(() => {
-    if (buttonsVariant && !prevButtonsVariantRef.current) {
-      setAnnounceText("Highlight actions available.");
+    if (buttonsVariant && (!prevButtonsVariantRef.current ||
+        (savedHighlight && !prevSavedHighlightRef.current))) {
+      setAnnounceText(
+        savedHighlight ? "Highlight saved. Undo available." : "Highlight actions available.",
+      );
     }
     prevButtonsVariantRef.current = buttonsVariant;
-  }, [buttonsVariant]);
+    prevSavedHighlightRef.current = savedHighlight;
+  }, [buttonsVariant, savedHighlight]);
 
   // Plan 13-11 (G6): focus-exit detection via the NATIVE focusout event,
   // attached imperatively on the toolbar root (focusout bubbles from the
@@ -198,11 +202,7 @@ export function SelectionToolbar({
 
   // Compute position from the measured size (or a fallback estimate).
   const size = measuredSize ?? { width: 240, height: 44 };
-  const { left, top } = computePosition(
-    selectionRect,
-    size.width,
-    size.height,
-  );
+  const { left, top } = computePosition(selectionRect, size.width, size.height);
 
   const isValid = captureResult.ok;
 
@@ -228,19 +228,16 @@ export function SelectionToolbar({
       <StatusRegion className="visually-hidden">{announceText}</StatusRegion>
       {isValid ? (
         <>
+          {savedHighlight && <span className="selection-toolbar-saved">Highlighted</span>}
           <button
             type="button"
             className="selection-toolbar-button"
-            onClick={onHighlight}
+            onClick={savedHighlight ? onUndo : onHighlight}
           >
-            Highlight
+            {savedHighlight ? "Undo" : "Highlight"}
           </button>
-          <button
-            type="button"
-            className="selection-toolbar-button"
-            onClick={onHighlightAndNote}
-          >
-            Highlight + note
+          <button type="button" className="selection-toolbar-button" onClick={onHighlightAndNote}>
+            {savedHighlight ? "Add note" : "Highlight + note"}
           </button>
         </>
       ) : (
@@ -255,8 +252,7 @@ export function SelectionToolbar({
             ? "This selection includes content that can't be highlighted."
             : captureResult.reason === "overlap"
               ? "This overlaps an existing highlight."
-              : captureResult.reason === "empty" ||
-                  captureResult.reason === "empty-span"
+              : captureResult.reason === "empty" || captureResult.reason === "empty-span"
                 ? "Select text to highlight it."
                 : "Select readable text to highlight it."}
         </p>

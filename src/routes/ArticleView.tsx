@@ -646,6 +646,8 @@ export function ArticleView({
     selectionRect,
     captureResult,
     handleHighlight,
+    savedHighlight,
+    handleUndo,
     handleHighlightAndNote,
     dismissFromFocusExit: dismissToolbarFromFocusExit,
   } = useSelectionToolbar({
@@ -2078,8 +2080,9 @@ export function ArticleView({
         <p className="visually-hidden">
           Keyboard shortcuts: M switches reading mode. PageUp and PageDown,
           ArrowLeft and ArrowRight, and Space and Shift+Space turn pages. To
-          highlight selected text, keyboard and mouse users can press H, or N to
-          highlight and open a note. Screen-reader users: after selecting text,
+          highlight selected text, keyboard users can press H, or N to
+          highlight and open a note. Pointer selections save automatically;
+          use Undo or Escape to remove the new highlight. Screen-reader users: after selecting text,
           Tab to the "Highlight" toolbar button and press Enter — screen readers
           reserve single-letter keys like H and N for their own navigation.
         </p>
@@ -2454,6 +2457,8 @@ export function ArticleView({
         <SelectionToolbar
           selectionRect={selectionRect}
           captureResult={captureResult}
+          savedHighlight={savedHighlight}
+          onUndo={handleUndo}
           onHighlight={handleHighlight}
           onHighlightAndNote={handleHighlightAndNote}
           onFocusExit={dismissToolbarFromFocusExit}
