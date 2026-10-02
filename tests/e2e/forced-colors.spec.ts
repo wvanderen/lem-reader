@@ -131,15 +131,15 @@ test.describe("Forced colors (A11Y-05)", () => {
     await page.goto(`${BASE}/#/article/${FIRST_FIXTURE}`);
     await page.getByRole("button", { name: "Reading settings" }).click();
     await expandSettingsGroup(page, "Appearance");
-    // The default-selected theme radio is "Sepia" — its checked state conveys
-    // selection independent of the marker color.
-    const sepia = page.getByRole("radio", { name: "Sepia" });
-    await expect(sepia).toBeChecked();
+    // The default-selected theme radio is "Daylight" — its checked state
+    // conveys selection independent of the marker color.
+    const daylight = page.getByRole("radio", { name: "Daylight" });
+    await expect(daylight).toBeChecked();
 
-    // Selecting "Dark" updates the checked state.
-    await page.getByRole("radio", { name: "Dark", exact: true }).click();
-    await expect(page.getByRole("radio", { name: "Dark", exact: true })).toBeChecked();
-    await expect(sepia).not.toBeChecked();
+    // Selecting "Night" updates the checked state.
+    await page.getByRole("radio", { name: "Night", exact: true }).click();
+    await expect(page.getByRole("radio", { name: "Night", exact: true })).toBeChecked();
+    await expect(daylight).not.toBeChecked();
   });
 
   // ───────────────────────────────────────────────────────────────────────

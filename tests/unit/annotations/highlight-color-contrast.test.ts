@@ -41,15 +41,21 @@ function cssToken(css: string, from: number, to: number, prop: string): string {
 
 describe("preset themes — ink on every highlight fill ≥ 4.5:1 (D5-14 × #118)", () => {
   const css = readFileSync(resolve(process.cwd(), "src/app.css"), "utf-8");
+  // ADR 0005 block order: :root (Daylight) → [data-theme="sepia"] (Warm
+  // paper) → [data-theme="light"] (Daylight, explicit) → [data-theme="dark"]
+  // (Night). The map below IS that order — keep it in sync with app.css.
+  const sepiaStart = css.indexOf('[data-theme="sepia"]');
   const lightStart = css.indexOf('[data-theme="light"]');
   const darkStart = css.indexOf('[data-theme="dark"]');
   const darkBlockEnd = css.indexOf("body {", darkStart);
-  expect(lightStart).toBeGreaterThan(-1);
+  expect(sepiaStart).toBeGreaterThan(-1);
+  expect(lightStart).toBeGreaterThan(sepiaStart);
   expect(darkStart).toBeGreaterThan(lightStart);
   expect(darkBlockEnd).toBeGreaterThan(darkStart);
 
   const blocks = {
-    sepia: [0, lightStart] as const,
+    daylight: [0, sepiaStart] as const,
+    sepia: [sepiaStart, lightStart] as const,
     light: [lightStart, darkStart] as const,
     dark: [darkStart, darkBlockEnd] as const,
   };

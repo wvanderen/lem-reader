@@ -90,7 +90,7 @@ describe("SettingsPanel — structure + aria (D2-01)", () => {
     }
     // Issue #120 — the theme group carries the three presets PLUS the two
     // independently saved custom slots (no single "Custom" radio anymore).
-    for (const name of ["Sepia", "Light", "Dark", "Custom light", "Custom dark"]) {
+    for (const name of ["Daylight", "Warm paper", "Night", "Custom light", "Custom dark"]) {
       expect(screen.getByRole("radio", { name })).not.toBeNull();
     }
     expect(screen.queryByRole("radio", { name: "Custom" })).toBeNull();
@@ -212,9 +212,9 @@ describe("SettingsPanel — custom theme builder (issues #86/#120)", () => {
     // Seeded from the LIGHT preset (issue #120: a slot seeds from its
     // matching preset, not the previously active theme) — the 5 stored
     // tokens land inline (decision #73: the inline writes ARE the theme).
-    expect(inlineToken("--surface")).toBe("#fcfcfa");
-    expect(inlineToken("--ink")).toBe("#1a1a1a");
-    expect(inlineToken("--accent")).toBe("#6b4423");
+    expect(inlineToken("--surface")).toBe("#f7f7f5");
+    expect(inlineToken("--ink")).toBe("#1c1f1d");
+    expect(inlineToken("--accent")).toBe("#22604a");
     // Derived tokens resolve too (the 15-prop palette).
     expect(inlineToken("--highlight")).toMatch(/^#[0-9a-f]{6}$/);
     // Issue #101 — the builder is a lazy chunk now; await its disclosure
@@ -232,9 +232,9 @@ describe("SettingsPanel — custom theme builder (issues #86/#120)", () => {
       fireEvent.click(screen.getByRole("radio", { name: "Custom dark" }));
     });
     expect(document.documentElement.dataset.theme).toBe("custom-dark");
-    expect(inlineToken("--surface")).toBe("#1b1814");
-    expect(inlineToken("--ink")).toBe("#ede6d9");
-    expect(inlineToken("--accent")).toBe("#c49a6c");
+    expect(inlineToken("--surface")).toBe("#141a17");
+    expect(inlineToken("--ink")).toBe("#e6e9e4");
+    expect(inlineToken("--accent")).toBe("#7cc7a1");
     expect(await screen.findByText("Customize colors")).not.toBeNull();
   });
 
@@ -271,7 +271,7 @@ describe("SettingsPanel — custom theme builder (issues #86/#120)", () => {
     act(() => {
       fireEvent.change(hex, { target: { value: "#12" } });
     });
-    expect(inlineToken("--ink")).toBe("#1a1a1a");
+    expect(inlineToken("--ink")).toBe("#1c1f1d");
     expect(hex.value).toBe("#12");
   });
 
@@ -287,7 +287,7 @@ describe("SettingsPanel — custom theme builder (issues #86/#120)", () => {
     // To a preset: data-theme flips, the inline palette is REMOVED (the CSS
     // block owns the preset again), the builder unmounts.
     act(() => {
-      fireEvent.click(screen.getByRole("radio", { name: "Light" }));
+      fireEvent.click(screen.getByRole("radio", { name: "Daylight" }));
     });
     expect(document.documentElement.dataset.theme).toBe("light");
     expect(inlineToken("--ink")).toBe("");
@@ -299,7 +299,7 @@ describe("SettingsPanel — custom theme builder (issues #86/#120)", () => {
     });
     expect(document.documentElement.dataset.theme).toBe("custom-light");
     expect(inlineToken("--ink")).toBe("#123456");
-    expect(inlineToken("--surface")).toBe("#fcfcfa");
+    expect(inlineToken("--surface")).toBe("#f7f7f5");
   });
 
   it("the two slots are independent: edits in one never ride into the other", async () => {
@@ -318,8 +318,8 @@ describe("SettingsPanel — custom theme builder (issues #86/#120)", () => {
       fireEvent.click(screen.getByRole("radio", { name: "Custom dark" }));
     });
     expect(document.documentElement.dataset.theme).toBe("custom-dark");
-    expect(inlineToken("--ink")).toBe("#ede6d9");
-    expect(inlineToken("--surface")).toBe("#1b1814");
+    expect(inlineToken("--ink")).toBe("#e6e9e4");
+    expect(inlineToken("--surface")).toBe("#141a17");
     // Edit the dark slot too.
     hex = await screen.findByLabelText("Text hex value");
     act(() => {
@@ -331,7 +331,7 @@ describe("SettingsPanel — custom theme builder (issues #86/#120)", () => {
       fireEvent.click(screen.getByRole("radio", { name: "Custom light" }));
     });
     expect(inlineToken("--ink")).toBe("#123456");
-    expect(inlineToken("--surface")).toBe("#fcfcfa");
+    expect(inlineToken("--surface")).toBe("#f7f7f5");
   });
 
   it("the readout warns below AA and Fix contrast restores the offending pair only", async () => {
@@ -344,7 +344,7 @@ describe("SettingsPanel — custom theme builder (issues #86/#120)", () => {
     // surface — Fix contrast must move the ink only.
     const hex = await screen.findByLabelText("Text hex value");
     act(() => {
-      fireEvent.change(hex, { target: { value: "#fcfcfa" } });
+      fireEvent.change(hex, { target: { value: "#f7f7f5" } });
     });
     expect(await screen.findByText(/hard to read/)).not.toBeNull();
     act(() => {
@@ -357,9 +357,9 @@ describe("SettingsPanel — custom theme builder (issues #86/#120)", () => {
     expect(contrastRatio(inlineToken("--ink"), inlineToken("--surface"))).toBeGreaterThanOrEqual(
       4.5,
     );
-    expect(inlineToken("--surface")).toBe("#fcfcfa");
-    expect(inlineToken("--accent")).toBe("#6b4423");
-    expect(inlineToken("--hairline")).toBe("#ddd9d0");
+    expect(inlineToken("--surface")).toBe("#f7f7f5");
+    expect(inlineToken("--accent")).toBe("#22604a");
+    expect(inlineToken("--hairline")).toBe("#d5d8d2");
   });
 
   it("Reset to base colors restores the slot's seed tokens while staying custom", async () => {
@@ -375,8 +375,8 @@ describe("SettingsPanel — custom theme builder (issues #86/#120)", () => {
       fireEvent.click(screen.getByRole("button", { name: "Reset to base colors" }));
     });
     expect(document.documentElement.dataset.theme).toBe("custom-light");
-    expect(inlineToken("--ink")).toBe("#1a1a1a");
-    expect(inlineToken("--surface")).toBe("#fcfcfa");
+    expect(inlineToken("--ink")).toBe("#1c1f1d");
+    expect(inlineToken("--surface")).toBe("#f7f7f5");
   });
 
   it("the panel-wide Reset drops BOTH slots; each re-activation re-seeds fresh", async () => {
@@ -398,7 +398,7 @@ describe("SettingsPanel — custom theme builder (issues #86/#120)", () => {
     act(() => {
       fireEvent.click(screen.getByRole("button", { name: "Reset to defaults" }));
     });
-    expect(document.documentElement.dataset.theme).toBe("sepia");
+    expect(document.documentElement.dataset.theme).toBe("light");
     expect(builderIn(document)).toBeNull();
     // Re-activation seeds from the matching presets AGAIN (the edited
     // records were dropped — decision #73: wholesale Reset, re-seed on next
@@ -406,13 +406,13 @@ describe("SettingsPanel — custom theme builder (issues #86/#120)", () => {
     act(() => {
       fireEvent.click(screen.getByRole("radio", { name: "Custom light" }));
     });
-    expect(inlineToken("--ink")).toBe("#1a1a1a");
-    expect(inlineToken("--surface")).toBe("#fcfcfa");
+    expect(inlineToken("--ink")).toBe("#1c1f1d");
+    expect(inlineToken("--surface")).toBe("#f7f7f5");
     act(() => {
       fireEvent.click(screen.getByRole("radio", { name: "Custom dark" }));
     });
-    expect(inlineToken("--ink")).toBe("#ede6d9");
-    expect(inlineToken("--surface")).toBe("#1b1814");
+    expect(inlineToken("--ink")).toBe("#e6e9e4");
+    expect(inlineToken("--surface")).toBe("#141a17");
   });
 });
 
@@ -421,7 +421,7 @@ describe("SettingsPanel — custom theme builder (issues #86/#120)", () => {
 describe("SettingsPanel — live-apply wiring (D2-03)", () => {
   it("selecting the 'Dark' radio writes data-theme='dark' on <html>", () => {
     renderExpanded(<Harness open={true} onClose={() => undefined} />);
-    const dark = screen.getByRole("radio", { name: "Dark" });
+    const dark = screen.getByRole("radio", { name: "Night" });
     act(() => {
       fireEvent.click(dark);
     });
@@ -432,13 +432,13 @@ describe("SettingsPanel — live-apply wiring (D2-03)", () => {
     renderExpanded(<Harness open={true} onClose={() => undefined} />);
     // Perturb state first.
     act(() => {
-      fireEvent.click(screen.getByRole("radio", { name: "Dark" }));
+      fireEvent.click(screen.getByRole("radio", { name: "Night" }));
     });
     expect(document.documentElement.dataset.theme).toBe("dark");
     act(() => {
       fireEvent.click(screen.getByRole("button", { name: "Reset to defaults" }));
     });
-    expect(document.documentElement.dataset.theme).toBe("sepia");
+    expect(document.documentElement.dataset.theme).toBe("light");
     // Per 02-04 gap 2, applyTheme now writes the --font-size custom property
     // (consumed by the body rule via var()) instead of the bare font-size
     // property the body rule overrode.

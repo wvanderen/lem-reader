@@ -113,9 +113,9 @@ test.describe("Touch targets ≥ 44×44px (A11Y-07)", () => {
       { name: "Comfortable", value: "comfortable" },
       { name: "Spacious", value: "spacious" },
       // Theme
-      { name: "Sepia", value: "sepia" },
-      { name: "Light", value: "light" },
-      { name: "Dark", value: "dark" },
+      { name: "Daylight", value: "light" },
+      { name: "Warm paper", value: "sepia" },
+      { name: "Night", value: "dark" },
       { name: "Custom light", value: "custom-light" },
       { name: "Custom dark", value: "custom-dark" },
     ]) {

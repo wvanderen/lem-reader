@@ -26,7 +26,7 @@ function validSettings(overrides: Record<string, unknown> = {}): unknown {
     size: 18,
     measure: 64,
     spacing: "comfortable",
-    theme: "sepia",
+    theme: "light",
     readingMode: "paginated",
     animatePageTurns: false,
     rate: 1,
@@ -446,8 +446,8 @@ describe("applyTheme writes :root tokens from validated settings", () => {
   it("applies the D-07 default baseline to documentElement", () => {
     applyTheme(DEFAULT_SETTINGS);
     const root = document.documentElement;
-    expect(root.dataset.theme).toBe("sepia");
-    expect(root.style.getPropertyValue("--font-body")).toContain("Iowan Old Style");
+    expect(root.dataset.theme).toBe("light");
+    expect(root.style.getPropertyValue("--font-body")).toContain("Literata");
     expect(root.style.getPropertyValue("--font-size")).toBe("18px");
     expect(root.style.getPropertyValue("--line-height")).toBe("1.6");
     expect(root.style.getPropertyValue("--letter-spacing")).toBe("0");

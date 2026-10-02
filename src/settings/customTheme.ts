@@ -127,25 +127,25 @@ export type ResolvedCustomTheme = Record<CustomColorProp, string>;
  * this map fails there). */
 export const PRESET_SEEDS: Record<CustomBaseTheme, CustomThemeTokens> = {
   sepia: {
-    surface: "#fbf8f3",
-    surfaceRaised: "#f2ede3",
-    ink: "#1f1b16",
-    accent: "#6b4423",
-    hairline: "#d9d1c2",
+    surface: "#f0e8d5",
+    surfaceRaised: "#e5dbc2",
+    ink: "#241f16",
+    accent: "#1f5c44",
+    hairline: "#d3c7ab",
   },
   light: {
-    surface: "#fcfcfa",
-    surfaceRaised: "#f4f4f0",
-    ink: "#1a1a1a",
-    accent: "#6b4423",
-    hairline: "#ddd9d0",
+    surface: "#f7f7f5",
+    surfaceRaised: "#eceded",
+    ink: "#1c1f1d",
+    accent: "#22604a",
+    hairline: "#d5d8d2",
   },
   dark: {
-    surface: "#1b1814",
-    surfaceRaised: "#26221c",
-    ink: "#ede6d9",
-    accent: "#c49a6c",
-    hairline: "#3a3328",
+    surface: "#141a17",
+    surfaceRaised: "#1d2521",
+    ink: "#e6e9e4",
+    accent: "#7cc7a1",
+    hairline: "#2c3630",
   },
 };
 

@@ -129,8 +129,8 @@ test.describe("STATE-02 + Pitfall 4 persistence", () => {
     await page.goto(`${BASE}/#/article/${FIRST_FIXTURE}`);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 
-    // Initial state: data-theme=sepia (D-07 default).
-    await expectDataTheme(page, "sepia");
+    // Initial state: data-theme=light (the ADR 0005 Daylight default).
+    await expectDataTheme(page, "light");
 
     // Open the settings panel and switch theme to Dark (UI-SPEC line 316).
     await page.getByRole("button", { name: "Reading settings" }).click();

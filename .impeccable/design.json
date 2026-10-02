@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-01T16:10:00Z",
+  "title": "Design System: Lem Reader",
+  "extensions": {
+    "colorMeta": {
+      "gallery-paper": { "role": "neutral", "displayName": "Gallery Paper", "canonical": "#f7f7f5" },
+      "mat-board": { "role": "neutral", "displayName": "Mat Board", "canonical": "#eceded" },
+      "graphite-ink": { "role": "neutral", "displayName": "Graphite Green", "canonical": "#1c1f1d" },
+      "pencil-gray": { "role": "neutral", "displayName": "Pencil Gray", "canonical": "#525a54" },
+      "bottle-green": { "role": "primary", "displayName": "Bottle Green", "canonical": "#22604a" },
+      "bottle-green-deep": { "role": "primary", "displayName": "Bottle Green Deep", "canonical": "#17452f" },
+      "brass": { "role": "secondary", "displayName": "Brass (on paper)", "canonical": "#8a6a24" },
+      "brass-lit": { "role": "secondary", "displayName": "Brass Lit (on boards)", "canonical": "#c9a24e" },
+      "enamel-board": { "role": "primary", "displayName": "Enamel Board", "canonical": "#1d3128" },
+      "board-white": { "role": "neutral", "displayName": "Board White", "canonical": "#f2f4f1" },
+      "board-soft": { "role": "neutral", "displayName": "Board Soft", "canonical": "#b9c6bd" },
+      "lit-board": { "role": "secondary", "displayName": "Lit Board", "canonical": "#2c4a3b" },
+      "manila": { "role": "neutral", "displayName": "Manila (Warm paper theme)", "canonical": "#f0e8d5" },
+      "night-wall": { "role": "neutral", "displayName": "Night Wall (Night theme)", "canonical": "#141a17" },
+      "highlight-tint": { "role": "tertiary", "displayName": "Classification Tint (default)", "canonical": "#eee1b4" },
+      "destructive-brick": { "role": "tertiary", "displayName": "Destructive Brick", "canonical": "#a63d32" }
+    },
+    "typographyMeta": {
+      "body": { "displayName": "Reading voice", "purpose": "All article prose and article headings — Literata, never transformed." },
+      "label": { "displayName": "Signage voice", "purpose": "Buttons, band nav, skip link, back links — PT Sans spaced caps." },
+      "panelTitle": { "displayName": "Panel title", "purpose": "Dialog and panel headings — PT Sans 20px sentence case." },
+      "code": { "displayName": "Code", "purpose": "Code blocks and inline code — system mono only." }
+    },
+    "shadows": [
+      {
+        "name": "pop",
+        "value": "0 1px 2px rgba(16, 24, 20, 0.07), 0 8px 24px rgba(16, 24, 20, 0.12)",
+        "purpose": "The ONE elevation token — native top-layer <dialog> only."
+      }
+    ],
+    "motion": [
+      { "name": "speed", "value": "220ms", "purpose": "State transitions only (hover/press/busy) — never mount/unmount." },
+      { "name": "ease", "value": "ease-out", "purpose": "Default easing; global prefers-reduced-motion gate disables all motion." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px", "purpose": "Below: wordmark clips out of flow; sheet layouts go full-width." },
+      { "name": "reader-collapse", "value": "460px", "purpose": "Reader only: staged shell-nav collapse out of flow, keyboard-reachable." }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The enamel board you press — solid bottle green, board-white caps.",
+      "html": "<button class=\"ds-btn-primary\">Add to library</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 16px; border: 1px solid transparent; border-radius: 8px; background: var(--accent-strong, #22604a); color: var(--board-text, #f2f4f1); font-family: var(--font-ui, 'PT Sans', system-ui, sans-serif); font-size: 13px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; line-height: 1.2; cursor: pointer; transition: background-color 220ms ease-out, border-color 220ms ease-out; } .ds-btn-primary:hover { border-color: var(--brass-bright, #c9a24e); } .ds-btn-primary:active { background: color-mix(in srgb, var(--accent-strong, #22604a) 88%, var(--brass-bright, #c9a24e)); } .ds-btn-primary:focus-visible { outline: 2px solid var(--focus-ring, #8a6a24); outline-offset: 2px; }"
+    },
+    {
+      "name": "Quiet Button",
+      "kind": "button",
+      "refersTo": "button-quiet",
+      "description": "Raised paper button; hover lights a brass edge.",
+      "html": "<button class=\"ds-btn-quiet\">Cancel</button>",
+      "css": ".ds-btn-quiet { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 16px; border: 1px solid var(--hairline, #d5d8d2); border-radius: 8px; background: var(--surface-raised, #eceded); color: var(--ink, #1c1f1d); font-family: var(--font-ui, 'PT Sans', system-ui, sans-serif); font-size: 13px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; line-height: 1.2; cursor: pointer; transition: border-color 220ms ease-out, color 220ms ease-out; } .ds-btn-quiet:hover { border-color: var(--brass, #8a6a24); color: var(--accent, #22604a); } .ds-btn-quiet:focus-visible { outline: 2px solid var(--focus-ring, #8a6a24); outline-offset: 2px; }"
+    },
+    {
+      "name": "Classification Band",
+      "kind": "nav",
+      "refersTo": "classification-band",
+      "description": "The 48px enamel band: brand + shelf-board destinations, current location lit.",
+      "html": "<header class=\"ds-band\"><a class=\"ds-band-brand\" href=\"#\">Lem</a><nav class=\"ds-band-nav\" aria-label=\"Primary\"><a href=\"#\">Library</a><a href=\"#\" aria-current=\"page\">Reading</a><a href=\"#\">Highlights</a></nav></header>",
+      "css": ".ds-band { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 48px; padding-inline: 24px; background: var(--board, #1d3128); border-bottom: 1px solid var(--brass-bright, #c9a24e); font-family: var(--font-ui, 'PT Sans', system-ui, sans-serif); } .ds-band-brand { color: var(--board-text, #f2f4f1); font-size: 14px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; text-decoration: none; } .ds-band-nav { display: flex; align-items: center; gap: 4px; white-space: nowrap; } .ds-band-nav a { display: inline-flex; align-items: center; min-height: 44px; padding-inline: 8px; border-radius: 8px; border-block-end: 2px solid transparent; box-sizing: border-box; color: var(--board-soft, #b9c6bd); font-size: 13px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; text-decoration: none; } .ds-band-nav a:hover { color: var(--board-text, #f2f4f1); } .ds-band-nav a[aria-current=\"page\"] { background: var(--lit, #2c4a3b); color: var(--lit-text, #f2f4f1); border-block-end-color: var(--brass-bright, #c9a24e); }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Raised mat-board container — flat, hairline, 12px radius.",
+      "html": "<div class=\"ds-card\"><h3 class=\"ds-card-title\">Saved articles</h3><p class=\"ds-card-body\">Quiet raised surface; spacing separates, never rules.</p></div>",
+      "css": ".ds-card { background: var(--surface-raised, #eceded); border: 1px solid var(--hairline, #d5d8d2); border-radius: 12px; padding: 24px; color: var(--ink, #1c1f1d); font-family: var(--font-body, Georgia, serif); } .ds-card-title { margin: 0 0 8px; font-family: var(--font-ui, 'PT Sans', system-ui, sans-serif); font-size: 16px; font-weight: 700; } .ds-card-body { margin: 0; color: var(--ink-soft, #525a54); line-height: 1.5; }"
+    },
+    {
+      "name": "Input",
+      "kind": "input",
+      "refersTo": null,
+      "description": "Hairline field on the surface; accent caret, brass focus ring.",
+      "html": "<input class=\"ds-input\" type=\"text\" placeholder=\"Search by title, author, or tag\" />",
+      "css": ".ds-input { box-sizing: border-box; width: 100%; min-height: 44px; padding: 0 16px; background: var(--surface, #f7f7f5); border: 1px solid var(--hairline, #d5d8d2); border-radius: 8px; font-family: var(--font-ui, 'PT Sans', system-ui, sans-serif); font-size: 16px; color: var(--ink, #1c1f1d); caret-color: var(--accent, #22604a); } .ds-input::placeholder { color: var(--ink-soft, #525a54); opacity: 1; } .ds-input:focus-visible { outline: 2px solid var(--focus-ring, #8a6a24); outline-offset: 2px; }"
+    },
+    {
+      "name": "Highlight Mark",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "The classification-tint annotation mark — the system's signature inline element.",
+      "html": "<p class=\"ds-mark-demo\">Prose with a <mark class=\"ds-mark\">classified passage</mark> inside.</p>",
+      "css": ".ds-mark-demo { font-family: var(--font-body, Georgia, serif); font-size: 18px; line-height: 1.6; color: var(--ink, #1c1f1d); } .ds-mark { background: var(--highlight, #eee1b4); color: var(--ink, #1c1f1d); border-radius: 2px; padding-inline: 2px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Reading Room Wayfinder",
+    "overview": "Lem Reader is the library's wayfinding made software: enamel signage that names where you are and never moves. The system's one inversion is its identity — chrome steps forward graphically (a deep enamel band, white spaced caps, brass rules) so the article panel can be the brightest, quietest surface on screen. The reading voice is deliberately separate from the signage voice: Literata carries hours of prose on cool paper; PT Sans labels the chrome in spaced caps. The two never swap jobs.",
+    "keyCharacteristics": [
+      "Enamel bottle-green boards with white spaced caps own all chrome",
+      "Brass (never gray) edges every board and quotation",
+      "The current location is the lit board — brighter fill, brass underline",
+      "Layout geometry is pinned: 48px band, centered 64ch measure, no shadows outside dialogs",
+      "Three scenes, not three color schemes: Daylight (default), Warm paper (manila), Night (lit signage on dark walls)"
+    ],
+    "rules": [
+      { "name": "The Brightest Panel Rule", "body": "The article surface is always the highest-luminance reading field on screen. Chrome may be graphic; the page stays quiet. If a decoration competes with the measure, the decoration loses.", "section": "colors" },
+      { "name": "The Brass Rule", "body": "Gray is for text, never for edges that matter. Rules that carry meaning — band edge, dialog top, quotation mark, focus — are brass. Hairlines between peers stay neutral.", "section": "colors" },
+      { "name": "The One Lit Board Rule", "body": "Exactly one navigation location is lit at a time. Lit = brighter green fill + board-white caps + 2px brass underline, driven by aria-current, never by color alone.", "section": "colors" },
+      { "name": "The Two Voices Rule", "body": "Prose is always Literata and never uppercase. Labels are always PT Sans caps. A UI string that mixes the voices is a bug.", "section": "typography" },
+      { "name": "The One Elevation Rule", "body": "If it is not a native dialog, it is flat. Cards, popovers, and sheets use raised surface color + hairlines, never shadows.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do keep chrome in the signage voice: PT Sans caps, enamel fills, brass edges.",
+      "Do reserve brass for rules, focus, and lit states — and gray for hairlines between peers.",
+      "Do theme every browser surface from the palette: selection tint, caret, focus ring are tokens, not defaults.",
+      "Do keep the 48px band, 44px targets, and the 4px spacing scale exact — they are load-bearing contracts.",
+      "Do express state beyond color: weight, underline, shape, and aria-current/aria-expanded carry what brass and green suggest."
+    ],
+    "donts": [
+      "Don't warm the default paper. Gallery Paper is neutral-cool; cream/beige is the retired default (ADR 0005), and warmth lives only in the explicit Warm paper theme.",
+      "Don't add shadows outside native dialogs, or gradients/glass anywhere — enamel is flat.",
+      "Don't let the signage voice leak into prose: no caps, no PT Sans inside the article measure.",
+      "Don't light two boards at once, and never convey current/hover state by color alone.",
+      "Don't shrink type to fit narrow screens — remove furniture instead (the staged-collapse discipline)."
+    ]
+  }
+}
