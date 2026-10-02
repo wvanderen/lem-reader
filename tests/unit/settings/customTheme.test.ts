@@ -276,27 +276,35 @@ describe("resolveCustomTheme — the Wayfinder chrome pairs (#146, the extended 
     // Text pairs on the boards (WCAG 1.4.3).
     expect(contrastRatio(r["--board-text"], r["--board"])).toBeGreaterThanOrEqual(AA_TEXT_RATIO);
     expect(contrastRatio(r["--lit-text"], r["--lit"])).toBeGreaterThanOrEqual(AA_TEXT_RATIO);
+    expect(contrastRatio(r["--board-soft"], r["--board"])).toBeGreaterThanOrEqual(AA_TEXT_RATIO);
     // The solid fill behind the band text (WCAG 1.4.3).
     expect(contrastRatio(r["--board-text"], r["--accent-strong"])).toBeGreaterThanOrEqual(
       AA_TEXT_RATIO,
     );
     // Non-text metal on its grounds (WCAG 1.4.11).
     expect(contrastRatio(r["--brass"], r["--surface"])).toBeGreaterThanOrEqual(AA_NON_TEXT_RATIO);
+    expect(contrastRatio(r["--brass"], r["--surface-raised"])).toBeGreaterThanOrEqual(
+      AA_NON_TEXT_RATIO,
+    );
     expect(contrastRatio(r["--brass-bright"], r["--board"])).toBeGreaterThanOrEqual(
       AA_NON_TEXT_RATIO,
     );
   });
 
-  it.each(CHROME_SEEDS)("$label: lit-text IS the band text (byte-for-byte, as in the presets)", ({
-    tokens,
-  }) => {
-    const r = resolveCustomTheme(tokens);
-    expect(r["--lit-text"]).toBe(r["--board-text"]);
-  });
+  it.each(CHROME_SEEDS)(
+    "$label: lit-text IS the band text (byte-for-byte, as in the presets)",
+    ({ tokens }) => {
+      const r = resolveCustomTheme(tokens);
+      expect(r["--lit-text"]).toBe(r["--board-text"]);
+    },
+  );
 
-  it.each(CHROME_SEEDS)("$label: derivation is deterministic across the chrome too", ({ tokens }) => {
-    expect(resolveCustomTheme(tokens)).toEqual(resolveCustomTheme(tokens));
-  });
+  it.each(CHROME_SEEDS)(
+    "$label: derivation is deterministic across the chrome too",
+    ({ tokens }) => {
+      expect(resolveCustomTheme(tokens)).toEqual(resolveCustomTheme(tokens));
+    },
+  );
 
   it("stored chrome tokens ride byte-stable (lowercased) and override derivation", () => {
     const stored = {
@@ -866,5 +874,45 @@ describe("ReaderSettingsSchema hydration — the two custom slots (#120)", () =>
     // Parse is IDEMPOTENT in serialized form (Zod re-emits keys in schema
     // order) — the existing round-trip discipline, now with chrome fields.
     expect(JSON.stringify(ReaderSettingsSchema.parse(parsed))).toBe(JSON.stringify(parsed));
+  });
+});
+
+describe("custom chrome review regressions", () => {
+  it("keeps secondary navigation readable on an edited white band", () => {
+    const r = resolveCustomTheme({
+      ...PRESET_SEEDS.light,
+      board: "#ffffff",
+      boardText: "#111111",
+      lit: "#ffffff",
+    });
+    expect(contrastRatio(r["--board-soft"], r["--board"])).toBeGreaterThanOrEqual(AA_TEXT_RATIO);
+  });
+
+  it("leaves compliant derived lit unstored after fixing band text", () => {
+    const tokens = { ...PRESET_SEEDS.light, board: "#1b3128", boardText: "#1b3128" };
+    const fixed = fixContrastPairs(tokens);
+    expect(fixed.boardText).not.toBe(tokens.boardText);
+    expect(fixed).not.toHaveProperty("lit");
+    const r = resolveCustomTheme(fixed);
+    expect(contrastRatio(r["--lit-text"], r["--lit"])).toBeGreaterThanOrEqual(AA_TEXT_RATIO);
+    expect(resolveCustomTheme({ ...fixed, board: "#ffffff" })["--lit"]).not.toBe(r["--lit"]);
+  });
+
+  it("derives brass against the raised paper as well as the surface", () => {
+    const r = resolveCustomTheme({ ...PRESET_SEEDS.light, surfaceRaised: "#3a775f" });
+    for (const ground of ["--surface", "--surface-raised"] as const) {
+      expect(contrastRatio(r["--brass"], r[ground])).toBeGreaterThanOrEqual(AA_NON_TEXT_RATIO);
+    }
+  });
+
+  it("fixes stored brass failing only on raised paper without moving other seeds", () => {
+    const tokens = { ...PRESET_SEEDS.light, surfaceRaised: "#3a775f", brass: "#3a775f" };
+    const fixed = fixContrastPairs(tokens);
+    expect(fixed).toEqual({ ...tokens, brass: expect.any(String) });
+    expect(fixed.brass).not.toBe(tokens.brass);
+    const r = resolveCustomTheme(fixed);
+    for (const ground of ["--surface", "--surface-raised"] as const) {
+      expect(contrastRatio(r["--brass"], r[ground])).toBeGreaterThanOrEqual(AA_NON_TEXT_RATIO);
+    }
   });
 });

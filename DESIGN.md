@@ -178,7 +178,7 @@ The two custom slots (Custom light / Custom dark) let the reader repaint the roo
 
 **The Two Registers Rule.** Derivation follows the surface's light/dark disposition, never the slot's name: a light-disposition surface builds Daylight's register (dark enamel band, deep quiet metal), a dark one builds Night's (darker band, bright lit metal). The same accent on the two slots yields two different rooms — on purpose.
 
-**The Custom Contrast Contract.** The derived/stored chrome is held to the same audit as the presets, test-enforced: band text ≥ 4.5:1 on the band, on the lit board, and on the solid fill; brass ≥ 3:1 on the paper; lit brass ≥ 3:1 on the band. The live readout reports every policed pair; "Fix contrast" nudges only a failing pair's own stored token (the pairs whose both sides derive are walked clear by the derivation itself and cannot fail).
+**The Custom Contrast Contract.** The derived/stored chrome is held to the same audit as the presets, test-enforced: band text ≥ 4.5:1 on the band, on the lit board, and on the solid fill; secondary band text ≥ 4.5:1 on the band; brass ≥ 3:1 on both paper surfaces; lit brass ≥ 3:1 on the band. The live readout reports every policed pair; "Fix contrast" nudges only a failing pair's own stored token Derived board text and lit brass adapt to their grounds. Arbitrary paper colors can make simultaneous brass contrast impossible; the readout keeps reporting any remaining failure.
 
 ### Dialogs
 Raised paper card, 16px radius, 2px brass top rule, the one elevation token, deep-green scrim (`rgba(16,24,20,.55)`). Native `<dialog>` top-layer only.

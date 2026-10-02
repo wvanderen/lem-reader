@@ -62,11 +62,12 @@
 //                      Stored boardText re-pins the whole text side.
 //   --brass            the ACCENT-hue metal — accent's hue at the register's
 //                      metal lightness, walked to ≥ 3:1 non-text on the
-//                      paper. (The presets keep a fixed gold; custom rooms
+//                      paper and raised paper. (The presets keep a fixed gold; custom rooms
 //                      match the reader's accent per issue #146.)
 //   --brass-bright     the lit metal — brass's hue/chroma at the register's
 //                      lit lightness, walked to ≥ 3:1 on the band.
-//   --board-soft       secondary board labels — the band family, dimmed.
+//   --board-soft       secondary board labels — the band family, dimmed
+//                      and walked clear of the effective band (≥ 4.5:1).
 //   --accent-strong    the solid fill — the accent itself when it already
 //                      clears 4.5:1 behind the band text (every light-
 //                      register preset: accent-strong IS accent); on a dark
@@ -81,7 +82,12 @@
 // Security (the applyTheme.ts posture): these functions map validated hex
 // tokens through closed math to hex output — no string reaches CSS that did
 // not round-trip through the hex grammar.
-import type { CustomTheme, CustomThemeSlot, CustomThemeTokens, ReaderSettings } from "../content/schema";
+import type {
+  CustomTheme,
+  CustomThemeSlot,
+  CustomThemeTokens,
+  ReaderSettings,
+} from "../content/schema";
 
 /** The three preset themes a custom theme can be seeded from / reset to. */
 export type CustomBaseTheme = CustomTheme["baseTheme"];
@@ -97,7 +103,11 @@ export const SLOT_BASE_THEME: Record<CustomThemeSlot, CustomBaseTheme> = {
  * for a preset theme (the ONE switch over the two slots; every consumer
  * derives from here). */
 export function activeSlotOf(theme: ReaderSettings["theme"]): CustomThemeSlot | undefined {
-  return theme === "custom-light" ? "custom-light" : theme === "custom-dark" ? "custom-dark" : undefined;
+  return theme === "custom-light"
+    ? "custom-light"
+    : theme === "custom-dark"
+      ? "custom-dark"
+      : undefined;
 }
 
 /** The slot record currently ACTIVE in `s` (undefined for a preset theme —
@@ -461,6 +471,37 @@ function walkAwayFrom(hex: string, againstHex: string, target: number): string {
     : darkerExtreme;
 }
 
+/** Find the nearest same-hue metal that clears both paper grounds. Unlike
+ * one-ground contrast, this predicate can have several passing intervals.
+ * Search the lightness range rather than assuming monotonicity. If the
+ * reader's grounds admit no passing color, retain the best minimum ratio;
+ * the builder reports the remaining failure instead of changing a ground. */
+function brassOnGrounds(hex: string, surface: string, raised: string): string {
+  const ratio = (color: string) =>
+    Math.min(contrastRatio(color, surface), contrastRatio(color, raised));
+  if (ratio(hex) >= AA_NON_TEXT_RATIO) return hex;
+  const token = hexToOkLch(hex);
+  let best = hex;
+  let bestRatio = ratio(hex);
+  let nearest = Number.POSITIVE_INFINITY;
+  for (let step = 0; step <= 512; step++) {
+    const L = step / 512;
+    const candidate = okLchToHex({ ...token, L });
+    const candidateRatio = ratio(candidate);
+    const travel = Math.abs(L - token.L);
+    if (candidateRatio >= CHROME_NON_TEXT_TARGET) {
+      if (travel < nearest) {
+        best = candidate;
+        nearest = travel;
+      }
+    } else if (nearest === Number.POSITIVE_INFINITY && candidateRatio > bestRatio) {
+      best = candidate;
+      bestRatio = candidateRatio;
+    }
+  }
+  return best;
+}
+
 /**
  * The two marker lightnesses, banded so ink-on-fill clears `target`
  * (D5-14 by construction). Compliant case: the fill band runs from the
@@ -597,12 +638,7 @@ export function resolveCustomTheme(rawTokens: CustomThemeTokens): ResolvedCustom
     };
     namedFills[name as keyof typeof NAMED_HIGHLIGHT_HUES] = okLchToHex({
       ...namedBand,
-      L: markerLightnessPair(
-        surfaceLch.L,
-        tokens.ink,
-        namedBand,
-        AA_TEXT_RATIO * 1.02,
-      ).highlightL,
+      L: markerLightnessPair(surfaceLch.L, tokens.ink, namedBand, AA_TEXT_RATIO * 1.02).highlightL,
     });
   }
 
@@ -619,58 +655,70 @@ export function resolveCustomTheme(rawTokens: CustomThemeTokens): ResolvedCustom
   // --board-text: the signage white (also --lit-text — the presets pair
   // them); near-white at the accent's hue family so the board text belongs
   // to the room's palette.
-  const boardText = tokens.boardText ?? okLchToHex({
-    L: BOARD_TEXT_L[register],
-    C: BOARD_TEXT_C,
-    h: accentLch.h,
-  });
+  const boardText =
+    tokens.boardText ??
+    okLchToHex({
+      L: BOARD_TEXT_L[register],
+      C: BOARD_TEXT_C,
+      h: accentLch.h,
+    });
 
   // --board: the enamel band — the accent's hue at the register's board
   // lightness, walked clear of the band text when the register default
   // lands short of AA (pinned constants keep every preset-seed band
   // compliant, so the walk is a no-op there).
-  const board = tokens.board ?? walkAwayFrom(
-    okLchToHex({
-      L: BOARD_L[register],
-      C: Math.min(accentLch.C, BOARD_C_CAP),
-      h: accentLch.h,
-    }),
-    boardText,
-    FIX_TARGET_RATIO,
-  );
+  const board =
+    tokens.board ??
+    walkAwayFrom(
+      okLchToHex({
+        L: BOARD_L[register],
+        C: Math.min(accentLch.C, BOARD_C_CAP),
+        h: accentLch.h,
+      }),
+      boardText,
+      FIX_TARGET_RATIO,
+    );
   const boardLch = hexToOkLch(board);
 
   // --lit: the lit current-location board — the band one step lighter, same
   // material, walked clear of the band text the same way. --lit-text is the
   // band text (byte-for-byte, as in every preset).
-  const lit = tokens.lit ?? walkAwayFrom(
+  const lit =
+    tokens.lit ??
+    walkAwayFrom(
+      okLchToHex({
+        L: clampL(boardLch.L + LIT_L_DELTA[register]),
+        C: Math.min(boardLch.C, LIT_C_CAP),
+        h: boardLch.h,
+      }),
+      boardText,
+      FIX_TARGET_RATIO,
+    );
+
+  // --board-soft: secondary board labels — the band family, dimmed.
+  const boardSoft = walkAwayFrom(
     okLchToHex({
-      L: clampL(boardLch.L + LIT_L_DELTA[register]),
-      C: Math.min(boardLch.C, LIT_C_CAP),
+      L: BOARD_SOFT_L[register],
+      C: Math.min(boardLch.C, BOARD_SOFT_C),
       h: boardLch.h,
     }),
-    boardText,
+    board,
     FIX_TARGET_RATIO,
   );
 
-  // --board-soft: secondary board labels — the band family, dimmed.
-  const boardSoft = okLchToHex({
-    L: BOARD_SOFT_L[register],
-    C: Math.min(boardLch.C, BOARD_SOFT_C),
-    h: boardLch.h,
-  });
-
   // --brass: the accent-hue metal at the register's quiet lightness, walked
   // to ≥ 3:1 non-text on the paper (the rules/edges contract).
-  const brass = tokens.brass ?? walkAwayFrom(
-    okLchToHex({
-      L: BRASS_L[register],
-      C: Math.min(accentLch.C, BRASS_C_CAP),
-      h: accentLch.h,
-    }),
-    tokens.surface,
-    CHROME_NON_TEXT_TARGET,
-  );
+  const brass =
+    tokens.brass ??
+    brassOnGrounds(
+      okLchToHex({
+        L: BRASS_L[register],
+        C: Math.min(accentLch.C, BRASS_C_CAP),
+        h: accentLch.h,
+      }),
+      tokens.surface,
+      tokens.surfaceRaised,
+    );
   const brassLch = hexToOkLch(brass);
 
   // --brass-bright: the lit metal — brass's own material at the register's
@@ -741,10 +789,8 @@ export function resolveCustomTheme(rawTokens: CustomThemeTokens): ResolvedCustom
  *        → boardText when stored, else board
  *   lit pair (band-text/lit ≥ 4.5)
  *        → lit (its text side IS the band text, designated above)
- *   brass pair (brass/surface ≥ 3 non-text)
+ *   brass pairs (brass/surface and brass/surface-raised ≥ 3 non-text)
  *        → brass
- *   lit-brass pair (brass-bright/board ≥ 3 non-text)
- *        → board (the metal derives from brass, designated above)
  * The solid-fill pair (band-text/accent-strong ≥ 4.5) is deliberately NOT
  * here: BOTH its tokens are either derived or shared with the band pair, so
  * a fix would tug-of-war another policed pair — and the derivation
@@ -765,14 +811,10 @@ export function fixContrastPairs(rawTokens: CustomThemeTokens): CustomThemeToken
     next.accent = walkAwayFrom(tokens.accent, tokens.surface, FIX_TARGET_RATIO);
   }
 
-  // Issue #146 — the fixable chrome pairs. `effective` reads each EDITABLE
-  // chrome value the way resolveCustomTheme resolves it (stored ?? derived),
-  // AFTER any earlier fix in this pass — so stored-side fixes compose. (A
-  // token that stayed UNSTORED keeps its pre-pass derived value here; the
-  // derivation's own contrast walks re-guarantee every audited pair on the
-  // next resolve, so the residual gap — if any — is degenerate-only.)
-  const resolved = resolveCustomTheme(tokens);
-  const effective = (key: ChromeTokenKey): string => next[key] ?? resolved[CHROME_TOKEN_PROPS[key]];
+  // Resolve against the current record after every fix. Untouched chrome
+  // remains derived and must follow earlier changes rather than a stale palette.
+  const effective = (key: ChromeTokenKey): string =>
+    resolveCustomTheme(next)[CHROME_TOKEN_PROPS[key]];
 
   // Band text on band — the stored side moves (text wins ties).
   if (contrastRatio(effective("boardText"), effective("board")) < AA_TEXT_RATIO) {
@@ -786,15 +828,15 @@ export function fixContrastPairs(rawTokens: CustomThemeTokens): CustomThemeToken
   if (contrastRatio(effective("boardText"), effective("lit")) < AA_TEXT_RATIO) {
     next.lit = walkAwayFrom(effective("lit"), effective("boardText"), FIX_TARGET_RATIO);
   }
-  // Brass on the paper — non-text 3:1.
-  if (contrastRatio(effective("brass"), tokens.surface) < AA_NON_TEXT_RATIO) {
-    next.brass = walkAwayFrom(effective("brass"), tokens.surface, CHROME_NON_TEXT_TARGET);
+  // Brass serves rules on both paper surfaces; only the metal moves.
+  if (
+    Math.min(
+      contrastRatio(effective("brass"), next.surface),
+      contrastRatio(effective("brass"), next.surfaceRaised),
+    ) < AA_NON_TEXT_RATIO
+  ) {
+    next.brass = brassOnGrounds(effective("brass"), next.surface, next.surfaceRaised);
   }
-  // Lit brass on the band — the band ground moves (the metal itself derives
-  // from brass and re-walks on the next resolve).
-  const brassBright = resolved["--brass-bright"];
-  if (contrastRatio(brassBright, effective("board")) < AA_NON_TEXT_RATIO) {
-    next.board = walkAwayFrom(effective("board"), brassBright, CHROME_NON_TEXT_TARGET);
-  }
+  // Lit brass and solid fill rederive against their current grounds.
   return next;
 }

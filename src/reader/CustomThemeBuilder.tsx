@@ -206,7 +206,12 @@ export function CustomThemeBuilder() {
     readoutResolved["--accent-strong"],
   );
   const brassRatio = contrastRatio(readoutResolved["--brass"], readout.surface);
-  const brassBrightRatio = contrastRatio(readoutResolved["--brass-bright"], readoutResolved["--board"]);
+  const brassRaisedRatio = contrastRatio(readoutResolved["--brass"], readout.surfaceRaised);
+  const bandSoftRatio = contrastRatio(readoutResolved["--board-soft"], readoutResolved["--board"]);
+  const brassBrightRatio = contrastRatio(
+    readoutResolved["--brass-bright"],
+    readoutResolved["--board"],
+  );
   const anyFailing =
     inkRatio < AA_TEXT_RATIO ||
     accentRatio < AA_TEXT_RATIO ||
@@ -214,6 +219,8 @@ export function CustomThemeBuilder() {
     litRatio < AA_TEXT_RATIO ||
     fillRatio < AA_TEXT_RATIO ||
     brassRatio < AA_NON_TEXT_RATIO ||
+    brassRaisedRatio < AA_NON_TEXT_RATIO ||
+    bandSoftRatio < AA_TEXT_RATIO ||
     brassBrightRatio < AA_NON_TEXT_RATIO;
 
   const fixContrast = () => {
@@ -274,16 +281,24 @@ export function CustomThemeBuilder() {
         <p className="custom-theme-verdict">{verdictLine("Text on surface", inkRatio)}</p>
         <p className="custom-theme-verdict">{verdictLine("Accent on surface", accentRatio)}</p>
         <p className="custom-theme-verdict">{verdictLine("Band text on band", bandTextRatio)}</p>
+        <p className="custom-theme-verdict">
+          {verdictLine("Secondary text on band", bandSoftRatio)}
+        </p>
         <p className="custom-theme-verdict">{verdictLine("Band text on lit board", litRatio)}</p>
         <p className="custom-theme-verdict">{verdictLine("Band text on solid fill", fillRatio)}</p>
         <p className="custom-theme-verdict">
           {verdictLine("Brass on surface", brassRatio, AA_NON_TEXT_RATIO)}
         </p>
         <p className="custom-theme-verdict">
+          {verdictLine("Brass on raised surface", brassRaisedRatio, AA_NON_TEXT_RATIO)}
+        </p>
+        <p className="custom-theme-verdict">
           {verdictLine("Lit brass on band", brassBrightRatio, AA_NON_TEXT_RATIO)}
         </p>
         {anyFailing && (
-          <p className="custom-theme-warning">Some color pairs are below the contrast guidelines.</p>
+          <p className="custom-theme-warning">
+            Some color pairs are below the contrast guidelines.
+          </p>
         )}
       </StatusRegion>
       <div className="custom-theme-actions">

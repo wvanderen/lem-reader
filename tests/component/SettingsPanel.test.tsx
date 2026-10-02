@@ -301,6 +301,28 @@ describe("SettingsPanel — custom theme builder (issues #86/#120)", () => {
     expect(after).not.toBe("#1d3128"); // ...and is not the preset enamel
   });
 
+  it("reports raised-paper brass failures and fixes only the metal", async () => {
+    renderExpanded(<Harness open={true} onClose={() => undefined} />);
+    act(() => {
+      fireEvent.click(screen.getByRole("radio", { name: "Custom light" }));
+    });
+    const raised = await screen.findByLabelText("Raised surface hex value");
+    const brass = await screen.findByLabelText("Brass hex value");
+    act(() => {
+      fireEvent.change(raised, { target: { value: "#3a775f" } });
+      fireEvent.change(brass, { target: { value: "#3a775f" } });
+    });
+    expect(await screen.findByText(/Brass on raised surface: 1.0:1 — below AA/)).not.toBeNull();
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "Fix contrast" }));
+    });
+    await waitFor(() => {
+      expect(screen.getByText(/Brass on raised surface:.*good/)).not.toBeNull();
+    });
+    expect(inlineToken("--surface-raised")).toBe("#3a775f");
+    expect(screen.getByText(/Secondary text on band:.*good/)).not.toBeNull();
+  });
+
   it("a below-AA band pair warns and Fix contrast moves the band only (#146)", async () => {
     renderExpanded(<Harness open={true} onClose={() => undefined} />);
     act(() => {
@@ -590,9 +612,12 @@ describe("SettingsPanel — read-aloud controls (issue #43, O8)", () => {
 
 it("starts with Reading open and preserves independent disclosure choices while mounted", () => {
   const { rerender } = render(<Harness open={true} onClose={() => undefined} />);
-  const reading = screen.getByText("Reading", { selector: "summary" }).parentElement as HTMLDetailsElement;
-  const appearance = screen.getByText("Appearance", { selector: "summary" }).parentElement as HTMLDetailsElement;
-  const data = screen.getByText("Your data", { selector: "summary" }).parentElement as HTMLDetailsElement;
+  const reading = screen.getByText("Reading", { selector: "summary" })
+    .parentElement as HTMLDetailsElement;
+  const appearance = screen.getByText("Appearance", { selector: "summary" })
+    .parentElement as HTMLDetailsElement;
+  const data = screen.getByText("Your data", { selector: "summary" })
+    .parentElement as HTMLDetailsElement;
   expect(reading.open).toBe(true);
   expect(appearance.open).toBe(false);
   expect(data.open).toBe(false);
