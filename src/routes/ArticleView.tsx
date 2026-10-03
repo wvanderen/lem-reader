@@ -655,6 +655,7 @@ export function ArticleView({
     readingRootRef: articleRef,
     articleEl,
     highlightApiRef,
+    surfaceKey: pageState?.page ?? "scrolling",
   });
 
   // useScrollSave must be called unconditionally (rules of hooks). It no-ops
