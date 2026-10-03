@@ -32,6 +32,8 @@ export interface UseSelectionToolbarArgs {
    * across articles).
    */
   article: CanonicalArticle | null;
+  /** Changes when the visible page or reading mode changes. */
+  surfaceKey?: string | number;
   /**
    * The reading surface (<article> element) ref. Selection containment,
    * the measurement-body guard, and the H/N capture root all read it at
@@ -78,6 +80,7 @@ export function useSelectionToolbar({
   readingRootRef,
   articleEl,
   highlightApiRef,
+  surfaceKey,
 }: UseSelectionToolbarArgs): SelectionToolbarController {
   // The live selection rect + enriched capture result for the current
   // selection (ok / overlap / empty / empty-span / ineligible /
@@ -120,7 +123,7 @@ export function useSelectionToolbar({
     clearToolbarState();
     setSaved(null);
     generationRef.current += 1;
-  }, [article, clearToolbarState]);
+  }, [article, surfaceKey, clearToolbarState]);
 
   /**
    * H/N shortcuts (UI-SPEC §Interaction 33) + the toolbar buttons' activation
@@ -381,8 +384,14 @@ export function useSelectionToolbar({
             currentRange.startOffset !== startOffset ||
             currentRange.endContainer !== endContainer ||
             currentRange.endOffset !== endOffset
-          )
-            return;
+          ) {
+            // Rendering marks replaces the selected text nodes and can
+            // retarget the browser's live Range to block boundaries. That
+            // is our render, not a newer gesture. Real pointer/keyboard
+            // gestures invalidate the generation above; unchanged DOM
+            // endpoints still let us detect newer selections during saving.
+            if (startContainer.isConnected && endContainer.isConnected) return;
+          }
           current.removeAllRanges();
         }
         clearToolbarState();

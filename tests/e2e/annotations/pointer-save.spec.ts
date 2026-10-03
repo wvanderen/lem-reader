@@ -45,3 +45,42 @@ for (const mode of ["paginated", "scrolling"] as const) {
     });
   }
 }
+
+for (const mode of ["paginated", "scrolling"] as const) {
+  test(`${mode}: multi-block save keeps management feedback`, async ({ page }) => {
+    await openArticle(page, FIXTURES[0]!);
+    if (!(await modeToggle(page).getAttribute("aria-label"))?.includes(`Reading mode: ${mode}`)) {
+      await switchMode(page);
+    }
+    await page.evaluate(() => {
+      const surface =
+        document.querySelector(".page-fragment") ??
+        document.querySelector(".article-body:not(.article-body-measurement)");
+      const blocks = surface!.querySelectorAll("p[data-block-index]");
+      const first = blocks[0]!;
+      const second = blocks[1]!;
+      first.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0 }));
+      const range = document.createRange();
+      range.setStart(first.firstChild!, 10);
+      range.setEnd(second.firstChild!, 40);
+      const selection = window.getSelection()!;
+      selection.removeAllRanges();
+      selection.addRange(range);
+      document.dispatchEvent(new Event("selectionchange"));
+      second.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, button: 0 }));
+    });
+    const toolbar = page.getByRole("toolbar", { name: "Highlight actions" });
+    await expect(toolbar.getByRole("button", { name: "Undo" })).toBeVisible();
+    await expect(toolbar.getByRole("button", { name: "Add note" })).toBeVisible();
+    await expect(page.locator("mark.highlight")).toHaveCount(2);
+    if (mode === "paginated") {
+      await page.keyboard.press("ArrowRight");
+      await expect(toolbar).toHaveCount(0);
+      await page.keyboard.press("ArrowLeft");
+      await expect(page.locator("mark.highlight")).toHaveCount(2);
+    } else {
+      await toolbar.getByRole("button", { name: "Undo" }).click();
+      await expect(page.locator("mark.highlight")).toHaveCount(0);
+    }
+  });
+}

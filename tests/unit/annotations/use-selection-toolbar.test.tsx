@@ -163,10 +163,12 @@ function Harness({
   api,
   extraBody,
   onController,
+  surfaceKey,
 }: {
   article: CanonicalArticle | null;
   api: HighlightOverlayValue;
   extraBody?: ReactNode;
+  surfaceKey?: number;
   onController?: (ctl: SelectionToolbarController) => void;
 }) {
   // Mirror the route's callback-ref pattern: the ref for imperative reads +
@@ -184,6 +186,7 @@ function Harness({
     readingRootRef: ref,
     articleEl: el,
     highlightApiRef: apiRef,
+    surfaceKey,
   });
   onController?.(ctl);
   return (
@@ -194,7 +197,7 @@ function Harness({
         Outside
       </button>
       <div ref={cbRef} data-testid="reading-root">
-        <p>Hello highlightable world.</p>
+        <p data-block-index="0">Hello highlightable world.</p>
         {extraBody}
       </div>
       <SelectionToolbar
@@ -773,5 +776,47 @@ describe("pending pointer saves", () => {
     fireEvent.keyDown(window, { key: "Escape" });
     expect(api.deleteHighlight).toHaveBeenCalledExactlyOnceWith("hl-new");
     expect(queryToolbar()).toBeNull();
+  });
+});
+
+describe("pointer save after highlight rendering", () => {
+  it("keeps saved feedback when rendering replaces selection text nodes", async () => {
+    const api = makeApi();
+    const view = renderHarness(api);
+    selectInRoot(6, 19);
+    vi.mocked(api.createHighlightFromSelection).mockImplementationOnce(async () => {
+      const paragraph = view.getByTestId("reading-root").querySelector("p")!;
+      // Highlight rendering replaces inline text nodes while the selection
+      // still covers the same passage (especially across multiple blocks).
+      paragraph.innerHTML = "Hello <mark>highlightable</mark> world.";
+      const range = document.createRange();
+      // The browser can retarget a cross-block range to block boundaries.
+      range.selectNodeContents(paragraph);
+      window.getSelection()!.removeAllRanges();
+      window.getSelection()!.addRange(range);
+      return { ok: true, highlightId: "hl-new", position: { start: 6, end: 19 } };
+    });
+    fireEvent(
+      view.getByTestId("reading-root").querySelector("p")!,
+      Object.assign(new Event("pointerup", { bubbles: true }), { button: 0 }),
+    );
+    await waitFor(() => expect(view.getByRole("button", { name: "Undo" })).toBeTruthy());
+  });
+});
+
+describe("reading surface transitions", () => {
+  it("dismisses saved feedback on page changes without deleting the highlight", async () => {
+    const api = makeApi();
+    const article = makeArticle();
+    const view = render(<Harness article={article} api={api} surfaceKey={1} />);
+    selectInRoot(6, 19);
+    fireEvent(
+      view.getByTestId("reading-root").querySelector("p")!,
+      Object.assign(new Event("pointerup", { bubbles: true }), { button: 0 }),
+    );
+    await waitFor(() => expect(view.getByRole("button", { name: "Undo" })).toBeTruthy());
+    view.rerender(<Harness article={article} api={api} surfaceKey={2} />);
+    expect(queryToolbar()).toBeNull();
+    expect(api.deleteHighlight).not.toHaveBeenCalled();
   });
 });
