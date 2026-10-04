@@ -23,7 +23,8 @@
 //   6. The 5-button header at 320: single 48px row, no wrap, no overflow,
 //      no silent overlap (.header-start flex-shrink honesty), all five
 //      article-scoped buttons ≥44px.
-//   7. Staged collapse (≤460px in Reader since issue #121): shell-nav
+//   7. Staged collapse (below 640px in Reader — the phone band contract):
+//      shell-nav
 //      links are clipped but
 //      keyboard-reachable (Tab reaches them) and a focused collapsed link
 //      becomes visible (the :focus-visible un-clip).
@@ -434,7 +435,7 @@ test.describe("TOC geometry (18-04 — ORNT-05 edge matrix)", () => {
     ).toEqual([]);
   });
 
-  test("staged collapse in Reader (≤460px since issue #121): clipped destinations stay keyboard-reachable and un-clip on focus", async ({
+  test("staged collapse in Reader (below 640px — the phone band contract): clipped destinations stay keyboard-reachable and un-clip on focus", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 320, height: 640 });
