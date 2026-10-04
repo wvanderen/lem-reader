@@ -44,22 +44,28 @@ describe("preset themes — ink on every highlight fill ≥ 4.5:1 (D5-14 × #118
   // ADR 0005 block order: :root (Daylight) → [data-theme="sepia"] (Warm
   // paper) → [data-theme="light"] (Daylight, explicit) → [data-theme="dark"]
   // (Night), extended by ADR 0006: [data-theme="trans-light"] (Trans pride)
-  // → [data-theme="bi-dark"] (Bi pride). The map below IS that order — keep
+  // → [data-theme="bi-dark"] (Bi pride), and by ADR 0007:
+  // [data-theme="marxism-light"] → [data-theme="marxism-dark"] (In Defense
+  // of Marxism, light + night). The map below IS that order — keep
   // it in sync with app.css. The ribbon-consumption rules that follow the
-  // bi-dark block carry no --token hex declarations, so the first-match
-  // extraction stays correct through them.
+  // marxism-dark block carry no --token hex declarations, so the
+  // first-match extraction stays correct through them.
   const sepiaStart = css.indexOf('[data-theme="sepia"]');
   const lightStart = css.indexOf('[data-theme="light"]');
   const darkStart = css.indexOf('[data-theme="dark"]');
   const transStart = css.indexOf('[data-theme="trans-light"]');
   const biStart = css.indexOf('[data-theme="bi-dark"]');
-  const biBlockEnd = css.indexOf("body {", biStart);
+  const marxismLightStart = css.indexOf('[data-theme="marxism-light"]');
+  const marxismDarkStart = css.indexOf('[data-theme="marxism-dark"]');
+  const marxismDarkBlockEnd = css.indexOf("body {", marxismDarkStart);
   expect(sepiaStart).toBeGreaterThan(-1);
   expect(lightStart).toBeGreaterThan(sepiaStart);
   expect(darkStart).toBeGreaterThan(lightStart);
   expect(transStart).toBeGreaterThan(darkStart);
   expect(biStart).toBeGreaterThan(transStart);
-  expect(biBlockEnd).toBeGreaterThan(biStart);
+  expect(marxismLightStart).toBeGreaterThan(biStart);
+  expect(marxismDarkStart).toBeGreaterThan(marxismLightStart);
+  expect(marxismDarkBlockEnd).toBeGreaterThan(marxismDarkStart);
 
   const blocks = {
     daylight: [0, sepiaStart] as const,
@@ -67,7 +73,9 @@ describe("preset themes — ink on every highlight fill ≥ 4.5:1 (D5-14 × #118
     light: [lightStart, darkStart] as const,
     dark: [darkStart, transStart] as const,
     "trans-light": [transStart, biStart] as const,
-    "bi-dark": [biStart, biBlockEnd] as const,
+    "bi-dark": [biStart, marxismLightStart] as const,
+    "marxism-light": [marxismLightStart, marxismDarkStart] as const,
+    "marxism-dark": [marxismDarkStart, marxismDarkBlockEnd] as const,
   };
 
   for (const [theme, [from, to]] of Object.entries(blocks)) {

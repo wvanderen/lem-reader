@@ -1,5 +1,6 @@
 // tests/unit/settings/prideThemes.test.ts
-// ADR 0006 — the two specialty pride themes ("trans-light" / "bi-dark").
+// ADR 0006 — the specialty themes ("trans-light" / "bi-dark"), extended by
+// ADR 0007 with the third room ("marxism-light").
 //
 // Hand-authored [data-theme] blocks in src/app.css (NOT custom-slot
 // derivations — there is no stored token record), so their palette contract
@@ -36,18 +37,24 @@ function cssToken(css: string, from: number, to: number, prop: string): string {
   return m[1];
 }
 
-describe("specialty pride themes — the palette contract (ADR 0006)", () => {
+describe("specialty themes — the palette contract (ADR 0006/0007)", () => {
   const css = readFileSync(resolve(process.cwd(), "src/app.css"), "utf-8");
   const transStart = css.indexOf('[data-theme="trans-light"]');
   const biStart = css.indexOf('[data-theme="bi-dark"]');
-  const biBlockEnd = css.indexOf("body {", biStart);
+  const marxismLightStart = css.indexOf('[data-theme="marxism-light"]');
+  const marxismDarkStart = css.indexOf('[data-theme="marxism-dark"]');
+  const marxismDarkBlockEnd = css.indexOf("body {", marxismDarkStart);
   expect(transStart).toBeGreaterThan(-1);
   expect(biStart).toBeGreaterThan(transStart);
-  expect(biBlockEnd).toBeGreaterThan(biStart);
+  expect(marxismLightStart).toBeGreaterThan(biStart);
+  expect(marxismDarkStart).toBeGreaterThan(marxismLightStart);
+  expect(marxismDarkBlockEnd).toBeGreaterThan(marxismDarkStart);
 
   const blocks = {
     "trans-light": [transStart, biStart] as const,
-    "bi-dark": [biStart, biBlockEnd] as const,
+    "bi-dark": [biStart, marxismLightStart] as const,
+    "marxism-light": [marxismLightStart, marxismDarkStart] as const,
+    "marxism-dark": [marxismDarkStart, marxismDarkBlockEnd] as const,
   };
 
   for (const [theme, [from, to]] of Object.entries(blocks)) {

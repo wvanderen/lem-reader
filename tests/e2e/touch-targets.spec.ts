@@ -118,6 +118,8 @@ test.describe("Touch targets ≥ 44×44px (A11Y-07)", () => {
       { name: "Night", value: "dark" },
       { name: "Trans pride", value: "trans-light" },
       { name: "Bi pride", value: "bi-dark" },
+      { name: "In Defense of Marxism", value: "marxism-light" },
+      { name: "In Defense of Marxism (Night)", value: "marxism-dark" },
       { name: "Custom light", value: "custom-light" },
       { name: "Custom dark", value: "custom-dark" },
     ]) {

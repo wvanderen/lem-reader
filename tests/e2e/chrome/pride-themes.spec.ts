@@ -54,6 +54,22 @@ const ROOMS = [
     accentRgb: "rgb(229, 137, 194)", // the same token (computed form)
     ribbonLead: "rgb(214, 2, 112)", // #d60270 — the flag's leading stripe
   },
+  {
+    name: "In Defense of Marxism",
+    literal: "marxism-light",
+    band: "rgb(63, 20, 27)", // #3f141b — the deep oxblood enamel (ADR 0007)
+    accentHex: "#a01c2e", // the deep crimson (raw-token form)
+    accentRgb: "rgb(160, 28, 46)", // the same token (computed form)
+    ribbonLead: "rgb(143, 20, 32)", // #8f1420 — the banner wash's leading edge
+  },
+  {
+    name: "In Defense of Marxism (Night)",
+    literal: "marxism-dark",
+    band: "rgb(21, 10, 13)", // #150a0d — the near-black oxblood enamel (ADR 0007)
+    accentHex: "#e08692", // the rose-crimson (raw-token form)
+    accentRgb: "rgb(224, 134, 146)", // the same token (computed form)
+    ribbonLead: "rgb(165, 27, 40)", // #a51b28 — the night banner wash's leading edge
+  },
 ] as const;
 
 for (const room of ROOMS) {

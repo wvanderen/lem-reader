@@ -697,9 +697,9 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                 />
                 <span>Night</span>
               </label>
-              {/* ADR 0006 — the specialty pride presets: hand-authored
-                rooms that fly a flag on the chrome ribbon hooks. Stored as
-                plain theme literals (no token record), exactly like the
+              {/* ADR 0006/0007 — the specialty presets: hand-authored
+                rooms that fly an identity on the chrome ribbon hooks. Stored
+                as plain theme literals (no token record), exactly like the
                 three presets above. */}
               <label className="settings-row">
                 <input
@@ -720,6 +720,26 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                   onChange={() => onTheme("bi-dark")}
                 />
                 <span>Bi pride</span>
+              </label>
+              <label className="settings-row">
+                <input
+                  type="radio"
+                  name="theme"
+                  value="marxism-light"
+                  checked={settings.theme === "marxism-light"}
+                  onChange={() => onTheme("marxism-light")}
+                />
+                <span>In Defense of Marxism</span>
+              </label>
+              <label className="settings-row">
+                <input
+                  type="radio"
+                  name="theme"
+                  value="marxism-dark"
+                  checked={settings.theme === "marxism-dark"}
+                  onChange={() => onTheme("marxism-dark")}
+                />
+                <span>In Defense of Marxism (Night)</span>
               </label>
               {/* Issues #86/#120 — the two custom slots: independently
                 saved, manually selected (NO automatic system-theme

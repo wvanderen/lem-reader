@@ -90,7 +90,7 @@ The reading voice is deliberately separate from the signage voice. Literata — 
 - Brass (never gray) edges every board and quotation
 - The current location is the *lit* board — brighter fill, brass underline
 - Layout geometry is pinned: 48px band, centered 64ch measure, no shadows outside dialogs
-- Three scenes, not three color schemes: Daylight (default), Warm paper (manila), Night (lit signage on dark walls) — plus two hand-authored specialty flag rooms (ADR 0006)
+- Three scenes, not three color schemes: Daylight (default), Warm paper (manila), Night (lit signage on dark walls) — plus hand-authored specialty rooms (ADR 0006/0007)
 
 ## Colors
 
@@ -182,8 +182,8 @@ The two custom slots (Custom light / Custom dark) let the reader repaint the roo
 
 **The Custom Contrast Contract.** The derived/stored chrome is held to the same audit as the presets, test-enforced: band text ≥ 4.5:1 on the band, on the lit board, and on the solid fill; secondary band text ≥ 4.5:1 on the band; brass ≥ 3:1 on both paper surfaces; lit brass ≥ 3:1 on the band. The live readout reports every policed pair; "Fix contrast" nudges only a failing pair's own stored token Derived board text and lit brass adapt to their grounds. Arbitrary paper colors can make simultaneous brass contrast impossible; the readout keeps reporting any remaining failure.
 
-### Specialty Themes (the flag rooms, ADR 0006)
-Two hand-authored presets fly a pride flag on the chrome: **Trans pride** (light — porcelain-blue paper, deep trans-blue enamel band, pink metal) and **Bi pride** (dark — aubergine walls, magenta accent, lavender metal). The Wayfinding grammar holds intact; ONE gradient material — the **soft wash** (`--flag-wash`, a real blend of the flag's hues) — paints exactly two moments: the dynamic progress hairline (whose `scaleX` compression would fragment hard stripes) and the lit current-location underline. Hard-stop flag geometry is refused: it read as chunky confetti chips at board scale and aliasing fragments under compression. The band's bottom edge stays the **basic lit metal** — a flag line there sat 1px above the wash and read as a clashing double-flag. The hooks default to the solid materials in `:root`, so every other preset and both custom rooms stay flat. The flag is identity, never meaning: the solid mark stays painted beneath the underline's `border-image`, forced colors strip it, and the article measure is never repainted. Both rooms pass the full preset contrast audit (test-enforced in `prideThemes.test.ts`).
+### Specialty Themes (the flag rooms, ADR 0006/0007)
+Hand-authored presets fly their identity on the chrome: **Trans pride** (light — porcelain-blue paper, deep trans-blue enamel band, pink metal), **Bi pride** (dark — aubergine walls, magenta accent, lavender metal), and **In Defense of Marxism** in two registers (light — the pamphlet room: warm newsprint paper, deep oxblood-red enamel band, crimson links, red-brown metal; night — red-black walls, near-black oxblood band, rose-crimson links, lit-red metal). The Wayfinding grammar holds intact; ONE gradient material — the **soft wash** (`--flag-wash`, a real blend of the flag's hues; in the Marxism room, the single-hue banner blend) — paints exactly two moments: the dynamic progress hairline (whose `scaleX` compression would fragment hard stripes) and the lit current-location underline. Hard-stop flag geometry is refused: it read as chunky confetti chips at board scale and aliasing fragments under compression. The band's bottom edge stays the **basic lit metal** — a flag line there sat 1px above the wash and read as a clashing double-flag. The hooks default to the solid materials in `:root`, so every other preset and both custom rooms stay flat. The flag is identity, never meaning: the solid mark stays painted beneath the underline's `border-image`, forced colors strip it, and the article measure is never repainted. All rooms pass the full preset contrast audit (test-enforced in `prideThemes.test.ts`).
 
 ### Dialogs
 Raised paper card, 16px radius, 2px brass top rule, the one elevation token, deep-green scrim (`rgba(16,24,20,.55)`). Native `<dialog>` top-layer only.
@@ -199,7 +199,7 @@ Raised paper card, 16px radius, 2px brass top rule, the one elevation token, dee
 
 ### Don't:
 - **Don't** warm the default paper. Gallery Paper is neutral-cool; cream/beige is the retired default (ADR 0005), and warmth lives only in the explicit Warm paper theme.
-- **Don't** add shadows outside native dialogs, or gradients/glass anywhere — enamel is flat. The single exception is the two specialty pride rooms' ribbon hooks (ADR 0006); never extend gradients past them.
+- **Don't** add shadows outside native dialogs, or gradients/glass anywhere — enamel is flat. The single exception is the specialty rooms' ribbon hooks (ADR 0006/0007); never extend gradients past them.
 - **Don't** let the signage voice leak into prose: no caps, no PT Sans inside the article measure.
 - **Don't** light two boards at once, and never convey current/hover state by color alone.
 - **Don't** shrink type to fit narrow screens — remove furniture instead (the staged-collapse discipline).
