@@ -407,10 +407,8 @@ test.describe("TOC geometry (18-04 — ORNT-05 edge matrix)", () => {
     });
 
     // Single 48px row — the LOAD-BEARING height never changes (no wrap).
-    // The bounding box is min-height 48px + the 1px hairline border-bottom
-    // (app.css .app-header) ≈ 49px; a WRAPPED row would double past 96px.
-    expect(geometry.headerHeight!).toBeLessThanOrEqual(49.5);
-    expect(geometry.headerHeight!).toBeGreaterThanOrEqual(47);
+    // The border is included in the 48px band, above the progress track.
+    expect(geometry.headerHeight).toBe(48);
 
     // No horizontal overflow (WCAG 1.4.10 at 320).
     expect(geometry.bodyScrollW).toBeLessThanOrEqual(geometry.bodyClientW + 1);

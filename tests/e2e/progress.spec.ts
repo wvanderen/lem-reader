@@ -52,6 +52,29 @@ test.describe("READ-05 progress hairline", () => {
     await expect(fill).toHaveCount(1);
   });
 
+  for (const width of [320, 1280]) {
+    for (const mode of ["paginated", "scrolling"] as const) {
+      test(`the full progress track sits below the 48px header at ${width}px in ${mode} mode`, async ({ page }) => {
+        await page.setViewportSize({ width, height: 800 });
+        await page.goto(`${BASE}/#/article/${FIXTURE}`);
+        await expect(page.locator(".page-viewport")).toBeVisible();
+        if (mode === "scrolling") {
+          await page.getByRole("button", { name: /reading mode/i }).click();
+          await expect(page.locator(".page-viewport")).toHaveCount(0);
+        }
+        await page.evaluate(() => document.fonts.ready);
+
+        const header = await page.locator(".app-header").boundingBox();
+        const track = await page.locator(".progress-hairline-viewport").boundingBox();
+        expect(header).not.toBeNull();
+        expect(track).not.toBeNull();
+        expect(header!.height).toBe(48);
+        expect(track!.height).toBe(2);
+        expect(track!.y).toBe(header!.y + header!.height);
+      });
+    }
+  }
+
   test("progress eases updates and respects reduced motion", async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "no-preference" });
     await page.goto(`${BASE}/#/article/${FIXTURE}`);
