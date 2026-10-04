@@ -899,6 +899,11 @@ a:hover {
   justify-content: space-between;
   gap: var(--space-md);
   min-height: 48px;
+  /* border-box keeps the band EXACTLY 48px including the 1px brass rule —
+     content-box made it 49px, so the rule painted over the top pixel of the
+     progress hairline (fixed at top: 48px, z-index below this header) and
+     halved its visible fill. Every budget above computes 48 + 2 from this. */
+  box-sizing: border-box;
   padding-inline: var(--space-lg);
   background: var(--board);
   border-bottom: 1px solid var(--brass-bright);
