@@ -4663,6 +4663,8 @@ main:has(.readaloud-bar) .article-body:has(.mark-read-close-page) .chapter-nav-p
     position: absolute;
     width: 1px;
     height: 1px;
+    /* Padding would keep the clipped border box wider than 1px. */
+    padding-inline: 0;
     overflow: hidden;
     clip: rect(0 0 0 0);
     white-space: nowrap;
@@ -4691,6 +4693,7 @@ main:has(.readaloud-bar) .article-body:has(.mark-read-close-page) .chapter-nav-p
     position: static;
     width: auto;
     height: auto;
+    padding-inline: var(--space-sm);
     overflow: visible;
     clip: auto;
     white-space: normal;
