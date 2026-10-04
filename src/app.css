@@ -278,8 +278,8 @@
    (deep aubergine walls, magenta accent, lavender metal); "marxism-light"
    and "marxism-dark" (ADR 0007) — the pamphlet rooms (light: warm paper,
    deep oxblood-red enamel, crimson links, red-brown metal; night:
-   red-black walls, near-black oxblood band, rose-crimson links, lit-red
-   metal). The Wayfinder
+   dark grey walls, banner-red enamel band, red links, lit-red metal).
+   The Wayfinder
    grammar holds: enamel band, spaced caps, lit board, calm paper — identity
    paints ONLY the two wash moments (progress hairline, lit underline);
    the band's bottom edge stays the BASIC lit metal and the article measure
@@ -393,31 +393,34 @@
 }
 
 /* ADR 0007 — the "In Defense of Marxism" night room (dark register). The
-   light room's companion: the red banner stays lit after close — red-black
-   walls, a near-black oxblood band, links lightened to rose-crimson for
-   dark-surface AA (the Night accent discipline), the metal brightened to
-   read on dark walls, and hue-true deep marker fills carrying the LIGHT
-   ink (the Night highlights contract). The banner wash brightens one step
-   so the moving hairline stays visible on dark walls. Same audit, same
-   two wash moments, band edge stays the basic lit metal, and the article
-   measure stays the brightest surface. Palette-checked 2026-10-04 (pinned
-   by tests/unit/settings/prideThemes.test.ts). */
+   light room's companion — the banner stays lit after close — re-grounded
+   2026-10-04: the walls go NEUTRAL dark grey (#1b1d1f), so the room stops
+   swimming in red and the signature red concentrates where the reader
+   orients — the navigator. The band flies the banner red (#8f1420), the
+   lit board steps brighter (#b01824), links carry the identity red
+   lightened for dark-surface AA (#e57373 — the Night accent discipline),
+   the metal brightens to read on grey walls, and hue-true deep marker
+   fills carry the LIGHT ink (the Night highlights contract). The banner
+   wash brightens so the moving hairline stays visible on grey walls.
+   Same audit, same two wash moments, band edge stays the basic lit metal,
+   and the article measure stays the brightest surface. Palette-checked
+   2026-10-04 (pinned by tests/unit/settings/prideThemes.test.ts). */
 [data-theme="marxism-dark"] {
-  --surface: #1d1315;
-  --surface-raised: #281b1e;
-  --ink: #ece4e2;
-  --ink-soft: #b5a5a2;
-  --accent: #e08692; /* rose-crimson — AA links on red-black walls */
-  --accent-hover: #eba0aa;
-  --accent-strong: #4a161d; /* solid fills stay dark for board-text */
+  --surface: #1b1d1f; /* dark grey walls — neutral, no red cast */
+  --surface-raised: #25282b;
+  --ink: #eceeee;
+  --ink-soft: #a8adaf;
+  --accent: #e57373; /* the identity red, lightened for dark-surface AA */
+  --accent-hover: #ee8a8a;
+  --accent-strong: #7c121d; /* solid fills stay dark for board-text */
   --focus-ring: #d98b87; /* the lit metal */
   --destructive: #e08a80;
-  --hairline: #3d2a2d;
-  --board: #150a0d; /* near-black oxblood enamel */
-  --board-text: #f2e9e8;
-  --board-soft: #b49a9b;
-  --lit: #3d171c;
-  --lit-text: #f2e9e8;
+  --hairline: #363a3d;
+  --board: #8f1420; /* the banner red — the navigator flies the flag */
+  --board-text: #f8efec;
+  --board-soft: #e6c3bf;
+  --lit: #b01824; /* the lit board — one step brighter than the band */
+  --lit-text: #f8efec;
   --brass: #d98b87; /* the lit metal on dark walls */
   --brass-bright: #e8a49b; /* the metal lit on boards */
   --highlight: #522b27;
@@ -426,8 +429,8 @@
   --highlight-blue: #263a4e;
   --highlight-pink: #4e2f36;
   --spoken-highlight: #452220;
-  --flag-wash: linear-gradient(90deg, #a51b28, #d8434f);
-  --progress-fill: var(--flag-wash);
+   --flag-wash: linear-gradient(90deg, #c0202e, #e8535c);
+   --progress-fill: var(--flag-wash);
 }
 
 /* Wash consumption — the only places the flag gradient paints. The two
