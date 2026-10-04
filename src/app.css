@@ -71,6 +71,18 @@
   --lit-text: #f2f4f1;
   --brass: #8a6a24; /* brass on paper (rules, quiet hover edges) */
   --brass-bright: #c9a24e; /* lit brass on boards (band rule, current mark) */
+  /* The wash hooks (ADR 0006): the chrome slots the specialty themes'
+     flag wash paints. :root defaults route every preset and custom room to
+     the solid Wayfinder materials — the hooks are inert unless a
+     [data-theme] block overrides them. The band edge is deliberately NOT a
+     flag moment (a flag line 1px above the moving wash read as a clashing
+     double-flag): --band-edge stays the lit metal in every room.
+     --progress-fill rides the background shorthand (a color OR an image);
+     the lit underline is a border COLOR by default (the wash joins it via
+     border-image in the specialty section below). */
+  --progress-fill: var(--accent);
+  --band-edge: var(--brass-bright);
+  --lit-underline: var(--brass-bright);
   /* Warm paper (sepia) — the optional manila reading room, a deliberate
      colored choice rather than a near-white default. */
   --warm-surface: #f0e8d5;
@@ -255,8 +267,105 @@
   --highlight-blue: #263a4e;
   --highlight-pink: #4e2f36;
   /* Issue #42: spoken-word marker fill (dark theme — deeper than the
-     annotation fill, reads as a shadow under the voice). */
+      annotation fill, reads as a shadow under the voice). */
   --spoken-highlight: #3f3417;
+}
+
+/* ── Specialty pride themes (ADR 0006) ──────────────────────────────────── */
+/* Two hand-authored reading rooms that fly a pride flag on the chrome:
+   "trans-light" — the trans-flag daylight room (cool porcelain-blue paper,
+   deep trans-blue enamel, pink metal); "bi-dark" — the bi-flag night room
+   (deep aubergine walls, magenta accent, lavender metal). The Wayfinder
+   grammar holds: enamel band, spaced caps, lit board, calm paper — the flag
+   paints ONLY the two wash moments (progress hairline, lit underline);
+   the band's bottom edge stays the BASIC lit metal and the article measure
+   stays untouched (the Brightest Panel rule). Every text pair ≥ 4.5:1 and
+   every rule ≥ 3:1 (palette-checked 2026-10-03; pinned by
+   tests/unit/settings/prideThemes.test.ts).
+
+   One gradient material (ADR 0006): hard-stop flag geometry read as chunky
+   color blocks at ribbon scale — five confetti chips under a nav board,
+   and aliasing fragments when the progress fill's transform scaleX
+   compressed it — so the crisp ribbon is gone. --flag-wash, a real blend
+   of the flag's hues (sRGB, flag-true endpoints, no synthetic stops), is
+   the single flag material, painting both moments: the lit
+   current-location underline (border-image) and the progress hairline
+   (background). */
+
+[data-theme="trans-light"] {
+  --surface: #f2f8fb;
+  --surface-raised: #e7f1f7;
+  --ink: #16232e;
+  --ink-soft: #4c6072;
+  --accent: #166093; /* deepened trans blue for AA links on porcelain */
+  --accent-hover: #104a74;
+  --accent-strong: #166093;
+  --focus-ring: #a83a63; /* the pink metal */
+  --destructive: #a63d32;
+  --hairline: #cadfe9;
+  --board: #14374e; /* deep trans-blue enamel */
+  --board-text: #f1f7fa;
+  --board-soft: #a9c6d6;
+  --lit: #1d4965;
+  --lit-text: #f1f7fa;
+  --brass: #a13a62; /* the pink metal on paper */
+  --brass-bright: #ee92b4; /* the pink metal lit on boards */
+  --highlight: #d3e5f0;
+  --highlight-yellow: #e3d084;
+  --highlight-green: #d3e2c3;
+  --highlight-blue: #c5d9e6;
+  --highlight-pink: #ecc9d6;
+  --spoken-highlight: #c9dcea;
+  --flag-wash: linear-gradient(90deg, #5bcefa, #f5a9b8);
+  --progress-fill: var(--flag-wash);
+}
+
+[data-theme="bi-dark"] {
+  --surface: #171122;
+  --surface-raised: #211936;
+  --ink: #ece4f4;
+  --ink-soft: #a99cbf;
+  --accent: #e589c2; /* lightened flag pink for AA links on aubergine */
+  --accent-hover: #efa6d3;
+  --accent-strong: #4a2148; /* solid fills stay dark for board-text */
+  --focus-ring: #c9a2e8; /* the lavender metal */
+  --destructive: #e08a80;
+  --hairline: #362a4d;
+  --board: #120c20; /* deep violet enamel */
+  --board-text: #f0ecf6;
+  --board-soft: #a596c2;
+  --lit: #2b2044;
+  --lit-text: #f0ecf6;
+  --brass: #bb92de; /* the lavender metal on dark walls */
+  --brass-bright: #d3b3ee; /* the lavender metal lit on boards */
+  --highlight: #4c3a52;
+  --highlight-yellow: #564a14;
+  --highlight-green: #294230;
+  --highlight-blue: #2f3a5e; /* the bi blue, deep */
+  --highlight-pink: #55284a; /* the bi pink, deep */
+  --spoken-highlight: #3d2f44;
+  --flag-wash: linear-gradient(90deg, #d60270, #9b4f96, #0038a8);
+  --progress-fill: var(--flag-wash);
+}
+
+/* Wash consumption — the only places the flag gradient paints. The two
+   moments are deliberately NON-adjacent: the lit underline (ON the
+   navigator, the short "you are here" mark) and the progress hairline
+   (the moving line). The band's bottom edge stays BASIC — the solid lit
+   metal (var(--band-edge), unchanged) — because a flag line there sat 1px
+   above the moving wash and read as a clashing double-flag (worst in
+   bi-dark, where both are pink→purple→blue). The border-color fallback
+   stays painted underneath the underline's border-image, so a UA that
+   drops border-image (or forced colors) still shows the solid lit mark. */
+[data-theme="trans-light"] .shell-nav a[aria-current="page"],
+[data-theme="bi-dark"] .shell-nav a[aria-current="page"] {
+  border-image: var(--flag-wash) 1;
+}
+@media (forced-colors: active) {
+  [data-theme="trans-light"] .shell-nav a[aria-current="page"],
+  [data-theme="bi-dark"] .shell-nav a[aria-current="page"] {
+    border-image: none;
+  }
 }
 
 body {
@@ -906,7 +1015,7 @@ a:hover {
   box-sizing: border-box;
   padding-inline: var(--space-lg);
   background: var(--board);
-  border-bottom: 1px solid var(--brass-bright);
+  border-bottom: 1px solid var(--band-edge);
 }
 /* Wordmark: the engraved hall sign — white spaced caps. The link-honesty
    invariant (D15-05: wordmark rides the global a rule) is deliberately
@@ -1616,11 +1725,13 @@ dialog.add-dialog {
   ); /* above article content, below .app-header (z-index: 10) and
                  below dialogs (top-layer, unaffected by z-index) */
 }
-/* Full-width fill; transform changes never affect layout. */
+/* Full-width fill; transform changes never affect layout. The fill is the
+   --progress-fill ribbon hook (ADR 0006): --accent in every preset and
+   custom room, the flag gradient in the two specialty themes. */
 .progress-hairline-fill {
   height: 100%;
   width: 100%;
-  background: var(--accent);
+  background: var(--progress-fill);
   transform-origin: left;
 }
 
@@ -4766,7 +4877,7 @@ main:has(.readaloud-bar) .article-body:has(.mark-read-close-page) .chapter-nav-p
   box-sizing: border-box;
 }
 .shell-nav a[aria-current="page"] {
-  border-block-end-color: var(--brass-bright);
+  border-block-end-color: var(--lit-underline);
 }
 .app-wordmark:hover,
 .shell-nav a:hover {

@@ -150,14 +150,15 @@ test.describe("Custom theme builder (#86/#120 — two custom slots, 5 tokens eac
     await openSettings(page);
 
     // The radios are reachable: focus the group's first radio and walk down
-    // with arrow keys (Daylight → Warm paper → Night → Custom light → Custom
-    // dark).
+    // with arrow keys (Daylight → Warm paper → Night → Trans pride →
+    // Bi pride → Custom light → Custom dark — ADR 0006 added the two
+    // specialty presets between Night and the custom slots).
     const daylight = page.getByRole("radio", { name: "Daylight" });
     await daylight.focus();
     await expect(daylight).toBeFocused();
-    await page.keyboard.press("ArrowDown");
-    await page.keyboard.press("ArrowDown");
-    await page.keyboard.press("ArrowDown");
+    for (let i = 0; i < 5; i++) {
+      await page.keyboard.press("ArrowDown");
+    }
     await expect(page.getByRole("radio", { name: "Custom light" })).toBeChecked();
     await expect(page.locator("details.custom-theme-builder")).toBeVisible();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "custom-light");
