@@ -1335,6 +1335,79 @@ dialog.settings-panel {
   color: var(--ink);
 }
 
+/* ── Theme shelves (menu organization) ────────────────────────────────────── */
+/* The Theme fieldset's nine options scan as three calm, independently
+   collapsible groups: Standard / Special / Custom. Each shelf is a native
+   <details>/<summary> (the panel's own disclosure pattern — native marker,
+   44px summary row); the radios stay ONE native radio group (name="theme" —
+   arrow keys walk the open shelves' nine choices), and the details element
+   is a group named by its summary (role="group" + aria-labelledby made
+   explicit). Spacing does the separating (tight rows inside a shelf, a wide
+   gap between shelves — more space above each disclosure than below); no
+   internal rule lines. */
+.theme-shelf + .theme-shelf {
+  margin-block-start: var(--space-md);
+}
+.theme-shelf > summary {
+  /* Block-level list-item display (NOT flex — a flex summary suppresses the
+     native disclosure marker, the one affordance that says these shelves
+     collapse). Mirrors .settings-group > summary: 44px row, marker, caps. */
+  min-height: var(--touch);
+  align-content: center;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+.theme-shelf[open] > summary {
+  margin-block-end: var(--space-xs);
+}
+.theme-shelf-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+/* The theme's palette as EQUAL blocks — a standard palette chip, not a
+   page-layout miniature (a facade lets the darkest token dominate, which is
+   how Night's chip once read darker than the room it names). Four equal
+   squares: ground, interactive accent, enamel band, metal. Colors arrive as
+   inline custom properties (themeSwatch — presets byte-matched to the
+   [data-theme] blocks, custom slots resolved live). IDENTITY, never
+   meaning: the chip is decorative (aria-hidden — the row's visible label
+   carries the name; the radio glyph owns checked), so forced-colors keeps
+   only the outline box. */
+.theme-swatch {
+  margin-inline-start: auto;
+  flex-shrink: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--hairline);
+  overflow: hidden;
+}
+.theme-swatch i {
+  display: block;
+}
+.theme-swatch i:nth-child(1) {
+  background: var(--swatch-surface);
+}
+.theme-swatch i:nth-child(2) {
+  background: var(--swatch-accent);
+}
+.theme-swatch i:nth-child(3) {
+  background: var(--swatch-board);
+}
+.theme-swatch i:nth-child(4) {
+  background: var(--swatch-metal);
+}
+
 /* ── Custom-theme builder (issues #86/#120; #146) ────────────────────────── */
 /* The disclosure section directly below the Theme fieldset, mounted only
    while a custom slot is active. Native <details>/<summary>; native color

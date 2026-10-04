@@ -36,7 +36,7 @@
 // ONE invalidateLibrarySnapshot() so mounted surfaces re-derive.
 import { RestoreStarterButton } from "./RestoreStarterButton";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import type { ChangeEvent } from "react";
+import type { ChangeEvent, CSSProperties } from "react";
 import { useSettings } from "../settings/SettingsContext";
 import { formatRate, MEASURE_STEPS, RATE_STEPS, SIZE_STEPS } from "../settings/tokens";
 import type { ReaderSettings } from "../content/schema";
@@ -78,6 +78,11 @@ import {
   slotThemePatch,
   SLOT_BASE_THEME,
 } from "../settings/customTheme";
+// The theme-menu shelves (menu organization): the swatch palette behind each
+// room's facade chip — presets from the byte-matched map, custom slots
+// resolved live from the stored record.
+import { themeSwatch } from "../settings/themeSwatches";
+import type { ThemeSwatch } from "../settings/themeSwatches";
 
 const CustomThemeBuilder = lazy(() =>
   import("./CustomThemeBuilder").then((m) => ({ default: m.CustomThemeBuilder })),
@@ -110,6 +115,64 @@ interface SettingsPanelProps {
  * (mirrors bundle.ts's BUNDLE_FILENAME discipline — one constant, no inline
  * copies for the 09-06 e2e to drift against). */
 const HIGHLIGHTS_FILENAME = "lem-reader-highlights.md";
+
+/**
+ * The Theme shelves (menu organization): nine themes scan as three calm,
+ * independently collapsible groups — Standard, Special, Custom. Each shelf
+ * is a native <details>/<summary> disclosure (keyboard-operable for free,
+ * the panel's own .settings-group pattern); the radios stay ONE native radio
+ * group (`name="theme"`), so arrow keys walk the open shelves' nine choices
+ * and the SR "Theme" grouping holds — the details element is itself a group
+ * named by its summary (made explicit with role="group" +
+ * aria-labelledby). Option labels are verbatim (the component + e2e suites
+ * pin them by exact name).
+ */
+const THEME_SHELVES: ReadonlyArray<{
+  id: string;
+  label: string;
+  options: ReadonlyArray<{ value: ReaderSettings["theme"]; label: string }>;
+}> = [
+  {
+    id: "theme-shelf-standard",
+    label: "Standard",
+    options: [
+      { value: "light", label: "Daylight" },
+      { value: "sepia", label: "Warm paper" },
+      { value: "dark", label: "Night" },
+    ],
+  },
+  {
+    id: "theme-shelf-special",
+    label: "Special",
+    options: [
+      { value: "trans-light", label: "Trans pride" },
+      { value: "bi-dark", label: "Bi pride" },
+      { value: "marxism-light", label: "In Defense of Marxism" },
+      { value: "marxism-dark", label: "In Defense of Marxism (Night)" },
+    ],
+  },
+  {
+    id: "theme-shelf-custom",
+    label: "Custom",
+    options: [
+      { value: "custom-light", label: "Custom light" },
+      { value: "custom-dark", label: "Custom dark" },
+    ],
+  },
+];
+
+/** A swatch chip's inline custom properties — the four equal palette blocks
+ * (surface / accent / band / metal). The chip is decorative: the row's
+ * visible label carries the name (A11Y-05, the builder's rule); the colors
+ * only ever reach the DOM as CSS custom property values on the chip span. */
+function swatchVars(swatch: ThemeSwatch): CSSProperties {
+  return {
+    "--swatch-surface": swatch.surface,
+    "--swatch-accent": swatch.accent,
+    "--swatch-board": swatch.board,
+    "--swatch-metal": swatch.metal,
+  } as CSSProperties;
+}
 
 /**
  * The six refusal kinds → the locked calm .status copy (verbatim strings —
@@ -667,105 +730,46 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
             <summary>Appearance</summary>
             <fieldset className="settings-section">
               <legend>Theme</legend>
-              <label className="settings-row">
-                <input
-                  type="radio"
-                  name="theme"
-                  value="light"
-                  checked={settings.theme === "light"}
-                  onChange={() => onTheme("light")}
-                />
-                <span>Daylight</span>
-              </label>
-              <label className="settings-row">
-                <input
-                  type="radio"
-                  name="theme"
-                  value="sepia"
-                  checked={settings.theme === "sepia"}
-                  onChange={() => onTheme("sepia")}
-                />
-                <span>Warm paper</span>
-              </label>
-              <label className="settings-row">
-                <input
-                  type="radio"
-                  name="theme"
-                  value="dark"
-                  checked={settings.theme === "dark"}
-                  onChange={() => onTheme("dark")}
-                />
-                <span>Night</span>
-              </label>
-              {/* ADR 0006/0007 — the specialty presets: hand-authored
-                rooms that fly an identity on the chrome ribbon hooks. Stored
-                as plain theme literals (no token record), exactly like the
-                three presets above. */}
-              <label className="settings-row">
-                <input
-                  type="radio"
-                  name="theme"
-                  value="trans-light"
-                  checked={settings.theme === "trans-light"}
-                  onChange={() => onTheme("trans-light")}
-                />
-                <span>Trans pride</span>
-              </label>
-              <label className="settings-row">
-                <input
-                  type="radio"
-                  name="theme"
-                  value="bi-dark"
-                  checked={settings.theme === "bi-dark"}
-                  onChange={() => onTheme("bi-dark")}
-                />
-                <span>Bi pride</span>
-              </label>
-              <label className="settings-row">
-                <input
-                  type="radio"
-                  name="theme"
-                  value="marxism-light"
-                  checked={settings.theme === "marxism-light"}
-                  onChange={() => onTheme("marxism-light")}
-                />
-                <span>In Defense of Marxism</span>
-              </label>
-              <label className="settings-row">
-                <input
-                  type="radio"
-                  name="theme"
-                  value="marxism-dark"
-                  checked={settings.theme === "marxism-dark"}
-                  onChange={() => onTheme("marxism-dark")}
-                />
-                <span>In Defense of Marxism (Night)</span>
-              </label>
-              {/* Issues #86/#120 — the two custom slots: independently
-                saved, manually selected (NO automatic system-theme
-                switching). Seeding/resume lives in onTheme; the builder
-                disclosure rides directly below this fieldset while either
-                slot is active. */}
-              <label className="settings-row">
-                <input
-                  type="radio"
-                  name="theme"
-                  value="custom-light"
-                  checked={settings.theme === "custom-light"}
-                  onChange={() => onTheme("custom-light")}
-                />
-                <span>Custom light</span>
-              </label>
-              <label className="settings-row">
-                <input
-                  type="radio"
-                  name="theme"
-                  value="custom-dark"
-                  checked={settings.theme === "custom-dark"}
-                  onChange={() => onTheme("custom-dark")}
-                />
-                <span>Custom dark</span>
-              </label>
+              {/* The three shelves (THEME_SHELVES above): collapsible
+                <details> disclosures — one native radio group, three named
+                groups, each row carrying its theme's equal-block palette
+                chip (themeSwatch — presets byte-matched to app.css, custom
+                slots resolved live). */}
+              {THEME_SHELVES.map((shelf) => (
+                <details
+                  key={shelf.id}
+                  role="group"
+                  aria-labelledby={shelf.id}
+                  className="theme-shelf"
+                  open
+                >
+                  <summary id={shelf.id}>{shelf.label}</summary>
+                  <div className="theme-shelf-rows">
+                    {shelf.options.map(({ value, label }) => (
+                      <label className="settings-row" key={value}>
+                        <input
+                          type="radio"
+                          name="theme"
+                          value={value}
+                          checked={settings.theme === value}
+                          onChange={() => onTheme(value)}
+                        />
+                        <span>{label}</span>
+                        <span
+                          className="theme-swatch"
+                          aria-hidden="true"
+                          style={swatchVars(themeSwatch(value, settings))}
+                        >
+                          <i />
+                          <i />
+                          <i />
+                          <i />
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </details>
+              ))}
             </fieldset>
 
             {/* Issues #86/#120 — the builder: ONLY while a custom slot is
