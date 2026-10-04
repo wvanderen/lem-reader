@@ -151,12 +151,15 @@ test.describe("Custom theme builder (#86/#120 — two custom slots, 5 tokens eac
 
     // The radios are reachable: focus the group's first radio and walk down
     // with arrow keys (Daylight → Warm paper → Night → Trans pride →
-    // Bi pride → Custom light → Custom dark — ADR 0006 added the two
-    // specialty presets between Night and the custom slots).
+    // Bi pride → In Defense of Marxism → In Defense of Marxism (Night) →
+    // Custom light → Custom dark — ADR 0006 added the two pride presets and
+    // ADR 0007 the two Marxism rooms between Night and the custom slots; the
+    // SettingsPanel's visual shelves never split the radio group, so the
+    // native arrow walk crosses all nine).
     const daylight = page.getByRole("radio", { name: "Daylight" });
     await daylight.focus();
     await expect(daylight).toBeFocused();
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 7; i++) {
       await page.keyboard.press("ArrowDown");
     }
     await expect(page.getByRole("radio", { name: "Custom light" })).toBeChecked();
