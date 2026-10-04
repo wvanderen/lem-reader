@@ -1858,7 +1858,8 @@ dialog.add-dialog {
  * ~48px header. aria-hidden — progress is conveyed to AT via the
  * SectionAnnouncer's polite live region, NOT this element (READ-05).
  *
- * Progress motion: a short transform transition smooths position updates;
+ * Progress motion: two transform-transition contracts — tight 200ms tracking
+ * for continuous updates, a 400ms from-rest glide for stepped page turns;
  * reduced motion retains immediate feedback.
  *
  * ResumeBanner (UI-SPEC §Interaction 10 + §Copywriting lines 318–323):
@@ -1898,8 +1899,19 @@ dialog.add-dialog {
 }
 
 @media (prefers-reduced-motion: no-preference) {
+  /* Continuous updates (scroll tracking, library rows): the hot-start
+     ease-out retargets cleanly on every scroll write — the fill covers most
+     of each new delta immediately, so it never trails a sustained scroll. */
   .progress-hairline-fill {
     transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  /* Stepped updates (paginated page turns — deltas up to half the track in
+     few-page articles): a from-rest glide whose travel is perceptible, so a
+     large step reads as calm arrival, not the teleport-then-creep the hot
+     start produced. The same curve under continuous updates would trail a
+     sustained scroll, which is why the two patterns carry different motion. */
+  .progress-hairline-stepped .progress-hairline-fill {
+    transition: transform 400ms cubic-bezier(0.3, 0, 0.2, 1);
   }
 }
 

@@ -14,6 +14,14 @@
 // (UI-SPEC content is LTR English). CSS eases updates under no-preference;
 // reduced motion keeps the progress line immediate.
 //
+// Two update patterns, two motion contracts (the 260928 stepped-glide tune):
+// continuous updates (scroll tracking) keep the hot-start 200ms ease-out so
+// the fill never trails a sustained scroll, while discrete stepped updates
+// (paginated page turns — deltas of a third to half the track in few-page
+// articles) get a calmer 400ms from-rest glide. The old single curve was an
+// extreme ease-out: on a large step it covered most of the distance in the
+// first frames — a teleport-then-creep the reader read as jumpy.
+//
 // Mirrors src/a11y/SkipLink.tsx minimal-component pattern: header comment
 // citing the locked decisions, single responsibility, verbatim UI-SPEC class
 // hook. Reader call sites opt into viewport placement; Library cards reuse
@@ -31,11 +39,19 @@ interface ProgressHairlineProps {
   progress?: number;
   /** Fixed reader chrome or a card-local track in normal document flow. */
   placement?: "inline" | "viewport";
+  /**
+   * Declares the stepped update pattern: this caller's ratio advances in
+   * discrete jumps (paginated page turns), not a continuous stream (scroll).
+   * Stepped fills take the slower from-rest glide; continuous fills keep
+   * tight scroll tracking. Purely presentational — no behavioral change.
+   */
+  stepped?: boolean;
 }
 
 export function ProgressHairline({
   progress,
   placement = "inline",
+  stepped = false,
 }: ProgressHairlineProps) {
   // Clamp the ratio to [0, 1] defensively — a position edge case (e.g. an
   // article shorter than the viewport, or a stale paginated offset) could
@@ -45,7 +61,9 @@ export function ProgressHairline({
   const ratio = Math.max(0, Math.min(1, progress ?? 0));
   return (
     <div
-      className={`progress-hairline progress-hairline-${placement}`}
+      className={`progress-hairline progress-hairline-${placement}${
+        stepped ? " progress-hairline-stepped" : ""
+      }`}
       aria-hidden="true"
     >
       <div
