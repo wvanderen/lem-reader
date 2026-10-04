@@ -697,6 +697,30 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                 />
                 <span>Night</span>
               </label>
+              {/* ADR 0006 — the specialty pride presets: hand-authored
+                rooms that fly a flag on the chrome ribbon hooks. Stored as
+                plain theme literals (no token record), exactly like the
+                three presets above. */}
+              <label className="settings-row">
+                <input
+                  type="radio"
+                  name="theme"
+                  value="trans-light"
+                  checked={settings.theme === "trans-light"}
+                  onChange={() => onTheme("trans-light")}
+                />
+                <span>Trans pride</span>
+              </label>
+              <label className="settings-row">
+                <input
+                  type="radio"
+                  name="theme"
+                  value="bi-dark"
+                  checked={settings.theme === "bi-dark"}
+                  onChange={() => onTheme("bi-dark")}
+                />
+                <span>Bi pride</span>
+              </label>
               {/* Issues #86/#120 — the two custom slots: independently
                 saved, manually selected (NO automatic system-theme
                 switching). Seeding/resume lives in onTheme; the builder

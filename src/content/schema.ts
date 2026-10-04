@@ -519,7 +519,11 @@ const ReaderSettingsObjectSchema = z.object({
   // The legacy "custom" literal left the enum: rows carrying it are mapped
   // pre-parse by migrateReaderSettings at every settings-entry seam (see
   // above), so the honest corrupt routing only ever sees canonical shapes.
-  theme: z.enum(["sepia", "light", "dark", "custom-light", "custom-dark"]),
+  // The specialty pride presets ("trans-light" / "bi-dark") widen the enum
+  // ADDITIVELY too (the same no-bump discipline): hand-authored [data-theme]
+  // palettes in app.css — no stored token record, no superRefine rule (a
+  // preset needs nothing beyond its name).
+  theme: z.enum(["sepia", "light", "dark", "trans-light", "bi-dark", "custom-light", "custom-dark"]),
   // Issue #120 — the TWO custom slots. Each is the SAME record shape issue
   // #86 stored (baseTheme names the preset the slot was seeded from / resets
   // to; the FIVE reader-editable tokens). Everything else in the palette is

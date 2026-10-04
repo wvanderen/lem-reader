@@ -116,6 +116,8 @@ test.describe("Touch targets ≥ 44×44px (A11Y-07)", () => {
       { name: "Daylight", value: "light" },
       { name: "Warm paper", value: "sepia" },
       { name: "Night", value: "dark" },
+      { name: "Trans pride", value: "trans-light" },
+      { name: "Bi pride", value: "bi-dark" },
       { name: "Custom light", value: "custom-light" },
       { name: "Custom dark", value: "custom-dark" },
     ]) {
