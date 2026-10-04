@@ -23,7 +23,8 @@
 //   6. The 5-button header at 320: single 48px row, no wrap, no overflow,
 //      no silent overlap (.header-start flex-shrink honesty), all five
 //      article-scoped buttons ≥44px.
-//   7. Staged collapse (≤460px in Reader since issue #121): shell-nav
+//   7. Staged collapse (below 640px in Reader — the phone band contract):
+//      shell-nav
 //      links are clipped but
 //      keyboard-reachable (Tab reaches them) and a focused collapsed link
 //      becomes visible (the :focus-visible un-clip).
@@ -406,10 +407,8 @@ test.describe("TOC geometry (18-04 — ORNT-05 edge matrix)", () => {
     });
 
     // Single 48px row — the LOAD-BEARING height never changes (no wrap).
-    // The bounding box is min-height 48px + the 1px hairline border-bottom
-    // (app.css .app-header) ≈ 49px; a WRAPPED row would double past 96px.
-    expect(geometry.headerHeight!).toBeLessThanOrEqual(49.5);
-    expect(geometry.headerHeight!).toBeGreaterThanOrEqual(47);
+    // The border is included in the 48px band, above the progress track.
+    expect(geometry.headerHeight).toBe(48);
 
     // No horizontal overflow (WCAG 1.4.10 at 320).
     expect(geometry.bodyScrollW).toBeLessThanOrEqual(geometry.bodyClientW + 1);
@@ -434,7 +433,7 @@ test.describe("TOC geometry (18-04 — ORNT-05 edge matrix)", () => {
     ).toEqual([]);
   });
 
-  test("staged collapse in Reader (≤460px since issue #121): clipped destinations stay keyboard-reachable and un-clip on focus", async ({
+  test("staged collapse in Reader (below 640px — the phone band contract): clipped destinations stay keyboard-reachable and un-clip on focus", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 320, height: 640 });

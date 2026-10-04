@@ -1023,6 +1023,11 @@ a:hover {
   justify-content: space-between;
   gap: var(--space-md);
   min-height: 48px;
+  /* border-box keeps the band EXACTLY 48px including the 1px brass rule —
+     content-box made it 49px, so the rule painted over the top pixel of the
+     progress hairline (fixed at top: 48px, z-index below this header) and
+     halved its visible fill. Every budget above computes 48 + 2 from this. */
+  box-sizing: border-box;
   padding-inline: var(--space-lg);
   background: var(--board);
   border-bottom: 1px solid var(--band-edge);
@@ -4558,14 +4563,25 @@ main:has(.readaloud-bar) .article-body:has(.mark-read-close-page) .chapter-nav-p
         overlap (Pitfall 1 honesty).
      3. Header gap 0 (space-between alone separates the two groups — the
         whole slack sits between them at 320px) + shell-nav gap --space-xs.
-   Result at 320×640: ~10px slack, no wrap, no overlap, no overflow.
-   Issue #82 note: the third data-driven Read link widens shell-nav by
-   ~35px in flow, and issue #121's Discover link by another ~52px; on the
-   Reader the staged collapse (below) still takes the links out of flow
-   through the tightest band (recalibrated 420px → 460px by issue #121),
-   and the read-nav row-budget e2e re-sweeps 320–810px with a target
-   present to keep the single-row claim honest.
-   Zero new transition/animation/scroll-behavior properties (A11Y-06). */
+    Result at 320×640: ~10px slack, no wrap, no overlap, no overflow.
+    Issue #82 note: the third data-driven Read link widens shell-nav by
+    ~35px in flow, and issue #121's Discover link by another ~52px; on the
+    Reader the staged collapse (below) takes the links out of flow through
+    the WHOLE phone band (moved 460px → 639px — with Read live the row
+    needed ≈476px, so 461–479px overflowed and 480–639px sat edge-to-edge
+    with zero slack; below 640px the reader band is reading-tools only and
+    the controls' gap widens --space-xs → --space-sm so the five 44px
+    boards breathe as the row's only content), and the read-nav row-budget
+    e2e re-sweeps 320–810px with a target present to keep the single-row
+    claim honest.
+    Mobile reader-band follow-up: with the Reader staged out, the 15-04
+    link-padding trim is partially UNWOUND on the non-Reader destinations
+    (the only ones still carrying links in flow): shelf boards regain
+    their 8px side padding (gap 0 — the padding does the separating,
+    16px between words, the desktop rhythm), and a ≤359px stage steps the
+    padding down to --space-xs for the legacy 320px handsets (measured
+    ≈308px at 320 — real slack, no zero-margin gamble).
+    Zero new transition/animation/scroll-behavior properties (A11Y-06). */
 @media (max-width: 639px) {
   .app-wordmark {
     position: absolute;
@@ -4584,13 +4600,23 @@ main:has(.readaloud-bar) .article-body:has(.mark-read-close-page) .chapter-nav-p
     flex-shrink: 0;
   }
   .shell-nav {
-    gap: var(--space-xs);
+    gap: 0;
   }
   .shell-nav a {
-    padding-inline: 0;
+    padding-inline: var(--space-sm);
   }
   .header-controls {
-    gap: var(--space-xs);
+    gap: var(--space-sm);
+  }
+}
+/* Narrow-handset stage of the nav relief unwind: the 8px shelf-board
+   padding fits from 360px up (the common phone floor); below 360 — the
+   legacy 320px handsets — the boards tighten to the 4px step so Library
+   + Read + gear still holds one row with real slack (measured ≈308px at
+   320). Word separation stays double the pre-reorganization trim: 8px. */
+@media (max-width: 359px) {
+  .shell-nav a {
+    padding-inline: var(--space-xs);
   }
 }
 /* Mechanism note (Option A): PaginatedSurface sets the PAGE-1 fragment's
@@ -4725,19 +4751,28 @@ main:has(.readaloud-bar) .article-body:has(.mark-read-close-page) .chapter-nav-p
 }
 
 /* ════════════════════════════════════════════════════════════════════════
- * Phase 18 Plan 18-02 Task 3 — staged destination collapse in Reader
- * (UI-SPEC §Layout "The ≤639px five-button geometry decision", SANCTIONED;
- * breakpoint recalibrated by issue #121)
+ * Reader staged destination collapse — the phone band contract
+ * (Phase 18 Plan 18-02 Task 3, SANCTIONED; recalibrated by issue #121,
+ * then 460px → 639px by the mobile reader-band reorganization)
  *
- * The 5th article-scoped button (D18-02) makes the Reader header row
- * arithmetically impossible below ≈378px (controls ≈254px + shell-nav
- * ≈122px + padding); Issue #82's third data-driven Read link widened
- * shell-nav to ≈156px in flow, moving the impossible threshold to ≈410px,
- * and Issue #121's Discover link widens it again to ≈208px in flow,
- * moving the threshold to ≈452px (READNAV-07 sweep evidence: the reader
- * row overflows at 421px, fits by 461px). The collapse breakpoint moves
- * 420px → 460px so the staged collapse still covers the whole infeasible
- * band with margin. The sanctioned relief: at ≤460px
+ * History of the threshold: the 5th article-scoped button (D18-02) made
+ * the Reader header row arithmetically impossible below ≈378px; issue
+ * #82's Read link moved the threshold to ≈410px; issue #121's Discover
+ * link to ≈452px, so the collapse moved 420px → 460px. The mobile
+ * reader-band reorganization measured the post-#121 reality WITH Read
+ * live (the widest cell): the row needs ≈476px, so 461–479px genuinely
+ * overflowed (links ran under the icon cluster) and 480–639px held
+ * edge-to-edge with zero slack and text-only hit targets butting the
+ * 44px controls. The collapse therefore moved to the phone line itself:
+ * below 640px — the SAME width where the wordmark clips — the Reader
+ * band stages the shell-nav out and belongs to the reading tools alone
+ * (contents, tags, highlights and notes, mode, settings). Wayfinding
+ * stays one tap away (Back to library at the content head, D15-04) and
+ * ONE phone breakpoint governs both collapses. Non-Reader destinations
+ * keep their links in flow at every width (their widest row, Highlights
+ * + add trigger, is ≈255px — always feasible).
+ *
+ * The sanctioned relief: below 640px
  * AND Reader only, the
  * shell-nav links receive the SAME visually-hidden clip treatment the
  * ≤639px wordmark collapse uses (identical declarations read from that
@@ -4745,21 +4780,22 @@ main:has(.readaloud-bar) .article-body:has(.mark-read-close-page) .chapter-nav-p
  * the a11y tree AND the tab order. NEVER display:none (which would remove
  * the destinations from layout/a11y — the D15-17/D18-02 no-vanishing
  * intent bends ONLY here, with reachability + focus-visibility preserved).
- * The visible Library affordance at extreme narrow is redundant by design:
+ * The visible Library affordance at narrow widths is redundant by design:
  * Back to library sits at the content head (D15-04).
  *
  * Every load-bearing constant is preserved: the SINGLE 48px row (no wrap,
  * no height change — main.paginated-main calc, banner offsets, headerPx
  * 48, SectionAnnouncer sentinel), all five 44px article-scoped targets,
  * .header-start flex-shrink: 0 (deficits stay visible — the 15-04 honesty
- * fix). No gap/padding changes (the Phase 15 relief ladder is exhausted).
- * Zero transition/animation properties (A11Y-06).
+ * fix). Zero transition/animation properties (A11Y-06).
  * ════════════════════════════════════════════════════════════════════════ */
-@media (max-width: 460px) {
+@media (max-width: 639px) {
   .app-header[data-destination="reader"] .shell-nav a {
     position: absolute;
     width: 1px;
     height: 1px;
+    /* Padding would keep the clipped border box wider than 1px. */
+    padding-inline: 0;
     overflow: hidden;
     clip: rect(0 0 0 0);
     white-space: nowrap;
@@ -4783,11 +4819,12 @@ main:has(.readaloud-bar) .article-body:has(.mark-read-close-page) .chapter-nav-p
     white-space: normal;
   }
 }
-@media (max-width: 460px) {
+@media (max-width: 639px) {
   .app-header[data-destination="reader"] .shell-nav a:focus-visible {
     position: static;
     width: auto;
     height: auto;
+    padding-inline: var(--space-sm);
     overflow: visible;
     clip: auto;
     white-space: normal;
