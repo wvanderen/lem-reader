@@ -138,7 +138,7 @@ A restrained paper world with one committed chrome color: neutral gallery paper 
 
 ## Layout
 
-A single calm column system, pinned by contract. The 48px classification band spans full width, edged by a 1px brass-lit rule; geometry is load-bearing (paginated page budgets, progress-hairline and panel offsets all compute from `48px + 2px`) and must never change height. Content sits in a centered measure (default 64ch, reader-adjustable 40–88ch) on the paper ground. Spacing rides a 4px scale (4/8/16/24/32/48/64); every interactive target keeps a 44px minimum hit area. Responsive: single column throughout; below 640px the wordmark collapses out of flow and below 460px the reader stages nav links out (keyboard reachability preserved) — furniture is removed, type is never shrunk.
+A single calm column system, pinned by contract. The 48px classification band spans full width, edged by a 1px brass-lit rule; geometry is load-bearing (paginated page budgets, progress-hairline and panel offsets all compute from `48px + 2px`) and must never change height. Content sits in a centered measure (default 64ch, reader-adjustable 40–88ch) on the paper ground. Spacing rides a 4px scale (4/8/16/24/32/48/64); every interactive target keeps a 44px minimum hit area. Responsive: single column throughout; below 640px the wordmark collapses out of flow and the reader stages the primary nav out with it — the phone reader band carries reading tools only (keyboard reachability preserved) — furniture is removed, type is never shrunk.
 
 ## Elevation & Depth
 
@@ -162,7 +162,7 @@ The signage register: PT Sans 700 caps, +0.05em tracking, 13px, 44px min height,
 - **Busy:** keeps its label and width; a prepended spinner rotates under the positive reduced-motion gate.
 
 ### Classification Band (Navigation)
-The 48px enamel board: brand mark and destination links as shelf boards. Links render in Board Soft caps on transparent boards; hover brightens to Board White; the current destination sits on the Lit Board with the brass underline (`aria-current`). Band icon triggers follow the icon-button board treatment. Below 640px the wordmark clips out of flow; below 460px (reader only) nav links stage out — all while staying keyboard-reachable with visible focus.
+The 48px enamel board: brand mark and destination links as shelf boards. Links render in Board Soft caps on transparent boards; hover brightens to Board White; the current destination sits on the Lit Board with the brass underline (`aria-current`). Band icon triggers follow the icon-button board treatment. Below 640px the wordmark clips out of flow and the reader band stages its nav links out with it — on phones the reader band carries the reading tools alone (wayfinding stays one tap away via Back to library) — all while staying keyboard-reachable with visible focus.
 
 ### Cards / Containers
 Mat Board fill, 1px hairline, 12px radius, flat. Status cards, disclosure blocks, and library rows share this anatomy; spacing does the separating, never internal rule lines.

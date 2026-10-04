@@ -40,7 +40,7 @@
     ],
     "breakpoints": [
       { "name": "sm", "value": "640px", "purpose": "Below: wordmark clips out of flow; sheet layouts go full-width." },
-      { "name": "reader-collapse", "value": "460px", "purpose": "Reader only: staged shell-nav collapse out of flow, keyboard-reachable." }
+      { "name": "reader-collapse", "value": "640px", "purpose": "Below 640, Reader only: staged shell-nav collapse out of flow — the phone reader band carries reading tools alone; keyboard-reachable." }
     ]
   },
   "components": [
