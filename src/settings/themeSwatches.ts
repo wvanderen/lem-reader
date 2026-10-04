@@ -57,7 +57,7 @@ export const PRESET_SWATCHES: Record<PresetThemeLiteral, ThemeSwatch> = {
   "trans-light": { surface: "#f2f8fb", accent: "#166093", board: "#14374e", metal: "#a13a62" },
   "bi-dark": { surface: "#171122", accent: "#e589c2", board: "#120c20", metal: "#bb92de" },
   "marxism-light": { surface: "#f8f3f1", accent: "#a01c2e", board: "#3f141b", metal: "#8f3d33" },
-  "marxism-dark": { surface: "#1d1315", accent: "#e08692", board: "#150a0d", metal: "#d98b87" },
+  "marxism-dark": { surface: "#1b1d1f", accent: "#e57373", board: "#0b0103", metal: "#d98b87" },
 };
 
 /**

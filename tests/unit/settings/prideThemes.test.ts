@@ -115,6 +115,21 @@ describe("specialty themes — the palette contract (ADR 0006/0007)", () => {
       expect(contrastRatio(t.lit, t.board), "lit vs board").toBeGreaterThanOrEqual(1.2);
     });
 
+    if (theme === "marxism-dark") {
+      it("marxism-dark: the article stays brighter than both navigation grounds", () => {
+        const surface = cssToken(css, from, to, "surface");
+        const board = cssToken(css, from, to, "board");
+        const lit = cssToken(css, from, to, "lit");
+        // Contrast against black increases monotonically with luminance.
+        expect(contrastRatio(surface, "#000000")).toBeGreaterThan(
+          contrastRatio(board, "#000000"),
+        );
+        expect(contrastRatio(surface, "#000000")).toBeGreaterThan(
+          contrastRatio(lit, "#000000"),
+        );
+      });
+    }
+
     it(`${theme}: the wash contract — one flag material, progress and underline ride it`, () => {
       const block = css.slice(from, to);
       expect(block).toMatch(/--flag-wash:\s*linear-gradient\(/);
