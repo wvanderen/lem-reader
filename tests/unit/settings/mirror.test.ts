@@ -195,6 +195,7 @@ describe("clearSettingsMirror", () => {
 
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { runInNewContext } from "node:vm";
 
 // jsdom-env specs get a non-file import.meta.url, so anchor to the vitest
 // cwd (always the project root) instead.
@@ -224,6 +225,20 @@ function evalMarkedMap(name: string): unknown {
 }
 
 describe("index.html inline script sync checks", () => {
+  it.each(["sepia", "light", "dark", "trans-light", "bi-dark", "marxism-light", "marxism-dark"])(
+    "restores saved %s before React executes",
+    (theme) => {
+      const script = INDEX_HTML.match(/<script>([\s\S]*?)<\/script>/)?.[1];
+      expect(script).toBeDefined();
+      const root = { dataset: {} as Record<string, string>, style: { setProperty() {} } };
+      runInNewContext(script!, {
+        document: { documentElement: root },
+        localStorage: { getItem: () => JSON.stringify({ ...NON_DEFAULT, theme }) },
+      });
+      expect(root.dataset.theme).toBe(theme);
+    },
+  );
+
   it("appears before the /src/main.tsx module script", () => {
     // The first plain <script> tag in the document is the inline hint.
     const inlineIdx = INDEX_HTML.indexOf("<script>");
