@@ -278,7 +278,7 @@
    (deep aubergine walls, magenta accent, lavender metal); "marxism-light"
    and "marxism-dark" (ADR 0007) — the pamphlet rooms (light: warm paper,
    deep oxblood-red enamel, crimson links, red-brown metal; night:
-   dark grey walls, banner-red enamel band, red links, lit-red metal).
+   dark grey walls, deep-red enamel band, red links, lit-red metal).
    The Wayfinder
    grammar holds: enamel band, spaced caps, lit board, calm paper — identity
    paints ONLY the two wash moments (progress hairline, lit underline);
@@ -396,8 +396,8 @@
    light room's companion — the banner stays lit after close — re-grounded
    2026-10-04: the walls go NEUTRAL dark grey (#1b1d1f), so the room stops
    swimming in red and the signature red concentrates where the reader
-   orients — the navigator. The band flies the banner red (#8f1420), the
-   lit board steps brighter (#b01824), links carry the identity red
+   orients — the navigator. The band carries deep-red enamel (#0b0103), the
+   lit board steps brighter (#390b12), links carry the identity red
    lightened for dark-surface AA (#e57373 — the Night accent discipline),
    the metal brightens to read on grey walls, and hue-true deep marker
    fills carry the LIGHT ink (the Night highlights contract). The banner
@@ -416,10 +416,10 @@
   --focus-ring: #d98b87; /* the lit metal */
   --destructive: #e08a80;
   --hairline: #363a3d;
-  --board: #8f1420; /* the banner red — the navigator flies the flag */
+  --board: #0b0103; /* deep-red enamel stays below the article luminance */
   --board-text: #f8efec;
   --board-soft: #e6c3bf;
-  --lit: #b01824; /* the lit board — one step brighter than the band */
+  --lit: #390b12; /* the lit board — one step brighter than the band */
   --lit-text: #f8efec;
   --brass: #d98b87; /* the lit metal on dark walls */
   --brass-bright: #e8a49b; /* the metal lit on boards */
@@ -429,8 +429,8 @@
   --highlight-blue: #263a4e;
   --highlight-pink: #4e2f36;
   --spoken-highlight: #452220;
-   --flag-wash: linear-gradient(90deg, #c0202e, #e8535c);
-   --progress-fill: var(--flag-wash);
+  --flag-wash: linear-gradient(90deg, #c0202e, #e8535c);
+  --progress-fill: var(--flag-wash);
 }
 
 /* Wash consumption — the only places the flag gradient paints. The two

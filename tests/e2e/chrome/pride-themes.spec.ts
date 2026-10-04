@@ -65,7 +65,7 @@ const ROOMS = [
   {
     name: "In Defense of Marxism (Night)",
     literal: "marxism-dark",
-    band: "rgb(143, 20, 32)", // #8f1420 — the banner-red enamel (ADR 0007)
+    band: "rgb(11, 1, 3)", // #0b0103 — the deep-red enamel (ADR 0007)
     accentHex: "#e57373", // the identity red, dark-surface AA (raw-token form)
     accentRgb: "rgb(229, 115, 115)", // the same token (computed form)
     ribbonLead: "rgb(192, 32, 46)", // #c0202e — the night banner wash's leading edge
