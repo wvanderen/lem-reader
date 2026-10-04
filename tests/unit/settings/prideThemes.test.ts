@@ -1,5 +1,6 @@
 // tests/unit/settings/prideThemes.test.ts
-// ADR 0006 — the two specialty pride themes ("trans-light" / "bi-dark").
+// ADR 0006 — the specialty themes ("trans-light" / "bi-dark"), extended by
+// ADR 0007 with the pamphlet rooms ("marxism-light" / "marxism-dark").
 //
 // Hand-authored [data-theme] blocks in src/app.css (NOT custom-slot
 // derivations — there is no stored token record), so their palette contract
@@ -26,6 +27,8 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { AA_TEXT_RATIO, contrastRatio } from "../../../src/settings/customTheme";
 
+import { presetPaletteBlocks } from "./presetPalette";
+
 const AA_NON_TEXT = 3;
 
 /** Pull a `--token: <value>;` declaration out of a CSS block substring. */
@@ -36,19 +39,13 @@ function cssToken(css: string, from: number, to: number, prop: string): string {
   return m[1];
 }
 
-describe("specialty pride themes — the palette contract (ADR 0006)", () => {
+describe("specialty themes — the palette contract (ADR 0006/0007)", () => {
   const css = readFileSync(resolve(process.cwd(), "src/app.css"), "utf-8");
-  const transStart = css.indexOf('[data-theme="trans-light"]');
-  const biStart = css.indexOf('[data-theme="bi-dark"]');
-  const biBlockEnd = css.indexOf("body {", biStart);
-  expect(transStart).toBeGreaterThan(-1);
-  expect(biStart).toBeGreaterThan(transStart);
-  expect(biBlockEnd).toBeGreaterThan(biStart);
-
-  const blocks = {
-    "trans-light": [transStart, biStart] as const,
-    "bi-dark": [biStart, biBlockEnd] as const,
-  };
+  const blocks = Object.fromEntries(
+    Object.entries(presetPaletteBlocks(css)).filter(([theme]) =>
+      ["trans-light", "bi-dark", "marxism-light", "marxism-dark"].includes(theme),
+    ),
+  );
 
   for (const [theme, [from, to]] of Object.entries(blocks)) {
     it(`${theme}: every text pair ≥ 4.5:1`, () => {

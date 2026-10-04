@@ -24,6 +24,7 @@ import {
   contrastRatio,
   resolveCustomTheme,
 } from "../../../src/settings/customTheme";
+import { presetPaletteBlocks } from "../settings/presetPalette";
 import { HIGHLIGHT_COLOR_NAMES } from "../../../src/content/schema";
 
 /** The CSS custom property for one named color id ("default" → --highlight). */
@@ -41,34 +42,7 @@ function cssToken(css: string, from: number, to: number, prop: string): string {
 
 describe("preset themes — ink on every highlight fill ≥ 4.5:1 (D5-14 × #118)", () => {
   const css = readFileSync(resolve(process.cwd(), "src/app.css"), "utf-8");
-  // ADR 0005 block order: :root (Daylight) → [data-theme="sepia"] (Warm
-  // paper) → [data-theme="light"] (Daylight, explicit) → [data-theme="dark"]
-  // (Night), extended by ADR 0006: [data-theme="trans-light"] (Trans pride)
-  // → [data-theme="bi-dark"] (Bi pride). The map below IS that order — keep
-  // it in sync with app.css. The ribbon-consumption rules that follow the
-  // bi-dark block carry no --token hex declarations, so the first-match
-  // extraction stays correct through them.
-  const sepiaStart = css.indexOf('[data-theme="sepia"]');
-  const lightStart = css.indexOf('[data-theme="light"]');
-  const darkStart = css.indexOf('[data-theme="dark"]');
-  const transStart = css.indexOf('[data-theme="trans-light"]');
-  const biStart = css.indexOf('[data-theme="bi-dark"]');
-  const biBlockEnd = css.indexOf("body {", biStart);
-  expect(sepiaStart).toBeGreaterThan(-1);
-  expect(lightStart).toBeGreaterThan(sepiaStart);
-  expect(darkStart).toBeGreaterThan(lightStart);
-  expect(transStart).toBeGreaterThan(darkStart);
-  expect(biStart).toBeGreaterThan(transStart);
-  expect(biBlockEnd).toBeGreaterThan(biStart);
-
-  const blocks = {
-    daylight: [0, sepiaStart] as const,
-    sepia: [sepiaStart, lightStart] as const,
-    light: [lightStart, darkStart] as const,
-    dark: [darkStart, transStart] as const,
-    "trans-light": [transStart, biStart] as const,
-    "bi-dark": [biStart, biBlockEnd] as const,
-  };
+  const blocks = presetPaletteBlocks(css);
 
   for (const [theme, [from, to]] of Object.entries(blocks)) {
     it.each(HIGHLIGHT_COLOR_NAMES)(

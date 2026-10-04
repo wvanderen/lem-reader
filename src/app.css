@@ -271,16 +271,20 @@
   --spoken-highlight: #3f3417;
 }
 
-/* ── Specialty pride themes (ADR 0006) ──────────────────────────────────── */
-/* Two hand-authored reading rooms that fly a pride flag on the chrome:
+/* ── Specialty themes (ADR 0006, extended by ADR 0007) ──────────────────── */
+/* Hand-authored reading rooms that fly their identity on the chrome:
    "trans-light" — the trans-flag daylight room (cool porcelain-blue paper,
    deep trans-blue enamel, pink metal); "bi-dark" — the bi-flag night room
-   (deep aubergine walls, magenta accent, lavender metal). The Wayfinder
-   grammar holds: enamel band, spaced caps, lit board, calm paper — the flag
+   (deep aubergine walls, magenta accent, lavender metal); "marxism-light"
+   and "marxism-dark" (ADR 0007) — the pamphlet rooms (light: warm paper,
+   deep oxblood-red enamel, crimson links, red-brown metal; night:
+   red-black walls, near-black oxblood band, rose-crimson links, lit-red
+   metal). The Wayfinder
+   grammar holds: enamel band, spaced caps, lit board, calm paper — identity
    paints ONLY the two wash moments (progress hairline, lit underline);
    the band's bottom edge stays the BASIC lit metal and the article measure
    stays untouched (the Brightest Panel rule). Every text pair ≥ 4.5:1 and
-   every rule ≥ 3:1 (palette-checked 2026-10-03; pinned by
+   every rule ≥ 3:1 (palette-checked 2026-10-04; pinned by
    tests/unit/settings/prideThemes.test.ts).
 
    One gradient material (ADR 0006): hard-stop flag geometry read as chunky
@@ -343,8 +347,86 @@
   --highlight-green: #294230;
   --highlight-blue: #2f3a5e; /* the bi blue, deep */
   --highlight-pink: #55284a; /* the bi pink, deep */
-  --spoken-highlight: #3d2f44;
-  --flag-wash: linear-gradient(90deg, #d60270, #9b4f96, #0038a8);
+   --spoken-highlight: #3d2f44;
+   --flag-wash: linear-gradient(90deg, #d60270, #9b4f96, #0038a8);
+   --progress-fill: var(--flag-wash);
+}
+
+/* ADR 0007 — the "In Defense of Marxism" pamphlet room (light register).
+   The reader asked for a darker red carried into the wayfinder chrome: the
+   band goes deep oxblood enamel, links go crimson, the metal turns
+   red-brown, and the paper takes a warm newsprint cast — the red is
+   committed to the chrome while the article measure stays the brightest,
+   quietest surface (the Brightest Panel rule). No flag geometry to blend:
+   the room's wash is the single-hue banner blend (deep red → lit red), the
+   same ONE gradient material on the same two moments. Destructive keeps the
+   system-wide brick — the identity red is darker and crimson-leaning, and
+   the destructive vocabulary carries its state by treatment (tint + border),
+   never hue alone. Palette-checked 2026-10-04 (pinned by
+   tests/unit/settings/prideThemes.test.ts). */
+[data-theme="marxism-light"] {
+  --surface: #f8f3f1;
+  --surface-raised: #f0e8e4;
+  --ink: #241a17;
+  --ink-soft: #63504a;
+  --accent: #a01c2e; /* deep crimson — AA links on newsprint */
+  --accent-hover: #801524;
+  --accent-strong: #a01c2e;
+  --focus-ring: #8f3d33; /* the red-brown metal */
+  --destructive: #a63d32;
+  --hairline: #e2d4cf;
+  --board: #3f141b; /* deep oxblood enamel — the darker-red wayfinder */
+  --board-text: #f8efec;
+  --board-soft: #cfa5a2;
+  --lit: #5b2029;
+  --lit-text: #f8efec;
+  --brass: #8f3d33; /* the red-brown metal on paper */
+  --brass-bright: #d08078; /* the metal lit on boards */
+  --highlight: #f4ddd2;
+  --highlight-yellow: #ecd98e;
+  --highlight-green: #d5e2c4;
+  --highlight-blue: #cdd9e3;
+  --highlight-pink: #e8cbc6;
+  --spoken-highlight: #e7cec3;
+   --flag-wash: linear-gradient(90deg, #8f1420, #c4343f);
+   --progress-fill: var(--flag-wash);
+}
+
+/* ADR 0007 — the "In Defense of Marxism" night room (dark register). The
+   light room's companion: the red banner stays lit after close — red-black
+   walls, a near-black oxblood band, links lightened to rose-crimson for
+   dark-surface AA (the Night accent discipline), the metal brightened to
+   read on dark walls, and hue-true deep marker fills carrying the LIGHT
+   ink (the Night highlights contract). The banner wash brightens one step
+   so the moving hairline stays visible on dark walls. Same audit, same
+   two wash moments, band edge stays the basic lit metal, and the article
+   measure stays the brightest surface. Palette-checked 2026-10-04 (pinned
+   by tests/unit/settings/prideThemes.test.ts). */
+[data-theme="marxism-dark"] {
+  --surface: #1d1315;
+  --surface-raised: #281b1e;
+  --ink: #ece4e2;
+  --ink-soft: #b5a5a2;
+  --accent: #e08692; /* rose-crimson — AA links on red-black walls */
+  --accent-hover: #eba0aa;
+  --accent-strong: #4a161d; /* solid fills stay dark for board-text */
+  --focus-ring: #d98b87; /* the lit metal */
+  --destructive: #e08a80;
+  --hairline: #3d2a2d;
+  --board: #150a0d; /* near-black oxblood enamel */
+  --board-text: #f2e9e8;
+  --board-soft: #b49a9b;
+  --lit: #3d171c;
+  --lit-text: #f2e9e8;
+  --brass: #d98b87; /* the lit metal on dark walls */
+  --brass-bright: #e8a49b; /* the metal lit on boards */
+  --highlight: #522b27;
+  --highlight-yellow: #5a4d12;
+  --highlight-green: #25402b;
+  --highlight-blue: #263a4e;
+  --highlight-pink: #4e2f36;
+  --spoken-highlight: #452220;
+  --flag-wash: linear-gradient(90deg, #a51b28, #d8434f);
   --progress-fill: var(--flag-wash);
 }
 
@@ -358,12 +440,16 @@
    stays painted underneath the underline's border-image, so a UA that
    drops border-image (or forced colors) still shows the solid lit mark. */
 [data-theme="trans-light"] .shell-nav a[aria-current="page"],
-[data-theme="bi-dark"] .shell-nav a[aria-current="page"] {
+[data-theme="bi-dark"] .shell-nav a[aria-current="page"],
+[data-theme="marxism-light"] .shell-nav a[aria-current="page"],
+[data-theme="marxism-dark"] .shell-nav a[aria-current="page"] {
   border-image: var(--flag-wash) 1;
 }
 @media (forced-colors: active) {
   [data-theme="trans-light"] .shell-nav a[aria-current="page"],
-  [data-theme="bi-dark"] .shell-nav a[aria-current="page"] {
+  [data-theme="bi-dark"] .shell-nav a[aria-current="page"],
+  [data-theme="marxism-light"] .shell-nav a[aria-current="page"],
+  [data-theme="marxism-dark"] .shell-nav a[aria-current="page"] {
     border-image: none;
   }
 }
