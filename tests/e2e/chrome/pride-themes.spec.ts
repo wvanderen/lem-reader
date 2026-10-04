@@ -75,11 +75,12 @@ for (const room of ROOMS) {
       .evaluate((el) => getComputedStyle(el).getPropertyValue("--accent").trim());
     expect([room.accentHex, room.accentRgb]).toContain(accent);
 
-    // The reader's viewport hairline paints the flag WASH — the soft blend,
-    // deliberately a DIFFERENT gradient from the crisp ribbon on the band
-    // edge above it (ADR 0006: static frame flies the hard-stop flag, the
-    // dynamic indicator carries the blend; scaleX compression would
-    // fragment hard stripes at low fill).
+    // The reader's viewport hairline paints the flag WASH — the soft blend.
+    // The band's bottom edge stays BASIC (the solid lit metal, no
+    // border-image): a hard-stripe ribbon there sat 1px above the moving
+    // wash and read as a clashing double-flag. The flag's crisp ribbon lives
+    // on the lit current-location underline instead — ON the navigator,
+    // far from the progress line (ADR 0006).
     await page.keyboard.press("Escape"); // close the panel; the dialog never carries state
     await page.goto(`${BASE}/#/article/getting-started`);
     // Attached, never "visible": at progress 0 the fill is scaleX(0) — a
@@ -90,8 +91,20 @@ for (const room of ROOMS) {
     const bandEdge = await page
       .locator(".app-header")
       .evaluate((el) => getComputedStyle(el).borderImageSource);
-    expect(bandEdge).toContain("linear-gradient");
-    expect(bandEdge).not.toBe(image);
+    expect(bandEdge).toBe("none");
+    const litMark = await page
+      .locator(".shell-nav a[aria-current='page']")
+      .evaluate((el) => getComputedStyle(el).borderImageSource);
+    expect(litMark).toContain(room.ribbonLead);
+
+    // The upstream border-box fix (the band is EXACTLY 48px including its
+    // 1px rule) is load-bearing for these themes: the wash must render its
+    // FULL 2px directly below the band — never halved under it.
+    const header = await page.locator(".app-header").boundingBox();
+    const track = await page.locator(".progress-hairline-viewport").boundingBox();
+    expect(header!.height).toBe(48);
+    expect(track!.height).toBe(2);
+    expect(track!.y).toBe(header!.y + header!.height);
 
     // Persistence: reload — Dexie + the pre-paint mirror restore the room
     // (data-theme on <html> from the first painted frame).
