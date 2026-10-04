@@ -77,10 +77,10 @@ for (const room of ROOMS) {
 
     // The reader's viewport hairline paints the flag WASH — the soft blend.
     // The band's bottom edge stays BASIC (the solid lit metal, no
-    // border-image): a hard-stripe ribbon there sat 1px above the moving
-    // wash and read as a clashing double-flag. The flag's crisp ribbon lives
-    // on the lit current-location underline instead — ON the navigator,
-    // far from the progress line (ADR 0006).
+    // border-image): a flag line there sat 1px above the moving wash and
+    // read as a clashing double-flag. The wash is the ONE flag material
+    // (ADR 0006 — hard-stop chunks read as confetti at ribbon scale): it
+    // also paints the lit current-location underline via border-image.
     await page.keyboard.press("Escape"); // close the panel; the dialog never carries state
     await page.goto(`${BASE}/#/article/getting-started`);
     // Attached, never "visible": at progress 0 the fill is scaleX(0) — a

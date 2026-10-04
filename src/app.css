@@ -71,15 +71,15 @@
   --lit-text: #f2f4f1;
   --brass: #8a6a24; /* brass on paper (rules, quiet hover edges) */
   --brass-bright: #c9a24e; /* lit brass on boards (band rule, current mark) */
-  /* The ribbon hooks (ADR 0006): the chrome slots the specialty themes'
-     flag paints. :root defaults route every preset and custom room to the
-     solid Wayfinder materials — the hooks are inert unless a [data-theme]
-     block overrides them. The band edge is deliberately NOT a flag moment
-     (a ribbon 1px above the moving wash read as a clashing double-flag):
-     --band-edge stays the lit metal in every room. --progress-fill rides
-     the background shorthand (a color OR an image); the lit underline is a
-     border COLOR by default (the flag ribbon joins it via border-image in
-     the specialty section below). */
+  /* The wash hooks (ADR 0006): the chrome slots the specialty themes'
+     flag wash paints. :root defaults route every preset and custom room to
+     the solid Wayfinder materials — the hooks are inert unless a
+     [data-theme] block overrides them. The band edge is deliberately NOT a
+     flag moment (a flag line 1px above the moving wash read as a clashing
+     double-flag): --band-edge stays the lit metal in every room.
+     --progress-fill rides the background shorthand (a color OR an image);
+     the lit underline is a border COLOR by default (the wash joins it via
+     border-image in the specialty section below). */
   --progress-fill: var(--accent);
   --band-edge: var(--brass-bright);
   --lit-underline: var(--brass-bright);
@@ -277,25 +277,20 @@
    deep trans-blue enamel, pink metal); "bi-dark" — the bi-flag night room
    (deep aubergine walls, magenta accent, lavender metal). The Wayfinder
    grammar holds: enamel band, spaced caps, lit board, calm paper — the flag
-   paints ONLY the two ribbon moments (progress hairline, lit underline);
+   paints ONLY the two wash moments (progress hairline, lit underline);
    the band's bottom edge stays the BASIC lit metal and the article measure
    stays untouched (the Brightest Panel rule). Every text pair ≥ 4.5:1 and
    every rule ≥ 3:1 (palette-checked 2026-10-03; pinned by
    tests/unit/settings/prideThemes.test.ts).
 
-   Two gradient materials, two jobs (ADR 0006):
-   --flag-ribbon  the CRISP flag — true hard-stop geometry, reading
-                  left-to-right (trans: equal fifths blue/pink/white/pink/
-                  blue; bi: 40/20/40 pink/purple/blue). It flies ONLY on
-                  the lit current-location underline — short, ON the
-                  navigator, far from the progress line.
-   --flag-wash    the SOFT flag — a real blend of the flag's hues (sRGB,
-                  flag-true endpoints, no synthetic stops). It rides the
-                  DYNAMIC indicator: the progress hairline. The fill moves
-                  via transform scaleX, so its paint compresses with
-                  progress — hard stripes would fragment into aliasing at
-                  low fill, while a wash always reads as one calm color
-                  story. */
+   One gradient material (ADR 0006): hard-stop flag geometry read as chunky
+   color blocks at ribbon scale — five confetti chips under a nav board,
+   and aliasing fragments when the progress fill's transform scaleX
+   compressed it — so the crisp ribbon is gone. --flag-wash, a real blend
+   of the flag's hues (sRGB, flag-true endpoints, no synthetic stops), is
+   the single flag material, painting both moments: the lit
+   current-location underline (border-image) and the progress hairline
+   (background). */
 
 [data-theme="trans-light"] {
   --surface: #f2f8fb;
@@ -321,14 +316,6 @@
   --highlight-blue: #c5d9e6;
   --highlight-pink: #ecc9d6;
   --spoken-highlight: #c9dcea;
-  --flag-ribbon: linear-gradient(
-    90deg,
-    #5bcefa 0% 20%,
-    #f5a9b8 20% 40%,
-    #ffffff 40% 60%,
-    #f5a9b8 60% 80%,
-    #5bcefa 80% 100%
-  );
   --flag-wash: linear-gradient(90deg, #5bcefa, #f5a9b8);
   --progress-fill: var(--flag-wash);
 }
@@ -357,23 +344,22 @@
   --highlight-blue: #2f3a5e; /* the bi blue, deep */
   --highlight-pink: #55284a; /* the bi pink, deep */
   --spoken-highlight: #3d2f44;
-  --flag-ribbon: linear-gradient(90deg, #d60270 0% 40%, #9b4f96 40% 60%, #0038a8 60% 100%);
   --flag-wash: linear-gradient(90deg, #d60270, #9b4f96, #0038a8);
   --progress-fill: var(--flag-wash);
 }
 
-/* Ribbon consumption — the only places a flag gradient paints. The flag's
-   two moments are deliberately NON-adjacent: the lit underline (ON the
-   navigator, the short "you are here" mark) and the progress wash (the
-   moving line). The band's bottom edge stays BASIC — the solid lit metal
-   (var(--band-edge), unchanged) — because a hard-stripe ribbon there sat
-   1px above the wash and read as a clashing double-flag (worst in bi-dark,
-   where both are pink→purple→blue). The border-color fallback stays
-   painted underneath the underline's border-image, so a UA that drops
-   border-image (or forced colors) still shows the solid lit mark. */
+/* Wash consumption — the only places the flag gradient paints. The two
+   moments are deliberately NON-adjacent: the lit underline (ON the
+   navigator, the short "you are here" mark) and the progress hairline
+   (the moving line). The band's bottom edge stays BASIC — the solid lit
+   metal (var(--band-edge), unchanged) — because a flag line there sat 1px
+   above the moving wash and read as a clashing double-flag (worst in
+   bi-dark, where both are pink→purple→blue). The border-color fallback
+   stays painted underneath the underline's border-image, so a UA that
+   drops border-image (or forced colors) still shows the solid lit mark. */
 [data-theme="trans-light"] .shell-nav a[aria-current="page"],
 [data-theme="bi-dark"] .shell-nav a[aria-current="page"] {
-  border-image: var(--flag-ribbon) 1;
+  border-image: var(--flag-wash) 1;
 }
 @media (forced-colors: active) {
   [data-theme="trans-light"] .shell-nav a[aria-current="page"],

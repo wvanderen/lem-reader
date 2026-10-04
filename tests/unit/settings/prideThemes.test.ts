@@ -118,11 +118,14 @@ describe("specialty pride themes — the palette contract (ADR 0006)", () => {
       expect(contrastRatio(t.lit, t.board), "lit vs board").toBeGreaterThanOrEqual(1.2);
     });
 
-    it(`${theme}: the ribbon contract — crisp ribbon + soft wash, progress rides the wash`, () => {
+    it(`${theme}: the wash contract — one flag material, progress and underline ride it`, () => {
       const block = css.slice(from, to);
-      expect(block).toMatch(/--flag-ribbon:\s*linear-gradient\(/);
       expect(block).toMatch(/--flag-wash:\s*linear-gradient\(/);
       expect(block).toMatch(/--progress-fill:\s*var\(--flag-wash\)/);
+      // The crisp hard-stop ribbon is gone (chunky color blocks at ribbon
+      // scale, aliasing under scaleX compression) — the wash is the ONLY
+      // flag material (ADR 0006).
+      expect(block).not.toMatch(/--flag-ribbon/);
     });
   }
 });
