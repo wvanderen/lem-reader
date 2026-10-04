@@ -78,6 +78,15 @@ test.describe("READ-05 progress hairline", () => {
   test("progress eases updates and respects reduced motion", async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "no-preference" });
     await page.goto(`${BASE}/#/article/${FIXTURE}`);
+    // Paginated mode renders the STEPPED hairline (page turns advance the
+    // ratio in discrete jumps): the 400ms from-rest glide.
+    const steppedFill = page.locator(".progress-hairline-stepped .progress-hairline-fill");
+    await expect(steppedFill).toHaveCSS("transition-property", "transform");
+    await expect(steppedFill).toHaveCSS("transition-duration", "0.4s");
+    // Scrolling mode remounts the continuous hairline (scroll events stream
+    // small deltas): the tight 200ms tracking ease-out.
+    await page.getByRole("button", { name: /reading mode/i }).click();
+    await expect(page.locator(".page-viewport")).toHaveCount(0);
     const fill = page.locator(".progress-hairline-fill");
     await expect(fill).toHaveCSS("transition-property", "transform");
     await expect(fill).toHaveCSS("transition-duration", "0.2s");

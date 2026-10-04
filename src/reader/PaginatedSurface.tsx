@@ -838,7 +838,7 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
           The SectionAnnouncer live region in ArticleView conveys structural
           progress to AT; both elements here are aria-hidden.
         */}
-        <ProgressHairline progress={progressRatio} placement="viewport" />
+        <ProgressHairline progress={progressRatio} placement="viewport" stepped />
         <PageIndicator current={currentPageIdx + 1} total={pages.length} />
 
         <h2
