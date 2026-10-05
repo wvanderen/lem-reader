@@ -36,6 +36,22 @@ npm run build
 
 CI runs these same checks plus the Playwright suite on every pull request; the performance budget harness runs non-blocking until its thresholds are re-baselined for CI hardware. Pagination, selection, focus, zoom, reflow, or responsive UI changes should still run the relevant Playwright specs in all configured browser engines locally. The complete suite is available with `npm test`.
 
+## CI runners
+
+The blocking e2e gate (`e2e-reference`) runs on a self-hosted runner on the reference machine — the 10-core macOS arm64 box the suite's timeouts, longtask budgets, and geometry assertions are calibrated against. GitHub-hosted runners cannot run it (shared-CPU noise fails ~50 calibrated spec sites per engine, independent of OS; those jobs run as non-blocking evidence with warning annotations).
+
+To set up the runner on a new reference machine (one-time, repo Settings → Actions → Runners also works via UI):
+
+```bash
+mkdir -p ~/actions-runner && cd ~/actions-runner
+curl -L -o runner.tar.gz <latest actions-runner-osx-arm64 release tarball>
+tar xzf runner.tar.gz
+./config.sh --url https://github.com/wvanderen/lem-reader --token <registration token> --name lem-reference --labels macOS --unattended
+./svc.sh install && ./svc.sh start
+```
+
+While the runner is offline the e2e-reference job queues and runs when the machine next connects; with a single runner, e2e-reference jobs serialize across PRs.
+
 ## Project guardrails
 
 - Preserve semantic HTML and keep DOM reading order equal to document order.
