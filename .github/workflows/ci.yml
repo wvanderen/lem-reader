@@ -9,7 +9,10 @@
 #            on the self-hosted reference machine (10-core macOS arm64,
 #            the environment the suite's timeouts, longtask budgets, and
 #            geometry assertions are calibrated against — where the tree
-#            passes 2129/2129). Setup instructions live in CONTRIBUTING.
+#            passes 2129/2129). runs-on pins the runner-specific
+#            `reference` label so only that machine can supply reference
+#            evidence; default self-hosted/macOS labels alone must never
+#            satisfy it. Setup instructions live in CONTRIBUTING.
 #            While the runner is offline the job queues (GitHub holds it)
 #            and picks up when the machine next connects; a single
 #            runner also serializes these across PRs — expected for a
@@ -75,7 +78,7 @@ jobs:
       - run: npm run build
 
   e2e-reference:
-    runs-on: [self-hosted, macOS]
+    runs-on: [self-hosted, macOS, reference]
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v5
