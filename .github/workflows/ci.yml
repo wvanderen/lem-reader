@@ -7,9 +7,19 @@
 #            (chromium/firefox/webkit — the layout/focus/selection
 #            authority; jsdom is not). Blocking. Legs run in parallel for
 #            feedback latency and isolate engine-specific failures.
+#            Runs on macOS RUNNERS ON PURPOSE: the suite's geometry and
+#            zoom/reflow assertions were authored and calibrated against
+#            macOS rendering (overlay scrollbars, font fallbacks during
+#            font-display: swap, subpixel AA). On ubuntu runners the same
+#            tree failed ~4% of specs uniformly across engines (31/27/28
+#            — off-by-one header geometry, 400%-zoom visibility, reflow)
+#            purely from rendering-environment drift, not code. Layout
+#            truth belongs to the environment it was authored on.
 #   perf   — the ACPT-04 user-approved performance budget harness
-#            (incl. the chromium-throttled-mobile profile).
-#            NON-BLOCKING (continue-on-error): the locked thresholds in
+#            (incl. the chromium-throttled-mobile profile), on the same
+#            macOS environment for comparability with the reference
+#            machine the locked thresholds were derived on.
+#            NON-BLOCKING (continue-on-error): the thresholds in
 #            tests/e2e/perf/budget.json were derived on the reference
 #            machine (D6-01 measure-first, 25% headroom), not on shared CI
 #            runners. This job collects CI-hardware numbers toward a
@@ -43,7 +53,7 @@ jobs:
       - run: npm run build
 
   e2e:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     strategy:
       fail-fast: false
       matrix:
@@ -67,7 +77,7 @@ jobs:
           if-no-files-found: ignore
 
   perf:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     continue-on-error: true
     steps:
       - uses: actions/checkout@v5
