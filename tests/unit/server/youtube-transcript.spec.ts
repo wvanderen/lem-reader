@@ -112,9 +112,7 @@ function jsonRouter(fixtures: { player?: string; next?: string; caption?: string
 
 /** The full happy-path routing: OK player, chapters next, srv1 captions. */
 function routeHappyPath(): void {
-  installRouter(
-    jsonRouter({ player: PLAYER_OK, next: NEXT_CHAPTERS, caption: CAPTIONS_SRV1 }),
-  );
+  installRouter(jsonRouter({ player: PLAYER_OK, next: NEXT_CHAPTERS, caption: CAPTIONS_SRV1 }));
 }
 
 beforeEach(() => {
@@ -224,9 +222,7 @@ describe("happy path — transcript + metadata + chapters (fixture-driven)", () 
     const playerBody = JSON.parse(String(playerCall.init?.body));
     expect(playerBody.videoId).toBe("dQw4w9WgXcQ");
     expect(playerBody.context.client.clientName).toBe("ANDROID");
-    const nextCall = fetchCalls.find(
-      (c) => c.url === "https://www.youtube.com/youtubei/v1/next",
-    )!;
+    const nextCall = fetchCalls.find((c) => c.url === "https://www.youtube.com/youtubei/v1/next")!;
     expect(nextCall).toBeDefined();
     const nextBody = JSON.parse(String(nextCall.init?.body));
     expect(nextBody.videoId).toBe("dQw4w9WgXcQ");
@@ -274,25 +270,35 @@ describe("selectCaptionTrack — language tiers over the captured fixture tracks
 
   /** What was picked, reduced to the two fields the policy decides on. */
   const picked = (track: Record<string, unknown> | undefined) =>
-    track === undefined
-      ? undefined
-      : { languageCode: track.languageCode, kind: track.kind };
+    track === undefined ? undefined : { languageCode: track.languageCode, kind: track.kind };
 
   it("no preference → today's rule unchanged: first manual track (fixture order)", () => {
-    expect(picked(selectCaptionTrack(fixtureTracks))).toEqual({ languageCode: "en", kind: undefined });
+    expect(picked(selectCaptionTrack(fixtureTracks))).toEqual({
+      languageCode: "en",
+      kind: undefined,
+    });
     expect(picked(selectCaptionTrack(fixtureTracks, undefined))).toEqual({
       languageCode: "en",
       kind: undefined,
     });
-    expect(picked(selectCaptionTrack(fixtureTracks, []))).toEqual({ languageCode: "en", kind: undefined });
+    expect(picked(selectCaptionTrack(fixtureTracks, []))).toEqual({
+      languageCode: "en",
+      kind: undefined,
+    });
   });
 
   it("exact match beats the ASR twin of the same language (manual beats ASR within a tier)", () => {
-    expect(picked(selectCaptionTrack(fixtureTracks, ["en"]))).toEqual({ languageCode: "en", kind: undefined });
+    expect(picked(selectCaptionTrack(fixtureTracks, ["en"]))).toEqual({
+      languageCode: "en",
+      kind: undefined,
+    });
   });
 
   it("a preference past the first track wins over listed order (the 'I don't speak arabic' fix)", () => {
-    expect(picked(selectCaptionTrack(fixtureTracks, ["ja"]))).toEqual({ languageCode: "ja", kind: undefined });
+    expect(picked(selectCaptionTrack(fixtureTracks, ["ja"]))).toEqual({
+      languageCode: "ja",
+      kind: undefined,
+    });
   });
 
   it("base-language tier: 'pt' matches the pt-BR track", () => {
@@ -317,7 +323,10 @@ describe("selectCaptionTrack — language tiers over the captured fixture tracks
   });
 
   it("an unmatched language falls back to today's rule (manual over ASR, first otherwise)", () => {
-    expect(picked(selectCaptionTrack(fixtureTracks, ["fr"]))).toEqual({ languageCode: "en", kind: undefined });
+    expect(picked(selectCaptionTrack(fixtureTracks, ["fr"]))).toEqual({
+      languageCode: "en",
+      kind: undefined,
+    });
     expect(picked(selectCaptionTrack(fixtureTracks, ["not-a-language"]))).toEqual({
       languageCode: "en",
       kind: undefined,
@@ -518,7 +527,10 @@ describe("guards (limits conventions: ~30s per call, ~5MB cap)", () => {
 
   it("refuses invalid InnerTube JSON as fetch-failed", async () => {
     installRouter(async () =>
-      fakeResponse({ headers: { "content-type": "text/html" }, body: "<html>bot challenge</html>" }),
+      fakeResponse({
+        headers: { "content-type": "text/html" },
+        body: "<html>bot challenge</html>",
+      }),
     );
     await expect(fetchYouTubeTranscript("dQw4w9WgXcQ")).rejects.toMatchObject({
       reason: "fetch-failed",

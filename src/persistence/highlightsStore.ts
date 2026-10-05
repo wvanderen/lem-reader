@@ -59,9 +59,7 @@ export type HighlightsLoadResult =
  * Invalid rows are DROPPED (defensive — a single corrupt row does not block
  * the rest), so the returned array may be shorter than the persisted set.
  */
-export async function loadHighlights(
-  articleId: string,
-): Promise<HighlightsLoadResult> {
+export async function loadHighlights(articleId: string): Promise<HighlightsLoadResult> {
   try {
     const rows = await db.highlights
       .where("[articleId+revision]")
@@ -120,10 +118,7 @@ export async function deleteHighlight(highlightId: string): Promise<void> {
  * `update` returns 0 rows updated; no throw). Throws propagate to the
  * caller (useAnnotationState) for STATE-05 routing.
  */
-export async function setHighlightColor(
-  highlightId: string,
-  color: HighlightColor,
-): Promise<void> {
+export async function setHighlightColor(highlightId: string, color: HighlightColor): Promise<void> {
   await db.highlights.update(highlightId, { color });
 }
 

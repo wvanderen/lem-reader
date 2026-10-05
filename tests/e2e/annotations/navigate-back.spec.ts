@@ -32,7 +32,10 @@ test.describe("ANNO-04 navigate back (05-05)", () => {
     expect(blockIdx, "page 2 must have a selectable block").not.toBe(-1);
     const ok = await selectRangeInBlock(page, blockIdx, 0, 18);
     expect(ok).toBeTruthy();
-    await page.locator(".selection-toolbar").getByRole("button", { name: "Highlight", exact: true }).click();
+    await page
+      .locator(".selection-toolbar")
+      .getByRole("button", { name: "Highlight", exact: true })
+      .click();
     await expect(page.locator("mark.highlight").first()).toBeVisible();
     const hlId = await page.locator("mark.highlight").first().getAttribute("data-highlight-id");
     expect(hlId).toBeTruthy();
@@ -68,7 +71,10 @@ test.describe("ANNO-04 navigate back (05-05)", () => {
     expect(blockIdx).not.toBe(-1);
     const ok = await selectRangeInBlock(page, blockIdx, 0, 18);
     expect(ok).toBeTruthy();
-    await page.locator(".selection-toolbar").getByRole("button", { name: "Highlight", exact: true }).click();
+    await page
+      .locator(".selection-toolbar")
+      .getByRole("button", { name: "Highlight", exact: true })
+      .click();
     await expect(page.locator("mark.highlight").first()).toBeVisible();
     const hlId = await page.locator("mark.highlight").first().getAttribute("data-highlight-id");
     expect(hlId).toBeTruthy();
@@ -125,37 +131,31 @@ test.describe("ANNO-04 navigate back (05-05)", () => {
  * resolveQuoteSelector returns "orphan" on the eager batch-resolve. The
  * position is a nearness hint (rendered at the best-effort vicinity).
  */
-async function seedOrphan(
-  page: import("@playwright/test").Page,
-  articleId: string,
-): Promise<void> {
-  await page.evaluate(
-    async (aid) => {
-      const db = await new Promise<IDBDatabase>((resolve, reject) => {
-        const r = indexedDB.open("lem-reader");
-        r.onsuccess = () => resolve(r.result);
-        r.onerror = () => reject(r.error);
-      });
-      const tx = db.transaction("highlights", "readwrite");
-      tx.objectStore("highlights").put({
-        schemaVersion: 1,
-        id: "seed-orphan-1",
-        articleId: aid,
-        revision: 1,
-        position: { start: 5, end: 15 },
-        quote: {
-          prefix: "zzqxx ",
-          exact: "ZZQXX NONEXISTENT ORPHAN PASSAGE QQZZX",
-          suffix: " qqzzx",
-        },
-        createdAt: new Date().toISOString(),
-      });
-      await new Promise<void>((resolve, reject) => {
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-      });
-      db.close();
-    },
-    articleId,
-  );
+async function seedOrphan(page: import("@playwright/test").Page, articleId: string): Promise<void> {
+  await page.evaluate(async (aid) => {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const r = indexedDB.open("lem-reader");
+      r.onsuccess = () => resolve(r.result);
+      r.onerror = () => reject(r.error);
+    });
+    const tx = db.transaction("highlights", "readwrite");
+    tx.objectStore("highlights").put({
+      schemaVersion: 1,
+      id: "seed-orphan-1",
+      articleId: aid,
+      revision: 1,
+      position: { start: 5, end: 15 },
+      quote: {
+        prefix: "zzqxx ",
+        exact: "ZZQXX NONEXISTENT ORPHAN PASSAGE QQZZX",
+        suffix: " qqzzx",
+      },
+      createdAt: new Date().toISOString(),
+    });
+    await new Promise<void>((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  }, articleId);
 }

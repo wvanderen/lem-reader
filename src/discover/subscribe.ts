@@ -17,10 +17,7 @@
 //      (Zod-at-boundary on the constructed row — the same parse the Dexie
 //      read path runs later; a mismatch can never persist).
 import { discoverFeed, IngestionError } from "../ingestion/IngestionClient";
-import {
-  hasSubscriptionForFeed,
-  saveSubscription,
-} from "../persistence/subscriptionsStore";
+import { hasSubscriptionForFeed, saveSubscription } from "../persistence/subscriptionsStore";
 import { SubscriptionRecordSchema } from "../content/schema";
 import type { SubscriptionRecord } from "../content/schema";
 import type { IngestionFailureReason } from "../ingestion/types";

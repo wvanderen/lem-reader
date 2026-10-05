@@ -249,10 +249,7 @@ test.describe("SSRF matrix (07-07 SC#3)", () => {
       });
 
       // Status: 400 (the typed IngestionResponse refusal).
-      expect(
-        res.status(),
-        `${vector.name}: expected 400 refusal, got ${res.status()}`,
-      ).toBe(400);
+      expect(res.status(), `${vector.name}: expected 400 refusal, got ${res.status()}`).toBe(400);
 
       // Body shape: { ok: false, reason ∈ acceptableReasons }.
       const body = await res.json();

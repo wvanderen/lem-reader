@@ -62,9 +62,7 @@ import type {
  * "This overlaps an existing highlight." instead of the two action buttons when
  * the selection intersects a persisted range.
  */
-export type ToolbarCaptureResult =
-  | CaptureResult
-  | { ok: false; reason: "overlap" };
+export type ToolbarCaptureResult = CaptureResult | { ok: false; reason: "overlap" };
 
 /**
  * Result of creating a highlight from a selection. Carries the new id on
@@ -101,9 +99,7 @@ export interface HighlightOverlayValue {
    * (overlap / empty / empty-span / ineligible / boundary-ineligible /
    * measurement-body) so the toolbar can show the right hint.
    */
-  createHighlightFromSelection: (
-    readingRoot: HTMLElement,
-  ) => Promise<CreateFromSelectionResult>;
+  createHighlightFromSelection: (readingRoot: HTMLElement) => Promise<CreateFromSelectionResult>;
   /**
    * Check the current selection validity (capture + D5-13 overlap check)
    * WITHOUT creating a highlight. Used by the SelectionToolbar's
@@ -167,9 +163,7 @@ export interface HighlightOverlayProviderProps {
   apiRef?: MutableRefObject<HighlightOverlayValue | null>;
 }
 
-const HighlightOverlayContext = createContext<HighlightOverlayValue | null>(
-  null,
-);
+const HighlightOverlayContext = createContext<HighlightOverlayValue | null>(null);
 
 export function HighlightOverlayProvider({
   article,
@@ -221,9 +215,7 @@ export function HighlightOverlayProvider({
   );
 
   const createHighlightFromSelection = useCallback(
-    async (
-      readingRoot: HTMLElement,
-    ): Promise<CreateFromSelectionResult> => {
+    async (readingRoot: HTMLElement): Promise<CreateFromSelectionResult> => {
       const capture = captureCurrentSelection(readingRoot);
       if (!capture.ok) {
         return { ok: false, reason: capture.reason };
@@ -266,9 +258,7 @@ export function HighlightOverlayProvider({
   }
 
   return (
-    <HighlightOverlayContext.Provider value={value}>
-      {children}
-    </HighlightOverlayContext.Provider>
+    <HighlightOverlayContext.Provider value={value}>{children}</HighlightOverlayContext.Provider>
   );
 }
 
@@ -279,9 +269,7 @@ export function HighlightOverlayProvider({
 export function useHighlightOverlay(): HighlightOverlayValue {
   const ctx = useContext(HighlightOverlayContext);
   if (!ctx) {
-    throw new Error(
-      "useHighlightOverlay must be used inside <HighlightOverlayProvider>",
-    );
+    throw new Error("useHighlightOverlay must be used inside <HighlightOverlayProvider>");
   }
   return ctx;
 }

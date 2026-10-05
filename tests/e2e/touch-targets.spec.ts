@@ -49,12 +49,8 @@ test.describe("Touch targets ≥ 44×44px (A11Y-07)", () => {
     await page.goto(`${BASE}/#/article/${FIRST_FIXTURE}`);
     const gear = page.getByRole("button", { name: "Reading settings" });
     const box = await bbox(gear);
-    expect(box.width, `gear width ${box.width}px < ${MIN}px`).toBeGreaterThanOrEqual(
-      MIN,
-    );
-    expect(box.height, `gear height ${box.height}px < ${MIN}px`).toBeGreaterThanOrEqual(
-      MIN,
-    );
+    expect(box.width, `gear width ${box.width}px < ${MIN}px`).toBeGreaterThanOrEqual(MIN);
+    expect(box.height, `gear height ${box.height}px < ${MIN}px`).toBeGreaterThanOrEqual(MIN);
   });
 
   test("every control inside the open panel meets 44×44px", async ({ page }) => {
@@ -69,9 +65,7 @@ test.describe("Touch targets ≥ 44×44px (A11Y-07)", () => {
     const close = page.getByRole("button", { name: "Close reading settings" });
     const closeBox = await bbox(close);
     if (closeBox.width < MIN || closeBox.height < MIN) {
-      failures.push(
-        `close ×: ${closeBox.width}×${closeBox.height}px`,
-      );
+      failures.push(`close ×: ${closeBox.width}×${closeBox.height}px`);
     }
 
     // Reset button.
@@ -126,9 +120,7 @@ test.describe("Touch targets ≥ 44×44px (A11Y-07)", () => {
       const radio = page.getByRole("radio", { name, exact: true });
       // The label row carries the hit area (the input itself is the 13px
       // glyph); the value pins the row even when names share substrings.
-      const lbl = page.locator(
-        `label.settings-row:has(input[type='radio'][value='${value}'])`,
-      );
+      const lbl = page.locator(`label.settings-row:has(input[type='radio'][value='${value}'])`);
       const b = await bbox(lbl.first());
       if (b.height < MIN) {
         failures.push(`radio '${name}' label row: height ${b.height}px < ${MIN}px`);
@@ -157,9 +149,7 @@ test.describe("Touch targets ≥ 44×44px (A11Y-07)", () => {
   // corpus so acceptance means the same thing everywhere.
   // Strengthen-only — no existing assertion removed (D6-12).
   for (const fixture of FIXTURES) {
-    test(`shared invariant holds under touch-targets @ ${fixture} (D6-09)`, async ({
-      page,
-    }) => {
+    test(`shared invariant holds under touch-targets @ ${fixture} (D6-09)`, async ({ page }) => {
       await openArticle(page, fixture);
       await assertEdgeInvariant(page, {
         fixture,
@@ -184,7 +174,11 @@ test.describe("Touch targets ≥ 44×44px (A11Y-07)", () => {
   // cells above stay byte-stable (D6-12).
   const MEASURED: Record<
     EdgeDestination,
-    Array<{ desc: string; locator: (page: import("@playwright/test").Page) => import("@playwright/test").Locator; width?: boolean }>
+    Array<{
+      desc: string;
+      locator: (page: import("@playwright/test").Page) => import("@playwright/test").Locator;
+      width?: boolean;
+    }>
   > = {
     library: [
       {
@@ -198,8 +192,7 @@ test.describe("Touch targets ≥ 44×44px (A11Y-07)", () => {
       },
       {
         desc: "library searchbox",
-        locator: (page) =>
-          page.getByRole("searchbox", { name: "Search your library" }),
+        locator: (page) => page.getByRole("searchbox", { name: "Search your library" }),
       },
       {
         desc: "tag filter chip",
@@ -209,9 +202,7 @@ test.describe("Touch targets ≥ 44×44px (A11Y-07)", () => {
       {
         desc: "shell-nav Library link",
         locator: (page) =>
-          page
-            .getByRole("navigation", { name: "Primary" })
-            .getByRole("link", { name: "Library" }),
+          page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Library" }),
       },
       {
         desc: "shell-nav Highlights link",
@@ -224,8 +215,7 @@ test.describe("Touch targets ≥ 44×44px (A11Y-07)", () => {
     discover: [
       {
         desc: "feed URL input",
-        locator: (page) =>
-          page.getByRole("textbox", { name: "Subscribe to a feed" }),
+        locator: (page) => page.getByRole("textbox", { name: "Subscribe to a feed" }),
       },
       {
         desc: "Subscribe button",
@@ -235,9 +225,7 @@ test.describe("Touch targets ≥ 44×44px (A11Y-07)", () => {
       {
         desc: "shell-nav Library link",
         locator: (page) =>
-          page
-            .getByRole("navigation", { name: "Primary" })
-            .getByRole("link", { name: "Library" }),
+          page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Library" }),
       },
       {
         desc: "shell-nav Highlights link",
@@ -254,8 +242,7 @@ test.describe("Touch targets ≥ 44×44px (A11Y-07)", () => {
       },
       {
         desc: "anchor-confidence filter combobox",
-        locator: (page) =>
-          page.getByRole("combobox", { name: "Anchor confidence" }),
+        locator: (page) => page.getByRole("combobox", { name: "Anchor confidence" }),
       },
       {
         desc: "sort select",
@@ -263,34 +250,29 @@ test.describe("Touch targets ≥ 44×44px (A11Y-07)", () => {
       },
       {
         desc: "row jump link",
-        locator: (page) =>
-          page.getByRole("link", { name: /^Go to highlight:/ }).first(),
+        locator: (page) => page.getByRole("link", { name: /^Go to highlight:/ }).first(),
         width: true,
       },
     ],
     "add-dialog": [
       {
         desc: "Web address radio label row",
-        locator: (page) =>
-          page.locator("label.add-source-row", { hasText: "Web address" }),
+        locator: (page) => page.locator("label.add-source-row", { hasText: "Web address" }),
         width: true,
       },
       {
         desc: "Paste text radio label row",
-        locator: (page) =>
-          page.locator("label.add-source-row", { hasText: "Paste text" }),
+        locator: (page) => page.locator("label.add-source-row", { hasText: "Paste text" }),
         width: true,
       },
       {
         desc: "Upload file radio label row",
-        locator: (page) =>
-          page.locator("label.add-source-row", { hasText: "Upload file" }),
+        locator: (page) => page.locator("label.add-source-row", { hasText: "Upload file" }),
         width: true,
       },
       {
         desc: "Cancel button",
-        locator: (page) =>
-          page.getByRole("button", { name: "Cancel", exact: true }),
+        locator: (page) => page.getByRole("button", { name: "Cancel", exact: true }),
         width: true,
       },
     ],

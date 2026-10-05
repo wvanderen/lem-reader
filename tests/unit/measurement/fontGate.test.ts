@@ -46,9 +46,7 @@ describe("awaitFontsReady(signal)", () => {
     stubFontsReady();
     const controller = new AbortController();
     controller.abort();
-    await expect(awaitFontsReady(controller.signal)).rejects.toBeInstanceOf(
-      AbortError,
-    );
+    await expect(awaitFontsReady(controller.signal)).rejects.toBeInstanceOf(AbortError);
   });
 
   it("throws AbortError when the signal aborts during the await", async () => {

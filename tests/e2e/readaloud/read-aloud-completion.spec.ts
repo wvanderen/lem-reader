@@ -131,15 +131,14 @@ test.describe("Issue #43 — read-aloud completion", () => {
     // The marker hopped with it: fire the word boundary the new utterance
     // produces — the mark covers text in the new chunk…
     await page.evaluate(() => {
-      (window as unknown as { __speechFire: (event: string, charIndex?: number) => void })
-        .__speechFire("boundary", 0);
+      (
+        window as unknown as { __speechFire: (event: string, charIndex?: number) => void }
+      ).__speechFire("boundary", 0);
     });
     await expect(page.locator("mark.spoken-word")).toBeVisible({ timeout: 10_000 });
     // …and the ONE polite region did NOT chatter: it still carries the
     // transport's own "Reading aloud." copy from Play.
-    await expect(
-      page.getByRole("status").filter({ hasText: "Reading aloud." }),
-    ).toHaveCount(1);
+    await expect(page.getByRole("status").filter({ hasText: "Reading aloud." })).toHaveCount(1);
 
     // Skip sentence backward: back to the first sentence's first chunk.
     await bar.getByRole("button", { name: "Skip sentence backward" }).click();
@@ -165,29 +164,28 @@ test.describe("Issue #43 — read-aloud completion", () => {
     const last = ESSAY_CHUNKS[ESSAY_CHUNKS.length - 1]!;
     const lastText = last.text;
     await expect
-      .poll(() =>
-        page.evaluate((target) => {
-          const w = window as unknown as {
-            __speechSpoken: { text: string; volume: number; done: boolean; cancelled: boolean }[];
-            __speechFire: (event: string, charIndex?: number) => void;
-          };
-          for (let i = 0; i < 5; i++) {
-            const live = [...w.__speechSpoken]
-              .reverse()
-              .find((r) => !r.done && !r.cancelled && r.volume === 1);
-            if (!live) return "none";
-            if (live.text === target) return "last";
-            w.__speechFire("end");
-          }
-          return "draining";
-        }, lastText),
+      .poll(
+        () =>
+          page.evaluate((target) => {
+            const w = window as unknown as {
+              __speechSpoken: { text: string; volume: number; done: boolean; cancelled: boolean }[];
+              __speechFire: (event: string, charIndex?: number) => void;
+            };
+            for (let i = 0; i < 5; i++) {
+              const live = [...w.__speechSpoken]
+                .reverse()
+                .find((r) => !r.done && !r.cancelled && r.volume === 1);
+              if (!live) return "none";
+              if (live.text === target) return "last";
+              w.__speechFire("end");
+            }
+            return "draining";
+          }, lastText),
         { timeout: 60_000 },
       )
       .toBe("last");
     await bar.getByRole("button", { name: "Skip sentence forward" }).click();
-    await expect(
-      page.getByRole("status").filter({ hasText: "No next sentence." }),
-    ).toHaveCount(1);
+    await expect(page.getByRole("status").filter({ hasText: "No next sentence." })).toHaveCount(1);
     // The session keeps playing at the last sentence.
     expect(await liveUtteranceText(page)).toBe(last.text);
 
@@ -206,29 +204,32 @@ test.describe("Issue #43 — read-aloud completion", () => {
     // spoken + whether anything is still live (Node accumulates).
     const spokenTexts: string[] = [];
     await expect
-      .poll(async () => {
-        const drained = await page.evaluate(() => {
-          const w = window as unknown as {
-            __speechSpoken: { text: string; volume: number; done: boolean; cancelled: boolean }[];
-            __speechFire: (event: string, charIndex?: number) => void;
-          };
-          const out: string[] = [];
-          for (let i = 0; i < 8; i++) {
-            const live = [...w.__speechSpoken]
+      .poll(
+        async () => {
+          const drained = await page.evaluate(() => {
+            const w = window as unknown as {
+              __speechSpoken: { text: string; volume: number; done: boolean; cancelled: boolean }[];
+              __speechFire: (event: string, charIndex?: number) => void;
+            };
+            const out: string[] = [];
+            for (let i = 0; i < 8; i++) {
+              const live = [...w.__speechSpoken]
+                .reverse()
+                .find((r) => !r.done && !r.cancelled && r.volume === 1);
+              if (!live) break;
+              out.push(live.text);
+              w.__speechFire("end");
+            }
+            const stillLive = [...w.__speechSpoken]
               .reverse()
               .find((r) => !r.done && !r.cancelled && r.volume === 1);
-            if (!live) break;
-            out.push(live.text);
-            w.__speechFire("end");
-          }
-          const stillLive = [...w.__speechSpoken]
-            .reverse()
-            .find((r) => !r.done && !r.cancelled && r.volume === 1);
-          return { out, stillLive: stillLive ? stillLive.text : null };
-        });
-        spokenTexts.push(...drained.out);
-        return drained.stillLive;
-      }, { timeout: 60_000 })
+            return { out, stillLive: stillLive ? stillLive.text : null };
+          });
+          spokenTexts.push(...drained.out);
+          return drained.stillLive;
+        },
+        { timeout: 60_000 },
+      )
       .toBeNull();
 
     // O7 — the spoken channel: no code-block source text was ever uttered.
@@ -260,26 +261,31 @@ test.describe("Issue #43 — read-aloud completion", () => {
     await page.waitForTimeout(300); // the probe + settle
     const charIndex = afterGap.utf16ToGrapheme.findIndex((v) => v >= 1);
     await expect
-      .poll(async () => {
-        const live = await liveUtteranceText(page);
-        if (live !== afterGap.text) {
-          await page.evaluate(() => {
-            const w = window as unknown as {
-              __speechSpoken: { volume: number; done: boolean; cancelled: boolean }[];
-              __speechFire: (event: string, charIndex?: number) => void;
-            };
-            const liveRec = [...w.__speechSpoken]
-              .reverse()
-              .find((r) => !r.done && !r.cancelled && r.volume === 1);
-            if (liveRec) w.__speechFire("end");
-          });
-        }
-        return live;
-      }, { timeout: 30_000 })
+      .poll(
+        async () => {
+          const live = await liveUtteranceText(page);
+          if (live !== afterGap.text) {
+            await page.evaluate(() => {
+              const w = window as unknown as {
+                __speechSpoken: { volume: number; done: boolean; cancelled: boolean }[];
+                __speechFire: (event: string, charIndex?: number) => void;
+              };
+              const liveRec = [...w.__speechSpoken]
+                .reverse()
+                .find((r) => !r.done && !r.cancelled && r.volume === 1);
+              if (liveRec) w.__speechFire("end");
+            });
+          }
+          return live;
+        },
+        { timeout: 30_000 },
+      )
       .toBe(afterGap.text);
     await page.evaluate((ci) => {
-      (window as unknown as { __speechFire: (event: string, ci?: number) => void })
-        .__speechFire("boundary", ci);
+      (window as unknown as { __speechFire: (event: string, ci?: number) => void }).__speechFire(
+        "boundary",
+        ci,
+      );
     }, charIndex);
     await expect(page.locator("mark.spoken-word")).toBeVisible({ timeout: 10_000 });
     const markText = await page.evaluate(() =>
@@ -315,9 +321,7 @@ test.describe("Issue #43 — read-aloud completion", () => {
     await expect(rate).toHaveAttribute("max", "3");
     await rate.focus();
     await page.keyboard.press("ArrowUp");
-    await expect(
-      page.locator(".settings-value").filter({ hasText: "1.25×" }),
-    ).toBeVisible();
+    await expect(page.locator(".settings-value").filter({ hasText: "1.25×" })).toBeVisible();
     await page.keyboard.press("Escape");
 
     // Subsequent playback carries BOTH applied values — and the bar mirrors
@@ -325,14 +329,17 @@ test.describe("Issue #43 — read-aloud completion", () => {
     await playAndAwaitProbe(page);
     await expect(page.locator(".readaloud-bar").getByText("Rate: 1.25×")).toBeVisible();
     await expect
-      .poll(async () =>
-        page.evaluate(() => {
-          const w = window as unknown as {
-            __speechSpoken: { rate: number; voice: string | null; volume: number }[];
-          };
-          const playback = w.__speechSpoken.filter((r) => r.volume === 1);
-          return playback.length > 0 ? { rate: playback[0]!.rate, voice: playback[0]!.voice } : null;
-        }),
+      .poll(
+        async () =>
+          page.evaluate(() => {
+            const w = window as unknown as {
+              __speechSpoken: { rate: number; voice: string | null; volume: number }[];
+            };
+            const playback = w.__speechSpoken.filter((r) => r.volume === 1);
+            return playback.length > 0
+              ? { rate: playback[0]!.rate, voice: playback[0]!.voice }
+              : null;
+          }),
         { timeout: 10_000 },
       )
       .toEqual({ rate: 1.25, voice: "stub-voice" });
@@ -348,8 +355,9 @@ test.describe("Issue #43 — read-aloud completion", () => {
     await playAndAwaitProbe(page);
     // The marker appears with the utterance's word-boundary event.
     await page.evaluate(() => {
-      (window as unknown as { __speechFire: (event: string, charIndex?: number) => void })
-        .__speechFire("boundary", 0);
+      (
+        window as unknown as { __speechFire: (event: string, charIndex?: number) => void }
+      ).__speechFire("boundary", 0);
     });
     await expect(page.locator("mark.spoken-word")).toBeVisible({ timeout: 10_000 });
 

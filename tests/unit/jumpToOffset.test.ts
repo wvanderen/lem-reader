@@ -26,11 +26,7 @@ import { ArticleSchema } from "../../src/content/schema";
 import type { CanonicalArticle } from "../../src/content/types";
 import type { PageFragment } from "../../src/pagination/types";
 import type { PaginatedSurfaceHandle } from "../../src/reader/PaginatedSurface";
-import {
-  FOCUS_SETTLE_MS,
-  jumpToOffset,
-  settleFocus,
-} from "../../src/reader/jumpToOffset";
+import { FOCUS_SETTLE_MS, jumpToOffset, settleFocus } from "../../src/reader/jumpToOffset";
 
 function parseArticle(raw: unknown): CanonicalArticle {
   return ArticleSchema.parse(raw);
@@ -210,10 +206,7 @@ describe("jumpToOffset — end landing", () => {
       endLanding: true,
     });
     expect(window.scrollTo).toHaveBeenCalledTimes(1);
-    expect(window.scrollTo).toHaveBeenCalledWith(
-      0,
-      document.documentElement.scrollHeight,
-    );
+    expect(window.scrollTo).toHaveBeenCalledWith(0, document.documentElement.scrollHeight);
     for (const el of blocks) {
       expect(el.scrollIntoView).not.toHaveBeenCalled();
     }
@@ -226,10 +219,7 @@ describe("jumpToOffset — end landing", () => {
       blocks: buildBlocks(),
       endLanding: true,
     });
-    expect(window.scrollTo).toHaveBeenCalledWith(
-      0,
-      document.documentElement.scrollHeight,
-    );
+    expect(window.scrollTo).toHaveBeenCalledWith(0, document.documentElement.scrollHeight);
   });
 
   it("keeps a mid-article offset on the normal passage path", () => {

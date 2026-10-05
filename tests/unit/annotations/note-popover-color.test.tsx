@@ -19,7 +19,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useEffect } from "react";
-import { HighlightOverlayProvider, useHighlightOverlay } from "../../../src/reader/annotations/HighlightOverlay";
+import {
+  HighlightOverlayProvider,
+  useHighlightOverlay,
+} from "../../../src/reader/annotations/HighlightOverlay";
 import { NotePopover } from "../../../src/reader/annotations/NotePopover";
 import type { CanonicalArticle } from "../../../src/content/types";
 import type { Block } from "../../../src/content/types";
@@ -34,8 +37,7 @@ const article: CanonicalArticle = {
     sourceUrl: "https://example.com/test",
     title: "Test Article",
     retrievedAt: "2026-07-28T00:00:00Z",
-    originalHtmlHash:
-      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    originalHtmlHash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
   },
   blocks: [
     {
@@ -74,28 +76,23 @@ const mockData = vi.hoisted(() => ({
   },
 }));
 
-vi.mock(
-  "../../../src/persistence/highlightsStore",
-  async () => {
-    const { HighlightRecordSchema } = await import(
-      "../../../src/content/schema"
-    );
-    return {
-      loadHighlights: vi.fn(async () => ({
-        ok: true,
-        // The real store safeParses every row on the read path; the stub
-        // hydrates through the SAME schema so a pre-#118 row (no color key)
-        // tests the boundary hydration, exactly as production does.
-        highlights: [HighlightRecordSchema.parse(mockData.highlightRecord)],
-      })),
-      saveHighlight: vi.fn().mockResolvedValue(undefined),
-      deleteHighlight: vi.fn().mockResolvedValue(undefined),
-      // Issue #118 — the ONE color write seam (stubbed; the call shape is the
-      // assertion target).
-      setHighlightColor: vi.fn().mockResolvedValue(undefined),
-    };
-  },
-);
+vi.mock("../../../src/persistence/highlightsStore", async () => {
+  const { HighlightRecordSchema } = await import("../../../src/content/schema");
+  return {
+    loadHighlights: vi.fn(async () => ({
+      ok: true,
+      // The real store safeParses every row on the read path; the stub
+      // hydrates through the SAME schema so a pre-#118 row (no color key)
+      // tests the boundary hydration, exactly as production does.
+      highlights: [HighlightRecordSchema.parse(mockData.highlightRecord)],
+    })),
+    saveHighlight: vi.fn().mockResolvedValue(undefined),
+    deleteHighlight: vi.fn().mockResolvedValue(undefined),
+    // Issue #118 — the ONE color write seam (stubbed; the call shape is the
+    // assertion target).
+    setHighlightColor: vi.fn().mockResolvedValue(undefined),
+  };
+});
 
 vi.mock("../../../src/persistence/notesStore", () => ({
   loadNote: vi.fn().mockResolvedValue(null),
@@ -112,14 +109,10 @@ vi.mock("../../../src/ingestion/library/tagsStore", () => ({
 }));
 
 vi.mock("../../../src/content/normalizeText", async (importOriginal) => {
-  const actual = await importOriginal<
-    typeof import("../../../src/content/normalizeText")
-  >();
+  const actual = await importOriginal<typeof import("../../../src/content/normalizeText")>();
   return {
     ...actual,
-    resolveQuoteSelector: vi
-      .fn()
-      .mockReturnValue({ start: 0, end: 5 }),
+    resolveQuoteSelector: vi.fn().mockReturnValue({ start: 0, end: 5 }),
   };
 });
 
@@ -210,9 +203,7 @@ describe("NotePopover color picker (issue #118)", () => {
   });
 
   it("a picked color commits through the ONE write seam + re-checks optimistically", async () => {
-    const { setHighlightColor } = await import(
-      "../../../src/persistence/highlightsStore"
-    );
+    const { setHighlightColor } = await import("../../../src/persistence/highlightsStore");
     const user = userEvent.setup();
     renderPopover();
 
@@ -243,9 +234,7 @@ describe("NotePopover color picker (issue #118)", () => {
   });
 
   it("keyboard: arrow keys move the radio group + Enter-free commit (native change)", async () => {
-    const { setHighlightColor } = await import(
-      "../../../src/persistence/highlightsStore"
-    );
+    const { setHighlightColor } = await import("../../../src/persistence/highlightsStore");
     const user = userEvent.setup();
     renderPopover();
 
@@ -260,12 +249,8 @@ describe("NotePopover color picker (issue #118)", () => {
   });
 
   it("the picker stays EDITABLE when the anchor is ambiguous (textarea does not)", async () => {
-    const { resolveQuoteSelector } = await import(
-      "../../../src/content/normalizeText"
-    );
-    const { setHighlightColor } = await import(
-      "../../../src/persistence/highlightsStore"
-    );
+    const { resolveQuoteSelector } = await import("../../../src/content/normalizeText");
+    const { setHighlightColor } = await import("../../../src/persistence/highlightsStore");
     vi.mocked(resolveQuoteSelector).mockReturnValueOnce("ambiguous");
     const user = userEvent.setup();
     renderPopover();
@@ -284,12 +269,8 @@ describe("NotePopover color picker (issue #118)", () => {
   });
 
   it("a failed write surfaces the inline 'Couldn't save color.' status (rethrow contract)", async () => {
-    const { setHighlightColor } = await import(
-      "../../../src/persistence/highlightsStore"
-    );
-    vi.mocked(setHighlightColor).mockRejectedValueOnce(
-      new Error("QuotaExceededError"),
-    );
+    const { setHighlightColor } = await import("../../../src/persistence/highlightsStore");
+    vi.mocked(setHighlightColor).mockRejectedValueOnce(new Error("QuotaExceededError"));
     const user = userEvent.setup();
     renderPopover();
 
@@ -302,12 +283,8 @@ describe("NotePopover color picker (issue #118)", () => {
   });
 
   it("a failed write ROLLS the optimistic pick back to the persisted color", async () => {
-    const { setHighlightColor } = await import(
-      "../../../src/persistence/highlightsStore"
-    );
-    vi.mocked(setHighlightColor).mockRejectedValueOnce(
-      new Error("QuotaExceededError"),
-    );
+    const { setHighlightColor } = await import("../../../src/persistence/highlightsStore");
+    vi.mocked(setHighlightColor).mockRejectedValueOnce(new Error("QuotaExceededError"));
     const user = userEvent.setup();
     renderPopover();
 

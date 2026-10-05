@@ -50,11 +50,7 @@ function parseArticle(blocks: unknown[]): CanonicalArticle {
  * at every `charsPerLine` UTF-16 code units. The first line is at top 0.
  * Used to drive the engine via measurement stubs (Plan 04-06 Task 3 path).
  */
-function uniformLineBoxes(
-  textLength: number,
-  charsPerLine: number,
-  lineHeight = 20,
-): LineBox[] {
+function uniformLineBoxes(textLength: number, charsPerLine: number, lineHeight = 20): LineBox[] {
   if (textLength === 0) return [];
   const count = Math.max(1, Math.ceil(textLength / charsPerLine));
   const boxes: LineBox[] = [];
@@ -109,9 +105,7 @@ function trackingBus(): { bus: DiagnosticBus; events: DiagnosticEvent[] } {
  * Per-block grapheme length, computed by wrapping the block in a synthetic
  * single-block article and reusing normalizeText (no forked logic — Pitfall 3).
  */
-function blockGraphemeLength(
-  block: CanonicalArticle["blocks"][number],
-): number {
+function blockGraphemeLength(block: CanonicalArticle["blocks"][number]): number {
   const synthetic = ArticleSchema.parse({ ...baseArticle, blocks: [block] });
   return graphemeClusters(normalizeText(synthetic), "en").length;
 }
@@ -129,10 +123,7 @@ function blockGraphemeLength(
  * the normalized-text concatenation, not a content unit (PAGE-03 "every
  * supported content unit appears exactly once").
  */
-function assertExactOnceCoverage(
-  article: CanonicalArticle,
-  result: FragmentationResult,
-): void {
+function assertExactOnceCoverage(article: CanonicalArticle, result: FragmentationResult): void {
   expect(result.status).toBe("ok");
   expect(result.pages.length).toBeGreaterThan(0);
   // Group ranges by blockIndex.
@@ -165,10 +156,7 @@ function assertExactOnceCoverage(
  * order. (A range on page i with blockIndex k + start s must be ≤ any range
  * on page j with blockIndex k' + start s' where (k, s) ≤ (k', s').)
  */
-function assertCanonicalOrder(
-  _article: CanonicalArticle,
-  result: FragmentationResult,
-): void {
+function assertCanonicalOrder(_article: CanonicalArticle, result: FragmentationResult): void {
   for (let i = 0; i < result.pages.length; i++) {
     for (let j = i + 1; j < result.pages.length; j++) {
       const earlier = result.pages[i]!.blocks;
@@ -306,9 +294,7 @@ describe("paginateDocument — PAGE-03 exactly-once + canonical order", () => {
     // must keep at least 2 lines per side; candidate at line 5 satisfies
     // this naturally.
     const text = "a b c d e f g h i j k l m n o p q r s t";
-    const article = parseArticle([
-      { kind: "paragraph", content: [{ text }] },
-    ]);
+    const article = parseArticle([{ kind: "paragraph", content: [{ text }] }]);
     // Line schedule: 10 lines, breaking every 4 chars. text length 39.
     const lineBoxes = uniformLineBoxes(text.length, 4);
     const measurement = measurementStub([
@@ -335,9 +321,7 @@ describe("paginateDocument — PAGE-03 exactly-once + canonical order", () => {
     expect(p2.blocks[0]!.blockIndex).toBe(0);
     expect(p1.blocks[0]!.startGrapheme).toBe(0);
     expect(p1.blocks[0]!.endGrapheme).toBe(p2.blocks[0]!.startGrapheme);
-    expect(p2.blocks[0]!.endGrapheme).toBe(
-      graphemeClusters(normalizeText(article), "en").length,
-    );
+    expect(p2.blocks[0]!.endGrapheme).toBe(graphemeClusters(normalizeText(article), "en").length);
   });
 
   // Plan 04-06 Task 3: container-block case. The engine MUST handle a
@@ -365,8 +349,7 @@ describe("paginateDocument — PAGE-03 exactly-once + canonical order", () => {
     // = "Quoted one with enough text.\nQuoted two with enough text." (57 chars)
     // The measurement captures lineBoxes against THIS text (the renderer's
     // coordinate). 4 lines × ~14 chars/line, 20px/line → 80px tall.
-    const blockquoteText =
-      "Quoted one with enough text.\nQuoted two with enough text.";
+    const blockquoteText = "Quoted one with enough text.\nQuoted two with enough text.";
     const blockquoteLineBoxes = uniformLineBoxes(blockquoteText.length, 14);
     const standaloneText = "Standalone paragraph after.";
     const measurement = measurementStub([
@@ -402,9 +385,7 @@ describe("paginateDocument — PAGE-03 exactly-once + canonical order", () => {
 
 describe("paginateDocument — AbortSignal handling (V7)", () => {
   it("AbortSignal aborted before walk → throws AbortError (silent cancel)", () => {
-    const article = parseArticle([
-      { kind: "paragraph", content: [{ text: "hi" }] },
-    ]);
+    const article = parseArticle([{ kind: "paragraph", content: [{ text: "hi" }] }]);
     const measurement = measurementStub([
       {
         kind: "paragraph",

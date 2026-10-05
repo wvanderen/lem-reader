@@ -152,8 +152,10 @@ export function SelectionToolbar({
   const prevSavedHighlightRef = useRef(false);
   const buttonsVariant = captureResult?.ok === true;
   useEffect(() => {
-    if (buttonsVariant && (!prevButtonsVariantRef.current ||
-        (savedHighlight && !prevSavedHighlightRef.current))) {
+    if (
+      buttonsVariant &&
+      (!prevButtonsVariantRef.current || (savedHighlight && !prevSavedHighlightRef.current))
+    ) {
       setAnnounceText(
         savedHighlight ? "Highlight saved. Undo available." : "Highlight actions available.",
       );

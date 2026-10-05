@@ -61,20 +61,14 @@ export function blockGraphemeLength(
  * Returns 0 for an empty fragment (defensive — the engine never emits empty
  * fragments, but callers should not crash if one arrives).
  */
-export function pageStartGlobalOffset(
-  article: CanonicalArticle,
-  fragment: PageFragment,
-): number {
+export function pageStartGlobalOffset(article: CanonicalArticle, fragment: PageFragment): number {
   if (fragment.blocks.length === 0) return 0;
   const first = fragment.blocks[0];
   if (!first) return 0;
   // Out-of-range blockIndex clamps to the sentinel entry (index blocks.length)
   // — byte-identical to the old loop's `i < article.blocks.length` cap.
   const blockIndex = Math.min(first.blockIndex, article.blocks.length);
-  return (
-    articleGraphemeIndex(article).blockStartOffsets[blockIndex]! +
-    first.startGrapheme
-  );
+  return articleGraphemeIndex(article).blockStartOffsets[blockIndex]! + first.startGrapheme;
 }
 
 /**

@@ -41,10 +41,7 @@ export interface ThemeSwatch {
 
 /** The preset theme literals (the schema's theme union minus the two
  * independently stored custom slots). */
-export type PresetThemeLiteral = Exclude<
-  ReaderSettings["theme"],
-  "custom-light" | "custom-dark"
->;
+export type PresetThemeLiteral = Exclude<ReaderSettings["theme"], "custom-light" | "custom-dark">;
 
 /**
  * The preset themes' swatches, byte-matching the [data-theme] blocks in
@@ -77,7 +74,9 @@ export function themeSwatch(
     // the same preset the slot seeds from on first activation.
     const record = activeSlotTheme({ ...settings, theme });
     if (record === undefined) {
-      return PRESET_SWATCHES[theme === "custom-light" ? SLOT_BASE_THEME["custom-light"] : SLOT_BASE_THEME["custom-dark"]];
+      return PRESET_SWATCHES[
+        theme === "custom-light" ? SLOT_BASE_THEME["custom-light"] : SLOT_BASE_THEME["custom-dark"]
+      ];
     }
     const resolved = resolveCustomTheme(record.tokens);
     return {

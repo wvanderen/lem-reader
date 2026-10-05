@@ -24,11 +24,7 @@
 import { describe, expect, it } from "vitest";
 import { deriveResumeTargets } from "../../../src/ingestion/library/resumeTarget";
 import { latestLocationByArticle } from "../../../src/reader/readingPosition";
-import {
-  ArticleSchema,
-  BookSchema,
-  LocationRecordSchema,
-} from "../../../src/content/schema";
+import { ArticleSchema, BookSchema, LocationRecordSchema } from "../../../src/content/schema";
 import type { CanonicalArticle } from "../../../src/content/schema";
 import type { Book, LocationRecord } from "../../../src/content/schema";
 import { EMPTY_LIBRARY_SNAPSHOT } from "../../../src/ingestion/library/librarySnapshot";
@@ -46,9 +42,7 @@ function makeArticle(id: string, title: string): CanonicalArticle {
       retrievedAt: "2026-01-01T00:00:00.000Z",
       originalHtmlHash: `sha256:${"3".repeat(64)}`,
     },
-    blocks: [
-      { kind: "paragraph", content: [{ text: `Body of ${title}.`, marks: [] }] },
-    ],
+    blocks: [{ kind: "paragraph", content: [{ text: `Body of ${title}.`, marks: [] }] }],
   });
 }
 
@@ -62,18 +56,13 @@ function makeBook(id: string, chapterIds: string[], title = "The Synthetic Book"
     chapterArticleIds: chapterIds,
     skippedChapterCount: 0,
     source: "epub-upload",
-    originalFileHash:
-      "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    originalFileHash: "sha256:0000000000000000000000000000000000000000000000000000000000000000",
     addedAt: "2026-01-01T00:00:00.000Z",
   });
 }
 
 /** Build a minimal valid LocationRecord. */
-function loc(
-  articleId: string,
-  graphemeOffset: number,
-  savedAt: string,
-): LocationRecord {
+function loc(articleId: string, graphemeOffset: number, savedAt: string): LocationRecord {
   return LocationRecordSchema.parse({
     schemaVersion: 1,
     articleId,
@@ -205,9 +194,7 @@ describe("deriveResumeTargets (#82 — the ONE derivation behind the rail and th
       locations: [],
       totals: { "art-a": 100 },
     });
-    expect(
-      deriveResumeTargets(markedUnread).map((e) => e.articleId),
-    ).toEqual([]);
+    expect(deriveResumeTargets(markedUnread).map((e) => e.articleId)).toEqual([]);
 
     // The reader opens it again; its first in-progress save reintroduces
     // the article as a target — eligibility was never permanently lost.
@@ -216,9 +203,7 @@ describe("deriveResumeTargets (#82 — the ONE derivation behind the rail and th
       locations: [loc("art-a", 10, "2026-01-05T00:00:00.000Z")],
       totals: { "art-a": 100 },
     });
-    expect(deriveResumeTargets(reopened).map((e) => e.articleId)).toEqual([
-      "art-a",
-    ]);
+    expect(deriveResumeTargets(reopened).map((e) => e.articleId)).toEqual(["art-a"]);
   });
 
   it("books and articles interleave by genuine recency: a book's sort key is its resume chapter's savedAt (D8-10)", () => {

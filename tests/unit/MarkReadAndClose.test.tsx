@@ -26,18 +26,14 @@ afterEach(() => {
 
 describe("MarkReadAndClose — explicit completion affordance", () => {
   it("renders a button named 'Mark read and close' in flow placement with the flow class", () => {
-    render(
-      <MarkReadAndClose onMarkRead={() => {}} hasAppHistory={false} placement="flow" />,
-    );
+    render(<MarkReadAndClose onMarkRead={() => {}} hasAppHistory={false} placement="flow" />);
     const button = screen.getByRole("button", { name: "Mark read and close" });
     expect(button).not.toBeNull();
     expect(button.className).toContain("mark-read-close-flow");
   });
 
   it("renders a button named 'Mark read and close' in page placement with the page class", () => {
-    render(
-      <MarkReadAndClose onMarkRead={() => {}} hasAppHistory={false} placement="page" />,
-    );
+    render(<MarkReadAndClose onMarkRead={() => {}} hasAppHistory={false} placement="page" />);
     const button = screen.getByRole("button", { name: "Mark read and close" });
     expect(button).not.toBeNull();
     expect(button.className).toContain("mark-read-close-page");
@@ -46,12 +42,8 @@ describe("MarkReadAndClose — explicit completion affordance", () => {
   it("click with hasAppHistory=true: onMarkRead once, then history.back() — in that order", () => {
     const order: string[] = [];
     const onMarkRead = vi.fn(() => order.push("onMarkRead"));
-    const backSpy = vi
-      .spyOn(window.history, "back")
-      .mockImplementation(() => order.push("back"));
-    render(
-      <MarkReadAndClose onMarkRead={onMarkRead} hasAppHistory={true} placement="flow" />,
-    );
+    const backSpy = vi.spyOn(window.history, "back").mockImplementation(() => order.push("back"));
+    render(<MarkReadAndClose onMarkRead={onMarkRead} hasAppHistory={true} placement="flow" />);
     fireEvent.click(screen.getByRole("button", { name: "Mark read and close" }));
     expect(onMarkRead).toHaveBeenCalledTimes(1);
     expect(backSpy).toHaveBeenCalledTimes(1);
@@ -61,9 +53,7 @@ describe("MarkReadAndClose — explicit completion affordance", () => {
 
   it("click with hasAppHistory=false: onMarkRead called, then the hash becomes '#/'", () => {
     const onMarkRead = vi.fn();
-    render(
-      <MarkReadAndClose onMarkRead={onMarkRead} hasAppHistory={false} placement="flow" />,
-    );
+    render(<MarkReadAndClose onMarkRead={onMarkRead} hasAppHistory={false} placement="flow" />);
     fireEvent.click(screen.getByRole("button", { name: "Mark read and close" }));
     expect(onMarkRead).toHaveBeenCalledTimes(1);
     expect(window.location.hash).toBe("#/");

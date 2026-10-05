@@ -41,10 +41,7 @@ import {
   variantKey,
   type TypographyVariant,
 } from "./fixtures-matrix";
-import {
-  readRenderedBlockHeight,
-  readRenderedLineCount,
-} from "./readDom";
+import { readRenderedBlockHeight, readRenderedLineCount } from "./readDom";
 import type { ReaderSettings } from "../../../src/content/schema";
 import { BASE } from "../_base";
 
@@ -116,8 +113,7 @@ async function predictBlockInBrowser(
         /* @vite-ignore */ url
       )) as typeof import("../../../src/measurement/textMeasurer");
       const geom = mod.fontStringFor(kind, level, settings);
-      const letterSpacingPx =
-        settings.spacing === "spacious" ? settings.size * 0.01 : 0;
+      const letterSpacingPx = settings.spacing === "spacious" ? settings.size * 0.01 : 0;
       const maxWidthPx = el.getBoundingClientRect().width;
       const result = mod.measureParagraphWithBreaks({
         text,
@@ -205,19 +201,10 @@ test(`calibration: measure fixtures × typography matrix (per-engine)`, async ({
         }, selector);
         if (!exists) continue;
         const domHeight = await readRenderedBlockHeight(page, selector);
-        const { lineCount: domLineCount } = await readRenderedLineCount(
-          page,
-          selector,
-        );
+        const { lineCount: domLineCount } = await readRenderedLineCount(page, selector);
         let prediction: { height: number; lineCount: number };
         try {
-          prediction = await predictBlockInBrowser(
-            page,
-            selector,
-            t.kind,
-            t.level,
-            settings,
-          );
+          prediction = await predictBlockInBrowser(page, selector, t.kind, t.level, settings);
         } catch {
           continue; // skip blocks Pretext cannot handle (rich-inline marks etc.)
         }

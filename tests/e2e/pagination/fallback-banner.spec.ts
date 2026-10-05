@@ -90,18 +90,15 @@ async function gotoFallback(page: import("@playwright/test").Page): Promise<void
   // Wait for the DiagnosticBus DEV hook to be exposed (the measurement
   // effect runs after the article + article element mount).
   await page.waitForFunction(
-    () =>
-      (window as unknown as Record<string, unknown>).__lemDiagnosticBus !==
-      undefined,
+    () => (window as unknown as Record<string, unknown>).__lemDiagnosticBus !== undefined,
     undefined,
     { timeout: 8000 },
   );
   // Inject the dom-fallback event — the subscription in ArticleView treats
   // this identically to a real engine emission.
   await page.evaluate(() => {
-    const bus = (
-      window as unknown as { __lemDiagnosticBus: { emit: (e: unknown) => void } }
-    ).__lemDiagnosticBus;
+    const bus = (window as unknown as { __lemDiagnosticBus: { emit: (e: unknown) => void } })
+      .__lemDiagnosticBus;
     bus.emit({ kind: "dom-fallback", ts: new Date().toISOString() });
   });
 }
@@ -117,13 +114,11 @@ test.describe("PAGE-09 pagination fallback banner (04-05)", () => {
 
     // The banner is a role=status region (aria-live=polite). Assert the
     // UI-SPEC §Copywriting verbatim copy is present.
-    const banner = page
-      .locator(".pagination-fallback-banner")
-      .first();
+    const banner = page.locator(".pagination-fallback-banner").first();
     await expect(banner).toBeVisible();
-    await expect(
-      banner.getByRole("heading", { level: 2 }),
-    ).toHaveText("This part of the article is too large to fit on one page.");
+    await expect(banner.getByRole("heading", { level: 2 })).toHaveText(
+      "This part of the article is too large to fit on one page.",
+    );
     await expect(banner.getByText(/Switched to scrolling so you can keep reading/)).toBeVisible();
     // Polite announce on appearance (visually-hidden span).
     await expect(banner.getByText("Switched to scrolling reading.")).toBeAttached();

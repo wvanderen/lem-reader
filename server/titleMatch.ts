@@ -20,5 +20,8 @@
  * match when word separators are normalized uniformly on both sides.
  */
 export function normalizeForTitleMatch(s: string): string {
-  return s.toLowerCase().replace(/[-_\s]+/g, " ").trim();
+  return s
+    .toLowerCase()
+    .replace(/[-_\s]+/g, " ")
+    .trim();
 }

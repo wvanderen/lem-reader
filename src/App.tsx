@@ -106,9 +106,7 @@ function parseHash(): View {
   // (foreign-controlled strings, T-10-02a). The value is used ONLY as a
   // lookup key (Array.find / getElementById in Plan 10-03) — never
   // innerHTML, never dynamic property access.
-  const m = /^#\/article\/([a-z0-9-]+)(?:\/h\/([^/]+))?$/.exec(
-    window.location.hash,
-  );
+  const m = /^#\/article\/([a-z0-9-]+)(?:\/h\/([^/]+))?$/.exec(window.location.hash);
   if (m) {
     return { name: "article", id: m[1] as string, jumpHighlightId: m[2] };
   }
@@ -210,14 +208,11 @@ function StorageRecoverySurfaces() {
     if (storageState === "ok") setBannerDismissed(false);
   }, [storageState]);
 
-  const showBanner =
-    storageState === "unavailable" && !bannerDismissed;
+  const showBanner = storageState === "unavailable" && !bannerDismissed;
 
   return (
     <>
-      {showBanner ? (
-        <StorageBanner onDismiss={() => setBannerDismissed(true)} />
-      ) : null}
+      {showBanner ? <StorageBanner onDismiss={() => setBannerDismissed(true)} /> : null}
       <WipeConfirm
         open={wipeOpen}
         onReset={async () => {
@@ -438,8 +433,11 @@ function AppInner() {
   // dynamic imports, so none of it rides the every-load chain). The
   // derivations are the pure folds over the settled snapshot, exactly the
   // eager path's useMemo shape.
-  const { status: deferredStatus, snapshot: deferredSnapshot, derive } =
-    useDeferredLibrarySnapshot();
+  const {
+    status: deferredStatus,
+    snapshot: deferredSnapshot,
+    derive,
+  } = useDeferredLibrarySnapshot();
   const readTarget = useMemo(() => {
     if (deferredStatus !== "ready" || deferredSnapshot === null || derive === null) {
       return null;
@@ -478,10 +476,7 @@ function AppInner() {
         addOpen={addOpen}
         onOpenAdd={openAdd}
       />
-      <SettingsPanel
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-      />
+      <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       {/* Issue #84 (decision #70) — the ONE app-level AddDialog, mounted
           from its FIRST open onward (issue #112 — the open-prop flip owns
           every close path, focus restore included). ANY successful save
@@ -524,10 +519,7 @@ function AppInner() {
             onOpenAdd={openAdd}
           />
         ) : view.name === "review" ? (
-          <ReviewView
-            hasAppHistory={hasAppHistory}
-            scopedArticleId={view.articleId}
-          />
+          <ReviewView hasAppHistory={hasAppHistory} scopedArticleId={view.articleId} />
         ) : view.name === "discover" ? (
           <DiscoverView hasAppHistory={hasAppHistory} />
         ) : (

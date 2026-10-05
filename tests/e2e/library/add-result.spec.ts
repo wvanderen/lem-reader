@@ -45,9 +45,7 @@ import type { CanonicalArticle } from "../../../src/content/types";
 
 /** The route-mock payload union: a schema-valid article (ok variant) or a
  * typed refusal envelope (the IngestionResponse refusal shape). */
-type IngestPayload =
-  | CanonicalArticle
-  | { ok: false; reason: string };
+type IngestPayload = CanonicalArticle | { ok: false; reason: string };
 
 function isRefusal(p: IngestPayload): p is { ok: false; reason: string } {
   return "ok" in p && p.ok === false;
@@ -70,9 +68,7 @@ function articlePayload(
       retrievedAt: "2026-09-29T00:00:00.000Z",
       originalHtmlHash: "sha256:" + "0".repeat(64),
     },
-    blocks: [
-      { kind: "paragraph", content: [{ text: "Body text.", marks: [] }] },
-    ],
+    blocks: [{ kind: "paragraph", content: [{ text: "Body text.", marks: [] }] }],
     footnotes: [],
     ...(meta ? { ingestionMeta: meta } : {}),
   } as CanonicalArticle;
@@ -92,10 +88,7 @@ const FLAGGED_META: NonNullable<CanonicalArticle["ingestionMeta"]> = {
 
 /** Route /api/ingest with the given payload (a mutable holder so a test
  * can swap the NEXT response mid-test for the add-another arm). */
-async function mockIngest(
-  page: Page,
-  payload: { current: IngestPayload },
-): Promise<void> {
+async function mockIngest(page: Page, payload: { current: IngestPayload }): Promise<void> {
   await page.route("**/api/ingest", (route) =>
     route.fulfill({
       status: 200,
@@ -124,9 +117,7 @@ function addButton(page: Page) {
 /** Open the library surface (the saved-articles list on #/). */
 async function openLibrary(page: Page): Promise<void> {
   await page.goto(`${BASE}/#/`);
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Saved articles" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
 }
 
 /** Drive a URL add to the result screen (the shared happy path). */
@@ -135,9 +126,7 @@ async function addUrl(page: Page, url: string): Promise<void> {
   await page.getByRole("textbox", { name: /add by url/i }).fill(url);
   await page.getByRole("button", { name: /^add$/i }).click();
   const dialog = page.locator("dialog.add-dialog");
-  await expect(dialog.locator(".status")).toContainText(
-    "Saved to your library.",
-  );
+  await expect(dialog.locator(".status")).toContainText("Saved to your library.");
   await expect(dialog.locator(".add-result")).toBeVisible();
 }
 
@@ -157,23 +146,15 @@ test.describe("Add result preserves Unread (issue #112)", () => {
     const dialog = page.locator("dialog.add-dialog");
     // The saved title is the result card's heading; the outcome actions
     // are explicit; NO navigation happened (the reader chose later).
-    await expect(
-      dialog.getByRole("heading", { name: "A Calm Result", level: 3 }),
-    ).toBeVisible();
-    await expect(
-      dialog.getByRole("button", { name: "Open article" }),
-    ).toBeVisible();
-    await expect(
-      dialog.getByRole("button", { name: "Add another" }),
-    ).toBeVisible();
+    await expect(dialog.getByRole("heading", { name: "A Calm Result", level: 3 })).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Open article" })).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Add another" })).toBeVisible();
     await expect(dialog.getByRole("button", { name: "Close" })).toBeVisible();
     expect(page.url(), "no auto-navigation on save").not.toContain("#/article");
     // A confident save is silent about LIMITS — no disclosure sentences —
     // but the AC's original link shows when the provenance URL exists.
     await expect(dialog.locator(".add-result .extraction-note")).toHaveCount(0);
-    await expect(
-      dialog.locator(".add-result .partial-content-note"),
-    ).toHaveCount(0);
+    await expect(dialog.locator(".add-result .partial-content-note")).toHaveCount(0);
     const sourceLine = dialog.locator(".add-result .add-result-source");
     await expect(sourceLine).toContainText("See the original");
     await expect(sourceLine.locator("a")).toHaveAttribute(
@@ -185,26 +166,20 @@ test.describe("Add result preserves Unread (issue #112)", () => {
     // Close: back on the library destination, dialog gone.
     await closeSavedResult(page);
     expect(page.url()).not.toContain("#/article");
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
 
     // THE Unread transition: the never-opened article is in the Unread
     // view (the snapshot invalidation fired while the dialog was open).
     // The h1 is the byte-stable "Saved articles" on every view (D14-25);
     // the Unread switcher link carries the live count.
     await page.goto(`${BASE}/#/unread`);
-    await expect(
-      page.getByRole("link", { name: /^Unread \(\d+\)$/ }),
-    ).toBeVisible();
+    await expect(page.getByRole("link", { name: /^Unread \(\d+\)$/ })).toBeVisible();
     await expect(
       page.locator(".library-list > li").filter({ hasText: "A Calm Result" }),
     ).toBeVisible();
   });
 
-  test("a flagged save discloses the ingestion limits with the original link", async ({
-    page,
-  }) => {
+  test("a flagged save discloses the ingestion limits with the original link", async ({ page }) => {
     const payload = {
       current: articlePayload("flagged-admission", "A Flagged Admission", FLAGGED_META),
     };
@@ -215,21 +190,16 @@ test.describe("Add result preserves Unread (issue #112)", () => {
     const result = page.locator("dialog.add-dialog .add-result");
     // The fidelity note + escape hatch (the reader view's exact sentences).
     const note = result.locator(".extraction-note");
-    await expect(note).toContainText(
-      "This article may be incomplete or inaccurate",
-    );
+    await expect(note).toContainText("This article may be incomplete or inaccurate");
     const link = note.locator("a");
-    await expect(link).toHaveAttribute(
-      "href",
-      "https://example.com/flagged-admission",
-    );
+    await expect(link).toHaveAttribute("href", "https://example.com/flagged-admission");
     await expect(link).toHaveAttribute("target", "_blank");
     await expect(link).toHaveAttribute("rel", "noopener noreferrer");
     await expect(link).toContainText("See the original");
     // The per-part heading + warning line + the degraded-anchoring note.
-    await expect(
-      result.locator(".partial-content-heading"),
-    ).toContainText("Some content could not be processed.");
+    await expect(result.locator(".partial-content-heading")).toContainText(
+      "Some content could not be processed.",
+    );
     await expect(result.locator(".partial-content-note li")).toHaveText(
       "1 image could not be fetched",
     );
@@ -262,16 +232,10 @@ test.describe("Add result preserves Unread (issue #112)", () => {
     // The NEXT save is independent: swap the payload, add a second
     // article, and the result shows the SECOND title.
     payload.current = articlePayload("second-add", "The Second Add");
-    await page
-      .getByRole("textbox", { name: /add by url/i })
-      .fill("https://example.com/second-add");
+    await page.getByRole("textbox", { name: /add by url/i }).fill("https://example.com/second-add");
     await page.getByRole("button", { name: /^add$/i }).click();
-    await expect(dialog.locator(".status")).toContainText(
-      "Saved to your library.",
-    );
-    await expect(
-      dialog.getByRole("heading", { name: "The Second Add", level: 3 }),
-    ).toBeVisible();
+    await expect(dialog.locator(".status")).toContainText("Saved to your library.");
+    await expect(dialog.getByRole("heading", { name: "The Second Add", level: 3 })).toBeVisible();
   });
 
   test("a duplicate refusal stays distinct from the saved result and never overwrites", async ({
@@ -285,16 +249,12 @@ test.describe("Add result preserves Unread (issue #112)", () => {
     // Add another → submit the SAME input: the service's has() now finds
     // the saved row → dedupe-refuse (D7-07/D16-09).
     await addAnother(page);
-    await page
-      .getByRole("textbox", { name: /add by url/i })
-      .fill("https://example.com/dup-check");
+    await page.getByRole("textbox", { name: /add by url/i }).fill("https://example.com/dup-check");
     await page.getByRole("button", { name: /^add$/i }).click();
 
     const dialog = page.locator("dialog.add-dialog");
     // Distinct surfaces: the calm refusal copy, NOT a saved result.
-    await expect(dialog.locator(".status")).toContainText(
-      "Already in your library.",
-    );
+    await expect(dialog.locator(".status")).toContainText("Already in your library.");
     await expect(dialog.locator(".add-result")).toHaveCount(0);
     await expect(dialog.getByRole("button", { name: "Open article" })).toHaveCount(0);
     await expect(dialog.getByRole("button", { name: "Add another" })).toHaveCount(0);
@@ -318,14 +278,11 @@ test.describe("Add result preserves Unread (issue #112)", () => {
     await openLibrary(page);
     await addUrl(page, "https://example.com/open-rule");
 
-    await page
-      .locator("dialog.add-dialog")
-      .getByRole("button", { name: "Open article" })
-      .click();
+    await page.locator("dialog.add-dialog").getByRole("button", { name: "Open article" }).click();
     await page.waitForURL(/#\/article\/open-rule$/, { timeout: 15_000 });
-    await expect(
-      page.getByRole("heading", { level: 1, name: "The Open Rule" }),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { level: 1, name: "The Open Rule" })).toBeVisible({
+      timeout: 10_000,
+    });
     await expect(page.locator("dialog.add-dialog")).not.toBeVisible();
     // The reading-location rule for a never-opened article: the reader
     // starts at the beginning — no restoration marker, no resume banner.
@@ -346,17 +303,13 @@ test.describe("Add result preserves Unread (issue #112)", () => {
     await trigger.press("Enter");
     await expect(page.locator("dialog.add-dialog")).toBeVisible();
 
-    await page
-      .getByRole("textbox", { name: /add by url/i })
-      .fill("https://example.com/focus-flow");
+    await page.getByRole("textbox", { name: /add by url/i }).fill("https://example.com/focus-flow");
     await page.getByRole("button", { name: /^add$/i }).click();
     await expect(page.locator("dialog.add-dialog .add-result")).toBeVisible();
 
     // THE landing: focus sits on the saved title (the keyboard + SR entry
     // point into the result — the transcript-swap focus-rail discipline).
-    const focusedClass = await page.evaluate(
-      () => document.activeElement?.className ?? "",
-    );
+    const focusedClass = await page.evaluate(() => document.activeElement?.className ?? "");
     expect(focusedClass).toBe("add-result-title");
 
     // Tab moves into the outcome content then the action row (the dialog
@@ -370,15 +323,11 @@ test.describe("Add result preserves Unread (issue #112)", () => {
     if (test.info().project.name !== "webkit") {
       await page.keyboard.press("Tab");
       await expect(
-        page
-          .locator("dialog.add-dialog")
-          .getByRole("link", { name: /See the original/ }),
+        page.locator("dialog.add-dialog").getByRole("link", { name: /See the original/ }),
       ).toBeFocused();
       await page.keyboard.press("Tab");
       await expect(
-        page
-          .locator("dialog.add-dialog")
-          .getByRole("button", { name: "Close" }),
+        page.locator("dialog.add-dialog").getByRole("button", { name: "Close" }),
       ).toBeFocused();
     }
 

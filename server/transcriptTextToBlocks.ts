@@ -52,8 +52,7 @@ function parseClockToMs(raw: string): number | null {
   if (parts.length !== 2 && parts.length !== 3) return null;
   const nums = parts.map((p) => Number(p));
   if (nums.some((n) => !Number.isInteger(n) || n < 0)) return null;
-  const [h, m, s] =
-    parts.length === 3 ? [nums[0]!, nums[1]!, nums[2]!] : [0, nums[0]!, nums[1]!];
+  const [h, m, s] = parts.length === 3 ? [nums[0]!, nums[1]!, nums[2]!] : [0, nums[0]!, nums[1]!];
   if (s > 59 || m > 59) return null;
   return ((h * 60 + m) * 60 + s) * 1000;
 }
@@ -141,7 +140,10 @@ export function pastedTranscriptToBlocks(
     }
     return {
       blocks: [...introBlocks, ...normalized.blocks],
-      anchors: normalized.anchors.map((a) => ({ ...a, blockIndex: a.blockIndex + introBlocks.length })),
+      anchors: normalized.anchors.map((a) => ({
+        ...a,
+        blockIndex: a.blockIndex + introBlocks.length,
+      })),
       warnings: [
         "Transcript pasted manually — captions and timings are unverified",
         ...normalized.warnings,
@@ -170,8 +172,11 @@ export function pastedTranscriptToBlocks(
       flush();
       continue;
     }
-    if (group.length > 0 && (groupLen >= TRANSCRIPT_PARAGRAPH_TARGET_CHARS ||
-      groupLen + 1 + trimmed.length > TRANSCRIPT_PARAGRAPH_CAP_CHARS)) {
+    if (
+      group.length > 0 &&
+      (groupLen >= TRANSCRIPT_PARAGRAPH_TARGET_CHARS ||
+        groupLen + 1 + trimmed.length > TRANSCRIPT_PARAGRAPH_CAP_CHARS)
+    ) {
       flush();
     }
     group.push(trimmed);
@@ -182,9 +187,7 @@ export function pastedTranscriptToBlocks(
     blocks,
     anchors: [],
     warnings:
-      blocks.length > 0
-        ? ["Transcript pasted manually — captions and timings are unverified"]
-        : [],
+      blocks.length > 0 ? ["Transcript pasted manually — captions and timings are unverified"] : [],
     durationSeconds: undefined,
   };
 }

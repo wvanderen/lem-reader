@@ -156,12 +156,8 @@ function opfXml(o: OpfOptions): string {
     .map((a, i) => `      <dc:creator id="creator-${i + 1}">${a}</dc:creator>`)
     .join("\n");
   const optionalMeta =
-    (o.publisher !== undefined
-      ? `\n      <dc:publisher>${o.publisher}</dc:publisher>`
-      : "") +
-    (o.publishedDate !== undefined
-      ? `\n      <dc:date>${o.publishedDate}</dc:date>`
-      : "");
+    (o.publisher !== undefined ? `\n      <dc:publisher>${o.publisher}</dc:publisher>` : "") +
+    (o.publishedDate !== undefined ? `\n      <dc:date>${o.publishedDate}</dc:date>` : "");
   const modifiedMeta =
     o.version === "3.0"
       ? `\n      <meta property="dcterms:modified">2026-01-01T00:00:00Z</meta>`
@@ -631,12 +627,7 @@ function oebpsNestedBookSpec(): FixtureSpec {
       { id: "c2", href: "text/ch2.xhtml", mediaType: "application/xhtml+xml" },
       { id: "c3", href: "text/ch3.xhtml", mediaType: "application/xhtml+xml" },
     ],
-    spine: [
-      { idref: "nav", linear: "no" },
-      { idref: "c1" },
-      { idref: "c2" },
-      { idref: "c3" },
-    ],
+    spine: [{ idref: "nav", linear: "no" }, { idref: "c1" }, { idref: "c2" }, { idref: "c3" }],
   });
   const entries: EpubEntries = {
     mimetype: mimetypeEntry(),
@@ -915,9 +906,7 @@ function protoPollutionOpfSpec(): FixtureSpec {
  * (the Phase 9 isSafeEntryName hard-gate class). */
 function zipSlipBookSpec(): FixtureSpec {
   const spec = markerShellSpec({ identifier: "urn:uuid:synthetic-book-slip" });
-  spec.entries["../../evil.xhtml"] = stored(
-    chapterXhtml("Evil Traversal Entry", 0),
-  );
+  spec.entries["../../evil.xhtml"] = stored(chapterXhtml("Evil Traversal Entry", 0));
   return spec;
 }
 
@@ -1023,12 +1012,7 @@ function mixedAdmissionBookSpec(): FixtureSpec {
       { id: "c2", href: "ch2.xhtml", mediaType: "application/xhtml+xml" },
       { id: "p1", href: "plate.xhtml", mediaType: "application/xhtml+xml" },
     ],
-    spine: [
-      { idref: "nav", linear: "no" },
-      { idref: "c1" },
-      { idref: "c2" },
-      { idref: "p1" },
-    ],
+    spine: [{ idref: "nav", linear: "no" }, { idref: "c1" }, { idref: "c2" }, { idref: "p1" }],
   });
   const entries: EpubEntries = {
     mimetype: mimetypeEntry(),
@@ -1753,11 +1737,7 @@ function selfCheck(): void {
   disc("renderedFigureBook", "images/render-ok.png", true);
   disc("refusedFigureBook", "images/still-anim.gif", true);
   disc("figureSpamBook", "images/spam-1.png", true);
-  disc(
-    "figureSpamBook",
-    `images/spam-${FIGURE_SPAM_COUNT}.png`,
-    true,
-  );
+  disc("figureSpamBook", `images/spam-${FIGURE_SPAM_COUNT}.png`, true);
 
   // bombEntryBook: the DECLARED central-directory size must equal the
   // exported lie (the 12-02 spec asserts it exceeds the REAL

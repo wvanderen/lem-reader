@@ -42,10 +42,7 @@ import { test, expect } from "@playwright/test";
 import { ArticleSchema } from "../../../src/content/schema";
 import type { CanonicalArticle } from "../../../src/content/types";
 import { resolveQuoteSelector } from "../../../src/content/normalizeText";
-import type {
-  TextPositionSelector,
-  TextQuoteSelector,
-} from "../../../src/content/normalizeText";
+import type { TextPositionSelector, TextQuoteSelector } from "../../../src/content/normalizeText";
 // Plan 13-06 (Option A — human decision 2026-08-18): the payload lives in
 // the non-spec helper ../library/markdown-payload.ts (extracted from
 // markdown-upload.spec.ts, same convention as _portability.ts/_fixtures.ts)
@@ -92,9 +89,7 @@ function paginationDev(page: import("@playwright/test").Page) {
   return page.evaluate(
     () =>
       (window as unknown as Record<string, unknown>).__lemPagination as
-        | PaginationDev
-        | undefined
-        | null,
+        PaginationDev | undefined | null,
   );
 }
 
@@ -125,9 +120,7 @@ test("ACPT-06 — ingest .md, read, highlight, export, re-import: nothing lost a
     const articleId = idMatch![1]!;
 
     // ── Machine A: read it — pagination settles (engine commits, ok) ──────
-    await expect(
-      pageA.getByRole("heading", { level: 1 }).first(),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(pageA.getByRole("heading", { level: 1 }).first()).toBeVisible({ timeout: 10_000 });
     await expect
       .poll(
         async () => {
@@ -159,8 +152,7 @@ test("ACPT-06 — ingest .md, read, highlight, export, re-import: nothing lost a
     await expect
       .poll(
         async () =>
-          (await readAllRows(pageA, "highlights")).filter((r) => r.articleId === articleId)
-            .length,
+          (await readAllRows(pageA, "highlights")).filter((r) => r.articleId === articleId).length,
         { timeout: 10_000 },
       )
       .toBe(1);
@@ -177,9 +169,10 @@ test("ACPT-06 — ingest .md, read, highlight, export, re-import: nothing lost a
     await expect
       .poll(
         async () =>
-          ((await readRow(pageA, "settings", "reader-prefs"))?.value as
-            | { readingMode?: string }
-            | undefined)?.readingMode ?? "missing",
+          (
+            (await readRow(pageA, "settings", "reader-prefs"))?.value as
+              { readingMode?: string } | undefined
+          )?.readingMode ?? "missing",
         { timeout: 10_000 },
       )
       .toBe("scrolling");
@@ -197,8 +190,7 @@ test("ACPT-06 — ingest .md, read, highlight, export, re-import: nothing lost a
     );
     await expect
       .poll(
-        async () =>
-          (await readRow(pageA, "location", [articleId, revision]))?.graphemeOffset ?? -1,
+        async () => (await readRow(pageA, "location", [articleId, revision]))?.graphemeOffset ?? -1,
         { timeout: 10_000 },
       )
       .toBeGreaterThan(0);
@@ -216,9 +208,7 @@ test("ACPT-06 — ingest .md, read, highlight, export, re-import: nothing lost a
 
     // ── Machine A: export the whole-library bundle through the Settings UI ─
     const panelA = await openSettings(pageA);
-    await expect(
-      panelA.getByRole("button", { name: "Export library bundle" }),
-    ).toBeEnabled();
+    await expect(panelA.getByRole("button", { name: "Export library bundle" })).toBeEnabled();
     const downloadPromise = pageA.waitForEvent("download", { timeout: 20_000 });
     await panelA.getByRole("button", { name: "Export library bundle" }).click();
     const download = await downloadPromise;
@@ -234,9 +224,7 @@ test("ACPT-06 — ingest .md, read, highlight, export, re-import: nothing lost a
     expect(entries["manifest.json"]).toBeDefined();
     expect(bundleJson.schemaVersion).toBe(6); // writers emit v6 (issue #121)
     expect(bundleJson.books).toEqual([]);
-    expect(
-      (bundleJson.articles as Array<{ id: string }>).map((a) => a.id),
-    ).toEqual([articleId]);
+    expect((bundleJson.articles as Array<{ id: string }>).map((a) => a.id)).toEqual([articleId]);
 
     // ── Machine B: import through the Settings UI (preview → Proceed) ─────
     const pageB = await machineB.newPage();
@@ -304,9 +292,9 @@ test("ACPT-06 — ingest .md, read, highlight, export, re-import: nothing lost a
     await pageB.keyboard.press("Escape");
     await expect(panelB).not.toBeVisible();
     await pageB.reload();
-    await expect(
-      pageB.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(pageB.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible({
+      timeout: 10_000,
+    });
     // The row-title contract (Plan 12-05, kept by the variant-A anatomy):
     // the `title-{id}` heading carries the row's name and its stretched
     // open-link lives inside it (the old standalone aria-labelledby anchor
@@ -315,14 +303,10 @@ test("ACPT-06 — ingest .md, read, highlight, export, re-import: nothing lost a
 
     // It opens in the traveled reading mode (scrolling prefs came along) and
     // the whole semantic body mounts.
-    await expect(
-      pageB.getByRole("heading", { level: 1 }).first(),
-    ).toBeVisible({ timeout: 15_000 });
+    await expect(pageB.getByRole("heading", { level: 1 }).first()).toBeVisible({ timeout: 15_000 });
     await pageB.waitForFunction(
       () =>
-        !!document.querySelector(
-          ".article-body:not(.article-body-measurement) [data-block-index]",
-        ),
+        !!document.querySelector(".article-body:not(.article-body-measurement) [data-block-index]"),
       undefined,
       { timeout: 10_000 },
     );
@@ -355,7 +339,7 @@ test("ACPT-06 — ingest .md, read, highlight, export, re-import: nothing lost a
       ({ exclude, min }) => {
         const blocks = Array.from(
           document.querySelectorAll(
-            '[data-block-index]:not(.article-body-measurement [data-block-index])',
+            "[data-block-index]:not(.article-body-measurement [data-block-index])",
           ),
         );
         for (const el of blocks) {
@@ -363,8 +347,7 @@ test("ACPT-06 — ingest .md, read, highlight, export, re-import: nothing lost a
           const rect = el.getBoundingClientRect();
           // The 0..24-char selection renders at the block's TOP: it must
           // start below the 48px header (+ slack) and inside the viewport.
-          const selectionTopVisible =
-            rect.top >= 56 && rect.top < window.innerHeight;
+          const selectionTopVisible = rect.top >= 56 && rect.top < window.innerHeight;
           if (
             !exclude.includes(idx) &&
             !Number.isNaN(idx) &&
@@ -396,14 +379,9 @@ test("ACPT-06 — ingest .md, read, highlight, export, re-import: nothing lost a
     // loadLocation → findScrollTarget → scrollIntoView). The saved deep
     // mid-article position must restore past the article top.
     await pageB.reload();
-    await expect(
-      pageB.getByRole("heading", { level: 1 }).first(),
-    ).toBeVisible({ timeout: 15_000 });
+    await expect(pageB.getByRole("heading", { level: 1 }).first()).toBeVisible({ timeout: 15_000 });
     await expect
-      .poll(
-        async () => pageB.evaluate(() => window.scrollY),
-        { timeout: 15_000 },
-      )
+      .poll(async () => pageB.evaluate(() => window.scrollY), { timeout: 15_000 })
       .toBeGreaterThan(100);
 
     // Paginates identically (D13-09 3): switch to paginated through the real
@@ -420,7 +398,7 @@ test("ACPT-06 — ingest .md, read, highlight, export, re-import: nothing lost a
     const restoredPassage = await pageB.evaluate(() => {
       const blocks = Array.from(
         document.querySelectorAll(
-          '[data-block-index]:not(.article-body-measurement [data-block-index])',
+          "[data-block-index]:not(.article-body-measurement [data-block-index])",
         ),
       );
       for (const el of blocks) {

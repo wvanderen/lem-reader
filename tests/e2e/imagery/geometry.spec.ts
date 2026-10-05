@@ -65,9 +65,7 @@ test.describe("20-08 geometry (IMG-05/IMG-06 — D20-13 reserved geometry)", () 
 
     const boxes = await page.evaluate(() => {
       const imgs = Array.from(
-        document.querySelectorAll(
-          ".article-body:not(.article-body-measurement) figure img",
-        ),
+        document.querySelectorAll(".article-body:not(.article-body-measurement) figure img"),
       );
       return imgs.map((el) => {
         const img = el as HTMLImageElement;
@@ -170,9 +168,7 @@ test.describe("20-08 geometry (IMG-05/IMG-06 — D20-13 reserved geometry)", () 
     await openArticle(page, article.id);
     const pageIdx = await findPageWith(page, "figure .figure-placeholder");
     expect(pageIdx, "the placeholder must live on some paginated page").toBeGreaterThanOrEqual(0);
-    await expect(
-      page.locator(".page-fragment figure .figure-placeholder").first(),
-    ).toBeVisible();
+    await expect(page.locator(".page-fragment figure .figure-placeholder").first()).toBeVisible();
     await expect(page.locator(".page-fragment figure figcaption").first()).toContainText(
       "The refused figure caption.",
     );
@@ -241,9 +237,10 @@ test.describe("20-08 geometry (IMG-05/IMG-06 — D20-13 reserved geometry)", () 
     // The cap resolves to a px used value (calc over 100dvh); fall back to
     // the derived viewport arithmetic when an engine reports the raw calc.
     const parsed = parseFloat(box.maxHeight);
-    const cap = Number.isFinite(parsed) && box.maxHeight.endsWith("px")
-      ? parsed
-      : (await page.evaluate(() => window.innerHeight) - 48 - 2 * 48) * 0.5;
+    const cap =
+      Number.isFinite(parsed) && box.maxHeight.endsWith("px")
+        ? parsed
+        : ((await page.evaluate(() => window.innerHeight)) - 48 - 2 * 48) * 0.5;
     // The stored height (900) far exceeds the cap — the box must CLAMP to
     // the cap (Pitfall 3: no figure box can exceed a page) while the
     // attribute pins the width at the stored 120px (the box never widens;

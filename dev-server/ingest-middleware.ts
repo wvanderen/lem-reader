@@ -167,9 +167,7 @@ export function viteIngestMiddleware(): (server: ViteDevServer) => void {
         // JSON.parse failure — surface as the typed server-error envelope.
         res.statusCode = 400;
         res.setHeader("Content-Type", "application/json");
-        res.end(
-          JSON.stringify({ ok: false, reason: "server-error" } satisfies IngestionResponse),
-        );
+        res.end(JSON.stringify({ ok: false, reason: "server-error" } satisfies IngestionResponse));
         return;
       }
 

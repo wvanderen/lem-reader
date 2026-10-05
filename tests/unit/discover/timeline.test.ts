@@ -62,12 +62,7 @@ describe("buildTimeline (issue #123)", () => {
         dated("b-old", "2026-08-20T00:00:00.000Z"),
       ]),
     ]);
-    expect(timeline.map((entry) => entry.item.title)).toEqual([
-      "b-new",
-      "a-new",
-      "a-old",
-      "b-old",
-    ]);
+    expect(timeline.map((entry) => entry.item.title)).toEqual(["b-new", "a-new", "a-old", "b-old"]);
     // Every entry carries its feed (the timeline labels the feed name).
     expect(timeline.map((entry) => entry.subscription.title)).toEqual([
       "Feed B",
@@ -94,10 +89,7 @@ describe("buildTimeline (issue #123)", () => {
 
   it("gives undated entries a DETERMINISTIC position: feed URL, then cache index", () => {
     const cache = [
-      subscription("a", FEED_A, "Feed A", [
-        undated("a-first"),
-        undated("a-second"),
-      ]),
+      subscription("a", FEED_A, "Feed A", [undated("a-first"), undated("a-second")]),
       subscription("b", FEED_B, "Feed B", [undated("b-only")]),
     ];
     // FEED_A < FEED_B lexicographically: feed A's block precedes feed B's,
@@ -117,18 +109,11 @@ describe("buildTimeline (issue #123)", () => {
     const same = "2026-09-10T00:00:00.000Z";
     const entries = buildTimeline([
       subscription("b", FEED_B, "Feed B", [dated("b-tie", same)]),
-      subscription("a", FEED_A, "Feed A", [
-        dated("a-tie-2", same),
-        dated("a-tie-1", same),
-      ]),
+      subscription("a", FEED_A, "Feed A", [dated("a-tie-2", same), dated("a-tie-1", same)]),
     ]);
     // Feed A precedes feed B; within feed A the cache order stands
     // (a-tie-2 is the cache's first entry).
-    expect(entries.map((entry) => entry.item.title)).toEqual([
-      "a-tie-2",
-      "a-tie-1",
-      "b-tie",
-    ]);
+    expect(entries.map((entry) => entry.item.title)).toEqual(["a-tie-2", "a-tie-1", "b-tie"]);
     // And the comparator alone is a total order: sorting either direction
     // of the input converges to the same sequence.
     const mirrored = [...entries].reverse().sort(compareTimelineEntries);
@@ -150,11 +135,7 @@ describe("buildTimeline (issue #123)", () => {
     ]);
     // The dated entry leads; the two undated entries keep their cache
     // order (rotten is the cache's first entry).
-    expect(timeline.map((entry) => entry.item.title)).toEqual([
-      "dated",
-      "rotten",
-      "plain",
-    ]);
+    expect(timeline.map((entry) => entry.item.title)).toEqual(["dated", "rotten", "plain"]);
   });
 });
 

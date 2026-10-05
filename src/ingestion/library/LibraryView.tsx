@@ -66,10 +66,7 @@ import { deriveLibraryReadingStats, timeReadLabels } from "./readingStats";
 import { filterLibrary, filterBooks } from "./libraryFilter";
 // Issue #114/#115 — the ONE merged library order over articles + books,
 // dispatched on the reader's persisted LibrarySortKind.
-import {
-  orderLibraryEntries,
-  type LibrarySortKind,
-} from "./libraryOrder";
+import { orderLibraryEntries, type LibrarySortKind } from "./libraryOrder";
 // Issue #115 — the sort control (Recently added / Title / Recently opened).
 import { LibrarySortSelect } from "./LibrarySortSelect";
 // Issue #115 — the persisted preference the control reads and writes. The
@@ -348,11 +345,7 @@ export function LibraryView({
       const target = event.target instanceof Element ? event.target.closest("a[href]") : null;
       const href = target?.getAttribute("href") ?? null;
       if (href === null) return;
-      if (
-        href !== "#/highlights" &&
-        href !== "#/discover" &&
-        !href.startsWith("#/article/")
-      ) {
+      if (href !== "#/highlights" && href !== "#/discover" && !href.startsWith("#/article/")) {
         return;
       }
       navLockRef.current = true;
@@ -519,10 +512,7 @@ export function LibraryView({
   // alphabetical; counts never render). Recomputes on snapshot identity
   // change only — an editing session's toggles refresh at the close
   // invalidation, the stale-while-revalidate discipline.
-  const tagStats = useMemo(
-    () => deriveTagStats(snapshot.articles, snapshot.books),
-    [snapshot],
-  );
+  const tagStats = useMemo(() => deriveTagStats(snapshot.articles, snapshot.books), [snapshot]);
 
   // Plan 14-02 (D14-20/23/24) — per-view membership from the ONE policy
   // module, derived in the SAME render body as the switcher counts below
@@ -597,12 +587,9 @@ export function LibraryView({
   // (offset-zero locations count as opened — the D14-18 Unread parity);
   // the other orders ignore it. Filters upstream already preserve relative
   // order, so narrowing never changes the chosen order's shape.
-  const orderedEntries = orderLibraryEntries(
-    visibleItems,
-    visibleBooks,
-    librarySort,
-    { latestLocationByArticleId: locationsByArticle },
-  );
+  const orderedEntries = orderLibraryEntries(visibleItems, visibleBooks, librarySort, {
+    latestLocationByArticleId: locationsByArticle,
+  });
 
   return (
     <main id="main">
@@ -894,9 +881,8 @@ export function LibraryView({
           <>
             <h2>Couldn&apos;t open your library.</h2>
             <p>
-              Your library could not be loaded. Reload the page to try again;
-              if it still fails, check that this browser can use local
-              storage.
+              Your library could not be loaded. Reload the page to try again; if it still fails,
+              check that this browser can use local storage.
             </p>
           </>
         )}

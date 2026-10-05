@@ -43,8 +43,7 @@ async function waitForPagination(page: import("@playwright/test").Page, fixture:
   await page.goto(`${BASE}/#/article/${fixture}`);
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await page.waitForFunction(
-    () =>
-      (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
+    () => (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
     undefined,
     { timeout: 8000 },
   );

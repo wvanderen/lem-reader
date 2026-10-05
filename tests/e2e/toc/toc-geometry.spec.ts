@@ -42,9 +42,7 @@ const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] as const;
 type AxeViolation = { id: string; impact?: string | null | undefined };
 
 function seriousViolations(results: { violations: AxeViolation[] }) {
-  return results.violations.filter((v) =>
-    ["serious", "critical"].includes(v.impact ?? ""),
-  );
+  return results.violations.filter((v) => ["serious", "critical"].includes(v.impact ?? ""));
 }
 
 test.beforeEach(async ({ page }) => {
@@ -61,9 +59,7 @@ function tocTrigger(page: Page) {
 /** Open the TOC panel and await the labeled surface. */
 async function openToc(page: Page): Promise<void> {
   await tocTrigger(page).click();
-  await expect(
-    page.getByRole("heading", { level: 2, name: "Contents" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "Contents" })).toBeVisible();
   await expect(page.locator(".toc-panel")).toBeVisible();
 }
 
@@ -84,9 +80,7 @@ async function expectFocusOnTrigger(page: Page): Promise<void> {
   }
   await expect
     .poll(() =>
-      page.evaluate(
-        () => document.activeElement === document.querySelector(".toc-trigger"),
-      ),
+      page.evaluate(() => document.activeElement === document.querySelector(".toc-trigger")),
     )
     .toBe(true);
 }
@@ -107,48 +101,45 @@ async function expectFocusOnTrigger(page: Page): Promise<void> {
  * either reaches the page, leaves the panel, or rests on a VISIBLE panel
  * control that can activate or Esc-close.
  */
-  async function tabOutcomeFromPanel(
-    page: Page,
-  ): Promise<"page" | "outside-panel" | "visible-panel-control"> {
-    await page.locator(".toc-list a").last().focus();
-    let last: "page" | "outside-panel" | "visible-panel-control" =
-      "visible-panel-control";
-    for (let i = 0; i < 5; i++) {
-      await page.keyboard.press("Tab");
-      const state = await page.evaluate(() => {
-        const panel = document.querySelector(".toc-panel");
-        const el = document.activeElement;
-        if (!el || el === document.body || el === document.documentElement) {
-          // A body stop is TRANSIENT on chromium (the next Tab wraps into
-          // the document start) — the caller keeps walking.
-          return { kind: "outside-panel" as const };
-        }
-        const insidePanel = !!(panel && panel.contains(el));
-        if (!insidePanel) return { kind: "page" as const };
-        // Inside the panel: honest only when the target is a real, visible,
-        // operable control (the entry links) — never a clipped/hidden node.
-        const r = el.getBoundingClientRect();
-        const visible = r.width > 1 && r.height > 1;
-        return {
-          kind: visible
-            ? ("visible-panel-control" as const)
-            : ("stranded" as const),
-        };
-      });
-      if (state.kind === "stranded") continue; // keep walking — never accept
-      last = state.kind;
-      if (state.kind === "page") return "page";
-    }
-    return last;
+async function tabOutcomeFromPanel(
+  page: Page,
+): Promise<"page" | "outside-panel" | "visible-panel-control"> {
+  await page.locator(".toc-list a").last().focus();
+  let last: "page" | "outside-panel" | "visible-panel-control" = "visible-panel-control";
+  for (let i = 0; i < 5; i++) {
+    await page.keyboard.press("Tab");
+    const state = await page.evaluate(() => {
+      const panel = document.querySelector(".toc-panel");
+      const el = document.activeElement;
+      if (!el || el === document.body || el === document.documentElement) {
+        // A body stop is TRANSIENT on chromium (the next Tab wraps into
+        // the document start) — the caller keeps walking.
+        return { kind: "outside-panel" as const };
+      }
+      const insidePanel = !!(panel && panel.contains(el));
+      if (!insidePanel) return { kind: "page" as const };
+      // Inside the panel: honest only when the target is a real, visible,
+      // operable control (the entry links) — never a clipped/hidden node.
+      const r = el.getBoundingClientRect();
+      const visible = r.width > 1 && r.height > 1;
+      return {
+        kind: visible ? ("visible-panel-control" as const) : ("stranded" as const),
+      };
+    });
+    if (state.kind === "stranded") continue; // keep walking — never accept
+    last = state.kind;
+    if (state.kind === "page") return "page";
   }
+  return last;
+}
 
 /** Read {currentPageIdx} from the DEV pagination hook (published on the
  *  first commit; kept fresh on every turn). */
 async function currentPageIdx(page: Page): Promise<number> {
   return page.evaluate(
     () =>
-      (window as unknown as { __lemPagination?: { currentPageIdx: number } })
-        .__lemPagination?.currentPageIdx ?? -1,
+      (window as unknown as { __lemPagination?: { currentPageIdx: number } }).__lemPagination
+        ?.currentPageIdx ?? -1,
   );
 }
 
@@ -214,16 +205,12 @@ test.describe("TOC geometry (18-04 — ORNT-05 edge matrix)", () => {
     if (browserName === "chromium") {
       // Chromium's sequential navigation flows out of the top-layer panel
       // into page content — the literal D18-04 reading.
-      expect(outcome, "Tab must escape the open rail panel into page content").toBe(
-        "page",
-      );
+      expect(outcome, "Tab must escape the open rail panel into page content").toBe("page");
     } else if (browserName === "webkit") {
       // WebKit's first Tab leaves the panel (to body — the documented
       // body-stall quirk then stops further walking). The panel never
       // holds focus captive.
-      expect(outcome, "Tab must leave the open rail panel").not.toBe(
-        "visible-panel-control",
-      );
+      expect(outcome, "Tab must leave the open rail panel").not.toBe("visible-panel-control");
     } else {
       // Firefox (issue #81 rot inventory — engine drift, 2026-09): firefox
       // previously scoped sequential navigation to the top-layer popover
@@ -249,14 +236,11 @@ test.describe("TOC geometry (18-04 — ORNT-05 edge matrix)", () => {
     const outcome = await tabOutcomeFromPanel(page);
     const browserName = test.info().project.name;
     if (browserName === "chromium") {
-      expect(
-        outcome,
-        "Tab must escape the open sheet into the page behind (still non-inert)",
-      ).toBe("page");
-    } else if (browserName === "webkit") {
-      expect(outcome, "Tab must leave the open sheet").not.toBe(
-        "visible-panel-control",
+      expect(outcome, "Tab must escape the open sheet into the page behind (still non-inert)").toBe(
+        "page",
       );
+    } else if (browserName === "webkit") {
+      expect(outcome, "Tab must leave the open sheet").not.toBe("visible-panel-control");
     } else {
       // Firefox (issue #81 rot inventory — engine drift, 2026-09): firefox
       // previously scoped sequential navigation to the top-layer popover
@@ -274,9 +258,7 @@ test.describe("TOC geometry (18-04 — ORNT-05 edge matrix)", () => {
     }
   });
 
-  test("Esc closes from inside the sheet and focus returns to the trigger", async ({
-    page,
-  }) => {
+  test("Esc closes from inside the sheet and focus returns to the trigger", async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 640 });
     await openArticle(page, FIXTURE);
     await openToc(page);
@@ -300,15 +282,14 @@ test.describe("TOC geometry (18-04 — ORNT-05 edge matrix)", () => {
     // DEV hook's current index is the byte-stable truth (the page-indicator
     // text needs the same committed state anyway).
     await page.keyboard.press("ArrowRight");
-    await expect
-      .poll(() => currentPageIdx(page), { timeout: 5_000 })
-      .toBeGreaterThanOrEqual(1);
+    await expect.poll(() => currentPageIdx(page), { timeout: 5_000 }).toBeGreaterThanOrEqual(1);
     const pageBefore = await currentPageIdx(page);
 
     const diagnosticsBefore = await page.evaluate(
       () =>
-        (window as unknown as { __lemDiagnosticBus?: { recent: () => unknown[] } })
-          .__lemDiagnosticBus?.recent().length ?? 0,
+        (
+          window as unknown as { __lemDiagnosticBus?: { recent: () => unknown[] } }
+        ).__lemDiagnosticBus?.recent().length ?? 0,
     );
 
     await openToc(page);
@@ -317,16 +298,15 @@ test.describe("TOC geometry (18-04 — ORNT-05 edge matrix)", () => {
     await page.keyboard.press("Escape");
     await expect(page.locator(".toc-panel")).toBeHidden();
 
-    await expect
-      .poll(() => currentPageIdx(page), { timeout: 5_000 })
-      .toBe(pageBefore);
+    await expect.poll(() => currentPageIdx(page), { timeout: 5_000 }).toBe(pageBefore);
 
     // Pitfall 7's warning sign: opening the overlay must not have resized
     // the reading surface — zero NEW diagnostic events across the cycles.
     const diagnosticsAfter = await page.evaluate(
       () =>
-        (window as unknown as { __lemDiagnosticBus?: { recent: () => unknown[] } })
-          .__lemDiagnosticBus?.recent().length ?? 0,
+        (
+          window as unknown as { __lemDiagnosticBus?: { recent: () => unknown[] } }
+        ).__lemDiagnosticBus?.recent().length ?? 0,
     );
     expect(
       diagnosticsAfter,
@@ -354,9 +334,7 @@ test.describe("TOC geometry (18-04 — ORNT-05 edge matrix)", () => {
         ),
     );
     await page.evaluate(() => window.scrollTo(0, 400));
-    await expect
-      .poll(() => page.evaluate(() => window.scrollY))
-      .toBeGreaterThan(200);
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(200);
     const scrollBefore = await page.evaluate(() => window.scrollY);
 
     await openToc(page);
@@ -365,9 +343,7 @@ test.describe("TOC geometry (18-04 — ORNT-05 edge matrix)", () => {
     await page.keyboard.press("Escape");
     await expect(page.locator(".toc-panel")).toBeHidden();
 
-    await expect
-      .poll(() => page.evaluate(() => window.scrollY))
-      .toBe(scrollBefore);
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(scrollBefore);
   });
 
   test("the 5-button header at 320: one 48px row, no wrap/overflow/overlap, all five buttons ≥44px", async ({
@@ -442,9 +418,7 @@ test.describe("TOC geometry (18-04 — ORNT-05 edge matrix)", () => {
     // CLIPPED: the shell-nav links receive the visually-hidden clip —
     // position:absolute out of flex flow, 1px box, never display:none.
     const clipped = await page.evaluate(() => {
-      const link = document.querySelector(
-        '.app-header[data-destination="reader"] .shell-nav a',
-      );
+      const link = document.querySelector('.app-header[data-destination="reader"] .shell-nav a');
       if (!link) return null;
       const r = link.getBoundingClientRect();
       const style = getComputedStyle(link);
@@ -481,10 +455,9 @@ test.describe("TOC geometry (18-04 — ORNT-05 edge matrix)", () => {
         "the collapsed destination must stay focusable (in the a11y tree — never display:none)",
       ).toBe(true);
       if (st!.focusVisible) {
-        expect(
-          st!.width,
-          "a :focus-visible collapsed destination must un-clip",
-        ).toBeGreaterThan(10);
+        expect(st!.width, "a :focus-visible collapsed destination must un-clip").toBeGreaterThan(
+          10,
+        );
       }
     } else {
       await tocTrigger(page).focus();
@@ -515,9 +488,7 @@ test.describe("TOC geometry (18-04 — ORNT-05 edge matrix)", () => {
     await openArticle(page, FIXTURE);
     await openToc(page);
 
-    const results = await new AxeBuilder({ page })
-      .withTags([...WCAG_TAGS])
-      .analyze();
+    const results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
     const serious = seriousViolations(results);
     expect(serious, JSON.stringify(serious, null, 2)).toEqual([]);
   });

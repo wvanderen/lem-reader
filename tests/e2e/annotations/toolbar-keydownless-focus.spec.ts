@@ -62,10 +62,7 @@ const FIXTURE = FIXTURES[0]!; // essay-long-form — paginated default mode
  * stays mounted (count 1 — engine-matrix completeness only; the SR
  * acceptance pairings are NVDA+Firefox and VoiceOver+Safari).
  */
-const ENGINE_BOUNDARY: Record<
-  string,
-  { collapsed: boolean; toolbarCount: number }
-> = {
+const ENGINE_BOUNDARY: Record<string, { collapsed: boolean; toolbarCount: number }> = {
   chromium: { collapsed: false, toolbarCount: 1 },
   firefox: { collapsed: true, toolbarCount: 0 },
   webkit: { collapsed: true, toolbarCount: 0 },
@@ -81,9 +78,7 @@ const ENGINE_BOUNDARY: Record<
  */
 async function keydownlessFocusChevron(page: Page): Promise<void> {
   await page.evaluate(() => {
-    const chevron = document.querySelector<HTMLButtonElement>(
-      "button.page-turn-previous",
-    );
+    const chevron = document.querySelector<HTMLButtonElement>("button.page-turn-previous");
     chevron?.focus();
   });
 }
@@ -93,18 +88,14 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.describe("G7 keydown-less focus boundary (NVDA browse mode — Plan 13-12)", () => {
-  test("browse-mode emulation pins the per-engine keydown-less boundary", async ({
-    page,
-  }) => {
+  test("browse-mode emulation pins the per-engine keydown-less boundary", async ({ page }) => {
     await openArticle(page, FIXTURE); // paginated is the default mode
     const blockIdx = await findFirstBlockWithText(page, 24);
     expect(blockIdx).not.toBe(-1);
     const ok = await selectRangeInBlock(page, blockIdx, 0, 18);
     expect(ok).toBeTruthy();
     await expect(page.locator(".selection-toolbar")).toBeVisible();
-    await expect(
-      page.getByRole("toolbar", { name: "Highlight actions" }),
-    ).toBeVisible();
+    await expect(page.getByRole("toolbar", { name: "Highlight actions" })).toBeVisible();
 
     // ONE evaluate: install the window-scoped keydown counter — AFTER all
     // setup activity so it starts at 0 (capture phase on window so nothing
@@ -136,18 +127,16 @@ test.describe("G7 keydown-less focus boundary (NVDA browse mode — Plan 13-12)"
       const chevron = document.querySelector("button.page-turn-previous");
       const active = document.activeElement;
       return {
-        keydowns: (window as unknown as { __g7Keydowns: number })
-          .__g7Keydowns,
+        keydowns: (window as unknown as { __g7Keydowns: number }).__g7Keydowns,
         focusOnChevron: chevron !== null && active === chevron,
         collapsed: window.getSelection()?.isCollapsed ?? true,
         toolbarCount: document.querySelectorAll(".selection-toolbar").length,
       };
     });
 
-    expect(
-      state.keydowns,
-      "the keydown-less focus jump delivers ZERO keydowns to the page",
-    ).toBe(0);
+    expect(state.keydowns, "the keydown-less focus jump delivers ZERO keydowns to the page").toBe(
+      0,
+    );
     expect(
       state.focusOnChevron,
       "focus sits on the Previous page chevron (the G7 report's landing spot)",
@@ -232,17 +221,12 @@ test.describe("G7 keydown-less focus boundary (NVDA browse mode — Plan 13-12)"
       focusState.isFocus,
       "one real Tab from the chevron lands focus on the toolbar's Highlight button",
     ).toBe(true);
-    expect(
-      focusState.connected,
-      "toolbar survives the focus move (containment hold)",
-    ).toBe(true);
+    expect(focusState.connected, "toolbar survives the focus move (containment hold)").toBe(true);
 
     // Flow C3: Enter on the focused button creates the highlight + announces
     // via the role=status region + dismisses the toolbar.
     await page.keyboard.press("Enter");
-    await expect(
-      page.locator("mark.highlight[data-highlight-id]").first(),
-    ).toBeVisible();
+    await expect(page.locator("mark.highlight[data-highlight-id]").first()).toBeVisible();
     await expect(announcementRegion(page)).toContainText(/Highlight saved/i);
     await expect(page.locator(".selection-toolbar")).toHaveCount(0);
   });

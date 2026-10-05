@@ -30,11 +30,7 @@ vi.mock("../../src/persistence/db", () => {
 });
 
 import { loadSettings, saveSettings } from "../../src/persistence/settingsStore";
-import {
-  isUnupgradeable,
-  isQuota,
-  classifyStorageError,
-} from "../../src/persistence/errors";
+import { isUnupgradeable, isQuota, classifyStorageError } from "../../src/persistence/errors";
 import { db } from "../../src/persistence/db";
 import { DEFAULT_SETTINGS } from "../../src/settings/defaults";
 import type { ReaderSettings } from "../../src/content/schema";

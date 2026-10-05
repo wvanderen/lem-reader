@@ -152,9 +152,7 @@ function markerFor(status: HighlightEntry["status"]): string {
  * Plan 17-03 (D17-09): every slot reads the EFFECTIVE (reader-owned) values. */
 function citationLine(article: CanonicalArticle): string {
   const author = effectiveAuthor(article);
-  const core = author
-    ? `${author}, *${effectiveTitle(article)}*`
-    : `*${effectiveTitle(article)}*`;
+  const core = author ? `${author}, *${effectiveTitle(article)}*` : `*${effectiveTitle(article)}*`;
   const sourceUrl = effectiveSourceUrl(article);
   const source = sourceUrl ? ` ([source](${sourceUrl}))` : "";
   return `> — ${core}${source}`;
@@ -176,10 +174,12 @@ function citationLine(article: CanonicalArticle): string {
  * (the full span exports; the ellipsis is a review-surface behavior
  * only). */
 function blockLines(article: CanonicalArticle | null, e: HighlightEntry): string[] {
-  const quoteLines = e.highlight.quote.exact.split(BLOCK_SEPARATOR).map(
-    (fragment, index) =>
-      `> ${index === 0 ? markerFor(e.status) : ""}${escapeMarkdownLine(fragment)}`,
-  );
+  const quoteLines = e.highlight.quote.exact
+    .split(BLOCK_SEPARATOR)
+    .map(
+      (fragment, index) =>
+        `> ${index === 0 ? markerFor(e.status) : ""}${escapeMarkdownLine(fragment)}`,
+    );
   const lines = [...quoteLines];
   if (article !== null) {
     lines.push(citationLine(article));

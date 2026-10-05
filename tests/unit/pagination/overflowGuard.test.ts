@@ -37,16 +37,13 @@ import type { PageFragment } from "../../../src/pagination/types";
 // each splitting test can stub its own LineBox[] schedule. The mock factory
 // preserves the real charOffsetToGrapheme + blockNormalizedText exports
 // (those are pure JS and work in jsdom).
-const readLineBoxesMock = vi.fn<
-  (el: HTMLElement, fullText: string, signal: AbortSignal) => LineBox[]
->();
+const readLineBoxesMock =
+  vi.fn<(el: HTMLElement, fullText: string, signal: AbortSignal) => LineBox[]>();
 vi.mock("../../../src/pagination/lineBoxes", async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import("../../../src/pagination/lineBoxes")>();
+  const actual = await importOriginal<typeof import("../../../src/pagination/lineBoxes")>();
   return {
     ...actual,
-    readLineBoxes: (...args: Parameters<typeof actual.readLineBoxes>) =>
-      readLineBoxesMock(...args),
+    readLineBoxes: (...args: Parameters<typeof actual.readLineBoxes>) => readLineBoxesMock(...args),
   };
 });
 
@@ -73,9 +70,7 @@ function parseArticle(blocks: unknown[]): CanonicalArticle {
 
 /** Article with N paragraphs of distinct text (each paragraph = 1 block). */
 function articleWithParagraphs(texts: string[]): CanonicalArticle {
-  return parseArticle(
-    texts.map((t) => ({ kind: "paragraph", content: [{ text: t }] })),
-  );
+  return parseArticle(texts.map((t) => ({ kind: "paragraph", content: [{ text: t }] })));
 }
 
 /** Article with N atomic figures (height-only — content irrelevant to guard). */
@@ -113,25 +108,19 @@ interface StubChild {
 function makeFragmentEl(children: StubChild[]): HTMLElement {
   const fragment = document.createElement("section");
   fragment.className = "page-fragment";
-  fragment.getBoundingClientRect = () =>
-    stubRect({ top: 0, bottom: 0, height: 0 });
+  fragment.getBoundingClientRect = () => stubRect({ top: 0, bottom: 0, height: 0 });
   for (const c of children) {
     const child = document.createElement("div");
     child.setAttribute("data-block-index", String(c.blockIndex));
     if (c.text !== undefined) child.textContent = c.text;
     const height = c.height ?? Math.max(0, c.bottom - c.top);
-    child.getBoundingClientRect = () =>
-      stubRect({ top: c.top, bottom: c.bottom, height });
+    child.getBoundingClientRect = () => stubRect({ top: c.top, bottom: c.bottom, height });
     fragment.appendChild(child);
   }
   return fragment as unknown as HTMLElement;
 }
 
-function stubRect(r: {
-  top: number;
-  bottom: number;
-  height: number;
-}): DOMRect {
+function stubRect(r: { top: number; bottom: number; height: number }): DOMRect {
   return {
     top: r.top,
     bottom: r.bottom,
@@ -146,11 +135,7 @@ function stubRect(r: {
 }
 
 /** Build N uniform line boxes of the given text (each `charsPerLine` wide). */
-function uniformLineBoxes(
-  textLength: number,
-  charsPerLine: number,
-  lineHeight = 20,
-): LineBox[] {
+function uniformLineBoxes(textLength: number, charsPerLine: number, lineHeight = 20): LineBox[] {
   if (textLength === 0) return [];
   const count = Math.max(1, Math.ceil(textLength / charsPerLine));
   const boxes: LineBox[] = [];
@@ -227,9 +212,7 @@ describe("refragmentOverflowingPage — no-overflow pass-through", () => {
   it("returns null when child bottom exactly equals pageBox + tolerance (boundary)", () => {
     const article = articleWithFigures(1);
     const pages: PageFragment[] = [wholeBlockPage(0, 1)];
-    const fragmentEl = makeFragmentEl([
-      { blockIndex: 0, top: 0, bottom: 302 },
-    ]);
+    const fragmentEl = makeFragmentEl([{ blockIndex: 0, top: 0, bottom: 302 }]);
     const { bus } = trackingBus();
 
     const result = refragmentOverflowingPage({
@@ -291,9 +274,7 @@ describe("refragmentOverflowingPage — atomic-block overflow", () => {
       { blockIndex: 0, startGrapheme: 0, endGrapheme: 3 },
       { blockIndex: 1, startGrapheme: 0, endGrapheme: 3 },
     ]);
-    expect(result![1]!.blocks).toEqual([
-      { blockIndex: 2, startGrapheme: 0, endGrapheme: 3 },
-    ]);
+    expect(result![1]!.blocks).toEqual([{ blockIndex: 2, startGrapheme: 0, endGrapheme: 3 }]);
     // pageIndex fields are renumbered 0..length-1.
     expect(result!.map((p) => p.pageIndex)).toEqual([0, 1]);
   });
@@ -404,8 +385,7 @@ describe("refragmentOverflowingPage — splitting-kind overflow", () => {
   it("re-splits a paragraph at the largest widow-legal line whose before-slice fits", () => {
     // Paragraph: 5 lines × 20px = 100px tall, charOffset 0..49.
     // pageBox: 50px (≈2 lines fit before widow). Expected split: line 2.
-    const paragraphText =
-      "01234567890123456789012345678901234567890123456789";
+    const paragraphText = "01234567890123456789012345678901234567890123456789";
     const article = articleWithParagraphs([paragraphText]);
     const pages: PageFragment[] = [
       {
@@ -423,9 +403,7 @@ describe("refragmentOverflowingPage — splitting-kind overflow", () => {
     //   k=3 → adjusted=3 → before-slice = lines[0..3), bottom = 3*20-2=58 > 50
     //   k=2 → adjusted=2 → before-slice = lines[0..2), bottom = 2*20-2=38 ≤ 50 ✓
     // So chosen splitIdx = 2 → charOffset 20 → grapheme offset 20.
-    readLineBoxesMock.mockReturnValue(
-      uniformLineBoxes(50, 10, 20),
-    );
+    readLineBoxesMock.mockReturnValue(uniformLineBoxes(50, 10, 20));
 
     const { bus, events } = trackingBus();
     const result = refragmentOverflowingPage({
@@ -444,13 +422,9 @@ describe("refragmentOverflowingPage — splitting-kind overflow", () => {
     expect(events).toEqual([]); // no fallback
     expect(result!).toHaveLength(2);
     // Current page: [0, 20) graphemes of paragraph block 0.
-    expect(result![0]!.blocks).toEqual([
-      { blockIndex: 0, startGrapheme: 0, endGrapheme: 20 },
-    ]);
+    expect(result![0]!.blocks).toEqual([{ blockIndex: 0, startGrapheme: 0, endGrapheme: 20 }]);
     // Next page: [20, 50) graphemes of paragraph block 0.
-    expect(result![1]!.blocks).toEqual([
-      { blockIndex: 0, startGrapheme: 20, endGrapheme: 50 },
-    ]);
+    expect(result![1]!.blocks).toEqual([{ blockIndex: 0, startGrapheme: 20, endGrapheme: 50 }]);
     expect(readLineBoxesMock).toHaveBeenCalledOnce();
   });
 
@@ -472,9 +446,7 @@ describe("refragmentOverflowingPage — splitting-kind overflow", () => {
       { blockIndex: 1, top: 100, bottom: 350 },
     ]);
     // Only 1 line box → cannot split under the 2/2 rule.
-    readLineBoxesMock.mockReturnValue([
-      { charOffset: 0, topPx: 0, bottomPx: 200 },
-    ]);
+    readLineBoxesMock.mockReturnValue([{ charOffset: 0, topPx: 0, bottomPx: 200 }]);
 
     const { bus, events } = trackingBus();
     const result = refragmentOverflowingPage({
@@ -492,19 +464,14 @@ describe("refragmentOverflowingPage — splitting-kind overflow", () => {
     expect(events).toEqual([]);
     expect(result!).toHaveLength(2);
     // Page 0: just block 0.
-    expect(result![0]!.blocks).toEqual([
-      { blockIndex: 0, startGrapheme: 0, endGrapheme: 5 },
-    ]);
+    expect(result![0]!.blocks).toEqual([{ blockIndex: 0, startGrapheme: 0, endGrapheme: 5 }]);
     // Page 1: just block 1.
-    expect(result![1]!.blocks).toEqual([
-      { blockIndex: 1, startGrapheme: 0, endGrapheme: 4 },
-    ]);
+    expect(result![1]!.blocks).toEqual([{ blockIndex: 1, startGrapheme: 0, endGrapheme: 4 }]);
   });
 
   it("preserves trailing sibling blocks when re-splitting", () => {
     // Two paragraphs on page 0; P0 overflows and gets split; P1 trails.
-    const paragraphText =
-      "01234567890123456789012345678901234567890123456789";
+    const paragraphText = "01234567890123456789012345678901234567890123456789";
     const article = articleWithParagraphs([paragraphText, "next"]);
     const pages: PageFragment[] = [
       {
@@ -542,9 +509,7 @@ describe("refragmentOverflowingPage — splitting-kind overflow", () => {
     expect(result).not.toBeNull();
     expect(result!).toHaveLength(2);
     // Page 0: [0,20) of paragraph 0.
-    expect(result![0]!.blocks).toEqual([
-      { blockIndex: 0, startGrapheme: 0, endGrapheme: 20 },
-    ]);
+    expect(result![0]!.blocks).toEqual([{ blockIndex: 0, startGrapheme: 0, endGrapheme: 20 }]);
     // Page 1: [20,50) of paragraph 0 + whole paragraph 1.
     expect(result![1]!.blocks).toEqual([
       { blockIndex: 0, startGrapheme: 20, endGrapheme: 50 },
@@ -560,9 +525,7 @@ describe("refragmentOverflowingPage — dom-fallback", () => {
     const article = articleWithFigures(1);
     const pages: PageFragment[] = [wholeBlockPage(0, 1)];
     // Block alone is taller than the page box.
-    const fragmentEl = makeFragmentEl([
-      { blockIndex: 0, top: 0, bottom: 500, height: 500 },
-    ]);
+    const fragmentEl = makeFragmentEl([{ blockIndex: 0, top: 0, bottom: 500, height: 500 }]);
     const { bus, events } = trackingBus();
 
     const result = refragmentOverflowingPage({
@@ -589,13 +552,9 @@ describe("refragmentOverflowingPage — dom-fallback", () => {
         blocks: [{ blockIndex: 0, startGrapheme: 0, endGrapheme: 2 }],
       },
     ];
-    const fragmentEl = makeFragmentEl([
-      { blockIndex: 0, top: 0, bottom: 500, height: 500 },
-    ]);
+    const fragmentEl = makeFragmentEl([{ blockIndex: 0, top: 0, bottom: 500, height: 500 }]);
     // 1 line — cannot split under 2/2 rule.
-    readLineBoxesMock.mockReturnValue([
-      { charOffset: 0, topPx: 0, bottomPx: 500 },
-    ]);
+    readLineBoxesMock.mockReturnValue([{ charOffset: 0, topPx: 0, bottomPx: 500 }]);
 
     const { bus, events } = trackingBus();
     const result = refragmentOverflowingPage({
@@ -625,9 +584,7 @@ describe("refragmentOverflowingPage — termination ceiling", () => {
       pageIndex: i,
       blocks: [{ blockIndex: 0, startGrapheme: 0, endGrapheme: 3 }],
     }));
-    const fragmentEl = makeFragmentEl([
-      { blockIndex: 0, top: 0, bottom: 500, height: 500 },
-    ]);
+    const fragmentEl = makeFragmentEl([{ blockIndex: 0, top: 0, bottom: 500, height: 500 }]);
     const { bus, events } = trackingBus();
 
     const result = refragmentOverflowingPage({
@@ -651,9 +608,7 @@ describe("refragmentOverflowingPage — termination ceiling", () => {
   it("respects abort signal (returns null when signal is aborted)", () => {
     const article = articleWithFigures(1);
     const pages: PageFragment[] = [wholeBlockPage(0, 1)];
-    const fragmentEl = makeFragmentEl([
-      { blockIndex: 0, top: 0, bottom: 200 },
-    ]);
+    const fragmentEl = makeFragmentEl([{ blockIndex: 0, top: 0, bottom: 200 }]);
     const { bus, events } = trackingBus();
     const controller = new AbortController();
     controller.abort();
@@ -712,7 +667,9 @@ describe("refragmentOverflowingPage — PAGE-03 invariants preserved", () => {
     expect(result).not.toBeNull();
     // The concatenation of all result page entries' blockIndex/start/end
     // must equal the original input (no block dropped, no entry duplicated).
-    const originalEntries = pages[0]!.blocks.map((b) => `${b.blockIndex}:${b.startGrapheme}-${b.endGrapheme}`);
+    const originalEntries = pages[0]!.blocks.map(
+      (b) => `${b.blockIndex}:${b.startGrapheme}-${b.endGrapheme}`,
+    );
     const resultEntries = result!
       .flatMap((p) => p.blocks)
       .map((b) => `${b.blockIndex}:${b.startGrapheme}-${b.endGrapheme}`);
@@ -822,19 +779,13 @@ describe("refragmentOverflowingPage — PAGE-03 invariants preserved", () => {
     // Verify NO empty slices.
     for (const page of result!) {
       for (const entry of page.blocks) {
-        expect(entry.endGrapheme, "no empty slices").toBeGreaterThan(
-          entry.startGrapheme,
-        );
+        expect(entry.endGrapheme, "no empty slices").toBeGreaterThan(entry.startGrapheme);
       }
     }
     // 2 pages: lead block on P0, offending block whole on P1.
     expect(result!).toHaveLength(2);
-    expect(result![0]!.blocks).toEqual([
-      { blockIndex: 0, startGrapheme: 0, endGrapheme: 4 },
-    ]);
-    expect(result![1]!.blocks).toEqual([
-      { blockIndex: 1, startGrapheme: 0, endGrapheme: 10 },
-    ]);
+    expect(result![0]!.blocks).toEqual([{ blockIndex: 0, startGrapheme: 0, endGrapheme: 4 }]);
+    expect(result![1]!.blocks).toEqual([{ blockIndex: 1, startGrapheme: 0, endGrapheme: 10 }]);
   });
 });
 

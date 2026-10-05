@@ -76,9 +76,7 @@ test.describe("A11Y-01 keyboard shortcuts H/N (05-05)", () => {
     await expect(textarea).toBeVisible();
     await expect(textarea).toHaveValue("");
     // The active element is the textarea (D5-10 focus→textarea on open).
-    const isFocused = await textarea.evaluate(
-      (el) => el === document.activeElement,
-    );
+    const isFocused = await textarea.evaluate((el) => el === document.activeElement);
     expect(isFocused, "textarea is focused on N-open").toBeTruthy();
   });
 
@@ -113,9 +111,7 @@ test.describe("A11Y-01 keyboard shortcuts H/N (05-05)", () => {
     await expect(page.locator("mark.highlight")).toHaveCount(0);
   });
 
-  test("H does not conflict with M (mode toggle) — both fire independently", async ({
-    page,
-  }) => {
+  test("H does not conflict with M (mode toggle) — both fire independently", async ({ page }) => {
     await openArticle(page, FIXTURE);
     const modeToggleBefore = await page
       .getByRole("button", { name: /^Reading mode:/ })
@@ -163,9 +159,7 @@ test.describe("A11Y-01 keyboard shortcuts H/N (05-05)", () => {
     const btn = page
       .locator(".selection-toolbar")
       .getByRole("button", { name: "Highlight", exact: true });
-    const tabFocused = await btn.evaluate(
-      (el) => document.activeElement === el,
-    );
+    const tabFocused = await btn.evaluate((el) => document.activeElement === el);
     expect(tabFocused, "one Tab reaches the Highlight button").toBeTruthy();
     // Native button — focusable. Focus + check in ONE atomic evaluate so
     // firefox doesn't lose focus across the protocol roundtrip between two

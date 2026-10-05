@@ -16,18 +16,13 @@
 // yield placement, output completeness/order, abort-at-yield, fallback,
 // and the default-budget ceiling.
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  DEFAULT_SLICE_BUDGET_MS,
-  measureAllBlocks,
-} from "../../../src/measurement/domMeasurer";
+import { DEFAULT_SLICE_BUDGET_MS, measureAllBlocks } from "../../../src/measurement/domMeasurer";
 import type { BlockMeasurement } from "../../../src/measurement/types";
 
 // ── globalThis.scheduler stub management ────────────────────────────────────
 
 /** Install a scheduler.yield spy stub on globalThis; returns the spy. */
-function installSchedulerSpy(
-  impl?: () => Promise<void>,
-): ReturnType<typeof vi.fn> {
+function installSchedulerSpy(impl?: () => Promise<void>): ReturnType<typeof vi.fn> {
   const g = globalThis as { scheduler?: unknown };
   g.scheduler = { yield: vi.fn(impl ?? (async () => {})) };
   return (g.scheduler as { yield: ReturnType<typeof vi.fn> }).yield;
@@ -90,15 +85,11 @@ function makeArticleEl(blockTexts: string[]): HTMLElement {
  * jsdom). Pins kind mapping, order, completeness, and field shapes.
  */
 function expectedFor(articleEl: HTMLElement): BlockMeasurement[] {
-  return Array.from(
-    articleEl.querySelectorAll<HTMLElement>("[data-block-index]"),
-  ).map((el) => ({
+  return Array.from(articleEl.querySelectorAll<HTMLElement>("[data-block-index]")).map((el) => ({
     kind: "paragraph",
     heightPx: el.getBoundingClientRect().height,
-    marginBlockStartPx:
-      Number.parseFloat(getComputedStyle(el).marginBlockStart) || 0,
-    marginBlockEndPx:
-      Number.parseFloat(getComputedStyle(el).marginBlockEnd) || 0,
+    marginBlockStartPx: Number.parseFloat(getComputedStyle(el).marginBlockStart) || 0,
+    marginBlockEndPx: Number.parseFloat(getComputedStyle(el).marginBlockEnd) || 0,
     lineCount: el.getClientRects().length,
     lineBoxes: [],
   }));
@@ -126,9 +117,7 @@ describe("measureAllBlocks — time-sliced async pass (260820-beo)", () => {
     expect(result).toEqual(expected);
     // First block runs synchronously; every subsequent block follows a yield
     // (budget 0 forces the slice boundary after EVERY block).
-    expect(yieldSpy.mock.calls.length).toBeGreaterThanOrEqual(
-      expected.length - 1,
-    );
+    expect(yieldSpy.mock.calls.length).toBeGreaterThanOrEqual(expected.length - 1);
   });
 
   it("aborting from inside the scheduler.yield spy rejects with AbortError at the yield point", async () => {
@@ -140,9 +129,7 @@ describe("measureAllBlocks — time-sliced async pass (260820-beo)", () => {
     installSchedulerSpy(async () => {
       controller.abort();
     });
-    await expect(
-      measureAllBlocks(articleEl, controller.signal, 0),
-    ).rejects.toThrowError(/abort/i);
+    await expect(measureAllBlocks(articleEl, controller.signal, 0)).rejects.toThrowError(/abort/i);
   });
 
   it("fallback path: with NO scheduler stub, budget 0 still resolves the full result via setTimeout(0)", async () => {
@@ -150,11 +137,7 @@ describe("measureAllBlocks — time-sliced async pass (260820-beo)", () => {
     removeSchedulerStub(); // jsdom-native: no globalThis.scheduler
     const articleEl = makeArticleEl(["x", "y", "z"]);
     const expected = expectedFor(articleEl);
-    const result = await measureAllBlocks(
-      articleEl,
-      new AbortController().signal,
-      0,
-    );
+    const result = await measureAllBlocks(articleEl, new AbortController().signal, 0);
     expect(result).toEqual(expected);
   });
 
@@ -164,10 +147,7 @@ describe("measureAllBlocks — time-sliced async pass (260820-beo)", () => {
     const articleEl = makeArticleEl(["tiny"]);
     const expected = expectedFor(articleEl);
     const yieldSpy = installSchedulerSpy();
-    const result = await measureAllBlocks(
-      articleEl,
-      new AbortController().signal,
-    );
+    const result = await measureAllBlocks(articleEl, new AbortController().signal);
     // Budget not exceeded → zero or few yields; output still correct.
     expect(result).toEqual(expected);
     expect(yieldSpy.mock.calls.length).toBeLessThanOrEqual(1);

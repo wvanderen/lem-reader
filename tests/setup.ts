@@ -59,8 +59,7 @@ if (typeof globalThis.ResizeObserver === "undefined") {
       this.elements.clear();
     }
   }
-  globalThis.ResizeObserver =
-    ResizeObserverStub as unknown as typeof ResizeObserver;
+  globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
 }
 
 // jsdom's document.fonts implementation is a stub FontFaceSet whose

@@ -54,7 +54,9 @@ test.describe("READ-05 progress hairline", () => {
 
   for (const width of [320, 1280]) {
     for (const mode of ["paginated", "scrolling"] as const) {
-      test(`the full progress track sits below the 48px header at ${width}px in ${mode} mode`, async ({ page }) => {
+      test(`the full progress track sits below the 48px header at ${width}px in ${mode} mode`, async ({
+        page,
+      }) => {
         await page.setViewportSize({ width, height: 800 });
         await page.goto(`${BASE}/#/article/${FIXTURE}`);
         await expect(page.locator(".page-viewport")).toBeVisible();
@@ -114,9 +116,7 @@ test.describe("READ-05 progress hairline", () => {
     expect(a, `expected scaleX near 0 at top, got transform=${transform}`).toBeLessThan(0.1);
   });
 
-  test("the fill scaleX increases toward 1 after scrolling to the bottom", async ({
-    page,
-  }) => {
+  test("the fill scaleX increases toward 1 after scrolling to the bottom", async ({ page }) => {
     await page.goto(`${BASE}/#/article/${FIXTURE}`);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 

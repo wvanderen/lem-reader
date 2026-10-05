@@ -65,10 +65,7 @@ import { EPUB_MAX_BYTES } from "../../src/ingestion/types";
 // uses in-browser (the 08-05 "seed graphemeOffset = total for deterministic
 // Finished state" precedent; a one-screen chapter's window scroll can never
 // reach the 98% offset, so the finished state is seeded, not scrolled).
-import {
-  normalizeText,
-  graphemeClusters,
-} from "../../src/content/normalizeText";
+import { normalizeText, graphemeClusters } from "../../src/content/normalizeText";
 import type { CanonicalArticle } from "../../src/content/types";
 
 /** Baseline top-level rows after the wipe: the fresh-library starter
@@ -76,15 +73,10 @@ import type { CanonicalArticle } from "../../src/content/types";
  * regression corpus (FIXTURES) stays URL-addressable but does NOT render
  * as library rows since the Getting Started split (b13eba5) — counting it
  * here was the pre-refresh rot (issue #81). */
-const BASELINE_ROWS = (
-  await import("../../src/fixtures")
-).fixtures.length;
+const BASELINE_ROWS = (await import("../../src/fixtures")).fixtures.length;
 
 /** The calm status line inside the Add dialog's live region. */
-function ingestStatus(
-  page: Page,
-  text: string,
-): import("@playwright/test").Locator {
+function ingestStatus(page: Page, text: string): import("@playwright/test").Locator {
   return page.locator("dialog.add-dialog .status").filter({ hasText: text });
 }
 
@@ -92,11 +84,7 @@ function ingestStatus(
  * and submit via the Add file button (every drive goes through the real
  * header button — ADD-01). Idempotent open: after a REFUSAL the dialog
  * stays open, so consecutive drives in one test skip the trigger click. */
-async function uploadEpub(
-  page: Page,
-  name: string,
-  bytes: Uint8Array,
-): Promise<void> {
+async function uploadEpub(page: Page, name: string, bytes: Uint8Array): Promise<void> {
   await openAddDialog(page);
   await pickSource(page, "file");
   await page.locator("input#ingest-file").setInputFiles({
@@ -112,16 +100,11 @@ async function uploadEpub(
  * disclosure, then dismiss WITHOUT opening the book (the Unread-preserving
  * Close path); the new row is already in the library behind the dialog
  * (the snapshot invalidated while the dialog was up). */
-async function closeBookResult(
-  page: Page,
-  skipText?: string,
-): Promise<void> {
+async function closeBookResult(page: Page, skipText?: string): Promise<void> {
   const dialog = page.locator("dialog.add-dialog");
   await expect(dialog.locator(".add-result")).toBeVisible({ timeout: 15_000 });
   if (skipText !== undefined) {
-    await expect(
-      dialog.locator(".add-result .add-result-skips"),
-    ).toHaveText(skipText);
+    await expect(dialog.locator(".add-result .add-result-skips")).toHaveText(skipText);
   }
   await closeSavedResult(page);
 }
@@ -147,9 +130,9 @@ async function uploadValidBook(page: Page): Promise<void> {
  */
 async function reloadLibrary(page: Page): Promise<void> {
   await page.reload();
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Saved articles" }),
-  ).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible({
+    timeout: 10_000,
+  });
   await expect(page.locator(".library-list > li").first()).toBeVisible({
     timeout: 10_000,
   });
@@ -163,10 +146,7 @@ function bookRow(page: Page): import("@playwright/test").Locator {
 /** Expand the book's chapter region via the real chevron button. */
 async function expandBook(page: Page): Promise<void> {
   await bookRow(page).locator(".book-toggle").click();
-  await expect(bookRow(page).locator(".book-toggle")).toHaveAttribute(
-    "aria-expanded",
-    "true",
-  );
+  await expect(bookRow(page).locator(".book-toggle")).toHaveAttribute("aria-expanded", "true");
 }
 
 /** Wait for an opened chapter's reading surface (pdf-intake waitForOpenedArticle). */
@@ -178,18 +158,14 @@ async function waitForOpenedArticle(page: Page): Promise<void> {
     () => {
       const visible =
         document.querySelector(".page-fragment [data-block-index]") ??
-        document.querySelector(
-          ".article-body:not(.article-body-measurement) [data-block-index]",
-        );
+        document.querySelector(".article-body:not(.article-body-measurement) [data-block-index]");
       return !!visible;
     },
     undefined,
     { timeout: 10_000 },
   );
   await page.waitForFunction(
-    () =>
-      (window as unknown as Record<string, unknown>).__lemPagination !==
-      undefined,
+    () => (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
     undefined,
     { timeout: 10_000 },
   );
@@ -203,10 +179,7 @@ async function readRow(
   key: IDBValidKey,
 ): Promise<Record<string, unknown> | null> {
   type SerializableKey = string | number | (string | number)[];
-  return page.evaluate<
-    Record<string, unknown> | null,
-    { storeName: string; key: SerializableKey }
-  >(
+  return page.evaluate<Record<string, unknown> | null, { storeName: string; key: SerializableKey }>(
     async ({ storeName, key }): Promise<Record<string, unknown> | null> => {
       return new Promise<Record<string, unknown> | null>((resolve) => {
         const req = indexedDB.open("lem-reader");
@@ -252,10 +225,7 @@ async function countRows(page: Page, storeName: string): Promise<number> {
 
 /** Read one article row from Dexie by id (raw — extra index keys intact,
  * harmless to normalizeText which only reads blocks/footnotes/lang). */
-async function readArticleRow(
-  page: Page,
-  articleId: string,
-): Promise<CanonicalArticle> {
+async function readArticleRow(page: Page, articleId: string): Promise<CanonicalArticle> {
   const row = await readRow(page, "articles", articleId);
   expect(row, `article row ${articleId} must exist`).not.toBeNull();
   return row as unknown as CanonicalArticle;
@@ -270,18 +240,14 @@ test.describe("ING-05 — EPUB book intake (SC#1)", () => {
     page,
   }) => {
     await page.goto(`${BASE}/#/`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
 
     await uploadValidBook(page);
     await reloadLibrary(page);
 
     // ONE book row at top level; the chapter articles NEVER render as
     // top-level rows (D12-01) — the count stays fixtures + the one book.
-    await expect(page.locator(".library-list > li")).toHaveCount(
-      BASELINE_ROWS + 1,
-    );
+    await expect(page.locator(".library-list > li")).toHaveCount(BASELINE_ROWS + 1);
     await expect(bookRow(page)).toHaveCount(1);
     await expect(
       bookRow(page).getByRole("heading", { level: 2, name: "The Synthetic Book" }),
@@ -297,12 +263,8 @@ test.describe("ING-05 — EPUB book intake (SC#1)", () => {
 
     // Expand → exactly 4 chapter sub-rows (nested — never top-level).
     await expandBook(page);
-    await expect(
-      bookRow(page).locator(".book-chapter-list > li"),
-    ).toHaveCount(4);
-    await expect(page.locator(".library-list > li")).toHaveCount(
-      BASELINE_ROWS + 1,
-    );
+    await expect(bookRow(page).locator(".book-chapter-list > li")).toHaveCount(4);
+    await expect(page.locator(".library-list > li")).toHaveCount(BASELINE_ROWS + 1);
 
     // The sub-rows reuse the LibraryRow anatomy at h3 (heading order).
     await expect(
@@ -330,15 +292,10 @@ test.describe("ING-05 — EPUB book intake (SC#1)", () => {
     await page.evaluate(() => {
       window.location.hash = "#/";
     });
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
     await expandBook(page);
     await bookRow(page).locator(".book-toggle").click();
-    await expect(bookRow(page).locator(".book-toggle")).toHaveAttribute(
-      "aria-expanded",
-      "false",
-    );
+    await expect(bookRow(page).locator(".book-toggle")).toHaveAttribute("aria-expanded", "false");
     await expect(page.locator(`#${regionId}`)).toBeHidden();
   });
 
@@ -346,9 +303,7 @@ test.describe("ING-05 — EPUB book intake (SC#1)", () => {
     page,
   }) => {
     await page.goto(`${BASE}/#/`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
 
     // mixedAdmissionBook: 2 readerable chapters + 1 pure-image plate →
     // skippedCount 1. Issue #113 (D16-12 as amended): the book success
@@ -365,12 +320,10 @@ test.describe("ING-05 — EPUB book intake (SC#1)", () => {
     await reloadLibrary(page);
     await expect(bookRow(page)).toHaveCount(1);
     await expandBook(page);
-    await expect(
-      bookRow(page).locator(".book-chapter-list > li"),
-    ).toHaveCount(2);
-    await expect(
-      bookRow(page).locator(".book-skip-disclosure"),
-    ).toHaveText("1 chapter could not be read.");
+    await expect(bookRow(page).locator(".book-chapter-list > li")).toHaveCount(2);
+    await expect(bookRow(page).locator(".book-skip-disclosure")).toHaveText(
+      "1 chapter could not be read.",
+    );
 
     // The admitted chapters open like any article.
     await bookRow(page)
@@ -412,9 +365,7 @@ test.describe("ING-05 — EPUB book intake (SC#1)", () => {
 
     // Reload so the chip strip derives essays (article tags ∪ book tags).
     await reloadLibrary(page);
-    const essaysChip = page
-      .locator(".tag-filter .tag-chip")
-      .filter({ hasText: "essays" });
+    const essaysChip = page.locator(".tag-filter .tag-chip").filter({ hasText: "essays" });
     await expect(essaysChip).toBeVisible();
 
     // The tag filter surfaces the BOOK row ONLY — never standalone chapter
@@ -426,9 +377,7 @@ test.describe("ING-05 — EPUB book intake (SC#1)", () => {
 
     // Clear the filter — all rows return (fixtures + the book).
     await essaysChip.click();
-    await expect(page.locator(".library-list > li")).toHaveCount(
-      BASELINE_ROWS + 1,
-    );
+    await expect(page.locator(".library-list > li")).toHaveCount(BASELINE_ROWS + 1);
 
     // Search by a CHAPTER title surfaces the book row (D12-04 — "find the
     // essay collection containing the essay"): one top-level row, the book.
@@ -475,9 +424,7 @@ test.describe("ING-05 — EPUB book intake (SC#1)", () => {
     await page.waitForTimeout(100);
     await page.waitForTimeout(1400);
     const scrollYBefore = await page.evaluate(() => window.scrollY);
-    expect(scrollYBefore, "expected to have scrolled inside chapter 2").toBeGreaterThan(
-      200,
-    );
+    expect(scrollYBefore, "expected to have scrolled inside chapter 2").toBeGreaterThan(200);
 
     // Back to the library → exactly ONE strip entry, the BOOK-level
     // "BookTitle — Chapter N of M" label (D12-02 — chapters never
@@ -485,9 +432,7 @@ test.describe("ING-05 — EPUB book intake (SC#1)", () => {
     await page.evaluate(() => {
       window.location.hash = "#/";
     });
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
     const stripRows = page.locator(".continue-reading-row");
     await expect(stripRows).toHaveCount(1);
     const bookEntry = stripRows.filter({
@@ -509,9 +454,7 @@ test.describe("ING-05 — EPUB book intake (SC#1)", () => {
     expect(Math.abs(scrollYAfter - scrollYBefore)).toBeLessThan(600);
   });
 
-  test("book progress: finishing a chapter advances the book hairline to 1/4", async ({
-    page,
-  }) => {
+  test("book progress: finishing a chapter advances the book hairline to 1/4", async ({ page }) => {
     await page.goto(`${BASE}/#/`);
     await uploadValidBook(page);
     await reloadLibrary(page);
@@ -531,10 +474,7 @@ test.describe("ING-05 — EPUB book intake (SC#1)", () => {
     const chapterId = (chapter1Href ?? "").replace("#/article/", "");
     expect(chapterId).toMatch(/-c00$/);
     const articleRow = await readArticleRow(page, chapterId);
-    const total = graphemeClusters(
-      normalizeText(articleRow),
-      articleRow.lang,
-    ).length;
+    const total = graphemeClusters(normalizeText(articleRow), articleRow.lang).length;
     expect(total).toBeGreaterThan(0);
     await page.evaluate(
       async ({ chapterId, total }) => {
@@ -565,10 +505,7 @@ test.describe("ING-05 — EPUB book intake (SC#1)", () => {
     await reloadLibrary(page);
     const fill = bookRow(page).locator(".book-card .progress-hairline-fill");
     await expect(fill).toBeVisible();
-    await expect(fill).toHaveAttribute(
-      "style",
-      expect.stringContaining("scaleX(0.25)"),
-    );
+    await expect(fill).toHaveAttribute("style", expect.stringContaining("scaleX(0.25)"));
   });
 
   test("remove cascade: book + chapters + highlight + note + location all go (T-12-12)", async ({
@@ -644,9 +581,7 @@ test.describe("ING-05 — EPUB book intake (SC#1)", () => {
     await page.evaluate(() => {
       window.location.hash = "#/";
     });
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
     await expandBook(page);
     // Issue #67 — the remove trigger is the row action cluster's trash
     // icon (the shared .library-row-remove aria-label template); the
@@ -683,13 +618,9 @@ test.describe("ING-05 — EPUB book intake (SC#1)", () => {
     expect(await readRow(page, "location", [chapterId, 1])).toBeNull();
   });
 
-  test("dedupe-refuse: re-uploading identical EPUB bytes stays ONE book", async ({
-    page,
-  }) => {
+  test("dedupe-refuse: re-uploading identical EPUB bytes stays ONE book", async ({ page }) => {
     await page.goto(`${BASE}/#/`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
 
     // First upload — book-level dedupe key = content-hash book id.
     await uploadValidBook(page);
@@ -699,16 +630,12 @@ test.describe("ING-05 — EPUB book intake (SC#1)", () => {
     // Second upload — IDENTICAL builder bytes → calm already-in-library
     // copy (D7-07 at book level), no overwrite, no orphans.
     await uploadEpub(page, "the-synthetic-book.epub", validBookEpub3());
-    await expect(
-      ingestStatus(page, "Already in your library."),
-    ).toBeVisible({ timeout: 15_000 });
+    await expect(ingestStatus(page, "Already in your library.")).toBeVisible({ timeout: 15_000 });
 
     // Still exactly one book row (stable row count).
     await reloadLibrary(page);
     await expect(bookRow(page)).toHaveCount(1);
-    await expect(page.locator(".library-list > li")).toHaveCount(
-      BASELINE_ROWS + 1,
-    );
+    await expect(page.locator(".library-list > li")).toHaveCount(BASELINE_ROWS + 1);
   });
 });
 
@@ -741,9 +668,7 @@ async function waitForOpenedChapter(page: Page): Promise<void> {
     () => {
       const visible =
         document.querySelector(".page-fragment [data-block-index]") ??
-        document.querySelector(
-          ".article-body:not(.article-body-measurement) [data-block-index]",
-        );
+        document.querySelector(".article-body:not(.article-body-measurement) [data-block-index]");
       return !!visible;
     },
     undefined,
@@ -757,21 +682,17 @@ async function waitForOpenedChapter(page: Page): Promise<void> {
  * scrolling mode, so the hook alone can resolve on stale values; the
  * fragment only renders once the CURRENT article's pages committed). */
 async function waitForPaginatedSurface(page: Page): Promise<void> {
-  await expect(
-    page.locator(".page-fragment [data-block-index]").first(),
-  ).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator(".page-fragment [data-block-index]").first()).toBeVisible({
+    timeout: 10_000,
+  });
   await page.waitForTimeout(400);
 }
 
 /** Read the DEV pagination hook's committed state (T-04-16). */
-async function devPagination(
-  page: Page,
-): Promise<{ pagesLength: number; currentPageIdx: number }> {
+async function devPagination(page: Page): Promise<{ pagesLength: number; currentPageIdx: number }> {
   return page.evaluate(() => {
-    const dev = (window as unknown as Record<string, unknown>)
-      .__lemPagination as
-      | { pagesLength: number; currentPageIdx: number }
-      | undefined;
+    const dev = (window as unknown as Record<string, unknown>).__lemPagination as
+      { pagesLength: number; currentPageIdx: number } | undefined;
     return {
       pagesLength: dev?.pagesLength ?? 0,
       currentPageIdx: dev?.currentPageIdx ?? -1,
@@ -819,15 +740,12 @@ async function turnToFinalPage(page: Page): Promise<void> {
  * toolbar renders position:fixed from the selection rect, so the selection
  * must be on-screen).
  */
-async function firstVisibleBlockInViewport(
-  page: Page,
-  minChars = 24,
-): Promise<number> {
+async function firstVisibleBlockInViewport(page: Page, minChars = 24): Promise<number> {
   return page.evaluate(
     ({ min }) => {
       const blocks = Array.from(
         document.querySelectorAll<HTMLElement>(
-          '[data-block-index]:not(.article-body-measurement [data-block-index])',
+          "[data-block-index]:not(.article-body-measurement [data-block-index])",
         ),
       );
       for (const el of blocks) {
@@ -865,15 +783,9 @@ async function openChapterByTitle(page: Page, title: string): Promise<string> {
 /** Seed a FINISHED location row (graphemeOffset = total) via raw IndexedDB —
  * the 08-05/12-05 deterministic precedent (a one-screen chapter's window
  * scroll can never carry the saved offset past the 98% threshold). */
-async function seedFinishedLocation(
-  page: Page,
-  chapterId: string,
-): Promise<void> {
+async function seedFinishedLocation(page: Page, chapterId: string): Promise<void> {
   const articleRow = await readArticleRow(page, chapterId);
-  const total = graphemeClusters(
-    normalizeText(articleRow),
-    articleRow.lang,
-  ).length;
+  const total = graphemeClusters(normalizeText(articleRow), articleRow.lang).length;
   expect(total).toBeGreaterThan(0);
   await page.evaluate(
     async ({ chapterId, total }) => {
@@ -928,9 +840,7 @@ test.describe("ING-05 — chapter reading identity (SC#2)", () => {
     expect(chapter2Row.ingestionMeta?.bookId).toBeTruthy();
 
     // D12-08 — the context line pins the exact literal shape (U+00B7).
-    await expect(page.locator("p.book-context")).toHaveText(
-      "The Synthetic Book · Chapter 2 of 4",
-    );
+    await expect(page.locator("p.book-context")).toHaveText("The Synthetic Book · Chapter 2 of 4");
     // Heading order: the h1 is the chapter title; the context line is a p.
     await expect(
       page.getByRole("heading", { level: 1, name: "Chapter 2. The Carpet-Bag" }),
@@ -944,9 +854,7 @@ test.describe("ING-05 — chapter reading identity (SC#2)", () => {
     await page.waitForTimeout(100);
     await page.waitForTimeout(1400); // location-save debounce
     const scrollYBefore = await page.evaluate(() => window.scrollY);
-    expect(scrollYBefore, "expected to have scrolled inside chapter 2").toBeGreaterThan(
-      200,
-    );
+    expect(scrollYBefore, "expected to have scrolled inside chapter 2").toBeGreaterThan(200);
 
     const blockIndex = await firstVisibleBlockInViewport(page, 24);
     expect(blockIndex, "expected a visible selectable block at the scroll").not.toBe(-1);
@@ -967,9 +875,7 @@ test.describe("ING-05 — chapter reading identity (SC#2)", () => {
     const scrollYRestored = await page.evaluate(() => window.scrollY);
     expect(scrollYRestored, "expected restored scrollY > 100").toBeGreaterThan(100);
     expect(Math.abs(scrollYRestored - scrollYBefore)).toBeLessThan(600);
-    await expect(
-      page.locator(`mark.highlight[data-highlight-id="${highlightId}"]`),
-    ).toHaveCount(1);
+    await expect(page.locator(`mark.highlight[data-highlight-id="${highlightId}"]`)).toHaveCount(1);
 
     // PAGINATED identity: M back — the chapter paginates (page count > 1)
     // and the highlight still renders. The D4-10 scrolling→paginated anchor
@@ -980,13 +886,9 @@ test.describe("ING-05 — chapter reading identity (SC#2)", () => {
     await switchMode(page); // → paginated
     await waitForPaginatedSurface(page);
     const pagination = await devPagination(page);
-    expect(pagination.pagesLength, "expected the chapter to paginate").toBeGreaterThan(
-      1,
-    );
+    expect(pagination.pagesLength, "expected the chapter to paginate").toBeGreaterThan(1);
     await turnToFirstPage(page);
-    const markLocator = page.locator(
-      `mark.highlight[data-highlight-id="${highlightId}"]`,
-    );
+    const markLocator = page.locator(`mark.highlight[data-highlight-id="${highlightId}"]`);
     for (let i = 0; i < pagination.pagesLength + 3; i++) {
       if ((await markLocator.count()) > 0) break;
       await page.keyboard.press("ArrowRight");
@@ -994,9 +896,7 @@ test.describe("ING-05 — chapter reading identity (SC#2)", () => {
     }
     await expect(markLocator).toBeVisible();
     // The context line persists across the mode swap.
-    await expect(page.locator("p.book-context")).toHaveText(
-      "The Synthetic Book · Chapter 2 of 4",
-    );
+    await expect(page.locator("p.book-context")).toHaveText("The Synthetic Book · Chapter 2 of 4");
 
     // Two-mode reading at chapter granularity: M back to scrolling, then
     // location restore works after ANOTHER reload (same tolerances).
@@ -1009,16 +909,12 @@ test.describe("ING-05 — chapter reading identity (SC#2)", () => {
     const scrollYRestoredAgain = await page.evaluate(() => window.scrollY);
     expect(scrollYRestoredAgain).toBeGreaterThan(100);
     expect(Math.abs(scrollYRestoredAgain - scrollYBefore)).toBeLessThan(600);
-    await expect(
-      page.locator(`mark.highlight[data-highlight-id="${highlightId}"]`),
-    ).toHaveCount(1);
+    await expect(page.locator(`mark.highlight[data-highlight-id="${highlightId}"]`)).toHaveCount(1);
   });
 });
 
 test.describe("ING-05 — cross-chapter navigation, resume, progress (SC#3)", () => {
-  test("Next/Previous chapter links navigate calmly in both modes", async ({
-    page,
-  }) => {
+  test("Next/Previous chapter links navigate calmly in both modes", async ({ page }) => {
     // Shrunk viewport (the 12-05 precedent): at the default 1280x720 a
     // synthetic chapter fits ONE page (page 1 IS the final page, so the
     // absent-on-non-final assertion would be geometrically impossible);
@@ -1034,15 +930,11 @@ test.describe("ING-05 — cross-chapter navigation, resume, progress (SC#3)", ()
     // ── Scrolling mode: the Next link sits at the flow end of chapter 1. ──
     const chapter1Id = await openChapterByTitle(page, "Chapter 1. Loomings");
     expect(chapter1Id).toMatch(/-c00$/);
-    await expect(page.locator("p.book-context")).toHaveText(
-      "The Synthetic Book · Chapter 1 of 4",
-    );
+    await expect(page.locator("p.book-context")).toHaveText("The Synthetic Book · Chapter 1 of 4");
     await switchMode(page); // → scrolling (persisted)
     await page.waitForTimeout(700);
     // Scroll to the very end of the chapter flow.
-    await page.evaluate(() =>
-      window.scrollTo(0, document.documentElement.scrollHeight),
-    );
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
     const nextLink = page.locator("a.chapter-next");
     await expect(nextLink).toBeVisible();
     // The lighter title span carries the next chapter's title.
@@ -1056,9 +948,7 @@ test.describe("ING-05 — cross-chapter navigation, resume, progress (SC#3)", ()
     await page.keyboard.press("Enter");
     await page.waitForURL(/#\/article\/epub-[a-z0-9]+-c01$/, { timeout: 10_000 });
     await waitForOpenedChapter(page);
-    await expect(page.locator("p.book-context")).toHaveText(
-      "The Synthetic Book · Chapter 2 of 4",
-    );
+    await expect(page.locator("p.book-context")).toHaveText("The Synthetic Book · Chapter 2 of 4");
 
     // ── Paginated mode: the Next link appears ONLY on the final page. ────
     await switchMode(page); // → paginated (persisted)
@@ -1075,33 +965,23 @@ test.describe("ING-05 — cross-chapter navigation, resume, progress (SC#3)", ()
     await turnToFinalPage(page);
     const paginatedNext = page.locator("a.chapter-next");
     await expect(paginatedNext).toBeVisible();
-    await expect(paginatedNext).toHaveAttribute(
-      "href",
-      /#\/article\/epub-[a-z0-9]+-c02$/,
-    );
+    await expect(paginatedNext).toHaveAttribute("href", /#\/article\/epub-[a-z0-9]+-c02$/);
     await paginatedNext.focus();
     await page.keyboard.press("Enter");
     await page.waitForURL(/#\/article\/epub-[a-z0-9]+-c02$/, { timeout: 10_000 });
     await waitForOpenedChapter(page);
     await waitForPaginatedSurface(page);
-    await expect(page.locator("p.book-context")).toHaveText(
-      "The Synthetic Book · Chapter 3 of 4",
-    );
+    await expect(page.locator("p.book-context")).toHaveText("The Synthetic Book · Chapter 3 of 4");
 
     // Previous link reachable from chapter start (first page) + returns.
     const paginatedPrev = page.locator("a.chapter-prev");
     await expect(paginatedPrev).toBeVisible();
-    await expect(paginatedPrev).toHaveAttribute(
-      "href",
-      /#\/article\/epub-[a-z0-9]+-c01$/,
-    );
+    await expect(paginatedPrev).toHaveAttribute("href", /#\/article\/epub-[a-z0-9]+-c01$/);
     await paginatedPrev.focus();
     await page.keyboard.press("Enter");
     await page.waitForURL(/#\/article\/epub-[a-z0-9]+-c01$/, { timeout: 10_000 });
     await waitForOpenedChapter(page);
-    await expect(page.locator("p.book-context")).toHaveText(
-      "The Synthetic Book · Chapter 2 of 4",
-    );
+    await expect(page.locator("p.book-context")).toHaveText("The Synthetic Book · Chapter 2 of 4");
   });
 
   test("reopen-resume: the strip resumes the LAST-read chapter (D12-07 re-skim wins)", async ({
@@ -1131,9 +1011,7 @@ test.describe("ING-05 — cross-chapter navigation, resume, progress (SC#3)", ()
     await page.evaluate(() => {
       window.location.hash = "#/";
     });
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
     const stripRows = page.locator(".continue-reading-row");
     await expect(stripRows).toHaveCount(1);
     const ch3Entry = stripRows.filter({
@@ -1153,9 +1031,7 @@ test.describe("ING-05 — cross-chapter navigation, resume, progress (SC#3)", ()
     await page.evaluate(() => {
       window.location.hash = "#/";
     });
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
     const chapter1Id = await openChapterByTitle(page, "Chapter 1. Loomings");
     expect(chapter1Id).toMatch(/-c00$/);
     await page.evaluate(() => window.scrollTo(0, 140));
@@ -1165,9 +1041,7 @@ test.describe("ING-05 — cross-chapter navigation, resume, progress (SC#3)", ()
     await page.evaluate(() => {
       window.location.hash = "#/";
     });
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
     await expect(page.locator(".continue-reading-row")).toHaveCount(1);
     const ch1Entry = page
       .locator(".continue-reading-row")
@@ -1197,11 +1071,8 @@ test.describe("ING-05 — cross-chapter navigation, resume, progress (SC#3)", ()
     const chapterIds = await bookRow(page)
       .locator(".book-chapter-list > li a[href^='#/article/']")
       .evaluateAll((links) =>
-        links.map((a) =>
-          (a as HTMLAnchorElement).getAttribute("href")?.replace(
-            "#/article/",
-            "",
-          ) ?? "",
+        links.map(
+          (a) => (a as HTMLAnchorElement).getAttribute("href")?.replace("#/article/", "") ?? "",
         ),
       );
     expect(chapterIds).toHaveLength(4);
@@ -1211,10 +1082,7 @@ test.describe("ING-05 — cross-chapter navigation, resume, progress (SC#3)", ()
     await reloadLibrary(page);
     const fill = bookRow(page).locator(".book-card .progress-hairline-fill");
     await expect(fill).toBeVisible();
-    await expect(fill).toHaveAttribute(
-      "style",
-      expect.stringContaining("scaleX(0.25)"),
-    );
+    await expect(fill).toHaveAttribute("style", expect.stringContaining("scaleX(0.25)"));
     // In-progress → still on the continue strip (resume = chapter 1).
     await expect(
       page
@@ -1238,9 +1106,7 @@ test.describe("ING-05 — cross-chapter navigation, resume, progress (SC#3)", ()
     await expect(page.locator(".continue-reading-row")).toHaveCount(0);
     await expect(bookRow(page)).toHaveCount(1);
     await expect(
-      bookRow(page).locator(
-        ".book-card > .library-row-main > .finished-mark",
-      ),
+      bookRow(page).locator(".book-card > .library-row-main > .finished-mark"),
     ).toHaveText("Finished");
   });
 });
@@ -1250,9 +1116,7 @@ test.describe("ING-05 — refusal no-side-effect gates", () => {
     page,
   }) => {
     await page.goto(`${BASE}/#/`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
     // The 11-05 fixtures-baseline pattern: row count BEFORE any refusal.
     await expect(page.locator(".library-list > li")).toHaveCount(BASELINE_ROWS);
     // The 11-04 earliest-enforcement proof: zero /api/ingest requests for
@@ -1270,15 +1134,15 @@ test.describe("ING-05 — refusal no-side-effect gates", () => {
 
     // 2. Corrupt (not a zip) → the unreadable copy.
     await uploadEpub(page, "broken.epub", corruptNotEpub());
-    await expect(
-      ingestStatus(page, "This file could not be read as an EPUB book."),
-    ).toBeVisible({ timeout: 15_000 });
+    await expect(ingestStatus(page, "This file could not be read as an EPUB book.")).toBeVisible({
+      timeout: 15_000,
+    });
 
     // 3. Empty (no readable chapters) → the no-readable-chapters copy.
     await uploadEpub(page, "empty-book.epub", emptyBook());
-    await expect(
-      ingestStatus(page, "No readable chapters were found in this book."),
-    ).toBeVisible({ timeout: 15_000 });
+    await expect(ingestStatus(page, "No readable chapters were found in this book.")).toBeVisible({
+      timeout: 15_000,
+    });
 
     // Every refusal: calm AND side-effect-free at the SURFACE — the URL
     // stays #/ and the row count is unchanged (no book row, no epub-badged
@@ -1296,14 +1160,13 @@ test.describe("ING-05 — refusal no-side-effect gates", () => {
     const overCap = new Uint8Array(EPUB_MAX_BYTES + 1024);
     overCap.set([0x50, 0x4b, 0x03, 0x04]); // zip magic prefix — irrelevant, refused on size
     await uploadEpub(page, "huge-book.epub", overCap);
-    await expect(
-      ingestStatus(page, "This book is too large to add."),
-    ).toBeVisible({ timeout: 15_000 });
+    await expect(ingestStatus(page, "This book is too large to add.")).toBeVisible({
+      timeout: 15_000,
+    });
     await page.waitForTimeout(500); // settle any in-flight request accounting
-    expect(
-      ingestRequests.length,
-      "over-cap pick must never reach /api/ingest",
-    ).toBe(requestsBeforeOverCap);
+    expect(ingestRequests.length, "over-cap pick must never reach /api/ingest").toBe(
+      requestsBeforeOverCap,
+    );
 
     // Physical Dexie proof after ALL four refusals. reloadLibrary first —
     // the 10-03 discipline: the wipe can complete AFTER the app's initial
@@ -1390,8 +1253,7 @@ test.describe("20-06 — chapter figures (container extraction)", () => {
     await expect(imgs.first()).toHaveAttribute("src", /^blob:/);
     await expect
       .poll(
-        async () =>
-          await imgs.first().evaluate((el) => (el as HTMLImageElement).naturalWidth),
+        async () => await imgs.first().evaluate((el) => (el as HTMLImageElement).naturalWidth),
         { timeout: 10_000 },
       )
       .toBeGreaterThan(0);
@@ -1437,9 +1299,7 @@ test.describe("20-06 — chapter figures (container extraction)", () => {
     await expect
       .poll(async () => await placeholder.count(), { timeout: 10_000 })
       .toBeGreaterThan(0);
-    await expect(placeholder.first()).toContainText(
-      "An animated illustration the reader refuses.",
-    );
+    await expect(placeholder.first()).toContainText("An animated illustration the reader refuses.");
     // The caption survives verbatim inside the reserved box.
     await expect(page.locator("figure figcaption").first()).toHaveText(
       "The refused figure caption survives.",
@@ -1447,9 +1307,7 @@ test.describe("20-06 — chapter figures (container extraction)", () => {
     // The refusal is DISCLOSED, never silent (D12-11 mirror): the chapter
     // article carries the extractionWarnings count.
     const articleRow = await readArticleRow(page, chapterIdFromUrl(page.url()));
-    expect(articleRow.ingestionMeta?.extractionWarnings).toEqual([
-      "1 image could not be included",
-    ]);
+    expect(articleRow.ingestionMeta?.extractionWarnings).toEqual(["1 image could not be included"]);
     // And zero asset rows ride the refused book's save.
     expect(await countRows(page, "assets")).toBe(0);
   });

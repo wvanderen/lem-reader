@@ -5,10 +5,7 @@
 // returning `unknown`, `it.each` for the reject matrix, `expect().toThrow()`
 // for rejects and `expect().toBe()` for acceptances. Zod is the authority.
 import { describe, expect, it } from "vitest";
-import {
-  LocationRecordSchema,
-  ReaderSettingsSchema,
-} from "../../src/content/schema";
+import { LocationRecordSchema, ReaderSettingsSchema } from "../../src/content/schema";
 import { applyTheme } from "../../src/settings/applyTheme";
 import { DEFAULT_SETTINGS } from "../../src/settings/defaults";
 
@@ -60,9 +57,15 @@ describe("ReaderSettingsSchema accepts valid combinations", () => {
   });
 
   it("preserves motion opt-in and accepts legacy settings without it", () => {
-    expect(ReaderSettingsSchema.parse(validSettings({ animatePageTurns: true })).animatePageTurns).toBe(true);
-    expect(ReaderSettingsSchema.parse(validSettings({ animatePageTurns: undefined })).animatePageTurns).toBeUndefined();
-    expect(ReaderSettingsSchema.safeParse(validSettings({ animatePageTurns: "true" })).success).toBe(false);
+    expect(
+      ReaderSettingsSchema.parse(validSettings({ animatePageTurns: true })).animatePageTurns,
+    ).toBe(true);
+    expect(
+      ReaderSettingsSchema.parse(validSettings({ animatePageTurns: undefined })).animatePageTurns,
+    ).toBeUndefined();
+    expect(
+      ReaderSettingsSchema.safeParse(validSettings({ animatePageTurns: "true" })).success,
+    ).toBe(false);
   });
 
   it.each([
@@ -70,9 +73,7 @@ describe("ReaderSettingsSchema accepts valid combinations", () => {
     ["sans", { font: "sans" }],
     ["dyslexic", { font: "dyslexic" }],
   ])("accepts font=%s", (_label, override) => {
-    expect(ReaderSettingsSchema.parse(validSettings(override)).font).toBe(
-      override.font,
-    );
+    expect(ReaderSettingsSchema.parse(validSettings(override)).font).toBe(override.font);
   });
 
   it.each([
@@ -101,9 +102,7 @@ describe("ReaderSettingsSchema accepts valid combinations", () => {
     [82, { measure: 82 }],
     [88, { measure: 88 }],
   ])("accepts measure=%i", (measure, override) => {
-    expect(ReaderSettingsSchema.parse(validSettings(override)).measure).toBe(
-      measure,
-    );
+    expect(ReaderSettingsSchema.parse(validSettings(override)).measure).toBe(measure);
   });
 
   it.each([
@@ -111,9 +110,7 @@ describe("ReaderSettingsSchema accepts valid combinations", () => {
     ["comfortable", { spacing: "comfortable" }],
     ["spacious", { spacing: "spacious" }],
   ])("accepts spacing=%s", (_label, override) => {
-    expect(ReaderSettingsSchema.parse(validSettings(override)).spacing).toBe(
-      override.spacing,
-    );
+    expect(ReaderSettingsSchema.parse(validSettings(override)).spacing).toBe(override.spacing);
   });
 
   it.each([
@@ -121,9 +118,7 @@ describe("ReaderSettingsSchema accepts valid combinations", () => {
     ["light", { theme: "light" }],
     ["dark", { theme: "dark" }],
   ])("accepts theme=%s", (_label, override) => {
-    expect(ReaderSettingsSchema.parse(validSettings(override)).theme).toBe(
-      override.theme,
-    );
+    expect(ReaderSettingsSchema.parse(validSettings(override)).theme).toBe(override.theme);
   });
 });
 
@@ -153,7 +148,10 @@ describe("ReaderSettingsSchema.parse rejects out-of-contract records", () => {
     // for calm loads.
     ["measure below the step range (34)", { measure: 34 }],
     ["measure above the step range (94)", { measure: 94 }],
-    ["the legacy maximum 72 (not a step on the #18 ladder; D21-03 clamps pre-parse at the seams)", { measure: 72 }],
+    [
+      "the legacy maximum 72 (not a step on the #18 ladder; D21-03 clamps pre-parse at the seams)",
+      { measure: 72 },
+    ],
     ["unknown spacing value", { spacing: "snug" }],
     ["unknown theme value", { theme: "solarized" }],
     ["missing font field", { font: undefined }],
@@ -306,9 +304,7 @@ describe("ReaderSettingsSchema hydrates read-aloud prefs for legacy v1/v2 rows (
   });
 
   it("a v2 row missing voice/rate hydrates both via defaults and keeps its version", () => {
-    const parsed = ReaderSettingsSchema.parse(
-      validSettings({ schemaVersion: 2, rate: undefined }),
-    );
+    const parsed = ReaderSettingsSchema.parse(validSettings({ schemaVersion: 2, rate: undefined }));
     expect(parsed.schemaVersion).toBe(2); // schemaVersion is NOT mutated by parse
     expect(parsed.voice).toBeUndefined();
     expect(parsed.rate).toBe(1);
@@ -337,9 +333,7 @@ describe("ReaderSettingsSchema hydrates read-aloud prefs for legacy v1/v2 rows (
 
   it("accepts the band edges (0.5 and 3) and the old 2.1 that moved inside the band", () => {
     for (const rate of [0.5, 2.1, 3]) {
-      const parsed = ReaderSettingsSchema.parse(
-        validSettings({ schemaVersion: 3, rate }),
-      );
+      const parsed = ReaderSettingsSchema.parse(validSettings({ schemaVersion: 3, rate }));
       expect(parsed.rate).toBe(rate);
     }
   });
@@ -410,11 +404,8 @@ describe("measure closed-set agreement (tokens ↔ schema ↔ Constraints)", () 
   it("ReaderSettingsSchema accepts EXACTLY the MEASURE_STEPS values", async () => {
     const { MEASURE_STEPS } = await import("../../src/settings/tokens");
     for (const m of WINDOW) {
-      const accepted =
-        ReaderSettingsSchema.safeParse(validSettings({ measure: m })).success;
-      expect(accepted, `measure ${m}`).toBe(
-        (MEASURE_STEPS as readonly number[]).includes(m),
-      );
+      const accepted = ReaderSettingsSchema.safeParse(validSettings({ measure: m })).success;
+      expect(accepted, `measure ${m}`).toBe((MEASURE_STEPS as readonly number[]).includes(m));
     }
   });
 
@@ -423,9 +414,7 @@ describe("measure closed-set agreement (tokens ↔ schema ↔ Constraints)", () 
     const { ConstraintsSchema } = await import("../../src/measurement/types");
     for (const m of WINDOW) {
       const accepted = ConstraintsSchema.safeParse(constraintsWith(m)).success;
-      expect(accepted, `measure ${m}`).toBe(
-        (MEASURE_STEPS as readonly number[]).includes(m),
-      );
+      expect(accepted, `measure ${m}`).toBe((MEASURE_STEPS as readonly number[]).includes(m));
     }
   });
 });

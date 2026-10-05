@@ -206,7 +206,10 @@ describe("chapter → h2 edge rules (decision #26, all five)", () => {
 
   it("rule 3 — duplicate 0:00 chapter restating the title: dropped + warning", () => {
     const result = transcriptToBlocks(
-      success([seg("a cue", 1000)], [ch("Never Gonna Give You Up", 0), ch("never  gonna give you up", 0)]),
+      success(
+        [seg("a cue", 1000)],
+        [ch("Never Gonna Give You Up", 0), ch("never  gonna give you up", 0)],
+      ),
     );
     expect(result.blocks.filter((b) => b.kind === "heading")).toHaveLength(0);
     expect(result.warnings).toEqual(["2 chapters duplicating the video title were omitted"]);
@@ -247,9 +250,7 @@ describe("chapter → h2 edge rules (decision #26, all five)", () => {
   it("rule 4 — a chapter exactly at a segment start breaks BEFORE that segment", () => {
     const a = cue(100, 0);
     const b = cue(100, 2);
-    const result = transcriptToBlocks(
-      success([seg(a, 0), seg(b, 1000)], [ch("Boundary", 1000)]),
-    );
+    const result = transcriptToBlocks(success([seg(a, 0), seg(b, 1000)], [ch("Boundary", 1000)]));
     expect(result.blocks.map((b) => b.kind)).toEqual(["paragraph", "heading", "paragraph"]);
   });
 
@@ -277,7 +278,13 @@ describe("block-keyed timestamp anchors (ingestionMeta.transcript.segments)", ()
     );
     // expected stream: p(a b) breaks at C1 (its startMs 3000 arrives with the
     // third cue) → h2(C1) p(c) → C2 at the last cue → h2(C2) p(d)
-    expect(result.blocks.map((b) => b.kind)).toEqual(["paragraph", "heading", "paragraph", "heading", "paragraph"]);
+    expect(result.blocks.map((b) => b.kind)).toEqual([
+      "paragraph",
+      "heading",
+      "paragraph",
+      "heading",
+      "paragraph",
+    ]);
     expect(result.anchors).toEqual([
       { blockIndex: 0, startMs: 1000 }, // first paragraph → first segment start
       { blockIndex: 1, startMs: 3000 }, // the chapter h2 participates with its own time
@@ -305,9 +312,7 @@ describe("block-keyed timestamp anchors (ingestionMeta.transcript.segments)", ()
   });
 
   it("timestamps never enter block text (nothing timestamp-bearing reaches the surface)", () => {
-    const result = transcriptToBlocks(
-      success([seg("words only", 1234)], [ch("Chapter", 0)]),
-    );
+    const result = transcriptToBlocks(success([seg("words only", 1234)], [ch("Chapter", 0)]));
     const allText = result.blocks
       .map((b) => (b.kind === "paragraph" || b.kind === "heading" ? textOf(b) : ""))
       .join(" ");

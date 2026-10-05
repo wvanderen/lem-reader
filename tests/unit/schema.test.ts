@@ -121,20 +121,38 @@ describe("BlockSchema discriminates exactly 9 kinds", () => {
     { kind: "paragraph", block: { kind: "paragraph", content: [{ text: "Body." }] } },
     {
       kind: "blockquote",
-      block: { kind: "blockquote", children: [{ kind: "paragraph", content: [{ text: "Quoted" }] }] },
+      block: {
+        kind: "blockquote",
+        children: [{ kind: "paragraph", content: [{ text: "Quoted" }] }],
+      },
     },
     {
       kind: "bulleted-list",
-      block: { kind: "bulleted-list", items: [{ content: [{ kind: "paragraph", content: [{ text: "Item" }] }] }] },
+      block: {
+        kind: "bulleted-list",
+        items: [{ content: [{ kind: "paragraph", content: [{ text: "Item" }] }] }],
+      },
     },
     {
       kind: "numbered-list",
-      block: { kind: "numbered-list", items: [{ content: [{ kind: "paragraph", content: [{ text: "One" }] }] }] },
+      block: {
+        kind: "numbered-list",
+        items: [{ content: [{ kind: "paragraph", content: [{ text: "One" }] }] }],
+      },
     },
-    { kind: "figure", block: { kind: "figure", alt: "A photo", src: "https://example.com/photo.jpg" } },
+    {
+      kind: "figure",
+      block: { kind: "figure", alt: "A photo", src: "https://example.com/photo.jpg" },
+    },
     { kind: "code-block", block: { kind: "code-block", source: "const x = 1;" } },
-    { kind: "footnote-reference", block: { kind: "footnote-reference", footnoteId: "fn-1", marker: "[1]" } },
-    { kind: "unsupported", block: { kind: "unsupported", originalKind: "video", plainDescription: "An embedded video." } },
+    {
+      kind: "footnote-reference",
+      block: { kind: "footnote-reference", footnoteId: "fn-1", marker: "[1]" },
+    },
+    {
+      kind: "unsupported",
+      block: { kind: "unsupported", originalKind: "video", plainDescription: "An embedded video." },
+    },
   ];
 
   it.each(cases)("parses a valid $kind block and preserves .kind", ({ kind, block }) => {
@@ -203,12 +221,13 @@ describe("FigureBlock asset evolution (Phase 20 — IMG-01/IMG-02 substrate)", (
   });
 
   it.each([
-    ["data: URI (D20-02 — the union simply has no arm for it)", "data:image/png;base64,iVBORw0KGgo="],
+    [
+      "data: URI (D20-02 — the union simply has no arm for it)",
+      "data:image/png;base64,iVBORw0KGgo=",
+    ],
     ["javascript: URI (Pitfall 5 survives at parse time)", "javascript:alert(1)"],
   ])("rejects a banned-scheme src: %s", (_label, src) => {
-    expect(() =>
-      BlockSchema.parse({ kind: "figure", alt: "x", src }),
-    ).toThrow();
+    expect(() => BlockSchema.parse({ kind: "figure", alt: "x", src })).toThrow();
   });
 
   it.each([
@@ -217,9 +236,7 @@ describe("FigureBlock asset evolution (Phase 20 — IMG-01/IMG-02 substrate)", (
     ["13 hex chars (too long)", "asset:img-0123456789abc"],
     ["uppercase hex (regex is [a-z0-9])", "asset:img-0123456789AB"],
   ])("rejects a malformed asset ref: %s", (_label, src) => {
-    expect(() =>
-      BlockSchema.parse({ kind: "figure", alt: "x", src }),
-    ).toThrow();
+    expect(() => BlockSchema.parse({ kind: "figure", alt: "x", src })).toThrow();
   });
 
   it.each([

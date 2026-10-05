@@ -25,21 +25,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { CanonicalArticle } from "../../content/types";
 import type { HighlightColor, HighlightRecord, NoteRecord } from "../../content/schema";
-import {
-  deriveQuoteSelector,
-  resolveQuoteSelector,
-} from "../../content/normalizeText";
+import { deriveQuoteSelector, resolveQuoteSelector } from "../../content/normalizeText";
 import type { TextPositionSelector } from "../../content/normalizeText";
 import {
   loadHighlights,
   saveHighlight,
   deleteHighlight as deleteHighlightFromStore,
 } from "../../persistence/highlightsStore";
-import {
-  loadNote,
-  saveNote,
-  deleteNote,
-} from "../../persistence/notesStore";
+import { loadNote, saveNote, deleteNote } from "../../persistence/notesStore";
 // Issue #116 — the ONE tag-write seam (mirrors TagEntry's setArticleTags
 // write-through; already in the reader graph via src/reader/TagEntry.tsx).
 import { setHighlightTags } from "../../ingestion/library/tagsStore";
@@ -66,11 +59,7 @@ export interface ResolvedHighlight {
   note: NoteRecord | null;
 }
 
-export type AnnotationStorageState =
-  | "ok"
-  | "unavailable"
-  | "corrupt"
-  | "unupgradeable";
+export type AnnotationStorageState = "ok" | "unavailable" | "corrupt" | "unupgradeable";
 
 export interface UseAnnotationStateCallbacks {
   /**
@@ -207,11 +196,7 @@ export function useAnnotationState(
         // Eager batch-resolve each record (D5-02 tri-state).
         const resolved: ResolvedHighlight[] = [];
         for (const record of result.highlights) {
-          const resolution = resolveQuoteSelector(
-            article,
-            record.quote,
-            record.position,
-          );
+          const resolution = resolveQuoteSelector(article, record.quote, record.position);
           let status: HighlightStatus;
           let resolvedPosition: TextPositionSelector | null;
           if (resolution === "ambiguous") {
@@ -326,34 +311,31 @@ export function useAnnotationState(
   // doesn't hammer IndexedDB. Empty text = no NoteRecord (the flush deletes
   // the persisted row). Mirrors SettingsContext.tsx scheduleSave/flushSave
   // verbatim, swapping settingsStore.saveSettings → notesStore.saveNote/deleteNote.
-  const commitNoteSave = useCallback(
-    async (id: string, text: string): Promise<void> => {
-      try {
-        if (text.length > 0) {
-          // Upsert: reuse the existing note id if present, else generate one.
-          // The in-memory state already carries the up-to-date note (updateNote
-          // set it optimistically); we read it here so we persist the right id.
-          setHighlights((prev) => {
-            const h = prev.find((x) => x.record.id === id);
-            if (h?.note) {
-              void saveNote(h.note);
-            }
-            return prev; // no state change — just reading
-          });
-          callbacksRef.current.onStatusAnnounce?.("Note saved.");
-        } else {
-          // D5-10 empty-text policy: empty note = no NoteRecord. Delete the
-          // persisted row if one exists.
-          await deleteNote(id);
-        }
-      } catch (e) {
-        const reason = classifyStorageError(e);
-        setStorageState(reason);
-        callbacksRef.current.onStorageError?.(reason);
+  const commitNoteSave = useCallback(async (id: string, text: string): Promise<void> => {
+    try {
+      if (text.length > 0) {
+        // Upsert: reuse the existing note id if present, else generate one.
+        // The in-memory state already carries the up-to-date note (updateNote
+        // set it optimistically); we read it here so we persist the right id.
+        setHighlights((prev) => {
+          const h = prev.find((x) => x.record.id === id);
+          if (h?.note) {
+            void saveNote(h.note);
+          }
+          return prev; // no state change — just reading
+        });
+        callbacksRef.current.onStatusAnnounce?.("Note saved.");
+      } else {
+        // D5-10 empty-text policy: empty note = no NoteRecord. Delete the
+        // persisted row if one exists.
+        await deleteNote(id);
       }
-    },
-    [],
-  );
+    } catch (e) {
+      const reason = classifyStorageError(e);
+      setStorageState(reason);
+      callbacksRef.current.onStorageError?.(reason);
+    }
+  }, []);
 
   const scheduleNoteSave = useCallback(
     (id: string, text: string): void => {
@@ -455,7 +437,7 @@ export function useAnnotationState(
    *     modal popover.
    */
   const commitHighlightEdit = useCallback(
-    async <T,>(args: {
+    async <T>(args: {
       key: string;
       applyOptimistic: (prev: ResolvedHighlight[]) => ResolvedHighlight[];
       seam: () => Promise<T>;
@@ -492,15 +474,11 @@ export function useAnnotationState(
   // shared contract above. See the interface doc for the failure contract.
   const updateHighlightTags = useCallback(
     async (id: string, tags: string[]): Promise<void> => {
-      const previous =
-        highlightsRef.current.find((h) => h.record.id === id)?.record.tags ??
-        [];
+      const previous = highlightsRef.current.find((h) => h.record.id === id)?.record.tags ?? [];
       await commitHighlightEdit({
         key: `tags:${id}`,
         applyOptimistic: (prev) =>
-          prev.map((h) =>
-            h.record.id === id ? { ...h, record: { ...h.record, tags } } : h,
-          ),
+          prev.map((h) => (h.record.id === id ? { ...h, record: { ...h.record, tags } } : h)),
         // setHighlightTags normalizes + routes to the persisted casing
         // (tagsStore.ts) before touching the highlight row only; the routed
         // array mirrors the exact written casings back into the record.
@@ -508,17 +486,13 @@ export function useAnnotationState(
         mirror: (routed) =>
           setHighlights((prev) =>
             prev.map((h) =>
-              h.record.id === id
-                ? { ...h, record: { ...h.record, tags: routed } }
-                : h,
+              h.record.id === id ? { ...h, record: { ...h.record, tags: routed } } : h,
             ),
           ),
         rollback: () =>
           setHighlights((prev) =>
             prev.map((h) =>
-              h.record.id === id
-                ? { ...h, record: { ...h.record, tags: previous } }
-                : h,
+              h.record.id === id ? { ...h, record: { ...h.record, tags: previous } } : h,
             ),
           ),
       });
@@ -533,23 +507,18 @@ export function useAnnotationState(
   const updateHighlightColor = useCallback(
     async (id: string, color: HighlightColor): Promise<void> => {
       const previous =
-        highlightsRef.current.find((h) => h.record.id === id)?.record.color ??
-        "default";
+        highlightsRef.current.find((h) => h.record.id === id)?.record.color ?? "default";
       await commitHighlightEdit({
         key: `color:${id}`,
         // Optimistic in-memory record update so the picker's selection + the
         // rendered <mark> modifier reflect immediately.
         applyOptimistic: (prev) =>
-          prev.map((h) =>
-            h.record.id === id ? { ...h, record: { ...h.record, color } } : h,
-          ),
+          prev.map((h) => (h.record.id === id ? { ...h, record: { ...h.record, color } } : h)),
         seam: () => setHighlightColor(id, color),
         rollback: () =>
           setHighlights((prev) =>
             prev.map((h) =>
-              h.record.id === id
-                ? { ...h, record: { ...h.record, color: previous } }
-                : h,
+              h.record.id === id ? { ...h, record: { ...h.record, color: previous } } : h,
             ),
           ),
       });

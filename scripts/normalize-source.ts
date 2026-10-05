@@ -98,14 +98,38 @@ function tidyRuns(runs: InlineRun[]): InlineRun[] {
 type Block = Record<string, unknown>;
 
 const BLOCK_TAGS = new Set([
-  "p", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "blockquote",
-  "figure", "pre", "table", "hr",
+  "p",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "ul",
+  "ol",
+  "blockquote",
+  "figure",
+  "pre",
+  "table",
+  "hr",
 ]);
 
 /** Elements that are unsupported in Phase 1 → emit one unsupported block. */
 const UNSUPPORTED_TAGS = new Set([
-  "table", "iframe", "video", "audio", "embed", "object", "canvas",
-  "svg", "form", "input", "button", "select", "textarea", "math",
+  "table",
+  "iframe",
+  "video",
+  "audio",
+  "embed",
+  "object",
+  "canvas",
+  "svg",
+  "form",
+  "input",
+  "button",
+  "select",
+  "textarea",
+  "math",
 ]);
 
 /** Find the main article content container heuristically. */
@@ -113,9 +137,9 @@ function findContent(document: Document): Element {
   const candidates = [
     "article",
     "main",
-    "#mw-content-text",        // Wikipedia
-    ".mw-parser-output",        // Wikipedia alt
-    "#content",                 // SEP / generic
+    "#mw-content-text", // Wikipedia
+    ".mw-parser-output", // Wikipedia alt
+    "#content", // SEP / generic
     "#article-content",
     ".article-body",
     "[role='main']",
@@ -143,7 +167,7 @@ function walkBlocks(container: Element, maxBlocks: number): Block[] {
     if (
       el.classList?.contains("mw-editsection") || // Wikipedia [edit] links
       el.getAttribute?.("role") === "navigation" ||
-      el.classList?.contains("reference") && tag === "li" // handled separately
+      (el.classList?.contains("reference") && tag === "li") // handled separately
     ) {
       return;
     }
@@ -208,12 +232,18 @@ function walkBlocks(container: Element, maxBlocks: number): Block[] {
       }
       if (/^https?:/i.test(src)) {
         const caption = cap ? tidyRuns(extractInline(cap, [])) : [];
-        blocks.push({ kind: "figure", alt: alt || "Image from the original article.", src, caption });
+        blocks.push({
+          kind: "figure",
+          alt: alt || "Image from the original article.",
+          src,
+          caption,
+        });
       } else {
         blocks.push({
           kind: "unsupported",
           originalKind: "figure",
-          plainDescription: "PLACEHOLDER: An image whose source could not be normalized. Describe it in reader-facing language.",
+          plainDescription:
+            "PLACEHOLDER: An image whose source could not be normalized. Describe it in reader-facing language.",
         });
       }
       return;
@@ -223,7 +253,7 @@ function walkBlocks(container: Element, maxBlocks: number): Block[] {
       const codeEl = el.querySelector("code");
       const source = (codeEl ?? el).textContent ?? "";
       if (source.trim().length) {
-        const cls = (codeEl?.getAttribute("class") ?? el.getAttribute("class") ?? "");
+        const cls = codeEl?.getAttribute("class") ?? el.getAttribute("class") ?? "";
         const lang = /(?:language|lang)-(\w+)/.exec(cls)?.[1];
         blocks.push({ kind: "code-block", source, ...(lang ? { language: lang } : {}) });
       }
@@ -253,9 +283,14 @@ function walkBlocks(container: Element, maxBlocks: number): Block[] {
 }
 
 /** Extract footnote bodies from a references/references list (Wikipedia/SEP). */
-function extractFootnoteBodies(document: Document, max = 12): { id: string; content: InlineRun[] }[] {
+function extractFootnoteBodies(
+  document: Document,
+  max = 12,
+): { id: string; content: InlineRun[] }[] {
   const out: { id: string; content: InlineRun[] }[] = [];
-  const lists = document.querySelectorAll("ol.references, .references ol, #References ol, section#notes ol, ol.citation");
+  const lists = document.querySelectorAll(
+    "ol.references, .references ol, #References ol, section#notes ol, ol.citation",
+  );
   let n = 0;
   for (const list of Array.from(lists)) {
     for (const li of Array.from(list.children)) {
@@ -278,7 +313,9 @@ function metaContent(document: Document, selector: string): string | undefined {
 }
 
 function buildProvenance(document: Document, sourceHtml: string, sourceUrlHint: string) {
-  const originalHtmlHash = createHash("sha256").update(Buffer.from(sourceHtml, "utf-8")).digest("hex");
+  const originalHtmlHash = createHash("sha256")
+    .update(Buffer.from(sourceHtml, "utf-8"))
+    .digest("hex");
   const title =
     metaContent(document, "meta[property='og:title']") ??
     (document.querySelector("title")?.textContent?.trim() || undefined) ??
@@ -288,11 +325,9 @@ function buildProvenance(document: Document, sourceHtml: string, sourceUrlHint: 
     metaContent(document, "meta[name='author']") ??
     metaContent(document, "meta[property='article:author']") ??
     undefined;
-  const publishedAt =
-    metaContent(document, "meta[property='article:published_time']") ??
-    undefined;
+  const publishedAt = metaContent(document, "meta[property='article:published_time']") ?? undefined;
   const canonical =
-    metaContent(document, "link[rel='canonical']",) ??
+    metaContent(document, "link[rel='canonical']") ??
     metaContent(document, "meta[property='og:url']") ??
     sourceUrlHint;
   return {
@@ -316,7 +351,9 @@ function metaContentAttr(document: Document, selector: string): string | undefin
 async function main() {
   const args = process.argv.slice(2);
   if (args.length < 2) {
-    console.error("Usage: npx tsx scripts/normalize-source.ts <source-html> <slug> [lang] [license] [--max-blocks N] [--source-url URL]");
+    console.error(
+      "Usage: npx tsx scripts/normalize-source.ts <source-html> <slug> [lang] [license] [--max-blocks N] [--source-url URL]",
+    );
     process.exit(1);
   }
   const sourcePath = args[0] as string;
@@ -366,7 +403,9 @@ async function main() {
   console.log(`\nREVIEW REQUIRED (D-09):`);
   console.log(`  1. Verify block coverage against the source article; trim nav/footer noise.`);
   console.log(`  2. REWRITE every unsupported.plainDescription in plain reader-facing language.`);
-  console.log(`  3. Verify footnoteId consistency: every footnote-reference needs a matching footnote body.`);
+  console.log(
+    `  3. Verify footnoteId consistency: every footnote-reference needs a matching footnote body.`,
+  );
   console.log(`  4. Confirm provenance (sourceUrl, author, publishedAt) are real and correct.`);
   console.log(`  5. Confirm id slug "${slug}" matches the filename.`);
   console.log(`  The reviewed JSON is the source of truth, not this script's output.`);

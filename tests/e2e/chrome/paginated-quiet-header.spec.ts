@@ -49,15 +49,12 @@ test.beforeEach(async ({ page }) => {
 });
 
 /** Open the fixture in paginated mode (the default) at 360×640 and wait for the engine. */
-async function openPaginatedAtSmallPhone(
-  page: import("@playwright/test").Page,
-): Promise<void> {
+async function openPaginatedAtSmallPhone(page: import("@playwright/test").Page): Promise<void> {
   await page.setViewportSize({ width: SMALL_PHONE.width, height: SMALL_PHONE.height });
   await page.goto(`${BASE}/#/article/${FIXTURE}`);
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await page.waitForFunction(
-    () =>
-      (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
+    () => (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
     undefined,
     { timeout: 8000 },
   );
@@ -73,9 +70,7 @@ test("paginated: header is a quiet mobile subheader and the back button keeps a 
   await openPaginatedAtSmallPhone(page);
 
   const geom = await page.evaluate(() => {
-    const header = document.querySelector<HTMLElement>(
-      "article.article-body > header",
-    );
+    const header = document.querySelector<HTMLElement>("article.article-body > header");
     const back = document.querySelector<HTMLElement>(
       "article.article-body > header .back-to-library",
     );
@@ -137,9 +132,7 @@ test("scrolling mode keeps the base header register", async ({ page }) => {
     const back = document.querySelector<HTMLElement>(
       "article.article-body > header .back-to-library",
     );
-    const h1 = document.querySelector<HTMLElement>(
-      "article.article-body > header h1",
-    );
+    const h1 = document.querySelector<HTMLElement>("article.article-body > header h1");
     if (!back || !h1) return null;
     return {
       backPosition: getComputedStyle(back).position,

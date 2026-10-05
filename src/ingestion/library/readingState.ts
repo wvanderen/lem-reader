@@ -66,9 +66,7 @@ export function articleReadingState(
   total: number,
 ): ReadingState {
   if (!location) return "unread";
-  return isFinishedOffset(location.graphemeOffset, total)
-    ? "finished"
-    : "in-progress";
+  return isFinishedOffset(location.graphemeOffset, total) ? "finished" : "in-progress";
 }
 
 /**

@@ -31,7 +31,6 @@ import { makeArticle, prepareFreshPage, seedRows } from "../portability/_portabi
 import { ArticleSchema } from "../../../src/content/schema";
 import type { CanonicalArticle } from "../../../src/content/types";
 
-
 // ── Seeded corpus ────────────────────────────────────────────────────────────
 
 const para = (text: string) => ({ kind: "paragraph", content: [{ text, marks: [] }] });
@@ -100,7 +99,10 @@ const HEADINGLESS_ARTICLE = makeArticle({
 test.beforeEach(async ({ page }) => {
   await prepareFreshPage(page);
   await seedRows(page, {
-    articles: [TOC_ARTICLE as unknown as Record<string, unknown>, HEADINGLESS_ARTICLE as unknown as Record<string, unknown>],
+    articles: [
+      TOC_ARTICLE as unknown as Record<string, unknown>,
+      HEADINGLESS_ARTICLE as unknown as Record<string, unknown>,
+    ],
   });
 });
 
@@ -169,9 +171,7 @@ async function openToc(page: Page): Promise<void> {
     panel.addEventListener("focusin", witnessOpenFocus);
   });
   await tocTrigger(page).click();
-  await expect(
-    page.getByRole("heading", { level: 2, name: "Contents" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "Contents" })).toBeVisible();
   await expect(page.locator(".toc-panel")).toBeVisible();
   await expect
     .poll(
@@ -204,11 +204,7 @@ async function expectFocusOnTrigger(page: Page): Promise<void> {
   }
   await expect
     .poll(() =>
-      page.evaluate(
-        () =>
-          document.activeElement ===
-          document.querySelector(".toc-trigger"),
-      ),
+      page.evaluate(() => document.activeElement === document.querySelector(".toc-trigger")),
     )
     .toBe(true);
 }
@@ -243,9 +239,7 @@ async function toggleMode(page: Page): Promise<void> {
  *  clone carries the same [data-block-index] set and must never match). */
 function articleHeading(page: Page, text: string) {
   return page
-    .locator(
-      "[data-block-index]:not(.article-body-measurement [data-block-index])",
-    )
+    .locator("[data-block-index]:not(.article-body-measurement [data-block-index])")
     .filter({ hasText: text })
     .first();
 }
@@ -258,46 +252,31 @@ test.describe("TOC navigation (18-02 — core cells)", () => {
     await expect(tocTrigger(page)).toHaveAttribute("aria-expanded", "false");
 
     await tocTrigger(page).click();
-    await expect(
-      page.getByRole("heading", { level: 2, name: "Contents" }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("navigation", { name: "Table of contents" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 2, name: "Contents" })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Table of contents" })).toBeVisible();
     await expect(tocTrigger(page)).toHaveAttribute("aria-expanded", "true");
 
     // Entries render as links: the synthetic Top entry first, then the
     // article's headings as-is (ORNT-04).
     const nav = page.getByRole("navigation", { name: "Table of contents" });
-    await expect(
-      nav.getByRole("link", { name: "Top of article" }),
-    ).toBeVisible();
-    await expect(
-      nav.getByRole("link", { name: "Alpha section" }),
-    ).toBeVisible();
-    await expect(
-      nav.getByRole("link", { name: "Nested under beta" }),
-    ).toBeVisible();
+    await expect(nav.getByRole("link", { name: "Top of article" })).toBeVisible();
+    await expect(nav.getByRole("link", { name: "Alpha section" })).toBeVisible();
+    await expect(nav.getByRole("link", { name: "Nested under beta" })).toBeVisible();
 
     // The headingless article: the trigger is still there and the panel
     // opens with the honest note (the trigger never plays peekaboo).
     await openArticle(page, HEADINGLESS_ARTICLE.id);
     await tocTrigger(page).click();
+    await expect(page.getByText("This article has no headings.")).toBeVisible();
     await expect(
-      page.getByText("This article has no headings."),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("navigation", { name: "Table of contents" }).getByRole(
-        "link",
-        { name: "Top of article" },
-      ),
+      page
+        .getByRole("navigation", { name: "Table of contents" })
+        .getByRole("link", { name: "Top of article" }),
     ).toBeVisible();
     await expect(tocTrigger(page)).toHaveAttribute("aria-expanded", "true");
   });
 
-  test("(b) Esc closes the panel and focus returns to the trigger", async ({
-    page,
-  }) => {
+  test("(b) Esc closes the panel and focus returns to the trigger", async ({ page }) => {
     await openArticle(page, TOC_ARTICLE.id);
     await openToc(page);
 
@@ -405,9 +384,7 @@ test.describe("TOC navigation (18-02 — core cells)", () => {
     await expect(h1).toHaveAttribute("data-toc-probe", "alive");
   });
 
-  test("(e) the same entry lands on the same heading in both modes (ORNT-03)", async ({
-    page,
-  }) => {
+  test("(e) the same entry lands on the same heading in both modes (ORNT-03)", async ({ page }) => {
     await openArticle(page, TOC_ARTICLE.id);
     await expect(page.locator(".page-fragment").first()).toBeVisible();
 
@@ -428,9 +405,7 @@ test.describe("TOC navigation (18-02 — core cells)", () => {
       .getByRole("link", { name: "Beta section" })
       .click();
     await expect(page.locator(".toc-panel")).toBeHidden();
-    await expect
-      .poll(focusedHeadingText, { timeout: 5_000 })
-      .not.toBeNull();
+    await expect.poll(focusedHeadingText, { timeout: 5_000 }).not.toBeNull();
     const paginatedLanding = await focusedHeadingText();
 
     // Toggle to scrolling and jump through the SAME entry.
@@ -441,9 +416,7 @@ test.describe("TOC navigation (18-02 — core cells)", () => {
       .getByRole("link", { name: "Beta section" })
       .click();
     await expect(page.locator(".toc-panel")).toBeHidden();
-    await expect
-      .poll(focusedHeadingText, { timeout: 5_000 })
-      .not.toBeNull();
+    await expect.poll(focusedHeadingText, { timeout: 5_000 }).not.toBeNull();
     const scrollingLanding = await focusedHeadingText();
 
     // Same structural destination: same heading text, same heading tag —
@@ -452,17 +425,13 @@ test.describe("TOC navigation (18-02 — core cells)", () => {
     expect(paginatedLanding!.tag).toMatch(/^h[2-6]$/);
   });
 
-  test("(f) open-close-open leaves the logical location unchanged (ORNT-05)", async ({
-    page,
-  }) => {
+  test("(f) open-close-open leaves the logical location unchanged (ORNT-05)", async ({ page }) => {
     await openArticle(page, TOC_ARTICLE.id);
     await expect(page.locator(".page-fragment").first()).toBeVisible();
 
     // ── Paginated half: move off page 1, then open/close/open twice.
     await page.keyboard.press("ArrowRight"); // PageTurnControls next turn
-    const pageBefore = await page
-      .locator(".page-indicator")
-      .textContent();
+    const pageBefore = await page.locator(".page-indicator").textContent();
     expect(pageBefore, "page indicator present in paginated mode").toBeTruthy();
 
     await openToc(page);
@@ -471,17 +440,13 @@ test.describe("TOC navigation (18-02 — core cells)", () => {
     await page.keyboard.press("Escape");
     await expect(page.locator(".toc-panel")).toBeHidden();
 
-    const pageAfter = await page
-      .locator(".page-indicator")
-      .textContent();
+    const pageAfter = await page.locator(".page-indicator").textContent();
     expect(pageAfter).toBe(pageBefore);
 
     // ── Scrolling half: establish a scroll offset, then open/close/open.
     await toggleMode(page);
     await page.evaluate(() => window.scrollTo(0, 600));
-    await expect
-      .poll(() => page.evaluate(() => window.scrollY))
-      .toBeGreaterThan(300);
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(300);
     const scrollBefore = await page.evaluate(() => window.scrollY);
 
     await openToc(page);
@@ -490,9 +455,7 @@ test.describe("TOC navigation (18-02 — core cells)", () => {
     await page.keyboard.press("Escape");
     await expect(page.locator(".toc-panel")).toBeHidden();
 
-    await expect
-      .poll(() => page.evaluate(() => window.scrollY))
-      .toBe(scrollBefore);
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(scrollBefore);
   });
 });
 
@@ -538,9 +501,7 @@ test.describe("TOC navigation (18-04 — corpus extension)", () => {
     await seedTocCorpus(page);
   });
 
-  test("(g) skipped levels nest deeper with NO intermediate li (D18-10)", async ({
-    page,
-  }) => {
+  test("(g) skipped levels nest deeper with NO intermediate li (D18-10)", async ({ page }) => {
     await openArticle(page, SKIP_ARTICLE.id);
 
     await openToc(page);
@@ -549,9 +510,7 @@ test.describe("TOC navigation (18-04 — corpus extension)", () => {
     // The h4 entry exists and its li carries depth 2 (parent.depth + 2 —
     // one extra nesting level for the skipped level 3). Scoped to the
     // depth-2 li so the hasText filter cannot match the wrapping ancestor.
-    const h4Li = nav
-      .locator('li[data-depth="2"]')
-      .filter({ hasText: "Sunken cathedral" });
+    const h4Li = nav.locator('li[data-depth="2"]').filter({ hasText: "Sunken cathedral" });
     await expect(h4Li).toHaveCount(1);
 
     // LIST-STRUCTURE depth (never visual indent): the h4's li lives inside
@@ -601,18 +560,14 @@ test.describe("TOC navigation (18-04 — corpus extension)", () => {
     // First entry → the FIRST heading in the article (position disambiguates).
     await entries.first().click();
     await expect(page.locator(".toc-panel")).toBeHidden();
-    await expect
-      .poll(readLandingBlockIndex, { timeout: 5_000 })
-      .not.toBeNull();
+    await expect.poll(readLandingBlockIndex, { timeout: 5_000 }).not.toBeNull();
     const firstLanding = await readLandingBlockIndex();
 
     // Second entry → the SECOND heading (a strictly later block).
     await openToc(page);
     await entries.nth(1).click();
     await expect(page.locator(".toc-panel")).toBeHidden();
-    await expect
-      .poll(readLandingBlockIndex, { timeout: 5_000 })
-      .not.toBeNull();
+    await expect.poll(readLandingBlockIndex, { timeout: 5_000 }).not.toBeNull();
     const secondLanding = await readLandingBlockIndex();
 
     expect(firstLanding).not.toBeNull();
@@ -668,15 +623,9 @@ test.describe("TOC navigation (18-04 — corpus extension)", () => {
     await expect(tocTrigger(page)).toHaveAttribute("aria-expanded", "false");
     await openToc(page);
     const nav = page.getByRole("navigation", { name: "Table of contents" });
-    await expect(
-      nav.getByRole("link", { name: "Top of article" }),
-    ).toBeVisible();
-    await expect(
-      nav.getByRole("link", { name: "Moorings" }),
-    ).toBeVisible();
-    await expect(
-      nav.getByRole("link", { name: "The ferry at dawn" }),
-    ).toBeVisible();
+    await expect(nav.getByRole("link", { name: "Top of article" })).toBeVisible();
+    await expect(nav.getByRole("link", { name: "Moorings" })).toBeVisible();
+    await expect(nav.getByRole("link", { name: "The ferry at dawn" })).toBeVisible();
 
     // The jump machinery is identical too: activation closes the panel and
     // focuses the chapter's own destination heading.
@@ -706,13 +655,9 @@ test.describe("TOC navigation (18-04 — corpus extension)", () => {
     await expect(tocTrigger(page)).toBeVisible();
     await tocTrigger(page).click();
     // …and the panel shows the Top entry + the calm note (same chrome).
-    await expect(
-      page.getByText("This article has no headings."),
-    ).toBeVisible();
+    await expect(page.getByText("This article has no headings.")).toBeVisible();
     const nav = page.getByRole("navigation", { name: "Table of contents" });
-    await expect(
-      nav.getByRole("link", { name: "Top of article" }),
-    ).toBeVisible();
+    await expect(nav.getByRole("link", { name: "Top of article" })).toBeVisible();
     // Top is the ONLY entry — nothing was invented (D18-13 + D18-10).
     await expect(nav.getByRole("link")).toHaveCount(1);
   });
@@ -733,9 +678,7 @@ test.describe("TOC navigation (18-04 — corpus extension)", () => {
 
     // Above the first heading: the Top entry carries aria-current.
     await openToc(page);
-    await expect
-      .poll(currentEntryText, { timeout: 3_000 })
-      .toContain("Top of article");
+    await expect.poll(currentEntryText, { timeout: 3_000 }).toContain("Top of article");
 
     // Scroll down past "Beta section": the current entry FOLLOWS the spy
     // (the panel stays open — the rail is a persistent companion at this
@@ -743,9 +686,7 @@ test.describe("TOC navigation (18-04 — corpus extension)", () => {
     // puts the heading ABOVE the 48px sentinel the spy measures against.
     const beta = articleHeading(page, "Beta section");
     await beta.evaluate((el) => el.scrollIntoView({ block: "start" }));
-    await expect
-      .poll(currentEntryText, { timeout: 3_000 })
-      .toContain("Beta section");
+    await expect.poll(currentEntryText, { timeout: 3_000 }).toContain("Beta section");
     await page.keyboard.press("Escape");
     await expect(page.locator(".toc-panel")).toBeHidden();
 
@@ -838,9 +779,7 @@ test.describe("TOC navigation (18-04 — corpus extension)", () => {
       .getByRole("link", { name: "Sunken cathedral" })
       .click();
     await expect(page.locator(".toc-panel")).toBeHidden();
-    await expect
-      .poll(focusedHeadingText, { timeout: 5_000 })
-      .not.toBeNull();
+    await expect.poll(focusedHeadingText, { timeout: 5_000 }).not.toBeNull();
     const paginatedLanding = await focusedHeadingText();
 
     // Toggle to scrolling and jump through the SAME entry.
@@ -851,9 +790,7 @@ test.describe("TOC navigation (18-04 — corpus extension)", () => {
       .getByRole("link", { name: "Sunken cathedral" })
       .click();
     await expect(page.locator(".toc-panel")).toBeHidden();
-    await expect
-      .poll(focusedHeadingText, { timeout: 5_000 })
-      .not.toBeNull();
+    await expect.poll(focusedHeadingText, { timeout: 5_000 }).not.toBeNull();
     const scrollingLanding = await focusedHeadingText();
 
     expect(scrollingLanding).toEqual(paginatedLanding);
@@ -921,9 +858,7 @@ test.describe("TOC reopen-restore aria-current (headingless-page regression)", (
     // (per-block lengths + the 1-grapheme "\n" BLOCK_SEPARATOR — the same
     // prefix sums pageStartGlobalOffset reads).
     const target = await page.evaluate((headingIndexes) => {
-      const dev = (window as unknown as Record<string, unknown>)[
-        "__lemPagination"
-      ] as {
+      const dev = (window as unknown as Record<string, unknown>)["__lemPagination"] as {
         pages: { blocks: { blockIndex: number; startGrapheme: number }[] }[];
         pagesLength: number;
         blockGraphemeLengths: number[];
@@ -932,10 +867,7 @@ test.describe("TOC reopen-restore aria-current (headingless-page regression)", (
       let pageIdx = -1;
       for (let i = dev.pagesLength - 1; i >= 1; i--) {
         const entries = dev.pages[i]!.blocks;
-        if (
-          entries.length > 0 &&
-          entries.every((e) => !headings.has(e.blockIndex))
-        ) {
+        if (entries.length > 0 && entries.every((e) => !headings.has(e.blockIndex))) {
           pageIdx = i;
           break;
         }
@@ -948,10 +880,7 @@ test.describe("TOC reopen-restore aria-current (headingless-page regression)", (
       }
       return { pageIdx, offset };
     }, HEADING_BLOCK_INDEXES);
-    expect(
-      target,
-      "corpus must derive a headingless deep page at this viewport",
-    ).not.toBeNull();
+    expect(target, "corpus must derive a headingless deep page at this viewport").not.toBeNull();
 
     // Let the app's own initial page-1 location save land first (the 1200ms
     // debounce; latest-wins) so the seeded deep row survives the reload's
@@ -962,9 +891,8 @@ test.describe("TOC reopen-restore aria-current (headingless-page regression)", (
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     await page.waitForFunction(
       (expectedIdx) => {
-        const dev = (window as unknown as Record<string, unknown>)[
-          "__lemPagination"
-        ] as { currentPageIdx: number } | undefined;
+        const dev = (window as unknown as Record<string, unknown>)["__lemPagination"] as
+          { currentPageIdx: number } | undefined;
         return dev !== undefined && dev.currentPageIdx === expectedIdx;
       },
       target!.pageIdx,
@@ -986,12 +914,10 @@ test.describe("TOC reopen-restore aria-current (headingless-page regression)", (
     await expect
       .poll(
         async () =>
-          (
-            await page
-              .getByRole("navigation", { name: "Table of contents" })
-              .locator('[aria-current="true"]')
-              .textContent()
-          ) ?? "",
+          (await page
+            .getByRole("navigation", { name: "Table of contents" })
+            .locator('[aria-current="true"]')
+            .textContent()) ?? "",
         { timeout: 3_000 },
       )
       .toContain("Gamma section");

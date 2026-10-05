@@ -33,8 +33,7 @@ export { FIXTURES };
 export type { TypographyVariant };
 
 /** 1×1 SVG image stub so figure loads don't race selection/pagination. */
-export const PIXEL_SVG =
-  '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>';
+export const PIXEL_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>';
 
 /**
  * Wipe the IndexedDB stores so each test starts from a deterministic
@@ -67,10 +66,7 @@ export type ReadingMode = "paginated" | "scrolling";
  * hook (`window.__lemPagination`) so subsequent page turns + highlight
  * rendering are stable (mirrors the pagination specs' waitForPagination).
  */
-export async function openArticle(
-  page: Page,
-  fixtureId: string,
-): Promise<void> {
+export async function openArticle(page: Page, fixtureId: string): Promise<void> {
   await page.goto(`${BASE}/#/article/${fixtureId}`);
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   // Wait for a visible (selectable) block to mount in EITHER mode.
@@ -81,9 +77,7 @@ export async function openArticle(
       // .page-fragment; in scrolling mode the live .article-body.
       const visible =
         document.querySelector(".page-fragment [data-block-index]") ??
-        document.querySelector(
-          ".article-body:not(.article-body-measurement) [data-block-index]",
-        );
+        document.querySelector(".article-body:not(.article-body-measurement) [data-block-index]");
       return !!visible;
     },
     undefined,
@@ -93,9 +87,7 @@ export async function openArticle(
   // capture path don't race an in-flight repagination (mirrors
   // mode-switch-anchor.spec.ts waitForPagination).
   await page.waitForFunction(
-    () =>
-      (window as unknown as Record<string, unknown>).__lemPagination !==
-      undefined,
+    () => (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
     undefined,
     { timeout: 10_000 },
   );
@@ -113,9 +105,7 @@ export function visibleReadingSurface(page: Page): Locator {
   // .page-fragment is only mounted in paginated mode; .article-body (NOT
   // .article-body-measurement) is the scrolling surface. Both can be
   // queried; first-match wins per mode.
-  return page
-    .locator(".page-fragment, .article-body:not(.article-body-measurement)")
-    .first();
+  return page.locator(".page-fragment, .article-body:not(.article-body-measurement)").first();
 }
 
 /**
@@ -172,10 +162,7 @@ export async function selectRangeInBlock(
       });
       if (!visibleBlock) return false;
       // Walk text nodes, accumulating length to find the start + end anchors.
-      const walker = document.createTreeWalker(
-        visibleBlock,
-        NodeFilter.SHOW_TEXT,
-      );
+      const walker = document.createTreeWalker(visibleBlock, NodeFilter.SHOW_TEXT);
       const texts: { node: Text; start: number; end: number }[] = [];
       let cursor = 0;
       let n = walker.nextNode() as Text | null;
@@ -227,7 +214,7 @@ export async function findFirstBlockWithTextAsync(
     ({ exclude, min }) => {
       const blocks = Array.from(
         document.querySelectorAll(
-          '[data-block-index]:not(.article-body-measurement [data-block-index])',
+          "[data-block-index]:not(.article-body-measurement [data-block-index])",
         ),
       );
       for (const el of blocks) {
@@ -252,10 +239,7 @@ export async function findFirstBlockWithTextAsync(
  * Used by specs that need a known-good capture target without hard-coding a
  * block index that may vary across fixtures or paginated page fragments.
  */
-export async function findFirstBlockWithText(
-  page: Page,
-  minChars = 24,
-): Promise<number> {
+export async function findFirstBlockWithText(page: Page, minChars = 24): Promise<number> {
   return findFirstBlockWithTextAsync(page, [], minChars);
 }
 
@@ -459,10 +443,7 @@ export async function seedNoteRecord(
  * `[articleId+revision]` (db.ts L89), so a standalone articleId index is
  * not available; a full scan is the simplest cross-engine-safe path.
  */
-export async function countHighlightsInDexie(
-  page: Page,
-  articleId: string,
-): Promise<number> {
+export async function countHighlightsInDexie(page: Page, articleId: string): Promise<number> {
   return page.evaluate(async (aid) => {
     const db = await new Promise<IDBDatabase>((resolve, reject) => {
       const req = indexedDB.open("lem-reader");
@@ -497,13 +478,11 @@ export async function countHighlightsInDexie(
  * hook. Returns 0 when the hook is not yet populated (the caller treats
  * 0 as "no pages yet").
  */
-export async function totalPages(
-  page: import("@playwright/test").Page,
-): Promise<number> {
+export async function totalPages(page: import("@playwright/test").Page): Promise<number> {
   return page.evaluate(
     () =>
-      (window as unknown as { __lemPagination?: { pagesLength: number } })
-        .__lemPagination?.pagesLength ?? 0,
+      (window as unknown as { __lemPagination?: { pagesLength: number } }).__lemPagination
+        ?.pagesLength ?? 0,
   );
 }
 
@@ -511,13 +490,11 @@ export async function totalPages(
  * Resolve the current 0-based page index from window.__lemPagination.
  * Returns 0 when the hook is not yet populated.
  */
-export async function currentPageIdx(
-  page: import("@playwright/test").Page,
-): Promise<number> {
+export async function currentPageIdx(page: import("@playwright/test").Page): Promise<number> {
   return page.evaluate(
     () =>
-      (window as unknown as { __lemPagination?: { currentPageIdx: number } })
-        .__lemPagination?.currentPageIdx ?? 0,
+      (window as unknown as { __lemPagination?: { currentPageIdx: number } }).__lemPagination
+        ?.currentPageIdx ?? 0,
   );
 }
 
@@ -568,16 +545,12 @@ export async function findDisjointBlockWalkingPages(
       ({ exclude, min }) => {
         const blocks = Array.from(
           document.querySelectorAll(
-            '[data-block-index]:not(.article-body-measurement [data-block-index])',
+            "[data-block-index]:not(.article-body-measurement [data-block-index])",
           ),
         );
         for (const el of blocks) {
           const i = Number(el!.getAttribute("data-block-index"));
-          if (
-            !exclude.includes(i) &&
-            !Number.isNaN(i) &&
-            (el!.textContent?.length ?? 0) >= min
-          ) {
+          if (!exclude.includes(i) && !Number.isNaN(i) && (el!.textContent?.length ?? 0) >= min) {
             return i;
           }
         }
@@ -623,10 +596,7 @@ export async function selectRangeBetweenBlocks(
 ): Promise<boolean> {
   return page.evaluate(
     ({ a, b }) => {
-      const scopeFor = (ep: {
-        blockIndex: number;
-        li?: number;
-      }): HTMLElement | null => {
+      const scopeFor = (ep: { blockIndex: number; li?: number }): HTMLElement | null => {
         const candidates = Array.from(
           document.querySelectorAll(`[data-block-index="${ep.blockIndex}"]`),
         );
@@ -657,12 +627,8 @@ export async function selectRangeBetweenBlocks(
         }
         if (texts.length === 0) return null;
         const hit =
-          texts.find((t) => ep.offset >= t.start && ep.offset < t.end) ??
-          texts[texts.length - 1]!;
-        const local = Math.max(
-          0,
-          Math.min(ep.offset - hit.start, hit.end - hit.start),
-        );
+          texts.find((t) => ep.offset >= t.start && ep.offset < t.end) ?? texts[texts.length - 1]!;
+        const local = Math.max(0, Math.min(ep.offset - hit.start, hit.end - hit.start));
         return { node: hit.node, offset: local };
       };
       const scopeA = scopeFor(a);
@@ -695,11 +661,9 @@ export async function markTextsForHighlight(
 ): Promise<string[]> {
   return page.evaluate(
     (id) =>
-      Array.from(
-        document.querySelectorAll(
-          `mark.highlight[data-highlight-id="${id}"]`,
-        ),
-      ).map((m) => m.textContent ?? ""),
+      Array.from(document.querySelectorAll(`mark.highlight[data-highlight-id="${id}"]`)).map(
+        (m) => m.textContent ?? "",
+      ),
     highlightId,
   );
 }

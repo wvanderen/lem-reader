@@ -25,24 +25,24 @@
 //                                        destructive handler (Pitfall 8).
 // Save failures update storageState to the classified reason and NEVER throw
 // to the reader.
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { ReactNode } from "react";
 import type { ReaderSettings } from "../content/schema";
 import { DEFAULT_SETTINGS } from "./defaults";
 import { applyTheme } from "./applyTheme";
-import {
-  clearSettingsMirror,
-  readSettingsMirror,
-  writeSettingsMirror,
-} from "./settingsMirror";
+import { clearSettingsMirror, readSettingsMirror, writeSettingsMirror } from "./settingsMirror";
 import { loadSettings, saveSettings } from "../persistence/settingsStore";
 import { classifyStorageError } from "../persistence/errors";
 
-export type StorageState =
-  | "ok"
-  | "unavailable"
-  | "corrupt"
-  | "unupgradeable";
+export type StorageState = "ok" | "unavailable" | "corrupt" | "unupgradeable";
 
 interface SettingsContextValue {
   settings: ReaderSettings;
@@ -105,10 +105,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
           // NOW so the next cold load in this same session paints the
           // corrected values. Failure handling lives inside the seam
           // (silent no-op — Pitfall 4).
-          if (
-            JSON.stringify(readSettingsMirror()) !==
-            JSON.stringify(result.settings)
-          ) {
+          if (JSON.stringify(readSettingsMirror()) !== JSON.stringify(result.settings)) {
             writeSettingsMirror(result.settings);
           }
         } else {

@@ -43,8 +43,7 @@ async function gotoPaginated(page: import("@playwright/test").Page): Promise<Pag
   await page.goto(`${BASE}/#/article/${FIXTURE}`);
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await page.waitForFunction(
-    () =>
-      (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
+    () => (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
     undefined,
     { timeout: 8000 },
   );
@@ -170,10 +169,7 @@ test.describe("PAGE-02 page-turn controls (04-05)", () => {
     const maxScroll = await page.evaluate(() =>
       Math.max(0, document.documentElement.scrollHeight - window.innerHeight),
     );
-    expect(
-      maxScroll,
-      "paginated mode must not expose a document scroll seam",
-    ).toBe(0);
+    expect(maxScroll, "paginated mode must not expose a document scroll seam").toBe(0);
     await page.evaluate(() => window.scrollTo(0, 1000));
 
     const surfaceBeforeWheel = await page
@@ -184,9 +180,9 @@ test.describe("PAGE-02 page-turn controls (04-05)", () => {
     await page.waitForTimeout(150);
     expect(await page.evaluate(() => window.scrollY)).toBe(0);
     expect(
-      await page.locator(".paginated-surface").evaluate((surface) =>
-        surface.getBoundingClientRect().top,
-      ),
+      await page
+        .locator(".paginated-surface")
+        .evaluate((surface) => surface.getBoundingClientRect().top),
       "wheel input must not displace the paginated surface",
     ).toBe(surfaceBeforeWheel);
     expect(
@@ -216,24 +212,23 @@ test.describe("PAGE-02 page-turn controls (04-05)", () => {
     expect(pageErrors, "no uncaught errors during document scroll").toEqual([]);
   });
 
-  test("content-triggered turns hand VoiceOver to a fresh page boundary", async ({
-    page,
-  }) => {
+  test("content-triggered turns hand VoiceOver to a fresh page boundary", async ({ page }) => {
     await gotoPaginated(page);
 
     // Model a screen-reader/content-origin turn by placing DOM focus on the
     // current paragraph. The temporary attribute belongs only to this old
     // page and must not be recreated by the focus-restoration implementation.
-    await page.locator(".page-fragment p").first().evaluate((paragraph) => {
-      paragraph.setAttribute("tabindex", "-1");
-      paragraph.focus();
-    });
+    await page
+      .locator(".page-fragment p")
+      .first()
+      .evaluate((paragraph) => {
+        paragraph.setAttribute("tabindex", "-1");
+        paragraph.focus();
+      });
     const scrollBeforeTurn = await page.evaluate(() => window.scrollY);
     await page.keyboard.press("PageDown");
 
-    await expect
-      .poll(() => currentPage(page), { message: "PageDown advances to page 2" })
-      .toBe(1);
+    await expect.poll(() => currentPage(page), { message: "PageDown advances to page 2" }).toBe(1);
     const pageBoundary = page.getByRole("heading", {
       name: "Page 2 begins",
       level: 2,
@@ -255,9 +250,7 @@ test.describe("PAGE-02 page-turn controls (04-05)", () => {
         firstBlockTop: firstBlockRect.top,
       };
     });
-    expect(boundaryGeometry.boundaryTop).toBeGreaterThanOrEqual(
-      boundaryGeometry.viewportTop,
-    );
+    expect(boundaryGeometry.boundaryTop).toBeGreaterThanOrEqual(boundaryGeometry.viewportTop);
     expect(
       boundaryGeometry.boundaryTop,
       "page boundary must be spatially before visible article content",
@@ -285,10 +278,7 @@ test.describe("PAGE-02 page-turn controls (04-05)", () => {
       }
       return outcomes;
     });
-    expect(keys, "Up/Down remain uncancelled after focus restoration").toEqual([
-      false,
-      false,
-    ]);
+    expect(keys, "Up/Down remain uncancelled after focus restoration").toEqual([false, false]);
   });
 
   test("Space does NOT hijack a form field outside the article (A11Y-01 bail)", async ({
@@ -308,10 +298,9 @@ test.describe("PAGE-02 page-turn controls (04-05)", () => {
     await page.keyboard.press("Space");
     await page.waitForTimeout(150);
 
-    expect(
-      await currentPage(page),
-      "Space inside a settings control must not turn the page",
-    ).toBe(beforeIdx);
+    expect(await currentPage(page), "Space inside a settings control must not turn the page").toBe(
+      beforeIdx,
+    );
 
     await page.keyboard.press("Escape");
     expect(pageErrors, "no uncaught errors").toEqual([]);

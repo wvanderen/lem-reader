@@ -40,8 +40,7 @@ const article = (blocks: Block[]): CanonicalArticle => ({
     sourceUrl: "https://example.com/test",
     title: "Test Article",
     retrievedAt: "2026-08-07T00:00:00Z",
-    originalHtmlHash:
-      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    originalHtmlHash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
   },
   blocks,
   footnotes: [],
@@ -62,11 +61,7 @@ describe("spoken-word marker — scrolling twin (ArticleBody)", () => {
   it("renders an aria-hidden, non-focusable mark; annotation marks stay untouched", () => {
     const art = article([paragraph(TEXT)]);
     const { container } = render(
-      <ArticleBody
-        article={art}
-        highlights={[annotation("hl-1", 0, 6)]}
-        spokenRange={WORD}
-      />,
+      <ArticleBody article={art} highlights={[annotation("hl-1", 0, 6)]} spokenRange={WORD} />,
     );
 
     const spoken = container.querySelector("mark.spoken-word");

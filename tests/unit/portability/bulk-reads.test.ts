@@ -15,18 +15,9 @@
 // Dexie.dependencies at module top-level, wipeDatabase beforeEach, lazy module
 // imports so the stores' module bodies see a populated Dexie.dependencies.
 import { beforeEach, describe, expect, it } from "vitest";
-import {
-  HighlightRecordSchema,
-  NoteRecordSchema,
-} from "../../../src/content/schema";
-import type {
-  HighlightRecord,
-  NoteRecord,
-} from "../../../src/content/schema";
-import type {
-  HighlightRecordRow,
-  NoteRecordRow,
-} from "../../../src/persistence/db";
+import { HighlightRecordSchema, NoteRecordSchema } from "../../../src/content/schema";
+import type { HighlightRecord, NoteRecord } from "../../../src/content/schema";
+import type { HighlightRecordRow, NoteRecordRow } from "../../../src/persistence/db";
 import fakeIndexedDB, { IDBKeyRange } from "fake-indexeddb";
 import { Dexie } from "dexie";
 

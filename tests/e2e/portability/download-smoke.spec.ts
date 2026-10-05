@@ -19,9 +19,9 @@ test.describe("Wave 0 — download capture (A1 / Pitfall 9)", () => {
     page,
   }) => {
     await page.goto(`${BASE}/`);
-    await expect(
-      page.getByRole("heading", { name: "Saved articles" }),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible({
+      timeout: 10_000,
+    });
 
     // Arm the listener BEFORE the click, then synthesize the download inside
     // the page — the exact shape downloadBlob() uses.

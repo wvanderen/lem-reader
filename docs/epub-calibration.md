@@ -74,7 +74,7 @@ enforces, inside `npm run test` via the always-on `replay.spec.ts`:
    `EPUB_THRESHOLDS` in `server/epubToBooks.ts` — **strengthen-only** (the
    full synthetic suites from 12-02/12-04,
    `npx vitest run tests/unit/server/epub-to-books.spec.ts
-   tests/unit/server/ingest-epub.spec.ts`, must stay green after any
+tests/unit/server/ingest-epub.spec.ts`, must stay green after any
    change — synthetic extreme cases must never flip) — and re-derive.
 5. **Commit derived evidence only** — manifest, `epub-evidence.json`,
    `replay.spec.ts`, and any `EPUB_THRESHOLDS` change. Never the books.
@@ -88,8 +88,8 @@ enforces, inside `npm run test` via the always-on `replay.spec.ts`:
   fails the build, and the thresholds pin fails any uncalibrated
   `EPUB_THRESHOLDS` change.
 - **Missing record fails loudly:** if `epub-evidence.json` is absent the
-  spec fails with *"EPUB calibration requires the local corpus — see
-  docs/epub-calibration.md"* — never a silent skip.
+  spec fails with _"EPUB calibration requires the local corpus — see
+  docs/epub-calibration.md"_ — never a silent skip.
 - `derive.spec.ts` is the LOCAL-only derive driver, gated by
   `describe.skipIf(process.env.EPUB_CALIBRATION_DERIVE !== "1")` — the
   documented, visible skip in normal runs (the accepted D12-12 CI

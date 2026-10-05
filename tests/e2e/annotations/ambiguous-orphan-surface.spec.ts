@@ -93,7 +93,9 @@ test.describe("ANNO-07 ambiguous/orphan surfacing (05-05)", () => {
     await expect(unresolved.first()).toBeVisible();
     // A confident (filled) mark may also exist for other highlights, but the
     // orphan MUST carry .unresolved (not a bare .highlight fill).
-    const orphanMark = page.locator('mark.highlight.unresolved[data-highlight-id="seed-orphan-inline"]');
+    const orphanMark = page.locator(
+      'mark.highlight.unresolved[data-highlight-id="seed-orphan-inline"]',
+    );
     await expect(orphanMark).toBeVisible();
   });
 
@@ -152,7 +154,9 @@ test.describe("ANNO-07 ambiguous/orphan surfacing (05-05)", () => {
     await drawerTrigger(page).click();
     const entry = page.locator("dialog.annotations-drawer .drawer-list li").first();
     // The Delete action is present + enabled (D5-04 — delete always available).
-    const deleteBtn = entry.locator(".drawer-entry-actions .drawer-entry-action", { hasText: /^Delete$/ });
+    const deleteBtn = entry.locator(".drawer-entry-actions .drawer-entry-action", {
+      hasText: /^Delete$/,
+    });
     await expect(deleteBtn).toBeVisible();
     await expect(deleteBtn).toBeEnabled();
   });

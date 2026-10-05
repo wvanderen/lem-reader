@@ -62,9 +62,7 @@ function expectBookEnvelope(response: IngestionResponse): {
 function blockTextOf(article: CanonicalArticle): string {
   return article.blocks
     .map((b) =>
-      b.kind === "paragraph" || b.kind === "heading"
-        ? b.content.map((r) => r.text).join("")
-        : "",
+      b.kind === "paragraph" || b.kind === "heading" ? b.content.map((r) => r.text).join("") : "",
     )
     .join("\n");
 }
@@ -77,9 +75,7 @@ async function ingestEpub(bytes: Uint8Array): Promise<IngestionResponse> {
 
 describe("ingest — epub fifth branch happy path", () => {
   it("admits all 4 chapters with the book envelope, deterministic -cNN ids, and per-chapter metadata", async () => {
-    const { book, articles, skippedCount } = expectBookEnvelope(
-      await ingestEpub(validBookEpub3()),
-    );
+    const { book, articles, skippedCount } = expectBookEnvelope(await ingestEpub(validBookEpub3()));
 
     // Book identity — the D7-07/D12 content-hash discipline.
     expect(book.id).toMatch(/^epub-[0-9a-f]{12}$/);
@@ -408,11 +404,9 @@ describe("viteIngestMiddleware — format-aware 413 reasons (Pitfall 2)", () => 
 
   it("post-read: an over-cap chunked {epub} body refuses 413 epub-too-large (parsed-body-key branch)", async () => {
     const handler = captureHandler();
-    const { req } = reqStub(
-      {},
-      "/api/ingest",
-      [JSON.stringify({ epub: "A".repeat(MAX_INGEST_BODY_BYTES), filename: "book.epub" })],
-    );
+    const { req } = reqStub({}, "/api/ingest", [
+      JSON.stringify({ epub: "A".repeat(MAX_INGEST_BODY_BYTES), filename: "book.epub" }),
+    ]);
     const res = resStub();
     await handler(req, res as unknown as ServerResponse, () => {});
     expect(res.statusCode).toBe(413);
@@ -421,11 +415,9 @@ describe("viteIngestMiddleware — format-aware 413 reasons (Pitfall 2)", () => 
 
   it("post-read: an over-cap chunked {pdf} body still refuses pdf-too-large (both branches pinned)", async () => {
     const handler = captureHandler();
-    const { req } = reqStub(
-      {},
-      "/api/ingest",
-      [JSON.stringify({ pdf: "A".repeat(MAX_INGEST_BODY_BYTES), filename: "report.pdf" })],
-    );
+    const { req } = reqStub({}, "/api/ingest", [
+      JSON.stringify({ pdf: "A".repeat(MAX_INGEST_BODY_BYTES), filename: "report.pdf" }),
+    ]);
     const res = resStub();
     await handler(req, res as unknown as ServerResponse, () => {});
     expect(res.statusCode).toBe(413);

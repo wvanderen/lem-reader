@@ -110,9 +110,7 @@ async function selectSpan(
   return page.evaluate(
     ({ a, b, backwards }) => {
       const visibleBlockFor = (idx: number): HTMLElement | null => {
-        const candidates = Array.from(
-          document.querySelectorAll(`[data-block-index="${idx}"]`),
-        );
+        const candidates = Array.from(document.querySelectorAll(`[data-block-index="${idx}"]`));
         const el = candidates.find(
           (c) => (c as HTMLElement).closest(".article-body-measurement") === null,
         );
@@ -120,9 +118,7 @@ async function selectSpan(
       };
       // The endpoint scope for an endpoint spec (block element, optionally
       // narrowed to its li[ep.li] descendant in document order).
-      const scopeFor = (
-        ep: { block: number; li?: number },
-      ): HTMLElement | null => {
+      const scopeFor = (ep: { block: number; li?: number }): HTMLElement | null => {
         const blockEl = visibleBlockFor(ep.block);
         if (!blockEl) return null;
         if (ep.li !== undefined) {
@@ -158,8 +154,7 @@ async function selectSpan(
         }
         if (texts.length === 0) return null;
         const hit =
-          texts.find((t) => ep.offset >= t.start && ep.offset < t.end) ??
-          texts[texts.length - 1]!;
+          texts.find((t) => ep.offset >= t.start && ep.offset < t.end) ?? texts[texts.length - 1]!;
         const local = Math.max(0, Math.min(ep.offset - hit.start, hit.end - hit.start));
         return { node: hit.node, offset: local };
       };
@@ -190,14 +185,9 @@ async function openScrolling(page: Page, fixtureId: string): Promise<void> {
 async function createSpanViaToolbar(page: Page): Promise<string> {
   const toolbar = page.locator(".selection-toolbar");
   await expect(toolbar).toBeVisible();
-  await toolbar
-    .getByRole("button", { name: "Highlight", exact: true })
-    .click();
+  await toolbar.getByRole("button", { name: "Highlight", exact: true }).click();
   await expect(announcementRegion(page)).toContainText(/Highlight saved/i);
-  const id = await page
-    .locator("mark.highlight")
-    .first()
-    .getAttribute("data-highlight-id");
+  const id = await page.locator("mark.highlight").first().getAttribute("data-highlight-id");
   expect(id, "created mark carries data-highlight-id").toBeTruthy();
   return id!;
 }
@@ -212,9 +202,7 @@ async function expectMarkInBlock(
   message: string,
 ): Promise<void> {
   await expect(
-    visibleBlock(page, blockIndex)
-      .locator(`mark.highlight[data-highlight-id="${id}"]`)
-      .first(),
+    visibleBlock(page, blockIndex).locator(`mark.highlight[data-highlight-id="${id}"]`).first(),
     message,
   ).toBeVisible();
 }
@@ -224,11 +212,7 @@ test.describe("ANNO-12 eligibility matrix — endpoint kinds (D19-01)", () => {
     page,
   }) => {
     await openScrolling(page, ESSAY);
-    const ok = await selectSpan(
-      page,
-      { block: 0, offset: 5 },
-      { block: 1, offset: 14 },
-    );
+    const ok = await selectSpan(page, { block: 0, offset: 5 }, { block: 1, offset: 14 });
     expect(ok, "paragraph → paragraph selection placed").toBeTruthy();
     const id = await createSpanViaToolbar(page);
     expect(await countHighlightsInDexie(page, ESSAY)).toBe(1);
@@ -241,11 +225,7 @@ test.describe("ANNO-12 eligibility matrix — endpoint kinds (D19-01)", () => {
   }) => {
     // figure-heavy block 7 = h2 "Morphology"; block 8 = body paragraph.
     await openScrolling(page, FIGURES);
-    const ok = await selectSpan(
-      page,
-      { block: 7, offset: 3 },
-      { block: 8, offset: 12 },
-    );
+    const ok = await selectSpan(page, { block: 7, offset: 3 }, { block: 8, offset: 12 });
     expect(ok, "heading → paragraph selection placed").toBeTruthy();
     const id = await createSpanViaToolbar(page);
     expect(await countHighlightsInDexie(page, FIGURES)).toBe(1);
@@ -259,11 +239,7 @@ test.describe("ANNO-12 eligibility matrix — endpoint kinds (D19-01)", () => {
     // essay-long-form block 3 = the corpus's blockquote (verified census —
     // the blockquote-bearing fixture); block 4 = the following paragraph.
     await openScrolling(page, ESSAY);
-    const ok = await selectSpan(
-      page,
-      { block: 3, offset: 4 },
-      { block: 4, offset: 12 },
-    );
+    const ok = await selectSpan(page, { block: 3, offset: 4 }, { block: 4, offset: 12 });
     expect(ok, "quotation-child → paragraph selection placed").toBeTruthy();
     const id = await createSpanViaToolbar(page);
     expect(await countHighlightsInDexie(page, ESSAY)).toBe(1);
@@ -278,11 +254,7 @@ test.describe("ANNO-12 eligibility matrix — endpoint kinds (D19-01)", () => {
     // the adjacent paragraph is block 2 (before the list — endpoint
     // composition is direction-symmetric; the backwards cell proves it).
     await openScrolling(page, LISTS);
-    const ok = await selectSpan(
-      page,
-      { block: 2, offset: 10 },
-      { block: 3, offset: 6, li: 0 },
-    );
+    const ok = await selectSpan(page, { block: 2, offset: 10 }, { block: 3, offset: 6, li: 0 });
     expect(ok, "paragraph → list-item selection placed").toBeTruthy();
     const id = await createSpanViaToolbar(page);
     expect(await countHighlightsInDexie(page, LISTS)).toBe(1);
@@ -292,17 +264,13 @@ test.describe("ANNO-12 eligibility matrix — endpoint kinds (D19-01)", () => {
 
   test("endpoint kind nested-list-item: span a NESTED item → following paragraph captures ONE record + marks BOTH blocks", async ({
     page,
-    }) => {
+  }) => {
     // nested-list-paths block 2 = the 3-level bulleted list.
     // querySelectorAll("li") document order: [2] = the first NESTED item
     // ("The first nested item, which itself opens a numbered sequence:").
     // Block 3 = "Reading-order guarantees…" paragraph.
     await openScrolling(page, NESTED);
-    const ok = await selectSpan(
-      page,
-      { block: 2, offset: 8, li: 2 },
-      { block: 3, offset: 12 },
-    );
+    const ok = await selectSpan(page, { block: 2, offset: 8, li: 2 }, { block: 3, offset: 12 });
     expect(ok, "nested-item → paragraph selection placed").toBeTruthy();
     const id = await createSpanViaToolbar(page);
     expect(await countHighlightsInDexie(page, NESTED)).toBe(1);
@@ -317,11 +285,7 @@ test.describe("ANNO-12 eligibility matrix — endpoint kinds (D19-01)", () => {
     // present — the alignment-fix pair proven end-to-end); block 5 = the
     // following paragraph.
     await openScrolling(page, FIGURES);
-    const ok = await selectSpan(
-      page,
-      { block: 4, offset: 5 },
-      { block: 5, offset: 12 },
-    );
+    const ok = await selectSpan(page, { block: 4, offset: 5 }, { block: 5, offset: 12 });
     expect(ok, "figcaption → paragraph selection placed").toBeTruthy();
     const id = await createSpanViaToolbar(page);
     expect(await countHighlightsInDexie(page, FIGURES)).toBe(1);
@@ -341,19 +305,13 @@ test.describe("ANNO-12 eligibility matrix — endpoint kinds (D19-01)", () => {
     // technical-post block 8 = code-block; the adjacent paragraph is block
     // 7 (before it). The code mark renders inside the <pre><code>.
     await openScrolling(page, TECH);
-    const ok = await selectSpan(
-      page,
-      { block: 7, offset: 10 },
-      { block: 8, offset: 12 },
-    );
+    const ok = await selectSpan(page, { block: 7, offset: 10 }, { block: 8, offset: 12 });
     expect(ok, "paragraph → code selection placed").toBeTruthy();
     const id = await createSpanViaToolbar(page);
     expect(await countHighlightsInDexie(page, TECH)).toBe(1);
     await expectMarkInBlock(page, id, 7, "mark in the paragraph");
     await expect(
-      visibleBlock(page, 8)
-        .locator("code")
-        .locator(`mark.highlight[data-highlight-id="${id}"]`),
+      visibleBlock(page, 8).locator("code").locator(`mark.highlight[data-highlight-id="${id}"]`),
       "mark inside the code block",
     ).toBeVisible();
   });
@@ -369,11 +327,7 @@ test.describe("ANNO-12 eligibility matrix — endpoint kinds (D19-01)", () => {
     // honest assertion set is: ONE record + mark in the paragraph + ZERO
     // marks inside the marker element.
     await openScrolling(page, FIGURES);
-    const ok = await selectSpan(
-      page,
-      { block: 0, offset: 10 },
-      { block: 1, offset: 1 },
-    );
+    const ok = await selectSpan(page, { block: 0, offset: 10 }, { block: 1, offset: 1 });
     expect(ok, "paragraph → footnote-reference selection placed").toBeTruthy();
     const id = await createSpanViaToolbar(page);
     expect(await countHighlightsInDexie(page, FIGURES)).toBe(1);
@@ -392,11 +346,7 @@ test.describe("ANNO-12 eligibility matrix — crossings (D19-01/D19-03)", () => 
     // essay-long-form blocks 2 → 4 cross the blockquote at 3: the
     // intermediate blockquote child renders a mark sharing the span id.
     await openScrolling(page, ESSAY);
-    const ok = await selectSpan(
-      page,
-      { block: 2, offset: 8 },
-      { block: 4, offset: 10 },
-    );
+    const ok = await selectSpan(page, { block: 2, offset: 8 }, { block: 4, offset: 10 });
     expect(ok, "cross-many selection placed").toBeTruthy();
     const id = await createSpanViaToolbar(page);
     expect(await countHighlightsInDexie(page, ESSAY)).toBe(1);
@@ -419,22 +369,15 @@ test.describe("ANNO-12 eligibility matrix — crossings (D19-01/D19-03)", () => 
     expect(ok, "item → sibling item selection placed").toBeTruthy();
     const id = await createSpanViaToolbar(page);
     expect(await countHighlightsInDexie(page, NESTED)).toBe(1);
-    const placement = await visibleBlock(page, 2).evaluate(
-      (listEl, hlId) => {
-        const inLi = (i: number) => {
-          // D21-15: the item is extracted to its own line — a member
-          // access split across lines trips no-unexpected-multiline.
-          const item = listEl.querySelectorAll("li")[i]!;
-          return (
-            item.querySelector(
-              `mark.highlight[data-highlight-id="${hlId}"]`,
-            ) !== null
-          );
-        };
-        return { first: inLi(0), sibling: inLi(1) };
-      },
-      id,
-    );
+    const placement = await visibleBlock(page, 2).evaluate((listEl, hlId) => {
+      const inLi = (i: number) => {
+        // D21-15: the item is extracted to its own line — a member
+        // access split across lines trips no-unexpected-multiline.
+        const item = listEl.querySelectorAll("li")[i]!;
+        return item.querySelector(`mark.highlight[data-highlight-id="${hlId}"]`) !== null;
+      };
+      return { first: inLi(0), sibling: inLi(1) };
+    }, id);
     expect(placement.first, "mark in the first item").toBeTruthy();
     expect(placement.sibling, "mark in the sibling item").toBeTruthy();
   });
@@ -443,11 +386,7 @@ test.describe("ANNO-12 eligibility matrix — crossings (D19-01/D19-03)", () => 
     page,
   }) => {
     await openScrolling(page, NESTED);
-    const ok = await selectSpan(
-      page,
-      { block: 2, offset: 6, li: 0 },
-      { block: 3, offset: 12 },
-    );
+    const ok = await selectSpan(page, { block: 2, offset: 6, li: 0 }, { block: 3, offset: 12 });
     expect(ok, "item → paragraph selection placed").toBeTruthy();
     const id = await createSpanViaToolbar(page);
     expect(await countHighlightsInDexie(page, NESTED)).toBe(1);
@@ -465,11 +404,7 @@ test.describe("ANNO-12 eligibility matrix — interior gaps (D19-02)", () => {
     // the global range) but reference markers render no marks — the
     // genuine textless-gap mechanism, no captioned-figure caveat.
     await openScrolling(page, FIGURES);
-    const ok = await selectSpan(
-      page,
-      { block: 0, offset: 10 },
-      { block: 3, offset: 12 },
-    );
+    const ok = await selectSpan(page, { block: 0, offset: 10 }, { block: 3, offset: 12 });
     expect(ok, "paragraph → paragraph across markers selection placed").toBeTruthy();
     const id = await createSpanViaToolbar(page);
     expect(await countHighlightsInDexie(page, FIGURES)).toBe(1);
@@ -495,11 +430,7 @@ test.describe("ANNO-12 eligibility matrix — interior gaps (D19-02)", () => {
     // interior (caption) marks per D19-01 render coverage, and the
     // non-text portion (img/alt surface) never carries a mark.
     await openScrolling(page, FIGURES);
-    const ok = await selectSpan(
-      page,
-      { block: 3, offset: 8 },
-      { block: 5, offset: 12 },
-    );
+    const ok = await selectSpan(page, { block: 3, offset: 8 }, { block: 5, offset: 12 });
     expect(ok, "paragraph → paragraph across figure selection placed").toBeTruthy();
     const id = await createSpanViaToolbar(page);
     expect(await countHighlightsInDexie(page, FIGURES)).toBe(1);
@@ -513,9 +444,7 @@ test.describe("ANNO-12 eligibility matrix — interior gaps (D19-02)", () => {
     // Every mark inside the figure lives in the figcaption — the img
     // (alt) surface renders zero marks ever (D19-02 gap by construction).
     const marksInFigure = await figureEl.locator("mark.highlight").count();
-    const marksInCaption = await figureEl
-      .locator("figcaption mark.highlight")
-      .count();
+    const marksInCaption = await figureEl.locator("figcaption mark.highlight").count();
     expect(marksInFigure).toBe(marksInCaption);
     expect(marksInCaption).toBeGreaterThan(0);
   });
@@ -528,11 +457,7 @@ test.describe("ANNO-12 eligibility matrix — interior gaps (D19-02)", () => {
     // span continues across the gap as ONE identity; the unsupported
     // element renders ZERO marks; the readable intermediates DO mark.
     await openScrolling(page, UNSUPPORTED);
-    const ok = await selectSpan(
-      page,
-      { block: 3, offset: 8 },
-      { block: 8, offset: 12 },
-    );
+    const ok = await selectSpan(page, { block: 3, offset: 8 }, { block: 8, offset: 12 });
     expect(ok, "paragraph → paragraph across unsupported selection placed").toBeTruthy();
     const id = await createSpanViaToolbar(page);
     expect(await countHighlightsInDexie(page, UNSUPPORTED)).toBe(1);
@@ -553,19 +478,13 @@ test.describe("ANNO-12 eligibility matrix — interior gaps (D19-02)", () => {
     // technical-post blocks 7 → 10 cross code 8 + heading 9. Code is
     // READABLE text — its interior marks (D19-01), unlike textless gaps.
     await openScrolling(page, TECH);
-    const ok = await selectSpan(
-      page,
-      { block: 7, offset: 10 },
-      { block: 10, offset: 12 },
-    );
+    const ok = await selectSpan(page, { block: 7, offset: 10 }, { block: 10, offset: 12 });
     expect(ok, "paragraph → paragraph across code selection placed").toBeTruthy();
     const id = await createSpanViaToolbar(page);
     expect(await countHighlightsInDexie(page, TECH)).toBe(1);
     await expectMarkInBlock(page, id, 7, "mark on the near side of the code");
     await expect(
-      visibleBlock(page, 8)
-        .locator("code")
-        .locator(`mark.highlight[data-highlight-id="${id}"]`),
+      visibleBlock(page, 8).locator("code").locator(`mark.highlight[data-highlight-id="${id}"]`),
       "the CODE interior IS marked (readable gap)",
     ).toBeVisible();
     await expectMarkInBlock(page, id, 10, "mark on the far side of the code");
@@ -578,11 +497,7 @@ test.describe("ANNO-12 eligibility matrix — refusals (D19-05/D19-06/D19-07)", 
   }) => {
     await openScrolling(page, UNSUPPORTED);
     // Endpoint INSIDE the unsupported block (4) → paragraph 8.
-    let ok = await selectSpan(
-      page,
-      { block: 4, offset: 12 },
-      { block: 8, offset: 12 },
-    );
+    let ok = await selectSpan(page, { block: 4, offset: 12 }, { block: 8, offset: 12 });
     expect(ok, "unsupported → paragraph selection placed").toBeTruthy();
     const toolbar = page.locator(".selection-toolbar");
     await expect(toolbar).toBeVisible();
@@ -591,9 +506,7 @@ test.describe("ANNO-12 eligibility matrix — refusals (D19-05/D19-06/D19-07)", 
     await expect(toolbar).toContainText(
       "This selection includes content that can't be highlighted.",
     );
-    await expect(
-      toolbar.getByRole("button", { name: "Highlight", exact: true }),
-    ).toHaveCount(0);
+    await expect(toolbar.getByRole("button", { name: "Highlight", exact: true })).toHaveCount(0);
     await page.keyboard.press("h");
     await page.waitForTimeout(200);
     expect(
@@ -601,19 +514,13 @@ test.describe("ANNO-12 eligibility matrix — refusals (D19-05/D19-06/D19-07)", 
       "no record created on boundary-ineligible refusal",
     ).toBe(0);
     // Either endpoint suffices — paragraph → unsupported refuses identically.
-    ok = await selectSpan(
-      page,
-      { block: 3, offset: 8 },
-      { block: 4, offset: 12 },
-    );
+    ok = await selectSpan(page, { block: 3, offset: 8 }, { block: 4, offset: 12 });
     expect(ok, "paragraph → unsupported selection placed").toBeTruthy();
     await expect(toolbar).toBeVisible();
     await expect(toolbar).toContainText(
       "This selection includes content that can't be highlighted.",
     );
-    await expect(
-      toolbar.getByRole("button", { name: "Highlight", exact: true }),
-    ).toHaveCount(0);
+    await expect(toolbar.getByRole("button", { name: "Highlight", exact: true })).toHaveCount(0);
     expect(await countHighlightsInDexie(page, UNSUPPORTED)).toBe(0);
   });
 
@@ -624,11 +531,9 @@ test.describe("ANNO-12 eligibility matrix — refusals (D19-05/D19-06/D19-07)", 
     // Footnote bodies render as <li id="fn-…"> WITHOUT data-block-index —
     // the ancestor walk terminates at the reading root → "ineligible".
     const tried = await page.evaluate(() => {
-      const para = Array.from(
-        document.querySelectorAll('[data-block-index="0"]'),
-      ).find((el) => el.closest(".article-body-measurement") === null) as
-        | HTMLElement
-        | undefined;
+      const para = Array.from(document.querySelectorAll('[data-block-index="0"]')).find(
+        (el) => el.closest(".article-body-measurement") === null,
+      ) as HTMLElement | undefined;
       const body = document.querySelector(
         'section[aria-label="Footnotes"] li',
       ) as HTMLElement | null;
@@ -649,9 +554,7 @@ test.describe("ANNO-12 eligibility matrix — refusals (D19-05/D19-06/D19-07)", 
     const toolbar = page.locator(".selection-toolbar");
     await expect(toolbar).toBeVisible();
     await expect(toolbar).toContainText("Select readable text to highlight it.");
-    await expect(
-      toolbar.getByRole("button", { name: "Highlight", exact: true }),
-    ).toHaveCount(0);
+    await expect(toolbar.getByRole("button", { name: "Highlight", exact: true })).toHaveCount(0);
     await page.keyboard.press("h");
     await page.waitForTimeout(200);
     expect(
@@ -665,28 +568,18 @@ test.describe("ANNO-12 eligibility matrix — refusals (D19-05/D19-06/D19-07)", 
   }) => {
     await openScrolling(page, ESSAY);
     // An existing single-block highlight on block 5…
-    let ok = await selectSpan(
-      page,
-      { block: 5, offset: 0 },
-      { block: 5, offset: 20 },
-    );
+    let ok = await selectSpan(page, { block: 5, offset: 0 }, { block: 5, offset: 20 });
     expect(ok, "first single-block selection placed").toBeTruthy();
     await createSpanViaToolbar(page);
     expect(await countHighlightsInDexie(page, ESSAY)).toBe(1);
     // …then a span from INSIDE it into the next block — the global ranges
     // intersect, so the whole span refuses (one policy, one string).
-    ok = await selectSpan(
-      page,
-      { block: 5, offset: 10 },
-      { block: 6, offset: 12 },
-    );
+    ok = await selectSpan(page, { block: 5, offset: 10 }, { block: 6, offset: 12 });
     expect(ok, "overlapping span selection placed").toBeTruthy();
     const toolbar = page.locator(".selection-toolbar");
     await expect(toolbar).toBeVisible();
     await expect(toolbar).toContainText("This overlaps an existing highlight.");
-    await expect(
-      toolbar.getByRole("button", { name: "Highlight", exact: true }),
-    ).toHaveCount(0);
+    await expect(toolbar.getByRole("button", { name: "Highlight", exact: true })).toHaveCount(0);
     await page.keyboard.press("h");
     await page.waitForTimeout(200);
     expect(
@@ -715,25 +608,20 @@ test.describe("ANNO-12 eligibility matrix — D19-14 marker exclusion", () => {
     expect(ok, "paragraph → item-character-0 selection placed").toBeTruthy();
     const id = await createSpanViaToolbar(page);
     expect(await countHighlightsInDexie(page, LISTS)).toBe(1);
-    const matches = await visibleBlock(page, 3).evaluate(
-      (listEl, hlId) => {
-        const li = listEl.querySelectorAll("li")[0]!;
-        const mark = li.querySelector(
-          `mark.highlight[data-highlight-id="${hlId}"]`,
-        );
-        if (!mark) return { placed: false };
-        const markText = mark.textContent ?? "";
-        const liText = li.textContent ?? "";
-        return {
-          placed: true,
-          equal: markText === liText,
-          startsClean: markText.length > 0 && !/^[\s•‣\-–\d.]/.test(markText),
-          firstChars: markText.slice(0, 12),
-          liFirstChars: liText.slice(0, 12),
-        };
-      },
-      id,
-    );
+    const matches = await visibleBlock(page, 3).evaluate((listEl, hlId) => {
+      const li = listEl.querySelectorAll("li")[0]!;
+      const mark = li.querySelector(`mark.highlight[data-highlight-id="${hlId}"]`);
+      if (!mark) return { placed: false };
+      const markText = mark.textContent ?? "";
+      const liText = li.textContent ?? "";
+      return {
+        placed: true,
+        equal: markText === liText,
+        startsClean: markText.length > 0 && !/^[\s•‣\-–\d.]/.test(markText),
+        firstChars: markText.slice(0, 12),
+        liFirstChars: liText.slice(0, 12),
+      };
+    }, id);
     expect(matches.placed, "mark placed inside the first item").toBeTruthy();
     expect(
       matches.equal,
@@ -796,9 +684,7 @@ test.describe("ANNO-12 eligibility matrix — D19-11 review row shape", () => {
     // classify orphan and this cell sees orphan rows).
     await page.goto(`${BASE}/`);
     await page.reload();
-    await expect(
-      page.getByText("Getting started with Lem Reader").first(),
-    ).toBeVisible();
+    await expect(page.getByText("Getting started with Lem Reader").first()).toBeVisible();
     await seedRows(page, {
       articles: [
         bundledFixtures.find((a) => a.id === ESSAY) as unknown as Record<string, unknown>,
@@ -806,27 +692,17 @@ test.describe("ANNO-12 eligibility matrix — D19-11 review row shape", () => {
       ],
     });
     await openScrolling(page, ESSAY);
-    let ok = await selectSpan(
-      page,
-      { block: 0, offset: 0 },
-      { block: 1, offset: 14 },
-    );
+    let ok = await selectSpan(page, { block: 0, offset: 0 }, { block: 1, offset: 14 });
     expect(ok, "essay prose span placed").toBeTruthy();
     await createSpanViaToolbar(page);
     await openScrolling(page, FIGURES);
-    ok = await selectSpan(
-      page,
-      { block: 1, offset: 0 },
-      { block: 3, offset: 12 },
-    );
+    ok = await selectSpan(page, { block: 1, offset: 0 }, { block: 3, offset: 12 });
     expect(ok, "figure marker span placed").toBeTruthy();
     await createSpanViaToolbar(page);
 
     // The Highlights review (#/highlights since 15-01).
     await page.goto(`${BASE}/#/highlights`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Highlights" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
     const rows = page.locator("li.review-item");
     await expect(rows).toHaveCount(2);
     // D19-11: NO block-count badge — confident rows carry NO badge element

@@ -3,7 +3,14 @@ import { BASE } from "../_base";
 
 const FIXTURE = "essay-long-form";
 
-type Rect = { top: number; right: number; bottom: number; left: number; width: number; height: number };
+type Rect = {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+  width: number;
+  height: number;
+};
 
 async function openReady(page: Page, width: 320 | 360): Promise<void> {
   await page.setViewportSize({ width, height: 640 });
@@ -38,7 +45,8 @@ async function geometry(page: Page) {
       firstText: rect(".page-fragment p"),
       main: rect("main.paginated-main"),
       mainScrollTop: document.querySelector<HTMLElement>("main.paginated-main")?.scrollTop ?? null,
-      articleScrollTop: document.querySelector<HTMLElement>("article.paginated-surface")?.scrollTop ?? null,
+      articleScrollTop:
+        document.querySelector<HTMLElement>("article.paginated-surface")?.scrollTop ?? null,
     };
   });
 }
@@ -86,9 +94,7 @@ for (const width of [320, 360] as const) {
     // readiness-gated restore) and the marker attaches to that page
     // fragment's edge.
     await expect(
-      page
-        .getByRole("status")
-        .filter({ hasText: "Returned to where you left off." }),
+      page.getByRole("status").filter({ hasText: "Returned to where you left off." }),
     ).toHaveCount(1, { timeout: 10_000 });
     await expect(page.locator(".restoration-marker")).toHaveCount(1, {
       timeout: 10_000,

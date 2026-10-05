@@ -56,11 +56,7 @@ import type { Block } from "../content/types";
 // this module derives them once at save time so the dialog never re-reads
 // the article or forks the copy. Pure functions over the model — no cycle
 // (extractionNote imports content/types only).
-import {
-  annotationsNote,
-  extractionNote,
-  partialContentWarnings,
-} from "../routes/extractionNote";
+import { annotationsNote, extractionNote, partialContentWarnings } from "../routes/extractionNote";
 
 /**
  * AddToLibraryInput — one submission arm of the add dialog. The file arm
@@ -235,10 +231,7 @@ function cleanTagsForSave(tags: readonly string[]): string[] {
  * makes both shapes valid, but the untouched pass-through is the honest
  * no-op).
  */
-function withTags<T extends { tags?: string[] }>(
-  record: T,
-  tags: readonly string[],
-): T {
+function withTags<T extends { tags?: string[] }>(record: T, tags: readonly string[]): T {
   const cleaned = cleanTagsForSave(tags);
   return cleaned.length > 0 ? { ...record, tags: cleaned } : record;
 }
@@ -366,10 +359,7 @@ async function saveArticle(
  * epub-empty), so a defined id is the expected shape; the optional field
  * keeps the nothing-to-open edge honest instead of a dead button.
  */
-async function addEpubBook(
-  file: File,
-  tags: readonly string[],
-): Promise<AddToLibraryOutcome> {
+async function addEpubBook(file: File, tags: readonly string[]): Promise<AddToLibraryOutcome> {
   const bytes = new Uint8Array(await file.arrayBuffer());
   const result = await ingestEpub(bytesToBase64(bytes), file.name);
 
@@ -389,7 +379,6 @@ async function addEpubBook(
     title: result.book.title,
     skippedChapterCount: result.skippedCount,
     firstChapterArticleId:
-      result.book.chapterArticleIds.find((id) => liveIds.has(id)) ??
-      result.articles[0]?.id,
+      result.book.chapterArticleIds.find((id) => liveIds.has(id)) ?? result.articles[0]?.id,
   };
 }

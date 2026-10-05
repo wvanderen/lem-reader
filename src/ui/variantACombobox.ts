@@ -104,9 +104,7 @@ export function variantAComboboxInputProps({
       // asymmetry fix (see module header).
       state.setOpen(true);
       state.setActive((a) =>
-        e.key === "ArrowDown"
-          ? (a + 1) % optionCount
-          : (a - 1 + optionCount) % optionCount,
+        e.key === "ArrowDown" ? (a + 1) % optionCount : (a - 1 + optionCount) % optionCount,
       );
     } else if (e.key === "Enter") {
       onEnter(e);
@@ -133,11 +131,7 @@ export function variantAComboboxInputProps({
     },
     onKeyDown: handleKeyDown,
     onBlur: (e) => {
-      if (
-        !e.currentTarget
-          .closest(rootClassName)
-          ?.contains(e.relatedTarget as Node | null)
-      ) {
+      if (!e.currentTarget.closest(rootClassName)?.contains(e.relatedTarget as Node | null)) {
         state.setOpen(false);
       }
     },

@@ -63,7 +63,7 @@ import { formatRate } from "../settings/tokens";
 import { StatusRegion } from "../ui/StatusRegion";
 
 interface ReadAloudBarProps {
-  state: TransportState;  /**
+  state: TransportState; /**
    * The current follow level — the floor ("progress-only") until the
    * session's probe resolves; the hook resets it at every session end.
    * The hook owns the floor and never supplies null.
@@ -171,10 +171,7 @@ export function ReadAloudBar({
       return;
     }
     const publish = () => {
-      document.body.style.setProperty(
-        READALOUD_HEIGHT_VAR,
-        `${cluster.offsetHeight}px`,
-      );
+      document.body.style.setProperty(READALOUD_HEIGHT_VAR, `${cluster.offsetHeight}px`);
     };
     publish();
     const observer = new ResizeObserver(publish);
@@ -228,11 +225,7 @@ export function ReadAloudBar({
               (playing/paused); the marker may be out of view after manual
               navigation, and this restores orientation focus-free. */}
           {sessionActive && onJumpToSpoken && (
-            <button
-              type="button"
-              className="btn btn-quiet readaloud-btn"
-              onClick={onJumpToSpoken}
-            >
+            <button type="button" className="btn btn-quiet readaloud-btn" onClick={onJumpToSpoken}>
               Jump to spoken position
             </button>
           )}
@@ -248,12 +241,8 @@ export function ReadAloudBar({
               level in plain language (the floor until a session's probe
               resolves — always present mid-session, never stale) and the
               configured rate. Visible text, never color-only. */}
-          {sessionActive && (
-            <span className="readaloud-follow">{FOLLOW_LABELS[followLevel]}</span>
-          )}
-          {sessionActive && (
-            <span className="readaloud-rate">Rate: {formatRate(rate)}×</span>
-          )}
+          {sessionActive && <span className="readaloud-follow">{FOLLOW_LABELS[followLevel]}</span>}
+          {sessionActive && <span className="readaloud-rate">Rate: {formatRate(rate)}×</span>}
         </div>
       </div>
       {/* The ONE polite transport live region (visually hidden, the ONE
@@ -261,9 +250,7 @@ export function ReadAloudBar({
           precedence while fresh — it is the feedback for the reader's LAST
           action — and the route clears it the moment the transport next
           announces. */}
-      <StatusRegion className="visually-hidden">
-        {notice ?? announcement ?? null}
-      </StatusRegion>
+      <StatusRegion className="visually-hidden">{notice ?? announcement ?? null}</StatusRegion>
     </>
   );
 }

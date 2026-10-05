@@ -16,22 +16,12 @@
 //   - requestAnimationFrame is stubbed to a manually-flushed queue so the
 //     coalescing invariant (multiple selectionchange events → ONE update per
 //     frame) is deterministic.
-import {
-  describe,
-  expect,
-  it,
-  vi,
-  afterEach,
-  beforeEach,
-  beforeAll,
-} from "vitest";
+import { describe, expect, it, vi, afterEach, beforeEach, beforeAll } from "vitest";
 import { render, cleanup, fireEvent, waitFor, act } from "@testing-library/react";
 import { useCallback, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { useSelectionToolbar } from "../../../src/reader/annotations/useSelectionToolbar";
-import type {
-  SelectionToolbarController,
-} from "../../../src/reader/annotations/useSelectionToolbar";
+import type { SelectionToolbarController } from "../../../src/reader/annotations/useSelectionToolbar";
 import { SelectionToolbar } from "../../../src/reader/annotations/SelectionToolbar";
 import type {
   HighlightOverlayValue,
@@ -99,8 +89,7 @@ const makeArticle = (): CanonicalArticle => ({
     sourceUrl: "https://example.com/test",
     title: "Test Article",
     retrievedAt: "2026-07-28T00:00:00Z",
-    originalHtmlHash:
-      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    originalHtmlHash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
   },
   blocks: [paragraph("Hello highlightable world.")],
   footnotes: [],
@@ -124,11 +113,13 @@ function makeApi(overrides?: {
     highlights: [],
     captureCurrentSelection: vi.fn((_root: HTMLElement): ToolbarCaptureResult => {
       api.captureCalls += 1;
-      return overrides?.captureResult ?? {
-        ok: true,
-        blockIndex: 0,
-        position: { start: 6, end: 19 },
-      };
+      return (
+        overrides?.captureResult ?? {
+          ok: true,
+          blockIndex: 0,
+          position: { start: 6, end: 19 },
+        }
+      );
     }),
     createHighlightFromSelection: vi.fn(
       async (_root: HTMLElement): Promise<CreateFromSelectionResult> => {
@@ -260,11 +251,7 @@ function renderHarness(
   opts?: { article?: CanonicalArticle | null; extraBody?: ReactNode },
 ) {
   return render(
-    <Harness
-      article={opts?.article ?? makeArticle()}
-      api={api}
-      extraBody={opts?.extraBody}
-    />,
+    <Harness article={opts?.article ?? makeArticle()} api={api} extraBody={opts?.extraBody} />,
   );
 }
 
@@ -276,9 +263,7 @@ async function mountActionableToolbar(api: FakeApi) {
   flushRaf();
   await waitFor(() => expect(queryToolbar()).not.toBeNull());
   return waitFor(() =>
-    expect(
-      document.querySelector<HTMLElement>(".selection-toolbar button"),
-    ).not.toBeNull(),
+    expect(document.querySelector<HTMLElement>(".selection-toolbar button")).not.toBeNull(),
   );
 }
 
@@ -294,12 +279,8 @@ describe("useSelectionToolbar — selection tracking", () => {
     flushRaf();
     await waitFor(() => expect(queryToolbar()).not.toBeNull());
     expect(api.captureCalls).toBe(1);
-    expect(
-      document.querySelectorAll(".selection-toolbar button").length,
-    ).toBe(2);
-    expect(
-      document.querySelector(".selection-toolbar button")?.textContent,
-    ).toBe("Highlight");
+    expect(document.querySelectorAll(".selection-toolbar button").length).toBe(2);
+    expect(document.querySelector(".selection-toolbar button")?.textContent).toBe("Highlight");
   });
 
   it("coalesces multiple selectionchange events into ONE update per frame", async () => {
@@ -349,11 +330,7 @@ describe("useSelectionToolbar — selection tracking", () => {
         </div>
       ),
     });
-    selectInContainer(
-      document.querySelector(".article-body-measurement")!,
-      0,
-      6,
-    );
+    selectInContainer(document.querySelector(".article-body-measurement")!, 0, 6);
     fireSelectionChange();
     flushRaf();
     await new Promise((r) => setTimeout(r, 0));
@@ -368,9 +345,7 @@ describe("useSelectionToolbar — focus containment (Gecko/WebKit hold)", () => 
     await mountActionableToolbar(api);
     // Simulate the engine behavior: focus moves onto the toolbar and the
     // selection collapses synchronously inside focus().
-    document
-      .querySelector<HTMLElement>(".selection-toolbar button")!
-      .focus();
+    document.querySelector<HTMLElement>(".selection-toolbar button")!.focus();
     window.getSelection()?.removeAllRanges();
     fireSelectionChange();
     flushRaf();
@@ -382,9 +357,7 @@ describe("useSelectionToolbar — focus containment (Gecko/WebKit hold)", () => 
   it("dismisses via focusout when focus EXITS the toolbar", async () => {
     const api = makeApi();
     await mountActionableToolbar(api);
-    const btn = document.querySelector<HTMLElement>(
-      ".selection-toolbar button",
-    )!;
+    const btn = document.querySelector<HTMLElement>(".selection-toolbar button")!;
     btn.focus();
     expect(queryToolbar()).not.toBeNull();
     // Focus leaves the toolbar root → the native focusout fires → dismissal.
@@ -397,9 +370,7 @@ describe("useSelectionToolbar — saved-range restore (Plan 13-11 G6)", () => {
   it("restores the saved range before creating from a toolbar button", async () => {
     const api = makeApi();
     await mountActionableToolbar(api);
-    const btn = document.querySelector<HTMLElement>(
-      ".selection-toolbar button",
-    )!;
+    const btn = document.querySelector<HTMLElement>(".selection-toolbar button")!;
     btn.focus();
     // The Gecko/WebKit collapse: live selection gone, toolbar held.
     window.getSelection()?.removeAllRanges();
@@ -423,9 +394,7 @@ describe("useSelectionToolbar — saved-range restore (Plan 13-11 G6)", () => {
     // The G6 flow: focus moves onto the toolbar (selection collapses in
     // Gecko/WebKit), then EXITS → focusout dismissal clears the saved range
     // with the toolbar.
-    const btn = document.querySelector<HTMLElement>(
-      ".selection-toolbar button",
-    )!;
+    const btn = document.querySelector<HTMLElement>(".selection-toolbar button")!;
     btn.focus();
     document.querySelector<HTMLElement>('[data-testid="outside"]')!.focus();
     await waitFor(() => expect(queryToolbar()).toBeNull());
@@ -479,12 +448,8 @@ describe("useSelectionToolbar — H/N shortcuts", () => {
     flushRaf();
     await waitFor(() => expect(queryToolbar()).not.toBeNull());
     // Hint variant: no buttons.
-    expect(
-      document.querySelectorAll(".selection-toolbar button").length,
-    ).toBe(0);
-    expect(queryToolbar()?.textContent).toContain(
-      "This overlaps an existing highlight.",
-    );
+    expect(document.querySelectorAll(".selection-toolbar button").length).toBe(0);
+    expect(queryToolbar()?.textContent).toContain("This overlaps an existing highlight.");
     pressKey("h");
     await waitFor(() => expect(api.createCalls).toBe(1));
     // Not-ok → calm bail: the toolbar stays mounted, nothing announced.
@@ -503,9 +468,7 @@ describe("useSelectionToolbar — keyboard routing matrix", () => {
         </mark>
       ),
     });
-    const mark = document.querySelector<HTMLElement>(
-      'mark[data-highlight-id="hl-7"]',
-    )!;
+    const mark = document.querySelector<HTMLElement>('mark[data-highlight-id="hl-7"]')!;
     mark.focus();
     const event = pressKey("Enter", mark);
     expect(event.defaultPrevented).toBe(true);
@@ -521,9 +484,7 @@ describe("useSelectionToolbar — keyboard routing matrix", () => {
         </mark>
       ),
     });
-    const mark = document.querySelector<HTMLElement>(
-      'mark[data-highlight-id="hl-8"]',
-    )!;
+    const mark = document.querySelector<HTMLElement>('mark[data-highlight-id="hl-8"]')!;
     mark.focus();
     pressKey(" ", mark);
     expect(api.setOpenPopoverFor).toHaveBeenCalledWith("hl-8");
@@ -535,10 +496,9 @@ describe("useSelectionToolbar — keyboard routing matrix", () => {
     expect(document.activeElement).toBe(document.body);
     const event = pressKey("Tab");
     expect(event.defaultPrevented).toBe(true);
-    expect(
-      document.activeElement ===
-        document.querySelector(".selection-toolbar button"),
-    ).toBe(true);
+    expect(document.activeElement === document.querySelector(".selection-toolbar button")).toBe(
+      true,
+    );
   });
 
   it("Tab does NOT route into a hint-only toolbar (no buttons to focus)", async () => {
@@ -560,9 +520,7 @@ describe("useSelectionToolbar — keyboard routing matrix", () => {
   it("Tab ON the last button dismisses the toolbar (tab-past, no preventDefault)", async () => {
     const api = makeApi();
     await mountActionableToolbar(api);
-    const buttons = document.querySelectorAll<HTMLElement>(
-      ".selection-toolbar button",
-    );
+    const buttons = document.querySelectorAll<HTMLElement>(".selection-toolbar button");
     const lastBtn = buttons[buttons.length - 1]!;
     lastBtn.focus();
     const event = pressKey("Tab");
@@ -575,10 +533,9 @@ describe("useSelectionToolbar — keyboard routing matrix", () => {
     await mountActionableToolbar(api);
     // Tab #1 routes onto the first button...
     pressKey("Tab");
-    expect(
-      document.activeElement ===
-        document.querySelector(".selection-toolbar button"),
-    ).toBe(true);
+    expect(document.activeElement === document.querySelector(".selection-toolbar button")).toBe(
+      true,
+    );
     // ...focus exits → dismissal → toolbar unmounted...
     document.querySelector<HTMLElement>('[data-testid="outside"]')!.focus();
     await waitFor(() => expect(queryToolbar()).toBeNull());
@@ -592,9 +549,7 @@ describe("useSelectionToolbar — keyboard routing matrix", () => {
     renderHarness(api, {
       extraBody: <input data-testid="field" aria-label="field" />,
     });
-    const field = document.querySelector<HTMLInputElement>(
-      '[data-testid="field"]',
-    )!;
+    const field = document.querySelector<HTMLInputElement>('[data-testid="field"]')!;
     selectInRoot(6, 19);
     fireSelectionChange();
     flushRaf();
@@ -616,21 +571,16 @@ describe("useSelectionToolbar — article lifecycle", () => {
     flushRaf();
     await waitFor(() => expect(queryToolbar()).not.toBeNull());
     // Swap: article → null (the route's load effect) clears the trio.
-    rerender(
-      <Harness article={null} api={api} onController={undefined} />,
-    );
+    rerender(<Harness article={null} api={api} onController={undefined} />);
     await waitFor(() => expect(queryToolbar()).toBeNull());
     // And a fresh selection on the new article mounts it again.
-    rerender(
-      <Harness article={makeArticle()} api={api} onController={undefined} />,
-    );
+    rerender(<Harness article={makeArticle()} api={api} onController={undefined} />);
     selectInRoot(6, 19);
     fireSelectionChange();
     flushRaf();
     await waitFor(() => expect(queryToolbar()).not.toBeNull());
   });
 });
-
 
 describe("completed pointer selection", () => {
   function releasePointer() {
@@ -645,9 +595,7 @@ describe("completed pointer selection", () => {
     selectInRoot(6, 19);
     fireEvent(document, new Event("selectionchange"));
     flushRaf();
-    await waitFor(() =>
-      expect(view.getByRole("button", { name: /^Highlight$/ })).toBeTruthy(),
-    );
+    await waitFor(() => expect(view.getByRole("button", { name: /^Highlight$/ })).toBeTruthy());
     fireEvent(
       document.querySelector('[data-testid="reading-root"] p')!,
       Object.assign(new Event("pointerup", { bubbles: true }), { button: 0 }),

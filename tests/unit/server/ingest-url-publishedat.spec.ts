@@ -93,8 +93,8 @@ async function ingestUrl(publishedTime?: string): Promise<{
   if (!response.ok) return { ok: false, reason: (response as { reason: string }).reason };
   return {
     ok: true,
-    publishedAt: (response as { article?: { provenance?: { publishedAt?: string } } })
-      .article?.provenance?.publishedAt,
+    publishedAt: (response as { article?: { provenance?: { publishedAt?: string } } }).article
+      ?.provenance?.publishedAt,
   };
 }
 

@@ -27,13 +27,14 @@ Create a focused branch, keep changes scoped, and add or update tests with behav
 Run the checks relevant to your change before opening a pull request:
 
 ```bash
-npm run lint
-npm run lint:no-danger
+npm run lint           # ESLint + the no-dangerouslySetInnerHTML gate
+npm run format:check
+npm run typecheck
 npm run test:unit -- --run
 npm run build
 ```
 
-Pagination, selection, focus, zoom, reflow, or responsive UI changes should also run the relevant Playwright specs in all configured browser engines. The complete suite is available with `npm test`.
+CI runs these same checks plus the Playwright suite on every pull request; the performance budget harness runs non-blocking until its thresholds are re-baselined for CI hardware. Pagination, selection, focus, zoom, reflow, or responsive UI changes should still run the relevant Playwright specs in all configured browser engines locally. The complete suite is available with `npm test`.
 
 ## Project guardrails
 

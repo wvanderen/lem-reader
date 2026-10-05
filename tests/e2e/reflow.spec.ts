@@ -8,11 +8,7 @@ import { test, expect } from "@playwright/test";
 import { assertEdgeInvariant } from "./_edge-invariant";
 // Plan 21-06 (D21-14 / ACPT-08) — the four-destination matrix cells below
 // (additive import; the cells are additive to the reader cells above).
-import {
-  DESTINATIONS,
-  assertDestinationInvariant,
-  openEdgeDestination,
-} from "./_edge-invariant";
+import { DESTINATIONS, assertDestinationInvariant, openEdgeDestination } from "./_edge-invariant";
 import { FIXTURES, wipeDatabase, openArticle } from "./annotations/_fixtures";
 // Plan 16-04 — the shared dialog-opening helper (the dialog-open reflow
 // case below; ADD-04 geometry proof).
@@ -77,21 +73,13 @@ test.describe("Reflow at 320px (A11Y-04)", () => {
 
     await expandSettingsGroup(page, "Appearance");
     // Reading and Appearance controls stay reachable at 320px.
-    for (const legend of [
-      "Typeface",
-      "Text size",
-      "Reading width",
-      "Spacing",
-      "Theme",
-    ]) {
+    for (const legend of ["Typeface", "Text size", "Reading width", "Spacing", "Theme"]) {
       await expect(page.getByText(legend, { exact: false }).first()).toBeVisible();
     }
 
     // Reset + close buttons are visible and operable.
     await expect(page.getByRole("button", { name: "Reset to defaults" })).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Close reading settings" }),
-    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Close reading settings" })).toBeVisible();
 
     // The panel itself does not introduce horizontal overflow on the page.
     const bodyOverflow = await page.evaluate(() => {
@@ -112,9 +100,7 @@ test.describe("Reflow at 320px (A11Y-04)", () => {
     page,
   }) => {
     await page.goto(`${BASE}/#/`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
 
     await openAddDialog(page);
     const dlg = page.locator("dialog.add-dialog");
@@ -145,10 +131,9 @@ test.describe("Reflow at 320px (A11Y-04)", () => {
       geometry.right,
       `dialog right edge ${geometry.right} overflows the ${geometry.innerWidth}px viewport`,
     ).toBeLessThanOrEqual(geometry.innerWidth + 1);
-    expect(
-      geometry.overflowY,
-      "the dialog scrolls its own tall content (overflow:auto)",
-    ).toBe("auto");
+    expect(geometry.overflowY, "the dialog scrolls its own tall content (overflow:auto)").toBe(
+      "auto",
+    );
 
     // Operability at 320px: every radio responds, the selected source's
     // input renders, and the submit control reflects typed input.
@@ -157,9 +142,7 @@ test.describe("Reflow at 320px (A11Y-04)", () => {
     await pickSource(page, "file");
     await expect(page.locator("input#ingest-file")).toBeVisible();
     await pickSource(page, "url");
-    await page
-      .getByRole("textbox", { name: /add by url/i })
-      .fill("https://example.com/reflow-320");
+    await page.getByRole("textbox", { name: /add by url/i }).fill("https://example.com/reflow-320");
     await expect(page.getByRole("button", { name: /^add$/i })).toBeEnabled();
   });
 
@@ -177,9 +160,7 @@ test.describe("Reflow at 320px (A11Y-04)", () => {
   // authoritative as a direct WCAG 1.4.10 proof (D6-12); no duplication
   // in this new test (the helper owns (c) here).
   for (const fixture of FIXTURES) {
-    test(`shared invariant holds at 320px reflow @ ${fixture} (D6-09)`, async ({
-      page,
-    }) => {
+    test(`shared invariant holds at 320px reflow @ ${fixture} (D6-09)`, async ({ page }) => {
       await openArticle(page, fixture);
       await assertEdgeInvariant(page, {
         fixture,

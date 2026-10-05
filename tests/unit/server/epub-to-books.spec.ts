@@ -47,18 +47,12 @@ import {
   type ChapterDraft,
 } from "../../../server/epubToBooks";
 import { IngestionError } from "../../../server/errors";
-import {
-  EPUB_MAX_ENTRY_BYTES,
-  MAX_FIGURES_PER_ARTICLE,
-} from "../../../server/limits";
+import { EPUB_MAX_ENTRY_BYTES, MAX_FIGURES_PER_ARTICLE } from "../../../server/limits";
 import { BlockSchema, type Block } from "../../../src/content/schema";
 
 /** Rejects with an IngestionError carrying exactly `reason`; returns the
  * error so per-test message assertions can chain. */
-async function expectRefusal(
-  build: () => Uint8Array,
-  reason: string,
-): Promise<IngestionError> {
+async function expectRefusal(build: () => Uint8Array, reason: string): Promise<IngestionError> {
   try {
     await epubToBooks(build());
   } catch (err) {
@@ -234,11 +228,7 @@ describe("epubToBooks — TOC-merge + chapters", () => {
   it("deepNavBook → exactly 3 chapters (depth-2/3 sections never become units — Pitfall 4)", async () => {
     const result = await epubToBooks(deepNavBook());
     expect(result.chapters.length).toBe(3);
-    expect(result.chapters.map((c) => c.title)).toEqual([
-      "Part One",
-      "Part Two",
-      "Part Three",
-    ]);
+    expect(result.chapters.map((c) => c.title)).toEqual(["Part One", "Part Two", "Part Three"]);
   });
 
   it("degenerateTocBook → 4 chapters (single-entry descent)", async () => {
@@ -275,9 +265,7 @@ describe("epubToBooks — TOC-merge + chapters", () => {
     expect(result.chapters.length).toBe(1);
     const draft = result.chapters[0] as ChapterDraft;
     // The walk no longer downgrades: BOTH figures survive as figure blocks.
-    const figures = draft.blocks.filter(
-      (b): b is FigureBlockT => b.kind === "figure",
-    );
+    const figures = draft.blocks.filter((b): b is FigureBlockT => b.kind === "figure");
     expect(figures.length).toBe(2);
     // Zero-network (D20-01): neither figure admits — the remote src refuses
     // (the container is the only read source) and the relative src dangles
@@ -294,7 +282,11 @@ describe("epubToBooks — TOC-merge + chapters", () => {
     // renderer can ever load it (T-12-05 anti-beacon holds structurally).
     const remote = figures.find((f) => f.originalSrc === "https://attacker.example/track.png");
     expect(remote).toBeDefined();
-    expect(JSON.stringify(draft.blocks.filter((b) => b.kind === "figure").map((f) => (f as FigureBlockT).src))).not.toContain("attacker.example");
+    expect(
+      JSON.stringify(
+        draft.blocks.filter((b) => b.kind === "figure").map((f) => (f as FigureBlockT).src),
+      ),
+    ).not.toContain("attacker.example");
   });
 
   it("emptyBook → epub-empty (zero readerable documents — whole-book refusal, D12-11)", async () => {
@@ -340,16 +332,27 @@ describe("epubToBooks — TOC-merge + chapters", () => {
   it("the output contract carries every field stages 2+ consume (incl. both hashes)", async () => {
     const bytes = validBookEpub3();
     const result = await epubToBooks(bytes);
-    for (const key of ["bookMeta", "chapters", "skippedCount", "originalFileHash", "fallbackUsed"] as const) {
+    for (const key of [
+      "bookMeta",
+      "chapters",
+      "skippedCount",
+      "originalFileHash",
+      "fallbackUsed",
+    ] as const) {
       expect(Object.prototype.hasOwnProperty.call(result, key)).toBe(true);
     }
     const chapter = result.chapters[0] as ChapterDraft;
-    for (const key of ["blocks", "footnotes", "lang", "title", "spineIndex", "sourceHtmlHash"] as const) {
+    for (const key of [
+      "blocks",
+      "footnotes",
+      "lang",
+      "title",
+      "spineIndex",
+      "sourceHtmlHash",
+    ] as const) {
       expect(Object.prototype.hasOwnProperty.call(chapter, key)).toBe(true);
     }
-    expect(result.originalFileHash).toBe(
-      createHash("sha256").update(bytes).digest("hex"),
-    );
+    expect(result.originalFileHash).toBe(createHash("sha256").update(bytes).digest("hex"));
     expect(chapter.sourceHtmlHash).toMatch(/^[0-9a-f]{64}$/);
     expect(result.bookMeta.title).toBe("The Synthetic Book");
     expect(EPUB_THRESHOLDS.minChapterBlocks).toBe(3);
@@ -465,11 +468,11 @@ describe("epubToBooks — 20-06 container extraction", () => {
   it("refuses a dangling marker (no archive entry) calmly with alt + caption intact", async () => {
     const result = await epubToBooks(figureChapterBook());
     const draft = result.chapters[0] as ChapterDraft;
-    const dangling = figuresOf(draft).find(
-      (f) => f.alt === "A figure whose entry is missing.",
-    );
+    const dangling = figuresOf(draft).find((f) => f.alt === "A figure whose entry is missing.");
     expect(dangling).toBeDefined();
-    expect("src" in (dangling as FigureBlockT) && (dangling as FigureBlockT).src !== undefined).toBe(false);
+    expect(
+      "src" in (dangling as FigureBlockT) && (dangling as FigureBlockT).src !== undefined,
+    ).toBe(false);
     expect(captionText(dangling as FigureBlockT)).toBe("The dangling figure caption stays.");
   });
 

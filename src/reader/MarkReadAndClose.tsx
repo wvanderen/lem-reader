@@ -21,11 +21,7 @@ interface MarkReadAndCloseProps {
   placement: "flow" | "page";
 }
 
-export function MarkReadAndClose({
-  onMarkRead,
-  hasAppHistory,
-  placement,
-}: MarkReadAndCloseProps) {
+export function MarkReadAndClose({ onMarkRead, hasAppHistory, placement }: MarkReadAndCloseProps) {
   const handleClick = () => {
     onMarkRead();
     leaveArticleToLibrary(hasAppHistory);

@@ -54,8 +54,7 @@ async function waitForPaginationReady(
   await page.goto(`${BASE}/#/article/${fixture}`);
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await page.waitForFunction(
-    () =>
-      (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
+    () => (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
     undefined,
     { timeout: 8000 },
   );
@@ -71,9 +70,7 @@ test.describe("PAGE-03b no-overflow invariant (04-05)", () => {
   for (const fixture of FIXTURES) {
     for (const viewport of VIEWPORTS) {
       const cell = `${fixture}@${viewport.width}x${viewport.height}`;
-      test(`${cell}: no rendered text crosses the page boundary`, async ({
-        page,
-      }) => {
+      test(`${cell}: no rendered text crosses the page boundary`, async ({ page }) => {
         const pageErrors: string[] = [];
         page.on("pageerror", (err) => pageErrors.push(String(err)));
 
@@ -129,9 +126,11 @@ test.describe("PAGE-03b no-overflow invariant (04-05)", () => {
               clippedTextRects,
             };
           });
-          expect(geom, `page ${pageNum}: paginated-surface + page-fragment must be mounted`).not.toBeNull();
-          const overflow =
-            geom!.fragmentScrollHeight - geom!.pageViewportClientHeight;
+          expect(
+            geom,
+            `page ${pageNum}: paginated-surface + page-fragment must be mounted`,
+          ).not.toBeNull();
+          const overflow = geom!.fragmentScrollHeight - geom!.pageViewportClientHeight;
           expect(
             overflow,
             `page ${pageNum}/${totalPages}: fragment scrollHeight (${geom!.fragmentScrollHeight}) must not exceed page viewport clientHeight (${geom!.pageViewportClientHeight}) + ${TOLERANCE_PX}px tolerance`,

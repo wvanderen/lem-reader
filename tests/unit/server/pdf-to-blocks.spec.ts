@@ -32,13 +32,7 @@ import {
 } from "../../fixtures/pdf/generate-synthetic-pdfs";
 
 // ── Synthetic fixture loading (tests/fixtures/pdf — committed corpus) ────────
-const FIXTURES_DIR = join(
-  dirname(fileURLToPath(import.meta.url)),
-  "..",
-  "..",
-  "fixtures",
-  "pdf",
-);
+const FIXTURES_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "fixtures", "pdf");
 
 function fixtureBytes(name: string): Uint8Array {
   return new Uint8Array(readFileSync(join(FIXTURES_DIR, name)));
@@ -159,7 +153,9 @@ describe("mapPdfjsError — PasswordException / InvalidPDFException name match",
 
   it("returns null for unknown error names (caller rethrows; orchestrator maps to server-error)", () => {
     expect(mapPdfjsError(new Error("boom"))).toBeNull();
-    expect(mapPdfjsError(Object.assign(new Error("x"), { name: "SomethingElseException" }))).toBeNull();
+    expect(
+      mapPdfjsError(Object.assign(new Error("x"), { name: "SomethingElseException" })),
+    ).toBeNull();
     expect(mapPdfjsError("not an error")).toBeNull();
     expect(mapPdfjsError(null)).toBeNull();
   });
@@ -309,7 +305,9 @@ describe("pdfToBlocks — font-size heading fallback", () => {
 
   it("fallback headings are level 2 (bodies start at h2 — one-h1 rule)", async () => {
     const { blocks } = await pdfToBlocks(fixtureBytes("synthetic-single-column.pdf"));
-    const headings = blocks.filter((b): b is Extract<Block, { kind: "heading" }> => b.kind === "heading");
+    const headings = blocks.filter(
+      (b): b is Extract<Block, { kind: "heading" }> => b.kind === "heading",
+    );
     expect(headings.length).toBeGreaterThan(0);
     for (const h of headings) {
       expect(h.level).toBeGreaterThanOrEqual(2);
@@ -345,7 +343,10 @@ describe("pdfToBlocks — paragraph assembly and hyphenation", () => {
     // the gap block sits BETWEEN the two paragraph groups of page 3
     const idx = blocks.findIndex((b) => b.kind === "unsupported");
     const before = blocks.slice(0, idx).map(textOf).join(" ");
-    const after = blocks.slice(idx + 1).map(textOf).join(" ");
+    const after = blocks
+      .slice(idx + 1)
+      .map(textOf)
+      .join(" ");
     expect(before).toContain("figure stand-in");
     expect(after).toContain("resumes below the figure stand-in");
   });
@@ -417,9 +418,7 @@ describe("pdfToBlocks — intra-line x-gap space rule (itemGapRatio × fontSize)
         pages: [
           sparseLinesPage("Alpha page"),
           sparseLinesPage("Beta page"),
-          buildContentStream([
-            { x: 60, y: 740, font: "F1", size: 12, text: "Closing note" },
-          ]),
+          buildContentStream([{ x: 60, y: 740, font: "F1", size: 12, text: "Closing note" }]),
         ],
       }),
     );
@@ -483,8 +482,7 @@ describe("outlineHeadingTargets — two-shaped dest resolution (stub pdf)", () =
       ],
       getDestination: async (id: string) =>
         id === "dest-a" ? [{ num: 3, gen: 0 }, { name: "XYZ" }, 0, 700, 0] : null,
-      getPageIndex: async (ref: unknown) =>
-        (ref as { num: number }).num === 3 ? 0 : 1,
+      getPageIndex: async (ref: unknown) => ((ref as { num: number }).num === 3 ? 0 : 1),
     };
     const targets = await outlineHeadingTargets(stubPdf);
     // Null-dest and url-bearing entries are skipped; a parent with a valid

@@ -99,12 +99,7 @@ function longParagraph(topic: string): string {
   ).repeat(5);
 }
 
-const LONG_TOPICS = [
-  "first trailing",
-  "second trailing",
-  "third trailing",
-  "fourth trailing",
-];
+const LONG_TOPICS = ["first trailing", "second trailing", "third trailing", "fourth trailing"];
 
 const FIGURE_ARTICLE: CanonicalArticle = ArticleSchema.parse({
   id: "figure-heavy", // registry-backed id — asset resolution never touches Dexie

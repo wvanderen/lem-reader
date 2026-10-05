@@ -41,11 +41,7 @@ function parseArticle(blocks: unknown[]): CanonicalArticle {
 }
 
 /** Build a uniform LineBox[] schedule (mirrors fragmentOrder.test.ts). */
-function uniformLineBoxes(
-  textLength: number,
-  charsPerLine: number,
-  lineHeight = 20,
-): LineBox[] {
+function uniformLineBoxes(textLength: number, charsPerLine: number, lineHeight = 20): LineBox[] {
   if (textLength === 0) return [];
   const count = Math.max(1, Math.ceil(textLength / charsPerLine));
   const boxes: LineBox[] = [];
@@ -101,9 +97,7 @@ describe("PAGE-04 termination guard 1 — atomic block oversize (>75% page)", ()
         caption: [{ text: "caption" }],
       },
     ]);
-    const measurement = measurementStub([
-      { kind: "figure", heightPx: 80, lineCount: 1 },
-    ]);
+    const measurement = measurementStub([{ kind: "figure", heightPx: 80, lineCount: 1 }]);
     const { bus, events } = trackingBus();
     const result = paginateDocument({
       article,
@@ -127,9 +121,7 @@ describe("PAGE-04 termination guard 1 — atomic block oversize (>75% page)", ()
         caption: [{ text: "cap" }],
       },
     ]);
-    const measurement = measurementStub([
-      { kind: "figure", heightPx: 75, lineCount: 1 },
-    ]);
+    const measurement = measurementStub([{ kind: "figure", heightPx: 75, lineCount: 1 }]);
     const { bus } = trackingBus();
     const result = paginateDocument({
       article,
@@ -145,9 +137,7 @@ describe("PAGE-04 termination guard 1 — atomic block oversize (>75% page)", ()
     const article = parseArticle([
       { kind: "heading", level: 2, content: [{ text: "Big heading" }] },
     ]);
-    const measurement = measurementStub([
-      { kind: "heading", heightPx: 76, lineCount: 1 },
-    ]);
+    const measurement = measurementStub([{ kind: "heading", heightPx: 76, lineCount: 1 }]);
     const { bus, events } = trackingBus();
     const result = paginateDocument({
       article,
@@ -165,9 +155,7 @@ describe("PAGE-04 termination guard 1 — atomic block oversize (>75% page)", ()
     const article = parseArticle([
       { kind: "code-block", language: "html", source: "<p>Example</p>" },
     ]);
-    const measurement = measurementStub([
-      { kind: "code-block", heightPx: 80, lineCount: 4 },
-    ]);
+    const measurement = measurementStub([{ kind: "code-block", heightPx: 80, lineCount: 4 }]);
     const { bus } = trackingBus();
     const result = paginateDocument({
       article,
@@ -184,9 +172,7 @@ describe("PAGE-04 termination guard 1 — atomic block oversize (>75% page)", ()
     // Paragraphs are splitting-kind — the oversize guard does NOT apply.
     // Even at 90% page height, the engine splits rather than falls back.
     const text = "aa bb cc dd ee"; // 5 segments → 5 line offsets
-    const article = parseArticle([
-      { kind: "paragraph", content: [{ text }] },
-    ]);
+    const article = parseArticle([{ kind: "paragraph", content: [{ text }] }]);
     const measurement = measurementStub([
       {
         kind: "paragraph",
@@ -219,9 +205,7 @@ describe("PAGE-04 termination guard 2 — page-count ceiling (>300 pages)", () =
       kind: "paragraph" as const,
       content: [{ text: t }] as InlineRun[],
     });
-    const article = parseArticle(
-      Array.from({ length: 200 }, () => para(text)),
-    );
+    const article = parseArticle(Array.from({ length: 200 }, () => para(text)));
     const measurement = measurementStub(
       Array.from({ length: 200 }, () => ({
         kind: "paragraph",
@@ -253,9 +237,7 @@ describe("PAGE-04 termination guard 3 — unsplittable-block overflow (zero-prog
     // Page height tiny (30px) so the 4-line paragraph can't fit even on a
     // fresh page after a flush. Engine hits the unsplittable-overflow path.
     const text = "aa bb cc dd"; // 4 segments
-    const article = parseArticle([
-      { kind: "paragraph", content: [{ text }] },
-    ]);
+    const article = parseArticle([{ kind: "paragraph", content: [{ text }] }]);
     const measurement = measurementStub([
       {
         kind: "paragraph",

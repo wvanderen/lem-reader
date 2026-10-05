@@ -184,9 +184,7 @@ function buildRationale(
   return `Calibration run with tolerance heightDriftPx<=${TOLERANCE_PX} AND breaks exact. Per-(engine,fixture,variant,kind) eligibility recorded; per-cell eligibility may legitimately differ across fonts/spacings (Pitfalls 5: system-ui in sans unsafe on macOS; 6: wordSpacing unmodeled under spacious). A kind is engine-eligible iff >= ${ELIGIBILITY_THRESHOLD * 100}% of its cells pass. Derived from ${cells}.`;
 }
 
-function normalizeEngines(
-  byEngine: Record<string, EngineRows>,
-): Record<string, EngineRows> {
+function normalizeEngines(byEngine: Record<string, EngineRows>): Record<string, EngineRows> {
   const out: Record<string, EngineRows> = {};
   for (const engine of ["chromium", "firefox", "webkit"]) {
     out[engine] = byEngine[engine] ?? {};
@@ -223,11 +221,7 @@ function main(): void {
 
   // Write the fresh fingerprint (regenerate the committed artifact).
   mkdirSync(resolve(FINGERPRINT_PATH, ".."), { recursive: true });
-  writeFileSync(
-    FINGERPRINT_PATH,
-    JSON.stringify(freshFingerprint, null, 2) + "\n",
-    "utf8",
-  );
+  writeFileSync(FINGERPRINT_PATH, JSON.stringify(freshFingerprint, null, 2) + "\n", "utf8");
   console.log(
     `[calibration] wrote ${FINGERPRINT_PATH} (${freshResults.length} samples, engines: ${enginesPresent.join(", ") || "none"})`,
   );
@@ -236,9 +230,7 @@ function main(): void {
   // (engine, kind) pairs. A committed-eligible kind now ineligible = FAIL.
   const committed = loadCommittedFingerprint();
   if (!committed || !committed.engines) {
-    console.log(
-      "[calibration] no committed fingerprint to diff against (first run); exit 0",
-    );
+    console.log("[calibration] no committed fingerprint to diff against (first run); exit 0");
     process.exit(0);
   }
 
@@ -269,9 +261,7 @@ function main(): void {
     process.exit(1);
   }
 
-  console.log(
-    "[calibration] D3-10 gate PASSED — no previously-eligible kind regressed",
-  );
+  console.log("[calibration] D3-10 gate PASSED — no previously-eligible kind regressed");
   process.exit(0);
 }
 

@@ -195,8 +195,7 @@ export function DeleteHighlightConfirm({
             removed" register. The Dexie transaction makes that removal
             atomic, so the copy never overstates or understates. */}
         <p id="review-remove-body">
-          Remove this highlight? The note attached to it will also be
-          removed.
+          Remove this highlight? The note attached to it will also be removed.
         </p>
         {/* Informational excerpt context (the NotePopover aria-describedby
             pattern) — a React text child, never raw HTML (T-10-05a). */}

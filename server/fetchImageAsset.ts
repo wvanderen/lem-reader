@@ -38,11 +38,7 @@ import { imageSize } from "image-size";
 // cleanup.
 import isAnimatedRaw from "is-animated";
 import { safeFetchCore, type SafeFetchProfile } from "./safeFetch";
-import {
-  MAX_ASSET_BYTES,
-  MAX_ASSET_PIXELS,
-  ASSET_FETCH_TIMEOUT_MS,
-} from "./limits";
+import { MAX_ASSET_BYTES, MAX_ASSET_PIXELS, ASSET_FETCH_TIMEOUT_MS } from "./limits";
 
 /** The typed surface this module consumes from is-animated: one Buffer
  * predicate (GIF / APNG / animated-WebP detection — exactly the D20-09 list).

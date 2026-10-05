@@ -41,7 +41,9 @@ function stubProxy(): {
 
 /** Outcome capturer: attaches BOTH handlers immediately so the race rejection
  * is never unhandled between the timer firing and the assertion. */
-function capture<T>(p: Promise<T>): Promise<{ ok: true; value: T } | { ok: false; error: unknown }> {
+function capture<T>(
+  p: Promise<T>,
+): Promise<{ ok: true; value: T } | { ok: false; error: unknown }> {
   return p.then(
     (value) => ({ ok: true as const, value }),
     (error: unknown) => ({ ok: false as const, error }),
@@ -63,9 +65,7 @@ describe("withPdfDocument — 30s extraction-timeout firing path (D13-11)", () =
     // Bytes are never parsed — the loader is mocked; the value is inert.
     const bytes = new Uint8Array([0x25, 0x50, 0x44, 0x46]);
 
-    const outcome = capture(
-      withPdfDocument(bytes, () => new Promise<string>(() => {})),
-    );
+    const outcome = capture(withPdfDocument(bytes, () => new Promise<string>(() => {})));
     // Flush the mocked loader's microtask first so the race timer is
     // installed at fake-time 0 BEFORE the clock advances past it.
     await vi.advanceTimersByTimeAsync(0);
@@ -88,9 +88,7 @@ describe("withPdfDocument — 30s extraction-timeout firing path (D13-11)", () =
     vi.mocked(getDocumentProxy).mockResolvedValue(proxy);
     const bytes = new Uint8Array([0x25, 0x50, 0x44, 0x46]);
 
-    const outcome = capture(
-      withPdfDocument(bytes, () => new Promise<string>(() => {})),
-    );
+    const outcome = capture(withPdfDocument(bytes, () => new Promise<string>(() => {})));
     await vi.advanceTimersByTimeAsync(0);
     await vi.advanceTimersByTimeAsync(PDF_EXTRACTION_TIMEOUT_MS + 1);
 

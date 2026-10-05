@@ -30,10 +30,7 @@
 // image stub + goto BASE + "Saved articles" wait + raw IndexedDB clear-rows.
 import { test, expect, type Page } from "@playwright/test";
 import { fixtures } from "../../../src/fixtures";
-import {
-  normalizeText,
-  graphemeClusters,
-} from "../../../src/content/normalizeText";
+import { normalizeText, graphemeClusters } from "../../../src/content/normalizeText";
 // REUSE-DO-NOT-FORK: the shared controllable-fake speechSynthesis harness.
 import { installFakeSpeech, type SpeechMode } from "./_speech";
 // Shared plumbing (BASE/clear/tab-walk) + the LIVE follow labels (one
@@ -45,9 +42,7 @@ const ARTICLE = fixtures[0]!;
 const ARTICLE_HREF = `#/article/${ARTICLE.id}`;
 const TOTAL = graphemeClusters(normalizeText(ARTICLE), ARTICLE.lang).length;
 
-async function readLocationRow(
-  page: Page,
-): Promise<{ graphemeOffset: number } | null> {
+async function readLocationRow(page: Page): Promise<{ graphemeOffset: number } | null> {
   return page.evaluate(async (articleId) => {
     return new Promise((resolve) => {
       const req = indexedDB.open("lem-reader");
@@ -72,10 +67,7 @@ async function readLocationRow(
   }, ARTICLE.id);
 }
 
-async function seedLocationRow(
-  page: Page,
-  graphemeOffset: number,
-): Promise<void> {
+async function seedLocationRow(page: Page, graphemeOffset: number): Promise<void> {
   await page.evaluate(
     ({ articleId, revision, offset }) => {
       return new Promise<void>((resolve) => {
@@ -134,9 +126,9 @@ async function openArticle(
   // New document: the stub installs, the app boots at the library, and the
   // first load constructs the Dexie schema for the raw-IndexedDB seam below.
   await page.goto(`${BASE}/`);
-  await expect(
-    page.getByRole("heading", { name: "Saved articles" }),
-  ).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible({
+    timeout: 10_000,
+  });
   await clearAllRows(page);
   if (opts.seedOffset !== undefined) {
     await seedLocationRow(page, opts.seedOffset);
@@ -166,35 +158,27 @@ test.describe("Issue #40 — the read-aloud minimal speakable path", () => {
     // Focus stays put on play (the app never moves focus; the click is
     // delivered programmatically so button-focus cannot mask a steal).
     await page.getByRole("heading", { name: ARTICLE.provenance.title }).click();
-    const focusedBefore = await page.evaluate(
-      () => document.activeElement?.tagName ?? null,
-    );
+    const focusedBefore = await page.evaluate(() => document.activeElement?.tagName ?? null);
     await pressPrimaryWithoutFocus(page);
     await expect(bar.getByRole("button", { name: "Pause" })).toBeVisible();
-    const focusedAfter = await page.evaluate(
-      () => document.activeElement?.tagName ?? null,
-    );
+    const focusedAfter = await page.evaluate(() => document.activeElement?.tagName ?? null);
     expect(focusedBefore).toBe("H1");
     expect(focusedAfter).toBe("H1");
 
     // The ONE transport status region announced the start (exactly one
     // polite region carries the transport copy).
-    await expect(
-      page.getByRole("status").filter({ hasText: "Reading aloud." }),
-    ).toHaveCount(1);
+    await expect(page.getByRole("status").filter({ hasText: "Reading aloud." })).toHaveCount(1);
 
     // Pause flips the NAME back; the pause announcement lands; Stop (now
     // meaningful) stops and announces through the same region — and the
     // bar collapses back to the idle entry.
     await bar.getByRole("button", { name: "Pause" }).click();
     await expect(bar.getByRole("button", { name: "Play" })).toBeVisible();
-    await expect(
-      page.getByRole("status").filter({ hasText: "Read aloud paused." }),
-    ).toHaveCount(1);
+    await expect(page.getByRole("status").filter({ hasText: "Read aloud paused." })).toHaveCount(1);
     await bar.getByRole("button", { name: "Stop" }).click();
-    await expect(
-      page.getByRole("status").filter({ hasText: "Read aloud stopped." }),
-    ).toHaveCount(1);
+    await expect(page.getByRole("status").filter({ hasText: "Read aloud stopped." })).toHaveCount(
+      1,
+    );
     await expect(bar.getByRole("button", { name: "Read aloud" })).toBeVisible();
 
     // Keyboard-reachable end to end with visible focus (issue #90's
@@ -214,17 +198,13 @@ test.describe("Issue #40 — the read-aloud minimal speakable path", () => {
         const el = document.activeElement as HTMLElement | null;
         return el ? getComputedStyle(el).outlineStyle : "none";
       });
-      expect(ring, "Tab-originated focus shows the visible focus ring").not.toBe(
-        "none",
-      );
+      expect(ring, "Tab-originated focus shows the visible focus ring").not.toBe("none");
     } else {
       await page.locator(entrySel).first().focus();
       await expect(page.locator(entrySel)).toBeFocused();
     }
     await page.keyboard.press("Enter");
-    await expect(
-      bar.getByRole("button", { name: "Pause" }),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(bar.getByRole("button", { name: "Pause" })).toBeVisible({ timeout: 10_000 });
   });
 
   test("word-capable voice: probe resolves 'word', listening persists and restores", async ({
@@ -260,14 +240,10 @@ test.describe("Issue #40 — the read-aloud minimal speakable path", () => {
       w.__speechFire("boundary", 8);
     });
     await expect
-      .poll(
-        async () => (await readLocationRow(page))?.graphemeOffset,
-        {
-          timeout: 15_000,
-          message:
-            "expected the listened position to persist as a location row",
-        },
-      )
+      .poll(async () => (await readLocationRow(page))?.graphemeOffset, {
+        timeout: 15_000,
+        message: "expected the listened position to persist as a location row",
+      })
       .toBeGreaterThan(0);
 
     // Leave and reopen (goto + reload — the openView remount discipline:
@@ -283,9 +259,7 @@ test.describe("Issue #40 — the read-aloud minimal speakable path", () => {
     });
   });
 
-  test("sentence-only voice: probe resolves 'sentence' without stalling", async ({
-    page,
-  }) => {
+  test("sentence-only voice: probe resolves 'sentence' without stalling", async ({ page }) => {
     await openArticle(page, "sentence");
     const bar = page.locator(".readaloud-bar");
     await bar.getByRole("button", { name: "Read aloud" }).click();
@@ -300,9 +274,7 @@ test.describe("Issue #40 — the read-aloud minimal speakable path", () => {
     // to its end — the queue advances (no stall).
     await page.waitForTimeout(200);
     const spokenAfterFirst = await page.evaluate(
-      () =>
-        (window as unknown as { __speechSpoken: unknown[] }).__speechSpoken
-          .length,
+      () => (window as unknown as { __speechSpoken: unknown[] }).__speechSpoken.length,
     );
     expect(spokenAfterFirst).toBeGreaterThanOrEqual(2); // probe + chunk 1
     await page.evaluate(() => {
@@ -313,9 +285,7 @@ test.describe("Issue #40 — the read-aloud minimal speakable path", () => {
     });
     await page.waitForTimeout(100);
     const spokenAfterAdvance = await page.evaluate(
-      () =>
-        (window as unknown as { __speechSpoken: unknown[] }).__speechSpoken
-          .length,
+      () => (window as unknown as { __speechSpoken: unknown[] }).__speechSpoken.length,
     );
     expect(spokenAfterAdvance).toBe(spokenAfterFirst + 1); // chunk 2 queued
     await bar.getByRole("button", { name: "Stop" }).click();
@@ -334,16 +304,14 @@ test.describe("Issue #40 — the read-aloud minimal speakable path", () => {
     await expect(bar.getByText(FOLLOW_LABELS["progress-only"])).toBeVisible({
       timeout: 10_000,
     });
-    await expect(
-      page.getByRole("status").filter({ hasText: "Speech didn't start." }),
-    ).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole("status").filter({ hasText: "Speech didn't start." })).toBeVisible({
+      timeout: 30_000,
+    });
     // The transport returned to its honest rest state (the idle entry).
     await expect(bar.getByRole("button", { name: "Read aloud" })).toBeVisible();
   });
 
-  test("finishing by ear marks the article finished (the end-pin persists)", async ({
-    page,
-  }) => {
+  test("finishing by ear marks the article finished (the end-pin persists)", async ({ page }) => {
     // A saved position near the end: Play starts from the chunk containing
     // it; speaking the remaining chunks to the last end persists the ONE
     // end-pin (offset = total) — the Finished check's own truth.
@@ -354,9 +322,7 @@ test.describe("Issue #40 — the read-aloud minimal speakable path", () => {
     await pressPrimaryWithoutFocus(page);
     await expect(
       bar.getByText(
-        new RegExp(
-          [FOLLOW_LABELS.word, FOLLOW_LABELS.sentence, FOLLOW_LABELS.passage].join("|"),
-        ),
+        new RegExp([FOLLOW_LABELS.word, FOLLOW_LABELS.sentence, FOLLOW_LABELS.passage].join("|")),
       ),
     ).toBeVisible({
       timeout: 10_000,
@@ -371,8 +337,7 @@ test.describe("Issue #40 — the read-aloud minimal speakable path", () => {
         },
         {
           timeout: 30_000,
-          message:
-            "expected the end-pin offset (total) after finishing by ear",
+          message: "expected the end-pin offset (total) after finishing by ear",
         },
       )
       .toBe(TOTAL);

@@ -43,9 +43,7 @@ export interface IngestAdapterResult {
  * for `Response.json(body, { status })` (Pages Function) or
  * `res.statusCode = status; res.json(body)` (Vite middleware).
  */
-export async function handleIngestBody(
-  body: unknown,
-): Promise<IngestAdapterResult> {
+export async function handleIngestBody(body: unknown): Promise<IngestAdapterResult> {
   // Body-shape guard: a non-object body cannot be an IngestionRequest; the
   // orchestrator would throw, which the catch in `ingest()` wraps to the
   // generic "server-error". Short-circuit here so we don't pay the cost and
@@ -58,7 +56,5 @@ export async function handleIngestBody(
   }
 
   const result = await ingest(body as IngestionRequest);
-  return result.ok
-    ? { status: 200, body: result }
-    : { status: 400, body: result };
+  return result.ok ? { status: 200, body: result } : { status: 400, body: result };
 }

@@ -85,9 +85,7 @@ const stubArticle = (): CanonicalArticle => ({
     retrievedAt: "2026-07-28T00:00:00Z",
     originalHtmlHash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
   },
-  blocks: [
-    { kind: "paragraph", content: [{ text: "A body paragraph.", marks: [] }] },
-  ],
+  blocks: [{ kind: "paragraph", content: [{ text: "A body paragraph.", marks: [] }] }],
   footnotes: [],
 });
 
@@ -119,9 +117,7 @@ describe("RemoveConfirm — honest write failure (issue #98)", () => {
     removeMock.mockRejectedValueOnce(new Error("quota"));
     renderDialog(onConfirm, onCancel);
     await user.click(screen.getByRole("button", { name: "Remove article" }));
-    expect(
-      await screen.findByText("Couldn't remove this article. Try again."),
-    ).not.toBeNull();
+    expect(await screen.findByText("Couldn't remove this article. Try again.")).not.toBeNull();
     // The dialog does not lie: no success report, no silent close.
     expect(onConfirm).not.toHaveBeenCalled();
     expect(onCancel).not.toHaveBeenCalled();
@@ -151,9 +147,7 @@ describe("RemoveConfirm — honest write failure (issue #98)", () => {
 
   it("a retry after a failed write succeeds and reports success exactly once, clearing the error", async () => {
     const user = userEvent.setup();
-    removeMock
-      .mockRejectedValueOnce(new Error("quota"))
-      .mockResolvedValueOnce(undefined);
+    removeMock.mockRejectedValueOnce(new Error("quota")).mockResolvedValueOnce(undefined);
     const onConfirm = vi.fn();
     renderDialog(onConfirm, vi.fn());
     const button = screen.getByRole("button", { name: "Remove article" }) as HTMLButtonElement;
@@ -161,9 +155,7 @@ describe("RemoveConfirm — honest write failure (issue #98)", () => {
     await screen.findByText("Couldn't remove this article. Try again.");
     await user.click(button);
     await waitFor(() => expect(onConfirm).toHaveBeenCalledTimes(1));
-    expect(
-      screen.queryByText("Couldn't remove this article. Try again."),
-    ).toBeNull();
+    expect(screen.queryByText("Couldn't remove this article. Try again.")).toBeNull();
   });
 
   it("a fresh open clears a prior session's failed-write error", async () => {
@@ -192,9 +184,7 @@ describe("RemoveConfirm — honest write failure (issue #98)", () => {
         onCancel={onCancel}
       />,
     );
-    expect(
-      screen.queryByText("Couldn't remove this article. Try again."),
-    ).toBeNull();
+    expect(screen.queryByText("Couldn't remove this article. Try again.")).toBeNull();
   });
 });
 
@@ -218,17 +208,13 @@ describe("BookRemoveConfirm — honest write failure (issue #98)", () => {
     removeBookMock.mockRejectedValueOnce(new Error("quota"));
     renderDialog(onConfirm, vi.fn());
     await user.click(screen.getByRole("button", { name: "Remove book" }));
-    expect(
-      await screen.findByText("Couldn't remove this book. Try again."),
-    ).not.toBeNull();
+    expect(await screen.findByText("Couldn't remove this book. Try again.")).not.toBeNull();
     expect(onConfirm).not.toHaveBeenCalled();
   });
 
   it("a retry after a failed write succeeds and reports success exactly once", async () => {
     const user = userEvent.setup();
-    removeBookMock
-      .mockRejectedValueOnce(new Error("quota"))
-      .mockResolvedValueOnce(undefined);
+    removeBookMock.mockRejectedValueOnce(new Error("quota")).mockResolvedValueOnce(undefined);
     const onConfirm = vi.fn();
     renderDialog(onConfirm, vi.fn());
     const button = screen.getByRole("button", { name: "Remove book" }) as HTMLButtonElement;
@@ -277,17 +263,13 @@ describe("DeleteHighlightConfirm — honest write failure (issue #98)", () => {
     deleteHighlightMock.mockRejectedValueOnce(new Error("quota"));
     renderDialog(onConfirm, vi.fn());
     await user.click(screen.getByRole("button", { name: "Remove highlight" }));
-    expect(
-      await screen.findByText("Couldn't remove this highlight. Try again."),
-    ).not.toBeNull();
+    expect(await screen.findByText("Couldn't remove this highlight. Try again.")).not.toBeNull();
     expect(onConfirm).not.toHaveBeenCalled();
   });
 
   it("a retry after a failed delete succeeds and reports success exactly once", async () => {
     const user = userEvent.setup();
-    deleteHighlightMock
-      .mockRejectedValueOnce(new Error("quota"))
-      .mockResolvedValueOnce(undefined);
+    deleteHighlightMock.mockRejectedValueOnce(new Error("quota")).mockResolvedValueOnce(undefined);
     const onConfirm = vi.fn();
     renderDialog(onConfirm, vi.fn());
     const button = screen.getByRole("button", { name: "Remove highlight" }) as HTMLButtonElement;
@@ -320,12 +302,7 @@ describe("DeleteHighlightConfirm — honest write failure (issue #98)", () => {
 describe("EditMetadataDialog — honest save failure (issue #98)", () => {
   function renderDialog(onSaved: () => void, onCancel: () => void) {
     return render(
-      <EditMetadataDialog
-        open
-        article={stubArticle()}
-        onSaved={onSaved}
-        onCancel={onCancel}
-      />,
+      <EditMetadataDialog open article={stubArticle()} onSaved={onSaved} onCancel={onCancel} />,
     );
   }
 
@@ -336,9 +313,7 @@ describe("EditMetadataDialog — honest save failure (issue #98)", () => {
     putMock.mockRejectedValueOnce(new Error("quota"));
     renderDialog(onSaved, onCancel);
     await user.click(screen.getByRole("button", { name: "Save" }));
-    expect(
-      await screen.findByText("Couldn't save this change. Try again."),
-    ).not.toBeNull();
+    expect(await screen.findByText("Couldn't save this change. Try again.")).not.toBeNull();
     // The dialog does not lie: the row list is never told the save landed.
     expect(onSaved).not.toHaveBeenCalled();
     expect(onCancel).not.toHaveBeenCalled();
@@ -346,9 +321,7 @@ describe("EditMetadataDialog — honest save failure (issue #98)", () => {
 
   it("a retry after a failed save succeeds and calls onSaved exactly once, clearing the error", async () => {
     const user = userEvent.setup();
-    putMock
-      .mockRejectedValueOnce(new Error("quota"))
-      .mockResolvedValueOnce("stub-article");
+    putMock.mockRejectedValueOnce(new Error("quota")).mockResolvedValueOnce("stub-article");
     const onSaved = vi.fn();
     renderDialog(onSaved, vi.fn());
     const save = screen.getByRole("button", { name: "Save" }) as HTMLButtonElement;
@@ -356,9 +329,7 @@ describe("EditMetadataDialog — honest save failure (issue #98)", () => {
     await screen.findByText("Couldn't save this change. Try again.");
     await user.click(save);
     await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
-    expect(
-      screen.queryByText("Couldn't save this change. Try again."),
-    ).toBeNull();
+    expect(screen.queryByText("Couldn't save this change. Try again.")).toBeNull();
   });
 
   it("the Save button carries the unified busy register while the put is in flight", async () => {
@@ -409,18 +380,14 @@ describe("ReviewNoteDialog — honest commit (issue #98)", () => {
     const textarea = screen.getByLabelText("Note");
     await user.type(textarea, "my note");
     await user.click(screen.getByRole("button", { name: "Done" }));
-    expect(
-      await screen.findByText("Couldn't save the note. Try again."),
-    ).not.toBeNull();
+    expect(await screen.findByText("Couldn't save the note. Try again.")).not.toBeNull();
     expect(onDone).not.toHaveBeenCalled();
   });
 
   it("a Done retry after a failed write reports saved=true exactly once", async () => {
     const user = userEvent.setup();
     const onDone = vi.fn();
-    saveNoteMock
-      .mockRejectedValueOnce(new Error("quota"))
-      .mockResolvedValueOnce(undefined);
+    saveNoteMock.mockRejectedValueOnce(new Error("quota")).mockResolvedValueOnce(undefined);
     render(<NoteHarness onDone={onDone} />);
     const textarea = screen.getByLabelText("Note");
     await user.type(textarea, "my note");

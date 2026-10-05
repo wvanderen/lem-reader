@@ -12,7 +12,7 @@ import { computeManifest, sha256Hex } from "../../../src/portability/manifest";
 import { sampleBundle } from "./bundle-schema.test";
 
 describe("sha256Hex (known-answer test)", () => {
-  it("digests the UTF-8 bytes of \"abc\" to the known SHA-256 value", async () => {
+  it('digests the UTF-8 bytes of "abc" to the known SHA-256 value', async () => {
     const bytes = new TextEncoder().encode("abc");
     await expect(sha256Hex(bytes)).resolves.toBe(
       "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
@@ -24,9 +24,9 @@ describe("computeManifest (determinism contract — Pitfall 2 / A4)", () => {
   it("recomputes identical block hashes after a JSON stringify/parse round-trip", async () => {
     const bundle = ExportBundleSchema.parse(sampleBundle());
     const first = await computeManifest(bundle);
-    const roundTripped = JSON.parse(
-      JSON.stringify(bundle),
-    ) as Parameters<typeof computeManifest>[0];
+    const roundTripped = JSON.parse(JSON.stringify(bundle)) as Parameters<
+      typeof computeManifest
+    >[0];
     const second = await computeManifest(roundTripped);
     expect(second.blocks).toEqual(first.blocks);
   });

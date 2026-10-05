@@ -84,8 +84,6 @@ describe("TagEntry on the shared picker", () => {
     await user.click(input);
     await user.type(input, "essays");
     await user.keyboard("{Enter}");
-    await waitFor(() =>
-      expect(screen.getByRole("status")).toHaveTextContent("Couldn't save tag."),
-    );
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Couldn't save tag."));
   });
 });

@@ -34,9 +34,7 @@ import type { ReadingSessionRecord } from "../content/schema";
  * write (the saveLocation precedent). A throw propagates to the caller,
  * which swallows it (recording never interrupts reading — D2-13).
  */
-export async function putReadingSession(
-  record: ReadingSessionRecord,
-): Promise<void> {
+export async function putReadingSession(record: ReadingSessionRecord): Promise<void> {
   const row: ReadingSessionRecordRow = {
     schemaVersion: record.schemaVersion,
     id: record.id,

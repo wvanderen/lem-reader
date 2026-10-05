@@ -95,18 +95,12 @@ test.describe("SC#1 + LIB-01 + LIB-05 — browse + open + source badge", () => {
     // (Pitfall 8-5). A future LibraryView refactor that renames the heading
     // trips this assertion.
     await page.goto(`${BASE}/#/`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
   });
 
-  test("the library list shows one row per v1.0 fixture (LIB-01 + SC#1)", async ({
-    page,
-  }) => {
+  test("the library list shows one row per v1.0 fixture (LIB-01 + SC#1)", async ({ page }) => {
     await page.goto(`${BASE}/#/`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
 
     // The library list must carry exactly one row per bundled fixture. The
     // count is dynamic — fixtures.length is the canonical count from
@@ -119,13 +113,9 @@ test.describe("SC#1 + LIB-01 + LIB-05 — browse + open + source badge", () => {
     ).toHaveCount(expectedCount);
   });
 
-  test('each v1.0 fixture row carries a "Sample" source badge', async ({
-    page,
-  }) => {
+  test('each v1.0 fixture row carries a "Sample" source badge', async ({ page }) => {
     await page.goto(`${BASE}/#/`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
 
     // Wait for the library list to render before asserting on its
     // children (the LibraryView load effect resolves async after mount).
@@ -150,22 +140,16 @@ test.describe("SC#1 + LIB-01 + LIB-05 — browse + open + source badge", () => {
     await expect(page.locator(".source-badge").first()).toHaveText("Sample");
   });
 
-  test("clicking a fixture's Open article link navigates to #/article/<id>", async ({
-    page,
-  }) => {
+  test("clicking a fixture's Open article link navigates to #/article/<id>", async ({ page }) => {
     await page.goto(`${BASE}/#/`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
 
     // The first fixture's Open-article link carries aria-labelledby pointing
     // at the row's <h2 id="title-{id}"> (Pitfall 8-5 byte-stable markup).
     // Click it → ArticleView mounts at #/article/<id> and renders the
     // article title as <h1> (provenance.title).
     const firstFixture = fixtures[0]!;
-    const openLink = page
-      .locator(`a[href="#/article/${firstFixture.id}"]`)
-      .first();
+    const openLink = page.locator(`a[href="#/article/${firstFixture.id}"]`).first();
     await expect(openLink).toBeVisible();
     await openLink.click();
 
@@ -186,9 +170,7 @@ test.describe("SC#1 + LIB-01 + LIB-05 — browse + open + source badge", () => {
     page,
   }) => {
     await page.goto(`${BASE}/#/`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
 
     // Wait for the async library load before snapshotting the baseline. A
     // one-shot .count() here raced LibraryView's load effect (listArticles
@@ -211,30 +193,22 @@ test.describe("SC#1 + LIB-01 + LIB-05 — browse + open + source badge", () => {
     // a sourceUrl, which makes the SourceBadge render as a link (LIB-05).
     await openAddDialog(page);
     await pickSource(page, "paste");
-    await page
-      .getByRole("textbox", { name: /paste html/i })
-      .fill(PASTE_HTML_WITH_SOURCE);
+    await page.getByRole("textbox", { name: /paste html/i }).fill(PASTE_HTML_WITH_SOURCE);
     await page.getByRole("button", { name: /add pasted article/i }).click();
 
     // Issue #112 — the save lands on the in-dialog result screen (no
     // auto-navigation); Close returns to the library destination with the
     // never-opened article Unread.
     await closeSavedResult(page);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
 
     // The library list grew by exactly one row (the ingested paste article).
-    await expect(page.locator(".library-list > li")).toHaveCount(
-      baselineRows + 1,
-    );
+    await expect(page.locator(".library-list > li")).toHaveCount(baselineRows + 1);
 
     // The ingested row carries a "Pasted" source badge. The badge text is
     // the SourceBadge.tsx badgeLabel("paste") branch. With a sourceUrl
     // present, the badge wraps the label in an <a> (LIB-05 link variant).
-    const pastedBadge = page
-      .locator(".source-badge")
-      .filter({ hasText: "Pasted" });
+    const pastedBadge = page.locator(".source-badge").filter({ hasText: "Pasted" });
     await expect(pastedBadge.first()).toBeVisible();
     await expect(pastedBadge.first().locator("a")).toBeVisible();
   });

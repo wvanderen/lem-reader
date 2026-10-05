@@ -85,9 +85,7 @@ export function deriveToc(article: CanonicalArticle): TocEntry[] {
 
   // D18-09: synthetic Top entry first. level 2 = shallowest body level so
   // the renderer treats it as a root sibling of the first body entry.
-  const entries: TocEntry[] = [
-    { text: TOP_TEXT, offset: 0, blockIndex: -1, level: 2, depth: 0 },
-  ];
+  const entries: TocEntry[] = [{ text: TOP_TEXT, offset: 0, blockIndex: -1, level: 2, depth: 0 }];
 
   // Open-ancestor stack of {level, depth}: popped when a heading of
   // shallower-or-equal level arrives (18-RESEARCH Pattern 3 computeDepth).
@@ -98,10 +96,7 @@ export function deriveToc(article: CanonicalArticle): TocEntry[] {
     // h1 is provenance-rendered by ArticleView — never a TOC entry.
     if (block.kind !== "heading" || block.level === 1) continue;
 
-    while (
-      stack.length > 0 &&
-      stack[stack.length - 1]!.level >= block.level
-    ) {
+    while (stack.length > 0 && stack[stack.length - 1]!.level >= block.level) {
       stack.pop();
     }
     const parent = stack[stack.length - 1];

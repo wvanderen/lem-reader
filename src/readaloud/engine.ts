@@ -443,10 +443,7 @@ export class ReadAloudEngine {
  * null only for a negative charIndex (spec: engines that cannot supply one
  * return 0 — never treat 0 as "unsupported" mid-stream).
  */
-export function mapBoundaryToCanonical(
-  chunk: SpeechChunk,
-  event: BoundaryEvent,
-): number | null {
+export function mapBoundaryToCanonical(chunk: SpeechChunk, event: BoundaryEvent): number | null {
   if (event.charIndex < 0) return null;
   const clamped = Math.min(event.charIndex, chunk.utf16ToGrapheme.length - 1);
   const ordinal = chunk.utf16ToGrapheme[clamped];

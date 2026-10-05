@@ -301,9 +301,7 @@ export function BlockView({
               // path (the shared SpokenMark) — never in the accessibility
               // tree, never a popover target.
               if (isSpokenMarkerId(seg.entry.id)) {
-                return (
-                  <SpokenMark key={i}>{seg.text}</SpokenMark>
-                );
+                return <SpokenMark key={i}>{seg.text}</SpokenMark>;
               }
               const status = seg.entry.status ?? "confident";
               // Issue #118 — the named-color modifier + the announced label

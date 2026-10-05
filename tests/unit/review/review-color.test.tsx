@@ -192,9 +192,8 @@ function buildSnapshot(): LibrarySnapshot {
 
 vi.mock("../../../src/ingestion/library/useLibrarySnapshot", async () => {
   const { useSyncExternalStore } = await import("react");
-  const { onLibrarySnapshotInvalidated } = await import(
-    "../../../src/ingestion/library/librarySnapshot"
-  );
+  const { onLibrarySnapshotInvalidated } =
+    await import("../../../src/ingestion/library/librarySnapshot");
   return {
     useLibrarySnapshot: () => {
       useSyncExternalStore(onLibrarySnapshotInvalidated, () => mockData.version);
@@ -348,9 +347,9 @@ describe("ReviewView highlight colors (issue #119)", () => {
     // on the next render: the row's stripe, the radio, and the color
     // button's accessible name all re-match the persisted color.
     await waitFor(() => {
-      expect(rowByExcerpt(ANCHOR_CONFIDENT.quote.exact)!.classList.contains("review-item-color-green")).toBe(
-        true,
-      );
+      expect(
+        rowByExcerpt(ANCHOR_CONFIDENT.quote.exact)!.classList.contains("review-item-color-green"),
+      ).toBe(true);
       expect(colorRadio(dialog, "Green").checked).toBe(true);
     });
     expect(
@@ -407,7 +406,6 @@ describe("ReviewView highlight colors (issue #119)", () => {
       expect(screen.queryByRole("dialog", { name: "Change color" })).toBeNull();
     });
   });
-
 
   it("a new editing session clears an earlier highlight's save failure", async () => {
     setHighlightColorMock.mockRejectedValueOnce(new Error("QuotaExceededError"));

@@ -25,7 +25,17 @@
 //   4. legacy remote-src figure → the placeholder renders, the remote URL is
 //      never fetched (all engines)
 import { test, expect, type Page } from "@playwright/test";
-import { BASE, openArticle, switchMode, visibleFigureImgs, waitForDecoded, seedImageryArticle, makeFigureArticle, registrySample, sampleBytes } from "./_helpers";
+import {
+  BASE,
+  openArticle,
+  switchMode,
+  visibleFigureImgs,
+  waitForDecoded,
+  seedImageryArticle,
+  makeFigureArticle,
+  registrySample,
+  sampleBytes,
+} from "./_helpers";
 
 // Every non-localhost http(s) URL is aborted. Registered BEFORE navigation in
 // every cell (the RESEARCH §Code Examples sketch's guard, made precise: the
@@ -134,13 +144,35 @@ test.describe("20-08 offline-reopen (IMG-03 / D20-12)", () => {
         "Reopening it must resolve every figure through the per-article AssetProvider's Dexie path — bulkGetAssets rows become object URLs, and no request ever leaves the origin.",
       ],
       figures: [
-        { alt: "A plain JPEG photograph", src: `asset:${jpeg.assetId}`, width: jpeg.width, height: jpeg.height, caption: "The JPEG figure caption." },
-        { alt: "A lossless WebP illustration", src: `asset:${webp.assetId}`, width: webp.width, height: webp.height, caption: "The WebP figure caption." },
+        {
+          alt: "A plain JPEG photograph",
+          src: `asset:${jpeg.assetId}`,
+          width: jpeg.width,
+          height: jpeg.height,
+          caption: "The JPEG figure caption.",
+        },
+        {
+          alt: "A lossless WebP illustration",
+          src: `asset:${webp.assetId}`,
+          width: webp.width,
+          height: webp.height,
+          caption: "The WebP figure caption.",
+        },
       ],
     });
     const assets = [
-      { assetId: jpeg.assetId, contentType: jpeg.contentType, byteLength: 0, dataBytes: await sampleBytes(jpeg) },
-      { assetId: webp.assetId, contentType: webp.contentType, byteLength: 0, dataBytes: await sampleBytes(webp) },
+      {
+        assetId: jpeg.assetId,
+        contentType: jpeg.contentType,
+        byteLength: 0,
+        dataBytes: await sampleBytes(jpeg),
+      },
+      {
+        assetId: webp.assetId,
+        contentType: webp.contentType,
+        byteLength: 0,
+        dataBytes: await sampleBytes(webp),
+      },
     ];
     for (const a of assets) a.byteLength = a.dataBytes.length;
 
@@ -190,7 +222,9 @@ test.describe("20-08 offline-reopen (IMG-03 / D20-12)", () => {
       ".article-body:not(.article-body-measurement) figure .figure-placeholder",
     );
     await expect(placeholders).toHaveCount(1);
-    await expect(placeholders.first()).toContainText("A vintage field photograph that predates local assets");
+    await expect(placeholders.first()).toContainText(
+      "A vintage field photograph that predates local assets",
+    );
     await expect(
       page.locator(".article-body:not(.article-body-measurement) figure figcaption"),
     ).toContainText("The caption outlives the image.");

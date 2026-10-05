@@ -27,10 +27,7 @@ import type { Page } from "@playwright/test";
  * @param page the Playwright Page
  * @param selector a CSS selector that resolves to exactly one block element
  */
-export async function readRenderedBlockHeight(
-  page: Page,
-  selector: string,
-): Promise<number> {
+export async function readRenderedBlockHeight(page: Page, selector: string): Promise<number> {
   return await page.evaluate((sel) => {
     const el = document.querySelector(sel) as HTMLElement | null;
     if (!el) throw new Error(`readRenderedBlockHeight: no element for ${sel}`);

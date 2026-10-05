@@ -10,10 +10,7 @@
 // z.string() — NEVER HTML (Pitfall 8 — React escapes text children;
 // react/no-danger ESLint rule forbids dangerouslySetInnerHTML).
 import { describe, expect, it } from "vitest";
-import {
-  HighlightRecordSchema,
-  NoteRecordSchema,
-} from "../../../src/content/schema";
+import { HighlightRecordSchema, NoteRecordSchema } from "../../../src/content/schema";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -56,9 +53,7 @@ describe("HighlightRecordSchema accepts valid records", () => {
   });
 
   it("accepts a multi-segment slug articleId (matches ArticleSchema.id / LocationRecord)", () => {
-    const parsed = HighlightRecordSchema.parse(
-      validHighlight({ articleId: "essay-long-form" }),
-    );
+    const parsed = HighlightRecordSchema.parse(validHighlight({ articleId: "essay-long-form" }));
     expect(parsed.articleId).toBe("essay-long-form");
   });
 
@@ -89,9 +84,7 @@ describe("HighlightRecordSchema.tags (issue #116)", () => {
   });
 
   it("parses + round-trips a tagged record verbatim", () => {
-    const parsed = HighlightRecordSchema.parse(
-      validHighlight({ tags: ["essays", "to-revisit"] }),
-    );
+    const parsed = HighlightRecordSchema.parse(validHighlight({ tags: ["essays", "to-revisit"] }));
     expect(parsed.tags).toEqual(["essays", "to-revisit"]);
   });
 
@@ -100,22 +93,18 @@ describe("HighlightRecordSchema.tags (issue #116)", () => {
   });
 
   it("rejects a non-array tags field", () => {
-    expect(() =>
-      HighlightRecordSchema.parse(validHighlight({ tags: "essays" })),
-    ).toThrow();
+    expect(() => HighlightRecordSchema.parse(validHighlight({ tags: "essays" }))).toThrow();
   });
 
   it("rejects a non-string tag entry", () => {
-    expect(() =>
-      HighlightRecordSchema.parse(validHighlight({ tags: [42] })),
-    ).toThrow();
+    expect(() => HighlightRecordSchema.parse(validHighlight({ tags: [42] }))).toThrow();
   });
 });
 
 // ── HighlightRecordSchema.color (issue #118 — named highlight colors) ────────
 
 describe("HighlightRecordSchema.color (issue #118)", () => {
-  it("hydrates an older row with NO color field to \"default\" (Pitfall 9 additive)", () => {
+  it('hydrates an older row with NO color field to "default" (Pitfall 9 additive)', () => {
     // Rows written before #118 omit the field entirely — the read boundary
     // hydrates them to "default" so every consumer sees the Default fill
     // until the reader explicitly changes it (the tags discipline).
@@ -135,9 +124,7 @@ describe("HighlightRecordSchema.color (issue #118)", () => {
   });
 
   it("rejects a color outside the closed vocabulary (T-05-03 tampering)", () => {
-    expect(() =>
-      HighlightRecordSchema.parse(validHighlight({ color: "red" })),
-    ).toThrow();
+    expect(() => HighlightRecordSchema.parse(validHighlight({ color: "red" }))).toThrow();
   });
 
   it("rejects a non-string color", () => {
@@ -180,16 +167,11 @@ describe("HighlightRecordSchema rejects invalid records", () => {
   });
 
   it("rejects schemaVersion: 2 (forward-incompatible — STATE-04 migration hook)", () => {
-    expect(() =>
-      HighlightRecordSchema.parse(validHighlight({ schemaVersion: 2 })),
-    ).toThrow();
+    expect(() => HighlightRecordSchema.parse(validHighlight({ schemaVersion: 2 }))).toThrow();
   });
 
   it("rejects schemaVersion missing (literal(1) is required)", () => {
-    const { schemaVersion: _omit, ...rest } = validHighlight() as Record<
-      string,
-      unknown
-    >;
+    const { schemaVersion: _omit, ...rest } = validHighlight() as Record<string, unknown>;
     expect(() => HighlightRecordSchema.parse(rest)).toThrow();
   });
 });
@@ -210,9 +192,7 @@ describe("NoteRecordSchema accepts valid records", () => {
   });
 
   it("accepts a note with Unicode text (NBSP, ZWJ, emoji — readable content)", () => {
-    const parsed = NoteRecordSchema.parse(
-      validNote({ text: "café résumé 👨‍👩‍👧 — notes" }),
-    );
+    const parsed = NoteRecordSchema.parse(validNote({ text: "café résumé 👨‍👩‍👧 — notes" }));
     expect(parsed.text).toBe("café résumé 👨‍👩‍👧 — notes");
   });
 });

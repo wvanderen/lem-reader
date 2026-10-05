@@ -150,7 +150,8 @@
      chrome. System faces remain as immediate fallbacks. The serif stack
      MUST byte-match FONT_STACKS.serif in src/settings/tokens.ts. */
   --font-body: "Literata", "Source Serif 4", Georgia, Charter, "Times New Roman", serif;
-  --font-ui: "PT Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-ui:
+    "PT Sans", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-code:
     ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
 
@@ -347,9 +348,9 @@
   --highlight-green: #294230;
   --highlight-blue: #2f3a5e; /* the bi blue, deep */
   --highlight-pink: #55284a; /* the bi pink, deep */
-   --spoken-highlight: #3d2f44;
-   --flag-wash: linear-gradient(90deg, #d60270, #9b4f96, #0038a8);
-   --progress-fill: var(--flag-wash);
+  --spoken-highlight: #3d2f44;
+  --flag-wash: linear-gradient(90deg, #d60270, #9b4f96, #0038a8);
+  --progress-fill: var(--flag-wash);
 }
 
 /* ADR 0007 — the "In Defense of Marxism" pamphlet room (light register).
@@ -388,8 +389,8 @@
   --highlight-blue: #cdd9e3;
   --highlight-pink: #e8cbc6;
   --spoken-highlight: #e7cec3;
-   --flag-wash: linear-gradient(90deg, #8f1420, #c4343f);
-   --progress-fill: var(--flag-wash);
+  --flag-wash: linear-gradient(90deg, #8f1420, #c4343f);
+  --progress-fill: var(--flag-wash);
 }
 
 /* ADR 0007 — the "In Defense of Marxism" night room (dark register). The
@@ -996,19 +997,53 @@ a:hover {
   background: transparent;
   margin-block: 0;
 }
-:is(.library-remove-confirm-inner, .book-remove-confirm-inner, .edit-metadata-inner, .review-note-dialog, .review-color-dialog, .reading-state-control) .status {
+:is(
+    .library-remove-confirm-inner,
+    .book-remove-confirm-inner,
+    .edit-metadata-inner,
+    .review-note-dialog,
+    .review-color-dialog,
+    .reading-state-control
+  )
+  .status {
   margin-block: 0;
   padding: 0;
   background: transparent;
   border: none;
 }
-:is(.library-remove-confirm-inner, .book-remove-confirm-inner, .edit-metadata-inner, .review-note-dialog, .review-color-dialog, .reading-state-control) .status p {
+:is(
+    .library-remove-confirm-inner,
+    .book-remove-confirm-inner,
+    .edit-metadata-inner,
+    .review-note-dialog,
+    .review-color-dialog,
+    .reading-state-control
+  )
+  .status
+  p {
   margin-block: 0 var(--space-sm);
 }
-:is(.library-remove-confirm-inner, .book-remove-confirm-inner, .edit-metadata-inner, .review-note-dialog, .review-color-dialog, .reading-state-control) .status:empty {
+:is(
+    .library-remove-confirm-inner,
+    .book-remove-confirm-inner,
+    .edit-metadata-inner,
+    .review-note-dialog,
+    .review-color-dialog,
+    .reading-state-control
+  )
+  .status:empty {
   margin-block: 0;
 }
-:is(.library-remove-confirm-inner, .book-remove-confirm-inner, .edit-metadata-inner, .review-note-dialog, .review-color-dialog, .reading-state-control) .status:empty p {
+:is(
+    .library-remove-confirm-inner,
+    .book-remove-confirm-inner,
+    .edit-metadata-inner,
+    .review-note-dialog,
+    .review-color-dialog,
+    .reading-state-control
+  )
+  .status:empty
+  p {
   margin-block: 0;
 }
 
@@ -1185,7 +1220,9 @@ a:hover {
   color: var(--board-text);
 }
 .app-header .btn-icon[aria-expanded="true"] {
-  color: var(--brass-bright); /* the lit affordance — never color alone:
+  color: var(
+    --brass-bright
+  ); /* the lit affordance — never color alone:
      aria-expanded + the D2-01 open-state contract still stand */
 }
 .app-header .btn-icon:active:not(:disabled) {
@@ -1985,7 +2022,7 @@ dialog.add-dialog {
      definite pinned height, guaranteeing the reading page ≥ 75% of the
      surface. The header itself becomes a scroll container (below) so its
      interactive content (tags, export) stays reachable at narrow widths. */
-   grid-template-rows: minmax(auto, 25%) minmax(0, 1fr);
+  grid-template-rows: minmax(auto, 25%) minmax(0, 1fr);
 }
 @supports (height: 100dvh) {
   .article-body.paginated-surface {
@@ -4525,9 +4562,7 @@ dialog.book-remove-confirm {
 /* Scrolling mode: the extra bottom padding lets the last lines scroll clear
  * ABOVE the expanded bar instead of stopping behind it. */
 body:has(.readaloud-bar--expanded) main#main:not(.paginated-main) {
-  padding-bottom: calc(
-    var(--space-3xl) + var(--readaloud-h, 0px) + var(--space-xs)
-  );
+  padding-bottom: calc(var(--space-3xl) + var(--readaloud-h, 0px) + var(--space-xs));
 }
 /* Paginated mode: shrink the pinned surface by the band's intrusion past the
  * 48px calm inset (clamped at 0 — inset-covered bands reserve nothing) so
@@ -4536,10 +4571,7 @@ body:has(.readaloud-bar--expanded) main#main:not(.paginated-main) {
  * rule — no duplicated viewport formulas to keep in sync. The intrusion is
  * declared on the surface so the capped header inherits it. */
 body:has(.readaloud-bar--expanded) .article-body.paginated-surface {
-  --readaloud-intrusion: max(
-    0px,
-    var(--readaloud-h, 0px) + var(--space-xs) - var(--space-2xl)
-  );
+  --readaloud-intrusion: max(0px, var(--readaloud-h, 0px) + var(--space-xs) - var(--space-2xl));
   height: calc(var(--paginated-budget) - var(--readaloud-intrusion));
 }
 /* The 09-07 25% header cap stays synchronized with the surface above by
@@ -4547,9 +4579,7 @@ body:has(.readaloud-bar--expanded) .article-body.paginated-surface {
  * fraction of the resulting definite pinned height — never a percentage,
  * which would resolve against the grid track). */
 body:has(.readaloud-bar--expanded) .article-body.paginated-surface > header {
-  max-height: calc(
-    (var(--paginated-budget) - var(--readaloud-intrusion)) * 0.25
-  );
+  max-height: calc((var(--paginated-budget) - var(--readaloud-intrusion)) * 0.25);
 }
 /* Bottom-band coexistence: when the transport bar is mounted, the final-page
  * completion button and the chapter nav stack ABOVE it (touch-target band —
@@ -5758,7 +5788,6 @@ dialog.discover-remove-confirm {
 }
 /* .discover-remove-confirm-actions rides .dialog-actions. */
 
-
 /* October polish: retain semantic groups without nested visual cards. */
 dialog.highlight-popover .tag-entry,
 dialog.highlight-popover .highlight-color-entry {
@@ -5846,11 +5875,21 @@ dialog.highlight-popover .highlight-color-entry legend {
   display: grid;
   grid-template-columns: repeat(5, var(--touch));
 }
-.library-row-actions .reading-state-control { grid-column: 1; }
-.library-row-tag-trigger { grid-column: 2; }
-.library-row-edit { grid-column: 3; }
-.library-row-highlights { grid-column: 4; }
-.library-row-remove { grid-column: 5; }
+.library-row-actions .reading-state-control {
+  grid-column: 1;
+}
+.library-row-tag-trigger {
+  grid-column: 2;
+}
+.library-row-edit {
+  grid-column: 3;
+}
+.library-row-highlights {
+  grid-column: 4;
+}
+.library-row-remove {
+  grid-column: 5;
+}
 @media (max-width: 639px) {
   .library-row > article,
   .book-card {

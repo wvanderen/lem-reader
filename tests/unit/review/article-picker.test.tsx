@@ -33,9 +33,7 @@ function makeArticle(id: string, title: string, readerTitle?: string): Canonical
       retrievedAt: "2026-01-01T00:00:00.000Z",
       originalHtmlHash: "0".repeat(64),
     },
-    blocks: [
-      { kind: "paragraph", content: [{ text: `${title} body text.` }] },
-    ],
+    blocks: [{ kind: "paragraph", content: [{ text: `${title} body text.` }] }],
     ...(readerTitle !== undefined ? { readerTitle } : {}),
   });
 }
@@ -54,9 +52,7 @@ const COUNTS = new Map([
   // a-zero: zero highlights — absent from the fold entirely
 ]);
 
-function mountPicker(
-  overrides: Partial<Parameters<typeof ArticlePicker>[0]> = {},
-) {
+function mountPicker(overrides: Partial<Parameters<typeof ArticlePicker>[0]> = {}) {
   const onPick = vi.fn();
   const utils = render(
     <ArticlePicker
@@ -137,9 +133,7 @@ describe("ArticlePicker: search", () => {
     mountPicker({ articles: renamed, counts: new Map([["a-renamed", 1]]) });
     const input = screen.getByRole("combobox") as HTMLInputElement;
     await user.type(input, "chosen");
-    expect(optionTexts(screen.getByRole("listbox"))).toEqual([
-      "Reader's Chosen Name1 highlight",
-    ]);
+    expect(optionTexts(screen.getByRole("listbox"))).toEqual(["Reader's Chosen Name1 highlight"]);
     // A canonical-only substring is NOT searchable — the override is the
     // ONE name (D17-08); the honest no-match option answers instead.
     await user.clear(input);
@@ -232,17 +226,17 @@ describe("ArticlePicker: keyboard + picking", () => {
     // Active starts at 0 (gamma). Two ArrowDowns walk gamma → beta →
     // alpha; a third wraps back to the head.
     await user.keyboard("{ArrowDown}{ArrowDown}");
-    expect(
-      within(listbox).getByRole("option", { selected: true }).textContent,
-    ).toBe("Alpha Field Notes1 highlight");
+    expect(within(listbox).getByRole("option", { selected: true }).textContent).toBe(
+      "Alpha Field Notes1 highlight",
+    );
     expect(input).toHaveAttribute(
       "aria-activedescendant",
       expect.stringContaining("article-picker-under-test-listbox"),
     );
     await user.keyboard("{ArrowDown}");
-    expect(
-      within(listbox).getByRole("option", { selected: true }).textContent,
-    ).toBe("Gamma Essays5 highlights");
+    expect(within(listbox).getByRole("option", { selected: true }).textContent).toBe(
+      "Gamma Essays5 highlights",
+    );
     await user.keyboard("{Enter}");
     expect(onPick).toHaveBeenCalledTimes(1);
     expect(onPick).toHaveBeenCalledWith("a-gamma");
@@ -279,9 +273,7 @@ describe("ArticlePicker: keyboard + picking", () => {
     const option = within(screen.getByRole("listbox")).getByRole("option", {
       name: /Beta Ledger/,
     });
-    option.dispatchEvent(
-      new MouseEvent("mousedown", { bubbles: true, cancelable: true }),
-    );
+    option.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
     expect(onPick).toHaveBeenCalledWith("a-beta");
   });
 
@@ -302,10 +294,7 @@ describe("ArticlePicker: aria wiring", () => {
     mountPicker();
     const input = screen.getByRole("combobox");
     expect(input).toHaveAttribute("aria-expanded", "false");
-    expect(input).toHaveAttribute(
-      "aria-controls",
-      "article-picker-under-test-listbox",
-    );
+    expect(input).toHaveAttribute("aria-controls", "article-picker-under-test-listbox");
     await user.click(input);
     const listbox = screen.getByRole("listbox");
     expect(listbox.id).toBe("article-picker-under-test-listbox");

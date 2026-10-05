@@ -139,11 +139,9 @@ export const EvidenceSchema = z.object({
    * against the numbers that produced it (D12-12, the D11-04 mirror; the
    * replay pins EPUB_THRESHOLDS deep-equal against this object — T-12-20).
    * ZodRecord has no .min — the non-empty check is a refine. */
-  thresholds: z
-    .record(z.string(), z.number())
-    .refine((r) => Object.keys(r).length > 0, {
-      message: "thresholds snapshot must not be empty",
-    }),
+  thresholds: z.record(z.string(), z.number()).refine((r) => Object.keys(r).length > 0, {
+    message: "thresholds snapshot must not be empty",
+  }),
   results: z.array(EvidenceResultSchema).min(1),
 });
 export type EpubCalibrationEvidence = z.infer<typeof EvidenceSchema>;
@@ -159,9 +157,7 @@ export function parseManifest(value: unknown): CalibrationManifest {
   const seen = new Set<string>();
   for (const entry of parsed.entries) {
     if (seen.has(entry.file)) {
-      throw new Error(
-        `[epub-calibration] manifest lists duplicate file: ${entry.file}`,
-      );
+      throw new Error(`[epub-calibration] manifest lists duplicate file: ${entry.file}`);
     }
     seen.add(entry.file);
   }
@@ -191,9 +187,7 @@ export const MISSING_RECORD_MESSAGE =
  * routes every read through here so the absence branch and the message can
  * never drift apart.
  */
-export function loadCommittedEvidence(
-  evidencePath: string,
-): EpubCalibrationEvidence {
+export function loadCommittedEvidence(evidencePath: string): EpubCalibrationEvidence {
   if (!existsSync(evidencePath)) {
     throw new Error(
       `${MISSING_RECORD_MESSAGE} — no committed epub-evidence.json ` +
@@ -218,10 +212,7 @@ export interface CorpusVerification {
  * SHA-256). Pure check — callers decide how to surface a failure (derive
  * THROWS on !ok, the exit-2-class refusal; nothing derives against a
  * tampered or partial corpus). */
-export function verifyCorpus(
-  corpusDir: string,
-  manifest: CalibrationManifest,
-): CorpusVerification {
+export function verifyCorpus(corpusDir: string, manifest: CalibrationManifest): CorpusVerification {
   const missing: string[] = [];
   const mismatched: string[] = [];
   for (const entry of manifest.entries) {
@@ -238,9 +229,7 @@ export function verifyCorpus(
 
 // ── validateEvidence (the D12-12 promotion bar — CI replays this) ───────────
 
-export type EvidenceValidation =
-  | { ok: true }
-  | { ok: false; problems: string[] };
+export type EvidenceValidation = { ok: true } | { ok: false; problems: string[] };
 
 /**
  * validateEvidence — enforce the D12-12 bar over a manifest + evidence pair.
@@ -303,9 +292,7 @@ export function validateEvidence(
     }
     if (result.verdict !== "admitted") {
       // The corpus is DRM-free by contract — every book must admit.
-      problems.push(
-        `DRM-free corpus book not admitted: ${entry.file} recorded ${result.verdict}`,
-      );
+      problems.push(`DRM-free corpus book not admitted: ${entry.file} recorded ${result.verdict}`);
       continue;
     }
     if (result.chapterCount === undefined) {
@@ -333,9 +320,7 @@ export function validateEvidence(
   const manifestFiles = new Set(manifest.entries.map((e) => e.file));
   for (const result of evidence.results) {
     if (!manifestFiles.has(result.file)) {
-      problems.push(
-        `evidence result for a file absent from the manifest: ${result.file}`,
-      );
+      problems.push(`evidence result for a file absent from the manifest: ${result.file}`);
     }
   }
 
@@ -367,9 +352,7 @@ export interface DerivePaths {
  * produced it. Throws (never writes partial evidence) on corpus integrity
  * failure.
  */
-export async function deriveEvidence(
-  paths: DerivePaths,
-): Promise<EpubCalibrationEvidence> {
+export async function deriveEvidence(paths: DerivePaths): Promise<EpubCalibrationEvidence> {
   const manifest = loadManifest(paths.manifestPath);
 
   // Corpus integrity gate BEFORE any derive work.
@@ -443,10 +426,7 @@ export async function deriveEvidence(
  * precedent: never overwrite the committed artifact with placeholder
  * data — CI replays this file as the durable truth).
  */
-export function writeEvidence(
-  evidence: EpubCalibrationEvidence,
-  evidencePath: string,
-): void {
+export function writeEvidence(evidence: EpubCalibrationEvidence, evidencePath: string): void {
   if (!evidence.results || evidence.results.length === 0) {
     throw new Error(
       "[epub-calibration] refusing to overwrite the committed evidence record with empty results — the corpus derive produced no verdicts (see docs/epub-calibration.md)",

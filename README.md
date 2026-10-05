@@ -67,17 +67,18 @@ Open `http://localhost:5173`. A Getting Started article is included, so the read
 
 ## Useful commands
 
-| Command                      | Purpose                                           |
-| ---------------------------- | ------------------------------------------------- |
-| `npm run dev`                | Start the local Vite app and ingestion endpoint   |
-| `npm run build`              | Type-check and create a production build          |
-| `npm run preview`            | Preview the production build locally              |
-| `npm run test:unit -- --run` | Run the Vitest suite once                         |
-| `npm run test:e2e`           | Run real-browser Playwright tests                 |
-| `npm run lint`               | Run ESLint                                        |
-| `npm run lint:no-danger`     | Enforce the no-`dangerouslySetInnerHTML` boundary |
-| `npm run perf`               | Run the browser performance budget harness        |
-| `npm run deploy:vercel`      | Build and deploy the linked Vercel project        |
+| Command                      | Purpose                                            |
+| ---------------------------- | -------------------------------------------------- |
+| `npm run dev`                | Start the local Vite app and ingestion endpoint    |
+| `npm run build`              | Type-check and create a production build           |
+| `npm run preview`            | Preview the production build locally               |
+| `npm run test:unit -- --run` | Run the Vitest suite once                          |
+| `npm run test:e2e`           | Run real-browser Playwright tests                  |
+| `npm run lint`               | ESLint + the no-`dangerouslySetInnerHTML` boundary |
+| `npm run typecheck`          | Type-check with `tsc` (strict, no emit)            |
+| `npm run format:check`       | Verify Prettier formatting                         |
+| `npm run perf`               | Run the browser performance budget harness         |
+| `npm run deploy:vercel`      | Build and deploy the linked Vercel project         |
 
 Playwright tests require its browser binaries. Install them once with `npx playwright install` if they are not already present.
 

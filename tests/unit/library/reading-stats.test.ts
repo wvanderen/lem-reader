@@ -21,11 +21,7 @@ import {
   timeReadLabels,
 } from "../../../src/ingestion/library/readingStats";
 
-function session(
-  id: string,
-  articleId: string,
-  activeSeconds: number,
-): ReadingSessionRecord {
+function session(id: string, articleId: string, activeSeconds: number): ReadingSessionRecord {
   return ReadingSessionRecordSchema.parse({
     schemaVersion: 1,
     id,
@@ -104,10 +100,7 @@ describe("deriveReadingStats — the whole-library fold", () => {
 
   it("orphan history (article no longer/not in the library) counts nowhere", () => {
     const stats = deriveReadingStats(
-      [
-        session("v1", "article-a", 120),
-        session("v2", "removed-article", 3600),
-      ],
+      [session("v1", "article-a", 120), session("v2", "removed-article", 3600)],
       KNOWN,
     );
     // Totals and visits sum over the SAME counted sessions.
@@ -136,10 +129,7 @@ describe("deriveLibraryReadingStats — the snapshot-level fold (issue #38)", ()
   it("builds membership from the snapshot's articles and folds its sessions", () => {
     const stats = deriveLibraryReadingStats({
       articles: [{ id: "article-a" }, { id: "article-b" }],
-      readingSessions: [
-        session("v1", "article-a", 120),
-        session("v2", "removed-article", 3600),
-      ],
+      readingSessions: [session("v1", "article-a", 120), session("v2", "removed-article", 3600)],
     });
     // The orphan row (not in snapshot.articles) counts nowhere.
     expect(stats.totalSeconds).toBe(120);
@@ -160,10 +150,7 @@ describe("timeReadLabels — the per-article label map (issue #38)", () => {
   it("carries a label ONLY for articles clearing the one-minute suppression", () => {
     const stats = deriveLibraryReadingStats({
       articles: [{ id: "article-a" }, { id: "article-b" }],
-      readingSessions: [
-        session("v1", "article-a", 300),
-        session("v2", "article-b", 45),
-      ],
+      readingSessions: [session("v1", "article-a", 300), session("v2", "article-b", 45)],
     });
     const labels = timeReadLabels(stats);
     expect(labels.get("article-a")).toBe("5 min read here");

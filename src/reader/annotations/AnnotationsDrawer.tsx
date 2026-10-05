@@ -159,11 +159,7 @@ export function AnnotationsDrawer({
   const countFormatter = new Intl.NumberFormat(navigator.language);
 
   return (
-    <dialog
-      ref={ref}
-      className="annotations-drawer"
-      aria-labelledby="annotations-drawer-title"
-    >
+    <dialog ref={ref} className="annotations-drawer" aria-labelledby="annotations-drawer-title">
       <div className="annotations-drawer-inner">
         <div className="annotations-drawer-header">
           <h2 id="annotations-drawer-title">
@@ -185,10 +181,7 @@ export function AnnotationsDrawer({
               URL-scoped review, gated at ≥ 1 highlight. Activation navigates
               (a real history push); the view swap unmounts the drawer. */}
           {sorted.length > 0 && reviewHref !== undefined && (
-            <a
-              className="btn btn-quiet annotations-drawer-review"
-              href={reviewHref}
-            >
+            <a className="btn btn-quiet annotations-drawer-review" href={reviewHref}>
               Review highlights
             </a>
           )}
@@ -218,8 +211,8 @@ export function AnnotationsDrawer({
           <StatusRegion className="drawer-empty">
             <h3>No highlights yet</h3>
             <p>
-              Select any text in the article to highlight it. You can add a note
-              to any highlight, and come back here to find them.
+              Select any text in the article to highlight it. You can add a note to any highlight,
+              and come back here to find them.
             </p>
           </StatusRegion>
         ) : (
@@ -269,12 +262,8 @@ export function AnnotationsDrawer({
                     }}
                   >
                     <span className="drawer-entry-excerpt">{excerpt}</span>
-                    {flagText && (
-                      <span className="drawer-entry-flag">{flagText}</span>
-                    )}
-                    {unresolvedBody && (
-                      <span className="drawer-entry-body">{unresolvedBody}</span>
-                    )}
+                    {flagText && <span className="drawer-entry-flag">{flagText}</span>}
+                    {unresolvedBody && <span className="drawer-entry-body">{unresolvedBody}</span>}
                     {!flagText && noteText.length > 0 && (
                       <span className="drawer-entry-note">
                         {truncate(noteText, NOTE_MAX_CHARS)}
@@ -312,4 +301,3 @@ export function AnnotationsDrawer({
     </dialog>
   );
 }
-

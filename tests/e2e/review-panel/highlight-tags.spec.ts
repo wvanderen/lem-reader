@@ -407,17 +407,21 @@ test.describe("annotation tags in Highlights review (issue #117)", () => {
     expect(overflow).toBeLessThanOrEqual(1);
 
     // The wrapped action cluster stays at the footer's inline end.
-    const geometry = await page.locator(".review-item").first().evaluate(card => {
-      const foot = card.querySelector<HTMLElement>(".review-row-foot")!;
-      const actions = card.querySelector<HTMLElement>(".review-row-actions")!;
-      const meta = card.querySelector<HTMLElement>(".review-row-meta")!;
-      return {
-        actionsRight: actions.getBoundingClientRect().right,
-        contentRight: foot.getBoundingClientRect().right - parseFloat(getComputedStyle(foot).paddingRight),
-        actionsTop: actions.getBoundingClientRect().top,
-        metaBottom: meta.getBoundingClientRect().bottom,
-      };
-    });
+    const geometry = await page
+      .locator(".review-item")
+      .first()
+      .evaluate((card) => {
+        const foot = card.querySelector<HTMLElement>(".review-row-foot")!;
+        const actions = card.querySelector<HTMLElement>(".review-row-actions")!;
+        const meta = card.querySelector<HTMLElement>(".review-row-meta")!;
+        return {
+          actionsRight: actions.getBoundingClientRect().right,
+          contentRight:
+            foot.getBoundingClientRect().right - parseFloat(getComputedStyle(foot).paddingRight),
+          actionsTop: actions.getBoundingClientRect().top,
+          metaBottom: meta.getBoundingClientRect().bottom,
+        };
+      });
     expect(geometry.actionsTop).toBeGreaterThanOrEqual(geometry.metaBottom);
     expect(Math.abs(geometry.actionsRight - geometry.contentRight)).toBeLessThanOrEqual(1);
 

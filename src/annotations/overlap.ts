@@ -20,9 +20,6 @@ import type { TextPositionSelector } from "../content/normalizeText";
  * Per D5-13 the caller rejects any new selection that overlaps an existing
  * highlight's range using this helper — disjoint ranges only.
  */
-export function rangesOverlap(
-  a: TextPositionSelector,
-  b: TextPositionSelector,
-): boolean {
+export function rangesOverlap(a: TextPositionSelector, b: TextPositionSelector): boolean {
   return Math.max(a.start, b.start) < Math.min(a.end, b.end);
 }

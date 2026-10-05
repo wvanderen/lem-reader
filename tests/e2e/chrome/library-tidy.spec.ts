@@ -50,28 +50,20 @@ async function tidyOrder(page: Page): Promise<{
       // rail → the library list. The rail is unconditionally mounted on
       // EVERY view (chrome-stability rule — D16-14 superseded 2026-09-08),
       // so its presence here needs no #/ landing justification.
-      searchBeforeContinue: before(
-        q(".library-search"),
-        q(".library-section-continue"),
-      ),
+      searchBeforeContinue: before(q(".library-search"), q(".library-section-continue")),
       addBeforeSearch: before(q(".library-add-button"), q(".library-search")),
       searchBeforeList: before(q(".library-search"), q("ul.library-list")),
       // The byte-stable .status load live region is re-homed as a DIRECT
       // child of main, AFTER the list region (Plan 16-03 — it follows the
       // list, not the retired add-content controls).
-      statusFollowsList: before(
-        q("ul.library-list"),
-        q("main#main > .status"),
-      ),
+      statusFollowsList: before(q("ul.library-list"), q("main#main > .status")),
       // The header row holds the h1 AND the Add to Library trigger beside
       // it (D16-03) — and still no in-page Highlights button (the 15-02
       // OQ1 removal; the shell link is the sole highlights entry).
       headerHoldsH1AndAdd:
         document.querySelector(".library-header h1") !== null &&
-        document.querySelector(".library-header .library-add-button") !==
-          null &&
-        document.querySelector(".library-header .article-export-highlights") ===
-          null,
+        document.querySelector(".library-header .library-add-button") !== null &&
+        document.querySelector(".library-header .article-export-highlights") === null,
     };
   });
 }
@@ -87,11 +79,17 @@ test("library home renders the header row plus ordered regions (header → toolb
   });
 
   const order = await tidyOrder(page);
-  expect(order.searchBeforeContinue, "the toolbar search precedes the continue rail (issue #67)").toBe(true);
+  expect(
+    order.searchBeforeContinue,
+    "the toolbar search precedes the continue rail (issue #67)",
+  ).toBe(true);
   expect(order.addBeforeSearch, "the header Add button precedes the search input").toBe(true);
   expect(order.searchBeforeList, "search input precedes the library list").toBe(true);
   expect(order.statusFollowsList, "the .status live region follows the library list").toBe(true);
-  expect(order.headerHoldsH1AndAdd, "header row holds the h1 + the Add to Library button (D16-03)").toBe(true);
+  expect(
+    order.headerHoldsH1AndAdd,
+    "header row holds the h1 + the Add to Library button (D16-03)",
+  ).toBe(true);
 });
 
 test("byte-stable library anchors survive the tidy (Pitfall 8-5)", async ({ page }) => {
@@ -148,10 +146,9 @@ test("the header row shares the library measure (G1)", async ({ page }) => {
   // The Add trigger lives INSIDE the header measure (its box is contained
   // by the header row's box — the button never escapes the shared width).
   expect(wideAdd.x, "Add button starts inside the header box").toBeGreaterThanOrEqual(wideHeader.x);
-  expect(
-    wideAdd.x + wideAdd.width,
-    "Add button ends inside the header box",
-  ).toBeLessThanOrEqual(wideHeader.x + wideHeader.width);
+  expect(wideAdd.x + wideAdd.width, "Add button ends inside the header box").toBeLessThanOrEqual(
+    wideHeader.x + wideHeader.width,
+  );
 
   // Narrow viewport: both boxes fill the main content box exactly — the
   // measure rule introduces no narrow-viewport regression.
@@ -161,5 +158,7 @@ test("the header row shares the library measure (G1)", async ({ page }) => {
   if (!narrowHeader || !narrowList) {
     throw new Error("tidy spec: measure boxes unresolved at 360×640");
   }
-  expect(narrowHeader.width, "header row fills the content box like its siblings").toBe(narrowList.width);
+  expect(narrowHeader.width, "header row fills the content box like its siblings").toBe(
+    narrowList.width,
+  );
 });

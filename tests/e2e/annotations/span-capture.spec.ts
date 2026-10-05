@@ -54,7 +54,7 @@ async function spanSelectionAcrossConsecutiveBlocks(
   return page.evaluate(() => {
     const blocks = Array.from(
       document.querySelectorAll(
-        '.page-fragment [data-block-index], .article-body:not(.article-body-measurement) [data-block-index]',
+        ".page-fragment [data-block-index], .article-body:not(.article-body-measurement) [data-block-index]",
       ),
     ).filter((el) => !el.closest(".article-body-measurement"));
     for (let i = 0; i + 1 < blocks.length; i++) {
@@ -101,15 +101,9 @@ test.describe("ANNO-08 span capture (D19) — 19-01", () => {
     // D5-06 refusal is gone; spans are ordinary valid selections (D19-09).
     const toolbar = page.locator(".selection-toolbar");
     await expect(toolbar).toBeVisible();
-    await expect(
-      toolbar.getByRole("button", { name: "Highlight", exact: true }),
-    ).toBeVisible();
-    await expect(
-      toolbar.getByRole("button", { name: "Highlight + note" }),
-    ).toBeVisible();
-    await toolbar
-      .getByRole("button", { name: "Highlight", exact: true })
-      .click();
+    await expect(toolbar.getByRole("button", { name: "Highlight", exact: true })).toBeVisible();
+    await expect(toolbar.getByRole("button", { name: "Highlight + note" })).toBeVisible();
+    await toolbar.getByRole("button", { name: "Highlight", exact: true }).click();
     await expect(announcementRegion(page)).toContainText(/Highlight saved/i);
     // ONE Dexie record — one identity for the whole span (ANNO-08/09).
     expect(await countHighlightsInDexie(page, FIXTURE)).toBe(1);
@@ -119,15 +113,11 @@ test.describe("ANNO-08 span capture (D19) — 19-01", () => {
     const id = await mark.first().getAttribute("data-highlight-id");
     expect(id, "mark carries a highlight id").toBeTruthy();
     await expect(
-      visibleBlock(page, spanned!.aIdx).locator(
-        `mark.highlight[data-highlight-id="${id}"]`,
-      ),
+      visibleBlock(page, spanned!.aIdx).locator(`mark.highlight[data-highlight-id="${id}"]`),
       "span mark renders in the START block",
     ).toBeVisible();
     await expect(
-      visibleBlock(page, spanned!.bIdx).locator(
-        `mark.highlight[data-highlight-id="${id}"]`,
-      ),
+      visibleBlock(page, spanned!.bIdx).locator(`mark.highlight[data-highlight-id="${id}"]`),
       "span mark renders in the END block",
     ).toBeVisible();
   });
@@ -145,27 +135,16 @@ test.describe("ANNO-08 span capture (D19) — 19-01", () => {
     // per-endpoint D5-08 slice math composes the same global range.
     const total = await totalPages(page);
     let spanned: { aIdx: number; bIdx: number } | null = null;
-    for (
-      let target = await currentPageIdx(page);
-      target < total && spanned === null;
-      target++
-    ) {
+    for (let target = await currentPageIdx(page); target < total && spanned === null; target++) {
       await turnToPage(page, target);
       spanned = await spanSelectionAcrossConsecutiveBlocks(page);
     }
-    expect(
-      spanned,
-      "some page must carry two consecutive text blocks",
-    ).not.toBeNull();
+    expect(spanned, "some page must carry two consecutive text blocks").not.toBeNull();
     // Same toolbar + creation + one-record + both-marks assertions.
     const toolbar = page.locator(".selection-toolbar");
     await expect(toolbar).toBeVisible();
-    await expect(
-      toolbar.getByRole("button", { name: "Highlight", exact: true }),
-    ).toBeVisible();
-    await toolbar
-      .getByRole("button", { name: "Highlight", exact: true })
-      .click();
+    await expect(toolbar.getByRole("button", { name: "Highlight", exact: true })).toBeVisible();
+    await toolbar.getByRole("button", { name: "Highlight", exact: true }).click();
     await expect(announcementRegion(page)).toContainText(/Highlight saved/i);
     expect(await countHighlightsInDexie(page, FIXTURE)).toBe(1);
     const mark = page.locator("mark.highlight");
@@ -173,15 +152,11 @@ test.describe("ANNO-08 span capture (D19) — 19-01", () => {
     const id = await mark.first().getAttribute("data-highlight-id");
     expect(id, "mark carries a highlight id").toBeTruthy();
     await expect(
-      visibleBlock(page, spanned!.aIdx).locator(
-        `mark.highlight[data-highlight-id="${id}"]`,
-      ),
+      visibleBlock(page, spanned!.aIdx).locator(`mark.highlight[data-highlight-id="${id}"]`),
       "span mark renders in the START block's page slice",
     ).toBeVisible();
     await expect(
-      visibleBlock(page, spanned!.bIdx).locator(
-        `mark.highlight[data-highlight-id="${id}"]`,
-      ),
+      visibleBlock(page, spanned!.bIdx).locator(`mark.highlight[data-highlight-id="${id}"]`),
       "span mark renders in the END block's page slice",
     ).toBeVisible();
   });
@@ -213,9 +188,7 @@ test.describe("ANNO-08 span capture (D19) — 19-01", () => {
     const toolbar = page.locator(".selection-toolbar");
     await expect(toolbar).toBeVisible();
     await expect(toolbar).toContainText(/overlaps an existing highlight/i);
-    await expect(
-      toolbar.getByRole("button", { name: "Highlight", exact: true }),
-    ).toHaveCount(0);
+    await expect(toolbar.getByRole("button", { name: "Highlight", exact: true })).toHaveCount(0);
     await page.keyboard.press("h");
     await page.waitForTimeout(200);
     expect(
@@ -241,10 +214,7 @@ test.describe("ANNO-08 span capture (D19) — 19-01", () => {
       .getByRole("button", { name: "Highlight", exact: true })
       .click();
     await expect(announcementRegion(page)).toContainText(/Highlight saved/i);
-    const hlId = await page
-      .locator("mark.highlight")
-      .first()
-      .getAttribute("data-highlight-id");
+    const hlId = await page.locator("mark.highlight").first().getAttribute("data-highlight-id");
     expect(hlId, "span mark carries a highlight id").toBeTruthy();
     // Switch back to paginated BEFORE the jump — the harder geometry: the
     // deep-link must TURN the reader to the page holding the span start.
@@ -268,9 +238,7 @@ test.describe("ANNO-08 span capture (D19) — 19-01", () => {
       ],
     });
     await page.goto(`${BASE}/#/highlights`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Highlights" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
     await page
       .getByRole("link", { name: /^Go to highlight:/ })
       .first()
@@ -278,14 +246,10 @@ test.describe("ANNO-08 span capture (D19) — 19-01", () => {
 
     // The reader opens + the readiness-gated jump resolves: focus lands
     // on #hl-<id> (the span's FIRST slice).
-    await expect(
-      page.getByRole("heading", { level: 1 }),
-    ).toBeVisible({ timeout: 15_000 });
-    await page.waitForFunction(
-      (want) => document.activeElement?.id === want,
-      `hl-${hlId}`,
-      { timeout: 15_000 },
-    );
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible({ timeout: 15_000 });
+    await page.waitForFunction((want) => document.activeElement?.id === want, `hl-${hlId}`, {
+      timeout: 15_000,
+    });
     // The focused first slice lives on the VISIBLE paginated surface —
     // never the hidden measurement body — proving the reader TURNED to
     // the span start's page (the focusMark target mounts only there).
@@ -294,16 +258,13 @@ test.describe("ANNO-08 span capture (D19) — 19-01", () => {
       return {
         isTarget: el !== null && el.id === want,
         inFragment: el !== null && el.closest(".page-fragment") !== null,
-        inMeasurement:
-          el !== null && el.closest(".article-body-measurement") !== null,
+        inMeasurement: el !== null && el.closest(".article-body-measurement") !== null,
       };
     }, `hl-${hlId}`);
     expect(placement.isTarget, "focus is on the hl- first-slice carrier").toBeTruthy();
     expect(placement.inFragment, "the reader turned to the span start's page").toBeTruthy();
     expect(placement.inMeasurement, "never the hidden measurement body").toBeFalsy();
     // The span's marks render on the mounted page sharing the one id.
-    await expect(
-      page.locator(`mark.highlight[data-highlight-id="${hlId}"]`).first(),
-    ).toBeVisible();
+    await expect(page.locator(`mark.highlight[data-highlight-id="${hlId}"]`).first()).toBeVisible();
   });
 });

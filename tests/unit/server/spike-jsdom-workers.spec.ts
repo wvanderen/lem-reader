@@ -29,8 +29,7 @@
 import { describe, expect, test, beforeAll } from "vitest";
 
 const SPIKE_URL = "http://localhost:8788/api/spike";
-const BOOT_HINT =
-  "workerd not running — start it with: npx wrangler pages dev --port 8788";
+const BOOT_HINT = "workerd not running — start it with: npx wrangler pages dev --port 8788";
 
 type Capability = { ok: boolean; error?: string; detail?: unknown };
 type SpikeResponse = {
@@ -115,10 +114,12 @@ describe("jsdom-on-Workers spike — RECORDED OUTCOME", () => {
     // When this starts failing, linkedom-DOMPurify is viable and 07-04 can
     // revisit Worker-local sanitize.
     expect(spike!.linkedom.linkedomDompurify.ok).toBe(false);
-    const detail = spike!.linkedom.linkedomDompurify.detail as {
-      hasScript?: boolean;
-      isSupported?: boolean;
-    } | undefined;
+    const detail = spike!.linkedom.linkedomDompurify.detail as
+      | {
+          hasScript?: boolean;
+          isSupported?: boolean;
+        }
+      | undefined;
     // The no-op signature: sanitize returns input with script intact AND
     // isSupported is undefined (DOMPurify bound but degraded).
     expect(detail?.hasScript).toBe(true);
@@ -133,8 +134,7 @@ describe("jsdom-on-Workers spike — RECORDED OUTCOME", () => {
     // Workers does SSRF-safe fetch; Node-runtime function does extract+sanitize.
     const jsdomViable = spike!.capabilities.jsdomImport.ok;
     const linkedomViable = spike!.linkedom.linkedomDompurify.ok;
-    const ssrfViableOnWorkers =
-      spike!.capabilities.ipAddress.ok && spike!.a1ResolveOverride.ok;
+    const ssrfViableOnWorkers = spike!.capabilities.ipAddress.ok && spike!.a1ResolveOverride.ok;
     // Document the trigger condition (do NOT assert the verdict itself, which
     // is a planner decision — just confirm the factual inputs that drive it).
     expect(jsdomViable).toBe(false);

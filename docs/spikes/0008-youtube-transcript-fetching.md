@@ -18,18 +18,18 @@ Lem Reader's ingest endpoint (`server/safeFetch.ts` → `server/ingest.ts`) norm
 
 **The idea:** YouTube serves caption data at `https://www.youtube.com/api/timedtext?v=VIDEO_ID&lang=en&fmt=json3` (historically also `https://video.google.com/timedtext?...`).
 
-**Live probe (2026-09-14):** a bare request for a captions-rich video (`dQw4w9WgXcQ`) returns **HTTP 200 with an empty body** (`content-type: text/html`). The bare-parameter form has been dead for third parties since YouTube began requiring session-bound signature (`pot`/`signature`/`exp`-family) parameters — those are issued inside the caption-track `baseUrl` values that only a **player session** (watch-page HTML or an InnerTube `player` response) can produce. The endpoint is a *delivery* URL, not a *discovery* URL: you must already have the per-session signed URL.
+**Live probe (2026-09-14):** a bare request for a captions-rich video (`dQw4w9WgXcQ`) returns **HTTP 200 with an empty body** (`content-type: text/html`). The bare-parameter form has been dead for third parties since YouTube began requiring session-bound signature (`pot`/`signature`/`exp`-family) parameters — those are issued inside the caption-track `baseUrl` values that only a **player session** (watch-page HTML or an InnerTube `player` response) can produce. The endpoint is a _delivery_ URL, not a _discovery_ URL: you must already have the per-session signed URL.
 
 **Formats** (when fetched via a valid `baseUrl`, `fmt=` / official `tfmt=` values — the official `captions.download` doc lists the same family):
 
-| Format | Shape | Timing granularity |
-|---|---|---|
-| `json3` | JSON: `events[]` with `tStartMs`, `dDurationMs`, `segs[]` (`utf8`, `tOffsetMs`) | line-level events with **per-word offsets** |
-| `srv1` | XML `<text start="…​" dur="…​">line</text>` | **per-line** |
-| `srv2` | XML, per-line events with word `<s>` children | line + word |
-| `srv3` | XML word-level | **per-word** |
-| `vtt` / `ttml` | WebVTT / TTML | line-level cues |
-| `sbv`, `scc`, `srt` | legacy subtitle containers | cue-level |
+| Format              | Shape                                                                           | Timing granularity                          |
+| ------------------- | ------------------------------------------------------------------------------- | ------------------------------------------- |
+| `json3`             | JSON: `events[]` with `tStartMs`, `dDurationMs`, `segs[]` (`utf8`, `tOffsetMs`) | line-level events with **per-word offsets** |
+| `srv1`              | XML `<text start="…​" dur="…​">line</text>`                                     | **per-line**                                |
+| `srv2`              | XML, per-line events with word `<s>` children                                   | line + word                                 |
+| `srv3`              | XML word-level                                                                  | **per-word**                                |
+| `vtt` / `ttml`      | WebVTT / TTML                                                                   | line-level cues                             |
+| `sbv`, `scc`, `srt` | legacy subtitle containers                                                      | cue-level                                   |
 
 Evidence that YouTube now defaults player-issued `baseUrl`s to the word-level `srv3`: `youtube-transcript-api` strips it — `caption["baseUrl"].replace("&fmt=srv3", "")` — and parses the remaining `srv1`-style XML (source: `youtube_transcript_api/_transcripts.py`).
 
@@ -45,20 +45,20 @@ Evidence that YouTube now defaults player-issued `baseUrl`s to the word-level `s
 
 All of these scrape YouTube's **private InnerTube API** (`POST https://www.youtube.com/youtubei/v1/player`), not the Data API. None are affiliated with YouTube.
 
-| | `youtube-transcript-api` (Python) | `youtube-transcript` (TS) | `youtubei.js` / `YouTube.js` (TS) |
-|---|---|---|---|
-| Version (2026-09-14) | 1.2.4 (PyPI) | 1.3.1 (npm, 2026-04-25) | 18.0.0 (npm, 2026-08-13) |
-| Flow | GET watch HTML → consent cookie → extract `INNERTUBE_API_KEY` → POST `player` (WEB context) → `captionTracks[].baseUrl` fetch | POST `youtubei/v1/player` (ANDROID client `20.10.38`) directly → regex-parse transcript XML | full InnerTube session client (`getInfo()`) with player deciphering, cookies, proxies, PO-token support |
-| Returns | `FetchedTranscript` snippets `{text, start, duration}` + `language`, `language_code`, `is_generated`; `list()` for track discovery; translation via `translate()` | `TranscriptResponse[]` `{text, start, duration}` | complete `VideoInfo`: `basic_info` (title, author, duration, keywords…), captions, chapters via engagement panels, plus everything else InnerTube exposes |
-| Language negotiation | priority-ordered `languages=['de','en']`; manual preferred over ASR; `find_generated/manually_created_transcript` | minimal: first available track | client-level `lang`/`location`; track list from player response |
-| Metadata (title/channel/duration) | ✗ transcripts only | ✗ transcripts only | ✓ full |
-| Failure taxonomy | typed: `TranscriptsDisabled`, `NoTranscriptFound`, `AgeRestricted`, `VideoUnplayable`, `RequestBlocked`/`IpBlocked` (HTTP 429), `PoTokenRequired`, `VideoUnavailable` | typed incl. `YoutubeTranscriptTooManyRequestError`, `TranscriptDisabledError` | InnerTube errors surfaced by client |
-| Blocked-IP story | README: "YouTube has started blocking most IPs that are known to belong to cloud providers" — rotating **residential proxies** are the documented workaround; cookie auth for age-gated videos "currently not available" | none built in | proxy + `po_token` config options |
-| Health | actively maintained, large user base | small, but updated 2026-04 | actively maintained (2026-08), large community |
+|                                   | `youtube-transcript-api` (Python)                                                                                                                                                                                        | `youtube-transcript` (TS)                                                                   | `youtubei.js` / `YouTube.js` (TS)                                                                                                                         |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Version (2026-09-14)              | 1.2.4 (PyPI)                                                                                                                                                                                                             | 1.3.1 (npm, 2026-04-25)                                                                     | 18.0.0 (npm, 2026-08-13)                                                                                                                                  |
+| Flow                              | GET watch HTML → consent cookie → extract `INNERTUBE_API_KEY` → POST `player` (WEB context) → `captionTracks[].baseUrl` fetch                                                                                            | POST `youtubei/v1/player` (ANDROID client `20.10.38`) directly → regex-parse transcript XML | full InnerTube session client (`getInfo()`) with player deciphering, cookies, proxies, PO-token support                                                   |
+| Returns                           | `FetchedTranscript` snippets `{text, start, duration}` + `language`, `language_code`, `is_generated`; `list()` for track discovery; translation via `translate()`                                                        | `TranscriptResponse[]` `{text, start, duration}`                                            | complete `VideoInfo`: `basic_info` (title, author, duration, keywords…), captions, chapters via engagement panels, plus everything else InnerTube exposes |
+| Language negotiation              | priority-ordered `languages=['de','en']`; manual preferred over ASR; `find_generated/manually_created_transcript`                                                                                                        | minimal: first available track                                                              | client-level `lang`/`location`; track list from player response                                                                                           |
+| Metadata (title/channel/duration) | ✗ transcripts only                                                                                                                                                                                                       | ✗ transcripts only                                                                          | ✓ full                                                                                                                                                    |
+| Failure taxonomy                  | typed: `TranscriptsDisabled`, `NoTranscriptFound`, `AgeRestricted`, `VideoUnplayable`, `RequestBlocked`/`IpBlocked` (HTTP 429), `PoTokenRequired`, `VideoUnavailable`                                                    | typed incl. `YoutubeTranscriptTooManyRequestError`, `TranscriptDisabledError`               | InnerTube errors surfaced by client                                                                                                                       |
+| Blocked-IP story                  | README: "YouTube has started blocking most IPs that are known to belong to cloud providers" — rotating **residential proxies** are the documented workaround; cookie auth for age-gated videos "currently not available" | none built in                                                                               | proxy + `po_token` config options                                                                                                                         |
+| Health                            | actively maintained, large user base                                                                                                                                                                                     | small, but updated 2026-04                                                                  | actively maintained (2026-08), large community                                                                                                            |
 
 **Common failure modes** (InnerTube-level `playabilityStatus`): `OK`, `ERROR` (video unavailable/private → typed refusal), `LOGIN_REQUIRED` with reason "Sign in to confirm you're not a bot" (bot detection) or "This video may be inappropriate…" (age gate). Transcripts-off videos expose `TranscriptsDisabled`. Unlisted videos with the link work; private ones never do.
 
-**Rate-limiting reality:** per-IP 429s and hard IP blocks (especially cloud-provider ranges), not token-bucket quotas. For a **personal-use** app fetching one video per user action, residential-proxy escalation is *not* needed — but caching and polite pacing are mandatory from day one.
+**Rate-limiting reality:** per-IP 429s and hard IP blocks (especially cloud-provider ranges), not token-bucket quotas. For a **personal-use** app fetching one video per user action, residential-proxy escalation is _not_ needed — but caching and polite pacing are mandatory from day one.
 
 **Verdict:** this is the only working transcript path. For Lem Reader (Node server), `youtubei.js` gives transcripts **and** metadata **and** chapters from one dependency; the minimal `youtube-transcript` approach proves a ~150-line hand-rolled client is viable if dependency weight matters.
 
@@ -68,15 +68,15 @@ All of these scrape YouTube's **private InnerTube API** (`POST https://www.youtu
 
 Both are community reverse-proxy projects with JSON APIs that wrap InnerTube. Both nominally solve CORS (instances send `access-control-allow-origin: *`) and both expose chapters.
 
-| | Invidious | Piped |
-|---|---|---|
-| Transcript endpoint | `GET /api/v1/captions/:id` → `{captions:[{label, languageCode, url}]}`; `?label=` returns **WebVTT**; `?lang=`; `?tlang=` auto-translate (docs: `iv-org/documentation/docs/api.md`) | `/streams/:id` → `VideoInfo` incl. `subtitles[]` (OpenAPI `#/components/schemas/Subtitle`) |
-| Metadata endpoint | `GET /api/v1/videos/:id` → `title`, `author`, `lengthSeconds`, `captions`, `chapters` | `/streams/:id` → `title`, `uploader`, `duration`, `views`, `subtitles`, chapters (`ChapterSegment.java`: `title`, `image`, `start`) |
-| **Live probe 2026-09-14** | top 4 instances: 403 Forbidden (anti-bot), "forbidden", Anubis bot-check page, HTML front page. One instance (`inv.nadeko.net`) served the caption **list** JSON only with a browser User-Agent — but `/api/v1/videos` answered "**Endpoint disabled**" and the caption **content** fetch returned HTTP 200 with **0 bytes** | official API host `pipedapi.kavin.rocks`: **HTTP 526** (Cloudflare invalid cert); alternates: 301, 502, empty |
+|                           | Invidious                                                                                                                                                                                                                                                                                                                    | Piped                                                                                                                               |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Transcript endpoint       | `GET /api/v1/captions/:id` → `{captions:[{label, languageCode, url}]}`; `?label=` returns **WebVTT**; `?lang=`; `?tlang=` auto-translate (docs: `iv-org/documentation/docs/api.md`)                                                                                                                                          | `/streams/:id` → `VideoInfo` incl. `subtitles[]` (OpenAPI `#/components/schemas/Subtitle`)                                          |
+| Metadata endpoint         | `GET /api/v1/videos/:id` → `title`, `author`, `lengthSeconds`, `captions`, `chapters`                                                                                                                                                                                                                                        | `/streams/:id` → `title`, `uploader`, `duration`, `views`, `subtitles`, chapters (`ChapterSegment.java`: `title`, `image`, `start`) |
+| **Live probe 2026-09-14** | top 4 instances: 403 Forbidden (anti-bot), "forbidden", Anubis bot-check page, HTML front page. One instance (`inv.nadeko.net`) served the caption **list** JSON only with a browser User-Agent — but `/api/v1/videos` answered "**Endpoint disabled**" and the caption **content** fetch returned HTTP 200 with **0 bytes** | official API host `pipedapi.kavin.rocks`: **HTTP 526** (Cloudflare invalid cert); alternates: 301, 502, empty                       |
 
 **Structural risk:** both projects are in a permanent arms race with YouTube (Invidious needs PO-token support / `inv-sig-helper` / video-companion infrastructure; instance operators disable heavy endpoints to survive). The probe shows the real-world contract: **public instances are hostile to programmatic access and fail in heterogenous ways** (403, challenge pages, disabled endpoints, truncated responses). Self-hosting an Invidious instance works but is a heavy, YouTube-coupled dependency for a personal reader.
 
-**Verdict:** acceptable as an *optional, best-effort fallback* — never as the primary path.
+**Verdict:** acceptable as an _optional, best-effort fallback_ — never as the primary path.
 
 ---
 
@@ -92,7 +92,7 @@ Both are community reverse-proxy projects with JSON APIs that wrap InnerTube. Bo
 
 ## 6. Why server-side fetching is required (CORS)
 
-**Live probe (2026-09-14):** `youtube.com` watch-page and `timedtext` responses carry **no `Access-Control-Allow-Origin` header** (only `content-type`). A browser `fetch()` from the Lem Reader origin can therefore *send* the request but cannot *read* the response — CORS blocks the read. Additionally, a browser-side InnerTube call would leak the user's IP/cookies into YouTube's bot-scoring with no control over headers or retries.
+**Live probe (2026-09-14):** `youtube.com` watch-page and `timedtext` responses carry **no `Access-Control-Allow-Origin` header** (only `content-type`). A browser `fetch()` from the Lem Reader origin can therefore _send_ the request but cannot _read_ the response — CORS blocks the read. Additionally, a browser-side InnerTube call would leak the user's IP/cookies into YouTube's bot-scoring with no control over headers or retries.
 
 This fits the existing architecture exactly: ingestion already runs server-side through the SSRF-guarded `safeFetchCore` pipeline (scheme/metadata/DNS/IP validation, redirect re-validation, size caps). YouTube hosts are public, so they pass the SSRF guard; a YouTube ingest profile would be a new `SafeFetchProfile`, not a fork.
 
@@ -100,12 +100,12 @@ This fits the existing architecture exactly: ingestion already runs server-side 
 
 ## 7. Metadata & chapters — where each datum comes from
 
-| Datum | InnerTube (Method B) | Invidious | Piped | Data API v3 |
-|---|---|---|---|---|
-| Title | `videoDetails.title` | `videos/:id → title` | `streams/:id → title` | `videos.list snippet.title` |
-| Channel | `videoDetails.author` | `author` | `uploader` | `snippet.channelTitle` |
-| Duration | `videoDetails.lengthSeconds` | `lengthSeconds` | `duration` | `contentDetails.duration` (ISO 8601) |
-| Chapters | engagement-panel `macroMarkersListItemRenderer` (needs the `next` endpoint; parsed by both projects) | `chapters[]` on videos response | `chapters[]` (`title`, `image`, `start`) | ✗ none |
+| Datum    | InnerTube (Method B)                                                                                 | Invidious                       | Piped                                    | Data API v3                          |
+| -------- | ---------------------------------------------------------------------------------------------------- | ------------------------------- | ---------------------------------------- | ------------------------------------ |
+| Title    | `videoDetails.title`                                                                                 | `videos/:id → title`            | `streams/:id → title`                    | `videos.list snippet.title`          |
+| Channel  | `videoDetails.author`                                                                                | `author`                        | `uploader`                               | `snippet.channelTitle`               |
+| Duration | `videoDetails.lengthSeconds`                                                                         | `lengthSeconds`                 | `duration`                               | `contentDetails.duration` (ISO 8601) |
+| Chapters | engagement-panel `macroMarkersListItemRenderer` (needs the `next` endpoint; parsed by both projects) | `chapters[]` on videos response | `chapters[]` (`title`, `image`, `start`) | ✗ none                               |
 
 One InnerTube `player` call covers transcript + title + channel + duration; chapters need one extra `next` call and can be deferred.
 
@@ -113,15 +113,15 @@ One InnerTube `player` call covers transcript + title + channel + duration; chap
 
 ## 8. Recommendation matrix
 
-| Criterion | A: bare timedtext | B: InnerTube library (server) | C: public Invidious/Piped | D: Data API v3 |
-|---|---|---|---|---|
-| Transcript (manual + ASR) | ✗ (empty response) | ✓ | ~ (instance-dependent; probe: mostly broken) | ✗ (owner-only download) |
-| Metadata | ✗ | ✓ (`youtubei.js`; minimal libs: transcripts only) | ✓ | ✓ |
-| Chapters | ✗ | ✓ (extra `next` call) | ✓ | ✗ |
-| Reliability (personal use) | dead | ✓ best available; IP-block risk | ✗ empirically | ✓ for metadata |
-| Must run server-side | n/a | ✓ (CORS + attestation) | no (ACAO:*) but unreliable | ✓ (API key secrecy) |
-| ToS exposure | n/a | scraping = outside ToS; personal-use enforcement is IP-level (429/blocks), documented by libs | same | ✓ sanctioned |
-| Maintenance risk | n/a | libs patch within days of YouTube changes | instances break constantly | stable but feature-poor |
+| Criterion                  | A: bare timedtext  | B: InnerTube library (server)                                                                 | C: public Invidious/Piped                    | D: Data API v3          |
+| -------------------------- | ------------------ | --------------------------------------------------------------------------------------------- | -------------------------------------------- | ----------------------- |
+| Transcript (manual + ASR)  | ✗ (empty response) | ✓                                                                                             | ~ (instance-dependent; probe: mostly broken) | ✗ (owner-only download) |
+| Metadata                   | ✗                  | ✓ (`youtubei.js`; minimal libs: transcripts only)                                             | ✓                                            | ✓                       |
+| Chapters                   | ✗                  | ✓ (extra `next` call)                                                                         | ✓                                            | ✗                       |
+| Reliability (personal use) | dead               | ✓ best available; IP-block risk                                                               | ✗ empirically                                | ✓ for metadata          |
+| Must run server-side       | n/a                | ✓ (CORS + attestation)                                                                        | no (ACAO:*) but unreliable                   | ✓ (API key secrecy)     |
+| ToS exposure               | n/a                | scraping = outside ToS; personal-use enforcement is IP-level (429/blocks), documented by libs | same                                         | ✓ sanctioned            |
+| Maintenance risk           | n/a                | libs patch within days of YouTube changes                                                     | instances break constantly                   | stable but feature-poor |
 
 **Recommendation for Lem Reader:**
 

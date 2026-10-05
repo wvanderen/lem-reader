@@ -136,9 +136,9 @@ export function useSectionSpy({
       const detectPaginated = () => {
         const fragment = articleEl.querySelector(".page-fragment");
         if (!fragment) return;
-        const first = Array.from(
-          fragment.querySelectorAll<HTMLHeadingElement>(selector),
-        ).find((h) => h.isConnected);
+        const first = Array.from(fragment.querySelectorAll<HTMLHeadingElement>(selector)).find(
+          (h) => h.isConnected,
+        );
         if (first) {
           notify(first);
           return;
@@ -158,9 +158,7 @@ export function useSectionSpy({
         // clone — read for IDENTITY ONLY (data-block-index + text); it is
         // never focused, never a destination (destination resolution stays
         // with the consumers, which strip the clone).
-        const firstBlock = fragment.querySelector<HTMLElement>(
-          "[data-block-index]",
-        );
+        const firstBlock = fragment.querySelector<HTMLElement>("[data-block-index]");
         const firstBlockIdx = Number(firstBlock?.dataset.blockIndex);
         if (!firstBlock || !Number.isFinite(firstBlockIdx)) return;
         let containing: HTMLHeadingElement | null = null;
@@ -200,9 +198,7 @@ export function useSectionSpy({
     // SectionAnnouncer contract; section-announce.spec.ts must stay green
     // with zero diff). Snapshot at effect setup, IO + rAF-throttled scroll
     // fallback, most-recently-passed-heading sentinel. ────────────────────
-    const headings = Array.from(
-      articleEl.querySelectorAll<HTMLHeadingElement>(selector),
-    );
+    const headings = Array.from(articleEl.querySelectorAll<HTMLHeadingElement>(selector));
     if (headings.length === 0) return;
 
     /**
@@ -212,9 +208,7 @@ export function useSectionSpy({
      * debounced notify.
      */
     const detect = () => {
-      const passed = headings.filter(
-        (h) => h.getBoundingClientRect().top < HEADER_PX + 8,
-      );
+      const passed = headings.filter((h) => h.getBoundingClientRect().top < HEADER_PX + 8);
       const current = passed.length > 0 ? passed[passed.length - 1] : null;
       const text = current?.textContent?.trim() ?? "";
       // Pitfall 6: only notify when the section actually changes. A scroll

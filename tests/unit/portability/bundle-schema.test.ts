@@ -10,7 +10,11 @@
 // record shape re-declared), preferences are always present (D9-12), and
 // fixtureIds carries only fixture ids (fixtures never serialize).
 import { describe, expect, it } from "vitest";
-import { ExportBundleSchema, BUNDLE_FILENAME, resolveAppVersion } from "../../../src/portability/bundle";
+import {
+  ExportBundleSchema,
+  BUNDLE_FILENAME,
+  resolveAppVersion,
+} from "../../../src/portability/bundle";
 
 // ── Fixture builders (schema-valid minimal records) ─────────────────────────
 
@@ -72,10 +76,7 @@ function sampleBook(overrides: Record<string, unknown> = {}) {
     title: "The Synthetic Book",
     authors: ["Ada Author"],
     language: "en",
-    chapterArticleIds: [
-      "epub-000000000001-c00",
-      "epub-000000000001-c01",
-    ],
+    chapterArticleIds: ["epub-000000000001-c00", "epub-000000000001-c01"],
     skippedChapterCount: 0,
     source: "epub-upload" as const,
     originalFileHash: "sha256:" + "c".repeat(64),
@@ -203,9 +204,7 @@ describe("ExportBundleSchema (D9-04 envelope)", () => {
     const result = ExportBundleSchema.safeParse({
       ...sampleBundle(),
       schemaVersion: 3,
-      articles: [
-        { ...sampleArticle(), readerTitle: "My Title", readerAuthor: "My Author" },
-      ],
+      articles: [{ ...sampleArticle(), readerTitle: "My Title", readerAuthor: "My Author" }],
     });
     expect(result.success).toBe(true);
     if (result.success) {
@@ -267,7 +266,7 @@ describe("bundle artifacts", () => {
     expect(BUNDLE_FILENAME).toBe("lem-reader-bundle-v1.zip");
   });
 
-  it("resolveAppVersion returns a non-empty string (\"dev\" under vitest — no define)", () => {
+  it('resolveAppVersion returns a non-empty string ("dev" under vitest — no define)', () => {
     const version = resolveAppVersion();
     expect(typeof version).toBe("string");
     expect(version.length).toBeGreaterThan(0);

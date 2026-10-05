@@ -12,12 +12,8 @@ describe("paginated mobile viewport geometry", () => {
     // old source-order fallback trick would break var() consumers on legacy
     // engines), and the header cap spends the SAME property — the two
     // formulas cannot drift.
-    expect(css).toContain(
-      "--paginated-budget: calc(100vh - 48px - 2px - 2 * var(--space-2xl));",
-    );
-    expect(css).toContain(
-      "--paginated-budget: calc(100dvh - 48px - 2px - 2 * var(--space-2xl));",
-    );
+    expect(css).toContain("--paginated-budget: calc(100vh - 48px - 2px - 2 * var(--space-2xl));");
+    expect(css).toContain("--paginated-budget: calc(100dvh - 48px - 2px - 2 * var(--space-2xl));");
     expect(css).toContain("height: var(--paginated-budget);");
     expect(css).toContain("max-height: calc(var(--paginated-budget) * 0.25);");
   });

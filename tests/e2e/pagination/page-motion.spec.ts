@@ -32,11 +32,17 @@ test("page fade is opt-in, persists, and obeys live reduced motion", async ({ pa
   expect(await fades()).toBe(1);
   await expect(fragment).toHaveCount(1);
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await expect.poll(() => fragment.evaluate(el => el.getAnimations().length)).toBe(0);
+  await expect.poll(() => fragment.evaluate((el) => el.getAnimations().length)).toBe(0);
   await page.getByRole("button", { name: "Previous page", exact: true }).click();
   await expect(fragment).toHaveAttribute("aria-label", "Page 2");
   expect(await fades()).toBe(1);
-  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("lem-settings-mirror-v1") ?? "{}").animatePageTurns)).toBe(true);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => JSON.parse(localStorage.getItem("lem-settings-mirror-v1") ?? "{}").animatePageTurns,
+      ),
+    )
+    .toBe(true);
   await page.reload();
   await expect(fragment).toBeVisible();
   expect(await fades()).toBe(0);

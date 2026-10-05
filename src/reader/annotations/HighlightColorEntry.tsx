@@ -44,11 +44,7 @@ interface HighlightColorEntryProps {
  * HighlightColorEntry — fieldset + legend + the radio pill row + a small
  * .status live region. Renders INSIDE NotePopover's edit view.
  */
-export function HighlightColorEntry({
-  color,
-  saveColor,
-  successCopy,
-}: HighlightColorEntryProps) {
+export function HighlightColorEntry({ color, saveColor, successCopy }: HighlightColorEntryProps) {
   const [statusCopy, setStatusCopy] = useState<string | null>(null);
 
   async function commit(next: HighlightColor) {

@@ -103,9 +103,7 @@ function sampleArticle(overrides: Partial<CanonicalArticle> = {}): CanonicalArti
 
 // Phase 12 Plan 03 — a schema-valid chapter article (epub-chapter meta) +
 // a schema-valid Book, the ingestEpub book ok-variant payload.
-function sampleChapter(
-  overrides: Partial<CanonicalArticle> = {},
-): CanonicalArticle {
+function sampleChapter(overrides: Partial<CanonicalArticle> = {}): CanonicalArticle {
   return ArticleSchema.parse({
     id: "epub-abc123def456-c00",
     revision: 1,
@@ -116,9 +114,7 @@ function sampleChapter(
       retrievedAt: "2026-08-18T00:00:00.000Z",
       originalHtmlHash: "sha256:" + "c".repeat(64),
     },
-    blocks: [
-      { kind: "paragraph", content: [{ text: "Chapter body.", marks: [] }] },
-    ],
+    blocks: [{ kind: "paragraph", content: [{ text: "Chapter body.", marks: [] }] }],
     footnotes: [],
     ingestionMeta: {
       source: "epub-chapter",
@@ -157,14 +153,12 @@ describe("IngestionClient (07-06 Task 1)", () => {
 
   it("ingestUrl returns the article on a 200 + ok:true response", async () => {
     const article = sampleArticle();
-    const fetchMock = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValue(
-        new Response(
-          JSON.stringify({ ok: true, article, confidence: { state: "confident" } }),
-          { status: 200, headers: { "Content-Type": "application/json" } },
-        ),
-      );
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ ok: true, article, confidence: { state: "confident" } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
 
     const { ingestUrl } = await loadClient();
     const result = await ingestUrl("https://example.com/article");
@@ -188,10 +182,10 @@ describe("IngestionClient (07-06 Task 1)", () => {
   it("ingestUrl posts {url, preferredLanguages} when a preference is supplied", async () => {
     const article = sampleArticle();
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        JSON.stringify({ ok: true, article, confidence: { state: "confident" } }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      ),
+      new Response(JSON.stringify({ ok: true, article, confidence: { state: "confident" } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
     );
 
     const { ingestUrl } = await loadClient();
@@ -259,10 +253,10 @@ describe("IngestionClient (07-06 Task 1)", () => {
       },
     });
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        JSON.stringify({ ok: true, article, confidence: { state: "low" } }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      ),
+      new Response(JSON.stringify({ ok: true, article, confidence: { state: "low" } }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
     );
 
     const { ingestHtml } = await loadClient();
@@ -274,16 +268,14 @@ describe("IngestionClient (07-06 Task 1)", () => {
 
   it("throws IngestionError with .reason on a 400 + ok:false response", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        JSON.stringify({ ok: false, reason: "ssrf-blocked-metadata" }),
-        { status: 400, headers: { "Content-Type": "application/json" } },
-      ),
+      new Response(JSON.stringify({ ok: false, reason: "ssrf-blocked-metadata" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      }),
     );
 
     const { ingestUrl, IngestionError } = await loadClient();
-    await expect(
-      ingestUrl("http://169.254.169.254/"),
-    ).rejects.toMatchObject({
+    await expect(ingestUrl("http://169.254.169.254/")).rejects.toMatchObject({
       name: "IngestionError",
       reason: "ssrf-blocked-metadata",
     });
@@ -312,14 +304,12 @@ describe("IngestionClient (07-06 Task 1)", () => {
           extractionWarnings: [],
         },
       });
-      const fetchMock = vi
-        .spyOn(globalThis, "fetch")
-        .mockResolvedValue(
-          new Response(
-            JSON.stringify({ ok: true, article, confidence: { state: "confident" } }),
-            { status: 200, headers: { "Content-Type": "application/json" } },
-          ),
-        );
+      const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(JSON.stringify({ ok: true, article, confidence: { state: "confident" } }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
 
       const { ingestPdf } = await loadClient();
       const b64 = "JVBERi0xLjQKJcOkw7zDtsOf"; // "%PDF-1.4" base64-encoded
@@ -344,10 +334,10 @@ describe("IngestionClient (07-06 Task 1)", () => {
 
     it("throws IngestionError carrying the typed pdf-scanned reason verbatim on a 400 + ok:false response", async () => {
       vi.spyOn(globalThis, "fetch").mockResolvedValue(
-        new Response(
-          JSON.stringify({ ok: false, reason: "pdf-scanned" }),
-          { status: 400, headers: { "Content-Type": "application/json" } },
-        ),
+        new Response(JSON.stringify({ ok: false, reason: "pdf-scanned" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        }),
       );
 
       const { ingestPdf } = await loadClient();
@@ -377,9 +367,7 @@ describe("IngestionClient (07-06 Task 1)", () => {
     );
 
     const { ingestUrl } = await loadClient();
-    await expect(
-      ingestUrl("https://example.com/article"),
-    ).rejects.toThrow();
+    await expect(ingestUrl("https://example.com/article")).rejects.toThrow();
   });
 });
 
@@ -397,8 +385,7 @@ describe("ingest asset envelope re-validation (20-02 Task 3)", () => {
   /** 64 deterministic bytes + the matching img-<12hex> id + wire envelope. */
   function sampleEnvelope(bytes = sampleAssetBytes()) {
     return {
-      assetId:
-        "img-" + createHash("sha256").update(bytes).digest("hex").slice(0, 12),
+      assetId: "img-" + createHash("sha256").update(bytes).digest("hex").slice(0, 12),
       contentType: "image/png" as const,
       byteLength: bytes.byteLength,
       dataBase64: Buffer.from(bytes).toString("base64"),
@@ -553,7 +540,8 @@ describe("DexieLibrarySource (07-06 Task 1)", () => {
     expect(await db.highlights.get("h-1")).toBeUndefined();
     expect(await db.notes.get("n-1")).toBeUndefined();
     expect(
-      await db.location.where("[articleId+revision]")
+      await db.location
+        .where("[articleId+revision]")
         .between(["remove-target", 0], ["remove-target", Number.MAX_SAFE_INTEGER])
         .count(),
     ).toBe(0);
@@ -643,14 +631,12 @@ describe("ingestEpub (12-03 Task 2)", () => {
         },
       }),
     ];
-    const fetchMock = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValue(
-        new Response(
-          JSON.stringify({ ok: true, book, articles: chapters, skippedCount: 2 }),
-          { status: 200, headers: { "Content-Type": "application/json" } },
-        ),
-      );
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ ok: true, book, articles: chapters, skippedCount: 2 }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
 
     const { ingestEpub } = await loadClient();
     const b64 = "UEsDBA=="; // "PK\x03\x04" base64-encoded
@@ -710,10 +696,10 @@ describe("ingestEpub (12-03 Task 2)", () => {
 
   it("throws IngestionError carrying the typed epub-protected reason on a refusal envelope", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        JSON.stringify({ ok: false, reason: "epub-protected" }),
-        { status: 400, headers: { "Content-Type": "application/json" } },
-      ),
+      new Response(JSON.stringify({ ok: false, reason: "epub-protected" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      }),
     );
 
     const { ingestEpub } = await loadClient();
@@ -738,14 +724,10 @@ describe("AddDialog .epub picker arm (12-03 Task 2)", () => {
     // jsdom implements HTMLDialogElement but NOT showModal/close behavior —
     // stub the two methods at the prototype level (the AddDialog.test.tsx
     // precedent) so the dialog shell's open-prop sync runs its real path.
-    HTMLDialogElement.prototype.showModal = vi.fn(function (
-      this: HTMLDialogElement,
-    ) {
+    HTMLDialogElement.prototype.showModal = vi.fn(function (this: HTMLDialogElement) {
       this.open = true;
     });
-    HTMLDialogElement.prototype.close = vi.fn(function (
-      this: HTMLDialogElement,
-    ) {
+    HTMLDialogElement.prototype.close = vi.fn(function (this: HTMLDialogElement) {
       this.open = false;
       this.dispatchEvent(new Event("close"));
     });
@@ -816,10 +798,10 @@ describe("AddDialog .epub picker arm (12-03 Task 2)", () => {
       }),
     ];
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        JSON.stringify({ ok: true, book, articles: chapters, skippedCount: 2 }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      ),
+      new Response(JSON.stringify({ ok: true, book, articles: chapters, skippedCount: 2 }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
     );
 
     const { AddDialog } = await import("../../src/ingestion/AddDialog");

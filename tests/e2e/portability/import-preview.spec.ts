@@ -282,9 +282,7 @@ test.describe("PORT-02 metadata overrides (17-05 — D17-10/D17-11/D17-13)", () 
     // articles with their local → incoming names.
     const preview = page.locator("dialog.import-preview");
     await expect(preview).toBeVisible({ timeout: 15_000 });
-    await expect(preview).toContainText(
-      "2 conflicting articles with a different title or author",
-    );
+    await expect(preview).toContainText("2 conflicting articles with a different title or author");
     await preview.getByRole("button", { name: "Show articles" }).click();
     const metadataList = preview.locator("#import-preview-metadata-list");
     await expect(metadataList).toBeVisible();
@@ -327,9 +325,7 @@ test.describe("PORT-02 metadata overrides (17-05 — D17-10/D17-11/D17-13)", () 
       CONFLICT_PARAGRAPHS,
     );
     await seedRows(page, {
-      articles: [
-        { ...base, readerTitle: "Local Kept Name", readerAuthor: "Local Author" },
-      ],
+      articles: [{ ...base, readerTitle: "Local Kept Name", readerAuthor: "Local Author" }],
     });
 
     // Incoming: a DIFFERENT title and NO author override — taking it whole
@@ -356,9 +352,7 @@ test.describe("PORT-02 metadata overrides (17-05 — D17-10/D17-11/D17-13)", () 
 
     const preview = page.locator("dialog.import-preview");
     await expect(preview).toBeVisible({ timeout: 15_000 });
-    await expect(preview).toContainText(
-      "1 conflicting article with a different title or author",
-    );
+    await expect(preview).toContainText("1 conflicting article with a different title or author");
 
     // Toggle THIS article to Use imported (the per-item choice).
     await preview.getByRole("button", { name: "Show articles" }).click();
@@ -386,12 +380,10 @@ test.describe("PORT-02 metadata overrides (17-05 — D17-10/D17-11/D17-13)", () 
     await page.keyboard.press("Escape");
     await expect(panel).not.toBeVisible();
     await page.reload();
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator("#title-md-metatake01")).toHaveText(
-      "Incoming Machine Name",
-    );
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(page.locator("#title-md-metatake01")).toHaveText("Incoming Machine Name");
   });
 
   test("merge-on-win: a revision+1 refresh overwrites content but keeps the LOCAL title override (D17-10)", async ({
@@ -440,9 +432,7 @@ test.describe("PORT-02 metadata overrides (17-05 — D17-10/D17-11/D17-13)", () 
 
     const preview = page.locator("dialog.import-preview");
     await expect(preview).toBeVisible({ timeout: 15_000 });
-    await expect(preview).toContainText(
-      "1 conflicting article with a different version",
-    );
+    await expect(preview).toContainText("1 conflicting article with a different version");
 
     // Overwrite the version conflict; metadata stays keep-mine (no
     // take-incoming choice — the reader keeps their name).
@@ -483,12 +473,10 @@ test.describe("PORT-02 metadata overrides (17-05 — D17-10/D17-11/D17-13)", () 
     // library Remove flow (row trash → RemoveConfirm → Remove article).
     await page.goto(`${BASE}/#/`);
     await page.reload();
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible({ timeout: 10_000 });
-    const row = page
-      .locator(".library-list > li")
-      .filter({ hasText: "Doomed Renamed Title" });
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible({
+      timeout: 10_000,
+    });
+    const row = page.locator(".library-list > li").filter({ hasText: "Doomed Renamed Title" });
     await expect(row).toBeVisible();
     await row.locator(".library-row-remove").click();
     const confirm = page.locator("dialog.library-remove-confirm");
@@ -654,9 +642,7 @@ test("a bundle missing one asset entry warns verbatim and imports the OTHER arti
   // Row truth: the COMPLETE article + its asset row landed; the dangling
   // article did NOT; exactly one asset row exists.
   expect(await readRow(page, "articles", "md-previewasset1")).not.toBeNull();
-  expect(
-    await readRow(page, "assets", ["md-previewasset1", "img-0123456789ab"]),
-  ).not.toBeNull();
+  expect(await readRow(page, "assets", ["md-previewasset1", "img-0123456789ab"])).not.toBeNull();
   expect(await readRow(page, "articles", "md-previewasset2")).toBeNull();
   expect(await countRows(page, "assets")).toBe(1);
 });

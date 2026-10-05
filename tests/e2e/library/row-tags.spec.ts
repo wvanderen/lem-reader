@@ -74,9 +74,7 @@ async function openLibrary(page: Page): Promise<void> {
   await page.evaluate(() => {
     window.location.hash = "#/";
   });
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Saved articles" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
   await expect(page.locator(".library-list > li").first()).toBeVisible({
     timeout: 10_000,
   });
@@ -88,9 +86,9 @@ async function openLibrary(page: Page): Promise<void> {
 async function reloadLibrary(page: Page): Promise<void> {
   await page.goto(`${BASE}/#/`);
   await page.reload();
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Saved articles" }),
-  ).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible({
+    timeout: 10_000,
+  });
   await expect(page.locator(".library-list > li").first()).toBeVisible({
     timeout: 10_000,
   });
@@ -118,9 +116,7 @@ test.describe("row tags popover (issue #75 — decision #71)", () => {
     // Type a fresh tag; the create option commits it; the pill chip confirms.
     const tagInput = page.getByRole("combobox", { name: "Add or search a tag" });
     await tagInput.fill("stoic");
-    await expect(
-      popover.getByRole("option", { name: 'Add “stoic”' }),
-    ).toBeVisible();
+    await expect(popover.getByRole("option", { name: "Add “stoic”" })).toBeVisible();
     await tagInput.press("Enter");
     await expect(
       popover.locator(".tag-picker-chips .tag-picker-pill").filter({ hasText: "stoic" }),
@@ -135,9 +131,7 @@ test.describe("row tags popover (issue #75 — decision #71)", () => {
     await expect(
       row.locator(".library-row-tags .tag-chip-readonly").filter({ hasText: "stoic" }),
     ).toBeVisible();
-    await expect(
-      page.locator(".tag-filter .tag-chip").filter({ hasText: "stoic" }),
-    ).toBeVisible();
+    await expect(page.locator(".tag-filter .tag-chip").filter({ hasText: "stoic" })).toBeVisible();
 
     // Reopen: the picker re-seeds from the row's stored tags.
     await rowTagsTrigger(page).click();
@@ -183,9 +177,7 @@ test.describe("row tags popover (issue #75 — decision #71)", () => {
     await openLibrary(page);
     await openAddDialog(page);
     await pickSource(page, "paste");
-    await page
-      .getByRole("textbox", { name: /paste html/i })
-      .fill(pasteHtml("Tagged At Import"));
+    await page.getByRole("textbox", { name: /paste html/i }).fill(pasteHtml("Tagged At Import"));
     // Pick a tag in the Tags (optional) fieldset BEFORE submitting.
     const tagInput = page.getByRole("combobox", { name: "Add or search a tag" });
     await tagInput.fill("fresh");
@@ -201,8 +193,6 @@ test.describe("row tags popover (issue #75 — decision #71)", () => {
     await expect(
       row.locator(".library-row-tags .tag-chip-readonly").filter({ hasText: "fresh" }),
     ).toBeVisible();
-    await expect(
-      page.locator(".tag-filter .tag-chip").filter({ hasText: "fresh" }),
-    ).toBeVisible();
+    await expect(page.locator(".tag-filter .tag-chip").filter({ hasText: "fresh" })).toBeVisible();
   });
 });

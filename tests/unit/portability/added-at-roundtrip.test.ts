@@ -63,9 +63,7 @@ function sampleArticle(overrides: Partial<ArticleInput> = {}): CanonicalArticle 
       retrievedAt: "2026-09-10T00:00:00.000Z",
       originalHtmlHash: "sha256:" + "a".repeat(64),
     },
-    blocks: [
-      { kind: "paragraph", content: [{ text: "Round trip body text.", marks: [] }] },
-    ],
+    blocks: [{ kind: "paragraph", content: [{ text: "Round trip body text.", marks: [] }] }],
     footnotes: [],
     ingestionMeta: {
       source: "url",

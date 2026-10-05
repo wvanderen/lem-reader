@@ -42,9 +42,7 @@ test.beforeEach(async ({ page }) => {
  * Create a highlight via the N shortcut (opens the editor with a focused empty
  * textarea). Returns after the dialog is open.
  */
-async function createHighlightAndOpenEditor(
-  page: import("@playwright/test").Page,
-): Promise<void> {
+async function createHighlightAndOpenEditor(page: import("@playwright/test").Page): Promise<void> {
   await openArticle(page, FIXTURE);
   const blockIdx = await findFirstBlockWithText(page, 24);
   expect(blockIdx).not.toBe(-1);
@@ -74,32 +72,22 @@ test.describe("Note popover modal-dialog focus (ACPT-02 finding #2)", () => {
       const d = document.querySelector("dialog#highlight-popover");
       return d ? d.matches(":modal") : false;
     });
-    expect(isModal, "dialog is modal (:modal matches — showModal opened it)").toBe(
-      true,
-    );
+    expect(isModal, "dialog is modal (:modal matches — showModal opened it)").toBe(true);
 
     // Focus is now INSIDE the dialog (showModal behavior).
     const activeInDialog = await page.evaluate(() => {
       const dlg = document.querySelector("dialog#highlight-popover");
-      return dlg && document.activeElement
-        ? dlg.contains(document.activeElement)
-        : false;
+      return dlg && document.activeElement ? dlg.contains(document.activeElement) : false;
     });
-    expect(activeInDialog, "focus should move into the dialog after open").toBe(
-      true,
-    );
+    expect(activeInDialog, "focus should move into the dialog after open").toBe(true);
 
     // The textarea specifically is the initial focus (D5-10).
     const textarea = page.locator("textarea.highlight-popover-textarea");
-    const textareaFocused = await textarea.evaluate(
-      (el) => el === document.activeElement,
-    );
+    const textareaFocused = await textarea.evaluate((el) => el === document.activeElement);
     expect(textareaFocused, "textarea is the initial focus on open").toBe(true);
   });
 
-  test("Tab cycles only within the dialog (focus trap — never escapes)", async ({
-    page,
-  }) => {
+  test("Tab cycles only within the dialog (focus trap — never escapes)", async ({ page }) => {
     await createHighlightAndOpenEditor(page);
 
     // The dialog's focusable controls in DOM order: textarea, Done, Delete.
@@ -141,16 +129,11 @@ test.describe("Note popover modal-dialog focus (ACPT-02 finding #2)", () => {
     for (let i = 0; i < 10; i++) {
       await page.keyboard.press("Shift+Tab");
       const escaped = await outsideInteractive();
-      expect(
-        escaped,
-        `focus escaped outside the dialog on Shift+Tab iteration ${i}`,
-      ).toBe(false);
+      expect(escaped, `focus escaped outside the dialog on Shift+Tab iteration ${i}`).toBe(false);
     }
   });
 
-  test("Escape closes the dialog + focus restores to the triggering <mark>", async ({
-    page,
-  }) => {
+  test("Escape closes the dialog + focus restores to the triggering <mark>", async ({ page }) => {
     // Focus-restore-to-<mark> is meaningful in the ACTIVATE-EXISTING-MARK path
     // (the real ACPT-02 Flow D scenario): the reader focuses a saved <mark>,
     // activates it → the editor opens (mark is activeElement at showModal time)
@@ -181,9 +164,7 @@ test.describe("Note popover modal-dialog focus (ACPT-02 finding #2)", () => {
     await expect(triggerMark).toBeFocused();
   });
 
-  test("Done closes the dialog + flushes the note save + restores focus", async ({
-    page,
-  }) => {
+  test("Done closes the dialog + flushes the note save + restores focus", async ({ page }) => {
     // Same activate-existing-mark path as the Escape test (see note there).
     await createHighlightAndOpenEditor(page);
     await page.locator("textarea.highlight-popover-textarea").fill("First note.");
@@ -223,10 +204,7 @@ test.describe("Note popover modal-dialog focus (ACPT-02 finding #2)", () => {
 
     // (a) The dialog references the excerpt element by id.
     const dlg = page.getByRole("dialog", { name: "Highlight note" });
-    await expect(dlg).toHaveAttribute(
-      "aria-describedby",
-      "highlight-popover-excerpt",
-    );
+    await expect(dlg).toHaveAttribute("aria-describedby", "highlight-popover-excerpt");
 
     // (b) The referenced element exists and is inside the dialog.
     const excerptEl = dlg.locator("#highlight-popover-excerpt");
@@ -247,11 +225,8 @@ test.describe("Note popover modal-dialog focus (ACPT-02 finding #2)", () => {
     //     role+description filter resolves through the accessibility tree, so
     //     a match proves the description is wired end-to-end cross-engine —
     //     not just that the DOM attribute exists.
-    const escapeRe = (s: string) =>
-      s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const descriptionRe = new RegExp(
-      `Highlighted text:.*${escapeRe(excerptText)}`,
-    );
+    const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const descriptionRe = new RegExp(`Highlighted text:.*${escapeRe(excerptText)}`);
     await expect(
       page.getByRole("dialog", { name: "Highlight note", description: descriptionRe }),
     ).toBeVisible();

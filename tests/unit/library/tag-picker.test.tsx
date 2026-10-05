@@ -59,12 +59,7 @@ describe("TagPicker: suggestions + filtering", () => {
     await user.click(input);
     const listbox = screen.getByRole("listbox");
     const options = within(listbox).getAllByRole("option");
-    expect(options.map((o) => o.textContent)).toEqual([
-      "essays",
-      "slow-web",
-      "attention",
-      "books",
-    ]);
+    expect(options.map((o) => o.textContent)).toEqual(["essays", "slow-web", "attention", "books"]);
   });
 
   it("filters by case-insensitive substring of the draft; a non-exact draft still offers create", async () => {
@@ -91,11 +86,7 @@ describe("TagPicker: suggestions + filtering", () => {
     const input = screen.getByRole("combobox");
     await user.click(input);
     const options = within(screen.getByRole("listbox")).getAllByRole("option");
-    expect(options.map((o) => o.textContent)).toEqual([
-      "slow-web",
-      "attention",
-      "books",
-    ]);
+    expect(options.map((o) => o.textContent)).toEqual(["slow-web", "attention", "books"]);
   });
 });
 

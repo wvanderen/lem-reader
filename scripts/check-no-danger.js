@@ -92,19 +92,13 @@ for (const dir of SCAN_DIRS) {
 }
 
 if (violations.length > 0) {
-  console.error(
-    "VIOLATION: dangerouslySetInnerHTML usage found in the following files:",
-  );
+  console.error("VIOLATION: dangerouslySetInnerHTML usage found in the following files:");
   for (const v of violations) {
     console.error(`  - ${v}`);
   }
   console.error("");
-  console.error(
-    "The doc model IS the security boundary (ING-07). Render Block JSON,",
-  );
-  console.error(
-    "never raw HTML. See 07-RESEARCH.md §Gate 2 + 07-VALIDATION.md §Wave 0.",
-  );
+  console.error("The doc model IS the security boundary (ING-07). Render Block JSON,");
+  console.error("never raw HTML. See 07-RESEARCH.md §Gate 2 + 07-VALIDATION.md §Wave 0.");
   process.exit(1);
 }
 

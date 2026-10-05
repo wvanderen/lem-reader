@@ -10,14 +10,9 @@
  * date style. Falls back to the raw ISO string if the user agent's locale
  * is unavailable (the ArticleView fallback discipline).
  */
-export function formatIsoDate(
-  iso: string,
-  dateStyle: "medium" | "short" = "medium",
-): string {
+export function formatIsoDate(iso: string, dateStyle: "medium" | "short" = "medium"): string {
   try {
-    return new Intl.DateTimeFormat(navigator.language, { dateStyle }).format(
-      new Date(iso),
-    );
+    return new Intl.DateTimeFormat(navigator.language, { dateStyle }).format(new Date(iso));
   } catch {
     return iso;
   }

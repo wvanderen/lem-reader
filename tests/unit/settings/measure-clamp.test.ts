@@ -42,14 +42,8 @@ vi.mock("../../../src/persistence/db", () => {
   };
 });
 
-import {
-  clampLegacyMeasure,
-  LEGACY_MEASURE,
-} from "../../../src/settings/legacyMeasure";
-import {
-  readSettingsMirror,
-  SETTINGS_MIRROR_KEY,
-} from "../../../src/settings/settingsMirror";
+import { clampLegacyMeasure, LEGACY_MEASURE } from "../../../src/settings/legacyMeasure";
+import { readSettingsMirror, SETTINGS_MIRROR_KEY } from "../../../src/settings/settingsMirror";
 import { loadSettings } from "../../../src/persistence/settingsStore";
 import { db } from "../../../src/persistence/db";
 import type { ReaderSettings } from "../../../src/content/schema";
@@ -168,10 +162,7 @@ describe("loadSettings clamps the legacy maximum calmly (D21-03 seam 1)", () => 
 
 describe("readSettingsMirror clamps the legacy maximum calmly (D21-03 seam 2)", () => {
   it("a painted-72 mirror returns parsed settings at 70 (not null), every other field intact", () => {
-    window.localStorage.setItem(
-      SETTINGS_MIRROR_KEY,
-      JSON.stringify(LEGACY_MAX_RECORD),
-    );
+    window.localStorage.setItem(SETTINGS_MIRROR_KEY, JSON.stringify(LEGACY_MAX_RECORD));
     expect(readSettingsMirror()).toEqual(CLAMPED_RECORD_PARSED);
   });
 
@@ -206,7 +197,7 @@ import { Dexie } from "dexie";
 import { zipSync } from "fflate";
 import { ExportBundleSchema } from "../../../src/portability/bundle";
 import { computeManifest } from "../../../src/portability/manifest";
-import type { Manifest, } from "../../../src/portability/manifest";
+import type { Manifest } from "../../../src/portability/manifest";
 import type { ExportBundle } from "../../../src/portability/bundle";
 import type { CanonicalArticle } from "../../../src/content/schema";
 
@@ -233,9 +224,7 @@ function sampleArticle(): CanonicalArticle {
       retrievedAt: "2026-08-01T00:00:00.000Z",
       originalHtmlHash: "sha256:" + "a".repeat(64),
     },
-    blocks: [
-      { kind: "paragraph", content: [{ text: "Example paragraph text.", marks: [] }] },
-    ],
+    blocks: [{ kind: "paragraph", content: [{ text: "Example paragraph text.", marks: [] }] }],
     footnotes: [],
   };
 }
@@ -368,9 +357,7 @@ import { resolve } from "node:path";
 const INDEX_HTML = readFileSync(resolve(process.cwd(), "index.html"), "utf-8");
 
 function extractMarked(name: string): string {
-  const re = new RegExp(
-    `//\\s*tokens:${name}:start([\\s\\S]*?)//\\s*tokens:${name}:end`,
-  );
+  const re = new RegExp(`//\\s*tokens:${name}:start([\\s\\S]*?)//\\s*tokens:${name}:end`);
   const match = re.exec(INDEX_HTML);
   if (!match) {
     throw new Error(`marker tokens:${name}:start/end not found in index.html`);
@@ -395,9 +382,7 @@ describe("index.html paint-hint legacy map sync check", () => {
   });
 
   it("the --measure write routes through the legacy map (never paints the dead 72ch width)", () => {
-    const measureBranch = INDEX_HTML.slice(
-      INDEX_HTML.indexOf('s.measure === "number"'),
-    );
+    const measureBranch = INDEX_HTML.slice(INDEX_HTML.indexOf('s.measure === "number"'));
     expect(measureBranch).toContain("LEGACY_MEASURE");
   });
 });

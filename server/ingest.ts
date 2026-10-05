@@ -133,9 +133,7 @@ export function probeRoundTripAnchor(article: CanonicalArticle): AnchorProbeResu
  */
 function unsupportedPartsWarning(count: number): string[] {
   return count > 0
-    ? [
-        `${count} part${count === 1 ? "" : "s"} of the original could not be displayed`,
-      ]
+    ? [`${count} part${count === 1 ? "" : "s"} of the original could not be displayed`]
     : [];
 }
 
@@ -165,8 +163,7 @@ function stampIngestionFlags(
   anchorProbe: "pass" | "ambiguous",
 ): void {
   if (article.ingestionMeta) {
-    article.ingestionMeta.extractionConfidence =
-      confidence.state === "confident" ? "high" : "low";
+    article.ingestionMeta.extractionConfidence = confidence.state === "confident" ? "high" : "low";
     if (anchorProbe === "ambiguous") {
       article.ingestionMeta.annotationsDegraded = true;
     }
@@ -318,9 +315,7 @@ function toIsoDatetimeOrNull(raw: string | undefined): string | undefined {
 export function consumeDuplicatedTitle(blocks: Block[], title: string): Block[] {
   const first = blocks[0];
   if (!first || first.kind !== "heading") return blocks;
-  const normBlock = normalizeForTitleMatch(
-    first.content.map((run) => run.text).join(""),
-  );
+  const normBlock = normalizeForTitleMatch(first.content.map((run) => run.text).join(""));
   const normTitle = normalizeForTitleMatch(title);
   // An empty normalized heading must not fuzzy-match every title ("" is
   // contained in everything) — require real text on both sides.
@@ -383,8 +378,12 @@ async function ingestEpubBook(input: {
   // Stage 1 — the adapter owns its timeout race (withEpubTimeout) and has
   // already run the D12-10 admission + D12-09 TOC-merge; both hashes were
   // computed in-adapter so this orchestrator never re-reads bytes.
-  const { bookMeta, chapters, skippedCount: adapterSkipped, originalFileHash } =
-    await epubToBooks(new Uint8Array(bytes));
+  const {
+    bookMeta,
+    chapters,
+    skippedCount: adapterSkipped,
+    originalFileHash,
+  } = await epubToBooks(new Uint8Array(bytes));
 
   const bookBase = `epub-${shortHash(b64)}`;
   const admitted: CanonicalArticle[] = [];
@@ -418,9 +417,7 @@ async function ingestEpubBook(input: {
       // per-figure refusals + the ADR-0003 unsupported-part count (count
       // form matching the single-article stage's tone — T-20-10, never
       // silent).
-      const unsupportedBlockCount = effectiveBlocks.filter(
-        (b) => b.kind === "unsupported",
-      ).length;
+      const unsupportedBlockCount = effectiveBlocks.filter((b) => b.kind === "unsupported").length;
       const assembled = {
         id,
         revision: 1,
@@ -677,9 +674,7 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
   // deriveConfidence, persistence, dedupe) is shared and unchanged. The
   // `"html" in input` narrowing makes input.html type-safe with no cast.
   const request: IngestionRequest =
-    "html" in input && looksLikePlainText(input.html)
-      ? { markdown: input.html }
-      : input;
+    "html" in input && looksLikePlainText(input.html) ? { markdown: input.html } : input;
 
   // Dispatch flags read the REROUTED request (260821-ov7): a tag-less {html}
   // input has already been rewritten onto {markdown}, so the hasHtml branch
@@ -824,9 +819,11 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
       // parses the pasted text ONCE here (canonical-model boundary) and
       // rejoins the shared stages 2+ below — the same input-source-
       // agnostic contract as every other format (D7-03).
-      const { text, url: pastedSourceUrl, title: transcriptTitle } = (
-        request as { transcript: { text: string; url?: string; title: string } }
-      ).transcript;
+      const {
+        text,
+        url: pastedSourceUrl,
+        title: transcriptTitle,
+      } = (request as { transcript: { text: string; url?: string; title: string } }).transcript;
       const videoId = pastedSourceUrl !== undefined ? extractYouTubeVideoId(pastedSourceUrl) : null;
       const parsed = pastedTranscriptToBlocks(text, transcriptTitle);
       blocks = parsed.blocks;
@@ -874,13 +871,7 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
       const fetched: FetchedContent = await safeFetch(request.url as string);
       finalUrl = fetched.finalUrl;
       const extracted = await extractAndNormalize(fetched.html, fetched.finalUrl);
-      ({
-        blocks,
-        footnotes,
-        lang,
-        provenancePartial,
-        isReaderable,
-      } = extracted);
+      ({ blocks, footnotes, lang, provenancePartial, isReaderable } = extracted);
       // D7-07 immutability — url id derived from finalUrl after redirects.
       id = slugifyUrl(fetched.finalUrl);
       source = "url";
@@ -894,13 +885,7 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
       const htmlInput = (request as { html: string }).html;
       finalUrl = undefined;
       const extracted = await extractAndNormalize(htmlInput, undefined);
-      ({
-        blocks,
-        footnotes,
-        lang,
-        provenancePartial,
-        isReaderable,
-      } = extracted);
+      ({ blocks, footnotes, lang, provenancePartial, isReaderable } = extracted);
       // D7-07 paste id = content-hash slug (slugifyUrl requires a real URL;
       // paste has none — see Rule 3 auto-fix note at the old L172-176).
       id = `paste-${shortHash(htmlInput)}`;
@@ -924,13 +909,7 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
       }
       finalUrl = undefined;
       const extracted = await pdfToBlocks(new Uint8Array(bytes));
-      ({
-        blocks,
-        footnotes,
-        lang,
-        provenancePartial,
-        isReaderable,
-      } = extracted);
+      ({ blocks, footnotes, lang, provenancePartial, isReaderable } = extracted);
       // D7-07 immutability mirror — id = pdf-<shortHash(base64 channel)>.
       id = `pdf-${shortHash(b64)}`;
       source = "pdf";
@@ -950,13 +929,7 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
       const filename = (request as { markdown: string; filename?: string }).filename;
       finalUrl = undefined;
       const extracted = await markdownToBlocks(mdInput);
-      ({
-        blocks,
-        footnotes,
-        lang,
-        provenancePartial,
-        isReaderable,
-      } = extracted);
+      ({ blocks, footnotes, lang, provenancePartial, isReaderable } = extracted);
       // D8-18: id = "md-<shortHash(canonical content)>" — content-hash, NOT
       // filename. Two uploads of identical .md content produce the same id
       // → dedupe-refuse on re-upload mirrors D7-07. Filename is metadata-only.
@@ -1024,9 +997,7 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
         // Count-first disclosure, matching the extractionWarnings tone
         // ("3 unsupported blocks omitted" — schema.ts L260 example).
         const n = stage.refusedCount;
-        imageRefusalWarnings = [
-          `${n} image${n === 1 ? "" : "s"} could not be included`,
-        ];
+        imageRefusalWarnings = [`${n} image${n === 1 ? "" : "s"} could not be included`];
       }
       assetEnvelopes = stage.assets.map(toAssetEnvelope);
     }
@@ -1035,8 +1006,7 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
     // - id: per-source (url slug / paste hash / md hash) — set above.
     // - originalHtmlHash: SHA-256 of the source bytes (url HTML / paste HTML /
     //   markdown source). Preserves traceability per D8-17.
-    const originalHtmlHash =
-      "sha256:" + createHash("sha256").update(sourceBytes).digest("hex");
+    const originalHtmlHash = "sha256:" + createHash("sha256").update(sourceBytes).digest("hex");
     const retrievedAt = new Date().toISOString();
     // Title fallback chain (per-source):
     //   url:     provenancePartial.title (from <meta og:title>/<title>/<h1>)
@@ -1050,13 +1020,13 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
     const title =
       provenancePartial.title ??
       (hasMarkdown
-        ? (markdownFilenameHint
-            ? stripMarkdownExtension(markdownFilenameHint)
-            : "Markdown document")
+        ? markdownFilenameHint
+          ? stripMarkdownExtension(markdownFilenameHint)
+          : "Markdown document"
         : hasPdf
-          ? (pdfFilenameHint
-              ? stripPdfExtension(pdfFilenameHint)
-              : "PDF document")
+          ? pdfFilenameHint
+            ? stripPdfExtension(pdfFilenameHint)
+            : "PDF document"
           : finalUrl
             ? safeHostname(finalUrl)
             : "Pasted article");
@@ -1071,9 +1041,7 @@ export async function ingest(input: IngestionRequest): Promise<IngestionResponse
     // present: the article-level note ("Some content could not be processed.
     // See the original.") appears because parts fell, and the inline
     // <details> disclosures mark WHERE they fell. Never silent.
-    const unsupportedBlockCount = effectiveBlocks.filter(
-      (b) => b.kind === "unsupported",
-    ).length;
+    const unsupportedBlockCount = effectiveBlocks.filter((b) => b.kind === "unsupported").length;
     const unsupportedBlockWarnings = unsupportedPartsWarning(unsupportedBlockCount);
 
     const assembled = {

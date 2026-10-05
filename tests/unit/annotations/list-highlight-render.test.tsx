@@ -25,11 +25,7 @@ import {
   sliceCodeForHighlights,
 } from "../../../src/annotations/highlightRanges";
 import type { HighlightSliceEntry } from "../../../src/annotations/highlightRanges";
-import type {
-  Block,
-  CanonicalArticle,
-  InlineRun,
-} from "../../../src/content/types";
+import type { Block, CanonicalArticle, InlineRun } from "../../../src/content/types";
 
 // ── Article fixture helpers (blockquote-highlight-render.test.tsx shape) ────
 
@@ -68,20 +64,14 @@ const article = (blocks: Block[]): CanonicalArticle => ({
     sourceUrl: "https://example.com/test",
     title: "Test Article",
     retrievedAt: "2026-08-07T00:00:00Z",
-    originalHtmlHash:
-      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    originalHtmlHash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
   },
   blocks,
   footnotes: [],
 });
 
 /** Build an ArticleBodyHighlight at the given D-05 article-global position. */
-function makeEntry(
-  id: string,
-  start: number,
-  end: number,
-  hasNote = false,
-): ArticleBodyHighlight {
+function makeEntry(id: string, start: number, end: number, hasNote = false): ArticleBodyHighlight {
   return {
     id,
     position: { start, end },
@@ -91,11 +81,7 @@ function makeEntry(
 }
 
 /** Build a slicer-entry at the given D-05 article-global position. */
-function slicerEntry(
-  id: string,
-  start: number,
-  end: number,
-): HighlightSliceEntry {
+function slicerEntry(id: string, start: number, end: number): HighlightSliceEntry {
   return { id, position: { start, end }, hasNote: false, status: "confident" };
 }
 
@@ -169,9 +155,7 @@ describe("first-slice-only DOM id — rendered output (19-03 Task 1, Pitfall 2)"
     expect(marks[0]!.id).toBe("hl-hl-span");
     expect(marks[1]!.id).toBe("");
     // The id carrier lives in document order before the continuation mark.
-    expect(marks[0]!.compareDocumentPosition(marks[1]!)).toBe(
-      Node.DOCUMENT_POSITION_FOLLOWING,
-    );
+    expect(marks[0]!.compareDocumentPosition(marks[1]!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     // The id carrier is inside the first block; the continuation is in the
     // second.
     const paragraphs = container.querySelectorAll("p");
@@ -212,15 +196,11 @@ describe("list item highlight rendering (19-03 Task 2)", () => {
     // [36, 40) = item 1's intra range [7, 11) = "item" — wholly inside
     // "Second item words".
     const hl = makeEntry("hl-one-item", 36, 40);
-    const { container } = render(
-      <ArticleBody article={flatListArticle} highlights={[hl]} />,
-    );
+    const { container } = render(<ArticleBody article={flatListArticle} highlights={[hl]} />);
 
     const lis = container.querySelectorAll("ul > li");
     expect(lis.length).toBe(3);
-    const marksByItem = Array.from(lis).map((li) =>
-      li.querySelectorAll("mark.highlight"),
-    );
+    const marksByItem = Array.from(lis).map((li) => li.querySelectorAll("mark.highlight"));
     expect(marksByItem[0]!.length).toBe(0);
     expect(marksByItem[1]!.length).toBe(1);
     expect(marksByItem[2]!.length).toBe(0);
@@ -232,9 +212,7 @@ describe("list item highlight rendering (19-03 Task 2)", () => {
     // [0, 8). The contiguous global range makes item 1 interior — it is
     // marked, never a silent gap.
     const hl = makeEntry("hl-span-items", 20, 55);
-    const { container } = render(
-      <ArticleBody article={flatListArticle} highlights={[hl]} />,
-    );
+    const { container } = render(<ArticleBody article={flatListArticle} highlights={[hl]} />);
 
     const lis = container.querySelectorAll("ul > li");
     for (const li of lis) {
@@ -251,9 +229,7 @@ describe("list item highlight rendering (19-03 Task 2)", () => {
   it("(c) D19-14: a highlight starting at an item's first character marks TEXT only — the mark's first character is the item's first text character, no marker inside", () => {
     // Item 0 starts at 12; [12, 17) = "First".
     const hl = makeEntry("hl-item-start", 12, 17);
-    const { container } = render(
-      <ArticleBody article={flatListArticle} highlights={[hl]} />,
-    );
+    const { container } = render(<ArticleBody article={flatListArticle} highlights={[hl]} />);
 
     const li = container.querySelector("ul > li")!;
     const mark = li.querySelector("mark.highlight");
@@ -278,10 +254,7 @@ describe("nested list recursion rendering (19-03 Task 2, D19-15)", () => {
     paragraph("Intro text."),
     bulletedList([
       [paragraph("Outer item lead")],
-      [
-        paragraph("Outer second"),
-        bulletedList([[paragraph("Nested sub text")]]),
-      ],
+      [paragraph("Outer second"), bulletedList([[paragraph("Nested sub text")]])],
     ]),
   ]);
 
@@ -289,9 +262,7 @@ describe("nested list recursion rendering (19-03 Task 2, D19-15)", () => {
     // [23, 50): outer item 0 intra [11, 15) = "lead"; item 1's paragraph
     // fully covered [28, 40); nested sub-item intra [0, 9) = "Nested su".
     const hl = makeEntry("hl-nested", 23, 50);
-    const { container } = render(
-      <ArticleBody article={nestedArticle} highlights={[hl]} />,
-    );
+    const { container } = render(<ArticleBody article={nestedArticle} highlights={[hl]} />);
 
     // The FIRST ul in document order is the outer list; scope to its direct
     // items (ul > li alone would also match the nested list's li).
@@ -380,9 +351,7 @@ describe("figure caption highlight rendering (19-03 Task 3, Pitfall 1 symmetric 
     // [22, 27) = caption intra [0, 5) = "Chart" — the Pitfall 1 symmetric
     // pair: WITHOUT the alt offset this would mis-slice into the alt's tail.
     const hl = makeEntry("hl-cap", 22, 27);
-    const { container } = render(
-      <ArticleBody article={captionArticle} highlights={[hl]} />,
-    );
+    const { container } = render(<ArticleBody article={captionArticle} highlights={[hl]} />);
 
     const figcaption = container.querySelector("figcaption");
     expect(figcaption).not.toBeNull();
@@ -400,9 +369,7 @@ describe("figure caption highlight rendering (19-03 Task 3, Pitfall 1 symmetric 
     // caption head [22, 25) = "Cha" is marked. The fill continues on both
     // sides of the textless gap (D19-02).
     const hl = makeEntry("hl-gap", 8, 25);
-    const { container } = render(
-      <ArticleBody article={captionArticle} highlights={[hl]} />,
-    );
+    const { container } = render(<ArticleBody article={captionArticle} highlights={[hl]} />);
 
     const marks = container.querySelectorAll("mark.highlight");
     expect(marks.length).toBe(2);
@@ -517,12 +484,8 @@ describe("one id across a paragraph→caption→code span (19-03 Task 3, Pitfall
       expect(m.getAttribute("data-highlight-id")).toBe("hl-mix");
     }
     expect(container.querySelector("p mark.highlight")!.textContent).toBe("e.");
-    expect(
-      container.querySelector("figcaption mark.highlight")!.textContent,
-    ).toBe("Cap words.");
-    expect(container.querySelector("pre code mark.highlight")!.textContent).toBe(
-      "ab\nc",
-    );
+    expect(container.querySelector("figcaption mark.highlight")!.textContent).toBe("Cap words.");
+    expect(container.querySelector("pre code mark.highlight")!.textContent).toBe("ab\nc");
     // Exactly ONE DOM id, on the span-start slice inside the paragraph.
     const idCarriers = container.querySelectorAll('[id="hl-hl-mix"]');
     expect(idCarriers.length).toBe(1);

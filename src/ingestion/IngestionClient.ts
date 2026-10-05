@@ -106,7 +106,7 @@ export async function validateEnvelopeAssets(
     if (bytes.byteLength !== env.byteLength) {
       throw new IngestionError("server-error");
     }
-    const computedId = "img-" + ((await sha256Hex(bytes)).slice(0, 12));
+    const computedId = "img-" + (await sha256Hex(bytes)).slice(0, 12);
     if (computedId !== env.assetId) {
       throw new IngestionError("server-error");
     }
@@ -156,9 +156,7 @@ export async function ingestUrl(
   url: string,
   preferredLanguages?: string[],
 ): Promise<IngestionSuccess> {
-  return preferredLanguages === undefined
-    ? ingest({ url })
-    : ingest({ url, preferredLanguages });
+  return preferredLanguages === undefined ? ingest({ url }) : ingest({ url, preferredLanguages });
 }
 
 /**
@@ -201,10 +199,7 @@ export async function ingestMarkdown(
  * res.ok guard, ArticleSchema.parse re-validation) is the shared pipeline —
  * this wrapper does NOT fork it.
  */
-export async function ingestPdf(
-  pdfBase64: string,
-  filename?: string,
-): Promise<IngestionSuccess> {
+export async function ingestPdf(pdfBase64: string, filename?: string): Promise<IngestionSuccess> {
   return ingest({ pdf: pdfBase64, filename });
 }
 

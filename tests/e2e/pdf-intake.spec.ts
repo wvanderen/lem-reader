@@ -86,9 +86,7 @@ const OUTLINE_PDF = pdfFixture("synthetic-outline.pdf");
  * corpus (src/fixtures `fixtures` = libraryFixtures), NOT the URL-only
  * regression corpus — the b13eba5 split made the old FIXTURES.length
  * baseline stale (issue #81 rot). */
-const BASELINE_ROWS = (
-  await import("../../src/fixtures")
-).fixtures.length;
+const BASELINE_ROWS = (await import("../../src/fixtures")).fixtures.length;
 
 /** Library rows whose source badge reads "PDF" (badgeLabel("pdf")). */
 function pdfLibraryRows(page: Page): import("@playwright/test").Locator {
@@ -98,10 +96,7 @@ function pdfLibraryRows(page: Page): import("@playwright/test").Locator {
 }
 
 /** The calm-refusal status line inside the Add dialog's live region. */
-function ingestStatus(
-  page: Page,
-  text: string,
-): import("@playwright/test").Locator {
+function ingestStatus(page: Page, text: string): import("@playwright/test").Locator {
   return page.locator("dialog.add-dialog .status").filter({ hasText: text });
 }
 
@@ -122,9 +117,7 @@ async function uploadPdf(page: Page, name: string, bytes: Buffer): Promise<void>
 /** Upload the single-column fixture and wait for the article to settle. */
 async function uploadAndOpen(page: Page): Promise<void> {
   await page.goto(`${BASE}/#/`);
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Saved articles" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
   await uploadPdf(page, "calm-report.pdf", SINGLE_COLUMN_PDF);
   // Issue #112 — "Open article" on the result screen navigates.
   await openSavedArticle(page, /#\/article\/pdf-/);
@@ -146,18 +139,14 @@ async function waitForOpenedArticle(page: Page): Promise<void> {
     () => {
       const visible =
         document.querySelector(".page-fragment [data-block-index]") ??
-        document.querySelector(
-          ".article-body:not(.article-body-measurement) [data-block-index]",
-        );
+        document.querySelector(".article-body:not(.article-body-measurement) [data-block-index]");
       return !!visible;
     },
     undefined,
     { timeout: 10_000 },
   );
   await page.waitForFunction(
-    () =>
-      (window as unknown as Record<string, unknown>).__lemPagination !==
-      undefined,
+    () => (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
     undefined,
     { timeout: 10_000 },
   );
@@ -173,9 +162,7 @@ test.describe("ING-04 — PDF upload intake (SC#1–SC#3 + D7-07)", () => {
     page,
   }) => {
     await page.goto(`${BASE}/#/`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
 
     await uploadPdf(page, "calm-report.pdf", SINGLE_COLUMN_PDF);
 
@@ -193,16 +180,14 @@ test.describe("ING-04 — PDF upload intake (SC#1–SC#3 + D7-07)", () => {
     // provenance h1 renders stripPdfExtension("calm-report.pdf"). PDF body
     // headings start at h2 (one-h1-per-page), so the level-1 heading is the
     // provenance title alone.
-    await expect(
-      page.getByRole("heading", { level: 1, name: "calm-report" }),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { level: 1, name: "calm-report" })).toBeVisible({
+      timeout: 10_000,
+    });
 
     // The page-1 large text ("A Study of Calm Reading") did NOT match the
     // filename title, so D11-09 consume left it as the body's first heading
     // (font-size fallback → h2). Structure survived extraction.
-    await expect(
-      page.getByRole("heading", { name: "A Study of Calm Reading" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "A Study of Calm Reading" })).toBeVisible();
 
     // Fixture body text is visibly rendered on the standard reading surface
     // (page-1 first paragraph, verbatim from the generator's constants).
@@ -212,9 +197,7 @@ test.describe("ING-04 — PDF upload intake (SC#1–SC#3 + D7-07)", () => {
     // commits (the visibleBlocks selector discipline used right below).
     await expect(
       page
-        .locator(
-          "[data-block-index]:not(.article-body-measurement [data-block-index])",
-        )
+        .locator("[data-block-index]:not(.article-body-measurement [data-block-index])")
         .filter({ hasText: "Long-form reading asks for steady attention" }),
     ).toBeVisible();
 
@@ -222,7 +205,7 @@ test.describe("ING-04 — PDF upload intake (SC#1–SC#3 + D7-07)", () => {
     // index] elements exist on the VISIBLE surface (excluding the always-
     // mounted hidden measurement body — the _fixtures.ts selector shape).
     const visibleBlocks = page.locator(
-      '[data-block-index]:not(.article-body-measurement [data-block-index])',
+      "[data-block-index]:not(.article-body-measurement [data-block-index])",
     );
     expect(await visibleBlocks.count()).toBeGreaterThan(0);
 
@@ -231,9 +214,7 @@ test.describe("ING-04 — PDF upload intake (SC#1–SC#3 + D7-07)", () => {
     await page.evaluate(() => {
       window.location.hash = "#/";
     });
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
     await expect(pdfLibraryRows(page)).toHaveCount(1);
   });
 
@@ -241,9 +222,7 @@ test.describe("ING-04 — PDF upload intake (SC#1–SC#3 + D7-07)", () => {
     page,
   }) => {
     await page.goto(`${BASE}/#/`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
 
     // Same D11-09 filename discipline as the ingest regression: the
     // synthetic fixtures carry no /Info title, so the title chain lands on
@@ -262,9 +241,7 @@ test.describe("ING-04 — PDF upload intake (SC#1–SC#3 + D7-07)", () => {
 
     // D11-07 filename title chain — no Info title on the fixture, so the
     // level-1 heading is the filename-derived provenance title alone.
-    await expect(
-      page.getByRole("heading", { level: 1, name: "outline-notes" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "outline-notes" })).toBeVisible();
 
     // UAT Test 2 expectation — the outline bookmarks reach the real reading
     // surface as structured h2 section headings, not one undifferentiated
@@ -274,9 +251,7 @@ test.describe("ING-04 — PDF upload intake (SC#1–SC#3 + D7-07)", () => {
     // heading is on the visible fragment (the D13-09 walk-pages precedent;
     // only the current page fragment is mounted in paginated mode). The
     // first section heading asserts on page 1 as before.
-    await expect(
-      page.getByRole("heading", { name: "Outlined Document" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Outlined Document" })).toBeVisible();
     const total = await totalPages(page);
     let secondSectionFound = false;
     for (let target = 0; target < total; target++) {
@@ -288,18 +263,13 @@ test.describe("ING-04 — PDF upload intake (SC#1–SC#3 + D7-07)", () => {
         break;
       }
     }
-    expect(
-      secondSectionFound,
-      "Second Section heading must render on some page",
-    ).toBe(true);
+    expect(secondSectionFound, "Second Section heading must render on some page").toBe(true);
 
     // One admitted PDF-badged library row (the SC#1 badge shape).
     await page.evaluate(() => {
       window.location.hash = "#/";
     });
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
     await expect(pdfLibraryRows(page)).toHaveCount(1);
   });
 
@@ -307,9 +277,7 @@ test.describe("ING-04 — PDF upload intake (SC#1–SC#3 + D7-07)", () => {
     page,
   }) => {
     await page.goto(`${BASE}/#/`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
 
     await uploadPdf(page, "scanned-document.pdf", SCANNED_PDF);
 
@@ -330,9 +298,7 @@ test.describe("ING-04 — PDF upload intake (SC#1–SC#3 + D7-07)", () => {
     page,
   }) => {
     await page.goto(`${BASE}/#/`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
 
     await uploadPdf(page, "journal-spread.pdf", TWO_COLUMN_PDF);
 
@@ -348,13 +314,9 @@ test.describe("ING-04 — PDF upload intake (SC#1–SC#3 + D7-07)", () => {
     await expect(pdfLibraryRows(page)).toHaveCount(0);
   });
 
-  test("corrupt refusal: non-PDF bytes refuse with the unreadable copy", async ({
-    page,
-  }) => {
+  test("corrupt refusal: non-PDF bytes refuse with the unreadable copy", async ({ page }) => {
     await page.goto(`${BASE}/#/`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
 
     await uploadPdf(page, "broken.pdf", CORRUPT_PDF);
 
@@ -373,9 +335,7 @@ test.describe("ING-04 — PDF upload intake (SC#1–SC#3 + D7-07)", () => {
     page,
   }) => {
     await page.goto(`${BASE}/#/`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
 
     // First upload — succeeds; "Open article" navigates to #/article/pdf-<id>
     // (issue #112 result screen).
@@ -388,12 +348,8 @@ test.describe("ING-04 — PDF upload intake (SC#1–SC#3 + D7-07)", () => {
     await page.evaluate(() => {
       window.location.hash = "#/";
     });
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
-    await expect(page.locator(".library-list > li")).toHaveCount(
-      BASELINE_ROWS + 1,
-    );
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
+    await expect(page.locator(".library-list > li")).toHaveCount(BASELINE_ROWS + 1);
 
     // Second upload — IDENTICAL buffer (content-hash id collides; the
     // dedupe-refuse check runs BEFORE save — no overwrite, no orphans).
@@ -407,9 +363,7 @@ test.describe("ING-04 — PDF upload intake (SC#1–SC#3 + D7-07)", () => {
 
     // No navigation away from #/ and the row count is unchanged.
     await expect(page).toHaveURL(/\/#\/$/);
-    await expect(page.locator(".library-list > li")).toHaveCount(
-      BASELINE_ROWS + 1,
-    );
+    await expect(page.locator(".library-list > li")).toHaveCount(BASELINE_ROWS + 1);
   });
 });
 
@@ -424,9 +378,7 @@ test.describe("ING-04 — PDF upload intake (SC#1–SC#3 + D7-07)", () => {
 // (default settings, default Playwright viewport — the core-reading-flow
 // OQ2 economy precedent); the cross-engine matrix is the engine axis.
 test.describe("ING-04 — annotate + location-restore identity (SC#1)", () => {
-  test("highlight created via the real selection flow survives a full reload", async ({
-    page,
-  }) => {
+  test("highlight created via the real selection flow survives a full reload", async ({ page }) => {
     await uploadAndOpen(page);
 
     // Select a known range in the first text-rich block on the visible page
@@ -441,9 +393,7 @@ test.describe("ING-04 — annotate + location-restore identity (SC#1)", () => {
     // record through the same Dexie path every other article uses.
     const toolbar = page.locator(".selection-toolbar");
     await expect(toolbar).toBeVisible();
-    await toolbar
-      .getByRole("button", { name: "Highlight", exact: true })
-      .click();
+    await toolbar.getByRole("button", { name: "Highlight", exact: true }).click();
 
     // The inline mark renders + the announce fires (STATE-03 via the shared
     // persistence path — not a PDF-specific branch).
@@ -459,14 +409,10 @@ test.describe("ING-04 — annotate + location-restore identity (SC#1)", () => {
     await page.reload();
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     await page.waitForTimeout(800);
-    await expect(
-      page.locator(`mark.highlight[data-highlight-id="${highlightId}"]`),
-    ).toHaveCount(1);
+    await expect(page.locator(`mark.highlight[data-highlight-id="${highlightId}"]`)).toHaveCount(1);
   });
 
-  test("reading position restores after reload (scrolling-mode save/restore)", async ({
-    page,
-  }) => {
+  test("reading position restores after reload (scrolling-mode save/restore)", async ({ page }) => {
     await uploadAndOpen(page);
 
     // Switch to scrolling mode via the real M-shortcut toggle (the
@@ -486,10 +432,9 @@ test.describe("ING-04 — annotate + location-restore identity (SC#1)", () => {
     await page.waitForTimeout(100);
     await page.waitForTimeout(1400);
     const scrollYBefore = await page.evaluate(() => window.scrollY);
-    expect(
-      scrollYBefore,
-      "expected to have scrolled down inside the pdf article",
-    ).toBeGreaterThan(200);
+    expect(scrollYBefore, "expected to have scrolled down inside the pdf article").toBeGreaterThan(
+      200,
+    );
 
     // Reload — the saved location MUST restore near the same passage
     // (block-level restore tolerance, never top-of-article for a mid-
@@ -499,10 +444,9 @@ test.describe("ING-04 — annotate + location-restore identity (SC#1)", () => {
     await page.waitForTimeout(1000);
 
     const scrollYAfter = await page.evaluate(() => window.scrollY);
-    expect(
-      scrollYAfter,
-      `expected restored scrollY > 100, got ${scrollYAfter}`,
-    ).toBeGreaterThan(100);
+    expect(scrollYAfter, `expected restored scrollY > 100, got ${scrollYAfter}`).toBeGreaterThan(
+      100,
+    );
     expect(
       Math.abs(scrollYAfter - scrollYBefore),
       `expected |delta| within 600px, got ${Math.abs(scrollYAfter - scrollYBefore)}`,

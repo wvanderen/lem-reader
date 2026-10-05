@@ -63,7 +63,10 @@ const unsupported = (plainDescription: string, originalKind = "embedded-video"):
   plainDescription,
 });
 
-const article = (blocks: Block[], footnotes: CanonicalArticle["footnotes"] = []): CanonicalArticle => ({
+const article = (
+  blocks: Block[],
+  footnotes: CanonicalArticle["footnotes"] = [],
+): CanonicalArticle => ({
   id: "test-article",
   revision: 1,
   lang: "en",
@@ -99,9 +102,7 @@ describe("BlockView — per-kind native element (DOC-02)", () => {
   });
 
   it("renders a blockquote as <blockquote>", () => {
-    const { container } = render(
-      <BlockView block={blockquote([paragraph("Quoted.")])} />,
-    );
+    const { container } = render(<BlockView block={blockquote([paragraph("Quoted.")])} />);
     const bq = container.querySelector("blockquote");
     expect(bq).not.toBeNull();
     expect(bq?.querySelector("p")).toHaveTextContent("Quoted.");
@@ -147,9 +148,7 @@ describe("BlockView — per-kind native element (DOC-02)", () => {
   });
 
   it("renders the Image unavailable. note when a placeholder figure has empty alt", () => {
-    const { container } = render(
-      <BlockView block={figure("", "https://example.com/i.png")} />,
-    );
+    const { container } = render(<BlockView block={figure("", "https://example.com/i.png")} />);
     const placeholder = container.querySelector(".figure-placeholder");
     expect(placeholder).not.toBeNull();
     // Verbatim UI-SPEC copy — the note NEVER replaces non-empty alt.
@@ -157,9 +156,7 @@ describe("BlockView — per-kind native element (DOC-02)", () => {
   });
 
   it("renders a figure without a figcaption when caption is empty", () => {
-    const { container } = render(
-      <BlockView block={figure("alt", "https://example.com/i.png")} />,
-    );
+    const { container } = render(<BlockView block={figure("alt", "https://example.com/i.png")} />);
     expect(container.querySelector("figure")).not.toBeNull();
     expect(container.querySelector("figcaption")).toBeNull();
   });
@@ -198,9 +195,10 @@ describe("ArticleBody — footnotes region + reading order (DOC-02)", () => {
   it("renders a Footnotes region when the article has footnotes", () => {
     render(
       <ArticleBody
-        article={article([paragraph("Body.")], [
-          { id: "fn-1", content: [{ text: "A footnote body.", marks: [] }] },
-        ])}
+        article={article(
+          [paragraph("Body.")],
+          [{ id: "fn-1", content: [{ text: "A footnote body.", marks: [] }] }],
+        )}
       />,
     );
     const region = screen.getByRole("region", { name: "Footnotes" });
@@ -213,9 +211,10 @@ describe("ArticleBody — footnotes region + reading order (DOC-02)", () => {
   it("renders a back-link anchor to the reference inside each footnote <li> (Gap 3)", () => {
     const { container } = render(
       <ArticleBody
-        article={article([paragraph("Body.")], [
-          { id: "fn-1", content: [{ text: "A footnote body.", marks: [] }] },
-        ])}
+        article={article(
+          [paragraph("Body.")],
+          [{ id: "fn-1", content: [{ text: "A footnote body.", marks: [] }] }],
+        )}
       />,
     );
     // The new back-link lives inside the footnote <li> and targets the
@@ -236,7 +235,11 @@ describe("ArticleBody — footnotes region + reading order (DOC-02)", () => {
   it("renders blocks in array order (DOM reading order == document order)", () => {
     const { container } = render(
       <ArticleBody
-        article={article([heading(2, "First"), paragraph("Second"), blockquote([paragraph("Third")])])}
+        article={article([
+          heading(2, "First"),
+          paragraph("Second"),
+          blockquote([paragraph("Third")]),
+        ])}
       />,
     );
     // The first three block-level children of the rendered fragment, in DOM
@@ -265,9 +268,7 @@ describe("ArticleBody — footnotes region + reading order (DOC-02)", () => {
       />,
     );
     // Exactly 3 [data-block-index] elements — one per article.blocks entry.
-    const indexed = Array.from(
-      container.querySelectorAll("[data-block-index]"),
-    );
+    const indexed = Array.from(container.querySelectorAll("[data-block-index]"));
     expect(indexed).toHaveLength(3);
     // Indices are "0", "1", "2" in document order.
     expect(indexed[0]?.getAttribute("data-block-index")).toBe("0");
@@ -282,13 +283,9 @@ describe("ArticleBody — footnotes region + reading order (DOC-02)", () => {
     // two child paragraphs and the ul's two <li> children (each wrapping a
     // <p>) are NOT article.blocks entries — tagging them would re-introduce
     // the double-count the attribute exists to eliminate.
-    const blockquoteInnerPs = container.querySelectorAll(
-      "blockquote [data-block-index]",
-    );
+    const blockquoteInnerPs = container.querySelectorAll("blockquote [data-block-index]");
     expect(blockquoteInnerPs).toHaveLength(0);
-    const listInner = container.querySelectorAll(
-      "ul [data-block-index]",
-    );
+    const listInner = container.querySelectorAll("ul [data-block-index]");
     expect(listInner).toHaveLength(0);
 
     // The footnotes <section> is NOT an article.blocks entry either; verified
@@ -298,9 +295,10 @@ describe("ArticleBody — footnotes region + reading order (DOC-02)", () => {
   it("does NOT emit data-block-index on the footnotes section", () => {
     const { container } = render(
       <ArticleBody
-        article={article([paragraph("Body.")], [
-          { id: "fn-1", content: [{ text: "Footnote body.", marks: [] }] },
-        ])}
+        article={article(
+          [paragraph("Body.")],
+          [{ id: "fn-1", content: [{ text: "Footnote body.", marks: [] }] }],
+        )}
       />,
     );
     // Only the paragraph carries data-block-index — the footnotes <section>

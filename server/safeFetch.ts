@@ -307,9 +307,7 @@ export async function safeFetchCore(
   // application/json, text/plain, application/pdf) fail both arms under both
   // modes and keep the early calm pre-read refusal.
   const contentType = res.headers.get("content-type") ?? "";
-  const substringAllowed = profile.allowedContentTypes.some((t) =>
-    contentType.includes(t),
-  );
+  const substringAllowed = profile.allowedContentTypes.some((t) => contentType.includes(t));
   const opaqueAdmitted =
     profile.contentTypeGate === "admit-opaque" && isOpaqueContentType(contentType);
   if (!substringAllowed && !opaqueAdmitted) {

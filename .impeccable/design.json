@@ -4,28 +4,72 @@
   "title": "Design System: Lem Reader",
   "extensions": {
     "colorMeta": {
-      "gallery-paper": { "role": "neutral", "displayName": "Gallery Paper", "canonical": "#f7f7f5" },
+      "gallery-paper": {
+        "role": "neutral",
+        "displayName": "Gallery Paper",
+        "canonical": "#f7f7f5"
+      },
       "mat-board": { "role": "neutral", "displayName": "Mat Board", "canonical": "#eceded" },
-      "graphite-ink": { "role": "neutral", "displayName": "Graphite Green", "canonical": "#1c1f1d" },
+      "graphite-ink": {
+        "role": "neutral",
+        "displayName": "Graphite Green",
+        "canonical": "#1c1f1d"
+      },
       "pencil-gray": { "role": "neutral", "displayName": "Pencil Gray", "canonical": "#525a54" },
       "bottle-green": { "role": "primary", "displayName": "Bottle Green", "canonical": "#22604a" },
-      "bottle-green-deep": { "role": "primary", "displayName": "Bottle Green Deep", "canonical": "#17452f" },
+      "bottle-green-deep": {
+        "role": "primary",
+        "displayName": "Bottle Green Deep",
+        "canonical": "#17452f"
+      },
       "brass": { "role": "secondary", "displayName": "Brass (on paper)", "canonical": "#8a6a24" },
-      "brass-lit": { "role": "secondary", "displayName": "Brass Lit (on boards)", "canonical": "#c9a24e" },
+      "brass-lit": {
+        "role": "secondary",
+        "displayName": "Brass Lit (on boards)",
+        "canonical": "#c9a24e"
+      },
       "enamel-board": { "role": "primary", "displayName": "Enamel Board", "canonical": "#1d3128" },
       "board-white": { "role": "neutral", "displayName": "Board White", "canonical": "#f2f4f1" },
       "board-soft": { "role": "neutral", "displayName": "Board Soft", "canonical": "#b9c6bd" },
       "lit-board": { "role": "secondary", "displayName": "Lit Board", "canonical": "#2c4a3b" },
-      "manila": { "role": "neutral", "displayName": "Manila (Warm paper theme)", "canonical": "#f0e8d5" },
-      "night-wall": { "role": "neutral", "displayName": "Night Wall (Night theme)", "canonical": "#141a17" },
-      "highlight-tint": { "role": "tertiary", "displayName": "Classification Tint (default)", "canonical": "#eee1b4" },
-      "destructive-brick": { "role": "tertiary", "displayName": "Destructive Brick", "canonical": "#a63d32" }
+      "manila": {
+        "role": "neutral",
+        "displayName": "Manila (Warm paper theme)",
+        "canonical": "#f0e8d5"
+      },
+      "night-wall": {
+        "role": "neutral",
+        "displayName": "Night Wall (Night theme)",
+        "canonical": "#141a17"
+      },
+      "highlight-tint": {
+        "role": "tertiary",
+        "displayName": "Classification Tint (default)",
+        "canonical": "#eee1b4"
+      },
+      "destructive-brick": {
+        "role": "tertiary",
+        "displayName": "Destructive Brick",
+        "canonical": "#a63d32"
+      }
     },
     "typographyMeta": {
-      "body": { "displayName": "Reading voice", "purpose": "All article prose and article headings — Literata, never transformed." },
-      "label": { "displayName": "Signage voice", "purpose": "Buttons, band nav, skip link, back links — PT Sans spaced caps." },
-      "panelTitle": { "displayName": "Panel title", "purpose": "Dialog and panel headings — PT Sans 20px sentence case." },
-      "code": { "displayName": "Code", "purpose": "Code blocks and inline code — system mono only." }
+      "body": {
+        "displayName": "Reading voice",
+        "purpose": "All article prose and article headings — Literata, never transformed."
+      },
+      "label": {
+        "displayName": "Signage voice",
+        "purpose": "Buttons, band nav, skip link, back links — PT Sans spaced caps."
+      },
+      "panelTitle": {
+        "displayName": "Panel title",
+        "purpose": "Dialog and panel headings — PT Sans 20px sentence case."
+      },
+      "code": {
+        "displayName": "Code",
+        "purpose": "Code blocks and inline code — system mono only."
+      }
     },
     "shadows": [
       {
@@ -35,12 +79,28 @@
       }
     ],
     "motion": [
-      { "name": "speed", "value": "220ms", "purpose": "State transitions only (hover/press/busy) — never mount/unmount." },
-      { "name": "ease", "value": "ease-out", "purpose": "Default easing; global prefers-reduced-motion gate disables all motion." }
+      {
+        "name": "speed",
+        "value": "220ms",
+        "purpose": "State transitions only (hover/press/busy) — never mount/unmount."
+      },
+      {
+        "name": "ease",
+        "value": "ease-out",
+        "purpose": "Default easing; global prefers-reduced-motion gate disables all motion."
+      }
     ],
     "breakpoints": [
-      { "name": "sm", "value": "640px", "purpose": "Below: wordmark clips out of flow; sheet layouts go full-width." },
-      { "name": "reader-collapse", "value": "640px", "purpose": "Below 640, Reader only: staged shell-nav collapse out of flow — the phone reader band carries reading tools alone; keyboard-reachable." }
+      {
+        "name": "sm",
+        "value": "640px",
+        "purpose": "Below: wordmark clips out of flow; sheet layouts go full-width."
+      },
+      {
+        "name": "reader-collapse",
+        "value": "640px",
+        "purpose": "Below 640, Reader only: staged shell-nav collapse out of flow — the phone reader band carries reading tools alone; keyboard-reachable."
+      }
     ]
   },
   "components": [
@@ -104,11 +164,31 @@
       "Three scenes, not three color schemes: Daylight (default), Warm paper (manila), Night (lit signage on dark walls)"
     ],
     "rules": [
-      { "name": "The Brightest Panel Rule", "body": "The article surface is always the highest-luminance reading field on screen. Chrome may be graphic; the page stays quiet. If a decoration competes with the measure, the decoration loses.", "section": "colors" },
-      { "name": "The Brass Rule", "body": "Gray is for text, never for edges that matter. Rules that carry meaning — band edge, dialog top, quotation mark, focus — are brass. Hairlines between peers stay neutral.", "section": "colors" },
-      { "name": "The One Lit Board Rule", "body": "Exactly one navigation location is lit at a time. Lit = brighter green fill + board-white caps + 2px brass underline, driven by aria-current, never by color alone.", "section": "colors" },
-      { "name": "The Two Voices Rule", "body": "Prose is always Literata and never uppercase. Labels are always PT Sans caps. A UI string that mixes the voices is a bug.", "section": "typography" },
-      { "name": "The One Elevation Rule", "body": "If it is not a native dialog, it is flat. Cards, popovers, and sheets use raised surface color + hairlines, never shadows.", "section": "elevation" }
+      {
+        "name": "The Brightest Panel Rule",
+        "body": "The article surface is always the highest-luminance reading field on screen. Chrome may be graphic; the page stays quiet. If a decoration competes with the measure, the decoration loses.",
+        "section": "colors"
+      },
+      {
+        "name": "The Brass Rule",
+        "body": "Gray is for text, never for edges that matter. Rules that carry meaning — band edge, dialog top, quotation mark, focus — are brass. Hairlines between peers stay neutral.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Lit Board Rule",
+        "body": "Exactly one navigation location is lit at a time. Lit = brighter green fill + board-white caps + 2px brass underline, driven by aria-current, never by color alone.",
+        "section": "colors"
+      },
+      {
+        "name": "The Two Voices Rule",
+        "body": "Prose is always Literata and never uppercase. Labels are always PT Sans caps. A UI string that mixes the voices is a bug.",
+        "section": "typography"
+      },
+      {
+        "name": "The One Elevation Rule",
+        "body": "If it is not a native dialog, it is flat. Cards, popovers, and sheets use raised surface color + hairlines, never shadows.",
+        "section": "elevation"
+      }
     ],
     "dos": [
       "Do keep chrome in the signage voice: PT Sans caps, enamel fills, brass edges.",

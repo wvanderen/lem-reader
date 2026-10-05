@@ -46,10 +46,7 @@ import type {
   NoteRecord,
   ReaderSettings,
 } from "../../../src/content/schema";
-import {
-  graphemeClusters,
-  normalizeText,
-} from "../../../src/content/normalizeText";
+import { graphemeClusters, normalizeText } from "../../../src/content/normalizeText";
 import { fixtures } from "../../../src/fixtures";
 import { ExportBundleSchema } from "../../../src/portability/bundle";
 import type { ExportBundle } from "../../../src/portability/bundle";
@@ -124,9 +121,7 @@ function sampleArticle(overrides: Partial<ArticleInput> = {}): CanonicalArticle 
       },
       {
         kind: "paragraph",
-        content: [
-          { text: "Theta iota kappa lambda mu nu xi omicron pi.", marks: [] },
-        ],
+        content: [{ text: "Theta iota kappa lambda mu nu xi omicron pi.", marks: [] }],
       },
     ],
     footnotes: [],
@@ -194,9 +189,7 @@ function sampleBook(overrides: Partial<Book> = {}): Book {
 }
 
 /** An epub-chapter article riding the bundle's articles block. */
-function sampleChapterArticle(
-  overrides: Partial<ArticleInput> = {},
-): CanonicalArticle {
+function sampleChapterArticle(overrides: Partial<ArticleInput> = {}): CanonicalArticle {
   return sampleArticle({
     id: "epub-333333333333-c00",
     provenance: {
@@ -236,18 +229,10 @@ function sampleBundle(overrides: Partial<BundleInput> = {}): ExportBundle {
  * highlight, one note, one location — the D9-14 table's local side. */
 async function seedLocalConflictSurface(): Promise<void> {
   const { db } = await loadDb();
-  await db.articles.put(
-    sampleArticle({ id: "art-local", revision: 1 }),
-  );
-  await db.highlights.put(
-    sampleHighlight({ id: "hl-local", articleId: "art-local" }),
-  );
-  await db.notes.put(
-    sampleNote({ id: "note-local", highlightId: "hl-local" }),
-  );
-  await db.location.put(
-    sampleLocation({ articleId: "art-local", revision: 1 }),
-  );
+  await db.articles.put(sampleArticle({ id: "art-local", revision: 1 }));
+  await db.highlights.put(sampleHighlight({ id: "hl-local", articleId: "art-local" }));
+  await db.notes.put(sampleNote({ id: "note-local", highlightId: "hl-local" }));
+  await db.location.put(sampleLocation({ articleId: "art-local", revision: 1 }));
 }
 
 /** A real passage of a bundled fixture — reuse the fixture's own normalized
@@ -276,16 +261,12 @@ describe("detectImportPreview — conflict kinds (09-03 Task 1)", () => {
 
     expect(preview.incoming.articles).toBe(1);
     expect(preview.added.articles).toBe(0);
-    const conflict = preview.conflicts.find(
-      (c) => c.kind === "article-revision",
-    );
+    const conflict = preview.conflicts.find((c) => c.kind === "article-revision");
     expect(conflict).toBeDefined();
     expect(conflict?.count).toBe(1);
     expect(conflict?.sampleIds).toContain("art-local");
     // Same id, different revision is a revision conflict — NOT divergence.
-    expect(
-      preview.conflicts.find((c) => c.kind === "article-content-divergence"),
-    ).toBeUndefined();
+    expect(preview.conflicts.find((c) => c.kind === "article-content-divergence")).toBeUndefined();
   });
 
   it("detects article-content-divergence at the same id+revision with a different originalHtmlHash", async () => {
@@ -311,15 +292,11 @@ describe("detectImportPreview — conflict kinds (09-03 Task 1)", () => {
     );
 
     expect(preview.added.articles).toBe(0);
-    const conflict = preview.conflicts.find(
-      (c) => c.kind === "article-content-divergence",
-    );
+    const conflict = preview.conflicts.find((c) => c.kind === "article-content-divergence");
     expect(conflict).toBeDefined();
     expect(conflict?.count).toBe(1);
     // Same id+revision is divergence — NOT a revision conflict.
-    expect(
-      preview.conflicts.find((c) => c.kind === "article-revision"),
-    ).toBeUndefined();
+    expect(preview.conflicts.find((c) => c.kind === "article-revision")).toBeUndefined();
   });
 
   it("treats an identical duplicate (same id+revision+hash) as neither conflict nor added", async () => {
@@ -343,9 +320,7 @@ describe("detectImportPreview — conflict kinds (09-03 Task 1)", () => {
 
     const preview = await detectImportPreview(
       sampleBundle({
-        highlights: [
-          sampleHighlight({ id: "hl-local", articleId: "art-local" }),
-        ],
+        highlights: [sampleHighlight({ id: "hl-local", articleId: "art-local" })],
       }),
     );
 
@@ -379,9 +354,7 @@ describe("detectImportPreview — conflict kinds (09-03 Task 1)", () => {
 
     const preview = await detectImportPreview(
       sampleBundle({
-        locations: [
-          sampleLocation({ articleId: "art-local", revision: 1 }),
-        ],
+        locations: [sampleLocation({ articleId: "art-local", revision: 1 })],
       }),
     );
 
@@ -426,17 +399,13 @@ describe("detectImportPreview — conflict kinds (09-03 Task 1)", () => {
 
     // Six local highlights whose ids collide with the six incoming ones.
     for (const n of [1, 2, 3, 4, 5, 6]) {
-      await db.highlights.put(
-        sampleHighlight({ id: `hl-dup-${n}`, articleId: "art-sample" }),
-      );
+      await db.highlights.put(sampleHighlight({ id: `hl-dup-${n}`, articleId: "art-sample" }));
     }
     const dupHighlights = [1, 2, 3, 4, 5, 6].map((n) =>
       sampleHighlight({ id: `hl-dup-${n}`, articleId: "art-sample" }),
     );
 
-    const preview = await detectImportPreview(
-      sampleBundle({ highlights: dupHighlights }),
-    );
+    const preview = await detectImportPreview(sampleBundle({ highlights: dupHighlights }));
 
     const conflict = preview.conflicts.find((c) => c.kind === "highlight-id");
     expect(conflict).toBeDefined();
@@ -458,9 +427,7 @@ describe("detectImportPreview — tri-state re-resolution (09-03 Task 1)", () =>
     const preview = await detectImportPreview(
       sampleBundle({
         articles: [sampleArticle({ id: "art-confident" })],
-        highlights: [
-          sampleHighlight({ id: "hl-a", articleId: "art-confident" }),
-        ],
+        highlights: [sampleHighlight({ id: "hl-a", articleId: "art-confident" })],
       }),
     );
 
@@ -515,9 +482,7 @@ describe("detectImportPreview — tri-state re-resolution (09-03 Task 1)", () =>
 
     const preview = await detectImportPreview(
       sampleBundle({
-        highlights: [
-          sampleHighlight({ id: "hl-ghost", articleId: "ghost-article" }),
-        ],
+        highlights: [sampleHighlight({ id: "hl-ghost", articleId: "ghost-article" })],
       }),
     );
 
@@ -630,9 +595,7 @@ describe("detectImportPreview — tri-state re-resolution (09-03 Task 1)", () =>
 
     const preview = await detectImportPreview(
       sampleBundle({
-        highlights: [
-          sampleHighlight({ id: "hl-local-tier", articleId: "art-local-tier" }),
-        ],
+        highlights: [sampleHighlight({ id: "hl-local-tier", articleId: "art-local-tier" })],
       }),
     );
 
@@ -782,10 +745,15 @@ describe("resolveImportPlan — override matrix (09-03 Task 2)", () => {
       articles: [sampleArticle({ id: "art-local", revision: 2 })],
     });
     const preview = await detectImportPreview(bundle);
-    const plan = await resolveImportPlan(bundle, preview, {
-      ...ALL_SKIP,
-      "article-revision": "overwrite",
-    }, false);
+    const plan = await resolveImportPlan(
+      bundle,
+      preview,
+      {
+        ...ALL_SKIP,
+        "article-revision": "overwrite",
+      },
+      false,
+    );
 
     expect(plan.articlesToWrite).toHaveLength(1);
     expect(plan.articlesToWrite[0]?.id).toBe("art-local");
@@ -802,10 +770,15 @@ describe("resolveImportPlan — override matrix (09-03 Task 2)", () => {
       articles: [sampleArticle({ id: "art-local", revision: 1 })],
     });
     const preview = await detectImportPreview(bundle);
-    const plan = await resolveImportPlan(bundle, preview, {
-      ...ALL_SKIP,
-      "article-revision": "overwrite",
-    }, false);
+    const plan = await resolveImportPlan(
+      bundle,
+      preview,
+      {
+        ...ALL_SKIP,
+        "article-revision": "overwrite",
+      },
+      false,
+    );
 
     expect(plan.articlesToWrite).toEqual([]);
     expect(plan.skipped.articles).toBe(1);
@@ -828,10 +801,15 @@ describe("resolveImportPlan — override matrix (09-03 Task 2)", () => {
     });
     const bundle = sampleBundle({ articles: [incoming] });
     const preview = await detectImportPreview(bundle);
-    const plan = await resolveImportPlan(bundle, preview, {
-      ...ALL_SKIP,
-      "article-content-divergence": "overwrite",
-    }, false);
+    const plan = await resolveImportPlan(
+      bundle,
+      preview,
+      {
+        ...ALL_SKIP,
+        "article-content-divergence": "overwrite",
+      },
+      false,
+    );
 
     expect(plan.articlesToWrite).toEqual([incoming]);
     expect(plan.skipped.articles).toBe(0);
@@ -847,10 +825,15 @@ describe("resolveImportPlan — override matrix (09-03 Task 2)", () => {
       notes: [sampleNote({ id: "note-follows", highlightId: "hl-local" })],
     });
     const preview = await detectImportPreview(bundle);
-    const plan = await resolveImportPlan(bundle, preview, {
-      ...ALL_SKIP,
-      "highlight-id": "keep-both",
-    }, false);
+    const plan = await resolveImportPlan(
+      bundle,
+      preview,
+      {
+        ...ALL_SKIP,
+        "highlight-id": "keep-both",
+      },
+      false,
+    );
 
     expect(plan.highlightsToWrite).toHaveLength(1);
     const minted = plan.highlightsToWrite[0]?.id;
@@ -875,10 +858,15 @@ describe("resolveImportPlan — override matrix (09-03 Task 2)", () => {
       notes: [sampleNote({ id: "note-local", highlightId: "hl-local" })],
     });
     const preview = await detectImportPreview(bundle);
-    const plan = await resolveImportPlan(bundle, preview, {
-      ...ALL_SKIP,
-      "note-id": "keep-both",
-    }, false);
+    const plan = await resolveImportPlan(
+      bundle,
+      preview,
+      {
+        ...ALL_SKIP,
+        "note-id": "keep-both",
+      },
+      false,
+    );
 
     expect(plan.notesToWrite).toHaveLength(1);
     const minted = plan.notesToWrite[0]?.id;
@@ -900,10 +888,15 @@ describe("resolveImportPlan — override matrix (09-03 Task 2)", () => {
     });
     const bundle = sampleBundle({ highlights: [incoming] });
     const preview = await detectImportPreview(bundle);
-    const plan = await resolveImportPlan(bundle, preview, {
-      ...ALL_SKIP,
-      "highlight-id": "overwrite",
-    }, false);
+    const plan = await resolveImportPlan(
+      bundle,
+      preview,
+      {
+        ...ALL_SKIP,
+        "highlight-id": "overwrite",
+      },
+      false,
+    );
 
     expect(plan.highlightsToWrite).toEqual([incoming]);
     expect(plan.idRewrites.size).toBe(0);
@@ -922,10 +915,15 @@ describe("resolveImportPlan — override matrix (09-03 Task 2)", () => {
     });
     const bundle = sampleBundle({ locations: [newer] });
     const preview = await detectImportPreview(bundle);
-    const plan = await resolveImportPlan(bundle, preview, {
-      ...ALL_SKIP,
-      location: "overwrite",
-    }, false);
+    const plan = await resolveImportPlan(
+      bundle,
+      preview,
+      {
+        ...ALL_SKIP,
+        location: "overwrite",
+      },
+      false,
+    );
 
     expect(plan.locationsToWrite).toEqual([newer]);
     expect(plan.skipped.locations).toBe(0);
@@ -943,10 +941,15 @@ describe("resolveImportPlan — override matrix (09-03 Task 2)", () => {
     });
     const bundle = sampleBundle({ locations: [older] });
     const preview = await detectImportPreview(bundle);
-    const plan = await resolveImportPlan(bundle, preview, {
-      ...ALL_SKIP,
-      location: "overwrite",
-    }, false);
+    const plan = await resolveImportPlan(
+      bundle,
+      preview,
+      {
+        ...ALL_SKIP,
+        location: "overwrite",
+      },
+      false,
+    );
 
     expect(plan.locationsToWrite).toEqual([]);
     expect(plan.skipped.locations).toBe(1);
@@ -961,11 +964,16 @@ describe("resolveImportPlan — override matrix (09-03 Task 2)", () => {
       locations: [sampleLocation({ articleId: "art-local", revision: 1 })],
     });
     const preview = await detectImportPreview(bundle);
-    const plan = await resolveImportPlan(bundle, preview, {
-      ...ALL_SKIP,
-      "article-revision": "keep-both",
-      location: "keep-both",
-    }, false);
+    const plan = await resolveImportPlan(
+      bundle,
+      preview,
+      {
+        ...ALL_SKIP,
+        "article-revision": "keep-both",
+        location: "keep-both",
+      },
+      false,
+    );
 
     expect(plan.articlesToWrite).toEqual([]);
     expect(plan.skipped.articles).toBe(1);
@@ -1033,11 +1041,16 @@ describe("resolveImportPlan — override matrix (09-03 Task 2)", () => {
       ],
     });
     const preview = await detectImportPreview(bundle);
-    const plan = await resolveImportPlan(bundle, preview, {
-      ...ALL_SKIP,
-      "highlight-id": "keep-both",
-      location: "overwrite",
-    }, true);
+    const plan = await resolveImportPlan(
+      bundle,
+      preview,
+      {
+        ...ALL_SKIP,
+        "highlight-id": "keep-both",
+        location: "overwrite",
+      },
+      true,
+    );
 
     // The plan itself is fully computed…
     expect(plan.highlightsToWrite).toHaveLength(1);
@@ -1073,9 +1086,7 @@ describe("detectImportPreview + resolveImportPlan — book conflicts (12-07)", (
   it("detects the book kind when a local book shares the id with a DIFFERENT originalFileHash (skip default)", async () => {
     const { detectImportPreview } = await loadConflicts();
     const { db } = await loadDb();
-    await db.books.put(
-      sampleBook({ originalFileHash: "sha256:" + "z".repeat(64) }),
-    );
+    await db.books.put(sampleBook({ originalFileHash: "sha256:" + "z".repeat(64) }));
 
     const preview = await detectImportPreview(
       sampleBundle({
@@ -1141,9 +1152,7 @@ describe("detectImportPreview + resolveImportPlan — book conflicts (12-07)", (
   it("book overwrite writes the incoming book under the SAME id (put over the local row)", async () => {
     const { detectImportPreview, resolveImportPlan } = await loadConflicts();
     const { db } = await loadDb();
-    await db.books.put(
-      sampleBook({ originalFileHash: "sha256:" + "z".repeat(64) }),
-    );
+    await db.books.put(sampleBook({ originalFileHash: "sha256:" + "z".repeat(64) }));
 
     const incoming = sampleBook();
     const bundle = sampleBundle({
@@ -1165,9 +1174,7 @@ describe("detectImportPreview + resolveImportPlan — book conflicts (12-07)", (
   it("book skip (default) and keep-both both exclude the conflicting book (keep-both behaves as skip — documented narrowing)", async () => {
     const { detectImportPreview, resolveImportPlan } = await loadConflicts();
     const { db } = await loadDb();
-    await db.books.put(
-      sampleBook({ originalFileHash: "sha256:" + "z".repeat(64) }),
-    );
+    await db.books.put(sampleBook({ originalFileHash: "sha256:" + "z".repeat(64) }));
 
     const bundle = sampleBundle({
       schemaVersion: 2,
@@ -1210,17 +1217,13 @@ describe("detectImportPreview + resolveImportPlan — book conflicts (12-07)", (
 
     const plan = await resolveImportPlan(bundle, preview, ALL_SKIP, false);
     expect(plan.articlesToWrite).toEqual([chapter]);
-    expect(plan.articlesToWrite[0]?.ingestionMeta?.bookId).toBe(
-      "epub-333333333333",
-    );
+    expect(plan.articlesToWrite[0]?.ingestionMeta?.bookId).toBe("epub-333333333333");
   });
 
   it("orphan tolerance: a chapter whose book was SKIPPED as a conflict still rides articlesToWrite", async () => {
     const { detectImportPreview, resolveImportPlan } = await loadConflicts();
     const { db } = await loadDb();
-    await db.books.put(
-      sampleBook({ originalFileHash: "sha256:" + "z".repeat(64) }),
-    );
+    await db.books.put(sampleBook({ originalFileHash: "sha256:" + "z".repeat(64) }));
 
     const chapter = sampleChapterArticle();
     const bundle = sampleBundle({
@@ -1242,10 +1245,7 @@ describe("detectImportPreview + resolveImportPlan — book conflicts (12-07)", (
 
 /** Phase 17 (17-04): set the seventh kind's bulk override on a base
  * Overrides record (the bulk take-incoming when "overwrite"). */
-function withMetadataOverride(
-  base: Overrides,
-  value: PerKindOverride,
-): Overrides {
+function withMetadataOverride(base: Overrides, value: PerKindOverride): Overrides {
   return { ...base, "article-metadata-override": value };
 }
 
@@ -1257,15 +1257,11 @@ describe("detectImportPreview — article-metadata-override classification (17-0
   it("same id+revision+hash with a differing readerTitle (both sides set) → exactly one article-metadata-override conflict, zero writes", async () => {
     const { detectImportPreview } = await loadConflicts();
     const { db } = await loadDb();
-    await db.articles.put(
-      sampleArticle({ id: "art-meta", readerTitle: "Local Name" }),
-    );
+    await db.articles.put(sampleArticle({ id: "art-meta", readerTitle: "Local Name" }));
 
     const preview = await detectImportPreview(
       sampleBundle({
-        articles: [
-          sampleArticle({ id: "art-meta", readerTitle: "Incoming Name" }),
-        ],
+        articles: [sampleArticle({ id: "art-meta", readerTitle: "Incoming Name" })],
       }),
     );
 
@@ -1279,9 +1275,7 @@ describe("detectImportPreview — article-metadata-override classification (17-0
     expect(preview.metadataConflicts).toHaveLength(1);
     expect(preview.metadataConflicts[0]?.id).toBe("art-meta");
     expect(preview.metadataConflicts[0]?.localReaderTitle).toBe("Local Name");
-    expect(preview.metadataConflicts[0]?.incomingReaderTitle).toBe(
-      "Incoming Name",
-    );
+    expect(preview.metadataConflicts[0]?.incomingReaderTitle).toBe("Incoming Name");
     expect(preview.metadataConflicts[0]?.localName).toBe("Local Name");
     expect(preview.metadataConflicts[0]?.incomingName).toBe("Incoming Name");
     // Zero writes: the local row is byte-unchanged.
@@ -1294,9 +1288,7 @@ describe("detectImportPreview — article-metadata-override classification (17-0
     // art-incoming-only: the INCOMING article has the override, local does not.
     await db.articles.put(sampleArticle({ id: "art-incoming-only" }));
     // art-local-only: the LOCAL article has the override, incoming does not.
-    await db.articles.put(
-      sampleArticle({ id: "art-local-only", readerAuthor: "Local Author" }),
-    );
+    await db.articles.put(sampleArticle({ id: "art-local-only", readerAuthor: "Local Author" }));
 
     const preview = await detectImportPreview(
       sampleBundle({
@@ -1307,25 +1299,19 @@ describe("detectImportPreview — article-metadata-override classification (17-0
       }),
     );
 
-    const conflict = preview.conflicts.find(
-      (c) => c.kind === "article-metadata-override",
-    );
+    const conflict = preview.conflicts.find((c) => c.kind === "article-metadata-override");
     expect(conflict).toBeDefined();
     expect(conflict?.count).toBe(2);
     expect(conflict?.sampleIds).toEqual(
       expect.arrayContaining(["art-incoming-only", "art-local-only"]),
     );
     expect(preview.metadataConflicts).toHaveLength(2);
-    const incomingOnly = preview.metadataConflicts.find(
-      (d) => d.id === "art-incoming-only",
-    );
+    const incomingOnly = preview.metadataConflicts.find((d) => d.id === "art-incoming-only");
     expect(incomingOnly?.localReaderTitle).toBeUndefined();
     expect(incomingOnly?.incomingReaderTitle).toBe("Their Name");
     expect(incomingOnly?.localName).toBe("Sample Article"); // canonical fallback
     expect(incomingOnly?.incomingName).toBe("Their Name");
-    const localOnly = preview.metadataConflicts.find(
-      (d) => d.id === "art-local-only",
-    );
+    const localOnly = preview.metadataConflicts.find((d) => d.id === "art-local-only");
     expect(localOnly?.localReaderAuthor).toBe("Local Author");
     expect(localOnly?.incomingReaderAuthor).toBeUndefined();
   });
@@ -1362,9 +1348,7 @@ describe("detectImportPreview — article-metadata-override classification (17-0
   it("revision differs AND metadata differs → classified article-revision ONLY (else-if order: revision → divergence → metadata)", async () => {
     const { detectImportPreview } = await loadConflicts();
     const { db } = await loadDb();
-    await db.articles.put(
-      sampleArticle({ id: "art-both", readerTitle: "Local Name" }),
-    );
+    await db.articles.put(sampleArticle({ id: "art-both", readerTitle: "Local Name" }));
 
     const preview = await detectImportPreview(
       sampleBundle({
@@ -1383,9 +1367,7 @@ describe("detectImportPreview — article-metadata-override classification (17-0
     // conflict row.
     expect(preview.conflicts).toHaveLength(1);
     expect(preview.conflicts[0]?.kind).toBe("article-revision");
-    expect(
-      preview.conflicts.find((c) => c.kind === "article-metadata-override"),
-    ).toBeUndefined();
+    expect(preview.conflicts.find((c) => c.kind === "article-metadata-override")).toBeUndefined();
     expect(preview.metadataConflicts).toEqual([]);
   });
 });
@@ -1398,14 +1380,10 @@ describe("resolveImportPlan — metadata conflicts + merge-on-win (17-04, D17-10
   it("metadata-only conflict + default skip → nothing written, local override intact, counted skipped (keep-LOCAL default, D17-11)", async () => {
     const { detectImportPreview, resolveImportPlan } = await loadConflicts();
     const { db } = await loadDb();
-    await db.articles.put(
-      sampleArticle({ id: "art-meta", readerTitle: "Local Name" }),
-    );
+    await db.articles.put(sampleArticle({ id: "art-meta", readerTitle: "Local Name" }));
 
     const bundle = sampleBundle({
-      articles: [
-        sampleArticle({ id: "art-meta", readerTitle: "Incoming Name" }),
-      ],
+      articles: [sampleArticle({ id: "art-meta", readerTitle: "Incoming Name" })],
     });
     const preview = await detectImportPreview(bundle);
 
@@ -1419,9 +1397,7 @@ describe("resolveImportPlan — metadata conflicts + merge-on-win (17-04, D17-10
   it("metadata-only conflict + the id in metadataTakeIncoming → the incoming row is written whole (its overrides win; a key-less incoming row REMOVES the local override — explicit reader choice)", async () => {
     const { detectImportPreview, resolveImportPlan } = await loadConflicts();
     const { db } = await loadDb();
-    await db.articles.put(
-      sampleArticle({ id: "art-meta", readerTitle: "Local Name" }),
-    );
+    await db.articles.put(sampleArticle({ id: "art-meta", readerTitle: "Local Name" }));
 
     const incoming = sampleArticle({ id: "art-meta" }); // NO override keys
     const bundle = sampleBundle({ articles: [incoming] });
@@ -1493,17 +1469,15 @@ describe("resolveImportPlan — metadata conflicts + merge-on-win (17-04, D17-10
     // Skip (default) keeps the local row — including its local override.
     const plan = await resolveImportPlan(bundle, preview, ALL_SKIP, false);
     expect(plan.articlesToWrite).toHaveLength(0);
-    expect(
-      (await db.articles.get("art-meta-date"))?.readerPublishedAt,
-    ).toBe("2024-03-05T12:00:00.000Z");
+    expect((await db.articles.get("art-meta-date"))?.readerPublishedAt).toBe(
+      "2024-03-05T12:00:00.000Z",
+    );
   });
 
   it("incoming revision+1 wins + the id in metadataTakeIncoming → the incoming row wins whole (no merge)", async () => {
     const { detectImportPreview, resolveImportPlan } = await loadConflicts();
     const { db } = await loadDb();
-    await db.articles.put(
-      sampleArticle({ id: "art-meta", readerTitle: "Local Name" }),
-    );
+    await db.articles.put(sampleArticle({ id: "art-meta", readerTitle: "Local Name" }));
 
     const incoming = sampleArticle({
       id: "art-meta",
@@ -1527,9 +1501,7 @@ describe("resolveImportPlan — metadata conflicts + merge-on-win (17-04, D17-10
   it("divergence overwrite + keep-local → the same merge rule: local overrides survive the content replacement (D17-10)", async () => {
     const { detectImportPreview, resolveImportPlan } = await loadConflicts();
     const { db } = await loadDb();
-    await db.articles.put(
-      sampleArticle({ id: "art-meta", readerTitle: "Local Name" }),
-    );
+    await db.articles.put(sampleArticle({ id: "art-meta", readerTitle: "Local Name" }));
 
     const incoming = sampleArticle({
       id: "art-meta",
@@ -1562,12 +1534,8 @@ describe("resolveImportPlan — metadata conflicts + merge-on-win (17-04, D17-10
   it("per-kind overwrite on article-metadata-override is the honest bulk take-incoming: every metadata-conflicted article is taken (Rule 2 — the offered select must do what it says)", async () => {
     const { detectImportPreview, resolveImportPlan } = await loadConflicts();
     const { db } = await loadDb();
-    await db.articles.put(
-      sampleArticle({ id: "art-a", readerTitle: "Local A" }),
-    );
-    await db.articles.put(
-      sampleArticle({ id: "art-b", readerTitle: "Local B" }),
-    );
+    await db.articles.put(sampleArticle({ id: "art-a", readerTitle: "Local A" }));
+    await db.articles.put(sampleArticle({ id: "art-b", readerTitle: "Local B" }));
 
     const incomingA = sampleArticle({ id: "art-a", readerTitle: "New A" });
     const incomingB = sampleArticle({ id: "art-b", readerTitle: "New B" });

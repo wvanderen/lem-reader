@@ -100,12 +100,7 @@ interface EditMetadataDialogProps {
   onCancel: () => void;
 }
 
-export function EditMetadataDialog({
-  open,
-  article,
-  onSaved,
-  onCancel,
-}: EditMetadataDialogProps) {
+export function EditMetadataDialog({ open, article, onSaved, onCancel }: EditMetadataDialogProps) {
   const ref = useRef<HTMLDialogElement>(null);
   // Capture the previously-focused element (the row's edit button) on open
   // so the close handler can restore focus (Pitfall 1).
@@ -157,9 +152,7 @@ export function EditMetadataDialog({
       setTitleValue(article?.readerTitle ?? "");
       setAuthorValue(article?.readerAuthor ?? "");
       setPublishedValue(
-        article?.readerPublishedAt !== undefined
-          ? isoToDateInput(article.readerPublishedAt)
-          : "",
+        article?.readerPublishedAt !== undefined ? isoToDateInput(article.readerPublishedAt) : "",
       );
       setSourceUrlValue(article?.readerSourceUrl ?? "");
       setTitleReset(false);
@@ -300,11 +293,7 @@ export function EditMetadataDialog({
   }
 
   return (
-    <dialog
-      ref={ref}
-      className="edit-metadata"
-      aria-labelledby="edit-metadata-heading"
-    >
+    <dialog ref={ref} className="edit-metadata" aria-labelledby="edit-metadata-heading">
       <div className="edit-metadata-inner">
         <h2 id="edit-metadata-heading">Edit metadata</h2>
         <form onSubmit={handleFormSubmit} className="edit-metadata-form">
@@ -436,9 +425,7 @@ export function EditMetadataDialog({
           {/* Issue #98 — the honest-failure line. Always-mounted StatusRegion
               (a live region must pre-exist to announce); idle it renders no
               children and paints nothing (the shared dialog rules). */}
-          <StatusRegion>
-            {saveError && <p>Couldn't save this change. Try again.</p>}
-          </StatusRegion>
+          <StatusRegion>{saveError && <p>Couldn't save this change. Try again.</p>}</StatusRegion>
           <div className="dialog-actions edit-metadata-actions">
             <BusyButton
               type="submit"

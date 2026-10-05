@@ -66,32 +66,29 @@ async function seedHighlight(
     tags?: string[];
   },
 ): Promise<void> {
-  await page.evaluate(
-    async (r) => {
-      const db = await new Promise<IDBDatabase>((resolve, reject) => {
-        const req = indexedDB.open("lem-reader");
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
-      });
-      const tx = db.transaction("highlights", "readwrite");
-      tx.objectStore("highlights").put({
-        schemaVersion: 1,
-        id: r.id,
-        articleId: "essay-long-form",
-        revision: 1,
-        position: { start: 5, end: 15 },
-        quote: r.quote,
-        createdAt: new Date().toISOString(),
-        ...(r.tags !== undefined ? { tags: r.tags } : {}),
-      });
-      await new Promise<void>((resolve, reject) => {
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-      });
-      db.close();
-    },
-    rec,
-  );
+  await page.evaluate(async (r) => {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const req = indexedDB.open("lem-reader");
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    const tx = db.transaction("highlights", "readwrite");
+    tx.objectStore("highlights").put({
+      schemaVersion: 1,
+      id: r.id,
+      articleId: "essay-long-form",
+      revision: 1,
+      position: { start: 5, end: 15 },
+      quote: r.quote,
+      createdAt: new Date().toISOString(),
+      ...(r.tags !== undefined ? { tags: r.tags } : {}),
+    });
+    await new Promise<void>((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+    db.close();
+  }, rec);
 }
 
 test.describe("highlight tags in the reader (issue #116)", () => {
@@ -118,9 +115,7 @@ test.describe("highlight tags in the reader (issue #116)", () => {
     // Done flushes + closes; the row carries the tag.
     await popover.locator(".highlight-popover-done").click();
     await expect(popover).not.toBeVisible();
-    await expect.poll(async () => (await readFirstHighlightRow(page))?.tags).toEqual([
-      "essays",
-    ]);
+    await expect.poll(async () => (await readFirstHighlightRow(page))?.tags).toEqual(["essays"]);
 
     // Full reload → activate the <mark> → the tag chip renders from the
     // persisted record (AC: tags remain editable after reopening).

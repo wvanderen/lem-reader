@@ -64,10 +64,7 @@ export const PDF_CLASS_ENUM = z.enum([
 export type PdfExpectedClass = z.infer<typeof PDF_CLASS_ENUM>;
 
 /** Classes whose promotion bar requires admission + ≥0.90 agreement. */
-export const ADMITTED_CLASSES: readonly PdfExpectedClass[] = [
-  "single-column",
-  "borderline",
-];
+export const ADMITTED_CLASSES: readonly PdfExpectedClass[] = ["single-column", "borderline"];
 
 const SHA256_REGEX = /^[0-9a-f]{64}$/;
 
@@ -106,11 +103,9 @@ export const EvidenceSchema = z.object({
    * thresholds live WITH their evidence so a recorded pass is auditable
    * against the numbers that produced it (D11-04). ZodRecord has no .min —
    * the non-empty check is a refine. */
-  thresholds: z
-    .record(z.string(), z.number())
-    .refine((r) => Object.keys(r).length > 0, {
-      message: "thresholds snapshot must not be empty",
-    }),
+  thresholds: z.record(z.string(), z.number()).refine((r) => Object.keys(r).length > 0, {
+    message: "thresholds snapshot must not be empty",
+  }),
   results: z.array(EvidenceResultSchema).min(1),
 });
 export type PdfCalibrationEvidence = z.infer<typeof EvidenceSchema>;
@@ -160,9 +155,7 @@ export function parseManifest(value: unknown): CalibrationManifest {
   const seen = new Set<string>();
   for (const entry of parsed.entries) {
     if (seen.has(entry.file)) {
-      throw new Error(
-        `[pdf-calibration] manifest lists duplicate file: ${entry.file}`,
-      );
+      throw new Error(`[pdf-calibration] manifest lists duplicate file: ${entry.file}`);
     }
     seen.add(entry.file);
   }
@@ -198,10 +191,7 @@ export interface CorpusVerification {
  * SHA-256). Pure check — callers decide how to surface a failure (derive
  * THROWS on !ok, the exit-2-class refusal; nothing derives against a
  * tampered or partial corpus). */
-export function verifyCorpus(
-  corpusDir: string,
-  manifest: CalibrationManifest,
-): CorpusVerification {
+export function verifyCorpus(corpusDir: string, manifest: CalibrationManifest): CorpusVerification {
   const missing: string[] = [];
   const mismatched: string[] = [];
   for (const entry of manifest.entries) {
@@ -225,7 +215,11 @@ export function verifyCorpus(
  * footnote/citation markers producers inject ("economy[1] borrowed") — they
  * are not content and break prefix containment otherwise. */
 function normalizeForPrefix(s: string): string {
-  return s.toLowerCase().replace(/\s+/g, " ").replace(/\[[0-9]+\]/g, "").trim();
+  return s
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/\[[0-9]+\]/g, "")
+    .trim();
 }
 
 /** Space-stripped form — the last-resort fuzzy tier. Producers emit
@@ -290,10 +284,7 @@ function labelMatchesBlock(label: GroundTruthLabel, block: Block): boolean {
  * committed behavior table (one extra block between labels ⇒ 2/3) is
  * unchanged under both walks.
  */
-export function computeAgreement(
-  labels: GroundTruthLabel[],
-  blocks: Block[],
-): number {
+export function computeAgreement(labels: GroundTruthLabel[], blocks: Block[]): number {
   const denominator = Math.max(labels.length, blocks.length);
   if (denominator === 0) return 1;
   let matched = 0;
@@ -316,9 +307,7 @@ export function computeAgreement(
 
 // ── validateEvidence (the D11-06 promotion bar — CI replays this) ───────────
 
-export type EvidenceValidation =
-  | { ok: true }
-  | { ok: false; problems: string[] };
+export type EvidenceValidation = { ok: true } | { ok: false; problems: string[] };
 
 /** The expected verdict for a class (the classification-correctness half of
  * the bar). Borderline + single-column are expected ADMITTED — the D11-02
@@ -414,9 +403,7 @@ export function validateEvidence(
         );
       }
       if (result.anchorRoundTrip !== true) {
-        problems.push(
-          `admitted result lacks anchorRoundTrip === true: ${entry.file} (SC#4a)`,
-        );
+        problems.push(`admitted result lacks anchorRoundTrip === true: ${entry.file} (SC#4a)`);
       }
     }
   }
@@ -425,9 +412,7 @@ export function validateEvidence(
   const manifestFiles = new Set(manifest.entries.map((e) => e.file));
   for (const result of evidence.results) {
     if (!manifestFiles.has(result.file)) {
-      problems.push(
-        `evidence result for a file absent from the manifest: ${result.file}`,
-      );
+      problems.push(`evidence result for a file absent from the manifest: ${result.file}`);
     }
   }
 
@@ -457,9 +442,7 @@ export interface DerivePaths {
  * that produced it. Throws (never writes partial evidence) on corpus
  * integrity failure or missing ground-truth label files.
  */
-export async function deriveEvidence(
-  paths: DerivePaths,
-): Promise<PdfCalibrationEvidence> {
+export async function deriveEvidence(paths: DerivePaths): Promise<PdfCalibrationEvidence> {
   const manifest = loadManifest(paths.manifestPath);
 
   // T-11-07: integrity gate BEFORE any derive work.
@@ -501,9 +484,7 @@ export async function deriveEvidence(
           sha256: entry.sha256,
           expectedClass: entry.expectedClass,
           verdict: "admitted",
-          agreement:
-            Math.round(computeAgreement(labels, response.article.blocks) * 10000) /
-            10000,
+          agreement: Math.round(computeAgreement(labels, response.article.blocks) * 10000) / 10000,
           anchorRoundTrip: true,
         });
       }
@@ -549,10 +530,7 @@ export async function deriveEvidence(
  * precedent: never overwrite the committed artifact with placeholder
  * data — CI replays this file as the durable truth).
  */
-export function writeEvidence(
-  evidence: PdfCalibrationEvidence,
-  evidencePath: string,
-): void {
+export function writeEvidence(evidence: PdfCalibrationEvidence, evidencePath: string): void {
   if (!evidence.results || evidence.results.length === 0) {
     throw new Error(
       "[pdf-calibration] refusing to overwrite the committed evidence record with empty results — the corpus derive produced no verdicts (see docs/pdf-calibration.md)",

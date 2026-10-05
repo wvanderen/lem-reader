@@ -30,8 +30,7 @@ function makeBook(chapterIds: string[], skipped = 0): Book {
     chapterArticleIds: chapterIds,
     skippedChapterCount: skipped,
     source: "epub-upload",
-    originalFileHash:
-      "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    originalFileHash: "sha256:0000000000000000000000000000000000000000000000000000000000000000",
     addedAt: "2026-01-01T00:00:00.000Z",
   });
 }
@@ -67,28 +66,36 @@ describe("deriveBookProgress (D12-03 — chapters-finished ratio)", () => {
   it("counts a chapter finished at EXACTLY the FINISHED_THRESHOLD boundary (>=)", () => {
     // 0.98 x 100 = 98 — offset 98 is AT the boundary and counts.
     const book = makeBook(["epub-book000111-c00"]);
-    const progress = deriveBookProgress(book, latestOf([loc("epub-book000111-c00", 98, "2026-01-02T00:00:00.000Z")]), lengthsOf({ "epub-book000111-c00": 100 }));
+    const progress = deriveBookProgress(
+      book,
+      latestOf([loc("epub-book000111-c00", 98, "2026-01-02T00:00:00.000Z")]),
+      lengthsOf({ "epub-book000111-c00": 100 }),
+    );
     expect(progress).toBe(1);
   });
 
   it("one below the boundary is unfinished", () => {
     const book = makeBook(["epub-book000111-c00"]);
-    const progress = deriveBookProgress(book, latestOf([loc("epub-book000111-c00", 97, "2026-01-02T00:00:00.000Z")]), lengthsOf({ "epub-book000111-c00": 100 }));
+    const progress = deriveBookProgress(
+      book,
+      latestOf([loc("epub-book000111-c00", 97, "2026-01-02T00:00:00.000Z")]),
+      lengthsOf({ "epub-book000111-c00": 100 }),
+    );
     expect(progress).toBe(0);
   });
 
   it("a mid-chapter location is unfinished", () => {
     const book = makeBook(["epub-book000111-c00"]);
-    const progress = deriveBookProgress(book, latestOf([loc("epub-book000111-c00", 50, "2026-01-02T00:00:00.000Z")]), lengthsOf({ "epub-book000111-c00": 100 }));
+    const progress = deriveBookProgress(
+      book,
+      latestOf([loc("epub-book000111-c00", 50, "2026-01-02T00:00:00.000Z")]),
+      lengthsOf({ "epub-book000111-c00": 100 }),
+    );
     expect(progress).toBe(0);
   });
 
   it("returns the finished-count ratio over 3 chapters", () => {
-    const ids = [
-      "epub-book000111-c00",
-      "epub-book000111-c01",
-      "epub-book000111-c02",
-    ];
+    const ids = ["epub-book000111-c00", "epub-book000111-c01", "epub-book000111-c02"];
     const book = makeBook(ids);
     const locations = [
       loc(ids[0]!, 1000, "2026-01-02T00:00:00.000Z"), // finished (>= 0.98*1000)
@@ -126,9 +133,7 @@ describe("deriveBookProgress (D12-03 — chapters-finished ratio)", () => {
 
   it("locations for articles OUTSIDE the book never count", () => {
     const book = makeBook(["epub-book000111-c00"]);
-    const locations = [
-      loc("some-other-article", 1000, "2026-01-02T00:00:00.000Z"),
-    ];
+    const locations = [loc("some-other-article", 1000, "2026-01-02T00:00:00.000Z")];
     expect(
       deriveBookProgress(book, latestOf(locations), lengthsOf({ "some-other-article": 1000 })),
     ).toBe(0);

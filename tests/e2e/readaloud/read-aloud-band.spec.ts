@@ -38,19 +38,16 @@ test.beforeEach(async ({ page }) => {
 async function openArticle(page: Page, mode: SpeechMode): Promise<Page> {
   await installFakeSpeech(page, mode);
   await page.goto(`${BASE}/`);
-  await expect(
-    page.getByRole("heading", { name: "Saved articles" }),
-  ).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible({
+    timeout: 10_000,
+  });
   await clearAllRows(page);
   await page.goto(`${BASE}/${ARTICLE_HREF}`);
   return page;
 }
 
 async function publishedHeight(page: Page): Promise<string> {
-  return page.evaluate(
-    (name) => document.body.style.getPropertyValue(name),
-    READALOUD_HEIGHT_VAR,
-  );
+  return page.evaluate((name) => document.body.style.getPropertyValue(name), READALOUD_HEIGHT_VAR);
 }
 
 /** The band's top edge, the reading flow's last prose bottom (scrolling
@@ -63,8 +60,7 @@ async function bandGeometry(page: Page): Promise<{
   paginatedLeafBottom: number | null;
 }> {
   return page.evaluate(() => {
-    const rect = (el: Element | null | undefined) =>
-      el ? el.getBoundingClientRect() : null;
+    const rect = (el: Element | null | undefined) => (el ? el.getBoundingClientRect() : null);
     const paragraphs = document.querySelectorAll(".article-body p");
     // The current page's lowest leaf box: content order is reading order in
     // the fragment tree, but the leaf max survives any nesting the block
@@ -74,16 +70,12 @@ async function bandGeometry(page: Page): Promise<{
       if (el.children.length > 0) continue;
       const bottom = el.getBoundingClientRect().bottom;
       paginatedLeafBottom =
-        paginatedLeafBottom === null
-          ? bottom
-          : Math.max(paginatedLeafBottom, bottom);
+        paginatedLeafBottom === null ? bottom : Math.max(paginatedLeafBottom, bottom);
     }
     return {
       bandTop: rect(document.querySelector(".readaloud-cluster"))?.top ?? null,
       lastProseBottom: rect(paragraphs[paragraphs.length - 1])?.bottom ?? null,
-      surfaceBottom: rect(
-        document.querySelector("article.paginated-surface"),
-      )?.bottom ?? null,
+      surfaceBottom: rect(document.querySelector("article.paginated-surface"))?.bottom ?? null,
       paginatedLeafBottom,
     };
   });
@@ -106,17 +98,13 @@ test.describe("Issue #90 — the expanded-band reservation", () => {
 
     await playAndAwaitProbe(page);
     const cluster = page.locator(".readaloud-cluster");
-    const measured = await cluster.evaluate(
-      (el) => (el as HTMLElement).offsetHeight,
-    );
+    const measured = await cluster.evaluate((el) => (el as HTMLElement).offsetHeight);
     expect(await publishedHeight(page)).toBe(`${measured}px`);
 
     // Scroll to the very bottom: the last prose must sit at or above the
     // band's top edge — nothing hides behind the playing bar (1px tolerance
     // for hairline rounding).
-    await page.evaluate(() =>
-      window.scrollTo(0, document.documentElement.scrollHeight),
-    );
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
     await expect
       .poll(async () => {
         const { lastProseBottom, bandTop } = await bandGeometry(page);
@@ -127,10 +115,7 @@ test.describe("Issue #90 — the expanded-band reservation", () => {
       .toBeLessThanOrEqual(1);
 
     // Session end un-publishes — idle reserves nothing again.
-    await page
-      .locator(".readaloud-bar")
-      .getByRole("button", { name: "Stop" })
-      .click();
+    await page.locator(".readaloud-bar").getByRole("button", { name: "Stop" }).click();
     await expect(
       page.locator(".readaloud-bar").getByRole("button", { name: "Read aloud" }),
     ).toBeVisible();
@@ -157,13 +142,8 @@ test.describe("Issue #90 — the expanded-band reservation", () => {
     // yet = still pending, never a false pass).
     await expect
       .poll(async () => {
-        const { surfaceBottom, bandTop, paginatedLeafBottom } =
-          await bandGeometry(page);
-        if (
-          surfaceBottom === null ||
-          bandTop === null ||
-          paginatedLeafBottom === null
-        ) {
+        const { surfaceBottom, bandTop, paginatedLeafBottom } = await bandGeometry(page);
+        if (surfaceBottom === null || bandTop === null || paginatedLeafBottom === null) {
           return Number.POSITIVE_INFINITY;
         }
         return Math.max(surfaceBottom, paginatedLeafBottom) - bandTop;
@@ -174,10 +154,7 @@ test.describe("Issue #90 — the expanded-band reservation", () => {
     const playing = await bandGeometry(page);
     expect(playing.surfaceBottom!).toBeLessThan(idleSurfaceBottom!);
 
-    await page
-      .locator(".readaloud-bar")
-      .getByRole("button", { name: "Stop" })
-      .click();
+    await page.locator(".readaloud-bar").getByRole("button", { name: "Stop" }).click();
     await expect(
       page.locator(".readaloud-bar").getByRole("button", { name: "Read aloud" }),
     ).toBeVisible();

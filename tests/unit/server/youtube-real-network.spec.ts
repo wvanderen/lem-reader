@@ -55,9 +55,7 @@ describe.skipIf(!ENABLED)("YouTube InnerTube real network (opt-in: YOUTUBE_REAL_
     "serves the srv1 line-level format after the srv3 strip (live caption body)",
     { timeout: 120_000 },
     async () => {
-      const result = await fetchYouTubeTranscriptFromUrl(
-        "https://youtu.be/dQw4w9WgXcQ",
-      );
+      const result = await fetchYouTubeTranscriptFromUrl("https://youtu.be/dQw4w9WgXcQ");
       if (!result.ok) throw new Error(`expected ok, got refusal: ${result.refusal}`);
       expect(result.segments.length).toBeGreaterThan(40);
       // Line-level means many segments carry the ♪ lyric markers the live

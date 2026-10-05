@@ -62,9 +62,7 @@ async function openArticle(page: Page): Promise<void> {
     () => {
       const visible =
         document.querySelector(".page-fragment [data-block-index]") ??
-        document.querySelector(
-          ".article-body:not(.article-body-measurement) [data-block-index]",
-        );
+        document.querySelector(".article-body:not(.article-body-measurement) [data-block-index]");
       return !!visible;
     },
     undefined,
@@ -82,9 +80,7 @@ function tagsTrigger(page: Page) {
 async function openPopover(page: Page): Promise<void> {
   await expect(tagsTrigger(page)).toHaveAttribute("aria-expanded", "false");
   await tagsTrigger(page).click();
-  await expect(
-    page.getByRole("dialog", { name: "Article tags" }),
-  ).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Article tags" })).toBeVisible();
   await expect(tagsTrigger(page)).toHaveAttribute("aria-expanded", "true");
 }
 
@@ -107,9 +103,7 @@ async function expectFocusOnTrigger(page: Page): Promise<void> {
   }
   await expect
     .poll(() =>
-      page.evaluate(
-        () => document.activeElement === document.querySelector(".tags-trigger"),
-      ),
+      page.evaluate(() => document.activeElement === document.querySelector(".tags-trigger")),
     )
     .toBe(true);
 }
@@ -125,7 +119,14 @@ function readBoxes(page: Page) {
     const t = trigger.getBoundingClientRect();
     return {
       pop: { x: p.x, y: p.y, width: p.width, height: p.height, right: p.right },
-      trigger: { x: t.x, y: t.y, width: t.width, height: t.height, right: t.right, bottom: t.bottom },
+      trigger: {
+        x: t.x,
+        y: t.y,
+        width: t.width,
+        height: t.height,
+        right: t.right,
+        bottom: t.bottom,
+      },
       vw: window.innerWidth,
       vh: window.innerHeight,
     };
@@ -161,10 +162,9 @@ async function expectAdjacentBelowTrigger(page: Page): Promise<void> {
 async function expectOverlapsTriggerColumn(page: Page): Promise<void> {
   const b = await readBoxes(page);
   expect(b, "popover + trigger boxes measurable").not.toBeNull();
-  expect(
-    b!.pop.x,
-    "popover must horizontally overlap the trigger's column",
-  ).toBeLessThan(b!.trigger.right);
+  expect(b!.pop.x, "popover must horizontally overlap the trigger's column").toBeLessThan(
+    b!.trigger.right,
+  );
   expect(b!.pop.right).toBeGreaterThan(b!.trigger.x);
 }
 
@@ -236,9 +236,7 @@ test.describe("tag menu geometry (21-02 — POLISH-08 / D21-05)", () => {
     expect(b!.pop.y + b!.pop.height).toBeLessThanOrEqual(b!.vh + 0.5);
   });
 
-  test("Esc closes and focus returns to the trigger (engine-honest shapes)", async ({
-    page,
-  }) => {
+  test("Esc closes and focus returns to the trigger (engine-honest shapes)", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await openArticle(page);
 
@@ -270,9 +268,7 @@ test.describe("tag menu geometry (21-02 — POLISH-08 / D21-05)", () => {
     expect(popBox, "popover box measurable before light-dismiss").toBeTruthy();
     const vp = page.viewportSize() ?? { width: 1280, height: 720 };
     const dismissX = Math.round(vp.width / 2);
-    const dismissY = Math.round(
-      Math.min(popBox!.y + popBox!.height + 24, vp.height - 8),
-    );
+    const dismissY = Math.round(Math.min(popBox!.y + popBox!.height + 24, vp.height - 8));
     await page.mouse.click(dismissX, dismissY);
 
     await expect(page.locator(".tag-popover")).toBeHidden();

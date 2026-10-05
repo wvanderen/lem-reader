@@ -56,8 +56,7 @@ import { classifyStorageError } from "./errors";
  *                          returns it) — kept so callers switch one union.
  */
 export type BooksLoadResult =
-  | { ok: true; books: Book[] }
-  | { ok: false; reason: "unavailable" | "corrupt" | "unupgradeable" };
+  { ok: true; books: Book[] } | { ok: false; reason: "unavailable" | "corrupt" | "unupgradeable" };
 
 /**
  * A Book with `addedAt` optional — the saveBook parameter shape. Callers
@@ -244,25 +243,14 @@ export async function saveBook(
 export async function removeBook(id: string): Promise<void> {
   await db.transaction(
     "rw",
-    [
-      db.books,
-      db.articles,
-      db.highlights,
-      db.notes,
-      db.location,
-      db.assets,
-      db.readingSessions,
-    ],
+    [db.books, db.articles, db.highlights, db.notes, db.location, db.assets, db.readingSessions],
     async () => {
       const book = await db.books.get(id);
 
       // Chapter set = declared TOC ∪ live bookId carriers (live truth —
       // tolerant of partial imports).
       const chapterIds = new Set<string>(book?.chapterArticleIds ?? []);
-      const liveChapterIds = await db.articles
-        .where("bookId")
-        .equals(id)
-        .primaryKeys();
+      const liveChapterIds = await db.articles.where("bookId").equals(id).primaryKeys();
       for (const key of liveChapterIds) {
         chapterIds.add(String(key));
       }

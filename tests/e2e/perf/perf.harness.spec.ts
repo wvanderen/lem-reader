@@ -104,8 +104,7 @@ async function readTrustedConstraints(
 ): Promise<{ size: number; viewportWidthPx: number } | null> {
   return await page.evaluate(() => {
     const c = (window as unknown as Record<string, unknown>).__lemLastTrustedConstraints as
-      | { size: number; viewportWidthPx: number }
-      | undefined;
+      { size: number; viewportWidthPx: number } | undefined;
     return c ?? null;
   });
 }
@@ -127,8 +126,7 @@ async function measureColdSamples(page: Page, fixture: string): Promise<number[]
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     await page.waitForFunction(
       () =>
-        (window as unknown as Record<string, unknown>).__lemLastTrustedConstraints !==
-        undefined,
+        (window as unknown as Record<string, unknown>).__lemLastTrustedConstraints !== undefined,
       undefined,
       { timeout: 15_000 },
     );
@@ -166,9 +164,7 @@ async function measureWarmSamples(page: Page): Promise<number[]> {
   // Open the settings panel to access the size slider (mirrors stale-
   // drop.spec.ts L83-86).
   await page.getByRole("button", { name: "Reading settings" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Reading settings", level: 2 }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Reading settings", level: 2 })).toBeVisible();
   const slider = page.getByRole("slider", { name: "Text size" });
   await slider.focus();
 
@@ -186,8 +182,7 @@ async function measureWarmSamples(page: Page): Promise<number[]> {
     await page.waitForFunction(
       (preS: number) => {
         const c = (window as unknown as Record<string, unknown>).__lemLastTrustedConstraints as
-          | { size: number }
-          | undefined;
+          { size: number } | undefined;
         return c !== undefined && c.size !== preS;
       },
       preSize,
@@ -218,73 +213,72 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-test(
-  `perf: measure cold + warm repagination (worst-case fixtures × profile)`,
-  async ({ page, browserName }) => {
-    // Generous timeout: 3 fixtures × (5 cold + 5 warm) = 30 measurement
-    // cycles per project, plus the throttled-mobile project adds CPU +
-    // network latency per cycle. CI machines vary.
-    test.setTimeout(300_000);
+test(`perf: measure cold + warm repagination (worst-case fixtures × profile)`, async ({
+  page,
+  browserName,
+}) => {
+  // Generous timeout: 3 fixtures × (5 cold + 5 warm) = 30 measurement
+  // cycles per project, plus the throttled-mobile project adds CPU +
+  // network latency per cycle. CI machines vary.
+  test.setTimeout(300_000);
 
-    const projectName = test.info().project.name;
-    // The profile is derived from the project name: chromium-throttled-
-    // mobile → throttled-mobile; chromium/firefox/webkit → desktop.
-    const profile: "desktop" | "throttled-mobile" =
-      projectName === "chromium-throttled-mobile" ? "throttled-mobile" : "desktop";
+  const projectName = test.info().project.name;
+  // The profile is derived from the project name: chromium-throttled-
+  // mobile → throttled-mobile; chromium/firefox/webkit → desktop.
+  const profile: "desktop" | "throttled-mobile" =
+    projectName === "chromium-throttled-mobile" ? "throttled-mobile" : "desktop";
 
-    // V7 — measurement must NEVER throw to the reader. Collect pageerrors;
-    // assert empty at the end (mirrors stale-drop.spec.ts L43-44, 115).
-    const pageErrors: string[] = [];
-    page.on("pageerror", (err) => pageErrors.push(String(err)));
+  // V7 — measurement must NEVER throw to the reader. Collect pageerrors;
+  // assert empty at the end (mirrors stale-drop.spec.ts L43-44, 115).
+  const pageErrors: string[] = [];
+  page.on("pageerror", (err) => pageErrors.push(String(err)));
 
-    for (const fixture of PERF_FIXTURES) {
-      // Reset to the default desktop viewport before each fixture so cold
-      // runs at a consistent geometry AND warm starts from the measure-
-      // capped article width (the previous fixture's warm cycle may have
-      // left the viewport at a sub-measure width, which would make the
-      // next fixture's warm iteration 0 a no-op).
-      await page.setViewportSize({ width: 1280, height: 720 });
+  for (const fixture of PERF_FIXTURES) {
+    // Reset to the default desktop viewport before each fixture so cold
+    // runs at a consistent geometry AND warm starts from the measure-
+    // capped article width (the previous fixture's warm cycle may have
+    // left the viewport at a sub-measure width, which would make the
+    // next fixture's warm iteration 0 a no-op).
+    await page.setViewportSize({ width: 1280, height: 720 });
 
-      // Apply throttle INSIDE the per-fixture loop so each cold measurement
-      // runs under the configured profile. (Throttle is chromium-only; this
-      // branch is a no-op under desktop projects.)
-      const cdp = await applyThrottleIfMobile(page, projectName);
+    // Apply throttle INSIDE the per-fixture loop so each cold measurement
+    // runs under the configured profile. (Throttle is chromium-only; this
+    // branch is a no-op under desktop projects.)
+    const cdp = await applyThrottleIfMobile(page, projectName);
 
-      // Cold: SAMPLES_PER_CELL page reloads → first trusted commit each.
-      const coldSamples = await measureColdSamples(page, fixture);
-      for (const wallClockMs of coldSamples) {
-        projectResults.push({ fixture, profile, engine: browserName, phase: "cold", wallClockMs });
-      }
+    // Cold: SAMPLES_PER_CELL page reloads → first trusted commit each.
+    const coldSamples = await measureColdSamples(page, fixture);
+    for (const wallClockMs of coldSamples) {
+      projectResults.push({ fixture, profile, engine: browserName, phase: "cold", wallClockMs });
+    }
 
-      // Warm: run SAMPLES_PER_CELL sub-measure resize re-triggers. The
-      // hook must be non-null here (measureColdSamples waited for it);
-      // guard defensively anyway. Sub-measure widths are required because
-      // above the ~550px measure cap the article width doesn't change on
-      // viewport resize (see measureWarmSamples comment).
-      const anchor = await readTrustedConstraints(page);
-      if (anchor) {
-        const warmSamples = await measureWarmSamples(page);
-        for (const wallClockMs of warmSamples) {
-          projectResults.push({ fixture, profile, engine: browserName, phase: "warm", wallClockMs });
-        }
-      }
-
-      if (cdp) {
-        try {
-          await cdp.detach();
-        } catch {
-          // ignore — page is navigating to the next fixture anyway
-        }
+    // Warm: run SAMPLES_PER_CELL sub-measure resize re-triggers. The
+    // hook must be non-null here (measureColdSamples waited for it);
+    // guard defensively anyway. Sub-measure widths are required because
+    // above the ~550px measure cap the article width doesn't change on
+    // viewport resize (see measureWarmSamples comment).
+    const anchor = await readTrustedConstraints(page);
+    if (anchor) {
+      const warmSamples = await measureWarmSamples(page);
+      for (const wallClockMs of warmSamples) {
+        projectResults.push({ fixture, profile, engine: browserName, phase: "warm", wallClockMs });
       }
     }
 
-    expect(
-      projectResults.length,
-      `expected at least one sample for ${projectName}`,
-    ).toBeGreaterThan(0);
-    expect(pageErrors, "no uncaught errors during measurement").toEqual([]);
-  },
-);
+    if (cdp) {
+      try {
+        await cdp.detach();
+      } catch {
+        // ignore — page is navigating to the next fixture anyway
+      }
+    }
+  }
+
+  expect(projectResults.length, `expected at least one sample for ${projectName}`).toBeGreaterThan(
+    0,
+  );
+  expect(pageErrors, "no uncaught errors during measurement").toEqual([]);
+});
 
 test.afterAll(async () => {
   // afterAll runs once per worker; write this project's results to a per-

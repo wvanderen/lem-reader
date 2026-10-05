@@ -129,9 +129,8 @@ export function WipeConfirm({ open, onReset, onCancel }: WipeConfirmProps) {
       <div className="wipe-confirm-inner">
         <h2 id="wipe-title">Reset local data?</h2>
         <p id="wipe-body">
-          Reading history and saved settings are damaged and can&apos;t be
-          used. Resetting clears them so you can start fresh. This can&apos;t
-          be undone.
+          Reading history and saved settings are damaged and can&apos;t be used. Resetting clears
+          them so you can start fresh. This can&apos;t be undone.
         </p>
         <div className="dialog-actions wipe-confirm-actions">
           {/* Destructive action — Pitfall 8: db.delete() fires ONLY in

@@ -96,9 +96,7 @@ test.describe("G8 selection-gated mount/announce boundary (NVDA native selection
     expect(ok).toBeTruthy();
 
     // The mount: the toolbar appears with its accessible role + name.
-    await expect(
-      page.getByRole("toolbar", { name: "Highlight actions" }),
-    ).toBeVisible();
+    await expect(page.getByRole("toolbar", { name: "Highlight actions" })).toBeVisible();
 
     // THE CUE (previously asserted by zero automation): the toolbar's own
     // INTERNAL live region — role=status, aria-live=polite, rendered inside
@@ -133,9 +131,7 @@ test.describe("G8 selection-gated mount/announce boundary (NVDA native selection
     await openArticle(page, FIXTURE); // paginated is the default mode
 
     // Starting state via ONE evaluate: no selection exists.
-    const startCollapsed = await page.evaluate(
-      () => window.getSelection()?.isCollapsed ?? true,
-    );
+    const startCollapsed = await page.evaluate(() => window.getSelection()?.isCollapsed ?? true);
     expect(startCollapsed, "no selection exists at start").toBe(true);
 
     // ONE evaluate: install the window-scoped keydown counter — AFTER all
@@ -159,9 +155,7 @@ test.describe("G8 selection-gated mount/announce boundary (NVDA native selection
     // G7-proven consequence, still possible with native selection off).
     // NO page.keyboard call may occur anywhere in this test.
     await page.evaluate(() => {
-      const chevron = document.querySelector<HTMLButtonElement>(
-        "button.page-turn-previous",
-      );
+      const chevron = document.querySelector<HTMLButtonElement>("button.page-turn-previous");
       chevron?.focus();
     });
 
@@ -180,10 +174,9 @@ test.describe("G8 selection-gated mount/announce boundary (NVDA native selection
       toolbarCount: document.querySelectorAll(".selection-toolbar").length,
     }));
 
-    expect(
-      state.keydowns,
-      "the keydown-less focus move delivers ZERO keydowns to the page",
-    ).toBe(0);
+    expect(state.keydowns, "the keydown-less focus move delivers ZERO keydowns to the page").toBe(
+      0,
+    );
     expect(
       state.isCollapsed,
       "the document selection stays collapsed — focus moves never create one",

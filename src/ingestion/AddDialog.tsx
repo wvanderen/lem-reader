@@ -92,11 +92,7 @@ import { mapReasonToCopy } from "./ingestCopy";
 // Issue #4 — the ingest-and-persist policy service; ONE call per
 // submission arm.
 import { addToLibrary } from "./addToLibrary";
-import type {
-  AddToLibraryOutcome,
-  SavedArticleResult,
-  SavedBookResult,
-} from "./addToLibrary";
+import type { AddToLibraryOutcome, SavedArticleResult, SavedBookResult } from "./addToLibrary";
 // Issue #112 — the partial-content disclosure heading, shared with the
 // reader view (the ONE copy home; the per-part lines ride the outcome).
 import { PARTIAL_CONTENT_NOTE } from "../routes/extractionNote";
@@ -206,9 +202,7 @@ export function AddDialog({ open, onCancel, onSaved, tagStats }: AddDialogProps)
   // render). A refused/failure outcome NEVER lands here — refusal copy and
   // the saved result stay distinct. Reset on every open (D16-08) and by
   // "Add another".
-  const [saved, setSaved] = useState<SavedArticleResult | SavedBookResult | null>(
-    null,
-  );
+  const [saved, setSaved] = useState<SavedArticleResult | SavedBookResult | null>(null);
 
   // Issue #84 (decision #70) — the transcript fallback is an IN-PLACE
   // SWAP of the content slot: while a bot-check offer is live the source
@@ -482,9 +476,7 @@ export function AddDialog({ open, onCancel, onSaved, tagStats }: AddDialogProps)
   function handleOpenSaved() {
     if (saved === null) return;
     const targetId =
-      saved.outcome === "saved-article"
-        ? saved.articleId
-        : saved.firstChapterArticleId;
+      saved.outcome === "saved-article" ? saved.articleId : saved.firstChapterArticleId;
     if (targetId === undefined) return;
     try {
       onCancel();
@@ -673,9 +665,7 @@ export function AddDialog({ open, onCancel, onSaved, tagStats }: AddDialogProps)
             just the diff). The region NEVER unmounts (a live region must
             exist before its content changes to announce reliably) and
             NEVER renders below the actions row. */}
-        <StatusRegion>
-          {status !== "idle" && message !== null && <p>{message}</p>}
-        </StatusRegion>
+        <StatusRegion>{status !== "idle" && message !== null && <p>{message}</p>}</StatusRegion>
 
         {/* Issues #112/#113 — the saved-result card: the saved title
             (focused on the save landing, tabIndex -1 so the heading is
@@ -805,10 +795,7 @@ export function AddDialog({ open, onCancel, onSaved, tagStats }: AddDialogProps)
             Issue #112 — the slot also hides in result mode (the outcome
             screen replaces it; the pick survives for "Add another"'s
             reset, same mount-preservation reasoning). */}
-        <div
-          className="add-source-content"
-          hidden={transcriptMode || resultMode}
-        >
+        <div className="add-source-content" hidden={transcriptMode || resultMode}>
           {source === "url" && (
             <form id="add-url-form" onSubmit={handleUrlSubmit} className="add-url-form">
               <label htmlFor="ingest-url">Add by URL</label>
@@ -900,11 +887,15 @@ export function AddDialog({ open, onCancel, onSaved, tagStats }: AddDialogProps)
             the result screen when the transcript paste SAVES (result mode
             hides the swap; "Add another" retires it wholesale). */}
         {transcriptMode && !resultMode && (
-          <form id="add-transcript-form" onSubmit={handleTranscriptSubmit} className="add-transcript-form">
+          <form
+            id="add-transcript-form"
+            onSubmit={handleTranscriptSubmit}
+            className="add-transcript-form"
+          >
             <p className="add-transcript-guidance">
-              You can still add it by hand: open the video on YouTube, open its transcript
-              (below the player choose "…more" then "Show transcript"), select all the
-              transcript text, copy it, and paste it here.
+              You can still add it by hand: open the video on YouTube, open its transcript (below
+              the player choose "…more" then "Show transcript"), select all the transcript text,
+              copy it, and paste it here.
             </p>
             <label htmlFor="ingest-transcript-title">Title</label>
             <input
@@ -982,11 +973,7 @@ export function AddDialog({ open, onCancel, onSaved, tagStats }: AddDialogProps)
             disabled mirrors the source picker's in-flight gate. Issue
             #112 — hidden in result mode (the tags for the JUST-saved
             article rode the atomic save; "Add another" resets them). */}
-        <fieldset
-          className="add-tags-fieldset"
-          disabled={submitting}
-          hidden={resultMode}
-        >
+        <fieldset className="add-tags-fieldset" disabled={submitting} hidden={resultMode}>
           <legend>Tags (optional)</legend>
           <label htmlFor="add-dialog-tags" className="visually-hidden">
             Add or search a tag
@@ -1012,11 +999,7 @@ export function AddDialog({ open, onCancel, onSaved, tagStats }: AddDialogProps)
               upstream). */}
           {resultMode ? (
             <>
-              <button
-                type="button"
-                className="btn btn-quiet add-dialog-cancel"
-                onClick={onCancel}
-              >
+              <button type="button" className="btn btn-quiet add-dialog-cancel" onClick={onCancel}>
                 Close
               </button>
               <button
@@ -1026,8 +1009,7 @@ export function AddDialog({ open, onCancel, onSaved, tagStats }: AddDialogProps)
               >
                 Add another
               </button>
-              {(savedArticle !== null ||
-                savedBook?.firstChapterArticleId !== undefined) && (
+              {(savedArticle !== null || savedBook?.firstChapterArticleId !== undefined) && (
                 <button
                   type="button"
                   className="btn btn-primary add-dialog-open"

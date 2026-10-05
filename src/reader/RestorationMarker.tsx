@@ -79,9 +79,7 @@ function useAttachGeometry({
   articleEl,
   offset,
   mode,
-}: RestorationMarkerProps):
-  | { top: number; height: number; insetInlineStart: number }
-  | null {
+}: RestorationMarkerProps): { top: number; height: number; insetInlineStart: number } | null {
   const [geometry, setGeometry] = useState<{
     top: number;
     height: number;
@@ -113,9 +111,7 @@ function useAttachGeometry({
       top: rect.top - articleRect.top,
       height: rect.height,
       insetInlineStart:
-        rect.left -
-        articleRect.left -
-        (mode === "paginated" ? BAR_WIDTH_PX : SCROLLING_GUTTER_PX),
+        rect.left - articleRect.left - (mode === "paginated" ? BAR_WIDTH_PX : SCROLLING_GUTTER_PX),
     });
   }, [article, articleEl, mode, offset]);
 

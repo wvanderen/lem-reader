@@ -453,10 +453,22 @@ const CustomThemeRecordSchema = z.object({
     ink: z.string().regex(/^#[0-9a-fA-F]{6}$/),
     accent: z.string().regex(/^#[0-9a-fA-F]{6}$/),
     hairline: z.string().regex(/^#[0-9a-fA-F]{6}$/),
-    board: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
-    boardText: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
-    lit: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
-    brass: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+    board: z
+      .string()
+      .regex(/^#[0-9a-fA-F]{6}$/)
+      .optional(),
+    boardText: z
+      .string()
+      .regex(/^#[0-9a-fA-F]{6}$/)
+      .optional(),
+    lit: z
+      .string()
+      .regex(/^#[0-9a-fA-F]{6}$/)
+      .optional(),
+    brass: z
+      .string()
+      .regex(/^#[0-9a-fA-F]{6}$/)
+      .optional(),
   }),
 });
 
@@ -477,13 +489,7 @@ const ReaderSettingsObjectSchema = z.object({
   // hydrate on read — Pitfall 9 (NO Dexie store change; the settings store
   // is key-value, Dexie is opaque to the value shape). v6 and above
   // forward-reject (V5 boundary discipline preserved).
-  schemaVersion: z.union([
-    z.literal(1),
-    z.literal(2),
-    z.literal(3),
-    z.literal(4),
-    z.literal(5),
-  ]),
+  schemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]),
   font: z.enum(["serif", "sans", "dyslexic"]),
   size: z.union([z.literal(16), z.literal(18), z.literal(20), z.literal(22), z.literal(24)]),
   // D21-01/D21-02 (POLISH-09) + issue #18 (D22-01): the union is the
@@ -657,13 +663,7 @@ export const TextQuoteSelectorSchema = z.object({
  * exactly four named colors. The closed set is the single source of truth —
  * the Zod enum below, the UI picker, the CSS tokens, and the custom-theme
  * derivation all key off these literal ids. */
-export const HIGHLIGHT_COLOR_NAMES = [
-  "default",
-  "yellow",
-  "green",
-  "blue",
-  "pink",
-] as const;
+export const HIGHLIGHT_COLOR_NAMES = ["default", "yellow", "green", "blue", "pink"] as const;
 export type HighlightColor = (typeof HIGHLIGHT_COLOR_NAMES)[number];
 export const HighlightColorSchema = z.enum(HIGHLIGHT_COLOR_NAMES);
 

@@ -18,10 +18,7 @@ import {
 } from "../../src/routes/extractionNote";
 import { ArticleSchema } from "../../src/content/schema";
 import type { CanonicalArticle } from "../../src/content/schema";
-import {
-  FAKE_HASH,
-  transcriptIngestionMeta,
-} from "./fixtures/transcript-meta";
+import { FAKE_HASH, transcriptIngestionMeta } from "./fixtures/transcript-meta";
 
 function makeArticle(
   meta?: Record<string, unknown> & { transcript?: Record<string, unknown> },
@@ -96,9 +93,7 @@ describe("extractionNote (issue #41, flow N6)", () => {
   it("the note never carries internal jargon", () => {
     for (const meta of [LOW_ASR, LOW_WEB]) {
       const note = extractionNote(makeArticle(meta)) ?? "";
-      expect(note.toLowerCase()).not.toMatch(
-        /extraction|confidence|asr|zod|schema|revision/,
-      );
+      expect(note.toLowerCase()).not.toMatch(/extraction|confidence|asr|zod|schema|revision/);
     }
   });
 });
@@ -136,8 +131,6 @@ describe("partial-content + annotations disclosures (ADR-0003)", () => {
   it("annotationsNote is silent when anchors are reliable or meta is absent", () => {
     expect(annotationsNote(makeArticle(HIGH))).toBeUndefined();
     expect(annotationsNote(makeArticle())).toBeUndefined();
-    expect(
-      annotationsNote(makeArticle({ ...HIGH, annotationsDegraded: false })),
-    ).toBeUndefined();
+    expect(annotationsNote(makeArticle({ ...HIGH, annotationsDegraded: false }))).toBeUndefined();
   });
 });

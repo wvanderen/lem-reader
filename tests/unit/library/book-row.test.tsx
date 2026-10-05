@@ -39,21 +39,10 @@ vi.mock("../../../src/ingestion/library/tagsStore", () => ({
 
 import { BookRow } from "../../../src/ingestion/library/BookRow";
 import { ArticleSchema, BookSchema, LocationRecordSchema } from "../../../src/content/schema";
-import type {
-  Book,
-  CanonicalArticle,
-  LocationRecord,
-} from "../../../src/content/schema";
-import {
-  EMPTY_LIBRARY_SNAPSHOT,
-} from "../../../src/ingestion/library/librarySnapshot";
-import type {
-  LibrarySnapshot,
-} from "../../../src/ingestion/library/librarySnapshot";
-import {
-  graphemeClusters,
-  normalizeText,
-} from "../../../src/content/normalizeText";
+import type { Book, CanonicalArticle, LocationRecord } from "../../../src/content/schema";
+import { EMPTY_LIBRARY_SNAPSHOT } from "../../../src/ingestion/library/librarySnapshot";
+import type { LibrarySnapshot } from "../../../src/ingestion/library/librarySnapshot";
+import { graphemeClusters, normalizeText } from "../../../src/content/normalizeText";
 import { latestLocationByArticle } from "../../../src/reader/readingPosition";
 
 const BOOK_ID = "epub-book000111";
@@ -65,26 +54,17 @@ function makeBook(overrides: Record<string, unknown> = {}): Book {
     title: "The Synthetic Book",
     authors: ["Ada Author", "Bob Builder"],
     language: "en",
-    chapterArticleIds: [
-      `${BOOK_ID}-c00`,
-      `${BOOK_ID}-c01`,
-      `${BOOK_ID}-c02`,
-    ],
+    chapterArticleIds: [`${BOOK_ID}-c00`, `${BOOK_ID}-c01`, `${BOOK_ID}-c02`],
     skippedChapterCount: 0,
     source: "epub-upload",
-    originalFileHash:
-      "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    originalFileHash: "sha256:0000000000000000000000000000000000000000000000000000000000000000",
     addedAt: "2026-01-01T00:00:00.000Z",
     ...overrides,
   });
 }
 
 /** A minimal valid epub-chapter article (id + TOC title + bookId). */
-function makeChapter(
-  id: string,
-  title: string,
-  chapterIndex: number,
-): CanonicalArticle {
+function makeChapter(id: string, title: string, chapterIndex: number): CanonicalArticle {
   return ArticleSchema.parse({
     id,
     revision: 1,
@@ -92,14 +72,12 @@ function makeChapter(
     provenance: {
       title,
       retrievedAt: "2026-01-01T00:00:00.000Z",
-      originalHtmlHash:
-        "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      originalHtmlHash: "sha256:0000000000000000000000000000000000000000000000000000000000000000",
     },
     blocks: [{ kind: "paragraph", content: [{ text: `Body of ${title}.` }] }],
     ingestionMeta: {
       source: "epub-chapter",
-      originalHtmlHash:
-        "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      originalHtmlHash: "sha256:0000000000000000000000000000000000000000000000000000000000000000",
       extractionConfidence: "high",
       bookId: BOOK_ID,
       chapterIndex,
@@ -107,11 +85,7 @@ function makeChapter(
   });
 }
 
-function loc(
-  articleId: string,
-  graphemeOffset: number,
-  savedAt: string,
-): LocationRecord {
+function loc(articleId: string, graphemeOffset: number, savedAt: string): LocationRecord {
   return LocationRecordSchema.parse({
     schemaVersion: 1,
     articleId,
@@ -270,9 +244,7 @@ describe("BookRow — skip disclosure (D12-11)", () => {
         onRemove={() => {}}
       />,
     );
-    expect(
-      screen.getByText("2 chapters could not be read."),
-    ).toBeInTheDocument();
+    expect(screen.getByText("2 chapters could not be read.")).toBeInTheDocument();
   });
 
   it("skippedChapterCount 1 renders the singular note", () => {
@@ -333,20 +305,11 @@ describe("BookRow — chapter sub-rows + tags (D12-01 + D12-04)", () => {
         onRemove={() => {}}
       />,
     );
-    await user.click(
-      screen.getByRole("button", { name: "Chapters of The Synthetic Book" }),
-    );
-    const link = screen.getByLabelText(
-      "Review 2 highlights for Chapter 2. The Carpet-Bag",
-    );
-    expect(link).toHaveAttribute(
-      "href",
-      `#/highlights?article=${BOOK_ID}-c01`,
-    );
+    await user.click(screen.getByRole("button", { name: "Chapters of The Synthetic Book" }));
+    const link = screen.getByLabelText("Review 2 highlights for Chapter 2. The Carpet-Bag");
+    expect(link).toHaveAttribute("href", `#/highlights?article=${BOOK_ID}-c01`);
     // Chapters without highlights stay gated off (the gate IS the zero state).
-    expect(
-      screen.queryByLabelText("Review 1 highlight for Chapter 1. Loomings"),
-    ).toBeNull();
+    expect(screen.queryByLabelText("Review 1 highlight for Chapter 1. Loomings")).toBeNull();
   });
 
   it("the book cluster stays trash-only — no review entry on the book row (issue #76)", () => {
@@ -378,17 +341,13 @@ describe("BookRow — chapter sub-rows + tags (D12-01 + D12-04)", () => {
     expect(
       screen.getByRole("heading", { level: 2, name: "The Synthetic Book" }),
     ).toBeInTheDocument();
-    await user.click(
-      screen.getByRole("button", { name: "Chapters of The Synthetic Book" }),
-    );
+    await user.click(screen.getByRole("button", { name: "Chapters of The Synthetic Book" }));
     for (const title of [
       "Chapter 1. Loomings",
       "Chapter 2. The Carpet-Bag",
       "Chapter 3. The Sermon",
     ]) {
-      expect(
-        screen.getByRole("heading", { level: 3, name: title }),
-      ).toBeInTheDocument();
+      expect(screen.getByRole("heading", { level: 3, name: title })).toBeInTheDocument();
     }
   });
 
@@ -402,9 +361,7 @@ describe("BookRow — chapter sub-rows + tags (D12-01 + D12-04)", () => {
         onRemove={() => {}}
       />,
     );
-    await user.click(
-      screen.getByRole("button", { name: "Chapters of The Synthetic Book" }),
-    );
+    await user.click(screen.getByRole("button", { name: "Chapters of The Synthetic Book" }));
     // TagEntry renders the fieldset + legend + existing-tag chips. The chip
     // is asserted WITHIN the fieldset — the collapsed row's readonly tag
     // chips (issue #67 anatomy) also render the tag text outside it.
@@ -428,14 +385,10 @@ describe("BookRow — chapter sub-rows + tags (D12-01 + D12-04)", () => {
         onRemove={() => {}}
       />,
     );
-    await user.click(
-      screen.getByRole("button", { name: "Chapters of The Synthetic Book" }),
-    );
+    await user.click(screen.getByRole("button", { name: "Chapters of The Synthetic Book" }));
     const list = document.querySelector(".book-chapter-list");
     expect(list).not.toBeNull();
-    const headings = Array.from(list!.querySelectorAll("h3")).map(
-      (h) => h.textContent,
-    );
+    const headings = Array.from(list!.querySelectorAll("h3")).map((h) => h.textContent);
     expect(headings).toEqual([
       "Chapter 1. Loomings",
       "Chapter 2. The Carpet-Bag",

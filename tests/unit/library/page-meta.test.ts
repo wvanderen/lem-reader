@@ -5,10 +5,7 @@
 // and the 64-char content cap + ellipsis before the suffix. jsdom owns
 // document.title here; no layout is asserted (that is Playwright's job).
 import { describe, expect, it } from "vitest";
-import {
-  TITLE_SUFFIX,
-  setDocumentTitle,
-} from "../../../src/ingestion/library/pageMeta";
+import { TITLE_SUFFIX, setDocumentTitle } from "../../../src/ingestion/library/pageMeta";
 
 describe("TITLE_SUFFIX", () => {
   it('is exported as "Lem Reader"', () => {

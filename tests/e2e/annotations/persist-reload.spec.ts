@@ -41,17 +41,26 @@ test.describe("STATE-03 persist + reload (05-05)", () => {
     expect(b1).not.toBe(-1);
     let ok = await selectRangeInBlock(page, b1, 0, 16);
     expect(ok).toBeTruthy();
-    await page.locator(".selection-toolbar").getByRole("button", { name: "Highlight", exact: true }).click();
+    await page
+      .locator(".selection-toolbar")
+      .getByRole("button", { name: "Highlight", exact: true })
+      .click();
     await expect(page.locator("mark.highlight").first()).toBeVisible();
     const id1 = await page.locator("mark.highlight").first().getAttribute("data-highlight-id");
 
     // Highlight 2 (with note) on a disjoint block — walking pages.
-    const { blockIndex: b2, pageIndex: b2Page } = await findDisjointBlockWalkingPages(page, [b1], 24);
+    const { blockIndex: b2, pageIndex: b2Page } = await findDisjointBlockWalkingPages(
+      page,
+      [b1],
+      24,
+    );
     expect(b2).not.toBe(-1);
     ok = await selectRangeInBlock(page, b2, 0, 16);
     expect(ok).toBeTruthy();
     await page.keyboard.press("n");
-    await page.locator("textarea.highlight-popover-textarea").fill("Persistent note across reload.");
+    await page
+      .locator("textarea.highlight-popover-textarea")
+      .fill("Persistent note across reload.");
     await page.locator("#highlight-popover .highlight-popover-done").click();
     await expect(page.locator("mark.highlight").first()).toBeVisible();
     await expect(page.locator("mark.highlight.has-note").first()).toBeVisible();
@@ -66,9 +75,7 @@ test.describe("STATE-03 persist + reload (05-05)", () => {
     await page.waitForTimeout(800);
     // The pagination engine re-commits before any page walk.
     await page.waitForFunction(
-      () =>
-        (window as unknown as Record<string, unknown>).__lemPagination !==
-        undefined,
+      () => (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
       undefined,
       { timeout: 10_000 },
     );
@@ -116,7 +123,10 @@ test.describe("STATE-03 persist + reload (05-05)", () => {
     expect(blockIdx).not.toBe(-1);
     const ok = await selectRangeInBlock(page, blockIdx, 0, 16);
     expect(ok).toBeTruthy();
-    await page.locator(".selection-toolbar").getByRole("button", { name: "Highlight", exact: true }).click();
+    await page
+      .locator(".selection-toolbar")
+      .getByRole("button", { name: "Highlight", exact: true })
+      .click();
     const hlId = await page.locator("mark.highlight").first().getAttribute("data-highlight-id");
     await page.reload();
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
@@ -165,9 +175,7 @@ test.describe("STATE-03 persist + reload (05-05)", () => {
       "Reading mode: scrolling",
     );
     // The span marks restore at the SAME text (both blocks, one id).
-    await expect(
-      page.locator(`mark.highlight[data-highlight-id="${hlId}"]`).first(),
-    ).toBeVisible();
+    await expect(page.locator(`mark.highlight[data-highlight-id="${hlId}"]`).first()).toBeVisible();
     expect(await markTextsForHighlight(page, hlId!)).toEqual(extentsBefore);
     // Exactly one first-slice DOM id in the document (scrolling mode).
     await expect(page.locator(`#hl-${hlId}`)).toHaveCount(1);

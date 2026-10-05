@@ -132,9 +132,11 @@ export async function installFakeSpeech(page: Page, mode: SpeechMode): Promise<v
       writable: true,
     });
     (window as unknown as { __speechSpoken: SpokenRecord[] }).__speechSpoken = spoken;
-    (window as unknown as {
-      __speechFire: (event: string, charIndex?: number) => void;
-    }).__speechFire = (event: string, charIndex = 0) => {
+    (
+      window as unknown as {
+        __speechFire: (event: string, charIndex?: number) => void;
+      }
+    ).__speechFire = (event: string, charIndex = 0) => {
       const record = [...spoken].reverse().find((r) => !r.done && !r.cancelled);
       if (!record) return;
       const u = record.utterance;

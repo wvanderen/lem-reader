@@ -64,10 +64,7 @@ import {
   makeArticle,
   seedRows,
 } from "../portability/_portability";
-import {
-  graphemeLength,
-  resolveQuoteSelector,
-} from "../../../src/content/normalizeText";
+import { graphemeLength, resolveQuoteSelector } from "../../../src/content/normalizeText";
 
 const ARTICLE_ID = "deep-link-jump-corpus";
 const HIGHLIGHT_ID = "hl-deep-link-jump-1";
@@ -78,8 +75,7 @@ const TITLE = "The Shifting Sandbanks Survey";
 // excerpts stay distinct): with empty prefix/suffix context, N>1 exact
 // occurrences can never disambiguate — the ambiguity trigger (the
 // tri-state.spec.ts corpus shape).
-const AMBIG_SENTENCE =
-  "The harbor bell counts the fog, not the hours.";
+const AMBIG_SENTENCE = "The harbor bell counts the fog, not the hours.";
 
 // Ten distinctive paragraphs (~430 chars each ≈ 4 paginated pages at the
 // default viewport) so a ~60%-deep anchor provably requires a page turn
@@ -124,14 +120,10 @@ const AMBIG_POSITION = {
   end: 120 + AMBIG_SENTENCE.length,
 };
 if (resolveQuoteSelector(ARTICLE, AMBIG_QUOTE, AMBIG_POSITION) !== "ambiguous") {
-  throw new Error(
-    "corpus invariant: the duplicated sentence must resolve ambiguous",
-  );
+  throw new Error("corpus invariant: the duplicated sentence must resolve ambiguous");
 }
 if (ANCHOR.quote.exact === AMBIG_SENTENCE) {
-  throw new Error(
-    "corpus invariant: the confident anchor must not sit on the ambiguous sentence",
-  );
+  throw new Error("corpus invariant: the confident anchor must not sit on the ambiguous sentence");
 }
 const ANCHOR_AMBIG = { position: AMBIG_POSITION, quote: AMBIG_QUOTE };
 const ANCHOR_GHOST = confidentHighlightOn(ARTICLE, { start: 96 });
@@ -148,11 +140,7 @@ const HIGHLIGHT_ROW_ORPHAN = {
   ...highlightRow("ghost-article", ANCHOR_GHOST, "hl-jump-orphan"),
   createdAt: "2026-08-13T00:00:00.000Z",
 };
-const HIGHLIGHT_ROWS = [
-  HIGHLIGHT_ROW,
-  HIGHLIGHT_ROW_AMBIG,
-  HIGHLIGHT_ROW_ORPHAN,
-];
+const HIGHLIGHT_ROWS = [HIGHLIGHT_ROW, HIGHLIGHT_ROW_AMBIG, HIGHLIGHT_ROW_ORPHAN];
 
 // The persisted scrolling preference (the Plan 04-06 Task 5 seed shape —
 // ReaderSettingsSchema-valid, readingMode "scrolling"). Seeding this row
@@ -191,16 +179,12 @@ async function seedCorpus(
   // The reload re-boots the app so Dexie creates the full v4 schema before
   // any seeding happens.
   await page.reload();
-  await expect(
-    page.getByRole("heading", { name: "Saved articles" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible();
   // A fixture row renders only once the composite repository's listArticles()
   // read has completed — the deterministic "Dexie is open + schema declared"
   // signal (the library is a fixtures ∪ ingested union, so it is never empty
   // and the empty-state heading cannot serve as this signal).
-  await expect(
-    page.getByText("Getting started with Lem Reader").first(),
-  ).toBeVisible();
+  await expect(page.getByText("Getting started with Lem Reader").first()).toBeVisible();
   await seedRows(page, {
     articles: [ARTICLE],
     highlights: HIGHLIGHT_ROWS,
@@ -213,9 +197,7 @@ async function seedCorpus(
  * deep-linked highlight's <mark> owns focus, then confirm the /h/ suffix
  * was replaceState-stripped from the URL. */
 async function expectFocusedArrival(page: Page): Promise<void> {
-  const mark = page.locator(
-    `mark.highlight[data-highlight-id="${HIGHLIGHT_ID}"]`,
-  );
+  const mark = page.locator(`mark.highlight[data-highlight-id="${HIGHLIGHT_ID}"]`);
   // Visible = mounted on the CURRENT page fragment (paginated renders marks
   // only on the live fragment) / rendered in the scrolling body.
   await expect(mark.first()).toBeVisible({ timeout: 10_000 });
@@ -224,9 +206,7 @@ async function expectFocusedArrival(page: Page): Promise<void> {
       const el = document.activeElement;
       return el?.getAttribute?.("data-highlight-id") ?? null;
     });
-    expect(focusedId, "deep-link arrival focuses the <mark>").toBe(
-      HIGHLIGHT_ID,
-    );
+    expect(focusedId, "deep-link arrival focuses the <mark>").toBe(HIGHLIGHT_ID);
   }).toPass({ timeout: 5000 });
   // The suffix strip is synchronous with the jump commit — poll briefly
   // for calm.
@@ -241,32 +221,25 @@ test.describe("RECV-01.c review-panel jump bidirectional (10-03 deep-link arriva
   }) => {
     await seedCorpus(page);
     await page.goto(`${BASE}/#/article/${ARTICLE_ID}/h/${HIGHLIGHT_ID}`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: TITLE }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: TITLE })).toBeVisible();
     await expectFocusedArrival(page);
   });
 
-  test("scrolling arrival: seeded scrolling preference, same focus + strip", async ({
-    page,
-  }) => {
+  test("scrolling arrival: seeded scrolling preference, same focus + strip", async ({ page }) => {
     await seedCorpus(page, { settings: [SCROLLING_PREFS_ROW] });
     // Reload so SettingsProvider hydrates the seeded preference — the
     // persistence.spec.ts seed-then-reload discipline (the provider reads
     // the reader-prefs row once at boot, before the seed above wrote it).
     await page.reload();
-    await expect(
-      page.getByRole("heading", { name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible();
     await page.goto(`${BASE}/#/article/${ARTICLE_ID}/h/${HIGHLIGHT_ID}`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: TITLE }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: TITLE })).toBeVisible();
     // The seeded preference actually hydrated (the arrival below would be
     // geometrically different otherwise, but pin the mode explicitly).
-    await expect(
-      page.getByRole("button", { name: /^Reading mode:/ }),
-    ).toHaveAttribute("aria-label", "Reading mode: scrolling");
+    await expect(page.getByRole("button", { name: /^Reading mode:/ })).toHaveAttribute(
+      "aria-label",
+      "Reading mode: scrolling",
+    );
     await expectFocusedArrival(page);
   });
 
@@ -280,9 +253,7 @@ test.describe("RECV-01.c review-panel jump bidirectional (10-03 deep-link arriva
     // article open — no jump prop, no jump effect. A saved-location restore
     // is acceptable (it scrolls but never focuses the mark).
     await page.reload();
-    await expect(
-      page.getByRole("heading", { level: 1, name: TITLE }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: TITLE })).toBeVisible();
     expect(page.url()).not.toContain("/h/");
     // Grace window covering a hypothetical jump's full schedule (readiness
     // retries + the 120ms Firefox settle guard) — then it never fired.
@@ -291,25 +262,17 @@ test.describe("RECV-01.c review-panel jump bidirectional (10-03 deep-link arriva
       const el = document.activeElement;
       return el?.getAttribute?.("data-highlight-id") ?? null;
     });
-    expect(focusedId, "reload must not re-jump to the mark").not.toBe(
-      HIGHLIGHT_ID,
-    );
+    expect(focusedId, "reload must not re-jump to the mark").not.toBe(HIGHLIGHT_ID);
   });
 
-  test("calm no-op: an unresolvable highlight id opens the article normally", async ({
-    page,
-  }) => {
+  test("calm no-op: an unresolvable highlight id opens the article normally", async ({ page }) => {
     await seedCorpus(page);
     await page.goto(`${BASE}/#/article/${ARTICLE_ID}/h/nonexistent-id`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: TITLE }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: TITLE })).toBeVisible();
     // No error surface (Pitfall 4 — the article error heading never
     // appears; the loaded corpus keeps the confident mark rendered, only
     // the JUMP is a no-op).
-    await expect(
-      page.getByRole("heading", { name: /Couldn't open this article/i }),
-    ).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: /Couldn't open this article/i })).toHaveCount(0);
     // The suffix is stripped once the highlights settle (loaded + absent →
     // terminal calm no-op).
     await expect(async () => {
@@ -317,33 +280,22 @@ test.describe("RECV-01.c review-panel jump bidirectional (10-03 deep-link arriva
     }).toPass({ timeout: 10_000 });
   });
 
-  test("browser Back from the deep-linked article returns to #/highlights", async ({
-    page,
-  }) => {
+  test("browser Back from the deep-linked article returns to #/highlights", async ({ page }) => {
     await seedCorpus(page);
     // Start at the panel (what a reader who followed a review row would
     // have behind them), then push the deep link exactly the way the
     // panel row will in 10-06: a plain location.hash assignment (a
     // history PUSH, not a replace).
     await page.goto(`${BASE}/#/highlights`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Highlights" }),
-    ).toBeVisible();
-    await page.evaluate(
-      (hash) => {
-        window.location.hash = hash;
-      },
-      `#/article/${ARTICLE_ID}/h/${HIGHLIGHT_ID}`,
-    );
-    await expect(
-      page.getByRole("heading", { level: 1, name: TITLE }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+    await page.evaluate((hash) => {
+      window.location.hash = hash;
+    }, `#/article/${ARTICLE_ID}/h/${HIGHLIGHT_ID}`);
+    await expect(page.getByRole("heading", { level: 1, name: TITLE })).toBeVisible();
     await expectFocusedArrival(page);
     // Back lands on #/highlights — the deep link was a history push.
     await page.goBack();
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Highlights" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
     await expect(page).toHaveURL(/#\/highlights$/);
   });
 });
@@ -359,21 +311,14 @@ test.describe("RECV-01.c review-panel jump bidirectional (10-06 click-from-row l
    * surface (main#main without paginated-main) DURING the loop — strictly
    * stronger than the pre-15-02 post-hoc ModeToggle label pin (D15-15 made
    * the toggle reader-gated, so it no longer renders on #/highlights). */
-  async function exerciseRowClickLoop(
-    page: Page,
-    expectScrollingRenderer = false,
-  ): Promise<void> {
+  async function exerciseRowClickLoop(page: Page, expectScrollingRenderer = false): Promise<void> {
     await page.goto(`${BASE}/#/highlights`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Highlights" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
     // The confident row's jump link — enabled (D10-03: only confident
     // rows are jumpable; ambiguous renders the disabled placeholder,
     // orphan-tail none). Review-row redesign: the jump is a real <a> in
     // the action cluster whose stretched overlay covers the card.
-    const rowButton = page
-      .getByRole("link", { name: /^Go to highlight:/ })
-      .first();
+    const rowButton = page.getByRole("link", { name: /^Go to highlight:/ }).first();
     await expect(rowButton).toBeVisible();
     await expect(rowButton).toBeEnabled();
     // THE reader click — the row button pushes the deep link exactly as
@@ -381,25 +326,19 @@ test.describe("RECV-01.c review-panel jump bidirectional (10-06 click-from-row l
     await rowButton.click();
     // Arrival: the retrying focus check (document.activeElement is the
     // mark) + the replaceState-stripped URL.
-    await expect(
-      page.getByRole("heading", { level: 1, name: TITLE }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: TITLE })).toBeVisible();
     await expectFocusedArrival(page);
     if (expectScrollingRenderer) {
       // The renderer proof on the LIVE surface: the seeded scrolling
       // preference hydrated, so the article mounts the scrolling main
       // (never the paginated viewport class) — 15-04 strengthen-only
       // rewrite of the old ModeToggle-label pin (D15-15 reader gating).
-      await expect(page.locator("main#main")).not.toHaveClass(
-        /paginated-main/,
-      );
+      await expect(page.locator("main#main")).not.toHaveClass(/paginated-main/);
     }
     // Back returned to #/highlights — SC#2 bidirectional, now proven through
     // the real UI path (row click → jump → Back).
     await page.goBack();
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Highlights" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
     await expect(page).toHaveURL(/#\/highlights$/);
     // Focus-restore observation — panel OPERABILITY only, never
     // origin-row focus (engine-variable; 10-VALIDATION.md owns the feel
@@ -426,9 +365,7 @@ test.describe("RECV-01.c review-panel jump bidirectional (10-06 click-from-row l
     // Reload so SettingsProvider hydrates the seeded preference (the
     // persistence.spec.ts seed-then-reload discipline).
     await page.reload();
-    await expect(
-      page.getByRole("heading", { name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible();
     // 15-04 (D15-15 citation): the loop asserts the LIVE renderer on the
     // article surface (main#main without paginated-main) — the pre-15-02
     // pin read the ModeToggle's aria-label from THIS panel surface, but
@@ -445,16 +382,16 @@ test.describe("POLISH-10 (D21-06) glyph visibility — jump affordance on exactl
   }) => {
     await seedCorpus(page);
     await page.goto(`${BASE}/#/highlights`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Highlights" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
 
     // The CONFIDENT row: still located by role + the Go-to-highlight name
     // template (the glyph is decorative — aria-hidden — so the accessible
     // name is byte-stable; review-row redesign: role link, not button)…
-    const confidentRow = page.getByRole("link", {
-      name: /^Go to highlight: /,
-    }).first();
+    const confidentRow = page
+      .getByRole("link", {
+        name: /^Go to highlight: /,
+      })
+      .first();
     await expect(confidentRow).toBeVisible();
     await expect(confidentRow).toBeEnabled();
     // …and it contains exactly one VISIBLE open-in-reader glyph (svg
@@ -476,15 +413,11 @@ test.describe("POLISH-10 (D21-06) glyph visibility — jump affordance on exactl
     // signal — the cluster carries only the four curation icons).
     const orphanSection = page.locator("section.review-section-orphan");
     await expect(orphanSection).toBeVisible();
-    await expect(
-      orphanSection.locator(".review-jump"),
-    ).toHaveCount(0);
+    await expect(orphanSection.locator(".review-jump")).toHaveCount(0);
     const orphanRow = orphanSection.locator(".review-row", {
       hasText: EXCERPT_GHOST,
     });
     await expect(orphanRow).toBeVisible();
-    await expect(
-      orphanRow.locator("svg.review-jump-glyph"),
-    ).toHaveCount(0);
+    await expect(orphanRow.locator("svg.review-jump-glyph")).toHaveCount(0);
   });
 });

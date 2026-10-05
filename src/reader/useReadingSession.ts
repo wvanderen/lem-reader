@@ -45,8 +45,7 @@ export const REBEGIN_GUARD_MS = 2000;
 /** The stash for a dormant session awaiting possible revival. Module-level:
  * the reader is a single-view SPA, and the stash must outlive the hook
  * effect's cleanup/mount boundary to do its job. */
-let dormantStash: { recorder: ReadingSessionRecorder; endedAtMs: number } | null =
-  null;
+let dormantStash: { recorder: ReadingSessionRecorder; endedAtMs: number } | null = null;
 
 export interface UseReadingSessionOptions {
   /** Ticker cadence override (tests). */
@@ -108,10 +107,7 @@ export function useReadingSession(
   /** The test-overridable clock (defaults to Date.now). Guards the rebegin
    * window — the SAME injected clock the recorder uses, so a test can
    * expire the guard deterministically. */
-  const clockNow = useCallback(
-    (): number => (optionsRef.current?.now ?? Date.now)(),
-    [],
-  );
+  const clockNow = useCallback((): number => (optionsRef.current?.now ?? Date.now)(), []);
 
   /** End the active visit: write its terminal row; a dormant visit is ALSO
    * written (a zero-activity open is still a visit — decision #24) and
@@ -142,11 +138,7 @@ export function useReadingSession(
       const nowMs = clockNow();
       const stash = dormantStash;
       dormantStash = null;
-      if (
-        stash &&
-        stash.recorder.articleId === id &&
-        nowMs - stash.endedAtMs <= REBEGIN_GUARD_MS
-      ) {
+      if (stash && stash.recorder.articleId === id && nowMs - stash.endedAtMs <= REBEGIN_GUARD_MS) {
         // Revival: same visit id + startedAt — the reopened visit continues
         // the stashed one (StrictMode twin mount, or a bounce-remount).
         return stash.recorder;
@@ -197,8 +189,7 @@ export function useReadingSession(
     const onPageHide = () => {
       if (activeRef.current) flushActive(activeRef.current);
     };
-    const intervalMs =
-      optionsRef.current?.flushIntervalMs ?? FLUSH_INTERVAL_MS;
+    const intervalMs = optionsRef.current?.flushIntervalMs ?? FLUSH_INTERVAL_MS;
     const timer = window.setInterval(() => {
       if (!activeRef.current) return;
       const current = activeRef.current;

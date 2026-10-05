@@ -60,7 +60,8 @@ vi.mock("../../src/ingestion/LibrarySource", () => {
   const save = vi.fn();
   return {
     dexieLibrarySource: {
-      has: vi.fn(), save,
+      has: vi.fn(),
+      save,
       saveIfAbsent: vi.fn(async (...args) => {
         await save(...args);
         return true;
@@ -102,14 +103,10 @@ const saveBookMock = vi.mocked(saveBook);
 // the dialog sync effect exercises its real code path (mirrors
 // SettingsPanel.test.tsx / import-preview-dialog.test.tsx).
 beforeEach(() => {
-  HTMLDialogElement.prototype.showModal = vi.fn(function (
-    this: HTMLDialogElement,
-  ) {
+  HTMLDialogElement.prototype.showModal = vi.fn(function (this: HTMLDialogElement) {
     this.open = true;
   });
-  HTMLDialogElement.prototype.close = vi.fn(function (
-    this: HTMLDialogElement,
-  ) {
+  HTMLDialogElement.prototype.close = vi.fn(function (this: HTMLDialogElement) {
     this.open = false;
     this.dispatchEvent(new Event("close"));
   });
@@ -184,11 +181,7 @@ function sampleBookResult(): EpubIngestionSuccess {
   };
 }
 
-function renderDialog(overrides?: {
-  open?: boolean;
-  onCancel?: () => void;
-  onSaved?: () => void;
-}) {
+function renderDialog(overrides?: { open?: boolean; onCancel?: () => void; onSaved?: () => void }) {
   const onCancel = overrides?.onCancel ?? vi.fn();
   const onSaved = overrides?.onSaved ?? vi.fn();
   const utils = render(
@@ -285,9 +278,7 @@ describe("AddDialog (16-02 Task 2)", () => {
     await user.click(screen.getByRole("button", { name: /^add$/i }));
 
     await waitFor(() => {
-      expect(
-        screen.getByText(/points somewhere the reader can't reach/i),
-      ).not.toBeNull();
+      expect(screen.getByText(/points somewhere the reader can't reach/i)).not.toBeNull();
     });
   });
 
@@ -355,9 +346,7 @@ describe("AddDialog (16-02 Task 2)", () => {
     expect(screen.getByRole("button", { name: "Add file" })).not.toBeNull();
 
     await user.click(screen.getByRole("radio", { name: "Paste text" }));
-    expect(
-      screen.getByRole("textbox", { name: "Paste HTML or text" }),
-    ).not.toBeNull();
+    expect(screen.getByRole("textbox", { name: "Paste HTML or text" })).not.toBeNull();
     expect(screen.queryByRole("textbox", { name: /add by url/i })).toBeNull();
     expect(fileInput().hasAttribute("hidden")).toBe(true);
   });
@@ -388,10 +377,7 @@ describe("AddDialog (16-02 Task 2)", () => {
     renderDialog();
 
     await user.click(screen.getByRole("radio", { name: "Upload file" }));
-    await user.upload(
-      fileInput(),
-      new File(["PK"], "book.epub", { type: "application/epub+zip" }),
-    );
+    await user.upload(fileInput(), new File(["PK"], "book.epub", { type: "application/epub+zip" }));
     const addFile = screen.getByRole("button", {
       name: "Add file",
     }) as HTMLButtonElement;
@@ -445,12 +431,8 @@ describe("AddDialog (16-02 Task 2)", () => {
     expect(onCancel).toHaveBeenCalledTimes(1);
 
     // The parent flips the open prop false → true (the Cancel path).
-    rerender(
-      <AddDialog open={false} onCancel={onCancel} onSaved={onSaved} tagStats={[]} />,
-    );
-    rerender(
-      <AddDialog open={true} onCancel={onCancel} onSaved={onSaved} tagStats={[]} />,
-    );
+    rerender(<AddDialog open={false} onCancel={onCancel} onSaved={onSaved} tagStats={[]} />);
+    rerender(<AddDialog open={true} onCancel={onCancel} onSaved={onSaved} tagStats={[]} />);
 
     const urlRadio = screen.getByRole("radio", {
       name: "Web address",
@@ -574,9 +556,7 @@ describe("AddDialog (16-02 Task 2)", () => {
     await waitFor(() => expect(hasBookMock).toHaveBeenCalledWith("book-id"));
     expect(saveBookMock).toHaveBeenCalledTimes(1);
     expect(screen.getByText("Saved to your library.")).not.toBeNull();
-    expect(
-      screen.getByRole("heading", { name: "Sample Book", level: 3 }),
-    ).not.toBeNull();
+    expect(screen.getByRole("heading", { name: "Sample Book", level: 3 })).not.toBeNull();
     // The honest skip disclosure rides the result card (skippedCount 2).
     expect(screen.getByText("2 chapters could not be read.")).not.toBeNull();
   });
@@ -592,9 +572,7 @@ describe("AddDialog (16-02 Task 2)", () => {
 // resetSession and refocuses the Web address field. A refusal NEVER enters
 // result mode.
 describe("AddDialog — saved result (issue #112)", () => {
-  async function saveUrlArticle(
-    overrides?: Partial<Awaited<ReturnType<typeof ingestUrl>>>,
-  ) {
+  async function saveUrlArticle(overrides?: Partial<Awaited<ReturnType<typeof ingestUrl>>>) {
     const user = userEvent.setup();
     ingestUrlMock.mockResolvedValue({
       article: sampleArticle(),
@@ -632,29 +610,15 @@ describe("AddDialog — saved result (issue #112)", () => {
   it("the result card shows the saved title with Open article + Add another (and Close) actions", async () => {
     await saveUrlArticle();
 
-    expect(
-      screen.getByRole("heading", { name: "Article", level: 3 }),
-    ).not.toBeNull();
-    expect(
-      screen.getByRole("button", { name: "Open article" }),
-    ).not.toBeNull();
-    expect(
-      screen.getByRole("button", { name: "Add another" }),
-    ).not.toBeNull();
+    expect(screen.getByRole("heading", { name: "Article", level: 3 })).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Open article" })).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Add another" })).not.toBeNull();
     expect(screen.getByRole("button", { name: "Close" })).not.toBeNull();
     // The intake chrome yields to the result: the shared submit is gone,
     // the source picker + tags fieldset are hidden.
     expect(screen.queryByRole("button", { name: /^add$/i })).toBeNull();
-    expect(
-      document
-        .querySelector("fieldset.add-source-picker")!
-        .hasAttribute("hidden"),
-    ).toBe(true);
-    expect(
-      document
-        .querySelector("fieldset.add-tags-fieldset")!
-        .hasAttribute("hidden"),
-    ).toBe(true);
+    expect(document.querySelector("fieldset.add-source-picker")!.hasAttribute("hidden")).toBe(true);
+    expect(document.querySelector("fieldset.add-tags-fieldset")!.hasAttribute("hidden")).toBe(true);
   });
 
   it("a confident save is silent about limits (no disclosure lines) but shows the original link when a sourceUrl exists", async () => {
@@ -662,9 +626,7 @@ describe("AddDialog — saved result (issue #112)", () => {
 
     // The limit sentences never render for a confident save...
     expect(document.querySelector(".add-result .extraction-note")).toBeNull();
-    expect(
-      document.querySelector(".add-result .partial-content-note"),
-    ).toBeNull();
+    expect(document.querySelector(".add-result .partial-content-note")).toBeNull();
     expect(document.querySelector(".add-result .annotations-note")).toBeNull();
     // ...but the AC's "original link" shows when a sourceUrl is available
     // (the quiet standalone provenance line — no limits to attach it to).
@@ -677,9 +639,7 @@ describe("AddDialog — saved result (issue #112)", () => {
   });
 
   it("a confident save with no sourceUrl (paste arm) shows no original link either", async () => {
-    const bare = sampleArticle("bare-id") as Awaited<
-      ReturnType<typeof ingestUrl>
-    >["article"];
+    const bare = sampleArticle("bare-id") as Awaited<ReturnType<typeof ingestUrl>>["article"];
     delete (bare.provenance as { sourceUrl?: string }).sourceUrl;
     await saveUrlArticle({ article: bare });
 
@@ -715,26 +675,21 @@ describe("AddDialog — saved result (issue #112)", () => {
     // The low-confidence sentence + the escape hatch (href from the saved
     // article's provenance, new-tab).
     const note = document.querySelector(".add-result .extraction-note")!;
-    expect(note.textContent).toContain(
-      "This article may be incomplete or inaccurate",
-    );
+    expect(note.textContent).toContain("This article may be incomplete or inaccurate");
     const link = note.querySelector("a")!;
     expect(link.getAttribute("href")).toBe("https://example.com/article");
     expect(link.getAttribute("rel")).toBe("noopener noreferrer");
     expect(link.textContent).toContain("See the original");
     // The per-part warning line + the degraded-anchoring sentence.
-    expect(
-      document
-        .querySelector(".add-result .partial-content-heading")!
-        .textContent,
-    ).toContain("Some content could not be processed.");
-    expect(
-      document.querySelector(".add-result .partial-content-note li")!
-        .textContent,
-    ).toBe("1 image could not be fetched");
-    expect(
-      document.querySelector(".add-result .annotations-note")!.textContent,
-    ).toContain("Highlights may be unreliable on this article.");
+    expect(document.querySelector(".add-result .partial-content-heading")!.textContent).toContain(
+      "Some content could not be processed.",
+    );
+    expect(document.querySelector(".add-result .partial-content-note li")!.textContent).toBe(
+      "1 image could not be fetched",
+    );
+    expect(document.querySelector(".add-result .annotations-note")!.textContent).toContain(
+      "Highlights may be unreliable on this article.",
+    );
   });
 
   it("Open article navigates close-first (ordered: cancel, then the hash write)", async () => {
@@ -778,26 +733,18 @@ describe("AddDialog — saved result (issue #112)", () => {
       name: "Web address",
     }) as HTMLInputElement;
     expect(urlRadio.checked).toBe(true);
-    expect(
-      (document.getElementById("ingest-url") as HTMLInputElement).value,
-    ).toBe("");
+    expect((document.getElementById("ingest-url") as HTMLInputElement).value).toBe("");
     // The picker + tags fieldset are visible again.
-    expect(
-      document
-        .querySelector("fieldset.add-source-picker")!
-        .hasAttribute("hidden"),
-    ).toBe(false);
-    expect(
-      document
-        .querySelector("fieldset.add-tags-fieldset")!
-        .hasAttribute("hidden"),
-    ).toBe(false);
+    expect(document.querySelector("fieldset.add-source-picker")!.hasAttribute("hidden")).toBe(
+      false,
+    );
+    expect(document.querySelector("fieldset.add-tags-fieldset")!.hasAttribute("hidden")).toBe(
+      false,
+    );
     // Focus rail: the reader's next decision is the Web address field.
     // The focus hand-off rides a rAF (post-commit), so wait for it.
     await waitFor(() => {
-      expect(document.activeElement).toBe(
-        document.getElementById("ingest-url"),
-      );
+      expect(document.activeElement).toBe(document.getElementById("ingest-url"));
     });
   });
 
@@ -851,9 +798,9 @@ describe("AddDialog — saved result (issue #112)", () => {
     const { onCancel } = await saveUrlArticle();
 
     act(() => {
-      (
-        document.querySelector("dialog.add-dialog") as HTMLDialogElement
-      ).dispatchEvent(new Event("cancel"));
+      (document.querySelector("dialog.add-dialog") as HTMLDialogElement).dispatchEvent(
+        new Event("cancel"),
+      );
     });
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
@@ -922,36 +869,22 @@ describe("AddDialog — book saved result (issue #113)", () => {
   it("the result card shows the book title with Open book + Add another (and Close) actions", async () => {
     await saveEpubBook();
 
-    expect(
-      screen.getByRole("heading", { name: "Sample Book", level: 3 }),
-    ).not.toBeNull();
+    expect(screen.getByRole("heading", { name: "Sample Book", level: 3 })).not.toBeNull();
     expect(screen.getByRole("button", { name: "Open book" })).not.toBeNull();
-    expect(
-      screen.getByRole("button", { name: "Add another" }),
-    ).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Add another" })).not.toBeNull();
     expect(screen.getByRole("button", { name: "Close" })).not.toBeNull();
     // The intake chrome yields to the result; the article-only controls
     // never render for a book.
     expect(screen.queryByRole("button", { name: "Open article" })).toBeNull();
-    expect(
-      document.querySelector("fieldset.add-source-picker")!.hasAttribute(
-        "hidden",
-      ),
-    ).toBe(true);
-    expect(
-      document.querySelector("fieldset.add-tags-fieldset")!.hasAttribute(
-        "hidden",
-      ),
-    ).toBe(true);
+    expect(document.querySelector("fieldset.add-source-picker")!.hasAttribute("hidden")).toBe(true);
+    expect(document.querySelector("fieldset.add-tags-fieldset")!.hasAttribute("hidden")).toBe(true);
   });
 
   it("a clean save (skippedCount 0) is silent about skips", async () => {
     await saveEpubBook();
     expect(screen.queryByText(/could not be read/)).toBeNull();
     // The card still renders its title + the outcome actions.
-    expect(
-      screen.getByRole("heading", { name: "Sample Book", level: 3 }),
-    ).not.toBeNull();
+    expect(screen.getByRole("heading", { name: "Sample Book", level: 3 })).not.toBeNull();
     expect(screen.getByRole("button", { name: "Open book" })).not.toBeNull();
   });
 
@@ -1025,15 +958,11 @@ describe("AddDialog — book saved result (issue #113)", () => {
     expect(urlRadio.checked).toBe(true);
     expect(fileInput().value).toBe("");
     expect(screen.queryByText("essays")).not.toBeInTheDocument();
-    expect(
-      document
-        .querySelector("fieldset.add-source-picker")!
-        .hasAttribute("hidden"),
-    ).toBe(false);
+    expect(document.querySelector("fieldset.add-source-picker")!.hasAttribute("hidden")).toBe(
+      false,
+    );
     await waitFor(() => {
-      expect(document.activeElement).toBe(
-        document.getElementById("ingest-url"),
-      );
+      expect(document.activeElement).toBe(document.getElementById("ingest-url"));
     });
   });
 
@@ -1193,9 +1122,7 @@ describe("AddDialog — discoverability hint (issue #60)", () => {
     // The hint follows the field it describes in document order, so screen
     // readers announce it naturally — robust to any future insertion
     // between label, input, and hint (no exact-child-list pinning).
-    expect(
-      input.compareDocumentPosition(hint) & Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy();
+    expect(input.compareDocumentPosition(hint) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     // Ordinary text: a plain paragraph whose ONLY attribute is its class —
     // nothing to hide it (aria-hidden), repurpose its announcement (role),
     // or make it a live region (aria-live); zoom-safe plain text.
@@ -1262,9 +1189,9 @@ describe("AddDialog — transcript content swap (issue #84)", () => {
     expect(document.getElementById("add-transcript-form")).not.toBeNull();
     expect(document.getElementById("ingest-transcript-title")).not.toBeNull();
     // The video URL rides provenance prefilled from the refused URL.
-    expect(
-      (document.getElementById("ingest-transcript-url") as HTMLInputElement).value,
-    ).toBe(YT_URL);
+    expect((document.getElementById("ingest-transcript-url") as HTMLInputElement).value).toBe(
+      YT_URL,
+    );
     // The always-mounted file input SURVIVED the swap (Pattern 3a).
     expect(document.getElementById("ingest-file")).not.toBeNull();
   });
@@ -1273,9 +1200,7 @@ describe("AddDialog — transcript content swap (issue #84)", () => {
     await refuseWithBotCheck();
     const status = screen.getByRole("status");
     const picker = document.querySelector("fieldset.add-source-picker")!;
-    expect(
-      status.compareDocumentPosition(picker) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+    expect(status.compareDocumentPosition(picker) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("the shared bottom submit flips to 'Add transcript' targeting the transcript form; the second action row is retired", async () => {
@@ -1303,16 +1228,12 @@ describe("AddDialog — transcript content swap (issue #84)", () => {
 
     // The swap retired: picker + URL form visible again, transcript form
     // unmounted, URL text intact.
-    expect(
-      document.querySelector("fieldset.add-source-picker")!.hasAttribute("hidden"),
-    ).toBe(false);
-    expect(
-      document.querySelector(".add-source-content")!.hasAttribute("hidden"),
-    ).toBe(false);
+    expect(document.querySelector("fieldset.add-source-picker")!.hasAttribute("hidden")).toBe(
+      false,
+    );
+    expect(document.querySelector(".add-source-content")!.hasAttribute("hidden")).toBe(false);
     expect(document.getElementById("add-transcript-form")).toBeNull();
-    expect(
-      (document.getElementById("ingest-url") as HTMLInputElement).value,
-    ).toBe(YT_URL);
+    expect((document.getElementById("ingest-url") as HTMLInputElement).value).toBe(YT_URL);
     // The shared submit re-armed for the URL arm.
     const add = screen.getByRole("button", { name: /^add$/i }) as HTMLButtonElement;
     expect(add.disabled).toBe(false);
@@ -1320,8 +1241,7 @@ describe("AddDialog — transcript content swap (issue #84)", () => {
     // future swap — it re-prefills from the NEXT refused URL (D16-08's
     // fresh-session discipline at field level).
     expect(
-      (document.getElementById("ingest-transcript-url") as HTMLInputElement | null)
-        ?.value ?? "",
+      (document.getElementById("ingest-transcript-url") as HTMLInputElement | null)?.value ?? "",
     ).toBe("");
   });
 
@@ -1351,8 +1271,7 @@ describe("AddDialog — transcript content swap (issue #84)", () => {
       "0:00\nA cue pasted by hand",
     );
     expect(
-      (screen.getByRole("button", { name: "Add transcript" }) as HTMLButtonElement)
-        .disabled,
+      (screen.getByRole("button", { name: "Add transcript" }) as HTMLButtonElement).disabled,
     ).toBe(false);
     await user.click(screen.getByRole("button", { name: "Add transcript" }));
 
@@ -1363,13 +1282,9 @@ describe("AddDialog — transcript content swap (issue #84)", () => {
       expect(screen.getByText("Saved to your library.")).not.toBeNull();
     });
     expect(navEvents).toEqual([]);
-    expect(
-      screen.getByRole("heading", { name: "Article", level: 3 }),
-    ).not.toBeNull();
+    expect(screen.getByRole("heading", { name: "Article", level: 3 })).not.toBeNull();
     expect(document.getElementById("add-transcript-form")).toBeNull();
-    expect(
-      screen.getByRole("button", { name: "Open article" }),
-    ).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Open article" })).not.toBeNull();
     expect(ingestPastedTranscriptMock).toHaveBeenCalledWith(
       "0:00\nA cue pasted by hand",
       "Pasted Lecture",

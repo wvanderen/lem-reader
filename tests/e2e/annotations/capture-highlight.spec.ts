@@ -57,9 +57,7 @@ test.describe("ANNO-01 capture highlight (05-05)", () => {
       await expect(toolbar).toHaveAttribute("role", "toolbar");
       // The two action buttons are present on a VALID selection.
       await expect(toolbar.getByRole("button", { name: "Highlight", exact: true })).toBeVisible();
-      await expect(
-        toolbar.getByRole("button", { name: "Highlight + note" }),
-      ).toBeVisible();
+      await expect(toolbar.getByRole("button", { name: "Highlight + note" })).toBeVisible();
       // Click Highlight (the bare path).
       await toolbar.getByRole("button", { name: "Highlight", exact: true }).click();
       // A mark.highlight renders at the captured range.
@@ -118,16 +116,26 @@ test.describe("ANNO-01 capture highlight (05-05)", () => {
     expect(b1, "first selectable block").not.toBe(-1);
     let ok = await selectRangeInBlock(page, b1, 0, 6);
     expect(ok, "first selection").toBeTruthy();
-    await page.locator(".selection-toolbar").getByRole("button", { name: "Highlight", exact: true }).click();
+    await page
+      .locator(".selection-toolbar")
+      .getByRole("button", { name: "Highlight", exact: true })
+      .click();
     await expect(page.locator("mark.highlight").first()).toBeVisible();
     await expect(announcementRegion(page)).toContainText(/Highlight saved/i);
     // A second disjoint block (D5-13 disjoint-ranges proof in the positive) —
     // walking pages under the Option A page-1 budget.
-    const { blockIndex: b2, pageIndex: b2Page } = await findDisjointBlockWalkingPages(page, [b1], 20);
+    const { blockIndex: b2, pageIndex: b2Page } = await findDisjointBlockWalkingPages(
+      page,
+      [b1],
+      20,
+    );
     expect(b2, "second disjoint selectable block").not.toBe(-1);
     ok = await selectRangeInBlock(page, b2, 0, 20);
     expect(ok, "second selection").toBeTruthy();
-    await page.locator(".selection-toolbar").getByRole("button", { name: "Highlight", exact: true }).click();
+    await page
+      .locator(".selection-toolbar")
+      .getByRole("button", { name: "Highlight", exact: true })
+      .click();
     await expect(page.locator("mark.highlight").first()).toBeVisible();
     // Both captures persisted (physical Dexie rows — the mode-independent
     // count) + both inline marks render at their own pages.
@@ -157,7 +165,9 @@ test.describe("ANNO-01 capture highlight (05-05)", () => {
     expect(b2Page, "the second block was found on a real page").toBeGreaterThanOrEqual(0);
   });
 
-  test("technical-post: code-block source is capturable (D5-07 — capture + persist)", async ({ page }) => {
+  test("technical-post: code-block source is capturable (D5-07 — capture + persist)", async ({
+    page,
+  }) => {
     // D5-07 "if you can read it, you can highlight it": code-block source is
     // in the eligible set. Capture must succeed + the highlight must persist
     // (D5-03 dual-selector). The inline <mark> overlay is paragraph + heading
@@ -180,7 +190,7 @@ test.describe("ANNO-01 capture highlight (05-05)", () => {
       codeBlockIdx = await page.evaluate(() => {
         const blocks = Array.from(
           document.querySelectorAll(
-            '[data-block-index]:not(.article-body-measurement [data-block-index])',
+            "[data-block-index]:not(.article-body-measurement [data-block-index])",
           ),
         ).filter((el) => !el.closest(".article-body-measurement"));
         for (const el of blocks) {
@@ -222,7 +232,9 @@ test.describe("ANNO-01 capture highlight (05-05)", () => {
     expect(count, "code-block highlight persisted").toBeGreaterThanOrEqual(1);
   });
 
-  test("figure-heavy: figure caption is capturable (D5-07 — capture + persist)", async ({ page }) => {
+  test("figure-heavy: figure caption is capturable (D5-07 — capture + persist)", async ({
+    page,
+  }) => {
     // D5-07: figure captions are in the eligible set. Capture must succeed +
     // the highlight must persist. The inline <mark> overlay is paragraph +
     // heading only (Plan 05-04's documented rendering scope — figure
@@ -243,7 +255,7 @@ test.describe("ANNO-01 capture highlight (05-05)", () => {
       captionIdx = await page.evaluate(() => {
         const blocks = Array.from(
           document.querySelectorAll(
-            '.page-fragment [data-block-index], .article-body:not(.article-body-measurement) [data-block-index]',
+            ".page-fragment [data-block-index], .article-body:not(.article-body-measurement) [data-block-index]",
           ),
         ).filter((el) => !el.closest(".article-body-measurement"));
         for (let i = 0; i < blocks.length; i++) {
@@ -254,10 +266,7 @@ test.describe("ANNO-01 capture highlight (05-05)", () => {
         return -1;
       });
     }
-    expect(
-      captionIdx,
-      "figure-heavy must have a figure+caption on some page",
-    ).not.toBe(-1);
+    expect(captionIdx, "figure-heavy must have a figure+caption on some page").not.toBe(-1);
     // Select inside the figcaption specifically (the figure may have an img
     // + caption; we want the caption text).
     const ok = await page.evaluate((blockIndex) => {
@@ -334,9 +343,7 @@ test.describe("ANNO-01 capture highlight (05-05)", () => {
     await expect(page.locator(".article-body-measurement")).toHaveAttribute("aria-hidden", "true");
   });
 
-  test("page-error free: no uncaught exceptions during capture (both modes)", async ({
-    page,
-  }) => {
+  test("page-error free: no uncaught exceptions during capture (both modes)", async ({ page }) => {
     const pageErrors: string[] = [];
     page.on("pageerror", (err) => pageErrors.push(String(err)));
     await openArticle(page, "essay-long-form");
@@ -344,7 +351,10 @@ test.describe("ANNO-01 capture highlight (05-05)", () => {
     expect(b1).not.toBe(-1);
     let ok = await selectRangeInBlock(page, b1, 0, 24);
     expect(ok).toBeTruthy();
-    await page.locator(".selection-toolbar").getByRole("button", { name: "Highlight", exact: true }).click();
+    await page
+      .locator(".selection-toolbar")
+      .getByRole("button", { name: "Highlight", exact: true })
+      .click();
     await expect(page.locator("mark.highlight").first()).toBeVisible();
     await switchMode(page);
     // In scrolling mode, find a DIFFERENT block from b1 so the [0,24)
@@ -355,7 +365,10 @@ test.describe("ANNO-01 capture highlight (05-05)", () => {
     expect(b2).not.toBe(-1);
     ok = await selectRangeInBlock(page, b2, 0, 24);
     expect(ok).toBeTruthy();
-    await page.locator(".selection-toolbar").getByRole("button", { name: "Highlight", exact: true }).click();
+    await page
+      .locator(".selection-toolbar")
+      .getByRole("button", { name: "Highlight", exact: true })
+      .click();
     await expect(page.locator("mark.highlight").first()).toBeVisible();
     expect(pageErrors, "no uncaught errors during capture").toEqual([]);
   });
@@ -376,17 +389,13 @@ async function findSecondBlockWithText(
     ({ exclude, min }) => {
       const blocks = Array.from(
         document.querySelectorAll(
-          '.page-fragment [data-block-index], .article-body:not(.article-body-measurement) [data-block-index]',
+          ".page-fragment [data-block-index], .article-body:not(.article-body-measurement) [data-block-index]",
         ),
       ).filter((el) => !el.closest(".article-body-measurement"));
       for (let i = 0; i < blocks.length; i++) {
         const block = blocks[i]!;
         const idx = Number(block.getAttribute("data-block-index"));
-        if (
-          idx !== exclude &&
-          !Number.isNaN(idx) &&
-          (block.textContent?.length ?? 0) >= min
-        ) {
+        if (idx !== exclude && !Number.isNaN(idx) && (block.textContent?.length ?? 0) >= min) {
           return idx;
         }
       }

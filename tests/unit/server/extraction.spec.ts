@@ -182,8 +182,7 @@ describe("htmlToBlocks — figureSrcResolver hook (20-02 Task 2)", () => {
     const { blocks } = htmlToBlocks(dom.window.document, undefined);
     const unsupported = blocks.find(
       (b): b is HtmlToBlocksResult["blocks"][number] & { originalKind: string } =>
-        b.kind === "unsupported" &&
-        (b as { originalKind: string }).originalKind === "figure",
+        b.kind === "unsupported" && (b as { originalKind: string }).originalKind === "figure",
     );
     expect(unsupported).toBeDefined();
     expect(blocks.find((b) => b.kind === "figure")).toBeUndefined();
@@ -228,12 +227,11 @@ describe("htmlToBlocks — figureSrcResolver hook (20-02 Task 2)", () => {
 // cells follow the direct htmlToBlocks document-fixture pattern above.
 
 describe("htmlToBlocks — inline-image hoisting (260908-ef5)", () => {
-  const wrap = (inner: string) =>
-    `<!doctype html><html><body><main>${inner}</main></body></html>`;
+  const wrap = (inner: string) => `<!doctype html><html><body><main>${inner}</main></body></html>`;
 
   it("a paragraph with text + one http img yields the paragraph FIRST, then the figure — runs byte-identical to the img-free equivalent", () => {
     const html = wrap(
-      "<p>Text before the image stays put <img src=\"https://cdn.example.com/one.png\" alt=\"First inline\"> and text after it too.</p>",
+      '<p>Text before the image stays put <img src="https://cdn.example.com/one.png" alt="First inline"> and text after it too.</p>',
     );
     const { blocks } = htmlToBlocks(new JSDOM(html).window.document, undefined);
     const imgFree = htmlToBlocks(
@@ -254,7 +252,7 @@ describe("htmlToBlocks — inline-image hoisting (260908-ef5)", () => {
 
   it("a paragraph with TWO http imgs yields the paragraph, then both figures in document order", () => {
     const html = wrap(
-      "<p>Before <img src=\"https://cdn.example.com/a.png\" alt=\"A\"> middle <img src=\"https://cdn.example.com/b.png\" alt=\"B\"> after.</p>",
+      '<p>Before <img src="https://cdn.example.com/a.png" alt="A"> middle <img src="https://cdn.example.com/b.png" alt="B"> after.</p>',
     );
     const { blocks } = htmlToBlocks(new JSDOM(html).window.document, undefined);
     expect(blocks.map((b) => b.kind)).toEqual(["paragraph", "figure", "figure"]);
@@ -267,7 +265,7 @@ describe("htmlToBlocks — inline-image hoisting (260908-ef5)", () => {
   });
 
   it("an img-only paragraph yields JUST the figure (empty paragraph omitted)", () => {
-    const html = wrap("<p><img src=\"https://cdn.example.com/only.png\" alt=\"Only\"></p>");
+    const html = wrap('<p><img src="https://cdn.example.com/only.png" alt="Only"></p>');
     const { blocks } = htmlToBlocks(new JSDOM(html).window.document, undefined);
     expect(blocks.map((b) => b.kind)).toEqual(["figure"]);
     const fig = blocks[0];
@@ -279,8 +277,8 @@ describe("htmlToBlocks — inline-image hoisting (260908-ef5)", () => {
 
   it("paragraphs inside blockquote children and list items hoist via the same recursion", () => {
     const html = wrap(
-      "<blockquote><p>Quoted <img src=\"https://cdn.example.com/quote.png\" alt=\"Quoted\"></p></blockquote>" +
-        "<ul><li><p>Listed <img src=\"https://cdn.example.com/list.png\" alt=\"Listed\"></p></li></ul>",
+      '<blockquote><p>Quoted <img src="https://cdn.example.com/quote.png" alt="Quoted"></p></blockquote>' +
+        '<ul><li><p>Listed <img src="https://cdn.example.com/list.png" alt="Listed"></p></li></ul>',
     );
     const { blocks } = htmlToBlocks(new JSDOM(html).window.document, undefined);
     const quote = blocks[0];
@@ -298,7 +296,7 @@ describe("htmlToBlocks — inline-image hoisting (260908-ef5)", () => {
   it("a non-resolvable relative inline img yields the paragraph PLUS the honest unsupported disclosure (never a silent drop)", () => {
     // No document URL → the relative src cannot resolve → same honest
     // UnsupportedBlock a bare top-level relative img produces.
-    const html = wrap("<p>Keep me <img src=\"images/pic.png\" alt=\"Local\"></p>");
+    const html = wrap('<p>Keep me <img src="images/pic.png" alt="Local"></p>');
     const { blocks } = htmlToBlocks(new JSDOM(html).window.document, undefined);
     expect(blocks.map((b) => b.kind)).toEqual(["paragraph", "unsupported"]);
     const unsupported = blocks[1];
@@ -308,7 +306,7 @@ describe("htmlToBlocks — inline-image hoisting (260908-ef5)", () => {
   });
 
   it("the heading arm is NOT hoisted — heading-with-image stays byte-stable (scope decision)", () => {
-    const html = wrap("<h2>Heading <img src=\"https://cdn.example.com/h.png\" alt=\"H\"></h2>");
+    const html = wrap('<h2>Heading <img src="https://cdn.example.com/h.png" alt="H"></h2>');
     const { blocks } = htmlToBlocks(new JSDOM(html).window.document, undefined);
     expect(blocks.map((b) => b.kind)).toEqual(["heading"]);
     const heading = blocks[0];
@@ -337,12 +335,11 @@ describe("htmlToBlocks — inline-image hoisting (260908-ef5)", () => {
 // is untouched.
 
 describe("htmlToBlocks — caption attachment (issue #19)", () => {
-  const wrap = (inner: string) =>
-    `<!doctype html><html><body><main>${inner}</main></body></html>`;
+  const wrap = (inner: string) => `<!doctype html><html><body><main>${inner}</main></body></html>`;
 
   it("an image-first paragraph puts its trailing text in the figure's caption channel — no caption paragraph above", () => {
     const html = wrap(
-      "<p><img src=\"https://cdn.example.com/one.png\" alt=\"One\"> Caption text below the image.</p>",
+      '<p><img src="https://cdn.example.com/one.png" alt="One"> Caption text below the image.</p>',
     );
     const { blocks } = htmlToBlocks(new JSDOM(html).window.document, undefined);
     expect(blocks.map((b) => b.kind)).toEqual(["figure"]);
@@ -350,19 +347,15 @@ describe("htmlToBlocks — caption attachment (issue #19)", () => {
     if (fig?.kind !== "figure") throw new Error("expected figure");
     expect(fig.src).toBe("https://cdn.example.com/one.png");
     expect(fig.alt).toBe("One");
-    expect(fig.caption.map((r) => r.text).join("")).toBe(
-      "Caption text below the image.",
-    );
+    expect(fig.caption.map((r) => r.text).join("")).toBe("Caption text below the image.");
     // D-05 alignment: the caption participates AFTER the alt in the block's
     // normalized text (the same substrate splitBlock/capture reason over).
-    expect(blockNormalizedText(fig)).toBe(
-      "One\nCaption text below the image.",
-    );
+    expect(blockNormalizedText(fig)).toBe("One\nCaption text below the image.");
   });
 
   it("an image-first paragraph with several images gives each figure its own trailing caption", () => {
     const html = wrap(
-      "<p><img src=\"https://cdn.example.com/a.png\" alt=\"A\"> Cap a <img src=\"https://cdn.example.com/b.png\" alt=\"B\"> Cap b</p>",
+      '<p><img src="https://cdn.example.com/a.png" alt="A"> Cap a <img src="https://cdn.example.com/b.png" alt="B"> Cap b</p>',
     );
     const { blocks } = htmlToBlocks(new JSDOM(html).window.document, undefined);
     expect(blocks.map((b) => b.kind)).toEqual(["figure", "figure"]);
@@ -376,67 +369,55 @@ describe("htmlToBlocks — caption attachment (issue #19)", () => {
 
   it("caption runs keep their inline marks (D19-01 caption marks)", () => {
     const html = wrap(
-      "<p><img src=\"https://cdn.example.com/m.png\" alt=\"M\"> An <em>emphasized</em> caption.</p>",
+      '<p><img src="https://cdn.example.com/m.png" alt="M"> An <em>emphasized</em> caption.</p>',
     );
     const { blocks } = htmlToBlocks(new JSDOM(html).window.document, undefined);
     const fig = blocks[0];
     if (fig?.kind !== "figure") throw new Error("expected figure");
-    expect(fig.caption.map((r) => r.text).join("")).toBe(
-      "An emphasized caption.",
-    );
-    expect(fig.caption.map((r) => r.marks.map((m) => m.type))).toEqual([
-      [],
-      ["em"],
-      [],
-    ]);
+    expect(fig.caption.map((r) => r.text).join("")).toBe("An emphasized caption.");
+    expect(fig.caption.map((r) => r.marks.map((m) => m.type))).toEqual([[], ["em"], []]);
   });
 
   it("a caption-looking paragraph before an image-only paragraph is consumed into the figure (caption moves below)", () => {
     const html = wrap(
       "<p>Figure 2: Annual rainfall by region</p>" +
-        "<p><img src=\"https://cdn.example.com/chart.png\" alt=\"Chart\"></p>",
+        '<p><img src="https://cdn.example.com/chart.png" alt="Chart"></p>',
     );
     const { blocks } = htmlToBlocks(new JSDOM(html).window.document, undefined);
     expect(blocks.map((b) => b.kind)).toEqual(["figure"]);
     const fig = blocks[0];
     if (fig?.kind !== "figure") throw new Error("expected figure");
-    expect(fig.caption.map((r) => r.text).join("")).toBe(
-      "Figure 2: Annual rainfall by region",
-    );
+    expect(fig.caption.map((r) => r.text).join("")).toBe("Figure 2: Annual rainfall by region");
   });
 
   it("a caption-looking paragraph after an image-only paragraph is consumed too (caption-below convention)", () => {
     const html = wrap(
-      "<p><img src=\"https://cdn.example.com/chart.png\" alt=\"Chart\"></p>" +
+      '<p><img src="https://cdn.example.com/chart.png" alt="Chart"></p>' +
         "<p>Figure 2: Annual rainfall by region</p>",
     );
     const { blocks } = htmlToBlocks(new JSDOM(html).window.document, undefined);
     expect(blocks.map((b) => b.kind)).toEqual(["figure"]);
     const fig = blocks[0];
     if (fig?.kind !== "figure") throw new Error("expected figure");
-    expect(fig.caption.map((r) => r.text).join("")).toBe(
-      "Figure 2: Annual rainfall by region",
-    );
+    expect(fig.caption.map((r) => r.text).join("")).toBe("Figure 2: Annual rainfall by region");
   });
 
   it("an entirely em-marked short paragraph is caption-looking", () => {
     const html = wrap(
       "<p><em>A sunset over the harbor at dusk.</em></p>" +
-        "<p><img src=\"https://cdn.example.com/sunset.png\" alt=\"Sunset\"></p>",
+        '<p><img src="https://cdn.example.com/sunset.png" alt="Sunset"></p>',
     );
     const { blocks } = htmlToBlocks(new JSDOM(html).window.document, undefined);
     expect(blocks.map((b) => b.kind)).toEqual(["figure"]);
     const fig = blocks[0];
     if (fig?.kind !== "figure") throw new Error("expected figure");
-    expect(fig.caption.map((r) => r.text).join("")).toBe(
-      "A sunset over the harbor at dusk.",
-    );
+    expect(fig.caption.map((r) => r.text).join("")).toBe("A sunset over the harbor at dusk.");
   });
 
   it("ordinary body prose is NEVER consumed — short plain paragraph stays a paragraph", () => {
     const html = wrap(
       "<p>A calm sentence that carries no caption signal at all.</p>" +
-        "<p><img src=\"https://cdn.example.com/x.png\" alt=\"X\"></p>",
+        '<p><img src="https://cdn.example.com/x.png" alt="X"></p>',
     );
     const { blocks } = htmlToBlocks(new JSDOM(html).window.document, undefined);
     expect(blocks.map((b) => b.kind)).toEqual(["paragraph", "figure"]);
@@ -462,16 +443,14 @@ describe("htmlToBlocks — caption attachment (issue #19)", () => {
   it("a true <figcaption> is never overwritten by an adjacent caption-looking paragraph", () => {
     const html = wrap(
       "<p>Figure 3: The real caption lives in the figcaption</p>" +
-        "<figure><img src=\"https://cdn.example.com/real.png\" alt=\"Real\">" +
+        '<figure><img src="https://cdn.example.com/real.png" alt="Real">' +
         "<figcaption>The real figcaption text</figcaption></figure>",
     );
     const { blocks } = htmlToBlocks(new JSDOM(html).window.document, undefined);
     expect(blocks.map((b) => b.kind)).toEqual(["paragraph", "figure"]);
     const fig = blocks[1];
     if (fig?.kind !== "figure") throw new Error("expected figure");
-    expect(fig.caption.map((r) => r.text).join("")).toBe(
-      "The real figcaption text",
-    );
+    expect(fig.caption.map((r) => r.text).join("")).toBe("The real figcaption text");
     const para = blocks[0];
     if (para?.kind !== "paragraph") throw new Error("expected paragraph");
     expect(para.content.map((r) => r.text).join("")).toBe(
@@ -481,7 +460,7 @@ describe("htmlToBlocks — caption attachment (issue #19)", () => {
 
   it("an image nested inside an inline wrapper keeps the calm legacy fallback (paragraph-first, empty captions)", () => {
     const html = wrap(
-      "<p><span><img src=\"https://cdn.example.com/deep.png\" alt=\"Deep\"></span> Caption stays a paragraph.</p>",
+      '<p><span><img src="https://cdn.example.com/deep.png" alt="Deep"></span> Caption stays a paragraph.</p>',
     );
     const { blocks } = htmlToBlocks(new JSDOM(html).window.document, undefined);
     expect(blocks.map((b) => b.kind)).toEqual(["paragraph", "figure"]);
@@ -492,7 +471,7 @@ describe("htmlToBlocks — caption attachment (issue #19)", () => {
 
   it("an ingested caption-bearing article passes the probeRoundTripAnchor check (caption offsets align)", () => {
     const html = wrap(
-      "<p><img src=\"https://cdn.example.com/one.png\" alt=\"One\"> The caption anchors over the figcaption substrate.</p>" +
+      '<p><img src="https://cdn.example.com/one.png" alt="One"> The caption anchors over the figcaption substrate.</p>' +
         "<p>Surrounding body text gives the quote selector unique context for the gate.</p>",
     );
     const { blocks } = htmlToBlocks(new JSDOM(html).window.document, undefined);
@@ -518,7 +497,7 @@ describe("htmlToBlocks — srcset best-candidate selection (260908-ef5)", () => 
 
   it("width descriptors: picks the largest candidate up to 1600 (1080w over 480w despite the 1x1 placeholder src)", () => {
     const [html, url] = wrap(
-      "<img src=\"https://cdn.example.com/1x1.png\" srcset=\"https://cdn.example.com/pic-480.png 480w, https://cdn.example.com/pic-1080.png 1080w\" alt=\"Responsive\">",
+      '<img src="https://cdn.example.com/1x1.png" srcset="https://cdn.example.com/pic-480.png 480w, https://cdn.example.com/pic-1080.png 1080w" alt="Responsive">',
     );
     const { blocks } = htmlToBlocks(new JSDOM(html).window.document, url);
     const fig = blocks[0];
@@ -529,14 +508,14 @@ describe("htmlToBlocks — srcset best-candidate selection (260908-ef5)", () => 
 
   it("width descriptors: a within-cap candidate beats every over-cap candidate; all-over-1600 picks the largest available", () => {
     const [withinBeatsOver, url1] = wrap(
-      "<img src=\"https://cdn.example.com/1x1.png\" srcset=\"https://cdn.example.com/pic-2048.png 2048w, https://cdn.example.com/pic-1200.png 1200w\" alt=\"A\">",
+      '<img src="https://cdn.example.com/1x1.png" srcset="https://cdn.example.com/pic-2048.png 2048w, https://cdn.example.com/pic-1200.png 1200w" alt="A">',
     );
     const figA = htmlToBlocks(new JSDOM(withinBeatsOver).window.document, url1).blocks[0];
     if (figA?.kind !== "figure") throw new Error("expected figure");
     expect(figA.src).toBe("https://cdn.example.com/pic-1200.png");
 
     const [allOver, url2] = wrap(
-      "<img src=\"https://cdn.example.com/1x1.png\" srcset=\"https://cdn.example.com/pic-1920.png 1920w, https://cdn.example.com/pic-3840.png 3840w\" alt=\"B\">",
+      '<img src="https://cdn.example.com/1x1.png" srcset="https://cdn.example.com/pic-1920.png 1920w, https://cdn.example.com/pic-3840.png 3840w" alt="B">',
     );
     const figB = htmlToBlocks(new JSDOM(allOver).window.document, url2).blocks[0];
     if (figB?.kind !== "figure") throw new Error("expected figure");
@@ -545,14 +524,14 @@ describe("htmlToBlocks — srcset best-candidate selection (260908-ef5)", () => 
 
   it("density-only candidates: the smallest at or above 1 wins; all-below-1 picks the largest below", () => {
     const [atOrAbove, url1] = wrap(
-      "<img src=\"https://cdn.example.com/1x1.png\" srcset=\"https://cdn.example.com/a.png 1x, https://cdn.example.com/b.png 2x, https://cdn.example.com/c.png 3x\" alt=\"A\">",
+      '<img src="https://cdn.example.com/1x1.png" srcset="https://cdn.example.com/a.png 1x, https://cdn.example.com/b.png 2x, https://cdn.example.com/c.png 3x" alt="A">',
     );
     const figA = htmlToBlocks(new JSDOM(atOrAbove).window.document, url1).blocks[0];
     if (figA?.kind !== "figure") throw new Error("expected figure");
     expect(figA.src).toBe("https://cdn.example.com/a.png");
 
     const [below, url2] = wrap(
-      "<img src=\"https://cdn.example.com/1x1.png\" srcset=\"https://cdn.example.com/a.png 0.5x, https://cdn.example.com/b.png 0.75x\" alt=\"B\">",
+      '<img src="https://cdn.example.com/1x1.png" srcset="https://cdn.example.com/a.png 0.5x, https://cdn.example.com/b.png 0.75x" alt="B">',
     );
     const figB = htmlToBlocks(new JSDOM(below).window.document, url2).blocks[0];
     if (figB?.kind !== "figure") throw new Error("expected figure");
@@ -561,7 +540,7 @@ describe("htmlToBlocks — srcset best-candidate selection (260908-ef5)", () => 
 
   it("a bare URL with no descriptor is a density-1 candidate", () => {
     const [html, url] = wrap(
-      "<img src=\"https://cdn.example.com/1x1.png\" srcset=\"https://cdn.example.com/bare.png, https://cdn.example.com/hi-dpi.png 2x\" alt=\"Bare\">",
+      '<img src="https://cdn.example.com/1x1.png" srcset="https://cdn.example.com/bare.png, https://cdn.example.com/hi-dpi.png 2x" alt="Bare">',
     );
     const fig = htmlToBlocks(new JSDOM(html).window.document, url).blocks[0];
     if (fig?.kind !== "figure") throw new Error("expected figure");
@@ -570,7 +549,7 @@ describe("htmlToBlocks — srcset best-candidate selection (260908-ef5)", () => 
 
   it("malformed parts are skipped calmly — the valid candidate still wins, the helper never throws", () => {
     const [html, url] = wrap(
-      "<img src=\"https://cdn.example.com/fallback.png\" srcset=\", https://cdn.example.com/good.png 2x, , part-with-extra tokens here, https://cdn.example.com/bad-desc.png 480q, 480w\" alt=\"M\">",
+      '<img src="https://cdn.example.com/fallback.png" srcset=", https://cdn.example.com/good.png 2x, , part-with-extra tokens here, https://cdn.example.com/bad-desc.png 480q, 480w" alt="M">',
     );
     const fig = htmlToBlocks(new JSDOM(html).window.document, url).blocks[0];
     if (fig?.kind !== "figure") throw new Error("expected figure");
@@ -579,7 +558,7 @@ describe("htmlToBlocks — srcset best-candidate selection (260908-ef5)", () => 
 
   it("relative candidates resolve against the document URL", () => {
     const [html, url] = wrap(
-      "<img src=\"https://cdn.example.com/1x1.png\" srcset=\"images/pic-480.png 480w, images/pic-1080.png 1080w\" alt=\"R\">",
+      '<img src="https://cdn.example.com/1x1.png" srcset="images/pic-480.png 480w, images/pic-1080.png 1080w" alt="R">',
       "https://example.com/article/",
     );
     const fig = htmlToBlocks(new JSDOM(html, { url }).window.document, url).blocks[0];
@@ -589,7 +568,7 @@ describe("htmlToBlocks — srcset best-candidate selection (260908-ef5)", () => 
 
   it("a non-http scheme candidate is skipped, keeping plain src (T-EF5-03)", () => {
     const [html, url] = wrap(
-      "<img src=\"https://cdn.example.com/keep-src.png\" srcset=\"javascript:alert(1) 900w\" alt=\"S\">",
+      '<img src="https://cdn.example.com/keep-src.png" srcset="javascript:alert(1) 900w" alt="S">',
     );
     const fig = htmlToBlocks(new JSDOM(html).window.document, url).blocks[0];
     if (fig?.kind !== "figure") throw new Error("expected figure");
@@ -597,9 +576,7 @@ describe("htmlToBlocks — srcset best-candidate selection (260908-ef5)", () => 
   });
 
   it("an empty/unparseable srcset leaves plain src in force (byte-stable)", () => {
-    const [html, url] = wrap(
-      "<img src=\"https://cdn.example.com/plain.png\" srcset=\"\" alt=\"P\">",
-    );
+    const [html, url] = wrap('<img src="https://cdn.example.com/plain.png" srcset="" alt="P">');
     const fig = htmlToBlocks(new JSDOM(html).window.document, url).blocks[0];
     if (fig?.kind !== "figure") throw new Error("expected figure");
     expect(fig.src).toBe("https://cdn.example.com/plain.png");
@@ -609,7 +586,7 @@ describe("htmlToBlocks — srcset best-candidate selection (260908-ef5)", () => 
 describe("sanitizeExtractedHtml preserves the srcset attribute (260908-ef5 ALLOWED_ATTR proof)", () => {
   it("an https srcset survives sanitization (consumed only by our parser — T-EF5-03)", () => {
     const out = sanitizeExtractedHtml(
-      "<img src=\"https://cdn.example.com/a.png\" srcset=\"https://cdn.example.com/a-480.png 480w, https://cdn.example.com/a-1080.png 1080w\" alt=\"x\">",
+      '<img src="https://cdn.example.com/a.png" srcset="https://cdn.example.com/a-480.png 480w, https://cdn.example.com/a-1080.png 1080w" alt="x">',
     );
     expect(out).toContain("srcset");
     expect(out).toContain("a-1080.png");

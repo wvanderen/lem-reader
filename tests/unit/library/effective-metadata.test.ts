@@ -53,9 +53,7 @@ function makeRow(overrides: Record<string, unknown> = {}): unknown {
 
 describe("ArticleSchema override fields (META-01 — additive; provenance untouched)", () => {
   it("a row carrying readerTitle round-trips ArticleSchema.parse with the field intact (Pitfall 1 strip-mode guard)", () => {
-    const parsed = ArticleSchema.parse(
-      makeRow({ readerTitle: "My Chosen Name" }),
-    );
+    const parsed = ArticleSchema.parse(makeRow({ readerTitle: "My Chosen Name" }));
     expect(parsed.readerTitle).toBe("My Chosen Name");
   });
 
@@ -67,9 +65,7 @@ describe("ArticleSchema override fields (META-01 — additive; provenance untouc
       retrievedAt: "2026-01-01T00:00:00Z",
       originalHtmlHash: "sha256:abc123def456",
     };
-    const parsed = ArticleSchema.parse(
-      makeRow({ provenance, readerTitle: "Renamed" }),
-    );
+    const parsed = ArticleSchema.parse(makeRow({ provenance, readerTitle: "Renamed" }));
     expect(parsed.provenance).toEqual(provenance);
   });
 
@@ -81,16 +77,12 @@ describe("ArticleSchema override fields (META-01 — additive; provenance untouc
 
 describe("effectiveTitle/effectiveAuthor (META-02 — one derivation; META-03 — clear-to-canonical)", () => {
   it("override present → effectiveTitle returns the override (reader-owned wins)", () => {
-    const article = ArticleSchema.parse(
-      makeRow({ readerTitle: "My Chosen Name" }),
-    );
+    const article = ArticleSchema.parse(makeRow({ readerTitle: "My Chosen Name" }));
     expect(effectiveTitle(article)).toBe("My Chosen Name");
   });
 
   it("override present → effectiveAuthor returns the override (reader-owned wins)", () => {
-    const article = ArticleSchema.parse(
-      makeRow({ readerAuthor: "Renamed Author" }),
-    );
+    const article = ArticleSchema.parse(makeRow({ readerAuthor: "Renamed Author" }));
     expect(effectiveAuthor(article)).toBe("Renamed Author");
   });
 
@@ -122,9 +114,7 @@ describe("effectiveTitle/effectiveAuthor (META-02 — one derivation; META-03 �
 
 describe("effectivePublishedAt/effectiveSourceUrl (META extension — the same derivation discipline)", () => {
   it("override present → effectivePublishedAt returns the override (reader-owned wins)", () => {
-    const article = ArticleSchema.parse(
-      makeRow({ readerPublishedAt: "2024-03-05T12:00:00.000Z" }),
-    );
+    const article = ArticleSchema.parse(makeRow({ readerPublishedAt: "2024-03-05T12:00:00.000Z" }));
     expect(effectivePublishedAt(article)).toBe("2024-03-05T12:00:00.000Z");
   });
 

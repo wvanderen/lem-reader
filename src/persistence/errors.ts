@@ -17,11 +17,7 @@
 // conservative "unavailable" branch so the reader is never blocked.
 
 /** Dexie error names that mean "the DB itself cannot be opened/upgraded." */
-const UNUPGRADEABLE_NAMES = new Set([
-  "UpgradeError",
-  "VersionError",
-  "UnknownError",
-]);
+const UNUPGRADEABLE_NAMES = new Set(["UpgradeError", "VersionError", "UnknownError"]);
 
 /** Dexie/IndexedDB error names that mean "storage is full or blocked." */
 const UNAVAILABLE_NAMES = new Set([
@@ -57,9 +53,7 @@ export function isQuota(e: unknown): boolean {
  * Classify a thrown storage error into the recovery vocabulary. Never throws.
  * Order matters: unupgradeable is checked FIRST (UnknownError is in both sets).
  */
-export function classifyStorageError(
-  e: unknown,
-): "unavailable" | "corrupt" | "unupgradeable" {
+export function classifyStorageError(e: unknown): "unavailable" | "corrupt" | "unupgradeable" {
   if (isUnupgradeable(e)) return "unupgradeable";
   if (isQuota(e)) return "unavailable";
   if (UNAVAILABLE_NAMES.has(nameOf(e))) return "unavailable";

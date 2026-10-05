@@ -28,14 +28,9 @@ vi.mock("../../../src/ingestion/library/tagsStore", () => ({
 import { LibraryRow } from "../../../src/ingestion/library/LibraryRow";
 import { ArticleSchema } from "../../../src/content/schema";
 import type { CanonicalArticle } from "../../../src/content/schema";
-import {
-  FAKE_HASH,
-  transcriptIngestionMeta,
-} from "../fixtures/transcript-meta";
+import { FAKE_HASH, transcriptIngestionMeta } from "../fixtures/transcript-meta";
 
-function makeArticle(transcript?: {
-  durationSeconds: number;
-}): CanonicalArticle {
+function makeArticle(transcript?: { durationSeconds: number }): CanonicalArticle {
   return ArticleSchema.parse({
     id: "row-article",
     revision: 1,
@@ -58,11 +53,7 @@ function makeArticle(transcript?: {
 
 function renderRow(timeReadLabel?: string, article?: CanonicalArticle) {
   return render(
-    <LibraryRow
-      article={article ?? makeArticle()}
-      total={100}
-      timeReadLabel={timeReadLabel}
-    />,
+    <LibraryRow article={article ?? makeArticle()} total={100} timeReadLabel={timeReadLabel} />,
   );
 }
 
@@ -82,9 +73,9 @@ describe("LibraryRow — the time-read meta line (issue #38)", () => {
   it("the label line carries no interactive elements (no new keyboard stops)", () => {
     renderRow("5 min read here");
     const line = document.querySelector(".library-row-time-read");
-    expect(
-      line!.querySelectorAll("a, button, input, select, textarea, [tabindex]"),
-    ).toHaveLength(0);
+    expect(line!.querySelectorAll("a, button, input, select, textarea, [tabindex]")).toHaveLength(
+      0,
+    );
   });
 });
 
@@ -103,9 +94,9 @@ describe("LibraryRow — the video-duration meta line (issue #41, flow N3)", () 
   it("the duration line carries no interactive elements (no new keyboard stops)", () => {
     renderRow(undefined, makeArticle({ durationSeconds: 735 }));
     const line = document.querySelector(".library-row-duration");
-    expect(
-      line!.querySelectorAll("a, button, input, select, textarea, [tabindex]"),
-    ).toHaveLength(0);
+    expect(line!.querySelectorAll("a, button, input, select, textarea, [tabindex]")).toHaveLength(
+      0,
+    );
   });
 });
 
@@ -120,9 +111,7 @@ describe("LibraryRow — the per-article review entry (issue #76)", () => {
 
   it("uses the singular label at exactly 1 highlight", () => {
     render(<LibraryRow article={makeArticle()} total={100} highlightCount={1} />);
-    expect(
-      screen.getByLabelText("Review 1 highlight for Row Article"),
-    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Review 1 highlight for Row Article")).toBeInTheDocument();
   });
 
   it("keeps a disabled highlights action at zero", () => {
@@ -137,14 +126,7 @@ describe("LibraryRow — the per-article review entry (issue #76)", () => {
   });
 
   it("the entry alone earns the action cluster (chapter sub-rows have no other buttons)", () => {
-    render(
-      <LibraryRow
-        article={makeArticle()}
-        total={100}
-        headingLevel={3}
-        highlightCount={2}
-      />,
-    );
+    render(<LibraryRow article={makeArticle()} total={100} headingLevel={3} highlightCount={2} />);
     const cluster = document.querySelector(".library-row-actions");
     expect(cluster).not.toBeNull();
     expect(cluster!.children).toHaveLength(1);

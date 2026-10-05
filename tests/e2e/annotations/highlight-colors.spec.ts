@@ -143,9 +143,7 @@ test.describe("highlight colors in the reader (issue #118)", () => {
     await expect(popover).not.toBeVisible();
 
     // The Dexie row carries the named color.
-    await expect
-      .poll(async () => (await readFirstHighlightRow(page))?.color)
-      .toBe("green");
+    await expect.poll(async () => (await readFirstHighlightRow(page))?.color).toBe("green");
 
     // Geometry invariance: same page count after the pick (AC: the color
     // changes no anchors, no reading order, no fragmentation).
@@ -206,12 +204,8 @@ test.describe("highlight colors in the reader (issue #118)", () => {
     await expect(yellow).toBeChecked();
     await popover.locator(".highlight-popover-done").click();
 
-    await expect
-      .poll(async () => (await readFirstHighlightRow(page))?.color)
-      .toBe("yellow");
-    await expect(page.locator("mark.highlight").first()).toHaveClass(
-      /color-yellow/,
-    );
+    await expect.poll(async () => (await readFirstHighlightRow(page))?.color).toBe("yellow");
+    await expect(page.locator("mark.highlight").first()).toHaveClass(/color-yellow/);
     // The screen-reader label announces the named color (not color alone).
     await expect(page.locator("mark.highlight").first()).toHaveAttribute(
       "aria-label",
@@ -244,12 +238,8 @@ test.describe("highlight colors in the reader (issue #118)", () => {
     await expect(popover.getByRole("radio", { name: "Default" })).toBeChecked();
     await popover.getByRole("radio", { name: "Blue" }).click();
     await popover.locator(".highlight-popover-done").click();
-    await expect
-      .poll(async () => (await readFirstHighlightRow(page))?.color)
-      .toBe("blue");
-    await expect(page.locator("mark.highlight").first()).toHaveClass(
-      /color-blue/,
-    );
+    await expect.poll(async () => (await readFirstHighlightRow(page))?.color).toBe("blue");
+    await expect(page.locator("mark.highlight").first()).toHaveClass(/color-blue/);
   });
 
   test("theme contrast: the mark's fill follows the theme token (Dark preset + Custom)", async ({
@@ -271,19 +261,10 @@ test.describe("highlight colors in the reader (issue #118)", () => {
         const token = root.getPropertyValue("--highlight-green").trim();
         if (!/^#[0-9a-fA-F]{6}$/.test(token)) return false;
         const n = Number.parseInt(token.slice(1), 16);
-        const [r, g, b] = [
-          (n >> 16) & 0xff,
-          (n >> 8) & 0xff,
-          n & 0xff,
-        ];
-        return (
-          getComputedStyle(markEl).backgroundColor ===
-          `rgb(${r}, ${g}, ${b})`
-        );
+        const [r, g, b] = [(n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff];
+        return getComputedStyle(markEl).backgroundColor === `rgb(${r}, ${g}, ${b})`;
       });
-      expect(matches, "mark fill === the theme's --highlight-green token").toBe(
-        true,
-      );
+      expect(matches, "mark fill === the theme's --highlight-green token").toBe(true);
     };
 
     // Dark preset via the REAL settings dialog (the radio drives applyTheme).

@@ -117,8 +117,7 @@ test.describe("longtask smoke — time-sliced measurement pass (260820-beo)", ()
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     await page.waitForFunction(
       () =>
-        (window as unknown as Record<string, unknown>).__lemLastTrustedConstraints !==
-        undefined,
+        (window as unknown as Record<string, unknown>).__lemLastTrustedConstraints !== undefined,
       undefined,
       { timeout: 15_000 },
     );
@@ -131,9 +130,7 @@ test.describe("longtask smoke — time-sliced measurement pass (260820-beo)", ()
     // midpoint (22), Down otherwise — so the size always changes from any
     // starting value in [18, 24].
     await page.getByRole("button", { name: "Reading settings" }).click();
-    await expect(
-      page.getByRole("heading", { name: "Reading settings", level: 2 }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Reading settings", level: 2 })).toBeVisible();
     const slider = page.getByRole("slider", { name: "Text size" });
     await slider.focus();
     const pre = await readTrustedConstraints(page);
@@ -143,8 +140,7 @@ test.describe("longtask smoke — time-sliced measurement pass (260820-beo)", ()
     await page.waitForFunction(
       (preS: number) => {
         const c = (window as unknown as Record<string, unknown>).__lemLastTrustedConstraints as
-          | { size: number }
-          | undefined;
+          { size: number } | undefined;
         return c !== undefined && c.size !== preS;
       },
       preSize,
@@ -162,10 +158,7 @@ test.describe("longtask smoke — time-sliced measurement pass (260820-beo)", ()
           .__lemLongtasks ?? [],
     );
     const violations = longtasks.filter((t) => t.duration > LONGTASK_BUDGET_MS);
-    const maxDuration = longtasks.reduce(
-      (max, t) => Math.max(max, t.duration),
-      0,
-    );
+    const maxDuration = longtasks.reduce((max, t) => Math.max(max, t.duration), 0);
     // Visible in the run output for the task summary (count + worst entry).
     console.log(
       `[longtask-smoke] ${longtasks.length} entries, max ${maxDuration.toFixed(1)}ms (budget ${LONGTASK_BUDGET_MS}ms)`,
@@ -234,7 +227,10 @@ test.describe("longtask smoke — time-sliced measurement pass (260820-beo)", ()
               const db = req.result;
               const tx = db.transaction("articles", "readwrite");
               tx.objectStore("articles").put(a);
-              tx.oncomplete = () => { db.close(); resolve(); };
+              tx.oncomplete = () => {
+                db.close();
+                resolve();
+              };
               tx.onerror = () => reject(tx.error);
             };
             req.onerror = () => reject(req.error);
@@ -253,10 +249,9 @@ test.describe("longtask smoke — time-sliced measurement pass (260820-beo)", ()
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     await page.waitForFunction(
       () =>
-        (window as unknown as Record<string, unknown>).__lemPagination !==
-          undefined &&
-        ((window as unknown as { __lemPagination?: { pagesLength: number } })
-          .__lemPagination?.pagesLength ?? 0) > 0,
+        (window as unknown as Record<string, unknown>).__lemPagination !== undefined &&
+        ((window as unknown as { __lemPagination?: { pagesLength: number } }).__lemPagination
+          ?.pagesLength ?? 0) > 0,
       undefined,
       { timeout: 60_000 },
     );
@@ -289,8 +284,8 @@ test.describe("longtask smoke — time-sliced measurement pass (260820-beo)", ()
     await page.keyboard.press("m");
     await page.waitForFunction(
       () =>
-        ((window as unknown as { __lemPagination?: { pagesLength: number } })
-          .__lemPagination?.pagesLength ?? 0) > 0,
+        ((window as unknown as { __lemPagination?: { pagesLength: number } }).__lemPagination
+          ?.pagesLength ?? 0) > 0,
       undefined,
       { timeout: 60_000 },
     );
@@ -308,8 +303,8 @@ test.describe("longtask smoke — time-sliced measurement pass (260820-beo)", ()
       const advanced = await page
         .waitForFunction(
           (target: number) =>
-            (window as unknown as { __lemPagination?: { currentPageIdx: number } })
-              .__lemPagination?.currentPageIdx === target,
+            (window as unknown as { __lemPagination?: { currentPageIdx: number } }).__lemPagination
+              ?.currentPageIdx === target,
           startIdx + i,
           { timeout: 15_000 },
         )
@@ -346,8 +341,7 @@ async function readTrustedConstraints(
 ): Promise<{ size: number; viewportWidthPx: number } | null> {
   return await page.evaluate(() => {
     const c = (window as unknown as Record<string, unknown>).__lemLastTrustedConstraints as
-      | { size: number; viewportWidthPx: number }
-      | undefined;
+      { size: number; viewportWidthPx: number } | undefined;
     return c ?? null;
   });
 }
@@ -358,8 +352,7 @@ async function readPagination(
 ): Promise<{ currentPageIdx: number; pagesLength: number } | null> {
   return await page.evaluate(() => {
     const p = (window as unknown as Record<string, unknown>).__lemPagination as
-      | { currentPageIdx: number; pagesLength: number }
-      | undefined;
+      { currentPageIdx: number; pagesLength: number } | undefined;
     return p ?? null;
   });
 }

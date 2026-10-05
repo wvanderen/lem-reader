@@ -146,10 +146,7 @@ export type RestoreLanding = "end" | "passage";
  * path). Pure decision only: the DOM scroll itself stays at the call
  * site.
  */
-export function landingForRestore(
-  offset: number,
-  total: number,
-): RestoreLanding {
+export function landingForRestore(offset: number, total: number): RestoreLanding {
   return isAtArticleEnd(offset, total) ? "end" : "passage";
 }
 
@@ -166,9 +163,7 @@ export function landingForRestore(
  * several rows; the latest-savedAt row is the live truth for the
  * finished check and the resume pick.
  */
-export function latestLocationByArticle(
-  locations: LocationRecord[],
-): Map<string, LocationRecord> {
+export function latestLocationByArticle(locations: LocationRecord[]): Map<string, LocationRecord> {
   const latest = new Map<string, LocationRecord>();
   for (const loc of locations) {
     const prev = latest.get(loc.articleId);

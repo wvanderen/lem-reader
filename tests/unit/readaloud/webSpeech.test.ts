@@ -30,9 +30,7 @@ interface FakeSynth {
 
 function stubSynthesis(voices: FakeVoice[] | null, synth?: Omit<FakeSynth, "getVoices">): void {
   const value: FakeSynth | undefined =
-    voices === null
-      ? undefined
-      : { getVoices: () => voices, ...(synth ?? {}) };
+    voices === null ? undefined : { getVoices: () => voices, ...(synth ?? {}) };
   Object.defineProperty(window, "speechSynthesis", {
     value,
     configurable: true,
@@ -71,9 +69,7 @@ describe("probeVoices", () => {
   });
 
   it("a loaded list resolves immediately with the plain voice surface", async () => {
-    stubSynthesis([
-      { voiceURI: "a", name: "A", lang: "en-GB", localService: true },
-    ]);
+    stubSynthesis([{ voiceURI: "a", name: "A", lang: "en-GB", localService: true }]);
     await expect(probeVoices(100)).resolves.toEqual([
       { voiceURI: "a", name: "A", lang: "en-GB", localService: true },
     ]);
@@ -97,9 +93,7 @@ describe("probeVoices", () => {
     voices.push({ voiceURI: "late", name: "Late", lang: "en", localService: true });
     for (const cb of listeners) cb();
     await vi.advanceTimersByTimeAsync(0);
-    expect(resolved).toEqual([
-      { voiceURI: "late", name: "Late", lang: "en", localService: true },
-    ]);
+    expect(resolved).toEqual([{ voiceURI: "late", name: "Late", lang: "en", localService: true }]);
   });
 
   it("a silent engine (no voices ever) resolves whatever is present at the timeout — never a hang", async () => {

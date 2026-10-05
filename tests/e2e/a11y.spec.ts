@@ -33,10 +33,7 @@ import { bookEnvelope, mockEpubIngest } from "./library/book-envelope";
 // The D-05 substrate — the SAME normalizeText + graphemeClusters the
 // in-browser derivations use (the 08-05/12-05 deterministic-seed
 // precedent: compute the location offset in Node, never in-page).
-import {
-  normalizeText,
-  graphemeClusters,
-} from "../../src/content/normalizeText";
+import { normalizeText, graphemeClusters } from "../../src/content/normalizeText";
 import type { CanonicalArticle } from "../../src/content/types";
 // Issue #90 — the read-aloud transport scans below use the shared
 // controllable-fake speechSynthesis harness to drive a REAL session, and
@@ -53,9 +50,7 @@ type AxeViolation = { id: string; impact?: string | null | undefined };
 type AxeResultLike = { violations: AxeViolation[] };
 
 function seriousViolations(results: AxeResultLike) {
-  return results.violations.filter((v) =>
-    ["serious", "critical"].includes(v.impact ?? ""),
-  );
+  return results.violations.filter((v) => ["serious", "critical"].includes(v.impact ?? ""));
 }
 
 test.beforeEach(async ({ page }) => {
@@ -105,7 +100,9 @@ test("a11y #84: the Highlights destination with the header Add icon is axe-clean
   await expect(trigger).toBeVisible();
   await expect(trigger).toHaveAttribute("aria-haspopup", "dialog");
   const results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
-  expect(seriousViolations(results), JSON.stringify(seriousViolations(results), null, 2)).toEqual([]);
+  expect(seriousViolations(results), JSON.stringify(seriousViolations(results), null, 2)).toEqual(
+    [],
+  );
 });
 
 // Issue #121 — the Discover destination gets the SAME axe bar, in BOTH of
@@ -157,9 +154,7 @@ test("a11y #121: the Discover destination is axe-clean (empty state and subscrip
   // Issue #123 anatomy: the ONE unified timeline announces through the
   // level-2 "Latest articles" region heading; the feed's own name is a
   // level-3 heading inside "Your feeds" (the feed controls section).
-  await expect(
-    page.getByRole("heading", { level: 2, name: "Latest articles" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "Latest articles" })).toBeVisible();
   await expect(
     page.getByRole("heading", { level: 3, name: "The Calm Reader Journal" }),
   ).toBeVisible();
@@ -182,16 +177,14 @@ test("a11y #84: the Add dialog transcript-swap state is axe-clean", async ({ pag
   });
   await page.goto(`${BASE}/#/`);
   await openAddDialog(page);
-  await page.getByRole("textbox", { name: /add by url/i }).fill(
-    "https://www.youtube.com/watch?v=axeSwapVi11",
-  );
+  await page
+    .getByRole("textbox", { name: /add by url/i })
+    .fill("https://www.youtube.com/watch?v=axeSwapVi11");
   await page.getByRole("button", { name: /^add$/i }).click();
   // The swap is live: the refusal moved focus to the required title and
   // the picker + source forms are hidden — the state under scan.
   await expect(page.getByRole("textbox", { name: "Title" })).toBeFocused();
-  await expect(
-    page.locator("dialog.add-dialog fieldset.add-source-picker"),
-  ).toBeHidden();
+  await expect(page.locator("dialog.add-dialog fieldset.add-source-picker")).toBeHidden();
   const results = await new AxeBuilder({ page })
     .withTags([...WCAG_TAGS])
     .include("dialog.add-dialog")
@@ -209,9 +202,7 @@ test("a11y #84: the Add dialog transcript-swap state is axe-clean", async ({ pag
 // Payloads are schema-valid CanonicalArticles via makeArticle + a
 // hand-built IngestionMeta (the client re-validates at the network
 // boundary — the add-result.spec.ts harness discipline).
-test("a11y #112: the saved-result state is axe-clean (confident AND flagged)", async ({
-  page,
-}) => {
+test("a11y #112: the saved-result state is axe-clean (confident AND flagged)", async ({ page }) => {
   await wipeDatabase(page);
   const confident = makeArticle({
     id: "a11y-saved-confident",
@@ -265,9 +256,7 @@ test("a11y #112: the saved-result state is axe-clean (confident AND flagged)", a
     // The state under scan: the result card is up AND the expected limit
     // render is live (an absent disclosure would silently weaken the gate).
     await expect(page.locator("dialog.add-dialog .add-result")).toBeVisible();
-    await expect(
-      page.locator(`dialog.add-dialog ${renderGuard}`),
-    ).toBeVisible();
+    await expect(page.locator(`dialog.add-dialog ${renderGuard}`)).toBeVisible();
     const results = await new AxeBuilder({ page })
       .withTags([...WCAG_TAGS])
       .include("dialog.add-dialog")
@@ -288,9 +277,7 @@ test("a11y #112: the saved-result state is axe-clean (confident AND flagged)", a
 // book ok-variant from the SHARED builder (the client re-validates the
 // envelope + every article at the network boundary — the
 // book-envelope.ts harness discipline).
-test("a11y #113: the book result state is axe-clean (skip disclosure live)", async ({
-  page,
-}) => {
+test("a11y #113: the book result state is axe-clean (skip disclosure live)", async ({ page }) => {
   await wipeDatabase(page);
   await mockEpubIngest(page, {
     current: bookEnvelope("epub-a11yresult1", "Axe Result Book", 1),
@@ -307,9 +294,9 @@ test("a11y #113: the book result state is axe-clean (skip disclosure live)", asy
   // The state under scan: the result card is up AND the skip disclosure is
   // live (an absent disclosure would silently weaken the gate).
   await expect(page.locator("dialog.add-dialog .add-result")).toBeVisible();
-  await expect(
-    page.locator("dialog.add-dialog .add-result .add-result-skips"),
-  ).toHaveText("1 chapter could not be read.");
+  await expect(page.locator("dialog.add-dialog .add-result .add-result-skips")).toHaveText(
+    "1 chapter could not be read.",
+  );
   const results = await new AxeBuilder({ page })
     .withTags([...WCAG_TAGS])
     .include("dialog.add-dialog")
@@ -328,9 +315,7 @@ for (const article of fixtures) {
       page,
     }) => {
       await page.goto(`${BASE}/#/article/${article.id}`);
-      const results = await new AxeBuilder({ page })
-        .withTags([...WCAG_TAGS])
-        .analyze();
+      const results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
       const serious = seriousViolations(results);
       const ids = serious.map((v) => v.id);
       // Pitfall 10 — explicit guards on the two high-risk semantic regressions.
@@ -349,9 +334,7 @@ for (const article of fixtures) {
 // needs the fake speech harness, so the expanded state gets its own scan
 // here. axe reports only automatable issues; the keyboard walkthrough lives
 // in the readaloud suite (tab-walk + Enter activation).
-test("a11y 90: read-aloud bar idle AND session-active is axe-clean", async ({
-  page,
-}) => {
+test("a11y 90: read-aloud bar idle AND session-active is axe-clean", async ({ page }) => {
   await installFakeSpeech(page, "word");
   await page.goto(`${BASE}/#/article/essay-long-form`);
   await page.waitForFunction(
@@ -363,9 +346,7 @@ test("a11y 90: read-aloud bar idle AND session-active is axe-clean", async ({
     { timeout: 10_000 },
   );
   const bar = page.locator(".readaloud-bar");
-  await expect(
-    bar.getByRole("button", { name: "Read aloud" }),
-  ).toBeVisible();
+  await expect(bar.getByRole("button", { name: "Read aloud" })).toBeVisible();
 
   // Idle: the collapsed quiet entry is in the tree and axe-clean.
   const idle = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
@@ -386,9 +367,7 @@ test("a11y 90: read-aloud bar idle AND session-active is axe-clean", async ({
   const active = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
   const activeSerious = seriousViolations(active);
   const activeIds = activeSerious.map((v) => v.id);
-  expect(activeIds, JSON.stringify(activeSerious, null, 2)).not.toContain(
-    "heading-order",
-  );
+  expect(activeIds, JSON.stringify(activeSerious, null, 2)).not.toContain("heading-order");
   expect(activeIds).not.toContain("list");
   expect(activeSerious).toEqual([]);
 
@@ -423,9 +402,9 @@ test("a11y 02-01 single-content-tree: article is rendered exactly once while pan
   // The dialog is open — the browser has made the rest of the document inert
   // (showModal's top-layer behavior). Confirm the dialog is in the open state
   // so the inert backdrop is in effect.
-  const dlgOpen = await page.locator("dialog.settings-panel").evaluate(
-    (el) => (el as HTMLDialogElement).open,
-  );
+  const dlgOpen = await page
+    .locator("dialog.settings-panel")
+    .evaluate((el) => (el as HTMLDialogElement).open);
   expect(dlgOpen, "dialog must be open (modal inert backdrop active)").toBe(true);
 });
 
@@ -457,7 +436,7 @@ test("a11y ACPT-02 #2: note popover open is a modal dialog + axe-clean + single-
   // Create a highlight + open the note editor via the N shortcut.
   await page.evaluate(() => {
     const block = document.querySelector<HTMLElement>(
-      '[data-block-index]:not(.article-body-measurement [data-block-index])',
+      "[data-block-index]:not(.article-body-measurement [data-block-index])",
     );
     if (!block) return;
     const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
@@ -483,9 +462,9 @@ test("a11y ACPT-02 #2: note popover open is a modal dialog + axe-clean + single-
   //     top-layer editor). Note: .article-body-measurement (the hidden
   //     measurement copy) is excluded — it is intentionally a second tree but
   //     aria-hidden + user-select:none.
-  const visibleArticleCount = await page.locator(
-    "article.article-body:not(.article-body-measurement)",
-  ).count();
+  const visibleArticleCount = await page
+    .locator("article.article-body:not(.article-body-measurement)")
+    .count();
   expect(visibleArticleCount, "visible article-body appears exactly once").toBe(1);
 
   // (c) The popover is genuinely modal — the focus scope + inert background
@@ -516,14 +495,10 @@ test("review panel #/highlights: zero serious/critical WCAG 2.2 AA violations (s
   // connection blocks Dexie's v4 upgrade).
   await page.goto(`${BASE}/#/`);
   await page.reload();
-  await expect(
-    page.getByRole("heading", { name: "Saved articles" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible();
   // A fixture row renders only once the repository read completed — the
   // deterministic "Dexie is open + schema declared" signal.
-  await expect(
-    page.getByText("Getting started with Lem Reader").first(),
-  ).toBeVisible();
+  await expect(page.getByText("Getting started with Lem Reader").first()).toBeVisible();
   const article = makeArticle({
     id: "a11y-review-corpus",
     title: "A Field Guide to Harbor Bells",
@@ -551,17 +526,11 @@ test("review panel #/highlights: zero serious/critical WCAG 2.2 AA violations (s
     ],
   });
   await page.goto(`${BASE}/#/highlights`);
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Highlights" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
   // The seeded row rendered (the panel's load effect settled) before axe
   // samples the tree — an empty panel would silently weaken the gate.
-  await expect(
-    page.getByRole("link", { name: /^Go to highlight:/ }).first(),
-  ).toBeVisible();
-  const results = await new AxeBuilder({ page })
-    .withTags([...WCAG_TAGS])
-    .analyze();
+  await expect(page.getByRole("link", { name: /^Go to highlight:/ }).first()).toBeVisible();
+  const results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
   const serious = seriousViolations(results);
   const ids = serious.map((v) => v.id);
   // Pitfall 8 — the one-h1 + h2-section and grouped-ul structures must
@@ -581,19 +550,12 @@ test("review panel #/highlights: zero serious/critical WCAG 2.2 AA violations (s
     .click();
   const colorDialog = page.getByRole("dialog", { name: "Change color" });
   await expect(colorDialog).toBeVisible();
-  await expect(
-    colorDialog.getByRole("radio", { name: "Default" }),
-  ).toBeChecked();
-  const colorResults = await new AxeBuilder({ page })
-    .withTags([...WCAG_TAGS])
-    .analyze();
+  await expect(colorDialog.getByRole("radio", { name: "Default" })).toBeChecked();
+  const colorResults = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
   const colorSerious = seriousViolations(colorResults);
   expect(colorSerious, JSON.stringify(colorSerious, null, 2)).toEqual([]);
   const colorIsModal = await colorDialog.evaluate((el) => el.matches(":modal"));
-  expect(
-    colorIsModal,
-    "color dialog is modal (:modal — showModal opened it)",
-  ).toBe(true);
+  expect(colorIsModal, "color dialog is modal (:modal — showModal opened it)").toBe(true);
 
   // Issue #125 (AC3) — the review TAG dialog (#117's ReviewTagsDialog)
   // gets the same modal-surface bar: opened on the seeded tagged row, with
@@ -601,20 +563,18 @@ test("review panel #/highlights: zero serious/critical WCAG 2.2 AA violations (s
   // violations and the :modal contract.
   await colorDialog.getByRole("button", { name: "Done" }).click();
   await expect(colorDialog).toBeHidden();
-  await page.getByRole("button", { name: /^Edit tags: / }).first().click();
+  await page
+    .getByRole("button", { name: /^Edit tags: / })
+    .first()
+    .click();
   const tagsDialog = page.getByRole("dialog", { name: "Edit tags" });
   await expect(tagsDialog).toBeVisible();
-  await expect(
-    tagsDialog.locator(".tag-picker-pill-text", { hasText: "margin" }),
-  ).toBeVisible();
+  await expect(tagsDialog.locator(".tag-picker-pill-text", { hasText: "margin" })).toBeVisible();
   const tagsResults = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
   const tagsSerious = seriousViolations(tagsResults);
   expect(tagsSerious, JSON.stringify(tagsSerious, null, 2)).toEqual([]);
   const tagsIsModal = await tagsDialog.evaluate((el) => el.matches(":modal"));
-  expect(
-    tagsIsModal,
-    "tag dialog is modal (:modal — showModal opened it)",
-  ).toBe(true);
+  expect(tagsIsModal, "tag dialog is modal (:modal — showModal opened it)").toBe(true);
 });
 
 // Issue #125 (AC3) — the Library SORT control (#115) is part of the
@@ -731,9 +691,9 @@ async function seedBookLibrary(page: Page): Promise<void> {
   await closeSavedResult(page);
   await expect(page.locator("li.book-row")).toBeVisible({ timeout: 15_000 });
   await page.reload();
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Saved articles" }),
-  ).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible({
+    timeout: 10_000,
+  });
   await expect(page.locator("li.book-row")).toBeVisible({ timeout: 10_000 });
 }
 
@@ -789,13 +749,8 @@ test.describe("a11y 12-06 — library with a book", () => {
     // contrast from COMPUTED styles — sampling mid-animation reports a
     // blended foreground and false-fails color-contrast.
     await page.locator("li.book-row .book-toggle").click();
-    await expect(page.locator("li.book-row .book-toggle")).toHaveAttribute(
-      "aria-expanded",
-      "true",
-    );
-    await expect(
-      page.locator("li.book-row .book-chapter-list > li").first(),
-    ).toBeVisible();
+    await expect(page.locator("li.book-row .book-toggle")).toHaveAttribute("aria-expanded", "true");
+    await expect(page.locator("li.book-row .book-chapter-list > li").first()).toBeVisible();
     await page.waitForTimeout(350); // out-run the 160ms book-disclose animation
     results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
     serious = seriousViolations(results);
@@ -822,10 +777,7 @@ test.describe("a11y 12-06 — library with a book", () => {
           if (rule instanceof CSSMediaRule) {
             mediaTexts.push(rule.media.mediaText);
             for (const inner of Array.from(rule.cssRules)) {
-              if (
-                inner instanceof CSSStyleRule &&
-                inner.selectorText.includes(".book-chapters")
-              ) {
+              if (inner instanceof CSSStyleRule && inner.selectorText.includes(".book-chapters")) {
                 return {
                   found: true,
                   media: rule.media.mediaText,
@@ -860,21 +812,18 @@ test.describe("a11y 12-06 — library with a book", () => {
       .getAttribute("href")
       .then((h) => (h ?? "").replace("#/article/", ""));
     expect(chapter1Id).toMatch(/-c00$/);
-    const articleRow = await page.evaluate(
-      async (id) => {
-        return new Promise<Record<string, unknown> | null>((resolve) => {
-          const req = indexedDB.open("lem-reader");
-          req.onsuccess = () => {
-            const tx = req.result.transaction("articles", "readonly");
-            const get = tx.objectStore("articles").get(id);
-            get.onsuccess = () => resolve(get.result ?? null);
-            get.onerror = () => resolve(null);
-          };
-          req.onerror = () => resolve(null);
-        });
-      },
-      chapter1Id,
-    );
+    const articleRow = await page.evaluate(async (id) => {
+      return new Promise<Record<string, unknown> | null>((resolve) => {
+        const req = indexedDB.open("lem-reader");
+        req.onsuccess = () => {
+          const tx = req.result.transaction("articles", "readonly");
+          const get = tx.objectStore("articles").get(id);
+          get.onsuccess = () => resolve(get.result ?? null);
+          get.onerror = () => resolve(null);
+        };
+        req.onerror = () => resolve(null);
+      });
+    }, chapter1Id);
     expect(articleRow, "chapter 1 article row must exist").not.toBeNull();
     // Mid-chapter offset (half the D-05 grapheme total) — an UNFINISHED
     // location so the Resume link renders (computed in Node by the SAME
@@ -906,9 +855,9 @@ test.describe("a11y 12-06 — library with a book", () => {
     );
     // Remount so LibraryView's load picks the location up.
     await page.reload();
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible({
+      timeout: 10_000,
+    });
     await expect(page.locator("li.book-row")).toBeVisible({ timeout: 10_000 });
 
     // Keyboard-order proof (issue #67 — the TITLE is the resume affordance):
@@ -919,8 +868,7 @@ test.describe("a11y 12-06 — library with a book", () => {
     // precedent). The selector scopes to the book row's main-column h2 —
     // chapter sub-row links share the .library-card-link class but live
     // inside the (hidden) disclosure region.
-    const resume =
-      "li.book-row .book-card > .library-row-main > h2 .library-card-link";
+    const resume = "li.book-row .book-card > .library-row-main > h2 .library-card-link";
     await expect(page.locator(resume)).toBeVisible({ timeout: 10_000 });
     await page.locator(resume).focus();
     await expect(page.locator(resume)).toBeFocused();
@@ -945,10 +893,7 @@ test.describe("a11y 12-06 — library with a book", () => {
     // ALL engines (button activation, not sequential navigation).
     await page.locator("li.book-row .book-toggle").focus();
     await page.keyboard.press("Enter");
-    await expect(page.locator("li.book-row .book-toggle")).toHaveAttribute(
-      "aria-expanded",
-      "true",
-    );
+    await expect(page.locator("li.book-row .book-toggle")).toHaveAttribute("aria-expanded", "true");
     await page.keyboard.press("Enter");
     await expect(page.locator("li.book-row .book-toggle")).toHaveAttribute(
       "aria-expanded",
@@ -961,16 +906,12 @@ test.describe("a11y 12-06 — library with a book", () => {
     await expect(page.locator(resume)).toBeVisible();
     const resumeIndex = await page.locator(resume).evaluate((el) => {
       const row = el.closest("li");
-      const focusables = row?.querySelectorAll(
-        "a[href], button:not([disabled]), input",
-      );
+      const focusables = row?.querySelectorAll("a[href], button:not([disabled]), input");
       return focusables ? Array.from(focusables).indexOf(el) : -1;
-      });
+    });
     const toggleIndex = await bookRow.locator(".book-toggle").evaluate((el) => {
       const row = el.closest("li");
-      const focusables = row?.querySelectorAll(
-        "a[href], button:not([disabled]), input",
-      );
+      const focusables = row?.querySelectorAll("a[href], button:not([disabled]), input");
       return focusables ? Array.from(focusables).indexOf(el) : -1;
     });
     expect(resumeIndex).toBeGreaterThan(-1);
@@ -982,10 +923,7 @@ test.describe("a11y 12-06 — library with a book", () => {
     // on webkit the structural DOM-order indices above + focus() +
     // Enter-activation carry the claim).
     await page.keyboard.press("Enter"); // re-expand (still focused)
-    await expect(page.locator("li.book-row .book-toggle")).toHaveAttribute(
-      "aria-expanded",
-      "true",
-    );
+    await expect(page.locator("li.book-row .book-toggle")).toHaveAttribute("aria-expanded", "true");
     if (tabOrderFollowsDom()) {
       expect(
         await tabWalkFrom(
@@ -1041,9 +979,9 @@ test.describe("a11y 12-06 — chapter reading (both modes)", () => {
       .locator('a[href^="#/article/"]')
       .click();
     await page.waitForURL(/#\/article\/epub-[a-z0-9]+-c01$/, { timeout: 10_000 });
-    await expect(
-      page.locator(".page-fragment [data-block-index]").first(),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator(".page-fragment [data-block-index]").first()).toBeVisible({
+      timeout: 10_000,
+    });
     await page.waitForTimeout(800);
 
     // The context line is a PARAGRAPH, never a heading — the h1 chapter
@@ -1060,10 +998,8 @@ test.describe("a11y 12-06 — chapter reading (both modes)", () => {
     // mounts there; Tab-reach + Enter-activate it.
     for (let i = 0; i < 30; i++) {
       const state = await page.evaluate(() => {
-        const dev = (window as unknown as Record<string, unknown>)
-          .__lemPagination as
-          | { pagesLength: number; currentPageIdx: number }
-          | undefined;
+        const dev = (window as unknown as Record<string, unknown>).__lemPagination as
+          { pagesLength: number; currentPageIdx: number } | undefined;
         if (!dev || dev.pagesLength === 0) return { done: false };
         return { done: dev.currentPageIdx === dev.pagesLength - 1 };
       });
@@ -1087,9 +1023,9 @@ test.describe("a11y 12-06 — chapter reading (both modes)", () => {
     }
     await page.keyboard.press("Enter");
     await page.waitForURL(/#\/article\/epub-[a-z0-9]+-c02$/, { timeout: 10_000 });
-    await expect(
-      page.locator(".page-fragment [data-block-index]").first(),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator(".page-fragment [data-block-index]").first()).toBeVisible({
+      timeout: 10_000,
+    });
     await page.waitForTimeout(600);
 
     // axe on the chapter view in PAGINATED mode (context line + chapter
@@ -1105,8 +1041,8 @@ test.describe("a11y 12-06 — chapter reading (both modes)", () => {
     // the FIRST page + Enter-activatable (back to chapter 2).
     for (let i = 0; i < 30; i++) {
       const idx = await page.evaluate(() => {
-        const dev = (window as unknown as Record<string, unknown>)
-          .__lemPagination as { currentPageIdx: number } | undefined;
+        const dev = (window as unknown as Record<string, unknown>).__lemPagination as
+          { currentPageIdx: number } | undefined;
         return dev?.currentPageIdx ?? -1;
       });
       if (idx === 0) break;
@@ -1132,9 +1068,7 @@ test.describe("a11y 12-06 — chapter reading (both modes)", () => {
       () =>
         !!(
           document.querySelector(".page-fragment [data-block-index]") ??
-          document.querySelector(
-            ".article-body:not(.article-body-measurement) [data-block-index]",
-          )
+          document.querySelector(".article-body:not(.article-body-measurement) [data-block-index]")
         ),
       undefined,
       { timeout: 10_000 },
@@ -1145,20 +1079,13 @@ test.describe("a11y 12-06 — chapter reading (both modes)", () => {
     // Next link is Tab-reachable + Enter-activatable there too.
     await page.keyboard.press("m");
     await page.waitForTimeout(700);
-    await page.evaluate(() =>
-      window.scrollTo(0, document.documentElement.scrollHeight),
-    );
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
     await expect(page.locator("a.chapter-next")).toBeVisible();
     // The Export button is the LAST header focusable; the flow order is
     // header → prev nav → body → next nav, so a short walk reaches it.
     if (tabOrderFollowsDom()) {
       expect(
-        await tabWalkFrom(
-          page,
-          ".article-export-highlights",
-          "a.chapter-next",
-          5,
-        ),
+        await tabWalkFrom(page, ".article-export-highlights", "a.chapter-next", 5),
         "Tab must reach the Next chapter link in scrolling mode",
       ).toBe(true);
     } else {
@@ -1168,9 +1095,7 @@ test.describe("a11y 12-06 — chapter reading (both modes)", () => {
     await page.keyboard.press("Enter");
     await page.waitForURL(/#\/article\/epub-[a-z0-9]+-c02$/, { timeout: 10_000 });
     await expect(
-      page.locator(
-        ".article-body:not(.article-body-measurement) [data-block-index]",
-      ).first(),
+      page.locator(".article-body:not(.article-body-measurement) [data-block-index]").first(),
     ).toBeVisible({ timeout: 10_000 });
     await page.waitForTimeout(600);
 
@@ -1215,15 +1140,11 @@ test("a11y 16-04: open Add dialog is axe-clean; picker arrow-key walkthrough; vi
   page,
 }) => {
   await page.goto(`${BASE}/#/`);
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Saved articles" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
 
   // Open the focused Add dialog (the shared helper — ADD-01).
   await openAddDialog(page);
-  await expect(
-    page.getByRole("radio", { name: "Web address" }),
-  ).toBeVisible();
+  await expect(page.getByRole("radio", { name: "Web address" })).toBeVisible();
 
   // Zero serious/critical WCAG 2.2 AA violations on the OPEN dialog
   // surface (the same bar + explicit Pitfall-8 guards as every scan).
@@ -1274,12 +1195,8 @@ test("a11y 16-04: open Add dialog is axe-clean; picker arrow-key walkthrough; vi
         visible: el.matches(":focus-visible"),
       };
     });
-    expect(focusRing.style, "dialog controls must show the focus ring").not.toBe(
-      "none",
-    );
-    expect(focusRing.visible, "Tab-originated focus matches :focus-visible").toBe(
-      true,
-    );
+    expect(focusRing.style, "dialog controls must show the focus ring").not.toBe("none");
+    expect(focusRing.visible, "Tab-originated focus matches :focus-visible").toBe(true);
   }
 });
 

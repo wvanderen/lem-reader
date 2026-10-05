@@ -10,18 +10,13 @@
 // facing voice, so the test pins the Pattern-7 table byte-for-byte.
 import { describe, expect, it } from "vitest";
 import { mapReasonToCopy } from "../../src/ingestion/ingestCopy";
-import {
-  IngestionFailureReasonEnum,
-  type IngestionFailureReason,
-} from "../../src/ingestion/types";
+import { IngestionFailureReasonEnum, type IngestionFailureReason } from "../../src/ingestion/types";
 
 // The five Phase 11 PDF entries — EXACT strings from 11-RESEARCH.md
 // §Pattern 7 (researcher-discretion recommendation, locked by this plan).
 const EXPECTED_PDF_COPY: Record<string, string> = {
-  "pdf-unreadable":
-    "This PDF couldn't be opened — it may be corrupt or not a PDF.",
-  "pdf-encrypted":
-    "This PDF is password-protected, so its text can't be read.",
+  "pdf-unreadable": "This PDF couldn't be opened — it may be corrupt or not a PDF.",
+  "pdf-encrypted": "This PDF is password-protected, so its text can't be read.",
   "pdf-scanned":
     "This PDF looks like scanned images rather than text. An OCR tool could convert it first.",
   "pdf-multi-column":

@@ -110,14 +110,17 @@ describe("safeFetch SSRF guard (07-03 Task 1)", () => {
     ["http://100.64.0.1/", ["100.64.0.1"], []], // CGNAT
     ["http://192.168.1.1/", ["192.168.1.1"], []],
     ["http://172.16.5.5/", ["172.16.5.5"], []],
-  ])("refuses private/loopback/CGNAT IP via DNS resolve %s → ssrf-blocked-private-ip", async (url, v4) => {
-    resolve4Mock.mockResolvedValue(v4);
-    resolve6Mock.mockResolvedValue([]);
-    await expect(safeFetch(url)).rejects.toMatchObject({
-      reason: "ssrf-blocked-private-ip",
-    });
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
+  ])(
+    "refuses private/loopback/CGNAT IP via DNS resolve %s → ssrf-blocked-private-ip",
+    async (url, v4) => {
+      resolve4Mock.mockResolvedValue(v4);
+      resolve6Mock.mockResolvedValue([]);
+      await expect(safeFetch(url)).rejects.toMatchObject({
+        reason: "ssrf-blocked-private-ip",
+      });
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
 
   it("refuses IPv6 loopback ::1 → ssrf-blocked-private-ip", async () => {
     resolve4Mock.mockResolvedValue([]);
@@ -140,15 +143,18 @@ describe("safeFetch SSRF guard (07-03 Task 1)", () => {
     "http://0x7f000001/", // hex
     "http://2130706433/", // dword
     "http://0177.0.0.1/", // octal
-  ])("refuses IP-encoding bypass %s (URL-normalized then deny-listed) → ssrf-blocked-private-ip", async (url) => {
-    // Node's URL constructor normalizes all three to 127.0.0.1
-    resolve4Mock.mockResolvedValue(["127.0.0.1"]);
-    resolve6Mock.mockResolvedValue([]);
-    await expect(safeFetch(url)).rejects.toMatchObject({
-      reason: "ssrf-blocked-private-ip",
-    });
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
+  ])(
+    "refuses IP-encoding bypass %s (URL-normalized then deny-listed) → ssrf-blocked-private-ip",
+    async (url) => {
+      // Node's URL constructor normalizes all three to 127.0.0.1
+      resolve4Mock.mockResolvedValue(["127.0.0.1"]);
+      resolve6Mock.mockResolvedValue([]);
+      await expect(safeFetch(url)).rejects.toMatchObject({
+        reason: "ssrf-blocked-private-ip",
+      });
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
 
   it("refuses IPv4-mapped IPv6 → ssrf-blocked-private-ip", async () => {
     // ::ffff:127.0.0.1 — an IPv4-mapped IPv6; the guard must check its v4 form.
@@ -242,7 +248,10 @@ describe("safeFetch SSRF guard (07-03 Task 1)", () => {
       fakeResponse({
         status: 200,
         url: "https://example.com/article",
-        headers: { "content-length": String(html.length), "content-type": "text/html; charset=utf-8" },
+        headers: {
+          "content-length": String(html.length),
+          "content-type": "text/html; charset=utf-8",
+        },
         body: html,
       }),
     );
@@ -396,10 +405,7 @@ describe("safeFetchCore image profile (20-01 Task 2 — Pitfall 4)", () => {
   it.each([
     ["application/octet-stream", { "content-type": "application/octet-stream" }],
     ["binary/octet-stream", { "content-type": "binary/octet-stream" }],
-    [
-      "parameterized octet-stream",
-      { "content-type": "application/octet-stream; charset=binary" },
-    ],
+    ["parameterized octet-stream", { "content-type": "application/octet-stream; charset=binary" }],
     ["no content-type header at all", {}],
   ])(
     "admit-opaque: %s returns the byte body — the sniff decides, not the declared header (D20-10)",

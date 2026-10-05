@@ -38,13 +38,9 @@ test.describe("RECV-01.a review-panel route entry", () => {
     await wipeDatabase(page);
   });
 
-  test("(a) shell 'Highlights' link navigates to #/highlights", async ({
-    page,
-  }) => {
+  test("(a) shell 'Highlights' link navigates to #/highlights", async ({ page }) => {
     await page.goto(`${BASE}/`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
 
     // Plan 15-02 (OQ1) — the shell link inside the Primary nav replaced the
     // in-page LibraryView button as the library→highlights entry. A plain
@@ -54,37 +50,25 @@ test.describe("RECV-01.a review-panel route entry", () => {
       .getByRole("link", { name: "Highlights" })
       .click();
 
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Highlights" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
     await expect(page).toHaveURL(/#\/highlights$/);
   });
 
   test("(b) #/highlights is directly addressable (deep link)", async ({ page }) => {
     await page.goto(`${BASE}/#/highlights`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Highlights" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
   });
 
-  test("(c) browser-back from #/highlights returns to the library", async ({
-    page,
-  }) => {
+  test("(c) browser-back from #/highlights returns to the library", async ({ page }) => {
     // Two explicit entries so goBack deterministically lands on the library.
     await page.goto(`${BASE}/`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
     await page.goto(`${BASE}/#/highlights`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Highlights" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
 
     await page.goBack();
 
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
   });
 
   test("(d) route swap back leaves one main and one h1 (no duplicate landmarks)", async ({
@@ -96,15 +80,11 @@ test.describe("RECV-01.a review-panel route entry", () => {
       .getByRole("navigation", { name: "Primary" })
       .getByRole("link", { name: "Highlights" })
       .click();
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Highlights" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
 
     await page.goBack();
 
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
     await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
     await expect(page.locator("main#main")).toHaveCount(1);
   });
@@ -113,24 +93,18 @@ test.describe("RECV-01.a review-panel route entry", () => {
     page,
   }) => {
     await page.goto(`${BASE}/#/highlights`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Highlights" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
 
     // Regex name because the aria-label appends a formatted count when
     // highlights exist ("Highlights and notes, 3"). The trigger is
     // conditionally rendered (NOT CSS-hidden) — count 0 proves the Header
     // L98 articleMounted conditional is false outside the article view.
-    await expect(
-      page.getByRole("button", { name: /Highlights and notes/ }),
-    ).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Highlights and notes/ })).toHaveCount(0);
 
     // Contrast leg — the same regex matches on the article view, so the
     // zero-count above pins the gating rather than a bad selector.
     await page.goto(`${BASE}/#/article/${FIXTURES[0]}`);
-    await expect(
-      page.getByRole("button", { name: /Highlights and notes/ }),
-    ).toBeVisible();
+    await expect(page.getByRole("button", { name: /Highlights and notes/ })).toBeVisible();
   });
 
   // Plan 15-01 (D15-07) — the ONLY deliberate alias-exercise goto in the
@@ -148,23 +122,17 @@ test.describe("RECV-01.a review-panel route entry", () => {
     // Two explicit entries so goBack deterministically tests the entry
     // count (mirrors case (c)'s discipline).
     await page.goto(`${BASE}/`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
     await page.goto(`${BASE}/#/review`);
 
     // The alias lands on the Highlights page…
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Highlights" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
     // …and the URL is normalized to the canonical form.
     await expect(page).toHaveURL(/#\/highlights$/);
 
     // Single-entry Back semantics: replaceState added no history entry,
     // so one Back crosses directly to the library.
     await page.goBack();
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
   });
 });

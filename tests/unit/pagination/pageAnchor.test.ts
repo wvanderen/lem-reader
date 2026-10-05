@@ -17,10 +17,7 @@ import { describe, expect, it } from "vitest";
 import { ArticleSchema } from "../../../src/content/schema";
 import type { CanonicalArticle, InlineRun } from "../../../src/content/types";
 import { graphemeLength } from "../../../src/content/normalizeText";
-import {
-  pageAnchorOffset,
-  pageStartGlobalOffset,
-} from "../../../src/pagination/anchor";
+import { pageAnchorOffset, pageStartGlobalOffset } from "../../../src/pagination/anchor";
 import type { PageFragment } from "../../../src/pagination/types";
 
 // ─── fixture builders (progress-formula.test.ts analogs) ────────────────────
@@ -87,13 +84,9 @@ describe("pageAnchorOffset — committed-page anchor boundary table", () => {
     const pages = texts.map((text, i) =>
       fragment(i, [{ blockIndex: i, startGrapheme: 0, endGrapheme: text.length }]),
     );
-    expect(pageAnchorOffset(article, pages, 0)).toBe(
-      pageStartGlobalOffset(article, pages[0]!),
-    );
+    expect(pageAnchorOffset(article, pages, 0)).toBe(pageStartGlobalOffset(article, pages[0]!));
     expect(pageAnchorOffset(article, pages, 0)).toBe(0);
-    expect(pageAnchorOffset(article, pages, 1)).toBe(
-      pageStartGlobalOffset(article, pages[1]!),
-    );
+    expect(pageAnchorOffset(article, pages, 1)).toBe(pageStartGlobalOffset(article, pages[1]!));
   });
 
   it("last page of a 3-page set → graphemeLength(article) (the completion pin)", () => {

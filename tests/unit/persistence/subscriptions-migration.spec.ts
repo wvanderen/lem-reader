@@ -77,9 +77,7 @@ describe("Dexie v7 → v8 additive upgrade (issue #121, Pitfall 9)", () => {
         retrievedAt: "2026-09-01T00:00:00.000Z",
         originalHtmlHash: "sha256:" + "1".repeat(64),
       },
-      blocks: [
-        { kind: "paragraph", content: [{ text: "Legacy body.", marks: [] }] },
-      ],
+      blocks: [{ kind: "paragraph", content: [{ text: "Legacy body.", marks: [] }] }],
       footnotes: [],
       ingestionMeta: {
         source: "url",
@@ -156,12 +154,10 @@ describe("Dexie v7 → v8 additive upgrade (issue #121, Pitfall 9)", () => {
     // Every legacy row survives byte-honest (re-validated through the same
     // Zod schemas the read paths use).
     expect(await db.articles.get("legacy-v7-article")).toBeDefined();
-    expect(
-      HighlightRecordSchema.safeParse(await db.highlights.get("legacy-h1")).success,
-    ).toBe(true);
-    expect(
-      NoteRecordSchema.safeParse(await db.notes.get("legacy-n1")).success,
-    ).toBe(true);
+    expect(HighlightRecordSchema.safeParse(await db.highlights.get("legacy-h1")).success).toBe(
+      true,
+    );
+    expect(NoteRecordSchema.safeParse(await db.notes.get("legacy-n1")).success).toBe(true);
     const loc = await db.location.get(["legacy-v7-article", 1]);
     expect(LocationRecordSchema.safeParse(loc).success).toBe(true);
     expect(BookSchema.safeParse(await db.books.get("legacy-v7-book")).success).toBe(true);

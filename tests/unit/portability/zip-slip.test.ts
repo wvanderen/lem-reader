@@ -30,14 +30,12 @@ describe("isSafeEntryName — mandated SC#2 evil corpus (every one refused)", ()
 });
 
 describe("isSafeEntryName — valid controls (all accepted)", () => {
-  it.each([
-    ["bundle.json"],
-    ["manifest.json"],
-    ["a/b/c.json"],
-    ["dir/./file.txt"],
-  ])("accepts %s", (rawName) => {
-    expect(isSafeEntryName(rawName)).toBe(true);
-  });
+  it.each([["bundle.json"], ["manifest.json"], ["a/b/c.json"], ["dir/./file.txt"]])(
+    "accepts %s",
+    (rawName) => {
+      expect(isSafeEntryName(rawName)).toBe(true);
+    },
+  );
 });
 
 describe("sanitizeFilename", () => {

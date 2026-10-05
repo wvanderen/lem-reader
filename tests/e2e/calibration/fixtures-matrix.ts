@@ -38,9 +38,7 @@ const SIZES_FULL: readonly SizeStep[] = [16, 18, 20, 22, 24];
 // measure axis follows MEASURE_STEPS / the ReaderSettingsSchema union
 // (MeasureStep derives from the schema type; a non-step value like 72
 // would not compile).
-const MEASURES_FULL: readonly MeasureStep[] = [
-  40, 46, 52, 58, 64, 70, 76, 82, 88,
-];
+const MEASURES_FULL: readonly MeasureStep[] = [40, 46, 52, 58, 64, 70, 76, 82, 88];
 const SPACINGS: readonly SpacingKey[] = ["compact", "comfortable", "spacious"];
 
 // CI-friendly sampled steps (RESEARCH Open Question A2 — full matrix may be
@@ -60,7 +58,8 @@ function cartesian<F, S, T, U>(
   us: readonly U[],
 ): Array<[F, S, T, U]> {
   const out: Array<[F, S, T, U]> = [];
-  for (const f of fs) for (const s of ss) for (const t of ts) for (const u of us) out.push([f, s, t, u]);
+  for (const f of fs)
+    for (const s of ss) for (const t of ts) for (const u of us) out.push([f, s, t, u]);
   return out;
 }
 
@@ -102,8 +101,7 @@ export const SAMPLED_MATRIX: readonly TypographyVariant[] = cartesian(
  * The active matrix for the harness run. Override via LEM_FULL_CALIBRATION=1
  * to use the full 405-variant matrix.
  */
-export const ACTIVE_MATRIX: readonly TypographyVariant[] = process.env
-  .LEM_FULL_CALIBRATION
+export const ACTIVE_MATRIX: readonly TypographyVariant[] = process.env.LEM_FULL_CALIBRATION
   ? TYPOGRAPHY_MATRIX
   : SAMPLED_MATRIX;
 
@@ -124,9 +122,7 @@ export const DEFAULT_CALIBRATION_SETTINGS: ReaderSettings = {
 };
 
 /** Merge a variant patch into the default settings. */
-export function settingsForVariant(
-  v: TypographyVariant,
-): ReaderSettings {
+export function settingsForVariant(v: TypographyVariant): ReaderSettings {
   return { ...DEFAULT_CALIBRATION_SETTINGS, ...v };
 }
 

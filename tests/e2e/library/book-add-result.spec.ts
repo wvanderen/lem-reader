@@ -51,10 +51,7 @@ import {
   addAnother,
   closeSavedResult,
 } from "./add-dialog";
-import {
-  bookEnvelope,
-  mockEpubIngest,
-} from "./book-envelope";
+import { bookEnvelope, mockEpubIngest } from "./book-envelope";
 
 /** The header-row trigger (the single way into the dialog). */
 function addButton(page: Page) {
@@ -64,9 +61,7 @@ function addButton(page: Page) {
 /** Open the library surface (the saved-articles list on #/). */
 async function openLibrary(page: Page): Promise<void> {
   await page.goto(`${BASE}/#/`);
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Saved articles" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
 }
 
 /** Pick a minimal .epub into the file picker and submit (the mock
@@ -94,13 +89,9 @@ async function addEpubToResult(
   await openLibrary(page);
   await uploadEpub(page, `${bookId}.epub`);
   const dialog = page.locator("dialog.add-dialog");
-  await expect(dialog.locator(".status")).toContainText(
-    "Saved to your library.",
-  );
+  await expect(dialog.locator(".status")).toContainText("Saved to your library.");
   await expect(dialog.locator(".add-result")).toBeVisible();
-  await expect(
-    dialog.getByRole("heading", { name: title, level: 3 }),
-  ).toBeVisible();
+  await expect(dialog.getByRole("heading", { name: title, level: 3 })).toBeVisible();
 }
 
 test.beforeEach(async ({ page }) => {
@@ -120,33 +111,25 @@ test.describe("Book add result preserves Unread (issue #113)", () => {
     );
     // The outcome actions are explicit; NO navigation ever happened.
     await expect(dialog.getByRole("button", { name: "Open book" })).toBeVisible();
-    await expect(
-      dialog.getByRole("button", { name: "Add another" }),
-    ).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Add another" })).toBeVisible();
     await expect(dialog.getByRole("button", { name: "Close" })).toBeVisible();
     expect(page.url(), "no auto-navigation on save").not.toContain("#/article");
     // A book result carries no per-article limits and no provenance link.
     await expect(dialog.locator(".add-result .extraction-note")).toHaveCount(0);
-    await expect(
-      dialog.locator(".add-result .partial-content-note"),
-    ).toHaveCount(0);
+    await expect(dialog.locator(".add-result .partial-content-note")).toHaveCount(0);
     await expect(dialog.locator(".add-result .add-result-source")).toHaveCount(0);
 
     // Close: back on the library destination, dialog gone.
     await closeSavedResult(page);
     expect(page.url()).not.toContain("#/article");
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
 
     // THE Unread transition: the never-opened book is in the Unread view
     // (no chapter location exists; the snapshot invalidated while the
     // dialog was open — the reload-free row appearance is asserted in the
     // add-another case below).
     await page.goto(`${BASE}/#/unread`);
-    await expect(
-      page.getByRole("link", { name: /^Unread \(\d+\)$/ }),
-    ).toBeVisible();
+    await expect(page.getByRole("link", { name: /^Unread \(\d+\)$/ })).toBeVisible();
     await expect(
       page.locator("li.book-row").filter({ hasText: "The Mock Skip Book" }),
     ).toBeVisible();
@@ -156,9 +139,7 @@ test.describe("Book add result preserves Unread (issue #113)", () => {
     await addEpubToResult(page, "epub-mockclean01", "The Mock Clean Book", 0);
 
     // Silence is the all-chapters-admitted state — no disclosure line.
-    await expect(
-      page.locator("dialog.add-dialog .add-result .add-result-skips"),
-    ).toHaveCount(0);
+    await expect(page.locator("dialog.add-dialog .add-result .add-result-skips")).toHaveCount(0);
     await closeSavedResult(page);
   });
 
@@ -178,9 +159,7 @@ test.describe("Book add result preserves Unread (issue #113)", () => {
     // library behind the dialog (Playwright visibility = not hidden with a
     // bounding box; the modal does not hide background content) — no
     // navigation, no reload.
-    await expect(
-      page.locator("li.book-row").filter({ hasText: "The First Book" }),
-    ).toBeVisible();
+    await expect(page.locator("li.book-row").filter({ hasText: "The First Book" })).toBeVisible();
 
     await addAnother(page);
 
@@ -205,19 +184,13 @@ test.describe("Book add result preserves Unread (issue #113)", () => {
       buffer: Buffer.from("PK-mock-bytes-2"),
     });
     await page.getByRole("button", { name: /add file/i }).click();
-    await expect(dialog.locator(".status")).toContainText(
-      "Saved to your library.",
+    await expect(dialog.locator(".status")).toContainText("Saved to your library.");
+    await expect(dialog.getByRole("heading", { name: "The Second Book", level: 3 })).toBeVisible();
+    await expect(dialog.locator(".add-result .add-result-skips")).toHaveText(
+      "1 chapter could not be read.",
     );
-    await expect(
-      dialog.getByRole("heading", { name: "The Second Book", level: 3 }),
-    ).toBeVisible();
-    await expect(
-      dialog.locator(".add-result .add-result-skips"),
-    ).toHaveText("1 chapter could not be read.");
     await closeSavedResult(page);
-    await expect(
-      page.locator("li.book-row").filter({ hasText: "The Second Book" }),
-    ).toBeVisible();
+    await expect(page.locator("li.book-row").filter({ hasText: "The Second Book" })).toBeVisible();
     await expect(page.locator("li.book-row")).toHaveCount(2);
   });
 
@@ -239,9 +212,7 @@ test.describe("Book add result preserves Unread (issue #113)", () => {
 
     const dialog = page.locator("dialog.add-dialog");
     // Distinct surfaces: the calm refusal copy, NOT a saved result.
-    await expect(dialog.locator(".status")).toContainText(
-      "Already in your library.",
-    );
+    await expect(dialog.locator(".status")).toContainText("Already in your library.");
     await expect(dialog.locator(".add-result")).toHaveCount(0);
     await expect(dialog.getByRole("button", { name: "Open book" })).toHaveCount(0);
     await expect(dialog.getByRole("button", { name: "Add another" })).toHaveCount(0);
@@ -261,9 +232,9 @@ test.describe("Book add result preserves Unread (issue #113)", () => {
 
     // The first DECLARED live chapter opens (a chapter IS an article).
     await openSavedBook(page, /#\/article\/epub-mockopen01-c00$/);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Chapter 1. Mock" }),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { level: 1, name: "Chapter 1. Mock" })).toBeVisible({
+      timeout: 10_000,
+    });
     await expect(page.locator("dialog.add-dialog")).not.toBeVisible();
     // The reading-location rule for a never-opened chapter: the reader
     // starts at the beginning — no restoration marker, no resume banner.
@@ -304,17 +275,17 @@ test.describe("Book add result preserves Unread (issue #113)", () => {
     });
     await page.getByRole("button", { name: /add file/i }).click();
     await expect(dialog.locator(".add-result")).toBeVisible();
-    await expect(
-      dialog.locator(".add-result .add-result-skips"),
-    ).toHaveText("1 chapter could not be read.");
+    await expect(dialog.locator(".add-result .add-result-skips")).toHaveText(
+      "1 chapter could not be read.",
+    );
     await dialog.getByRole("button", { name: "Open book" }).focus();
     await page.keyboard.press("Enter");
     await page.waitForURL(/#\/article\/epub-mockkeys02-c00$/, {
       timeout: 15_000,
     });
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Chapter 1. Mock" }),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { level: 1, name: "Chapter 1. Mock" })).toBeVisible({
+      timeout: 10_000,
+    });
     await expect(page.locator("dialog.add-dialog")).not.toBeVisible();
   });
 
@@ -346,9 +317,7 @@ test.describe("Book add result preserves Unread (issue #113)", () => {
 
     // THE landing: focus sits on the saved title (the keyboard + SR entry
     // point into the result).
-    const focusedClass = await page.evaluate(
-      () => document.activeElement?.className ?? "",
-    );
+    const focusedClass = await page.evaluate(() => document.activeElement?.className ?? "");
     expect(focusedClass).toBe("add-result-title");
 
     // Tab moves past the card (a book carries no original link) into the
@@ -373,8 +342,6 @@ test.describe("Book add result preserves Unread (issue #113)", () => {
     await expect(trigger).toBeFocused();
     // Closing (not opening) preserved Unread: the book is in Unread.
     await page.goto(`${BASE}/#/unread`);
-    await expect(
-      page.locator("li.book-row").filter({ hasText: "The Focus Book" }),
-    ).toBeVisible();
+    await expect(page.locator("li.book-row").filter({ hasText: "The Focus Book" })).toBeVisible();
   });
 });

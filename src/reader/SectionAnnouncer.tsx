@@ -41,7 +41,5 @@ export function SectionAnnouncer({ articleEl }: SectionAnnouncerProps) {
     },
   });
 
-  return (
-    <StatusRegion className="visually-hidden">{announce}</StatusRegion>
-  );
+  return <StatusRegion className="visually-hidden">{announce}</StatusRegion>;
 }

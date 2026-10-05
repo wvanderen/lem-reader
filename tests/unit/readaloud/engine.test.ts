@@ -17,16 +17,9 @@
 //      the stall watchdog; three consecutive failed utterances fail the
 //      session — never an infinite speak/error loop.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  mapBoundaryRangeToCanonical,
-  ReadAloudEngine,
-} from "../../../src/readaloud/engine";
+import { mapBoundaryRangeToCanonical, ReadAloudEngine } from "../../../src/readaloud/engine";
 import type { SkipUnits, SpeechChunk } from "../../../src/readaloud/chunks";
-import type {
-  SpeechAdapter,
-  SpeakRequest,
-  UtteranceEvents,
-} from "../../../src/readaloud/types";
+import type { SpeechAdapter, SpeakRequest, UtteranceEvents } from "../../../src/readaloud/types";
 
 // ─── fake adapter ────────────────────────────────────────────────────────────
 
@@ -70,9 +63,7 @@ function chunk(
     text,
     startGrapheme,
     endGrapheme: startGrapheme + width,
-    utf16ToGrapheme: Array.from({ length: width + 1 }, (_, i) =>
-      Math.min(i, width),
-    ),
+    utf16ToGrapheme: Array.from({ length: width + 1 }, (_, i) => Math.min(i, width)),
     units,
   };
 }
@@ -121,7 +112,7 @@ function makeEngine(chunks = makeChunks()): Harness {
       onFollowLevel: (l) => h.levels.push(l),
       onProgress: (o) => h.progress.push(o),
       onSpokenRange: (range) => h.spokenRanges.push(range),
-      onFinish: () => h.finished += 1,
+      onFinish: () => (h.finished += 1),
       onError: (m) => h.errors.push(m),
     },
   });

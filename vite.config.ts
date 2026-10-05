@@ -10,9 +10,9 @@ import { viteIngestMiddleware } from "./dev-server/ingest-middleware";
 // `src/vite-env.d.ts` declares it for TypeScript. bundle.ts's
 // resolveAppVersion() guards with typeof so unit tests (no define) get
 // "dev" instead of a ReferenceError.
-const pkg = JSON.parse(
-  readFileSync(new URL("./package.json", import.meta.url), "utf-8"),
-) as { version: string };
+const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf-8")) as {
+  version: string;
+};
 
 // ── 07-06 HYBRID CONTINGENCY adaptation (human-approved 2026-08-11) ────────
 // Per the 07-01 spike verdict, extraction (jsdom + DOMPurify + Readability)

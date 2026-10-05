@@ -362,9 +362,7 @@ test.describe("focused Add dialog (ADD-04 — 16-04 Task 1)", () => {
       window.addEventListener(
         "hashchange",
         () => {
-          const dlg = document.querySelector("dialog.add-dialog") as
-            | HTMLDialogElement
-            | null;
+          const dlg = document.querySelector("dialog.add-dialog") as HTMLDialogElement | null;
           // Issue #84 — the dialog mounts at the APP SHELL (the ONE
           // session shared with the Highlights header icon), so the
           // element stays in the document after close (the SettingsPanel

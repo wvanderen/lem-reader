@@ -21,8 +21,7 @@ function makeSurface(): {
 } {
   const state = { page: 2, total: 4 };
   const turn = vi.fn((direction: "next" | "previous") => {
-    const moved =
-      direction === "next" ? state.page < state.total : state.page > 1;
+    const moved = direction === "next" ? state.page < state.total : state.page > 1;
     if (moved) {
       state.page += direction === "next" ? 1 : -1;
     }
@@ -70,104 +69,56 @@ describe("PageTurnControls — keyboard bundle (D4-05)", () => {
 
   it("PageDown calls turn('next')", () => {
     const surface = makeSurface();
-    render(
-      <PageTurnControls
-        enabled={true}
-        surfaceRef={surface.ref}
-        articleEl={document.body}
-      />,
-    );
+    render(<PageTurnControls enabled={true} surfaceRef={surface.ref} articleEl={document.body} />);
     dispatchKey("PageDown");
     expect(surface.turn).toHaveBeenCalledWith("next");
   });
 
   it("ArrowRight calls turn('next')", () => {
     const surface = makeSurface();
-    render(
-      <PageTurnControls
-        enabled={true}
-        surfaceRef={surface.ref}
-        articleEl={document.body}
-      />,
-    );
+    render(<PageTurnControls enabled={true} surfaceRef={surface.ref} articleEl={document.body} />);
     dispatchKey("ArrowRight");
     expect(surface.turn).toHaveBeenCalledWith("next");
   });
 
   it("Space (no shift) calls turn('next')", () => {
     const surface = makeSurface();
-    render(
-      <PageTurnControls
-        enabled={true}
-        surfaceRef={surface.ref}
-        articleEl={document.body}
-      />,
-    );
+    render(<PageTurnControls enabled={true} surfaceRef={surface.ref} articleEl={document.body} />);
     dispatchKey(" ");
     expect(surface.turn).toHaveBeenCalledWith("next");
   });
 
   it("PageUp calls turn('previous')", () => {
     const surface = makeSurface();
-    render(
-      <PageTurnControls
-        enabled={true}
-        surfaceRef={surface.ref}
-        articleEl={document.body}
-      />,
-    );
+    render(<PageTurnControls enabled={true} surfaceRef={surface.ref} articleEl={document.body} />);
     dispatchKey("PageUp");
     expect(surface.turn).toHaveBeenCalledWith("previous");
   });
 
   it("ArrowLeft calls turn('previous')", () => {
     const surface = makeSurface();
-    render(
-      <PageTurnControls
-        enabled={true}
-        surfaceRef={surface.ref}
-        articleEl={document.body}
-      />,
-    );
+    render(<PageTurnControls enabled={true} surfaceRef={surface.ref} articleEl={document.body} />);
     dispatchKey("ArrowLeft");
     expect(surface.turn).toHaveBeenCalledWith("previous");
   });
 
   it("Shift+Space calls turn('previous')", () => {
     const surface = makeSurface();
-    render(
-      <PageTurnControls
-        enabled={true}
-        surfaceRef={surface.ref}
-        articleEl={document.body}
-      />,
-    );
+    render(<PageTurnControls enabled={true} surfaceRef={surface.ref} articleEl={document.body} />);
     dispatchKey(" ", true);
     expect(surface.turn).toHaveBeenCalledWith("previous");
   });
 
   it("calls preventDefault on handled keys (so Space does not also scroll)", () => {
     const surface = makeSurface();
-    render(
-      <PageTurnControls
-        enabled={true}
-        surfaceRef={surface.ref}
-        articleEl={document.body}
-      />,
-    );
+    render(<PageTurnControls enabled={true} surfaceRef={surface.ref} articleEl={document.body} />);
     const event = dispatchKey(" ");
     expect(event.defaultPrevented).toBe(true);
   });
 
   it("does NOT call turn when enabled is false (listener removed on mode-switch)", () => {
     const surface = makeSurface();
-    render(
-      <PageTurnControls
-        enabled={false}
-        surfaceRef={surface.ref}
-        articleEl={document.body}
-      />,
-    );
+    render(<PageTurnControls enabled={false} surfaceRef={surface.ref} articleEl={document.body} />);
     dispatchKey("PageDown");
     expect(surface.turn).not.toHaveBeenCalled();
   });
@@ -187,11 +138,7 @@ describe("PageTurnControls — form-field/dialog bail (T-04-10, A11Y-01)", () =>
     render(
       <div>
         <input data-testid="field" />
-        <PageTurnControls
-          enabled={true}
-          surfaceRef={surface.ref}
-          articleEl={document.body}
-        />
+        <PageTurnControls enabled={true} surfaceRef={surface.ref} articleEl={document.body} />
       </div>,
     );
     const input = screen.getByTestId("field");
@@ -207,11 +154,7 @@ describe("PageTurnControls — form-field/dialog bail (T-04-10, A11Y-01)", () =>
     render(
       <div>
         <div data-testid="editable" />
-        <PageTurnControls
-          enabled={true}
-          surfaceRef={surface.ref}
-          articleEl={document.body}
-          />
+        <PageTurnControls enabled={true} surfaceRef={surface.ref} articleEl={document.body} />
       </div>,
     );
     const editable = screen.getByTestId("editable");
@@ -260,13 +203,7 @@ describe("PageTurnControls — swipe (D4-06)", () => {
     const surface = makeSurface();
     const articleEl = document.createElement("article");
     document.body.appendChild(articleEl);
-    render(
-      <PageTurnControls
-        enabled={true}
-        surfaceRef={surface.ref}
-        articleEl={articleEl}
-      />,
-    );
+    render(<PageTurnControls enabled={true} surfaceRef={surface.ref} articleEl={articleEl} />);
     articleEl.dispatchEvent(
       new TouchEvent("touchstart", { touches: [touch(200, 100, articleEl)] }),
     );
@@ -284,13 +221,7 @@ describe("PageTurnControls — swipe (D4-06)", () => {
     const surface = makeSurface();
     const articleEl = document.createElement("article");
     document.body.appendChild(articleEl);
-    render(
-      <PageTurnControls
-        enabled={true}
-        surfaceRef={surface.ref}
-        articleEl={articleEl}
-      />,
-    );
+    render(<PageTurnControls enabled={true} surfaceRef={surface.ref} articleEl={articleEl} />);
     articleEl.dispatchEvent(
       new TouchEvent("touchstart", { touches: [touch(100, 100, articleEl)] }),
     );
@@ -308,13 +239,7 @@ describe("PageTurnControls — swipe (D4-06)", () => {
     const surface = makeSurface();
     const articleEl = document.createElement("article");
     document.body.appendChild(articleEl);
-    render(
-      <PageTurnControls
-        enabled={true}
-        surfaceRef={surface.ref}
-        articleEl={articleEl}
-      />,
-    );
+    render(<PageTurnControls enabled={true} surfaceRef={surface.ref} articleEl={articleEl} />);
     // Two touches start → multi-touch flag set → touchend bails.
     articleEl.dispatchEvent(
       new TouchEvent("touchstart", {
@@ -335,13 +260,7 @@ describe("PageTurnControls — swipe (D4-06)", () => {
     const surface = makeSurface();
     const articleEl = document.createElement("article");
     document.body.appendChild(articleEl);
-    render(
-      <PageTurnControls
-        enabled={true}
-        surfaceRef={surface.ref}
-        articleEl={articleEl}
-      />,
-    );
+    render(<PageTurnControls enabled={true} surfaceRef={surface.ref} articleEl={articleEl} />);
     articleEl.dispatchEvent(
       new TouchEvent("touchstart", { touches: [touch(100, 100, articleEl)] }),
     );
@@ -360,13 +279,7 @@ describe("PageTurnControls — swipe (D4-06)", () => {
     const surface = makeSurface();
     const articleEl = document.createElement("article");
     document.body.appendChild(articleEl);
-    render(
-      <PageTurnControls
-        enabled={true}
-        surfaceRef={surface.ref}
-        articleEl={articleEl}
-      />,
-    );
+    render(<PageTurnControls enabled={true} surfaceRef={surface.ref} articleEl={articleEl} />);
     articleEl.dispatchEvent(
       new TouchEvent("touchstart", { touches: [touch(100, 100, articleEl)] }),
     );
@@ -394,11 +307,7 @@ describe("PageTurnControls — announce (A11Y-08)", () => {
   it("announces 'Page N of M.' after a successful turn (debounced)", () => {
     const surface = makeSurface(); // starts at page 2 of 4
     const { container } = render(
-      <PageTurnControls
-        enabled={true}
-        surfaceRef={surface.ref}
-        articleEl={document.body}
-      />,
+      <PageTurnControls enabled={true} surfaceRef={surface.ref} articleEl={document.body} />,
     );
     // Turn next → page 3 of 4.
     dispatchKey("PageDown");
@@ -408,9 +317,7 @@ describe("PageTurnControls — announce (A11Y-08)", () => {
     act(() => {
       vi.advanceTimersByTime(250);
     });
-    expect(container.querySelector('div[role="status"]')?.textContent).toBe(
-      "Page 3 of 4.",
-    );
+    expect(container.querySelector('div[role="status"]')?.textContent).toBe("Page 3 of 4.");
   });
 
   it("does NOT announce when the turn was a no-op (boundary: already on last page)", () => {
@@ -418,11 +325,7 @@ describe("PageTurnControls — announce (A11Y-08)", () => {
     surface.state.page = 4;
     surface.state.total = 4;
     const { container } = render(
-      <PageTurnControls
-        enabled={true}
-        surfaceRef={surface.ref}
-        articleEl={document.body}
-      />,
+      <PageTurnControls enabled={true} surfaceRef={surface.ref} articleEl={document.body} />,
     );
     dispatchKey("PageDown"); // at last page → moved:false → no announce
     act(() => {
@@ -434,11 +337,7 @@ describe("PageTurnControls — announce (A11Y-08)", () => {
   it("rapid turns reflect the FINAL page (debounce anti-flood)", () => {
     const surface = makeSurface(); // page 2 of 4
     const { container } = render(
-      <PageTurnControls
-        enabled={true}
-        surfaceRef={surface.ref}
-        articleEl={document.body}
-      />,
+      <PageTurnControls enabled={true} surfaceRef={surface.ref} articleEl={document.body} />,
     );
     // Two rapid next-turns: page 2 → 3 → 4.
     dispatchKey("PageDown");
@@ -447,8 +346,6 @@ describe("PageTurnControls — announce (A11Y-08)", () => {
       vi.advanceTimersByTime(250);
     });
     // Only ONE announce, reflecting the final page (4 of 4).
-    expect(container.querySelector('div[role="status"]')?.textContent).toBe(
-      "Page 4 of 4.",
-    );
+    expect(container.querySelector('div[role="status"]')?.textContent).toBe("Page 4 of 4.");
   });
 });

@@ -151,7 +151,8 @@ describe("optional starter article", () => {
     const { libraryFixtures } = await import("../../../src/fixtures");
     const { dexieLibrarySource } = await import("../../../src/ingestion/LibrarySource");
     await dexieLibrarySource.save(libraryFixtures[0]!);
-    const { compositeLibraryRepository: library } = await import("../../../src/ingestion/LibrarySource");
+    const { compositeLibraryRepository: library } =
+      await import("../../../src/ingestion/LibrarySource");
     expect(await library.list()).toEqual([]);
     expect(await library.open("getting-started")).toBeNull();
   });

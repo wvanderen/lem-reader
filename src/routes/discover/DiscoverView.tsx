@@ -613,7 +613,12 @@ export function DiscoverView({ hasAppHistory }: { hasAppHistory: boolean }) {
                                   className="btn btn-quiet discover-item-open"
                                   ref={(node) => {
                                     const pending = saveFocusRef.current;
-                                    if (!node || pending?.link !== link || node.closest(".discover-item") !== pending.row) return;
+                                    if (
+                                      !node ||
+                                      pending?.link !== link ||
+                                      node.closest(".discover-item") !== pending.row
+                                    )
+                                      return;
                                     if (
                                       document.activeElement === pending.button ||
                                       document.activeElement === document.body

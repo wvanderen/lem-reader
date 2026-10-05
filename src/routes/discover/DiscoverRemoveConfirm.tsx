@@ -120,9 +120,7 @@ export function DiscoverRemoveConfirm({
     >
       <div className="discover-remove-confirm-inner">
         <h2 id="discover-remove-title">Remove subscription</h2>
-        <p id="discover-remove-body">
-          Remove {feedTitle}? Its saved previews will be removed.
-        </p>
+        <p id="discover-remove-body">Remove {feedTitle}? Its saved previews will be removed.</p>
         {/* Issue #98 — the honest-failure line. Always-mounted StatusRegion;
             idle it renders no children and paints nothing. */}
         <StatusRegion>

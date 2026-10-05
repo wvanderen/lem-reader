@@ -35,7 +35,11 @@ const PASTE_TITLE = "Calm Reading Interfaces Lecture";
 describe("timestamped paste + YouTube URL", () => {
   it("ingests into a youtube-sourced article with pasted transcript meta", async () => {
     const response = await ingest({
-      transcript: { text: PANEL, title: PASTE_TITLE, url: "https://www.youtube.com/watch?v=aircAruvnKk" },
+      transcript: {
+        text: PANEL,
+        title: PASTE_TITLE,
+        url: "https://www.youtube.com/watch?v=aircAruvnKk",
+      },
     });
     expect(response.ok).toBe(true);
     if (!response.ok || !("article" in response)) return;
@@ -72,13 +76,21 @@ describe("timestamped paste + YouTube URL", () => {
 
   it("derives the SAME yt-<hash> id from every URL form (watch / youtu.be / shorts)", async () => {
     const watch = await ingest({
-      transcript: { text: PANEL, title: PASTE_TITLE, url: "https://www.youtube.com/watch?v=aircAruvnKk" },
+      transcript: {
+        text: PANEL,
+        title: PASTE_TITLE,
+        url: "https://www.youtube.com/watch?v=aircAruvnKk",
+      },
     });
     const shortForm = await ingest({
       transcript: { text: PANEL, title: PASTE_TITLE, url: "https://youtu.be/aircAruvnKk?t=7" },
     });
     const shorts = await ingest({
-      transcript: { text: PANEL, title: PASTE_TITLE, url: "https://www.youtube.com/shorts/aircAruvnKk" },
+      transcript: {
+        text: PANEL,
+        title: PASTE_TITLE,
+        url: "https://www.youtube.com/shorts/aircAruvnKk",
+      },
     });
     if (!watch.ok || !("article" in watch)) return expect.unreachable();
     if (!shortForm.ok || !("article" in shortForm)) return expect.unreachable();
@@ -89,7 +101,11 @@ describe("timestamped paste + YouTube URL", () => {
 
   it("round-trips selectors over text with no timestamps in it (decision #26)", async () => {
     const response = await ingest({
-      transcript: { text: PANEL, title: PASTE_TITLE, url: "https://www.youtube.com/watch?v=aircAruvnKk" },
+      transcript: {
+        text: PANEL,
+        title: PASTE_TITLE,
+        url: "https://www.youtube.com/watch?v=aircAruvnKk",
+      },
     });
     expect(response.ok).toBe(true);
     if (!response.ok || !("article" in response)) return;
@@ -110,7 +126,11 @@ describe("plain-text paste (no timestamps)", () => {
 
   it("with a YouTube URL keeps the yt- identity but emits NO fabricated timings", async () => {
     const response = await ingest({
-      transcript: { text: PLAIN, title: PASTE_TITLE, url: "https://www.youtube.com/watch?v=aircAruvnKk" },
+      transcript: {
+        text: PLAIN,
+        title: PASTE_TITLE,
+        url: "https://www.youtube.com/watch?v=aircAruvnKk",
+      },
     });
     expect(response.ok).toBe(true);
     if (!response.ok || !("article" in response)) return;

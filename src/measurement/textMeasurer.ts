@@ -40,12 +40,7 @@
 //     153). The adapter derives `font` + `lineHeight` PER KIND via
 //     `fontStringFor()` — body geometry for paragraphs, hardcoded heading
 //     geometry for headings. See HEADING_GEOMETRY below.
-import {
-  layout,
-  layoutWithLines,
-  prepare,
-  prepareWithSegments,
-} from "@chenglou/pretext";
+import { layout, layoutWithLines, prepare, prepareWithSegments } from "@chenglou/pretext";
 import type { ReaderSettings } from "../content/schema";
 import { FONT_STACKS, SPACING_PRESETS } from "../settings/tokens";
 

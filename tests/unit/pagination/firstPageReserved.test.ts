@@ -44,11 +44,7 @@ function parseArticle(blocks: unknown[]): CanonicalArticle {
   return ArticleSchema.parse({ ...baseArticle, blocks });
 }
 
-function uniformLineBoxes(
-  textLength: number,
-  charsPerLine: number,
-  lineHeight = 20,
-): LineBox[] {
+function uniformLineBoxes(textLength: number, charsPerLine: number, lineHeight = 20): LineBox[] {
   if (textLength === 0) return [];
   const count = Math.max(1, Math.ceil(textLength / charsPerLine));
   const boxes: LineBox[] = [];
@@ -115,10 +111,7 @@ function blockGraphemeLength(block: CanonicalArticle["blocks"][number]): number 
 }
 
 /** Assert every block's intra-block ranges union to [0, blockLen) exactly once. */
-function assertExactOnceCoverage(
-  article: CanonicalArticle,
-  result: FragmentationResult,
-): void {
+function assertExactOnceCoverage(article: CanonicalArticle, result: FragmentationResult): void {
   expect(result.status).toBe("ok");
   expect(result.pages.length).toBeGreaterThan(0);
   const byBlock = new Map<number, Array<{ start: number; end: number }>>();
@@ -194,9 +187,7 @@ describe("paginateDocument — firstPageReservedPx (Plan 13-04 Option A)", () =>
     expect(result.pages.map((p) => p.blocks.length)).toEqual([1, 3, 1]);
     // Page 1 holds exactly one whole block (the reserved budget bound it).
     expect(result.pages[0]!.blocks).toHaveLength(1);
-    expect(result.pages[0]!.blocks[0]!.endGrapheme).toBe(
-      blockGraphemeLength(article.blocks[0]!),
-    );
+    expect(result.pages[0]!.blocks[0]!.endGrapheme).toBe(blockGraphemeLength(article.blocks[0]!));
     assertExactOnceCoverage(article, result);
   });
 
@@ -292,9 +283,7 @@ describe("paginateDocument — firstPageReservedPx (Plan 13-04 Option A)", () =>
     const page1Block0 = result.pages[0]!.blocks.find((b) => b.blockIndex === 0);
     expect(page1Block0).toBeDefined();
     expect(page1Block0!.endGrapheme).toBeGreaterThan(0);
-    expect(page1Block0!.endGrapheme).toBeLessThan(
-      blockGraphemeLength(article.blocks[0]!),
-    );
+    expect(page1Block0!.endGrapheme).toBeLessThan(blockGraphemeLength(article.blocks[0]!));
     assertExactOnceCoverage(article, result);
   });
 
@@ -334,10 +323,7 @@ describe("paginateDocument — firstPageReservedPx (Plan 13-04 Option A)", () =>
      * span 123px, so heightPx 144 carries the recorded 21px structural
      * overhead.
      */
-    const REPRO_TEXTS = [
-      "aaaa bbbb cccc dddd eeee",
-      "ffff gggg hhhh iiii jjjj",
-    ];
+    const REPRO_TEXTS = ["aaaa bbbb cccc dddd eeee", "ffff gggg hhhh iiii jjjj"];
     const reproMeasurement = () =>
       measurementStub(
         REPRO_TEXTS.map((t) => ({

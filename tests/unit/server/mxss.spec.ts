@@ -133,19 +133,16 @@ describe("sanitizeExtractedHtml — DOMPurify strips every Attack Classes payloa
 describe("extractAndNormalize — full pipeline strips every Attack Classes payload", () => {
   // Integration test: the payload travels Readability → DOMPurify → DOM walk →
   // Block tree. The serialized Block tree MUST NOT carry any forbidden token.
-  it.each(MXSS_PAYLOADS)(
-    "Block tree is clean for $name",
-    async ({ html, forbiddenSubstring }) => {
-      const { blocks } = await extractAndNormalize(wrapInArticle(html), undefined);
-      const serialized = JSON.stringify(blocks);
-      expect(serialized).not.toContain(forbiddenSubstring);
-      expect(serialized).not.toContain("onerror");
-      expect(serialized).not.toContain("onload");
-      expect(serialized).not.toContain("onclick");
-      expect(serialized).not.toContain("javascript:");
-      expect(serialized).not.toContain("<script");
-    },
-  );
+  it.each(MXSS_PAYLOADS)("Block tree is clean for $name", async ({ html, forbiddenSubstring }) => {
+    const { blocks } = await extractAndNormalize(wrapInArticle(html), undefined);
+    const serialized = JSON.stringify(blocks);
+    expect(serialized).not.toContain(forbiddenSubstring);
+    expect(serialized).not.toContain("onerror");
+    expect(serialized).not.toContain("onload");
+    expect(serialized).not.toContain("onclick");
+    expect(serialized).not.toContain("javascript:");
+    expect(serialized).not.toContain("<script");
+  });
 });
 
 describe("mXSS corpus — aggregate guards (SC#4 phase-exit gate)", () => {

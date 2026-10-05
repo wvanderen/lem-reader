@@ -27,10 +27,7 @@ import {
   graphemeLength,
   normalizeText,
 } from "../../src/content/normalizeText";
-import {
-  fragmentContainingOffset,
-  pageStartGlobalOffset,
-} from "../../src/pagination/anchor";
+import { fragmentContainingOffset, pageStartGlobalOffset } from "../../src/pagination/anchor";
 import { findAllOccurrences } from "../../src/annotations/resolution";
 import {
   computeTopVisibleOffset,
@@ -80,15 +77,11 @@ function multiBlockArticle(): CanonicalArticle {
  * blocks j < blockIndex accumulating per-block grapheme length + one
  * BLOCK_SEPARATOR, capping at article.blocks.length (the sentinel path).
  */
-function oldAccumulatedOffset(
-  article: CanonicalArticle,
-  blockIndex: number,
-): number {
+function oldAccumulatedOffset(article: CanonicalArticle, blockIndex: number): number {
   let offset = 0;
   for (let j = 0; j < blockIndex && j < article.blocks.length; j++) {
     offset +=
-      graphemeClusters(blockNormalizedText(article.blocks[j]!), article.lang)
-        .length +
+      graphemeClusters(blockNormalizedText(article.blocks[j]!), article.lang).length +
       BLOCK_SEPARATOR.length;
   }
   return offset;
@@ -100,9 +93,7 @@ describe("articleGraphemeIndex clusters equal a fresh graphemeClusters(normalize
   it("deep-equals the uncached segmentation for a multi-block article with code + footnotes", () => {
     const article = multiBlockArticle();
     const index = articleGraphemeIndex(article);
-    expect(index.clusters).toEqual(
-      graphemeClusters(normalizeText(article), article.lang),
-    );
+    expect(index.clusters).toEqual(graphemeClusters(normalizeText(article), article.lang));
     expect(index.normalizedText).toBe(normalizeText(article));
   });
 });
@@ -126,10 +117,7 @@ describe("articleGraphemeIndex blockStartOffsets equal the OLD accumulation loop
     // segmentation is the only correct source.
     for (let i = 0; i < article.blocks.length; i++) {
       expect(index.perBlockLengths[i]).toBe(
-        graphemeClusters(
-          blockNormalizedText(article.blocks[i]!),
-          article.lang,
-        ).length,
+        graphemeClusters(blockNormalizedText(article.blocks[i]!), article.lang).length,
       );
     }
   });
@@ -143,9 +131,7 @@ describe("graphemeLength is served by the index and is stable across calls", () 
     expect(graphemeLength(article)).toBe(graphemeLength(article));
     // totalGraphemes includes the footnotes region, so it exceeds the body
     // span (sentinel entry) by the footnote text + its leading separator.
-    expect(index.totalGraphemes).toBeGreaterThan(
-      index.blockStartOffsets[article.blocks.length]!,
-    );
+    expect(index.totalGraphemes).toBeGreaterThan(index.blockStartOffsets[article.blocks.length]!);
   });
 
   it("an article with no blocks and no footnotes yields totalGraphemes 0 and blockStartOffsets [0]", () => {
@@ -186,9 +172,7 @@ describe("deriveQuoteSelector is identical on first (build) and second (cache-hi
     const clusters = articleGraphemeIndex(article).clusters;
     expect(first.exact).toBe(clusters.slice(5, 12).join(""));
     expect(first.prefix).toBe(clusters.slice(Math.max(0, 5 - 32), 5).join(""));
-    expect(first.suffix).toBe(
-      clusters.slice(12, Math.min(clusters.length, 12 + 32)).join(""),
-    );
+    expect(first.suffix).toBe(clusters.slice(12, Math.min(clusters.length, 12 + 32)).join(""));
   });
 });
 
@@ -201,9 +185,7 @@ describe("WeakMap identity keying — each parsed article object gets its own in
     const a = parseArticle(raw);
     const b = parseArticle(raw);
     expect(a).not.toBe(b);
-    expect(articleGraphemeIndex(b).normalizedText).toBe(
-      articleGraphemeIndex(a).normalizedText,
-    );
+    expect(articleGraphemeIndex(b).normalizedText).toBe(articleGraphemeIndex(a).normalizedText);
   });
 
   it("a different-content article never reuses another article's entry (no stale cross-article cache)", () => {
@@ -218,9 +200,7 @@ describe("WeakMap identity keying — each parsed article object gets its own in
     });
     // Build alpha's index first so a cross-article bug would have a victim.
     expect(articleGraphemeIndex(alpha).normalizedText).toBe("Alpha body text.");
-    expect(articleGraphemeIndex(beta).normalizedText).toBe(
-      "Beta body text, longer.",
-    );
+    expect(articleGraphemeIndex(beta).normalizedText).toBe("Beta body text, longer.");
   });
 });
 
@@ -239,40 +219,28 @@ describe("pageStartGlobalOffset returns byte-identical offsets to the OLD accumu
 
   it("fragment starting at block 0 (the O(1) base case)", () => {
     const frag = fragment(0, [{ blockIndex: 0, startGrapheme: 0, endGrapheme: 3 }]);
-    expect(pageStartGlobalOffset(article, frag)).toBe(
-      oldAccumulatedOffset(article, 0),
-    );
+    expect(pageStartGlobalOffset(article, frag)).toBe(oldAccumulatedOffset(article, 0));
   });
 
   it("fragment starting mid-way through a middle block (intra-block startGrapheme added)", () => {
     const frag = fragment(2, [{ blockIndex: 2, startGrapheme: 3, endGrapheme: 8 }]);
-    expect(pageStartGlobalOffset(article, frag)).toBe(
-      oldAccumulatedOffset(article, 2) + 3,
-    );
+    expect(pageStartGlobalOffset(article, frag)).toBe(oldAccumulatedOffset(article, 2) + 3);
   });
 
   it("fragment starting at the last block", () => {
     const last = article.blocks.length - 1;
-    const frag = fragment(3, [
-      { blockIndex: last, startGrapheme: 0, endGrapheme: 2 },
-    ]);
-    expect(pageStartGlobalOffset(article, frag)).toBe(
-      oldAccumulatedOffset(article, last),
-    );
+    const frag = fragment(3, [{ blockIndex: last, startGrapheme: 0, endGrapheme: 2 }]);
+    expect(pageStartGlobalOffset(article, frag)).toBe(oldAccumulatedOffset(article, last));
   });
 
   it("out-of-range blockIndex falls to the sentinel entry (capped accumulation, old loop replica)", () => {
     const frag = fragment(4, [{ blockIndex: 99, startGrapheme: 0, endGrapheme: 2 }]);
-    expect(pageStartGlobalOffset(article, frag)).toBe(
-      oldAccumulatedOffset(article, 99),
-    );
+    expect(pageStartGlobalOffset(article, frag)).toBe(oldAccumulatedOffset(article, 99));
   });
 
   it("out-of-range blockIndex with an intra-block offset keeps the +startGrapheme term", () => {
     const frag = fragment(4, [{ blockIndex: 99, startGrapheme: 5, endGrapheme: 9 }]);
-    expect(pageStartGlobalOffset(article, frag)).toBe(
-      oldAccumulatedOffset(article, 99) + 5,
-    );
+    expect(pageStartGlobalOffset(article, frag)).toBe(oldAccumulatedOffset(article, 99) + 5);
   });
 
   it("empty fragment returns 0 (defensive)", () => {
@@ -282,9 +250,7 @@ describe("pageStartGlobalOffset returns byte-identical offsets to the OLD accumu
   it("every block start and intra-block offset round-trips the oracle (exhaustive over blocks)", () => {
     for (let i = 0; i <= article.blocks.length; i++) {
       const frag = fragment(0, [{ blockIndex: i, startGrapheme: 2, endGrapheme: 4 }]);
-      expect(pageStartGlobalOffset(article, frag)).toBe(
-        oldAccumulatedOffset(article, i) + 2,
-      );
+      expect(pageStartGlobalOffset(article, frag)).toBe(oldAccumulatedOffset(article, i) + 2);
     }
   });
 });
@@ -294,10 +260,7 @@ describe("fragmentContainingOffset returns the same page index as before (scan +
   // One fragment per body block, startGrapheme 0 — page i's article-global
   // start is exactly oldAccumulatedOffset(article, i) (the oracle).
   const pages: PageFragment[] = article.blocks.map((block, i) => {
-    const len = graphemeClusters(
-      blockNormalizedText(block),
-      article.lang,
-    ).length;
+    const len = graphemeClusters(blockNormalizedText(block), article.lang).length;
     return fragment(i, [{ blockIndex: i, startGrapheme: 0, endGrapheme: len }]);
   });
   const starts = article.blocks.map((_, i) => oldAccumulatedOffset(article, i));
@@ -320,9 +283,7 @@ describe("fragmentContainingOffset returns the same page index as before (scan +
 
   it("an offset overshooting the last page clamps to the last index", () => {
     const overshoot = starts[starts.length - 1]! + 100_000;
-    expect(fragmentContainingOffset(pages, overshoot, article)).toBe(
-      pages.length - 1,
-    );
+    expect(fragmentContainingOffset(pages, overshoot, article)).toBe(pages.length - 1);
   });
 
   it("empty pages array returns 0 (defensive)", () => {
@@ -332,10 +293,7 @@ describe("fragmentContainingOffset returns the same page index as before (scan +
 
 describe("findAllOccurrences matches a naive reference implementation", () => {
   /** Naive cluster-by-cluster comparison — the pre-fast-path oracle. */
-  function naiveOccurrences(
-    haystack: readonly string[],
-    needle: readonly string[],
-  ): number[] {
+  function naiveOccurrences(haystack: readonly string[], needle: readonly string[]): number[] {
     const positions: number[] = [];
     for (let i = 0; i + needle.length <= haystack.length; i++) {
       let match = true;
@@ -352,9 +310,9 @@ describe("findAllOccurrences matches a naive reference implementation", () => {
 
   it("repeated first clusters (haystack a,b,a,b / needle a,b) finds every occurrence", () => {
     expect(findAllOccurrences(["a", "b", "a", "b"], ["a", "b"])).toEqual([0, 2]);
-    expect(
-      findAllOccurrences(["a", "b", "a", "b"], ["a", "b"]),
-    ).toEqual(naiveOccurrences(["a", "b", "a", "b"], ["a", "b"]));
+    expect(findAllOccurrences(["a", "b", "a", "b"], ["a", "b"])).toEqual(
+      naiveOccurrences(["a", "b", "a", "b"], ["a", "b"]),
+    );
   });
 
   it("a needle at the last valid position is found", () => {
@@ -372,9 +330,7 @@ describe("findAllOccurrences matches a naive reference implementation", () => {
   it("real-article clusters with a sampled needle agree with the naive scan", () => {
     const clusters = articleGraphemeIndex(multiBlockArticle()).clusters;
     const needle = clusters.slice(10, 18);
-    expect(findAllOccurrences(clusters, needle)).toEqual(
-      naiveOccurrences(clusters, needle),
-    );
+    expect(findAllOccurrences(clusters, needle)).toEqual(naiveOccurrences(clusters, needle));
   });
 });
 
@@ -406,20 +362,12 @@ function bodyElements(article: CanonicalArticle): HTMLElement[] {
   };
   return article.blocks.map((block) => {
     const kind = block.kind;
-    return makeBlock(
-      blockNormalizedText(block),
-      kind,
-      tagFor[kind] ?? "p",
-    );
+    return makeBlock(blockNormalizedText(block), kind, tagFor[kind] ?? "p");
   });
 }
 
 /** OLD computeTopVisibleOffset replica (pre-change oracle — uncached walk). */
-function oldTopVisibleOffset(
-  article: CanonicalArticle,
-  els: HTMLElement[],
-  headerPx = 48,
-): number {
+function oldTopVisibleOffset(article: CanonicalArticle, els: HTMLElement[], headerPx = 48): number {
   let consumed = 0;
   let offset = 0;
   for (const el of els) {
@@ -475,9 +423,7 @@ describe("elementGraphemeLength cache — same offsets as the uncached walk, sta
     const offsets = [0, 3, 14, 30, 60, 1000];
     // First pass: oracle-verified targets (the oracle itself segments — that
     // is fine, it runs OUTSIDE the measured cache-hit window below).
-    const expected = offsets.map((offset) =>
-      findScrollTarget(article, els, offset),
-    );
+    const expected = offsets.map((offset) => findScrollTarget(article, els, offset));
     offsets.forEach((offset, i) => {
       expect(expected[i]).toBe(oldScrollTarget(article, els, offset));
     });

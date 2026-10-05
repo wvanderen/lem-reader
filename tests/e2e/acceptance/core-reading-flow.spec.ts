@@ -50,12 +50,9 @@ interface PaginationDev {
   status: string;
 }
 
-async function paginationDev(
-  page: import("@playwright/test").Page,
-): Promise<PaginationDev> {
+async function paginationDev(page: import("@playwright/test").Page): Promise<PaginationDev> {
   return page.evaluate(
-    () =>
-      (window as unknown as Record<string, unknown>).__lemPagination as PaginationDev,
+    () => (window as unknown as Record<string, unknown>).__lemPagination as PaginationDev,
   );
 }
 
@@ -64,8 +61,7 @@ async function paginationDev(
  * aria-hidden measurement clone (Plan 04-08) which is user-select:none +
  * not keyboard-reachable (mirrors visibleBlock in _fixtures.ts).
  */
-const VISIBLE_BLOCKS =
-  '[data-block-index]:not(.article-body-measurement [data-block-index])';
+const VISIBLE_BLOCKS = "[data-block-index]:not(.article-body-measurement [data-block-index])";
 
 test.describe("ACPT-01 core reading flow (06-02)", () => {
   // Iterate all 6 FIXTURES from fixtures-matrix.ts (D3-09 corpus). ONE
@@ -121,16 +117,10 @@ test.describe("ACPT-01 core reading flow (06-02)", () => {
       // the swap (D4-10 anchor — same logical passage; no content loss
       // across the mode boundary).
       await switchMode(page);
-      await expect(modeToggle(page)).toHaveAttribute(
-        "aria-label",
-        "Reading mode: scrolling",
-      );
+      await expect(modeToggle(page)).toHaveAttribute("aria-label", "Reading mode: scrolling");
       await expect(page.getByRole("article")).toBeVisible();
       const blocksAfterSwitch = await visibleBlocks.count();
-      expect(
-        blocksAfterSwitch,
-        `${fixture}: blocks present in scrolling mode`,
-      ).toBeGreaterThan(0);
+      expect(blocksAfterSwitch, `${fixture}: blocks present in scrolling mode`).toBeGreaterThan(0);
 
       // ── (4) RESTORE LOCATION ──────────────────────────────────────────
       // Reload; the article re-mounts without content loss (STATE-01
@@ -160,15 +150,10 @@ test.describe("ACPT-01 core reading flow (06-02)", () => {
       const blockIdx = await findFirstBlockWithText(page, 24);
       expect(blockIdx, `${fixture}: must have a selectable block`).not.toBe(-1);
       const ok = await selectRangeInBlock(page, blockIdx, 0, 18);
-      expect(
-        ok,
-        `${fixture}: selection must be set on block ${blockIdx}`,
-      ).toBeTruthy();
+      expect(ok, `${fixture}: selection must be set on block ${blockIdx}`).toBeTruthy();
       const toolbar = page.locator(".selection-toolbar");
       await expect(toolbar).toBeVisible();
-      await toolbar
-        .getByRole("button", { name: "Highlight", exact: true })
-        .click();
+      await toolbar.getByRole("button", { name: "Highlight", exact: true }).click();
       const mark = page.locator("mark.highlight");
       await expect(mark.first()).toBeVisible();
       await expect(mark.first()).toHaveAttribute("data-highlight-id", /.+/);
@@ -188,9 +173,7 @@ test.describe("ACPT-01 core reading flow (06-02)", () => {
       await expect(entry).toBeVisible();
       await entry.locator(".drawer-entry").click();
       await expect(page.locator("dialog.annotations-drawer")).toBeHidden();
-      const target = page.locator(
-        `mark.highlight[data-highlight-id="${hlId}"]`,
-      );
+      const target = page.locator(`mark.highlight[data-highlight-id="${hlId}"]`);
       await expect(target.first()).toBeVisible();
       // Focus is rAF-deferred after the page-turn/scrollIntoView commit
       // (firefox can race a fixed wait — mirrors navigate-back.spec.ts).
@@ -199,18 +182,12 @@ test.describe("ACPT-01 core reading flow (06-02)", () => {
           const el = document.activeElement;
           return el?.getAttribute?.("data-highlight-id") ?? null;
         });
-        expect(
-          focusedId,
-          `${fixture}: navigate-back focuses the <mark>`,
-        ).toBe(hlId);
+        expect(focusedId, `${fixture}: navigate-back focuses the <mark>`).toBe(hlId);
       }).toPass({ timeout: 3000 });
 
       // V7 — measurement/annotation never throws to the reader across the
       // whole flow (mirrors stale-drop.spec.ts pageerror guard).
-      expect(
-        pageErrors,
-        `${fixture}: no uncaught errors during the flow`,
-      ).toEqual([]);
+      expect(pageErrors, `${fixture}: no uncaught errors during the flow`).toEqual([]);
     });
   }
 });

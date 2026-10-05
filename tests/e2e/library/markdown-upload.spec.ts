@@ -115,9 +115,7 @@ test.describe("SC#4 + ING-03 — markdown + html upload intake", () => {
     page,
   }) => {
     await page.goto(`${BASE}/#/`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
 
     // Open the Add dialog on the file source, then attach the .md via
     // setInputFiles (the only Playwright-native way to attach in-memory
@@ -170,12 +168,8 @@ test.describe("SC#4 + ING-03 — markdown + html upload intake", () => {
     await page.evaluate(() => {
       window.location.hash = "#/";
     });
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
-    const markdownBadge = page
-      .locator(".source-badge")
-      .filter({ hasText: "Markdown" });
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
+    const markdownBadge = page.locator(".source-badge").filter({ hasText: "Markdown" });
     await expect(markdownBadge.first()).toBeVisible();
   });
 
@@ -183,9 +177,7 @@ test.describe("SC#4 + ING-03 — markdown + html upload intake", () => {
     page,
   }) => {
     await page.goto(`${BASE}/#/`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
 
     const fileInput = page.locator("input#ingest-file");
 
@@ -209,14 +201,9 @@ test.describe("SC#4 + ING-03 — markdown + html upload intake", () => {
     await page.evaluate(() => {
       window.location.hash = "#/";
     });
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
-    const expectedRowsAfterFirst =
-      (await import("../../../src/fixtures")).fixtures.length + 1;
-    await expect(page.locator(".library-list > li")).toHaveCount(
-      expectedRowsAfterFirst,
-    );
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
+    const expectedRowsAfterFirst = (await import("../../../src/fixtures")).fixtures.length + 1;
+    await expect(page.locator(".library-list > li")).toHaveCount(expectedRowsAfterFirst);
 
     // Second upload — reopen the dialog (article success closed it) and
     // re-pick the file source. Same content (D8-18 produces the same id;
@@ -243,18 +230,12 @@ test.describe("SC#4 + ING-03 — markdown + html upload intake", () => {
     // No navigation away from #/ (the dedupe-refuse never calls save →
     // no hash change). The library list count is unchanged (auto-retrying).
     await expect(page).toHaveURL(/\/#\/$/);
-    await expect(page.locator(".library-list > li")).toHaveCount(
-      expectedRowsAfterFirst,
-    );
+    await expect(page.locator(".library-list > li")).toHaveCount(expectedRowsAfterFirst);
   });
 
-  test("front-matter absent fallback: .md without YAML still ingests", async ({
-    page,
-  }) => {
+  test("front-matter absent fallback: .md without YAML still ingests", async ({ page }) => {
     await page.goto(`${BASE}/#/`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
 
     // Upload a .md WITHOUT front-matter. The D8-17 fallback chain runs
     // server-side: provenancePartial.title is undefined → stripMarkdown-
@@ -278,21 +259,17 @@ test.describe("SC#4 + ING-03 — markdown + html upload intake", () => {
     // "plain-doc.md" → "plain-doc". The body's `#` heading also renders as
     // an h1 block, so use .first() to scope to the ArticleView header title
     // (it precedes the body in document order).
-    await expect(
-      page.getByRole("heading", { level: 1, name: "plain-doc" }).first(),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { level: 1, name: "plain-doc" }).first()).toBeVisible({
+      timeout: 10_000,
+    });
     expect(await page.locator("article p").count()).toBeGreaterThan(0);
 
     // The "Markdown" source badge is present on the library row.
     await page.evaluate(() => {
       window.location.hash = "#/";
     });
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
-    const markdownBadge = page
-      .locator(".source-badge")
-      .filter({ hasText: "Markdown" });
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
+    const markdownBadge = page.locator(".source-badge").filter({ hasText: "Markdown" });
     await expect(markdownBadge.first()).toBeVisible();
   });
 
@@ -300,9 +277,7 @@ test.describe("SC#4 + ING-03 — markdown + html upload intake", () => {
     page,
   }) => {
     await page.goto(`${BASE}/#/`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
 
     // Open the dialog on the file source, then upload a small .html file.
     // The Add dialog's dispatch detects the .html extension and calls
@@ -327,9 +302,7 @@ test.describe("SC#4 + ING-03 — markdown + html upload intake", () => {
     // paste- prefix asserts the shared-{html}-path id shape).
     await openSavedArticle(page, /#\/article\/paste-/);
     await expect(
-      page
-        .getByRole("heading", { level: 1, name: "An HTML Upload Variant" })
-        .first(),
+      page.getByRole("heading", { level: 1, name: "An HTML Upload Variant" }).first(),
     ).toBeVisible({ timeout: 10_000 });
     expect(await page.locator("article p").count()).toBeGreaterThan(0);
 
@@ -339,12 +312,8 @@ test.describe("SC#4 + ING-03 — markdown + html upload intake", () => {
     await page.evaluate(() => {
       window.location.hash = "#/";
     });
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
-    const pastedBadge = page
-      .locator(".source-badge")
-      .filter({ hasText: "Pasted" });
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
+    const pastedBadge = page.locator(".source-badge").filter({ hasText: "Pasted" });
     await expect(pastedBadge.first()).toBeVisible();
   });
 });

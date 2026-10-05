@@ -59,9 +59,7 @@ function sampleArticle(): CanonicalArticle {
       retrievedAt: "2026-09-20T00:00:00.000Z",
       originalHtmlHash: "sha256:" + "c".repeat(64),
     },
-    blocks: [
-      { kind: "paragraph", content: [{ text: "Round trip body text.", marks: [] }] },
-    ],
+    blocks: [{ kind: "paragraph", content: [{ text: "Round trip body text.", marks: [] }] }],
     footnotes: [],
     ingestionMeta: {
       source: "url",

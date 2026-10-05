@@ -78,10 +78,7 @@ function tabOrderFollowsDom(): boolean {
  * link — matched by href "#/" AND rendered text "Lem Reader" (the Library
  * link shares the href but not the name). Returns true when the walk landed.
  */
-async function tabWalkToBrand(
-  page: Page,
-  maxPresses: number,
-): Promise<boolean> {
+async function tabWalkToBrand(page: Page, maxPresses: number): Promise<boolean> {
   for (let i = 0; i < maxPresses; i++) {
     await page.keyboard.press("Tab");
     await page.waitForTimeout(60);
@@ -105,9 +102,7 @@ test.describe("shell nav (15-02 — NAV-01/NAV-02/NAV-05)", () => {
 
   test("sentinel: harness wires up (library h1 renders)", async ({ page }) => {
     await page.goto(`${BASE}/`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
   });
 
   // (1) Persistent shell — D15-02: one shell, one rule. The Primary nav and
@@ -132,14 +127,10 @@ test.describe("shell nav (15-02 — NAV-01/NAV-02/NAV-05)", () => {
       await expect(nav).toBeVisible();
       await expect(nav.getByRole("link", { name: "Library" })).toBeVisible();
       await expect(nav.getByRole("link", { name: "Discover" })).toBeVisible();
-      await expect(
-        nav.getByRole("link", { name: "Highlights" }),
-      ).toBeVisible();
+      await expect(nav.getByRole("link", { name: "Highlights" })).toBeVisible();
       // Issue #82 — no unfinished target on a wiped library: the Read
       // destination is absent, never disabled.
-      await expect(
-        nav.getByRole("link", { name: "Continue reading" }),
-      ).toHaveCount(0);
+      await expect(nav.getByRole("link", { name: "Continue reading" })).toHaveCount(0);
       await expect(
         nav.getByRole("link"),
         "D15-08 — exactly three destination links with no resume target",
@@ -153,9 +144,7 @@ test.describe("shell nav (15-02 — NAV-01/NAV-02/NAV-05)", () => {
   // destination (issue #121); #/highlights reverses the polarity; the
   // Reader carries neither. The brand link NEVER carries the attribute —
   // its semantic role is app-home, not a destination.
-  test("(2) aria-current follows the destination; the brand never carries it", async ({
-    page,
-  }) => {
+  test("(2) aria-current follows the destination; the brand never carries it", async ({ page }) => {
     const library = primaryNav(page).getByRole("link", { name: "Library" });
     const discover = primaryNav(page).getByRole("link", { name: "Discover" });
     const highlights = shellHighlightsLink(page);
@@ -163,9 +152,7 @@ test.describe("shell nav (15-02 — NAV-01/NAV-02/NAV-05)", () => {
     // ANY list view = the Library destination.
     for (const url of [`${BASE}/`, `${BASE}/#/unread`]) {
       await page.goto(url);
-      await expect(
-        page.getByRole("heading", { level: 1, name: "Saved articles" }),
-      ).toBeVisible();
+      await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
       await expect(library).toHaveAttribute("aria-current", "page");
       expect(await discover.getAttribute("aria-current")).toBeNull();
       expect(await highlights.getAttribute("aria-current")).toBeNull();
@@ -173,18 +160,14 @@ test.describe("shell nav (15-02 — NAV-01/NAV-02/NAV-05)", () => {
 
     // The Discover destination (issue #121) carries its own polarity.
     await page.goto(`${BASE}/#/discover`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Discover" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Discover" })).toBeVisible();
     await expect(discover).toHaveAttribute("aria-current", "page");
     expect(await library.getAttribute("aria-current")).toBeNull();
     expect(await highlights.getAttribute("aria-current")).toBeNull();
 
     // The Highlights destination reverses the polarity.
     await page.goto(`${BASE}/#/highlights`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Highlights" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
     await expect(highlights).toHaveAttribute("aria-current", "page");
     expect(await library.getAttribute("aria-current")).toBeNull();
     expect(await discover.getAttribute("aria-current")).toBeNull();
@@ -222,9 +205,7 @@ test.describe("shell nav (15-02 — NAV-01/NAV-02/NAV-05)", () => {
     await brandLink(page).click();
 
     await expect(page).toHaveURL(/#\/$/);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
   });
 
   // (4) Gating — NAV-05/D15-15/D15-16: the mode toggle renders ONLY when an
@@ -240,16 +221,12 @@ test.describe("shell nav (15-02 — NAV-01/NAV-02/NAV-05)", () => {
 
     // Count-zero on Library + Highlights, h1-gated (articleMounted gate).
     await page.goto(`${BASE}/`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
     await expect(modeToggle).toHaveCount(0);
     await expect(gear).toBeVisible();
 
     await page.goto(`${BASE}/#/highlights`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Highlights" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
     await expect(modeToggle).toHaveCount(0);
     await expect(gear).toBeVisible();
 
@@ -275,9 +252,7 @@ test.describe("shell nav (15-02 — NAV-01/NAV-02/NAV-05)", () => {
   // fits within the row's content box, and the two groups never overlap
   // (start's right edge ≤ controls' left edge). Measured slack at the
   // tightest cell: 10px between groups on all three engines (15-04).
-  test("(5) 320×640 reader header: one row — no wrap, no horizontal overflow", async ({
-    page,
-  }) => {
+  test("(5) 320×640 reader header: one row — no wrap, no horizontal overflow", async ({ page }) => {
     await page.goto(`${BASE}/#/article/${FIXTURES[0]}`);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     await page.setViewportSize({ width: NARROW.width, height: NARROW.height });
@@ -332,9 +307,7 @@ test.describe("shell nav (15-02 — NAV-01/NAV-02/NAV-05)", () => {
   // accessibility tree AND the tab order. A bounded Tab walk from the
   // document start must reach the collapsed link (display:none /
   // visibility:hidden would remove it — the exact failure mode this pins).
-  test("(6) collapsed wordmark stays keyboard reachable at 320×640", async ({
-    page,
-  }) => {
+  test("(6) collapsed wordmark stays keyboard reachable at 320×640", async ({ page }) => {
     await page.setViewportSize({ width: NARROW.width, height: NARROW.height });
     // Issue #81 rot inventory — deterministic walk start. The wipe's
     // goto(`#/`) leaves this article goto a SAME-DOCUMENT navigation: the
@@ -366,9 +339,7 @@ test.describe("shell nav (15-02 — NAV-01/NAV-02/NAV-05)", () => {
       await expect(brand).toBeFocused();
       await page.keyboard.press("Enter");
       await expect(page).toHaveURL(/#\/$/);
-      await expect(
-        page.getByRole("heading", { level: 1, name: "Saved articles" }),
-      ).toBeVisible();
+      await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
     }
   });
 });

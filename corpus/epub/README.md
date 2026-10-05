@@ -17,14 +17,14 @@ thresholds are calibrated against. It is **local-only**:
 6–10 real, **DRM-free** EPUBs spanning the shapes the promotion bar
 discriminates:
 
-| Shape                              | Count | What it proves                                   |
-| ---------------------------------- | ----- | ------------------------------------------------ |
-| EPUB 3 nav, deep-nested TOC        | ≥ 1   | depth-1 units only; nesting does not fragment    |
-| EPUB 3 nav, publisher chapter-split | ≥ 1  | spine ranges merge into one chapter per TOC entry |
-| EPUB 2 NCX-only                    | ≥ 1   | the NCX fallback resolution path                 |
-| OPF nested under OEBPS/            | ≥ 1   | href normalization against the OPF directory     |
-| Real front matter before first TOC entry | ≥ 1 | the leading front-matter unit admits or skips honestly |
-| Degenerate single-entry TOC        | where findable | the depth-2 descent (optional — record the gap honestly) |
+| Shape                                    | Count          | What it proves                                           |
+| ---------------------------------------- | -------------- | -------------------------------------------------------- |
+| EPUB 3 nav, deep-nested TOC              | ≥ 1            | depth-1 units only; nesting does not fragment            |
+| EPUB 3 nav, publisher chapter-split      | ≥ 1            | spine ranges merge into one chapter per TOC entry        |
+| EPUB 2 NCX-only                          | ≥ 1            | the NCX fallback resolution path                         |
+| OPF nested under OEBPS/                  | ≥ 1            | href normalization against the OPF directory             |
+| Real front matter before first TOC entry | ≥ 1            | the leading front-matter unit admits or skips honestly   |
+| Degenerate single-entry TOC              | where findable | the depth-2 descent (optional — record the gap honestly) |
 
 **No DRM-protected books.** Every corpus book must admit — a DRM book
 belongs in the 12-01 synthetic refusal tests (`epub-protected`), never this

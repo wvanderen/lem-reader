@@ -34,9 +34,7 @@ describe("Epoch.bump()", () => {
     const e = new Epoch();
     const first = e.bump();
     const second = e.bump();
-    expect(first.signal.aborted, "first signal must abort after second bump").toBe(
-      true,
-    );
+    expect(first.signal.aborted, "first signal must abort after second bump").toBe(true);
     // The newest signal stays live until the next bump.
     expect(second.signal.aborted, "newest signal must remain live").toBe(false);
     const third = e.bump();

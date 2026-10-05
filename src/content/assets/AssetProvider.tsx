@@ -35,9 +35,7 @@ import type { AssetRecordRow } from "../../persistence/db";
  * allocations across renders — the EMPTY_HIGHLIGHTS discipline). */
 const EMPTY_URLS: ReadonlyMap<string, string> = new Map();
 
-const AssetUrlContext = createContext<ReadonlyMap<string, string> | null>(
-  null,
-);
+const AssetUrlContext = createContext<ReadonlyMap<string, string> | null>(null);
 
 /**
  * figureAssetIds — walk a block tree collecting the `asset:img-<12hex>`
@@ -131,11 +129,7 @@ export function AssetProvider({
     };
   }, [article]);
 
-  return (
-    <AssetUrlContext.Provider value={urls}>
-      {children}
-    </AssetUrlContext.Provider>
-  );
+  return <AssetUrlContext.Provider value={urls}>{children}</AssetUrlContext.Provider>;
 }
 
 /**

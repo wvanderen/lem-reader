@@ -51,8 +51,7 @@ test.describe("PAGE-07 stale-epoch drop (03-01)", () => {
     // after fonts.ready resolves).
     await page.waitForFunction(
       () =>
-        (window as unknown as Record<string, unknown>).__lemLastTrustedConstraints !==
-        undefined,
+        (window as unknown as Record<string, unknown>).__lemLastTrustedConstraints !== undefined,
       undefined,
       { timeout: 5000 },
     );
@@ -71,9 +70,7 @@ test.describe("PAGE-07 stale-epoch drop (03-01)", () => {
     // (b) Three rapid typography changes inside the same window. Drive the
     // SettingsPanel size slider: ArrowUp x3 = 18→20→22→24 (SIZE_STEPS).
     await page.getByRole("button", { name: "Reading settings" }).click();
-    await expect(
-      page.getByRole("heading", { name: "Reading settings", level: 2 }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Reading settings", level: 2 })).toBeVisible();
     const slider = page.getByRole("slider", { name: "Text size" });
     await slider.focus();
     const finalSize = 24;
@@ -95,8 +92,7 @@ test.describe("PAGE-07 stale-epoch drop (03-01)", () => {
     // would leave size or viewportWidthPx at an intermediate value.
     const committed = await page.evaluate(() => {
       const c = (window as unknown as Record<string, unknown>).__lemLastTrustedConstraints as
-        | { size: number; viewportWidthPx: number }
-        | undefined;
+        { size: number; viewportWidthPx: number } | undefined;
       return c ?? null;
     });
     expect(committed, "a trusted view must have committed").not.toBeNull();

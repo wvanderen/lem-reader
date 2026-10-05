@@ -222,13 +222,7 @@ export const MAX_ASSET_RESPONSE_BYTES = 3 * 1024 * 1024;
  * shape, the crypto check is the load-bearing integrity gate. */
 export const AssetEnvelopeSchema = z.object({
   assetId: z.string().regex(/^img-[a-z0-9]{12}$/),
-  contentType: z.enum([
-    "image/jpeg",
-    "image/png",
-    "image/webp",
-    "image/gif",
-    "image/avif",
-  ]),
+  contentType: z.enum(["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"]),
   byteLength: z.number().int().min(1),
   dataBase64: z.string().min(1),
 });

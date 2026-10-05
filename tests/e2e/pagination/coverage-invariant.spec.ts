@@ -46,12 +46,10 @@ test.beforeEach(async ({ page }) => {
 });
 
 interface PaginationDev {
-  pages:
-    | Array<{
-        pageIndex: number;
-        blocks: Array<{ blockIndex: number; startGrapheme: number; endGrapheme: number }>;
-      }>
-    | null;
+  pages: Array<{
+    pageIndex: number;
+    blocks: Array<{ blockIndex: number; startGrapheme: number; endGrapheme: number }>;
+  }> | null;
   status: string;
   blockGraphemeLengths: number[];
   articleGraphemeLength: number;
@@ -73,8 +71,7 @@ async function waitForPagination(
   await page.goto(`${BASE}/#/article/${fixture}`);
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await page.waitForFunction(
-    () =>
-      (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
+    () => (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
     undefined,
     { timeout: 8000 },
   );
@@ -112,7 +109,10 @@ test.describe("PAGE-03a exactly-once coverage (04-05)", () => {
         // (1) Per-block exactly-once: collect every slice, group by blockIndex,
         // sort by startGrapheme, assert contiguous [0, blockLen) with no
         // gaps/overlaps/duplication. Tracks the max endGrapheme seen per block.
-        const slicesByBlock = new Map<number, Array<{ start: number; end: number; page: number }>>();
+        const slicesByBlock = new Map<
+          number,
+          Array<{ start: number; end: number; page: number }>
+        >();
         for (const pg of pages) {
           for (const entry of pg.blocks) {
             const arr = slicesByBlock.get(entry.blockIndex) ?? [];
@@ -132,7 +132,10 @@ test.describe("PAGE-03a exactly-once coverage (04-05)", () => {
           let cursor = 0;
           for (const s of slices) {
             expect(s.end, `block ${b} slice end must exceed start`).toBeGreaterThan(s.start);
-            expect(s.start, `block ${b} slice start ${s.start} must equal cursor ${cursor} (no gap/overlap)`).toBe(cursor);
+            expect(
+              s.start,
+              `block ${b} slice start ${s.start} must equal cursor ${cursor} (no gap/overlap)`,
+            ).toBe(cursor);
             cursor = s.end;
           }
           expect(cursor, `block ${b} must be fully covered [0, ${blockLens[b]})`).toBe(
@@ -141,7 +144,10 @@ test.describe("PAGE-03a exactly-once coverage (04-05)", () => {
         }
         // No extra block indices beyond the article's block count.
         for (const key of slicesByBlock.keys()) {
-          expect(key, `blockIndex ${key} must be in [0, ${blockLens.length})`).toBeGreaterThanOrEqual(0);
+          expect(
+            key,
+            `blockIndex ${key} must be in [0, ${blockLens.length})`,
+          ).toBeGreaterThanOrEqual(0);
           expect(key).toBeLessThan(blockLens.length);
         }
 
@@ -159,7 +165,10 @@ test.describe("PAGE-03a exactly-once coverage (04-05)", () => {
             global += blockLens[i]! + 1; // +1 for BLOCK_SEPARATOR ("\n")
           }
           global += firstBlock.startGrapheme;
-          expect(global, `page ${pg.pageIndex} global offset must exceed prev (${prevGlobal})`).toBeGreaterThan(prevGlobal);
+          expect(
+            global,
+            `page ${pg.pageIndex} global offset must exceed prev (${prevGlobal})`,
+          ).toBeGreaterThan(prevGlobal);
           prevGlobal = global;
         }
 

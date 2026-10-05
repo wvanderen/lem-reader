@@ -51,11 +51,7 @@ function makeParagraphBlock(text: string, index: number): HTMLElement {
  * node. jsdom's Selection/Range is sufficient for this — we exercise the
  * offset-mapping logic, not layout.
  */
-function selectFirstTextNode(
-  el: HTMLElement,
-  start: number,
-  end: number,
-): void {
+function selectFirstTextNode(el: HTMLElement, start: number, end: number): void {
   const textNode = el.firstChild!;
   const range = document.createRange();
   range.setStart(textNode, start);
@@ -140,10 +136,7 @@ describe("captureSelection — run-boundary mapping (norm joins runs with ' ')",
       blocks: [
         {
           kind: "paragraph",
-          content: [
-            { text: "hello" },
-            { text: "world" },
-          ],
+          content: [{ text: "hello" }, { text: "world" }],
         },
       ],
     });
@@ -590,9 +583,7 @@ describe("captureSelection — span composition (D19)", () => {
     const article = parseArticle({
       ...baseArticle,
       blocks: [{ kind: "paragraph", content: [{ text: "body text" }] }],
-      footnotes: [
-        { id: "fn-1", content: [{ text: "footnote body text" }] },
-      ],
+      footnotes: [{ id: "fn-1", content: [{ text: "footnote body text" }] }],
     });
     const p = makeParagraphBlock("body text", 0);
     const section = document.createElement("section");

@@ -27,10 +27,7 @@
 // test. jsdom is NOT authoritative for layout (Pitfall 2) — the real-browser
 // proof stays in tests/e2e/**.
 import { describe, expect, it } from "vitest";
-import {
-  blockNormalizedText,
-  readLineBoxes,
-} from "../../../src/pagination/lineBoxes";
+import { blockNormalizedText, readLineBoxes } from "../../../src/pagination/lineBoxes";
 import { AbortError } from "../../../src/measurement/fontGate";
 import type { LineBox } from "../../../src/pagination/types";
 
@@ -98,18 +95,11 @@ function installScheduleMock(
       const dataLen = state.node.data.length;
       for (let li = 0; li < lines.length; li++) {
         const lineStart = lines[li]!.start;
-        const lineEnd =
-          li + 1 < lines.length ? lines[li + 1]!.start : dataLen;
+        const lineEnd = li + 1 < lines.length ? lines[li + 1]!.start : dataLen;
         // Range [start, end) overlaps this line iff end > lineStart AND
         // start < lineEnd AND the range is non-empty (end > start).
-        if (
-          state.end > lineStart &&
-          state.start < lineEnd &&
-          state.end > state.start
-        ) {
-          rects.push(
-            new DOMRect(0, lines[li]!.top, 100, lines[li]!.height) as DOMRect,
-          );
+        if (state.end > lineStart && state.start < lineEnd && state.end > state.start) {
+          rects.push(new DOMRect(0, lines[li]!.top, 100, lines[li]!.height) as DOMRect);
         }
       }
       return rects as unknown as DOMRectList;
@@ -157,7 +147,7 @@ function linearOracleReadLineBoxes(
   for (const textNode of textNodes) {
     const localLen = textNode.data.length;
     for (let i = 0; i <= localLen; i++) {
-      if ((globalBase + i) > 0 && signal.aborted) throw new AbortError();
+      if (globalBase + i > 0 && signal.aborted) throw new AbortError();
       range.setStart(textNode, 0);
       range.setEnd(textNode, i);
       const rects = range.getClientRects();
@@ -236,11 +226,7 @@ describe("readLineBoxes — O(lines × log L) probe bound", () => {
     const lines = intSchedule([0, 40, 80, 120, 160]); // 5 lines, 4 breaks
     const mock = installScheduleMock(new Map([[text, lines]]));
     try {
-      const boxes = readLineBoxes(
-        makeParagraphEl(text),
-        text,
-        new AbortController().signal,
-      );
+      const boxes = readLineBoxes(makeParagraphEl(text), text, new AbortController().signal);
       expect(boxes).toHaveLength(5);
       // The bound: 5 × ceil(log2(200)) + 5 + 2 = 5×8+7 = 47. The old
       // per-character walk performs 201 probes and fails this assertion.
@@ -263,9 +249,7 @@ describe("readLineBoxes — binary-search walk equals the linear oracle", () => 
       text,
       new Map([[text, [{ start: 0, top: 0.5, height: 18.25 }]]]),
     );
-    expect(actual).toEqual([
-      { charOffset: 0, topPx: 0.5, bottomPx: 18.75 },
-    ]);
+    expect(actual).toEqual([{ charOffset: 0, topPx: 0.5, bottomPx: 18.75 }]);
   });
 
   it("multi-line ASCII (breaks at 0/7/14)", () => {
@@ -290,11 +274,7 @@ describe("readLineBoxes — binary-search walk equals the linear oracle", () => 
       { start: 14, top: 20.4, height: 17.8 },
       { start: 21, top: 40.1, height: 18 },
     ];
-    const { actual } = expectEquivalent(
-      makeParagraphEl(text),
-      text,
-      new Map([[text, schedule]]),
-    );
+    const { actual } = expectEquivalent(makeParagraphEl(text), text, new Map([[text, schedule]]));
     // Line 2's box is emitted (20 ≠ 0); line 3 rounds equal (20 === 20) →
     // merged (no box at 14); line 4 emitted at fractional top.
     expect(actual.map((b) => b.charOffset)).toEqual([0, 7, 21]);
@@ -306,13 +286,20 @@ describe("readLineBoxes — binary-search walk equals the linear oracle", () => 
     const second = "cccc dddd"; // 9 chars — lines at local 0, 5 (tops 40, 60)
     const el = makeBlockquoteEl(first, second);
     const fullText = blockNormalizedText(el); // "aaaa bbbcccc dddd"
-    const { actual } = expectEquivalent(el, fullText, new Map([
-      [first, intSchedule([0, 5])],
-      [second, [
-        { start: 0, top: 40, height: 18 },
-        { start: 5, top: 60, height: 18 },
-      ]]],
-    ));
+    const { actual } = expectEquivalent(
+      el,
+      fullText,
+      new Map([
+        [first, intSchedule([0, 5])],
+        [
+          second,
+          [
+            { start: 0, top: 40, height: 18 },
+            { start: 5, top: 60, height: 18 },
+          ],
+        ],
+      ]),
+    );
     // GLOBAL offsets across text nodes: 0, 5 (node 1), 8 (node 2 start), 13.
     expect(actual.map((b) => b.charOffset)).toEqual([0, 5, 8, 13]);
     expect(actual.map((b) => b.topPx)).toEqual([0, 20, 40, 60]);
@@ -320,11 +307,7 @@ describe("readLineBoxes — binary-search walk equals the linear oracle", () => 
 
   it("schedule yielding no rects at all → both return []", () => {
     const text = "ignored";
-    const { actual } = expectEquivalent(
-      makeParagraphEl(text),
-      text,
-      new Map([[text, []]]),
-    );
+    const { actual } = expectEquivalent(makeParagraphEl(text), text, new Map([[text, []]]));
     expect(actual).toEqual([]);
   });
 
@@ -356,11 +339,7 @@ describe("readLineBoxes — contract lock under the binary-search walk", () => {
     ];
     const mock = installScheduleMock(new Map([[text, schedule]]));
     try {
-      const boxes = readLineBoxes(
-        makeParagraphEl(text),
-        text,
-        new AbortController().signal,
-      );
+      const boxes = readLineBoxes(makeParagraphEl(text), text, new AbortController().signal);
       expect(boxes).toHaveLength(3);
       expect(boxes[0]!.charOffset).toBe(0);
       expect(boxes[1]!.charOffset).toBe(8);
@@ -392,9 +371,9 @@ describe("readLineBoxes — abort semantics preserved", () => {
       },
     });
     try {
-      expect(() =>
-        readLineBoxes(makeParagraphEl(text), text, controller.signal),
-      ).toThrowError(/abort/i);
+      expect(() => readLineBoxes(makeParagraphEl(text), text, controller.signal)).toThrowError(
+        /abort/i,
+      );
     } finally {
       mock.restore();
     }
@@ -402,15 +381,13 @@ describe("readLineBoxes — abort semantics preserved", () => {
 
   it("pre-aborted signal throws AbortError immediately", () => {
     const text = "some text";
-    const mock = installScheduleMock(
-      new Map([[text, intSchedule([0])]]),
-    );
+    const mock = installScheduleMock(new Map([[text, intSchedule([0])]]));
     try {
       const controller = new AbortController();
       controller.abort();
-      expect(() =>
-        readLineBoxes(makeParagraphEl(text), text, controller.signal),
-      ).toThrowError(/abort/i);
+      expect(() => readLineBoxes(makeParagraphEl(text), text, controller.signal)).toThrowError(
+        /abort/i,
+      );
     } finally {
       mock.restore();
     }

@@ -38,9 +38,9 @@ const PLAIN_TEXT_PASTE = [
 // ── The reroute predicate ────────────────────────────────────────────────────
 describe("looksLikePlainText (260821-ov7 reroute predicate)", () => {
   it("tag-less multi-paragraph rendered text → true (reroutes onto the markdown intake)", () => {
-    expect(
-      looksLikePlainText("First paragraph.\n\nSecond paragraph.\n\nThird paragraph."),
-    ).toBe(true);
+    expect(looksLikePlainText("First paragraph.\n\nSecond paragraph.\n\nThird paragraph.")).toBe(
+      true,
+    );
   });
 
   it("whitespace-only content → true (reroutes; refused downstream for zero blocks — integration case 3)", () => {
@@ -110,12 +110,7 @@ describe("ingest — plain-text paste reroute (260821-ov7)", () => {
 
     expect(viaPaste.ok).toBe(true);
     expect(viaUpload.ok).toBe(true);
-    if (
-      viaPaste.ok &&
-      viaUpload.ok &&
-      "article" in viaPaste &&
-      "article" in viaUpload
-    ) {
+    if (viaPaste.ok && viaUpload.ok && "article" in viaPaste && "article" in viaUpload) {
       // The same bytes through either door → ONE article (dedupe-refuse on
       // repeat — the intended save-once semantics).
       expect(viaPaste.article.id).toBe(viaUpload.article.id);

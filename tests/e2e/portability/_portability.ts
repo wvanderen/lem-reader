@@ -61,14 +61,7 @@ export async function prepareFreshPage(page: Page): Promise<void> {
         const db = req.result;
         // Phase 20 (20-05): assets joins the cleared stores so asset-row
         // assertions stay deterministic (strengthen-only helper change).
-        const stores = [
-          "articles",
-          "settings",
-          "location",
-          "highlights",
-          "notes",
-          "assets",
-        ];
+        const stores = ["articles", "settings", "location", "highlights", "notes", "assets"];
         const existing = stores.filter((s) => db.objectStoreNames.contains(s));
         if (existing.length === 0) {
           resolve();

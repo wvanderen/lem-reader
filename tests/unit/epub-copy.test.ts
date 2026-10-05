@@ -12,10 +12,7 @@
 // the ingest UI, not a fixture copy).
 import { describe, expect, it } from "vitest";
 import { mapReasonToCopy } from "../../src/ingestion/ingestCopy";
-import {
-  IngestionFailureReasonEnum,
-  type IngestionFailureReason,
-} from "../../src/ingestion/types";
+import { IngestionFailureReasonEnum, type IngestionFailureReason } from "../../src/ingestion/types";
 
 // The four Phase 12 EPUB entries — EXACT strings from 12-03-PLAN.md Task 2
 // action 2c (locked by this plan; calm DOC-06 voice, no internal jargon).

@@ -36,16 +36,8 @@ export async function openAddDialog(page: Page): Promise<void> {
  * (D16-05: Web address / Paste text / Upload file). `.check()` is a no-op
  * when the radio is already checked, so repeated calls are safe.
  */
-export async function pickSource(
-  page: Page,
-  source: "url" | "paste" | "file",
-): Promise<void> {
-  const name =
-    source === "url"
-      ? "Web address"
-      : source === "paste"
-        ? "Paste text"
-        : "Upload file";
+export async function pickSource(page: Page, source: "url" | "paste" | "file"): Promise<void> {
+  const name = source === "url" ? "Web address" : source === "paste" ? "Paste text" : "Upload file";
   await page.getByRole("radio", { name }).check();
 }
 
@@ -61,10 +53,7 @@ export async function openSavedArticle(
   page: Page,
   urlPattern: RegExp = /#\/article\//,
 ): Promise<void> {
-  await page
-    .locator("dialog.add-dialog")
-    .getByRole("button", { name: "Open article" })
-    .click();
+  await page.locator("dialog.add-dialog").getByRole("button", { name: "Open article" }).click();
   await expect(page.locator("dialog.add-dialog")).not.toBeVisible();
   await page.waitForURL(urlPattern, { timeout: 15_000 });
 }
@@ -80,10 +69,7 @@ export async function openSavedBook(
   page: Page,
   urlPattern: RegExp = /#\/article\//,
 ): Promise<void> {
-  await page
-    .locator("dialog.add-dialog")
-    .getByRole("button", { name: "Open book" })
-    .click();
+  await page.locator("dialog.add-dialog").getByRole("button", { name: "Open book" }).click();
   await expect(page.locator("dialog.add-dialog")).not.toBeVisible();
   await page.waitForURL(urlPattern, { timeout: 15_000 });
 }
@@ -94,14 +80,9 @@ export async function openSavedBook(
  * the Web address radio checked). The dialog never closed.
  */
 export async function addAnother(page: Page): Promise<void> {
-  await page
-    .locator("dialog.add-dialog")
-    .getByRole("button", { name: "Add another" })
-    .click();
+  await page.locator("dialog.add-dialog").getByRole("button", { name: "Add another" }).click();
   await expect(page.locator("dialog.add-dialog .add-result")).toHaveCount(0);
-  await expect(
-    page.locator("dialog.add-dialog fieldset.add-source-picker"),
-  ).toBeVisible();
+  await expect(page.locator("dialog.add-dialog fieldset.add-source-picker")).toBeVisible();
   await expect(page.getByRole("radio", { name: "Web address" })).toBeChecked();
 }
 
@@ -112,9 +93,6 @@ export async function addAnother(page: Page): Promise<void> {
  * destination; the saved article/book appears in the library Unread.
  */
 export async function closeSavedResult(page: Page): Promise<void> {
-  await page
-    .locator("dialog.add-dialog")
-    .getByRole("button", { name: "Close" })
-    .click();
+  await page.locator("dialog.add-dialog").getByRole("button", { name: "Close" }).click();
   await expect(page.locator("dialog.add-dialog")).not.toBeVisible();
 }

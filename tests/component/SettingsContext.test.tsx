@@ -37,15 +37,13 @@ const saveMock = vi.mocked(saveSettings);
 
 // A tiny consumer that exposes the context value via a ref side-effect so the
 // test can drive update/reset from outside the React render cycle.
-let latest:
-  | {
-      settings: ReturnType<typeof useSettings>["settings"];
-      update: ReturnType<typeof useSettings>["update"];
-      reset: ReturnType<typeof useSettings>["reset"];
-      storageState: ReturnType<typeof useSettings>["storageState"];
-      resetLocalData: ReturnType<typeof useSettings>["resetLocalData"];
-    }
-  | null = null;
+let latest: {
+  settings: ReturnType<typeof useSettings>["settings"];
+  update: ReturnType<typeof useSettings>["update"];
+  reset: ReturnType<typeof useSettings>["reset"];
+  storageState: ReturnType<typeof useSettings>["storageState"];
+  resetLocalData: ReturnType<typeof useSettings>["resetLocalData"];
+} | null = null;
 
 function Probe() {
   const ctx = useSettings();
@@ -148,12 +146,8 @@ describe("SettingsContext (D2-03 live-apply)", () => {
     const tokens = readTokens();
     expect(tokens.fontSizeToken).toBe("24px");
     expect(tokens.measure).toBe("58ch");
-    expect(document.documentElement.style.getPropertyValue("--line-height")).toBe(
-      "1.8",
-    );
-    expect(
-      document.documentElement.style.getPropertyValue("--word-spacing"),
-    ).toBe("0.05em");
+    expect(document.documentElement.style.getPropertyValue("--line-height")).toBe("1.8");
+    expect(document.documentElement.style.getPropertyValue("--word-spacing")).toBe("0.05em");
   });
 
   it("reset() restores the D-07 baseline (D2-04)", () => {
@@ -190,16 +184,12 @@ describe("SettingsContext (D2-03 live-apply)", () => {
 
   it("useSettings throws a clear error outside <SettingsProvider>", () => {
     // Suppress the expected console.error noise from React's error boundary.
-    const spy = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => undefined);
+    const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
     function Orphan() {
       useSettings();
       return null;
     }
-    expect(() => render(<Orphan />)).toThrow(
-      /useSettings must be used inside <SettingsProvider>/,
-    );
+    expect(() => render(<Orphan />)).toThrow(/useSettings must be used inside <SettingsProvider>/);
     spy.mockRestore();
   });
 });
@@ -208,7 +198,7 @@ describe("SettingsContext (D2-03 live-apply)", () => {
 describe("SettingsContext (02-02 persistence + STATE-05)", () => {
   it("hydrates settings from loadSettings() on mount (STATE-02)", async () => {
     const persisted: ReaderSettings = {
-  librarySort: "recently-added", // issue #115 — the additive preference
+      librarySort: "recently-added", // issue #115 — the additive preference
       schemaVersion: 1,
       font: "sans",
       size: 22,
@@ -303,10 +293,7 @@ describe("SettingsContext (02-02 persistence + STATE-05)", () => {
       readingMode: "scrolling",
       librarySort: "recently-added",
     };
-    window.localStorage.setItem(
-      "lem-settings-mirror-v1",
-      JSON.stringify(mirrored),
-    );
+    window.localStorage.setItem("lem-settings-mirror-v1", JSON.stringify(mirrored));
     loadMock.mockResolvedValue({ ok: false, reason: "unavailable" });
     render(
       <SettingsProvider>

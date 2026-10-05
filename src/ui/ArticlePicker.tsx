@@ -66,20 +66,14 @@ interface ArticleOption {
   count: number;
 }
 
-export function ArticlePicker({
-  articles,
-  counts,
-  inputId,
-  onPick,
-}: ArticlePickerProps) {
+export function ArticlePicker({ articles, counts, inputId, onPick }: ArticlePickerProps) {
   const state = useVariantAComboboxState();
   const { draft, open, active, reset, lower } = state;
 
   const listboxId = variantAListboxId(inputId);
 
   const options = useMemo((): ArticleOption[] => {
-    const byTitle = (a: ArticleOption, b: ArticleOption) =>
-      a.title.localeCompare(b.title);
+    const byTitle = (a: ArticleOption, b: ArticleOption) => a.title.localeCompare(b.title);
     const withCounts = articles.map((a) => ({
       id: a.id,
       title: effectiveTitle(a),
@@ -104,10 +98,7 @@ export function ArticlePicker({
       0,
       Math.max(1, MAX_SUGGESTIONS - highlightedMatches.length),
     );
-    return [
-      ...highlightedMatches.slice(0, MAX_SUGGESTIONS - zeroShown.length),
-      ...zeroShown,
-    ];
+    return [...highlightedMatches.slice(0, MAX_SUGGESTIONS - zeroShown.length), ...zeroShown];
   }, [articles, counts, lower]);
 
   // The honest no-match line: a non-empty query that matched nothing.
@@ -144,9 +135,7 @@ export function ArticlePicker({
           placeholder="Search articles…"
           aria-expanded={listOpen}
           aria-activedescendant={
-            listOpen && active < options.length
-              ? `${listboxId}-opt-${active}`
-              : undefined
+            listOpen && active < options.length ? `${listboxId}-opt-${active}` : undefined
           }
         />
         {listOpen && (
@@ -158,9 +147,7 @@ export function ArticlePicker({
                   id={`${listboxId}-opt-${i}`}
                   aria-selected={i === active}
                   className={
-                    i === active
-                      ? "article-picker-suggestion active"
-                      : "article-picker-suggestion"
+                    i === active ? "article-picker-suggestion active" : "article-picker-suggestion"
                   }
                   // mousedown (not click) so the input keeps focus — the
                   // pick must not cost the typing anchor (the TagPicker
@@ -170,9 +157,7 @@ export function ArticlePicker({
                     commitPick(o);
                   }}
                 >
-                  <span className="article-picker-suggestion-text">
-                    {o.title}
-                  </span>
+                  <span className="article-picker-suggestion-text">{o.title}</span>
                   <span className="article-picker-count">
                     {o.count} {o.count === 1 ? "highlight" : "highlights"}
                   </span>

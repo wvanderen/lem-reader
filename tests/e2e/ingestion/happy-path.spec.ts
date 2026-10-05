@@ -94,9 +94,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.describe("ingestion happy-path (07-07 SC#1)", () => {
-  test("paste HTML → article opens in reader (real middleware pipeline)", async ({
-    page,
-  }) => {
+  test("paste HTML → article opens in reader (real middleware pipeline)", async ({ page }) => {
     // Navigate to the library (the header Add button opens the intake
     // dialog per 16-03 — ADD-01).
     await page.goto(`${BASE}/#/`);
@@ -254,7 +252,10 @@ test.describe("ingestion happy-path (07-07 SC#1)", () => {
     await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible();
 
     await openAddDialog(page);
-    await page.getByRole("textbox", { name: /url/i }).first().fill("https://example.com/photo-essay");
+    await page
+      .getByRole("textbox", { name: /url/i })
+      .first()
+      .fill("https://example.com/photo-essay");
     await page.getByRole("button", { name: /^add$/i }).click();
 
     // Issue #112 — "Open article" on the result screen navigates.
@@ -271,8 +272,7 @@ test.describe("ingestion happy-path (07-07 SC#1)", () => {
     await expect.poll(async () => await imgs.count(), { timeout: 10_000 }).toBeGreaterThan(0);
     await expect
       .poll(
-        async () =>
-          await imgs.first().evaluate((el) => (el as HTMLImageElement).naturalWidth),
+        async () => await imgs.first().evaluate((el) => (el as HTMLImageElement).naturalWidth),
         { timeout: 10_000 },
       )
       .toBeGreaterThan(0);

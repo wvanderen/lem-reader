@@ -30,10 +30,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { Blob as NodeBlob } from "node:buffer";
 import { zipSync, unzipSync, strToU8, strFromU8 } from "fflate";
-import {
-  ArticleSchema,
-  BookSchema,
-} from "../../../src/content/schema";
+import { ArticleSchema, BookSchema } from "../../../src/content/schema";
 import type { CanonicalArticle } from "../../../src/content/schema";
 import { ExportBundleSchema } from "../../../src/portability/bundle";
 import type { Overrides } from "../../../src/portability/conflicts";
@@ -225,9 +222,7 @@ describe("buildBundle — v4 asset emission (20-05 Task 1)", () => {
     };
     // The field's presence is the v4 write contract (the v2 books precedent).
     expect(bundleJson.assets).toEqual([]);
-    expect(
-      Object.keys(entries).filter((k) => k.startsWith("assets/")),
-    ).toEqual([]);
+    expect(Object.keys(entries).filter((k) => k.startsWith("assets/"))).toEqual([]);
   });
 
   it("validates back through validateBundle with the writer's version — 6 since issue #121, assets intact (round trip)", async () => {
@@ -261,9 +256,7 @@ describe("manifest assets block (20-05 Task 1)", () => {
     await seedFigureAsset();
 
     const entries = unzipSync((await buildBundle()).bytes);
-    const parsed = ExportBundleSchema.parse(
-      JSON.parse(strFromU8(entries["bundle.json"]!)),
-    );
+    const parsed = ExportBundleSchema.parse(JSON.parse(strFromU8(entries["bundle.json"]!)));
     const claimed = JSON.parse(strFromU8(entries["manifest.json"]!)) as {
       blocks: Record<string, string>;
     };
@@ -572,11 +565,7 @@ describe("import gates — bombs, tampering, limits (20-05 Task 2)", () => {
     // the validated asset set loses the row and the figure article's ref
     // dangles — calmly, inside the ok result (never-throw).
     const zipBytes = new Uint8Array(await file.arrayBuffer());
-    const bombed = patchDeclaredUncompressedSize(
-      zipBytes,
-      FIGURE_ENTRY,
-      200_000_001,
-    );
+    const bombed = patchDeclaredUncompressedSize(zipBytes, FIGURE_ENTRY, 200_000_001);
     const result = await validate(new File([bombed], "v4.zip"));
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -676,9 +665,7 @@ describe("import gates — bombs, tampering, limits (20-05 Task 2)", () => {
       strFromU8(unzipSync(new Uint8Array(await budgetFile.arrayBuffer()))["bundle.json"]!),
     ) as { assets: Array<Record<string, unknown>> };
     for (const meta of budgetJson.assets) meta.byteLength = 14 * 1024 * 1024;
-    const budgetManifest = await computeManifest(
-      ExportBundleSchema.parse(budgetJson),
-    );
+    const budgetManifest = await computeManifest(ExportBundleSchema.parse(budgetJson));
     const budgetResult = await validate(
       new File(
         [

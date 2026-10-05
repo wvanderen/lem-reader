@@ -14,7 +14,10 @@
     {
       "kind": "paragraph",
       "content": [
-        { "text": "Hummingbirds are birds native to the Americas and comprise the biological family Trochilidae. With approximately 375 species and 113 genera,", "marks": [] }
+        {
+          "text": "Hummingbirds are birds native to the Americas and comprise the biological family Trochilidae. With approximately 375 species and 113 genera,",
+          "marks": []
+        }
       ]
     },
     {
@@ -30,7 +33,10 @@
     {
       "kind": "paragraph",
       "content": [
-        { "text": "they occur from Alaska to Tierra del Fuego, but most species are found in Central and South America. Hummingbirds are known by that name because of the humming sound created by their beating wings, which flap at high frequencies audible to other birds and humans.", "marks": [] }
+        {
+          "text": "they occur from Alaska to Tierra del Fuego, but most species are found in Central and South America. Hummingbirds are known by that name because of the humming sound created by their beating wings, which flap at high frequencies audible to other birds and humans.",
+          "marks": []
+        }
       ]
     },
     {
@@ -40,14 +46,15 @@
       "originalSrc": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/75/Bee_hummingbird_%28Mellisuga_helenae%29_adult_male_non-breeding.jpg/250px-Bee_hummingbird_%28Mellisuga_helenae%29_adult_male_non-breeding.jpg",
       "width": 200,
       "height": 320,
-      "caption": [
-        { "text": "Adult male bee hummingbird, Cuba.", "marks": [] }
-      ]
+      "caption": [{ "text": "Adult male bee hummingbird, Cuba.", "marks": [] }]
     },
     {
       "kind": "paragraph",
       "content": [
-        { "text": "Hummingbirds have varied specialized characteristics to enable rapid, maneuverable flight: exceptional metabolic capacity, adaptations to high altitude, sensitive visual and communication abilities, and long-distance migration in some species. Among all birds, male hummingbirds have the widest diversity of plumage color, particularly in blues, greens, and purples.", "marks": [] }
+        {
+          "text": "Hummingbirds have varied specialized characteristics to enable rapid, maneuverable flight: exceptional metabolic capacity, adaptations to high altitude, sensitive visual and communication abilities, and long-distance migration in some species. Among all birds, male hummingbirds have the widest diversity of plumage color, particularly in blues, greens, and purples.",
+          "marks": []
+        }
       ]
     },
     {
@@ -63,7 +70,10 @@
     {
       "kind": "paragraph",
       "content": [
-        { "text": "Across the estimated 375 species, hummingbird weights range from as small as 2.0 grams (0.071 oz) to as large as 20 grams (0.71 oz). They have characteristic long, narrow beaks (bills) which may be straight (of varying lengths) or highly curved. The bee hummingbird \u2014 only 6 centimetres (2.4 in) long and weighing about 2 grams \u2014 is the world\u2019s smallest bird and smallest warm-blooded vertebrate.", "marks": [] }
+        {
+          "text": "Across the estimated 375 species, hummingbird weights range from as small as 2.0 grams (0.071 oz) to as large as 20 grams (0.71 oz). They have characteristic long, narrow beaks (bills) which may be straight (of varying lengths) or highly curved. The bee hummingbird \u2014 only 6 centimetres (2.4 in) long and weighing about 2 grams \u2014 is the world\u2019s smallest bird and smallest warm-blooded vertebrate.",
+          "marks": []
+        }
       ]
     },
     {
@@ -83,7 +93,10 @@
         {
           "kind": "paragraph",
           "content": [
-            { "text": "Hummingbirds do not walk on the ground or hop like most birds, but rather shuffle laterally and use their feet to grip while perching, preening feathers, or nest-building.", "marks": [] }
+            {
+              "text": "Hummingbirds do not walk on the ground or hop like most birds, but rather shuffle laterally and use their feet to grip while perching, preening feathers, or nest-building.",
+              "marks": []
+            }
           ]
         }
       ]
@@ -101,7 +114,10 @@
     {
       "id": "fn-2",
       "content": [
-        { "text": "International Ornithologists\u2019 Union. IOC World Bird List (hummingbirds).", "marks": [] }
+        {
+          "text": "International Ornithologists\u2019 Union. IOC World Bird List (hummingbirds).",
+          "marks": []
+        }
       ]
     },
     {

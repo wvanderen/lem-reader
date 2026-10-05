@@ -21,8 +21,7 @@ vi.mock("../../src/content/repository", () => ({
 // restore) so the h1-default focus wiring is observable without timing.
 // Everything else in the module (saveLocation for useScrollSave) stays real.
 vi.mock("../../src/persistence/locationStore", async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import("../../src/persistence/locationStore")>();
+  const actual = await importOriginal<typeof import("../../src/persistence/locationStore")>();
   return { ...actual, loadLocation: vi.fn() };
 });
 
@@ -58,7 +57,18 @@ function renderWithProvider(ui: React.ReactElement) {
  * doesn't exercise navigation) + the Plan 13-10 tag-popover props (closed —
  * the popover surface stays display:none in jsdom) + the Plan 18-02 TOC
  * props (closed — same jsdom popover-display discipline). */
-function withProps(articleId: string): { articleId: string; modeToggleHandlerRef: ArticleViewProps["modeToggleHandlerRef"]; drawerOpen: boolean; onCloseDrawer: () => void; tagsOpen: boolean; onCloseTags: () => void; tocOpen: boolean; onCloseToc: () => void; onAnnotationCountChange: (n: number) => void; hasAppHistory: boolean } {
+function withProps(articleId: string): {
+  articleId: string;
+  modeToggleHandlerRef: ArticleViewProps["modeToggleHandlerRef"];
+  drawerOpen: boolean;
+  onCloseDrawer: () => void;
+  tagsOpen: boolean;
+  onCloseTags: () => void;
+  tocOpen: boolean;
+  onCloseToc: () => void;
+  onAnnotationCountChange: (n: number) => void;
+  hasAppHistory: boolean;
+} {
   return {
     articleId,
     modeToggleHandlerRef: createRef(),
@@ -188,7 +198,7 @@ describe("ArticleView document.title (Plan 14-03 Task 2)", () => {
     document.title = "Lem Reader";
   });
 
-  it("sets \"<provenance.title> — Lem Reader\" when a standalone article resolves", async () => {
+  it('sets "<provenance.title> — Lem Reader" when a standalone article resolves', async () => {
     openArticleMock.mockResolvedValue(fullArticle());
     renderWithProvider(<ArticleView {...withProps("stub-article")} />);
     await screen.findByRole("heading", { level: 1, name: "Stub Article" });
@@ -197,7 +207,7 @@ describe("ArticleView document.title (Plan 14-03 Task 2)", () => {
     });
   });
 
-  it("sets \"Couldn't open this article — Lem Reader\" when openArticle rejects (D14-06)", async () => {
+  it('sets "Couldn\'t open this article — Lem Reader" when openArticle rejects (D14-06)', async () => {
     openArticleMock.mockRejectedValue(new Error("boom"));
     renderWithProvider(<ArticleView {...withProps("stub-article")} />);
     await screen.findByRole("heading", {
@@ -299,13 +309,9 @@ describe("ArticleView corrupt-location honesty (issue #98)", () => {
     // The visible calm note rides the article-top meta (and the SAME
     // sentence rides the hidden region below — hence getAllByText).
     expect(screen.getAllByText(CORRUPT_COPY).length).toBe(2);
-    expect(document.querySelector("p.meta.restore-note")?.textContent).toBe(
-      CORRUPT_COPY,
-    );
+    expect(document.querySelector("p.meta.restore-note")?.textContent).toBe(CORRUPT_COPY);
     // The same sentence announces through the dedicated hidden region.
-    const hiddenRegions = Array.from(
-      document.querySelectorAll("main .status.visually-hidden"),
-    );
+    const hiddenRegions = Array.from(document.querySelectorAll("main .status.visually-hidden"));
     expect(
       hiddenRegions.some((r) => r.textContent === CORRUPT_COPY),
       "the corrupt-location sentence must ride a visually-hidden status region",
@@ -319,12 +325,8 @@ describe("ArticleView corrupt-location honesty (issue #98)", () => {
     await screen.findByRole("heading", { level: 1, name: "Stub Article" });
     await act(async () => {});
     expect(screen.queryByText(CORRUPT_COPY)).toBeNull();
-    const hiddenRegions = Array.from(
-      document.querySelectorAll("main .status.visually-hidden"),
-    );
-    expect(
-      hiddenRegions.some((r) => r.textContent === CORRUPT_COPY),
-    ).toBe(false);
+    const hiddenRegions = Array.from(document.querySelectorAll("main .status.visually-hidden"));
+    expect(hiddenRegions.some((r) => r.textContent === CORRUPT_COPY)).toBe(false);
   });
 });
 
@@ -364,7 +366,7 @@ describe("ArticleView flagged-article note region (ADR-0003)", () => {
     expect(noteLink).not.toBeNull();
     expect(noteLink?.getAttribute("href")).toBe("https://example.com/posts/stub");
     expect(noteLink?.getAttribute("target")).toBe("_blank");
-    expect((noteLink?.getAttribute("rel") ?? "")).toContain("noopener");
+    expect(noteLink?.getAttribute("rel") ?? "").toContain("noopener");
   });
 
   it("renders the partial-content header, the See-the-original link, and each warning line", async () => {
@@ -382,13 +384,11 @@ describe("ArticleView flagged-article note region (ADR-0003)", () => {
     const header = document.querySelector(".partial-content-heading");
     expect(header?.textContent).toContain("Some content could not be processed.");
     // The escape hatch rides the partial-content header.
-    expect(header?.querySelector("a")?.getAttribute("href")).toBe(
-      "https://example.com/posts/stub",
-    );
+    expect(header?.querySelector("a")?.getAttribute("href")).toBe("https://example.com/posts/stub");
     // Each warning line renders as its own list item.
-    const items = Array.from(
-      document.querySelectorAll(".partial-content-note ul li"),
-    ).map((li) => li.textContent);
+    const items = Array.from(document.querySelectorAll(".partial-content-note ul li")).map(
+      (li) => li.textContent,
+    );
     expect(items).toEqual([
       "2 parts of the original could not be displayed",
       "1 image could not be included",
@@ -404,9 +404,7 @@ describe("ArticleView flagged-article note region (ADR-0003)", () => {
       }),
     );
     renderWithProvider(<ArticleView {...withProps("stub-article")} />);
-    expect(
-      await screen.findByText("Highlights may be unreliable on this article."),
-    ).not.toBeNull();
+    expect(await screen.findByText("Highlights may be unreliable on this article.")).not.toBeNull();
   });
 
   it("renders NO note lines for a clean confident article — silence, never a placeholder", async () => {

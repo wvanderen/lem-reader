@@ -79,9 +79,7 @@ import { PaginationFallbackBanner } from "../reader/PaginationFallbackBanner";
 // cannot useContext its own child's provider). The SelectionToolbar (Task 2)
 // + NotePopover (Plan 05-03) consume useHighlightOverlay() directly as
 // provider children.
-import {
-  HighlightOverlayProvider,
-} from "../reader/annotations/HighlightOverlay";
+import { HighlightOverlayProvider } from "../reader/annotations/HighlightOverlay";
 import type { HighlightOverlayValue } from "../reader/annotations/HighlightOverlay";
 // Issue #9 — the selection lifecycle (selection tracking, toolbar state,
 // Gecko/WebKit saved-range restore, the keyboard routing matrix, focus-exit
@@ -119,10 +117,7 @@ import type { TocEntry } from "../content/toc";
 // Entries re-resolves the honest tri-state through the SHIPPED resolver —
 // no forked resolution logic), a sanitizeFilename-derived download name, and
 // a calm visually-hidden live-region announcement.
-import {
-  collectHighlightEntries,
-  renderArticleHighlights,
-} from "../portability/markdown";
+import { collectHighlightEntries, renderArticleHighlights } from "../portability/markdown";
 import { sanitizeFilename } from "../portability/zipSlip";
 import { downloadBlob } from "../portability/download";
 import { loadAllHighlights } from "../persistence/highlightsStore";
@@ -371,8 +366,7 @@ export function ArticleView({
     // chapter outside the record gets NO links (never a self-reference);
     // the context line itself still renders (D12-08).
     const idx =
-      meta.chapterIndex !== undefined &&
-      book.chapterArticleIds[meta.chapterIndex] === article.id
+      meta.chapterIndex !== undefined && book.chapterArticleIds[meta.chapterIndex] === article.id
         ? meta.chapterIndex
         : book.chapterArticleIds.indexOf(article.id);
     const prevId = idx >= 0 ? book.chapterArticleIds[idx - 1] : undefined;
@@ -396,9 +390,7 @@ export function ArticleView({
   // mirrored from onAnchorChange (which fires on every page/pages commit) so
   // the chapter nav can mount the Next link ONLY on the final page and the
   // Previous link ONLY on the first page — never permanent chrome.
-  const [pageState, setPageState] = useState<{ page: number; total: number } | null>(
-    null,
-  );
+  const [pageState, setPageState] = useState<{ page: number; total: number } | null>(null);
 
   // Phase 5 Plan 05-02 (ANNO-01/05/06): annotation state seam. The apiRef
   // bridge lets this component's H/N keydown handler call
@@ -409,9 +401,7 @@ export function ArticleView({
   // Polite live region for annotation announces (D5-12, A11Y-08). Concise
   // copy: "Highlight saved." / "Highlight deleted." Rendered as a visually-
   // hidden role=status region so it announces to AT without visual clutter.
-  const [annotationAnnouncement, setAnnotationAnnouncement] = useState<
-    string | null
-  >(null);
+  const [annotationAnnouncement, setAnnotationAnnouncement] = useState<string | null>(null);
 
   // Plan 09-05 (D9-06, PORT-03): per-article highlights export state. The
   // busy flag disables the header button while a download is in flight; the
@@ -419,9 +409,7 @@ export function ArticleView({
   // role=status region (below) so export messages never clobber in-flight
   // annotation announces (mirrors the annotationAnnouncement pattern).
   const [exportingHighlights, setExportingHighlights] = useState(false);
-  const [exportAnnouncement, setExportAnnouncement] = useState<string | null>(
-    null,
-  );
+  const [exportAnnouncement, setExportAnnouncement] = useState<string | null>(null);
 
   // Issue #98 (decision #96) — corrupt-location honesty. When the saved
   // location row for this [articleId+revision] fails its Zod parse at
@@ -432,9 +420,7 @@ export function ArticleView({
   // the annotation/export announces. Reset per article in the restore
   // effect below (the only writer).
   const [restoreNote, setRestoreNote] = useState<string | null>(null);
-  const [restoreAnnouncement, setRestoreAnnouncement] = useState<string | null>(
-    null,
-  );
+  const [restoreAnnouncement, setRestoreAnnouncement] = useState<string | null>(null);
 
   // Plan 13-10 (G5 — the AnnotationsDrawer ownership pattern): the tag
   // popover surface (a native popover="auto" panel wrapping the
@@ -615,9 +601,9 @@ export function ArticleView({
   // persists). Cleared by the reader's explicit Switch to pages / M / header
   // toggle (returns to the persisted preference) or by an article swap.
   const [showFallbackBanner, setShowFallbackBanner] = useState(false);
-  const [sessionModeOverride, setSessionModeOverride] = useState<
-    "paginated" | "scrolling" | null
-  >(null);
+  const [sessionModeOverride, setSessionModeOverride] = useState<"paginated" | "scrolling" | null>(
+    null,
+  );
 
   // Ref + state for the rendered <article> element. The ref lets
   // useScrollSave/restoreLocation read the DOM imperatively; the state
@@ -668,10 +654,7 @@ export function ArticleView({
   // reader never persists a location at all. 260908-oht: saveLocationNow is
   // the synchronous flush-now seam for handleMarkRead (unmount cancels
   // pending debounces — the explicit button must flush, not schedule).
-  const { scheduleLocationSave, saveLocationNow } = useScrollSave(
-    article,
-    articleRef,
-  );
+  const { scheduleLocationSave, saveLocationNow } = useScrollSave(article, articleRef);
 
   // Phase 3 (PAGE-06 + PAGE-07): mount the staleness-safe measurement
   // pipeline. The hook no-ops during article loading (rules of hooks). The
@@ -763,62 +746,65 @@ export function ArticleView({
     },
     [noteActivity, scheduleLocationSave],
   );
-  const handleAnchorChange = useCallback((offset: number) => {
-    currentAnchorOffsetRef.current = offset;
-    // Track the latest precise offset (only updated in paginated mode where
-    // PaginatedSurface reports via onAnchorChange).
-    lastPreciseAnchorRef.current = offset;
-    // Issue #34: a page turn (or the initial commit) is a reading-activity
-    // pulse — in paginated mode NO window scroll fires, so without this the
-    // idle cap could never distinguish an active page-turning reader from a
-    // parked tab (the 18-03 Pitfall 2 shape: paginated signals must ride
-    // the anchor path).
-    // Phase 18 Plan 18-03 (Pitfall 2 closure — D18-06/UI-SPEC §Auto-Resolved
-    // #8): persist the per-turn offset through the SHARED debounced save +
-    // dual-flush discipline in useScrollSave (SAVE_DEBOUNCE_MS 1200; the
-    // saveLocation call-site family stays singular there — never a direct
-    // call here). Latest-wins: the initial page-1 commit's offset-0 save is
-    // replaced by the restore turn's offset before the debounce fires, so a
-    // reopen-restore never overwrites the reader's saved location with 0.
-    // ADR 0001 (listening is reading) — the session-active gate: while a
-    // read-aloud session exists the LISTENED offset owns the save (it rides
-    // the same debounce through onListenProgress). An anchor commit that
-    // lands mid-session — a refragment re-anchoring the same page (e.g. the
-    // transport band reservation shrinking the paginated surface), or even a
-    // manual turn — carries no fresher intent than the voice's position, and
-    // letting it write would drag the latest-wins save backwards to the page
-    // start. The anchor REF above still updates (mode swaps, play's start
-    // offset, deep links stay coherent); the save family simply hears from
-    // the listened path alone until the session ends, after which turns save
-    // normally again.
-    if (readAloudStateRef.current === "stopped") {
-      recordProgress(offset);
-    }
-    // Plan 12-06 (D12-05): mirror the committed page state (the handle reads
-    // from refs, so by the time this effect-scoped callback runs the values
-    // are post-commit) so the chapter nav's first/last-page gating reacts to
-    // every turn WITHOUT lifting PaginatedSurface's page state up. The
-    // functional update keeps object identity stable when the page did not
-    // change (refragmentation that re-lands on the same page causes zero
-    // re-render churn).
-    setPageState((prev) => {
-      const next = surfaceRef.current?.getState() ?? null;
-      if (prev === next) return prev;
-      if (
-        prev !== null &&
-        next !== null &&
-        prev.page === next.page &&
-        prev.total === next.total
-      ) {
-        return prev;
+  const handleAnchorChange = useCallback(
+    (offset: number) => {
+      currentAnchorOffsetRef.current = offset;
+      // Track the latest precise offset (only updated in paginated mode where
+      // PaginatedSurface reports via onAnchorChange).
+      lastPreciseAnchorRef.current = offset;
+      // Issue #34: a page turn (or the initial commit) is a reading-activity
+      // pulse — in paginated mode NO window scroll fires, so without this the
+      // idle cap could never distinguish an active page-turning reader from a
+      // parked tab (the 18-03 Pitfall 2 shape: paginated signals must ride
+      // the anchor path).
+      // Phase 18 Plan 18-03 (Pitfall 2 closure — D18-06/UI-SPEC §Auto-Resolved
+      // #8): persist the per-turn offset through the SHARED debounced save +
+      // dual-flush discipline in useScrollSave (SAVE_DEBOUNCE_MS 1200; the
+      // saveLocation call-site family stays singular there — never a direct
+      // call here). Latest-wins: the initial page-1 commit's offset-0 save is
+      // replaced by the restore turn's offset before the debounce fires, so a
+      // reopen-restore never overwrites the reader's saved location with 0.
+      // ADR 0001 (listening is reading) — the session-active gate: while a
+      // read-aloud session exists the LISTENED offset owns the save (it rides
+      // the same debounce through onListenProgress). An anchor commit that
+      // lands mid-session — a refragment re-anchoring the same page (e.g. the
+      // transport band reservation shrinking the paginated surface), or even a
+      // manual turn — carries no fresher intent than the voice's position, and
+      // letting it write would drag the latest-wins save backwards to the page
+      // start. The anchor REF above still updates (mode swaps, play's start
+      // offset, deep links stay coherent); the save family simply hears from
+      // the listened path alone until the session ends, after which turns save
+      // normally again.
+      if (readAloudStateRef.current === "stopped") {
+        recordProgress(offset);
       }
-      return next;
-    });
-    // recordProgress is a stable useCallback over the stable
-    // scheduleLocationSave (empty deps in useScrollSave) and noteActivity
-    // (issue #34) — listing it keeps the exhaustive-deps rule satisfied
-    // without changing this callback's identity.
-  }, [recordProgress]);
+      // Plan 12-06 (D12-05): mirror the committed page state (the handle reads
+      // from refs, so by the time this effect-scoped callback runs the values
+      // are post-commit) so the chapter nav's first/last-page gating reacts to
+      // every turn WITHOUT lifting PaginatedSurface's page state up. The
+      // functional update keeps object identity stable when the page did not
+      // change (refragmentation that re-lands on the same page causes zero
+      // re-render churn).
+      setPageState((prev) => {
+        const next = surfaceRef.current?.getState() ?? null;
+        if (prev === next) return prev;
+        if (
+          prev !== null &&
+          next !== null &&
+          prev.page === next.page &&
+          prev.total === next.total
+        ) {
+          return prev;
+        }
+        return next;
+      });
+      // recordProgress is a stable useCallback over the stable
+      // scheduleLocationSave (empty deps in useScrollSave) and noteActivity
+      // (issue #34) — listing it keeps the exhaustive-deps rule satisfied
+      // without changing this callback's identity.
+    },
+    [recordProgress],
+  );
 
   // 260908-oht: the explicit end-of-article completion gesture (Issue #2:
   // one of the four decision sites that call readingPosition). Persists
@@ -1224,7 +1210,9 @@ export function ArticleView({
   // code by construction).
   useEffect(() => {
     if (status === "error") {
-      setDocumentTitle(starterRemoved ? "Getting Started is unavailable" : "Couldn't open this article");
+      setDocumentTitle(
+        starterRemoved ? "Getting Started is unavailable" : "Couldn't open this article",
+      );
       return;
     }
     if (!article) return; // loading transient — no write
@@ -1235,9 +1223,7 @@ export function ArticleView({
       // ARTICLE half is the effective (reader-owned) title; the BOOK half
       // stays chapterContext.book.title byte-identical (books are not
       // overridable — D17-05).
-      setDocumentTitle(
-        `${effectiveTitle(article)} — ${chapterContext.book.title}`,
-      );
+      setDocumentTitle(`${effectiveTitle(article)} — ${chapterContext.book.title}`);
     } else {
       // Standalone article OR missing/corrupt book row (the tolerant
       // lookup returned null) — the effective title (Plan 17-03: the
@@ -1324,9 +1310,7 @@ export function ArticleView({
       // 4 — deleted in another tab / hand-typed garbage → calm no-op).
       const api = highlightApiRef.current;
       const highlights = api?.highlights ?? [];
-      const resolved = highlights.find(
-        (h) => h.record.id === jumpHighlightId,
-      );
+      const resolved = highlights.find((h) => h.record.id === jumpHighlightId);
       const position = resolved?.resolvedPosition ?? null;
       if (resolved && !position) {
         // Loaded and unresolved — terminal calm no-op (Pitfall 4; the
@@ -1340,9 +1324,7 @@ export function ArticleView({
         return;
       }
       // Settle (c): paginated mode only — the first pagination commit.
-      const pages = isPaginated
-        ? surfaceRef.current?.getPages() ?? null
-        : null;
+      const pages = isPaginated ? (surfaceRef.current?.getPages() ?? null) : null;
       if (isPaginated && (!pages || pages.length === 0)) {
         if (performance.now() - startedAt >= RETRY_CAP_MS) {
           finish(); // bounded — never-committing surface (T-10-03c)
@@ -1595,8 +1577,7 @@ export function ArticleView({
     let rafId: number | null = null;
     const read = () => {
       rafId = null;
-      const scrollMax =
-        document.documentElement.scrollHeight - window.innerHeight;
+      const scrollMax = document.documentElement.scrollHeight - window.innerHeight;
       setProgress(scrollMax > 0 ? window.scrollY / scrollMax : 0);
     };
     const onScroll = () => {
@@ -1715,9 +1696,7 @@ export function ArticleView({
       if (!article || !articleRef.current) return;
       const api = highlightApiRef.current;
       if (!api) return;
-      const resolved = api.highlights.find(
-        (h) => h.record.id === highlightId,
-      );
+      const resolved = api.highlights.find((h) => h.record.id === highlightId);
       if (!resolved || !resolved.resolvedPosition) return;
 
       jumpToOffset(article, resolved.resolvedPosition.start, {
@@ -1744,21 +1723,16 @@ export function ArticleView({
    * [data-block-index] set — it is filtered out here so the focus lands on
    * the page fragment the reader actually sees).
    */
-  const resolveTocDestination = useCallback(
-    (blockIndex: number): HTMLElement | null => {
-      const root = articleRef.current;
-      if (!root) return null;
-      const candidates = root.querySelectorAll<HTMLElement>(
-        `[data-block-index="${blockIndex}"]`,
-      );
-      for (const el of candidates) {
-        if (el.closest(".article-body-measurement")) continue;
-        return el;
-      }
-      return null;
-    },
-    [],
-  );
+  const resolveTocDestination = useCallback((blockIndex: number): HTMLElement | null => {
+    const root = articleRef.current;
+    if (!root) return null;
+    const candidates = root.querySelectorAll<HTMLElement>(`[data-block-index="${blockIndex}"]`);
+    for (const el of candidates) {
+      if (el.closest(".article-body-measurement")) continue;
+      return el;
+    }
+    return null;
+  }, []);
 
   /**
    * Phase 18 Plan 18-02 (D18-03 + the D5-11 tail via jumpToOffset — Issue
@@ -1829,12 +1803,20 @@ export function ArticleView({
               <h1 ref={errorH1Ref} tabIndex={-1}>
                 {starterRemoved ? "Getting Started is unavailable." : "Couldn't open this article."}
               </h1>
-              <p>{starterRemoved ? "You removed Getting Started from your library. Restore it to read it again." : "The article could not be loaded. Select it again from the list, or try a different article."}</p>
+              <p>
+                {starterRemoved
+                  ? "You removed Getting Started from your library. Restore it to read it again."
+                  : "The article could not be loaded. Select it again from the list, or try a different article."}
+              </p>
             </>
           )}
         </StatusRegion>
         {starterRemoved && (
-          <RestoreStarterButton onRestored={() => { starterRestoreFocusRef.current = true; }} />
+          <RestoreStarterButton
+            onRestored={() => {
+              starterRestoreFocusRef.current = true;
+            }}
+          />
         )}
       </main>
     );
@@ -1867,22 +1849,11 @@ export function ArticleView({
   const handleExportHighlights = async () => {
     setExportingHighlights(true);
     try {
-      const [allHighlights, allNotes] = await Promise.all([
-        loadAllHighlights(),
-        loadAllNotes(),
-      ]);
-      const articleHighlights = allHighlights.filter(
-        (h) => h.articleId === article.id,
-      );
+      const [allHighlights, allNotes] = await Promise.all([loadAllHighlights(), loadAllNotes()]);
+      const articleHighlights = allHighlights.filter((h) => h.articleId === article.id);
       const highlightIds = new Set(articleHighlights.map((h) => h.id));
-      const articleNotes = allNotes.filter((n) =>
-        highlightIds.has(n.highlightId),
-      );
-      const entries = collectHighlightEntries(
-        [article],
-        articleHighlights,
-        articleNotes,
-      );
+      const articleNotes = allNotes.filter((n) => highlightIds.has(n.highlightId));
+      const entries = collectHighlightEntries([article], articleHighlights, articleNotes);
       const md = renderArticleHighlights(article, entries);
       // Plan 17-03 (OQ5 pinned effective): the download filename carries the
       // effective title — the exported file is named what the reader calls
@@ -1890,9 +1861,7 @@ export function ArticleView({
       const filename = `highlights-${sanitizeFilename(effectiveTitle(article), article.id)}.md`;
       downloadBlob([md], filename, "text/markdown");
       const noun = articleHighlights.length === 1 ? "highlight" : "highlights";
-      setExportAnnouncement(
-        `Exported ${articleHighlights.length} ${noun} for this article.`,
-      );
+      setExportAnnouncement(`Exported ${articleHighlights.length} ${noun} for this article.`);
     } catch {
       setExportAnnouncement("Export didn't complete.");
     } finally {
@@ -1995,8 +1964,7 @@ export function ArticleView({
       {warnings.length > 0 && (
         <div className="meta partial-content-note">
           <p className="partial-content-heading">
-            {PARTIAL_CONTENT_NOTE}{" "}
-            {seeOriginal}
+            {PARTIAL_CONTENT_NOTE} {seeOriginal}
           </p>
           <ul>
             {/* Composite key: warnings are free-form strings (three producers)
@@ -2057,9 +2025,7 @@ export function ArticleView({
           never paint during the paginated pending window either (it would
           appear, then vanish at the swap — the exact first-load jump this
           plan closes). */}
-      {!isPaginated && (
-        <ProgressHairline progress={progress} placement="viewport" />
-      )}
+      {!isPaginated && <ProgressHairline progress={progress} placement="viewport" />}
       {/* A11Y-08: polite live region announcing section changes during scroll.
           articleEl is null during loading; the callback ref sets it once the
           <article> mounts, triggering a re-render so this component receives
@@ -2079,12 +2045,11 @@ export function ArticleView({
           readers. Mirrors the skip-link pattern.
         */}
         <p className="visually-hidden">
-          Keyboard shortcuts: M switches reading mode. PageUp and PageDown,
-          ArrowLeft and ArrowRight, and Space and Shift+Space turn pages. To
-          highlight selected text, keyboard users can press H, or N to
-          highlight and open a note. Pointer selections save automatically;
-          use Undo or Escape to remove the new highlight. Screen-reader users: after selecting text,
-          Tab to the "Highlight" toolbar button and press Enter — screen readers
+          Keyboard shortcuts: M switches reading mode. PageUp and PageDown, ArrowLeft and
+          ArrowRight, and Space and Shift+Space turn pages. To highlight selected text, keyboard
+          users can press H, or N to highlight and open a note. Pointer selections save
+          automatically; use Undo or Escape to remove the new highlight. Screen-reader users: after
+          selecting text, Tab to the "Highlight" toolbar button and press Enter — screen readers
           reserve single-letter keys like H and N for their own navigation.
         </p>
         {/* Phase 5 Plan 05-02 (D5-12, A11Y-08): polite live region for
@@ -2094,26 +2059,20 @@ export function ArticleView({
             announces to AT without visual clutter (mirrors the SectionAnnouncer
             pattern). Both this and the two regions below are the ONE
             StatusRegion primitive (issue #98) in its visually-hidden variant. */}
-        <StatusRegion className="visually-hidden">
-          {annotationAnnouncement}
-        </StatusRegion>
+        <StatusRegion className="visually-hidden">{annotationAnnouncement}</StatusRegion>
         {/* Plan 09-05 (D9-06, PORT-03): a SECOND visually-hidden polite
             region for the per-article highlights-export result ("Exported N
             highlights for this article." / "Export didn't complete."). Kept
             separate from the annotation region above so an export announce
             never clobbers an in-flight annotation announce (each live region
             announces its own atomic phrase — D2-13 pattern). */}
-        <StatusRegion className="visually-hidden">
-          {exportAnnouncement}
-        </StatusRegion>
+        <StatusRegion className="visually-hidden">{exportAnnouncement}</StatusRegion>
         {/* Issue #98 — the THIRD visually-hidden polite region: the
             corrupt-location honesty announce at restore time (the visible
             twin line rides articleTopMeta). Separate from the two regions
             above so a restore note can never clobber or be clobbered by an
             annotation/export announce. */}
-        <StatusRegion className="visually-hidden">
-          {restoreAnnouncement}
-        </StatusRegion>
+        <StatusRegion className="visually-hidden">{restoreAnnouncement}</StatusRegion>
         {/* Phase 18 Plan 18-03 (ORNT-06, D18-05/08): the passive restoration
             marker mounts ONLY when a reopen-restore genuinely landed (the
             restorationMarker state above is set exclusively inside the
@@ -2158,7 +2117,7 @@ export function ArticleView({
                and non-critical to the reading experience (D2-13). */
           }}
         >
-        {/* Plan 13-09 (G4 — stable first paint): the pinned paginated frame
+          {/* Plan 13-09 (G4 — stable first paint): the pinned paginated frame
             (fixed viewport height + grid + overflow clip) is applied whenever
             the EFFECTIVE mode is paginated — including the pre-settle pending
             window — so the frame is byte-stable from the first article paint
@@ -2166,40 +2125,40 @@ export function ArticleView({
             reverts the class in the same render that mounts the scrolling
             body (disclosed by the banner), so the clip never traps a
             scrolling rendering. */}
-        {/* Phase 20 Plan 20-04: AssetProvider wraps the whole <article>
+          {/* Phase 20 Plan 20-04: AssetProvider wraps the whole <article>
             element — every figure-rendering subtree (both reading bodies)
             resolves through the one per-article object-URL map. Siblings
             outside (toolbar/popovers/drawer) render no figures and stay
             outside the provider. */}
-        <AssetProvider article={article}>
-        <article
-          ref={articleCallbackRef}
-          className={isPaginated ? "article-body paginated-surface" : "article-body"}
-        >
-          {/* Plan 13-04 (POLISH-03 / D13-13): the pinned per-page header is
+          <AssetProvider article={article}>
+            <article
+              ref={articleCallbackRef}
+              className={isPaginated ? "article-body paginated-surface" : "article-body"}
+            >
+              {/* Plan 13-04 (POLISH-03 / D13-13): the pinned per-page header is
               SLIM — BackToLibrary + the title ONLY. Byline/source/book
               context moved to the article-top metadata spot (13-10 G5:
               provenance-only); tags live in the top-bar popover and export
               in the annotations drawer. The header row's 09-07 geometry cap
               stays byte-unchanged; the slimmer content keeps it far under
               the cap (no internal scrolling at 360×640). */}
-          <header>
-            {/* Plan 13-04 (POLISH-05 / D13-15) — the standardized back
+              <header>
+                {/* Plan 13-04 (POLISH-05 / D13-15) — the standardized back
                 affordance at the article header start, BEFORE the title
                 cluster. Native button = keyboard-reachable by construction;
                 history.back() only when App's in-app flag is set, else the
                 "#/" fallback (Pitfall 7 — deep-link tabs never exit). */}
-            <BackToLibrary hasAppHistory={hasAppHistory} />
-            {/* Plan 14-03 Task 3: gains ONLY tabIndex={-1} + the focus ref —
+                <BackToLibrary hasAppHistory={hasAppHistory} />
+                {/* Plan 14-03 Task 3: gains ONLY tabIndex={-1} + the focus ref —
                 text and level byte-stable. Plan 17-03: the text VALUE source
                 is now the effective title (ref + tabIndex untouched). */}
-            <h1 ref={articleH1Ref} tabIndex={-1}>
-              {effectiveTitle(article)}
-            </h1>
-          </header>
-          {paginatedActive && trustedView && articleEl ? (
-            <>
-              {/*
+                <h1 ref={articleH1Ref} tabIndex={-1}>
+                  {effectiveTitle(article)}
+                </h1>
+              </header>
+              {paginatedActive && trustedView && articleEl ? (
+                <>
+                  {/*
                 Plan 04-08 (PAGE-06 + PAGE-07 cross-phase regression fix):
                 a hidden ArticleBody is kept mounted alongside PaginatedSurface
                 so the measurement engine's measureAllBlocks always finds the
@@ -2220,10 +2179,10 @@ export function ArticleView({
                 none prevents any interaction. See app.css for the geometry
                 contract.
               */}
-              <div className="article-body-measurement" aria-hidden="true">
-                <ArticleBody article={article} highlights={EMPTY_HIGHLIGHTS} />
-              </div>
-              {/*
+                  <div className="article-body-measurement" aria-hidden="true">
+                    <ArticleBody article={article} highlights={EMPTY_HIGHLIGHTS} />
+                  </div>
+                  {/*
                 PaginatedSurface owns pages + currentPageIdx + the turn handler.
                 The ref lets PageTurnControls (keyboard + swipe) drive the same
                 state. initialAnchorOffset is the D4-10 scrolling→paginated
@@ -2231,7 +2190,7 @@ export function ArticleView({
                 currentAnchorOffsetRef fresh for the NEXT swap (paginated→
                 scrolling).
               */}
-              {/* Plan 13-04 (Option A — human decision 2026-08-18): the
+                  {/* Plan 13-04 (Option A — human decision 2026-08-18): the
                   metadata spot is OWNED here but MOUNTED by
                   PaginatedSurface (articleStartChrome) — the surface shows
                   it exactly on page 1, in the same render as the page-1
@@ -2245,33 +2204,33 @@ export function ArticleView({
                   The viewport box itself is grid-determined: the spot
                   mount/unmount never changes its height (no ResizeObserver
                   re-measure loop). */}
-              <div className="page-viewport">
-                <PaginatedSurface
-                  animatePageTurns={settings.animatePageTurns}
-                  ref={surfaceRef}
-                  article={article}
-                  trustedView={trustedView}
-                  articleEl={articleEl}
-                  diagnostics={diagnostics}
-                  articleStartChrome={articleTopMeta}
-                  initialAnchorOffset={currentAnchorOffsetRef.current}
-                  onAnchorChange={handleAnchorChange}
-                  spokenRange={follow.spokenRange}
-                  onUserTurn={follow.suspend}
-                />
-                {/*
+                  <div className="page-viewport">
+                    <PaginatedSurface
+                      animatePageTurns={settings.animatePageTurns}
+                      ref={surfaceRef}
+                      article={article}
+                      trustedView={trustedView}
+                      articleEl={articleEl}
+                      diagnostics={diagnostics}
+                      articleStartChrome={articleTopMeta}
+                      initialAnchorOffset={currentAnchorOffsetRef.current}
+                      onAnchorChange={handleAnchorChange}
+                      spokenRange={follow.spokenRange}
+                      onUserTurn={follow.suspend}
+                    />
+                    {/*
                   PageTurnControls registers the keyboard bundle + swipe + the
                   "Page N of M" announce. Enabled only while paginated mode is
                   active. The M shortcut routes through the SAME handleToggleMode
                   as the header button so the D4-10 anchor applies either way.
                 */}
-                <PageTurnControls
-                  enabled={paginatedActive}
-                  surfaceRef={surfaceRef}
-                  articleEl={articleEl}
-                />
-              </div>
-              {/* Plan 12-06 (D12-05): paginated chapter nav — ArticleView-
+                    <PageTurnControls
+                      enabled={paginatedActive}
+                      surfaceRef={surfaceRef}
+                      articleEl={articleEl}
+                    />
+                  </div>
+                  {/* Plan 12-06 (D12-05): paginated chapter nav — ArticleView-
                   owned chrome rendered AFTER the surface element (never
                   inside page fragments), so it is geometrically stable: the
                   CSS places it in the fixed chrome band below the pinned
@@ -2283,47 +2242,35 @@ export function ArticleView({
                   state, never permanent chrome. Native focusable anchors
                   (Tab/Enter only, no shortcut registration); the page-turn
                   key handlers in PageTurnControls are untouched. */}
-              {chapterContext?.nextId &&
-                pageState !== null &&
-                pageState.page === pageState.total && (
-                  <nav
-                    className="chapter-nav chapter-nav-page chapter-nav-next"
-                    aria-label="Book chapters"
-                  >
-                  <a
-                    className="chapter-next"
-                    href={`#/article/${chapterContext.nextId}`}
-                  >
-                    Next chapter
-                    {chapterContext.nextTitle && (
-                      <span className="chapter-nav-title">
-                        {" "}
-                        {chapterContext.nextTitle}
-                      </span>
+                  {chapterContext?.nextId &&
+                    pageState !== null &&
+                    pageState.page === pageState.total && (
+                      <nav
+                        className="chapter-nav chapter-nav-page chapter-nav-next"
+                        aria-label="Book chapters"
+                      >
+                        <a className="chapter-next" href={`#/article/${chapterContext.nextId}`}>
+                          Next chapter
+                          {chapterContext.nextTitle && (
+                            <span className="chapter-nav-title"> {chapterContext.nextTitle}</span>
+                          )}
+                        </a>
+                      </nav>
                     )}
-                  </a>
-                </nav>
-              )}
-              {chapterContext?.prevId && pageState !== null && pageState.page === 1 && (
-                <nav
-                  className="chapter-nav chapter-nav-page chapter-nav-previous"
-                  aria-label="Book chapters"
-                >
-                  <a
-                    className="chapter-prev"
-                    href={`#/article/${chapterContext.prevId}`}
-                  >
-                    Previous chapter
-                    {chapterContext.prevTitle && (
-                      <span className="chapter-nav-title">
-                        {" "}
-                        {chapterContext.prevTitle}
-                      </span>
-                    )}
-                  </a>
-                </nav>
-              )}
-              {/* 260908-oht: the end-of-article gesture on the FINAL page —
+                  {chapterContext?.prevId && pageState !== null && pageState.page === 1 && (
+                    <nav
+                      className="chapter-nav chapter-nav-page chapter-nav-previous"
+                      aria-label="Book chapters"
+                    >
+                      <a className="chapter-prev" href={`#/article/${chapterContext.prevId}`}>
+                        Previous chapter
+                        {chapterContext.prevTitle && (
+                          <span className="chapter-nav-title"> {chapterContext.prevTitle}</span>
+                        )}
+                      </a>
+                    </nav>
+                  )}
+                  {/* 260908-oht: the end-of-article gesture on the FINAL page —
                   the SAME final-page gate the Next chapter link uses. A
                   one-page article satisfies the gate (1 === 1), which is
                   exactly how one-page articles finish given the POLISH-02
@@ -2331,17 +2278,17 @@ export function ArticleView({
                   outside the measured page content (no pagination
                   disturbance); DOM order after the page fragment keeps Tab
                   order after page content. */}
-              {pageState !== null && pageState.page === pageState.total && (
-                <MarkReadAndClose
-                  placement="page"
-                  onMarkRead={handleMarkRead}
-                  hasAppHistory={hasAppHistory}
-                />
-              )}
-            </>
-          ) : paginatedPending ? (
-            <>
-              {/*
+                  {pageState !== null && pageState.page === pageState.total && (
+                    <MarkReadAndClose
+                      placement="page"
+                      onMarkRead={handleMarkRead}
+                      hasAppHistory={hasAppHistory}
+                    />
+                  )}
+                </>
+              ) : paginatedPending ? (
+                <>
+                  {/*
                 Plan 13-09 (G4): the pending window — the effective mode is
                 paginated but measurement has not settled (trustedView or
                 articleEl not yet ready). This branch renders the SAME hidden
@@ -2354,10 +2301,10 @@ export function ArticleView({
                 contract (position:absolute out of flow, visibility:hidden
                 boxes preserved).
               */}
-              <div className="article-body-measurement" aria-hidden="true">
-                <ArticleBody article={article} highlights={EMPTY_HIGHLIGHTS} />
-              </div>
-              {/*
+                  <div className="article-body-measurement" aria-hidden="true">
+                    <ArticleBody article={article} highlights={EMPTY_HIGHLIGHTS} />
+                  </div>
+                  {/*
                 Plan 13-09 (G4): a calm placeholder inside the REAL page
                 viewport — the frame rides the pinned .paginated-surface
                 geometry already applied to the <article>, and this paragraph
@@ -2368,111 +2315,95 @@ export function ArticleView({
                 this branch unmounts and the banner discloses the mode
                 change.
               */}
-              <div className="page-viewport">
-                <p className="meta" role="status" aria-live="polite">Preparing pages…</p>
-              </div>
-            </>
-          ) : (
-            <>
-              {/* Plan 13-10 (G5): in scrolling mode the metadata spot is
+                  <div className="page-viewport">
+                    <p className="meta" role="status" aria-live="polite">
+                      Preparing pages…
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Plan 13-10 (G5): in scrolling mode the metadata spot is
                   ordinary flow content above the article body — byline,
                   source, book context (provenance-only) — scrolling away
                   naturally with the article (rendered once, never pinned). */}
-              {articleTopMeta}
-              {/* Plan 12-06 (D12-05): Previous chapter at chapter START —
+                  {articleTopMeta}
+                  {/* Plan 12-06 (D12-05): Previous chapter at chapter START —
                   mounted BEFORE the body in the article flow so it is
                   reachable from the top of the chapter (symmetric with the
                   Next link at the end). */}
-              {chapterContext?.prevId && (
-                <nav
-                  className="chapter-nav chapter-nav-previous"
-                  aria-label="Book chapters"
-                >
-                  <a
-                    className="chapter-prev"
-                    href={`#/article/${chapterContext.prevId}`}
-                  >
-                    Previous chapter
-                    {chapterContext.prevTitle && (
-                      <span className="chapter-nav-title">
-                        {" "}
-                        {chapterContext.prevTitle}
-                      </span>
-                    )}
-                  </a>
-                </nav>
-              )}
-              <ArticleBody article={article} spokenRange={spokenRange} />
-              {/* 260908-oht: the end-of-article gesture sits at the end of
+                  {chapterContext?.prevId && (
+                    <nav className="chapter-nav chapter-nav-previous" aria-label="Book chapters">
+                      <a className="chapter-prev" href={`#/article/${chapterContext.prevId}`}>
+                        Previous chapter
+                        {chapterContext.prevTitle && (
+                          <span className="chapter-nav-title"> {chapterContext.prevTitle}</span>
+                        )}
+                      </a>
+                    </nav>
+                  )}
+                  <ArticleBody article={article} spokenRange={spokenRange} />
+                  {/* 260908-oht: the end-of-article gesture sits at the end of
                   the content — BEFORE the book navigation that follows it
                   (flow placement, calm quiet-button register). */}
-              <MarkReadAndClose
-                placement="flow"
-                onMarkRead={handleMarkRead}
-                hasAppHistory={hasAppHistory}
-              />
-              {/* Plan 12-06 (D12-05): Next chapter exactly at chapter END —
+                  <MarkReadAndClose
+                    placement="flow"
+                    onMarkRead={handleMarkRead}
+                    hasAppHistory={hasAppHistory}
+                  />
+                  {/* Plan 12-06 (D12-05): Next chapter exactly at chapter END —
                   after the last block in the article flow; a calm link, not
                   permanent chrome. */}
-              {chapterContext?.nextId && (
-                <nav
-                  className="chapter-nav chapter-nav-next"
-                  aria-label="Book chapters"
-                >
-                  <a
-                    className="chapter-next"
-                    href={`#/article/${chapterContext.nextId}`}
-                  >
-                    Next chapter
-                    {chapterContext.nextTitle && (
-                      <span className="chapter-nav-title">
-                        {" "}
-                        {chapterContext.nextTitle}
-                      </span>
-                    )}
-                  </a>
-                </nav>
+                  {chapterContext?.nextId && (
+                    <nav className="chapter-nav chapter-nav-next" aria-label="Book chapters">
+                      <a className="chapter-next" href={`#/article/${chapterContext.nextId}`}>
+                        Next chapter
+                        {chapterContext.nextTitle && (
+                          <span className="chapter-nav-title"> {chapterContext.nextTitle}</span>
+                        )}
+                      </a>
+                    </nav>
+                  )}
+                </>
               )}
-            </>
-          )}
-          {/* Phase 18 Plan 18-03 (ORNT-06): the passive marker — rendered as
+              {/* Phase 18 Plan 18-03 (ORNT-06): the passive marker — rendered as
               the LAST child of the shared <article> so it never disturbs the
               mode branches; absolutely positioned (zero layout impact) with
               pointer-events none; transient (unmounts itself at 4s). */}
-          {restorationMarker && articleEl && (
-            <RestorationMarker
-              article={article}
-              articleEl={articleEl}
-              offset={restorationMarker.offset}
-              mode={restorationMarker.mode}
-            />
-          )}
-        </article>
-        </AssetProvider>
-        {/* Issue #9: SelectionToolbar renders purely from the
+              {restorationMarker && articleEl && (
+                <RestorationMarker
+                  article={article}
+                  articleEl={articleEl}
+                  offset={restorationMarker.offset}
+                  mode={restorationMarker.mode}
+                />
+              )}
+            </article>
+          </AssetProvider>
+          {/* Issue #9: SelectionToolbar renders purely from the
             useSelectionToolbar controller state. onHighlight /
             onHighlightAndNote reuse the SAME hook create path the H/N
             keyboard path uses (ONE capture → persist → clear-selection
             flow); onFocusExit wires the toolbar's focusout-driven dismissal
             (Tab-past / focus-exit) to the hook's stable dismissal. */}
-        <SelectionToolbar
-          selectionRect={selectionRect}
-          captureResult={captureResult}
-          savedHighlight={savedHighlight}
-          onUndo={handleUndo}
-          onHighlight={handleHighlight}
-          onHighlightAndNote={handleHighlightAndNote}
-          onFocusExit={dismissToolbarFromFocusExit}
-        />
-        {/* Phase 5 Plan 05-03: NotePopover mounts inside the provider so it
+          <SelectionToolbar
+            selectionRect={selectionRect}
+            captureResult={captureResult}
+            savedHighlight={savedHighlight}
+            onUndo={handleUndo}
+            onHighlight={handleHighlight}
+            onHighlightAndNote={handleHighlightAndNote}
+            onFocusExit={dismissToolbarFromFocusExit}
+          />
+          {/* Phase 5 Plan 05-03: NotePopover mounts inside the provider so it
             can consume useHighlightOverlay() for openPopoverFor coordination
             state + CRUD (updateNote/flushNoteSave/deleteHighlight). The
             popover is controlled by the provider's openPopoverFor state
             (set by the N shortcut, "Highlight + note" toolbar button, or
             activating a <mark>). popover="manual" → typing doesn't
             light-dismiss; top-layer rendering with no backdrop. */}
-        <NotePopover />
-        {/* Plan 13-10 (G5 — the AnnotationsDrawer ownership pattern): the
+          <NotePopover />
+          {/* Plan 13-10 (G5 — the AnnotationsDrawer ownership pattern): the
             tag-editing popover. A native popover="auto" panel in the top
             layer — free light-dismiss + Esc; the toggle-event close seam
             above restores focus to the trigger and routes the state back to
@@ -2482,16 +2413,16 @@ export function ArticleView({
             call anywhere in this path). role="dialog" + aria-label give the
             surface its accessible name; the closed panel is display:none
             (UA popover styling) so it never leaks into the reading flow. */}
-        <div
-          ref={tagPopoverRef}
-          popover="auto"
-          role="dialog"
-          aria-label="Article tags"
-          className="tag-popover"
-        >
-          <TagEntry recordId={article.id} tags={article.tags ?? []} />
-        </div>
-        {/* Phase 18 Plan 18-02: the TOC panel — popover="manual", NON-modal
+          <div
+            ref={tagPopoverRef}
+            popover="auto"
+            role="dialog"
+            aria-label="Article tags"
+            className="tag-popover"
+          >
+            <TagEntry recordId={article.id} tags={article.tags ?? []} />
+          </div>
+          {/* Phase 18 Plan 18-02: the TOC panel — popover="manual", NON-modal
             (no dialog role, no modal state, no popup hint — Pitfall 3; the
             first non-dialog overlay, D18-01). The controlled seam above owns
             open/close + focus restore; the panel owns rendering, the shared
@@ -2499,32 +2430,32 @@ export function ArticleView({
             Esc, and intercepted entry activation (onActivate →
             handleTocJump). The UA hides the closed panel (display:none) so
             it never leaks into the reading flow. */}
-        <TocPanel
-          ref={tocPanelRef}
-          article={article}
-          articleEl={articleEl}
-          open={tocOpen}
-          mode={isPaginated ? "paginated" : "scrolling"}
-          onActivate={handleTocJump}
-        />
-        {/* Phase 5 Plan 05-03 Task 2: AnnotationsDrawer — native <dialog>
+          <TocPanel
+            ref={tocPanelRef}
+            article={article}
+            articleEl={articleEl}
+            open={tocOpen}
+            mode={isPaginated ? "paginated" : "scrolling"}
+            onActivate={handleTocJump}
+          />
+          {/* Phase 5 Plan 05-03 Task 2: AnnotationsDrawer — native <dialog>
             reading-order list + empty-state + navigate-back. Reads highlights
             from useHighlightOverlay(); the onNavigate handler runs D5-11
             (fragmentContainingOffset/commitTurn paginated OR findScrollTarget/
             scrollIntoView scrolling → focus the <mark>). onEditNote opens the
             inline popover for Edit/Delete after a navigate-back or directly. */}
-        <AnnotationsDrawer
-          open={drawerOpen}
-          onClose={onCloseDrawer}
-          onNavigate={handleNavigateBack}
-          onEditNote={(id) => {
-            const api = highlightApiRef.current;
-            if (api) api.setOpenPopoverFor(id);
-          }}
-          onExportHighlights={handleExportHighlights}
-          exportingHighlights={exportingHighlights}
-          reviewHref={`#/highlights?article=${article.id}`}
-        />
+          <AnnotationsDrawer
+            open={drawerOpen}
+            onClose={onCloseDrawer}
+            onNavigate={handleNavigateBack}
+            onEditNote={(id) => {
+              const api = highlightApiRef.current;
+              if (api) api.setOpenPopoverFor(id);
+            }}
+            onExportHighlights={handleExportHighlights}
+            exportingHighlights={exportingHighlights}
+            reviewHref={`#/highlights?article=${article.id}`}
+          />
         </HighlightOverlayProvider>
         {/* Issue #40: the fixed compact transport bar — mounted in BOTH
             reading modes (manual turning/scrolling during playback is still
@@ -2544,9 +2475,7 @@ export function ArticleView({
           notice={follow.notice}
           rate={settings.rate}
           onPrimary={() =>
-            readAloudState === "playing"
-              ? pauseOrResumeReadAloud()
-              : playReadAloud()
+            readAloudState === "playing" ? pauseOrResumeReadAloud() : playReadAloud()
           }
           onStop={stopReadAloud}
           onJumpToSpoken={follow.jumpToSpoken}

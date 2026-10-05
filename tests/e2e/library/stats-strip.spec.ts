@@ -23,20 +23,13 @@
 import { test, expect, type Page } from "@playwright/test";
 import { ArticleSchema } from "../../../src/content/schema";
 import type { CanonicalArticle } from "../../../src/content/schema";
-import {
-  normalizeText,
-  graphemeClusters,
-} from "../../../src/content/normalizeText";
+import { normalizeText, graphemeClusters } from "../../../src/content/normalizeText";
 import { BASE } from "../_base";
 
 /** Build an ArticleSchema-valid standalone article from plain paragraphs
  * (library-restore.spec.ts makeStandalone discipline — schema-built in
  * Node so the store-seam Zod read never drops a seeded row). */
-function makeStandalone(
-  id: string,
-  title: string,
-  paragraphs: string[],
-): CanonicalArticle {
+function makeStandalone(id: string, title: string, paragraphs: string[]): CanonicalArticle {
   return ArticleSchema.parse({
     id,
     revision: 1,
@@ -55,33 +48,22 @@ function makeStandalone(
 
 // Two standalones with distinct ids/titles so row/card filters are
 // deterministic and each article's accrued time is independent.
-const STATS_ARTICLE_A = makeStandalone(
-  "stats-strip-a",
-  "Tide Charts for Landlocked Readers",
-  [
-    "The first chart maps tides onto kitchen clocks, because the reader we imagine owns no coast and measures everything in meal times.",
-    "The second chart drops the metaphor and admits that landlocked tide reading is mostly a hobby about patience.",
-    "The closing note suggests keeping the charts near a window anyway, since imaginary water still deserves good light.",
-  ],
-);
-const STATS_ARTICLE_B = makeStandalone(
-  "stats-strip-b",
-  "A Small Almanac of Weather Sayings",
-  [
-    "Every almanac of sayings begins by admitting half of them contradict the other half, then prints them anyway.",
-    "This one is no different: red skies at night share a page with sailors taking care, and nobody reconciles them.",
-  ],
-);
+const STATS_ARTICLE_A = makeStandalone("stats-strip-a", "Tide Charts for Landlocked Readers", [
+  "The first chart maps tides onto kitchen clocks, because the reader we imagine owns no coast and measures everything in meal times.",
+  "The second chart drops the metaphor and admits that landlocked tide reading is mostly a hobby about patience.",
+  "The closing note suggests keeping the charts near a window anyway, since imaginary water still deserves good light.",
+]);
+const STATS_ARTICLE_B = makeStandalone("stats-strip-b", "A Small Almanac of Weather Sayings", [
+  "Every almanac of sayings begins by admitting half of them contradict the other half, then prints them anyway.",
+  "This one is no different: red skies at night share a page with sailors taking care, and nobody reconciles them.",
+]);
 
 /**
  * seedArticleRows — write ArticleSchema-valid article rows (built in Node)
  * into the articles store via a raw put (progress-recent.spec.ts
  * discipline). MUST run BEFORE openLibrary.
  */
-async function seedArticleRows(
-  page: Page,
-  articles: CanonicalArticle[],
-): Promise<void> {
+async function seedArticleRows(page: Page, articles: CanonicalArticle[]): Promise<void> {
   await page.evaluate(async (rows) => {
     await new Promise<void>((resolve, reject) => {
       const req = indexedDB.open("lem-reader");
@@ -173,11 +155,7 @@ async function countReadingSessions(page: Page): Promise<number> {
  * discipline) — used to flip an article to Finished for the finished-
  * count sentence.
  */
-async function seedLocation(
-  page: Page,
-  articleId: string,
-  graphemeOffset: number,
-): Promise<void> {
+async function seedLocation(page: Page, articleId: string, graphemeOffset: number): Promise<void> {
   await page.evaluate(
     async ({ articleId, graphemeOffset }) => {
       const location = {
@@ -215,9 +193,7 @@ async function seedLocation(
 async function openLibrary(page: Page) {
   await page.goto(`${BASE}/#/`);
   await page.reload();
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Saved articles" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
   await expect(page.locator(".library-list > li").first()).toBeVisible({
     timeout: 10_000,
   });
@@ -234,9 +210,9 @@ test.beforeEach(async ({ page }) => {
   // deterministic no-history state (clear-rows, NOT deleteDatabase —
   // the webkit deleteDatabase race).
   await page.goto(`${BASE}/`);
-  await expect(
-    page.getByRole("heading", { name: "Saved articles" }),
-  ).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible({
+    timeout: 10_000,
+  });
   await page.evaluate(async () => {
     await new Promise<void>((resolve) => {
       const req = indexedDB.open("lem-reader");
@@ -250,9 +226,7 @@ test.beforeEach(async ({ page }) => {
           "notes",
           "readingSessions",
         ];
-        const existing = stores.filter((s) =>
-          db.objectStoreNames.contains(s),
-        );
+        const existing = stores.filter((s) => db.objectStoreNames.contains(s));
         if (existing.length === 0) {
           resolve();
           return;
@@ -284,9 +258,7 @@ test.describe("issue #38 — the ambient reading-stats strip", () => {
     expect(body).not.toMatch(/streak|goal|daily target|words read/i);
   });
 
-  test("after reading: strip in the header block + per-card meta lines", async ({
-    page,
-  }) => {
+  test("after reading: strip in the header block + per-card meta lines", async ({ page }) => {
     await seedArticleRows(page, [STATS_ARTICLE_A, STATS_ARTICLE_B]);
     // A: two visits totalling 240s → "4 min read here"; B: one visit of 60s
     // → "1 min read here". Whole history: 300s across 3 visits → "5 min".
@@ -306,24 +278,15 @@ test.describe("issue #38 — the ambient reading-stats strip", () => {
     const order = await page.evaluate(() => {
       const header = document.querySelector(".library-header");
       const strip = document.querySelector(".library-stats-strip");
-      const continueSection = document.querySelector(
-        ".library-section-continue",
-      );
+      const continueSection = document.querySelector(".library-section-continue");
       const list = document.querySelector(".library-section-list");
       if (!header || !strip || !continueSection || !list) return false;
       return (
+        Boolean(header.compareDocumentPosition(strip) & Node.DOCUMENT_POSITION_FOLLOWING) &&
         Boolean(
-          header.compareDocumentPosition(strip) &
-            Node.DOCUMENT_POSITION_FOLLOWING,
+          strip.compareDocumentPosition(continueSection) & Node.DOCUMENT_POSITION_FOLLOWING,
         ) &&
-        Boolean(
-          strip.compareDocumentPosition(continueSection) &
-            Node.DOCUMENT_POSITION_FOLLOWING,
-        ) &&
-        Boolean(
-          continueSection.compareDocumentPosition(list) &
-            Node.DOCUMENT_POSITION_FOLLOWING,
-        )
+        Boolean(continueSection.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING)
       );
     });
     expect(order).toBe(true);
@@ -335,28 +298,19 @@ test.describe("issue #38 — the ambient reading-stats strip", () => {
     const rowA = page
       .locator(".library-list > li")
       .filter({ hasText: STATS_ARTICLE_A.provenance.title });
-    await expect(rowA.locator(".library-row-time-read")).toHaveText(
-      "4 min read here",
-    );
+    await expect(rowA.locator(".library-row-time-read")).toHaveText("4 min read here");
     const rowB = page
       .locator(".library-list > li")
       .filter({ hasText: STATS_ARTICLE_B.provenance.title });
-    await expect(rowB.locator(".library-row-time-read")).toHaveText(
-      "1 min read here",
-    );
+    await expect(rowB.locator(".library-row-time-read")).toHaveText("1 min read here");
   });
 
-  test("'N finished.' appears only when the finished count is nonzero", async ({
-    page,
-  }) => {
+  test("'N finished.' appears only when the finished count is nonzero", async ({ page }) => {
     await seedArticleRows(page, [STATS_ARTICLE_A]);
     await seedReadingSession(page, "visit-a1", STATS_ARTICLE_A.id, 300);
     // No location → 0 finished → sentence absent (covered above); now make
     // A finished: a location at the full grapheme offset (>= 0.98 ratio).
-    const total = graphemeClusters(
-      normalizeText(STATS_ARTICLE_A),
-      STATS_ARTICLE_A.lang,
-    ).length;
+    const total = graphemeClusters(normalizeText(STATS_ARTICLE_A), STATS_ARTICLE_A.lang).length;
     await seedLocation(page, STATS_ARTICLE_A.id, total);
     await openLibrary(page);
 
@@ -369,9 +323,7 @@ test.describe("issue #38 — the ambient reading-stats strip", () => {
       .locator(".library-list > li")
       .filter({ hasText: STATS_ARTICLE_A.provenance.title });
     await expect(rowA.locator(".finished-mark")).toBeVisible();
-    await expect(rowA.locator(".library-row-time-read")).toHaveText(
-      "5 min read here",
-    );
+    await expect(rowA.locator(".library-row-time-read")).toHaveText("5 min read here");
   });
 
   test("under one minute: the strip still reads, but the card line is suppressed", async ({
@@ -383,9 +335,7 @@ test.describe("issue #38 — the ambient reading-stats strip", () => {
 
     // The visit is real — the strip reads (in words, never "0 min").
     const strip = page.locator(".library-stats-strip");
-    await expect(strip).toContainText(
-      "You've read under a minute across 1 visit.",
-    );
+    await expect(strip).toContainText("You've read under a minute across 1 visit.");
     // …but under a minute of accrued time silences the card line.
     const rowA = page
       .locator(".library-list > li")
@@ -409,9 +359,11 @@ test.describe("issue #38 — the ambient reading-stats strip", () => {
     const rowA = page
       .locator(".library-list > li")
       .filter({ hasText: STATS_ARTICLE_A.provenance.title });
-    await rowA.getByRole("button", {
-      name: `Remove ${STATS_ARTICLE_A.provenance.title} from library`,
-    }).click();
+    await rowA
+      .getByRole("button", {
+        name: `Remove ${STATS_ARTICLE_A.provenance.title} from library`,
+      })
+      .click();
     await page.getByRole("button", { name: "Remove article" }).click();
     await expect(rowA).toHaveCount(0);
 

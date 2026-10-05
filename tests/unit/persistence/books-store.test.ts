@@ -123,7 +123,9 @@ function sampleChapter(
   });
 }
 
-function sampleHighlight(overrides: Partial<Parameters<typeof HighlightRecordSchema.parse>[0]> = {}): HighlightRecord {
+function sampleHighlight(
+  overrides: Partial<Parameters<typeof HighlightRecordSchema.parse>[0]> = {},
+): HighlightRecord {
   return HighlightRecordSchema.parse({
     schemaVersion: 1,
     id: "hl-chapter",
@@ -136,7 +138,9 @@ function sampleHighlight(overrides: Partial<Parameters<typeof HighlightRecordSch
   });
 }
 
-function sampleNote(overrides: Partial<Parameters<typeof NoteRecordSchema.parse>[0]> = {}): NoteRecord {
+function sampleNote(
+  overrides: Partial<Parameters<typeof NoteRecordSchema.parse>[0]> = {},
+): NoteRecord {
   return NoteRecordSchema.parse({
     schemaVersion: 1,
     id: "note-chapter",
@@ -147,7 +151,9 @@ function sampleNote(overrides: Partial<Parameters<typeof NoteRecordSchema.parse>
   });
 }
 
-function sampleLocation(overrides: Partial<Parameters<typeof LocationRecordSchema.parse>[0]> = {}): LocationRecord {
+function sampleLocation(
+  overrides: Partial<Parameters<typeof LocationRecordSchema.parse>[0]> = {},
+): LocationRecord {
   return LocationRecordSchema.parse({
     schemaVersion: 1,
     articleId: "epub-abc123def456-c00",
@@ -188,9 +194,7 @@ async function seedBookSurface(): Promise<void> {
   await saveBook(book, chapters);
   await db.highlights.put(sampleHighlight());
   await db.notes.put(sampleNote());
-  await db.location.put(
-    sampleLocation({ articleId: "epub-abc123def456-c01" }),
-  );
+  await db.location.put(sampleLocation({ articleId: "epub-abc123def456-c01" }));
 }
 
 /** Count rows in every store — the zero-rows proof's after map (all six
@@ -210,9 +214,7 @@ async function countAllStores(): Promise<Record<string, number>> {
 // Dexie creating hooks persist across tests — the SAME function reference
 // is registered via hook("creating", fn) and deregistered via
 // hook("creating").unsubscribe(fn) in afterEach (cross-test bleed guard).
-let injectedCreatingHook:
-  | ((primKey: unknown, obj: { id?: string }) => void)
-  | null = null;
+let injectedCreatingHook: ((primKey: unknown, obj: { id?: string }) => void) | null = null;
 
 // ── saveBook + listBooks + getBook + hasBook ─────────────────────────────────
 
@@ -249,9 +251,7 @@ describe("booksStore — save/list round-trip (12-03 Task 1)", () => {
     await saveBook(unstamped, [sampleChapter()]);
     const stampedRow = await db.books.get(unstamped.id);
     expect(stampedRow?.addedAt).toBeDefined();
-    expect(() =>
-      BookSchema.parse({ ...unstamped, addedAt: stampedRow?.addedAt }),
-    ).not.toThrow();
+    expect(() => BookSchema.parse({ ...unstamped, addedAt: stampedRow?.addedAt })).not.toThrow();
 
     // Caller-supplied addedAt survives verbatim (no re-stamp).
     const book = sampleBook({
@@ -272,9 +272,7 @@ describe("booksStore — save/list round-trip (12-03 Task 1)", () => {
         },
       }),
     ]);
-    expect((await db.books.get(book.id))?.addedAt).toBe(
-      "2020-01-01T00:00:00.000Z",
-    );
+    expect((await db.books.get(book.id))?.addedAt).toBe("2020-01-01T00:00:00.000Z");
   });
 
   it("saveBook stamps addedAt on chapter articles too — the issue #114 immutable stamp (a stamp-less chapter gets dated; a caller-supplied stamp survives)", async () => {
@@ -314,9 +312,7 @@ describe("booksStore — save/list round-trip (12-03 Task 1)", () => {
       chapterArticleIds: ["epub-datedchapter0-c00"],
     });
     const fixedAt = "2020-06-01T00:00:00.000Z";
-    await saveBook(datedBook, [
-      sampleChapter({ id: "epub-datedchapter0-c00", addedAt: fixedAt }),
-    ]);
+    await saveBook(datedBook, [sampleChapter({ id: "epub-datedchapter0-c00", addedAt: fixedAt })]);
     expect((await db.articles.get("epub-datedchapter0-c00"))?.addedAt).toBe(fixedAt);
   });
 
@@ -376,10 +372,7 @@ describe("booksStore — saveBook atomicity (12-03 Task 1)", () => {
       }),
     ];
 
-    const creatingHook = (
-      _primKey: unknown,
-      obj: { id?: string },
-    ): void => {
+    const creatingHook = (_primKey: unknown, obj: { id?: string }): void => {
       if (obj?.id === "epub-abc123def456-boom") {
         throw new Error("injected mid-transaction failure");
       }
@@ -387,9 +380,7 @@ describe("booksStore — saveBook atomicity (12-03 Task 1)", () => {
     injectedCreatingHook = creatingHook;
     db.articles.hook("creating", creatingHook);
 
-    await expect(saveBook(book, chapters)).rejects.toThrow(
-      "injected mid-transaction failure",
-    );
+    await expect(saveBook(book, chapters)).rejects.toThrow("injected mid-transaction failure");
 
     // FULL rollback: no book row, no chapter rows — a half-saved book is
     // impossible.
@@ -501,9 +492,7 @@ describe("setBookTags via the book fixtures (12-03 Task 1; adopted by tagsStore)
 
   it("round-trips the tag array on the Book record (D12-04), drops empties, routes case-variants", async () => {
     const { saveBook, getBook } = await loadBooksStore();
-    const { setBookTags } = await (
-      await import("../../../src/ingestion/library/tagsStore")
-    );
+    const { setBookTags } = await await import("../../../src/ingestion/library/tagsStore");
     const book = sampleBook();
     await saveBook(book, [sampleChapter()]);
 

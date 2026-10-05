@@ -244,25 +244,22 @@ export function useScrollSave(
    * navigates away. The saveLocation call-site family stays singular
    * (flush owns it); failure routing through onStorageError is unchanged.
    */
-  const saveLocationNow = useCallback<ScheduleLocationSave>(
-    (graphemeOffset: number) => {
-      const currentArticle = articleRef.current;
-      if (!currentArticle) return;
-      pendingRef.current = {
-        schemaVersion: 1,
-        articleId: currentArticle.id,
-        revision: currentArticle.revision,
-        graphemeOffset,
-        savedAt: new Date().toISOString(),
-      };
-      if (saveTimer.current !== null) {
-        window.clearTimeout(saveTimer.current);
-        saveTimer.current = null;
-      }
-      flush();
-    },
-    [],
-  );
+  const saveLocationNow = useCallback<ScheduleLocationSave>((graphemeOffset: number) => {
+    const currentArticle = articleRef.current;
+    if (!currentArticle) return;
+    pendingRef.current = {
+      schemaVersion: 1,
+      articleId: currentArticle.id,
+      revision: currentArticle.revision,
+      graphemeOffset,
+      savedAt: new Date().toISOString(),
+    };
+    if (saveTimer.current !== null) {
+      window.clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    flush();
+  }, []);
 
   // Scroll listener — register on mount, cleanup on unmount. Re-registers
   // only if the article identity changes (article swap). No-ops while article

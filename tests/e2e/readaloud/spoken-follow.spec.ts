@@ -70,21 +70,24 @@ function chunkAndCharIndexForOffset(offset: number): { chunkIndex: number; charI
 async function advanceToChunk(page: Page, chunkIndex: number): Promise<void> {
   const target = CHUNKS[chunkIndex]!.text;
   await expect
-    .poll(async () => {
-      return page.evaluate((want) => {
-        const w = window as unknown as {
-          __speechSpoken: { text: string; volume: number; done: boolean; cancelled: boolean }[];
-          __speechFire: (event: string, charIndex?: number) => void;
-        };
-        const live = [...w.__speechSpoken]
-          .reverse()
-          .find((r) => !r.done && !r.cancelled && r.volume === 1);
-        if (!live) return "none";
-        if (live.text === want) return "live";
-        w.__speechFire("end");
-        return "advanced";
-      }, target);
-    }, { timeout: 20_000 })
+    .poll(
+      async () => {
+        return page.evaluate((want) => {
+          const w = window as unknown as {
+            __speechSpoken: { text: string; volume: number; done: boolean; cancelled: boolean }[];
+            __speechFire: (event: string, charIndex?: number) => void;
+          };
+          const live = [...w.__speechSpoken]
+            .reverse()
+            .find((r) => !r.done && !r.cancelled && r.volume === 1);
+          if (!live) return "none";
+          if (live.text === want) return "live";
+          w.__speechFire("end");
+          return "advanced";
+        }, target);
+      },
+      { timeout: 20_000 },
+    )
     .toBe("live");
 }
 
@@ -119,9 +122,7 @@ test.beforeEach(async ({ page }) => {
 test.describe("Issue #42 — spoken word + follow behaviors", () => {
   test.setTimeout(120_000);
 
-  test("O2: the spoken word renders aria-hidden and focus never moves to it", async ({
-    page,
-  }) => {
+  test("O2: the spoken word renders aria-hidden and focus never moves to it", async ({ page }) => {
     await openEssay(page);
     await playAndAwaitProbe(page);
 
@@ -141,15 +142,9 @@ test.describe("Issue #42 — spoken word + follow behaviors", () => {
     const focusBefore = await page.evaluate(() => document.activeElement?.tagName ?? null);
     const textAt10 = await spokenMarkerText(page);
     await fireBoundaryAt(page, 60);
-    await expect
-      .poll(async () => spokenMarkerText(page), { timeout: 10_000 })
-      .not.toBe(textAt10);
-    expect(await page.evaluate(() => document.activeElement?.tagName ?? null)).toBe(
-      focusBefore,
-    );
-    expect(await page.evaluate(() => document.activeElement?.tagName ?? null)).not.toBe(
-      "MARK",
-    );
+    await expect.poll(async () => spokenMarkerText(page), { timeout: 10_000 }).not.toBe(textAt10);
+    expect(await page.evaluate(() => document.activeElement?.tagName ?? null)).toBe(focusBefore);
+    expect(await page.evaluate(() => document.activeElement?.tagName ?? null)).not.toBe("MARK");
   });
 
   test("O4: speech crossing a page boundary turns the page automatically; instant under reduced motion", async ({
@@ -174,8 +169,7 @@ test.describe("Issue #42 — spoken word + follow behaviors", () => {
     await expect(page.getByText(/1 of \d+/).first()).toBeVisible({ timeout: 20_000 });
     const pages = (await page.evaluate(
       () =>
-        (window as unknown as { __lemPagination: { pages: PageFragment[] } })
-          .__lemPagination.pages,
+        (window as unknown as { __lemPagination: { pages: PageFragment[] } }).__lemPagination.pages,
     )) as PageFragment[];
     expect(pages.length).toBeGreaterThanOrEqual(3);
 
@@ -188,8 +182,7 @@ test.describe("Issue #42 — spoken word + follow behaviors", () => {
 
     await playAndAwaitProbe(page);
 
-    const fades = () =>
-      page.evaluate(() => (window as unknown as { turnFades: number }).turnFades);
+    const fades = () => page.evaluate(() => (window as unknown as { turnFades: number }).turnFades);
 
     // Speak the first word of page 2 — the follower auto-turns (with the
     // opted-in fade, under no-preference motion).
@@ -215,9 +208,7 @@ test.describe("Issue #42 — spoken word + follow behaviors", () => {
     ).toBe(0);
   });
 
-  test("the marker persists across pause and hops on resume + skip", async ({
-    page,
-  }) => {
+  test("the marker persists across pause and hops on resume + skip", async ({ page }) => {
     await openEssay(page);
     await playAndAwaitProbe(page);
 
@@ -235,17 +226,13 @@ test.describe("Issue #42 — spoken word + follow behaviors", () => {
     // Resume: the marker hops to the next spoken word.
     await bar.getByRole("button", { name: "Play" }).click();
     await fireBoundaryAt(page, 60);
-    await expect
-      .poll(async () => spokenMarkerText(page), { timeout: 10_000 })
-      .not.toBe(textAt10);
+    await expect.poll(async () => spokenMarkerText(page), { timeout: 10_000 }).not.toBe(textAt10);
     const textAt60 = await spokenMarkerText(page);
 
     // Skip forward mid-chunk (the track the #43 skip controls ride): the
     // marker hops again, never drifting backward.
     await fireBoundaryAt(page, 110);
-    await expect
-      .poll(async () => spokenMarkerText(page), { timeout: 10_000 })
-      .not.toBe(textAt60);
+    await expect.poll(async () => spokenMarkerText(page), { timeout: 10_000 }).not.toBe(textAt60);
 
     await bar.getByRole("button", { name: "Stop" }).click();
     // Stopped: the marker is gone — a dead session leaves no stale cue.
@@ -257,9 +244,9 @@ test.describe("Issue #42 — spoken word + follow behaviors", () => {
   }) => {
     await openEssay(page);
     await page.getByRole("button", { name: "Reading mode: paginated" }).click();
-    await expect(
-      page.getByRole("button", { name: "Reading mode: scrolling" }),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("button", { name: "Reading mode: scrolling" })).toBeVisible({
+      timeout: 10_000,
+    });
 
     await playAndAwaitProbe(page);
 
@@ -289,14 +276,12 @@ test.describe("Issue #42 — spoken word + follow behaviors", () => {
     // APP never moves it — WebKit leaves body after a click; engines that
     // focus the button keep it there), and confirms through the ONE polite
     // transport region.
-    const focusBeforeJump = await page.evaluate(
-      () => document.activeElement?.tagName ?? null,
-    );
+    const focusBeforeJump = await page.evaluate(() => document.activeElement?.tagName ?? null);
     await page.getByRole("button", { name: "Jump to spoken position" }).click();
     await expect.poll(markerInView, { timeout: 15_000 }).toBe(true);
-    expect(
-      await page.evaluate(() => document.activeElement?.tagName ?? null),
-    ).toBe(focusBeforeJump);
+    expect(await page.evaluate(() => document.activeElement?.tagName ?? null)).toBe(
+      focusBeforeJump,
+    );
     await expect(
       page.getByRole("status").filter({ hasText: "Jumped to spoken position." }),
     ).toHaveCount(1);
@@ -307,9 +292,9 @@ test.describe("Issue #42 — spoken word + follow behaviors", () => {
   }) => {
     await openEssay(page);
     await page.getByRole("button", { name: "Reading mode: paginated" }).click();
-    await expect(
-      page.getByRole("button", { name: "Reading mode: scrolling" }),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("button", { name: "Reading mode: scrolling" })).toBeVisible({
+      timeout: 10_000,
+    });
 
     await playAndAwaitProbe(page);
 
@@ -355,9 +340,9 @@ test.describe("Issue #42 — spoken word + follow behaviors", () => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await openEssay(page);
     await page.getByRole("button", { name: "Reading mode: paginated" }).click();
-    await expect(
-      page.getByRole("button", { name: "Reading mode: scrolling" }),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("button", { name: "Reading mode: scrolling" })).toBeVisible({
+      timeout: 10_000,
+    });
 
     await playAndAwaitProbe(page);
 

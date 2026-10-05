@@ -50,10 +50,7 @@ export function PaginationFallbackBanner({
         {/* UI-SPEC §Copywriting line 351 — heading */}
         <h2>This part of the article is too large to fit on one page.</h2>
         {/* UI-SPEC §Copywriting line 352 — body */}
-        <p>
-          Switched to scrolling so you can keep reading. You can switch back to
-          pages anytime.
-        </p>
+        <p>Switched to scrolling so you can keep reading. You can switch back to pages anytime.</p>
         {/* UI-SPEC §Copywriting line 354 — polite announce on appearance. The
             region's aria-live="polite" announces this text on mount. */}
         <span className="visually-hidden">Switched to scrolling reading.</span>
@@ -83,4 +80,3 @@ export function PaginationFallbackBanner({
     </StatusRegion>
   );
 }
-

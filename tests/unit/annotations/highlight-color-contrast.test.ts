@@ -45,14 +45,11 @@ describe("preset themes — ink on every highlight fill ≥ 4.5:1 (D5-14 × #118
   const blocks = presetPaletteBlocks(css);
 
   for (const [theme, [from, to]] of Object.entries(blocks)) {
-    it.each(HIGHLIGHT_COLOR_NAMES)(
-      `${theme}: ink on ${colorProp("%s")} fill ≥ 4.5:1`,
-      (color) => {
-        const ink = cssToken(css, from, to, "--ink");
-        const fill = cssToken(css, from, to, colorProp(color));
-        expect(contrastRatio(ink, fill)).toBeGreaterThanOrEqual(AA_TEXT_RATIO);
-      },
-    );
+    it.each(HIGHLIGHT_COLOR_NAMES)(`${theme}: ink on ${colorProp("%s")} fill ≥ 4.5:1`, (color) => {
+      const ink = cssToken(css, from, to, "--ink");
+      const fill = cssToken(css, from, to, colorProp(color));
+      expect(contrastRatio(ink, fill)).toBeGreaterThanOrEqual(AA_TEXT_RATIO);
+    });
   }
 
   it("every named token exists in every preset block (no forgotten theme)", () => {

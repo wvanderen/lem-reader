@@ -27,10 +27,7 @@
 // clear-rows (never deleteDatabase — the webkit race).
 import { test, expect, type Page } from "@playwright/test";
 import { fixtures } from "../../../src/fixtures";
-import {
-  normalizeText,
-  graphemeClusters,
-} from "../../../src/content/normalizeText";
+import { normalizeText, graphemeClusters } from "../../../src/content/normalizeText";
 import { BASE } from "../_base";
 
 /** The sole starter-library fixture is the gesture's corpus. */
@@ -47,9 +44,7 @@ const TOTAL = graphemeClusters(normalizeText(ARTICLE), ARTICLE.lang).length;
 /** The persisted location row for the article (raw IndexedDB read — the
  * flush landed BEFORE the navigation; the row IS the truth, keyed
  * [articleId+revision] so the upsert keeps exactly one row). */
-async function readLocationRow(
-  page: Page,
-): Promise<{ graphemeOffset: number } | null> {
+async function readLocationRow(page: Page): Promise<{ graphemeOffset: number } | null> {
   return page.evaluate(async (articleId) => {
     return new Promise((resolve) => {
       const req = indexedDB.open("lem-reader");
@@ -95,25 +90,16 @@ test.beforeEach(async ({ page }) => {
   // every store's rows for deterministic first-run state (clear-rows, NOT
   // deleteDatabase — the webkit race; the reading-views discipline).
   await page.goto(`${BASE}/`);
-  await expect(
-    page.getByRole("heading", { name: "Saved articles" }),
-  ).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible({
+    timeout: 10_000,
+  });
   await page.evaluate(async () => {
     await new Promise<void>((resolve) => {
       const req = indexedDB.open("lem-reader");
       req.onsuccess = () => {
         const db = req.result;
-        const stores = [
-          "articles",
-          "settings",
-          "location",
-          "highlights",
-          "notes",
-          "books",
-        ];
-        const existing = stores.filter((s) =>
-          db.objectStoreNames.contains(s),
-        );
+        const stores = ["articles", "settings", "location", "highlights", "notes", "books"];
+        const existing = stores.filter((s) => db.objectStoreNames.contains(s));
         if (existing.length === 0) {
           resolve();
           return;
@@ -139,9 +125,9 @@ test.describe("Issue #2 — the Mark read and close completion gesture", () => {
 
   /** The library truth after the gesture: URL, switcher count, card mark. */
   async function expectFinishedLibrary(page: Page): Promise<void> {
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible({
+      timeout: 10_000,
+    });
     // The shared close contract: back lands on a library route — the entry
     // BEFORE the fragment navigation (hashless BASE or "#/", both parse to
     // the All view; never the article).
@@ -161,21 +147,17 @@ test.describe("Issue #2 — the Mark read and close completion gesture", () => {
   test("flow placement: marks read, closes to the library, persists the end-pin (scrolling mode)", async ({
     page,
   }) => {
-    await page
-      .locator(`.library-list a[href="${ARTICLE_HREF}"]`)
-      .click();
-    await expect(
-      page.getByRole("heading", { level: 1, name: ARTICLE_TITLE }),
-    ).toBeVisible({ timeout: 10_000 });
+    await page.locator(`.library-list a[href="${ARTICLE_HREF}"]`).click();
+    await expect(page.getByRole("heading", { level: 1, name: ARTICLE_TITLE })).toBeVisible({
+      timeout: 10_000,
+    });
 
     // Scrolling mode mounts the flow-placement gesture at the article end
     // (the real mode toggle — the header-geometry clicking discipline).
     await page.getByRole("button", { name: /reading mode/i }).click();
     await expect(page.locator(".page-viewport")).toHaveCount(0);
 
-    await page
-      .getByRole("button", { name: "Mark read and close" })
-      .click();
+    await page.getByRole("button", { name: "Mark read and close" }).click();
 
     // The shared close contract + the persisted flush truth + agreement.
     await expectFinishedLibrary(page);
@@ -190,12 +172,10 @@ test.describe("Issue #2 — the Mark read and close completion gesture", () => {
   test("page placement: the final-page gesture marks read, closes, persists the end-pin (paginated mode)", async ({
     page,
   }) => {
-    await page
-      .locator(`.library-list a[href="${ARTICLE_HREF}"]`)
-      .click();
-    await expect(
-      page.getByRole("heading", { level: 1, name: ARTICLE_TITLE }),
-    ).toBeVisible({ timeout: 10_000 });
+    await page.locator(`.library-list a[href="${ARTICLE_HREF}"]`).click();
+    await expect(page.getByRole("heading", { level: 1, name: ARTICLE_TITLE })).toBeVisible({
+      timeout: 10_000,
+    });
 
     // The paginated default mounts the gesture in the fixed bottom chrome
     // band ONLY when the committed page is the last (page === total — the
@@ -227,12 +207,10 @@ test.describe("Issue #2 — the Mark read and close completion gesture", () => {
   }) => {
     // First open — the initial page-1 commit persists a location, so the
     // article becomes in-progress (opened = started, D14-18).
-    await page
-      .locator(`.library-list a[href="${ARTICLE_HREF}"]`)
-      .click();
-    await expect(
-      page.getByRole("heading", { level: 1, name: ARTICLE_TITLE }),
-    ).toBeVisible({ timeout: 10_000 });
+    await page.locator(`.library-list a[href="${ARTICLE_HREF}"]`).click();
+    await expect(page.getByRole("heading", { level: 1, name: ARTICLE_TITLE })).toBeVisible({
+      timeout: 10_000,
+    });
     await expect
       .poll(async () => (await readLocationRow(page)) !== null, {
         timeout: 10_000,
@@ -244,16 +222,14 @@ test.describe("Issue #2 — the Mark read and close completion gesture", () => {
     await page.getByRole("button", { name: "Back to library" }).click();
     const strip = page.locator(".continue-reading-strip");
     await expect(strip).toBeVisible({ timeout: 10_000 });
-    await expect(
-      strip.locator(`a.library-card-link[href="${ARTICLE_HREF}"]`),
-    ).toBeVisible();
+    await expect(strip.locator(`a.library-card-link[href="${ARTICLE_HREF}"]`)).toBeVisible();
 
     // Re-open FROM the strip card and complete via the gesture (flow
     // placement — deterministic at any restore offset).
     await strip.locator(`a.library-card-link[href="${ARTICLE_HREF}"]`).click();
-    await expect(
-      page.getByRole("heading", { level: 1, name: ARTICLE_TITLE }),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { level: 1, name: ARTICLE_TITLE })).toBeVisible({
+      timeout: 10_000,
+    });
     await page.getByRole("button", { name: /reading mode/i }).click();
     await expect(page.locator(".page-viewport")).toHaveCount(0);
     await page.getByRole("button", { name: "Mark read and close" }).click();
@@ -261,9 +237,9 @@ test.describe("Issue #2 — the Mark read and close completion gesture", () => {
     // The finished article is no longer strip material — with nothing
     // else in-progress, the spare section unmounts entirely (spare-chrome
     // discipline), and the library still agrees (Finished (1)).
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible({
+      timeout: 10_000,
+    });
     await expect(strip).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Finished (1)" })).toBeVisible({
       timeout: 10_000,

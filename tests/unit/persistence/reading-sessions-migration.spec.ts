@@ -76,9 +76,7 @@ describe("Dexie v6 → v7 additive upgrade (issue #34 AC 4, Pitfall 9)", () => {
         retrievedAt: "2026-09-01T00:00:00.000Z",
         originalHtmlHash: "sha256:" + "1".repeat(64),
       },
-      blocks: [
-        { kind: "paragraph", content: [{ text: "Legacy body.", marks: [] }] },
-      ],
+      blocks: [{ kind: "paragraph", content: [{ text: "Legacy body.", marks: [] }] }],
       footnotes: [],
       ingestionMeta: {
         source: "url",
@@ -144,19 +142,13 @@ describe("Dexie v6 → v7 additive upgrade (issue #34 AC 4, Pitfall 9)", () => {
     // Every legacy row survives byte-honest (re-validated through the same
     // Zod schemas the read paths use).
     expect(await db.articles.get("legacy-v6-article")).toBeDefined();
-    expect(
-      HighlightRecordSchema.safeParse(await db.highlights.get("legacy-h1")).success,
-    ).toBe(true);
-    expect(
-      NoteRecordSchema.safeParse(await db.notes.get("legacy-n1")).success,
-    ).toBe(true);
+    expect(HighlightRecordSchema.safeParse(await db.highlights.get("legacy-h1")).success).toBe(
+      true,
+    );
+    expect(NoteRecordSchema.safeParse(await db.notes.get("legacy-n1")).success).toBe(true);
     const loc = await db.location.get(["legacy-v6-article", 1]);
-    expect(
-      LocationRecordSchema.safeParse(loc).success,
-    ).toBe(true);
-    expect(
-      BookSchema.safeParse(await db.books.get("legacy-v6-book")).success,
-    ).toBe(true);
+    expect(LocationRecordSchema.safeParse(loc).success).toBe(true);
+    expect(BookSchema.safeParse(await db.books.get("legacy-v6-book")).success).toBe(true);
     expect((await db.settings.get("reader-prefs"))?.value).toEqual({
       theme: "sepia",
     });
@@ -169,9 +161,7 @@ describe("Dexie v6 → v7 additive upgrade (issue #34 AC 4, Pitfall 9)", () => {
     // The new store exists, starts EMPTY, and the v7 indexes are live
     // (the articleId index — the cascade-delete range — is queryable).
     expect(await db.readingSessions.count()).toBe(0);
-    expect(
-      await db.readingSessions.where("articleId").equals("legacy-v6-article").count(),
-    ).toBe(0);
+    expect(await db.readingSessions.where("articleId").equals("legacy-v6-article").count()).toBe(0);
     await db.readingSessions.put({
       schemaVersion: 1,
       id: "post-upgrade-visit",
@@ -183,8 +173,6 @@ describe("Dexie v6 → v7 additive upgrade (issue #34 AC 4, Pitfall 9)", () => {
       activeSeconds: 200,
     });
     expect(await db.readingSessions.count()).toBe(1);
-    expect(
-      await db.readingSessions.where("articleId").equals("legacy-v6-article").count(),
-    ).toBe(1);
+    expect(await db.readingSessions.where("articleId").equals("legacy-v6-article").count()).toBe(1);
   });
 });

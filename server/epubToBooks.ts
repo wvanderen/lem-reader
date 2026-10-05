@@ -202,9 +202,7 @@ function tryParseEpubXml(text: string): unknown {
 type XmlObj = Record<string, unknown>;
 
 function asObj(v: unknown): XmlObj | undefined {
-  return typeof v === "object" && v !== null && !Array.isArray(v)
-    ? (v as XmlObj)
-    : undefined;
+  return typeof v === "object" && v !== null && !Array.isArray(v) ? (v as XmlObj) : undefined;
 }
 
 /** Repeatable-or-single → array (belt-and-suspenders for hosts whose config
@@ -384,10 +382,7 @@ function assertNotDrmProtected(entries: Record<string, Uint8Array>): void {
   const doc = tryParseEpubXml(UTF8.decode(encrypted));
   const encryptedDataList = xmlArr(asObj(asObj(doc)?.encryption)?.EncryptedData);
   for (const ed of encryptedDataList) {
-    if (
-      xmlAttr(asObj(ed)?.EncryptionMethod, "Algorithm") !==
-      FONT_OBFUSCATION_ALGORITHM
-    ) {
+    if (xmlAttr(asObj(ed)?.EncryptionMethod, "Algorithm") !== FONT_OBFUSCATION_ALGORITHM) {
       // Missing or non-font-obfuscation algorithm — the allowlist refuses.
       throw new IngestionError("epub-protected", DRM_REFUSAL_MESSAGE);
     }
@@ -481,10 +476,7 @@ export function parseEpubArchive(bytes: Uint8Array): EpubArchive {
   }
   const opfEntry = entries[opfPath];
   if (opfEntry === undefined) {
-    throw new IngestionError(
-      "epub-unreadable",
-      "This EPUB's package document is missing.",
-    );
+    throw new IngestionError("epub-unreadable", "This EPUB's package document is missing.");
   }
   const opfDir = dirOf(opfPath);
 
@@ -499,10 +491,7 @@ export function parseEpubArchive(bytes: Uint8Array): EpubArchive {
     manifestObj === undefined ||
     spineObj === undefined
   ) {
-    throw new IngestionError(
-      "epub-unreadable",
-      "This EPUB's package document is incomplete.",
-    );
+    throw new IngestionError("epub-unreadable", "This EPUB's package document is incomplete.");
   }
 
   const title = xmlText(xmlArr(metadataObj.title)[0]).trim() || "Untitled book";
@@ -560,9 +549,7 @@ export function parseEpubArchive(bytes: Uint8Array): EpubArchive {
   }
 
   const navItem =
-    manifestItems.find((it) =>
-      (it.properties ?? "").split(/\s+/).includes("nav"),
-    ) ?? undefined;
+    manifestItems.find((it) => (it.properties ?? "").split(/\s+/).includes("nav")) ?? undefined;
   const tocIdref = xmlAttr(spineObj, "toc");
   const ncxItem = tocIdref !== undefined ? manifestById.get(tocIdref) : undefined;
 
@@ -589,12 +576,7 @@ interface FlatTocEntry {
 /** Flatten one nav <ol> level: each <li> with an <a> yields an entry at
  * `depth`; a nested <ol> inside a li increments depth (top-level li = 1 —
  * deeper entries are in-chapter sections, never chapter units). */
-function flattenNavOl(
-  ol: unknown,
-  navDir: string,
-  depth: number,
-  out: FlatTocEntry[],
-): void {
+function flattenNavOl(ol: unknown, navDir: string, depth: number, out: FlatTocEntry[]): void {
   for (const li of xmlArr(asObj(ol)?.li)) {
     const liObj = asObj(li);
     const a = asObj(liObj?.a);
@@ -690,7 +672,10 @@ function resolveNcxToc(archive: EpubArchive): FlatTocEntry[] | undefined {
 /** Plain text of a paragraph/heading block (admission + title chain). */
 function blockText(b: Block): string {
   if (b.kind === "paragraph" || b.kind === "heading") {
-    return b.content.map((r) => r.text).join("").trim();
+    return b.content
+      .map((r) => r.text)
+      .join("")
+      .trim();
   }
   return "";
 }
@@ -732,9 +717,7 @@ interface WalkedDocument {
  */
 function walkChapterDocument(xhtml: string): WalkedDocument {
   const rawDom = new JSDOM(xhtml);
-  const titleText = rawDom.window.document
-    .querySelector("title")
-    ?.textContent?.trim();
+  const titleText = rawDom.window.document.querySelector("title")?.textContent?.trim();
   const docTitle = titleText !== undefined && titleText.length > 0 ? titleText : undefined;
 
   const sanitized = sanitizeExtractedHtml(xhtml);
@@ -848,9 +831,7 @@ function extractUnitFigures(
         res = "fetch"; // zero-network: remote srcs refuse, never fetched
       } else {
         const entryKey = normalizeEpubHref(src, chapterDir);
-        const entry = isSafeEntryName(entryKey)
-          ? archive.entryBytes(entryKey)
-          : undefined;
+        const entry = isSafeEntryName(entryKey) ? archive.entryBytes(entryKey) : undefined;
         res = entry === undefined ? "fetch" : sniffImageAsset(entry);
       }
       if (typeof res !== "string") {
@@ -906,8 +887,7 @@ function extractUnitFigures(
  */
 function isReaderableDocument(blocks: Block[]): boolean {
   return (
-    blocks.length >= EPUB_THRESHOLDS.minChapterBlocks &&
-    blocks.some((b) => blockText(b).length > 0)
+    blocks.length >= EPUB_THRESHOLDS.minChapterBlocks && blocks.some((b) => blockText(b).length > 0)
   );
 }
 
@@ -1100,11 +1080,7 @@ function partitionChapters(
  * intent — primary) → first document's <title> → first heading block text →
  * the unit's label of last resort. Numbering runs over ADMITTED chapters
  * only (Pitfall 10 — skipped chapters are disclosed, never renumbered). */
-function chapterTitle(
-  unit: ChapterUnit,
-  unitDocs: SpineDoc[],
-  number: number,
-): string {
+function chapterTitle(unit: ChapterUnit, unitDocs: SpineDoc[], number: number): string {
   const label = unit.label?.trim();
   if (label !== undefined && label.length > 0) return label;
   const docTitle = unitDocs[0]?.walked.docTitle?.trim();
@@ -1174,9 +1150,7 @@ function assembleChapters(archive: EpubArchive): {
   // units (first-come deterministic; byte-identical twins reuse admissions).
   const budget: BookAssetBudget = { usedBytes: 0, byAssetId: new Map() };
   for (const unit of units) {
-    const unitDocs = docs.filter(
-      (d) => d.pos >= unit.startPos && d.pos < unit.endPos,
-    );
+    const unitDocs = docs.filter((d) => d.pos >= unit.startPos && d.pos < unit.endPos);
     if (unitDocs.length === 0) continue; // structurally empty (e.g. a
     // leading range holding only the nav document) — not a disclosed skip
     const blocks: Block[] = [];
@@ -1187,13 +1161,20 @@ function assembleChapters(archive: EpubArchive): {
     }
     // 20-06: figures resolve ONLY after admission — skipped plates never
     // spend sniff work and never contribute assets (D20-03 scope).
-    const { docs: resolvedDocs, assets, refusedCount } = extractUnitFigures(
-      unitDocs,
-      archive,
-      budget,
-    );
+    const {
+      docs: resolvedDocs,
+      assets,
+      refusedCount,
+    } = extractUnitFigures(unitDocs, archive, budget);
     chapters.push(
-      emitChapter(unit, resolvedDocs, chapters.length + 1, archive.bookMeta.language, assets, refusedCount),
+      emitChapter(
+        unit,
+        resolvedDocs,
+        chapters.length + 1,
+        archive.bookMeta.language,
+        assets,
+        refusedCount,
+      ),
     );
   }
   return { chapters, skippedCount, fallbackUsed };
@@ -1213,10 +1194,7 @@ export async function epubToBooks(bytes: Uint8Array): Promise<EpubToBooksResult>
     const { chapters, skippedCount, fallbackUsed } = assembleChapters(archive);
     assertChapterCap(chapters.length);
     if (chapters.length === 0) {
-      throw new IngestionError(
-        "epub-empty",
-        "This book has no chapters with readable text.",
-      );
+      throw new IngestionError("epub-empty", "This book has no chapters with readable text.");
     }
     return {
       bookMeta: archive.bookMeta,

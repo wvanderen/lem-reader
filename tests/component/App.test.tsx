@@ -273,9 +273,7 @@ describe("App — route hashes still swap the view", () => {
     // Issue #101 — LibraryView is a lazy route chunk now, so the h1 lands
     // one microtask later (the async chunk import); findByRole observes the
     // SAME contract (library chrome present during the pending load).
-    expect(
-      await screen.findByRole("heading", { level: 1, name: "Saved articles" }),
-    ).not.toBeNull();
+    expect(await screen.findByRole("heading", { level: 1, name: "Saved articles" })).not.toBeNull();
     // The feedback aside mounts only after the library load settles, so the
     // link is asserted asynchronously — findByRole retries until the mock
     // resolves. Its pending-load ABSENCE is pinned by the never-settling
@@ -315,9 +313,7 @@ describe("App — feedback aside never flashes during the library load", () => {
     // Issue #101 — LibraryView is a lazy route chunk now; await the chrome
     // (the chunk import resolves while the listArticles promise below never
     // settles) so the assertions still observe the PENDING-load state.
-    expect(
-      await screen.findByRole("heading", { level: 1, name: "Saved articles" }),
-    ).not.toBeNull();
+    expect(await screen.findByRole("heading", { level: 1, name: "Saved articles" })).not.toBeNull();
     expect(
       screen.queryByRole("link", {
         name: "Share feedback on GitHub (opens in a new tab)",

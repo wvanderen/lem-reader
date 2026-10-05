@@ -34,7 +34,8 @@ vi.mock("../../src/ingestion/LibrarySource", () => {
   const save = vi.fn();
   return {
     dexieLibrarySource: {
-      has: vi.fn(), save,
+      has: vi.fn(),
+      save,
       saveIfAbsent: vi.fn(async (...args) => {
         await save(...args);
         return true;
@@ -85,9 +86,7 @@ function sampleArticle(): CanonicalArticle {
       retrievedAt: "2026-09-24T00:00:00.000Z",
       originalHtmlHash: "sha256:" + "0".repeat(64),
     },
-    blocks: [
-      { kind: "paragraph", content: [{ text: "Body.", marks: [] }] },
-    ],
+    blocks: [{ kind: "paragraph", content: [{ text: "Body.", marks: [] }] }],
     footnotes: [],
   } as unknown as CanonicalArticle;
 }
@@ -98,9 +97,7 @@ const STATS: TagStat[] = [
 ];
 
 function renderDialog(tagStats: TagStat[] = STATS) {
-  return render(
-    <AddDialog open={true} onCancel={vi.fn()} onSaved={vi.fn()} tagStats={tagStats} />,
-  );
+  return render(<AddDialog open={true} onCancel={vi.fn()} onSaved={vi.fn()} tagStats={tagStats} />);
 }
 
 async function addTagViaPicker(draft: string) {
@@ -212,9 +209,7 @@ describe("AddDialog tags: tags ride the saved record", () => {
     await addTagViaPicker("essays");
     await user.click(screen.getByRole("button", { name: "Add" }));
 
-    await waitFor(() =>
-      expect(screen.getByText("Already in your library.")).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByText("Already in your library.")).toBeInTheDocument());
     expect(saveMock).not.toHaveBeenCalled();
   });
 });
@@ -225,15 +220,9 @@ describe("AddDialog tags: session reset (D16-08)", () => {
     await addTagViaPicker("essays");
     expect(screen.getByText("essays")).toBeInTheDocument();
 
-    rerender(
-      <AddDialog open={false} onCancel={vi.fn()} onSaved={vi.fn()} tagStats={STATS} />,
-    );
-    rerender(
-      <AddDialog open={true} onCancel={vi.fn()} onSaved={vi.fn()} tagStats={STATS} />,
-    );
+    rerender(<AddDialog open={false} onCancel={vi.fn()} onSaved={vi.fn()} tagStats={STATS} />);
+    rerender(<AddDialog open={true} onCancel={vi.fn()} onSaved={vi.fn()} tagStats={STATS} />);
 
-    await waitFor(() =>
-      expect(screen.queryByText("essays")).not.toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.queryByText("essays")).not.toBeInTheDocument());
   });
 });

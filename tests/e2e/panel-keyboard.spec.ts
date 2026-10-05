@@ -43,13 +43,9 @@ test.describe("Settings panel keyboard (A11Y-01/02 — Pitfall 1)", () => {
     // (1) Focus is now INSIDE the dialog (showModal behavior).
     const activeInDialog = await page.evaluate(() => {
       const dlg = document.querySelector("dialog.settings-panel");
-      return dlg && document.activeElement
-        ? dlg.contains(document.activeElement)
-        : false;
+      return dlg && document.activeElement ? dlg.contains(document.activeElement) : false;
     });
-    expect(activeInDialog, "focus should move into the dialog after open").toBe(
-      true,
-    );
+    expect(activeInDialog, "focus should move into the dialog after open").toBe(true);
 
     // (2) Tab cycles ONLY within the dialog (focus trap — never escapes to an
     // interactive control outside). The browser-provided focus trap on
@@ -106,9 +102,7 @@ test.describe("Settings panel keyboard (A11Y-01/02 — Pitfall 1)", () => {
     await expect(gear).toBeFocused();
   });
 
-  test("clicking the × close button restores focus to the gear trigger", async ({
-    page,
-  }) => {
+  test("clicking the × close button restores focus to the gear trigger", async ({ page }) => {
     await page.goto(`${BASE}/#/article/${FIRST_FIXTURE}`);
     const gear = page.getByRole("button", { name: "Reading settings" });
     await gear.focus();
@@ -144,12 +138,8 @@ test.describe("Review panel keyboard reachability (RECV-01.i)", () => {
     // Re-mount so Dexie re-declares its schema before seeding (10-03 fix).
     await page.goto(`${BASE}/#/`);
     await page.reload();
-    await expect(
-      page.getByRole("heading", { name: "Saved articles" }),
-    ).toBeVisible();
-    await expect(
-      page.getByText("Getting started with Lem Reader").first(),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible();
+    await expect(page.getByText("Getting started with Lem Reader").first()).toBeVisible();
     const article = makeArticle({
       id: "kb-review-corpus",
       title: TITLE,
@@ -164,12 +154,8 @@ test.describe("Review panel keyboard reachability (RECV-01.i)", () => {
       highlights: [highlightRow("kb-review-corpus", anchor, "hl-kb-review-1")],
     });
     await page.goto(`${BASE}/#/highlights`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Highlights" }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("link", { name: /^Go to highlight:/ }).first(),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+    await expect(page.getByRole("link", { name: /^Go to highlight:/ }).first()).toBeVisible();
 
     // Walk Tab from the top of the document and require the expected
     // controls to appear IN ORDER. Unlisted pass-through focusables (the
@@ -212,9 +198,7 @@ test.describe("Review panel keyboard reachability (RECV-01.i)", () => {
       if (hit === null) continue;
       const want = expected[reached]!;
       const matches =
-        want.id !== ""
-          ? hit.id === want.id
-          : hit.label.startsWith(want.labelPrefix ?? "");
+        want.id !== "" ? hit.id === want.id : hit.label.startsWith(want.labelPrefix ?? "");
       if (matches) reached += 1;
     }
     expect(
@@ -225,9 +209,7 @@ test.describe("Review panel keyboard reachability (RECV-01.i)", () => {
     // The programmatic-focus contract on ALL engines (the WebKit
     // forced-colors precedent): every expected control — row jump link
     // included — accepts focus, in DOM order.
-    const rowButton = page
-      .getByRole("link", { name: /^Go to highlight:/ })
-      .first();
+    const rowButton = page.getByRole("link", { name: /^Go to highlight:/ }).first();
     for (const target of [
       page.locator("#review-article-filter"),
       page.locator("#review-confidence-filter"),
@@ -241,13 +223,9 @@ test.describe("Review panel keyboard reachability (RECV-01.i)", () => {
     // article, then browser Back returns to the panel (the entry-button
     // way out and back).
     await page.keyboard.press("Enter");
-    await expect(
-      page.getByRole("heading", { level: 1, name: TITLE }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: TITLE })).toBeVisible();
     await page.goBack();
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Highlights" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
   });
 });
 
@@ -268,9 +246,7 @@ test.describe("Destination keyboard arm (ACPT-08 — D21-14)", () => {
   }) => {
     await wipeDatabase(page);
     await page.goto(`${BASE}/#/`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
 
     // Keyboard-open from a predictable starting point (the panel-keyboard
     // precedent): focus the trigger, activate with Enter.
@@ -284,9 +260,7 @@ test.describe("Destination keyboard arm (ACPT-08 — D21-14)", () => {
     // Focus moved INTO the dialog on open — the [data-initial-focus]
     // Web-address radio (the 02-01 webkit no-auto-focus lesson; asserted
     // on every engine).
-    await expect(
-      page.getByRole("radio", { name: "Web address" }),
-    ).toBeFocused();
+    await expect(page.getByRole("radio", { name: "Web address" })).toBeFocused();
 
     // Escape closes the dialog…
     await page.keyboard.press("Escape");
@@ -306,12 +280,8 @@ test.describe("Destination keyboard arm (ACPT-08 — D21-14)", () => {
     // then wait for the composite list's readiness sentinel.
     await page.goto(`${BASE}/#/`);
     await page.reload();
-    await expect(
-      page.getByRole("heading", { name: "Saved articles" }),
-    ).toBeVisible();
-    await expect(
-      page.getByText("Getting started with Lem Reader").first(),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible();
+    await expect(page.getByText("Getting started with Lem Reader").first()).toBeVisible();
     const article = makeArticle({
       id: "kb-dest-review",
       title: TITLE,
@@ -330,9 +300,7 @@ test.describe("Destination keyboard arm (ACPT-08 — D21-14)", () => {
       .getByRole("navigation", { name: "Primary" })
       .getByRole("link", { name: "Highlights" })
       .click();
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Highlights" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
 
     // Highlights is a plain route — no modal, so Esc has NO close target
     // here. The honest contract (the D18-04 two-target lesson, inverted):
@@ -342,33 +310,21 @@ test.describe("Destination keyboard arm (ACPT-08 — D21-14)", () => {
     await articleFilter.focus();
     await expect(articleFilter).toBeFocused();
     await page.keyboard.press("Escape");
-    await expect(
-      articleFilter,
-      "focus must stay on the article filter after Escape",
-    ).toBeFocused();
+    await expect(articleFilter, "focus must stay on the article filter after Escape").toBeFocused();
     await expect(page).toHaveURL(/#\/highlights$/);
 
-    const rowButton = page
-      .getByRole("link", { name: /^Go to highlight:/ })
-      .first();
+    const rowButton = page.getByRole("link", { name: /^Go to highlight:/ }).first();
     await rowButton.focus();
     await expect(rowButton).toBeFocused();
     await page.keyboard.press("Escape");
-    await expect(
-      rowButton,
-      "focus must stay on the row button after Escape",
-    ).toBeFocused();
+    await expect(rowButton, "focus must stay on the row button after Escape").toBeFocused();
     await expect(page).toHaveURL(/#\/highlights$/);
 
     // Full keyboard operability: Enter on the focused row button jumps to
     // the article (the row's whole purpose), then Back returns.
     await page.keyboard.press("Enter");
-    await expect(
-      page.getByRole("heading", { level: 1, name: TITLE }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: TITLE })).toBeVisible();
     await page.goBack();
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Highlights" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
   });
 });

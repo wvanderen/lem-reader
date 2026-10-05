@@ -101,12 +101,8 @@ describe("TocPanel: labeling + entry honesty (ORNT-01, D18-09/11)", () => {
 
   it("renders an h2 'Contents' title and a nav with aria-label 'Table of contents'", () => {
     mountPanel(article);
-    expect(
-      screen.getByRole("heading", { level: 2, name: "Contents" }),
-    ).toBeVisible();
-    expect(
-      screen.getByRole("navigation", { name: "Table of contents" }),
-    ).toBeVisible();
+    expect(screen.getByRole("heading", { level: 2, name: "Contents" })).toBeVisible();
+    expect(screen.getByRole("navigation", { name: "Table of contents" })).toBeVisible();
   });
 
   it("renders the first entry as a 'Top of article' link", () => {
@@ -155,9 +151,7 @@ describe("TocPanel: skipped-level nesting (D18-10)", () => {
     expect(nestedLis[0]!.textContent).toContain("Skipped deep heading");
     // The h5's li carries its true depth (2 — the indent hook): visibly
     // deeper than a direct h3 child (depth 1) would sit.
-    const deepLi = screen
-      .getByRole("link", { name: "Skipped deep heading" })
-      .closest("li");
+    const deepLi = screen.getByRole("link", { name: "Skipped deep heading" }).closest("li");
     expect(deepLi!.getAttribute("data-depth")).toBe("2");
     expect(deepLi!.closest("ul")).toBe(nested);
   });
@@ -251,9 +245,7 @@ describe("TocPanel: paginated aria-current on headingless fragments (D18-12 rest
    * the only connected full-heading set in paginated mode). Every block
    * element carries its article data-block-index.
    */
-  function buildPaginatedArticleEl(
-    fragmentBlockIndexes: number[],
-  ): HTMLElement {
+  function buildPaginatedArticleEl(fragmentBlockIndexes: number[]): HTMLElement {
     const articleEl = document.createElement("article");
     const clone = document.createElement("div");
     clone.className = "article-body-measurement";
@@ -263,9 +255,7 @@ describe("TocPanel: paginated aria-current on headingless fragments (D18-12 rest
     };
     const blockText = (idx: number): string => {
       const block = article.blocks[idx]!;
-      return (block as { content: { text: string }[] }).content
-        .map((r) => r.text)
-        .join("");
+      return (block as { content: { text: string }[] }).content.map((r) => r.text).join("");
     };
     article.blocks.forEach((_, idx) => {
       const el = document.createElement(blockTag(idx));
@@ -429,11 +419,7 @@ describe("TocPanel: headingless state (D18-13)", () => {
 describe("TocPanel: entry activation", () => {
   const article = parseArticle({
     ...baseArticle,
-    blocks: [
-      para("Intro paragraph."),
-      heading(2, "Alpha section"),
-      para("Body one."),
-    ],
+    blocks: [para("Intro paragraph."), heading(2, "Alpha section"), para("Body one.")],
   });
 
   it("click calls onActivate with the entry and preventDefaults", () => {
@@ -478,7 +464,8 @@ describe("TocPanel: Escape routing", () => {
     const keyEvent = fireEvent.keyDown(panel, { key: "Escape" });
     expect(keyEvent).toBe(false);
     expect(hidePopover).toHaveBeenCalledTimes(1);
-  });});
+  });
+});
 
 afterEach(() => {
   document.body.innerHTML = "";

@@ -19,9 +19,7 @@ describe("LibrarySortSelect (issue #115)", () => {
     render(<LibrarySortSelect sort="recently-added" onSortChange={vi.fn()} />);
     const select = screen.getByRole("combobox", { name: "Sort library by" });
     expect(select).not.toBeNull();
-    const options = Array.from((select as HTMLSelectElement).options).map(
-      (o) => o.textContent,
-    );
+    const options = Array.from((select as HTMLSelectElement).options).map((o) => o.textContent);
     expect(options).toEqual(["Recently added", "Title", "Recently opened"]);
     expect((select as HTMLSelectElement).value).toBe("recently-added");
   });
