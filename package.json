@@ -25,10 +25,12 @@
     "calibrate:pdf": "PDF_CALIBRATION_DERIVE=1 vitest run tests/unit/server/pdf-calibration/derive.spec.ts",
     "calibrate:epub": "EPUB_CALIBRATION_DERIVE=1 NODE_OPTIONS=--max-old-space-size=8192 vitest run tests/unit/server/epub-calibration/derive.spec.ts",
     "perf": "playwright test perf.harness && node tests/e2e/perf/budget.compare.ts",
-    "lint": "eslint .",
+    "lint": "eslint . && node scripts/check-no-danger.js # eslint + the ING-07 no-dangerouslySetInnerHTML gate",
     "lint:no-danger": "node scripts/check-no-danger.js # rejects dangerouslySetInnerHTML in src/server/functions (ING-07)",
-    "deploy:vercel": "node scripts/deploy-vercel.mjs",
-    "format": "prettier --write ."
+    "typecheck": "tsc",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "deploy:vercel": "node scripts/deploy-vercel.mjs"
   },
   "dependencies": {
     "@chenglou/pretext": "0.0.8",

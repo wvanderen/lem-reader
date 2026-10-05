@@ -1,0 +1,4 @@
+# Reformat commit — Prettier applied repo-wide (one-time) ahead of the CI
+# format gate. Blame with:
+#   git blame --ignore-revs-file .git-blame-ignore-revs <file>
+3fef6b335d3a5c37ce56b4f94c54a9e8c8c84944

@@ -1,0 +1,88 @@
+# Continuous integration for Lem Reader.
+#
+# Jobs:
+#   checks — lint (incl. the no-dangerouslySetInnerHTML gate), format,
+#            typecheck, unit tests, and a production build. Fast, blocking.
+#   e2e    — the Playwright suite, one matrix leg per desktop engine
+#            (chromium/firefox/webkit — the layout/focus/selection
+#            authority; jsdom is not). Blocking. Legs run in parallel for
+#            feedback latency and isolate engine-specific failures.
+#   perf   — the ACPT-04 user-approved performance budget harness
+#            (incl. the chromium-throttled-mobile profile).
+#            NON-BLOCKING (continue-on-error): the locked thresholds in
+#            tests/e2e/perf/budget.json were derived on the reference
+#            machine (D6-01 measure-first, 25% headroom), not on shared CI
+#            runners. This job collects CI-hardware numbers toward a
+#            re-baseline; flip it to blocking once a CI-derived budget is
+#            user-approved.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run typecheck
+      - run: npm run test:unit -- --run
+      - run: npm run build
+
+  e2e:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [chromium, firefox, webkit]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps ${{ matrix.project }}
+      - run: npx playwright test --project=${{ matrix.project }}
+      - name: Upload Playwright artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts-${{ matrix.project }}
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  perf:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps
+      - run: npm run perf
+      - name: Upload perf artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-artifacts
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore
