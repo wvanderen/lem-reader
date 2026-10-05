@@ -5,10 +5,22 @@
 #            typecheck, unit tests, and a production build. Fast,
 #            deterministic, OS-independent. Blocking.
 #
-#   e2e    — the Playwright suite, one matrix leg per desktop engine
-#            (chromium/firefox/webkit — the layout/focus/selection
-#            authority; jsdom is not). NON-BLOCKING on GitHub-hosted
-#            runners, deliberately:
+#   e2e-reference — THE blocking layout gate: the full Playwright suite
+#            on the self-hosted reference machine (10-core macOS arm64,
+#            the environment the suite's timeouts, longtask budgets, and
+#            geometry assertions are calibrated against — where the tree
+#            passes 2129/2129). runs-on pins the runner-specific
+#            `reference` label so only that machine can supply reference
+#            evidence; default self-hosted/macOS labels alone must never
+#            satisfy it. Setup instructions live in CONTRIBUTING.
+#            While the runner is offline the job queues (GitHub holds it)
+#            and picks up when the machine next connects; a single
+#            runner also serializes these across PRs — expected for a
+#            personal repo.
+#
+#   e2e    — the same Playwright suite on GitHub-hosted runners, one
+#            matrix leg per desktop engine (chromium/firefox/webkit).
+#            NON-BLOCKING on shared runners, deliberately:
 #
 #            The suite's timeouts, longtask budgets, and
 #            interaction-paced assertions are calibrated for a quiet,
@@ -64,6 +76,26 @@ jobs:
       - run: npm run typecheck
       - run: npm run test:unit -- --run
       - run: npm run build
+
+  e2e-reference:
+    runs-on: [self-hosted, macOS, reference]
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npx playwright install
+      - run: npm run test:e2e
+      - name: Upload Playwright artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts-reference
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore
 
   e2e:
     runs-on: ubuntu-latest
