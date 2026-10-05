@@ -104,7 +104,7 @@ export function NotePopover(): React.ReactElement | null {
 
   // Find the resolved highlight for the open popover.
   const resolved = openPopoverFor
-    ? highlights.find((h) => h.record.id === openPopoverFor) ?? null
+    ? (highlights.find((h) => h.record.id === openPopoverFor) ?? null)
     : null;
 
   const noteText = resolved?.note?.text ?? "";
@@ -180,9 +180,7 @@ export function NotePopover(): React.ReactElement | null {
   // WebKit's modal focus management and left focus on the dialog.)
   useEffect(() => {
     if (!confirmingDelete) return;
-    const keepBtn = popoverRef.current?.querySelector<HTMLButtonElement>(
-      "[data-initial-focus]",
-    );
+    const keepBtn = popoverRef.current?.querySelector<HTMLButtonElement>("[data-initial-focus]");
     keepBtn?.focus();
   }, [confirmingDelete]);
 
@@ -221,9 +219,7 @@ export function NotePopover(): React.ReactElement | null {
   const handleDeleteCancel = () => {
     setConfirmingDelete(false);
     // Return focus to the textarea.
-    const textarea = popoverRef.current?.querySelector<HTMLTextAreaElement>(
-      "textarea",
-    );
+    const textarea = popoverRef.current?.querySelector<HTMLTextAreaElement>("textarea");
     textarea?.focus();
   };
 
@@ -239,16 +235,13 @@ export function NotePopover(): React.ReactElement | null {
       aria-label="Highlight note"
       aria-describedby="highlight-popover-excerpt"
     >
-      {resolved && (
-        confirmingDelete ? (
+      {resolved &&
+        (confirmingDelete ? (
           <div className="highlight-popover-confirm">
-            <p className="highlight-popover-confirm-prompt">
-              Delete this highlight?
-            </p>
+            <p className="highlight-popover-confirm-prompt">Delete this highlight?</p>
             {excerpt.length > 0 && (
               <p className="highlight-popover-excerpt" id="highlight-popover-excerpt">
-                <span className="visually-hidden">Highlighted text:</span>{" "}
-                {excerpt}
+                <span className="visually-hidden">Highlighted text:</span> {excerpt}
               </p>
             )}
             <div className="dialog-actions highlight-popover-actions">
@@ -283,8 +276,7 @@ export function NotePopover(): React.ReactElement | null {
                   VO stops on before reaching the excerpt content. Sighted
                   readers see only the italic excerpt (the prefix is clipped). */}
               <p className="highlight-popover-excerpt" id="highlight-popover-excerpt">
-                <span className="visually-hidden">Highlighted text:</span>{" "}
-                {excerpt}
+                <span className="visually-hidden">Highlighted text:</span> {excerpt}
               </p>
             </div>
             <div className="highlight-popover-note">
@@ -309,11 +301,7 @@ export function NotePopover(): React.ReactElement | null {
                   // Enter CONFIRMS an IME composition (the confirming keyDown
                   // reports isComposing=true — save-and-close mid-composition
                   // would discard the in-flight text).
-                  if (
-                    (e.metaKey || e.ctrlKey) &&
-                    e.key === "Enter" &&
-                    !e.nativeEvent.isComposing
-                  ) {
+                  if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && !e.nativeEvent.isComposing) {
                     e.preventDefault();
                     handleDone();
                   }
@@ -335,9 +323,7 @@ export function NotePopover(): React.ReactElement | null {
                 key={resolved.record.id}
                 recordId={resolved.record.id}
                 tags={resolved.record.tags ?? []}
-                saveTags={(next) =>
-                  updateHighlightTags(resolved.record.id, next)
-                }
+                saveTags={(next) => updateHighlightTags(resolved.record.id, next)}
                 inputId="highlight-popover-tags-input"
               />
             )}
@@ -351,9 +337,7 @@ export function NotePopover(): React.ReactElement | null {
               <HighlightColorEntry
                 key={resolved.record.id}
                 color={resolved.record.color}
-                saveColor={(next) =>
-                  updateHighlightColor(resolved.record.id, next)
-                }
+                saveColor={(next) => updateHighlightColor(resolved.record.id, next)}
               />
             )}
             <div className="highlight-popover-actions dialog-actions">
@@ -372,9 +356,8 @@ export function NotePopover(): React.ReactElement | null {
                 Done
               </button>
             </div>
-           </>
-        )
-      )}
+          </>
+        ))}
     </dialog>
   );
 }

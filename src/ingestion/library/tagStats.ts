@@ -50,7 +50,5 @@ export function deriveTagStats(
   };
   fold(articles);
   fold(books);
-  return [...counts.values()].sort(
-    (a, b) => b.count - a.count || a.tag.localeCompare(b.tag),
-  );
+  return [...counts.values()].sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
 }

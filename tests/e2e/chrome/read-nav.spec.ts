@@ -48,11 +48,7 @@ import { BASE } from "../_base";
  * snapshot's standalone partition — so the rail/nav fixtures must be real
  * listed rows, not merely addressable regression fixtures.
  */
-function makeStandalone(
-  id: string,
-  title: string,
-  paragraphs: string[],
-): CanonicalArticle {
+function makeStandalone(id: string, title: string, paragraphs: string[]): CanonicalArticle {
   return ArticleSchema.parse({
     id,
     revision: 1,
@@ -187,10 +183,7 @@ async function seedScrollingMode(page: Page): Promise<void> {
 
 /** Seed article rows via raw IndexedDB (the progress-recent clone). MUST
  * run before the reload so the composite library lists the rows. */
-async function seedArticleRows(
-  page: Page,
-  articles: CanonicalArticle[],
-): Promise<void> {
+async function seedArticleRows(page: Page, articles: CanonicalArticle[]): Promise<void> {
   await page.evaluate(async (rows) => {
     await new Promise<void>((resolve, reject) => {
       const req = indexedDB.open("lem-reader");
@@ -223,26 +216,17 @@ async function openLibraryWith(
 ): Promise<void> {
   await page.goto(`${BASE}/#/`);
   await page.reload();
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Saved articles" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
   await seedArticleRows(
     page,
     seeds.map((seed) => seed.article),
   );
   for (const seed of seeds) {
-    await seedLocation(
-      page,
-      seed.article.id,
-      Math.floor(seed.total * seed.ratio),
-      seed.savedAt,
-    );
+    await seedLocation(page, seed.article.id, Math.floor(seed.total * seed.ratio), seed.savedAt);
   }
   await page.goto(`${BASE}/#/`);
   await page.reload();
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Saved articles" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
 }
 
 /** The library row for a fixture id, found by its launch link (title text
@@ -289,18 +273,13 @@ test.describe("Read nav (#82 — the shell Read destination over the shared resu
   // READNAV-01/02 — a partial read creates the target; the link labels
   // itself "Continue reading" for AT while showing "Read", and carries a
   // plain native href (pushes history; no interception).
-  test("appears after a partial read; labels + native href (READNAV-01/02)", async ({
-    page,
-  }) => {
+  test("appears after a partial read; labels + native href (READNAV-01/02)", async ({ page }) => {
     await openLibraryWith(page, [
       { article: ARTICLE_A, total: TOTAL_A, ratio: 0.3, savedAt: "2026-01-03T00:00:00.000Z" },
     ]);
     const read = readLink(page);
     await expect(read).toBeVisible();
-    await expect(read).toHaveAttribute(
-      "href",
-      `#/article/${A_ID}`,
-    );
+    await expect(read).toHaveAttribute("href", `#/article/${A_ID}`);
     await expect(read).toHaveAttribute("aria-label", "Continue reading");
     await expect(read).toHaveText("Read");
     // Off the Reader the link never claims aria-current (D15-09 family).
@@ -319,22 +298,13 @@ test.describe("Read nav (#82 — the shell Read destination over the shared resu
     // then reload into the Library.
     await page.goto(`${BASE}/#/`);
     await page.reload();
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
     await seedScrollingMode(page);
     await seedArticleRows(page, [ARTICLE_A]);
-    await seedLocation(
-      page,
-      A_ID,
-      Math.floor(TOTAL_A * 0.3),
-      "2026-01-03T00:00:00.000Z",
-    );
+    await seedLocation(page, A_ID, Math.floor(TOTAL_A * 0.3), "2026-01-03T00:00:00.000Z");
     await page.goto(`${BASE}/#/`);
     await page.reload();
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
 
     await readLink(page).click();
     await expect(page).toHaveURL(new RegExp(`#/article/${A_ID}$`));
@@ -344,9 +314,7 @@ test.describe("Read nav (#82 — the shell Read destination over the shared resu
     // landing at top would mean the resume pointer is decorative.
     await page.waitForTimeout(1500);
     const scrollY = await page.evaluate(() => window.scrollY);
-    expect(scrollY, "expected the offset restore to land mid-prose").toBeGreaterThan(
-      300,
-    );
+    expect(scrollY, "expected the offset restore to land mid-prose").toBeGreaterThan(300);
   });
 
   // READNAV-04 — aria-current="page" ONLY while the open article IS the
@@ -376,9 +344,7 @@ test.describe("Read nav (#82 — the shell Read destination over the shared resu
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     await expect(read).toHaveAttribute("aria-current", "page");
     expect(
-      await primaryNav(page)
-        .getByRole("link", { name: "Library" })
-        .getAttribute("aria-current"),
+      await primaryNav(page).getByRole("link", { name: "Library" }).getAttribute("aria-current"),
     ).toBeNull();
   });
 
@@ -416,9 +382,7 @@ test.describe("Read nav (#82 — the shell Read destination over the shared resu
 
   // READNAV-06 — the pointer is Dexie-backed state, not session state:
   // reloads and destination hops keep it correct.
-  test("the target survives reload and destination hops (READNAV-06)", async ({
-    page,
-  }) => {
+  test("the target survives reload and destination hops (READNAV-06)", async ({ page }) => {
     await openLibraryWith(page, [
       { article: ARTICLE_A, total: TOTAL_A, ratio: 0.3, savedAt: "2026-01-03T00:00:00.000Z" },
     ]);
@@ -429,9 +393,7 @@ test.describe("Read nav (#82 — the shell Read destination over the shared resu
     await expect(read).toHaveAttribute("href", `#/article/${A_ID}`);
 
     await page.goto(`${BASE}/#/highlights`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Highlights" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
     await expect(read).toHaveAttribute("href", `#/article/${A_ID}`);
   });
 
@@ -450,10 +412,9 @@ test.describe("Read nav (#82 — the shell Read destination over the shared resu
       await page.setViewportSize({ width, height: 640 });
       const libGeom = await rowGeometry(page);
       expect(libGeom, `library header mounted at ${width}px`).not.toBeNull();
-      expect(
-        libGeom!.scrollHeight,
-        `library: no wrap at ${width}px`,
-      ).toBeLessThanOrEqual(libGeom!.clientHeight + 1);
+      expect(libGeom!.scrollHeight, `library: no wrap at ${width}px`).toBeLessThanOrEqual(
+        libGeom!.clientHeight + 1,
+      );
       expect(
         libGeom!.scrollWidth,
         `library: no horizontal overflow at ${width}px`,
@@ -478,14 +439,12 @@ test.describe("Read nav (#82 — the shell Read destination over the shared resu
       expect(geom!.scrollHeight, `reader: no wrap at ${width}px`).toBeLessThanOrEqual(
         geom!.clientHeight + 1,
       );
-      expect(
-        geom!.scrollWidth,
-        `reader: no horizontal overflow at ${width}px`,
-      ).toBeLessThanOrEqual(geom!.clientWidth + 1);
-      expect(
-        geom!.startRight,
-        `reader: groups never overlap at ${width}px`,
-      ).toBeLessThanOrEqual(geom!.controlsLeft + 0.5);
+      expect(geom!.scrollWidth, `reader: no horizontal overflow at ${width}px`).toBeLessThanOrEqual(
+        geom!.clientWidth + 1,
+      );
+      expect(geom!.startRight, `reader: groups never overlap at ${width}px`).toBeLessThanOrEqual(
+        geom!.controlsLeft + 0.5,
+      );
     }
 
     // The staged-collapse polarity (the mobile reader-band contract): the
@@ -505,20 +464,16 @@ test.describe("Read nav (#82 — the shell Read destination over the shared resu
       await page.setViewportSize({ width, height: 640 });
       const staged = await navInFlow(page);
       expect(staged, `reader nav link mounted at ${width}px`).not.toBeNull();
-      expect(
-        staged!.position,
-        `reader: nav links staged out of flow at ${width}px`,
-      ).toBe("absolute");
+      expect(staged!.position, `reader: nav links staged out of flow at ${width}px`).toBe(
+        "absolute",
+      );
       expect(staged!.width, `reader: nav links clipped at ${width}px`).toBeLessThanOrEqual(1.5);
     }
     for (const width of [640, 810] as const) {
       await page.setViewportSize({ width, height: 640 });
       const flow = await navInFlow(page);
       expect(flow, `reader nav link mounted at ${width}px`).not.toBeNull();
-      expect(
-        flow!.position,
-        `reader: nav links back in flow at ${width}px`,
-      ).not.toBe("absolute");
+      expect(flow!.position, `reader: nav links back in flow at ${width}px`).not.toBe("absolute");
       expect(flow!.width, `reader: nav links visible at ${width}px`).toBeGreaterThan(10);
     }
   });
@@ -527,9 +482,7 @@ test.describe("Read nav (#82 — the shell Read destination over the shared resu
   // chromium + firefox follow DOM order in sequential navigation (the
   // shell-nav Tab-walk precedent); webkit degrades to programmatic
   // focusability + Enter activation (the 09-06 engine-honest gate).
-  test("Read is keyboard reachable with a visible focus ring (READNAV-08)", async ({
-    page,
-  }) => {
+  test("Read is keyboard reachable with a visible focus ring (READNAV-08)", async ({ page }) => {
     test.setTimeout(60_000);
     await openLibraryWith(page, [
       { article: ARTICLE_A, total: TOTAL_A, ratio: 0.3, savedAt: "2026-01-03T00:00:00.000Z" },
@@ -546,8 +499,7 @@ test.describe("Read nav (#82 — the shell Read destination over the shared resu
         landed = await page.evaluate(() => {
           const el = document.activeElement;
           return (
-            el instanceof HTMLAnchorElement &&
-            el.getAttribute("aria-label") === "Continue reading"
+            el instanceof HTMLAnchorElement && el.getAttribute("aria-label") === "Continue reading"
           );
         });
       }
@@ -609,16 +561,12 @@ test.describe("Read nav live roll (#102 — in-reader writes invalidate the shel
 
   /** The view-switcher link with its ready-gated count in the name. */
   function switcherLink(page: Page, name: string) {
-    return page
-      .getByRole("navigation", { name: "Library views" })
-      .getByRole("link", { name });
+    return page.getByRole("navigation", { name: "Library views" }).getByRole("link", { name });
   }
 
   /** The rail card link for an article id (the Continue-Reading strip). */
   function railCardFor(page: Page, articleId: string) {
-    return page.locator(
-      `.continue-reading .library-card-link[href="#/article/${articleId}"]`,
-    );
+    return page.locator(`.continue-reading .library-card-link[href="#/article/${articleId}"]`);
   }
 
   test("in-reader progress makes Read appear live; back on Library it is there with no reload", async ({
@@ -630,16 +578,12 @@ test.describe("Read nav live roll (#102 — in-reader writes invalidate the shel
     // progress must come from the REAL in-reader save path.
     await page.goto(`${BASE}/#/`);
     await page.reload();
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
     await seedScrollingMode(page);
     await seedArticleRows(page, [ARTICLE_A]);
     await page.goto(`${BASE}/#/`);
     await page.reload();
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
 
     // Baseline (the issue repro, step 3's nav shape): nothing opened →
     // the shell nav is Library/Highlights only.
@@ -655,9 +599,7 @@ test.describe("Read nav live roll (#102 — in-reader writes invalidate the shel
     // registered — a real reader's continuous scrolling always lands
     // post-registration, and latest-wins coalesces the pair into ONE
     // debounced write.
-    await libraryRowFor(page, A_ID)
-      .locator(`a[href="#/article/${A_ID}"]`)
-      .click();
+    await libraryRowFor(page, A_ID).locator(`a[href="#/article/${A_ID}"]`).click();
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     await page.evaluate(() => window.scrollTo(0, 600));
     await page.waitForTimeout(250);
@@ -672,9 +614,7 @@ test.describe("Read nav live roll (#102 — in-reader writes invalidate the shel
     // Return to the Library via the hash nav (the repro's flow — no
     // reload, no seeded shortcut).
     await primaryNav(page).getByRole("link", { name: "Library" }).click();
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
     await expectNoReload(page, "back on Library");
 
     // The shell Read destination persisted the journey: present, pointing
@@ -695,28 +635,14 @@ test.describe("Read nav live roll (#102 — in-reader writes invalidate the shel
     // reload; every PROGRESS move below happens in-reader.
     await page.goto(`${BASE}/#/`);
     await page.reload();
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
     await seedScrollingMode(page);
     await seedArticleRows(page, [ARTICLE_B, ARTICLE_A]);
-    await seedLocation(
-      page,
-      B_ID,
-      Math.floor(TOTAL_B * 0.2),
-      "2026-01-02T00:00:00.000Z",
-    );
-    await seedLocation(
-      page,
-      A_ID,
-      Math.floor(TOTAL_A * 0.3),
-      "2026-01-03T00:00:00.000Z",
-    );
+    await seedLocation(page, B_ID, Math.floor(TOTAL_B * 0.2), "2026-01-02T00:00:00.000Z");
+    await seedLocation(page, A_ID, Math.floor(TOTAL_A * 0.3), "2026-01-03T00:00:00.000Z");
     await page.goto(`${BASE}/#/`);
     await page.reload();
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
 
     await expect(readLink(page)).toHaveAttribute("href", `#/article/${A_ID}`);
 
@@ -728,15 +654,11 @@ test.describe("Read nav live roll (#102 — in-reader writes invalidate the shel
     await plantNoReloadMarker(page);
     await page.waitForTimeout(1500);
     const readToBottom = async () => {
-      await page.evaluate(() =>
-        window.scrollTo(0, document.documentElement.scrollHeight),
-      );
+      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
       await page.waitForTimeout(250);
       // Re-assert the bottom so the LAST scheduled save is the end-pin
       // (latest-wins over any restore-straggler scroll events).
-      await page.evaluate(() =>
-        window.scrollTo(0, document.documentElement.scrollHeight),
-      );
+      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
     };
     await readToBottom();
 
@@ -759,9 +681,7 @@ test.describe("Read nav live roll (#102 — in-reader writes invalidate the shel
 
     // Back on the Library the derivation agrees: nothing unfinished.
     await primaryNav(page).getByRole("link", { name: "Library" }).click();
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
     await expect(readLink(page)).toHaveCount(0);
     await expect(switcherLink(page, "Finished (2)")).toBeVisible();
     await expectNoReload(page, "library agrees");

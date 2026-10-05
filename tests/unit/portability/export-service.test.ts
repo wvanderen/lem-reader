@@ -38,10 +38,7 @@ import type {
   NoteRecord,
   ReaderSettings,
 } from "../../../src/content/schema";
-import {
-  graphemeClusters,
-  normalizeText,
-} from "../../../src/content/normalizeText";
+import { graphemeClusters, normalizeText } from "../../../src/content/normalizeText";
 import { fixtures } from "../../../src/fixtures";
 import { ExportBundleSchema } from "../../../src/portability/bundle";
 import { computeManifest } from "../../../src/portability/manifest";
@@ -180,9 +177,7 @@ function sampleBook(overrides: Partial<Book> = {}): Book {
 
 /** An epub-chapter article — an ordinary ArticleSchema row whose
  * ingestionMeta carries the book FK (the 12-01 Phase-12 widening). */
-function sampleChapter(
-  overrides: Partial<ArticleInput> = {},
-): CanonicalArticle {
+function sampleChapter(overrides: Partial<ArticleInput> = {}): CanonicalArticle {
   return sampleArticle({
     id: "epub-111111111111-c00",
     provenance: {
@@ -315,10 +310,7 @@ describe("buildBundle (09-04 Task 1)", () => {
     const bundle = ExportBundleSchema.parse(JSON.parse(strFromU8(entries["bundle.json"]!)));
     expect(bundle.schemaVersion).toBe(7); // writers preserve starter removal
     expect(bundle.articles).toHaveLength(2);
-    expect(bundle.articles.map((a) => a.id).sort()).toEqual([
-      "art-plain",
-      "art-with-source",
-    ]);
+    expect(bundle.articles.map((a) => a.id).sort()).toEqual(["art-plain", "art-with-source"]);
     // Fixtures NEVER serialize (ARCHITECTURE L615) — the highlight's fixture
     // article is absent from the articles block.
     expect(bundle.articles.map((a) => a.id)).not.toContain(fixture.id);
@@ -462,8 +454,6 @@ describe("buildBundle (09-04 Task 1)", () => {
     expect(secondRest).toEqual(firstRest);
 
     // And the deterministic SHA-256 manifest blocks hash identically.
-    expect(await computeManifest(secondBundle)).toEqual(
-      await computeManifest(firstBundle),
-    );
+    expect(await computeManifest(secondBundle)).toEqual(await computeManifest(firstBundle));
   });
 });

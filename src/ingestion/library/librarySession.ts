@@ -78,10 +78,7 @@ export function peekLibraryContext(): LibraryContextSnapshot | null {
  * restores filters but resets scroll/focus fresh — never restore
  * something that isn't true (D15-14).
  */
-export function viewMatches(
-  landing: LibraryViewName,
-  captured: LibraryViewName,
-): boolean {
+export function viewMatches(landing: LibraryViewName, captured: LibraryViewName): boolean {
   return landing === captured;
 }
 

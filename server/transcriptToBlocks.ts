@@ -21,11 +21,12 @@
 //
 // Deterministic and pure: same input → same blocks + anchors + warnings,
 // every time, on every runtime.
+import type { Block, TranscriptSegmentAnchor } from "../src/content/schema";
 import type {
-  Block,
-  TranscriptSegmentAnchor,
-} from "../src/content/schema";
-import type { TranscriptChapter, TranscriptSegment, TranscriptSuccess } from "../src/ingestion/youtube";
+  TranscriptChapter,
+  TranscriptSegment,
+  TranscriptSuccess,
+} from "../src/ingestion/youtube";
 import { normalizeForTitleMatch } from "./titleMatch";
 
 // ── Grouping budgets (decision #26, decided character budgets) ───────────────
@@ -217,8 +218,11 @@ export function transcriptToBlocks(transcript: TranscriptSuccess): TranscriptNor
     // An empty paragraph always admits the segment — a lone segment longer
     // than the cap stays ONE unsplit paragraph (decision #26; pagination's
     // fragment splitter owns that pathological case).
-    if (group.length > 0 && (groupLen >= TRANSCRIPT_PARAGRAPH_TARGET_CHARS ||
-      groupLen + 1 + segment.text.length > TRANSCRIPT_PARAGRAPH_CAP_CHARS)) {
+    if (
+      group.length > 0 &&
+      (groupLen >= TRANSCRIPT_PARAGRAPH_TARGET_CHARS ||
+        groupLen + 1 + segment.text.length > TRANSCRIPT_PARAGRAPH_CAP_CHARS)
+    ) {
       flushGroup();
     }
     if (group.length === 0) {

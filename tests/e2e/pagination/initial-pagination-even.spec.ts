@@ -79,8 +79,7 @@ test.describe("initial-pagination-even (05-06)", () => {
       return new Promise<FirstPagination>((resolve) => {
         const tick = () => {
           const dev = (window as unknown as Record<string, unknown>).__lemPagination as
-            | { pagesLength?: number; status?: string }
-            | undefined;
+            { pagesLength?: number; status?: string } | undefined;
           if (dev && typeof dev.pagesLength === "number") {
             resolve({ pagesLength: dev.pagesLength, status: dev.status ?? "unknown" });
             return;
@@ -117,8 +116,7 @@ test.describe("initial-pagination-even (05-06)", () => {
     await page.waitForTimeout(600);
     const settled = await page.evaluate(() => {
       const dev = (window as unknown as Record<string, unknown>).__lemPagination as
-        | { pagesLength?: number; status?: string }
-        | undefined;
+        { pagesLength?: number; status?: string } | undefined;
       return {
         pagesLength: dev?.pagesLength ?? 0,
         status: dev?.status ?? "unknown",
@@ -133,8 +131,7 @@ test.describe("initial-pagination-even (05-06)", () => {
     await page.waitForTimeout(400);
     const resettled = await page.evaluate(() => {
       const dev = (window as unknown as Record<string, unknown>).__lemPagination as
-        | { pagesLength?: number }
-        | undefined;
+        { pagesLength?: number } | undefined;
       return dev?.pagesLength ?? 0;
     });
     expect(
@@ -143,7 +140,10 @@ test.describe("initial-pagination-even (05-06)", () => {
     ).toBe(settled.pagesLength);
 
     // (c) engine status for the cell is "ok".
-    expect(settled.status, `engine status for ${ESSAY_LONG_FORM}@${DESKTOP.width}x${DESKTOP.height}`).toBe("ok");
+    expect(
+      settled.status,
+      `engine status for ${ESSAY_LONG_FORM}@${DESKTOP.width}x${DESKTOP.height}`,
+    ).toBe("ok");
 
     expect(pageErrors, "no uncaught errors during pagination").toEqual([]);
   });

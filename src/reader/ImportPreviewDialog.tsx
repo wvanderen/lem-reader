@@ -160,9 +160,7 @@ export function ImportPreviewDialog({
   // list. Default empty/collapsed; reset on EVERY open alongside the other
   // choices (the 09-06 close-path lesson — a prior canceled import never
   // leaks into the next one).
-  const [metadataTakeIncoming, setMetadataTakeIncoming] = useState<
-    ReadonlySet<string>
-  >(new Set());
+  const [metadataTakeIncoming, setMetadataTakeIncoming] = useState<ReadonlySet<string>>(new Set());
   const [metadataExpanded, setMetadataExpanded] = useState(false);
 
   // Sync the `open` prop with the underlying <dialog> state.
@@ -303,10 +301,7 @@ export function ImportPreviewDialog({
                             className="import-preview-metadata-list"
                           >
                             {preview.metadataConflicts.map((d) => (
-                              <li
-                                key={d.id}
-                                className="import-preview-metadata-item"
-                              >
+                              <li key={d.id} className="import-preview-metadata-item">
                                 <span className="import-preview-metadata-names">
                                   <span className="import-preview-metadata-local">
                                     {d.localName}
@@ -319,9 +314,7 @@ export function ImportPreviewDialog({
                                 <select
                                   aria-label={`Import choice for ${d.localName}`}
                                   value={
-                                    metadataTakeIncoming.has(d.id)
-                                      ? "use-imported"
-                                      : "keep-mine"
+                                    metadataTakeIncoming.has(d.id) ? "use-imported" : "keep-mine"
                                   }
                                   onChange={(e) => {
                                     const next = new Set(metadataTakeIncoming);
@@ -406,7 +399,11 @@ export function ImportPreviewDialog({
           {/* Destructive action — Pitfall 8: onProceed (the parent's
               applyImport bulk write) fires ONLY in onImportClick above. The
               button label names the consequence unambiguously. */}
-          <button type="button" className="btn btn-destructive import-preview-proceed" onClick={onImportClick}>
+          <button
+            type="button"
+            className="btn btn-destructive import-preview-proceed"
+            onClick={onImportClick}
+          >
             Import
           </button>
           {/* Cancel — names the actual outcome: nothing is written, local

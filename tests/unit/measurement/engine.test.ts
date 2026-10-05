@@ -58,9 +58,8 @@ vi.mock("../../../src/measurement/fontGate", async (importOriginal) => {
 // tests override measureAllBlocksMock.mockImplementationOnce for partial-DOM
 // scenarios. The real measureAllBlocks queries [data-block-index] on a live
 // DOM element — not viable in jsdom.
-const measureAllBlocksMock = vi.fn<
-  (articleEl: HTMLElement, signal: AbortSignal) => BlockMeasurement[]
->();
+const measureAllBlocksMock =
+  vi.fn<(articleEl: HTMLElement, signal: AbortSignal) => BlockMeasurement[]>();
 vi.mock("../../../src/measurement/domMeasurer", () => ({
   measureAllBlocks: (articleEl: HTMLElement, signal: AbortSignal): BlockMeasurement[] =>
     measureAllBlocksMock(articleEl, signal),
@@ -263,7 +262,9 @@ describe("MeasurementEngine — V7 error classification", () => {
     void article;
     // Replace the trusted handler with one that throws.
     unsubscribe();
-    const diagnostics = (engine as unknown as { opts: { diagnostics: { recent: () => unknown[] } } }).opts.diagnostics;
+    const diagnostics = (
+      engine as unknown as { opts: { diagnostics: { recent: () => unknown[] } } }
+    ).opts.diagnostics;
     engine.onTrusted(() => {
       throw new Error("handler explosion");
     });
@@ -272,7 +273,9 @@ describe("MeasurementEngine — V7 error classification", () => {
     // Must NOT throw — the engine catches + classifies.
     await expect(engine.run(constraintsFor(18))).resolves.toBeUndefined();
     // The diagnostic was emitted.
-    expect(diagnostics.recent().some((e) => (e as { kind: string }).kind === "measurement-error")).toBe(true);
+    expect(
+      diagnostics.recent().some((e) => (e as { kind: string }).kind === "measurement-error"),
+    ).toBe(true);
   });
 });
 
@@ -327,8 +330,7 @@ function mountDispatchDom(
     const spec = specs[i]!;
     const el = document.createElement(spec.kind === "heading" ? "h2" : "p");
     el.setAttribute("data-block-index", String(i));
-    el.textContent =
-      spec.text ?? (spec.kind === "heading" ? "A heading" : "Some paragraph text.");
+    el.textContent = spec.text ?? (spec.kind === "heading" ? "A heading" : "Some paragraph text.");
     articleEl.appendChild(el);
   }
 }
@@ -360,9 +362,7 @@ function buildDispatchEngine(
     diagnostics,
     eligibility,
     getReaderSettings:
-      "getReaderSettings" in engineOpts
-        ? engineOpts.getReaderSettings
-        : () => settingsStub,
+      "getReaderSettings" in engineOpts ? engineOpts.getReaderSettings : () => settingsStub,
     driftGuard: engineOpts.driftGuard,
     driftTolerancePx: engineOpts.driftTolerancePx,
   });
@@ -376,12 +376,13 @@ describe("MeasurementEngine — calibration-gated strategy dispatch (issue 6)", 
     textMeasurerMocks;
 
   beforeEach(() => {
-    fontStringForMock.mockReset().mockImplementation(
-      (kind: "paragraph" | "heading") =>
+    fontStringForMock
+      .mockReset()
+      .mockImplementation((kind: "paragraph" | "heading") =>
         kind === "heading"
           ? { font: "600 22px serif", lineHeightPx: 28.6 }
           : { font: "400 18px serif", lineHeightPx: 28.8 },
-    );
+      );
     measureParagraphHeightMock.mockReset();
     measureParagraphHeightMock.mockImplementation(() => {
       throw new Error("measureParagraphHeight not stubbed for this test");
@@ -562,9 +563,7 @@ describe("MeasurementEngine — calibration-gated strategy dispatch (issue 6)", 
     // kind-level downgrade diagnostic.
     await engine.run(constraintsFor(18));
     expect(diagnostics.recent().some((e) => e.kind === "drift-exceedance")).toBe(true);
-    const downgrades = diagnostics
-      .recent()
-      .filter((e) => e.kind === "runtime-guard-downgrade");
+    const downgrades = diagnostics.recent().filter((e) => e.kind === "runtime-guard-downgrade");
     expect(downgrades).toHaveLength(1);
     expect((downgrades[0] as { "kind-downgraded": string })["kind-downgraded"]).toBe("heading");
 
@@ -575,8 +574,8 @@ describe("MeasurementEngine — calibration-gated strategy dispatch (issue 6)", 
     expect(measureParagraphHeightMock).not.toHaveBeenCalled();
     expect(committed).toHaveLength(2);
     expect(committed[1]!.blocks).toEqual(dom);
-    expect(
-      diagnostics.recent().filter((e) => e.kind === "runtime-guard-downgrade"),
-    ).toHaveLength(1);
+    expect(diagnostics.recent().filter((e) => e.kind === "runtime-guard-downgrade")).toHaveLength(
+      1,
+    );
   });
 });

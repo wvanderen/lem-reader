@@ -259,10 +259,14 @@ const taggedEssays = filterLibrary(ALL_STANDALONE, { query: "", activeTag: TAG }
 async function seedCorpus(page: Page): Promise<void> {
   await seedStoreRows(page, "books", CORPUS_BOOKS);
   // Chapter rows carry the denormalized bookId used by the articles index.
-  await seedStoreRows(page, "articles", CORPUS_ARTICLES.map((article) => ({
-    ...article,
-    ...(article.ingestionMeta?.bookId ? { bookId: article.ingestionMeta.bookId } : {}),
-  })));
+  await seedStoreRows(
+    page,
+    "articles",
+    CORPUS_ARTICLES.map((article) => ({
+      ...article,
+      ...(article.ingestionMeta?.bookId ? { bookId: article.ingestionMeta.bookId } : {}),
+    })),
+  );
   await seedStoreRows(page, "location", CORPUS_LOCATIONS);
 }
 

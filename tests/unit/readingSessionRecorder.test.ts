@@ -14,10 +14,7 @@
 //   - identity + row shape: one stable visit id across every snapshot;
 //     activeSeconds floors; schemaVersion literal
 import { describe, expect, it } from "vitest";
-import {
-  ReadingSessionRecorder,
-  IDLE_CAP_MS,
-} from "../../src/reader/readingSessionRecorder";
+import { ReadingSessionRecorder, IDLE_CAP_MS } from "../../src/reader/readingSessionRecorder";
 
 /** A manually-advanced clock: deterministic truth tables without timers. */
 function manualClock(startAt = 0): { now(): number; advance(ms: number): void } {

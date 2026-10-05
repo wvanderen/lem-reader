@@ -13,16 +13,10 @@
 //   - chapter members are excluded from standalone results;
 //   - the empty filter returns everything (books + standalone articles).
 import { describe, expect, it } from "vitest";
-import {
-  filterLibrary,
-  filterBooks,
-} from "../../../src/ingestion/library/libraryFilter";
+import { filterLibrary, filterBooks } from "../../../src/ingestion/library/libraryFilter";
 import type { LibraryFilter } from "../../../src/ingestion/library/libraryFilter";
 import { ArticleSchema, BookSchema } from "../../../src/content/schema";
-import type {
-  Book,
-  CanonicalArticle,
-} from "../../../src/content/schema";
+import type { Book, CanonicalArticle } from "../../../src/content/schema";
 
 const BOOK_ID = "epub-book000222";
 
@@ -35,8 +29,7 @@ function makeArticle(overrides: Record<string, unknown>): CanonicalArticle {
     provenance: {
       title: "Untitled",
       retrievedAt: "2026-01-01T00:00:00.000Z",
-      originalHtmlHash:
-        "0000000000000000000000000000000000000000000000000000000000000000",
+      originalHtmlHash: "0000000000000000000000000000000000000000000000000000000000000000",
     },
     blocks: [{ kind: "paragraph", content: [{ text: "body" }] }],
     ...overrides,
@@ -53,8 +46,7 @@ function makeBook(overrides: Record<string, unknown> = {}): Book {
     chapterArticleIds: [`${BOOK_ID}-c00`, `${BOOK_ID}-c01`],
     skippedChapterCount: 0,
     source: "epub-upload",
-    originalFileHash:
-      "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    originalFileHash: "sha256:0000000000000000000000000000000000000000000000000000000000000000",
     addedAt: "2026-01-01T00:00:00.000Z",
     ...overrides,
   });
@@ -69,13 +61,11 @@ function chapterArticles(): CanonicalArticle[] {
         title: `Chapter ${i + 1}. ${i === 0 ? "Loomings" : "The Gauntlet"}`,
         author: "Ada Author",
         retrievedAt: "2026-01-01T00:00:00.000Z",
-        originalHtmlHash:
-          "0000000000000000000000000000000000000000000000000000000000000000",
+        originalHtmlHash: "0000000000000000000000000000000000000000000000000000000000000000",
       },
       ingestionMeta: {
         source: "epub-chapter",
-        originalHtmlHash:
-          "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        originalHtmlHash: "sha256:0000000000000000000000000000000000000000000000000000000000000000",
         extractionConfidence: "high",
         bookId: BOOK_ID,
         chapterIndex: i,
@@ -87,12 +77,7 @@ function chapterArticles(): CanonicalArticle[] {
 /** The caller-supplied chapter-title map (LibraryView builds this from the
  * live chapter rows; the pure function takes it as a parameter). */
 function chapterTitles(): Map<string, string[]> {
-  return new Map([
-    [
-      BOOK_ID,
-      chapterArticles().map((c) => c.provenance.title),
-    ],
-  ]);
+  return new Map([[BOOK_ID, chapterArticles().map((c) => c.provenance.title)]]);
 }
 
 // A standalone article sharing NOTHING with the book's haystack.
@@ -102,8 +87,7 @@ const standalone = makeArticle({
     title: "Meditations",
     author: "Marcus",
     retrievedAt: "2026-01-01T00:00:00.000Z",
-    originalHtmlHash:
-      "0000000000000000000000000000000000000000000000000000000000000000",
+    originalHtmlHash: "0000000000000000000000000000000000000000000000000000000000000000",
   },
 });
 
@@ -127,9 +111,10 @@ describe("filterLibrary — chapter members never surface standalone (D12-01)", 
 describe("filterBooks — book title + author + chapter-title haystack (D12-04)", () => {
   it("empty filter returns every book", () => {
     const other = makeBook({ id: "epub-other000333", title: "Another Book" });
-    expect(filterBooks([makeBook(), other], noFilter, chapterTitles())).toEqual(
-      [makeBook(), other],
-    );
+    expect(filterBooks([makeBook(), other], noFilter, chapterTitles())).toEqual([
+      makeBook(),
+      other,
+    ]);
   });
 
   it("book TITLE match surfaces the book", () => {
@@ -157,13 +142,13 @@ describe("filterBooks — book title + author + chapter-title haystack (D12-04)"
 
   it("chapter titles absent from the map simply do not match (partial import tolerance)", () => {
     const empty = new Map<string, string[]>();
-    expect(
-      filterBooks([makeBook()], { query: "the gauntlet", activeTag: null }, empty),
-    ).toEqual([]);
+    expect(filterBooks([makeBook()], { query: "the gauntlet", activeTag: null }, empty)).toEqual(
+      [],
+    );
     // …but the book's own title still matches.
-    expect(
-      filterBooks([makeBook()], { query: "synthetic", activeTag: null }, empty),
-    ).toEqual([makeBook()]);
+    expect(filterBooks([makeBook()], { query: "synthetic", activeTag: null }, empty)).toEqual([
+      makeBook(),
+    ]);
   });
 });
 
@@ -176,9 +161,9 @@ describe("tag filtering — book tags surface the BOOK row only (D12-04)", () =>
   });
 
   it("an untagged book is filtered out under an active tag", () => {
-    expect(
-      filterBooks([makeBook()], { query: "", activeTag: "essays" }, chapterTitles()),
-    ).toEqual([]);
+    expect(filterBooks([makeBook()], { query: "", activeTag: "essays" }, chapterTitles())).toEqual(
+      [],
+    );
   });
 
   it("standalone article tag behavior is unchanged (D8-07 regression)", () => {
@@ -187,8 +172,7 @@ describe("tag filtering — book tags surface the BOOK row only (D12-04)", () =>
       provenance: {
         title: "Plato's Republic",
         retrievedAt: "2026-01-01T00:00:00.000Z",
-        originalHtmlHash:
-          "0000000000000000000000000000000000000000000000000000000000000000",
+        originalHtmlHash: "0000000000000000000000000000000000000000000000000000000000000000",
       },
       tags: ["essays"],
     });

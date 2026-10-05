@@ -108,9 +108,7 @@ test.describe("PORT-03 — highlights Markdown export content", () => {
     // count-suffix-tolerant /^Highlights and notes/ regex shape from
     // annotations/_fixtures.ts drawerTrigger, inlined — this suite does not
     // import that helper).
-    await page
-      .getByRole("button", { name: /^Highlights and notes/ })
-      .click();
+    await page.getByRole("button", { name: /^Highlights and notes/ }).click();
     await expect(page.locator("dialog.annotations-drawer")).toBeVisible({
       timeout: 15_000,
     });

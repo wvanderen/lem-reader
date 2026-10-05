@@ -48,12 +48,7 @@ import {
  * module's concern); the three stage arms are article-budget concepts
  * represented ONLY here, on the type this stage and 20-06 both consume.
  * No widening of the 20-01 union. */
-export type AssetResolution =
-  | ImageAsset
-  | ImageAssetRefusal
-  | "count"
-  | "budget"
-  | "deadline";
+export type AssetResolution = ImageAsset | ImageAssetRefusal | "count" | "budget" | "deadline";
 
 /** http(s) predicate — the collect step's admission filter. data: and every
  * other scheme are NEVER collected: they are already refused upstream by the
@@ -203,8 +198,7 @@ export async function runAssetStage(
 
   // ── Deadline gate + bounded-concurrency fetch over the admitted srcs ────
   const deadlineAt = Date.now() + (options.deadlineMs ?? ASSET_STAGE_DEADLINE_MS);
-  const expired = (): boolean =>
-    options.signal?.aborted === true || Date.now() >= deadlineAt;
+  const expired = (): boolean => options.signal?.aborted === true || Date.now() >= deadlineAt;
 
   const fetched = new Map<string, AssetResolution>();
   let cursor = 0;

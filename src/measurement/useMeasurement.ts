@@ -110,8 +110,7 @@ export function useMeasurement(
     // eligible — otherwise no Pretext work happens and the guard is dead
     // weight (saves the per-block text walk on every measurement pass).
     const anyEligible =
-      eligibility.paragraph.pretextEligible ||
-      eligibility.heading.pretextEligible;
+      eligibility.paragraph.pretextEligible || eligibility.heading.pretextEligible;
     const driftGuard = anyEligible
       ? new RuntimeDriftGuard({
           tolerancePx: RUNTIME_DRIFT_TOLERANCE_PX,
@@ -157,8 +156,7 @@ export function useMeasurement(
     // test viewport). Gated behind import.meta.env.DEV — stripped from the
     // production build (mirrors __lemPagination + __lemLastTrustedConstraints).
     if (import.meta.env.DEV) {
-      (window as unknown as Record<string, unknown>).__lemDiagnosticBus =
-        diagnostics;
+      (window as unknown as Record<string, unknown>).__lemDiagnosticBus = diagnostics;
     }
     return () => {
       coalescerRef.current = null;

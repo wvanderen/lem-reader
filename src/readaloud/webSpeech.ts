@@ -99,9 +99,7 @@ export function probeVoices(timeoutMs = 2000): Promise<VoiceChoice[]> {
 export function filterVoiceChoices(voices: readonly VoiceChoice[]): VoiceChoice[] {
   const local = voices.filter((v) => v.localService);
   const chosen = local.length > 0 ? local : [...voices];
-  return chosen.sort(
-    (a, b) => a.name.localeCompare(b.name) || a.lang.localeCompare(b.lang),
-  );
+  return chosen.sort((a, b) => a.name.localeCompare(b.name) || a.lang.localeCompare(b.lang));
 }
 
 /**

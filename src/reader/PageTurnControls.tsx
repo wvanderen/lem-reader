@@ -153,11 +153,7 @@ export function PageTurnControls({
         // preventDefault ONLY on handled keys so the key does not also scroll.
         event.preventDefault();
         handleTurn("next");
-      } else if (
-        key === "PageUp" ||
-        key === "ArrowLeft" ||
-        (key === " " && event.shiftKey)
-      ) {
+      } else if (key === "PageUp" || key === "ArrowLeft" || (key === " " && event.shiftKey)) {
         event.preventDefault();
         handleTurn("previous");
       }
@@ -238,9 +234,7 @@ export function PageTurnControls({
     };
   }, []);
 
-  return (
-    <StatusRegion className="visually-hidden">{announce}</StatusRegion>
-  );
+  return <StatusRegion className="visually-hidden">{announce}</StatusRegion>;
 }
 
 /**
@@ -303,8 +297,7 @@ function isFocusInContent(active: Element | null, articleEl: HTMLElement | null)
  */
 export function focusNewPageTop(articleEl: HTMLElement | null): void {
   if (!articleEl) return;
-  const pageFragment =
-    articleEl.querySelector<HTMLElement>(".page-fragment");
+  const pageFragment = articleEl.querySelector<HTMLElement>(".page-fragment");
   if (!pageFragment) return;
   pageFragment
     .querySelectorAll<HTMLElement>(":scope > [data-block-index][tabindex='-1']")

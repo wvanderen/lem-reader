@@ -40,11 +40,7 @@ import { useMemo, useState } from "react";
 import type { Book, CanonicalArticle } from "../../content/schema";
 import { TagEntry } from "../../reader/TagEntry";
 import { setBookTags } from "./tagsStore";
-import {
-  deriveBookProgress,
-  resolveResumeChapterId,
-  chapterOrdinal,
-} from "./bookProgress";
+import { deriveBookProgress, resolveResumeChapterId, chapterOrdinal } from "./bookProgress";
 import { bookReadingState } from "./readingState";
 import { LibraryRow } from "./LibraryRow";
 import { RowProgress, RowTags } from "./RowAnatomy";
@@ -63,12 +59,7 @@ interface BookRowProps {
   onRemove: () => void;
 }
 
-export function BookRow({
-  book,
-  chapters,
-  snapshot,
-  onRemove,
-}: BookRowProps) {
+export function BookRow({ book, chapters, snapshot, onRemove }: BookRowProps) {
   const [open, setOpen] = useState(false);
 
   // D12-03 book progress + D12-07 resume target — pure derivations, zero
@@ -77,10 +68,8 @@ export function BookRow({
   // is the snapshot's ONE precomputed fold — Issue #8, never a re-fold).
   const progress = useMemo(
     () =>
-      deriveBookProgress(
-        book,
-        snapshot.latestLocationByArticleId,
-        (articleId) => snapshot.totalsByArticleId.get(articleId),
+      deriveBookProgress(book, snapshot.latestLocationByArticleId, (articleId) =>
+        snapshot.totalsByArticleId.get(articleId),
       ),
     [book, snapshot],
   );
@@ -110,10 +99,8 @@ export function BookRow({
   // (readingState.ts); the progress memo above stays untouched because
   // the hairline ratio still needs it.
   const isFinished =
-    bookReadingState(
-      book,
-      snapshot.latestLocationByArticleId,
-      (articleId) => snapshot.totalsByArticleId.get(articleId),
+    bookReadingState(book, snapshot.latestLocationByArticleId, (articleId) =>
+      snapshot.totalsByArticleId.get(articleId),
     ) === "finished";
   const chaptersRegionId = `chapters-${book.id}`;
   const chapterCount = book.chapterArticleIds.length;
@@ -129,9 +116,7 @@ export function BookRow({
   // guard below is the ONLY consumer of the sentinel and the derivation
   // can't silently read as "chapter 0".
   const ordinal: number | null =
-    inProgress && resumeChapterId !== null
-      ? chapterOrdinal(book, resumeChapterId)
-      : null;
+    inProgress && resumeChapterId !== null ? chapterOrdinal(book, resumeChapterId) : null;
 
   return (
     <li className="book-row">
@@ -151,10 +136,10 @@ export function BookRow({
           </h2>
           {/* Issue #67 — ONE metaline: kind+TOC size · authors · position. */}
           <div className="library-card-meta">
-            <p className="meta">Book · {chapterCount} {chapterCount === 1 ? "chapter" : "chapters"}</p>
-            {book.authors.length > 0 && (
-              <p className="meta">{book.authors.join(", ")}</p>
-            )}
+            <p className="meta">
+              Book · {chapterCount} {chapterCount === 1 ? "chapter" : "chapters"}
+            </p>
+            {book.authors.length > 0 && <p className="meta">{book.authors.join(", ")}</p>}
             {ordinal !== null && (
               <p className="meta">
                 Chapter {ordinal} of {chapterCount}

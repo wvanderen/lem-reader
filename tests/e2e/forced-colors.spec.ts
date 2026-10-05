@@ -9,11 +9,7 @@ import { test, expect } from "@playwright/test";
 import { assertEdgeInvariant } from "./_edge-invariant";
 // Plan 21-06 (D21-14 / ACPT-08) — the four-destination matrix cells below
 // (additive import; the cells are additive to the reader cells above).
-import {
-  DESTINATIONS,
-  assertDestinationInvariant,
-  openEdgeDestination,
-} from "./_edge-invariant";
+import { DESTINATIONS, assertDestinationInvariant, openEdgeDestination } from "./_edge-invariant";
 import { FIXTURES, wipeDatabase, openArticle } from "./annotations/_fixtures";
 import {
   confidentHighlightOn,
@@ -49,18 +45,12 @@ test.describe("Forced colors (A11Y-05)", () => {
     // invisible. Scope the clone subtree out (the _fixtures.ts visible-
     // surface selector discipline). During the paginated pending window no
     // anchor matches yet; the poll settles once the surface mounts.
-    const link = page
-      .locator(".article-body a:not(.article-body-measurement a)")
-      .first();
+    const link = page.locator(".article-body a:not(.article-body-measurement a)").first();
     await expect(link).toBeVisible();
-    const td = await link.evaluate(
-      (el) => window.getComputedStyle(el).textDecoration,
-    );
+    const td = await link.evaluate((el) => window.getComputedStyle(el).textDecoration);
     // `text-decoration` shorthand includes line, style, color. We just assert
     // that the line is present (underline or "line-through underline" etc.).
-    expect(td.toLowerCase(), `link underline lost under forced-colors`).toContain(
-      "underline",
-    );
+    expect(td.toLowerCase(), `link underline lost under forced-colors`).toContain("underline");
   });
 
   test("gear open/closed distinction is conveyed by aria-expanded (beyond color)", async ({
@@ -157,12 +147,8 @@ test.describe("Forced colors (A11Y-05)", () => {
     // so Dexie re-declares its schema before seeding (the 10-03 fix).
     await page.goto(`${BASE}/#/`);
     await page.reload();
-    await expect(
-      page.getByRole("heading", { name: "Saved articles" }),
-    ).toBeVisible();
-    await expect(
-      page.getByText("Getting started with Lem Reader").first(),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible();
+    await expect(page.getByText("Getting started with Lem Reader").first()).toBeVisible();
     const article = makeArticle({
       id: "fc-review-corpus",
       title: "Notes on the Lighthouse Ledger",
@@ -203,16 +189,10 @@ test.describe("Forced colors (A11Y-05)", () => {
       ],
     });
     await page.goto(`${BASE}/#/highlights`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Highlights" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
     // The emulation is genuinely active on this page (not just configured).
-    const forced = await page.evaluate(() =>
-      window.matchMedia("(forced-colors: active)").matches,
-    );
-    expect(forced, "forced-colors emulation must be active on #/highlights").toBe(
-      true,
-    );
+    const forced = await page.evaluate(() => window.matchMedia("(forced-colors: active)").matches);
+    expect(forced, "forced-colors emulation must be active on #/highlights").toBe(true);
     // Row + badge text keeps a non-transparent forced color — the text
     // survives the palette override (legibility signal, not a specific
     // engine color value).
@@ -221,21 +201,16 @@ test.describe("Forced colors (A11Y-05)", () => {
         .locator(sel)
         .first()
         .evaluate((el) => window.getComputedStyle(el).color);
-      expect(
-        color,
-        `${sel} must keep a non-transparent forced color under forced-colors`,
-      ).not.toBe("rgba(0, 0, 0, 0)");
+      expect(color, `${sel} must keep a non-transparent forced color under forced-colors`).not.toBe(
+        "rgba(0, 0, 0, 0)",
+      );
       expect(color).not.toBe("transparent");
     }
     // The badge conveys its state as TEXT (beyond-color, the A11Y-05 bar).
-    await expect(page.locator(".review-badge").first()).toContainText(
-      "Article missing",
-    );
+    await expect(page.locator(".review-badge").first()).toContainText("Article missing");
     // Operable under emulation: the confident row's jump link opens the
     // article (a real reader click path).
-    const rowButton = page
-      .getByRole("link", { name: /^Go to highlight:/ })
-      .first();
+    const rowButton = page.getByRole("link", { name: /^Go to highlight:/ }).first();
     await expect(rowButton).toBeEnabled();
     await rowButton.click();
     await expect(
@@ -258,9 +233,7 @@ test.describe("Forced colors (A11Y-05)", () => {
   // outlines, checked state); this adds the consolidated invariant.
   // Strengthen-only — no existing assertion removed (D6-12).
   for (const fixture of FIXTURES) {
-    test(`shared invariant holds under forced-colors @ ${fixture} (D6-09)`, async ({
-      page,
-    }) => {
+    test(`shared invariant holds under forced-colors @ ${fixture} (D6-09)`, async ({ page }) => {
       await openArticle(page, fixture);
       await assertEdgeInvariant(page, {
         fixture,

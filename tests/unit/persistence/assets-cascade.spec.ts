@@ -162,9 +162,7 @@ function sampleBookFixture(): { book: Book; chapters: CanonicalArticle[] } {
         retrievedAt: "2026-08-31T00:00:00.000Z",
         originalHtmlHash: "sha256:" + hashChar.repeat(64),
       },
-      blocks: [
-        { kind: "paragraph", content: [{ text: "Chapter body.", marks: [] }] },
-      ],
+      blocks: [{ kind: "paragraph", content: [{ text: "Chapter body.", marks: [] }] }],
       footnotes: [],
       ingestionMeta: {
         source: "epub-chapter",
@@ -203,9 +201,7 @@ async function saveBookWithAssets(
 // Dexie creating hooks persist across tests — the SAME function reference
 // is registered via hook("creating", fn) and deregistered via
 // hook("creating").unsubscribe(fn) in afterEach (cross-test bleed guard).
-let injectedCreatingHook:
-  | ((primKey: unknown, obj: { assetId?: string }) => void)
-  | null = null;
+let injectedCreatingHook: ((primKey: unknown, obj: { assetId?: string }) => void) | null = null;
 
 // ── Task 1: assetsStore seam (v6 store + Zod-validated reads) ───────────────
 
@@ -263,10 +259,7 @@ describe("assetsStore — put/bulkGet round-trip + corrupt-row drops (20-03 Task
       createdAt: "2026-08-31T00:00:00.000Z",
     } as unknown as Parameters<typeof db.assets.put>[0]);
 
-    const read = await bulkGetAssets("asset-article-slug", [
-      good.assetId,
-      "not-img-shaped",
-    ]);
+    const read = await bulkGetAssets("asset-article-slug", [good.assetId, "not-img-shaped"]);
     expect(read.ok).toBe(true);
     if (!read.ok) throw new Error("expected ok read");
     // The corrupt row is dropped; the valid sibling survives.
@@ -331,10 +324,7 @@ describe("LibrarySource.save — ONE transaction, upsert replacement (20-03 Task
     const article = sampleArticle();
     const asset = sampleAsset("bbbb");
 
-    const creatingHook = (
-      _primKey: unknown,
-      obj: { assetId?: string },
-    ): void => {
+    const creatingHook = (_primKey: unknown, obj: { assetId?: string }): void => {
       if (obj?.assetId === asset.assetId) {
         throw new Error("injected asset-put failure");
       }
@@ -343,9 +333,9 @@ describe("LibrarySource.save — ONE transaction, upsert replacement (20-03 Task
     db.assets.hook("creating", creatingHook);
 
     const source = new DexieLibrarySource();
-    await expect(
-      saveArticleWithAssets(article, [asset]),
-    ).rejects.toThrow("injected asset-put failure");
+    await expect(saveArticleWithAssets(article, [asset])).rejects.toThrow(
+      "injected asset-put failure",
+    );
 
     // FULL rollback: no article row, no asset rows — the transaction
     // guarantees neither landed.
@@ -400,10 +390,7 @@ describe("LibrarySource.remove — asset rows cascade in the SAME transaction (2
     const source = new DexieLibrarySource();
     const article = sampleArticle();
 
-    await saveArticleWithAssets(article, [
-      sampleAsset("1234"),
-      sampleAsset("5678"),
-    ]);
+    await saveArticleWithAssets(article, [sampleAsset("1234"), sampleAsset("5678")]);
     // Seed the existing cascade surface too — the assets delete joins the
     // SAME transaction as highlights/notes/location.
     await db.highlights.put({
@@ -479,9 +466,7 @@ describe("booksStore — per-chapter asset upsert + removeBook cascade (20-03 Ta
       { ...sampleAsset("2222"), articleId: c01.id },
     ]);
     // Re-save with a different asset set per chapter.
-    await saveBookWithAssets(book, chapters, [
-      { ...sampleAsset("3333"), articleId: c00.id },
-    ]);
+    await saveBookWithAssets(book, chapters, [{ ...sampleAsset("3333"), articleId: c00.id }]);
 
     expect(await db.assets.count()).toBe(1);
     const row = (await db.assets.toArray())[0];

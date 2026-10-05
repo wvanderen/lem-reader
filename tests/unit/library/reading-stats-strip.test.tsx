@@ -22,11 +22,7 @@ import type { ReadingSessionRecord } from "../../../src/content/schema";
 import { EMPTY_LIBRARY_SNAPSHOT } from "../../../src/ingestion/library/librarySnapshot";
 import type { LibrarySnapshot } from "../../../src/ingestion/library/librarySnapshot";
 
-function session(
-  id: string,
-  articleId: string,
-  activeSeconds: number,
-): ReadingSessionRecord {
+function session(id: string, articleId: string, activeSeconds: number): ReadingSessionRecord {
   return ReadingSessionRecordSchema.parse({
     schemaVersion: 1,
     id,
@@ -64,11 +60,7 @@ function snapshotWith(
   } as LibrarySnapshot;
 }
 
-function renderStrip(
-  sessions: ReadingSessionRecord[],
-  finishedCount = 0,
-  ready = true,
-) {
+function renderStrip(sessions: ReadingSessionRecord[], finishedCount = 0, ready = true) {
   return render(
     <ReadingStatsStrip
       snapshot={snapshotWith(sessions)}
@@ -92,10 +84,7 @@ describe("ReadingStatsStrip — spare-chrome nulls", () => {
 
 describe("ReadingStatsStrip — the ambient sentence", () => {
   it("reads the sentence in plain document order (plural visits)", () => {
-    renderStrip([
-      session("v1", "article-a", 120),
-      session("v2", "article-a", 180),
-    ]);
+    renderStrip([session("v1", "article-a", 120), session("v2", "article-a", 180)]);
     const strip = screen.getByText(/You've read/);
     expect(strip.textContent).toBe("You've read 5 min across 2 visits.");
   });
@@ -130,7 +119,9 @@ describe("ReadingStatsStrip — ambient discipline (issue #38)", () => {
     renderStrip([session("v1", "article-a", 120)], 2);
     const strip = document.querySelector(".library-stats-strip");
     expect(strip).not.toBeNull();
-    expect(strip!.querySelectorAll("a, button, input, select, textarea, [tabindex]")).toHaveLength(0);
+    expect(strip!.querySelectorAll("a, button, input, select, textarea, [tabindex]")).toHaveLength(
+      0,
+    );
   });
 
   it("carries no streaks, goals, daily targets, or words-read vocabulary", () => {

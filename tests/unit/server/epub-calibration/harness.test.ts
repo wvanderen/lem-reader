@@ -287,9 +287,7 @@ describe("validateEvidence", () => {
     delete evidence.results[0]!.anchorRoundTrip;
     const res = validateEvidence(parseManifest(VALID_MANIFEST), evidence);
     expect(res.ok).toBe(false);
-    expect(
-      res.ok === false && res.problems.some((p) => /not admitted/i.test(p)),
-    ).toBe(true);
+    expect(res.ok === false && res.problems.some((p) => /not admitted/i.test(p))).toBe(true);
   });
 
   it("fails when an admitted result's chapterCount is wrong", () => {
@@ -297,9 +295,9 @@ describe("validateEvidence", () => {
     evidence.results[0]!.chapterCount = 11; // expected 12
     const res = validateEvidence(parseManifest(VALID_MANIFEST), evidence);
     expect(res.ok).toBe(false);
-    expect(
-      res.ok === false && res.problems.some((p) => /chapter count mismatch/i.test(p)),
-    ).toBe(true);
+    expect(res.ok === false && res.problems.some((p) => /chapter count mismatch/i.test(p))).toBe(
+      true,
+    );
   });
 
   it("fails when an admitted result's chapterCount is missing", () => {
@@ -307,9 +305,7 @@ describe("validateEvidence", () => {
     delete evidence.results[0]!.chapterCount;
     const res = validateEvidence(parseManifest(VALID_MANIFEST), evidence);
     expect(res.ok).toBe(false);
-    expect(
-      res.ok === false && res.problems.some((p) => /lacks chapterCount/i.test(p)),
-    ).toBe(true);
+    expect(res.ok === false && res.problems.some((p) => /lacks chapterCount/i.test(p))).toBe(true);
   });
 
   it("fails when the fallback partition fired on a book whose TOC resolves (Pitfall 1)", () => {
@@ -317,9 +313,7 @@ describe("validateEvidence", () => {
     evidence.results[1]!.fallbackUsed = true; // collection-ncx resolves
     const res = validateEvidence(parseManifest(VALID_MANIFEST), evidence);
     expect(res.ok).toBe(false);
-    expect(
-      res.ok === false && res.problems.some((p) => /whose TOC resolves/i.test(p)),
-    ).toBe(true);
+    expect(res.ok === false && res.problems.some((p) => /whose TOC resolves/i.test(p))).toBe(true);
   });
 
   it("permits fallback on a book whose TOC does not resolve (honest expectation)", () => {
@@ -334,9 +328,7 @@ describe("validateEvidence", () => {
     delete evidence.results[0]!.fallbackUsed;
     const res = validateEvidence(parseManifest(VALID_MANIFEST), evidence);
     expect(res.ok).toBe(false);
-    expect(
-      res.ok === false && res.problems.some((p) => /lacks fallbackUsed/i.test(p)),
-    ).toBe(true);
+    expect(res.ok === false && res.problems.some((p) => /lacks fallbackUsed/i.test(p))).toBe(true);
   });
 
   it("fails when an admitted result's anchorRoundTrip flag is missing", () => {
@@ -344,9 +336,7 @@ describe("validateEvidence", () => {
     delete evidence.results[0]!.anchorRoundTrip;
     const res = validateEvidence(parseManifest(VALID_MANIFEST), evidence);
     expect(res.ok).toBe(false);
-    expect(
-      res.ok === false && res.problems.some((p) => /anchorRoundTrip/i.test(p)),
-    ).toBe(true);
+    expect(res.ok === false && res.problems.some((p) => /anchorRoundTrip/i.test(p))).toBe(true);
   });
 
   it("fails when an admitted result's anchorRoundTrip is false", () => {

@@ -36,13 +36,7 @@
 
 import { useSettings } from "../settings/SettingsContext";
 import { ModeToggle } from "./ModeToggle";
-import {
-  GearIcon,
-  HighlighterIcon,
-  TagIcon,
-  ContentsIcon,
-  PlusIcon,
-} from "../ui/icons";
+import { GearIcon, HighlighterIcon, TagIcon, ContentsIcon, PlusIcon } from "../ui/icons";
 
 interface HeaderProps {
   onOpenSettings: () => void;
@@ -157,12 +151,12 @@ export function Header({
   onToggleTags,
   tocOpen,
   onToggleToc,
-    destination,
-    readTarget,
-    openArticleId,
-    addOpen,
-    onOpenAdd,
-  }: HeaderProps) {
+  destination,
+  readTarget,
+  openArticleId,
+  addOpen,
+  onOpenAdd,
+}: HeaderProps) {
   // Header is a useSettings consumer so the toggle's aria-pressed + glyph
   // reflect the LIVE preference without App prop-drilling. App stays unchanged.
   const { settings } = useSettings();
@@ -209,10 +203,7 @@ export function Header({
           nav landmarks stay distinguishable in the a11y tree.
         */}
         <nav className="shell-nav" aria-label="Primary">
-          <a
-            href="#/"
-            aria-current={destination === "library" ? "page" : undefined}
-          >
+          <a href="#/" aria-current={destination === "library" ? "page" : undefined}>
             Library
           </a>
           {/*
@@ -221,16 +212,10 @@ export function Header({
             collapses its destinations), between Library and Highlights so
             the reading destinations keep their order.
           */}
-          <a
-            href="#/discover"
-            aria-current={destination === "discover" ? "page" : undefined}
-          >
+          <a href="#/discover" aria-current={destination === "discover" ? "page" : undefined}>
             Discover
           </a>
-          <a
-            href="#/highlights"
-            aria-current={destination === "highlights" ? "page" : undefined}
-          >
+          <a href="#/highlights" aria-current={destination === "highlights" ? "page" : undefined}>
             Highlights
           </a>
           {/*
@@ -248,8 +233,7 @@ export function Header({
               href={`#/article/${readTarget.articleId}`}
               aria-label="Continue reading"
               aria-current={
-                destination === "reader" &&
-                openArticleId === readTarget.articleId
+                destination === "reader" && openArticleId === readTarget.articleId
                   ? "page"
                   : undefined
               }
@@ -376,9 +360,7 @@ export function Header({
           Article-scoped triggers stay in the shell header, NOT content
           headers (D15-18).
         */}
-        {articleMounted && (
-          <ModeToggle mode={settings.readingMode} onToggle={onToggleMode} />
-        )}
+        {articleMounted && <ModeToggle mode={settings.readingMode} onToggle={onToggleMode} />}
         <button
           type="button"
           className="btn btn-icon gear-button"

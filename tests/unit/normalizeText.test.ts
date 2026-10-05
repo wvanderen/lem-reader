@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ArticleSchema } from "../../src/content/schema";
-import {
-  BLOCK_SEPARATOR,
-  normalizeRunText,
-  normalizeText,
-} from "../../src/content/normalizeText";
+import { BLOCK_SEPARATOR, normalizeRunText, normalizeText } from "../../src/content/normalizeText";
 import type { CanonicalArticle } from "../../src/content/types";
 
 /**

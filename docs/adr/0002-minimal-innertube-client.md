@@ -14,4 +14,5 @@ The server fetches YouTube transcripts with a ~300-line project-owned InnerTube 
 - No server-side cache, no retry: re-fetching a transcript is a reader action, and the saved article persists in the local library.
 
 ---
+
 Decided in [Transcript fetch client & cache posture: youtubei.js vs minimal InnerTube client](https://github.com/wvanderen/lem-reader/issues/27), 2026-09-16.

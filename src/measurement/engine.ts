@@ -55,11 +55,7 @@
 
 import type { CanonicalArticle } from "../content/types";
 import type { ReaderSettings } from "../content/schema";
-import type {
-  Constraints,
-  EligibilityState,
-  MeasurementResult,
-} from "./types";
+import type { Constraints, EligibilityState, MeasurementResult } from "./types";
 import type { BlockMeasurement } from "./types";
 import { Epoch } from "./epoch";
 import { AbortError, awaitFontsReady } from "./fontGate";
@@ -77,8 +73,7 @@ import { COMMITTED_FINGERPRINT } from "./fingerprint";
  * its RUNTIME_DRIFT_TOLERANCE_PX explicitly so the dispatch and the drift
  * guard share one bound in production.
  */
-const DEFAULT_DRIFT_TOLERANCE_PX =
-  COMMITTED_FINGERPRINT.toleranceBound?.heightDriftPx ?? 1.0;
+const DEFAULT_DRIFT_TOLERANCE_PX = COMMITTED_FINGERPRINT.toleranceBound?.heightDriftPx ?? 1.0;
 
 /** DOM-only eligibility default (seeded from the fingerprint by the hook). */
 const DEFAULT_ELIGIBILITY: EligibilityState = {
@@ -383,8 +378,7 @@ export class MeasurementEngine {
           lineBoxes: [],
         };
         const drift = Math.abs(dom.heightPx - prediction.height);
-        const agrees =
-          drift <= this.driftTolerancePx && prediction.lineCount === dom.lineCount;
+        const agrees = drift <= this.driftTolerancePx && prediction.lineCount === dom.lineCount;
         // Feed the guard every usable pair; its sampleSize cap decides how
         // many actually get compared (D3-08 — the engine need not know N).
         predictions.push(predictionBlock);
@@ -491,10 +485,7 @@ function letterSpacingPxForPreset(settings: ReaderSettings): number {
  * invokes this per block (issue 6 wiring); the runtime drift guard's
  * downgrades mutate the eligibility the next pass consults here.
  */
-export function chooseStrategy(
-  kind: BlockKind,
-  eligibility: EligibilityState,
-): "pretext" | "dom" {
+export function chooseStrategy(kind: BlockKind, eligibility: EligibilityState): "pretext" | "dom" {
   switch (kind) {
     case "heading":
       return eligibility.heading.pretextEligible ? "pretext" : "dom";

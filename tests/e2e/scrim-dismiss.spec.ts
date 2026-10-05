@@ -38,10 +38,7 @@ test.describe("Backdrop scrim dismissal (260908-o0w)", () => {
       point.x > box!.x + box!.width ||
       point.y < box!.y ||
       point.y > box!.y + box!.height;
-    expect(
-      outside,
-      "scrim click point must be outside the settings panel box",
-    ).toBe(true);
+    expect(outside, "scrim click point must be outside the settings panel box").toBe(true);
 
     // The real mouse click on the dimmed ::backdrop dismisses the dialog
     // through the open-prop mirror (parent flips open → dlg.close()).
@@ -49,14 +46,10 @@ test.describe("Backdrop scrim dismissal (260908-o0w)", () => {
     await expect(dlg).toBeHidden();
   });
 
-  test("clicking the dimmed backdrop closes the Add dialog (onCancel path)", async ({
-    page,
-  }) => {
+  test("clicking the dimmed backdrop closes the Add dialog (onCancel path)", async ({ page }) => {
     await wipeDatabase(page);
     await page.goto(`${BASE}/#/`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
 
     // Open the Add dialog via the Library header trigger (the established
     // panel-keyboard locator, reused verbatim).
@@ -74,10 +67,7 @@ test.describe("Backdrop scrim dismissal (260908-o0w)", () => {
       point.x > box!.x + box!.width ||
       point.y < box!.y ||
       point.y > box!.y + box!.height;
-    expect(
-      outside,
-      "scrim click point must be outside the add dialog box",
-    ).toBe(true);
+    expect(outside, "scrim click point must be outside the add dialog box").toBe(true);
 
     await page.mouse.click(point.x, point.y);
     await expect(dlg).toBeHidden();

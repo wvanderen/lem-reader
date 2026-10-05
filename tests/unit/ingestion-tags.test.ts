@@ -99,9 +99,7 @@ describe("tagsStore (08-02 Task 2)", () => {
     const { loadAllTags } = await loadTagsStore();
     const { DexieLibrarySource } = await loadLibrarySource();
     const source = new DexieLibrarySource();
-    await source.save(
-      sampleArticle({ id: "a", tags: ["philosophy", "essay"] }),
-    );
+    await source.save(sampleArticle({ id: "a", tags: ["philosophy", "essay"] }));
 
     const tags = await loadAllTags();
     // localeCompare sort: "essay" < "philosophy"
@@ -327,8 +325,12 @@ describe("setHighlightTags (issue #116)", () => {
     await seedHighlight();
     let release!: () => void;
     let started!: () => void;
-    const reading = new Promise<void>((resolve) => { started = resolve; });
-    const delay = new Promise<void>((resolve) => { release = resolve; });
+    const reading = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const delay = new Promise<void>((resolve) => {
+      release = resolve;
+    });
     const read = vi.spyOn(dexieLibrarySource, "list").mockImplementationOnce(async () => {
       started();
       await delay;
@@ -351,7 +353,9 @@ describe("setHighlightTags (issue #116)", () => {
     const { setHighlightTags } = await loadTagsStore();
     const { db } = await import("../../src/persistence/db");
     await seedHighlight();
-    const update = vi.spyOn(db.highlights, "update").mockRejectedValueOnce(new Error("save failed"));
+    const update = vi
+      .spyOn(db.highlights, "update")
+      .mockRejectedValueOnce(new Error("save failed"));
     try {
       const failure = setHighlightTags("hl-tag-seed-1", []);
       const retry = setHighlightTags("hl-tag-seed-1", ["retry"]);
@@ -367,9 +371,7 @@ describe("setHighlightTags (issue #116)", () => {
     const { setHighlightTags } = await loadTagsStore();
     // Resolves with the routed array (the write contract); the missing row
     // means nothing was written (Dexie update returned 0 rows).
-    await expect(
-      setHighlightTags("does-not-exist", ["tag"]),
-    ).resolves.toEqual(["tag"]);
+    await expect(setHighlightTags("does-not-exist", ["tag"])).resolves.toEqual(["tag"]);
     const { loadAllHighlights } = await import("../../src/persistence/highlightsStore");
     expect(await loadAllHighlights()).toEqual([]);
   });

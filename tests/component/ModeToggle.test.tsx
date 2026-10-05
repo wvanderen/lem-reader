@@ -32,13 +32,9 @@ describe("ModeToggle (D4-09)", () => {
 
   it("uses the UI-SPEC aria-label copy naming the current mode", () => {
     const { rerender } = render(<ModeToggle mode="paginated" onToggle={() => {}} />);
-    expect(screen.getByRole("button").getAttribute("aria-label")).toBe(
-      "Reading mode: paginated",
-    );
+    expect(screen.getByRole("button").getAttribute("aria-label")).toBe("Reading mode: paginated");
     rerender(<ModeToggle mode="scrolling" onToggle={() => {}} />);
-    expect(screen.getByRole("button").getAttribute("aria-label")).toBe(
-      "Reading mode: scrolling",
-    );
+    expect(screen.getByRole("button").getAttribute("aria-label")).toBe("Reading mode: scrolling");
   });
 
   it("contains an inline <svg> glyph (the secondary cue beyond aria-pressed)", () => {

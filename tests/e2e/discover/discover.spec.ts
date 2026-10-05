@@ -97,10 +97,7 @@ type FeedStubs = Record<string, unknown>;
 /** Intercept the browser-level POST /api/ingest with canned envelopes
  * keyed by the posted feedUrl (the multi-feed condition). Returns the
  * call-count accessor. */
-async function stubIngestByFeed(
-  page: Page,
-  stubs: FeedStubs,
-): Promise<{ calls: () => number }> {
+async function stubIngestByFeed(page: Page, stubs: FeedStubs): Promise<{ calls: () => number }> {
   let ingestCalls = 0;
   await page.route("**/api/ingest", (route) => {
     if (route.request().method() !== "POST") return route.fallback();
@@ -135,9 +132,7 @@ function primaryNav(page: Page) {
 
 /** Timeline entry titles in DOM order (the newest-first assertions). */
 async function timelineTitles(page: Page): Promise<string[]> {
-  const raw = await page
-    .locator(".discover-timeline .discover-item-title")
-    .allTextContents();
+  const raw = await page.locator(".discover-timeline .discover-item-title").allTextContents();
   return raw.map((title) => title.replace(" (opens in a new tab)", ""));
 }
 
@@ -151,9 +146,7 @@ test.describe("Discover (issues #121 + #123)", () => {
   }) => {
     await page.setViewportSize(NARROW);
     await page.goto(`${BASE}/#/discover`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Discover" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Discover" })).toBeVisible();
 
     // The link is a visible text link at narrow width (never icon-only).
     const link = primaryNav(page).getByRole("link", { name: "Discover" });
@@ -162,17 +155,11 @@ test.describe("Discover (issues #121 + #123)", () => {
     await expect(link).toHaveAttribute("href", "#/discover");
 
     // The empty state: title at the surface's outline level + one sentence.
-    await expect(
-      page.getByRole("heading", { name: "No subscriptions yet." }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "No subscriptions yet." })).toBeVisible();
 
     // The subscribe form is present with its accessible name + hint.
-    await expect(
-      page.getByRole("textbox", { name: "Subscribe to a feed" }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Subscribe" }),
-    ).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Subscribe to a feed" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Subscribe" })).toBeVisible();
   });
 
   test("keyboard: Enter on the shell Discover link navigates; the form is the next focus stop after the nav", async ({
@@ -180,27 +167,19 @@ test.describe("Discover (issues #121 + #123)", () => {
   }) => {
     await page.setViewportSize(NARROW);
     await page.goto(`${BASE}/`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
 
     // Keyboard activation of the text link navigates to the destination.
     await primaryNav(page).getByRole("link", { name: "Discover" }).focus();
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/#\/discover$/);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Discover" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Discover" })).toBeVisible();
 
     // The in-app arrival moves focus to the h1 (the view-switch announce
     // discipline); the next Tab stop is the subscribe input.
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Discover" }),
-    ).toBeFocused();
+    await expect(page.getByRole("heading", { level: 1, name: "Discover" })).toBeFocused();
     await page.keyboard.press("Tab");
-    await expect(
-      page.getByRole("textbox", { name: "Subscribe to a feed" }),
-    ).toBeFocused();
+    await expect(page.getByRole("textbox", { name: "Subscribe to a feed" })).toBeFocused();
   });
 
   test("subscribe: a valid feed URL saves the subscription and renders the timeline entry (title, feed name, date, excerpt, image)", async ({
@@ -208,9 +187,7 @@ test.describe("Discover (issues #121 + #123)", () => {
   }) => {
     await stubIngestByFeed(page, { "https://journal.example.com/feed.xml": FEED_OK });
     await page.goto(`${BASE}/#/discover`);
-    await expect(
-      page.getByRole("heading", { name: "No subscriptions yet." }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "No subscriptions yet." })).toBeVisible();
 
     await subscribe(page, "https://journal.example.com/feed.xml");
 
@@ -222,10 +199,7 @@ test.describe("Discover (issues #121 + #123)", () => {
       name: "On stable reading positions (opens in a new tab)",
     });
     await expect(first).toBeVisible();
-    await expect(first).toHaveAttribute(
-      "href",
-      "https://journal.example.com/stable-positions",
-    );
+    await expect(first).toHaveAttribute("href", "https://journal.example.com/stable-positions");
     await expect(
       page.locator(".discover-item-feed", { hasText: "The Calm Reader Journal" }).first(),
     ).toBeVisible();
@@ -245,9 +219,7 @@ test.describe("Discover (issues #121 + #123)", () => {
     await expect(page.locator(".discover-feed-updated").first()).toHaveText(/^Updated /);
 
     // The input cleared for the next subscribe (the fresh-session shape).
-    await expect(
-      page.getByRole("textbox", { name: "Subscribe to a feed" }),
-    ).toHaveValue("");
+    await expect(page.getByRole("textbox", { name: "Subscribe to a feed" })).toHaveValue("");
 
     // The subscription persists across a reload (local-first), and the
     // reload's refresh-on-open brings the cache back.
@@ -315,9 +287,7 @@ test.describe("Discover (issues #121 + #123)", () => {
     expect(ingest.calls()).toBeGreaterThanOrEqual(2);
   });
 
-  test("refresh happens on OPENING and on request — never on a poll", async ({
-    page,
-  }) => {
+  test("refresh happens on OPENING and on request — never on a poll", async ({ page }) => {
     const ingest = await stubIngestByFeed(page, {
       "https://journal.example.com/feed.xml": FEED_OK,
     });
@@ -328,13 +298,9 @@ test.describe("Discover (issues #121 + #123)", () => {
     // exactly once. (Calls so far: the subscribe fetch + this reopen's
     // refresh — subscribing does NOT re-fetch the feed it just fetched.)
     await primaryNav(page).getByRole("link", { name: "Library" }).click();
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
     await primaryNav(page).getByRole("link", { name: "Discover" }).click();
-    await expect(
-      page.getByRole("heading", { level: 2, name: "Latest articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 2, name: "Latest articles" })).toBeVisible();
     await expect(page.locator(".discover-timeline .discover-item").first()).toBeVisible();
     expect(ingest.calls()).toBe(2);
 
@@ -378,9 +344,7 @@ test.describe("Discover (issues #121 + #123)", () => {
     // last-known-good stamp, Retry — and the cached previews + the feed
     // row STAY.
     const notice = page.locator(".discover-refresh-notice");
-    await expect(notice).toContainText(
-      "Couldn't reach this feed. Showing saved items from ",
-    );
+    await expect(notice).toContainText("Couldn't reach this feed. Showing saved items from ");
     await expect(
       page.getByRole("link", {
         name: "On stable reading positions (opens in a new tab)",
@@ -477,10 +441,12 @@ test.describe("Discover (issues #121 + #123)", () => {
   test("refusal: an invalid candidate is refused with calm copy, the input is preserved, and nothing saves", async ({
     page,
   }) => {
-    await stubIngestByFeed(page, { "https://journal.example.com/broken.xml": {
-      ok: false,
-      reason: "feed-unreadable",
-    } });
+    await stubIngestByFeed(page, {
+      "https://journal.example.com/broken.xml": {
+        ok: false,
+        reason: "feed-unreadable",
+      },
+    });
     await page.goto(`${BASE}/#/discover`);
     const input = page.getByRole("textbox", { name: "Subscribe to a feed" });
     await input.fill("https://journal.example.com/broken.xml");
@@ -488,18 +454,14 @@ test.describe("Discover (issues #121 + #123)", () => {
 
     // The calm refusal (a NO, not an error) + input preserved (D16-11).
     await expect(
-      page
-        .getByRole("status")
-        .filter({
-          hasText: "This feed couldn't be read — it may be malformed or not a feed.",
-        }),
+      page.getByRole("status").filter({
+        hasText: "This feed couldn't be read — it may be malformed or not a feed.",
+      }),
     ).toBeVisible();
     await expect(input).toHaveValue("https://journal.example.com/broken.xml");
 
     // Nothing saved: the empty state still owns the list region.
-    await expect(
-      page.getByRole("heading", { name: "No subscriptions yet." }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "No subscriptions yet." })).toBeVisible();
   });
 
   test("remove: the destructive confirm gates the delete; Keep keeps, Remove removes and announces", async ({
@@ -512,16 +474,12 @@ test.describe("Discover (issues #121 + #123)", () => {
       page.getByRole("heading", { level: 3, name: "The Calm Reader Journal" }),
     ).toBeVisible();
 
-    await page
-      .getByRole("button", { name: "Remove The Calm Reader Journal" })
-      .click();
+    await page.getByRole("button", { name: "Remove The Calm Reader Journal" }).click();
 
     // The confirm dialog: the NON-destructive default holds focus (Pitfall 8).
     const dlg = page.locator("dialog.discover-remove-confirm");
     await expect(dlg).toBeVisible();
-    await expect(
-      dlg.getByRole("heading", { name: "Remove subscription" }),
-    ).toBeVisible();
+    await expect(dlg.getByRole("heading", { name: "Remove subscription" })).toBeVisible();
     await expect(dlg.getByText("Remove The Calm Reader Journal?")).toBeVisible();
 
     // Keep: the subscription stays.
@@ -533,13 +491,9 @@ test.describe("Discover (issues #121 + #123)", () => {
 
     // Remove: the row and its previews go, the empty state returns, the
     // removal announces.
-    await page
-      .getByRole("button", { name: "Remove The Calm Reader Journal" })
-      .click();
+    await page.getByRole("button", { name: "Remove The Calm Reader Journal" }).click();
     await dlg.getByRole("button", { name: "Remove subscription" }).click();
-    await expect(
-      page.getByRole("heading", { name: "No subscriptions yet." }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "No subscriptions yet." })).toBeVisible();
     await expect(
       page.getByRole("status").filter({ hasText: "Subscription removed." }),
     ).toBeVisible();
@@ -583,9 +537,7 @@ test.describe("Discover (issues #121 + #123)", () => {
     // Add the article from the feed's domain through the Library view's
     // Add dialog (D16-02 — the Add trigger lives beside the library h1).
     await primaryNav(page).getByRole("link", { name: "Library" }).click();
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
     await page.getByRole("button", { name: "Add to Library" }).click();
     const addDlg = page.locator("dialog.add-dialog");
     await addDlg
@@ -597,25 +549,17 @@ test.describe("Discover (issues #121 + #123)", () => {
 
     // Remove the subscription that "provided" it.
     await primaryNav(page).getByRole("link", { name: "Discover" }).click();
-    await page
-      .getByRole("button", { name: "Remove The Calm Reader Journal" })
-      .click();
+    await page.getByRole("button", { name: "Remove The Calm Reader Journal" }).click();
     await page
       .locator("dialog.discover-remove-confirm")
       .getByRole("button", { name: "Remove subscription" })
       .click();
-    await expect(
-      page.getByRole("heading", { name: "No subscriptions yet." }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "No subscriptions yet." })).toBeVisible();
 
     // The saved article is untouched in the library.
     await primaryNav(page).getByRole("link", { name: "Library" }).click();
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("link", { name: "A kept essay" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "A kept essay" })).toBeVisible();
   });
 
   test("an invalid (non-URL) input refuses BEFORE any network cost and preserves the input", async ({
@@ -636,9 +580,7 @@ test.describe("Discover (issues #121 + #123)", () => {
       page.getByRole("status").filter({ hasText: "Enter a valid web address." }),
     ).toBeVisible();
     expect(ingestCalls).toBe(0);
-    await expect(
-      page.getByRole("heading", { name: "No subscriptions yet." }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "No subscriptions yet." })).toBeVisible();
   });
 
   test("narrow screens: the timeline and its controls reflow inside the viewport at 320px", async ({
@@ -654,9 +596,7 @@ test.describe("Discover (issues #121 + #123)", () => {
     await subscribe(page, "https://other.example.com/rss.xml");
 
     // Everything the timeline needs is visible at 320px.
-    await expect(
-      page.getByRole("heading", { level: 2, name: "Latest articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 2, name: "Latest articles" })).toBeVisible();
     await expect(page.getByRole("combobox", { name: "Filter by feed" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Refresh" })).toBeVisible();
     await expect(
@@ -742,7 +682,9 @@ test.describe("Discover (issues #121 + #123)", () => {
     ).toHaveAttribute("href", "#/article/journal-example-com-stable-positions");
     await expect(page).toHaveURL(/#\/discover$/);
 
-    await expect(page.getByRole("link", { name: "Open On stable reading positions" })).toBeFocused();
+    await expect(
+      page.getByRole("link", { name: "Open On stable reading positions" }),
+    ).toBeFocused();
 
     // Open is the reader's choice; it navigates in-app to the article.
     await page.getByRole("link", { name: "Open On stable reading positions" }).click();
@@ -753,13 +695,9 @@ test.describe("Discover (issues #121 + #123)", () => {
     // Back to the library: the addition is listed under Unread (a
     // never-opened addition — reading it here WOULD have moved it).
     await primaryNav(page).getByRole("link", { name: "Library" }).click();
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
     await page.getByRole("link", { name: /^Unread \(\d+\)$/ }).click();
-    await expect(
-      page.getByRole("link", { name: "On stable reading positions" }),
-    ).toBeVisible();
+    await expect(page.getByRole("link", { name: "On stable reading positions" })).toBeVisible();
   });
 
   test("duplicate links: the same article in two feeds resolves to ONE library item and both previews read In library", async ({
@@ -795,9 +733,7 @@ test.describe("Discover (issues #121 + #123)", () => {
     await subscribe(page, "https://other.example.com/rss.xml");
 
     // Save from the journal's copy.
-    await page
-      .getByRole("button", { name: "Save On stable reading positions" })
-      .click();
+    await page.getByRole("button", { name: "Save On stable reading positions" }).click();
     await expect(
       page.getByRole("status").filter({ hasText: "Saved to your library." }),
     ).toBeVisible();
@@ -811,7 +747,9 @@ test.describe("Discover (issues #121 + #123)", () => {
 
     // One saved row in the library — not one per feed copy.
     await primaryNav(page).getByRole("link", { name: "Library" }).click();
-    await expect(page.locator(".library-card-link", { hasText: "stable reading positions" })).toHaveCount(1);
+    await expect(
+      page.locator(".library-card-link", { hasText: "stable reading positions" }),
+    ).toHaveCount(1);
 
     // The shared saved state survives a fresh reload (the snapshot
     // derivation, not session state): both copies still read In library.
@@ -889,9 +827,7 @@ test.describe("Discover (issues #121 + #123)", () => {
     await expect(
       page.getByRole("status").filter({ hasText: "Already in your library." }),
     ).toBeVisible();
-    await expect(
-      page.getByRole("link", { name: "Open Shared story" }),
-    ).toHaveCount(2);
+    await expect(page.getByRole("link", { name: "Open Shared story" })).toHaveCount(2);
     const openHref = await page
       .getByRole("link", { name: "Open Shared story" })
       .first()
@@ -906,9 +842,7 @@ test.describe("Discover (issues #121 + #123)", () => {
     await primaryNav(page).getByRole("link", { name: "Library" }).click();
     await expect(page.getByRole("link", { name: "Shared story" })).toHaveCount(1);
     await page.getByRole("link", { name: "Shared story" }).click();
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Shared story" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Shared story" })).toBeVisible();
     // (The reader renders the pagination + scrolling twins of every block,
     // and the inactive twin is visually hidden — attachment, not visibili-
     // ty, is the twin-proof assertion here.)
@@ -945,9 +879,7 @@ test.describe("Discover (issues #121 + #123)", () => {
     await subscribe(page, "https://journal.example.com/feed.xml");
 
     // The calm page-voice refusal — not an error, no crash; the + remains.
-    await page
-      .getByRole("button", { name: "Save On stable reading positions" })
-      .click();
+    await page.getByRole("button", { name: "Save On stable reading positions" }).click();
     await expect(
       page.getByRole("status").filter({ hasText: "This page isn't an article." }),
     ).toBeVisible();
@@ -955,9 +887,7 @@ test.describe("Discover (issues #121 + #123)", () => {
 
     // Retry after the page becomes saveable: the SAME control recovers.
     broken = false;
-    await page
-      .getByRole("button", { name: "Save On stable reading positions" })
-      .click();
+    await page.getByRole("button", { name: "Save On stable reading positions" }).click();
     await expect(
       page.getByRole("status").filter({ hasText: "Saved to your library." }),
     ).toBeVisible();

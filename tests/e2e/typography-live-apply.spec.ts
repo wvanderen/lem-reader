@@ -49,20 +49,14 @@ test.describe("READ-02 typography live-apply (02-04 gap 2)", () => {
     // settings"). Live-apply happens while the panel is open (D2-03 — no
     // Save step).
     await page.getByRole("button", { name: "Reading settings" }).click();
-    await expect(
-      page.getByRole("heading", { name: "Reading settings", level: 2 }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Reading settings", level: 2 })).toBeVisible();
 
     // (a) DEFAULT: body computed font-size is the D-07 default 18px (the
     // --font-size custom property is unset on first paint; the body rule's
     // var(--font-size, 18px) fallback fires; applyTheme then runs on mount
     // and writes 18px via the SettingsProvider effect).
-    const defaultSize = await page.evaluate(
-      () => getComputedStyle(document.body).fontSize,
-    );
-    expect(defaultSize, `expected default body font-size 18px, got ${defaultSize}`).toBe(
-      "18px",
-    );
+    const defaultSize = await page.evaluate(() => getComputedStyle(document.body).fontSize);
+    expect(defaultSize, `expected default body font-size 18px, got ${defaultSize}`).toBe("18px");
 
     // (b) Set the Text size slider to 24. The slider's step is 2 (SIZE_STEPS
     // 16/18/20/22/24), so 3 ArrowUp presses move 18→20→22→24. fill() is not
@@ -74,13 +68,8 @@ test.describe("READ-02 typography live-apply (02-04 gap 2)", () => {
     await slider.press("ArrowUp");
     await slider.press("ArrowUp");
 
-    const sizedUp = await page.evaluate(
-      () => getComputedStyle(document.body).fontSize,
-    );
-    expect(
-      sizedUp,
-      `expected body font-size 24px after slider to 24, got ${sizedUp}`,
-    ).toBe("24px");
+    const sizedUp = await page.evaluate(() => getComputedStyle(document.body).fontSize);
+    expect(sizedUp, `expected body font-size 24px after slider to 24, got ${sizedUp}`).toBe("24px");
 
     // (c) Click the "Spacious" spacing radio. The spacious preset writes
     //    --word-spacing: 0.05em, which at 24px font-size resolves to a
@@ -125,15 +114,11 @@ test.describe("POLISH-09 truthful reading width (21-01 + #18)", () => {
   /** The 88-"0" ruler truth check: a hidden, absolutely-positioned,
    * white-space:pre probe span appended inside the surface measured against
    * the surface's own box width (D21-01 contract at the #18 maximum). */
-  async function expectRulerEqualsSurfaceWidth(
-    page: Page,
-    selector: string,
-  ): Promise<void> {
+  async function expectRulerEqualsSurfaceWidth(page: Page, selector: string): Promise<void> {
     const { ruler, surface, diff } = await page.evaluate((sel) => {
       const el = document.querySelector(sel)!;
       const probe = document.createElement("span");
-      probe.style.cssText =
-        "position:absolute;visibility:hidden;white-space:pre";
+      probe.style.cssText = "position:absolute;visibility:hidden;white-space:pre";
       probe.textContent = "0".repeat(88);
       el.appendChild(probe);
       const w = probe.getBoundingClientRect().width;
@@ -160,8 +145,7 @@ test.describe("POLISH-09 truthful reading width (21-01 + #18)", () => {
     await page.waitForFunction(
       () =>
         document.querySelector(".article-body.paginated-surface") === null &&
-        document.querySelector(".article-body:not(.article-body-measurement)") !==
-          null,
+        document.querySelector(".article-body:not(.article-body-measurement)") !== null,
       undefined,
       { timeout: 10_000 },
     );
@@ -169,9 +153,7 @@ test.describe("POLISH-09 truthful reading width (21-01 + #18)", () => {
     // Open settings and drive the measure slider to far-right via the real
     // control (Home/End are the native range-input endpoint keys).
     await page.getByRole("button", { name: "Reading settings" }).click();
-    await expect(
-      page.getByRole("heading", { name: "Reading settings", level: 2 }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Reading settings", level: 2 })).toBeVisible();
     const slider = page.getByRole("slider", { name: "Reading width" });
     await slider.focus();
     await slider.press("End");
@@ -189,27 +171,20 @@ test.describe("POLISH-09 truthful reading width (21-01 + #18)", () => {
 
     // The token the surfaces consume resolves to 88ch.
     const measureToken = await page.evaluate(() =>
-      getComputedStyle(document.documentElement)
-        .getPropertyValue("--measure")
-        .trim(),
+      getComputedStyle(document.documentElement).getPropertyValue("--measure").trim(),
     );
     expect(measureToken).toBe("88ch");
 
     // (a) Ruler truth in scrolling mode (.article-body max-width:
     // var(--measure) — app.css). The panel may stay open; live-apply has
     // already written the token.
-    await expectRulerEqualsSurfaceWidth(
-      page,
-      ".article-body:not(.article-body-measurement)",
-    );
+    await expectRulerEqualsSurfaceWidth(page, ".article-body:not(.article-body-measurement)");
 
     // (b) Switch to paginated mode via the mode toggle and repeat the
     // ruler assertion against the paginated surface (width:
     // var(--measure) — app.css).
     await page.keyboard.press("Escape"); // close the modal settings dialog
-    await expect(
-      page.getByRole("heading", { name: "Reading settings", level: 2 }),
-    ).toBeHidden();
+    await expect(page.getByRole("heading", { name: "Reading settings", level: 2 })).toBeHidden();
     await modeToggle.click();
     await page.waitForFunction(
       () =>
@@ -226,9 +201,7 @@ test.describe("POLISH-09 truthful reading width (21-01 + #18)", () => {
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 
     await page.getByRole("button", { name: "Reading settings" }).click();
-    await expect(
-      page.getByRole("heading", { name: "Reading settings", level: 2 }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Reading settings", level: 2 })).toBeVisible();
     const slider = page.getByRole("slider", { name: "Reading width" });
     await slider.focus();
     await slider.press("Home");
@@ -236,9 +209,7 @@ test.describe("POLISH-09 truthful reading width (21-01 + #18)", () => {
     await expect(slider).toHaveAttribute("aria-valuenow", "40");
     await expect(slider).toHaveAttribute("aria-valuemin", "40");
     const measureToken = await page.evaluate(() =>
-      getComputedStyle(document.documentElement)
-        .getPropertyValue("--measure")
-        .trim(),
+      getComputedStyle(document.documentElement).getPropertyValue("--measure").trim(),
     );
     expect(measureToken).toBe("40ch");
     // The 320px-reflow / 400%-zoom matrix cells (Plan 06 machinery)

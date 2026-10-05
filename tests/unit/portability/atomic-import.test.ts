@@ -176,9 +176,7 @@ function sampleBook(overrides: Partial<Book> = {}): Book {
 }
 
 /** An epub-chapter article riding the bundle's articles block. */
-function sampleChapterArticle(
-  chapterIndex: 0 | 1,
-): CanonicalArticle {
+function sampleChapterArticle(chapterIndex: 0 | 1): CanonicalArticle {
   return sampleArticle({
     id: `epub-444444444444-c0${chapterIndex}`,
     provenance: {
@@ -218,15 +216,9 @@ function sampleBundle(overrides: Partial<BundleInput> = {}): ExportBundle {
 async function seedLocalConflictSurface(): Promise<void> {
   const { db } = await loadDb();
   await db.articles.put(sampleArticle({ id: "art-local", revision: 1 }));
-  await db.highlights.put(
-    sampleHighlight({ id: "hl-local", articleId: "art-local" }),
-  );
-  await db.notes.put(
-    sampleNote({ id: "note-local", highlightId: "hl-local" }),
-  );
-  await db.location.put(
-    sampleLocation({ articleId: "art-local", revision: 1 }),
-  );
+  await db.highlights.put(sampleHighlight({ id: "hl-local", articleId: "art-local" }));
+  await db.notes.put(sampleNote({ id: "note-local", highlightId: "hl-local" }));
+  await db.location.put(sampleLocation({ articleId: "art-local", revision: 1 }));
 }
 
 /** Count rows in every store — the rollback proof's before/after map. */
@@ -257,9 +249,7 @@ const ALL_SKIP: Overrides = {
 // Dexie creating hooks persist across tests — the SAME function reference is
 // registered via hook("creating", fn) and deregistered via
 // hook("creating").unsubscribe(fn) in afterEach (cross-test bleed guard).
-let injectedCreatingHook:
-  | ((primKey: unknown, obj: { id?: string }) => void)
-  | null = null;
+let injectedCreatingHook: ((primKey: unknown, obj: { id?: string }) => void) | null = null;
 
 // ── Happy path: new + keep-both-rewritten records all land ───────────────────
 
@@ -336,9 +326,7 @@ describe("applyImport — happy path (09-04 Task 3)", () => {
 
     // Locations: compound-key rows landed; art-local's is the newer one.
     expect(await db.location.get(["art-new", 1])).toBeDefined();
-    expect((await db.location.get(["art-local", 1]))?.savedAt).toBe(
-      "2026-08-15T12:00:00.000Z",
-    );
+    expect((await db.location.get(["art-local", 1]))?.savedAt).toBe("2026-08-15T12:00:00.000Z");
 
     // Preferences: db.settings gained the reader-prefs row with the bundle
     // preferences (applyPreferences true).
@@ -449,10 +437,7 @@ describe("applyImport — atomicity / rollback (09-04 Task 3)", () => {
     // Dexie creating hooks fire INSIDE the transaction; a throw rejects the
     // create, propagates out of the closure, and rolls the WHOLE
     // transaction back — every put that already happened is undone.
-    const creatingHook = (
-      _primKey: unknown,
-      obj: { id?: string },
-    ): void => {
+    const creatingHook = (_primKey: unknown, obj: { id?: string }): void => {
       if (obj?.id === SENTINEL_NOTE_ID) {
         throw new Error("injected mid-transaction failure");
       }
@@ -460,9 +445,7 @@ describe("applyImport — atomicity / rollback (09-04 Task 3)", () => {
     injectedCreatingHook = creatingHook;
     db.notes.hook("creating", creatingHook);
 
-    await expect(applyImport(plan)).rejects.toThrow(
-      "injected mid-transaction failure",
-    );
+    await expect(applyImport(plan)).rejects.toThrow("injected mid-transaction failure");
 
     // FULL rollback: every store equals its pre-apply counts.
     const after = await countAllStores();
@@ -527,9 +510,7 @@ describe("applyImport — books + chapters (12-07)", () => {
       const row = await db.articles.get(chapter.id);
       expect(row, `chapter ${chapter.id} must exist`).toBeDefined();
       expect((row as { bookId?: string }).bookId).toBe(book.id);
-      expect((row as { ingestionMeta?: { bookId?: string } }).ingestionMeta?.bookId).toBe(
-        book.id,
-      );
+      expect((row as { ingestionMeta?: { bookId?: string } }).ingestionMeta?.bookId).toBe(book.id);
     }
 
     // The chapter highlight re-resolves confident against the imported
@@ -566,10 +547,7 @@ describe("applyImport — books + chapters (12-07)", () => {
 
     // The books/chapters/highlights puts precede the sentinel note's put —
     // the hook throw must unwind ALL of them.
-    const creatingHook = (
-      _primKey: unknown,
-      obj: { id?: string },
-    ): void => {
+    const creatingHook = (_primKey: unknown, obj: { id?: string }): void => {
       if (obj?.id === SENTINEL_NOTE_ID) {
         throw new Error("injected mid-transaction failure");
       }
@@ -577,9 +555,7 @@ describe("applyImport — books + chapters (12-07)", () => {
     injectedCreatingHook = creatingHook;
     db.notes.hook("creating", creatingHook);
 
-    await expect(applyImport(plan)).rejects.toThrow(
-      "injected mid-transaction failure",
-    );
+    await expect(applyImport(plan)).rejects.toThrow("injected mid-transaction failure");
 
     // FULL rollback: no book row, no chapter rows, no highlight rows.
     const after = await countAllStores();

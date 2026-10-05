@@ -34,11 +34,7 @@ vi.mock("node:dns", () => ({
 }));
 
 import dns from "node:dns";
-import {
-  fetchImageAsset,
-  sniffImageAsset,
-  type ImageAsset,
-} from "../../../server/fetchImageAsset";
+import { fetchImageAsset, sniffImageAsset, type ImageAsset } from "../../../server/fetchImageAsset";
 import { MAX_ASSET_BYTES } from "../../../src/ingestion/types";
 
 const resolve4Mock = dns.promises.resolve4 as unknown as ReturnType<typeof vi.fn>;
@@ -47,35 +43,64 @@ const resolve6Mock = dns.promises.resolve6 as unknown as ReturnType<typeof vi.fn
 // ── Authentic minimal image bytes ────────────────────────────────────────────
 
 const u8 = (...bs: number[]) => new Uint8Array(bs);
-const fromHex = (h: string) =>
-  new Uint8Array(h.match(/../g)!.map((b) => parseInt(b, 16)));
+const fromHex = (h: string) => new Uint8Array(h.match(/../g)!.map((b) => parseInt(b, 16)));
 
 const PNG_SIG = fromHex("89504e470d0a1a0a");
 
 /** PNG chunk: BE length (payload only) + type + payload + CRC zeros. */
 const pngChunk = (type: string, payload: Uint8Array) =>
   u8(
-    0, 0, (payload.length >> 8) & 0xff, payload.length & 0xff,
+    0,
+    0,
+    (payload.length >> 8) & 0xff,
+    payload.length & 0xff,
     ...fromHex(Buffer.from(type, "ascii").toString("hex")),
     ...payload,
-    0, 0, 0, 0,
+    0,
+    0,
+    0,
+    0,
   );
 
 const pngIhdr = (w: number, h: number) =>
   u8(
     ...PNG_SIG,
-    ...pngChunk("IHDR", u8(
-      (w >>> 24) & 0xff, (w >>> 16) & 0xff, (w >>> 8) & 0xff, w & 0xff,
-      (h >>> 24) & 0xff, (h >>> 16) & 0xff, (h >>> 8) & 0xff, h & 0xff,
-      8, 2, 0, 0, 0, // bit depth, truecolor, comp, filter, interlace
-    )),
+    ...pngChunk(
+      "IHDR",
+      u8(
+        (w >>> 24) & 0xff,
+        (w >>> 16) & 0xff,
+        (w >>> 8) & 0xff,
+        w & 0xff,
+        (h >>> 24) & 0xff,
+        (h >>> 16) & 0xff,
+        (h >>> 8) & 0xff,
+        h & 0xff,
+        8,
+        2,
+        0,
+        0,
+        0, // bit depth, truecolor, comp, filter, interlace
+      ),
+    ),
   );
 
 /** One GIF image descriptor + LZW data (the classic 1x1 clear+code block). */
 const gifImageBlock = u8(
-  0x2c, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, // desc 1x1@0,0, no LCT
+  0x2c,
+  0x00,
+  0x00,
+  0x00,
+  0x00,
+  0x01,
+  0x00,
+  0x01,
+  0x00,
+  0x00, // desc 1x1@0,0, no LCT
   0x02, // LZW min code size
-  0x02, 0x44, 0x01, // data sub-block
+  0x02,
+  0x44,
+  0x01, // data sub-block
   0x00, // terminator
 );
 
@@ -84,15 +109,28 @@ const gifHeader = u8(0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00, 0x01, 0x00,
 const STATIC_GIF = u8(...gifHeader, ...gifImageBlock, 0x3b);
 
 const NETSCAPE_EXT = u8(
-  0x21, 0xff, 0x0b,
-  0x4e, 0x45, 0x54, 0x53, 0x43, 0x41, 0x50, 0x45, 0x32, 0x2e, 0x30, // NETSCAPE2.0
-  0x03, 0x01, 0x00, 0x00, // loop sub-block
+  0x21,
+  0xff,
+  0x0b,
+  0x4e,
+  0x45,
+  0x54,
+  0x53,
+  0x43,
+  0x41,
+  0x50,
+  0x45,
+  0x32,
+  0x2e,
+  0x30, // NETSCAPE2.0
+  0x03,
+  0x01,
+  0x00,
+  0x00, // loop sub-block
   0x00,
 );
 
-const ANIMATED_GIF = u8(
-  ...gifHeader, ...NETSCAPE_EXT, ...gifImageBlock, ...gifImageBlock, 0x3b,
-);
+const ANIMATED_GIF = u8(...gifHeader, ...NETSCAPE_EXT, ...gifImageBlock, ...gifImageBlock, 0x3b);
 
 const STATIC_PNG = pngIhdr(1, 1);
 
@@ -109,27 +147,56 @@ const APNG = u8(
 
 const STATIC_WEBP = u8(
   ...fromHex("52494646"), // RIFF
-  0x11, 0x00, 0x00, 0x00, // size 17
+  0x11,
+  0x00,
+  0x00,
+  0x00, // size 17
   ...fromHex("57454250"), // WEBP
   ...fromHex("5650384c"), // VP8L (lossless — no VP8X/ANIM)
-  0x05, 0x00, 0x00, 0x00, // chunk size 5
-  0x2f, 0x00, 0x00, 0x00, 0x00, // sig + w-1/h-1/alpha/version → 1x1
+  0x05,
+  0x00,
+  0x00,
+  0x00, // chunk size 5
+  0x2f,
+  0x00,
+  0x00,
+  0x00,
+  0x00, // sig + w-1/h-1/alpha/version → 1x1
 );
 
 const ANIMATED_WEBP = u8(
   ...fromHex("52494646"), // RIFF
-  0x24, 0x00, 0x00, 0x00, // size 36
+  0x24,
+  0x00,
+  0x00,
+  0x00, // size 36
   ...fromHex("57454250"), // WEBP
   ...fromHex("56503858"), // VP8X (extended)
-  0x0a, 0x00, 0x00, 0x00, // chunk size 10
+  0x0a,
+  0x00,
+  0x00,
+  0x00, // chunk size 10
   0x02, // flags: ANIMATION
-  0x00, 0x00, 0x00, // reserved
-  0x00, 0x00, 0x00, // canvas w-1
-  0x00, 0x00, 0x00, // canvas h-1
+  0x00,
+  0x00,
+  0x00, // reserved
+  0x00,
+  0x00,
+  0x00, // canvas w-1
+  0x00,
+  0x00,
+  0x00, // canvas h-1
   ...fromHex("414e494d"), // ANIM (what is-animated scans for)
-  0x06, 0x00, 0x00, 0x00, // chunk size 6
-  0x00, 0x00, 0x00, 0x00, // bg color
-  0x00, 0x00, // loop count
+  0x06,
+  0x00,
+  0x00,
+  0x00, // chunk size 6
+  0x00,
+  0x00,
+  0x00,
+  0x00, // bg color
+  0x00,
+  0x00, // loop count
 );
 
 /** ISO-BMFF box: BE size (header incl.) + type + payload. */
@@ -140,29 +207,62 @@ const bmffBox = (type: string, payload: Uint8Array) => {
 };
 
 const AVIF = u8(
-  ...bmffBox("ftyp", u8(
-    ...fromHex("61766966"), // major brand "avif"
-    0, 0, 0, 0, // minor version
-    ...fromHex("617669666d6966316d616631"), // compatible brands avif/mif1/maf1
-  )),
-  ...bmffBox("meta", u8(
-    0, 0, 0, 0, // full-box version/flags
-    ...bmffBox("iprp", u8(
-      ...bmffBox("ipco", u8(
-        ...bmffBox("ispe", u8(0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1)), // v/flags + 1x1 BE
-      )),
-    )),
-  )),
+  ...bmffBox(
+    "ftyp",
+    u8(
+      ...fromHex("61766966"), // major brand "avif"
+      0,
+      0,
+      0,
+      0, // minor version
+      ...fromHex("617669666d6966316d616631"), // compatible brands avif/mif1/maf1
+    ),
+  ),
+  ...bmffBox(
+    "meta",
+    u8(
+      0,
+      0,
+      0,
+      0, // full-box version/flags
+      ...bmffBox(
+        "iprp",
+        u8(
+          ...bmffBox(
+            "ipco",
+            u8(
+              ...bmffBox("ispe", u8(0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1)), // v/flags + 1x1 BE
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
 );
 
 /** JPEG with a complete SOF0 (w, h) + JFIF APP0 — parses in image-size. */
 const jpegSof = (w: number, h: number) =>
   u8(
     ...fromHex("ffd8"), // SOI
-    ...fromHex("ffe000104a46494600"), 1, 1, 0, 0, 0, 0, 0, 0, 0, // APP0 JFIF (version, units, densities, no thumbnail)
+    ...fromHex("ffe000104a46494600"),
+    1,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0, // APP0 JFIF (version, units, densities, no thumbnail)
     ...fromHex("ffc0000b08"), // SOF0 len 11 precision 8
-    (h >> 8) & 0xff, h & 0xff, (w >> 8) & 0xff, w & 0xff,
-    0x01, 0x01, 0x11, 0x00, // 1 component
+    (h >> 8) & 0xff,
+    h & 0xff,
+    (w >> 8) & 0xff,
+    w & 0xff,
+    0x01,
+    0x01,
+    0x11,
+    0x00, // 1 component
     ...fromHex("ffd9"), // EOI
   );
 
@@ -170,14 +270,42 @@ const jpegSof = (w: number, h: number) =>
 const jpegExif = (orientation: number, w: number, h: number) =>
   u8(
     ...fromHex("ffd8"),
-    ...fromHex("ffe1"), 0x00, 0x22, // APP1 len 34
+    ...fromHex("ffe1"),
+    0x00,
+    0x22, // APP1 len 34
     ...fromHex("457869660000"), // "Exif\0\0"
-    ...fromHex("49492a00"), 0x08, 0x00, 0x00, 0x00, // TIFF LE, IFD0 @8
-    0x01, 0x00, // 1 entry
-    0x12, 0x01, 0x03, 0x00, 0x01, 0x00, 0x00, 0x00, orientation, 0x00, 0x00, 0x00, // 0x0112 SHORT
-    0x00, 0x00, 0x00, 0x00, // next IFD
-    ...fromHex("ffc0000b08"), (h >> 8) & 0xff, h & 0xff, (w >> 8) & 0xff, w & 0xff,
-    0x01, 0x01, 0x11, 0x00,
+    ...fromHex("49492a00"),
+    0x08,
+    0x00,
+    0x00,
+    0x00, // TIFF LE, IFD0 @8
+    0x01,
+    0x00, // 1 entry
+    0x12,
+    0x01,
+    0x03,
+    0x00,
+    0x01,
+    0x00,
+    0x00,
+    0x00,
+    orientation,
+    0x00,
+    0x00,
+    0x00, // 0x0112 SHORT
+    0x00,
+    0x00,
+    0x00,
+    0x00, // next IFD
+    ...fromHex("ffc0000b08"),
+    (h >> 8) & 0xff,
+    h & 0xff,
+    (w >> 8) & 0xff,
+    w & 0xff,
+    0x01,
+    0x01,
+    0x11,
+    0x00,
     ...fromHex("ffd9"),
   );
 
@@ -230,9 +358,7 @@ afterEach(() => {
 function serveBytes(bytes: Uint8Array, headers: Record<string, string> = {}) {
   resolve4Mock.mockResolvedValue(["93.184.216.34"]);
   resolve6Mock.mockResolvedValue([]);
-  fetchMock.mockResolvedValueOnce(
-    fakeImageResponse({ headers, byteBody: bytes }),
-  );
+  fetchMock.mockResolvedValueOnce(fakeImageResponse({ headers, byteBody: bytes }));
 }
 
 // ── sniffImageAsset — the network-free seam (20-06 EPUB reuse) ───────────────
@@ -246,14 +372,17 @@ describe("sniffImageAsset valid formats (D20-08 raster set)", () => {
     ["avif", AVIF, "image/avif", 1, 1],
   ];
 
-  it.each(cases)("admits a valid %s and returns the ImageAsset shape", (_fmt, bytes, contentType, w, h) => {
-    const result = sniffImageAsset(bytes);
-    if (typeof result === "string") throw new Error(`expected ImageAsset, got refusal ${result}`);
-    expect(result.contentType).toBe(contentType);
-    expect(result.width).toBe(w);
-    expect(result.height).toBe(h);
-    expect(result.bytes).toBe(bytes); // zero-copy: the same buffer, never a clone
-  });
+  it.each(cases)(
+    "admits a valid %s and returns the ImageAsset shape",
+    (_fmt, bytes, contentType, w, h) => {
+      const result = sniffImageAsset(bytes);
+      if (typeof result === "string") throw new Error(`expected ImageAsset, got refusal ${result}`);
+      expect(result.contentType).toBe(contentType);
+      expect(result.width).toBe(w);
+      expect(result.height).toBe(h);
+      expect(result.bytes).toBe(bytes); // zero-copy: the same buffer, never a clone
+    },
+  );
 
   it("assetId is img-<12 lowercase hex> derived from the byte content (D7-07)", () => {
     const result = sniffImageAsset(STATIC_PNG);
@@ -277,15 +406,15 @@ describe("sniffImageAsset valid formats (D20-08 raster set)", () => {
 });
 
 describe("sniffImageAsset typed refusals (never throws — D20-05)", () => {
-  it("refuses SVG bytes with \"type\" (D20-10 — raster-only media boundary)", () => {
+  it('refuses SVG bytes with "type" (D20-10 — raster-only media boundary)', () => {
     expect(sniffImageAsset(SVG_BYTES)).toBe("type");
   });
 
-  it("refuses undetectable garbage bytes with \"type\" (imageSize throw → typed refusal)", () => {
+  it('refuses undetectable garbage bytes with "type" (imageSize throw → typed refusal)', () => {
     expect(sniffImageAsset(new Uint8Array(32).fill(0x41))).toBe("type");
   });
 
-  it("refuses a declared pixel bomb with \"pixels\" (65,000×65,000 PNG — T-20-03)", () => {
+  it('refuses a declared pixel bomb with "pixels" (65,000×65,000 PNG — T-20-03)', () => {
     expect(sniffImageAsset(PIXEL_BOMB_PNG)).toBe("pixels");
   });
 
@@ -294,7 +423,7 @@ describe("sniffImageAsset typed refusals (never throws — D20-05)", () => {
     expect(sniffImageAsset(pngIhdr(4000, 4000))).toMatchObject({ width: 4000, height: 4000 });
   });
 
-  it("refuses bytes over MAX_ASSET_BYTES with \"bytes\" (decoded-byte cap)", () => {
+  it('refuses bytes over MAX_ASSET_BYTES with "bytes" (decoded-byte cap)', () => {
     expect(sniffImageAsset(new Uint8Array(MAX_ASSET_BYTES + 1))).toBe("bytes");
   });
 
@@ -308,7 +437,7 @@ describe("sniffImageAsset typed refusals (never throws — D20-05)", () => {
     ["animated GIF (2 image descriptors + NETSCAPE2.0)", ANIMATED_GIF],
     ["animated WebP (VP8X + ANIM)", ANIMATED_WEBP],
     ["APNG (acTL + fcTL + IDAT + fcTL + fdAT)", APNG],
-  ])("refuses an %s with \"animated\" (D20-09)", (_label, bytes) => {
+  ])('refuses an %s with "animated" (D20-09)', (_label, bytes) => {
     expect(sniffImageAsset(bytes)).toBe("animated");
   });
 
@@ -316,9 +445,12 @@ describe("sniffImageAsset typed refusals (never throws — D20-05)", () => {
     ["static GIF", STATIC_GIF],
     ["static PNG", STATIC_PNG],
     ["static WebP", STATIC_WEBP],
-  ])("admits the %s form of an animation-capable type (D20-09 — static passes)", (_label, bytes) => {
-    expect(typeof sniffImageAsset(bytes)).toBe("object");
-  });
+  ])(
+    "admits the %s form of an animation-capable type (D20-09 — static passes)",
+    (_label, bytes) => {
+      expect(typeof sniffImageAsset(bytes)).toBe("object");
+    },
+  );
 });
 
 describe("sniffImageAsset EXIF orientation (Pitfall 2 — reserved-geometry correctness)", () => {
@@ -359,13 +491,13 @@ describe("fetchImageAsset (network path — the ONLY asset egress)", () => {
     expect(arrayBufferCallCount).toBe(1);
   });
 
-  it("SVG bytes under a LYING image/png header refuse \"type\" — the sniff overrules the header (T-20-02, D20-10)", async () => {
+  it('SVG bytes under a LYING image/png header refuse "type" — the sniff overrules the header (T-20-02, D20-10)', async () => {
     serveBytes(SVG_BYTES, { "content-type": "image/png" });
     const result = await fetchImageAsset("https://cdn.example.com/evil.png");
     expect(result).toBe("type");
   });
 
-  it("a private-IP host refuses \"fetch\" BEFORE any network call (the 9 measures are the same pipeline — T-20-01)", async () => {
+  it('a private-IP host refuses "fetch" BEFORE any network call (the 9 measures are the same pipeline — T-20-01)', async () => {
     resolve4Mock.mockResolvedValue(["10.0.0.1"]);
     resolve6Mock.mockResolvedValue([]);
     const result = await fetchImageAsset("http://10.0.0.1/pic.png");
@@ -373,7 +505,7 @@ describe("fetchImageAsset (network path — the ONLY asset egress)", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("a non-image content-type header refuses \"fetch\" with the body NEVER read (calm early refusal, Measure 7)", async () => {
+  it('a non-image content-type header refuses "fetch" with the body NEVER read (calm early refusal, Measure 7)', async () => {
     serveBytes(STATIC_PNG, { "content-type": "text/html; charset=utf-8" });
     const result = await fetchImageAsset("https://cdn.example.com/not-an-image");
     expect(result).toBe("fetch");
@@ -407,7 +539,7 @@ describe("fetchImageAsset (network path — the ONLY asset egress)", () => {
     },
   );
 
-  it("octet-stream-declared HTML challenge bytes still refuse \"type\" — the sniff overrules the opaque header (D20-10)", async () => {
+  it('octet-stream-declared HTML challenge bytes still refuse "type" — the sniff overrules the opaque header (D20-10)', async () => {
     serveBytes(new TextEncoder().encode("<html>challenge</html>"), {
       "content-type": "application/octet-stream",
     });
@@ -415,7 +547,7 @@ describe("fetchImageAsset (network path — the ONLY asset egress)", () => {
     expect(result).toBe("type");
   });
 
-  it("an over-cap content-length header refuses \"fetch\" with the body NEVER read", async () => {
+  it('an over-cap content-length header refuses "fetch" with the body NEVER read', async () => {
     serveBytes(STATIC_PNG, {
       "content-type": "image/png",
       "content-length": String(MAX_ASSET_BYTES + 1),
@@ -425,7 +557,7 @@ describe("fetchImageAsset (network path — the ONLY asset egress)", () => {
     expect(arrayBufferCallCount).toBe(0);
   });
 
-  it("a network-level fetch failure refuses \"fetch\" (never a thrown TypeError — D20-05 composure)", async () => {
+  it('a network-level fetch failure refuses "fetch" (never a thrown TypeError — D20-05 composure)', async () => {
     resolve4Mock.mockResolvedValue(["93.184.216.34"]);
     resolve6Mock.mockResolvedValue([]);
     fetchMock.mockRejectedValueOnce(new TypeError("fetch failed"));

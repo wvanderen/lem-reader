@@ -122,9 +122,7 @@ test.describe("STATE-02 + Pitfall 4 persistence", () => {
   // Assertions unchanged — the budget doubles so load contention cannot
   // flake the spec (calibration.harness + perf.harness set 300s).
   test.setTimeout(60_000);
-  test("typography/theme settings survive a full page reload (STATE-02)", async ({
-    page,
-  }) => {
+  test("typography/theme settings survive a full page reload (STATE-02)", async ({ page }) => {
     // Open an article (the live-apply target — settings write tokens to :root).
     await page.goto(`${BASE}/#/article/${FIRST_FIXTURE}`);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
@@ -198,16 +196,11 @@ test.describe("STATE-02 + Pitfall 4 persistence", () => {
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 
     // The storage-failure banner copy must NOT appear (STATE-05 happy path).
-    await expect(
-      page.getByText("Your reading settings can't be saved right now."),
-    ).toHaveCount(0);
+    await expect(page.getByText("Your reading settings can't be saved right now.")).toHaveCount(0);
 
     // The wipe-confirm dialog must NOT auto-open.
     await expect(page.locator("dialog.wipe-confirm")).not.toBeVisible();
-    await expect(page.locator("dialog.wipe-confirm")).toHaveJSProperty(
-      "open",
-      false,
-    );
+    await expect(page.locator("dialog.wipe-confirm")).toHaveJSProperty("open", false);
 
     // Open the settings panel — the happy-path controls are present and
     // operable; the recovery surfaces do NOT interfere with reading.
@@ -246,24 +239,16 @@ test.describe("STATE-02 + Pitfall 4 persistence", () => {
 
     const wipeDlg = page.locator("dialog.wipe-confirm");
     // Title (UI-SPEC line 328).
-    await expect(wipeDlg.locator("h2#wipe-title")).toHaveText(
-      "Reset local data?",
-    );
+    await expect(wipeDlg.locator("h2#wipe-title")).toHaveText("Reset local data?");
     // Body (UI-SPEC line 329).
     await expect(wipeDlg.locator("#wipe-body")).toContainText(
       /Reading history and saved settings are damaged/,
     );
-    await expect(wipeDlg.locator("#wipe-body")).toContainText(
-      /This can't be undone/,
-    );
+    await expect(wipeDlg.locator("#wipe-body")).toContainText(/This can't be undone/);
     // Destructive button (UI-SPEC line 330).
-    await expect(
-      wipeDlg.locator("button.wipe-confirm-destructive"),
-    ).toHaveText("Reset local data");
+    await expect(wipeDlg.locator("button.wipe-confirm-destructive")).toHaveText("Reset local data");
     // Cancel button — names the actual outcome (UI-SPEC line 331).
-    await expect(
-      wipeDlg.locator("button.wipe-confirm-cancel"),
-    ).toHaveText("Keep reading");
+    await expect(wipeDlg.locator("button.wipe-confirm-cancel")).toHaveText("Keep reading");
   });
 });
 
@@ -371,9 +356,7 @@ test.describe("STATE-01 location restore", () => {
     ).toBeGreaterThan(100);
   });
 
-  test("locations are isolated per article (D-06 — [articleId+revision] key)", async ({
-    page,
-  }) => {
+  test("locations are isolated per article (D-06 — [articleId+revision] key)", async ({ page }) => {
     // Plan 04-06 Task 5: seed scrolling mode here too for consistency (the
     // test asserts scrollY near 0 after navigating to a different fixture;
     // in paginated mode the same assertion holds trivially because there's
@@ -429,9 +412,7 @@ test.describe("STATE-01 paginated save/restore (Plan 18-03)", () => {
    *  pagination commit; currentPageIdx is kept fresh on every turn). */
   async function paginationReady(page: import("@playwright/test").Page) {
     await page.waitForFunction(
-      () =>
-        (window as unknown as Record<string, unknown>).__lemPagination !==
-        undefined,
+      () => (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
       undefined,
       { timeout: 10_000 },
     );
@@ -442,8 +423,7 @@ test.describe("STATE-01 paginated save/restore (Plan 18-03)", () => {
     page: import("@playwright/test").Page,
   ): Promise<{ currentPageIdx: number; pagesLength: number }> {
     return page.evaluate(() => {
-      const dev = (window as unknown as Record<string, unknown>)
-        .__lemPagination as {
+      const dev = (window as unknown as Record<string, unknown>).__lemPagination as {
         currentPageIdx: number;
         pagesLength: number;
       };
@@ -487,8 +467,9 @@ test.describe("STATE-01 paginated save/restore (Plan 18-03)", () => {
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     await paginationReady(page);
     const total = await page.evaluate(() => {
-      const dev = (window as unknown as Record<string, unknown>)
-        .__lemPagination as { articleGraphemeLength: number };
+      const dev = (window as unknown as Record<string, unknown>).__lemPagination as {
+        articleGraphemeLength: number;
+      };
       return dev.articleGraphemeLength;
     });
     expect(total).toBeGreaterThan(0);
@@ -505,8 +486,10 @@ test.describe("STATE-01 paginated save/restore (Plan 18-03)", () => {
     await paginationReady(page);
     await page.waitForFunction(
       () => {
-        const dev = (window as unknown as Record<string, unknown>)
-          .__lemPagination as { currentPageIdx: number; pagesLength: number };
+        const dev = (window as unknown as Record<string, unknown>).__lemPagination as {
+          currentPageIdx: number;
+          pagesLength: number;
+        };
         return dev.pagesLength >= 2 && dev.currentPageIdx >= 1;
       },
       undefined,
@@ -528,8 +511,10 @@ test.describe("STATE-01 paginated save/restore (Plan 18-03)", () => {
     await paginationReady(page);
     await page.waitForFunction(
       () => {
-        const dev = (window as unknown as Record<string, unknown>)
-          .__lemPagination as { currentPageIdx: number; pagesLength: number };
+        const dev = (window as unknown as Record<string, unknown>).__lemPagination as {
+          currentPageIdx: number;
+          pagesLength: number;
+        };
         return dev.pagesLength >= 3;
       },
       undefined,
@@ -561,8 +546,9 @@ test.describe("STATE-01 paginated save/restore (Plan 18-03)", () => {
     await paginationReady(page);
     await page.waitForFunction(
       () => {
-        const dev = (window as unknown as Record<string, unknown>)
-          .__lemPagination as { currentPageIdx: number };
+        const dev = (window as unknown as Record<string, unknown>).__lemPagination as {
+          currentPageIdx: number;
+        };
         return dev.currentPageIdx === 2;
       },
       undefined,

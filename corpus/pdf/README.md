@@ -15,12 +15,12 @@ thresholds are calibrated against. It is **local-only**:
 
 6–10 real PDFs spanning all four corpus classes (D11-05):
 
-| Class           | Count    | Shape                                                |
-| --------------- | -------- | ---------------------------------------------------- |
-| single-column   | ≥ 2      | include one Word export and one LaTeX build           |
-| scanned         | ≥ 1      | image-only pages (no extractable text)                |
-| multi-column    | ≥ 1      | journal/newsletter two-column layouts                 |
-| borderline      | ≥ 1      | pull quotes, sidebars, or indented blockquotes        |
+| Class         | Count | Shape                                          |
+| ------------- | ----- | ---------------------------------------------- |
+| single-column | ≥ 2   | include one Word export and one LaTeX build    |
+| scanned       | ≥ 1   | image-only pages (no extractable text)         |
+| multi-column  | ≥ 1   | journal/newsletter two-column layouts          |
+| borderline    | ≥ 1   | pull quotes, sidebars, or indented blockquotes |
 
 Vary producers where possible (InDesign/print exports alongside Word/LaTeX).
 

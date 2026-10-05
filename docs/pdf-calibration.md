@@ -76,8 +76,8 @@ enforces, inside `npm run test` via the always-on `replay.spec.ts`:
   `pdf-evidence.json` and runs `validateEvidence` — a regressed threshold
   set, a drifted hash, or a below-bar agreement fails the build.
 - **Missing record fails loudly:** if `pdf-evidence.json` is absent the
-  spec fails with *"calibration requires the local corpus — see
-  docs/pdf-calibration.md"* — never a silent skip (T-11-15).
+  spec fails with _"calibration requires the local corpus — see
+  docs/pdf-calibration.md"_ — never a silent skip (T-11-15).
 - `derive.spec.ts` is the LOCAL-only derive driver, gated by
   `describe.skipIf(process.env.PDF_CALIBRATION_DERIVE !== "1")` — the one
   documented, visible skip in normal runs (the accepted D11-04 CI

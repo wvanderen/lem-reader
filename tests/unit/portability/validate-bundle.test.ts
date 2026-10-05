@@ -642,7 +642,7 @@ describe("validateBundle — round trip (09-04 Task 2)", () => {
     expect(row?.key).toBe("reader-prefs");
     expect(JSON.stringify(row?.value)).toBe(JSON.stringify(customPrefs));
     // Spot-check the case preservation rode the whole way — in BOTH slots.
-    const imported = (row?.value as ReaderSettings);
+    const imported = row?.value as ReaderSettings;
     expect(imported.customLightTheme?.tokens.ink).toBe("#1A1A1A");
     expect(imported.customDarkTheme?.tokens.ink).toBe("#EDE6D9");
   });

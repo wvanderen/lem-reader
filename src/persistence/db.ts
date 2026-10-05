@@ -77,12 +77,7 @@ export interface NoteRecordRow {
 export interface AssetRecordRow {
   articleId: string; // FK → articles.id
   assetId: string; // img-<12hex> content-hash (the assetRef body)
-  contentType:
-    | "image/jpeg"
-    | "image/png"
-    | "image/webp"
-    | "image/gif"
-    | "image/avif";
+  contentType: "image/jpeg" | "image/png" | "image/webp" | "image/gif" | "image/avif";
   byteLength: number;
   data: Blob; // IndexedDB-native blob storage → createObjectURL-direct
   createdAt: string; // ISO-8601
@@ -138,37 +133,40 @@ export class LemReaderDB extends Dexie {
   // by name from the version declarations).
   settings!: Table<SettingsRecord, string>;
   location!: Table<LocationRecordRow, [string, number]>;
-  articles!: Table<{
-    id: string;
-    revision: number;
-    source?: string;
-    addedAt?: string;
-    ingestionMeta?: unknown;
-    provenance?: unknown;
-    blocks?: unknown;
-    footnotes?: unknown;
-    lang?: string;
-    tags?: string[];
-    // Phase 12 (ING-05): the bookId FK → books.id powers grouping reads
-    // (D12-01). Additive-optional — existing rows parse unchanged (Pitfall 9).
-    bookId?: string;
-    // Phase 17 (META-01, D17-12): reader-owned display overrides stored as
-    // plain row fields. NO Dexie version bump: only INDEXED properties
-    // require a version-block declaration (Dexie design — object stores
-    // accept any row properties), and no Phase 17 query keys on overrides
-    // (search is the in-memory haystack). The ingestionMeta precedent
-    // landed bumpless the same way; the v1..v5 blocks below stay
-    // byte-unchanged and there is NO upgrade callback (Pitfall 9;
-    // 17-RESEARCH OQ3 Option A).
-    readerTitle?: string;
-    readerAuthor?: string;
-    // The same bumpless mechanism extended: reader-owned display overrides
-    // for the provenance date and source link. Plain non-indexed row
-    // fields — NO Dexie version bump (only INDEXED properties require a
-    // version-block declaration; no query keys on overrides).
-    readerPublishedAt?: string;
-    readerSourceUrl?: string;
-  }, string>;
+  articles!: Table<
+    {
+      id: string;
+      revision: number;
+      source?: string;
+      addedAt?: string;
+      ingestionMeta?: unknown;
+      provenance?: unknown;
+      blocks?: unknown;
+      footnotes?: unknown;
+      lang?: string;
+      tags?: string[];
+      // Phase 12 (ING-05): the bookId FK → books.id powers grouping reads
+      // (D12-01). Additive-optional — existing rows parse unchanged (Pitfall 9).
+      bookId?: string;
+      // Phase 17 (META-01, D17-12): reader-owned display overrides stored as
+      // plain row fields. NO Dexie version bump: only INDEXED properties
+      // require a version-block declaration (Dexie design — object stores
+      // accept any row properties), and no Phase 17 query keys on overrides
+      // (search is the in-memory haystack). The ingestionMeta precedent
+      // landed bumpless the same way; the v1..v5 blocks below stay
+      // byte-unchanged and there is NO upgrade callback (Pitfall 9;
+      // 17-RESEARCH OQ3 Option A).
+      readerTitle?: string;
+      readerAuthor?: string;
+      // The same bumpless mechanism extended: reader-owned display overrides
+      // for the provenance date and source link. Plain non-indexed row
+      // fields — NO Dexie version bump (only INDEXED properties require a
+      // version-block declaration; no query keys on overrides).
+      readerPublishedAt?: string;
+      readerSourceUrl?: string;
+    },
+    string
+  >;
   // Phase 5: real row types replace the Phase 1 placeholder annotations
   // (LOW risk — runtime-unaffected; Dexie resolves stores by name from the
   // version declarations, not from TS types). Mirrors the Phase 02-02

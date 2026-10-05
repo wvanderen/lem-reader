@@ -50,19 +50,11 @@ function installRangeMock(lineCharOffsets: number[]): () => void {
       for (let li = 0; li < lineCharOffsets.length; li++) {
         const lineStart = lineCharOffsets[li]!;
         const lineEnd =
-          li + 1 < lineCharOffsets.length
-            ? lineCharOffsets[li + 1]!
-            : Number.MAX_SAFE_INTEGER;
+          li + 1 < lineCharOffsets.length ? lineCharOffsets[li + 1]! : Number.MAX_SAFE_INTEGER;
         // Range [start, end) overlaps this line iff end > lineStart AND
         // start < lineEnd AND the range is non-empty (end > start).
-        if (
-          state.end > lineStart &&
-          state.start < lineEnd &&
-          state.end > state.start
-        ) {
-          rects.push(
-            new DOMRect(0, li * 20, 100, 18) as DOMRect,
-          );
+        if (state.end > lineStart && state.start < lineEnd && state.end > state.start) {
+          rects.push(new DOMRect(0, li * 20, 100, 18) as DOMRect);
         }
       }
       return rects as unknown as DOMRectList;
@@ -131,9 +123,7 @@ describe("readLineBoxes — DOM line-box read-phase", () => {
       const el = makeParagraphEl(text);
       const boxes = readLineBoxes(el, text, new AbortController().signal);
       expect(boxes.length).toBeGreaterThan(1);
-      const graphemes = boxes.map((b) =>
-        charOffsetToGrapheme(text, b.charOffset, "en"),
-      );
+      const graphemes = boxes.map((b) => charOffsetToGrapheme(text, b.charOffset, "en"));
       for (let i = 1; i < graphemes.length; i++) {
         expect(graphemes[i]).toBeGreaterThan(graphemes[i - 1]!);
       }
@@ -149,9 +139,7 @@ describe("readLineBoxes — DOM line-box read-phase", () => {
       const el = makeParagraphEl(text);
       const controller = new AbortController();
       controller.abort();
-      expect(() =>
-        readLineBoxes(el, text, controller.signal),
-      ).toThrowError(/abort/i);
+      expect(() => readLineBoxes(el, text, controller.signal)).toThrowError(/abort/i);
     } finally {
       restore();
     }
@@ -306,16 +294,9 @@ describe("readLineBoxes — container blocks (Plan 04-06 generalization)", () =>
         const schedule = cfg.lineLocalOffsets;
         for (let li = 0; li < schedule.length; li++) {
           const lineStart = schedule[li]!;
-          const lineEnd =
-            li + 1 < schedule.length ? schedule[li + 1]! : data.length;
-          if (
-            state.end > lineStart &&
-            state.start < lineEnd &&
-            state.end > state.start
-          ) {
-            rects.push(
-              new DOMRect(0, cfg.baseTop + li * 20, 100, 18) as DOMRect,
-            );
+          const lineEnd = li + 1 < schedule.length ? schedule[li + 1]! : data.length;
+          if (state.end > lineStart && state.start < lineEnd && state.end > state.start) {
+            rects.push(new DOMRect(0, cfg.baseTop + li * 20, 100, 18) as DOMRect);
           }
         }
         return rects as unknown as DOMRectList;
@@ -374,9 +355,7 @@ describe("readLineBoxes — container blocks (Plan 04-06 generalization)", () =>
         "en",
       );
       expect(lastGrapheme).toBeGreaterThan(0);
-      expect(lastGrapheme).toBeLessThanOrEqual(
-        graphemeClusters(fullText, "en").length,
-      );
+      expect(lastGrapheme).toBeLessThanOrEqual(graphemeClusters(fullText, "en").length);
     } finally {
       restore();
     }

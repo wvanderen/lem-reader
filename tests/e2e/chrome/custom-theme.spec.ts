@@ -416,9 +416,7 @@ test.describe("Custom theme builder (#86/#120 — two custom slots, 5 tokens eac
 
   // CT-06 — axe on the open dialog with the builder live (the a11y.spec
   // dialog-scan discipline: serious/critical must be empty).
-  test("axe WCAG 2.2 AA on the settings dialog with the builder open (CT-06)", async ({
-    page,
-  }) => {
+  test("axe WCAG 2.2 AA on the settings dialog with the builder open (CT-06)", async ({ page }) => {
     await openSettings(page);
     await activateSlot(page, "Custom dark");
     const results = await new AxeBuilder({ page })
@@ -432,9 +430,7 @@ test.describe("Custom theme builder (#86/#120 — two custom slots, 5 tokens eac
   });
 
   // CT-07 — slot independence (#120): two independently saved palettes.
-  test("the two slots save independently and both survive a reload (CT-07)", async ({
-    page,
-  }) => {
+  test("the two slots save independently and both survive a reload (CT-07)", async ({ page }) => {
     test.setTimeout(60_000);
     await openSettings(page);
 

@@ -60,28 +60,17 @@ describe("DiagnosticEventSchema.parse accepts each of the 6 kinds (D3-05)", () =
 
 describe("DiagnosticEventSchema.parse rejects malformed shapes (V5)", () => {
   it("rejects an unknown kind literal (tampering defense)", () => {
-    expect(() =>
-      DiagnosticEventSchema.parse({ kind: "totally-fake-kind", ts: baseTs }),
-    ).toThrow();
+    expect(() => DiagnosticEventSchema.parse({ kind: "totally-fake-kind", ts: baseTs })).toThrow();
   });
 
   it.each([
-    [
-      "late-epoch-drop missing captured",
-      { kind: "late-epoch-drop", current: 7, ts: baseTs },
-    ],
-    [
-      "late-epoch-drop missing current",
-      { kind: "late-epoch-drop", captured: 3, ts: baseTs },
-    ],
+    ["late-epoch-drop missing captured", { kind: "late-epoch-drop", current: 7, ts: baseTs }],
+    ["late-epoch-drop missing current", { kind: "late-epoch-drop", captured: 3, ts: baseTs }],
     [
       "runtime-guard-downgrade missing kind-downgraded",
       { kind: "runtime-guard-downgrade", heightDriftPx: 1, ts: baseTs },
     ],
-    [
-      "measurement-error missing message",
-      { kind: "measurement-error", ts: baseTs },
-    ],
+    ["measurement-error missing message", { kind: "measurement-error", ts: baseTs }],
     ["missing kind discriminant entirely", { ts: baseTs }],
     ["missing ts", { kind: "drift-exceedance" }],
     ["ts is not an ISO datetime", { kind: "drift-exceedance", ts: "yesterday" }],
@@ -122,8 +111,8 @@ describe("DiagnosticBus", () => {
     bus.subscribe(() => {
       /* no-op */
     });
-    expect(
-      () => bus.emit({ kind: "not-a-real-kind", ts: baseTs } as unknown as DiagnosticEvent),
+    expect(() =>
+      bus.emit({ kind: "not-a-real-kind", ts: baseTs } as unknown as DiagnosticEvent),
     ).toThrow();
   });
 

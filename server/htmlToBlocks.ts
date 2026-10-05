@@ -72,14 +72,27 @@ export const SANITIZE_CONFIG = {
   USE_PROFILES: { html: true },
   // Exactly the tags that map to a v1.0 Block kind + the D-04 inline marks.
   ALLOWED_TAGS: [
-    "p", "h1", "h2", "h3", "h4", "h5", "h6", // HeadingBlock
-    "ul", "ol", "li", // BulletedListBlock / NumberedListBlock
+    "p",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6", // HeadingBlock
+    "ul",
+    "ol",
+    "li", // BulletedListBlock / NumberedListBlock
     "blockquote", // BlockquoteBlock
-    "pre", "code", // CodeBlock
+    "pre",
+    "code", // CodeBlock
     "a", // LinkMark
-    "strong", "em", // StrongMark / EmMark
-    "img", "figure", "figcaption", // FigureBlock (src httpUrl only)
-    "br", "hr", // structural
+    "strong",
+    "em", // StrongMark / EmMark
+    "img",
+    "figure",
+    "figcaption", // FigureBlock (src httpUrl only)
+    "br",
+    "hr", // structural
     "sup", // FootnoteReferenceBlock (marker)
   ],
   // 260908-ef5 — srcset admitted for the best-candidate selection below.
@@ -95,8 +108,18 @@ export const SANITIZE_CONFIG = {
   ALLOWED_ATTR: ["href", "title", "alt", "src", "cite", "srcset"],
   // Explicitly forbid the dangerous tags even if a profile would allow them.
   FORBID_TAGS: [
-    "script", "style", "iframe", "object", "embed", "form", "input",
-    "link", "meta", "base", "svg", "math",
+    "script",
+    "style",
+    "iframe",
+    "object",
+    "embed",
+    "form",
+    "input",
+    "link",
+    "meta",
+    "base",
+    "svg",
+    "math",
   ],
   // No data-* attributes — eliminates the DOM-clobbering surface (Pitfall 4).
   // Do NOT set ALLOW_UNKNOWN_PROTOCOLS (preserves the default URI regex that
@@ -202,13 +225,37 @@ function tidyRuns(runs: InlineRunT[]): InlineRun[] {
 
 // ── Block-kind mapping (exhaustive — Pattern F; no default clause) ──────────
 const BLOCK_TAGS = new Set([
-  "p", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "blockquote",
-  "figure", "pre", "table", "hr",
+  "p",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "ul",
+  "ol",
+  "blockquote",
+  "figure",
+  "pre",
+  "table",
+  "hr",
 ]);
 
 const UNSUPPORTED_TAGS = new Set([
-  "table", "iframe", "video", "audio", "embed", "object", "canvas",
-  "svg", "form", "input", "button", "select", "textarea", "math",
+  "table",
+  "iframe",
+  "video",
+  "audio",
+  "embed",
+  "object",
+  "canvas",
+  "svg",
+  "form",
+  "input",
+  "button",
+  "select",
+  "textarea",
+  "math",
 ]);
 
 function headingLevel(tag: string): 1 | 2 | 3 | 4 | 5 | 6 | null {
@@ -299,7 +346,10 @@ function selectSrcsetCandidate(attr: string, baseUri: string): string | null {
   const densities: { url: string; density: number }[] = [];
 
   for (const part of attr.split(",")) {
-    const tokens = part.trim().split(/\s+/).filter((t) => t.length > 0);
+    const tokens = part
+      .trim()
+      .split(/\s+/)
+      .filter((t) => t.length > 0);
     if (tokens.length === 1) {
       // A lone descriptor token is a missing-URL malformed part, never a
       // relative URL we should admit.
@@ -359,11 +409,14 @@ function figureBlock(el: Element, figureSrcResolver?: FigureSrcResolver): Block[
   const img = tag === "img" ? el : el.querySelector("img");
   const figcaption = tag === "figure" ? el.querySelector("figcaption") : null;
   if (!img) {
-    return [{
-      kind: "unsupported",
-      originalKind: tag,
-      plainDescription: "An image element from the original article that the reader could not load.",
-    }];
+    return [
+      {
+        kind: "unsupported",
+        originalKind: tag,
+        plainDescription:
+          "An image element from the original article that the reader could not load.",
+      },
+    ];
   }
   const alt = img.getAttribute("alt") ?? "";
   // img.src (IDL) returns the absolute URL (resolved by jsdom against baseURI).
@@ -400,11 +453,13 @@ function figureBlock(el: Element, figureSrcResolver?: FigureSrcResolver): Block[
     const caption = figcaption ? tidyRuns(extractInline(figcaption, [])) : [];
     return [{ kind: "figure", alt: alt || "", src, caption }];
   }
-  return [{
-    kind: "unsupported",
-    originalKind: "figure",
-    plainDescription: "An image whose source could not be normalized to a valid URL.",
-  }];
+  return [
+    {
+      kind: "unsupported",
+      originalKind: "figure",
+      plainDescription: "An image whose source could not be normalized to a valid URL.",
+    },
+  ];
 }
 
 /** Heuristically find the main article content container in a document. */
@@ -463,9 +518,7 @@ function visitChildren(
   figureSrcResolver?: FigureSrcResolver,
 ): Block[] {
   return attachAdjacentCaptions(
-    Array.from(el.children).flatMap((c) =>
-      visit(c, footnoteCounter, figureSrcResolver),
-    ),
+    Array.from(el.children).flatMap((c) => visit(c, footnoteCounter, figureSrcResolver)),
   );
 }
 
@@ -505,11 +558,13 @@ function visit(
     const marker = (el.textContent ?? "").trim();
     footnoteCounter.n += 1;
     const num = /^=?\s*(\d+)/.exec(marker)?.[1] ?? String(footnoteCounter.n);
-    return [{
-      kind: "footnote-reference",
-      footnoteId: `fn-${num}`,
-      marker: marker || `[${num}]`,
-    }];
+    return [
+      {
+        kind: "footnote-reference",
+        footnoteId: `fn-${num}`,
+        marker: marker || `[${num}]`,
+      },
+    ];
   }
 
   const level = headingLevel(tag);
@@ -565,9 +620,7 @@ function visit(
         ),
       );
     }
-    const hoistedFigures = allImgs.flatMap((img) =>
-      figureBlock(img, figureSrcResolver),
-    );
+    const hoistedFigures = allImgs.flatMap((img) => figureBlock(img, figureSrcResolver));
     if (content.length) {
       return hoistedFigures.length
         ? [{ kind: "paragraph", content }, ...hoistedFigures]
@@ -613,11 +666,13 @@ function visit(
   if (tag === "hr") return []; // decorative thematic break — no Block kind
 
   if (UNSUPPORTED_TAGS.has(tag)) {
-    return [{
-      kind: "unsupported",
-      originalKind: tag,
-      plainDescription: `An embedded ${tag} element from the original article that the reader could not render.`,
-    }];
+    return [
+      {
+        kind: "unsupported",
+        originalKind: tag,
+        plainDescription: `An embedded ${tag} element from the original article that the reader could not render.`,
+      },
+    ];
   }
 
   // Container-ish elements (div, section, aside, main, article, span, dl):
@@ -627,11 +682,13 @@ function visit(
   }
 
   // Catch-all (no `default:` clause — the unsupported branch IS the default).
-  return [{
-    kind: "unsupported",
-    originalKind: tag,
-    plainDescription: `A ${tag} element from the original article that the reader could not render.`,
-  }];
+  return [
+    {
+      kind: "unsupported",
+      originalKind: tag,
+      plainDescription: `A ${tag} element from the original article that the reader could not render.`,
+    },
+  ];
 }
 
 /**
@@ -708,8 +765,7 @@ function buildProvenance(document: Document, sourceUrl: string | undefined): Pro
     metaContent(document, "meta[name='author']") ??
     metaContent(document, "meta[property='article:author']") ??
     undefined;
-  const publishedAt =
-    metaContent(document, "meta[property='article:published_time']") ?? undefined;
+  const publishedAt = metaContent(document, "meta[property='article:published_time']") ?? undefined;
   const canonical =
     linkHref(document, "link[rel='canonical']") ??
     metaContent(document, "meta[property='og:url']") ??

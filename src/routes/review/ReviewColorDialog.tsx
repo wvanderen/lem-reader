@@ -174,11 +174,7 @@ export function ReviewColorDialog({
       {/* A fresh picker per editing session prevents previous failures or
           late completions from appearing on another highlight. */}
       {open && (
-        <HighlightColorEntry
-          color={color}
-          saveColor={saveColor}
-          successCopy="Color saved."
-        />
+        <HighlightColorEntry color={color} saveColor={saveColor} successCopy="Color saved." />
       )}
       <div className="highlight-popover-actions">
         {/* Pure dismissal — every pick has already committed through

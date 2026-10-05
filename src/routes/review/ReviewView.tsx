@@ -106,13 +106,7 @@ import { HIGHLIGHT_COLOR_LABELS } from "../../annotations/highlightColors";
 // TagIcon/TrashIcon/EditIcon are the shared glyphs; DropletIcon names the
 // color editor; JumpToArticleIcon is the row's jump affordance, whose
 // stretched overlay makes the whole card navigable.
-import {
-  DropletIcon,
-  EditIcon,
-  JumpToArticleIcon,
-  TagIcon,
-  TrashIcon,
-} from "../../ui/icons";
+import { DropletIcon, EditIcon, JumpToArticleIcon, TagIcon, TrashIcon } from "../../ui/icons";
 // Issue #98 (decision #96) — the ONE polite status-region primitive; this
 // page's load/error/empty/announcement region renders through it.
 import { StatusRegion } from "../../ui/StatusRegion";
@@ -666,12 +660,15 @@ export function ReviewView({
             <option value="position">Position</option>
           </select>
         </div>
-        <button type="button" className="btn btn-quiet review-clear-filters"
+        <button
+          type="button"
+          className="btn btn-quiet review-clear-filters"
           onClick={() => {
             setFilters({ articleTag: null, highlightTag: null, confidence: "all" });
             setSearchReset((n) => n + 1);
             window.location.hash = "#/highlights";
-          }}>
+          }}
+        >
           Clear filters
         </button>
       </div>

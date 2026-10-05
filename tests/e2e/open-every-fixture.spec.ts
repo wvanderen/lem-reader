@@ -58,9 +58,7 @@ for (const article of fixtures) {
       ).toBeVisible();
 
       // DOC-03: source-URL link to the original publisher
-      await expect(
-        page.getByRole("link", { name: /Originally published at/ }),
-      ).toBeVisible();
+      await expect(page.getByRole("link", { name: /Originally published at/ })).toBeVisible();
 
       // DOC-02: article body region present
       await expect(page.getByRole("article")).toBeVisible();
@@ -79,17 +77,14 @@ for (const article of fixtures) {
       if (article.id === "figure-heavy") {
         await page.keyboard.press("m");
         await page.waitForTimeout(600); // the mode-swap settle (switchMode shape)
-        const imgs = page.locator(
-          ".article-body:not(.article-body-measurement) figure img",
-        );
+        const imgs = page.locator(".article-body:not(.article-body-measurement) figure img");
         await expect.poll(async () => await imgs.count(), { timeout: 10_000 }).toBe(2);
         for (let i = 0; i < 2; i++) {
           await expect(imgs.nth(i)).toHaveAttribute("src", /^blob:/);
           await imgs.nth(i).scrollIntoViewIfNeeded();
           await expect
             .poll(
-              async () =>
-                await imgs.nth(i).evaluate((el) => (el as HTMLImageElement).naturalWidth),
+              async () => await imgs.nth(i).evaluate((el) => (el as HTMLImageElement).naturalWidth),
               { timeout: 10_000 },
             )
             .toBeGreaterThan(0);
@@ -138,16 +133,13 @@ test("footnote round-trip stays in-article (figure-heavy, Gap 3)", async ({ page
   // back to the paginated default). The cold-load-no-snap discipline.
   await prepareFreshPage(page);
   await seedRows(page, { settings: [{ key: "reader-prefs", value: SCROLLING }] });
-  await page.addInitScript(
-    (seed) => {
-      try {
-        localStorage.setItem("lem-settings-mirror-v1", seed);
-      } catch {
-        /* best-effort (about:blank hop) */
-      }
-    },
-    JSON.stringify(SCROLLING),
-  );
+  await page.addInitScript((seed) => {
+    try {
+      localStorage.setItem("lem-settings-mirror-v1", seed);
+    } catch {
+      /* best-effort (about:blank hop) */
+    }
+  }, JSON.stringify(SCROLLING));
   await page.goto("about:blank");
   await page.goto(`${BASE}/#/article/figure-heavy`);
   const articleH1 = page.getByRole("heading", { level: 1, name: "Hummingbird" });

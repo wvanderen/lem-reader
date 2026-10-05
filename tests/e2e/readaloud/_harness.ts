@@ -18,14 +18,7 @@ export async function clearAllRows(page: Page): Promise<void> {
       const req = indexedDB.open("lem-reader");
       req.onsuccess = () => {
         const db = req.result;
-        const stores = [
-          "articles",
-          "settings",
-          "location",
-          "highlights",
-          "notes",
-          "books",
-        ];
+        const stores = ["articles", "settings", "location", "highlights", "notes", "books"];
         const existing = stores.filter((s) => db.objectStoreNames.contains(s));
         if (existing.length === 0) {
           resolve();

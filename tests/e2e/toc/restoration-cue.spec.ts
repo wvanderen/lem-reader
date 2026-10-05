@@ -87,25 +87,28 @@ async function seedScrollingMode(page: import("@playwright/test").Page): Promise
 
 /** Seed a raw LocationRecord (the mobile-first-page-chrome put shape). */
 async function seedLocation(page: import("@playwright/test").Page): Promise<void> {
-  await page.evaluate(async (seed) => {
-    await new Promise<void>((resolve, reject) => {
-      const request = indexedDB.open("lem-reader");
-      request.onsuccess = () => {
-        const database = request.result;
-        const transaction = database.transaction("location", "readwrite");
-        transaction.objectStore("location").put({
-          schemaVersion: 1,
-          articleId: seed.articleId,
-          revision: 1,
-          graphemeOffset: seed.graphemeOffset,
-          savedAt: new Date().toISOString(),
-        });
-        transaction.oncomplete = () => resolve();
-        transaction.onerror = () => reject(transaction.error);
-      };
-      request.onerror = () => reject(request.error);
-    });
-  }, { articleId: FIXTURE, graphemeOffset: SAVED_OFFSET });
+  await page.evaluate(
+    async (seed) => {
+      await new Promise<void>((resolve, reject) => {
+        const request = indexedDB.open("lem-reader");
+        request.onsuccess = () => {
+          const database = request.result;
+          const transaction = database.transaction("location", "readwrite");
+          transaction.objectStore("location").put({
+            schemaVersion: 1,
+            articleId: seed.articleId,
+            revision: 1,
+            graphemeOffset: seed.graphemeOffset,
+            savedAt: new Date().toISOString(),
+          });
+          transaction.oncomplete = () => resolve();
+          transaction.onerror = () => reject(transaction.error);
+        };
+        request.onerror = () => reject(request.error);
+      });
+    },
+    { articleId: FIXTURE, graphemeOffset: SAVED_OFFSET },
+  );
 }
 
 /** Open the article in scrolling mode and settle: first navigation (Dexie
@@ -167,12 +170,14 @@ test.describe("RestorationMarker — scrolling mode (ORNT-06)", () => {
       return {
         inArticle: b.top >= a.top - 1 && b.bottom <= a.bottom + 1,
         intersectsViewport: b.top < window.innerHeight && b.bottom > 0,
-        hasGutterOffset: b.left < a.left + (a.width / 2),
+        hasGutterOffset: b.left < a.left + a.width / 2,
       };
     });
     expect(near).not.toBeNull();
     expect(near!.inArticle, "marker bar must sit within the article's span").toBe(true);
-    expect(near!.intersectsViewport, "marker bar must be visible near the restored block").toBe(true);
+    expect(near!.intersectsViewport, "marker bar must be visible near the restored block").toBe(
+      true,
+    );
     expect(near!.hasGutterOffset, "marker bar must sit in the inline-start gutter").toBe(true);
   });
 
@@ -191,9 +196,7 @@ test.describe("RestorationMarker — scrolling mode (ORNT-06)", () => {
     // itself 4000ms after mount (fade class at 3400ms + 600ms CSS opacity
     // transition). The announce region goes with it — one cause, one cue.
     await expect(marker).toHaveCount(0, { timeout: 10_000 });
-    await expect(
-      page.getByText("Returned to where you left off."),
-    ).toHaveCount(0);
+    await expect(page.getByText("Returned to where you left off.")).toHaveCount(0);
   });
 
   test("first open with NO saved location: no marker and no announce (rule 11 honesty)", async ({
@@ -204,14 +207,10 @@ test.describe("RestorationMarker — scrolling mode (ORNT-06)", () => {
     await page.waitForTimeout(1200); // the restore effect has resolved null
 
     await expect(page.locator(".restoration-marker")).toHaveCount(0);
-    await expect(
-      page.getByText("Returned to where you left off."),
-    ).toHaveCount(0);
+    await expect(page.getByText("Returned to where you left off.")).toHaveCount(0);
   });
 
-  test("content is not shifted — the marker is overlay-only (ORNT-06)", async ({
-    page,
-  }) => {
+  test("content is not shifted — the marker is overlay-only (ORNT-06)", async ({ page }) => {
     await openScrollingReady(page);
     await seedLocation(page);
     await page.reload();
@@ -231,7 +230,9 @@ test.describe("RestorationMarker — scrolling mode (ORNT-06)", () => {
     // geometry checks use; a real layout shift is tens of pixels.
     expect(Math.abs(withoutMarker.scrollY - withMarker.scrollY)).toBeLessThanOrEqual(1);
     expect(Math.abs(withoutMarker.articleTop! - withMarker.articleTop!)).toBeLessThanOrEqual(1);
-    expect(Math.abs(withoutMarker.articleBottom! - withMarker.articleBottom!)).toBeLessThanOrEqual(1);
+    expect(Math.abs(withoutMarker.articleBottom! - withMarker.articleBottom!)).toBeLessThanOrEqual(
+      1,
+    );
     expect(Math.abs(withoutMarker.firstTop! - withMarker.firstTop!)).toBeLessThanOrEqual(1);
     expect(Math.abs(withoutMarker.firstBottom! - withMarker.firstBottom!)).toBeLessThanOrEqual(1);
   });
@@ -252,9 +253,7 @@ test.describe("RestorationMarker — paginated mode (18-04)", () => {
   /** Wait for the DEV-only pagination hook (first commit). */
   async function paginationReady(page: import("@playwright/test").Page) {
     await page.waitForFunction(
-      () =>
-        (window as unknown as Record<string, unknown>).__lemPagination !==
-        undefined,
+      () => (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
       undefined,
       { timeout: 10_000 },
     );
@@ -267,25 +266,28 @@ test.describe("RestorationMarker — paginated mode (18-04)", () => {
     page: import("@playwright/test").Page,
     graphemeOffset: number,
   ): Promise<void> {
-    await page.evaluate(async (seed) => {
-      await new Promise<void>((resolve, reject) => {
-        const request = indexedDB.open("lem-reader");
-        request.onsuccess = () => {
-          const database = request.result;
-          const transaction = database.transaction("location", "readwrite");
-          transaction.objectStore("location").put({
-            schemaVersion: 1,
-            articleId: seed.articleId,
-            revision: 1,
-            graphemeOffset: seed.graphemeOffset,
-            savedAt: new Date().toISOString(),
-          });
-          transaction.oncomplete = () => resolve();
-          transaction.onerror = () => reject(transaction.error);
-        };
-        request.onerror = () => reject(request.error);
-      });
-    }, { articleId: FIXTURE, graphemeOffset });
+    await page.evaluate(
+      async (seed) => {
+        await new Promise<void>((resolve, reject) => {
+          const request = indexedDB.open("lem-reader");
+          request.onsuccess = () => {
+            const database = request.result;
+            const transaction = database.transaction("location", "readwrite");
+            transaction.objectStore("location").put({
+              schemaVersion: 1,
+              articleId: seed.articleId,
+              revision: 1,
+              graphemeOffset: seed.graphemeOffset,
+              savedAt: new Date().toISOString(),
+            });
+            transaction.oncomplete = () => resolve();
+            transaction.onerror = () => reject(transaction.error);
+          };
+          request.onerror = () => reject(request.error);
+        });
+      },
+      { articleId: FIXTURE, graphemeOffset },
+    );
   }
 
   /** Open once, read the article's total grapheme length (DEV hook), seed a
@@ -308,8 +310,9 @@ test.describe("RestorationMarker — paginated mode (18-04)", () => {
     await paginationReady(page);
     await page.waitForFunction(
       () => {
-        const dev = (window as unknown as Record<string, unknown>)
-          .__lemPagination as { currentPageIdx: number };
+        const dev = (window as unknown as Record<string, unknown>).__lemPagination as {
+          currentPageIdx: number;
+        };
         return dev.currentPageIdx >= 1;
       },
       undefined,
@@ -324,9 +327,7 @@ test.describe("RestorationMarker — paginated mode (18-04)", () => {
 
     // The polite announce (the D18-05 verbatim carry-forward) AND the bar.
     await expect(
-      page
-        .getByRole("status")
-        .filter({ hasText: "Returned to where you left off." }),
+      page.getByRole("status").filter({ hasText: "Returned to where you left off." }),
     ).toHaveCount(1, { timeout: 8_000 });
     const marker = page.locator(".restoration-marker");
     await expect(marker).toHaveCount(1, { timeout: 8_000 });
@@ -352,7 +353,10 @@ test.describe("RestorationMarker — paginated mode (18-04)", () => {
       };
     });
     expect(near).not.toBeNull();
-    expect(near!.atInlineStartEdge, "the bar must sit at the restored page's inline-start edge").toBe(true);
+    expect(
+      near!.atInlineStartEdge,
+      "the bar must sit at the restored page's inline-start edge",
+    ).toBe(true);
     expect(near!.pageHeightBar, "the bar must span the restored page's height").toBe(true);
     expect(near!.intersectsViewport, "the bar must be visible at the restored page").toBe(true);
     expect(near!.belowHeaderLine).toBe(true);
@@ -368,16 +372,14 @@ test.describe("RestorationMarker — paginated mode (18-04)", () => {
 
     // No button/link/focusable inside the marker — there is nothing to
     // dismiss (the cue IS the location; it retires on its own).
-    const interactive = await marker.evaluate((el) =>
-      el.querySelectorAll("button, a, input, select, textarea, [tabindex]").length,
+    const interactive = await marker.evaluate(
+      (el) => el.querySelectorAll("button, a, input, select, textarea, [tabindex]").length,
     );
     expect(interactive).toBe(0);
 
     // pointer-events: none — the bar can never intercept a click or a page
     // turn gesture (ORNT-06 "does not block").
-    const pointerEvents = await marker.evaluate(
-      (el) => getComputedStyle(el).pointerEvents,
-    );
+    const pointerEvents = await marker.evaluate((el) => getComputedStyle(el).pointerEvents);
     expect(pointerEvents).toBe("none");
   });
 
@@ -391,14 +393,12 @@ test.describe("RestorationMarker — paginated mode (18-04)", () => {
     const readIdx = () =>
       page.evaluate(
         () =>
-          (window as unknown as { __lemPagination?: { currentPageIdx: number } })
-            .__lemPagination?.currentPageIdx ?? -1,
+          (window as unknown as { __lemPagination?: { currentPageIdx: number } }).__lemPagination
+            ?.currentPageIdx ?? -1,
       );
     const before = await readIdx();
     await page.keyboard.press("PageDown");
-    await expect
-      .poll(readIdx, { timeout: 5_000 })
-      .toBe(before + 1);
+    await expect.poll(readIdx, { timeout: 5_000 }).toBe(before + 1);
     // The marker is still mounted (well within its 4s window) — reading
     // continued past it without dismissal.
     await expect(marker).toHaveCount(1);
@@ -432,7 +432,9 @@ test.describe("RestorationMarker — paginated mode (18-04)", () => {
 
     // The ≤1px convention (the scrolling describe's calibration note).
     expect(Math.abs(withoutMarker.articleTop! - withMarker.articleTop!)).toBeLessThanOrEqual(1);
-    expect(Math.abs(withoutMarker.articleBottom! - withMarker.articleBottom!)).toBeLessThanOrEqual(1);
+    expect(Math.abs(withoutMarker.articleBottom! - withMarker.articleBottom!)).toBeLessThanOrEqual(
+      1,
+    );
     expect(Math.abs(withoutMarker.fragmentTop! - withMarker.fragmentTop!)).toBeLessThanOrEqual(1);
     expect(Math.abs(withoutMarker.fragmentLeft! - withMarker.fragmentLeft!)).toBeLessThanOrEqual(1);
   });
@@ -451,14 +453,9 @@ test.describe("RestorationMarker — paginated mode (18-04)", () => {
     // the opacity change is an instant step (computed transition-duration
     // 0s). Poll generously: the class arrives mid-window.
     await expect
-      .poll(
-        () => marker.evaluate((el) => el.classList.contains("is-fading")),
-        { timeout: 6_000 },
-      )
+      .poll(() => marker.evaluate((el) => el.classList.contains("is-fading")), { timeout: 6_000 })
       .toBe(true);
-    const duration = await marker.evaluate((el) =>
-      getComputedStyle(el).transitionDuration,
-    );
+    const duration = await marker.evaluate((el) => getComputedStyle(el).transitionDuration);
     expect(
       duration,
       "the reduced-motion gate must kill the fade (0s duration — no JS animation exists)",

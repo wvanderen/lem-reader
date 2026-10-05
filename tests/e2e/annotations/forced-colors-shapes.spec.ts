@@ -105,17 +105,20 @@ test.describe("A11Y-05 forced-colors shape distinction (05-05)", () => {
     // vicinity (block 0, page 1 — skipping it also keeps the D5-13 overlap
     // check from rejecting the selection).
     const bare = await findDisjointBlockWalkingPages(page, [0], 24);
-    expect(bare.blockIndex, "a later page must carry a selectable block for the bare highlight").not.toBe(-1);
+    expect(
+      bare.blockIndex,
+      "a later page must carry a selectable block for the bare highlight",
+    ).not.toBe(-1);
     await selectRangeInBlock(page, bare.blockIndex, 0, 16);
-    await page.locator(".selection-toolbar").getByRole("button", { name: "Highlight", exact: true }).click();
+    await page
+      .locator(".selection-toolbar")
+      .getByRole("button", { name: "Highlight", exact: true })
+      .click();
     const bareId = await page.locator("mark.highlight").first().getAttribute("data-highlight-id");
 
     // The bare highlight is the solid-fill shape — NOT a dotted underline.
     if (bareId) {
-      const bareShape = await computedShape(
-        page,
-        `mark.highlight[data-highlight-id="${bareId}"]`,
-      );
+      const bareShape = await computedShape(page, `mark.highlight[data-highlight-id="${bareId}"]`);
       expect(bareShape.textDecorationStyle, "bare highlight is NOT dotted underline").not.toMatch(
         /dotted/i,
       );
@@ -149,7 +152,9 @@ test.describe("A11Y-05 forced-colors shape distinction (05-05)", () => {
         page,
         `mark.highlight.has-note[data-highlight-id="${noteId}"]`,
       );
-      expect(noteShape.textDecorationStyle, "note-bearing uses dotted underline").toMatch(/dotted/i);
+      expect(noteShape.textDecorationStyle, "note-bearing uses dotted underline").toMatch(
+        /dotted/i,
+      );
       expect(noteShape.outlineStyle, "note-bearing has NO dashed outline").not.toMatch(/dashed/i);
     }
   });
@@ -161,7 +166,9 @@ test.describe("A11Y-05 forced-colors shape distinction (05-05)", () => {
     // The unresolved mark is visible + carries the dashed outline (not the
     // solid Highlight fill a confident mark would use). ANNO-07 under forced-
     // colors: the reader can tell the state by shape alone.
-    const unresolved = page.locator('mark.highlight.unresolved[data-highlight-id="seed-orphan-fc"]');
+    const unresolved = page.locator(
+      'mark.highlight.unresolved[data-highlight-id="seed-orphan-fc"]',
+    );
     await expect(unresolved.first()).toBeVisible();
     const shape = await computedShape(
       page,

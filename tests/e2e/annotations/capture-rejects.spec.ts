@@ -40,7 +40,10 @@ test.describe("ANNO-01 capture rejects (D5-13 + D5-08) — 05-05", () => {
     expect(blockIdx).not.toBe(-1);
     let ok = await selectRangeInBlock(page, blockIdx, 0, 24);
     expect(ok, "first selection").toBeTruthy();
-    await page.locator(".selection-toolbar").getByRole("button", { name: "Highlight", exact: true }).click();
+    await page
+      .locator(".selection-toolbar")
+      .getByRole("button", { name: "Highlight", exact: true })
+      .click();
     await expect(page.locator("mark.highlight").first()).toBeVisible();
     const baselineCount = await page.locator("mark.highlight").count();
     expect(baselineCount).toBeGreaterThanOrEqual(1);
@@ -104,7 +107,9 @@ test.describe("ANNO-01 capture rejects (D5-13 + D5-08) — 05-05", () => {
     await page.waitForTimeout(200);
     // The toolbar must NOT present the valid action buttons for a cross-page
     // (multi-block or hidden-body) selection.
-    const actionButtons = page.locator(".selection-toolbar").getByRole("button", { name: "Highlight", exact: true });
+    const actionButtons = page
+      .locator(".selection-toolbar")
+      .getByRole("button", { name: "Highlight", exact: true });
     const count = await actionButtons.count();
     expect(count, "no valid Highlight button for cross-page selection").toBe(0);
   });

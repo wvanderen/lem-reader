@@ -64,9 +64,7 @@ test.beforeEach(async ({ page }) => {
 async function assertTabReachAndEnterActivate(page: Page): Promise<void> {
   const toolbar = page.locator(".selection-toolbar");
   await expect(toolbar).toBeVisible();
-  await expect(
-    page.getByRole("toolbar", { name: "Highlight actions" }),
-  ).toBeVisible();
+  await expect(page.getByRole("toolbar", { name: "Highlight actions" })).toBeVisible();
   const highlightBtn = toolbar.getByRole("button", {
     name: "Highlight",
     exact: true,
@@ -88,13 +86,9 @@ async function assertTabReachAndEnterActivate(page: Page): Promise<void> {
   // to the DOM — the Gecko/WebKit collapse regression assertion.
   const state = await highlightBtn.evaluate((el) => ({
     isFocus: document.activeElement === el,
-    connected:
-      el.closest(".selection-toolbar")?.isConnected === true,
+    connected: el.closest(".selection-toolbar")?.isConnected === true,
   }));
-  expect(
-    state.isFocus,
-    "one Tab lands focus on the toolbar's Highlight button",
-  ).toBe(true);
+  expect(state.isFocus, "one Tab lands focus on the toolbar's Highlight button").toBe(true);
   expect(
     state.connected,
     "toolbar survives the focus move (Gecko/WebKit collapse regression)",
@@ -104,9 +98,7 @@ async function assertTabReachAndEnterActivate(page: Page): Promise<void> {
   // firefox/webkit the selection collapsed inside focus(); the saved-range
   // restore re-enters the unchanged creation path.
   await page.keyboard.press("Enter");
-  await expect(
-    page.locator("mark.highlight[data-highlight-id]").first(),
-  ).toBeVisible();
+  await expect(page.locator("mark.highlight[data-highlight-id]").first()).toBeVisible();
   await expect(announcementRegion(page)).toContainText(/Highlight saved/i);
   await expect(page.locator(".selection-toolbar")).toHaveCount(0);
 }
@@ -158,10 +150,7 @@ test.describe("G6 toolbar Tab path (Flow C2/C3 — Plan 13-11)", () => {
     await expect(page.locator(".selection-toolbar")).toHaveCount(0);
     const activeInsideToolbar = await page.evaluate(() => {
       const active = document.activeElement;
-      return (
-        active instanceof Element &&
-        active.closest(".selection-toolbar") !== null
-      );
+      return active instanceof Element && active.closest(".selection-toolbar") !== null;
     });
     expect(
       activeInsideToolbar,

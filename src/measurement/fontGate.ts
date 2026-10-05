@@ -47,11 +47,7 @@ export async function awaitFontsReady(signal: AbortSignal): Promise<void> {
   await Promise.race([
     document.fonts.ready,
     new Promise<never>((_, reject) => {
-      signal.addEventListener(
-        "abort",
-        () => reject(new AbortError()),
-        { once: true },
-      );
+      signal.addEventListener("abort", () => reject(new AbortError()), { once: true });
     }),
   ]);
 }

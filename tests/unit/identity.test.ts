@@ -66,7 +66,11 @@ describe("revision discipline (documented manual rule)", () => {
       blocks: [{ kind: "paragraph" as const, content: [{ text: "v1 body" }] }],
     };
     const r1 = ArticleSchema.parse({ ...base, revision: 1 });
-    const r2 = ArticleSchema.parse({ ...base, revision: 2, blocks: [{ kind: "paragraph", content: [{ text: "v2 body edited" }] }] });
+    const r2 = ArticleSchema.parse({
+      ...base,
+      revision: 2,
+      blocks: [{ kind: "paragraph", content: [{ text: "v2 body edited" }] }],
+    });
     expect(r1.id).toBe(r2.id);
     expect(r1.revision).toBe(1);
     expect(r2.revision).toBe(2);

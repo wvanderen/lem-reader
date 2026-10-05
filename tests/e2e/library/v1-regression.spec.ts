@@ -60,15 +60,11 @@ for (const article of fixtures) {
     }) => {
       // 1. Mount LibraryView at #/.
       await page.goto(`${BASE}/#/`);
-      await expect(
-        page.getByRole("heading", { level: 1, name: "Saved articles" }),
-      ).toBeVisible();
+      await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
 
       // 2. The fixture's Open-article link is present on #/ (byte-stable <a>
       //    with aria-labelledby — Pitfall 8-5). Clicking it mounts ArticleView.
-      const openLink = page.locator(
-        `a[href="#/article/${article.id}"]`,
-      );
+      const openLink = page.locator(`a[href="#/article/${article.id}"]`);
       await expect(openLink, `Open-article link for ${article.id}`).toBeVisible();
       await openLink.click();
 
@@ -98,9 +94,7 @@ for (const article of fixtures) {
       // 6. Browser back returns to #/ and the Saved articles heading is
       //    visible again (the hash router handles the list route gracefully).
       await page.goBack();
-      await expect(
-        page.getByRole("heading", { level: 1, name: "Saved articles" }),
-      ).toBeVisible();
+      await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
     });
   });
 }

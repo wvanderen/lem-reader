@@ -381,10 +381,7 @@ describe("computeAgreement", () => {
   });
 
   it("matches case- and whitespace-insensitively on the text prefix", () => {
-    const blocks = [
-      heading("INTRODUCTION"),
-      para("This   paper studies calm reading in depth."),
-    ];
+    const blocks = [heading("INTRODUCTION"), para("This   paper studies calm reading in depth.")];
     expect(computeAgreement(labels, blocks)).toBe(1);
   });
 

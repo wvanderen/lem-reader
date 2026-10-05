@@ -31,8 +31,7 @@ vi.mock("../../../src/persistence/db", () => {
   const notesWhere = vi.fn(() => ({ equals: notesWhereEquals }));
   const notes = { where: notesWhere, put: vi.fn() };
   const transaction = vi.fn(
-    (_mode: string, _s1: unknown, _s2: unknown, fn: () => Promise<unknown>) =>
-      fn(),
+    (_mode: string, _s1: unknown, _s2: unknown, fn: () => Promise<unknown>) => fn(),
   );
   return {
     db: {
@@ -118,8 +117,7 @@ beforeEach(() => {
   notesDeleteMock.mockReset();
   // Restore the default transaction stub (just-invoke-fn) after each test.
   dbTransactionMock.mockImplementation(
-    (_mode: string, _s1: unknown, _s2: unknown, fn: () => Promise<unknown>) =>
-      fn(),
+    (_mode: string, _s1: unknown, _s2: unknown, fn: () => Promise<unknown>) => fn(),
   );
 });
 

@@ -72,10 +72,7 @@ function syntheticArticles(): CanonicalArticle[] {
       blocks: [
         {
           kind: "paragraph",
-          content: [
-            { text: "body with a footnote marker" },
-            { text: " following more text here" },
-          ],
+          content: [{ text: "body with a footnote marker" }, { text: " following more text here" }],
         },
         {
           kind: "footnote-reference",
@@ -83,9 +80,7 @@ function syntheticArticles(): CanonicalArticle[] {
           marker: "[1]",
         },
       ],
-      footnotes: [
-        { id: "fn-1", content: [{ text: "the footnote body content stands alone" }] },
-      ],
+      footnotes: [{ id: "fn-1", content: [{ text: "the footnote body content stands alone" }] }],
     }),
   ];
 }
@@ -134,9 +129,7 @@ describe("selector round-trip — ANNO-05/06 invariant (same revision)", () => {
     const position = samplePositions(article)[1]!;
     const selector = deriveQuoteSelector(article, position);
     const clusters = graphemeClusters(normalizeText(article), article.lang);
-    const expectedExact = clusters
-      .slice(position.start, position.end)
-      .join("");
+    const expectedExact = clusters.slice(position.start, position.end).join("");
     expect(selector.exact).toBe(expectedExact);
   });
 });

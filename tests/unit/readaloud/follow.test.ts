@@ -4,34 +4,35 @@
 // fights the reader — manual navigation suspends following, and following
 // silently resumes when speech re-enters the reader's current view.
 import { describe, expect, it } from "vitest";
-import {
-  paginatedFollowDecision,
-  scrollingFollowDecision,
-} from "../../../src/readaloud/follow";
+import { paginatedFollowDecision, scrollingFollowDecision } from "../../../src/readaloud/follow";
 
 describe("paginatedFollowDecision", () => {
   it("turns to the spoken page while following (the auto page-turn)", () => {
-    expect(
-      paginatedFollowDecision({ suspended: false, displayedPage: 2, spokenPage: 3 }),
-    ).toEqual({ action: "turn", suspended: false });
+    expect(paginatedFollowDecision({ suspended: false, displayedPage: 2, spokenPage: 3 })).toEqual({
+      action: "turn",
+      suspended: false,
+    });
   });
 
   it("stays put when speech is on the displayed page", () => {
-    expect(
-      paginatedFollowDecision({ suspended: false, displayedPage: 3, spokenPage: 3 }),
-    ).toEqual({ action: "none", suspended: false });
+    expect(paginatedFollowDecision({ suspended: false, displayedPage: 3, spokenPage: 3 })).toEqual({
+      action: "none",
+      suspended: false,
+    });
   });
 
   it("a manual turn suspends: speech on another page does NOT turn", () => {
-    expect(
-      paginatedFollowDecision({ suspended: true, displayedPage: 0, spokenPage: 4 }),
-    ).toEqual({ action: "none", suspended: true });
+    expect(paginatedFollowDecision({ suspended: true, displayedPage: 0, spokenPage: 4 })).toEqual({
+      action: "none",
+      suspended: true,
+    });
   });
 
   it("speech re-entering the displayed page re-acquires following", () => {
-    expect(
-      paginatedFollowDecision({ suspended: true, displayedPage: 4, spokenPage: 4 }),
-    ).toEqual({ action: "none", suspended: false });
+    expect(paginatedFollowDecision({ suspended: true, displayedPage: 4, spokenPage: 4 })).toEqual({
+      action: "none",
+      suspended: false,
+    });
   });
 });
 

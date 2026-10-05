@@ -26,11 +26,7 @@
 // waitForFunction) — zero fixed sleeps (Pitfall 8: firefox rAF-throttle is a
 // known flake class under load).
 import { test, expect, type Page } from "@playwright/test";
-import {
-  makeArticle,
-  prepareFreshPage,
-  seedRows,
-} from "../portability/_portability";
+import { makeArticle, prepareFreshPage, seedRows } from "../portability/_portability";
 import { BASE } from "../_base";
 
 /** Corpus fixture proven to paginate to ≥2 pages at default settings. */
@@ -58,9 +54,7 @@ interface PaginationDev {
 
 async function paginationState(page: Page): Promise<PaginationDev> {
   return page.evaluate(
-    () =>
-      (window as unknown as Record<string, unknown>)
-        .__lemPagination as PaginationDev,
+    () => (window as unknown as Record<string, unknown>).__lemPagination as PaginationDev,
   );
 }
 
@@ -86,9 +80,7 @@ async function pollScaleXAbove(page: Page, floor: number): Promise<number> {
     (floorValue: number) => {
       const el = document.querySelector(".progress-hairline-fill");
       if (!el) return false;
-      const m = /matrix\(([\d.eE+-]+)/.exec(
-        getComputedStyle(el).transform ?? "",
-      );
+      const m = /matrix\(([\d.eE+-]+)/.exec(getComputedStyle(el).transform ?? "");
       const a = m && m[1] ? parseFloat(m[1]) : 0;
       return a > floorValue ? a : false;
     },
@@ -99,16 +91,11 @@ async function pollScaleXAbove(page: Page, floor: number): Promise<number> {
 }
 
 /** Open an article in paginated mode and wait for the engine's first commit. */
-async function openPaginated(
-  page: Page,
-  articleId: string,
-): Promise<PaginationDev> {
+async function openPaginated(page: Page, articleId: string): Promise<PaginationDev> {
   await page.goto(`${BASE}/#/article/${articleId}`);
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await page.waitForFunction(
-    () =>
-      (window as unknown as Record<string, unknown>).__lemPagination !==
-      undefined,
+    () => (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
     undefined,
     { timeout: 10_000 },
   );
@@ -118,10 +105,12 @@ async function openPaginated(
 /** Turn one page forward and poll until the committed index is `targetIdx`. */
 async function turnForward(page: Page, targetIdx: number): Promise<void> {
   await page.keyboard.press("PageDown");
-  await expect.poll(async () => (await paginationState(page)).currentPageIdx, {
-    timeout: 5000,
-    message: `expected currentPageIdx to reach ${targetIdx}`,
-  }).toBe(targetIdx);
+  await expect
+    .poll(async () => (await paginationState(page)).currentPageIdx, {
+      timeout: 5000,
+      message: `expected currentPageIdx to reach ${targetIdx}`,
+    })
+    .toBe(targetIdx);
 }
 
 test.describe("POLISH-02 first-paint progress boundaries (SC#2)", () => {

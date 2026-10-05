@@ -43,20 +43,14 @@ const article = (blocks: Block[]): CanonicalArticle => ({
     sourceUrl: "https://example.com/test",
     title: "Test Article",
     retrievedAt: "2026-08-07T00:00:00Z",
-    originalHtmlHash:
-      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    originalHtmlHash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
   },
   blocks,
   footnotes: [],
 });
 
 /** Build an ArticleBodyHighlight at the given D-05 article-global position. */
-function makeEntry(
-  id: string,
-  start: number,
-  end: number,
-  hasNote = false,
-): ArticleBodyHighlight {
+function makeEntry(id: string, start: number, end: number, hasNote = false): ArticleBodyHighlight {
   return {
     id,
     position: { start, end },
@@ -80,9 +74,7 @@ describe("blockquote highlight rendering — inline <mark> in BOTH render paths 
     const art = article([blockquote([paragraph(childText)])]);
     // Highlight "passage" at article-global [7, 14).
     const hl = makeEntry("hl-scroll", 7, 14);
-    const { container } = render(
-      <ArticleBody article={art} highlights={[hl]} />,
-    );
+    const { container } = render(<ArticleBody article={art} highlights={[hl]} />);
 
     // The mark must render INSIDE the blockquote (the diagnosed gap: today
     // InlineList receives no slices for the blockquote's child paragraph).

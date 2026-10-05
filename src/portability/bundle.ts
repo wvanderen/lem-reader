@@ -113,70 +113,66 @@ import {
 export const AssetExportMetaSchema = z.object({
   articleId: z.string().min(1),
   assetId: z.string().regex(/^img-[a-z0-9]{12}$/),
-  contentType: z.enum([
-    "image/jpeg",
-    "image/png",
-    "image/webp",
-    "image/gif",
-    "image/avif",
-  ]),
+  contentType: z.enum(["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"]),
   byteLength: z.number().int().min(1),
   sha256: z.string().regex(/^[a-f0-9]{64}$/),
   entry: z.string().regex(/^assets\/[^/]+\/img-[a-z0-9]{12}$/),
 });
 export type AssetExportMeta = z.infer<typeof AssetExportMetaSchema>;
 
-export const ExportBundleSchema = z.object({
-  // PORT-01/02 versioning hook — the 1|..|7 union reads all seven
-  // generations; v8+ forward-rejects (D9-04). Phase 17 (17-04): v3 carries
-  // reader-owned metadata overrides (readerTitle/readerAuthor) inside each
-  // article row via ArticleSchema composition (D17-12). Phase 20 (20-05):
-  // v4 carries the assets metadata array (raw bytes ride the zip). Issue
-  // #37: v5 carries the readingSessions array. Issue #121: v6 carries the
-  // subscriptions array (previews ride inside each row).
-  schemaVersion: z.union([
-    z.literal(1),
-    z.literal(2),
-    z.literal(3),
-    z.literal(4),
-    z.literal(5),
-    z.literal(6),
-    z.literal(7),
-  ]),
-  exportedAt: z.string().datetime(), // ISO-8601
-  appVersion: z.string(), // diagnostic only (D9-04)
-  articles: z.array(ArticleSchema), // Dexie articles ONLY — fixtures never serialize
-  locations: z.array(LocationRecordSchema),
-  highlights: z.array(HighlightRecordSchema),
-  notes: z.array(NoteRecordSchema),
-  preferences: ReaderSettingsSchema, // always present (D9-12)
-  fixtureIds: z.array(z.string()), // ids of bundled fixtures the reader's records reference
-  // Phase 12 (Plan 12-07) — absent on v1 bundles (hydrates to undefined);
-  // ALWAYS present on v2 writes (empty array on book-free libraries).
-  books: z.array(BookSchema).optional(),
-  // Phase 20 (Plan 20-05) — absent on v1/v2/v3 bundles (hydrates to
-  // undefined); ALWAYS present on v4 writes (empty array on asset-free
-  // libraries — the presence-is-the-contract books precedent).
-  assets: z.array(AssetExportMetaSchema).optional(),
-  // Issue #37 — absent on v1..v4 bundles (hydrates to undefined); ALWAYS
-  // present on v5 writes (empty array on a session-free library — the
-  // presence-is-the-contract books/assets precedent). Composes
-  // ReadingSessionRecordSchema — one append-only row per visit (decision
-  // #24); the per-visit uuid primary key is the merge key at import.
-  readingSessions: z.array(ReadingSessionRecordSchema).optional(),
-  // Issue #121 — absent on v1..v5 bundles (hydrates to undefined); ALWAYS
-  // present on v6 writes (empty array on a subscription-free library — the
-  // presence-is-the-contract precedent). Composes SubscriptionRecordSchema
-  // — one row per subscribed feed whose bounded recent-item previews ride
-  // INSIDE the row as its local cache; the NORMALIZED feed URL is the merge
-  // key at import (a duplicate feedUrl keeps the LOCAL row and its cache).
-  subscriptions: z.array(SubscriptionRecordSchema).optional(),
-  // Required on v7; older bundles leave the destination choice untouched.
-  starterRemoved: z.boolean().optional(),
-}).refine((bundle) => bundle.schemaVersion < 7 || bundle.starterRemoved !== undefined, {
-  message: "Version 7 bundles must include the starter article choice",
-  path: ["starterRemoved"],
-});
+export const ExportBundleSchema = z
+  .object({
+    // PORT-01/02 versioning hook — the 1|..|7 union reads all seven
+    // generations; v8+ forward-rejects (D9-04). Phase 17 (17-04): v3 carries
+    // reader-owned metadata overrides (readerTitle/readerAuthor) inside each
+    // article row via ArticleSchema composition (D17-12). Phase 20 (20-05):
+    // v4 carries the assets metadata array (raw bytes ride the zip). Issue
+    // #37: v5 carries the readingSessions array. Issue #121: v6 carries the
+    // subscriptions array (previews ride inside each row).
+    schemaVersion: z.union([
+      z.literal(1),
+      z.literal(2),
+      z.literal(3),
+      z.literal(4),
+      z.literal(5),
+      z.literal(6),
+      z.literal(7),
+    ]),
+    exportedAt: z.string().datetime(), // ISO-8601
+    appVersion: z.string(), // diagnostic only (D9-04)
+    articles: z.array(ArticleSchema), // Dexie articles ONLY — fixtures never serialize
+    locations: z.array(LocationRecordSchema),
+    highlights: z.array(HighlightRecordSchema),
+    notes: z.array(NoteRecordSchema),
+    preferences: ReaderSettingsSchema, // always present (D9-12)
+    fixtureIds: z.array(z.string()), // ids of bundled fixtures the reader's records reference
+    // Phase 12 (Plan 12-07) — absent on v1 bundles (hydrates to undefined);
+    // ALWAYS present on v2 writes (empty array on book-free libraries).
+    books: z.array(BookSchema).optional(),
+    // Phase 20 (Plan 20-05) — absent on v1/v2/v3 bundles (hydrates to
+    // undefined); ALWAYS present on v4 writes (empty array on asset-free
+    // libraries — the presence-is-the-contract books precedent).
+    assets: z.array(AssetExportMetaSchema).optional(),
+    // Issue #37 — absent on v1..v4 bundles (hydrates to undefined); ALWAYS
+    // present on v5 writes (empty array on a session-free library — the
+    // presence-is-the-contract books/assets precedent). Composes
+    // ReadingSessionRecordSchema — one append-only row per visit (decision
+    // #24); the per-visit uuid primary key is the merge key at import.
+    readingSessions: z.array(ReadingSessionRecordSchema).optional(),
+    // Issue #121 — absent on v1..v5 bundles (hydrates to undefined); ALWAYS
+    // present on v6 writes (empty array on a subscription-free library — the
+    // presence-is-the-contract precedent). Composes SubscriptionRecordSchema
+    // — one row per subscribed feed whose bounded recent-item previews ride
+    // INSIDE the row as its local cache; the NORMALIZED feed URL is the merge
+    // key at import (a duplicate feedUrl keeps the LOCAL row and its cache).
+    subscriptions: z.array(SubscriptionRecordSchema).optional(),
+    // Required on v7; older bundles leave the destination choice untouched.
+    starterRemoved: z.boolean().optional(),
+  })
+  .refine((bundle) => bundle.schemaVersion < 7 || bundle.starterRemoved !== undefined, {
+    message: "Version 7 bundles must include the starter article choice",
+    path: ["starterRemoved"],
+  });
 export type ExportBundle = z.infer<typeof ExportBundleSchema>;
 
 /** The D9-01 locked download filename for the whole-library zip export. */

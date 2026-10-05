@@ -123,10 +123,7 @@ async function seedV1Snapshot(page: Page): Promise<void> {
           const highlights = db.createObjectStore("highlights", {
             keyPath: "id",
           });
-          highlights.createIndex("[articleId+revision]", [
-            "articleId",
-            "revision",
-          ]);
+          highlights.createIndex("[articleId+revision]", ["articleId", "revision"]);
         }
         if (!db.objectStoreNames.contains("notes")) {
           const notes = db.createObjectStore("notes", { keyPath: "id" });
@@ -141,10 +138,7 @@ async function seedV1Snapshot(page: Page): Promise<void> {
        */
       function seedRows(db: IDBDatabase): Promise<void> {
         return new Promise((resolve, reject) => {
-          const tx = db.transaction(
-            ["settings", "location", "highlights", "notes"],
-            "readwrite",
-          );
+          const tx = db.transaction(["settings", "location", "highlights", "notes"], "readwrite");
           tx.objectStore("settings").put(settings);
           tx.objectStore("location").put(location);
           tx.objectStore("highlights").put(highlight);
@@ -228,10 +222,7 @@ async function readRow(
   key: IDBValidKey,
 ): Promise<Record<string, unknown> | null> {
   type SerializableKey = string | number | (string | number)[];
-  return page.evaluate<
-    Record<string, unknown> | null,
-    { storeName: string; key: SerializableKey }
-  >(
+  return page.evaluate<Record<string, unknown> | null, { storeName: string; key: SerializableKey }>(
     async ({ storeName, key }): Promise<Record<string, unknown> | null> => {
       return new Promise<Record<string, unknown> | null>((resolve) => {
         const req = indexedDB.open("lem-reader");
@@ -244,9 +235,7 @@ async function readRow(
           const tx = db.transaction(storeName, "readonly");
           const getReq = tx.objectStore(storeName).get(key as IDBValidKey);
           getReq.onsuccess = () =>
-            resolve(
-              (getReq.result ?? null) as Record<string, unknown> | null,
-            );
+            resolve((getReq.result ?? null) as Record<string, unknown> | null);
           getReq.onerror = () => resolve(null);
         };
         req.onerror = () => resolve(null);
@@ -260,30 +249,24 @@ async function readRow(
  * countRows — count the rows in the named store. Resolves to -1 if the store
  * is missing.
  */
-async function countRows(
-  page: Page,
-  storeName: string,
-): Promise<number> {
-  return page.evaluate(
-    async (storeName) => {
-      return new Promise<number>((resolve) => {
-        const req = indexedDB.open("lem-reader");
-        req.onsuccess = () => {
-          const db = req.result;
-          if (!db.objectStoreNames.contains(storeName)) {
-            resolve(-1);
-            return;
-          }
-          const tx = db.transaction(storeName, "readonly");
-          const countReq = tx.objectStore(storeName).count();
-          countReq.onsuccess = () => resolve(countReq.result);
-          countReq.onerror = () => resolve(-1);
-        };
-        req.onerror = () => resolve(-1);
-      });
-    },
-    storeName,
-  );
+async function countRows(page: Page, storeName: string): Promise<number> {
+  return page.evaluate(async (storeName) => {
+    return new Promise<number>((resolve) => {
+      const req = indexedDB.open("lem-reader");
+      req.onsuccess = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(storeName)) {
+          resolve(-1);
+          return;
+        }
+        const tx = db.transaction(storeName, "readonly");
+        const countReq = tx.objectStore(storeName).count();
+        countReq.onsuccess = () => resolve(countReq.result);
+        countReq.onerror = () => resolve(-1);
+      };
+      req.onerror = () => resolve(-1);
+    });
+  }, storeName);
 }
 
 test.beforeEach(async ({ page }) => {
@@ -295,9 +278,9 @@ test.beforeEach(async ({ page }) => {
   // blocks indefinitely and the DB stays at v3 — see the seedV1Snapshot
   // comment for the full recovery story).
   await page.goto(`${BASE}/`);
-  await expect(
-    page.getByRole("heading", { name: "Saved articles" }),
-  ).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible({
+    timeout: 10_000,
+  });
   await page.evaluate(async () => {
     await new Promise<void>((resolve) => {
       const req = indexedDB.open("lem-reader");
@@ -333,9 +316,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.describe("v1 → v3 Dexie migration snapshot (07-07 SC#5)", () => {
-  test("v1/v2 fixture snapshot intact after v3 upgrade (Pitfall 9)", async ({
-    page,
-  }) => {
+  test("v1/v2 fixture snapshot intact after v3 upgrade (Pitfall 9)", async ({ page }) => {
     // 1. Seed the v1/v2-shaped snapshot (settings + location + highlight +
     //    note). This constructs the DB at version 2 with representative rows
     //    mirroring the v1.0 fixture shape.
@@ -351,9 +332,9 @@ test.describe("v1 → v3 Dexie migration snapshot (07-07 SC#5)", () => {
     // Wait for the SPA to mount (which constructs Dexie) by waiting for the
     // list heading. The mount triggers the upgrade chain synchronously in
     // the Dexie constructor's open.
-    await expect(
-      page.getByRole("heading", { name: "Saved articles" }),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible({
+      timeout: 10_000,
+    });
     // Give Dexie's async open + any migration microtasks a moment to settle.
     await page.waitForTimeout(500);
 
@@ -371,10 +352,7 @@ test.describe("v1 → v3 Dexie migration snapshot (07-07 SC#5)", () => {
     expect(settingsRow?.value?.schemaVersion).toBe(2);
 
     // Location row: [articleId+revision] compound key + graphemeOffset survived.
-    const locationRow = (await readRow(page, "location", [
-      "essay-long-form",
-      1,
-    ])) as {
+    const locationRow = (await readRow(page, "location", ["essay-long-form", 1])) as {
       articleId: string;
       revision: number;
       graphemeOffset: number;
@@ -473,9 +451,7 @@ test.describe("v3 → v4 Dexie migration snapshot (08-02 SC#5 + Pitfall 9)", () 
     // `.default([])` must hydrate it to `[]` on read (proven by unit suite).
   };
 
-  test("v3 article row survives v4 upgrade; *tags index declared (Pitfall 9)", async ({
-    page,
-  }) => {
+  test("v3 article row survives v4 upgrade; *tags index declared (Pitfall 9)", async ({ page }) => {
     // 1. Seed a v3 article row directly into the articles store. The beforeEach
     //    has already mounted the SPA (constructing Dexie at v4) and cleared all
     //    rows. We write the v3-shape row (no `tags` field) directly via the
@@ -515,9 +491,9 @@ test.describe("v3 → v4 Dexie migration snapshot (08-02 SC#5 + Pitfall 9)", () 
     //    pattern).
     await page.goto(`${BASE}/#/`);
     await page.reload();
-    await expect(
-      page.getByRole("heading", { name: "Saved articles" }),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible({
+      timeout: 10_000,
+    });
     await page.waitForTimeout(500);
 
     // 3. The v3 row survives the v4 upgrade byte-unchanged (Pitfall 9 — no
@@ -564,9 +540,9 @@ test.describe("v3 → v4 Dexie migration snapshot (08-02 SC#5 + Pitfall 9)", () 
     //    → dexieLibrarySource.list() → ArticleSchema.safeParse, which hydrates
     //    the absent `tags` field to `[]` via `.default([])`). The title link
     //    being visible proves the Zod-validated read path works end-to-end.
-    await expect(
-      page.getByRole("link", { name: /V3 Seeded Article/i }),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("link", { name: /V3 Seeded Article/i })).toBeVisible({
+      timeout: 10_000,
+    });
   });
 });
 
@@ -665,9 +641,9 @@ test.describe("v5 rows hydrate overrides without a write-back (17-05 META-04 + 1
     //    change is the ArticleSchema optional fields on the read path.
     await page.goto(`${BASE}/#/`);
     await page.reload();
-    await expect(
-      page.getByRole("heading", { name: "Saved articles" }),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible({
+      timeout: 10_000,
+    });
     await page.waitForTimeout(500);
 
     // 3. The parsed surface hydrates both override fields to UNDEFINED: the
@@ -679,12 +655,10 @@ test.describe("v5 rows hydrate overrides without a write-back (17-05 META-04 + 1
     const seededRow = page.locator(".library-list > li").filter({
       hasText: "V5 Seeded Article",
     });
-    await expect(seededRow.locator("#title-v5-article-seed")).toHaveText(
-      "V5 Seeded Article",
+    await expect(seededRow.locator("#title-v5-article-seed")).toHaveText("V5 Seeded Article");
+    await expect(seededRow.locator("p.meta:not(.source-badge):not(.finished-mark)")).toHaveText(
+      "V5 Canonical Author",
     );
-    await expect(
-      seededRow.locator("p.meta:not(.source-badge):not(.finished-mark)"),
-    ).toHaveText("V5 Canonical Author");
 
     // 4. NO WRITE-BACK (META-04): the app opened, read, Zod-parsed, and
     //    rendered the row — and the raw stored row STILL carries none of
@@ -702,12 +676,7 @@ test.describe("v5 rows hydrate overrides without a write-back (17-05 META-04 + 1
     } | null;
     expect(articleRow, "v5 article row must survive the app open").not.toBeNull();
     expect(articleRow?.id).toBe("v5-article-seed");
-    for (const key of [
-      "readerTitle",
-      "readerAuthor",
-      "readerPublishedAt",
-      "readerSourceUrl",
-    ]) {
+    for (const key of ["readerTitle", "readerAuthor", "readerPublishedAt", "readerSourceUrl"]) {
       expect(
         Object.prototype.hasOwnProperty.call(articleRow, key),
         `raw row must gain NO ${key} key (no write-back)`,
@@ -759,9 +728,9 @@ test.describe("v5 rows hydrate overrides without a write-back (17-05 META-04 + 1
 
     await page.goto(`${BASE}/#/`);
     await page.reload();
-    await expect(
-      page.getByRole("heading", { name: "Saved articles" }),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible({
+      timeout: 10_000,
+    });
     await page.waitForTimeout(500);
 
     // The EFFECTIVE values render (META-02): the row heading + byline read
@@ -769,12 +738,10 @@ test.describe("v5 rows hydrate overrides without a write-back (17-05 META-04 + 1
     const forwardRow = page.locator(".library-list > li").filter({
       hasText: "Reader Renamed V5",
     });
-    await expect(forwardRow.locator("#title-v5-article-seed")).toHaveText(
-      "Reader Renamed V5",
+    await expect(forwardRow.locator("#title-v5-article-seed")).toHaveText("Reader Renamed V5");
+    await expect(forwardRow.locator("p.meta:not(.source-badge):not(.finished-mark)")).toHaveText(
+      "Reader-Owned Author",
     );
-    await expect(
-      forwardRow.locator("p.meta:not(.source-badge):not(.finished-mark)"),
-    ).toHaveText("Reader-Owned Author");
 
     // Row truth: all four keys persisted through the open/read cycle and
     // the canonical bytes stay canonical underneath (META-01's layering).

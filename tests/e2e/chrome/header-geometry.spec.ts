@@ -46,15 +46,12 @@ test.beforeEach(async ({ page }) => {
 });
 
 /** Open the fixture in paginated mode (the default) at 360×640 and wait for the engine. */
-async function openPaginatedAtSmallPhone(
-  page: import("@playwright/test").Page,
-): Promise<void> {
+async function openPaginatedAtSmallPhone(page: import("@playwright/test").Page): Promise<void> {
   await page.setViewportSize({ width: SMALL_PHONE.width, height: SMALL_PHONE.height });
   await page.goto(`${BASE}/#/article/${FIXTURE}`);
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await page.waitForFunction(
-    () =>
-      (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
+    () => (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
     undefined,
     { timeout: 8000 },
   );
@@ -65,15 +62,11 @@ async function openPaginatedAtSmallPhone(
 }
 
 test.describe("header geometry (13-04 — POLISH-03 / D13-13)", () => {
-  test("paginated: slim header has no internal scrolling at 360×640", async ({
-    page,
-  }) => {
+  test("paginated: slim header has no internal scrolling at 360×640", async ({ page }) => {
     await openPaginatedAtSmallPhone(page);
 
     const headerGeom = await page.evaluate(() => {
-      const header = document.querySelector<HTMLElement>(
-        "article.article-body > header",
-      );
+      const header = document.querySelector<HTMLElement>("article.article-body > header");
       if (!header) return null;
       return {
         scrollHeight: header.scrollHeight,
@@ -110,9 +103,7 @@ test.describe("header geometry (13-04 — POLISH-03 / D13-13)", () => {
     expect(await page.locator(".article-top-meta button").count()).toBe(0);
     expect(await page.locator(".article-top-meta .tag-entry").count()).toBe(0);
     expect(await page.locator(".tag-entry").count()).toBe(1);
-    expect(
-      await page.locator(".annotations-drawer .annotations-drawer-export").count(),
-    ).toBe(1);
+    expect(await page.locator(".annotations-drawer .annotations-drawer-export").count()).toBe(1);
 
     // (b) Option A geometry: spot + page-1 content coexist inside
     // .page-viewport without clipped text. The assertions mirror the
@@ -141,15 +132,13 @@ test.describe("header geometry (13-04 — POLISH-03 / D13-13)", () => {
         }
       }
       const dev = (window as unknown as Record<string, unknown>).__lemPagination as
-        | { pagesLength: number }
-        | undefined;
+        { pagesLength: number } | undefined;
       return {
         pagesLength: dev?.pagesLength ?? 0,
         fragmentScrollHeight: fragment.scrollHeight,
         viewportClientHeight: viewport.clientHeight,
         clippedTextRects,
-        spotInsideViewport:
-          s.top >= v.top - 1 && s.bottom <= v.bottom + 1,
+        spotInsideViewport: s.top >= v.top - 1 && s.bottom <= v.bottom + 1,
         fragmentStartsBelowSpot: f.top >= s.bottom - 1,
       };
     });
@@ -179,9 +168,11 @@ test.describe("header geometry (13-04 — POLISH-03 / D13-13)", () => {
     expect(await page.locator(".tag-entry").count()).toBe(1);
     const afterTurnPages = await page.evaluate(
       () =>
-        ((window as unknown as Record<string, unknown>).__lemPagination as {
-          pagesLength: number;
-        }).pagesLength,
+        (
+          (window as unknown as Record<string, unknown>).__lemPagination as {
+            pagesLength: number;
+          }
+        ).pagesLength,
     );
     expect(afterTurnPages, "spot unmount must not re-trigger pagination").toBe(
       startGeom!.pagesLength,
@@ -196,8 +187,7 @@ test.describe("header geometry (13-04 — POLISH-03 / D13-13)", () => {
       const viewport = document.querySelector<HTMLElement>(".page-viewport");
       const fragment = document.querySelector<HTMLElement>(".page-fragment");
       const dev = (window as unknown as Record<string, unknown>).__lemPagination as
-        | { pagesLength: number }
-        | undefined;
+        { pagesLength: number } | undefined;
       if (!viewport || !fragment) return null;
       const v = viewport.getBoundingClientRect();
       const walker = document.createTreeWalker(fragment, NodeFilter.SHOW_TEXT);
@@ -235,9 +225,7 @@ test.describe("header geometry (13-04 — POLISH-03 / D13-13)", () => {
     await expect(page.locator(".page-viewport")).toHaveCount(0);
 
     const geom = await page.evaluate(() => {
-      const header = document.querySelector<HTMLElement>(
-        "article.article-body > header",
-      );
+      const header = document.querySelector<HTMLElement>("article.article-body > header");
       const spot = document.querySelector<HTMLElement>(".article-top-meta");
       // The first rendered article block (scrolling branch has no
       // .article-body-measurement clone — that is paginated-only).
@@ -252,12 +240,9 @@ test.describe("header geometry (13-04 — POLISH-03 / D13-13)", () => {
         // Plan 13-10 G5: the TagEntry count is popover-scoped — zero inside
         // the spot, exactly one overall (the closed popover instance).
         tagEntryCount: document.querySelectorAll(".tag-entry").length,
-        spotTagEntryCount: document.querySelectorAll(
-          ".article-top-meta .tag-entry",
-        ).length,
+        spotTagEntryCount: document.querySelectorAll(".article-top-meta .tag-entry").length,
         spotAboveFirstBlock:
-          spot.getBoundingClientRect().bottom <=
-          firstBlock.getBoundingClientRect().top + 1,
+          spot.getBoundingClientRect().bottom <= firstBlock.getBoundingClientRect().top + 1,
       };
     });
     expect(geom, "header + spot + body must be mounted in scrolling mode").not.toBeNull();

@@ -121,17 +121,11 @@ test.beforeEach(async ({ page }) => {
 async function seedAndOpenReview(page: Page): Promise<void> {
   await page.goto(`${BASE}/#/`);
   await page.reload();
-  await expect(
-    page.getByRole("heading", { name: "Saved articles" }),
-  ).toBeVisible();
-  await expect(
-    page.getByText("Getting started with Lem Reader").first(),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible();
+  await expect(page.getByText("Getting started with Lem Reader").first()).toBeVisible();
   await seedRows(page, CORPUS_ROWS);
   await page.goto(`${BASE}/#/highlights`);
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Highlights" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
 }
 
 /** The <li> carrying one highlight's row (body + curation cluster). */
@@ -141,9 +135,7 @@ function rowByExcerpt(page: Page, excerpt: string) {
 
 /** The note dialog's textarea (visually-hidden <label for> association). */
 function noteTextarea(page: Page) {
-  return page
-    .getByRole("dialog")
-    .getByLabel("Note", { exact: true });
+  return page.getByRole("dialog").getByLabel("Note", { exact: true });
 }
 
 test.describe("RECV-01.f review-panel curate (10-05 in-place edit + delete)", () => {
@@ -161,14 +153,12 @@ test.describe("RECV-01.f review-panel curate (10-05 in-place edit + delete)", ()
 
     // The noted row previews the seeded note before the edit.
     await expect(rowByExcerpt(page, EXCERPT_NOTED)).toBeVisible();
-    await expect(
-      rowByExcerpt(page, EXCERPT_NOTED).locator(".review-note-preview"),
-    ).toHaveText(ORIGINAL_NOTE);
+    await expect(rowByExcerpt(page, EXCERPT_NOTED).locator(".review-note-preview")).toHaveText(
+      ORIGINAL_NOTE,
+    );
 
     // Open the editor: accessible name carries the excerpt prefix.
-    await page
-      .getByRole("button", { name: `Edit note: ${EXCERPT_NOTED}` })
-      .click();
+    await page.getByRole("button", { name: `Edit note: ${EXCERPT_NOTED}` }).click();
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
     // The textarea is SEEDED with the existing text and FOCUSED (D5-10 —
@@ -184,19 +174,17 @@ test.describe("RECV-01.f review-panel curate (10-05 in-place edit + delete)", ()
 
     // The row's note preview shows the NEW text WITHOUT any reload — the
     // snapshot invalidation re-derived the panel from Dexie (Pitfall 6).
-    await expect(
-      rowByExcerpt(page, EXCERPT_NOTED).locator(".review-note-preview"),
-    ).toHaveText(REVISED_NOTE);
+    await expect(rowByExcerpt(page, EXCERPT_NOTED).locator(".review-note-preview")).toHaveText(
+      REVISED_NOTE,
+    );
 
     // Persistence proof (the plan's sanctioned reload double-check — the
     // update itself was already proven above without it).
     await page.reload();
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Highlights" }),
-    ).toBeVisible();
-    await expect(
-      rowByExcerpt(page, EXCERPT_NOTED).locator(".review-note-preview"),
-    ).toHaveText(REVISED_NOTE);
+    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+    await expect(rowByExcerpt(page, EXCERPT_NOTED).locator(".review-note-preview")).toHaveText(
+      REVISED_NOTE,
+    );
   });
 
   test("orphan row gains a note in place (D10-11 — no article needed), reload persists", async ({
@@ -211,9 +199,7 @@ test.describe("RECV-01.f review-panel curate (10-05 in-place edit + delete)", ()
 
     // Notes are keyed to highlightId — the ghost-article row edits like any
     // other (the whole reason the panel's editor is a props-driven clone).
-    await page
-      .getByRole("button", { name: `Edit note: ${EXCERPT_ORPHAN}` })
-      .click();
+    await page.getByRole("button", { name: `Edit note: ${EXCERPT_ORPHAN}` }).click();
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
     await expect(noteTextarea(page)).toHaveValue(EMPTY);
@@ -222,18 +208,14 @@ test.describe("RECV-01.f review-panel curate (10-05 in-place edit + delete)", ()
     await expect(dialog).toBeHidden();
 
     // The orphan row gains the preview WITHOUT reload.
-    await expect(
-      orphanRow.locator(".review-note-preview"),
-    ).toHaveText(ORPHAN_NOTE);
+    await expect(orphanRow.locator(".review-note-preview")).toHaveText(ORPHAN_NOTE);
 
     // Persistence double-check.
     await page.reload();
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Highlights" }),
-    ).toBeVisible();
-    await expect(
-      rowByExcerpt(page, EXCERPT_ORPHAN).locator(".review-note-preview"),
-    ).toHaveText(ORPHAN_NOTE);
+    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+    await expect(rowByExcerpt(page, EXCERPT_ORPHAN).locator(".review-note-preview")).toHaveText(
+      ORPHAN_NOTE,
+    );
   });
 
   test("empty-text commit deletes the NoteRecord (D5-10) — preview gone without reload", async ({
@@ -242,14 +224,10 @@ test.describe("RECV-01.f review-panel curate (10-05 in-place edit + delete)", ()
     await seedAndOpenReview(page);
 
     const notedRow = rowByExcerpt(page, EXCERPT_NOTED);
-    await expect(
-      notedRow.locator(".review-note-preview"),
-    ).toHaveText(ORIGINAL_NOTE);
+    await expect(notedRow.locator(".review-note-preview")).toHaveText(ORIGINAL_NOTE);
 
     // Clear the textarea entirely and commit.
-    await page
-      .getByRole("button", { name: `Edit note: ${EXCERPT_NOTED}` })
-      .click();
+    await page.getByRole("button", { name: `Edit note: ${EXCERPT_NOTED}` }).click();
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
     await noteTextarea(page).fill(EMPTY);
@@ -268,9 +246,7 @@ test.describe("RECV-01.f review-panel curate (10-05 in-place edit + delete)", ()
   }) => {
     await seedAndOpenReview(page);
 
-    await page
-      .getByRole("button", { name: `Edit note: ${EXCERPT_NOTED}` })
-      .click();
+    await page.getByRole("button", { name: `Edit note: ${EXCERPT_NOTED}` }).click();
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
     await noteTextarea(page).fill(ESC_NOTE);
@@ -279,9 +255,9 @@ test.describe("RECV-01.f review-panel curate (10-05 in-place edit + delete)", ()
     // have run the SAME commit, so no keystrokes are lost.
     await noteTextarea(page).press("Escape");
     await expect(dialog).toBeHidden();
-    await expect(
-      rowByExcerpt(page, EXCERPT_NOTED).locator(".review-note-preview"),
-    ).toHaveText(ESC_NOTE);
+    await expect(rowByExcerpt(page, EXCERPT_NOTED).locator(".review-note-preview")).toHaveText(
+      ESC_NOTE,
+    );
   });
 
   test("remove confirm: cascade-honest copy, initial focus on Cancel, Cancel keeps the row", async ({
@@ -289,37 +265,27 @@ test.describe("RECV-01.f review-panel curate (10-05 in-place edit + delete)", ()
   }) => {
     await seedAndOpenReview(page);
 
-    await page
-      .getByRole("button", { name: `Remove highlight: ${EXCERPT_NOTED}` })
-      .click();
+    await page.getByRole("button", { name: `Remove highlight: ${EXCERPT_NOTED}` }).click();
     const alert = page.getByRole("alertdialog");
     await expect(alert).toBeVisible();
 
     // Cascade-honest copy (D10-12): the note consequence is named.
-    await expect(alert).toContainText(
-      "The note attached to it will also be removed.",
-    );
+    await expect(alert).toContainText("The note attached to it will also be removed.");
     // The excerpt context renders inside the dialog (informational copy).
     await expect(alert).toContainText(EXCERPT_NOTED);
 
     // Pitfall 8 / D10-12: initial focus sits on the NON-destructive button
     // — an accidental Enter cannot delete.
-    await expect(
-      alert.getByRole("button", { name: "Keep highlight" }),
-    ).toBeFocused();
+    await expect(alert.getByRole("button", { name: "Keep highlight" })).toBeFocused();
 
     // Cancel closes only: the row (and its note preview) remain.
     await alert.getByRole("button", { name: "Keep highlight" }).click();
     await expect(alert).toBeHidden();
     const notedRow = rowByExcerpt(page, EXCERPT_NOTED);
     await expect(notedRow).toBeVisible();
-    await expect(
-      notedRow.locator(".review-note-preview"),
-    ).toHaveText(ORIGINAL_NOTE);
+    await expect(notedRow.locator(".review-note-preview")).toHaveText(ORIGINAL_NOTE);
     // No announcement fired — nothing was removed.
-    await expect(page.locator("main > [role='status']")).not.toContainText(
-      "Highlight removed.",
-    );
+    await expect(page.locator("main > [role='status']")).not.toContainText("Highlight removed.");
   });
 
   test("remove proceeds: row + note gone without reload, 'Highlight removed.' announced, reload keeps it gone", async ({
@@ -327,17 +293,13 @@ test.describe("RECV-01.f review-panel curate (10-05 in-place edit + delete)", ()
   }) => {
     await seedAndOpenReview(page);
 
-    await page
-      .getByRole("button", { name: `Remove highlight: ${EXCERPT_NOTED}` })
-      .click();
+    await page.getByRole("button", { name: `Remove highlight: ${EXCERPT_NOTED}` }).click();
     const alert = page.getByRole("alertdialog");
     await expect(alert).toBeVisible();
 
     // The destructive control (exact accessible name — the row affordance
     // carries the excerpt suffix, the dialog button does not).
-    await alert
-      .getByRole("button", { name: "Remove highlight", exact: true })
-      .click();
+    await alert.getByRole("button", { name: "Remove highlight", exact: true }).click();
     await expect(alert).toBeHidden();
 
     // The row (and its note preview) is gone WITHOUT a reload — the
@@ -347,15 +309,11 @@ test.describe("RECV-01.f review-panel curate (10-05 in-place edit + delete)", ()
     await expect(rowByExcerpt(page, EXCERPT_ORPHAN)).toBeVisible();
 
     // D10-12 exact copy, announced through the role=status live region.
-    await expect(page.locator("main > [role='status']")).toContainText(
-      "Highlight removed.",
-    );
+    await expect(page.locator("main > [role='status']")).toContainText("Highlight removed.");
 
     // Dexie truth: the row stays gone after a reload.
     await page.reload();
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Highlights" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
     await expect(rowByExcerpt(page, EXCERPT_NOTED)).toHaveCount(0);
     await expect(rowByExcerpt(page, EXCERPT_ORPHAN)).toBeVisible();
   });

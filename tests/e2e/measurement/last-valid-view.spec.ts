@@ -36,9 +36,7 @@ const PIXEL_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/
  * MUST run AFTER the IndexedDB wipe AND AFTER the app's first load (so Dexie
  * has declared its schema). Callers navigate, call this, then reload.
  */
-async function seedScrollingMode(
-  page: import("@playwright/test").Page,
-): Promise<void> {
+async function seedScrollingMode(page: import("@playwright/test").Page): Promise<void> {
   await page.evaluate(() => {
     return new Promise<void>((resolve) => {
       const req = indexedDB.open("lem-reader");
@@ -161,8 +159,6 @@ test.describe("PAGE-06 last-valid-view retention (03-01)", () => {
       .locator('[role="status"]')
       .textContent({ timeout: 2000 })
       .catch(() => null);
-    expect(statusAfter, "status region must NOT change due to measurement").toBe(
-      statusBefore,
-    );
+    expect(statusAfter, "status region must NOT change due to measurement").toBe(statusBefore);
   });
 });

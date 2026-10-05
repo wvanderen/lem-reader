@@ -214,9 +214,7 @@ describe("markdownToBlocks — mdast → Block mapping (RESEARCH §Pattern 1)", 
   });
 
   it("maps block-level standalone image → FigureBlock (http(s) only)", async () => {
-    const { blocks } = await markdownToBlocks(
-      "![alt caption](https://example.com/img.png)\n",
-    );
+    const { blocks } = await markdownToBlocks("![alt caption](https://example.com/img.png)\n");
     const fig = blocks.find((b) => b.kind === "figure");
     expect(fig).toBeDefined();
     if (fig && fig.kind === "figure") {
@@ -308,9 +306,7 @@ describe("markdownToBlocks — YAML front-matter (D8-17)", () => {
   });
 
   it("converts date to ISO-8601 (ArticleSchema.datetime-compatible)", async () => {
-    const { provenancePartial } = await markdownToBlocks(
-      "---\ndate: 2024-06-15\n---\n\nbody\n",
-    );
+    const { provenancePartial } = await markdownToBlocks("---\ndate: 2024-06-15\n---\n\nbody\n");
     expect(provenancePartial.publishedAt).toBe("2024-06-15T00:00:00.000Z");
   });
 
@@ -337,7 +333,11 @@ describe("markdownToBlocks — YAML front-matter (D8-17)", () => {
   it("drops the yaml node from the Block stream (front-matter is metadata, not content)", async () => {
     const { blocks } = await markdownToBlocks("---\ntitle: t\n---\n\nbody\n");
     // The yaml node must NOT become a block.
-    expect(blocks.find((b) => b.kind === "unsupported" && (b as { originalKind: string }).originalKind === "yaml")).toBeUndefined();
+    expect(
+      blocks.find(
+        (b) => b.kind === "unsupported" && (b as { originalKind: string }).originalKind === "yaml",
+      ),
+    ).toBeUndefined();
     expect(blocks.find((b) => b.kind === "paragraph")).toBeDefined();
   });
 
@@ -516,9 +516,7 @@ describe("markdownToBlocks — caption attachment (issue #19)", () => {
     if (fig?.kind !== "figure") throw new Error("expected figure");
     expect(fig.src).toBe("https://example.com/harbor.png");
     expect(fig.alt).toBe("harbor");
-    expect(fig.caption.map((r) => r.text).join("")).toBe(
-      "A sunset over the harbor.",
-    );
+    expect(fig.caption.map((r) => r.text).join("")).toBe("A sunset over the harbor.");
   });
 
   it("caption runs keep their inline marks (D19-01)", async () => {
@@ -527,14 +525,8 @@ describe("markdownToBlocks — caption attachment (issue #19)", () => {
     );
     const fig = blocks[0];
     if (fig?.kind !== "figure") throw new Error("expected figure");
-    expect(fig.caption.map((r) => r.text).join("")).toBe(
-      "An emphasized caption.",
-    );
-    expect(fig.caption.map((r) => r.marks.map((m) => m.type))).toEqual([
-      [],
-      ["strong"],
-      [],
-    ]);
+    expect(fig.caption.map((r) => r.text).join("")).toBe("An emphasized caption.");
+    expect(fig.caption.map((r) => r.marks.map((m) => m.type))).toEqual([[], ["strong"], []]);
   });
 
   it("several images in one paragraph each carry their own trailing caption (no silent image drop)", async () => {
@@ -557,9 +549,7 @@ describe("markdownToBlocks — caption attachment (issue #19)", () => {
     expect(blocks.map((b) => b.kind)).toEqual(["figure"]);
     const fig = blocks[0];
     if (fig?.kind !== "figure") throw new Error("expected figure");
-    expect(fig.caption.map((r) => r.text).join("")).toBe(
-      "Figure 1: A calm chart",
-    );
+    expect(fig.caption.map((r) => r.text).join("")).toBe("Figure 1: A calm chart");
   });
 
   it("a caption-looking paragraph after an image-only paragraph is consumed too (caption-below convention)", async () => {
@@ -569,9 +559,7 @@ describe("markdownToBlocks — caption attachment (issue #19)", () => {
     expect(blocks.map((b) => b.kind)).toEqual(["figure"]);
     const fig = blocks[0];
     if (fig?.kind !== "figure") throw new Error("expected figure");
-    expect(fig.caption.map((r) => r.text).join("")).toBe(
-      "Figure 1: A calm chart",
-    );
+    expect(fig.caption.map((r) => r.text).join("")).toBe("Figure 1: A calm chart");
   });
 
   it("an entirely em-marked short paragraph is caption-looking", async () => {
@@ -598,9 +586,7 @@ describe("markdownToBlocks — caption attachment (issue #19)", () => {
     const longProse =
       "Long body prose that meanders well past any reasonable caption length while never mentioning a keyword, " +
       "so even though it directly precedes a standalone image it must remain in the reading flow untouched.";
-    const { blocks } = await markdownToBlocks(
-      `${longProse}\n\n![y](https://example.com/y.png)\n`,
-    );
+    const { blocks } = await markdownToBlocks(`${longProse}\n\n![y](https://example.com/y.png)\n`);
     expect(blocks.map((b) => b.kind)).toEqual(["paragraph", "figure"]);
     const para = blocks[0];
     if (para?.kind !== "paragraph") throw new Error("expected paragraph");

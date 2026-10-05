@@ -47,20 +47,14 @@ const article = (blocks: Block[]): CanonicalArticle => ({
     sourceUrl: "https://example.com/test",
     title: "Test Article",
     retrievedAt: "2026-07-28T00:00:00Z",
-    originalHtmlHash:
-      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    originalHtmlHash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
   },
   blocks,
   footnotes: [],
 });
 
 /** Build an ArticleBodyHighlight at the given D-05 position. */
-function makeEntry(
-  id: string,
-  start: number,
-  end: number,
-  hasNote = false,
-): ArticleBodyHighlight {
+function makeEntry(id: string, start: number, end: number, hasNote = false): ArticleBodyHighlight {
   return {
     id,
     position: { start, end },
@@ -75,14 +69,9 @@ describe("highlight overlay rendering — <mark> into ArticleBody (D5-15)", () =
   it("renders a <mark class='highlight'> for a seeded highlight", () => {
     // Article: "Hello world." (block 0, 12 graphemes) + separator + "Second
     // paragraph." (block 1). Highlight "world" at graphemes 6-11.
-    const art = article([
-      paragraph("Hello world."),
-      paragraph("Second paragraph."),
-    ]);
+    const art = article([paragraph("Hello world."), paragraph("Second paragraph.")]);
     const hl = makeEntry("hl-1", 6, 11);
-    const { container } = render(
-      <ArticleBody article={art} highlights={[hl]} />,
-    );
+    const { container } = render(<ArticleBody article={art} highlights={[hl]} />);
 
     const mark = container.querySelector("mark.highlight");
     expect(mark).not.toBeNull();
@@ -97,10 +86,7 @@ describe("highlight overlay rendering — <mark> into ArticleBody (D5-15)", () =
   });
 
   it("renders zero <mark> when no highlights are provided", () => {
-    const art = article([
-      paragraph("Hello world."),
-      paragraph("Second paragraph."),
-    ]);
+    const art = article([paragraph("Hello world."), paragraph("Second paragraph.")]);
     const { container } = render(<ArticleBody article={art} highlights={[]} />);
 
     const marks = container.querySelectorAll("mark.highlight");
@@ -127,9 +113,7 @@ describe("highlight overlay rendering — <mark> into ArticleBody (D5-15)", () =
     // The block normalized text is "Before link link text after link." —
     // 33 graphemes. Highlight [0, 33) covers everything.
     const hl = makeEntry("hl-link", 0, 33);
-    const { container } = render(
-      <ArticleBody article={art} highlights={[hl]} />,
-    );
+    const { container } = render(<ArticleBody article={art} highlights={[hl]} />);
 
     const mark = container.querySelector("mark.highlight");
     expect(mark).not.toBeNull();
@@ -144,9 +128,7 @@ describe("highlight overlay rendering — <mark> into ArticleBody (D5-15)", () =
   it("renders the .has-note modifier when the highlight has a note (D5-14)", () => {
     const art = article([paragraph("Hello world.")]);
     const hl = makeEntry("hl-note", 0, 5, true);
-    const { container } = render(
-      <ArticleBody article={art} highlights={[hl]} />,
-    );
+    const { container } = render(<ArticleBody article={art} highlights={[hl]} />);
 
     const mark = container.querySelector("mark.highlight");
     expect(mark).not.toBeNull();
@@ -163,18 +145,14 @@ describe("highlight overlay rendering — <mark> into ArticleBody (D5-15)", () =
       ...makeEntry("hl-green", 6, 11),
       color: "green",
     };
-    const { container } = render(
-      <ArticleBody article={art} highlights={[hl]} />,
-    );
+    const { container } = render(<ArticleBody article={art} highlights={[hl]} />);
 
     const mark = container.querySelector("mark.highlight");
     expect(mark).not.toBeNull();
     expect(mark?.classList.contains("color-green")).toBe(true);
     // Color is never the sole identifier — the aria-label carries the name
     // (UI-SPEC §Copywriting + A11Y-05).
-    expect(mark?.getAttribute("aria-label")?.startsWith("Green highlight")).toBe(
-      true,
-    );
+    expect(mark?.getAttribute("aria-label")?.startsWith("Green highlight")).toBe(true);
     // The semantic identity is unchanged: same id/data attribute/tab order.
     expect(mark?.getAttribute("data-highlight-id")).toBe("hl-green");
     expect(mark?.getAttribute("tabindex")).toBe("0");
@@ -186,9 +164,7 @@ describe("highlight overlay rendering — <mark> into ArticleBody (D5-15)", () =
       ...makeEntry("hl-explicit", 0, 5),
       color: "default",
     };
-    const { container, rerender } = render(
-      <ArticleBody article={art} highlights={[explicit]} />,
-    );
+    const { container, rerender } = render(<ArticleBody article={art} highlights={[explicit]} />);
     const markExplicit = container.querySelector("mark.highlight");
     expect(markExplicit?.className).toBe("highlight");
 
@@ -206,9 +182,7 @@ describe("highlight overlay rendering — <mark> into ArticleBody (D5-15)", () =
       status: "orphan",
       color: "pink",
     };
-    const { container } = render(
-      <ArticleBody article={art} highlights={[hl]} />,
-    );
+    const { container } = render(<ArticleBody article={art} highlights={[hl]} />);
 
     const mark = container.querySelector("mark.highlight");
     expect(mark).not.toBeNull();

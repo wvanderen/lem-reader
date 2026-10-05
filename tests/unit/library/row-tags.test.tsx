@@ -166,8 +166,6 @@ describe("RowTagsPopover: commit + close", () => {
     liftPanel();
     await user.type(screen.getByLabelText("Add or search a tag"), "essays");
     await user.keyboard("{Enter}");
-    await waitFor(() =>
-      expect(screen.getByRole("status")).toHaveTextContent("Couldn't save tag."),
-    );
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Couldn't save tag."));
   });
 });

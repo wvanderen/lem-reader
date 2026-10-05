@@ -63,11 +63,7 @@ describe("RuntimeDriftGuard — within tolerance", () => {
       diagnostics: bus,
     });
     const eligibility = bothEligible();
-    guard.sample(
-      [block("paragraph", 100)],
-      [block("paragraph", 101)],
-      eligibility,
-    );
+    guard.sample([block("paragraph", 100)], [block("paragraph", 101)], eligibility);
     expect(eligibility.paragraph.pretextEligible).toBe(true);
     expect(bus.recent()).toEqual([]);
   });
@@ -92,9 +88,7 @@ describe("RuntimeDriftGuard — beyond tolerance (D3-08 downgrade)", () => {
     expect(returned.paragraph.pretextEligible).toBe(false);
     expect(returned.heading.pretextEligible).toBe(true);
     // Exactly one diagnostic, naming the kind + observed drift.
-    const downgrades = received.filter(
-      (e) => e.kind === "runtime-guard-downgrade",
-    );
+    const downgrades = received.filter((e) => e.kind === "runtime-guard-downgrade");
     expect(downgrades).toHaveLength(1);
     const dg = downgrades[0]!;
     expect(dg.kind).toBe("runtime-guard-downgrade");
@@ -114,16 +108,10 @@ describe("RuntimeDriftGuard — beyond tolerance (D3-08 downgrade)", () => {
       diagnostics: bus,
     });
     const eligibility = bothEligible();
-    guard.sample(
-      [block("heading", 30)],
-      [block("heading", 35)],
-      eligibility,
-    );
+    guard.sample([block("heading", 30)], [block("heading", 35)], eligibility);
     expect(eligibility.heading.pretextEligible).toBe(false);
     expect(eligibility.paragraph.pretextEligible).toBe(true);
-    expect(
-      received.filter((e) => e.kind === "runtime-guard-downgrade"),
-    ).toHaveLength(1);
+    expect(received.filter((e) => e.kind === "runtime-guard-downgrade")).toHaveLength(1);
   });
 
   it("emits ONE diagnostic per downgraded kind even with multiple drifting blocks", () => {
@@ -138,22 +126,12 @@ describe("RuntimeDriftGuard — beyond tolerance (D3-08 downgrade)", () => {
     const eligibility = bothEligible();
     // Three drifting paragraphs in one pass.
     guard.sample(
-      [
-        block("paragraph", 100),
-        block("paragraph", 100),
-        block("paragraph", 100),
-      ],
-      [
-        block("paragraph", 110),
-        block("paragraph", 112),
-        block("paragraph", 105),
-      ],
+      [block("paragraph", 100), block("paragraph", 100), block("paragraph", 100)],
+      [block("paragraph", 110), block("paragraph", 112), block("paragraph", 105)],
       eligibility,
     );
     expect(eligibility.paragraph.pretextEligible).toBe(false);
-    const downgrades = received.filter(
-      (e) => e.kind === "runtime-guard-downgrade",
-    );
+    const downgrades = received.filter((e) => e.kind === "runtime-guard-downgrade");
     expect(downgrades).toHaveLength(1);
     // Records the WORST drift observed (12, not 5 or 10).
     expect(downgrades[0]).toHaveProperty("heightDriftPx", 12);
@@ -175,9 +153,7 @@ describe("RuntimeDriftGuard — beyond tolerance (D3-08 downgrade)", () => {
     );
     expect(eligibility.paragraph.pretextEligible).toBe(false);
     expect(eligibility.heading.pretextEligible).toBe(false);
-    expect(
-      received.filter((e) => e.kind === "runtime-guard-downgrade"),
-    ).toHaveLength(2);
+    expect(received.filter((e) => e.kind === "runtime-guard-downgrade")).toHaveLength(2);
   });
 });
 
@@ -222,23 +198,11 @@ describe("RuntimeDriftGuard — sampling discipline", () => {
     });
     const eligibility = bothEligible();
     // First pass: drift, downgrade + emit.
-    guard.sample(
-      [block("paragraph", 100)],
-      [block("paragraph", 110)],
-      eligibility,
-    );
-    expect(
-      received.filter((e) => e.kind === "runtime-guard-downgrade"),
-    ).toHaveLength(1);
+    guard.sample([block("paragraph", 100)], [block("paragraph", 110)], eligibility);
+    expect(received.filter((e) => e.kind === "runtime-guard-downgrade")).toHaveLength(1);
     // Second pass: still drifting, but the kind is now ineligible — skip.
-    guard.sample(
-      [block("paragraph", 100)],
-      [block("paragraph", 110)],
-      eligibility,
-    );
-    expect(
-      received.filter((e) => e.kind === "runtime-guard-downgrade"),
-    ).toHaveLength(1);
+    guard.sample([block("paragraph", 100)], [block("paragraph", 110)], eligibility);
+    expect(received.filter((e) => e.kind === "runtime-guard-downgrade")).toHaveLength(1);
   });
 
   it("ignores DOM-only kinds (blockquote/figure/etc.) — only paragraph/heading are Pretext-eligible", () => {

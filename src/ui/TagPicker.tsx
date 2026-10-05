@@ -70,16 +70,10 @@ function findExisting(stats: TagStat[], text: string): TagStat | undefined {
  * (The tagsStore write seams re-route against the persisted universe, so a
  * commit that raced a stale stats read still cannot stack a case twin.)
  */
-function toggleTag(
-  selected: string[],
-  stats: TagStat[],
-  text: string,
-): string[] {
+function toggleTag(selected: string[], stats: TagStat[], text: string): string[] {
   const trimmed = text.trim();
   if (trimmed.length === 0) return selected;
-  const existing =
-    findExisting(stats, trimmed)?.tag ??
-    selected.find((t) => sameTag(t, trimmed));
+  const existing = findExisting(stats, trimmed)?.tag ?? selected.find((t) => sameTag(t, trimmed));
   return selected.includes(existing ?? trimmed)
     ? selected.filter((t) => t !== existing)
     : [...selected, existing ?? trimmed];

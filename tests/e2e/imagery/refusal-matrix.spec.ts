@@ -32,9 +32,7 @@ type AxeViolation = { id: string; impact?: string | null | undefined };
 type AxeResultLike = { violations: AxeViolation[] };
 
 function seriousViolations(results: AxeResultLike) {
-  return results.violations.filter((v) =>
-    ["serious", "critical"].includes(v.impact ?? ""),
-  );
+  return results.violations.filter((v) => ["serious", "critical"].includes(v.impact ?? ""));
 }
 
 const REFUSED_ALT = "A refused skyline photograph that was too large to include";
@@ -52,7 +50,11 @@ function refusalArticle() {
     ],
     figures: [
       { alt: REFUSED_ALT, caption: REFUSED_CAPTION },
-      { alt: LEGACY_ALT, src: "https://legacy-publisher.example/img/portrait.jpg", caption: LEGACY_CAPTION },
+      {
+        alt: LEGACY_ALT,
+        src: "https://legacy-publisher.example/img/portrait.jpg",
+        caption: LEGACY_CAPTION,
+      },
     ],
   });
 }
@@ -103,9 +105,7 @@ test.describe("20-08 refusal-matrix (D20-14 / D20-06 / D19-01)", () => {
     for (let target = 0; target < total && !selected; target += 1) {
       await turnToPage(page, target);
       selected = await page.evaluate((captionText) => {
-        const figures = Array.from(
-          document.querySelectorAll(".page-fragment figure"),
-        );
+        const figures = Array.from(document.querySelectorAll(".page-fragment figure"));
         const refused = figures.find(
           (f) =>
             f.querySelector(".figure-placeholder") !== null &&
@@ -133,16 +133,14 @@ test.describe("20-08 refusal-matrix (D20-14 / D20-06 / D19-01)", () => {
     const toolbar = page.locator(".selection-toolbar");
     await expect(toolbar).toBeVisible();
     await toolbar.getByRole("button", { name: "Highlight", exact: true }).click();
-    await expect(
-      page.locator("main [role='status'].visually-hidden").first(),
-    ).toContainText(/Highlight saved/i);
+    await expect(page.locator("main [role='status'].visually-hidden").first()).toContainText(
+      /Highlight saved/i,
+    );
 
     // The mark renders INSIDE the refused figure's figcaption — the caption
     // kept its highlightability though the media refused (D19-01), and the
     // media surface itself still carries no marks (D19-02).
-    await expect(
-      page.locator(".page-fragment figcaption mark.highlight").first(),
-    ).toBeVisible();
+    await expect(page.locator(".page-fragment figcaption mark.highlight").first()).toBeVisible();
     await expect(
       page.locator(".page-fragment figure .figure-placeholder mark.highlight"),
     ).toHaveCount(0);
@@ -167,10 +165,11 @@ test.describe("20-08 refusal-matrix (D20-14 / D20-06 / D19-01)", () => {
         placeholderPage = target;
       }
     }
-    expect(placeholderPage, "a placeholder must live on some paginated page").toBeGreaterThanOrEqual(0);
-    await expect(
-      page.locator(".page-fragment figure .figure-placeholder").first(),
-    ).toBeVisible();
+    expect(
+      placeholderPage,
+      "a placeholder must live on some paginated page",
+    ).toBeGreaterThanOrEqual(0);
+    await expect(page.locator(".page-fragment figure .figure-placeholder").first()).toBeVisible();
     await expect(page.locator(".page-fragment figure figcaption").first()).toBeVisible();
 
     // SCROLLING: same article, same calm surface.

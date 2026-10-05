@@ -32,7 +32,10 @@ test.describe("ANNO-05 / STATE-03 survive relayout (05-05)", () => {
     expect(blockIdx).not.toBe(-1);
     const ok = await selectRangeInBlock(page, blockIdx, 0, 24);
     expect(ok).toBeTruthy();
-    await page.locator(".selection-toolbar").getByRole("button", { name: "Highlight", exact: true }).click();
+    await page
+      .locator(".selection-toolbar")
+      .getByRole("button", { name: "Highlight", exact: true })
+      .click();
     const mark = page.locator("mark.highlight").first();
     await expect(mark).toBeVisible();
     const hlId = await mark.getAttribute("data-highlight-id");
@@ -70,7 +73,10 @@ test.describe("ANNO-05 / STATE-03 survive relayout (05-05)", () => {
     expect(blockIdx).not.toBe(-1);
     const ok = await selectRangeInBlock(page, blockIdx, 0, 24);
     expect(ok).toBeTruthy();
-    await page.locator(".selection-toolbar").getByRole("button", { name: "Highlight", exact: true }).click();
+    await page
+      .locator(".selection-toolbar")
+      .getByRole("button", { name: "Highlight", exact: true })
+      .click();
     const mark = page.locator("mark.highlight").first();
     await expect(mark).toBeVisible();
     const hlId = await mark.getAttribute("data-highlight-id");
@@ -153,9 +159,7 @@ test.describe("ANNO-05 / STATE-03 survive relayout (05-05)", () => {
     await page.waitForTimeout(1500);
 
     // Scrolling: same id, same extents, exactly ONE first-slice DOM id.
-    await expect(
-      page.locator(`mark.highlight[data-highlight-id="${hlId}"]`).first(),
-    ).toBeVisible();
+    await expect(page.locator(`mark.highlight[data-highlight-id="${hlId}"]`).first()).toBeVisible();
     expect(await markTextsForHighlight(page, hlId!)).toEqual(extentsBefore);
     await expect(page.locator(`#hl-${hlId}`)).toHaveCount(1);
 
@@ -168,14 +172,10 @@ test.describe("ANNO-05 / STATE-03 survive relayout (05-05)", () => {
     const total = await totalPages(page);
     for (let target = 0; target < total; target++) {
       await turnToPage(page, target);
-      const count = await page
-        .locator(`mark.highlight[data-highlight-id="${hlId}"]`)
-        .count();
+      const count = await page.locator(`mark.highlight[data-highlight-id="${hlId}"]`).count();
       if (count > 0) {
         await expect(
-          page
-            .locator(`mark.highlight[data-highlight-id="${hlId}"]`)
-            .first(),
+          page.locator(`mark.highlight[data-highlight-id="${hlId}"]`).first(),
         ).toBeVisible();
         await expect(page.locator(`#hl-${hlId}`)).toHaveCount(1);
         foundPaginated = true;
@@ -187,9 +187,7 @@ test.describe("ANNO-05 / STATE-03 survive relayout (05-05)", () => {
     // Back to scrolling: the extents are STILL byte-stable (the round trip
     // through paginated mode never mutated the stored range).
     await switchMode(page);
-    await expect(
-      page.locator(`mark.highlight[data-highlight-id="${hlId}"]`).first(),
-    ).toBeVisible();
+    await expect(page.locator(`mark.highlight[data-highlight-id="${hlId}"]`).first()).toBeVisible();
     expect(await markTextsForHighlight(page, hlId!)).toEqual(extentsBefore);
     await expect(page.locator(`#hl-${hlId}`)).toHaveCount(1);
   });

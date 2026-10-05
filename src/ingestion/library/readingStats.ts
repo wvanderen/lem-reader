@@ -111,9 +111,7 @@ export interface ReadingStatsInput {
  * row labels) folds the same way, so the membership construction and the
  * orphan discipline live in exactly one place.
  */
-export function deriveLibraryReadingStats(
-  snapshot: ReadingStatsInput,
-): ReadingStats {
+export function deriveLibraryReadingStats(snapshot: ReadingStatsInput): ReadingStats {
   const knownArticleIds = new Set(snapshot.articles.map((article) => article.id));
   return deriveReadingStats(snapshot.readingSessions, knownArticleIds);
 }

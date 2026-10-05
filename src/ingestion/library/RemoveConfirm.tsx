@@ -162,8 +162,7 @@ export function RemoveConfirm({
       <div className="library-remove-confirm-inner">
         <h2 id="remove-title">Remove this article?</h2>
         <p id="remove-body">
-          Remove this article? Your highlights and notes for it will also be
-          removed.
+          Remove this article? Your highlights and notes for it will also be removed.
         </p>
         {/* Issue #98 — the honest-failure line. Always-mounted StatusRegion
             (a live region must pre-exist to announce); idle it renders no

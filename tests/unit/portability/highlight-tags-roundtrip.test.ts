@@ -54,7 +54,8 @@ async function loadStores() {
   return { ...highlights, ...notes };
 }
 
-function sampleArticle(): CanonicalArticle {  return ArticleSchema.parse({
+function sampleArticle(): CanonicalArticle {
+  return ArticleSchema.parse({
     id: "art-tag-roundtrip",
     revision: 1,
     lang: "en",
@@ -65,9 +66,7 @@ function sampleArticle(): CanonicalArticle {  return ArticleSchema.parse({
       retrievedAt: "2026-09-10T00:00:00.000Z",
       originalHtmlHash: "sha256:" + "d".repeat(64),
     },
-    blocks: [
-      { kind: "paragraph", content: [{ text: "Round trip body text.", marks: [] }] },
-    ],
+    blocks: [{ kind: "paragraph", content: [{ text: "Round trip body text.", marks: [] }] }],
     footnotes: [],
     ingestionMeta: {
       source: "url",

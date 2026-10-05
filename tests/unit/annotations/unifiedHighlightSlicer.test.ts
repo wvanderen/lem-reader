@@ -85,11 +85,7 @@ describe("multiple highlights in ONE block — the whitespace-decoration walk (i
   });
 
   it("three highlights in one block stay exact (drift must not accumulate)", () => {
-    const slices = sliceTexts([
-      entry("a", 0, 5),
-      entry("b", 6, 10),
-      entry("c", 11, 16),
-    ]);
+    const slices = sliceTexts([entry("a", 0, 5), entry("b", 6, 10), entry("c", 11, 16)]);
     const marked = slices.filter((s) => s.id !== null);
     expect(marked).toContainEqual({ id: "c", text: " gamma" });
     expect(slices.map((s) => s.text).join("")).toBe("alpha beta gamma");

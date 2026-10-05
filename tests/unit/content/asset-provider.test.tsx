@@ -169,21 +169,15 @@ describe("useAssetUrl — optional context (legacy callers byte-unchanged)", () 
 describe("AssetProvider — fixture registry consult FIRST (fixtures never touch Dexie)", () => {
   it("resolves fixture-article refs from the bundled registry without consulting bulkGetAssets", async () => {
     render(prov(fixtureFigureArticle, "asset:img-e191d5d4e581"));
-    await waitFor(() =>
-      expect(screen.getByTestId("probe")).not.toHaveTextContent("none"),
-    );
+    await waitFor(() => expect(screen.getByTestId("probe")).not.toHaveTextContent("none"));
     expect(bulkGetAssetsMock).not.toHaveBeenCalled();
   });
 
   it("creates exactly ONE object URL per REFERENCED asset (unreferenced registry rows are inert)", async () => {
     render(
-      prov(fixtureFigureArticle, "asset:img-e191d5d4e581", (
-        <Probe src="asset:img-357de6805bda" />
-      )),
+      prov(fixtureFigureArticle, "asset:img-e191d5d4e581", <Probe src="asset:img-357de6805bda" />),
     );
-    await waitFor(() =>
-      expect(screen.getAllByTestId("probe")[1]).not.toHaveTextContent("none"),
-    );
+    await waitFor(() => expect(screen.getAllByTestId("probe")[1]).not.toHaveTextContent("none"));
     // The registry carries 7 samples; the article references exactly 2.
     expect(createObjectURL).toHaveBeenCalledTimes(2);
     expect(created).toHaveLength(2);
@@ -206,9 +200,7 @@ describe("AssetProvider — Dexie resolution (non-fixture articles)", () => {
         <Probe src="asset:img-bbbbbbbbbbbb" />
       </AssetProvider>,
     );
-    await waitFor(() =>
-      expect(screen.getAllByTestId("probe")[0]).not.toHaveTextContent("none"),
-    );
+    await waitFor(() => expect(screen.getAllByTestId("probe")[0]).not.toHaveTextContent("none"));
     expect(bulkGetAssetsMock).toHaveBeenCalledWith("dex-article", [
       "img-aaaaaaaaaaaa",
       "img-bbbbbbbbbbbb",
@@ -235,9 +227,7 @@ describe("AssetProvider — Dexie resolution (non-fixture articles)", () => {
 describe("AssetProvider — object-URL lifecycle (Pitfall 9)", () => {
   it("revokes every created URL on unmount (create/revoke symmetry)", async () => {
     const view = render(prov(fixtureFigureArticle, "asset:img-e191d5d4e581"));
-    await waitFor(() =>
-      expect(screen.getByTestId("probe")).not.toHaveTextContent("none"),
-    );
+    await waitFor(() => expect(screen.getByTestId("probe")).not.toHaveTextContent("none"));
     expect(created).toHaveLength(2);
     expect(revoked).toHaveLength(0);
     view.unmount();
@@ -250,17 +240,13 @@ describe("AssetProvider — object-URL lifecycle (Pitfall 9)", () => {
       assets: [dexRow("article-b", "img-cccccccccccc")],
     });
     const view = render(prov(fixtureFigureArticle, "asset:img-e191d5d4e581"));
-    await waitFor(() =>
-      expect(screen.getByTestId("probe")).not.toHaveTextContent("none"),
-    );
+    await waitFor(() => expect(screen.getByTestId("probe")).not.toHaveTextContent("none"));
     const firstUrl = screen.getByTestId("probe").textContent;
     expect(firstUrl).not.toBe("none");
 
     const next = article("article-b", [figure("next", "asset:img-cccccccccccc")]);
     view.rerender(prov(next, "asset:img-cccccccccccc"));
-    await waitFor(() =>
-      expect(screen.getByTestId("probe")).not.toHaveTextContent("none"),
-    );
+    await waitFor(() => expect(screen.getByTestId("probe")).not.toHaveTextContent("none"));
     const secondUrl = screen.getByTestId("probe").textContent;
     expect(secondUrl).not.toBe(firstUrl);
     // The fixture article's URLs were all revoked on the switch.
@@ -270,13 +256,9 @@ describe("AssetProvider — object-URL lifecycle (Pitfall 9)", () => {
 
   it("StrictMode twin-mount runs are leak-free (every created URL revoked-or-active)", async () => {
     // Single-figure article so the probe's URL IS the complete active set.
-    const single = article("figure-heavy", [
-      figure("only", "asset:img-e191d5d4e581"),
-    ]);
+    const single = article("figure-heavy", [figure("only", "asset:img-e191d5d4e581")]);
     render(<StrictMode>{prov(single, "asset:img-e191d5d4e581")}</StrictMode>);
-    await waitFor(() =>
-      expect(screen.getByTestId("probe")).not.toHaveTextContent("none"),
-    );
+    await waitFor(() => expect(screen.getByTestId("probe")).not.toHaveTextContent("none"));
     // Twin-mount may resolve twice; whatever was created is either still
     // active (the final run) or already revoked (the aborted first run).
     // The probe's live URL is the ONLY unrevoked one.

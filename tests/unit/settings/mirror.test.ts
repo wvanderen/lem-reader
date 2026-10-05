@@ -104,33 +104,18 @@ describe("readSettingsMirror", () => {
   // ── Behavior 3: invalid stored values → null (never coerce, never throw) ──
 
   it.each([
-    [
-      "corrupt JSON",
-      "{not json at all",
-    ],
-    [
-      "wrong value shapes (size as string)",
-      JSON.stringify({ ...NON_DEFAULT, size: "twenty-two" }),
-    ],
-    [
-      "unknown enum value (theme)",
-      JSON.stringify({ ...NON_DEFAULT, theme: "neon" }),
-    ],
+    ["corrupt JSON", "{not json at all"],
+    ["wrong value shapes (size as string)", JSON.stringify({ ...NON_DEFAULT, size: "twenty-two" })],
+    ["unknown enum value (theme)", JSON.stringify({ ...NON_DEFAULT, theme: "neon" })],
     [
       "unknown schemaVersion (v6 forward-reject)",
       JSON.stringify({ ...NON_DEFAULT, schemaVersion: 6 }),
     ],
-    [
-      "non-object stored value",
-      '"just a string"',
-    ],
-  ])(
-    "returns null on a stored value that fails ReaderSettingsSchema (%s)",
-    (_label, stored) => {
-      window.localStorage.setItem(SETTINGS_MIRROR_KEY, stored);
-      expect(readSettingsMirror()).toBeNull();
-    },
-  );
+    ["non-object stored value", '"just a string"'],
+  ])("returns null on a stored value that fails ReaderSettingsSchema (%s)", (_label, stored) => {
+    window.localStorage.setItem(SETTINGS_MIRROR_KEY, stored);
+    expect(readSettingsMirror()).toBeNull();
+  });
 
   // ── Behavior 4: throwing getItem → null, never a throw ────────────────────
 
@@ -203,9 +188,7 @@ const INDEX_HTML = readFileSync(resolve(process.cwd(), "index.html"), "utf-8");
 
 /** Extract the source between two `// tokens:<name>:start|end` markers. */
 function extractMarked(name: string): string {
-  const re = new RegExp(
-    `//\\s*tokens:${name}:start([\\s\\S]*?)//\\s*tokens:${name}:end`,
-  );
+  const re = new RegExp(`//\\s*tokens:${name}:start([\\s\\S]*?)//\\s*tokens:${name}:end`);
   const match = re.exec(INDEX_HTML);
   if (!match) {
     throw new Error(`marker tokens:${name}:start/end not found in index.html`);
@@ -242,9 +225,7 @@ describe("index.html inline script sync checks", () => {
   it("appears before the /src/main.tsx module script", () => {
     // The first plain <script> tag in the document is the inline hint.
     const inlineIdx = INDEX_HTML.indexOf("<script>");
-    const moduleIdx = INDEX_HTML.indexOf(
-      '<script type="module" src="/src/main.tsx">',
-    );
+    const moduleIdx = INDEX_HTML.indexOf('<script type="module" src="/src/main.tsx">');
     expect(inlineIdx).toBeGreaterThan(-1);
     expect(moduleIdx).toBeGreaterThan(-1);
     expect(inlineIdx).toBeLessThan(moduleIdx);
@@ -274,9 +255,7 @@ describe("index.html inline script sync checks", () => {
       string,
       { lineHeight: number; letterSpacing: string; wordSpacing: string }
     >;
-    const keys = Object.keys(SPACING_PRESETS) as Array<
-      keyof typeof SPACING_PRESETS
-    >;
+    const keys = Object.keys(SPACING_PRESETS) as Array<keyof typeof SPACING_PRESETS>;
     expect(Object.keys(inline).sort()).toEqual([...keys].sort());
     for (const key of keys) {
       expect(inline[key]).toEqual(SPACING_PRESETS[key]);

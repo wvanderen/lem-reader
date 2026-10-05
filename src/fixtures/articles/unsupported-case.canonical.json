@@ -14,7 +14,10 @@
     {
       "kind": "paragraph",
       "content": [
-        { "text": "This article gets you started with HTML tables, covering the very basics such as rows, cells, headings, making cells span multiple columns and rows, and how to group together all the cells in a column for styling purposes.", "marks": [] }
+        {
+          "text": "This article gets you started with HTML tables, covering the very basics such as rows, cells, headings, making cells span multiple columns and rows, and how to group together all the cells in a column for styling purposes.",
+          "marks": []
+        }
       ]
     },
     {
@@ -25,15 +28,24 @@
     {
       "kind": "paragraph",
       "content": [
-        { "text": "A table is a structured set of data made up of rows and columns (", "marks": [] },
+        {
+          "text": "A table is a structured set of data made up of rows and columns (",
+          "marks": []
+        },
         { "text": "tabular data", "marks": [{ "type": "em" }] },
-        { "text": "). A table allows you to quickly and easily look up values that indicate some kind of connection between different types of data, for example a person and their age, or a day of the week, or the timetable for a local swimming pool.", "marks": [] }
+        {
+          "text": "). A table allows you to quickly and easily look up values that indicate some kind of connection between different types of data, for example a person and their age, or a day of the week, or the timetable for a local swimming pool.",
+          "marks": []
+        }
       ]
     },
     {
       "kind": "paragraph",
       "content": [
-        { "text": "The point of a table is that it is rigid. Information is easily interpreted by making visual associations between row and column headers. The article presents a worked example:", "marks": [] }
+        {
+          "text": "The point of a table is that it is rigid. Information is easily interpreted by making visual associations between row and column headers. The article presents a worked example:",
+          "marks": []
+        }
       ]
     },
     {
@@ -60,7 +72,10 @@
             {
               "kind": "paragraph",
               "content": [
-                { "text": "First, recognize that table headers deserve their own element: ", "marks": [] },
+                {
+                  "text": "First, recognize that table headers deserve their own element: ",
+                  "marks": []
+                },
                 { "text": "<th>", "marks": [{ "type": "code" }] },
                 { "text": " (\u201ctable header\u201d). It works like ", "marks": [] },
                 { "text": "<td>", "marks": [{ "type": "code" }] },
@@ -74,9 +89,15 @@
             {
               "kind": "paragraph",
               "content": [
-                { "text": "Table headings come with default styling \u2014 they are bold and centered even without your own CSS \u2014 to help them stand out. With the ", "marks": [] },
+                {
+                  "text": "Table headings come with default styling \u2014 they are bold and centered even without your own CSS \u2014 to help them stand out. With the ",
+                  "marks": []
+                },
                 { "text": "scope", "marks": [{ "type": "code" }] },
-                { "text": " attribute, they also make tables more accessible by associating each header with its row or column.", "marks": [] }
+                {
+                  "text": " attribute, they also make tables more accessible by associating each header with its row or column.",
+                  "marks": []
+                }
               ]
             }
           ]
@@ -86,7 +107,10 @@
     {
       "kind": "paragraph",
       "content": [
-        { "text": "At the end of the article, an embedded interactive lesson recaps the key ideas and offers extra practice.", "marks": [] }
+        {
+          "text": "At the end of the article, an embedded interactive lesson recaps the key ideas and offers extra practice.",
+          "marks": []
+        }
       ]
     },
     {

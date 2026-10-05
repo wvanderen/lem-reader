@@ -113,10 +113,7 @@ export async function assertEdgeInvariant(
   await expect(article, `${label}: article role missing`).toBeVisible();
 
   const visibleBlocks = page.locator(VISIBLE_BLOCK_SELECTOR);
-  await expect(
-    visibleBlocks,
-    `${label}: no visible blocks rendered`,
-  ).not.toHaveCount(0);
+  await expect(visibleBlocks, `${label}: no visible blocks rendered`).not.toHaveCount(0);
 
   // Capture a sample block's text so we can prove content survives the mode
   // toggle below (the "content remains present" signal — deep keyboard
@@ -184,15 +181,11 @@ export async function assertEdgeInvariant(
   // Settle the mode swap (mirrors mode-switch-anchor.spec.ts 400ms).
   await page.waitForTimeout(400);
 
-  await expect(
-    article,
-    `${label}: article missing after mode toggle`,
-  ).toBeVisible();
+  await expect(article, `${label}: article missing after mode toggle`).toBeVisible();
   const visibleBlocksAfter = page.locator(VISIBLE_BLOCK_SELECTOR);
-  await expect(
-    visibleBlocksAfter,
-    `${label}: no visible blocks after mode toggle`,
-  ).not.toHaveCount(0);
+  await expect(visibleBlocksAfter, `${label}: no visible blocks after mode toggle`).not.toHaveCount(
+    0,
+  );
   const sampleAfter = await visibleBlocksAfter.first().textContent();
   expect(
     (sampleAfter ?? "").length,
@@ -248,22 +241,15 @@ export const DESTINATIONS: readonly EdgeDestination[] = [
  *  - "add-dialog": the library surface, then the "Add to Library" trigger
  *    via the shared idempotent openAddDialog helper (16-03).
  */
-export async function openEdgeDestination(
-  page: Page,
-  destination: EdgeDestination,
-): Promise<void> {
+export async function openEdgeDestination(page: Page, destination: EdgeDestination): Promise<void> {
   // wipeDatabase's own goto left the app mounted against the deleted DB —
   // reload so Dexie re-declares the schema before any seeding (10-03).
   await page.reload();
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Saved articles" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
   // Library readiness gate before seeding (the RECV-01.i discipline): the
   // composite list must have actually loaded its rows — the first bundled
   // fixture's title is the deterministic sentinel.
-  await expect(
-    page.getByText("Getting started with Lem Reader").first(),
-  ).toBeVisible();
+  await expect(page.getByText("Getting started with Lem Reader").first()).toBeVisible();
 
   if (destination === "library") {
     const article = makeArticle({
@@ -281,12 +267,8 @@ export async function openEdgeDestination(
     // row joins the composite list (the 08-05 openLibrary discipline:
     // page.reload() forces the remount after a Dexie seed).
     await page.reload();
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
-    await expect(
-      page.getByText("The Harbor Master's Ledger").first(),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
+    await expect(page.getByText("The Harbor Master's Ledger").first()).toBeVisible();
     return;
   }
 
@@ -298,12 +280,8 @@ export async function openEdgeDestination(
       .getByRole("navigation", { name: "Primary" })
       .getByRole("link", { name: "Discover" })
       .click();
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Discover" }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: "No subscriptions yet." }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Discover" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "No subscriptions yet." })).toBeVisible();
     return;
   }
 
@@ -319,20 +297,14 @@ export async function openEdgeDestination(
     const anchor = confidentHighlightOn(article);
     await seedRows(page, {
       articles: [article],
-      highlights: [
-        highlightRow("edge-dest-review", anchor, "hl-edge-dest-review-1"),
-      ],
+      highlights: [highlightRow("edge-dest-review", anchor, "hl-edge-dest-review-1")],
     });
     await page
       .getByRole("navigation", { name: "Primary" })
       .getByRole("link", { name: "Highlights" })
       .click();
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Highlights" }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("link", { name: /^Go to highlight:/ }).first(),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
+    await expect(page.getByRole("link", { name: /^Go to highlight:/ }).first()).toBeVisible();
     return;
   }
 
@@ -457,9 +429,7 @@ export async function assertDestinationInvariant(
       },
       {
         desc: "row jump link",
-        locator: page
-          .getByRole("link", { name: /^Go to highlight:/ })
-          .first(),
+        locator: page.getByRole("link", { name: /^Go to highlight:/ }).first(),
       },
       {
         desc: "shell-nav Library link",
@@ -494,10 +464,7 @@ export async function assertDestinationInvariant(
   // (b) Required functions reachable — every canonical control is present
   // and visible (native focusable controls; A11Y-01/02 substrate).
   for (const { desc, locator } of required) {
-    await expect(
-      locator,
-      `${label}: required function unreachable — ${desc}`,
-    ).toBeVisible();
+    await expect(locator, `${label}: required function unreachable — ${desc}`).toBeVisible();
   }
 
   // (c) No layout overflow clips or overlaps content — the WCAG 1.4.10
@@ -512,9 +479,7 @@ export async function assertDestinationInvariant(
         scrollW: document.body.scrollWidth,
         clientW: document.body.clientWidth,
       },
-      main: main
-        ? { scrollW: main.scrollWidth, clientW: main.clientWidth }
-        : null,
+      main: main ? { scrollW: main.scrollWidth, clientW: main.clientWidth } : null,
     };
   });
   expect(

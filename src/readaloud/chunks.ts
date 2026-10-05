@@ -103,9 +103,7 @@ export function chunkArticleForSpeech(article: CanonicalArticle): SpeechChunk[] 
     // discipline the per-block index builds (never segment a joined string
     // and split on separators).
     const rangeMap = buildUtf16ToGraphemeMap(clusters, range.start, range.end);
-    for (const segment of segmenter.segment(
-      clusters.slice(range.start, range.end).join(""),
-    )) {
+    for (const segment of segmenter.segment(clusters.slice(range.start, range.end).join(""))) {
       const localStart = rangeMap[segment.index];
       const localEnd = rangeMap[segment.index + segment.segment.length];
       if (localStart === undefined || localEnd === undefined) continue; // defensive

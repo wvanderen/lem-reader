@@ -24,10 +24,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { zipSync, unzipSync, strFromU8 } from "fflate";
 import { ArticleSchema } from "../../../src/content/schema";
-import type {
-  CanonicalArticle,
-  ReadingSessionRecord,
-} from "../../../src/content/schema";
+import type { CanonicalArticle, ReadingSessionRecord } from "../../../src/content/schema";
 import { ExportBundleSchema } from "../../../src/portability/bundle";
 import type { Overrides } from "../../../src/portability/conflicts";
 import { computeManifest } from "../../../src/portability/manifest";
@@ -84,9 +81,7 @@ function sampleArticle(id = "art-session-rt01"): CanonicalArticle {
       retrievedAt: "2026-09-01T00:00:00.000Z",
       originalHtmlHash: "sha256:" + "3".repeat(64),
     },
-    blocks: [
-      { kind: "paragraph", content: [{ text: "Body text here.", marks: [] }] },
-    ],
+    blocks: [{ kind: "paragraph", content: [{ text: "Body text here.", marks: [] }] }],
     footnotes: [],
   });
 }
@@ -250,9 +245,7 @@ describe("manifest readingSessions block (issue #37)", () => {
     await putReadingSession(sampleSession("visit-a", "art-session-rt01"));
 
     const entries = unzipSync((await buildBundle()).bytes);
-    const parsed = ExportBundleSchema.parse(
-      JSON.parse(strFromU8(entries["bundle.json"]!)),
-    );
+    const parsed = ExportBundleSchema.parse(JSON.parse(strFromU8(entries["bundle.json"]!)));
     const claimed = JSON.parse(strFromU8(entries["manifest.json"]!)) as {
       blocks: Record<string, string>;
     };
@@ -382,9 +375,7 @@ describe("session merge + round trip (issue #37)", () => {
         endOffset: 2_000,
       }),
     ];
-    const result = await validateBundle(
-      await v5BundleFile([sampleArticle()], bundleVisits),
-    );
+    const result = await validateBundle(await v5BundleFile([sampleArticle()], bundleVisits));
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
@@ -533,8 +524,6 @@ describe("session merge + round trip (issue #37)", () => {
 
 /** Whole-table read through the store seam (STATE-04 — Zod-validated). */
 async function loadAllRows(): Promise<ReadingSessionRecord[]> {
-  const { loadAllReadingSessions } = await import(
-    "../../../src/persistence/readingSessionsStore"
-  );
+  const { loadAllReadingSessions } = await import("../../../src/persistence/readingSessionsStore");
   return await loadAllReadingSessions();
 }

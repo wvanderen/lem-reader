@@ -77,9 +77,9 @@ const SAMPLES: readonly FixtureAssetSample[] = [
       "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
       "AAAAAAAAAAAAP//Z",
   },
-    // The EXIF-orientation-6 sample: same real JPEG bytes with the 20-01
-    // jpegExif(6, …) APP1 segment spliced after SOI. Header 320x200;
-    // orientation ≥ 5 swaps the STORED dims (Pitfall 2 / D20-13) → 200x320.
+  // The EXIF-orientation-6 sample: same real JPEG bytes with the 20-01
+  // jpegExif(6, …) APP1 segment spliced after SOI. Header 320x200;
+  // orientation ≥ 5 swaps the STORED dims (Pitfall 2 / D20-13) → 200x320.
   {
     key: "jpegExifRotated",
     assetId: "img-e191d5d4e581",
@@ -119,8 +119,7 @@ const SAMPLES: readonly FixtureAssetSample[] = [
     contentType: "image/webp",
     width: 240,
     height: 180,
-    base64:
-      "UklGRigAAABXRUJQVlA4TBsAAAAv78AsAAdQsyo1qP8BAkmb9c+//RH9T+6/FwEA",
+    base64: "UklGRigAAABXRUJQVlA4TBsAAAAv78AsAAdQsyo1qP8BAkmb9c+//RH9T+6/FwEA",
   },
   {
     key: "gif",
@@ -180,8 +179,8 @@ const SAMPLES: readonly FixtureAssetSample[] = [
       "AAAARAAAAQABAAAAAQAAAVEAAABRAAAAAW1kYXQAAAAAAAAAYRIACg4AAAADv32Z//AgQEDQgDI9EAGEgAIIIIi0VVXKKQlXYU6p" +
       "GxSETjCV8+aHyvhAwiBtF1wUjhPDI3nYjL2/g3+v7lwgicxCdAsfIG9zwg==",
   },
-    // 2 real frames + NETSCAPE2.0 loop extension — is-animated reports
-    // true (verified), and both frames decode in real browsers.
+  // 2 real frames + NETSCAPE2.0 loop extension — is-animated reports
+  // true (verified), and both frames decode in real browsers.
   {
     key: "animatedGif",
     assetId: "img-8ebe8fb0b5e6",
@@ -327,17 +326,19 @@ const VERIFIED = SAMPLES.map((sample) => ({
  * articles. Consulted FIRST by the AssetProvider (fixtures never touch
  * Dexie); rows not referenced by the article's blocks are inert.
  */
-export const fixtureAssetRegistry: ReadonlyMap<string, AssetRecordRow[]> =
-  new Map<string, AssetRecordRow[]>([
-    [
-      "figure-heavy",
-      VERIFIED.map(({ sample, bytes }) => ({
-        articleId: "figure-heavy",
-        assetId: sample.assetId,
-        contentType: sample.contentType,
-        byteLength: bytes.byteLength,
-        data: new Blob([bytes], { type: sample.contentType }),
-        createdAt: FIXTURE_CREATED_AT,
-      })),
-    ],
-  ]);
+export const fixtureAssetRegistry: ReadonlyMap<string, AssetRecordRow[]> = new Map<
+  string,
+  AssetRecordRow[]
+>([
+  [
+    "figure-heavy",
+    VERIFIED.map(({ sample, bytes }) => ({
+      articleId: "figure-heavy",
+      assetId: sample.assetId,
+      contentType: sample.contentType,
+      byteLength: bytes.byteLength,
+      data: new Blob([bytes], { type: sample.contentType }),
+      createdAt: FIXTURE_CREATED_AT,
+    })),
+  ],
+]);

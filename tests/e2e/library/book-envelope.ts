@@ -56,9 +56,7 @@ export function chapterPayload(
       retrievedAt: "2026-09-29T00:00:00.000Z",
       originalHtmlHash: "sha256:" + "0".repeat(64),
     },
-    blocks: [
-      { kind: "paragraph", content: [{ text: "Chapter body.", marks: [] }] },
-    ],
+    blocks: [{ kind: "paragraph", content: [{ text: "Chapter body.", marks: [] }] }],
     footnotes: [],
     ingestionMeta: {
       source: "epub-chapter",

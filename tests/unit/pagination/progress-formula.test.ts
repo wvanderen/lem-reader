@@ -84,9 +84,7 @@ describe("paginatedProgressRatio — SC#2 boundary table", () => {
       paragraph("Second paragraph of several here."),
       paragraph("Third paragraph of several here."),
     ]);
-    const first = fragment(0, [
-      { blockIndex: 0, startGrapheme: 0, endGrapheme: 31 },
-    ]);
+    const first = fragment(0, [{ blockIndex: 0, startGrapheme: 0, endGrapheme: 31 }]);
     expect(paginatedProgressRatio(article, first)).toBe(0);
   });
 
@@ -114,18 +112,14 @@ describe("paginatedProgressRatio — SC#2 boundary table", () => {
   it("an article whose graphemeLength is 0 yields ratio 0 (defensive empty)", () => {
     // A code-block with empty source is schema-valid and normalizes to "".
     const article = parseArticle([{ kind: "code-block", source: "" }]);
-    const only = fragment(0, [
-      { blockIndex: 0, startGrapheme: 0, endGrapheme: 0 },
-    ]);
+    const only = fragment(0, [{ blockIndex: 0, startGrapheme: 0, endGrapheme: 0 }]);
     expect(paginatedProgressRatio(article, only)).toBe(0);
   });
 
   it("a start offset beyond total clamps to 1 (defensive upper bound)", () => {
     const article = parseArticle([paragraph("Hello world")]);
     // Stale corpus fragment whose start overshoots the article (11 graphemes).
-    const stale = fragment(0, [
-      { blockIndex: 0, startGrapheme: 999, endGrapheme: 1000 },
-    ]);
+    const stale = fragment(0, [{ blockIndex: 0, startGrapheme: 999, endGrapheme: 1000 }]);
     expect(paginatedProgressRatio(article, stale)).toBe(1);
   });
 });
@@ -201,9 +195,7 @@ describe("committedPageProgressRatio — committed-page pin boundary table", () 
 
   it("graphemeLength 0 article → 0 (defensive empty)", () => {
     const article = parseArticle([{ kind: "code-block", source: "" }]);
-    const only = fragment(0, [
-      { blockIndex: 0, startGrapheme: 0, endGrapheme: 0 },
-    ]);
+    const only = fragment(0, [{ blockIndex: 0, startGrapheme: 0, endGrapheme: 0 }]);
     expect(committedPageProgressRatio(article, [only], 0)).toBe(0);
   });
 

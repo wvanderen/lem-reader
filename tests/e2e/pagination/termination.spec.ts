@@ -57,8 +57,7 @@ test.describe("PAGE-03c termination (04-05)", () => {
         await page.goto(`${BASE}/#/article/${fixture}`);
         await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
         await page.waitForFunction(
-          () =>
-            (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
+          () => (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
           undefined,
           { timeout: 15000 },
         );
@@ -119,8 +118,7 @@ test.describe("PAGE-03c termination (04-05)", () => {
     await page.keyboard.press("Escape");
 
     await page.waitForFunction(
-      () =>
-        (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
+      () => (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
       undefined,
       { timeout: 15000 },
     );

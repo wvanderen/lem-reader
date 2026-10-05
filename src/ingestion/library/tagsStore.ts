@@ -80,10 +80,7 @@ export type { TagStat } from "./tagStats";
  * (a books-load failure routes calmly to zero book rows).
  */
 export async function loadTagStats(): Promise<TagStat[]> {
-  const [articles, booksResult] = await Promise.all([
-    dexieLibrarySource.list(),
-    listBooks(),
-  ]);
+  const [articles, booksResult] = await Promise.all([dexieLibrarySource.list(), listBooks()]);
   const books = booksResult.ok ? booksResult.books : [];
   return deriveTagStats(articles, books);
 }
@@ -122,10 +119,7 @@ async function routeToStoredCasing(tags: readonly string[]): Promise<string[]> {
  * `dexieLibrarySource.list()` read, STATE-04 corrupt-row drop), dedupe
  * case-insensitively, and Q7A-routing to the persisted casing.
  */
-export async function setArticleTags(
-  articleId: string,
-  tags: string[],
-): Promise<void> {
+export async function setArticleTags(articleId: string, tags: string[]): Promise<void> {
   const routed = await routeToStoredCasing(tags);
   await db.articles.update(articleId, { tags: routed });
 }
@@ -159,10 +153,7 @@ const pendingHighlightTagWrites = new Map<string, Promise<void>>();
  * throw). Returns the ROUTED array as written, so the caller's optimistic
  * in-memory state can mirror the exact persisted casings.
  */
-export function setHighlightTags(
-  highlightId: string,
-  tags: string[],
-): Promise<string[]> {
+export function setHighlightTags(highlightId: string, tags: string[]): Promise<string[]> {
   // Include vocabulary reads in the queue: an empty selection otherwise
   // overtakes an earlier addition while it is resolving stored casing.
   const selection = [...tags];
@@ -173,7 +164,10 @@ export function setHighlightTags(
     return routed;
   });
   // A failed save must not prevent later edits from being persisted.
-  const settled = write.then(() => {}, () => {});
+  const settled = write.then(
+    () => {},
+    () => {},
+  );
   pendingHighlightTagWrites.set(highlightId, settled);
   void settled.then(() => {
     if (pendingHighlightTagWrites.get(highlightId) === settled) {

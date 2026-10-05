@@ -234,14 +234,9 @@ function visit(node: MdastNode): Block[] {
     // paragraphs keep the legacy paragraph-only shape — a heuristic miss
     // degrades to today's behavior, never to lost text.
     if (images.length > 0) {
-      const nestedImage = children.some(
-        (c) => c.type !== "image" && containsImageDeep(c),
-      );
+      const nestedImage = children.some((c) => c.type !== "image" && containsImageDeep(c));
       const segments = nestedImage ? null : splitChildSegments(children);
-      if (
-        segments &&
-        tidyRuns(extractInlineMdastNodes(segments[0]!, [])).length === 0
-      ) {
+      if (segments && tidyRuns(extractInlineMdastNodes(segments[0]!, [])).length === 0) {
         return images.flatMap((img, k) =>
           withCaption(
             figureFromImage(img),
@@ -287,9 +282,8 @@ function visit(node: MdastNode): Block[] {
   if (node.type === "code") {
     const source = node.value ?? "";
     if (!source.trim().length) return [];
-    const lang = typeof node.lang === "string" && node.lang.length > 0
-      ? node.lang.toLowerCase()
-      : undefined;
+    const lang =
+      typeof node.lang === "string" && node.lang.length > 0 ? node.lang.toLowerCase() : undefined;
     return [lang ? { kind: "code-block", source, language: lang } : { kind: "code-block", source }];
   }
 
@@ -316,11 +310,13 @@ function visit(node: MdastNode): Block[] {
   // Catch-all (Pattern F — no `default:` clause; the unsupported branch IS
   // the catch-all). Any mdast node type not enumerated above becomes an
   // honest DOC-06 disclosure.
-  return [{
-    kind: "unsupported",
-    originalKind: node.type,
-    plainDescription: `A ${node.type} element from the original document that the reader could not render.`,
-  }];
+  return [
+    {
+      kind: "unsupported",
+      originalKind: node.type,
+      plainDescription: `A ${node.type} element from the original document that the reader could not render.`,
+    },
+  ];
 }
 
 /** Issue #19 — split a paragraph's child nodes into caption segments:

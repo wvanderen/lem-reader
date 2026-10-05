@@ -71,11 +71,7 @@ export function blockNormalizedText(el: HTMLElement): string {
  * (the exclusive-end convention — a split at endGrapheme == blockLength
  * means "whole block").
  */
-export function charOffsetToGrapheme(
-  text: string,
-  charOffset: number,
-  locale: string,
-): number {
+export function charOffsetToGrapheme(text: string, charOffset: number, locale: string): number {
   const clusters = graphemeClusters(text, locale);
   let consumed = 0;
   for (let i = 0; i < clusters.length; i++) {
@@ -130,11 +126,7 @@ export function charOffsetToGrapheme(
  * rects (e.g. the block is display:none or empty — the caller treats this as
  * a zero-line block and moves it whole per D4-02 atomic fallback).
  */
-export function readLineBoxes(
-  el: HTMLElement,
-  fullText: string,
-  signal: AbortSignal,
-): LineBox[] {
+export function readLineBoxes(el: HTMLElement, fullText: string, signal: AbortSignal): LineBox[] {
   if (signal.aborted) throw new AbortError();
   // Early-return on empty normalized text — no text means no line boxes.
   // fullText is the canonical normalized text for this block; the offsets
@@ -201,10 +193,7 @@ export function readLineBoxes(
         const rects = range.getClientRects();
         if (rects.length > 0) {
           const lastRect = rects[rects.length - 1]!;
-          if (
-            Number.isNaN(lastTop) ||
-            Math.round(lastRect.top) !== Math.round(lastTop)
-          ) {
+          if (Number.isNaN(lastTop) || Math.round(lastRect.top) !== Math.round(lastTop)) {
             // Predicate holds at mid — the boundary is at mid or earlier.
             boundary = mid;
             boundaryRects = rects;

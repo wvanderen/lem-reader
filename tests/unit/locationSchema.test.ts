@@ -42,40 +42,31 @@ describe("LocationRecordSchema accepts valid records", () => {
   });
 
   it("accepts a multi-segment slug articleId (matches ArticleSchema.id)", () => {
-    const parsed = LocationRecordSchema.parse(
-      validLocation({ articleId: "essay-long-form" }),
-    );
+    const parsed = LocationRecordSchema.parse(validLocation({ articleId: "essay-long-form" }));
     expect(parsed.articleId).toBe("essay-long-form");
   });
 
   it("accepts a single-segment slug articleId", () => {
-    const parsed = LocationRecordSchema.parse(
-      validLocation({ articleId: "abc123" }),
-    );
+    const parsed = LocationRecordSchema.parse(validLocation({ articleId: "abc123" }));
     expect(parsed.articleId).toBe("abc123");
   });
 
   it.each([1, 2, 42, 1000])("accepts revision=%i (D-06 monotonic)", (revision) => {
-    expect(
-      LocationRecordSchema.parse(validLocation({ revision })).revision,
-    ).toBe(revision);
+    expect(LocationRecordSchema.parse(validLocation({ revision })).revision).toBe(revision);
   });
 
   it.each([0, 1, 42, 99999])(
     "accepts graphemeOffset=%i (D-05 offset into normalizeText)",
     (graphemeOffset) => {
-      expect(
-        LocationRecordSchema.parse(validLocation({ graphemeOffset }))
-          .graphemeOffset,
-      ).toBe(graphemeOffset);
+      expect(LocationRecordSchema.parse(validLocation({ graphemeOffset })).graphemeOffset).toBe(
+        graphemeOffset,
+      );
     },
   );
 
   it("accepts a valid ISO-8601 datetime with milliseconds + timezone Z", () => {
     const savedAt = "2026-08-02T17:13:01.123Z";
-    expect(
-      LocationRecordSchema.parse(validLocation({ savedAt })).savedAt,
-    ).toBe(savedAt);
+    expect(LocationRecordSchema.parse(validLocation({ savedAt })).savedAt).toBe(savedAt);
   });
 });
 
@@ -112,16 +103,11 @@ describe("LocationRecordSchema rejects invalid records", () => {
   });
 
   it("rejects schemaVersion: 2 (forward-incompatible — STATE-04 migration hook)", () => {
-    expect(() =>
-      LocationRecordSchema.parse(validLocation({ schemaVersion: 2 })),
-    ).toThrow();
+    expect(() => LocationRecordSchema.parse(validLocation({ schemaVersion: 2 }))).toThrow();
   });
 
   it("rejects schemaVersion missing (literal(1) is required)", () => {
-    const { schemaVersion: _omit, ...rest } = validLocation() as Record<
-      string,
-      unknown
-    >;
+    const { schemaVersion: _omit, ...rest } = validLocation() as Record<string, unknown>;
     expect(() => LocationRecordSchema.parse(rest)).toThrow();
   });
 });
@@ -138,9 +124,7 @@ describe("LocationRecordSchema.safeParse round-trips (the locationStore read pat
   });
 
   it("returns success: false on an invalid payload (no throw)", () => {
-    const result = LocationRecordSchema.safeParse(
-      validLocation({ revision: -1 }),
-    );
+    const result = LocationRecordSchema.safeParse(validLocation({ revision: -1 }));
     expect(result.success).toBe(false);
     if (!result.success) {
       // The error is shape; the test does not depend on the exact Zod issue

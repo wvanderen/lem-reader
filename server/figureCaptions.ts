@@ -126,11 +126,7 @@ export function attachAdjacentCaptions(blocks: Block[]): Block[] {
       continue;
     }
     const prev = out[i - 1];
-    if (
-      prev !== undefined &&
-      prev.kind === "figure" &&
-      prev.caption.length === 0
-    ) {
+    if (prev !== undefined && prev.kind === "figure" && prev.caption.length === 0) {
       out.splice(i, 1);
       out[i - 1] = { ...prev, caption: block.content };
     }
@@ -142,11 +138,7 @@ export function attachAdjacentCaptions(blocks: Block[]): Block[] {
       continue;
     }
     const next = out[i + 1];
-    if (
-      next !== undefined &&
-      next.kind === "figure" &&
-      next.caption.length === 0
-    ) {
+    if (next !== undefined && next.kind === "figure" && next.caption.length === 0) {
       out.splice(i, 1);
       out[i] = { ...next, caption: block.content };
     }

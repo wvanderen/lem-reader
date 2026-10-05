@@ -11,14 +11,14 @@ directory ever feeds calibration.
 
 ## Contents
 
-| File | Purpose |
-|------|---------|
-| `generate-synthetic-pdfs.ts` | Deterministic generator + built-in integrity self-check |
+| File                          | Purpose                                                                                                                                                                    |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `generate-synthetic-pdfs.ts`  | Deterministic generator + built-in integrity self-check                                                                                                                    |
 | `synthetic-single-column.pdf` | 3 pages: 18pt bold title/heading, 12pt paragraphs, one hyphen-at-line-end split word (`conclu-` / `sion…`), ~200pt vertical gap between paragraph groups (figure stand-in) |
-| `synthetic-two-column.pdf` | 2 pages, text in two x-ranges (~60–280 and ~312–532pt), each column well over 15% of page text — the refuse-side fixture for the D11-03 multi-column detector |
-| `synthetic-scanned.pdf` | 2 pages with empty content streams — zero text items (the scanned/no-text-layer class) |
-| `synthetic-outline.pdf` | 2 single-column pages + `/Outlines` tree with two bookmarks using explicit array destinations at page tops (outline-first heading fixture for D11-08) |
-| `synthetic-corrupt.pdf` | Literal ASCII bytes `this is not a pdf` (the pdf-unreadable class) |
+| `synthetic-two-column.pdf`    | 2 pages, text in two x-ranges (~60–280 and ~312–532pt), each column well over 15% of page text — the refuse-side fixture for the D11-03 multi-column detector              |
+| `synthetic-scanned.pdf`       | 2 pages with empty content streams — zero text items (the scanned/no-text-layer class)                                                                                     |
+| `synthetic-outline.pdf`       | 2 single-column pages + `/Outlines` tree with two bookmarks using explicit array destinations at page tops (outline-first heading fixture for D11-08)                      |
+| `synthetic-corrupt.pdf`       | Literal ASCII bytes `this is not a pdf` (the pdf-unreadable class)                                                                                                         |
 
 All valid fixtures are minimal PDF 1.4 documents: `%PDF-1.4` header, computed
 xref offsets, `/MediaBox [0 0 612 792]`, Helvetica `/F1` + Helvetica-Bold

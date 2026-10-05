@@ -34,8 +34,19 @@
               "kind": "paragraph",
               "content": [
                 { "text": "Flat items with a link mid-item: the ", "marks": [] },
-                { "text": "HTML specification", "marks": [{ "type": "link", "href": "https://html.spec.whatwg.org/multipage/grouping-content.html#the-ul-element" }] },
-                { "text": " permits both ordered and unordered nesting to arbitrary depth.", "marks": [] }
+                {
+                  "text": "HTML specification",
+                  "marks": [
+                    {
+                      "type": "link",
+                      "href": "https://html.spec.whatwg.org/multipage/grouping-content.html#the-ul-element"
+                    }
+                  ]
+                },
+                {
+                  "text": " permits both ordered and unordered nesting to arbitrary depth.",
+                  "marks": []
+                }
               ]
             }
           ]
@@ -56,7 +67,10 @@
                     {
                       "kind": "paragraph",
                       "content": [
-                        { "text": "The first nested item, which itself opens a numbered sequence:", "marks": [] }
+                        {
+                          "text": "The first nested item, which itself opens a numbered sequence:",
+                          "marks": []
+                        }
                       ]
                     },
                     {
@@ -68,7 +82,10 @@
                             {
                               "kind": "paragraph",
                               "content": [
-                                { "text": "Read the parent item to establish context.", "marks": [] }
+                                {
+                                  "text": "Read the parent item to establish context.",
+                                  "marks": []
+                                }
                               ]
                             }
                           ]
@@ -88,7 +105,10 @@
                             {
                               "kind": "paragraph",
                               "content": [
-                                { "text": "Return to the enclosing bullet without losing your place.", "marks": [] }
+                                {
+                                  "text": "Return to the enclosing bullet without losing your place.",
+                                  "marks": []
+                                }
                               ]
                             }
                           ]
@@ -102,7 +122,10 @@
                     {
                       "kind": "paragraph",
                       "content": [
-                        { "text": "A sibling nested item with no deeper children, so the recursion has a base case at every level.", "marks": [] }
+                        {
+                          "text": "A sibling nested item with no deeper children, so the recursion has a base case at every level.",
+                          "marks": []
+                        }
                       ]
                     }
                   ]
@@ -115,9 +138,7 @@
           "content": [
             {
               "kind": "paragraph",
-              "content": [
-                { "text": "A final flat item closing the outer list.", "marks": [] }
-              ]
+              "content": [{ "text": "A final flat item closing the outer list.", "marks": [] }]
             }
           ]
         }

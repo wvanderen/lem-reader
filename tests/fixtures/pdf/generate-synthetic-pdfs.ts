@@ -185,10 +185,9 @@ export function serializePdf(spec: FixtureSpec): Buffer {
     `<< /Type /Catalog /Pages 2 0 R` +
     (spec.outlines ? ` /Outlines ${outlineRootNum} 0 R /PageMode /UseOutlines` : "") +
     ` >>`;
-  objects[2] =
-    `<< /Type /Pages /Kids [${spec.pages
-      .map((_, i) => `${pageObjectNum(i)} 0 R`)
-      .join(" ")}] /Count ${pageCount} >>`;
+  objects[2] = `<< /Type /Pages /Kids [${spec.pages
+    .map((_, i) => `${pageObjectNum(i)} 0 R`)
+    .join(" ")}] /Count ${pageCount} >>`;
 
   spec.pages.forEach((content, i) => {
     objects[pageObjectNum(i)] =
@@ -260,8 +259,20 @@ function singleColumnSpec(): FixtureSpec {
   const page1 = buildContentStream([
     { x: SINGLE_COLUMN_X, y: 740, font: "F2", size: TITLE_SIZE, text: "A Study of Calm Reading" },
     ...page1Body.lines,
-    { x: SINGLE_COLUMN_X, y: hyphenY, font: "F1", size: BODY_SIZE, text: "Good pagination should read like conclu-" },
-    { x: SINGLE_COLUMN_X, y: hyphenY - BODY_LEADING, font: "F1", size: BODY_SIZE, text: "sion rather than interruption." },
+    {
+      x: SINGLE_COLUMN_X,
+      y: hyphenY,
+      font: "F1",
+      size: BODY_SIZE,
+      text: "Good pagination should read like conclu-",
+    },
+    {
+      x: SINGLE_COLUMN_X,
+      y: hyphenY - BODY_LEADING,
+      font: "F1",
+      size: BODY_SIZE,
+      text: "sion rather than interruption.",
+    },
   ]);
 
   // Page 2: an 18pt bold heading + paragraphs.
@@ -287,7 +298,9 @@ function singleColumnSpec(): FixtureSpec {
   // starting group two at (yAfter - 200) puts its first baseline ~224pt below
   // group one's last baseline — comfortably a "figure-sized" visual gap.
   const groupOne = composeParagraphs(
-    ["The first group of paragraphs sits above the figure stand-in. Its lines are dense enough to establish a reading rhythm before the visual pause."],
+    [
+      "The first group of paragraphs sits above the figure stand-in. Its lines are dense enough to establish a reading rhythm before the visual pause.",
+    ],
     SINGLE_COLUMN_X,
     740,
     80,
@@ -295,7 +308,9 @@ function singleColumnSpec(): FixtureSpec {
     8,
   );
   const groupTwo = composeParagraphs(
-    ["The second group resumes below the figure stand-in. Text after a large vertical gap should still flow into the same reading order without a forced break."],
+    [
+      "The second group resumes below the figure stand-in. Text after a large vertical gap should still flow into the same reading order without a forced break.",
+    ],
     SINGLE_COLUMN_X,
     Math.floor(groupOne.yAfter) - 200,
     80,
@@ -311,11 +326,15 @@ function singleColumnSpec(): FixtureSpec {
  * multi-column detector; each column carries well over 15% of page text). */
 function twoColumnSpec(): FixtureSpec {
   const composeColumn = (paragraphs: string[]): TextLine[] =>
-    composeParagraphs(paragraphs, 0, 740, COLUMN_WRAP_CHARS, 14, 6).lines
-      .map((line) => ({ ...line, x: COLUMN_LEFT_X }));
+    composeParagraphs(paragraphs, 0, 740, COLUMN_WRAP_CHARS, 14, 6).lines.map((line) => ({
+      ...line,
+      x: COLUMN_LEFT_X,
+    }));
   const composeRightColumn = (paragraphs: string[]): TextLine[] =>
-    composeParagraphs(paragraphs, 0, 740, COLUMN_WRAP_CHARS, 14, 6).lines
-      .map((line) => ({ ...line, x: COLUMN_RIGHT_X }));
+    composeParagraphs(paragraphs, 0, 740, COLUMN_WRAP_CHARS, 14, 6).lines.map((line) => ({
+      ...line,
+      x: COLUMN_RIGHT_X,
+    }));
 
   const page1 = buildContentStream([
     ...composeColumn([
@@ -487,7 +506,9 @@ function main(): void {
     for (const problem of problems) console.error(`  - ${problem}`);
     process.exit(1);
   }
-  console.log("self-check PASS: 4 valid fixtures (%PDF- prefix + >500B), corrupt marker present, re-emit byte-identical");
+  console.log(
+    "self-check PASS: 4 valid fixtures (%PDF- prefix + >500B), corrupt marker present, re-emit byte-identical",
+  );
 }
 
 // Run as a script only: `node tests/fixtures/pdf/generate-synthetic-pdfs.ts`.
@@ -495,6 +516,5 @@ function main(): void {
 // re-writing fixtures or logging — the direct-run check compares the module
 // URL against the invoked script path (standard ESM main-module idiom).
 const isDirectRun =
-  process.argv[1] !== undefined &&
-  import.meta.url === pathToFileURL(process.argv[1]).href;
+  process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isDirectRun) main();

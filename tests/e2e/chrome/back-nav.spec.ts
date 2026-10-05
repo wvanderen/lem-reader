@@ -88,9 +88,7 @@ test("(a) in-app: library → article → Back to library returns to the library
   // Open an article through its library row (a real in-app navigation that
   // pushes a history entry and flips App's hasAppHistory flag).
   await page.locator(".library-list a[href^='#/article/']").first().click();
-  await expect(page.getByRole("heading", { level: 1 })).not.toHaveText(
-    "Saved articles",
-  );
+  await expect(page.getByRole("heading", { level: 1 })).not.toHaveText("Saved articles");
   await expect(backToLibrary(page)).toBeVisible();
 
   // history.back() → the prior "#/" entry; the router swaps to the library.
@@ -122,7 +120,10 @@ test("(c) Highlights uses shell navigation instead of a Back control", async ({ 
   await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Back", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Clear filters" })).toBeVisible();
-  await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Library" }).click();
+  await page
+    .getByRole("navigation", { name: "Primary" })
+    .getByRole("link", { name: "Library" })
+    .click();
   await expect(libraryHeading(page)).toBeVisible();
   await expect(page).toHaveURL(/#\/$/);
 });
@@ -198,8 +199,8 @@ test("(e) view-route: library → switcher view → article → Back returns to 
   await backToLibrary(page).click();
   await expect(libraryHeading(page)).toBeVisible({ timeout: 10_000 });
   await expect(page).toHaveURL(/#\/unread$/);
-  await expect(
-    page.locator(".view-switcher a[aria-current='page']"),
-  ).toHaveAttribute("href", "#/unread");
+  await expect(page.locator(".view-switcher a[aria-current='page']")).toHaveAttribute(
+    "href",
+    "#/unread",
+  );
 });
-

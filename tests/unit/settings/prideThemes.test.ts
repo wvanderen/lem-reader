@@ -121,12 +121,8 @@ describe("specialty themes — the palette contract (ADR 0006/0007)", () => {
         const board = cssToken(css, from, to, "board");
         const lit = cssToken(css, from, to, "lit");
         // Contrast against black increases monotonically with luminance.
-        expect(contrastRatio(surface, "#000000")).toBeGreaterThan(
-          contrastRatio(board, "#000000"),
-        );
-        expect(contrastRatio(surface, "#000000")).toBeGreaterThan(
-          contrastRatio(lit, "#000000"),
-        );
+        expect(contrastRatio(surface, "#000000")).toBeGreaterThan(contrastRatio(board, "#000000"));
+        expect(contrastRatio(surface, "#000000")).toBeGreaterThan(contrastRatio(lit, "#000000"));
       });
     }
 

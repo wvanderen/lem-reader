@@ -18,11 +18,7 @@
 // .textContent + a data-kind attribute. The DOM is queried by the caller
 // (ArticleView), which passes the rendered block elements in document order.
 import type { CanonicalArticle } from "../content/types";
-import {
-  BLOCK_SEPARATOR,
-  graphemeClusters,
-  normalizeRunText,
-} from "../content/normalizeText";
+import { BLOCK_SEPARATOR, graphemeClusters, normalizeRunText } from "../content/normalizeText";
 
 /**
  * The rendered top-level article blocks in document order. The
@@ -40,9 +36,7 @@ import {
  * target — one selector, one contract.
  */
 export function queryBlocks(articleEl: HTMLElement): HTMLElement[] {
-  return Array.from(
-    articleEl.querySelectorAll<HTMLElement>("[data-block-index]"),
-  );
+  return Array.from(articleEl.querySelectorAll<HTMLElement>("[data-block-index]"));
 }
 
 // ── Per-element grapheme-length cache (260819-tld) ───────────────────────────
@@ -65,10 +59,7 @@ interface ElementGraphemeLengthEntry {
   readonly length: number;
 }
 
-const elementGraphemeLengthCache = new WeakMap<
-  HTMLElement,
-  ElementGraphemeLengthEntry
->();
+const elementGraphemeLengthCache = new WeakMap<HTMLElement, ElementGraphemeLengthEntry>();
 
 /**
  * Grapheme length of one rendered element's normalized text, cached per
@@ -76,10 +67,7 @@ const elementGraphemeLengthCache = new WeakMap<
  * the SAME substrate helpers (imported, never reimplemented) — so the cached
  * value is byte-identical to the uncached computation.
  */
-function elementGraphemeLength(
-  article: CanonicalArticle,
-  el: HTMLElement,
-): number {
+function elementGraphemeLength(article: CanonicalArticle, el: HTMLElement): number {
   const cached = elementGraphemeLengthCache.get(el);
   if (cached && cached.article === article) return cached.length;
   const length = graphemeClusters(normalizeElText(el), article.lang).length;

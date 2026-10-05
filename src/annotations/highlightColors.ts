@@ -68,17 +68,12 @@ export function highlightClassName(traits: HighlightMarkTraits): string {
  * A NAMED color (issue #118) prefixes its display name — "Yellow
  * highlight: …" — so the choice is never conveyed by color alone.
  */
-export function highlightAriaLabelForText(
-  text: string,
-  traits: HighlightMarkTraits,
-): string {
+export function highlightAriaLabelForText(text: string, traits: HighlightMarkTraits): string {
   const excerpt = text.slice(0, 80);
   // Issue #118 — a NAMED color prefixes its display name ("Yellow
   // highlight: …"); Default keeps the calm unprefixed copy byte-unchanged.
   const base =
-    traits.color === "default"
-      ? "Highlight"
-      : `${HIGHLIGHT_COLOR_LABELS[traits.color]} highlight`;
+    traits.color === "default" ? "Highlight" : `${HIGHLIGHT_COLOR_LABELS[traits.color]} highlight`;
   if (traits.status === "ambiguous") {
     return `${base} that couldn't be matched: ${excerpt}`;
   }

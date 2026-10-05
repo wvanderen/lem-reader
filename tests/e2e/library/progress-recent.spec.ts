@@ -25,10 +25,7 @@ import { test, expect, type Page } from "@playwright/test";
 import { fixtures } from "../../../src/fixtures";
 import { ArticleSchema } from "../../../src/content/schema";
 import type { CanonicalArticle } from "../../../src/content/schema";
-import {
-  normalizeText,
-  graphemeClusters,
-} from "../../../src/content/normalizeText";
+import { normalizeText, graphemeClusters } from "../../../src/content/normalizeText";
 import { BASE } from "../_base";
 
 // Overridable for session-local dev-server runs (the _fixtures.ts
@@ -49,11 +46,7 @@ const HAIRLINE_TOTAL = graphemeClusters(
 /** Build an ArticleSchema-valid standalone article from plain paragraphs
  * (library-restore.spec.ts makeStandalone discipline — schema-built in
  * Node so the store-seam Zod read never drops a seeded row). */
-function makeStandalone(
-  id: string,
-  title: string,
-  paragraphs: string[],
-): CanonicalArticle {
+function makeStandalone(id: string, title: string, paragraphs: string[]): CanonicalArticle {
   return ArticleSchema.parse({
     id,
     revision: 1,
@@ -73,42 +66,25 @@ function makeStandalone(
 // Two standalones used for the continue-reading strip derivation (distinct
 // ids + titles so row/card filters are deterministic; multi-paragraph bodies
 // so mid-article ratios are meaningful).
-const STRIP_FIXTURE_A = makeStandalone(
-  "progress-recent-strip-a",
-  "Quiet Harbor Logbook",
-  [
-    "The morning inventory listed rope, lantern oil, and one borrowed chronometer whose owner everyone had politely forgotten.",
-    "Midday brought the ferry, two letters, and a dispute about whether the west pier counts as part of the harbor at all.",
-    "By evening the log was closed with a short note that the tide had been reasonable, which is the highest praise the harbor allows.",
-  ],
-);
-const STRIP_FIXTURE_B = makeStandalone(
-  "progress-recent-strip-b",
-  "Lantern Field Guide",
-  [
-    "A field guide begins with the admission that most lanterns are older than the people describing them.",
-    "The middle chapters organize flames by patience instead of brightness, which the old keepers insisted was the honest axis.",
-    "The final entry is blank on purpose: a place for the reader's own lantern, wherever it happens to be burning.",
-  ],
-);
-const STRIP_TOTAL_A = graphemeClusters(
-  normalizeText(STRIP_FIXTURE_A),
-  STRIP_FIXTURE_A.lang,
-).length;
-const STRIP_TOTAL_B = graphemeClusters(
-  normalizeText(STRIP_FIXTURE_B),
-  STRIP_FIXTURE_B.lang,
-).length;
+const STRIP_FIXTURE_A = makeStandalone("progress-recent-strip-a", "Quiet Harbor Logbook", [
+  "The morning inventory listed rope, lantern oil, and one borrowed chronometer whose owner everyone had politely forgotten.",
+  "Midday brought the ferry, two letters, and a dispute about whether the west pier counts as part of the harbor at all.",
+  "By evening the log was closed with a short note that the tide had been reasonable, which is the highest praise the harbor allows.",
+]);
+const STRIP_FIXTURE_B = makeStandalone("progress-recent-strip-b", "Lantern Field Guide", [
+  "A field guide begins with the admission that most lanterns are older than the people describing them.",
+  "The middle chapters organize flames by patience instead of brightness, which the old keepers insisted was the honest axis.",
+  "The final entry is blank on purpose: a place for the reader's own lantern, wherever it happens to be burning.",
+]);
+const STRIP_TOTAL_A = graphemeClusters(normalizeText(STRIP_FIXTURE_A), STRIP_FIXTURE_A.lang).length;
+const STRIP_TOTAL_B = graphemeClusters(normalizeText(STRIP_FIXTURE_B), STRIP_FIXTURE_B.lang).length;
 
 /**
  * seedArticleRows — write ArticleSchema-valid article rows (built in Node)
  * into the articles store via a raw put (the library-restore.spec.ts
  * discipline). MUST run BEFORE openLibrary (seed-before-open).
  */
-async function seedArticleRows(
-  page: Page,
-  articles: CanonicalArticle[],
-): Promise<void> {
+async function seedArticleRows(page: Page, articles: CanonicalArticle[]): Promise<void> {
   await page.evaluate(async (rows) => {
     await new Promise<void>((resolve, reject) => {
       const req = indexedDB.open("lem-reader");
@@ -211,9 +187,7 @@ async function openLibrary(page: Page) {
   // whatever rows are now in Dexie (location seeds, ingested articles).
   await page.goto(`${BASE}/#/`);
   await page.reload();
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Saved articles" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
   await expect(page.locator(".library-list > li").first()).toBeVisible({
     timeout: 10_000,
   });
@@ -230,24 +204,16 @@ test.beforeEach(async ({ page }) => {
   // dexie-migration.spec.ts beforeEach — clear-rows, NOT deleteDatabase, to
   // avoid the webkit deleteDatabase race).
   await page.goto(`${BASE}/`);
-  await expect(
-    page.getByRole("heading", { name: "Saved articles" }),
-  ).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible({
+    timeout: 10_000,
+  });
   await page.evaluate(async () => {
     await new Promise<void>((resolve) => {
       const req = indexedDB.open("lem-reader");
       req.onsuccess = () => {
         const db = req.result;
-        const stores = [
-          "articles",
-          "settings",
-          "location",
-          "highlights",
-          "notes",
-        ];
-        const existing = stores.filter((s) =>
-          db.objectStoreNames.contains(s),
-        );
+        const stores = ["articles", "settings", "location", "highlights", "notes"];
+        const existing = stores.filter((s) => db.objectStoreNames.contains(s));
         if (existing.length === 0) {
           resolve();
           return;
@@ -265,9 +231,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.describe("SC#5 + LIB-06 — progress hairline + continue-reading strip + finished mark", () => {
-  test("per-row hairline fill ratio matches seeded graphemeOffset (D8-11)", async ({
-    page,
-  }) => {
+  test("per-row hairline fill ratio matches seeded graphemeOffset (D8-11)", async ({ page }) => {
     // Seed a location at 50% — the per-row ProgressHairline should render
     // transform: scaleX(0.5).
     const halfOffset = Math.floor(HAIRLINE_TOTAL * 0.5);
@@ -293,26 +257,17 @@ test.describe("SC#5 + LIB-06 — progress hairline + continue-reading strip + fi
     // register that ArticleView owns.
     const track = row.locator(".progress-hairline");
     await expect(track).toHaveCSS("position", "static");
-    const [rowBox, trackBox] = await Promise.all([
-      row.boundingBox(),
-      track.boundingBox(),
-    ]);
+    const [rowBox, trackBox] = await Promise.all([row.boundingBox(), track.boundingBox()]);
     expect(rowBox).not.toBeNull();
     expect(trackBox).not.toBeNull();
     expect(trackBox!.x).toBeGreaterThanOrEqual(rowBox!.x);
-    expect(trackBox!.x + trackBox!.width).toBeLessThanOrEqual(
-      rowBox!.x + rowBox!.width,
-    );
+    expect(trackBox!.x + trackBox!.width).toBeLessThanOrEqual(rowBox!.x + rowBox!.width);
     expect(trackBox!.y).toBeGreaterThanOrEqual(rowBox!.y);
-    expect(trackBox!.y + trackBox!.height).toBeLessThanOrEqual(
-      rowBox!.y + rowBox!.height,
-    );
+    expect(trackBox!.y + trackBox!.height).toBeLessThanOrEqual(rowBox!.y + rowBox!.height);
 
     // The transform is `scaleX(<ratio>)` — extract the ratio with a regex
     // and assert it's close to 0.5 (precision 1 = within 0.05).
-    const transform = await fill.evaluate(
-      (el) => (el as HTMLElement).style.transform,
-    );
+    const transform = await fill.evaluate((el) => (el as HTMLElement).style.transform);
     const match = /scaleX\(([\d.]+)\)/.exec(transform);
     expect(match, `transform must match scaleX(<number>): got "${transform}"`).not.toBeNull();
     const ratio = parseFloat(match![1]!);
@@ -327,9 +282,7 @@ test.describe("SC#5 + LIB-06 — progress hairline + continue-reading strip + fi
     await expect(freshRow.locator(".progress-hairline-fill")).toHaveCount(0);
   });
 
-  test("Finished mark at >= 0.98 ratio + hairline at scaleX(1) (D8-12)", async ({
-    page,
-  }) => {
+  test("Finished mark at >= 0.98 ratio + hairline at scaleX(1) (D8-12)", async ({ page }) => {
     // Seed a location at the END of the article (graphemeOffset = total).
     // ratio = total / total = 1.0 >= FINISHED_THRESHOLD (0.98), so the row
     // flips to Finished: hairline hidden, finished-mark visible with text
@@ -381,12 +334,8 @@ test.describe("SC#5 + LIB-06 — progress hairline + continue-reading strip + fi
 
     // The card ordering is savedAt DESC (D8-10 — most-recently-opened first).
     // STRIP_FIXTURE_B has the later savedAt (2026-08-13) so it appears first.
-    await expect(cards.first()).toContainText(
-      STRIP_FIXTURE_B.provenance.title,
-    );
-    await expect(cards.nth(1)).toContainText(
-      STRIP_FIXTURE_A.provenance.title,
-    );
+    await expect(cards.first()).toContainText(STRIP_FIXTURE_B.provenance.title);
+    await expect(cards.nth(1)).toContainText(STRIP_FIXTURE_A.provenance.title);
   });
 
   test("Finished articles leave the continue-reading strip but stay in the main list (D8-12)", async ({
@@ -410,9 +359,7 @@ test.describe("SC#5 + LIB-06 — progress hairline + continue-reading strip + fi
     await expect(strip).toBeVisible();
     const cards = strip.locator(".continue-reading-row");
     await expect(cards).toHaveCount(1);
-    await expect(cards.first()).toContainText(
-      STRIP_FIXTURE_A.provenance.title,
-    );
+    await expect(cards.first()).toContainText(STRIP_FIXTURE_A.provenance.title);
 
     // The Finished article is in the main library list with the mark.
     const finishedRow = page
@@ -487,8 +434,6 @@ test.describe("SC#5 + LIB-06 — progress hairline + continue-reading strip + fi
     await expect(page.locator(".continue-reading-strip")).toHaveCount(0);
 
     // The library list still renders fixtures (one row per fixture).
-    await expect(page.locator(".library-list > li")).toHaveCount(
-      fixtures.length,
-    );
+    await expect(page.locator(".library-list > li")).toHaveCount(fixtures.length);
   });
 });

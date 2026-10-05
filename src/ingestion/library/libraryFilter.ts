@@ -31,11 +31,7 @@
 //     javascript:/data: URI). See T-8-12 mitigation in the plan.
 import type { CanonicalArticle } from "../../content/types";
 import type { Book } from "../../content/schema";
-import {
-  effectiveTitle,
-  effectiveAuthor,
-  effectiveSourceUrl,
-} from "./effectiveMetadata";
+import { effectiveTitle, effectiveAuthor, effectiveSourceUrl } from "./effectiveMetadata";
 
 /**
  * `LibraryFilter` — the filter shape consumed by `filterLibrary`. Mirrors the
@@ -139,11 +135,7 @@ export function filterBooks(
     }
     // Search (D12-04 — book title + authors AND chapter titles).
     if (q.length > 0) {
-      const haystack = [
-        book.title,
-        ...book.authors,
-        ...(chapterTitlesByBook.get(book.id) ?? []),
-      ]
+      const haystack = [book.title, ...book.authors, ...(chapterTitlesByBook.get(book.id) ?? [])]
         .join(" ")
         .toLowerCase();
       if (!haystack.includes(q)) return false;

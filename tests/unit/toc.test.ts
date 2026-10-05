@@ -107,20 +107,13 @@ describe("deriveToc: Top entry + per-heading entries", () => {
 describe("deriveToc: skipped heading levels", () => {
   const article = parseArticle({
     ...baseArticle,
-    blocks: [
-      heading(2, "Chapter"),
-      heading(5, "Deep skip"),
-    ],
+    blocks: [heading(2, "Chapter"), heading(5, "Deep skip")],
   });
   const toc = deriveToc(article);
 
   it("h2 followed directly by h5 → Top + 2 entries (zero invented intermediates)", () => {
     expect(toc).toHaveLength(3);
-    expect(toc.map((e) => e.text)).toEqual([
-      "Top of article",
-      "Chapter",
-      "Deep skip",
-    ]);
+    expect(toc.map((e) => e.text)).toEqual(["Top of article", "Chapter", "Deep skip"]);
   });
 
   it("the h5 entry has depth 2 — the skip deepens nesting with no intermediate entry", () => {
@@ -135,11 +128,7 @@ describe("deriveToc: skipped heading levels", () => {
 describe("deriveToc: duplicate heading texts", () => {
   const article = parseArticle({
     ...baseArticle,
-    blocks: [
-      heading(2, "Notes"),
-      para("Some text."),
-      heading(2, "Notes"),
-    ],
+    blocks: [heading(2, "Notes"), para("Some text."), heading(2, "Notes")],
   });
   const toc = deriveToc(article);
 

@@ -45,9 +45,9 @@ test.describe("ANNO-03 delete confirm (05-05)", () => {
     // Step 1: click Delete → confirm prompt replaces the body.
     await page.locator("#highlight-popover .highlight-popover-delete").click();
     await expect(page.locator("#highlight-popover .highlight-popover-confirm")).toBeVisible();
-    await expect(page.locator("#highlight-popover .highlight-popover-confirm-prompt")).toContainText(
-      /Delete this highlight\?/i,
-    );
+    await expect(
+      page.locator("#highlight-popover .highlight-popover-confirm-prompt"),
+    ).toContainText(/Delete this highlight\?/i);
     // Non-destructive default focus → the Keep button ([data-initial-focus]).
     const keepBtn = page.locator("#highlight-popover [data-initial-focus]");
     await expect(keepBtn).toBeVisible();
@@ -89,10 +89,7 @@ test.describe("ANNO-03 delete confirm (05-05)", () => {
     await page.locator("#highlight-popover .highlight-popover-done").click();
     // Capture the highlight id so we can verify both the mark + the Dexie
     // row are gone after delete.
-    const hlId = await page
-      .locator("mark.highlight")
-      .first()
-      .getAttribute("data-highlight-id");
+    const hlId = await page.locator("mark.highlight").first().getAttribute("data-highlight-id");
     expect(hlId, "highlight has data-highlight-id").toBeTruthy();
     // Reopen + start delete + confirm.
     await page.locator("mark.highlight").first().click();
@@ -146,29 +143,21 @@ test.describe("ANNO-03 delete confirm (05-05)", () => {
     const hlId = await mark.getAttribute("data-highlight-id");
     expect(hlId).toBeTruthy();
     // The span renders marks in BOTH blocks before the delete.
-    const before = await page.locator(
-      `mark.highlight[data-highlight-id="${hlId}"]`,
-    );
+    const before = await page.locator(`mark.highlight[data-highlight-id="${hlId}"]`);
     expect(await before.count()).toBeGreaterThanOrEqual(2);
 
     // The review surface: one row → Remove highlight → the confirm dialog.
     await page.goto(`${BASE}/#/highlights`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Highlights" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
     await page
       .getByRole("button", { name: /^Remove highlight:/ })
       .first()
       .click();
     const dialog = page.locator("dialog.review-remove-confirm");
     await expect(dialog).toBeVisible();
-    await dialog
-      .getByRole("button", { name: "Remove highlight", exact: true })
-      .click();
+    await dialog.getByRole("button", { name: "Remove highlight", exact: true }).click();
     await expect(dialog).not.toBeVisible();
-    await expect(page.locator("main .status").first()).toContainText(
-      /Highlight removed/i,
-    );
+    await expect(page.locator("main .status").first()).toContainText(/Highlight removed/i);
 
     // Back in the article: ZERO marks for the id in scrolling mode (the
     // whole body mounts — nothing survives anywhere in the document)…

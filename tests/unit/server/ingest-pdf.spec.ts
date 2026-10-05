@@ -23,19 +23,10 @@ import {
 } from "../../../server/ingest";
 import { MAX_INGEST_BODY_BYTES, PDF_MAX_BYTES } from "../../../server/limits";
 import type { Block } from "../../../src/content/schema";
-import {
-  buildContentStream,
-  serializePdf,
-} from "../../fixtures/pdf/generate-synthetic-pdfs";
+import { buildContentStream, serializePdf } from "../../fixtures/pdf/generate-synthetic-pdfs";
 
 // ── Synthetic fixture loading (tests/fixtures/pdf — committed corpus) ────────
-const FIXTURES_DIR = join(
-  dirname(fileURLToPath(import.meta.url)),
-  "..",
-  "..",
-  "fixtures",
-  "pdf",
-);
+const FIXTURES_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "fixtures", "pdf");
 
 function fixtureB64(name: string): string {
   return readFileSync(join(FIXTURES_DIR, name)).toString("base64");
@@ -179,7 +170,13 @@ describe("ingest — pdf thin-content admission (ADR-0003)", () => {
           // out of the adapter's near-empty/scanned detector class.
           { x: 60, y: 740, font: "F1", size: 12, text: "A short memo with barely any content." },
           { x: 60, y: 724, font: "F1", size: 12, text: "One more line of honest, readable text." },
-          { x: 60, y: 708, font: "F1", size: 12, text: "And a third line so the page is not near-empty." },
+          {
+            x: 60,
+            y: 708,
+            font: "F1",
+            size: 12,
+            text: "And a third line so the page is not near-empty.",
+          },
         ]),
       ],
     });
@@ -292,7 +289,8 @@ describe("ingest — pdf round-trip anchor re-proof (SC#4a)", () => {
       filename: "calm-report.pdf",
     });
     expect(response.ok).toBe(true);
-    if (!response.ok || !("article" in response)) throw new Error("expected ok:true article envelope");
+    if (!response.ok || !("article" in response))
+      throw new Error("expected ok:true article envelope");
     // The orchestrator already ran the gate internally (Stage 7); re-running
     // it here proves the PERSISTED article shape round-trips — an admitted
     // PDF is a fixture to the reading engine (SC#4a integration proof).

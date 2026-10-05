@@ -168,12 +168,8 @@ describe("renderArticleHighlights (D9-08 template, byte-for-byte)", () => {
     const overridden = sampleArticle({
       readerSourceUrl: "https://corrected.example.org/real-origin",
     });
-    const out = renderArticleHighlights(overridden, [
-      entry(confidentHighlight, "confident"),
-    ]);
-    expect(out).toContain(
-      "([source](https://corrected.example.org/real-origin))",
-    );
+    const out = renderArticleHighlights(overridden, [entry(confidentHighlight, "confident")]);
+    expect(out).toContain("([source](https://corrected.example.org/real-origin))");
     expect(out).not.toContain("example.com/article-a");
   });
 
@@ -341,9 +337,7 @@ describe("Plan 19-02 (D19-12): multi-line quote.exact renders as ONE entry", () 
       id: "hl-span-note",
       quote: { prefix: "", exact: "first fragment\nsecond fragment", suffix: "" },
     });
-    const out = renderArticleHighlights(sampleArticle(), [
-      entry(span, "confident", sampleNote()),
-    ]);
+    const out = renderArticleHighlights(sampleArticle(), [entry(span, "confident", sampleNote())]);
     expect(out).toContain(
       "\n> first fragment\n> second fragment\n> — An Author, *Article A* ([source](https://example.com/article-a))\n> Note: a reader note\n",
     );
@@ -545,9 +539,7 @@ describe("Plan 17-03: markdown export on effective (reader-owned) metadata", () 
       readerTitle: "My Renamed Piece",
       readerAuthor: "Reader-Chosen Name",
     });
-    const out = renderArticleHighlights(article, [
-      entry(confidentHighlight, "confident"),
-    ]);
+    const out = renderArticleHighlights(article, [entry(confidentHighlight, "confident")]);
     expect(out).toContain("# Highlights — My Renamed Piece");
     expect(out).toContain(
       "> — Reader-Chosen Name, *My Renamed Piece* ([source](https://example.com/article-a))",
@@ -602,10 +594,7 @@ describe("Plan 17-03: markdown export on effective (reader-owned) metadata", () 
       entries: [],
     };
     const canonicalSection = { article: sampleArticle(), entries: [] };
-    const ordered = orderSectionsByRecency(
-      [overriddenSection, canonicalSection],
-      [],
-    );
+    const ordered = orderSectionsByRecency([overriddenSection, canonicalSection], []);
     expect(ordered.map((s) => s.article.id)).toEqual([
       "article-ovr", // effective "Aardvark Renamed"
       "article-a", // effective "Article A"

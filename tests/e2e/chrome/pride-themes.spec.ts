@@ -128,15 +128,13 @@ for (const room of ROOMS) {
     await page.waitForLoadState("networkidle");
     await expect(page.locator("html")).toHaveAttribute("data-theme", room.literal);
     await expect(page.locator(".app-header")).toHaveCSS("background-color", room.band);
-    expect(await viewportFill(page).evaluate((el) => getComputedStyle(el).backgroundImage)).toContain(
-      room.ribbonLead,
-    );
+    expect(
+      await viewportFill(page).evaluate((el) => getComputedStyle(el).backgroundImage),
+    ).toContain(room.ribbonLead);
   });
 }
 
-test("PT-03 leaving a flag room restores the flat enamel (no gradient leak)", async ({
-  page,
-}) => {
+test("PT-03 leaving a flag room restores the flat enamel (no gradient leak)", async ({ page }) => {
   await wipeDatabase(page);
   await openSettings(page);
 

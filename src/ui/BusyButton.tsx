@@ -26,12 +26,7 @@ export function BusyButton({
   ...rest
 }: BusyButtonProps) {
   return (
-    <button
-      type={type}
-      {...rest}
-      aria-busy={busy || undefined}
-      disabled={disabled || busy}
-    >
+    <button type={type} {...rest} aria-busy={busy || undefined} disabled={disabled || busy}>
       {busy && <SpinnerIcon />}
       {children}
     </button>

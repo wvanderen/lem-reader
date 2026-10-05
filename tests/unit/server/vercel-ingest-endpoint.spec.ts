@@ -54,9 +54,7 @@ function okArticle(): IngestionResponse {
         retrievedAt: "2026-08-11T00:00:00.000Z",
         originalHtmlHash: "sha256:" + "0".repeat(64),
       },
-      blocks: [
-        { kind: "paragraph", content: [{ text: "Hello.", marks: [] }] },
-      ],
+      blocks: [{ kind: "paragraph", content: [{ text: "Hello.", marks: [] }] }],
       footnotes: [],
       ingestionMeta: {
         source: "url",

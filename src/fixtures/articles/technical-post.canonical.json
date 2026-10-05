@@ -27,17 +27,26 @@
         { "text": "M", "marks": [{ "type": "strong" }] },
         { "text": "arkup ", "marks": [] },
         { "text": "L", "marks": [{ "type": "strong" }] },
-        { "text": "anguage) is the code that is used to structure a web page and its content. HTML is a ", "marks": [] },
+        {
+          "text": "anguage) is the code that is used to structure a web page and its content. HTML is a ",
+          "marks": []
+        },
         { "text": "markup language", "marks": [{ "type": "em" }] },
         { "text": " consisting of a series of ", "marks": [] },
         { "text": "elements", "marks": [{ "type": "code" }] },
-        { "text": " used to wrap (or enclose) text content to define its structure and cause it to behave in a certain way.", "marks": [] }
+        {
+          "text": " used to wrap (or enclose) text content to define its structure and cause it to behave in a certain way.",
+          "marks": []
+        }
       ]
     },
     {
       "kind": "paragraph",
       "content": [
-        { "text": "If we wrap unstructured content with the following HTML elements, we can turn a single line into a paragraph (", "marks": [] },
+        {
+          "text": "If we wrap unstructured content with the following HTML elements, we can turn a single line into a paragraph (",
+          "marks": []
+        },
         { "text": "<p>", "marks": [{ "type": "code" }] },
         { "text": ") and three bullet points (", "marks": [] },
         { "text": "<li>", "marks": [{ "type": "code" }] },
@@ -57,7 +66,10 @@
     {
       "kind": "paragraph",
       "content": [
-        { "text": "A lot of the web\u2019s content is lists and HTML has special elements for these. Marking up lists always consists of at least two elements. The most common list types are ordered and unordered lists:", "marks": [] }
+        {
+          "text": "A lot of the web\u2019s content is lists and HTML has special elements for these. Marking up lists always consists of at least two elements. The most common list types are ordered and unordered lists:",
+          "marks": []
+        }
       ]
     },
     {
@@ -70,7 +82,10 @@
               "kind": "paragraph",
               "content": [
                 { "text": "Unordered lists", "marks": [{ "type": "strong" }] },
-                { "text": " are for lists where the order of the items doesn\u2019t matter, such as a shopping list. These are wrapped in a ", "marks": [] },
+                {
+                  "text": " are for lists where the order of the items doesn\u2019t matter, such as a shopping list. These are wrapped in a ",
+                  "marks": []
+                },
                 { "text": "<ul>", "marks": [{ "type": "code" }] },
                 { "text": " element.", "marks": [] }
               ]
@@ -83,7 +98,10 @@
               "kind": "paragraph",
               "content": [
                 { "text": "Ordered lists", "marks": [{ "type": "strong" }] },
-                { "text": " are for lists where the order of the items does matter, such as a list of cooking instructions in a recipe. These are wrapped in an ", "marks": [] },
+                {
+                  "text": " are for lists where the order of the items does matter, such as a list of cooking instructions in a recipe. These are wrapped in an ",
+                  "marks": []
+                },
                 { "text": "<ol>", "marks": [{ "type": "code" }] },
                 { "text": " element.", "marks": [] }
               ]
@@ -97,7 +115,10 @@
       "content": [
         { "text": "Each item inside the lists is put inside a ", "marks": [] },
         { "text": "<li>", "marks": [{ "type": "code" }] },
-        { "text": " (list item) element. For example, to turn a paragraph fragment into a list:", "marks": [] }
+        {
+          "text": " (list item) element. For example, to turn a paragraph fragment into a list:",
+          "marks": []
+        }
       ]
     },
     {
@@ -113,13 +134,22 @@
     {
       "kind": "paragraph",
       "content": [
-        { "text": "Links are very important \u2014 they are what makes the web a web! To add a link, we need to use an ", "marks": [] },
+        {
+          "text": "Links are very important \u2014 they are what makes the web a web! To add a link, we need to use an ",
+          "marks": []
+        },
         { "text": "<a>", "marks": [{ "type": "code" }] },
-        { "text": " element, \u201ca\u201d being short for \u201canchor\u201d. Give the ", "marks": [] },
+        {
+          "text": " element, \u201ca\u201d being short for \u201canchor\u201d. Give the ",
+          "marks": []
+        },
         { "text": "<a>", "marks": [{ "type": "code" }] },
         { "text": " element an ", "marks": [] },
         { "text": "href", "marks": [{ "type": "code" }] },
-        { "text": " attribute, and fill in the value with the web address that you want the link to point to:", "marks": [] }
+        {
+          "text": " attribute, and fill in the value with the web address that you want the link to point to:",
+          "marks": []
+        }
       ]
     },
     {

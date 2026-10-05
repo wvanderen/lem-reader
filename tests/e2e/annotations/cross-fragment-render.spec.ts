@@ -52,7 +52,10 @@ test.describe("D5-16 cross-fragment render (05-05)", () => {
     expect(blockIdx).not.toBe(-1);
     const ok = await selectRangeInBlock(page, blockIdx, 0, 24);
     expect(ok).toBeTruthy();
-    await page.locator(".selection-toolbar").getByRole("button", { name: "Highlight", exact: true }).click();
+    await page
+      .locator(".selection-toolbar")
+      .getByRole("button", { name: "Highlight", exact: true })
+      .click();
     const hlId = await page.locator("mark.highlight").first().getAttribute("data-highlight-id");
     expect(hlId).toBeTruthy();
 
@@ -83,7 +86,10 @@ test.describe("D5-16 cross-fragment render (05-05)", () => {
     // Create a highlight in paginated mode on page 1.
     const ok = await selectRangeInBlock(page, blockIdx, 0, 18);
     expect(ok).toBeTruthy();
-    await page.locator(".selection-toolbar").getByRole("button", { name: "Highlight", exact: true }).click();
+    await page
+      .locator(".selection-toolbar")
+      .getByRole("button", { name: "Highlight", exact: true })
+      .click();
     const hlId = await page.locator("mark.highlight").first().getAttribute("data-highlight-id");
     expect(hlId).toBeTruthy();
     // All marks for this highlight share the id (whether 1 or N slices).
@@ -120,18 +126,9 @@ async function selectFullMountedPageSpan(
       document.querySelectorAll(".page-fragment [data-block-index]"),
     ).filter((el) => !el.closest(".article-body-measurement"));
     const eligible = blocks.filter((el) =>
-      [
-        "p",
-        "h1",
-        "h2",
-        "h3",
-        "h4",
-        "h5",
-        "h6",
-        "ul",
-        "ol",
-        "blockquote",
-      ].includes(el.tagName.toLowerCase()),
+      ["p", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "blockquote"].includes(
+        el.tagName.toLowerCase(),
+      ),
     );
     if (eligible.length < 2) return null;
     const first = eligible[0]!;
@@ -177,35 +174,32 @@ async function selectFromBlockIntoElement(
     toOffset: number;
   },
 ): Promise<boolean> {
-  return page.evaluate(
-    ({ fromBlockIndex, fromOffset, toSelector, toOffset }) => {
-      const from = Array.from(
-        document.querySelectorAll(`[data-block-index="${fromBlockIndex}"]`),
-      ).find((el) => el.closest(".article-body-measurement") === null);
-      const to = Array.from(document.querySelectorAll(toSelector)).find(
-        (el) => el.closest(".article-body-measurement") === null,
-      );
-      if (!from || !to) return false;
-      const w1 = document.createTreeWalker(from, NodeFilter.SHOW_TEXT);
-      const n1 = w1.nextNode() as Text | null;
-      const w2 = document.createTreeWalker(to, NodeFilter.SHOW_TEXT);
-      const n2 = w2.nextNode() as Text | null;
-      if (!n1 || !n2) return false;
-      try {
-        const range = document.createRange();
-        range.setStart(n1, Math.min(fromOffset, n1.nodeValue!.length));
-        range.setEnd(n2, Math.min(toOffset, n2.nodeValue!.length));
-        const sel = window.getSelection();
-        if (!sel) return false;
-        sel.removeAllRanges();
-        sel.addRange(range);
-        return true;
-      } catch {
-        return false;
-      }
-    },
-    opts,
-  );
+  return page.evaluate(({ fromBlockIndex, fromOffset, toSelector, toOffset }) => {
+    const from = Array.from(
+      document.querySelectorAll(`[data-block-index="${fromBlockIndex}"]`),
+    ).find((el) => el.closest(".article-body-measurement") === null);
+    const to = Array.from(document.querySelectorAll(toSelector)).find(
+      (el) => el.closest(".article-body-measurement") === null,
+    );
+    if (!from || !to) return false;
+    const w1 = document.createTreeWalker(from, NodeFilter.SHOW_TEXT);
+    const n1 = w1.nextNode() as Text | null;
+    const w2 = document.createTreeWalker(to, NodeFilter.SHOW_TEXT);
+    const n2 = w2.nextNode() as Text | null;
+    if (!n1 || !n2) return false;
+    try {
+      const range = document.createRange();
+      range.setStart(n1, Math.min(fromOffset, n1.nodeValue!.length));
+      range.setEnd(n2, Math.min(toOffset, n2.nodeValue!.length));
+      const sel = window.getSelection();
+      if (!sel) return false;
+      sel.removeAllRanges();
+      sel.addRange(range);
+      return true;
+    } catch {
+      return false;
+    }
+  }, opts);
 }
 
 /** Find a paragraph immediately followed by a list on the mounted page. */
@@ -255,9 +249,7 @@ async function findParagraphAndCaptionedFigureOnMountedPage(
       if (!w.nextNode()) continue;
       const para = blocks.find((el) => {
         if (el.tagName.toLowerCase() !== "p") return false;
-        return (
-          el.compareDocumentPosition(fig) & Node.DOCUMENT_POSITION_FOLLOWING
-        );
+        return el.compareDocumentPosition(fig) & Node.DOCUMENT_POSITION_FOLLOWING;
       });
       if (!para) continue;
       return {
@@ -279,27 +271,15 @@ test.describe("ANNO-09/ANNO-10 paginated span coverage (19-04)", () => {
     // walk-pages precedent) and span its FULL content.
     const total = await totalPages(page);
     let spanned: { firstIdx: number; lastIdx: number } | null = null;
-    for (
-      let target = await currentPageIdx(page);
-      target < total && spanned === null;
-      target++
-    ) {
+    for (let target = await currentPageIdx(page); target < total && spanned === null; target++) {
       await turnToPage(page, target);
       spanned = await selectFullMountedPageSpan(page);
     }
-    expect(
-      spanned,
-      "some page carries two or more text blocks",
-    ).not.toBeNull();
+    expect(spanned, "some page carries two or more text blocks").not.toBeNull();
     const toolbar = page.locator(".selection-toolbar");
     await expect(toolbar).toBeVisible();
-    await toolbar
-      .getByRole("button", { name: "Highlight", exact: true })
-      .click();
-    const hlId = await page
-      .locator("mark.highlight")
-      .first()
-      .getAttribute("data-highlight-id");
+    await toolbar.getByRole("button", { name: "Highlight", exact: true }).click();
+    const hlId = await page.locator("mark.highlight").first().getAttribute("data-highlight-id");
     expect(hlId, "mark carries a highlight id").toBeTruthy();
 
     // Typography-triggered repagination (the survive-relayout precedent):
@@ -324,9 +304,7 @@ test.describe("ANNO-09/ANNO-10 paginated span coverage (19-04)", () => {
     let pagesCarryingSpan = 0;
     for (let p = 0; p < pagesNow; p++) {
       await turnToPage(page, p);
-      const marks = page.locator(
-        `mark.highlight[data-highlight-id="${hlId}"]`,
-      );
+      const marks = page.locator(`mark.highlight[data-highlight-id="${hlId}"]`);
       const n = await marks.count();
       if (n === 0) continue;
       pagesCarryingSpan++;
@@ -345,18 +323,11 @@ test.describe("ANNO-09/ANNO-10 paginated span coverage (19-04)", () => {
     await openArticle(page, FIXTURES[3]!); // list-reference, paginated
     const total = await totalPages(page);
     let pair: { paraIdx: number; listIdx: number } | null = null;
-    for (
-      let target = await currentPageIdx(page);
-      target < total && pair === null;
-      target++
-    ) {
+    for (let target = await currentPageIdx(page); target < total && pair === null; target++) {
       await turnToPage(page, target);
       pair = await findParagraphFollowedByListOnMountedPage(page);
     }
-    expect(
-      pair,
-      "some page carries a paragraph followed by a list",
-    ).not.toBeNull();
+    expect(pair, "some page carries a paragraph followed by a list").not.toBeNull();
     // Span from the paragraph's first char into the first list item — the
     // endpoint composition runs through the mounted page's slice
     // attributes; the span's tail lands in list-item content.
@@ -366,34 +337,22 @@ test.describe("ANNO-09/ANNO-10 paginated span coverage (19-04)", () => {
       toSelector: `[data-block-index="${pair!.listIdx}"] li`,
       toOffset: 6,
     });
-    expect(
-      ok,
-      "cross-block selection from paragraph into a list item",
-    ).toBeTruthy();
+    expect(ok, "cross-block selection from paragraph into a list item").toBeTruthy();
     const toolbar = page.locator(".selection-toolbar");
     await expect(toolbar).toBeVisible();
-    await toolbar
-      .getByRole("button", { name: "Highlight", exact: true })
-      .click();
-    const hlId = await page
-      .locator("mark.highlight")
-      .first()
-      .getAttribute("data-highlight-id");
+    await toolbar.getByRole("button", { name: "Highlight", exact: true }).click();
+    const hlId = await page.locator("mark.highlight").first().getAttribute("data-highlight-id");
     expect(hlId, "mark carries a highlight id").toBeTruthy();
     // The span's head marks the paragraph…
     await expect(
-      visibleBlock(page, pair!.paraIdx).locator(
-        `mark.highlight[data-highlight-id="${hlId}"]`,
-      ),
+      visibleBlock(page, pair!.paraIdx).locator(`mark.highlight[data-highlight-id="${hlId}"]`),
       "span mark renders in the START paragraph",
     ).toBeVisible();
     // …and its tail marks list ITEM content on the mounted fragment —
     // per-item threading inside the page fragment (the paginated twin of
     // Plan 03's scrolling coverage; a list-entry bypass fails here).
     await expect(
-      visibleBlock(page, pair!.listIdx).locator(
-        `li mark.highlight[data-highlight-id="${hlId}"]`,
-      ),
+      visibleBlock(page, pair!.listIdx).locator(`li mark.highlight[data-highlight-id="${hlId}"]`),
       "span mark renders inside a list item on the mounted fragment",
     ).toBeVisible();
     // One id per mounted page (Pitfall 2).
@@ -406,18 +365,11 @@ test.describe("ANNO-09/ANNO-10 paginated span coverage (19-04)", () => {
     await openArticle(page, FIXTURES[1]!); // figure-heavy, paginated
     const total = await totalPages(page);
     let pair: { paraIdx: number; figIdx: number } | null = null;
-    for (
-      let target = await currentPageIdx(page);
-      target < total && pair === null;
-      target++
-    ) {
+    for (let target = await currentPageIdx(page); target < total && pair === null; target++) {
       await turnToPage(page, target);
       pair = await findParagraphAndCaptionedFigureOnMountedPage(page);
     }
-    expect(
-      pair,
-      "some page carries a paragraph followed by a captioned figure",
-    ).not.toBeNull();
+    expect(pair, "some page carries a paragraph followed by a captioned figure").not.toBeNull();
     // Select from the paragraph's first char into the figure's caption
     // (non-empty alt — the Pitfall 1 symmetric-offset case).
     const ok = await selectFromBlockIntoElement(page, {
@@ -426,36 +378,24 @@ test.describe("ANNO-09/ANNO-10 paginated span coverage (19-04)", () => {
       toSelector: `[data-block-index="${pair!.figIdx}"] figcaption`,
       toOffset: 10,
     });
-    expect(
-      ok,
-      "cross-block selection from paragraph into the figcaption",
-    ).toBeTruthy();
+    expect(ok, "cross-block selection from paragraph into the figcaption").toBeTruthy();
     const toolbar = page.locator(".selection-toolbar");
     await expect(toolbar).toBeVisible();
-    await toolbar
-      .getByRole("button", { name: "Highlight", exact: true })
-      .click();
-    const hlId = await page
-      .locator("mark.highlight")
-      .first()
-      .getAttribute("data-highlight-id");
+    await toolbar.getByRole("button", { name: "Highlight", exact: true }).click();
+    const hlId = await page.locator("mark.highlight").first().getAttribute("data-highlight-id");
     expect(hlId, "mark carries a highlight id").toBeTruthy();
     const figLoc = visibleBlock(page, pair!.figIdx);
     // The mark is visible INSIDE the figcaption — Task 1's caption
     // routing pin. A silent paginated bypass of Plan 03's caption path
     // fails this cell (the mark would render nowhere).
     await expect(
-      figLoc.locator(
-        `figcaption mark.highlight[data-highlight-id="${hlId}"]`,
-      ),
+      figLoc.locator(`figcaption mark.highlight[data-highlight-id="${hlId}"]`),
       "caption-endpoint span marks the figcaption",
     ).toBeVisible();
     // ZERO marks on the img surface (alt is an attribute — D19-02 gap by
     // construction) and every figure mark lives inside the caption.
     await expect(figLoc.locator("img mark.highlight")).toHaveCount(0);
-    const inCaption = await figLoc
-      .locator("figcaption mark.highlight")
-      .count();
+    const inCaption = await figLoc.locator("figcaption mark.highlight").count();
     const inFigure = await figLoc.locator("mark.highlight").count();
     expect(inFigure, "no figure marks outside the caption").toBe(inCaption);
     expect(inCaption).toBeGreaterThan(0);

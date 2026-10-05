@@ -76,10 +76,7 @@ async function readRow(
   key: IDBValidKey,
 ): Promise<Record<string, unknown> | null> {
   type SerializableKey = string | number | (string | number)[];
-  return page.evaluate<
-    Record<string, unknown> | null,
-    { storeName: string; key: SerializableKey }
-  >(
+  return page.evaluate<Record<string, unknown> | null, { storeName: string; key: SerializableKey }>(
     async ({ storeName, key }): Promise<Record<string, unknown> | null> => {
       return new Promise<Record<string, unknown> | null>((resolve) => {
         const req = indexedDB.open("lem-reader");
@@ -92,9 +89,7 @@ async function readRow(
           const tx = db.transaction(storeName, "readonly");
           const getReq = tx.objectStore(storeName).get(key as IDBValidKey);
           getReq.onsuccess = () =>
-            resolve(
-              (getReq.result ?? null) as Record<string, unknown> | null,
-            );
+            resolve((getReq.result ?? null) as Record<string, unknown> | null);
           getReq.onerror = () => resolve(null);
         };
         req.onerror = () => resolve(null);
@@ -109,26 +104,23 @@ async function readRow(
  * dexie-migration.spec.ts L264-288 verbatim.
  */
 async function countRows(page: Page, storeName: string): Promise<number> {
-  return page.evaluate(
-    async (storeName) => {
-      return new Promise<number>((resolve) => {
-        const req = indexedDB.open("lem-reader");
-        req.onsuccess = () => {
-          const db = req.result;
-          if (!db.objectStoreNames.contains(storeName)) {
-            resolve(-1);
-            return;
-          }
-          const tx = db.transaction(storeName, "readonly");
-          const countReq = tx.objectStore(storeName).count();
-          countReq.onsuccess = () => resolve(countReq.result);
-          countReq.onerror = () => resolve(-1);
-        };
-        req.onerror = () => resolve(-1);
-      });
-    },
-    storeName,
-  );
+  return page.evaluate(async (storeName) => {
+    return new Promise<number>((resolve) => {
+      const req = indexedDB.open("lem-reader");
+      req.onsuccess = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(storeName)) {
+          resolve(-1);
+          return;
+        }
+        const tx = db.transaction(storeName, "readonly");
+        const countReq = tx.objectStore(storeName).count();
+        countReq.onsuccess = () => resolve(countReq.result);
+        countReq.onerror = () => resolve(-1);
+      };
+      req.onerror = () => resolve(-1);
+    });
+  }, storeName);
 }
 
 /**
@@ -138,10 +130,7 @@ async function countRows(page: Page, storeName: string): Promise<number> {
  * ingested paste-HTML article's id (caller discovers it by reading the
  * articles store after the Add dialog's save).
  */
-async function seedCascadeRows(
-  page: Page,
-  articleId: string,
-): Promise<void> {
+async function seedCascadeRows(page: Page, articleId: string): Promise<void> {
   await page.evaluate(
     async ({ articleId }) => {
       const highlight = {
@@ -175,10 +164,7 @@ async function seedCascadeRows(
         const req = indexedDB.open("lem-reader");
         req.onsuccess = () => {
           const db = req.result;
-          const tx = db.transaction(
-            ["highlights", "notes", "location"],
-            "readwrite",
-          );
+          const tx = db.transaction(["highlights", "notes", "location"], "readwrite");
           tx.objectStore("highlights").put(highlight);
           tx.objectStore("notes").put(note);
           tx.objectStore("location").put(location);
@@ -210,8 +196,7 @@ async function discoverIngestedArticleId(page: Page): Promise<string> {
         }
         const tx = db.transaction("articles", "readonly");
         const getAllReq = tx.objectStore("articles").getAllKeys();
-        getAllReq.onsuccess = () =>
-          resolve((getAllReq.result ?? []).map((k) => String(k)));
+        getAllReq.onsuccess = () => resolve((getAllReq.result ?? []).map((k) => String(k)));
         getAllReq.onerror = () => resolve([]);
       };
       req.onerror = () => resolve([]);
@@ -231,24 +216,16 @@ test.beforeEach(async ({ page }) => {
   // dexie-migration.spec.ts beforeEach L290-330 — clear-rows, NOT
   // deleteDatabase, to avoid the webkit deleteDatabase race).
   await page.goto(`${BASE}/`);
-  await expect(
-    page.getByRole("heading", { name: "Saved articles" }),
-  ).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible({
+    timeout: 10_000,
+  });
   await page.evaluate(async () => {
     await new Promise<void>((resolve) => {
       const req = indexedDB.open("lem-reader");
       req.onsuccess = () => {
         const db = req.result;
-        const stores = [
-          "articles",
-          "settings",
-          "location",
-          "highlights",
-          "notes",
-        ];
-        const existing = stores.filter((s) =>
-          db.objectStoreNames.contains(s),
-        );
+        const stores = ["articles", "settings", "location", "highlights", "notes"];
+        const existing = stores.filter((s) => db.objectStoreNames.contains(s));
         if (existing.length === 0) {
           resolve();
           return;
@@ -266,19 +243,13 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.describe("SC#2 + LIB-02 — cascade-remove + confirmation", () => {
-  test("removing an article cascades to highlights + notes + location", async ({
-    page,
-  }) => {
+  test("removing an article cascades to highlights + notes + location", async ({ page }) => {
     // 1. Ingest a paste-HTML article via the real Vite Node middleware.
     await page.goto(`${BASE}/#/`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
     await openAddDialog(page);
     await pickSource(page, "paste");
-    await page
-      .getByRole("textbox", { name: /paste html/i })
-      .fill(PASTE_HTML);
+    await page.getByRole("textbox", { name: /paste html/i }).fill(PASTE_HTML);
     await page.getByRole("button", { name: /add pasted article/i }).click();
     // Issue #112 — the save lands on the in-dialog result screen; the
     // reader never opened the article (Unread), so CLOSE returns to the
@@ -311,11 +282,8 @@ test.describe("SC#2 + LIB-02 — cascade-remove + confirmation", () => {
     await page.evaluate(() => {
       window.location.hash = "#/";
     });
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
-    const expectedBaselineRows =
-      (await import("../../../src/fixtures")).fixtures.length + 1;
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
+    const expectedBaselineRows = (await import("../../../src/fixtures")).fixtures.length + 1;
     await expect(
       page.locator(".library-list > li"),
       "library list includes fixtures + 1 ingested",
@@ -389,19 +357,13 @@ test.describe("SC#2 + LIB-02 — cascade-remove + confirmation", () => {
     ).toBeNull();
   });
 
-  test("cancel path: Keep article leaves everything intact (Pitfall 8)", async ({
-    page,
-  }) => {
+  test("cancel path: Keep article leaves everything intact (Pitfall 8)", async ({ page }) => {
     // 1. Ingest + seed (same setup as the cascade test above).
     await page.goto(`${BASE}/#/`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
     await openAddDialog(page);
     await pickSource(page, "paste");
-    await page
-      .getByRole("textbox", { name: /paste html/i })
-      .fill(PASTE_HTML);
+    await page.getByRole("textbox", { name: /paste html/i }).fill(PASTE_HTML);
     await page.getByRole("button", { name: /add pasted article/i }).click();
     // Issue #112 — close the result screen; the article stays Unread.
     await closeSavedResult(page);
@@ -421,9 +383,7 @@ test.describe("SC#2 + LIB-02 — cascade-remove + confirmation", () => {
     await page.evaluate(() => {
       window.location.hash = "#/";
     });
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
     const ingestRow = page
       .locator(".library-list > li")
       .filter({ hasText: "Cascade-Remove Test Article" });
@@ -444,16 +404,9 @@ test.describe("SC#2 + LIB-02 — cascade-remove + confirmation", () => {
     ).toHaveCount(1);
 
     // 5. NO Dexie rows were deleted (T-8-19 — physical proof via countRows).
-    expect(await countRows(page, "highlights"), "highlight intact").toBe(
-      highlightsBefore,
-    );
+    expect(await countRows(page, "highlights"), "highlight intact").toBe(highlightsBefore);
     expect(await countRows(page, "notes"), "note intact").toBe(notesBefore);
-    expect(await countRows(page, "location"), "location intact").toBe(
-      locationBefore,
-    );
-    expect(
-      await readRow(page, "articles", articleId),
-      "article row intact",
-    ).not.toBeNull();
+    expect(await countRows(page, "location"), "location intact").toBe(locationBefore);
+    expect(await readRow(page, "articles", articleId), "article row intact").not.toBeNull();
   });
 });

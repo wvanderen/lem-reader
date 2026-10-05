@@ -242,9 +242,7 @@ export function ReviewNoteDialog({
       {/* Issue #98 — the honest-failure line. Always-mounted StatusRegion
           (a live region must pre-exist to announce); idle it renders no
           children and paints nothing (the shared dialog rules). */}
-      <StatusRegion>
-        {writeError && <p>{NOTE_SAVE_FAILED_COPY}</p>}
-      </StatusRegion>
+      <StatusRegion>{writeError && <p>{NOTE_SAVE_FAILED_COPY}</p>}</StatusRegion>
       <div className="highlight-popover-actions">
         {/* Non-destructive default (Pitfall 8): Enter confirms the edit,
             never deletes. Carries [data-initial-focus] as the documented

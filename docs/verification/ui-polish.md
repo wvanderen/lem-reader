@@ -23,6 +23,7 @@ Scope: [confirmed UI polish spec](../specs/ui-polish.md).
 
 Typecheck, lint, production build, and the Impeccable mechanical scan pass.
 The full `npm test` run completed:
+
 - Unit/component: 3,022 passed, 16 skipped. The subsequently added missing-count chapter test passes in the focused 25-test library run.
 - Browser: 2,132 passed, 20 skipped, 12 failures recorded before corrections. Four failures were worker collection mismatches after retired Back tests were replaced while the suite was running.
 - Every failed behavior was corrected and rerun across all three engines. The full run itself remains nonzero; no claim is made that its captured report is wholly green.

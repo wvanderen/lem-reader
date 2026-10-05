@@ -33,51 +33,50 @@ const EVIDENCE_PATH = join(HERE, "pdf-evidence.json");
 // default 5s timeout is far too tight for real-PDF extraction.
 const DERIVE_TIMEOUT_MS = 300_000;
 
-describe.skipIf(
-  process.env.PDF_CALIBRATION_DERIVE !== "1",
-)("calibration derive (LOCAL ONLY — PDF_CALIBRATION_DERIVE=1)",
-() => {
-  it(
-    "verifyCorpus passes against the local corpus (T-11-07 integrity gate)",
-    () => {
+describe.skipIf(process.env.PDF_CALIBRATION_DERIVE !== "1")(
+  "calibration derive (LOCAL ONLY — PDF_CALIBRATION_DERIVE=1)",
+  () => {
+    it("verifyCorpus passes against the local corpus (T-11-07 integrity gate)", () => {
       const verification = verifyCorpus(CORPUS_DIR, loadManifest(MANIFEST_PATH));
       expect(verification).toEqual({ ok: true, missing: [], mismatched: [] });
-    },
-  );
+    });
 
-  it(
-    "deriveEvidence meets the D11-06 bar (validateEvidence ok — classification + ≥0.90 agreement)",
-    async () => {
-      const evidence = await deriveEvidence({
-        manifestPath: MANIFEST_PATH,
-        corpusDir: CORPUS_DIR,
-        groundTruthDir: GROUND_TRUTH_DIR,
-      });
-      const validation = validateEvidence(loadManifest(MANIFEST_PATH), evidence);
-      if (!validation.ok) {
-        // Print the per-file problems so the tune-to-bar loop has its data.
-        console.error("[pdf-calibration] D11-06 bar problems:\n" + validation.problems.join("\n"));
-      }
-      expect(validation.ok).toBe(true);
-    },
-    DERIVE_TIMEOUT_MS,
-  );
+    it(
+      "deriveEvidence meets the D11-06 bar (validateEvidence ok — classification + ≥0.90 agreement)",
+      async () => {
+        const evidence = await deriveEvidence({
+          manifestPath: MANIFEST_PATH,
+          corpusDir: CORPUS_DIR,
+          groundTruthDir: GROUND_TRUTH_DIR,
+        });
+        const validation = validateEvidence(loadManifest(MANIFEST_PATH), evidence);
+        if (!validation.ok) {
+          // Print the per-file problems so the tune-to-bar loop has its data.
+          console.error(
+            "[pdf-calibration] D11-06 bar problems:\n" + validation.problems.join("\n"),
+          );
+        }
+        expect(validation.ok).toBe(true);
+      },
+      DERIVE_TIMEOUT_MS,
+    );
 
-  it(
-    "writeEvidence records the derived evidence (refuse-empty guard honored)",
-    async () => {
-      const evidence = await deriveEvidence({
-        manifestPath: MANIFEST_PATH,
-        corpusDir: CORPUS_DIR,
-        groundTruthDir: GROUND_TRUTH_DIR,
-      });
-      writeEvidence(evidence, EVIDENCE_PATH);
-      expect(existsSync(EVIDENCE_PATH)).toBe(true);
-      // The written record re-loads + re-validates (the exact bytes CI replays).
-      const reloaded = loadEvidence(EVIDENCE_PATH);
-      expect(reloaded.results.length).toBe(evidence.results.length);
-      expect(validateEvidence(loadManifest(MANIFEST_PATH), reloaded).ok).toBe(true);
-    },
-    DERIVE_TIMEOUT_MS,
-  );
-});
+    it(
+      "writeEvidence records the derived evidence (refuse-empty guard honored)",
+      async () => {
+        const evidence = await deriveEvidence({
+          manifestPath: MANIFEST_PATH,
+          corpusDir: CORPUS_DIR,
+          groundTruthDir: GROUND_TRUTH_DIR,
+        });
+        writeEvidence(evidence, EVIDENCE_PATH);
+        expect(existsSync(EVIDENCE_PATH)).toBe(true);
+        // The written record re-loads + re-validates (the exact bytes CI replays).
+        const reloaded = loadEvidence(EVIDENCE_PATH);
+        expect(reloaded.results.length).toBe(evidence.results.length);
+        expect(validateEvidence(loadManifest(MANIFEST_PATH), reloaded).ok).toBe(true);
+      },
+      DERIVE_TIMEOUT_MS,
+    );
+  },
+);

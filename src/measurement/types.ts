@@ -21,13 +21,7 @@ import { z } from "zod";
 
 export const ConstraintsSchema = z.object({
   font: z.enum(["serif", "sans", "dyslexic"]),
-  size: z.union([
-    z.literal(16),
-    z.literal(18),
-    z.literal(20),
-    z.literal(22),
-    z.literal(24),
-  ]),
+  size: z.union([z.literal(16), z.literal(18), z.literal(20), z.literal(22), z.literal(24)]),
   // Issue #18 (D22-01): mirrors the uniform-6 measure ladder [40..88] in
   // src/settings/tokens.ts MEASURE_STEPS / ReaderSettingsSchema — this
   // closed set must never drift from the settings union (the module-header

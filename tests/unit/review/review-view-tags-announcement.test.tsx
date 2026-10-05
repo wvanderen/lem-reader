@@ -169,9 +169,7 @@ describe("ReviewView tags announcement glue (issue #117 review follow-up)", () =
     const { user, dialog } = await openTagsDialog();
 
     // A real write: remove the seeded chip (the write-through seam lands []).
-    await user.click(
-      within(dialog).getByRole("button", { name: "Remove tag essays" }),
-    );
+    await user.click(within(dialog).getByRole("button", { name: "Remove tag essays" }));
     await waitFor(() => expect(setHighlightTags).toHaveBeenCalledWith("hl-1", []));
 
     await user.click(within(dialog).getByRole("button", { name: "Done" }));
@@ -209,7 +207,10 @@ it("clears filters and article search while preserving sorting, without a Back c
   expect(screen.getByLabelText("Anchor confidence")).toHaveValue("all");
   expect(screen.getByLabelText("Sort")).toHaveValue("position");
   expect(screen.getByRole("combobox", { name: "Article" })).toHaveValue("");
-  expect(screen.getByRole("button", { name: "Filter by Highlight tag: essays" })).toHaveAttribute("aria-pressed", "false");
+  expect(screen.getByRole("button", { name: "Filter by Highlight tag: essays" })).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
   expect(screen.queryByRole("button", { name: "Back" })).toBeNull();
   expect(window.location.hash).toBe("#/highlights");
 });

@@ -74,10 +74,9 @@ export default {
     try {
       body = await request.json();
     } catch {
-      return Response.json(
-        { ok: false, reason: "server-error" } satisfies IngestionResponse,
-        { status: 400 },
-      );
+      return Response.json({ ok: false, reason: "server-error" } satisfies IngestionResponse, {
+        status: 400,
+      });
     }
     const { status, body: responseBody } = await handleIngestBody(body);
     return Response.json(responseBody, { status });

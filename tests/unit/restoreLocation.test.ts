@@ -18,11 +18,7 @@
 import { describe, expect, it } from "vitest";
 import { ArticleSchema } from "../../src/content/schema";
 import type { CanonicalArticle } from "../../src/content/types";
-import {
-  BLOCK_SEPARATOR,
-  graphemeClusters,
-  normalizeText,
-} from "../../src/content/normalizeText";
+import { BLOCK_SEPARATOR, graphemeClusters, normalizeText } from "../../src/content/normalizeText";
 import { findScrollTarget, normalizeElText } from "../../src/reader/restoreLocation";
 
 function parseArticle(raw: unknown): CanonicalArticle {
@@ -128,11 +124,7 @@ describe("findScrollTarget resolves grapheme offsets to DOM blocks", () => {
     expect(target).toBe(blocks[0]);
     // Offset == firstLen + separator.length is the first grapheme of the
     // second block.
-    const target2 = findScrollTarget(
-      article,
-      blocks,
-      firstLen + BLOCK_SEPARATOR.length,
-    );
+    const target2 = findScrollTarget(article, blocks, firstLen + BLOCK_SEPARATOR.length);
     expect(target2).toBe(blocks[1]);
   });
 });
@@ -231,11 +223,7 @@ describe("findScrollTarget round-trips with normalizeText block boundaries", () 
     consumed -= BLOCK_SEPARATOR.length;
     // The body portion of normalizeText(article) — derive by joining the body
     // blocks' canonical text with BLOCK_SEPARATOR.
-    const bodyText = [
-      "Title",
-      "Body one.",
-      "code\n  here",
-    ].join(BLOCK_SEPARATOR);
+    const bodyText = ["Title", "Body one.", "code\n  here"].join(BLOCK_SEPARATOR);
     expect(consumed).toBe(graphemeClusters(bodyText, article.lang).length);
   });
 });

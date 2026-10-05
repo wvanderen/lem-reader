@@ -43,19 +43,10 @@
 // server-side dependency and is never imported by `/src/*` modules at runtime.
 // Only the `Block` / `InlineRun` types cross from src (erased by tsc), so the
 // client bundle does not grow.
-import {
-  extractTextItems,
-  getDocumentProxy,
-  getMeta,
-  type StructuredTextItem,
-} from "unpdf";
+import { extractTextItems, getDocumentProxy, getMeta, type StructuredTextItem } from "unpdf";
 import type { Block, InlineRun } from "../src/content/schema";
 import { IngestionError } from "./errors";
-import {
-  MAX_IMAGE_PIXELS,
-  PDF_EXTRACTION_TIMEOUT_MS,
-  PDF_MAX_PAGES,
-} from "./limits";
+import { MAX_IMAGE_PIXELS, PDF_EXTRACTION_TIMEOUT_MS, PDF_MAX_PAGES } from "./limits";
 
 /** The pdfjs document proxy type without importing pdfjs internals — derived
  * from unpdf's own public surface (the classes are NOT re-exported from the
@@ -306,7 +297,11 @@ function bandRuns(band: LineBand, splitGap: number): XRun[] {
  * whitespace-collapsed, digit-runs → "#" (running heads carry varying page
  * numbers; "A Science of Reality: … 3" and "… 4" must compare equal). */
 function furnitureKey(text: string): string {
-  return text.replace(/\s+/g, " ").trim().replace(/[0-9]+/g, "#").toLowerCase();
+  return text
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[0-9]+/g, "#")
+    .toLowerCase();
 }
 
 /** A bare page number band ("1".."2026", optionally decorated) — the classic
@@ -329,9 +324,7 @@ function isBarePageNumber(text: string): boolean {
  * (not a "non-text region"), and still counted as near-empty for the
  * scanned verdict, which runs on the stripped pages.
  */
-export function stripPageFurniture(
-  pages: StructuredTextItem[][],
-): StructuredTextItem[][] {
+export function stripPageFurniture(pages: StructuredTextItem[][]): StructuredTextItem[][] {
   // Pass 1 — band each page once, collect first/last band candidate keys.
   interface PageBands {
     bands: LineBand[];
@@ -351,7 +344,11 @@ export function stripPageFurniture(
       return { bands, firstKey: null, lastKey: null };
     }
     const textOf = (band: LineBand): string =>
-      band.items.map((i) => i.str).join("").replace(/\s+/g, " ").trim();
+      band.items
+        .map((i) => i.str)
+        .join("")
+        .replace(/\s+/g, " ")
+        .trim();
     const short = (t: string) => t.length > 0 && t.length <= PDF_THRESHOLDS.furnitureMaxChars;
     // ISOLATION (calibration lesson): furniture floats apart from the body.
     // A first/last band must be separated from the page's remaining content
@@ -366,10 +363,7 @@ export function stripPageFurniture(
     const last = textOf(bands[bands.length - 1]!);
     return {
       bands,
-      firstKey:
-        short(first) && isolatedFromBody(bands[0]!, bands[1]!)
-          ? furnitureKey(first)
-          : null,
+      firstKey: short(first) && isolatedFromBody(bands[0]!, bands[1]!) ? furnitureKey(first) : null,
       lastKey:
         short(last) && isolatedFromBody(bands[bands.length - 1]!, bands[bands.length - 2]!)
           ? furnitureKey(last)
@@ -386,8 +380,7 @@ export function stripPageFurniture(
   const isFurniture = (key: string | null): boolean => {
     if (key === null) return false;
     return (
-      isBarePageNumber(key) ||
-      (repeatCounts.get(key) ?? 0) >= PDF_THRESHOLDS.furnitureRepeatPages
+      isBarePageNumber(key) || (repeatCounts.get(key) ?? 0) >= PDF_THRESHOLDS.furnitureRepeatPages
     );
   };
 
@@ -548,11 +541,9 @@ export function classifyDocument(pages: StructuredTextItem[][]): DocumentVerdict
     const real = realItems(page);
     const chars = real.reduce((n, it) => n + nonWsChars(it.str), 0);
     const isTextBearing =
-      real.length >= PDF_THRESHOLDS.scannedItemFloor &&
-      chars >= PDF_THRESHOLDS.scannedCharFloor;
+      real.length >= PDF_THRESHOLDS.scannedItemFloor && chars >= PDF_THRESHOLDS.scannedCharFloor;
     const isNearEmpty =
-      real.length < PDF_THRESHOLDS.nearEmptyItemFloor ||
-      chars < PDF_THRESHOLDS.nearEmptyCharFloor;
+      real.length < PDF_THRESHOLDS.nearEmptyItemFloor || chars < PDF_THRESHOLDS.nearEmptyCharFloor;
     if (isTextBearing) textBearingPages += 1;
     if (isNearEmpty) nearEmptyPages += 1;
     if (isTextBearing && pageIsColumnar(real)) columnarPages += 1;
@@ -566,9 +557,7 @@ export function classifyDocument(pages: StructuredTextItem[][]): DocumentVerdict
     multiColumn:
       textBearingPages > 0 &&
       columnarPages > PDF_THRESHOLDS.columnarMajorityRatio * textBearingPages,
-    scanned:
-      totalPages > 0 &&
-      nearEmptyPages > PDF_THRESHOLDS.scannedMajorityRatio * totalPages,
+    scanned: totalPages > 0 && nearEmptyPages > PDF_THRESHOLDS.scannedMajorityRatio * totalPages,
   };
 }
 
@@ -726,18 +715,13 @@ function destTopY(dest: Array<any>): number | null {
  * external links, not headings; null dests have no target; string dests
  * resolve through getDestination (named destinations — many LaTeX/Word
  * exporters use them); explicit arrays pass through as-is (Pitfall 10). */
-export async function outlineHeadingTargets(
-  pdf: OutlineCapablePdf,
-): Promise<OutlineTarget[]> {
+export async function outlineHeadingTargets(pdf: OutlineCapablePdf): Promise<OutlineTarget[]> {
   const outline = await pdf.getOutline();
   if (!outline || outline.length === 0) return [];
   const targets: OutlineTarget[] = [];
   for (const { entry, depth } of flattenOutline(outline)) {
     if (entry.url || !entry.dest) continue;
-    const dest =
-      typeof entry.dest === "string"
-        ? await pdf.getDestination(entry.dest)
-        : entry.dest;
+    const dest = typeof entry.dest === "string" ? await pdf.getDestination(entry.dest) : entry.dest;
     if (!dest || dest.length === 0) continue;
     try {
       const pageIndex = await pdf.getPageIndex(dest[0]);
@@ -836,15 +820,13 @@ function assemblePage(pageIndex: number, items: StructuredTextItem[]): DraftBloc
     /** A band's bottom edge (min item y) — merged fragment chains grow
      * downward, so proximity to the NEXT band must be measured from the
      * bottom, not from the stale top reference y. */
-    const bottom = (band: LineBand): number =>
-      Math.min(...band.items.map((it) => it.y));
+    const bottom = (band: LineBand): number => Math.min(...band.items.map((it) => it.y));
     const tol = PDF_THRESHOLDS.scriptBandRatio * lineDelta;
     const orphanTol = PDF_THRESHOLDS.scriptFragmentGapRatio * lineDelta;
     const sizes = bands.map(dominant);
     const charCounts = bands.map(chars);
     const sizeQualified = (i: number): boolean =>
-      sizes[i]! < (sizes[i - 1] ?? -Infinity) ||
-      sizes[i]! < (sizes[i + 1] ?? -Infinity);
+      sizes[i]! < (sizes[i - 1] ?? -Infinity) || sizes[i]! < (sizes[i + 1] ?? -Infinity);
     const charQualified = (i: number): boolean =>
       charCounts[i]! <= PDF_THRESHOLDS.scriptFragmentChars;
     const isScriptBand = (i: number): boolean => charQualified(i) || sizeQualified(i);
@@ -861,14 +843,12 @@ function assemblePage(pageIndex: number, items: StructuredTextItem[]): DraftBloc
         // its base line than inline script. Everything else — body-sized
         // short lines, math-heavy body lines — keeps the tighter window so
         // paragraph line spacing never fuses.
-        const window =
-          charQualified(i) && sizeQualified(i) ? orphanTol : tol;
+        const window = charQualified(i) && sizeQualified(i) ? orphanTol : tol;
         const prevOk = prev !== null && bottom(prev) - curr.y <= window;
         const nextOk = next !== null && bottom(curr) - next.y <= window;
         let target: number | null = null;
         if (prevOk && nextOk) {
-          target =
-            bottom(prev) - curr.y <= bottom(curr) - next.y ? i - 1 : i + 1;
+          target = bottom(prev) - curr.y <= bottom(curr) - next.y ? i - 1 : i + 1;
         } else if (prevOk) {
           target = i - 1;
         } else if (nextOk) {
@@ -910,11 +890,7 @@ function assemblePage(pageIndex: number, items: StructuredTextItem[]): DraftBloc
         const gap = it.x - (prev.x + prev.width);
         const endsWithSpace = /\s$/.test(prev.str);
         const startsWithSpace = /^\s/.test(it.str);
-        if (
-          gap > PDF_THRESHOLDS.itemGapRatio * it.fontSize &&
-          !endsWithSpace &&
-          !startsWithSpace
-        ) {
+        if (gap > PDF_THRESHOLDS.itemGapRatio * it.fontSize && !endsWithSpace && !startsWithSpace) {
           text += " ";
         }
       }
@@ -948,9 +924,7 @@ function assemblePage(pageIndex: number, items: StructuredTextItem[]): DraftBloc
   if (lines.length === 0) return [];
 
   const drafts: DraftBlock[] = [];
-  let current:
-    | { texts: string[]; y: number; fontSize: number; standalone: boolean }
-    | null = null;
+  let current: { texts: string[]; y: number; fontSize: number; standalone: boolean } | null = null;
   let pageTopPending = true; // the next flushed paragraph opens this page
   const flush = (): void => {
     if (!current) return;
@@ -1047,7 +1021,6 @@ function assemblePage(pageIndex: number, items: StructuredTextItem[]): DraftBloc
   flush();
   return drafts;
 }
-
 
 // ── Title sanity (D11-07 helper half) ─────────────────────────────────────────
 /** Producer-garbage Info-title patterns (RESEARCH Example 2; A1 — corpus-
@@ -1193,10 +1166,7 @@ export async function pdfToBlocks(pdfBytes: Uint8Array): Promise<PdfToBlocksResu
     const coerced = new Set<DraftBlock>();
     for (const target of outlineTargets) {
       const candidates = drafts.filter(
-        (d) =>
-          d.kind === "paragraph" &&
-          d.pageIndex === target.pageIndex &&
-          !coerced.has(d),
+        (d) => d.kind === "paragraph" && d.pageIndex === target.pageIndex && !coerced.has(d),
       );
       if (candidates.length === 0) continue;
       let chosen: DraftBlock | null = null;
@@ -1212,9 +1182,7 @@ export async function pdfToBlocks(pdfBytes: Uint8Array): Promise<PdfToBlocksResu
             bestDist = dist;
           }
         }
-        const tolerance =
-          PDF_THRESHOLDS.outlineYToleranceLines *
-          (best?.lineDelta ?? bodyFontSize);
+        const tolerance = PDF_THRESHOLDS.outlineYToleranceLines * (best?.lineDelta ?? bodyFontSize);
         const maxTopY = Math.max(...candidates.map((c) => c.topY));
         if (best && bestDist <= tolerance) {
           chosen = best;
@@ -1326,9 +1294,8 @@ export async function pdfToBlocks(pdfBytes: Uint8Array): Promise<PdfToBlocksResu
       blocks,
       footnotes: [], // PDF footnotes are body text in Phase 11 (Pattern 1)
       lang: "en", // English-only corpus per Pitfall 5 scope note
-      provenancePartial: saneInfoTitle(meta.info) !== undefined
-        ? { title: saneInfoTitle(meta.info) }
-        : {},
+      provenancePartial:
+        saneInfoTitle(meta.info) !== undefined ? { title: saneInfoTitle(meta.info) } : {},
       // Admission algebra (11-07 gap closure): admit when blocks.length >= 3
       // AND (at least one text-bearing page OR no near-empty page at all).
       // WHY: legitimately sparse structured documents (outline/title-page
@@ -1346,8 +1313,7 @@ export async function pdfToBlocks(pdfBytes: Uint8Array): Promise<PdfToBlocksResu
       // PDF_THRESHOLDS value stay frozen — the 11-06 calibration replay pins
       // them, and re-tuning requires re-running the derive harness (out of
       // scope for this gap closure).
-      isReaderable:
-        blocks.length >= 3 && (textBearingPages >= 1 || verdict.nearEmptyPages === 0),
+      isReaderable: blocks.length >= 3 && (textBearingPages >= 1 || verdict.nearEmptyPages === 0),
     };
   });
 }

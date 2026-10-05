@@ -12,4 +12,5 @@ The reader answers "where am I?" with one canonical grapheme offset into the art
 - The spoken word itself is never persisted (canonical offsets only), so this changes nothing about the annotation-selector contract.
 
 ---
+
 Decided in [TTS read-aloud v1: what does "following words" mean in Lem Reader?](https://github.com/wvanderen/lem-reader/issues/23), 2026-09-15.

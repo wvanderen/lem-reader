@@ -142,7 +142,11 @@ describe("plain pastes (no timestamps)", () => {
 
   it("treats a lone clock mention as prose, not a stamp", () => {
     const result = pastedTranscriptToBlocks(
-      ["At 5:30 in the video something happens", "and then the talk continues", "for a while more"].join("\n"),
+      [
+        "At 5:30 in the video something happens",
+        "and then the talk continues",
+        "for a while more",
+      ].join("\n"),
       "Test video",
     );
     // One lone stamp < the two-stamp threshold → plain-text path.

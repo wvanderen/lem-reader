@@ -344,9 +344,7 @@ describe("ArticleSchema.ingestionMeta (additive optional — Pitfall 9)", () => 
   });
 
   it("parses an ingested article WITH full ingestionMeta", () => {
-    const parsed = ArticleSchema.parse(
-      validV1Article({ ingestionMeta: validIngestionMeta }),
-    );
+    const parsed = ArticleSchema.parse(validV1Article({ ingestionMeta: validIngestionMeta }));
     expect(parsed.ingestionMeta?.source).toBe("url");
     expect(parsed.ingestionMeta?.extractionConfidence).toBe("high");
   });
@@ -432,9 +430,7 @@ describe("ArticleSchema.readerPublishedAt/readerSourceUrl (META extension — ad
   });
 
   it("rejects a non-datetime readerPublishedAt (mirrors the canonical publishedAt refinement)", () => {
-    const result = ArticleSchema.safeParse(
-      validV1Article({ readerPublishedAt: "March 5, 2024" }),
-    );
+    const result = ArticleSchema.safeParse(validV1Article({ readerPublishedAt: "March 5, 2024" }));
     expect(result.success).toBe(false);
   });
 
@@ -513,9 +509,7 @@ describe("IngestionRequestSchema (D7-03 — {url} | {html} | {markdown} | {pdf} 
   });
 
   it("rejects a non-http url scheme (mirrors Provenance/IngestionMeta httpUrl)", () => {
-    expect(() =>
-      IngestionRequestSchema.parse({ url: "javascript:alert(1)" }),
-    ).toThrow();
+    expect(() => IngestionRequestSchema.parse({ url: "javascript:alert(1)" })).toThrow();
   });
 
   it("rejects empty html (D7-03 — paste path requires content)", () => {
@@ -537,9 +531,7 @@ describe("IngestionRequestSchema (D7-03 — {url} | {html} | {markdown} | {pdf} 
   it("rejects a pdf value containing non-base64 characters", () => {
     // Spaces + '!' are outside the base64 alphabet — the boundary refuses the
     // payload before the server ever decodes it.
-    expect(() =>
-      IngestionRequestSchema.parse({ pdf: "this is not base64!" }),
-    ).toThrow();
+    expect(() => IngestionRequestSchema.parse({ pdf: "this is not base64!" })).toThrow();
   });
 
   it("rejects an empty pdf string (min(1) — mirrors html/markdown)", () => {
@@ -562,9 +554,7 @@ describe("IngestionRequestSchema (D7-03 — {url} | {html} | {markdown} | {pdf} 
   it("rejects an epub value containing non-base64 characters", () => {
     // Spaces + '!' are outside the base64 alphabet — the boundary refuses the
     // payload before the server ever decodes it.
-    expect(() =>
-      IngestionRequestSchema.parse({ epub: "this is not base64!" }),
-    ).toThrow();
+    expect(() => IngestionRequestSchema.parse({ epub: "this is not base64!" })).toThrow();
   });
 
   it("rejects an empty epub string (min(1) — mirrors html/markdown/pdf)", () => {
@@ -674,9 +664,7 @@ describe("IngestionResponseSchema", () => {
   });
 
   it("rejects a failure envelope with an unknown reason", () => {
-    expect(() =>
-      IngestionResponseSchema.parse({ ok: false, reason: "mystery-reason" }),
-    ).toThrow();
+    expect(() => IngestionResponseSchema.parse({ ok: false, reason: "mystery-reason" })).toThrow();
   });
 
   // Phase 12 (Plan 12-01 Task 2) — the SECOND ok-variant: the multi-article
@@ -886,21 +874,15 @@ describe("BookSchema (Plan 12-01 Task 2)", () => {
   });
 
   it("rejects a chapterArticleId outside the id regex (chapter ids share the D-06 slug shape)", () => {
-    expect(() =>
-      BookSchema.parse({ ...validBook, chapterArticleIds: ["BAD ID"] }),
-    ).toThrow();
+    expect(() => BookSchema.parse({ ...validBook, chapterArticleIds: ["BAD ID"] })).toThrow();
   });
 
   it("rejects source values other than the epub-upload literal (only book-producing source in Phase 12)", () => {
-    expect(() =>
-      BookSchema.parse({ ...validBook, source: "fixture" }),
-    ).toThrow();
+    expect(() => BookSchema.parse({ ...validBook, source: "fixture" })).toThrow();
   });
 
   it("rejects a negative skippedChapterCount (D12-11 disclosure count is ≥ 0)", () => {
-    expect(() =>
-      BookSchema.parse({ ...validBook, skippedChapterCount: -1 }),
-    ).toThrow();
+    expect(() => BookSchema.parse({ ...validBook, skippedChapterCount: -1 })).toThrow();
   });
 });
 

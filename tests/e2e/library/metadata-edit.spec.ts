@@ -26,11 +26,7 @@ import { ArticleSchema } from "../../../src/content/schema";
 // Plan 17-05 — the shared portability helpers for the cross-surface cell's
 // seeded highlight (confidentHighlightOn + highlightRow + seedRows: the
 // Node-side anchor derivation over the SAVED row, the 12-07 chapter pattern).
-import {
-  confidentHighlightOn,
-  highlightRow,
-  seedRows,
-} from "../portability/_portability";
+import { confidentHighlightOn, highlightRow, seedRows } from "../portability/_portability";
 // Plan 16-03 — the shared dialog-opening helper (ADD-01: the intake forms
 // live behind the header Add button's modal).
 import { openAddDialog, pickSource, openSavedArticle } from "./add-dialog";
@@ -46,9 +42,7 @@ import { BASE } from "../_base";
  * whose canonical provenance has NO author (the META-03 absent-author cell).
  */
 function pasteHtml(title: string, author?: string): string {
-  const authorMeta = author
-    ? `<meta name="author" content="${author}">\n`
-    : "";
+  const authorMeta = author ? `<meta name="author" content="${author}">\n` : "";
   return `<!DOCTYPE html>
 <html><head><title>${title}</title>
 ${authorMeta}</head>
@@ -100,10 +94,7 @@ async function readRow(
   key: IDBValidKey,
 ): Promise<Record<string, unknown> | null> {
   type SerializableKey = string | number | (string | number)[];
-  return page.evaluate<
-    Record<string, unknown> | null,
-    { storeName: string; key: SerializableKey }
-  >(
+  return page.evaluate<Record<string, unknown> | null, { storeName: string; key: SerializableKey }>(
     async ({ storeName, key }): Promise<Record<string, unknown> | null> => {
       return new Promise<Record<string, unknown> | null>((resolve) => {
         const req = indexedDB.open("lem-reader");
@@ -116,9 +107,7 @@ async function readRow(
           const tx = db.transaction(storeName, "readonly");
           const getReq = tx.objectStore(storeName).get(key as IDBValidKey);
           getReq.onsuccess = () =>
-            resolve(
-              (getReq.result ?? null) as Record<string, unknown> | null,
-            );
+            resolve((getReq.result ?? null) as Record<string, unknown> | null);
           getReq.onerror = () => resolve(null);
         };
         req.onerror = () => resolve(null);
@@ -145,8 +134,7 @@ async function discoverIngestedArticleId(page: Page): Promise<string> {
         }
         const tx = db.transaction("articles", "readonly");
         const getAllReq = tx.objectStore("articles").getAllKeys();
-        getAllReq.onsuccess = () =>
-          resolve((getAllReq.result ?? []).map((k) => String(k)));
+        getAllReq.onsuccess = () => resolve((getAllReq.result ?? []).map((k) => String(k)));
         getAllReq.onerror = () => resolve([]);
       };
       req.onerror = () => resolve([]);
@@ -200,9 +188,7 @@ async function seedLocation(
 async function ingestPaste(page: Page, html: string) {
   await openAddDialog(page);
   await pickSource(page, "paste");
-  await page
-    .getByRole("textbox", { name: /paste html/i })
-    .fill(html);
+  await page.getByRole("textbox", { name: /paste html/i }).fill(html);
   await page.getByRole("button", { name: /add pasted article/i }).click();
   await openSavedArticle(page);
 }
@@ -215,9 +201,7 @@ async function openLibrary(page: Page) {
   await page.evaluate(() => {
     window.location.hash = "#/";
   });
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Saved articles" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
   await expect(page.locator(".library-list > li").first()).toBeVisible({
     timeout: 10_000,
   });
@@ -248,24 +232,16 @@ test.beforeEach(async ({ page }) => {
   // remove-cascade clear-rows discipline — NOT deleteDatabase, to avoid the
   // webkit deleteDatabase race).
   await page.goto(`${BASE}/`);
-  await expect(
-    page.getByRole("heading", { name: "Saved articles" }),
-  ).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible({
+    timeout: 10_000,
+  });
   await page.evaluate(async () => {
     await new Promise<void>((resolve) => {
       const req = indexedDB.open("lem-reader");
       req.onsuccess = () => {
         const db = req.result;
-        const stores = [
-          "articles",
-          "settings",
-          "location",
-          "highlights",
-          "notes",
-        ];
-        const existing = stores.filter((s) =>
-          db.objectStoreNames.contains(s),
-        );
+        const stores = ["articles", "settings", "location", "highlights", "notes"];
+        const existing = stores.filter((s) => db.objectStoreNames.contains(s));
         if (existing.length === 0) {
           resolve();
           return;
@@ -304,9 +280,7 @@ test.describe("D17-01/D17-02 + META-01 — save flow + persistence", () => {
     await expect(titleInput).toHaveAttribute("placeholder", EDIT_FLOW_TITLE);
     const saveBtn = dialog.getByRole("button", { name: "Save" });
     await expect(saveBtn).toBeDisabled();
-    await expect(dialog).toContainText(
-      "Type a title, or choose Reset to keep the original.",
-    );
+    await expect(dialog).toContainText("Type a title, or choose Reset to keep the original.");
 
     // 4. Type a new title + author, Save (D17-02).
     await titleInput.fill("My Renamed Title");
@@ -316,15 +290,9 @@ test.describe("D17-01/D17-02 + META-01 — save flow + persistence", () => {
 
     // 5. The dialog closes; the row shows the EFFECTIVE values.
     await expect(dialog).not.toBeVisible();
-    await expect(page.locator(`#title-${articleId}`)).toHaveText(
-      "My Renamed Title",
-    );
-    const editedRow = page
-      .locator(".library-list > li")
-      .filter({ hasText: "My Renamed Title" });
-    await expect(editedRow.locator("p.meta:not(.source-badge)")).toHaveText(
-      "Renamed Author",
-    );
+    await expect(page.locator(`#title-${articleId}`)).toHaveText("My Renamed Title");
+    const editedRow = page.locator(".library-list > li").filter({ hasText: "My Renamed Title" });
+    await expect(editedRow.locator("p.meta:not(.source-badge)")).toHaveText("Renamed Author");
 
     // 6. ROW TRUTH (META-01): the stored row carries the overrides while
     //    provenance.title, id, and revision are untouched.
@@ -355,12 +323,8 @@ test.describe("D17-01/D17-02 + META-01 — save flow + persistence", () => {
     // Reload: the override must survive the full Dexie round-trip and
     // re-derive on the fresh LibraryView mount.
     await page.reload();
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
-    await expect(page.locator(`#title-${articleId}`)).toHaveText(
-      "Reloaded Name",
-    );
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
+    await expect(page.locator(`#title-${articleId}`)).toHaveText("Reloaded Name");
     const row = await readRow(page, "articles", articleId);
     expect(row?.readerTitle).toBe("Reloaded Name");
   });
@@ -371,10 +335,7 @@ test.describe("META-03 + D17-04 — reset + blank refusal", () => {
     page,
   }) => {
     await page.goto(`${BASE}/#/`);
-    await ingestPaste(
-      page,
-      pasteHtml(RESET_TITLE_CANONICAL, "Reset Byline"),
-    );
+    await ingestPaste(page, pasteHtml(RESET_TITLE_CANONICAL, "Reset Byline"));
     const articleId = await discoverIngestedArticleId(page);
     expect(articleId).not.toBe("");
 
@@ -384,21 +345,15 @@ test.describe("META-03 + D17-04 — reset + blank refusal", () => {
     await dialog.getByRole("textbox", { name: /^Title$/ }).fill("Renamed Once");
     await dialog.getByRole("button", { name: "Save" }).click();
     await expect(dialog).not.toBeVisible();
-    await expect(page.locator(`#title-${articleId}`)).toHaveText(
-      "Renamed Once",
-    );
+    await expect(page.locator(`#title-${articleId}`)).toHaveText("Renamed Once");
 
     // Reopen, Reset title, Save → the canonical title returns.
     dialog = await openEditDialog(page, "Renamed Once");
     await dialog.getByRole("button", { name: "Reset title" }).click();
-    await expect(dialog.getByRole("textbox", { name: /^Title$/ })).toHaveValue(
-      "",
-    );
+    await expect(dialog.getByRole("textbox", { name: /^Title$/ })).toHaveValue("");
     await dialog.getByRole("button", { name: "Save" }).click();
     await expect(dialog).not.toBeVisible();
-    await expect(page.locator(`#title-${articleId}`)).toHaveText(
-      RESET_TITLE_CANONICAL,
-    );
+    await expect(page.locator(`#title-${articleId}`)).toHaveText(RESET_TITLE_CANONICAL);
 
     // ROW TRUTH (META-03): the override key is ABSENT on the raw row —
     // deleted by the whole-row put, never written as a blank string.
@@ -422,12 +377,8 @@ test.describe("META-03 + D17-04 — reset + blank refusal", () => {
 
     await openLibrary(page);
     // Baseline: no author line on the row (only the source badge's .meta).
-    const bareRow = page
-      .locator(".library-list > li")
-      .filter({ hasText: ABSENT_AUTHOR_TITLE });
-    await expect(
-      bareRow.locator("p.meta:not(.source-badge):not(.finished-mark)"),
-    ).toHaveCount(0);
+    const bareRow = page.locator(".library-list > li").filter({ hasText: ABSENT_AUTHOR_TITLE });
+    await expect(bareRow.locator("p.meta:not(.source-badge):not(.finished-mark)")).toHaveCount(0);
 
     // The author placeholder carries the No author fallback (D17-03).
     let dialog = await openEditDialog(page, ABSENT_AUTHOR_TITLE);
@@ -443,17 +394,13 @@ test.describe("META-03 + D17-04 — reset + blank refusal", () => {
     await expect(dialog).not.toBeVisible();
 
     // The author line now renders (effectiveAuthor truthy).
-    const authoredRow = page
-      .locator(".library-list > li")
-      .filter({ hasText: ABSENT_AUTHOR_TITLE });
-    await expect(
-      authoredRow.locator("p.meta:not(.source-badge):not(.finished-mark)"),
-    ).toHaveText("Anonymous Reader");
+    const authoredRow = page.locator(".library-list > li").filter({ hasText: ABSENT_AUTHOR_TITLE });
+    await expect(authoredRow.locator("p.meta:not(.source-badge):not(.finished-mark)")).toHaveText(
+      "Anonymous Reader",
+    );
     let row = await readRow(page, "articles", articleId);
     expect(row?.readerAuthor).toBe("Anonymous Reader");
-    expect(Object.prototype.hasOwnProperty.call(row, "readerTitle")).toBe(
-      false,
-    );
+    expect(Object.prototype.hasOwnProperty.call(row, "readerTitle")).toBe(false);
 
     // Reset author → no author line rendered; the readerAuthor key is gone.
     dialog = await openEditDialog(page, ABSENT_AUTHOR_TITLE);
@@ -461,12 +408,10 @@ test.describe("META-03 + D17-04 — reset + blank refusal", () => {
     await dialog.getByRole("button", { name: "Reset title" }).click();
     await dialog.getByRole("button", { name: "Save" }).click();
     await expect(dialog).not.toBeVisible();
-    const restoredRow = page
-      .locator(".library-list > li")
-      .filter({ hasText: ABSENT_AUTHOR_TITLE });
-    await expect(
-      restoredRow.locator("p.meta:not(.source-badge):not(.finished-mark)"),
-    ).toHaveCount(0);
+    const restoredRow = page.locator(".library-list > li").filter({ hasText: ABSENT_AUTHOR_TITLE });
+    await expect(restoredRow.locator("p.meta:not(.source-badge):not(.finished-mark)")).toHaveCount(
+      0,
+    );
     row = await readRow(page, "articles", articleId);
     expect(
       Object.prototype.hasOwnProperty.call(row, "readerAuthor"),
@@ -478,10 +423,7 @@ test.describe("META-03 + D17-04 — reset + blank refusal", () => {
     page,
   }) => {
     await page.goto(`${BASE}/#/`);
-    await ingestPaste(
-      page,
-      pasteHtml(BLANK_TITLE_CANONICAL, "Refusal Byline"),
-    );
+    await ingestPaste(page, pasteHtml(BLANK_TITLE_CANONICAL, "Refusal Byline"));
     const articleId = await discoverIngestedArticleId(page);
     expect(articleId).not.toBe("");
 
@@ -499,16 +441,12 @@ test.describe("META-03 + D17-04 — reset + blank refusal", () => {
     await expect(saveBtn).toBeEnabled();
     await reopened.getByRole("textbox", { name: /^Title$/ }).fill("");
     await expect(saveBtn).toBeDisabled();
-    await expect(reopened).toContainText(
-      "Type a title, or choose Reset to keep the original.",
-    );
+    await expect(reopened).toContainText("Type a title, or choose Reset to keep the original.");
 
     // Typing re-enables.
     await reopened.getByRole("textbox", { name: /^Title$/ }).fill("Typed Again");
     await expect(saveBtn).toBeEnabled();
-    await expect(reopened).not.toContainText(
-      "Type a title, or choose Reset to keep the original.",
-    );
+    await expect(reopened).not.toContainText("Type a title, or choose Reset to keep the original.");
 
     // Cancel — the refusal state leaves the stored row untouched.
     await reopened.getByRole("button", { name: "Cancel" }).click();
@@ -552,15 +490,11 @@ test.describe("Pitfall 6 — Esc/focus hygiene", () => {
     await editBtn.click();
     await expect(dialog).toBeVisible();
     // Fresh field state on reopen (no stale typed text — the D16-08 reset).
-    await expect(dialog.getByRole("textbox", { name: /^Title$/ })).toHaveValue(
-      "",
-    );
+    await expect(dialog.getByRole("textbox", { name: /^Title$/ })).toHaveValue("");
 
     // No write happened: the stored row carries no override keys.
     const stored = await readRow(page, "articles", articleId);
-    expect(Object.prototype.hasOwnProperty.call(stored, "readerTitle")).toBe(
-      false,
-    );
+    expect(Object.prototype.hasOwnProperty.call(stored, "readerTitle")).toBe(false);
   });
 });
 
@@ -570,9 +504,7 @@ test.describe("OQ1 — fixture gate", () => {
   }) => {
     // Before any ingest: fixtures only — zero edit affordances anywhere.
     await page.goto(`${BASE}/#/`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
     await expect(page.locator(".library-list > li").first()).toBeVisible({
       timeout: 10_000,
     });
@@ -587,17 +519,11 @@ test.describe("OQ1 — fixture gate", () => {
 
     // Exactly ONE edit affordance — on the ingested row (the composite
     // list renders fixtures + Dexie rows; only the Dexie row is editable).
-    await expect(page.locator(".library-list > li .library-row-edit")).toHaveCount(
-      1,
-    );
-    const ingestedRow = page
-      .locator(".library-list > li")
-      .filter({ hasText: FIXTURE_GATE_TITLE });
+    await expect(page.locator(".library-list > li .library-row-edit")).toHaveCount(1);
+    const ingestedRow = page.locator(".library-list > li").filter({ hasText: FIXTURE_GATE_TITLE });
     await expect(ingestedRow.locator(".library-row-edit")).toHaveCount(1);
     // And every Sample-badged fixture row still has none.
-    const fixtureRows = page
-      .locator(".library-list > li")
-      .filter({ hasText: "Sample" });
+    const fixtureRows = page.locator(".library-list > li").filter({ hasText: "Sample" });
     await expect(fixtureRows.first()).toBeVisible();
     await expect(fixtureRows.locator(".library-row-edit")).toHaveCount(0);
   });
@@ -617,9 +543,7 @@ test.describe("D17-07 + D17-09 — search + strip consistency", () => {
     await dialog.getByRole("textbox", { name: /^Title$/ }).fill(SEARCH_NEW_TITLE);
     await dialog.getByRole("button", { name: "Save" }).click();
     await expect(dialog).not.toBeVisible();
-    await expect(page.locator(`#title-${articleId}`)).toHaveText(
-      SEARCH_NEW_TITLE,
-    );
+    await expect(page.locator(`#title-${articleId}`)).toHaveText(SEARCH_NEW_TITLE);
 
     // Found by the new name.
     const searchInput = page.locator("input#library-search");
@@ -647,9 +571,7 @@ test.describe("D17-07 + D17-09 — search + strip consistency", () => {
     await openLibrary(page);
     const strip = page.locator(".continue-reading-strip");
     await expect(strip).toBeVisible();
-    await expect(
-      strip.locator("a", { hasText: STRIP_OLD_TITLE }),
-    ).toBeVisible();
+    await expect(strip.locator("a", { hasText: STRIP_OLD_TITLE })).toBeVisible();
 
     // Rename via the edit dialog.
     const dialog = await openEditDialog(page, STRIP_OLD_TITLE);
@@ -661,13 +583,9 @@ test.describe("D17-07 + D17-09 — search + strip consistency", () => {
     // remove flow refreshes the list, not the live strip). Reload and
     // assert the strip carries the ONE effective name.
     await page.reload();
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
     await expect(strip.locator("a", { hasText: STRIP_NEW_TITLE })).toBeVisible();
-    await expect(
-      strip.locator("a", { hasText: STRIP_OLD_TITLE }),
-    ).toHaveCount(0);
+    await expect(strip.locator("a", { hasText: STRIP_OLD_TITLE })).toHaveCount(0);
   });
 });
 
@@ -695,10 +613,7 @@ test.describe("META-02 cross-surface — one effective name everywhere (17-05, D
     //    anchor derives over EXACTLY the text the surfaces hold) and an
     //    in-progress reading location for the strip.
     await page.goto(`${BASE}/#/`);
-    await ingestPaste(
-      page,
-      pasteHtml(CROSS_CANONICAL_TITLE, CROSS_CANONICAL_AUTHOR),
-    );
+    await ingestPaste(page, pasteHtml(CROSS_CANONICAL_TITLE, CROSS_CANONICAL_AUTHOR));
     const articleId = await discoverIngestedArticleId(page);
     expect(articleId).not.toBe("");
 
@@ -722,9 +637,7 @@ test.describe("META-02 cross-surface — one effective name everywhere (17-05, D
     // 3. STRIP: reload (the strip derives on LibraryView mount — the D8-03
     //    contract) and the saved-location entry carries the effective name.
     await page.reload();
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
     const strip = page.locator(".continue-reading-strip");
     await expect(strip.locator("a", { hasText: CROSS_EFFECTIVE_TITLE })).toBeVisible();
     await expect(strip.locator("a", { hasText: CROSS_CANONICAL_TITLE })).toHaveCount(0);
@@ -733,21 +646,19 @@ test.describe("META-02 cross-surface — one effective name everywhere (17-05, D
     //    the effective values (D14-02's per-destination title contract fed
     //    by the one derivation).
     await page.goto(`${BASE}/#/article/${articleId}`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: CROSS_EFFECTIVE_TITLE }),
-    ).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("heading", { level: 1, name: CROSS_EFFECTIVE_TITLE })).toBeVisible({
+      timeout: 15_000,
+    });
     await expect(page).toHaveTitle(`${CROSS_EFFECTIVE_TITLE} — Lem Reader`);
-    await expect(
-      page.locator(".article-top-meta p.meta"),
-    ).toHaveText(CROSS_EFFECTIVE_AUTHOR);
+    await expect(page.locator(".article-top-meta p.meta")).toHaveText(CROSS_EFFECTIVE_AUTHOR);
 
     // 5. REVIEW: the Highlights view's article picker suggestion AND the
     //    section h2 carry the effective title (the 17-03 surface swaps;
     //    the native select option became a picker suggestion — #107).
     await page.goto(`${BASE}/#/highlights`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Highlights" }),
-    ).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible({
+      timeout: 15_000,
+    });
     // Focus opens the browse list; the suggestion carries the effective
     // name and the canonical is absent (one name — D17-08/D17-09).
     await page.locator("#review-article-filter").click();
@@ -774,12 +685,10 @@ test.describe("META-02 cross-surface — one effective name everywhere (17-05, D
     //    cites/heads the markdown with it; the CANONICAL title is asserted
     //    ABSENT from the content (one name — D17-08/D17-09).
     await page.goto(`${BASE}/#/article/${articleId}`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: CROSS_EFFECTIVE_TITLE }),
-    ).toBeVisible({ timeout: 15_000 });
-    await page
-      .getByRole("button", { name: /^Highlights and notes/ })
-      .click();
+    await expect(page.getByRole("heading", { level: 1, name: CROSS_EFFECTIVE_TITLE })).toBeVisible({
+      timeout: 15_000,
+    });
+    await page.getByRole("button", { name: /^Highlights and notes/ }).click();
     await expect(page.locator("dialog.annotations-drawer")).toBeVisible({
       timeout: 15_000,
     });
@@ -788,17 +697,13 @@ test.describe("META-02 cross-surface — one effective name everywhere (17-05, D
     const downloadPromise = page.waitForEvent("download", { timeout: 20_000 });
     await exportButton.click();
     const download = await downloadPromise;
-    expect(download.suggestedFilename()).toBe(
-      `highlights-${CROSS_EFFECTIVE_TITLE}.md`,
-    );
+    expect(download.suggestedFilename()).toBe(`highlights-${CROSS_EFFECTIVE_TITLE}.md`);
     const path = await download.path();
     expect(path).toBeTruthy();
     const md = readFileSync(path!, "utf8");
     // Heading + citation carry the effective values (17-03's markdown swaps).
     expect(md).toContain(`# Highlights — ${CROSS_EFFECTIVE_TITLE}`);
-    expect(md).toContain(
-      `> — ${CROSS_EFFECTIVE_AUTHOR}, *${CROSS_EFFECTIVE_TITLE}*`,
-    );
+    expect(md).toContain(`> — ${CROSS_EFFECTIVE_AUTHOR}, *${CROSS_EFFECTIVE_TITLE}*`);
     // ONE NAME: the canonical title/author never surface in the export.
     expect(md).not.toContain(CROSS_CANONICAL_TITLE);
     expect(md).not.toContain(CROSS_CANONICAL_AUTHOR);
@@ -884,20 +789,15 @@ test.describe("META extension — publishedAt + sourceUrl overrides", () => {
     const overrideRow = page
       .locator(".library-list > li")
       .filter({ hasText: DATE_CANONICAL_TITLE });
-    await expect(overrideRow.locator(".source-badge a")).toHaveAttribute(
-      "href",
-      SOURCE_OVERRIDE,
-    );
+    await expect(overrideRow.locator(".source-badge a")).toHaveAttribute("href", SOURCE_OVERRIDE);
 
     // READER: the byline derives the effective date (the override's year,
     // never the canonical's) and the source link points at the override.
     await page.goto(`${BASE}/#/article/${articleId}`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: DATE_CANONICAL_TITLE }),
-    ).toBeVisible({ timeout: 15_000 });
-    await expect(page.locator(".article-top-meta p.meta").first()).toContainText(
-      "2024",
-    );
+    await expect(page.getByRole("heading", { level: 1, name: DATE_CANONICAL_TITLE })).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.locator(".article-top-meta p.meta").first()).toContainText("2024");
     await expect(
       page.locator(".article-top-meta a", { hasText: "Originally published at" }),
     ).toHaveAttribute("href", SOURCE_OVERRIDE);
@@ -923,12 +823,8 @@ test.describe("META extension — publishedAt + sourceUrl overrides", () => {
     // Reopen: the fields seed FROM THE OVERRIDES (the ISO datetime converts
     // back to the date input's YYYY-MM-DD).
     dialog = await openEditDialog(page, DATE_CANONICAL_TITLE);
-    await expect(dialog.locator("#edit-metadata-published")).toHaveValue(
-      DATE_OVERRIDE_INPUT,
-    );
-    await expect(dialog.locator("#edit-metadata-source")).toHaveValue(
-      SOURCE_OVERRIDE,
-    );
+    await expect(dialog.locator("#edit-metadata-published")).toHaveValue(DATE_OVERRIDE_INPUT);
+    await expect(dialog.locator("#edit-metadata-source")).toHaveValue(SOURCE_OVERRIDE);
 
     // Reset both, Save → the keys are DELETED from the stored row
     // (META-03 — never blank) and the canonical values return in the reader.
@@ -955,18 +851,13 @@ test.describe("META extension — publishedAt + sourceUrl overrides", () => {
     const canonicalRow = page
       .locator(".library-list > li")
       .filter({ hasText: DATE_CANONICAL_TITLE });
-    await expect(canonicalRow.locator(".source-badge a")).toHaveAttribute(
-      "href",
-      SOURCE_CANONICAL,
-    );
+    await expect(canonicalRow.locator(".source-badge a")).toHaveAttribute("href", SOURCE_CANONICAL);
 
     await page.goto(`${BASE}/#/article/${articleId}`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: DATE_CANONICAL_TITLE }),
-    ).toBeVisible({ timeout: 15_000 });
-    await expect(page.locator(".article-top-meta p.meta").first()).toContainText(
-      "2020",
-    );
+    await expect(page.getByRole("heading", { level: 1, name: DATE_CANONICAL_TITLE })).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.locator(".article-top-meta p.meta").first()).toContainText("2020");
     await expect(
       page.locator(".article-top-meta a", { hasText: "Originally published at" }),
     ).toHaveAttribute("href", SOURCE_CANONICAL);

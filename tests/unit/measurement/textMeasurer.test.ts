@@ -37,31 +37,25 @@ import type { ReaderSettings } from "../../../src/content/schema";
 // declared below it. The hoisted bag is accessible to both the factory and
 // the test body.
 const mocks = vi.hoisted(() => {
-  const layoutMock = vi.fn(
-    (_prepared: unknown, maxWidth: number, lineHeight: number) => ({
-      height: maxWidth * 10 + lineHeight,
-      lineCount: 3,
-    }),
-  );
-  const layoutWithLinesMock = vi.fn(
-    (_prepared: unknown, maxWidth: number, lineHeight: number) => ({
-      height: maxWidth * 10 + lineHeight,
-      lineCount: 2,
-      lines: [
-        { text: "first line", width: maxWidth - 5, start: {}, end: {} },
-        { text: "second line", width: maxWidth - 10, start: {}, end: {} },
-      ],
-    }),
-  );
-  const prepareMock = vi.fn(
-    (_text: string, _font: string, _opts?: unknown) => ({ __br: "prepared" }),
-  );
-  const prepareWithSegmentsMock = vi.fn(
-    (_text: string, _font: string, _opts?: unknown) => ({
-      __br: "prepared-with-segments",
-      segments: [],
-    }),
-  );
+  const layoutMock = vi.fn((_prepared: unknown, maxWidth: number, lineHeight: number) => ({
+    height: maxWidth * 10 + lineHeight,
+    lineCount: 3,
+  }));
+  const layoutWithLinesMock = vi.fn((_prepared: unknown, maxWidth: number, lineHeight: number) => ({
+    height: maxWidth * 10 + lineHeight,
+    lineCount: 2,
+    lines: [
+      { text: "first line", width: maxWidth - 5, start: {}, end: {} },
+      { text: "second line", width: maxWidth - 10, start: {}, end: {} },
+    ],
+  }));
+  const prepareMock = vi.fn((_text: string, _font: string, _opts?: unknown) => ({
+    __br: "prepared",
+  }));
+  const prepareWithSegmentsMock = vi.fn((_text: string, _font: string, _opts?: unknown) => ({
+    __br: "prepared-with-segments",
+    segments: [],
+  }));
   return {
     prepareMock,
     layoutMock,
@@ -85,8 +79,7 @@ import {
   measureParagraphWithBreaks,
 } from "../../../src/measurement/textMeasurer";
 
-const { prepareMock, layoutMock, prepareWithSegmentsMock, layoutWithLinesMock } =
-  mocks;
+const { prepareMock, layoutMock, prepareWithSegmentsMock, layoutWithLinesMock } = mocks;
 
 const baseSettings: ReaderSettings = {
   librarySort: "recently-added", // issue #115 — the additive preference
@@ -126,11 +119,7 @@ describe("measureParagraphHeight — adapter contract", () => {
       letterSpacing: 0,
     });
     expect(layoutMock).toHaveBeenCalledTimes(1);
-    expect(layoutMock).toHaveBeenCalledWith(
-      prepareMock.mock.results[0]!.value,
-      600,
-      lineHeightPx,
-    );
+    expect(layoutMock).toHaveBeenCalledWith(prepareMock.mock.results[0]!.value, 600, lineHeightPx);
     expect(result).toEqual({
       height: expect.any(Number),
       lineCount: expect.any(Number),
@@ -152,18 +141,8 @@ describe("measureParagraphHeight — adapter contract", () => {
     // calls; caching is Pretext's job internally). The CONTRACT proven here
     // is that the adapter calls prepare(text, font, {letterSpacing}) with
     // byte-stable inputs across both calls — Pretext dedupes internally.
-    expect(prepareMock).toHaveBeenNthCalledWith(
-      1,
-      "same text",
-      font,
-      { letterSpacing: 0 },
-    );
-    expect(prepareMock).toHaveBeenNthCalledWith(
-      2,
-      "same text",
-      font,
-      { letterSpacing: 0 },
-    );
+    expect(prepareMock).toHaveBeenNthCalledWith(1, "same text", font, { letterSpacing: 0 });
+    expect(prepareMock).toHaveBeenNthCalledWith(2, "same text", font, { letterSpacing: 0 });
   });
 });
 
@@ -178,11 +157,9 @@ describe("measureParagraphWithBreaks — adapter contract", () => {
       maxWidthPx: 320,
     });
     expect(prepareWithSegmentsMock).toHaveBeenCalledTimes(1);
-    expect(prepareWithSegmentsMock).toHaveBeenCalledWith(
-      "alpha beta gamma",
-      font,
-      { letterSpacing: 0.3 },
-    );
+    expect(prepareWithSegmentsMock).toHaveBeenCalledWith("alpha beta gamma", font, {
+      letterSpacing: 0.3,
+    });
     expect(layoutWithLinesMock).toHaveBeenCalledTimes(1);
     expect(layoutWithLinesMock).toHaveBeenCalledWith(
       prepareWithSegmentsMock.mock.results[0]!.value,
@@ -227,9 +204,7 @@ describe("fontStringFor — Pitfall 7 per-kind geometry", () => {
       spacing: "spacious",
     });
     expect(compact.lineHeightPx).toBe(18 * SPACING_PRESETS.compact.lineHeight);
-    expect(spacious.lineHeightPx).toBe(
-      18 * SPACING_PRESETS.spacious.lineHeight,
-    );
+    expect(spacious.lineHeightPx).toBe(18 * SPACING_PRESETS.spacious.lineHeight);
   });
 
   it("heading level 1: returns the hardcoded 32px / 1.2 / 600 geometry (Pitfall 7)", () => {

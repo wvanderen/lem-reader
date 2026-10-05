@@ -37,8 +37,7 @@ function makeBook(chapterIds: string[], skipped = 0): Book {
     chapterArticleIds: chapterIds,
     skippedChapterCount: skipped,
     source: "epub-upload",
-    originalFileHash:
-      "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    originalFileHash: "sha256:0000000000000000000000000000000000000000000000000000000000000000",
     addedAt: "2026-01-01T00:00:00.000Z",
   });
 }
@@ -76,28 +75,26 @@ describe("articleReadingState (D14-18 — opened = in-progress; unread = never o
   });
 
   it("location at offset 0 with total > 0 → in-progress (D14-18 opened = started)", () => {
-    expect(
-      articleReadingState(loc("art-a", 0, "2026-01-02T00:00:00.000Z"), 100),
-    ).toBe("in-progress");
+    expect(articleReadingState(loc("art-a", 0, "2026-01-02T00:00:00.000Z"), 100)).toBe(
+      "in-progress",
+    );
   });
 
   it("offset = total → finished", () => {
-    expect(
-      articleReadingState(loc("art-a", 100, "2026-01-02T00:00:00.000Z"), 100),
-    ).toBe("finished");
+    expect(articleReadingState(loc("art-a", 100, "2026-01-02T00:00:00.000Z"), 100)).toBe(
+      "finished",
+    );
   });
 
   it("offset exactly at the FINISHED_THRESHOLD boundary (total 100, offset 98) → finished (>= semantics)", () => {
     // 0.98 × 100 = 98 — offset 98 is AT the boundary and finishes.
-    expect(
-      articleReadingState(loc("art-a", 98, "2026-01-02T00:00:00.000Z"), 100),
-    ).toBe("finished");
+    expect(articleReadingState(loc("art-a", 98, "2026-01-02T00:00:00.000Z"), 100)).toBe("finished");
   });
 
   it("one below the boundary (total 100, offset 97) → in-progress", () => {
-    expect(
-      articleReadingState(loc("art-a", 97, "2026-01-02T00:00:00.000Z"), 100),
-    ).toBe("in-progress");
+    expect(articleReadingState(loc("art-a", 97, "2026-01-02T00:00:00.000Z"), 100)).toBe(
+      "in-progress",
+    );
   });
 
   it("opened zero-length article (total 0, positive offset) → finished — byte-stable edge", () => {
@@ -107,19 +104,23 @@ describe("articleReadingState (D14-18 — opened = in-progress; unread = never o
     // every surface today; the policy module preserves that edge byte-for-byte
     // (any "fix" here would change rendered behavior, which this plan
     // forbids — zero UI change).
-    expect(
-      articleReadingState(loc("art-a", 5, "2026-01-02T00:00:00.000Z"), 0),
-    ).toBe("finished");
+    expect(articleReadingState(loc("art-a", 5, "2026-01-02T00:00:00.000Z"), 0)).toBe("finished");
   });
 });
 
 describe("bookReadingState (D14-19/D14-21 — honest book-level states)", () => {
   it("book with no chapter locations → unread", () => {
     const book = makeBook(["epub-book000111-c00", "epub-book000111-c01"]);
-    expect(bookReadingState(book, latestOf([]), lengthsOf({
-      "epub-book000111-c00": 100,
-      "epub-book000111-c01": 100,
-    }))).toBe("unread");
+    expect(
+      bookReadingState(
+        book,
+        latestOf([]),
+        lengthsOf({
+          "epub-book000111-c00": 100,
+          "epub-book000111-c01": 100,
+        }),
+      ),
+    ).toBe("unread");
   });
 
   it("book with some chapters opened, none finished → in-progress", () => {
@@ -130,10 +131,14 @@ describe("bookReadingState (D14-19/D14-21 — honest book-level states)", () => 
       // ids[1] never opened
     ];
     expect(
-      bookReadingState(book, latestOf(locations), lengthsOf({
-        [ids[0]!]: 100,
-        [ids[1]!]: 100,
-      })),
+      bookReadingState(
+        book,
+        latestOf(locations),
+        lengthsOf({
+          [ids[0]!]: 100,
+          [ids[1]!]: 100,
+        }),
+      ),
     ).toBe("in-progress");
   });
 
@@ -145,9 +150,7 @@ describe("bookReadingState (D14-19/D14-21 — honest book-level states)", () => 
     const book = makeBook(ids);
     // Chapters 0..38 finished (offset = total); chapter 39 never opened.
     // (savedAt is uniform — this row pins the RATIO edge, not recency.)
-    const locations = ids
-      .slice(0, 39)
-      .map((id) => loc(id, 100, "2026-01-01T00:00:00.000Z"));
+    const locations = ids.slice(0, 39).map((id) => loc(id, 100, "2026-01-01T00:00:00.000Z"));
     const lengths = lengthsOf(Object.fromEntries(ids.map((id) => [id, 100])));
     expect(bookReadingState(book, latestOf(locations), lengths)).toBe("in-progress");
   });
@@ -162,17 +165,15 @@ describe("bookReadingState (D14-19/D14-21 — honest book-level states)", () => 
       loc(ids[0]!, 100, "2026-01-02T00:00:00.000Z"),
       loc(ids[1]!, 1_000_000, "2026-01-03T00:00:00.000Z"),
     ];
-    expect(
-      bookReadingState(book, latestOf(locations), lengthsOf({ [ids[0]!]: 100 })),
-    ).toBe("in-progress");
+    expect(bookReadingState(book, latestOf(locations), lengthsOf({ [ids[0]!]: 100 }))).toBe(
+      "in-progress",
+    );
   });
 
   it("book with all chapters individually finished → finished", () => {
     const ids = ["epub-book000111-c00", "epub-book000111-c01", "epub-book000111-c02"];
     const book = makeBook(ids);
-    const locations = ids.map((id, i) =>
-      loc(id, 100, `2026-01-0${i + 2}T00:00:00.000Z`),
-    );
+    const locations = ids.map((id, i) => loc(id, 100, `2026-01-0${i + 2}T00:00:00.000Z`));
     const lengths = lengthsOf(Object.fromEntries(ids.map((id) => [id, 100])));
     expect(bookReadingState(book, latestOf(locations), lengths)).toBe("finished");
   });

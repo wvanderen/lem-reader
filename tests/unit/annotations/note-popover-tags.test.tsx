@@ -17,7 +17,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, render, renderHook, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useEffect } from "react";
-import { HighlightOverlayProvider, useHighlightOverlay } from "../../../src/reader/annotations/HighlightOverlay";
+import {
+  HighlightOverlayProvider,
+  useHighlightOverlay,
+} from "../../../src/reader/annotations/HighlightOverlay";
 import { useAnnotationState } from "../../../src/reader/annotations/useAnnotationState";
 import { NotePopover } from "../../../src/reader/annotations/NotePopover";
 import type { CanonicalArticle } from "../../../src/content/types";
@@ -33,8 +36,7 @@ const article: CanonicalArticle = {
     sourceUrl: "https://example.com/test",
     title: "Test Article",
     retrievedAt: "2026-07-28T00:00:00Z",
-    originalHtmlHash:
-      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    originalHtmlHash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
   },
   blocks: [
     {
@@ -109,14 +111,10 @@ vi.mock("../../../src/ingestion/library/tagsStore", () => ({
 }));
 
 vi.mock("../../../src/content/normalizeText", async (importOriginal) => {
-  const actual = await importOriginal<
-    typeof import("../../../src/content/normalizeText")
-  >();
+  const actual = await importOriginal<typeof import("../../../src/content/normalizeText")>();
   return {
     ...actual,
-    resolveQuoteSelector: vi
-      .fn()
-      .mockReturnValue({ start: 0, end: 5 }),
+    resolveQuoteSelector: vi.fn().mockReturnValue({ start: 0, end: 5 }),
   };
 });
 
@@ -168,9 +166,7 @@ async function openTagsInput(): Promise<{
   input: HTMLInputElement;
 }> {
   const user = userEvent.setup();
-  const input = (await screen.findByPlaceholderText(
-    "Add or search a tag…",
-  )) as HTMLInputElement;
+  const input = (await screen.findByPlaceholderText("Add or search a tag…")) as HTMLInputElement;
   await user.click(input);
   return { user, input };
 }
@@ -204,35 +200,30 @@ describe("NotePopover tags (issue #116)", () => {
 
   it("keyboard pick: typing + Enter commits the tag through the write seam", async () => {
     mockData.highlightRecord.tags = ["essays"];
-    const { setHighlightTags } = await import(
-      "../../../src/ingestion/library/tagsStore"
-    );
+    const { setHighlightTags } = await import("../../../src/ingestion/library/tagsStore");
     renderPopover();
 
     const { user, input } = await openTagsInput();
     await user.type(input, "philosophy");
     await user.keyboard("{Enter}");
 
-    expect(setHighlightTags).toHaveBeenCalledWith("hl-test-1", [
-      "essays",
-      "philosophy",
-    ]);
+    expect(setHighlightTags).toHaveBeenCalledWith("hl-test-1", ["essays", "philosophy"]);
   });
 
   it("case matching: typing ESSAYS routes to the stored casing (Q7A)", async () => {
     mockData.highlightRecord.tags = [];
-    const { setHighlightTags } = await import(
-      "../../../src/ingestion/library/tagsStore"
-    );
+    const { setHighlightTags } = await import("../../../src/ingestion/library/tagsStore");
     renderPopover();
 
     const { user, input } = await openTagsInput();
     await user.type(input, "ESSAYS");
     // The suggestion list offers the STORED casing, not the typed twin.
     const listbox = screen.getByRole("listbox");
-    expect(within(listbox).getAllByRole("option").map((o) => o.textContent)).toEqual([
-      "essays",
-    ]);
+    expect(
+      within(listbox)
+        .getAllByRole("option")
+        .map((o) => o.textContent),
+    ).toEqual(["essays"]);
     await user.keyboard("{Enter}");
 
     expect(setHighlightTags).toHaveBeenCalledWith("hl-test-1", ["essays"]);
@@ -248,13 +239,9 @@ describe("NotePopover tags (issue #116)", () => {
   });
 
   it("tags stay EDITABLE when the anchor is ambiguous (textarea does not)", async () => {
-    const { resolveQuoteSelector } = await import(
-      "../../../src/content/normalizeText"
-    );
+    const { resolveQuoteSelector } = await import("../../../src/content/normalizeText");
     vi.mocked(resolveQuoteSelector).mockReturnValueOnce("ambiguous");
-    const { setHighlightTags } = await import(
-      "../../../src/ingestion/library/tagsStore"
-    );
+    const { setHighlightTags } = await import("../../../src/ingestion/library/tagsStore");
     mockData.highlightRecord.tags = [];
     renderPopover();
 
@@ -273,9 +260,7 @@ describe("NotePopover tags (issue #116)", () => {
 
   it("removing a chip commits the removal", async () => {
     mockData.highlightRecord.tags = ["essays", "keep"];
-    const { setHighlightTags } = await import(
-      "../../../src/ingestion/library/tagsStore"
-    );
+    const { setHighlightTags } = await import("../../../src/ingestion/library/tagsStore");
     const user = userEvent.setup();
     renderPopover();
 
@@ -289,9 +274,7 @@ describe("NotePopover tags (issue #116)", () => {
 
   it("removing a chip by KEYBOARD (focus + Enter on the remove button) commits too", async () => {
     mockData.highlightRecord.tags = ["essays"];
-    const { setHighlightTags } = await import(
-      "../../../src/ingestion/library/tagsStore"
-    );
+    const { setHighlightTags } = await import("../../../src/ingestion/library/tagsStore");
     const user = userEvent.setup();
     renderPopover();
 
@@ -311,12 +294,8 @@ describe("NotePopover tags (issue #116)", () => {
 
   it("a failed write surfaces the inline 'Couldn't save tag.' status (rethrow contract)", async () => {
     mockData.highlightRecord.tags = [];
-    const { setHighlightTags } = await import(
-      "../../../src/ingestion/library/tagsStore"
-    );
-    vi.mocked(setHighlightTags).mockRejectedValueOnce(
-      new Error("QuotaExceededError"),
-    );
+    const { setHighlightTags } = await import("../../../src/ingestion/library/tagsStore");
+    vi.mocked(setHighlightTags).mockRejectedValueOnce(new Error("QuotaExceededError"));
     renderPopover();
 
     const { user, input } = await openTagsInput();
@@ -338,14 +317,23 @@ describe("NotePopover tags (issue #116)", () => {
   });
 });
 
-
 it("does not mirror an older save over a newer optimistic tag edit", async () => {
   const { setHighlightTags } = await import("../../../src/ingestion/library/tagsStore");
   let finishAddition!: (tags: string[]) => void;
   let finishRemoval!: (tags: string[]) => void;
   vi.mocked(setHighlightTags)
-    .mockImplementationOnce(() => new Promise((resolve) => { finishAddition = resolve; }))
-    .mockImplementationOnce(() => new Promise((resolve) => { finishRemoval = resolve; }));
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishAddition = resolve;
+        }),
+    )
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishRemoval = resolve;
+        }),
+    );
   const { result } = renderHook(() => useAnnotationState(article, {}));
   await waitFor(() => expect(result.current.highlights).toHaveLength(1));
   let addition!: Promise<void>;

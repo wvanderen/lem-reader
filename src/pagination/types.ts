@@ -127,6 +127,4 @@ export type { LineBox };
 // classifier. Keeping the offset out of this type lets classifyBlock stay a
 // pure function of block.kind (no page geometry or DOM dependency).
 
-export type SplitDecision =
-  | { kind: "atomic" }
-  | { kind: "split" };
+export type SplitDecision = { kind: "atomic" } | { kind: "split" };

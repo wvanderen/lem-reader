@@ -22,14 +22,8 @@
 // spaces — decision #26: "ASR text has normal word spaces"). Deterministic:
 // the same seed regenerates the same corpus on every run and every runtime.
 import { describe, expect, it } from "vitest";
-import {
-  ArticleSchema,
-  type CanonicalArticle,
-} from "../../../src/content/schema";
-import {
-  articleGraphemeIndex,
-  normalizeText,
-} from "../../../src/content/normalizeText";
+import { ArticleSchema, type CanonicalArticle } from "../../../src/content/schema";
+import { articleGraphemeIndex, normalizeText } from "../../../src/content/normalizeText";
 import { splitParagraphRuns } from "../../../src/pagination/splitBlock";
 import { probeRoundTripAnchor } from "../../../server/ingest";
 import { deriveConfidence } from "../../../server/confidence";
@@ -50,13 +44,59 @@ function lcg(seed: number): () => number {
 }
 
 const WORD_BANK = [
-  "signal", "gradient", "layer", "network", "budget", "latency", "reader",
-  "caption", "segment", "paragraph", "chapter", "marker", "anchor", "offset",
-  "measure", "line", "page", "column", "margin", "cursor", "token", "stream",
-  "buffer", "window", "sample", "frame", "cache", "queue", "worker", "packet",
-  "model", "vector", "matrix", "kernel", "pointer", "cursor", "query", "index",
-  "cluster", "feature", "vector", "tensor", "scalar", "domain", "range",
-  "graph", "edge", "node", "path", "cycle", "tree", "heap", "stack",
+  "signal",
+  "gradient",
+  "layer",
+  "network",
+  "budget",
+  "latency",
+  "reader",
+  "caption",
+  "segment",
+  "paragraph",
+  "chapter",
+  "marker",
+  "anchor",
+  "offset",
+  "measure",
+  "line",
+  "page",
+  "column",
+  "margin",
+  "cursor",
+  "token",
+  "stream",
+  "buffer",
+  "window",
+  "sample",
+  "frame",
+  "cache",
+  "queue",
+  "worker",
+  "packet",
+  "model",
+  "vector",
+  "matrix",
+  "kernel",
+  "pointer",
+  "cursor",
+  "query",
+  "index",
+  "cluster",
+  "feature",
+  "vector",
+  "tensor",
+  "scalar",
+  "domain",
+  "range",
+  "graph",
+  "edge",
+  "node",
+  "path",
+  "cycle",
+  "tree",
+  "heap",
+  "stack",
 ];
 
 /** asrCue — one synthetic ASR cue: unpunctuated, space-separated words, an
@@ -205,15 +245,14 @@ describe("transcript corpus — 3-hour ASR + pathological cue (decision #26)", (
   });
 
   it("NO-OP SHAPE: only paragraph/heading blocks reach the reading surface", () => {
-    expect(article.blocks.every((b) => b.kind === "paragraph" || b.kind === "heading")).toBe(
-      true,
-    );
+    expect(article.blocks.every((b) => b.kind === "paragraph" || b.kind === "heading")).toBe(true);
   });
 
   it("CHAPTERS: honored markers become h2 boundaries; edge rules drop theirs with warnings", () => {
-    const headings = article.blocks.filter(
-      (b) => b.kind === "heading",
-    ) as Extract<(typeof article.blocks)[number], { kind: "heading" }>[];
+    const headings = article.blocks.filter((b) => b.kind === "heading") as Extract<
+      (typeof article.blocks)[number],
+      { kind: "heading" }
+    >[];
     // 8 chapter markers in, 6 survive (rule-2 whitespace title + rule-5
     // beyond-the-end both drop) — each as an h2.
     expect(headings).toHaveLength(6);
@@ -263,9 +302,8 @@ describe("transcript corpus — 3-hour ASR + pathological cue (decision #26)", (
     expect(pathological).toBeDefined();
     if (pathological?.kind !== "paragraph") return expect.unreachable();
     const lang = article.lang;
-    const total = articleGraphemeIndex(article).perBlockLengths[
-      article.blocks.indexOf(pathological)
-    ];
+    const total =
+      articleGraphemeIndex(article).perBlockLengths[article.blocks.indexOf(pathological)];
     expect(total).toBeGreaterThan(1500);
     for (const splitAt of [1, 500, Math.floor(total! / 2), total! - 1]) {
       const { before, after } = splitParagraphRuns(pathological.content, splitAt, lang);
@@ -274,8 +312,7 @@ describe("transcript corpus — 3-hour ASR + pathological cue (decision #26)", (
       // whitespace layout) dropped or moved — so selection/capture and the
       // raw↔norm bridge keep addressing the same source positions after the
       // page-boundary cut, even mid-word.
-      const rejoined =
-        before.map((r) => r.text).join("") + after.map((r) => r.text).join("");
+      const rejoined = before.map((r) => r.text).join("") + after.map((r) => r.text).join("");
       expect(rejoined).toBe(pathological.content.map((r) => r.text).join(""));
       // Marks survive on both sides (trivially [] for transcripts, but the
       // Pitfall-4 shape is what the engine relies on).

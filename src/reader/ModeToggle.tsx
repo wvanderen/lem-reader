@@ -63,9 +63,7 @@ export function ModeToggle({ mode, onToggle }: ModeToggleProps): React.ReactElem
     timerRef.current = window.setTimeout(() => {
       // UI-SPEC §Copywriting: concise, names the new mode, never the offset math.
       setAnnounce(
-        mode === "paginated"
-          ? "Switched to paginated reading."
-          : "Switched to scrolling reading.",
+        mode === "paginated" ? "Switched to paginated reading." : "Switched to scrolling reading.",
       );
     }, 0);
   }, [mode]);
@@ -105,4 +103,3 @@ export function ModeToggle({ mode, onToggle }: ModeToggleProps): React.ReactElem
     </>
   );
 }
-

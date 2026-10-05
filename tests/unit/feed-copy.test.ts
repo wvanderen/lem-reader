@@ -23,11 +23,7 @@ describe("mapFeedReasonToCopy — issue #121 feed-voiced refusals", () => {
   });
 
   it("delegates every OTHER cataloged reason to mapReasonToCopy verbatim", () => {
-    const reVoiced = new Set([
-      "unsupported-content-type",
-      "response-too-large",
-      "fetch-failed",
-    ]);
+    const reVoiced = new Set(["unsupported-content-type", "response-too-large", "fetch-failed"]);
     for (const reason of IngestionFailureReasonEnum.options) {
       if (reVoiced.has(reason)) continue;
       expect(mapFeedReasonToCopy(reason)).toBe(mapReasonToCopy(reason));

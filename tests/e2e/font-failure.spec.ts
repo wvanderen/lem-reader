@@ -117,9 +117,7 @@ test.describe("ACPT-03 font-failure (D6-11)", () => {
     // measurement clone. The PAGE-06 intent (content readable, no blank
     // flash) is unchanged.
     const visibleParagraph = page
-      .locator(
-        ".page-fragment p, .article-body p:not(.article-body-measurement p)",
-      )
+      .locator(".page-fragment p, .article-body p:not(.article-body-measurement p)")
       .first();
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     await expect(visibleParagraph).toBeVisible();
@@ -163,9 +161,7 @@ test.describe("ACPT-03 font-failure (D6-11)", () => {
     // header moved the byline out of <header>, so the first bare `article p`
     // is now the aria-hidden measurement clone — see the BLOCK cell above).
     const visibleParagraph = page
-      .locator(
-        ".page-fragment p, .article-body p:not(.article-body-measurement p)",
-      )
+      .locator(".page-fragment p, .article-body p:not(.article-body-measurement p)")
       .first();
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     await expect(visibleParagraph).toBeVisible();
@@ -177,22 +173,16 @@ test.describe("ACPT-03 font-failure (D6-11)", () => {
     // measurement/stale-drop.spec.ts.
     await page.waitForFunction(
       () =>
-        (
-          window as unknown as Record<string, unknown>
-        ).__lemLastTrustedConstraints !== undefined,
+        (window as unknown as Record<string, unknown>).__lemLastTrustedConstraints !== undefined,
       undefined,
       { timeout: 10_000 },
     );
     const committed = await page.evaluate(
       () =>
         (window as unknown as Record<string, unknown>).__lemLastTrustedConstraints as
-          | { size: number; viewportWidthPx: number }
-          | undefined,
+          { size: number; viewportWidthPx: number } | undefined,
     );
-    expect(
-      committed,
-      "a trusted view must commit after the delayed font settles",
-    ).not.toBeNull();
+    expect(committed, "a trusted view must commit after the delayed font settles").not.toBeNull();
     expect(
       committed!.size,
       "committed size must be a valid step after the delayed font settles",
@@ -230,9 +220,7 @@ test.describe("ACPT-03 font-failure (D6-11)", () => {
     // starts from a non-null trusted view.
     await page.waitForFunction(
       () =>
-        (
-          window as unknown as Record<string, unknown>
-        ).__lemLastTrustedConstraints !== undefined,
+        (window as unknown as Record<string, unknown>).__lemLastTrustedConstraints !== undefined,
       undefined,
       { timeout: 10_000 },
     );
@@ -249,9 +237,7 @@ test.describe("ACPT-03 font-failure (D6-11)", () => {
     await page.setViewportSize({ width: finalWidth, height: 1000 });
 
     await page.getByRole("button", { name: "Reading settings" }).click();
-    await expect(
-      page.getByRole("heading", { name: "Reading settings", level: 2 }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Reading settings", level: 2 })).toBeVisible();
     const slider = page.getByRole("slider", { name: "Text size" });
     await slider.focus();
     const finalSize = 24;
@@ -272,8 +258,7 @@ test.describe("ACPT-03 font-failure (D6-11)", () => {
     const committed = await page.evaluate(
       () =>
         (window as unknown as Record<string, unknown>).__lemLastTrustedConstraints as
-          | { size: number; viewportWidthPx: number }
-          | undefined,
+          { size: number; viewportWidthPx: number } | undefined,
     );
     expect(committed, "a trusted view must have committed after the race").not.toBeNull();
     expect(

@@ -42,23 +42,23 @@ async function snapshot(page: import("@playwright/test").Page): Promise<Paginati
 test("turning pages stays stable and non-final pages use the viewport", async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 800 });
   await page.goto(`${BASE}/#/article/${FIXTURE}`);
-  const firstPublication = await page.evaluate(() =>
-    new Promise<{ pagesLength: number; blockCounts: number[] }>((resolve) => {
-      const tick = () => {
-        const state = (window as unknown as Record<string, unknown>).__lemPagination as
-          | { pagesLength: number; pages: Array<{ blocks: unknown[] }> }
-          | undefined;
-        if (state) {
-          resolve({
-            pagesLength: state.pagesLength,
-            blockCounts: state.pages.map((fragment) => fragment.blocks.length),
-          });
-          return;
-        }
+  const firstPublication = await page.evaluate(
+    () =>
+      new Promise<{ pagesLength: number; blockCounts: number[] }>((resolve) => {
+        const tick = () => {
+          const state = (window as unknown as Record<string, unknown>).__lemPagination as
+            { pagesLength: number; pages: Array<{ blocks: unknown[] }> } | undefined;
+          if (state) {
+            resolve({
+              pagesLength: state.pagesLength,
+              blockCounts: state.pages.map((fragment) => fragment.blocks.length),
+            });
+            return;
+          }
+          requestAnimationFrame(tick);
+        };
         requestAnimationFrame(tick);
-      };
-      requestAnimationFrame(tick);
-    }),
+      }),
   );
   await expect(page.locator(".page-fragment")).toBeVisible();
   await page.waitForTimeout(1_000);

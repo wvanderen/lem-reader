@@ -33,9 +33,7 @@ import { fileURLToPath } from "node:url";
 
 const require = nodeCreateRequire(import.meta.url);
 
-const computedStylePath = require.resolve(
-  "jsdom/lib/jsdom/living/css/helpers/computed-style.js",
-);
+const computedStylePath = require.resolve("jsdom/lib/jsdom/living/css/helpers/computed-style.js");
 const stylesheetPath = path.resolve(
   path.dirname(computedStylePath),
   "../../../browser/default-stylesheet.css",
@@ -132,18 +130,14 @@ const NODE_BUILTINS_ALLOWED = new Set(["canvas"]); // external by design (jsdom 
 function assertSelfContained(outfile) {
   const output = readFileSync(outfile, "utf8");
   const offenders = new Set();
-  for (const match of output.matchAll(
-    /(?:__require|require\d*)\(\s*(['"])([^'"]+)\1\s*\)/g,
-  )) {
+  for (const match of output.matchAll(/(?:__require|require\d*)\(\s*(['"])([^'"]+)\1\s*\)/g)) {
     const spec = match[2];
     if (spec === "canvas" || isBuiltin(spec)) continue;
     offenders.add(spec);
   }
   // Eager require.resolve of relative/bare specs crashes ESM cold start the
   // same way (no __dirname-anchored tree exists beside the bundle).
-  for (const match of output.matchAll(
-    /require\d*\.resolve\(\s*(['"])([^'"]+)\1\s*\)/g,
-  )) {
+  for (const match of output.matchAll(/require\d*\.resolve\(\s*(['"])([^'"]+)\1\s*\)/g)) {
     offenders.add(`resolve:${match[2]}`);
   }
   if (offenders.size > 0) {

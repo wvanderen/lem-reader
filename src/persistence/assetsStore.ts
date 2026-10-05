@@ -44,13 +44,7 @@ import type { ValidatedAsset } from "../ingestion/IngestionClient";
 export const AssetRecordSchema = z.object({
   articleId: z.string().min(1),
   assetId: z.string().regex(/^img-[a-z0-9]{12}$/),
-  contentType: z.enum([
-    "image/jpeg",
-    "image/png",
-    "image/webp",
-    "image/gif",
-    "image/avif",
-  ]),
+  contentType: z.enum(["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"]),
   byteLength: z.number().int().min(1),
   data: z.instanceof(Blob),
   createdAt: z.string().datetime(), // ISO-8601
@@ -75,8 +69,7 @@ export type AssetsLoadResult =
  * a swallowed failure there would break rollback).
  */
 export type AssetsWriteResult =
-  | { ok: true }
-  | { ok: false; reason: "unavailable" | "corrupt" | "unupgradeable" };
+  { ok: true } | { ok: false; reason: "unavailable" | "corrupt" | "unupgradeable" };
 
 /**
  * putAssets — standalone write seam: build rows from ValidatedAsset inputs
@@ -133,9 +126,7 @@ export async function bulkGetAssets(
   assetIds: string[],
 ): Promise<AssetsLoadResult> {
   try {
-    const keys = assetIds.map(
-      (assetId) => [articleId, assetId] as [string, string],
-    );
+    const keys = assetIds.map((assetId) => [articleId, assetId] as [string, string]);
     const rows = await db.assets.bulkGet(keys);
     const valid: AssetRecordRow[] = [];
     for (const row of rows) {
@@ -182,9 +173,7 @@ export async function loadAllAssets(): Promise<AssetRecordRow[]> {
  * the calm standalone seam for callers outside those transactions). Never
  * throws: Dexie-level failures classify into `{ok: false, reason}`.
  */
-export async function deleteAssetsForArticle(
-  articleId: string,
-): Promise<AssetsWriteResult> {
+export async function deleteAssetsForArticle(articleId: string): Promise<AssetsWriteResult> {
   try {
     await db.assets.where("articleId").equals(articleId).delete();
     return { ok: true };

@@ -52,9 +52,7 @@ const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] as const;
 type AxeViolation = { id: string; impact?: string | null | undefined };
 
 function seriousViolations(results: { violations: AxeViolation[] }) {
-  return results.violations.filter((v) =>
-    ["serious", "critical"].includes(v.impact ?? ""),
-  );
+  return results.violations.filter((v) => ["serious", "critical"].includes(v.impact ?? ""));
 }
 
 test.beforeEach(async ({ page }) => {
@@ -71,9 +69,7 @@ async function openLibrary(page: Page): Promise<void> {
   await page.evaluate(() => {
     window.location.hash = "#/";
   });
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Saved articles" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
   await expect(page.locator(".library-list > li").first()).toBeVisible({
     timeout: 10_000,
   });
@@ -90,9 +86,7 @@ async function openArticle(page: Page): Promise<void> {
     () => {
       const visible =
         document.querySelector(".page-fragment [data-block-index]") ??
-        document.querySelector(
-          ".article-body:not(.article-body-measurement) [data-block-index]",
-        );
+        document.querySelector(".article-body:not(.article-body-measurement) [data-block-index]");
       return !!visible;
     },
     undefined,
@@ -124,9 +118,7 @@ async function expectFocusOnTrigger(page: Page): Promise<void> {
   }
   await expect
     .poll(() =>
-      page.evaluate(
-        () => document.activeElement === document.querySelector(".tags-trigger"),
-      ),
+      page.evaluate(() => document.activeElement === document.querySelector(".tags-trigger")),
     )
     .toBe(true);
 }
@@ -141,9 +133,7 @@ test.describe("tag popover (13-10 — G5)", () => {
     await seedRows(page, { articles: [TAGGED_ARTICLE] });
     await page.goto(`${BASE}/#/article/${TAGGED_ARTICLE.id}`);
     await page.waitForURL(/#\/article\//, { timeout: 10_000 });
-    await expect(
-      page.getByRole("heading", { level: 1 }).first(),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { level: 1 }).first()).toBeVisible({ timeout: 10_000 });
 
     // Before opening: the popover surface is hidden (UA popover styling)
     // and its TagEntry is not visible.
@@ -153,9 +143,7 @@ test.describe("tag popover (13-10 — G5)", () => {
     // Open via the top-bar trigger.
     await expect(tagsTrigger(page)).toHaveAttribute("aria-expanded", "false");
     await tagsTrigger(page).click();
-    await expect(
-      page.getByRole("dialog", { name: "Article tags" }),
-    ).toBeVisible();
+    await expect(page.getByRole("dialog", { name: "Article tags" })).toBeVisible();
     await expect(tagsTrigger(page)).toHaveAttribute("aria-expanded", "true");
 
     // Edit: add a tag through the shared TagPicker (issue #75 — decision
@@ -165,29 +153,21 @@ test.describe("tag popover (13-10 — G5)", () => {
     await tagInput.fill("stoic");
     await tagInput.press("Enter");
     await expect(
-      page
-        .locator(".tag-picker-chips .tag-picker-pill")
-        .filter({ hasText: "stoic" }),
+      page.locator(".tag-picker-chips .tag-picker-pill").filter({ hasText: "stoic" }),
     ).toBeVisible();
 
     // Persistence: back to the library, the tag filter chip strip surfaces
     // the tag (loadAllTags re-derivation over the Dexie rows).
     await openLibrary(page);
-    const stoicChip = page
-      .locator(".tag-filter .tag-chip")
-      .filter({ hasText: "stoic" });
+    const stoicChip = page.locator(".tag-filter .tag-chip").filter({ hasText: "stoic" });
     await expect(stoicChip).toBeVisible();
 
     // Return to the article, reopen the popover.
-    const articleLink = page.locator(
-      'a[href^="#/article/' + TAGGED_ARTICLE.id + '"]',
-    );
+    const articleLink = page.locator('a[href^="#/article/' + TAGGED_ARTICLE.id + '"]');
     await expect(articleLink).toBeVisible();
     await articleLink.click();
     await page.waitForURL(/#\/article\//, { timeout: 10_000 });
-    await expect(
-      page.getByRole("heading", { level: 1 }).first(),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { level: 1 }).first()).toBeVisible({ timeout: 10_000 });
     await tagsTrigger(page).click();
     await expect(page.locator(".tag-popover")).toBeVisible();
     await expect(tagsTrigger(page)).toHaveAttribute("aria-expanded", "true");
@@ -203,9 +183,7 @@ test.describe("tag popover (13-10 — G5)", () => {
     expect(popBox, "popover box measurable before light-dismiss").toBeTruthy();
     const vp = page.viewportSize() ?? { width: 1280, height: 720 };
     const dismissX = Math.round(vp.width / 2);
-    const dismissY = Math.round(
-      Math.min(popBox!.y + popBox!.height + 24, vp.height - 8),
-    );
+    const dismissY = Math.round(Math.min(popBox!.y + popBox!.height + 24, vp.height - 8));
     await page.mouse.click(dismissX, dismissY);
     await expect(page.locator(".tag-popover")).toBeHidden();
     await expect(tagsTrigger(page)).toHaveAttribute("aria-expanded", "false");
@@ -243,9 +221,9 @@ test.describe("tag popover (13-10 — G5)", () => {
     // The visually-hidden announcement region (main's SECOND role=status
     // region — the 09-05 export announce lives in ArticleView) carries the
     // "Exported" phrase.
-    await expect(
-      page.locator("main [role='status'].visually-hidden").nth(1),
-    ).toContainText(/Exported/);
+    await expect(page.locator("main [role='status'].visually-hidden").nth(1)).toContainText(
+      /Exported/,
+    );
   });
 
   test("a11y: open tag popover state has zero serious/critical WCAG violations", async ({
@@ -255,9 +233,7 @@ test.describe("tag popover (13-10 — G5)", () => {
     await tagsTrigger(page).click();
     await expect(page.locator(".tag-popover")).toBeVisible();
 
-    const results = await new AxeBuilder({ page })
-      .withTags([...WCAG_TAGS])
-      .analyze();
+    const results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
     const serious = seriousViolations(results);
     expect(serious, JSON.stringify(serious, null, 2)).toEqual([]);
   });

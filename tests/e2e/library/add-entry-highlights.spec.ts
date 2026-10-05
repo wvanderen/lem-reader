@@ -55,17 +55,13 @@ test.describe("Add entry points (#84 — the Highlights header Add icon)", () =>
   }) => {
     // Library: no header icon — the h1-row primary button is the ONE Add.
     await page.goto(`${BASE}/#/`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
     await expect(addTrigger(page)).toHaveCount(0);
     await expect(libraryAddButton(page)).toBeVisible();
 
     // Highlights: the quiet icon, wired as a dialog control.
     await page.goto(`${BASE}/#/highlights`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Highlights" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
     await expect(libraryAddButton(page)).toHaveCount(0);
     const trigger = addTrigger(page);
     await expect(trigger).toBeVisible();
@@ -89,9 +85,7 @@ test.describe("Add entry points (#84 — the Highlights header Add icon)", () =>
     page,
   }) => {
     await page.goto(`${BASE}/#/highlights`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Highlights" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
 
     // Keyboard-open from a predictable starting point.
     const trigger = addTrigger(page);
@@ -156,20 +150,17 @@ test.describe("Add entry points (#84 — the Highlights header Add icon)", () =>
     // swaps IN PLACE: picker + source forms hide, the transcript flow
     // shows, and only ONE actions row exists.
     const dlg = page.locator("dialog.add-dialog");
-    await expect(statusCard(page)).toContainText(
-      "YouTube is asking for extra verification",
-    );
+    await expect(statusCard(page)).toContainText("YouTube is asking for extra verification");
     await expect(dlg.locator("fieldset.add-source-picker")).toBeHidden();
     await expect(dlg.locator(".add-source-content")).toBeHidden();
     await expect(dlg.locator("#add-transcript-form")).toBeVisible();
     await expect(dlg.locator(".add-transcript-actions")).toHaveCount(0);
     // The shared bottom submit flipped to the transcript target.
-    await expect(
-      dlg.locator("button.add-dialog-submit"),
-    ).toHaveAttribute("form", "add-transcript-form");
-    await expect(dlg.locator("button.add-dialog-submit")).toHaveText(
-      "Add transcript",
+    await expect(dlg.locator("button.add-dialog-submit")).toHaveAttribute(
+      "form",
+      "add-transcript-form",
     );
+    await expect(dlg.locator("button.add-dialog-submit")).toHaveText("Add transcript");
 
     // The quiet Back control returns to the URL form with the typed URL
     // intact (D16-11) — the walk's swap round-trip.
@@ -182,10 +173,7 @@ test.describe("Add entry points (#84 — the Highlights header Add icon)", () =>
     // succeeds, and the issue #112 result screen's "Open article" opens
     // the reader (D16-12's close-first ordering preserved).
     await page.getByRole("button", { name: /^add$/i, exact: true }).click();
-    await openSavedArticle(
-      page,
-      new RegExp(`#/article/${fixtureArticle.id}$`),
-    );
+    await openSavedArticle(page, new RegExp(`#/article/${fixtureArticle.id}$`));
     await expect(
       page.getByRole("heading", { level: 1, name: fixtureArticle.provenance.title }),
     ).toBeVisible({ timeout: 10_000 });

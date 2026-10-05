@@ -147,23 +147,18 @@ async function coldLoad(page: Page, url: string): Promise<void> {
 async function settle(page: Page): Promise<void> {
   await page.waitForFunction(
     () =>
-      document.querySelector(
-        ".article-body:not(.article-body-measurement) [data-block-index]",
-      ) !== null,
+      document.querySelector(".article-body:not(.article-body-measurement) [data-block-index]") !==
+      null,
     undefined,
     { timeout: 10_000 },
   );
   await page.waitForFunction(
     () =>
       new Promise<boolean>((resolve) => {
-        const before = (
-          window as unknown as { __paintRecords: unknown[] }
-        ).__paintRecords.length;
+        const before = (window as unknown as { __paintRecords: unknown[] }).__paintRecords.length;
         setTimeout(() => {
           resolve(
-            (
-              window as unknown as { __paintRecords: unknown[] }
-            ).__paintRecords.length === before,
+            (window as unknown as { __paintRecords: unknown[] }).__paintRecords.length === before,
           );
         }, 400);
       }),
@@ -273,10 +268,10 @@ test("SC#1 wipe — the destructive reset clears BOTH truths; a wiped reader col
   // Pitfall 1 catch, in the LIVE page: localStorage survived db.delete() —
   // only resetLocalData's clearSettingsMirror can null it.
   await expect
-    .poll(
-      () => page.evaluate((key) => localStorage.getItem(key), MIRROR_KEY),
-      { timeout: 5_000, message: "mirror key must read back null after the wipe" },
-    )
+    .poll(() => page.evaluate((key) => localStorage.getItem(key), MIRROR_KEY), {
+      timeout: 5_000,
+      message: "mirror key must read back null after the wipe",
+    })
     .toBeNull();
 
   // Reload the wiped reader: defaults paint (records show the default
@@ -309,10 +304,9 @@ test("SC#1 wipe — the destructive reset clears BOTH truths; a wiped reader col
     "the mount-time applyTheme(DEFAULT_SETTINGS) must have written tokens",
   ).toBeGreaterThan(0);
   for (const [i, rec] of state.records.entries()) {
-    expect(
-      rec.theme,
-      `post-wipe record ${i} must show the DEFAULT theme (no zombie prefs)`,
-    ).toBe(DEFAULT_THEME);
+    expect(rec.theme, `post-wipe record ${i} must show the DEFAULT theme (no zombie prefs)`).toBe(
+      DEFAULT_THEME,
+    );
     expect(rec.fontSize, `post-wipe record ${i} must show the DEFAULT size`).toBe(
       DEFAULT_FONT_SIZE,
     );

@@ -50,7 +50,9 @@ export interface TriggerCoalescerOptions {
  * cleanup path on article swap / unmount.
  */
 export class TriggerCoalescer {
-  private readonly opts: Required<Omit<TriggerCoalescerOptions, "onTrigger" | "getSettings" | "articleEl">> &
+  private readonly opts: Required<
+    Omit<TriggerCoalescerOptions, "onTrigger" | "getSettings" | "articleEl">
+  > &
     Pick<TriggerCoalescerOptions, "onTrigger" | "getSettings" | "articleEl">;
   private readonly epoch = new Epoch();
   private timer: number | null = null;

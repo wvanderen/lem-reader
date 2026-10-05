@@ -53,9 +53,7 @@ export function effectiveTitle(article: CanonicalArticle): string {
  * never to an empty-string override — the schema's min(1) makes that
  * state unrepresentable, D17-04).
  */
-export function effectiveAuthor(
-  article: CanonicalArticle,
-): string | undefined {
+export function effectiveAuthor(article: CanonicalArticle): string | undefined {
   return article.readerAuthor ?? article.provenance.author;
 }
 
@@ -67,9 +65,7 @@ export function effectiveAuthor(
  * existing truthy guard renders nothing. Both sides are ISO datetime, so
  * every consumer's existing formatter works unchanged.
  */
-export function effectivePublishedAt(
-  article: CanonicalArticle,
-): string | undefined {
+export function effectivePublishedAt(article: CanonicalArticle): string | undefined {
   return article.readerPublishedAt ?? article.provenance.publishedAt;
 }
 
@@ -81,9 +77,7 @@ export function effectivePublishedAt(
  * override on a paste article restores "no source link", never an empty
  * href.
  */
-export function effectiveSourceUrl(
-  article: CanonicalArticle,
-): string | undefined {
+export function effectiveSourceUrl(article: CanonicalArticle): string | undefined {
   return article.readerSourceUrl ?? article.provenance.sourceUrl;
 }
 
@@ -94,9 +88,7 @@ export function effectiveSourceUrl(
  * article — absence is the empty state, never a placeholder (the same
  * silence discipline as effectiveAuthor's absent-author case).
  */
-export function videoDuration(
-  article: CanonicalArticle,
-): string | undefined {
+export function videoDuration(article: CanonicalArticle): string | undefined {
   const transcript = article.ingestionMeta?.transcript;
   return transcript ? formatDuration(transcript.durationSeconds) : undefined;
 }

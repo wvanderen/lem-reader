@@ -32,9 +32,7 @@ describe("normalization / round-trip anchor probe (SC#1, ADR-0003)", () => {
     // Three v1.0 fixtures spanning the corpus: an essay, a technical post, and
     // an academic article with footnotes. Each has substantial prose → unique
     // 20-grapheme windows at every sampled offset.
-    const fixtures = [essayLongFormJson, technicalPostJson, footnoteAcademicJson].map(
-      parseArticle,
-    );
+    const fixtures = [essayLongFormJson, technicalPostJson, footnoteAcademicJson].map(parseArticle);
     for (const fixture of fixtures) {
       expect(probeRoundTripAnchor(fixture)).toBe("pass");
     }
@@ -143,7 +141,9 @@ describe("normalization / round-trip anchor probe (SC#1, ADR-0003)", () => {
     expect(result.ok).toBe(true);
     if (result.ok && "article" in result) {
       expect(result.article.blocks.length).toBeGreaterThan(0);
-      expect(result.confidence.state === "confident" || result.confidence.state === "low").toBe(true);
+      expect(result.confidence.state === "confident" || result.confidence.state === "low").toBe(
+        true,
+      );
     }
   });
 

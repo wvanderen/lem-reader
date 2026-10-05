@@ -29,10 +29,12 @@ export function isSpokenMarkerId(id: string): boolean {
  * renderers branch on the id BEFORE any status-driven styling, so the value
  * is never surfaced.
  */
-export function spokenMarkerEntry(range: {
-  start: number;
-  end: number;
-}): { id: string; position: TextPositionSelector; hasNote: false; status: "confident" } {
+export function spokenMarkerEntry(range: { start: number; end: number }): {
+  id: string;
+  position: TextPositionSelector;
+  hasNote: false;
+  status: "confident";
+} {
   return {
     id: SPOKEN_MARKER_ID,
     position: { start: range.start, end: range.end },

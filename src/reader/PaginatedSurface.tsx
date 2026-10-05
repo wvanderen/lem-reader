@@ -885,4 +885,3 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
     );
   },
 );
-

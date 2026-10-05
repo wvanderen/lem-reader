@@ -110,10 +110,7 @@ export function jumpToOffset(
       const pageIdx = fragmentContainingOffset(pages, offset, article);
       surface.turnToPage(pageIdx);
     }
-  } else if (
-    input.endLanding &&
-    landingForRestore(offset, endPinOffset(article)) === "end"
-  ) {
+  } else if (input.endLanding && landingForRestore(offset, endPinOffset(article)) === "end") {
     // 260908-oht: absolute document bottom so the first scroll-save re-pins
     // total instead of un-finishing a finished article.
     window.scrollTo(0, document.documentElement.scrollHeight);

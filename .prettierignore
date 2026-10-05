@@ -1,0 +1,12 @@
+# Legacy GSD planning artifacts — frozen (see .planning/DEPRECATED.md)
+.planning/
+
+# Generated / build output (mirrors eslint.config.js ignores)
+api/
+dist/
+.vercel/
+playwright-report/
+test-results/
+
+# Dependency tree
+node_modules/

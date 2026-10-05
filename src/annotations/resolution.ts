@@ -19,15 +19,9 @@
 //
 // Pure domain logic — no DOM, no React, no side effects. jsdom-safe to unit
 // test with synthetic fixtures.
-import {
-  articleGraphemeIndex,
-  graphemeClusters,
-} from "../content/normalizeText";
+import { articleGraphemeIndex, graphemeClusters } from "../content/normalizeText";
 import type { CanonicalArticle } from "../content/types";
-import type {
-  TextPositionSelector,
-  TextQuoteSelector,
-} from "../content/normalizeText";
+import type { TextPositionSelector, TextQuoteSelector } from "../content/normalizeText";
 
 /**
  * Find every grapheme-offset position where `needle` appears as a contiguous
@@ -96,9 +90,7 @@ export function matchesContext(
   if (suffix.length > 0) {
     const suffixClusters = graphemeClusters(suffix, lang);
     const candidateEnd = candidateStart + exactLen;
-    const window = clusters
-      .slice(candidateEnd, candidateEnd + suffixClusters.length)
-      .join("");
+    const window = clusters.slice(candidateEnd, candidateEnd + suffixClusters.length).join("");
     if (window !== suffix) return false;
   }
   return true;
@@ -217,12 +209,7 @@ export function resolveQuoteSelectorInText(
   }
 
   // Step 4: zero exact → prefix+suffix-only fallback. D5-02 step 4.
-  const candidates = findPrefixSuffixCandidates(
-    clusters,
-    selector,
-    lang,
-    exactClusters.length,
-  );
+  const candidates = findPrefixSuffixCandidates(clusters, selector, lang, exactClusters.length);
   if (candidates.length === 0) return "orphan";
   if (candidates.length === 1) return candidates[0]!;
   // N>1 candidates: use positionHint as a nearness tie-breaker. A unique

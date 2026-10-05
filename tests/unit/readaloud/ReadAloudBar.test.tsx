@@ -62,18 +62,12 @@ describe("ReadAloudBar — transport buttons", () => {
 
   it("idle free-floats: the pill wrapper goes chrome-less until a session exists", () => {
     const idle = renderBar("stopped");
-    expect(
-      idle.container.querySelector(".readaloud-cluster--idle"),
-    ).not.toBeNull();
+    expect(idle.container.querySelector(".readaloud-cluster--idle")).not.toBeNull();
     cleanup();
 
     const active = renderBar("playing");
-    expect(
-      active.container.querySelector(".readaloud-cluster--idle"),
-    ).toBeNull();
-    expect(
-      active.container.querySelector(".readaloud-cluster"),
-    ).not.toBeNull();
+    expect(active.container.querySelector(".readaloud-cluster--idle")).toBeNull();
+    expect(active.container.querySelector(".readaloud-cluster")).not.toBeNull();
   });
 
   it("playing: the primary button's name flips to 'Pause' (state, not color)", () => {
@@ -160,15 +154,11 @@ describe("ReadAloudBar — jump to spoken position (issue #42)", () => {
     cleanup();
 
     renderBar("playing", { onJumpToSpoken: vi.fn() });
-    expect(
-      screen.getByRole("button", { name: "Jump to spoken position" }),
-    ).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Jump to spoken position" })).not.toBeNull();
     cleanup();
 
     renderBar("paused", { onJumpToSpoken: vi.fn() });
-    expect(
-      screen.getByRole("button", { name: "Jump to spoken position" }),
-    ).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Jump to spoken position" })).not.toBeNull();
   });
 
   it("clicks route to onJumpToSpoken without touching the transport", () => {
@@ -231,15 +221,9 @@ describe("ReadAloudBar — skip controls (issue #43, O3)", () => {
 
     for (const state of ["playing", "paused"] as const) {
       renderBar(state, { ...skipHandlers });
-      expect(
-        screen.getByRole("button", { name: "Skip sentence backward" }),
-      ).not.toBeNull();
-      expect(
-        screen.getByRole("button", { name: "Skip sentence forward" }),
-      ).not.toBeNull();
-      expect(
-        screen.getByRole("button", { name: "Skip paragraph forward" }),
-      ).not.toBeNull();
+      expect(screen.getByRole("button", { name: "Skip sentence backward" })).not.toBeNull();
+      expect(screen.getByRole("button", { name: "Skip sentence forward" })).not.toBeNull();
+      expect(screen.getByRole("button", { name: "Skip paragraph forward" })).not.toBeNull();
       cleanup();
     }
 
@@ -304,30 +288,22 @@ describe("ReadAloudBar — expanded-band reservation (issue #90)", () => {
   it("idle reserves nothing; a live session marks the bar expanded", () => {
     const idle = renderBar("stopped");
     expect(document.body.style.getPropertyValue(READALOUD_HEIGHT_VAR)).toBe("");
-    expect(
-      idle.container.querySelector(".readaloud-bar--expanded"),
-    ).toBeNull();
+    expect(idle.container.querySelector(".readaloud-bar--expanded")).toBeNull();
     cleanup();
 
     const active = renderBar("playing");
-    expect(
-      active.container.querySelector(".readaloud-bar--expanded"),
-    ).not.toBeNull();
+    expect(active.container.querySelector(".readaloud-bar--expanded")).not.toBeNull();
   });
 
   it("publishes --readaloud-h live (wrap-count aware) and un-publishes at session end", () => {
     const playing = renderBar("playing");
-    expect(document.body.style.getPropertyValue(READALOUD_HEIGHT_VAR)).toBe(
-      "72px",
-    );
+    expect(document.body.style.getPropertyValue(READALOUD_HEIGHT_VAR)).toBe("72px");
 
     // The pill wraps on a narrow viewport → the observer redelivers and the
     // fresh height wins (the wrap-count-aware contract).
     measuredHeight = 88;
     for (const ro of roInstances) ro.fire();
-    expect(document.body.style.getPropertyValue(READALOUD_HEIGHT_VAR)).toBe(
-      "88px",
-    );
+    expect(document.body.style.getPropertyValue(READALOUD_HEIGHT_VAR)).toBe("88px");
 
     // Session end (state flip, not unmount) un-publishes — idle reserves
     // nothing.
@@ -337,9 +313,7 @@ describe("ReadAloudBar — expanded-band reservation (issue #90)", () => {
 
   it("unmount mid-session un-publishes (the cleanup path)", () => {
     renderBar("playing");
-    expect(document.body.style.getPropertyValue(READALOUD_HEIGHT_VAR)).toBe(
-      "72px",
-    );
+    expect(document.body.style.getPropertyValue(READALOUD_HEIGHT_VAR)).toBe("72px");
     cleanup();
     expect(document.body.style.getPropertyValue(READALOUD_HEIGHT_VAR)).toBe("");
   });

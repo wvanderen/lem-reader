@@ -37,20 +37,9 @@ import { seedStoreRows } from "./seedStoreRows";
 // IndexedDB writes, cleared per-test; no production code path touched).
 import { test, expect, type Page } from "@playwright/test";
 import { fixtures } from "../../../src/fixtures";
-import {
-  normalizeText,
-  graphemeClusters,
-} from "../../../src/content/normalizeText";
-import {
-  ArticleSchema,
-  BookSchema,
-  LocationRecordSchema,
-} from "../../../src/content/schema";
-import type {
-  Book,
-  CanonicalArticle,
-  LocationRecord,
-} from "../../../src/content/schema";
+import { normalizeText, graphemeClusters } from "../../../src/content/normalizeText";
+import { ArticleSchema, BookSchema, LocationRecordSchema } from "../../../src/content/schema";
+import type { Book, CanonicalArticle, LocationRecord } from "../../../src/content/schema";
 import {
   articleReadingState,
   bookReadingState,
@@ -79,11 +68,7 @@ function totalOf(article: CanonicalArticle): number {
 }
 
 /** Build an ArticleSchema-valid standalone article from plain paragraphs. */
-function makeStandalone(
-  id: string,
-  title: string,
-  paragraphs: string[],
-): CanonicalArticle {
+function makeStandalone(id: string, title: string, paragraphs: string[]): CanonicalArticle {
   return ArticleSchema.parse({
     id,
     revision: 1,
@@ -177,14 +162,10 @@ const STANDALONE_UNREAD = makeStandalone("rv-standalone-unread", "The Unread Alm
   "The almanac was printed in a winter when the harbor froze so hard that the pilots walked to their boats across the ice, and its tables still record the tide heights they measured through the cracks.",
   "Nobody has opened this copy since it was shelved, which the librarian considers a kind of purity: an almanac of a season that arrived, passed, and was never once consulted.",
 ]);
-const STANDALONE_PROGRESS = makeStandalone(
-  "rv-standalone-progress",
-  "The Halfway Harbor Log",
-  [
-    "The harbor log opens on a Monday of small weather, four fishing boats out, one ferry delayed by fog, and a customs officer who signed the page with an enthusiasm the day did not otherwise justify.",
-    "The middle of the log is where the ink changes hands, and the reader who stops here stops exactly where the season itself seemed to hesitate before deciding what kind of year to become.",
-  ],
-);
+const STANDALONE_PROGRESS = makeStandalone("rv-standalone-progress", "The Halfway Harbor Log", [
+  "The harbor log opens on a Monday of small weather, four fishing boats out, one ferry delayed by fog, and a customs officer who signed the page with an enthusiasm the day did not otherwise justify.",
+  "The middle of the log is where the ink changes hands, and the reader who stops here stops exactly where the season itself seemed to hesitate before deciding what kind of year to become.",
+]);
 const STANDALONE_FINISHED = makeStandalone(
   "rv-standalone-finished",
   "The Completed Comet Register",
@@ -203,15 +184,9 @@ const DONE_C0 = makeChapter(
     "The tide ledger records, in a column of patient numerals, the exact height of every high water for a year, and the keeper who wrote it claimed he could hear the pattern in the numbers before he could see it.",
   ],
 );
-const DONE_C1 = makeChapter(
-  "rv-done-c01",
-  "Chapter 2. The Bell Founders",
-  "rv-book-all-done",
-  1,
-  [
-    "The bell founders poured their bronze on a cold morning so the mold would not crack, and the bell that came out rang a note they had not planned but recognized at once, the way one recognizes a face in a crowd.",
-  ],
-);
+const DONE_C1 = makeChapter("rv-done-c01", "Chapter 2. The Bell Founders", "rv-book-all-done", 1, [
+  "The bell founders poured their bronze on a cold morning so the mold would not crack, and the bell that came out rang a note they had not planned but recognized at once, the way one recognizes a face in a crowd.",
+]);
 const BOOK_ALL_DONE = makeBook("rv-book-all-done", "Every Chapter Completed", [
   DONE_C0.id,
   DONE_C1.id,
@@ -253,11 +228,12 @@ const PARTIAL_C3 = makeChapter(
     "The final chapter was printed after the rest of the edition had already sailed, and copies that contain it are rarer than the errors it was written to correct.",
   ],
 );
-const BOOK_PARTIAL = makeBook(
-  "rv-book-three-of-four",
-  "Three of Four Chapters Done",
-  [PARTIAL_C0.id, PARTIAL_C1.id, PARTIAL_C2.id, PARTIAL_C3.id],
-);
+const BOOK_PARTIAL = makeBook("rv-book-three-of-four", "Three of Four Chapters Done", [
+  PARTIAL_C0.id,
+  PARTIAL_C1.id,
+  PARTIAL_C2.id,
+  PARTIAL_C3.id,
+]);
 
 const ATLAS_C0 = makeChapter(
   "rv-atlas-c00",
@@ -353,8 +329,7 @@ const CORPUS_LOCATIONS: LocationRecord[] = [
 const TOTALS_BY_ID = new Map<string, number>();
 for (const f of fixtures) TOTALS_BY_ID.set(f.id, totalOf(f));
 for (const a of CORPUS_ARTICLES) TOTALS_BY_ID.set(a.id, totalOf(a));
-const textLengthOf = (articleId: string): number | undefined =>
-  TOTALS_BY_ID.get(articleId);
+const textLengthOf = (articleId: string): number | undefined => TOTALS_BY_ID.get(articleId);
 
 /** The latest-savedAt fold (the app's locationsByArticle discipline — D8-10).
  * Issue #8 — folded through readingPosition's ONE latestLocationByArticle
@@ -439,10 +414,14 @@ function expectedRowsFor(view: ViewName): number {
 async function seedCorpus(page: Page): Promise<void> {
   await seedStoreRows(page, "books", CORPUS_BOOKS);
   // Chapter rows carry the denormalized bookId used by the articles index.
-  await seedStoreRows(page, "articles", CORPUS_ARTICLES.map((article) => ({
-    ...article,
-    ...(article.ingestionMeta?.bookId ? { bookId: article.ingestionMeta.bookId } : {}),
-  })));
+  await seedStoreRows(
+    page,
+    "articles",
+    CORPUS_ARTICLES.map((article) => ({
+      ...article,
+      ...(article.ingestionMeta?.bookId ? { bookId: article.ingestionMeta.bookId } : {}),
+    })),
+  );
   await seedStoreRows(page, "location", CORPUS_LOCATIONS);
 }
 
@@ -456,9 +435,9 @@ async function seedCorpus(page: Page): Promise<void> {
 async function openView(page: Page, hash: string): Promise<void> {
   await page.goto(`${BASE}/${hash}`);
   await page.reload();
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Saved articles" }),
-  ).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible({
+    timeout: 10_000,
+  });
   await expect(page.getByRole("link", { name: /^All \(\d+\)/ })).toBeVisible({
     timeout: 10_000,
   });
@@ -468,9 +447,7 @@ async function openView(page: Page, hash: string): Promise<void> {
  * counts exactly (D14-23 — structural agreement, every view renders all
  * four labels). */
 async function expectSwitcherCounts(page: Page): Promise<void> {
-  await expect(
-    page.getByRole("link", { name: `All (${EXPECTED_ALL_COUNT})` }),
-  ).toBeVisible();
+  await expect(page.getByRole("link", { name: `All (${EXPECTED_ALL_COUNT})` })).toBeVisible();
   await expect(
     page.getByRole("link", { name: `Unread (${EXPECTED_COUNTS.unread})` }),
   ).toBeVisible();
@@ -494,25 +471,16 @@ test.beforeEach(async ({ page }) => {
   // avoid the webkit deleteDatabase race). 14-04: "books" is ADDED to the
   // cloned list — the v5 store the progress-recent list predates.
   await page.goto(`${BASE}/`);
-  await expect(
-    page.getByRole("heading", { name: "Saved articles" }),
-  ).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible({
+    timeout: 10_000,
+  });
   await page.evaluate(async () => {
     await new Promise<void>((resolve) => {
       const req = indexedDB.open("lem-reader");
       req.onsuccess = () => {
         const db = req.result;
-        const stores = [
-          "articles",
-          "settings",
-          "location",
-          "highlights",
-          "notes",
-          "books",
-        ];
-        const existing = stores.filter((s) =>
-          db.objectStoreNames.contains(s),
-        );
+        const stores = ["articles", "settings", "location", "highlights", "notes", "books"];
+        const existing = stores.filter((s) => db.objectStoreNames.contains(s));
         if (existing.length === 0) {
           resolve();
           return;
@@ -551,12 +519,8 @@ test.describe("LIB-07/LIB-08 — views/counts/rows/empty agreement (D14-20/23/24
     expect(EMPTY_COUNTS["in-progress"]).toBe(0);
     expect(EMPTY_COUNTS.finished).toBe(0);
     // The honesty rows themselves, held out against the seeded raw rows:
-    expect(bookReadingState(BOOK_PARTIAL, LATEST_BY_ARTICLE, textLengthOf)).toBe(
-      "in-progress",
-    );
-    expect(
-      bookReadingState(BOOK_MISSING_ROW, LATEST_BY_ARTICLE, textLengthOf),
-    ).toBe("in-progress");
+    expect(bookReadingState(BOOK_PARTIAL, LATEST_BY_ARTICLE, textLengthOf)).toBe("in-progress");
+    expect(bookReadingState(BOOK_MISSING_ROW, LATEST_BY_ARTICLE, textLengthOf)).toBe("in-progress");
   });
 
   for (const view of ["all", "unread", "in-progress", "finished"] as const) {
@@ -582,20 +546,14 @@ test.describe("LIB-07/LIB-08 — views/counts/rows/empty agreement (D14-20/23/24
       // (3) Rendered rows equal the expected membership for this view
       // (.library-list > li DIRECT children — a book row is ONE li, its
       // nested chapter lis never count top-level — D14-24).
-      await expect(page.locator(".library-list > li")).toHaveCount(
-        expectedRowsFor(view),
-      );
+      await expect(page.locator(".library-list > li")).toHaveCount(expectedRowsFor(view));
 
       // (4) The per-view empty-state heading appears EXACTLY when the
       // expected count is zero (D14-26 — membership-driven).
       if (expectedCountFor(view) === 0) {
-        await expect(
-          page.getByRole("heading", { name: EMPTY_HEADINGS[view] }),
-        ).toBeVisible();
+        await expect(page.getByRole("heading", { name: EMPTY_HEADINGS[view] })).toBeVisible();
       } else {
-        await expect(
-          page.getByRole("heading", { name: EMPTY_HEADINGS[view] }),
-        ).toHaveCount(0);
+        await expect(page.getByRole("heading", { name: EMPTY_HEADINGS[view] })).toHaveCount(0);
       }
     });
   }
@@ -608,27 +566,19 @@ test.describe("LIB-07/LIB-08 — views/counts/rows/empty agreement (D14-20/23/24
     // and unread are not.
     await openView(page, "#/in-progress");
     await expect(page.getByRole("link", { name: "In progress (0)" })).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: "Nothing in progress" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Nothing in progress" })).toBeVisible();
     await expect(page.locator("ul.library-list")).toHaveCount(0);
 
     await openView(page, "#/finished");
     await expect(page.getByRole("link", { name: "Finished (0)" })).toBeVisible();
-    await expect(
-      page.getByRole("heading", { name: "Nothing finished yet" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Nothing finished yet" })).toBeVisible();
 
     await openView(page, "#/unread");
-    await expect(
-      page.getByRole("heading", { name: "Nothing unread" }),
-    ).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Nothing unread" })).toHaveCount(0);
     await expect(page.locator(".library-list > li")).toHaveCount(fixtures.length);
 
     await openView(page, "#/");
-    await expect(
-      page.getByRole("heading", { name: "Your library is empty" }),
-    ).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Your library is empty" })).toHaveCount(0);
     await expect(page.locator(".library-list > li")).toHaveCount(fixtures.length);
   });
 
@@ -643,23 +593,19 @@ test.describe("LIB-07/LIB-08 — views/counts/rows/empty agreement (D14-20/23/24
     // viewport the measure introduces no change.
     await page.setViewportSize({ width: 1400, height: 900 });
     await openView(page, "#/finished");
-    await expect(
-      page.getByRole("heading", { name: "Nothing finished yet" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Nothing finished yet" })).toBeVisible();
 
     const wideEmpty = await page.locator(".library-empty").boundingBox();
     const wideHeader = await page.locator(".library-header").boundingBox();
     if (!wideEmpty || !wideHeader) {
       throw new Error("reading-views spec: measure boxes unresolved at 1400×900");
     }
-    expect(
-      wideEmpty.width,
-      "empty-state copy is capped at the shared measure",
-    ).toBeLessThanOrEqual(1100);
-    expect(
-      wideHeader.width,
-      "header row is capped at the shared measure",
-    ).toBeLessThanOrEqual(1100);
+    expect(wideEmpty.width, "empty-state copy is capped at the shared measure").toBeLessThanOrEqual(
+      1100,
+    );
+    expect(wideHeader.width, "header row is capped at the shared measure").toBeLessThanOrEqual(
+      1100,
+    );
     const emptyCenter = wideEmpty.x + wideEmpty.width / 2;
     const headerCenter = wideHeader.x + wideHeader.width / 2;
     expect(
@@ -675,20 +621,18 @@ test.describe("LIB-07/LIB-08 — views/counts/rows/empty agreement (D14-20/23/24
     if (!narrowEmpty || !narrowHeader) {
       throw new Error("reading-views spec: measure boxes unresolved at 360×640");
     }
-    expect(
-      narrowEmpty.width,
-      "empty state fills the content box like its siblings",
-    ).toBe(narrowHeader.width);
+    expect(narrowEmpty.width, "empty state fills the content box like its siblings").toBe(
+      narrowHeader.width,
+    );
   });
 
-  test("unknown #/ segment falls back to the All view (D14-16)", async ({
-    page,
-  }) => {
+  test("unknown #/ segment falls back to the All view (D14-16)", async ({ page }) => {
     await seedCorpus(page);
     await openView(page, "#/bogus-view");
-    await expect(
-      page.getByRole("link", { name: `All (${EXPECTED_ALL_COUNT})` }),
-    ).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("link", { name: `All (${EXPECTED_ALL_COUNT})` })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
     await expect(page.locator(".library-list > li")).toHaveCount(EXPECTED_ALL_COUNT);
   });
 
@@ -700,18 +644,17 @@ test.describe("LIB-07/LIB-08 — views/counts/rows/empty agreement (D14-20/23/24
     // openView already cold-loaded; the explicit second reload is the
     // D14-17 statement — reload is a cold load: the URL restores the view.
     await page.reload();
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible({ timeout: 10_000 });
-    await expect(
-      page.getByRole("link", { name: /^Finished \(\d+\)/ }),
-    ).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(page.getByRole("link", { name: /^Finished \(\d+\)/ })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
     await expect(
       page.getByRole("link", { name: `Finished (${EXPECTED_COUNTS.finished})` }),
     ).toBeVisible();
-    await expect(page.locator(".library-list > li")).toHaveCount(
-      EXPECTED_COUNTS.finished,
-    );
+    await expect(page.locator(".library-list > li")).toHaveCount(EXPECTED_COUNTS.finished);
   });
 
   test("honesty rows: the 3-of-4 book and the missing-chapter-row book render In progress, never Finished (D14-19/D14-21)", async ({
@@ -725,9 +668,7 @@ test.describe("LIB-07/LIB-08 — views/counts/rows/empty agreement (D14-20/23/24
       page.locator(".library-list > li").filter({ hasText: BOOK_PARTIAL.title }),
     ).toBeVisible();
     await expect(
-      page
-        .locator(".library-list > li")
-        .filter({ hasText: BOOK_MISSING_ROW.title }),
+      page.locator(".library-list > li").filter({ hasText: BOOK_MISSING_ROW.title }),
     ).toBeVisible();
 
     // …and absent from #/finished — a 39-of-40-chapter book and a book with
@@ -739,9 +680,7 @@ test.describe("LIB-07/LIB-08 — views/counts/rows/empty agreement (D14-20/23/24
       page.locator(".library-list > li").filter({ hasText: BOOK_PARTIAL.title }),
     ).toHaveCount(0);
     await expect(
-      page
-        .locator(".library-list > li")
-        .filter({ hasText: BOOK_MISSING_ROW.title }),
+      page.locator(".library-list > li").filter({ hasText: BOOK_MISSING_ROW.title }),
     ).toHaveCount(0);
   });
 });
@@ -797,9 +736,7 @@ test.describe("NAV-04 — focus/title/history matrix", () => {
     // fixtures[0] has NO location in this corpus → the fresh-article path:
     // the h1 default is the most specific focus target (D14-05 layering).
     const fixtureTitle = fixtures[0]!.provenance.title;
-    const rowLink = page.locator(
-      `.library-list a[href="#/article/${fixtures[0]!.id}"]`,
-    );
+    const rowLink = page.locator(`.library-list a[href="#/article/${fixtures[0]!.id}"]`);
     await rowLink.click();
     const articleH1 = page.getByRole("heading", { level: 1, name: fixtureTitle });
     await expect(articleH1).toBeVisible({ timeout: 10_000 });
@@ -844,9 +781,7 @@ test.describe("NAV-04 — focus/title/history matrix", () => {
       name: "Saved articles",
     });
     await expect(libraryH1).toBeVisible({ timeout: 10_000 });
-    await expect(
-      page.getByRole("link", { name: /^All \(\d+\)/ }),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("link", { name: /^All \(\d+\)/ })).toBeVisible({ timeout: 10_000 });
     await expect(libraryH1).toBeFocused();
     await expect(page).toHaveTitle(LIBRARY_TITLE);
   });
@@ -859,9 +794,7 @@ test.describe("NAV-04 — focus/title/history matrix", () => {
     await expect(page).toHaveTitle(LIBRARY_TITLE);
 
     // A real reader click on the Unread switcher link.
-    await page
-      .getByRole("link", { name: `Unread (${EXPECTED_COUNTS.unread})` })
-      .click();
+    await page.getByRole("link", { name: `Unread (${EXPECTED_COUNTS.unread})` }).click();
     // replaceState semantics: the URL changed in place…
     await expect(page).toHaveURL(/#\/unread$/);
     // …aria-current moved to Unread (exactly one)…
@@ -870,50 +803,43 @@ test.describe("NAV-04 — focus/title/history matrix", () => {
     ).toHaveAttribute("aria-current", "page");
     await expect(page.locator(".view-switcher a[aria-current='page']")).toHaveCount(1);
     // …the uniform h1 rule fired on the swap (D14-15)…
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeFocused();
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeFocused();
     // …and the library title is CONSTANT across views (D14-25).
     await expect(page).toHaveTitle(LIBRARY_TITLE);
   });
 
   test("history: Back from an article returns to the ORIGINATING view, never an intermediate switch (D14-13/D14-14)", async ({
     page,
-    }) => {
+  }) => {
     await seedCorpus(page);
     await openView(page, "#/");
 
     // Two switches — each replaces the library's single history entry, so
     // the entry now reads #/finished (the #/unread switch was never pushed).
-    await page
-      .getByRole("link", { name: `Unread (${EXPECTED_COUNTS.unread})` })
-      .click();
+    await page.getByRole("link", { name: `Unread (${EXPECTED_COUNTS.unread})` }).click();
     await expect(page).toHaveURL(/#\/unread$/);
-    await page
-      .getByRole("link", { name: `Finished (${EXPECTED_COUNTS.finished})` })
-      .click();
+    await page.getByRole("link", { name: `Finished (${EXPECTED_COUNTS.finished})` }).click();
     await expect(page).toHaveURL(/#\/finished$/);
 
     // Open an article (a destination PUSH), then go Back.
     await page.locator(".library-list a[href^='#/article/']").first().click();
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeHidden({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeHidden({
+      timeout: 10_000,
+    });
     await page.goBack();
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible({
+      timeout: 10_000,
+    });
     // Back landed on the FINAL (#/finished) view — the intermediate #/unread
     // entry never existed (replaceState — D14-13/D14-14).
     await expect(page).toHaveURL(/#\/finished$/);
-    await expect(
-      page.getByRole("link", { name: /^Finished \(\d+\)/ }),
-    ).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("link", { name: /^Finished \(\d+\)/ })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
   });
 
-  test("deep link: the hl mark is focused and the article h1 is NOT (D14-05)", async ({
-    page,
-  }) => {
+  test("deep link: the hl mark is focused and the article h1 is NOT (D14-05)", async ({ page }) => {
     // The jump-bidirectional seeding, minimized: a standalone article with a
     // derived-and-verified CONFIDENT anchor (re-resolves confident in the
     // app through the shipped resolver — never a forked offset).
@@ -937,18 +863,14 @@ test.describe("NAV-04 — focus/title/history matrix", () => {
 
     // The deep link (in-app hash arrival): the jump pipeline owns focus.
     await page.goto(`${BASE}/#/article/${ARTICLE_ID}/h/${HIGHLIGHT_ID}`);
-    await expect(
-      page.getByRole("heading", { level: 1, name: TITLE }),
-    ).toBeVisible({ timeout: 10_000 });
-    const mark = page.locator(
-      `mark.highlight[data-highlight-id="${HIGHLIGHT_ID}"]`,
-    );
+    await expect(page.getByRole("heading", { level: 1, name: TITLE })).toBeVisible({
+      timeout: 10_000,
+    });
+    const mark = page.locator(`mark.highlight[data-highlight-id="${HIGHLIGHT_ID}"]`);
     await expect(mark.first()).toBeVisible({ timeout: 10_000 });
     await expect(mark.first()).toBeFocused();
     // Most-specific target wins — the h1 default never fired (D14-05).
-    await expect(
-      page.getByRole("heading", { level: 1, name: TITLE }),
-    ).not.toBeFocused();
+    await expect(page.getByRole("heading", { level: 1, name: TITLE })).not.toBeFocused();
   });
 
   test("restore beats h1: opening the mid-article standalone shows the restoration marker and never focuses the h1 (D14-10)", async ({
@@ -963,9 +885,7 @@ test.describe("NAV-04 — focus/title/history matrix", () => {
     // restoration marker + polite announce replace the retired resume
     // banner and its "You left off here" copy; the restore-beats-h1
     // invariant below is preserved unchanged.
-    await page
-      .locator(`.library-list a[href="#/article/${STANDALONE_PROGRESS.id}"]`)
-      .click();
+    await page.locator(`.library-list a[href="#/article/${STANDALONE_PROGRESS.id}"]`).click();
     const articleH1 = page.getByRole("heading", {
       level: 1,
       name: STANDALONE_PROGRESS.provenance.title,
@@ -974,9 +894,7 @@ test.describe("NAV-04 — focus/title/history matrix", () => {
     const marker = page.locator(".restoration-marker");
     await expect(marker).toHaveCount(1, { timeout: 10_000 });
     await expect(
-      page
-        .getByRole("status")
-        .filter({ hasText: "Returned to where you left off." }),
+      page.getByRole("status").filter({ hasText: "Returned to where you left off." }),
     ).toHaveCount(1, { timeout: 10_000 });
     await expect(articleH1).not.toBeFocused();
   });
@@ -1027,13 +945,9 @@ test.describe("NAV-04 — focus/title/history matrix", () => {
 
     // Expand the all-done book row and open its first chapter through the
     // real chapter link (a reader click — push + warm arrival).
-    const bookRow = page
-      .locator(".library-list > li")
-      .filter({ hasText: BOOK_ALL_DONE.title });
+    const bookRow = page.locator(".library-list > li").filter({ hasText: BOOK_ALL_DONE.title });
     await bookRow.locator(".book-toggle").click();
-    await bookRow
-      .locator(`.book-chapter-list a[href="#/article/${DONE_C0.id}"]`)
-      .click();
+    await bookRow.locator(`.book-chapter-list a[href="#/article/${DONE_C0.id}"]`).click();
     await expect(
       page.getByRole("heading", {
         level: 1,
@@ -1092,9 +1006,7 @@ test.describe("LIB-09/LIB-10 — no-matches era: strip stability + counts-pure m
       await openView(page, VIEW_HREFS[view]);
       await expect(page.locator(".library-section-continue")).toBeVisible();
       await expect(page.locator(".continue-reading-strip")).toBeVisible();
-      await expect(page.locator(".continue-reading-strip")).toContainText(
-        "Continue reading",
-      );
+      await expect(page.locator(".continue-reading-strip")).toContainText("Continue reading");
     }
   });
 

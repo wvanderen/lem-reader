@@ -26,8 +26,8 @@ export function StorageBanner({ onDismiss }: StorageBannerProps) {
       <div className="storage-banner-main">
         <h2>Your reading settings can&apos;t be saved right now.</h2>
         <p>
-          Local storage is unavailable, so changes won&apos;t be kept after you
-          close this tab. You can keep reading.
+          Local storage is unavailable, so changes won&apos;t be kept after you close this tab. You
+          can keep reading.
         </p>
       </div>
       <button
@@ -42,4 +42,3 @@ export function StorageBanner({ onDismiss }: StorageBannerProps) {
     </StatusRegion>
   );
 }
-

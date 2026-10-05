@@ -35,10 +35,7 @@ import type { PageFragment } from "./types";
  * bounds: an empty coordinate space yields 0; a stale offset overshooting
  * the article clamps to 1 (ProgressHairline clamps again downstream).
  */
-export function paginatedProgressRatio(
-  article: CanonicalArticle,
-  fragment: PageFragment,
-): number {
+export function paginatedProgressRatio(article: CanonicalArticle, fragment: PageFragment): number {
   const total = graphemeLength(article);
   if (total === 0) return 0;
   const start = pageStartGlobalOffset(article, fragment);
@@ -59,8 +56,5 @@ export function committedPageProgressRatio(
 ): number {
   const total = graphemeLength(article);
   if (total === 0) return 0;
-  return Math.min(
-    1,
-    Math.max(0, pageAnchorOffset(article, pages, currentPageIdx) / total),
-  );
+  return Math.min(1, Math.max(0, pageAnchorOffset(article, pages, currentPageIdx) / total));
 }

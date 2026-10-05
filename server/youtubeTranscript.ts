@@ -122,7 +122,9 @@ function isCaptionHost(hostname: string): boolean {
  * collapsed ~10 hand-rolled `typeof === "object" && !== null` cascades into
  * it); undefined for anything that isn't a plain object. */
 function asObject(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : undefined;
+  return typeof value === "object" && value !== null
+    ? (value as Record<string, unknown>)
+    : undefined;
 }
 
 /**
@@ -296,10 +298,7 @@ function parseClockToMs(raw: unknown): number | null {
   if (parts.length < 2 || parts.length > 3) return null;
   const nums = parts.map((p) => Number(p));
   if (nums.some((n) => !Number.isInteger(n) || n < 0)) return null;
-  const [h, m, s] =
-    nums.length === 3
-      ? [nums[0]!, nums[1]!, nums[2]!]
-      : [0, nums[0]!, nums[1]!];
+  const [h, m, s] = nums.length === 3 ? [nums[0]!, nums[1]!, nums[2]!] : [0, nums[0]!, nums[1]!];
   return ((h * 60 + m) * 60 + s) * 1000;
 }
 
@@ -460,7 +459,12 @@ export async function fetchYouTubeTranscript(
   const details = asObject(playerRecord?.videoDetails);
   const title = details?.title;
   const channel = details?.author;
-  if (typeof title !== "string" || title.length === 0 || typeof channel !== "string" || channel.length === 0) {
+  if (
+    typeof title !== "string" ||
+    title.length === 0 ||
+    typeof channel !== "string" ||
+    channel.length === 0
+  ) {
     // An OK status without usable details is protocol garbage — honest
     // transport failure, never silently degraded.
     throw new IngestionError("fetch-failed", "player-missing-video-details");

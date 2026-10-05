@@ -24,7 +24,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
 import { useEffect } from "react";
-import { HighlightOverlayProvider, useHighlightOverlay } from "../../../src/reader/annotations/HighlightOverlay";
+import {
+  HighlightOverlayProvider,
+  useHighlightOverlay,
+} from "../../../src/reader/annotations/HighlightOverlay";
 import { NotePopover } from "../../../src/reader/annotations/NotePopover";
 import { saveNote } from "../../../src/persistence/notesStore";
 import type { CanonicalArticle } from "../../../src/content/types";
@@ -40,8 +43,7 @@ const article: CanonicalArticle = {
     sourceUrl: "https://example.com/test",
     title: "Test Article",
     retrievedAt: "2026-07-28T00:00:00Z",
-    originalHtmlHash:
-      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    originalHtmlHash: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
   },
   blocks: [
     {
@@ -97,14 +99,10 @@ vi.mock("../../../src/persistence/notesStore", () => ({
 
 // Stub the resolution engine so the highlight is "confident" (same-revision).
 vi.mock("../../../src/content/normalizeText", async (importOriginal) => {
-  const actual = await importOriginal<
-    typeof import("../../../src/content/normalizeText")
-  >();
+  const actual = await importOriginal<typeof import("../../../src/content/normalizeText")>();
   return {
     ...actual,
-    resolveQuoteSelector: vi
-      .fn()
-      .mockReturnValue({ start: 0, end: 5 }),
+    resolveQuoteSelector: vi.fn().mockReturnValue({ start: 0, end: 5 }),
   };
 });
 
@@ -337,9 +335,7 @@ describe("NotePopover — Cmd/Ctrl+Enter note save shortcut (PR 106)", () => {
     expect(saved?.text).toBe("Saved via shortcut");
 
     // The popover closed (edit view unmounted).
-    expect(
-      screen.queryByPlaceholderText("Add a note (optional)"),
-    ).toBeNull();
+    expect(screen.queryByPlaceholderText("Add a note (optional)")).toBeNull();
   });
 
   it("Ctrl+Enter also saves and closes", async () => {
@@ -387,9 +383,7 @@ describe("NotePopover — Cmd/Ctrl+Enter note save shortcut (PR 106)", () => {
     });
 
     // Still in the edit view, save not flushed.
-    expect(
-      screen.getByPlaceholderText("Add a note (optional)"),
-    ).toBeTruthy();
+    expect(screen.getByPlaceholderText("Add a note (optional)")).toBeTruthy();
     expect(saveNote).not.toHaveBeenCalled();
   });
 
@@ -414,9 +408,7 @@ describe("NotePopover — Cmd/Ctrl+Enter note save shortcut (PR 106)", () => {
     });
 
     // Still in the edit view.
-    expect(
-      screen.getByPlaceholderText("Add a note (optional)"),
-    ).toBeTruthy();
+    expect(screen.getByPlaceholderText("Add a note (optional)")).toBeTruthy();
     expect(saveNote).not.toHaveBeenCalled();
   });
 });

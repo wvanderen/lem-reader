@@ -237,18 +237,14 @@ test("paginated cold load: no scroll-then-swap — placeholder frame is the firs
   // The engine's DEV pagination hook (first-paint-progress openPaginated
   // wait): PaginatedSurface mounted and its first commit landed.
   await page.waitForFunction(
-    () =>
-      (window as unknown as Record<string, unknown>).__lemPagination !==
-      undefined,
+    () => (window as unknown as Record<string, unknown>).__lemPagination !== undefined,
     undefined,
     { timeout: 10_000 },
   );
   // Belt: the settled surface (first fragment) is actually in the DOM.
-  await page.waitForFunction(
-    () => document.querySelector(".page-fragment") !== null,
-    undefined,
-    { timeout: 10_000 },
-  );
+  await page.waitForFunction(() => document.querySelector(".page-fragment") !== null, undefined, {
+    timeout: 10_000,
+  });
 
   const state = await readRecorder(page);
 
@@ -261,7 +257,10 @@ test("paginated cold load: no scroll-then-swap — placeholder frame is the firs
   ).toBe(true);
   // The article-bearing main locked its paginated geometry from the same
   // first paint (viewport inset + overflow locks never arrive late).
-  expect(state.mainLockedFirst, "the article's main must be paginated-locked at first insertion").toBe(true);
+  expect(
+    state.mainLockedFirst,
+    "the article's main must be paginated-locked at first insertion",
+  ).toBe(true);
   // THE G4 MUST-NOT: zero visible article-block insertions before the
   // first page fragment — the scrolling surface never painted.
   expect(
@@ -269,7 +268,10 @@ test("paginated cold load: no scroll-then-swap — placeholder frame is the firs
     "no [data-block-index] may be inserted outside the measurement clone before the first page fragment",
   ).toBe(0);
   // The calm placeholder was observed inside the page viewport.
-  expect(state.sawPlaceholder, "the pending status paragraph must appear before the first fragment").toBe(true);
+  expect(
+    state.sawPlaceholder,
+    "the pending status paragraph must appear before the first fragment",
+  ).toBe(true);
   // The pinned class was never stripped off the article.
   expect(state.sawClassDrop, "the article must never drop the pinned surface class").toBe(false);
 
@@ -278,19 +280,23 @@ test("paginated cold load: no scroll-then-swap — placeholder frame is the firs
   const header = page.locator("article.article-body > header");
   const before = await header.boundingBox();
   await page.evaluate(
-    () =>
-      new Promise<null>((resolve) =>
-        requestAnimationFrame(() => resolve(null)),
-      ),
+    () => new Promise<null>((resolve) => requestAnimationFrame(() => resolve(null))),
   );
   const after = await header.boundingBox();
   if (!before || !after) {
-    throw new Error(`article header box unavailable: before=${JSON.stringify(before)} after=${JSON.stringify(after)}`);
+    throw new Error(
+      `article header box unavailable: before=${JSON.stringify(before)} after=${JSON.stringify(after)}`,
+    );
   }
   expect(Math.abs(before.x - after.x), "header x must not move").toBeLessThanOrEqual(1);
   expect(Math.abs(before.y - after.y), "header y must not move").toBeLessThanOrEqual(1);
-  expect(Math.abs(before.width - after.width), "header width must not change").toBeLessThanOrEqual(1);
-  expect(Math.abs(before.height - after.height), "header height must not change").toBeLessThanOrEqual(1);
+  expect(Math.abs(before.width - after.width), "header width must not change").toBeLessThanOrEqual(
+    1,
+  );
+  expect(
+    Math.abs(before.height - after.height),
+    "header height must not change",
+  ).toBeLessThanOrEqual(1);
 
   // The placeholder's viewport height equals the settled fragment's
   // viewport height — the page row never resized at the swap.
@@ -305,9 +311,7 @@ test("paginated cold load: no scroll-then-swap — placeholder frame is the firs
   ).toBeLessThanOrEqual(2);
 });
 
-test("scrolling mode: no placeholder, scrolling body paints first", async ({
-  page,
-}) => {
+test("scrolling mode: no placeholder, scrolling body paints first", async ({ page }) => {
   // Persisted scrolling settings in BOTH truths (the cold-load-no-snap seed
   // discipline): the Dexie row hydrates, the mirror drives the first paint.
   await seedRows(page, { settings: [{ key: "reader-prefs", value: PERSISTED }] });
@@ -318,9 +322,8 @@ test("scrolling mode: no placeholder, scrolling body paints first", async ({
   // Settle: the visible scrolling body's first block is mounted.
   await page.waitForFunction(
     () =>
-      document.querySelector(
-        ".article-body:not(.article-body-measurement) [data-block-index]",
-      ) !== null,
+      document.querySelector(".article-body:not(.article-body-measurement) [data-block-index]") !==
+      null,
     undefined,
     { timeout: 10_000 },
   );
@@ -328,7 +331,10 @@ test("scrolling mode: no placeholder, scrolling body paints first", async ({
   const state = await readRecorder(page);
 
   // No pending placeholder paragraph ever appeared.
-  expect(state.sawPlaceholder, "the paginated pending placeholder must never appear in scrolling mode").toBe(false);
+  expect(
+    state.sawPlaceholder,
+    "the paginated pending placeholder must never appear in scrolling mode",
+  ).toBe(false);
   // The first article paint is the scrolling surface — no pinned class.
   expect(
     state.firstArticleClass?.includes("paginated-surface"),

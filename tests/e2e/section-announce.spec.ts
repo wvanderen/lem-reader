@@ -90,12 +90,11 @@ test.describe("A11Y-08 section-change announce", () => {
 
     // After the scroll, one of the visually-hidden status regions carries
     // "Section: {heading}." for the most-recently-passed heading.
-    const announceRegion = page.locator(
-      'div[role="status"][aria-live="polite"].visually-hidden',
+    const announceRegion = page.locator('div[role="status"][aria-live="polite"].visually-hidden');
+    await expect(announceRegion.filter({ hasText: /^Section: .+\.$/ })).toHaveText(
+      /^Section: .+\.$/,
+      { timeout: 3000 },
     );
-    await expect(
-      announceRegion.filter({ hasText: /^Section: .+\.$/ }),
-    ).toHaveText(/^Section: .+\.$/, { timeout: 3000 });
   });
 
   test("the live region does NOT flood on fast scroll past multiple headings (Pitfall 6)", async ({

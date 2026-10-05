@@ -22,10 +22,7 @@
 import { describe, expect, it } from "vitest";
 import { ArticleSchema } from "../../../src/content/schema";
 import type { CanonicalArticle } from "../../../src/content/types";
-import {
-  MAX_CHUNK_GRAPHEMES,
-  chunkArticleForSpeech,
-} from "../../../src/readaloud/chunks";
+import { MAX_CHUNK_GRAPHEMES, chunkArticleForSpeech } from "../../../src/readaloud/chunks";
 import { normalizeText, graphemeClusters } from "../../../src/content/normalizeText";
 
 // Blocks are typed at the PARSE-INPUT boundary (marks hydrates via .default)
@@ -87,9 +84,7 @@ describe("chunkArticleForSpeech — coverage + sentence integrity", () => {
     const clusters = graphemeClusters(normalizeText(article), article.lang);
     for (const chunk of chunks) {
       expect(chunk.endGrapheme).toBeGreaterThan(chunk.startGrapheme);
-      expect(clusters.slice(chunk.startGrapheme, chunk.endGrapheme).join("")).toBe(
-        chunk.text,
-      );
+      expect(clusters.slice(chunk.startGrapheme, chunk.endGrapheme).join("")).toBe(chunk.text);
     }
     // Whitespace-only segments are skipped — nothing empty is spoken.
     for (const chunk of chunks) {
@@ -116,15 +111,11 @@ describe("chunkArticleForSpeech — the MAX_CHUNK_GRAPHEMES budget", () => {
   it("splits an un-punctuated over-long segment at whitespace (words stay whole)", () => {
     const words = Array.from({ length: 120 }, (_, i) => `word${i}`).join(" ");
     // 120 words × ~7 graphemes ≈ 840 graphemes — well over the budget.
-    const article = makeArticle([
-      { kind: "paragraph", content: [{ text: words }] },
-    ]);
+    const article = makeArticle([{ kind: "paragraph", content: [{ text: words }] }]);
     const chunks = chunkArticleForSpeech(article);
     expect(chunks.length).toBeGreaterThan(1);
     for (const chunk of chunks) {
-      expect(chunk.endGrapheme - chunk.startGrapheme).toBeLessThanOrEqual(
-        MAX_CHUNK_GRAPHEMES,
-      );
+      expect(chunk.endGrapheme - chunk.startGrapheme).toBeLessThanOrEqual(MAX_CHUNK_GRAPHEMES);
       // Words stay whole: after the range trim every piece is whole
       // `wordN` tokens joined by single spaces — never a partial word.
       expect(chunk.text.startsWith("word")).toBe(true);
@@ -133,29 +124,23 @@ describe("chunkArticleForSpeech — the MAX_CHUNK_GRAPHEMES budget", () => {
     // Ordering survives splitting (the dropped separator whitespace leaves
     // a 1-cluster gap at word-boundary cuts).
     for (let i = 1; i < chunks.length; i++) {
-      expect(chunks[i]!.startGrapheme).toBeGreaterThanOrEqual(
-        chunks[i - 1]!.endGrapheme,
-      );
-      expect(chunks[i]!.startGrapheme).toBeLessThanOrEqual(
-        chunks[i - 1]!.endGrapheme + 1,
-      );
+      expect(chunks[i]!.startGrapheme).toBeGreaterThanOrEqual(chunks[i - 1]!.endGrapheme);
+      expect(chunks[i]!.startGrapheme).toBeLessThanOrEqual(chunks[i - 1]!.endGrapheme + 1);
     }
   });
 
   it("hard-cuts a whitespace-free run-on segment without losing ground", () => {
     // An unbroken (whitespace-free) over-budget span — the hard-cut path.
     const runOn = "x".repeat(MAX_CHUNK_GRAPHEMES * 2 + 10);
-    const article = makeArticle([
-      { kind: "paragraph", content: [{ text: runOn }] },
-    ]);
+    const article = makeArticle([{ kind: "paragraph", content: [{ text: runOn }] }]);
     const chunks = chunkArticleForSpeech(article);
     expect(chunks.length).toBe(3); // 250 + 250 + 10
     for (let i = 1; i < chunks.length; i++) {
       expect(chunks[i]!.startGrapheme).toBe(chunks[i - 1]!.endGrapheme);
     }
-    expect(
-      chunks.reduce((sum, c) => sum + (c.endGrapheme - c.startGrapheme), 0),
-    ).toBe(runOn.length);
+    expect(chunks.reduce((sum, c) => sum + (c.endGrapheme - c.startGrapheme), 0)).toBe(
+      runOn.length,
+    );
   });
 });
 
@@ -170,17 +155,12 @@ describe("chunkArticleForSpeech — the spoken channel rules (issue #43, O7)", (
       { kind: "paragraph", content: [{ text: "After the code." }] },
     ]);
     const chunks = chunkArticleForSpeech(article);
-    expect(chunks.map((c) => c.text)).toEqual([
-      "Before the code.",
-      "After the code.",
-    ]);
+    expect(chunks.map((c) => c.text)).toEqual(["Before the code.", "After the code."]);
     // The skipped range belongs to no chunk, but the surrounding ranges stay
     // EXACT against the normalized cluster array — the marker can hop the
     // gap without losing ground.
     const text = normalizeText(article);
-    const chunksText = chunks
-      .map((c) => text.slice(c.startGrapheme, c.endGrapheme))
-      .join("");
+    const chunksText = chunks.map((c) => text.slice(c.startGrapheme, c.endGrapheme)).join("");
     expect(chunksText).not.toContain("const one");
   });
 
@@ -195,10 +175,7 @@ describe("chunkArticleForSpeech — the spoken channel rules (issue #43, O7)", (
       { kind: "paragraph", content: [{ text: "More readable prose." }] },
     ]);
     const chunks = chunkArticleForSpeech(article);
-    expect(chunks.map((c) => c.text)).toEqual([
-      "Readable prose.",
-      "More readable prose.",
-    ]);
+    expect(chunks.map((c) => c.text)).toEqual(["Readable prose.", "More readable prose."]);
   });
 
   it("a figure is skipped but its caption reads (alt stays silent)", () => {
@@ -229,9 +206,7 @@ describe("chunkArticleForSpeech — the spoken channel rules (issue #43, O7)", (
       },
       { kind: "paragraph", content: [{ text: "After the figure." }] },
     ]);
-    expect(chunkArticleForSpeech(article).map((c) => c.text)).toEqual([
-      "After the figure.",
-    ]);
+    expect(chunkArticleForSpeech(article).map((c) => c.text)).toEqual(["After the figure."]);
   });
 
   it("a link's TEXT is spoken — never its href", () => {
@@ -286,11 +261,7 @@ describe("chunkArticleForSpeech — the spoken channel rules (issue #43, O7)", (
       { kind: "paragraph", content: [{ text: "Second prose." }] },
     ]);
     const chunks = chunkArticleForSpeech(article);
-    expect(chunks.map((c) => c.text)).toEqual([
-      "The header",
-      "First prose.",
-      "Second prose.",
-    ]);
+    expect(chunks.map((c) => c.text)).toEqual(["The header", "First prose.", "Second prose."]);
     // Canonical ranges stay strictly ordered (document order preserved).
     for (let i = 1; i < chunks.length; i++) {
       expect(chunks[i]!.startGrapheme).toBeGreaterThan(chunks[i - 1]!.startGrapheme);
@@ -308,9 +279,7 @@ describe("chunkArticleForSpeech — the spoken channel rules (issue #43, O7)", (
     const before = chunks[0]!;
     const after = chunks[1]!;
     // The skipped span (between the two speakable ranges) belongs to no chunk.
-    const skippedText = clusters
-      .slice(before.endGrapheme, after.startGrapheme)
-      .join("");
+    const skippedText = clusters.slice(before.endGrapheme, after.startGrapheme).join("");
     expect(skippedText).toContain("SECRET CODE SOURCE");
     // Both neighbors are exact against the substrate.
     expect(clusters.slice(before.startGrapheme, before.endGrapheme).join("")).toBe(before.text);
@@ -332,13 +301,7 @@ describe("chunkArticleForSpeech — sentenceIndex + paragraphIndex (the skip uni
       { kind: "paragraph", content: [{ text: "Four." }] },
     ]);
     const chunks = chunkArticleForSpeech(article);
-    expect(chunks.map((c) => c.text)).toEqual([
-      "A title",
-      "One.",
-      "Two.",
-      "Three.",
-      "Four.",
-    ]);
+    expect(chunks.map((c) => c.text)).toEqual(["A title", "One.", "Two.", "Three.", "Four."]);
     // sentenceIndex: a running ordinal across the speakable stream.
     expect(chunks.map((c) => c.units.sentenceIndex)).toEqual([0, 1, 2, 3, 4]);
     // paragraphIndex: heading = unit 0; the 3-sentence paragraph = unit 1;
@@ -349,9 +312,7 @@ describe("chunkArticleForSpeech — sentenceIndex + paragraphIndex (the skip uni
 
   it("all pieces of an over-budget split sentence share one sentenceIndex", () => {
     const words = Array.from({ length: 120 }, (_, i) => `word${i}`).join(" ");
-    const article = makeArticle([
-      { kind: "paragraph", content: [{ text: words }] },
-    ]);
+    const article = makeArticle([{ kind: "paragraph", content: [{ text: words }] }]);
     const chunks = chunkArticleForSpeech(article);
     expect(chunks.length).toBeGreaterThan(1);
     expect(new Set(chunks.map((c) => c.units.sentenceIndex)).size).toBe(1);
@@ -385,26 +346,20 @@ describe("chunkArticleForSpeech — sentenceIndex + paragraphIndex (the skip uni
 
 describe("chunkArticleForSpeech — the F5 UTF-16 → grapheme map", () => {
   it("maps ASCII (1 unit per cluster) as the identity, with the past-the-end entry", () => {
-    const article = makeArticle([
-      { kind: "paragraph", content: [{ text: "Hello there." }] },
-    ]);
+    const article = makeArticle([{ kind: "paragraph", content: [{ text: "Hello there." }] }]);
     const chunks = chunkArticleForSpeech(article);
     const chunk = chunks[0]!;
     expect(chunk.utf16ToGrapheme.length).toBe(chunk.text.length + 1);
     for (let i = 0; i < chunk.text.length; i++) {
       expect(chunk.utf16ToGrapheme[i]).toBe(i);
     }
-    expect(chunk.utf16ToGrapheme[chunk.text.length]).toBe(
-      chunk.endGrapheme - chunk.startGrapheme,
-    );
+    expect(chunk.utf16ToGrapheme[chunk.text.length]).toBe(chunk.endGrapheme - chunk.startGrapheme);
   });
 
   it("keeps astral clusters (2 UTF-16 units, 1 grapheme) aligned", () => {
     // "a😀b." — 5 UTF-16 code units, 4 grapheme clusters.
     const text = "a\u{1F600}b.";
-    const article = makeArticle([
-      { kind: "paragraph", content: [{ text }] },
-    ]);
+    const article = makeArticle([{ kind: "paragraph", content: [{ text }] }]);
     const chunks = chunkArticleForSpeech(article);
     expect(chunks.length).toBe(1);
     const chunk = chunks[0]!;
@@ -426,9 +381,7 @@ describe("chunkArticleForSpeech — edges", () => {
   it("returns [] for a whitespace-free article body", () => {
     // An article must have ≥1 block; a figure with no alt/caption
     // contributes nothing — the body separator is whitespace-only.
-    const article = makeArticle([
-      { kind: "figure", alt: "", caption: [] },
-    ]);
+    const article = makeArticle([{ kind: "figure", alt: "", caption: [] }]);
     expect(chunkArticleForSpeech(article)).toEqual([]);
   });
 

@@ -30,17 +30,16 @@
         try {
           // tokens:FONT_STACKS:start
           var FONT_STACKS = {
-            serif:
-              '"Literata", "Source Serif 4", Georgia, Charter, "Times New Roman", serif',
+            serif: '"Literata", "Source Serif 4", Georgia, Charter, "Times New Roman", serif',
             sans: "system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
-            dyslexic: "Verdana, Tahoma, 'Segoe UI', Geneva, sans-serif"
+            dyslexic: "Verdana, Tahoma, 'Segoe UI', Geneva, sans-serif",
           };
           // tokens:FONT_STACKS:end
           // tokens:SPACING_PRESETS:start
           var SPACING_PRESETS = {
             compact: { lineHeight: 1.4, letterSpacing: "0", wordSpacing: "0" },
             comfortable: { lineHeight: 1.6, letterSpacing: "0", wordSpacing: "0" },
-            spacious: { lineHeight: 1.8, letterSpacing: "0.01em", wordSpacing: "0.05em" }
+            spacious: { lineHeight: 1.8, letterSpacing: "0.01em", wordSpacing: "0.05em" },
           };
           // tokens:SPACING_PRESETS:end
           // D21-03 (POLISH-09) + issue #18 (D22-01): inline copy of
@@ -51,7 +50,15 @@
           // tokens:LEGACY_MEASURE:start
           var LEGACY_MEASURE = { 72: 70 };
           // tokens:LEGACY_MEASURE:end
-          var THEMES = { sepia: true, light: true, dark: true, "trans-light": true, "bi-dark": true, "marxism-light": true, "marxism-dark": true };
+          var THEMES = {
+            sepia: true,
+            light: true,
+            dark: true,
+            "trans-light": true,
+            "bi-dark": true,
+            "marxism-light": true,
+            "marxism-dark": true,
+          };
           var own = Object.prototype.hasOwnProperty;
 
           var raw = null;
@@ -92,9 +99,7 @@
           if (typeof s.measure === "number" && isFinite(s.measure)) {
             // D21-03: route through the inline legacy map so the paint hint
             // matches the clamped hydration value.
-            var m = own.call(LEGACY_MEASURE, s.measure)
-              ? LEGACY_MEASURE[s.measure]
-              : s.measure;
+            var m = own.call(LEGACY_MEASURE, s.measure) ? LEGACY_MEASURE[s.measure] : s.measure;
             r.style.setProperty("--measure", m + "ch");
           }
         } catch (e) {

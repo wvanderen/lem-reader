@@ -59,18 +59,13 @@ function buildArticleEl(): HTMLElement {
   article.blocks.forEach((block, i) => {
     const p = document.createElement("p");
     p.setAttribute("data-block-index", String(i));
-    p.textContent =
-      block.kind === "paragraph"
-        ? block.content.map((r) => r.text).join("")
-        : "";
+    p.textContent = block.kind === "paragraph" ? block.content.map((r) => r.text).join("") : "";
     el.appendChild(p);
   });
   return el;
 }
 
-function mountMarker(
-  overrides: Partial<Parameters<typeof RestorationMarker>[0]> = {},
-) {
+function mountMarker(overrides: Partial<Parameters<typeof RestorationMarker>[0]> = {}) {
   const articleEl = overrides.articleEl ?? buildArticleEl();
   return {
     articleEl,

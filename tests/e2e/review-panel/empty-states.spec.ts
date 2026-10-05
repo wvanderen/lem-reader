@@ -69,29 +69,18 @@ test.beforeEach(async ({ page }) => {
 /** The listing.spec.ts seed shape: schema-declaring reload after the wipe,
  * seed (articles only, or the full corpus), then hash-navigate
  * #/highlights. */
-async function seedAndOpenReview(
-  page: Page,
-  rows: SeedRows,
-): Promise<void> {
+async function seedAndOpenReview(page: Page, rows: SeedRows): Promise<void> {
   await page.goto(`${BASE}/#/`);
   await page.reload();
-  await expect(
-    page.getByRole("heading", { name: "Saved articles" }),
-  ).toBeVisible();
-  await expect(
-    page.getByText("Getting started with Lem Reader").first(),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible();
+  await expect(page.getByText("Getting started with Lem Reader").first()).toBeVisible();
   await seedRows(page, rows);
   await page.goto(`${BASE}/#/highlights`);
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Highlights" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
 }
 
 test.describe("RECV-01.g review-panel empty states (10-04 both branches)", () => {
-  test("no highlights at all: the no-content anatomy in the live region", async ({
-    page,
-  }) => {
+  test("no highlights at all: the no-content anatomy in the live region", async ({ page }) => {
     // Articles seeded, ZERO highlight rows — the library exists but no
     // reader has highlighted anything yet. Issue #98 — the zero state
     // adopts the ONE no-content anatomy: outline-level title + one
@@ -103,9 +92,7 @@ test.describe("RECV-01.g review-panel empty states (10-04 both branches)", () =>
     await expect(
       status.getByRole("heading", { level: 2, name: "No highlights yet" }),
     ).toBeVisible();
-    await expect(
-      status.getByText("Highlights you make while reading appear here."),
-    ).toBeVisible();
+    await expect(status.getByText("Highlights you make while reading appear here.")).toBeVisible();
   });
 
   test("filters matching nothing: the no-match copy against a non-empty library", async ({
@@ -115,9 +102,7 @@ test.describe("RECV-01.g review-panel empty states (10-04 both branches)", () =>
 
     // The library is demonstrably NON-empty before filtering: a corpus
     // section heading is visible.
-    await expect(
-      page.getByRole("heading", { level: 2, name: TITLE_A, exact: true }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 2, name: TITLE_A, exact: true })).toBeVisible();
 
     // Article B has no orphan rows, so article=B ∧ confidence=Orphan
     // matches nothing. Issue #107 — picking B navigates into the scoped
@@ -126,18 +111,14 @@ test.describe("RECV-01.g review-panel empty states (10-04 both branches)", () =>
     await articleInput.fill(TITLE_B);
     await articleInput.press("Enter");
     await expect(page.locator(".review-scope-chip")).toBeVisible();
-    await page
-      .getByLabel("Anchor confidence", { exact: true })
-      .selectOption("orphan");
+    await page.getByLabel("Anchor confidence", { exact: true }).selectOption("orphan");
 
     await expect(page.locator(".review-row")).toHaveCount(0);
     await expect(page.locator("main > [role='status']")).toContainText(
       "No highlights match these filters.",
     );
     // The copy is DISTINCT from the no-highlights branch.
-    await expect(page.locator("main > [role='status']")).not.toContainText(
-      "No highlights yet",
-    );
+    await expect(page.locator("main > [role='status']")).not.toContainText("No highlights yet");
   });
 
   test("live-region parity: the empty copy renders inside role=status as state changes", async ({
@@ -157,9 +138,7 @@ test.describe("RECV-01.g review-panel empty states (10-04 both branches)", () =>
     // copy happens inside the live region itself (this corpus has no
     // orphan rows, so confidence=Orphan alone matches nothing).
     await expect(status).not.toContainText("No highlights match");
-    await page
-      .getByLabel("Anchor confidence", { exact: true })
-      .selectOption("orphan");
+    await page.getByLabel("Anchor confidence", { exact: true }).selectOption("orphan");
     await expect(status).toContainText("No highlights match these filters.");
   });
 });

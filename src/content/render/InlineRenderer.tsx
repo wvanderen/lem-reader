@@ -56,14 +56,11 @@ function Inline({ run }: { run: InlineRun }) {
 /** The per-slice aria-label: the shared §Copywriting derivation (the ONE
  * copy in highlightColors.ts) fed from the slice's bundled traits. */
 function highlightAriaLabel(slice: HighlightSlice): string {
-  return highlightAriaLabelForText(
-    slice.runs.map((r) => r.text).join(""),
-    {
-      color: slice.color ?? "default",
-      hasNote: slice.hasNote,
-      status: slice.status,
-    },
-  );
+  return highlightAriaLabelForText(slice.runs.map((r) => r.text).join(""), {
+    color: slice.color ?? "default",
+    hasNote: slice.hasNote,
+    status: slice.status,
+  });
 }
 
 export function InlineList({

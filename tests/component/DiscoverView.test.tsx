@@ -681,7 +681,6 @@ it("returns focus to the activated preview when the same link appears in two fee
   expect(await screen.findByRole("link", { name: "Open Syndicated item" })).toHaveFocus();
 });
 
-
 it("replaces the save icon with one spinner while ingestion is pending", async () => {
   vi.mocked(listSubscriptions).mockResolvedValue({ ok: true, subscriptions: [SUB_A] });
   vi.mocked(saveFeedItem).mockReturnValue(new Promise(() => {}));

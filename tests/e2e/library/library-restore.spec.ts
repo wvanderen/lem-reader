@@ -96,10 +96,7 @@ const SEEDED_ROW_COUNT = CORPUS.length + fixtures.length;
 
 /** seedArticleRows — write ArticleSchema-valid article rows (built in Node)
  * into the articles store via a raw put. */
-async function seedArticleRows(
-  page: Page,
-  articles: CanonicalArticle[],
-): Promise<void> {
+async function seedArticleRows(page: Page, articles: CanonicalArticle[]): Promise<void> {
   await page.evaluate(async (rows) => {
     await new Promise<void>((resolve, reject) => {
       const req = indexedDB.open("lem-reader");
@@ -127,10 +124,7 @@ async function seedCorpus(page: Page): Promise<void> {
 
 /** Delete raw article rows by id while the app is elsewhere (the matrix's
  * row-gone / clamp degradations mutate the corpus from inside Reader). */
-async function deleteArticleRows(
-  page: Page,
-  ids: string[],
-): Promise<void> {
+async function deleteArticleRows(page: Page, ids: string[]): Promise<void> {
   await page.evaluate(async (rowIds) => {
     await new Promise<void>((resolve, reject) => {
       const req = indexedDB.open("lem-reader");
@@ -160,9 +154,9 @@ async function deleteArticleRows(
 async function openView(page: Page, hash: string): Promise<void> {
   await page.goto(`${BASE}/${hash}`);
   await page.reload();
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Saved articles" }),
-  ).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible({
+    timeout: 10_000,
+  });
   await expect(page.getByRole("link", { name: /^All \(\d+\)/ })).toBeVisible({
     timeout: 10_000,
   });
@@ -179,25 +173,16 @@ test.beforeEach(async ({ page }) => {
   // deleteDatabase — the webkit race). Cloned verbatim from
   // reading-views.spec.ts.
   await page.goto(`${BASE}/`);
-  await expect(
-    page.getByRole("heading", { name: "Saved articles" }),
-  ).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible({
+    timeout: 10_000,
+  });
   await page.evaluate(async () => {
     await new Promise<void>((resolve) => {
       const req = indexedDB.open("lem-reader");
       req.onsuccess = () => {
         const db = req.result;
-        const stores = [
-          "articles",
-          "settings",
-          "location",
-          "highlights",
-          "notes",
-          "books",
-        ];
-        const existing = stores.filter((s) =>
-          db.objectStoreNames.contains(s),
-        );
+        const stores = ["articles", "settings", "location", "highlights", "notes", "books"];
+        const existing = stores.filter((s) => db.objectStoreNames.contains(s));
         if (existing.length === 0) {
           resolve();
           return;
@@ -239,9 +224,7 @@ async function scrollToOffset(page: Page, y: number): Promise<number> {
 async function firstVisibleRowLink(page: Page): Promise<string> {
   const href = await page.evaluate(() => {
     const links = Array.from(
-      document.querySelectorAll<HTMLAnchorElement>(
-        '.library-list a[href^="#/article/"]',
-      ),
+      document.querySelectorAll<HTMLAnchorElement>('.library-list a[href^="#/article/"]'),
     );
     const hit = links.find((a) => {
       const r = a.getBoundingClientRect();
@@ -271,9 +254,7 @@ async function firstVisibleRowLink(page: Page): Promise<string> {
 async function lastRowLink(page: Page): Promise<string> {
   const href = await page.evaluate(() => {
     const links = Array.from(
-      document.querySelectorAll<HTMLAnchorElement>(
-        '.library-list a[href^="#/article/"]',
-      ),
+      document.querySelectorAll<HTMLAnchorElement>('.library-list a[href^="#/article/"]'),
     );
     return links[links.length - 1]?.getAttribute("href") ?? null;
   });
@@ -291,15 +272,12 @@ test.describe("NAV-03 — library return-context restore matrix", () => {
     // The corpus is present and counted (ready signal already waited for
     // in openView; the row count re-proves it against the rendered list —
     // direct-child selector so nested tag-chip lis never over-count).
-    await expect(page.locator(".library-list > li")).toHaveCount(
-      SEEDED_ROW_COUNT,
-    );
+    await expect(page.locator(".library-list > li")).toHaveCount(SEEDED_ROW_COUNT);
 
     // Scroll-meaningful: the document overflows the default viewport, so
     // the matrix's scroll captures/restores assert against a real offset.
     const overflows = await page.evaluate(
-      () =>
-        document.documentElement.scrollHeight > window.innerHeight + 200,
+      () => document.documentElement.scrollHeight > window.innerHeight + 200,
     );
     expect(overflows).toBe(true);
   });
@@ -324,18 +302,16 @@ test.describe("NAV-03 — library return-context restore matrix", () => {
     const y0 = await scrollToOffset(page, 1100);
     const launchHref = await firstVisibleRowLink(page);
     await page.locator(`.library-list a[href="${launchHref}"]`).click();
-    await expect(
-      page.getByRole("heading", { level: 1 }),
-    ).not.toHaveText("Saved articles", { timeout: 10_000 });
+    await expect(page.getByRole("heading", { level: 1 })).not.toHaveText("Saved articles", {
+      timeout: 10_000,
+    });
 
     // Return path 1: BackToLibrary (history.back → the #/unread entry).
     await page.getByRole("button", { name: "Back to library" }).click();
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible({ timeout: 10_000 });
-    await expect(
-      page.getByRole("link", { name: /^All \(\d+\)/ }),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(page.getByRole("link", { name: /^All \(\d+\)/ })).toBeVisible({ timeout: 10_000 });
 
     // Filters restored (D15-13 — all return paths)…
     await expect(searchInput(page)).toHaveValue("lantern");
@@ -343,16 +319,12 @@ test.describe("NAV-03 — library return-context restore matrix", () => {
     // …the launched row's Open article link is the focused element
     // (D15-11 — most-specific target; toBeFocused retries past the
     // ready gate)…
-    const launchedLink = page.locator(
-      `.library-list a[href="${launchHref}"]`,
-    );
+    const launchedLink = page.locator(`.library-list a[href="${launchHref}"]`);
     await expect(launchedLink).toBeFocused();
     // …and the clamped scroll restore landed within tolerance of y0
     // (asserted AFTER focus — the restore scroll precedes the focus in
     // the same ready-gate tick, so a settled focus implies settled scroll).
-    expect(Math.abs((await scrollYOf(page)) - y0)).toBeLessThanOrEqual(
-      SCROLL_TOLERANCE,
-    );
+    expect(Math.abs((await scrollYOf(page)) - y0)).toBeLessThanOrEqual(SCROLL_TOLERANCE);
   });
 
   test("(b) shell Library link path, view-match (capture from #/): tag + scroll + row focus restore (D15-11/D15-13; D15-05/D15-09 constant #/ target)", async ({
@@ -362,17 +334,15 @@ test.describe("NAV-03 — library return-context restore matrix", () => {
     await openView(page, "#/");
 
     // Filters: the salt chip narrows All to the 6 salt-tagged rows.
-    await page
-      .getByRole("button", { name: "Filter by tag: salt" })
-      .click();
+    await page.getByRole("button", { name: "Filter by tag: salt" }).click();
     await expect(page.locator(".library-list > li")).toHaveCount(6);
 
     const y0 = await scrollToOffset(page, 1100);
     const launchHref = await firstVisibleRowLink(page);
     await page.locator(`.library-list a[href="${launchHref}"]`).click();
-    await expect(
-      page.getByRole("heading", { level: 1 }),
-    ).not.toHaveText("Saved articles", { timeout: 10_000 });
+    await expect(page.getByRole("heading", { level: 1 })).not.toHaveText("Saved articles", {
+      timeout: 10_000,
+    });
 
     // Return path 2: the header Primary-nav Library link (constant #/ —
     // the capture was taken from the All view, so the landing matches).
@@ -380,12 +350,10 @@ test.describe("NAV-03 — library return-context restore matrix", () => {
       .getByRole("navigation", { name: "Primary" })
       .getByRole("link", { name: "Library" })
       .click();
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible({ timeout: 10_000 });
-    await expect(
-      page.getByRole("link", { name: /^All \(\d+\)/ }),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(page.getByRole("link", { name: /^All \(\d+\)/ })).toBeVisible({ timeout: 10_000 });
 
     // Tag filter restored — the chip is still the active single-select…
     const saltChip = page.locator(".tag-filter .tag-chip", {
@@ -394,12 +362,8 @@ test.describe("NAV-03 — library return-context restore matrix", () => {
     await expect(saltChip).toHaveAttribute("aria-pressed", "true");
     await expect(page.locator(".library-list > li")).toHaveCount(6);
     // …scroll + launched row focus restored (view-match).
-    await expect(
-      page.locator(`.library-list a[href="${launchHref}"]`),
-    ).toBeFocused();
-    expect(Math.abs((await scrollYOf(page)) - y0)).toBeLessThanOrEqual(
-      SCROLL_TOLERANCE,
-    );
+    await expect(page.locator(`.library-list a[href="${launchHref}"]`)).toBeFocused();
+    expect(Math.abs((await scrollYOf(page)) - y0)).toBeLessThanOrEqual(SCROLL_TOLERANCE);
   });
 
   test("(c) brand path, view-MISMATCH: filters restore, scroll/focus reset fresh — never mismatched scroll (D15-14)", async ({
@@ -414,9 +378,9 @@ test.describe("NAV-03 — library return-context restore matrix", () => {
     await scrollToOffset(page, 1100);
     const launchHref = await firstVisibleRowLink(page);
     await page.locator(`.library-list a[href="${launchHref}"]`).click();
-    await expect(
-      page.getByRole("heading", { level: 1 }),
-    ).not.toHaveText("Saved articles", { timeout: 10_000 });
+    await expect(page.getByRole("heading", { level: 1 })).not.toHaveText("Saved articles", {
+      timeout: 10_000,
+    });
 
     // Return path 3: the brand link — its constant target is #/ (All),
     // so the landing view MISMATCHES the Unread capture.
@@ -427,9 +391,7 @@ test.describe("NAV-03 — library return-context restore matrix", () => {
       name: "Saved articles",
     });
     await expect(libraryH1).toBeVisible({ timeout: 10_000 });
-    await expect(
-      page.getByRole("link", { name: /^All \(\d+\)/ }),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("link", { name: /^All \(\d+\)/ })).toBeVisible({ timeout: 10_000 });
 
     // Filters restored on the mismatched landing (D15-13 — filters
     // follow ALL return paths)…
@@ -439,9 +401,7 @@ test.describe("NAV-03 — library return-context restore matrix", () => {
     await expect(libraryH1).toBeFocused();
     // …and the launched row link is NOT focused (no false restore), with
     // scroll reset to top (the h1 default focus scrolls to content top).
-    await expect(
-      page.locator(`.library-list a[href="${launchHref}"]`),
-    ).not.toBeFocused();
+    await expect(page.locator(`.library-list a[href="${launchHref}"]`)).not.toBeFocused();
     expect(await scrollYOf(page)).toBeLessThan(40);
   });
 
@@ -461,20 +421,21 @@ test.describe("NAV-03 — library return-context restore matrix", () => {
       .getByRole("navigation", { name: "Primary" })
       .getByRole("link", { name: "Highlights" })
       .click();
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Highlights" }),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible({
+      timeout: 10_000,
+    });
 
     // The shell Library destination restores the saved library session.
-    await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Library" }).click();
+    await page
+      .getByRole("navigation", { name: "Primary" })
+      .getByRole("link", { name: "Library" })
+      .click();
     const libraryH1 = page.getByRole("heading", {
       level: 1,
       name: "Saved articles",
     });
     await expect(libraryH1).toBeVisible({ timeout: 10_000 });
-    await expect(
-      page.getByRole("link", { name: /^All \(\d+\)/ }),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("link", { name: /^All \(\d+\)/ })).toBeVisible({ timeout: 10_000 });
 
     // Filters + scroll restored, h1 focused via the null-row branch —
     // preventScroll:true, so the focus does NOT reset the restored scroll
@@ -482,9 +443,7 @@ test.describe("NAV-03 — library return-context restore matrix", () => {
     await expect(searchInput(page)).toHaveValue("lantern");
     await expect(page.locator(".library-list > li")).toHaveCount(6);
     await expect(libraryH1).toBeFocused();
-    expect(Math.abs((await scrollYOf(page)) - y0)).toBeLessThanOrEqual(
-      SCROLL_TOLERANCE,
-    );
+    expect(Math.abs((await scrollYOf(page)) - y0)).toBeLessThanOrEqual(SCROLL_TOLERANCE);
   });
 
   test("(e) row-gone degrade: Back with the launched row deleted → h1 focus, scroll reset to top, no crash, no false row focus (D15-14)", async ({
@@ -497,12 +456,10 @@ test.describe("NAV-03 — library return-context restore matrix", () => {
     // offset, so the reset-to-top below is a deliberate degrade, not a
     // trivially-zero restore).
     await scrollToOffset(page, 400);
-    await page
-      .locator('.library-list a[href="#/article/lr-restore-a00"]')
-      .click();
-    await expect(
-      page.getByRole("heading", { level: 1 }),
-    ).not.toHaveText("Saved articles", { timeout: 10_000 });
+    await page.locator('.library-list a[href="#/article/lr-restore-a00"]').click();
+    await expect(page.getByRole("heading", { level: 1 })).not.toHaveText("Saved articles", {
+      timeout: 10_000,
+    });
 
     // While in Reader, remove the launched article's row via raw IndexedDB
     // (the corpus changed since capture — no production path touched).
@@ -516,17 +473,13 @@ test.describe("NAV-03 — library return-context restore matrix", () => {
     await expect(libraryH1).toBeVisible({ timeout: 10_000 });
     // 12 corpus − 1 deleted + 1 starter fixture (the 13-06 realignment
     // precedent — the starter library shrank `fixtures` to one article).
-    await expect(
-      page.getByRole("link", { name: /^All \(12\)/ }),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("link", { name: /^All \(12\)/ })).toBeVisible({ timeout: 10_000 });
 
     // The truthful degrade: h1 focused with DEFAULT scroll (reset to
     // top), the row is gone, and nothing false is focused or restored.
     // No crash: the library loaded (the All count rendered) and every
     // assertion below runs against it.
-    await expect(
-      page.locator('.library-list a[href="#/article/lr-restore-a00"]'),
-    ).toHaveCount(0);
+    await expect(page.locator('.library-list a[href="#/article/lr-restore-a00"]')).toHaveCount(0);
     await expect(libraryH1).toBeFocused();
     expect(await scrollYOf(page)).toBeLessThan(40);
   });
@@ -543,9 +496,9 @@ test.describe("NAV-03 — library return-context restore matrix", () => {
     await scrollToOffset(page, 1_000_000);
     const launchHref = await lastRowLink(page);
     await page.locator(`.library-list a[href="${launchHref}"]`).click();
-    await expect(
-      page.getByRole("heading", { level: 1 }),
-    ).not.toHaveText("Saved articles", { timeout: 10_000 });
+    await expect(page.getByRole("heading", { level: 1 })).not.toHaveText("Saved articles", {
+      timeout: 10_000,
+    });
 
     // While in Reader, delete the FIRST HALF of the corpus rows (the
     // launched starter-fixture row stays — the row-found path runs; a
@@ -561,20 +514,16 @@ test.describe("NAV-03 — library return-context restore matrix", () => {
     );
 
     await page.getByRole("button", { name: "Back to library" }).click();
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible({ timeout: 10_000 });
-    await expect(
-      page.getByRole("link", { name: /^All \(7\)/ }),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(page.getByRole("link", { name: /^All \(7\)/ })).toBeVisible({ timeout: 10_000 });
 
     // The launched row's link focused FIRST (toBeFocused retries through
     // the ready-gate restore, so a settled focus implies the clamped
     // scrollTo already ran — reading scrollY before this could catch the
     // pre-restore browser-left offset).
-    await expect(
-      page.locator(`.library-list a[href="${launchHref}"]`),
-    ).toBeFocused();
+    await expect(page.locator(`.library-list a[href="${launchHref}"]`)).toBeFocused();
 
     // Short list (7 rows — 6 surviving corpus rows + the starter
     // fixture), captured offset overshoots it → the
@@ -589,7 +538,3 @@ test.describe("NAV-03 — library return-context restore matrix", () => {
     expect(y).toBeGreaterThan(0);
   });
 });
-
-
-
-

@@ -53,8 +53,22 @@ const CAPTIONS_SRV1 = fixture("captions.dQw4w9WgXcQ.en.srv1.xml");
 // client parses), keeping the real captured player/next envelope shapes.
 const CUES: string[] = Array.from({ length: 40 }, (_, i) => {
   const words = [
-    "alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel",
-    "india", "juliett", "kilo", "lima", "mike", "november", "oscar", "papa",
+    "alpha",
+    "bravo",
+    "charlie",
+    "delta",
+    "echo",
+    "foxtrot",
+    "golf",
+    "hotel",
+    "india",
+    "juliett",
+    "kilo",
+    "lima",
+    "mike",
+    "november",
+    "oscar",
+    "papa",
   ];
   const shifted = words.slice(i % words.length).concat(words.slice(0, i % words.length));
   return `cue ${String(i).padStart(3, "0")} ${shifted.join(" ")} drifts ${i * 7} units apart`;
@@ -132,11 +146,7 @@ async function wipeDatabase(): Promise<void> {
   });
 }
 
-function installRouter(fixtures: {
-  player?: string;
-  next?: string;
-  caption?: string;
-}): void {
+function installRouter(fixtures: { player?: string; next?: string; caption?: string }): void {
   fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
     fetchCalls.push({ url, init });
     if (url === "https://www.youtube.com/youtubei/v1/player") {
@@ -359,9 +369,9 @@ describe("dispatch — only real YouTube URLs take the transcript branch", () =>
     const response = await ingest({ url: "https://example.com/article" });
     expect(response.ok).toBe(false);
     expect(fetchCalls.every((c) => c.url === "https://example.com/article")).toBe(true);
-    expect(
-      fetchCalls.some((c) => c.url.startsWith("https://www.youtube.com/youtubei")),
-    ).toBe(false);
+    expect(fetchCalls.some((c) => c.url.startsWith("https://www.youtube.com/youtubei"))).toBe(
+      false,
+    );
   });
 
   it("routes a youtube-host URL WITHOUT a valid id to the HTML pipeline (embed form)", async () => {
@@ -370,9 +380,9 @@ describe("dispatch — only real YouTube URLs take the transcript branch", () =>
       return fakeResponse({ status: 500 });
     });
     await ingest({ url: "https://www.youtube.com/embed/dQw4w9WgXcQ" });
-    expect(
-      fetchCalls.some((c) => c.url.startsWith("https://www.youtube.com/youtubei")),
-    ).toBe(false);
+    expect(fetchCalls.some((c) => c.url.startsWith("https://www.youtube.com/youtubei"))).toBe(
+      false,
+    );
   });
 });
 
@@ -398,7 +408,10 @@ describe("dedupe — watch/shorts/youtu.be collapse to ONE library article", () 
     // save (D7-07): a different URL form of the same video derives the SAME
     // yt-<hash> id, so the second add refuses (already-in-library) instead
     // of saving a twin article.
-    for (const url of ["https://youtu.be/dQw4w9WgXcQ?t=42", "https://www.youtube.com/shorts/dQw4w9WgXcQ"]) {
+    for (const url of [
+      "https://youtu.be/dQw4w9WgXcQ?t=42",
+      "https://www.youtube.com/shorts/dQw4w9WgXcQ",
+    ]) {
       const again = await ingest({ url });
       expect(again.ok).toBe(true);
       if (!again.ok || !("article" in again)) return expect.unreachable();

@@ -218,10 +218,7 @@ export function useReadAloudFollow(options: UseReadAloudFollowOptions): UseReadA
       if (isFormField(event.target)) return;
       // Activating a control (Space/Enter on a button, etc.) doesn't scroll
       // the page — not a manual-navigation signal.
-      if (
-        event.target instanceof Element &&
-        event.target.closest("button, a, [role='button']")
-      ) {
+      if (event.target instanceof Element && event.target.closest("button, a, [role='button']")) {
         return;
       }
       if (

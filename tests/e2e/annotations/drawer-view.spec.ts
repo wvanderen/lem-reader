@@ -77,7 +77,10 @@ test.describe("ANNO-03 drawer view (05-05)", () => {
     // Highlight 1 on the first eligible block.
     let ok = await selectRangeInBlock(page, first, 0, 12);
     expect(ok).toBeTruthy();
-    await page.locator(".selection-toolbar").getByRole("button", { name: "Highlight", exact: true }).click();
+    await page
+      .locator(".selection-toolbar")
+      .getByRole("button", { name: "Highlight", exact: true })
+      .click();
     await expect(page.locator("mark.highlight").first()).toBeVisible();
     blocks.push(first);
     // Highlights 2 + 3 on subsequent disjoint blocks — walking pages.
@@ -86,12 +89,18 @@ test.describe("ANNO-03 drawer view (05-05)", () => {
       if (candidate === -1) break;
       ok = await selectRangeInBlock(page, candidate, 0, 12);
       if (!ok) continue;
-      await page.locator(".selection-toolbar").getByRole("button", { name: "Highlight", exact: true }).click();
+      await page
+        .locator(".selection-toolbar")
+        .getByRole("button", { name: "Highlight", exact: true })
+        .click();
       await expect(page.locator("mark.highlight").first()).toBeVisible();
       blocks.push(candidate);
       await page.waitForTimeout(150);
     }
-    expect(blocks.length, "created at least 2 highlights for reading-order proof").toBeGreaterThanOrEqual(2);
+    expect(
+      blocks.length,
+      "created at least 2 highlights for reading-order proof",
+    ).toBeGreaterThanOrEqual(2);
 
     // Open the drawer + assert the list renders in reading order.
     await drawerTrigger(page).click();
@@ -112,9 +121,7 @@ test.describe("ANNO-03 drawer view (05-05)", () => {
     );
   });
 
-  test("close via × returns focus to the trigger (A11Y-02 restore)", async ({
-    page,
-  }) => {
+  test("close via × returns focus to the trigger (A11Y-02 restore)", async ({ page }) => {
     await openArticle(page, FIXTURE);
     await drawerTrigger(page).click();
     const drawer = page.locator("dialog.annotations-drawer");
@@ -141,9 +148,7 @@ test.describe("ANNO-03 drawer view (05-05)", () => {
       }).toPass({ timeout: 2000 });
     } else {
       await expect(async () => {
-        const isFocused = await drawerTrigger(page).evaluate(
-          (el) => el === document.activeElement,
-        );
+        const isFocused = await drawerTrigger(page).evaluate((el) => el === document.activeElement);
         expect(isFocused, "focus restored to the drawer trigger").toBeTruthy();
       }).toPass({ timeout: 2000 });
     }

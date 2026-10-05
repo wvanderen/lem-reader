@@ -28,10 +28,7 @@
 //   as for any text article (flows A–L inherit; no special-casing).
 import { test, expect, type Page } from "@playwright/test";
 import { openAddDialog, openSavedArticle } from "../library/add-dialog";
-import {
-  selectRangeInBlock,
-  announcementRegion,
-} from "../annotations/_fixtures";
+import { selectRangeInBlock, announcementRegion } from "../annotations/_fixtures";
 import { BASE } from "../_base";
 
 // ── transcript-article builder (ArticleSchema-valid envelopes) ──────────────
@@ -240,9 +237,7 @@ async function addByUrl(page: Page, url: string): Promise<void> {
  *  never match — the _edge-invariant.ts visible-block selector discipline). */
 function visibleBlock(page: Page, text: string) {
   return page
-    .locator(
-      "[data-block-index]:not(.article-body-measurement [data-block-index])",
-    )
+    .locator("[data-block-index]:not(.article-body-measurement [data-block-index])")
     .filter({ hasText: text })
     .first();
 }
@@ -282,9 +277,7 @@ test.describe("YouTube ingest end-to-end (issue #41, flow N)", () => {
     await expect(h1).toHaveText(CHAPTERED.provenance.title, { timeout: 10_000 });
 
     // The channel is the byline (the article-top-meta provenance block).
-    await expect(page.locator(".article-top-meta")).toContainText(
-      CHAPTERED.provenance.author,
-    );
+    await expect(page.locator(".article-top-meta")).toContainText(CHAPTERED.provenance.author);
 
     // Transcript paragraphs read in caption order (DOM order = document
     // order), and timestamps are NEVER rendered — not in the transcript
@@ -348,9 +341,7 @@ test.describe("YouTube ingest end-to-end (issue #41, flow N)", () => {
     );
     await expect(row.locator(".library-row-duration")).toHaveText("12 min");
     // The channel in the author field.
-    await expect(row.locator(".library-card-meta .meta").first()).toHaveText(
-      "Calm Signal",
-    );
+    await expect(row.locator(".library-card-meta .meta").first()).toHaveText("Calm Signal");
 
     // The finished state rides the ordinary row control (no special-casing).
     await row.getByRole("button", { name: `Mark as read: ${CHAPTERED.provenance.title}` }).click();
@@ -390,13 +381,9 @@ test.describe("YouTube ingest end-to-end (issue #41, flow N)", () => {
     // A chapter jump lands at the chapter heading (no special-casing — the
     // ordinary jump machinery over the persisted h2 offsets); the panel
     // closes through the same seam as any article.
-    await nav
-      .getByRole("link", { name: CHAPTERED_SPEC.chapters[1]!.title })
-      .click();
+    await nav.getByRole("link", { name: CHAPTERED_SPEC.chapters[1]!.title }).click();
     await expect(page.locator(".toc-panel")).toBeHidden();
-    await expect(
-      visibleBlock(page, CHAPTERED_SPEC.chapters[1]!.title),
-    ).toBeVisible();
+    await expect(visibleBlock(page, CHAPTERED_SPEC.chapters[1]!.title)).toBeVisible();
 
     // Chapterless: the panel honestly offers only "Top of article".
     await page.getByRole("button", { name: "Back to library" }).click();
@@ -408,9 +395,7 @@ test.describe("YouTube ingest end-to-end (issue #41, flow N)", () => {
     await page.getByRole("button", { name: "Table of contents" }).click();
     const plainNav = page.getByRole("navigation", { name: "Table of contents" });
     await expect(plainNav).toBeVisible();
-    await expect(
-      plainNav.getByRole("link", { name: "Top of article" }),
-    ).toBeVisible();
+    await expect(plainNav.getByRole("link", { name: "Top of article" })).toBeVisible();
     await expect(plainNav.getByRole("link")).toHaveCount(1);
   });
 
@@ -436,9 +421,7 @@ test.describe("YouTube ingest end-to-end (issue #41, flow N)", () => {
     ] as const;
     const mock = mockIngest(
       page,
-      Object.fromEntries(
-        refusals.map((r) => [r.url, { ok: false, reason: r.reason }]),
-      ),
+      Object.fromEntries(refusals.map((r) => [r.url, { ok: false, reason: r.reason }])),
     );
 
     const rowsBefore = await libraryRowCount(page);
@@ -475,9 +458,7 @@ test.describe("YouTube ingest end-to-end (issue #41, flow N)", () => {
     });
   });
 
-  test("N5: bot-check announces immediately with no automatic retry", async ({
-    page,
-  }) => {
+  test("N5: bot-check announces immediately with no automatic retry", async ({ page }) => {
     const BOT_URL = "https://www.youtube.com/watch?v=botCheckVi1";
     const ingest = mockIngest(page, {
       [BOT_URL]: { ok: false, reason: "youtube-bot-check" },
@@ -592,10 +573,7 @@ test.describe("YouTube ingest end-to-end (issue #41, flow N)", () => {
       .fill("0:00\nA cue the reader pasted by hand");
     await expect(addTranscript).toBeDisabled();
     await expect(dialog).toContainText("Type a title to enable Add.");
-    await expect(titleInput).toHaveAttribute(
-      "aria-describedby",
-      "ingest-transcript-title-hint",
-    );
+    await expect(titleInput).toHaveAttribute("aria-describedby", "ingest-transcript-title-hint");
     await titleInput.fill("Pasted Lecture");
     await expect(dialog).not.toContainText("Type a title to enable Add.");
     await addTranscript.click();
@@ -675,10 +653,9 @@ test.describe("YouTube ingest end-to-end (issue #41, flow N)", () => {
     // Ingest succeeds — "Open article" opens the reader like any
     // transcript article (issue #112).
     await openSavedArticle(page, /#\/article\/yt-e2e-asr$/);
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-      ASR_ONLY.provenance.title,
-      { timeout: 10_000 },
-    );
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(ASR_ONLY.provenance.title, {
+      timeout: 10_000,
+    });
 
     // The low-confidence disclosure rides the provenance block — honest
     // fidelity, never a silent upgrade to trusted. ADR-0003: the sentence
@@ -695,9 +672,7 @@ test.describe("YouTube ingest end-to-end (issue #41, flow N)", () => {
     await expect(row.locator(".library-row-duration")).toHaveText("10 min");
   });
 
-  test("A–L verbatim: a transcript paragraph highlights like any text block", async ({
-    page,
-  }) => {
+  test("A–L verbatim: a transcript paragraph highlights like any text block", async ({ page }) => {
     const WATCH_URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
     mockIngest(page, {
       [WATCH_URL]: okEnvelope(CHAPTERED),

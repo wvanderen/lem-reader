@@ -72,16 +72,18 @@ import {
   normalizeText,
   resolveQuoteSelector,
 } from "../../../src/content/normalizeText";
-import type {
-  TextPositionSelector,
-  TextQuoteSelector,
-} from "../../../src/content/normalizeText";
+import type { TextPositionSelector, TextQuoteSelector } from "../../../src/content/normalizeText";
 import { sha256Hex } from "../../../src/portability/manifest";
 // The EPUB-with-images bytes + the exact PNG the chapter figure carries —
 // a non-spec module (unit fixture library), safe to import.
 import { FIGURE_PNG_B64, renderedFigureBook } from "../../unit/server/epub-fixtures";
 import { MARKDOWN_WITH_FRONTMATTER } from "../library/markdown-payload";
-import { openAddDialog, pickSource, openSavedArticle, closeSavedResult } from "../library/add-dialog";
+import {
+  openAddDialog,
+  pickSource,
+  openSavedArticle,
+  closeSavedResult,
+} from "../library/add-dialog";
 import {
   announcementRegion,
   countHighlightsInDexie,
@@ -164,9 +166,7 @@ function paginationDev(page: Page) {
   return page.evaluate(
     () =>
       (window as unknown as Record<string, unknown>).__lemPagination as
-        | PaginationDev
-        | undefined
-        | null,
+        PaginationDev | undefined | null,
   );
 }
 
@@ -174,9 +174,9 @@ function paginationDev(page: Page) {
  * per-mount discipline; the 16-03 reloadLibrary precedent). */
 async function reloadLibrary(page: Page): Promise<void> {
   await page.reload();
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Saved articles" }),
-  ).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible({
+    timeout: 10_000,
+  });
   await expect(page.locator(".library-list > li").first()).toBeVisible({
     timeout: 10_000,
   });
@@ -306,12 +306,7 @@ test("ACPT-07 — the v2.1 core flow as one unbroken journey: nothing lost acros
     expect(chapterHref, "the expanded book must expose the chapter link").not.toBeNull();
     const chapterId = (chapterHref ?? "").replace("#/article/", "");
     expect(chapterId).toMatch(/-c00$/);
-    await expect
-      .poll(
-        async () => countRows(pageA, "assets"),
-        { timeout: 10_000 },
-      )
-      .toBe(1);
+    await expect.poll(async () => countRows(pageA, "assets"), { timeout: 10_000 }).toBe(1);
     const assetRowsOnA = await readAllRows(pageA, "assets");
     expect(assetRowsOnA).toHaveLength(1);
     const assetId = String(assetRowsOnA[0]!.assetId);
@@ -348,9 +343,7 @@ test("ACPT-07 — the v2.1 core flow as one unbroken journey: nothing lost acros
     ).toHaveCount(1);
     await expect(pageA.locator(`#title-${UNREAD_ID}`)).toBeVisible();
     await searchInput.fill("");
-    const chip = pageA
-      .locator(".tag-filter .tag-chip")
-      .filter({ hasText: SEED_TAG });
+    const chip = pageA.locator(".tag-filter .tag-chip").filter({ hasText: SEED_TAG });
     await expect(chip, "the seeded tag renders a filter chip (D8-07)").toBeVisible();
     await chip.click();
     await expect(chip).toHaveAttribute("aria-pressed", "true");
@@ -379,9 +372,7 @@ test("ACPT-07 — the v2.1 core flow as one unbroken journey: nothing lost acros
     const articleId = idMatch![1]!;
 
     // The engine commits multi-page (the page-count identity baseline).
-    await expect(
-      pageA.getByRole("heading", { level: 1 }).first(),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(pageA.getByRole("heading", { level: 1 }).first()).toBeVisible({ timeout: 10_000 });
     await expect
       .poll(
         async () => {
@@ -395,9 +386,9 @@ test("ACPT-07 — the v2.1 core flow as one unbroken journey: nothing lost acros
 
     // ── Edit metadata: the reader-title override through the real dialog ─
     await pageA.getByRole("button", { name: "Back to library" }).click();
-    await expect(
-      pageA.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(pageA.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible({
+      timeout: 10_000,
+    });
     const mdRow = pageA
       .locator(".library-list > li")
       .filter({ hasText: "The Discipline of Calm Reading" });
@@ -414,21 +405,15 @@ test("ACPT-07 — the v2.1 core flow as one unbroken journey: nothing lost acros
     // ── Navigate by TOC: the panel turns the page to the section ────────
     await pageA.locator(`[id="title-${articleId}"] a.library-card-link`).click();
     await pageA.waitForURL(new RegExp(`#/article/${articleId}$`), { timeout: 10_000 });
-    await expect(
-      pageA.getByRole("heading", { level: 1 }).first(),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(pageA.getByRole("heading", { level: 1 }).first()).toBeVisible({ timeout: 10_000 });
     await expect(pageA.locator(".page-fragment").first()).toBeVisible({ timeout: 10_000 });
     await pageA.getByRole("button", { name: "Table of contents" }).click();
     const tocNav = pageA.getByRole("navigation", { name: "Table of contents" });
-    await expect(
-      tocNav.getByRole("link", { name: "Top of article" }),
-    ).toBeVisible();
+    await expect(tocNav.getByRole("link", { name: "Top of article" })).toBeVisible();
     await tocNav.getByRole("link", { name: "A Section on Lists" }).click();
     await expect(pageA.locator(".toc-panel")).toBeHidden();
     const destination = pageA
-      .locator(
-        "[data-block-index]:not(.article-body-measurement [data-block-index])",
-      )
+      .locator("[data-block-index]:not(.article-body-measurement [data-block-index])")
       .filter({ hasText: "A Section on Lists" })
       .first();
     await expect(destination).toBeVisible();
@@ -453,9 +438,10 @@ test("ACPT-07 — the v2.1 core flow as one unbroken journey: nothing lost acros
     await expect
       .poll(
         async () =>
-          ((await readRow(pageA, "settings", "reader-prefs"))?.value as
-            | { readingMode?: string }
-            | undefined)?.readingMode ?? "missing",
+          (
+            (await readRow(pageA, "settings", "reader-prefs"))?.value as
+              { readingMode?: string } | undefined
+          )?.readingMode ?? "missing",
         { timeout: 10_000 },
       )
       .toBe("scrolling");
@@ -466,16 +452,12 @@ test("ACPT-07 — the v2.1 core flow as one unbroken journey: nothing lost acros
       ({ after, min }) => {
         const blocks = Array.from(
           document.querySelectorAll(
-            '[data-block-index]:not(.article-body-measurement [data-block-index])',
+            "[data-block-index]:not(.article-body-measurement [data-block-index])",
           ),
         );
         for (const el of blocks) {
           const idx = Number(el.getAttribute("data-block-index"));
-          if (
-            idx > after &&
-            !Number.isNaN(idx) &&
-            (el.textContent?.length ?? 0) >= min
-          ) {
+          if (idx > after && !Number.isNaN(idx) && (el.textContent?.length ?? 0) >= min) {
             return idx;
           }
         }
@@ -485,7 +467,11 @@ test("ACPT-07 — the v2.1 core flow as one unbroken journey: nothing lost acros
     );
     expect(blockTwo, "a second text block must follow the first").not.toBe(-1);
     expect(
-      await selectRangeBetweenBlocks(pageA, { blockIndex: blockOne, offset: 0 }, { blockIndex: blockTwo, offset: 24 }),
+      await selectRangeBetweenBlocks(
+        pageA,
+        { blockIndex: blockOne, offset: 0 },
+        { blockIndex: blockTwo, offset: 24 },
+      ),
       "the cross-block selection must be set",
     ).toBeTruthy();
     const toolbar = pageA.locator(".selection-toolbar");
@@ -507,26 +493,18 @@ test("ACPT-07 — the v2.1 core flow as one unbroken journey: nothing lost acros
 
     // ── Review: the Highlights row jumps back to the focused mark ────────
     await pageA.goto(`${BASE}/#/highlights`);
-    await expect(
-      pageA.getByRole("heading", { level: 1, name: "Highlights" }),
-    ).toBeVisible({ timeout: 10_000 });
-    const rowButton = pageA
-      .getByRole("link", { name: /^Go to highlight:/ })
-      .first();
+    await expect(pageA.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible({
+      timeout: 10_000,
+    });
+    const rowButton = pageA.getByRole("link", { name: /^Go to highlight:/ }).first();
     await expect(rowButton, "the cross-block highlight is a confident, jumpable row").toBeEnabled();
     await rowButton.click();
-    await expect(
-      pageA.getByRole("heading", { level: 1 }).first(),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(pageA.getByRole("heading", { level: 1 }).first()).toBeVisible({ timeout: 10_000 });
     // A CROSS-BLOCK highlight renders one mark per containing block — both
     // slices share data-highlight-id (the D5-16/Phase 19 span contract), so
     // the jump landing shows BOTH slices (heading block → paragraph block).
-    const jumpedMarks = pageA.locator(
-      `mark.highlight[data-highlight-id="${traveledHighlightId}"]`,
-    );
-    await expect
-      .poll(async () => await jumpedMarks.count(), { timeout: 15_000 })
-      .toBe(2);
+    const jumpedMarks = pageA.locator(`mark.highlight[data-highlight-id="${traveledHighlightId}"]`);
+    await expect.poll(async () => await jumpedMarks.count(), { timeout: 15_000 }).toBe(2);
     await expect(jumpedMarks.first()).toBeVisible();
     await expect
       .poll(() =>
@@ -546,8 +524,7 @@ test("ACPT-07 — the v2.1 core flow as one unbroken journey: nothing lost acros
     );
     await expect
       .poll(
-        async () =>
-          (await readRow(pageA, "location", [articleId, revision]))?.graphemeOffset ?? -1,
+        async () => (await readRow(pageA, "location", [articleId, revision]))?.graphemeOffset ?? -1,
         { timeout: 10_000 },
       )
       .toBeGreaterThan(0);
@@ -564,9 +541,7 @@ test("ACPT-07 — the v2.1 core flow as one unbroken journey: nothing lost acros
 
     // ── Export the whole-library bundle WITH images through Settings ─────
     const panelA = await openSettings(pageA);
-    await expect(
-      panelA.getByRole("button", { name: "Export library bundle" }),
-    ).toBeEnabled();
+    await expect(panelA.getByRole("button", { name: "Export library bundle" })).toBeEnabled();
     const downloadPromise = pageA.waitForEvent("download", { timeout: 20_000 });
     await panelA.getByRole("button", { name: "Export library bundle" }).click();
     const download = await downloadPromise;
@@ -605,8 +580,7 @@ test("ACPT-07 — the v2.1 core flow as one unbroken journey: nothing lost acros
     await expect(preview).toBeVisible({ timeout: 15_000 });
     // The summary sentence computed from the bundle itself (honest
     // pluralization — the ImportPreviewDialog countWithLabel contract).
-    const counted = (n: number, one: string, other: string) =>
-      `${n} ${n === 1 ? one : other}`;
+    const counted = (n: number, one: string, other: string) => `${n} ${n === 1 ? one : other}`;
     const nArticles = (bundleJson.articles as unknown[]).length;
     const nHighlights = (bundleJson.highlights as unknown[]).length;
     const nNotes = (bundleJson.notes as unknown[]).length;
@@ -647,9 +621,7 @@ test("ACPT-07 — the v2.1 core flow as one unbroken journey: nothing lost acros
     expect(assetOnB.fields!.assetId).toBe(assetId);
     expect(assetOnB.fields!.contentType).toBe(assetOnA.fields!.contentType);
     expect(assetOnB.fields!.byteLength).toBe(assetOnA.fields!.byteLength);
-    expect(assetOnB.bytes, "the reimported Blob bytes are byte-equal").toEqual(
-      assetOnA.bytes,
-    );
+    expect(assetOnB.bytes, "the reimported Blob bytes are byte-equal").toEqual(assetOnA.bytes);
     expect(assetOnB.bytes).toEqual(Array.from(FIGURE_PNG_BYTES));
     expect(typeof assetOnB.fields!.createdAt).toBe("string");
 
@@ -677,18 +649,14 @@ test("ACPT-07 — the v2.1 core flow as one unbroken journey: nothing lost acros
     await pageB.keyboard.press("Escape");
     await expect(panelB).not.toBeVisible();
     await pageB.reload();
-    await expect(
-      pageB.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(pageB.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible({
+      timeout: 10_000,
+    });
     // The traveled reader-title override is the row's effective name; the
     // open-link rides inside the `title-{id}` heading (variant-A anatomy).
     await pageB.locator(`[id="title-${articleId}"] a.library-card-link`).click();
-    await expect(
-      pageB.getByRole("heading", { level: 1 }).first(),
-    ).toBeVisible({ timeout: 15_000 });
-    await expect(
-      pageB.getByRole("heading", { level: 1, name: overriddenTitle }),
-    ).toBeVisible();
+    await expect(pageB.getByRole("heading", { level: 1 }).first()).toBeVisible({ timeout: 15_000 });
+    await expect(pageB.getByRole("heading", { level: 1, name: overriddenTitle })).toBeVisible();
 
     // The traveled highlight renders its mark (scrolling mode traveled too).
     // The traveled highlight renders its mark on BOTH cross-block slices
@@ -696,17 +664,12 @@ test("ACPT-07 — the v2.1 core flow as one unbroken journey: nothing lost acros
     const traveledMarks = pageB.locator(
       `mark.highlight[data-highlight-id="${traveledHighlightId}"]`,
     );
-    await expect
-      .poll(async () => await traveledMarks.count(), { timeout: 15_000 })
-      .toBe(2);
+    await expect.poll(async () => await traveledMarks.count(), { timeout: 15_000 }).toBe(2);
     await expect(traveledMarks.first()).toBeVisible();
 
     // The deep reading position restores past the article top (STATE-01).
     await expect
-      .poll(
-        async () => pageB.evaluate(() => window.scrollY),
-        { timeout: 15_000 },
-      )
+      .poll(async () => pageB.evaluate(() => window.scrollY), { timeout: 15_000 })
       .toBeGreaterThan(100);
 
     // Paginates identically: switch through the real toggle; the engine
@@ -715,7 +678,7 @@ test("ACPT-07 — the v2.1 core flow as one unbroken journey: nothing lost acros
     const restoredPassage = await pageB.evaluate(() => {
       const blocks = Array.from(
         document.querySelectorAll(
-          '[data-block-index]:not(.article-body-measurement [data-block-index])',
+          "[data-block-index]:not(.article-body-measurement [data-block-index])",
         ),
       );
       for (const el of blocks) {
@@ -753,9 +716,9 @@ test("ACPT-07 — the v2.1 core flow as one unbroken journey: nothing lost acros
     // The images arm's machine-B proof: the reimported chapter figure
     // renders its LOCAL blob img (decode + blob: src — the 20-05 SC#4 bar).
     await pageB.getByRole("button", { name: "Back to library" }).click();
-    await expect(
-      pageB.getByRole("heading", { level: 1, name: "Saved articles" }),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(pageB.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible({
+      timeout: 10_000,
+    });
     await pageB.locator("li.book-row .book-toggle").click();
     await pageB
       .locator("li.book-row .book-chapter-list > li")
@@ -763,20 +726,14 @@ test("ACPT-07 — the v2.1 core flow as one unbroken journey: nothing lost acros
       .locator('a[href^="#/article/"]')
       .click();
     await pageB.waitForURL(new RegExp(`#/article/${chapterId}$`), { timeout: 10_000 });
-    await expect(
-      pageB.getByRole("heading", { level: 1 }).first(),
-    ).toBeVisible({ timeout: 15_000 });
+    await expect(pageB.getByRole("heading", { level: 1 }).first()).toBeVisible({ timeout: 15_000 });
     const img = pageB.locator("figure img");
-    await expect
-      .poll(async () => await img.count(), { timeout: 10_000 })
-      .toBeGreaterThan(0);
+    await expect.poll(async () => await img.count(), { timeout: 10_000 }).toBeGreaterThan(0);
     await expect(img.first()).toHaveAttribute("src", /^blob:/);
     await expect
-      .poll(
-        async () =>
-          await img.first().evaluate((el) => (el as HTMLImageElement).naturalWidth),
-        { timeout: 10_000 },
-      )
+      .poll(async () => await img.first().evaluate((el) => (el as HTMLImageElement).naturalWidth), {
+        timeout: 10_000,
+      })
       .toBeGreaterThan(0);
   } finally {
     await machineA.close();

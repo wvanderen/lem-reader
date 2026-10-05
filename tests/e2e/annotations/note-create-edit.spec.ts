@@ -167,17 +167,12 @@ test.describe("ANNO-02/ANNO-11 note edit on a multi-block span (19-05)", () => {
 
     // The span's FIRST slice (document order in scrolling mode) carries
     // the hl- DOM id + the has-note modifier on every slice.
-    const hlId = await page
-      .locator("mark.highlight")
-      .first()
-      .getAttribute("data-highlight-id");
+    const hlId = await page.locator("mark.highlight").first().getAttribute("data-highlight-id");
     expect(hlId).toBeTruthy();
     await expect(page.locator(`#hl-${hlId}`)).toHaveCount(1);
     const extentsBefore = await markTextsForHighlight(page, hlId!);
     expect(extentsBefore.length, "marks render in BOTH blocks").toBeGreaterThanOrEqual(2);
-    const notedMarks = page.locator(
-      `mark.highlight.has-note[data-highlight-id="${hlId}"]`,
-    );
+    const notedMarks = page.locator(`mark.highlight.has-note[data-highlight-id="${hlId}"]`);
     expect(await notedMarks.count()).toBe(extentsBefore.length);
 
     // Reopen the popover ON THE FIRST SLICE + edit the note.
@@ -220,9 +215,7 @@ test.describe("ANNO-02/ANNO-11 note edit on a multi-block span (19-05)", () => {
     const total = await totalPages(page);
     for (let target = 0; target < total; target++) {
       await turnToPage(page, target);
-      const count = await page
-        .locator(`mark.highlight[data-highlight-id="${hlId}"]`)
-        .count();
+      const count = await page.locator(`mark.highlight[data-highlight-id="${hlId}"]`).count();
       if (count > 0) {
         await expect(
           page.locator(`mark.highlight[data-highlight-id="${hlId}"]`).first(),
@@ -232,6 +225,8 @@ test.describe("ANNO-02/ANNO-11 note edit on a multi-block span (19-05)", () => {
         break;
       }
     }
-    expect(foundPaginated, "span marks still render in paginated mode after the note edit").toBe(true);
+    expect(foundPaginated, "span marks still render in paginated mode after the note edit").toBe(
+      true,
+    );
   });
 });

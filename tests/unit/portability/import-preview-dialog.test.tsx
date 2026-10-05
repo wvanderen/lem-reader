@@ -308,9 +308,7 @@ describe("ImportPreviewDialog — per-item metadata choice (17-04, D17-11)", () 
     act(() => {
       fireEvent.click(screen.getByRole("button", { name: "Show articles" }));
     });
-    const first = screen.getByLabelText(
-      "Import choice for Local Name 1",
-    ) as HTMLSelectElement;
+    const first = screen.getByLabelText("Import choice for Local Name 1") as HTMLSelectElement;
     expect(first.value).toBe("keep-mine");
     act(() => {
       fireEvent.click(screen.getByRole("button", { name: "Import" }));
@@ -360,10 +358,7 @@ describe("ImportPreviewDialog — per-item metadata choice (17-04, D17-11)", () 
       "Import choice for articles with a different title or author",
     ) as HTMLSelectElement;
     expect(kindSelect.value).toBe("skip");
-    expect(Array.from(kindSelect.options).map((o) => o.value)).toEqual([
-      "skip",
-      "overwrite",
-    ]);
+    expect(Array.from(kindSelect.options).map((o) => o.value)).toEqual(["skip", "overwrite"]);
   });
 
   it("resets per-item state when the dialog reopens (the open-transition reset path mirrors)", () => {
@@ -408,9 +403,7 @@ describe("ImportPreviewDialog — per-item metadata choice (17-04, D17-11)", () 
     act(() => {
       fireEvent.click(screen.getByRole("button", { name: "Show articles" }));
     });
-    const third = screen.getByLabelText(
-      "Import choice for Local Name 3",
-    ) as HTMLSelectElement;
+    const third = screen.getByLabelText("Import choice for Local Name 3") as HTMLSelectElement;
     expect(third.value).toBe("keep-mine");
     act(() => {
       fireEvent.click(screen.getByRole("button", { name: "Import" }));

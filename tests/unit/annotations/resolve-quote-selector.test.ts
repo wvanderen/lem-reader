@@ -22,10 +22,7 @@ import {
   resolveQuoteSelector,
 } from "../../../src/content/normalizeText";
 import type { CanonicalArticle } from "../../../src/content/types";
-import type {
-  TextPositionSelector,
-  TextQuoteSelector,
-} from "../../../src/content/normalizeText";
+import type { TextPositionSelector, TextQuoteSelector } from "../../../src/content/normalizeText";
 
 function parseArticle(raw: unknown): CanonicalArticle {
   return ArticleSchema.parse(raw);
@@ -142,10 +139,7 @@ describe("resolveQuoteSelector — N>1 exact → ambiguous", () => {
 describe("resolveQuoteSelector — zero exact → orphan", () => {
   it("returns 'orphan' when the exact text is absent and no prefix/suffix fallback matches", () => {
     const originalText = "the original passage that will disappear";
-    const { selector, position } = deriveForUniqueSubstring(
-      originalText,
-      "original passage",
-    );
+    const { selector, position } = deriveForUniqueSubstring(originalText, "original passage");
     // Edited article: the passage is completely gone, and the prefix/suffix
     // context does not co-occur anywhere.
     const editedText = "a totally different set of words with no overlap";
@@ -175,10 +169,7 @@ describe("resolveQuoteSelector — zero exact + unique prefix/suffix → confide
   it("returns a confident position when the exact text changed but prefix+suffix uniquely co-occur", () => {
     // Original: prefix="alpha " exact="middle" suffix=" omega"
     const originalText = "alpha middle omega rest of article";
-    const { selector, position } = deriveForUniqueSubstring(
-      originalText,
-      "middle",
-    );
+    const { selector, position } = deriveForUniqueSubstring(originalText, "middle");
     // Edited: "middle" → "CHANGED", but "alpha " still precedes and " omega"
     // still follows. Exactly one prefix+suffix candidate → confident.
     const editedText = "alpha CHANGED omega rest of article";

@@ -43,9 +43,7 @@ async function loadHook() {
   return await import("../../src/reader/useReadingSession");
 }
 async function loadRows(): Promise<ReadingSessionRecord[]> {
-  const { loadAllReadingSessions } = await import(
-    "../../src/persistence/readingSessionsStore"
-  );
+  const { loadAllReadingSessions } = await import("../../src/persistence/readingSessionsStore");
   return loadAllReadingSessions();
 }
 
@@ -143,9 +141,7 @@ describe("useReadingSession — one row per visit (issue #34 AC 1)", () => {
       expect(rows).toHaveLength(2);
       // Two distinct visit identities (append-only — no merge).
       expect(new Set(rows.map((r) => r.id)).size).toBe(2);
-      const sorted = [...rows].sort((a, b) =>
-        a.startedAt.localeCompare(b.startedAt),
-      );
+      const sorted = [...rows].sort((a, b) => a.startedAt.localeCompare(b.startedAt));
       expect(new Date(sorted[1]?.startedAt ?? 0).getTime()).toBeGreaterThan(
         new Date(sorted[0]?.startedAt ?? 0).getTime(),
       );

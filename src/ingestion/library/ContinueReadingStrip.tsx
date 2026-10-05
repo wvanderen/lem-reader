@@ -67,10 +67,7 @@ import { ProgressHairline } from "../../reader/ProgressHairline";
 import { percentRead } from "./readingState";
 import { effectiveTitle } from "./effectiveMetadata";
 import type { LibrarySnapshot } from "./librarySnapshot";
-import {
-  deriveResumeTargets,
-  type ResumeTargetEntry,
-} from "./resumeTarget";
+import { deriveResumeTargets, type ResumeTargetEntry } from "./resumeTarget";
 
 /** The cap on continue-reading cards (D8-09 — calm lower end). */
 const CONTINUE_READING_CAP = 3;

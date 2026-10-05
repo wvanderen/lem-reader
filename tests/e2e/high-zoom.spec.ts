@@ -34,11 +34,7 @@ import { FIXTURES, wipeDatabase, openArticle } from "./annotations/_fixtures";
 import { openAddDialog, pickSource } from "./library/add-dialog";
 // Plan 21-06 (D21-14 / ACPT-08) — the four-destination matrix cells below
 // (additive import; the cells are additive to the reader cells above).
-import {
-  DESTINATIONS,
-  assertDestinationInvariant,
-  openEdgeDestination,
-} from "./_edge-invariant";
+import { DESTINATIONS, assertDestinationInvariant, openEdgeDestination } from "./_edge-invariant";
 import { BASE } from "./_base";
 
 // 320 CSS px is the WCAG 1.4.10 reflow breakpoint; 800px height gives the
@@ -91,9 +87,7 @@ for (const fixture of FIXTURES) {
           sample: first?.textContent ?? "",
         };
       }, visibleBlockSelector);
-      expect(before.count, `${ZOOM_LABEL} ${fixture}: blocks before zoom`).toBeGreaterThan(
-        0,
-      );
+      expect(before.count, `${ZOOM_LABEL} ${fixture}: blocks before zoom`).toBeGreaterThan(0);
 
       // Apply 400% zoom. Wrapped so engines that don't support CSS zoom
       // still leave the page in a usable state (the assertion below is
@@ -134,9 +128,7 @@ for (const fixture of FIXTURES) {
 // body has NO horizontal overflow. This is the direct reflow contract
 // (reflow.spec.ts asserts it for one fixture; here we re-prove it as part of
 // the high-zoom acceptance bar on a representative text-heavy fixture).
-test("320px reflow: body has no horizontal overflow (WCAG 1.4.10)", async ({
-  page,
-}) => {
+test("320px reflow: body has no horizontal overflow (WCAG 1.4.10)", async ({ page }) => {
   await openArticle(page, "essay-long-form");
 
   const overflow = await page.evaluate(() => ({
@@ -161,9 +153,7 @@ test("Add dialog at 400% zoom + 320px reflow: no overflow at 320px; dialog survi
   page,
 }) => {
   await page.goto(`${BASE}/#/`);
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Saved articles" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
 
   await openAddDialog(page);
   const dlg = page.locator("dialog.add-dialog");
@@ -195,9 +185,7 @@ test("Add dialog at 400% zoom + 320px reflow: no overflow at 320px; dialog survi
   await pickSource(page, "paste");
   await expect(page.locator("textarea#ingest-paste")).toBeVisible();
   await pickSource(page, "url");
-  await page
-    .getByRole("textbox", { name: /add by url/i })
-    .fill("https://example.com/high-zoom");
+  await page.getByRole("textbox", { name: /add by url/i }).fill("https://example.com/high-zoom");
   await expect(page.getByRole("button", { name: /^add$/i })).toBeEnabled();
 
   // SECONDARY: apply 400% CSS zoom — survival only (no content lost, the
@@ -207,19 +195,14 @@ test("Add dialog at 400% zoom + 320px reflow: no overflow at 320px; dialog survi
   });
   await page.waitForTimeout(500);
 
-  await expect(
-    dlg,
-    "the dialog is still rendered after 400% zoom",
-  ).toBeVisible();
+  await expect(dlg, "the dialog is still rendered after 400% zoom").toBeVisible();
   await expect(
     page.getByRole("radio", { name: "Web address" }),
     "no picker content lost after 400% zoom",
   ).toBeVisible();
   // Operability under zoom: the URL field still accepts input and the
   // submit control still reflects it.
-  await page
-    .getByRole("textbox", { name: /add by url/i })
-    .fill("https://example.com/high-zoom-4x");
+  await page.getByRole("textbox", { name: /add by url/i }).fill("https://example.com/high-zoom-4x");
   await expect(page.getByRole("button", { name: /^add$/i })).toBeEnabled();
 });
 

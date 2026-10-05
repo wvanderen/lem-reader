@@ -204,23 +204,23 @@ describe("endPinOffset + isAtArticleEnd — the shared end substrate", () => {
 // ─── 3. restore-at-end landing ──────────────────────────────────────────────
 
 describe("landingForRestore — restore/mode-swap landing table (260908-oht end-landing)", () => {
-  it("offset at the total (a finished article's pinned save) → \"end\"", () => {
+  it('offset at the total (a finished article\'s pinned save) → "end"', () => {
     expect(landingForRestore(100, 100)).toBe("end");
   });
 
-  it("offset PAST the total (corpus changed since the save) → \"end\"", () => {
+  it('offset PAST the total (corpus changed since the save) → "end"', () => {
     expect(landingForRestore(140, 100)).toBe("end");
   });
 
-  it("offset one short of the total → \"passage\" (normal findScrollTarget restore)", () => {
+  it('offset one short of the total → "passage" (normal findScrollTarget restore)', () => {
     expect(landingForRestore(99, 100)).toBe("passage");
   });
 
-  it("offset 0 (article top) → \"passage\"", () => {
+  it('offset 0 (article top) → "passage"', () => {
     expect(landingForRestore(0, 100)).toBe("passage");
   });
 
-  it("composed with the end pin: a pinned save lands at \"end\"", () => {
+  it('composed with the end pin: a pinned save lands at "end"', () => {
     const article = makeArticle();
     const pinned = endPinOffset(article);
     expect(landingForRestore(pinned, graphemeLength(article))).toBe("end");

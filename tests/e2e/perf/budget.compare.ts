@@ -35,13 +35,7 @@
 //
 // Shape (mirrors calibration/fingerprint.json schema):
 
-import {
-  readFileSync,
-  writeFileSync,
-  existsSync,
-  readdirSync,
-  mkdirSync,
-} from "node:fs";
+import { readFileSync, writeFileSync, existsSync, readdirSync, mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 
 const REPO_ROOT = process.cwd();
@@ -75,10 +69,7 @@ interface Budget {
   toleranceBound?: { headroomPct?: number | null };
   rationale?: string;
   /** engines[engine][profile][fixture][phase] = BudgetCell */
-  engines?: Record<
-    string,
-    Record<string, Record<string, Partial<Record<Phase, BudgetCell>>>>
-  >;
+  engines?: Record<string, Record<string, Record<string, Partial<Record<Phase, BudgetCell>>>>>;
 }
 
 // ── Aggregation ─────────────────────────────────────────────────────────────
@@ -104,15 +95,14 @@ function aggregate(samples: readonly PerfSample[]): Map<string, CellAggregate> {
   const byCell = new Map<string, CellAggregate>();
   for (const s of samples) {
     const key = `${s.engine}|${s.profile}|${s.fixture}|${s.phase}`;
-    const cell =
-      byCell.get(key) ?? {
-        fixture: s.fixture,
-        profile: s.profile,
-        engine: s.engine,
-        phase: s.phase,
-        p95: 0,
-        samples: [],
-      };
+    const cell = byCell.get(key) ?? {
+      fixture: s.fixture,
+      profile: s.profile,
+      engine: s.engine,
+      phase: s.phase,
+      p95: 0,
+      samples: [],
+    };
     cell.samples.push(s.wallClockMs);
     byCell.set(key, cell);
   }
@@ -150,9 +140,7 @@ function loadCommittedBudget(): Budget | null {
 }
 
 /** Build the engines shape from fresh measurements (for the artifact write). */
-function buildEnginesShape(
-  byCell: Map<string, CellAggregate>,
-): NonNullable<Budget["engines"]> {
+function buildEnginesShape(byCell: Map<string, CellAggregate>): NonNullable<Budget["engines"]> {
   const engines: NonNullable<Budget["engines"]> = {};
   for (const cell of byCell.values()) {
     const e = (engines[cell.engine] ??= {});
@@ -176,7 +164,7 @@ function mergeLockedThresholds(
       for (const [fixture, phases] of Object.entries(fixtures ?? {})) {
         for (const [phase, cell] of Object.entries(phases ?? {})) {
           if (!cell || typeof cell.wallClockMs !== "number") continue;
-          const f = ((fresh[engine] ??= {})[profile] ??= {})[fixture] ??= {};
+          const f = (((fresh[engine] ??= {})[profile] ??= {})[fixture] ??= {});
           const existing = f[phase as Phase];
           f[phase as Phase] = {
             wallClockMs: cell.wallClockMs,
@@ -198,12 +186,8 @@ function printP95Table(byCell: Map<string, CellAggregate>): void {
     return a.phase.localeCompare(b.phase);
   });
   console.log("[perf] measured p95 wall-clock (ms):");
-  console.log(
-    "  engine    | profile          | fixture          | phase |    p95 | n",
-  );
-  console.log(
-    "  ----------|------------------|------------------|-------|--------|---",
-  );
+  console.log("  engine    | profile          | fixture          | phase |    p95 | n");
+  console.log("  ----------|------------------|------------------|-------|--------|---");
   for (const r of rows) {
     console.log(
       `  ${r.engine.padEnd(9)} | ${r.profile.padEnd(17)} | ${r.fixture.padEnd(17)} | ${r.phase.padEnd(5)} | ${String(r.p95).padStart(6)} | ${r.samples.length}`,
@@ -282,12 +266,8 @@ function main(): void {
     // The harness did not run (or wrote no samples). Do NOT overwrite the
     // committed budget; surface the error so CI catches a misconfigured
     // `npm run perf` step.
-    console.error(
-      "[perf] no per-project results in .perf-tmp/ — did the harness run?",
-    );
-    console.error(
-      "[perf] refusing to overwrite tests/e2e/perf/budget.json with empty data",
-    );
+    console.error("[perf] no per-project results in .perf-tmp/ — did the harness run?");
+    console.error("[perf] refusing to overwrite tests/e2e/perf/budget.json with empty data");
     console.error("[perf] D6-04 gate SKIPPED (no fresh data)");
     process.exit(2);
   }
@@ -322,9 +302,7 @@ function main(): void {
     console.log(
       `[perf] wrote ${BUDGET_PATH} (${freshSamples.length} samples, engines: ${[...enginesPresent].join(", ") || "none"})`,
     );
-    console.log(
-      "[perf] no locked budget to diff against (placeholder / first run); exit 0",
-    );
+    console.log("[perf] no locked budget to diff against (placeholder / first run); exit 0");
     process.exit(0);
   }
 
@@ -334,9 +312,7 @@ function main(): void {
   if (!committed) {
     // Unreachable given isLockedBudget returned true above; surface as an
     // internal error rather than masquerading as refuse-empty or regression.
-    throw new Error(
-      "[perf] internal error: locked-budget path reached with null committed",
-    );
+    throw new Error("[perf] internal error: locked-budget path reached with null committed");
   }
   const headroomPct = committed.toleranceBound?.headroomPct ?? 0;
   const regressions = findRegressions(byCell, committed, headroomPct);

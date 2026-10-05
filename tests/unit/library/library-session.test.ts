@@ -34,9 +34,7 @@ import type { LibraryContextSnapshot } from "../../../src/ingestion/library/libr
  * (the D15-12 shape; no schema-parse builders needed — the snapshot is not
  * a persisted record, so no Zod boundary applies).
  */
-function snap(
-  overrides: Partial<LibraryContextSnapshot> = {},
-): LibraryContextSnapshot {
+function snap(overrides: Partial<LibraryContextSnapshot> = {}): LibraryContextSnapshot {
   return {
     view: "all",
     query: "lantern",

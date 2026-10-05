@@ -30,11 +30,7 @@
 // the rail slices 3 (D8-09); the nav takes [0].
 import type { CanonicalArticle } from "../../content/types";
 import type { Book } from "../../content/schema";
-import {
-  chapterOrdinal,
-  deriveBookProgress,
-  resolveResumeChapterId,
-} from "./bookProgress";
+import { chapterOrdinal, deriveBookProgress, resolveResumeChapterId } from "./bookProgress";
 import { articleReadingState, bookReadingState } from "./readingState";
 import type { LibrarySnapshot } from "./librarySnapshot";
 
@@ -73,35 +69,31 @@ export type ResumeTargetEntry =
  *                 its precomputed folds feed every derivation; consumers
  *                 never re-fold raw rows.
  */
-export function deriveResumeTargets(
-  snapshot: LibrarySnapshot,
-): ResumeTargetEntry[] {
+export function deriveResumeTargets(snapshot: LibrarySnapshot): ResumeTargetEntry[] {
   const latestByArticle = snapshot.latestLocationByArticleId;
   const totalsById = snapshot.totalsByArticleId;
 
   // Standalone article entries (D12-02: chapter members — articles
   // carrying ingestionMeta.bookId — NEVER emit their own entry; the
   // snapshot's partition already excluded them).
-  const articleEntries: ResumeTargetEntry[] = snapshot.standaloneArticles.flatMap(
-    (article) => {
-      const location = latestByArticle.get(article.id);
-      if (!location) return [];
-      const total = totalsById.get(article.id) ?? 0;
-      const progress = Math.min(1, location.graphemeOffset / total);
-      // D14-20 — the membership gate is a !== in-progress check on
-      // the ONE policy module.
-      if (articleReadingState(location, total) !== "in-progress") return [];
-      return [
-        {
-          kind: "article" as const,
-          articleId: article.id,
-          article,
-          progress,
-          lastOpenedAt: location.savedAt,
-        },
-      ];
-    },
-  );
+  const articleEntries: ResumeTargetEntry[] = snapshot.standaloneArticles.flatMap((article) => {
+    const location = latestByArticle.get(article.id);
+    if (!location) return [];
+    const total = totalsById.get(article.id) ?? 0;
+    const progress = Math.min(1, location.graphemeOffset / total);
+    // D14-20 — the membership gate is a !== in-progress check on
+    // the ONE policy module.
+    if (articleReadingState(location, total) !== "in-progress") return [];
+    return [
+      {
+        kind: "article" as const,
+        articleId: article.id,
+        article,
+        progress,
+        lastOpenedAt: location.savedAt,
+      },
+    ];
+  });
 
   // ONE book-level entry per in-progress book (D12-02): any chapter
   // location + chapters-finished progress < 1. The D12-06 "Chapter N of
@@ -112,9 +104,8 @@ export function deriveResumeTargets(
     // policy module. Issue #8 — every derivation reads the snapshot's ONE
     // precomputed latest-location fold (never a re-fold of the raw rows).
     if (
-      bookReadingState(book, latestByArticle, (articleId) =>
-        totalsById.get(articleId),
-      ) !== "in-progress"
+      bookReadingState(book, latestByArticle, (articleId) => totalsById.get(articleId)) !==
+      "in-progress"
     )
       return [];
     const resumeChapterId = resolveResumeChapterId(book, latestByArticle);
@@ -141,9 +132,8 @@ export function deriveResumeTargets(
     ];
   });
 
-  return [...articleEntries, ...bookEntries]
-    .sort((a, b) =>
-      // savedAt descending (most-recently-opened first — D8-10).
-      a.lastOpenedAt < b.lastOpenedAt ? 1 : a.lastOpenedAt > b.lastOpenedAt ? -1 : 0,
-    );
+  return [...articleEntries, ...bookEntries].sort((a, b) =>
+    // savedAt descending (most-recently-opened first — D8-10).
+    a.lastOpenedAt < b.lastOpenedAt ? 1 : a.lastOpenedAt > b.lastOpenedAt ? -1 : 0,
+  );
 }

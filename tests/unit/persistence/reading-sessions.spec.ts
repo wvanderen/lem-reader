@@ -68,9 +68,7 @@ function sampleArticle(overrides: Partial<CanonicalArticle> = {}): CanonicalArti
       retrievedAt: "2026-09-01T00:00:00.000Z",
       originalHtmlHash: "sha256:" + "0".repeat(64),
     },
-    blocks: [
-      { kind: "paragraph", content: [{ text: "Body text here.", marks: [] }] },
-    ],
+    blocks: [{ kind: "paragraph", content: [{ text: "Body text here.", marks: [] }] }],
     footnotes: [],
     ingestionMeta: {
       source: "url",
@@ -108,9 +106,7 @@ function sampleBookFixture(): { book: Book; chapters: CanonicalArticle[] } {
         retrievedAt: "2026-09-01T00:00:00.000Z",
         originalHtmlHash: "sha256:" + hashChar.repeat(64),
       },
-      blocks: [
-        { kind: "paragraph", content: [{ text: "Chapter body.", marks: [] }] },
-      ],
+      blocks: [{ kind: "paragraph", content: [{ text: "Chapter body.", marks: [] }] }],
       footnotes: [],
       ingestionMeta: {
         source: "epub-chapter",
@@ -200,15 +196,19 @@ describe("readingSessions — one append-only row per visit (issue #34 AC 1)", (
 
     // The flush discipline: each flush snapshots the SAME visit with
     // refined totals — the upsert must replace, never duplicate.
-    await putReadingSession(sampleSession("visit-a", "session-article-slug", {
-      activeSeconds: 15,
-      endOffset: 900,
-    }));
-    await putReadingSession(sampleSession("visit-a", "session-article-slug", {
-      activeSeconds: 30,
-      endOffset: 1_800,
-      endedAt: "2026-09-15T10:05:30.000Z",
-    }));
+    await putReadingSession(
+      sampleSession("visit-a", "session-article-slug", {
+        activeSeconds: 15,
+        endOffset: 900,
+      }),
+    );
+    await putReadingSession(
+      sampleSession("visit-a", "session-article-slug", {
+        activeSeconds: 30,
+        endOffset: 1_800,
+        endedAt: "2026-09-15T10:05:30.000Z",
+      }),
+    );
 
     expect(await db.readingSessions.count()).toBe(1);
     const row = await db.readingSessions.get("visit-a");
@@ -220,15 +220,19 @@ describe("readingSessions — one append-only row per visit (issue #34 AC 1)", (
     const { db } = await loadDb();
     const { putReadingSession, loadAllReadingSessions } = await loadSessionsStore();
 
-    await putReadingSession(sampleSession("visit-1", "session-article-slug", {
-      startedAt: "2026-09-15T10:00:00.000Z",
-    }));
-    await putReadingSession(sampleSession("visit-2", "session-article-slug", {
-      startedAt: "2026-09-15T18:00:00.000Z",
-      endedAt: "2026-09-15T18:03:00.000Z",
-      activeSeconds: 120,
-      endOffset: 2_000,
-    }));
+    await putReadingSession(
+      sampleSession("visit-1", "session-article-slug", {
+        startedAt: "2026-09-15T10:00:00.000Z",
+      }),
+    );
+    await putReadingSession(
+      sampleSession("visit-2", "session-article-slug", {
+        startedAt: "2026-09-15T18:00:00.000Z",
+        endedAt: "2026-09-15T18:03:00.000Z",
+        activeSeconds: 120,
+        endOffset: 2_000,
+      }),
+    );
 
     expect(await db.readingSessions.count()).toBe(2);
     const rows = await loadAllReadingSessions();

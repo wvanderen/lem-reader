@@ -97,13 +97,7 @@ export function registrySample(key: keyof typeof SAMPLES | string): RegistrySamp
 }
 
 /** The decode-matrix formats (plan-locked: jpeg/png/webp/gif/avif). */
-export const DECODE_FORMATS = [
-  "jpeg",
-  "png",
-  "webp",
-  "gif",
-  "avif",
-] as const;
+export const DECODE_FORMATS = ["jpeg", "png", "webp", "gif", "avif"] as const;
 
 /** The registry sample's raw bytes as a plain number array — the JSON-only
  * Playwright argument channel shape seedRows' assets arm consumes (the 20-05
@@ -156,9 +150,7 @@ export function makeFigureArticle(opts: {
         ...(fig.src !== undefined ? { src: fig.src } : {}),
         ...(fig.width !== undefined ? { width: fig.width } : {}),
         ...(fig.height !== undefined ? { height: fig.height } : {}),
-        ...(fig.caption !== undefined
-          ? { caption: [{ text: fig.caption, marks: [] }] }
-          : {}),
+        ...(fig.caption !== undefined ? { caption: [{ text: fig.caption, marks: [] }] } : {}),
       })),
     ],
   });
@@ -241,20 +233,14 @@ export async function waitForDecoded(img: Locator): Promise<void> {
  * budget). Returns -1 when no page carries a match. Leaves the reader ON
  * the matching page.
  */
-export async function findPageWith(
-  page: Page,
-  selector: string,
-): Promise<number> {
+export async function findPageWith(page: Page, selector: string): Promise<number> {
   const total = await totalPages(page);
   for (let target = 0; target < total; target += 1) {
     await turnToPage(page, target);
-    const found = await page.evaluate(
-      (sel) => {
-        const el = document.querySelector(`.page-fragment ${sel}`);
-        return el !== null;
-      },
-      selector,
-    );
+    const found = await page.evaluate((sel) => {
+      const el = document.querySelector(`.page-fragment ${sel}`);
+      return el !== null;
+    }, selector);
     if (found) return target;
   }
   return -1;

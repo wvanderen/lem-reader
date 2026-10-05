@@ -33,10 +33,7 @@ import { orderLibraryEntries } from "../../../src/ingestion/library/libraryOrder
 import { ArticleSchema, BookSchema, LocationRecordSchema } from "../../../src/content/schema";
 import type { CanonicalArticle, Book, LocationRecord } from "../../../src/content/schema";
 import { filterBooks, filterLibrary } from "../../../src/ingestion/library/libraryFilter";
-import {
-  articleReadingState,
-  bookReadingState,
-} from "../../../src/ingestion/library/readingState";
+import { articleReadingState, bookReadingState } from "../../../src/ingestion/library/readingState";
 import type { ReadingState } from "../../../src/ingestion/library/readingState";
 
 /** A minimal valid standalone article; addedAt added only when supplied. */
@@ -55,9 +52,7 @@ function makeArticle(
       retrievedAt: "2026-09-01T00:00:00.000Z",
       originalHtmlHash: "sha256:" + "0".repeat(64),
     },
-    blocks: [
-      { kind: "paragraph", content: [{ text: `Body of ${id}.`, marks: [] }] },
-    ],
+    blocks: [{ kind: "paragraph", content: [{ text: `Body of ${id}.`, marks: [] }] }],
     footnotes: [],
     ingestionMeta: {
       source: "url",
@@ -90,9 +85,7 @@ function makeBook(id: string, addedAt: string, chapterIds: string[] = [`${id}-c0
 
 /** Entry label for readable expectations: `a:<id>` / `b:<id>`. */
 function label(entry: ReturnType<typeof orderLibraryEntries>[number]): string {
-  return entry.kind === "article"
-    ? `a:${entry.article.id}`
-    : `b:${entry.book.id}`;
+  return entry.kind === "article" ? `a:${entry.article.id}` : `b:${entry.book.id}`;
 }
 function labels(entries: ReturnType<typeof orderLibraryEntries>): string[] {
   return entries.map(label);
@@ -184,9 +177,7 @@ describe("filter composition preserves the Recently-added order (issue #114)", (
     makeArticle("tagged-new", "2026-09-05T00:00:00.000Z"),
     makeArticle("plain-mid", "2026-09-03T00:00:00.000Z"),
     makeArticle("tagged-old", "2026-09-01T00:00:00.000Z"),
-  ].map((a, i) =>
-    i % 2 === 0 ? { ...a, tags: ["essay"] } : a,
-  );
+  ].map((a, i) => (i % 2 === 0 ? { ...a, tags: ["essay"] } : a));
   const books = [
     makeBook("tagged-book", "2026-09-04T00:00:00.000Z"),
     makeBook("plain-book", "2026-08-30T00:00:00.000Z"),
@@ -288,8 +279,7 @@ describe("orderLibraryEntries composes with the reading-state views (issue #114)
   const textLengthOf = (id: string): number | undefined => totals.get(id);
   const articleState = (a: CanonicalArticle): ReadingState =>
     articleReadingState(latest.get(a.id), totals.get(a.id) ?? 0);
-  const bookState = (b: Book): ReadingState =>
-    bookReadingState(b, latest, textLengthOf);
+  const bookState = (b: Book): ReadingState => bookReadingState(b, latest, textLengthOf);
 
   const allArticles = [finishedArticle, inProgressArticle, unreadArticle];
   const allBooks = [progressBook];
@@ -367,12 +357,7 @@ describe("orderLibraryEntries by title (issue #115)", () => {
     );
     // Added order (Zebra, first/mid, Later) is irrelevant — title governs:
     // "A first essay" < "Later anthology" < "Middling essay" < "Zebra anthology".
-    expect(labels(entries)).toEqual([
-      "a:first",
-      "b:last-book",
-      "a:mid",
-      "b:zebra-book",
-    ]);
+    expect(labels(entries)).toEqual(["a:first", "b:last-book", "a:mid", "b:zebra-book"]);
   });
 
   it("sorts by the READER-VISIBLE effective title — the readerTitle override wins over the canonical title", () => {
@@ -494,7 +479,9 @@ describe("orderLibraryEntries by recently-opened (issue #115)", () => {
     });
   }
 
-  function ctx(...locations: LocationRecord[]): { latestLocationByArticleId: Map<string, LocationRecord> } {
+  function ctx(...locations: LocationRecord[]): {
+    latestLocationByArticleId: Map<string, LocationRecord>;
+  } {
     return { latestLocationByArticleId: new Map(locations.map((l) => [l.articleId, l] as const)) };
   }
 
