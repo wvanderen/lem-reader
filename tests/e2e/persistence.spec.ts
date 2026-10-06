@@ -130,11 +130,12 @@ test.describe("STATE-02 + Pitfall 4 persistence", () => {
     // Initial state: data-theme=light (the ADR 0005 Daylight default).
     await expectDataTheme(page, "light");
 
-    // Open the settings panel and switch theme to Dark (UI-SPEC line 316).
+    // Open the settings panel and switch theme to Night (UI-SPEC line 316;
+    // ADR 0005 renamed the presets — the "dark" value's label is "Night").
     await page.getByRole("button", { name: "Reading settings" }).click();
     await expandSettingsGroup(page, "Appearance");
     await expect(page.locator("dialog.settings-panel")).toBeVisible();
-    await page.getByRole("radio", { name: "Dark", exact: true }).click();
+    await page.getByRole("radio", { name: "Night", exact: true }).click();
 
     // Live-apply: data-theme flips immediately (D2-03).
     await expectDataTheme(page, "dark");
@@ -160,10 +161,11 @@ test.describe("STATE-02 + Pitfall 4 persistence", () => {
     await page.goto(`${BASE}/#/article/${FIRST_FIXTURE}`);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 
-    // Open the panel and switch to Light theme.
+    // Open the panel and switch to Daylight theme (ADR 0005 label for the
+    // "light" value).
     await page.getByRole("button", { name: "Reading settings" }).click();
     await expandSettingsGroup(page, "Appearance");
-    await page.getByRole("radio", { name: "Light", exact: true }).click();
+    await page.getByRole("radio", { name: "Daylight", exact: true }).click();
     await expectDataTheme(page, "light");
 
     // Close the panel and IMMEDIATELY simulate the reader tabbing away —
@@ -207,7 +209,7 @@ test.describe("STATE-02 + Pitfall 4 persistence", () => {
     await page.getByRole("button", { name: "Reading settings" }).click();
     await expandSettingsGroup(page, "Appearance");
     await expect(page.locator("dialog.settings-panel")).toBeVisible();
-    await expect(page.getByRole("radio", { name: "Sepia" })).toBeVisible();
+    await expect(page.getByRole("radio", { name: "Warm paper" })).toBeVisible();
 
     // Structural contract for the recovery surfaces (verified in DOM, even
     // though they are hidden in the OK state). The WipeConfirm alertdialog

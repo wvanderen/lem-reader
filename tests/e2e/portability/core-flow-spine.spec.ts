@@ -222,7 +222,7 @@ test("ACPT-06 — ingest .md, read, highlight, export, re-import: nothing lost a
     // this writer-emit site surfaced in the honest full-suite gate run.)
     const { bundle: bundleJson, entries } = readBundleJson(bundlePath!);
     expect(entries["manifest.json"]).toBeDefined();
-    expect(bundleJson.schemaVersion).toBe(6); // writers emit v6 (issue #121)
+    expect(bundleJson.schemaVersion).toBe(7); // writers emit v7 (the starterRemoved flag — issue #143)
     expect(bundleJson.books).toEqual([]);
     expect((bundleJson.articles as Array<{ id: string }>).map((a) => a.id)).toEqual([articleId]);
 

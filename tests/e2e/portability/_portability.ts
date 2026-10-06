@@ -91,9 +91,12 @@ export async function openSettings(page: Page): Promise<Locator> {
   return panel;
 }
 
-/** The "Your data" cluster's role=status live region (D2-13 pattern). */
+/** The "Your data" cluster's role=status live region (D2-13 pattern).
+ * Scoped to the fieldset's direct child: the restore-starter row renders
+ * its own StatusRegion inside a wrapping div, and strict mode must see
+ * exactly one match. */
 export function settingsStatus(page: Page): Locator {
-  return page.locator("dialog.settings-panel .status");
+  return page.locator("dialog.settings-panel fieldset.settings-data > .status");
 }
 
 /** The visually-hidden bundle file input inside the settings panel. */

@@ -720,7 +720,11 @@ test.describe("META-02 cross-surface — one effective name everywhere (17-05, D
 // reopening seeds the fields from the persisted overrides; Reset deletes
 // the keys from the stored row (META-03) and the canonical values return.
 const DATE_CANONICAL_TITLE = "Published Date Override Article";
-const DATE_CANONICAL_ISO = "2020-06-01T09:30:00Z";
+// The raw meta string stays in the offset-free form the source used; ingest
+// normalizes it once (7f8b93a — offset-form CMS dates must not 400), so the
+// stored provenance carries the millisecond ISO shape.
+const DATE_CANONICAL_RAW = "2020-06-01T09:30:00Z";
+const DATE_CANONICAL_ISO = "2020-06-01T09:30:00.000Z";
 const DATE_OVERRIDE_INPUT = "2024-03-05";
 const DATE_OVERRIDE_ISO = "2024-03-05T12:00:00.000Z";
 const SOURCE_CANONICAL = "https://example.com/original";
@@ -729,7 +733,7 @@ const SOURCE_OVERRIDE = "https://example.org/true-source";
 function pasteHtmlWithMeta(title: string): string {
   return `<!DOCTYPE html>
 <html><head><title>${title}</title>
-<meta property="article:published_time" content="${DATE_CANONICAL_ISO}">
+<meta property="article:published_time" content="${DATE_CANONICAL_RAW}">
 <link rel="canonical" href="${SOURCE_CANONICAL}">
 </head>
 <body>

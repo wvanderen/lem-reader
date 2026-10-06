@@ -198,7 +198,7 @@ test("RI-RT — reader-improvements fields survive the real export → import jo
 
     // ── Node-side: the v6 writer carries every new field verbatim ─────────
     const { bundle } = readBundleJson(bundlePath!);
-    expect(bundle.schemaVersion).toBe(6);
+    expect(bundle.schemaVersion).toBe(7);
     // The export orders subscriptions by feedUrl — compare as an id-keyed
     // map so the assertion is order-independent.
     expect(

@@ -51,8 +51,9 @@ const PERSISTED = {
   readingMode: "scrolling",
 };
 
-/** The DEFAULT tokens a wiped reader must paint (D-07 warm-paper). */
-const DEFAULT_THEME = "sepia";
+/** The DEFAULT tokens a wiped reader must paint (ADR 0005 — Daylight is
+ * the default; the "light" stored value paints the Daylight theme). */
+const DEFAULT_THEME = "light";
 const DEFAULT_FONT_SIZE = "18px";
 
 test.beforeEach(async ({ page }) => {
