@@ -475,16 +475,16 @@ test.describe("RestorationMarker — paginated mode (18-04)", () => {
 
     // The fade class still lands at 3400ms (the lifecycle is timer-driven)
     // — poll tolerating the unmount that follows it: a detached marker
-    // means the fade phase already came and went.
+    // (query returns null) means the fade phase already came and went.
+    // An evaluate that THROWS is not detachment — a crashed page must
+    // fail loudly, so no catch softens this poll.
     await expect
       .poll(
         () =>
-          page
-            .evaluate(() => {
-              const el = document.querySelector(".restoration-marker");
-              return el === null || el.classList.contains("is-fading");
-            })
-            .catch(() => true),
+          page.evaluate(() => {
+            const el = document.querySelector(".restoration-marker");
+            return el === null || el.classList.contains("is-fading");
+          }),
         { timeout: 10_000 },
       )
       .toBe(true);
