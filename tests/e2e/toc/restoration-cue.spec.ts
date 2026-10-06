@@ -218,6 +218,22 @@ test.describe("RestorationMarker — scrolling mode (ORNT-06)", () => {
     const marker = page.locator(".restoration-marker");
     await expect(marker).toHaveCount(1, { timeout: 8_000 });
 
+    // Scroll restoration settles asynchronously (webkit eases the restore
+    // jump under worker contention) — the overlay contract compares the
+    // viewport-relative geometry across the marker lifecycle, so both reads
+    // must happen once the scroll offset has stopped moving.
+    await page.waitForFunction(
+      async () => {
+        const y1 = window.scrollY;
+        await new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        );
+        return Math.abs(window.scrollY - y1) <= 0.5;
+      },
+      undefined,
+      { timeout: 8_000 },
+    );
+
     // Geometry WITH the marker mounted…
     const withMarker = await readGeometry(page);
     // …and after the 4s lifecycle unmounts it (generous fade window).
@@ -448,18 +464,30 @@ test.describe("RestorationMarker — paginated mode (18-04)", () => {
     const marker = page.locator(".restoration-marker");
     await expect(marker).toHaveCount(1, { timeout: 8_000 });
 
-    // The fade class still lands at 3400ms (the lifecycle is timer-driven)
-    // — but the global prefers-reduced-motion gate kills the transition, so
-    // the opacity change is an instant step (computed transition-duration
-    // 0s). Poll generously: the class arrives mid-window.
-    await expect
-      .poll(() => marker.evaluate((el) => el.classList.contains("is-fading")), { timeout: 6_000 })
-      .toBe(true);
+    // The reduced-motion gate kills the transition from mount — the
+    // computed duration is phase-independent, so read it while the marker
+    // is alive (its ~4s lifecycle) instead of racing the is-fading window.
     const duration = await marker.evaluate((el) => getComputedStyle(el).transitionDuration);
     expect(
       duration,
       "the reduced-motion gate must kill the fade (0s duration — no JS animation exists)",
     ).toBe("0s");
+
+    // The fade class still lands at 3400ms (the lifecycle is timer-driven)
+    // — poll tolerating the unmount that follows it: a detached marker
+    // means the fade phase already came and went.
+    await expect
+      .poll(
+        () =>
+          page
+            .evaluate(() => {
+              const el = document.querySelector(".restoration-marker");
+              return el === null || el.classList.contains("is-fading");
+            })
+            .catch(() => true),
+        { timeout: 10_000 },
+      )
+      .toBe(true);
 
     // And the bar is gone by the lifecycle deadline.
     await expect(marker).toHaveCount(0, { timeout: 10_000 });

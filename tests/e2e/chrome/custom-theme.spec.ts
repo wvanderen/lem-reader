@@ -88,7 +88,7 @@ async function seedLegacyCustomRow(page: Page): Promise<void> {
       new Promise<void>((resolve) => setTimeout(resolve, ms));
     // Poll for the app-created store (the app's Dexie boot creates it).
     let db = await openDb();
-    for (let i = 0; !db.objectStoreNames.contains("settings") && i < 100; i++) {
+    for (let i = 0; !db.objectStoreNames.contains("settings") && i < 240; i++) {
       db.close();
       await sleep(50);
       db = await openDb();

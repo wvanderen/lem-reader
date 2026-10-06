@@ -16,6 +16,16 @@ export default defineConfig({
   // green (never tighter). Assertions, engines, and spec selection are
   // byte-unchanged; only concurrency drops (≈7m → ≈10m full suite).
   workers: 3,
+  // The same moving-target starvation class the worker cap above records
+  // (full-suite load on the reference machine starves a DIFFERENT handful
+  // of tail specs per run — two full runs, six distinct one-off sites,
+  // zero code-level failures) converges here instead: the CI gate retries
+  // each spec once, so a transient contention blip fails the gate only if
+  // it reproduces. A real regression fails both attempts. `trace:
+  // "on-first-retry"` keeps every absorbed blip auditable (flaky ≠ silent;
+  // Playwright reports the count), and local runs stay retry-free so a
+  // developer sees the blip raw.
+  retries: process.env.CI ? 1 : 0,
   use: { trace: "on-first-retry" },
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },

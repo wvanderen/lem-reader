@@ -15,7 +15,7 @@ import { expandSettingsGroup } from "../settings";
 //   3. An older (pre-#118) highlight — the row's color field stripped via
 //      raw IndexedDB — renders the Default fill until the reader changes
 //      it (AC: older highlights use Default until explicitly changed).
-//   4. Theme contrast: with the Dark preset AND a Custom theme active, the
+//   4. Theme contrast: with the Night preset AND a Custom theme active, the
 //      mark's computed fill equals the theme's --highlight-green token (the
 //      unit suite pins ink-on-fill ≥ 4.5:1 for every theme; this cell
 //      proves the token swap reaches the mark).
@@ -242,7 +242,7 @@ test.describe("highlight colors in the reader (issue #118)", () => {
     await expect(page.locator("mark.highlight").first()).toHaveClass(/color-blue/);
   });
 
-  test("theme contrast: the mark's fill follows the theme token (Dark preset + Custom)", async ({
+  test("theme contrast: the mark's fill follows the theme token (Night preset + Custom)", async ({
     page,
   }) => {
     await openArticle(page, FIXTURE);
@@ -267,12 +267,13 @@ test.describe("highlight colors in the reader (issue #118)", () => {
       expect(matches, "mark fill === the theme's --highlight-green token").toBe(true);
     };
 
-    // Dark preset via the REAL settings dialog (the radio drives applyTheme).
+    // Night preset via the REAL settings dialog (the radio drives
+    // applyTheme; ADR 0005 renamed the "dark" value's label to "Night").
     await page.getByRole("button", { name: "Reading settings" }).click();
     await expandSettingsGroup(page, "Appearance");
     const settings = page.locator("dialog.settings-panel");
     await expect(settings).toBeVisible();
-    await settings.getByRole("radio", { name: "Dark", exact: true }).click();
+    await settings.getByRole("radio", { name: "Night", exact: true }).click();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
     await assertFillMatchesToken();
 

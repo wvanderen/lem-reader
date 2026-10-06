@@ -602,9 +602,16 @@ export async function applyImport(plan: ResolvedImportPlan): Promise<void> {
   // on the other, and the tuple overloads stop at five (the STATE 12-07
   // lesson; the saveBook/removeBook array-form standardization).
   const applyPuts = async (): Promise<void> => {
-    // A removal/restoration choice always wins locally. Older installations
-    // with saved content also keep their default starter choice.
-    if (plan.starterRemoved !== undefined && !(await db.settings.get(STARTER_CHOICE_KEY))) {
+    // A removal choice travels with the bundle and applies ONLY where it
+    // changes observable state (issue #143): a machine with no recorded
+    // choice AND no content (truly fresh) adopts the bundle's removal.
+    // `false` is row-absence — the default starter-present state — so an
+    // imported false writes nothing: fabricating an explicit false row
+    // would silence every future true-choice transfer ("the explicit
+    // choice wins" reads the row, not the absence). Machines with existing
+    // content keep their default starter choice either way, and any
+    // recorded local row (restore or removal) always wins untouched.
+    if (plan.starterRemoved === true && !(await db.settings.get(STARTER_CHOICE_KEY))) {
       const existing =
         (await db.articles.count()) +
         (await db.books.count()) +
@@ -612,10 +619,9 @@ export async function applyImport(plan: ResolvedImportPlan): Promise<void> {
         (await db.location.count()) +
         (await db.readingSessions.count()) +
         (await db.subscriptions.count());
-      await db.settings.put({
-        key: STARTER_CHOICE_KEY,
-        value: existing > 0 ? false : plan.starterRemoved,
-      });
+      if (existing === 0) {
+        await db.settings.put({ key: STARTER_CHOICE_KEY, value: true });
+      }
     }
     for (const book of plan.booksToWrite) {
       await db.books.put(book);

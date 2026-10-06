@@ -2144,7 +2144,7 @@ dialog.add-dialog {
 }
 /* Quiet title register — the exact .page-indicator/.chapter-nav visual
    line. Scoped specificity (0,2,2) beats BOTH the base
-   .article-body > header h1 (26px/32px, (0,1,2)) and its ≥640px 32px
+   .article-body > header h1 (26px/36px, (0,1,2)) and its ≥640px 32px
    media override (media queries add no specificity), so no media query is
    needed — flat 14px like the indicator. margin-block stays 0 from the
    base rule. The element REMAINS an h1 (heading semantics + the
@@ -4617,17 +4617,20 @@ main:has(.readaloud-bar) .article-body:has(.mark-read-close-page) .chapter-nav-p
 /* Mobile-first: the slim header's title uses a calmer size under 640px so
  * the row (back affordance beside/above a wrapped title) always fits the
  * 09-07 25% cap WITHOUT internal scrolling at 360×640 — the D13-13 bar.
- * line-height is a whole-pixel 32px (ratio 1.23 — display leading): the
+ * line-height is a whole-pixel 36px (ratio 1.38 — display leading): the
  * inherited unitless 1.2 yields fractional 31.2px lines whose wrapped
  * accumulation rounds scrollHeight above clientHeight by 2-3px on
- * chromium/firefox (integer rounding of fractional line boxes), which is
- * rounding noise — but whole pixels remove the class entirely. Every
- * corpus title (≤30 chars) wraps to ≤3 lines at this size next to the
- * back button; longer titles keep the 09-07 overflow safety net. */
+ * chromium/firefox (integer rounding of fractional line boxes). The
+ * Wayfinder reading face (Literata, ADR 0005) carries taller glyph boxes
+ * than the previous system serif, and the engines read its vertical
+ * metrics differently — chromium needs ~33.5px at 26px, firefox ~36px —
+ * so the line-height must clear the taller reader. Every corpus title
+ * (≤30 chars) wraps to ≤3 lines at this size next to the back button
+ * (44+8+108 = 160 = the cap, with the 09-07 overflow safety net beyond). */
 .article-body > header h1 {
   margin-block: 0;
   font-size: 26px;
-  line-height: 32px;
+  line-height: 36px;
 }
 @media (min-width: 640px) {
   .article-body > header h1 {
