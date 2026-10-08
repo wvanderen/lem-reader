@@ -46,6 +46,9 @@ import { LibraryRow } from "./LibraryRow";
 import { RowProgress, RowTags } from "./RowAnatomy";
 import type { LibrarySnapshot } from "./librarySnapshot";
 import { TrashIcon } from "../../ui/icons";
+// Issue #163 — the D12-11 skip sentence's ONE copy home (the quiet-save
+// confirmation appends the SAME pair this row renders durably).
+import { skippedChaptersCopy } from "../ingestCopy";
 
 interface BookRowProps {
   /** The Book record (its chapterArticleIds are the ordered TOC). */
@@ -183,12 +186,13 @@ export function BookRow({ book, chapters, snapshot, onRemove }: BookRowProps) {
               ))}
             </ul>
             {/* D12-11 — calm skip disclosure. Never silently missing, never
-                silently broken; absent when nothing was skipped. */}
+                silently broken; absent when nothing was skipped. The ONE
+                copy home (ingestCopy.skippedChaptersCopy) keeps this row
+                and the #163 quiet-save confirmation byte-identical by
+                construction. */}
             {book.skippedChapterCount > 0 && (
               <p className="meta book-skip-disclosure">
-                {book.skippedChapterCount === 1
-                  ? "1 chapter could not be read."
-                  : `${book.skippedChapterCount} chapters could not be read.`}
+                {skippedChaptersCopy(book.skippedChapterCount)}
               </p>
             )}
             {/* D12-04 — tags live on the BOOK record. TagEntry's saveTags

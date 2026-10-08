@@ -17,7 +17,11 @@ export const DEFAULT_SETTINGS: ReaderSettings = {
   // canonical write version 4 → 5. Neither slot is set by default (the
   // D-07 sepia baseline carries no custom record; a slot's record appears
   // on first activation or when the #120 migration places one).
-  schemaVersion: 5, // STATE-04 — bumped from 4 → 5 in issue #120
+  // Issue #163 — the remembered "Open after adding" add-dialog preference
+  // bumps the canonical write version 5 → 6. Checked by default: opening
+  // what you just added is the expectation a first-run reader brings;
+  // unchecking it is the deliberate quiet-add choice, remembered hereafter.
+  schemaVersion: 6, // STATE-04 — bumped from 5 → 6 in issue #163
   font: "serif", // D-07 warm-paper serif
   size: 18, // D-07 default body size
   measure: 64, // D-07 calm measure
@@ -29,4 +33,6 @@ export const DEFAULT_SETTINGS: ReaderSettings = {
   voice: undefined, // read-aloud: the platform default voice
   rate: 1, // read-aloud: the 1× speech rate multiplier
   librarySort: "recently-added", // #115 — the shipped pre-control order (#114)
+  openAfterAdd: true, // #163 — successful ingestion opens the item (books at
+  // their first readable chapter); unchecking remembers the quiet add.
 };

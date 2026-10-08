@@ -26,7 +26,12 @@ import { validBookEpub3 } from "../unit/server/epub-fixtures";
 // Plan 16-03 — the shared dialog-opening helper (ADD-01: the intake forms
 // live behind the header Add button's modal; the axe scan below targets
 // the OPEN dialog surface).
-import { openAddDialog, pickSource, closeSavedResult } from "./library/add-dialog";
+import {
+  openAddDialog,
+  pickSource,
+  setOpenAfterAdding,
+  awaitQuietClosed,
+} from "./library/add-dialog";
 // Issue #113 — the shared BOOK-envelope mock (the schema-valid ok-variant
 // the client re-validates at the network boundary).
 import { bookEnvelope, mockEpubIngest } from "./library/book-envelope";
@@ -193,16 +198,15 @@ test("a11y #84: the Add dialog transcript-swap state is axe-clean", async ({ pag
   expect(serious, JSON.stringify(serious, null, 2)).toEqual([]);
 });
 
-// Issue #112 review follow-up — the saved-result state gets the SAME axe
-// bar as the open + transcript-swap dialog states above (the issue AC5
-// screen-reader pillar). BOTH result renders scan: the confident save
-// (title + quiet provenance line + the Close / Add another / Open article
-// row) and the flagged save (extraction note + partial-content list +
-// degraded note, each carrying the "See the original." escape hatch).
-// Payloads are schema-valid CanonicalArticles via makeArticle + a
-// hand-built IngestionMeta (the client re-validates at the network
-// boundary — the add-result.spec.ts harness discipline).
-test("a11y #112: the saved-result state is axe-clean (confident AND flagged)", async ({ page }) => {
+// Issue #163 — the quiet-save LANDING gets the axe bar the retired #112
+// result screen used to get: the library surface with the notice status
+// region live (the confirmation the unchecked landing announces). Payloads
+// are schema-valid CanonicalArticles via makeArticle (the client
+// re-validates at the network boundary — the add-result.spec.ts harness
+// discipline).
+test("a11y #163: the quiet-save landing (library + notice region) is axe-clean", async ({
+  page,
+}) => {
   await wipeDatabase(page);
   const confident = makeArticle({
     id: "a11y-saved-confident",
@@ -210,74 +214,48 @@ test("a11y #112: the saved-result state is axe-clean (confident AND flagged)", a
     paragraphs: ["Body text."],
     sourceUrl: "https://example.com/saved-confident",
   });
-  const flagged: CanonicalArticle = {
-    ...makeArticle({
-      id: "a11y-saved-flagged",
-      title: "Saved Result: Flagged",
-      paragraphs: ["Body text."],
-      sourceUrl: "https://example.com/saved-flagged",
-    }),
-    ingestionMeta: {
-      source: "url",
-      origin: "url",
-      sourceUrl: "https://example.com/saved-flagged",
-      originalHtmlHash: `sha256:${"0".repeat(64)}`,
-      extractionConfidence: "low",
-      extractionWarnings: ["1 unsupported block omitted"],
-      annotationsDegraded: true,
-    },
-  };
-  for (const [payload, renderGuard] of [
-    [confident, ".add-result-source"],
-    [flagged, ".partial-content-note"],
-  ] as const) {
-    await page.route("**/api/ingest", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        // The IngestionResponse ok-variant envelope (add-result.spec.ts's
-        // mockIngest shape — bare articles are refused at the boundary).
-        body: JSON.stringify({
-          ok: true,
-          article: payload,
-          confidence:
-            payload.ingestionMeta?.extractionConfidence === "low"
-              ? { state: "low" }
-              : { state: "confident" },
-        }),
-      });
+  await page.route("**/api/ingest", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      // The IngestionResponse ok-variant envelope (add-result.spec.ts's
+      // mockIngest shape — bare articles are refused at the boundary).
+      body: JSON.stringify({
+        ok: true,
+        article: confident,
+        confidence: { state: "confident" },
+      }),
     });
-    await page.goto(`${BASE}/#/`);
-    await openAddDialog(page);
-    await page
-      .getByRole("textbox", { name: /add by url/i })
-      .fill(payload.provenance.sourceUrl ?? "");
-    await page.getByRole("button", { name: /^add$/i }).click();
-    // The state under scan: the result card is up AND the expected limit
-    // render is live (an absent disclosure would silently weaken the gate).
-    await expect(page.locator("dialog.add-dialog .add-result")).toBeVisible();
-    await expect(page.locator(`dialog.add-dialog ${renderGuard}`)).toBeVisible();
-    const results = await new AxeBuilder({ page })
-      .withTags([...WCAG_TAGS])
-      .include("dialog.add-dialog")
-      .analyze();
-    const serious = seriousViolations(results);
-    const ids = serious.map((v) => v.id);
-    expect(ids, JSON.stringify(serious, null, 2)).not.toContain("heading-order");
-    expect(ids).not.toContain("list");
-    expect(serious).toEqual([]);
-    // Dismiss before the next arm — the loop re-opens from the list route.
-    await closeSavedResult(page);
-  }
+  });
+  await page.goto(`${BASE}/#/`);
+  await openAddDialog(page);
+  // The UNCHECKED landing — the confirmation must land in the library's
+  // notice region for the scan to have the live region under test.
+  await setOpenAfterAdding(page, false);
+  await page
+    .getByRole("textbox", { name: /add by url/i })
+    .fill(confident.provenance.sourceUrl ?? "");
+  await page.getByRole("button", { name: /^add$/i }).click();
+  // The state under scan: the dialog is gone, the landing is the library,
+  // and the notice region carries the confirmation live (an absent region
+  // would silently weaken the gate).
+  await awaitQuietClosed(page);
+  await expect(page.locator(".library-add-notice")).toContainText("Saved to your library.");
+  const results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
+  const serious = seriousViolations(results);
+  const ids = serious.map((v) => v.id);
+  expect(ids, JSON.stringify(serious, null, 2)).not.toContain("heading-order");
+  expect(ids).not.toContain("list");
+  expect(serious).toEqual([]);
 });
 
-// Issue #113 — the BOOK result state gets the SAME axe bar: the card shows
-// the book title + the honest skip disclosure (one skipped chapter live) +
-// the Close / Add another / Open book row. The envelope is a schema-valid
-// book ok-variant from the SHARED builder (the client re-validates the
-// envelope + every article at the network boundary — the
+// Issue #163 — the BOOK quiet landing gets the SAME axe bar: the notice
+// carries the honest skip sentence (one skipped chapter live) and the
+// BookRow's durable disclosure sits beneath it. The envelope is a
+// schema-valid book ok-variant from the SHARED builder (the client
+// re-validates the envelope + every article at the network boundary — the
 // book-envelope.ts harness discipline).
-test("a11y #113: the book result state is axe-clean (skip disclosure live)", async ({ page }) => {
+test("a11y #163: the book quiet landing (skip sentence live) is axe-clean", async ({ page }) => {
   await wipeDatabase(page);
   await mockEpubIngest(page, {
     current: bookEnvelope("epub-a11yresult1", "Axe Result Book", 1),
@@ -285,28 +263,22 @@ test("a11y #113: the book result state is axe-clean (skip disclosure live)", asy
   await page.goto(`${BASE}/#/`);
   await openAddDialog(page);
   await pickSource(page, "file");
+  await setOpenAfterAdding(page, false);
   await page.locator("input#ingest-file").setInputFiles({
     name: "axe-book.epub",
     mimeType: "application/epub+zip",
     buffer: Buffer.from("PK-mock-bytes"),
   });
   await page.getByRole("button", { name: /add file/i }).click();
-  // The state under scan: the result card is up AND the skip disclosure is
-  // live (an absent disclosure would silently weaken the gate).
-  await expect(page.locator("dialog.add-dialog .add-result")).toBeVisible();
-  await expect(page.locator("dialog.add-dialog .add-result .add-result-skips")).toHaveText(
-    "1 chapter could not be read.",
-  );
-  const results = await new AxeBuilder({ page })
-    .withTags([...WCAG_TAGS])
-    .include("dialog.add-dialog")
-    .analyze();
+  // The state under scan: the quiet landing with the skip sentence live
+  // (an absent disclosure would silently weaken the gate).
+  await awaitQuietClosed(page, "Saved to your library. 1 chapter could not be read.");
+  const results = await new AxeBuilder({ page }).withTags([...WCAG_TAGS]).analyze();
   const serious = seriousViolations(results);
   const ids = serious.map((v) => v.id);
   expect(ids, JSON.stringify(serious, null, 2)).not.toContain("heading-order");
   expect(ids).not.toContain("list");
   expect(serious).toEqual([]);
-  await closeSavedResult(page);
 });
 
 for (const article of fixtures) {
@@ -663,10 +635,13 @@ test.describe("compact navigation (320px)", () => {
 // SR flows stay Phase 13's ACPT gate.
 
 /** Attach an EPUB to the picker + submit (the epub-intake harness clone,
- * routed through the Add dialog per Plan 16-03). */
+ * routed through the Add dialog per Plan 16-03). Issue #163: the quiet
+ * landing is selected BEFORE the submission — every book save in this
+ * suite must leave the library unblocked, never auto-open a chapter. */
 async function uploadEbook(page: Page): Promise<void> {
   await openAddDialog(page);
   await pickSource(page, "file");
+  await setOpenAfterAdding(page, false);
   await page.locator("input#ingest-file").setInputFiles({
     name: "the-synthetic-book.epub",
     mimeType: "application/epub+zip",
@@ -680,15 +655,10 @@ async function seedBookLibrary(page: Page): Promise<void> {
   await wipeDatabase(page);
   await page.goto(`${BASE}/#/`);
   await uploadEbook(page);
-  // Issue #113 (D16-12 as amended): the book success STAYS OPEN on the
-  // result screen — drive through it (Close, the Unread-preserving path)
-  // so the library interactions below are not blocked by the modal; the
-  // row appears via the snapshot invalidation fired while the dialog was
-  // up.
-  await expect(page.locator("dialog.add-dialog .add-result")).toBeVisible({
-    timeout: 15_000,
-  });
-  await closeSavedResult(page);
+  // Issue #163 — the book success CLOSES onto the library (the quiet
+  // landing): the library interactions below are not blocked by the
+  // modal, and the row appears via the pre-close snapshot invalidation.
+  await awaitQuietClosed(page);
   await expect(page.locator("li.book-row")).toBeVisible({ timeout: 15_000 });
   await page.reload();
   await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible({

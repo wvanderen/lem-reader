@@ -144,6 +144,12 @@ interface LibraryViewProps {
   /** Issue #84 (decision #70) — opens the ONE app-level AddDialog (the
    * same session the Highlights header icon opens). */
   onOpenAdd: () => void;
+  /** Issue #163 — the quiet-save confirmation ("Saved to your library.",
+   * books appending the D12-11 skip sentence) handed over by the
+   * app-level AddDialog's unchecked-success landing. Rendered through the
+   * notice StatusRegion below; the app shell clears it when the reader
+   * leaves the Library destination or reopens the dialog. */
+  savedNotice: string | null;
 }
 
 // Plan 14-02 (D14-22) — the four switcher links, in order. hrefs stay the
@@ -192,6 +198,7 @@ export function LibraryView({
   warmMount,
   addOpen,
   onOpenAdd,
+  savedNotice,
 }: LibraryViewProps) {
   // Plan 14-02 Task 3 — the h1 focus target (tabindex=-1 pattern; text and
   // level byte-stable per D14-25) + the previous-view ref for the
@@ -296,6 +303,21 @@ export function LibraryView({
   // target and invalidates the snapshot (ONE reload per editing session —
   // the toggles inside the popover wrote through setArticleTags directly).
   const [tagsTarget, setTagsTarget] = useState<RowTagsTarget | null>(null);
+  // Issue #163 — the quiet-save confirmation lands one tick AFTER the
+  // notice arrives (mount or prop change): a live region announces a
+  // CHANGE, not content present at its own mount, and the
+  // cross-destination landing remounts this whole surface with the notice
+  // already in props. The deferred fill guarantees the region exists
+  // (idle/empty) before the copy lands in it.
+  const [noticeShown, setNoticeShown] = useState(false);
+  useEffect(() => {
+    if (savedNotice === null) {
+      setNoticeShown(false);
+      return;
+    }
+    const t = window.setTimeout(() => setNoticeShown(true), 0);
+    return () => window.clearTimeout(t);
+  }, [savedNotice]);
 
   // Plan 15-03 (Pitfall 8) — rewrite EVERY render so the unmount cleanup
   // below always reads the CURRENT context. A StrictMode double render
@@ -886,6 +908,19 @@ export function LibraryView({
             </p>
           </>
         )}
+      </StatusRegion>
+      {/* Issue #163 — the quiet-save confirmation: the add form's unchecked
+          success closes onto THIS region (the ONE StatusRegion primitive,
+          always mounted, polite + atomic), so the save is announced even
+          though the dialog that saved is already gone — a live region
+          inside the closing <dialog> could not announce (display:none on
+          close). Copy arrives from the app shell (savedNotice); the shell
+          retires it when the reader leaves the Library destination or
+          reopens the dialog. Distinct from the load region above (its copy
+          names the LIBRARY's load, issue #96); the deferred noticeShown
+          fill guarantees the announcement is a genuine content change. */}
+      <StatusRegion className="library-add-notice">
+        {savedNotice !== null && noticeShown && <p>{savedNotice}</p>}
       </StatusRegion>
       {/* Quick 260908-nk2 — during the initial load the page is short enough
           (header row, switcher, search, tag filter, empty list) that this

@@ -103,8 +103,11 @@ test("byte-stable library anchors survive the tidy (Pitfall 8-5)", async ({ page
   await expect(page.locator("main#main")).toBeAttached();
 
   // The LibraryView .status live region (a direct child of main following
-  // the list region) keeps its polite live-region semantics.
-  const status = page.locator("main#main > .status");
+  // the list region) keeps its polite live-region semantics. Issue #163 —
+  // the quiet-save notice region joined main as a SECOND direct .status
+  // child; the byte-stable anchor under test here is the LOAD region (the
+  // first, its position unchanged: directly after the list section).
+  const status = page.locator("main#main > .status").first();
   await expect(status).toBeAttached();
   await expect(status).toHaveAttribute("role", "status");
   await expect(status).toHaveAttribute("aria-live", "polite");

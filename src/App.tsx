@@ -299,10 +299,30 @@ function AppInner() {
   const [addDialogReady, setAddDialogReady] = useState(false);
   // ONE stable open handler for BOTH triggers (the header icon and the
   // Library h1-row button share the identity, issue #84 review).
+  // Issue #163 — reopening the dialog also retires a stale quiet-save
+  // confirmation (a fresh add session must not show last session's
+  // "Saved to your library." behind the refusal copy).
+  const [addSavedNotice, setAddSavedNotice] = useState<string | null>(null);
   const openAdd = useCallback(() => {
     setAddDialogReady(true);
+    setAddSavedNotice(null);
     setAddOpen(true);
   }, []);
+  // Issue #163 — the unchecked-success landing: the dialog hands the
+  // confirmation copy here, the library's status region announces it (a
+  // live region inside the closing dialog could not), and — when the
+  // save was launched from another destination — the shell returns to
+  // the library (the AC's "returns to the library"; the hash write is
+  // the same in-app navigation every row link uses, so hasAppHistory and
+  // the library's session-restore seam behave exactly as on any other
+  // library arrival).
+  const handleQuietSave = useCallback(
+    (notice: string) => {
+      setAddSavedNotice(notice);
+      if (view.name !== "list") window.location.hash = "#/";
+    },
+    [view],
+  );
 
   useEffect(() => {
     // Plan 15-03 (D15-11..14 / Pitfall 3) — the app owns scroll on Back.
@@ -363,11 +383,16 @@ function AppInner() {
   // Plan 18-02: the TOC panel resets the same way — rule 18's view-change
   // close routes through ArticleView's seam (hidePopover → toggle event →
   // onCloseToc), so this reset IS the seam path, never a second one.
+  // Issue #163: a quiet-save confirmation retires when the reader leaves
+  // the Library destination (in-library view switches are
+  // state-within-destination and keep it — the confirmation stays while
+  // they browse the list it names).
   useEffect(() => {
     setDrawerOpen(false);
     setAnnotationCount(0);
     setTagsOpen(false);
     setTocOpen(false);
+    if (view.name !== "list") setAddSavedNotice(null);
   }, [view]);
 
   // D4-09/D4-10: when ArticleView has registered an anchor-capturing handler,
@@ -497,6 +522,9 @@ function AppInner() {
             // call imports from the zero-dependency bus module: the
             // broadcast without the snapshot graph.
             onSaved={() => invalidateLibrarySnapshot()}
+            // Issue #163 — the unchecked-success confirmation rides the
+            // library's status region (see handleQuietSave).
+            onQuietSave={handleQuietSave}
             tagStats={addTagStats}
           />
         </Suspense>
@@ -517,6 +545,7 @@ function AppInner() {
             warmMount={hasAppHistory}
             addOpen={addOpen}
             onOpenAdd={openAdd}
+            savedNotice={addSavedNotice}
           />
         ) : view.name === "review" ? (
           <ReviewView hasAppHistory={hasAppHistory} scopedArticleId={view.articleId} />

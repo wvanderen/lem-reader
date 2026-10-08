@@ -80,6 +80,10 @@ jobs:
   e2e-reference:
     runs-on: [self-hosted, macOS, reference]
     timeout-minutes: 90
+    env:
+      # Reserve a port separate from local development on Vite's default.
+      # Keep CI's checked-out server isolated; never reuse that dev server.
+      LEM_E2E_BASE: http://localhost:15173
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5

@@ -33,7 +33,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { ArticleSchema, BookSchema, ReaderSettingsSchema } from "../../../src/content/schema";
 import type { CanonicalArticle, ReaderSettings } from "../../../src/content/schema";
 import { ExportBundleSchema } from "../../../src/portability/bundle";
-import { computeManifest } from "../../../src/portability/manifest";
+import { computeManifest, sha256Hex } from "../../../src/portability/manifest";
 import type { Manifest } from "../../../src/portability/manifest";
 import { seedCustomTheme } from "../../../src/settings/customTheme";
 import { zipSync } from "fflate";
@@ -127,7 +127,7 @@ function zipFileOf(entries: Record<string, Uint8Array>): File {
   return new File([zipSync(entries)], "x.zip");
 }
 
-function bundleJsonOf(value: unknown): Uint8Array {
+function bundleJsonOf(value: unknown): Uint8Array<ArrayBuffer> {
   return new TextEncoder().encode(JSON.stringify(value));
 }
 
@@ -646,4 +646,72 @@ describe("validateBundle — round trip (09-04 Task 2)", () => {
     expect(imported.customLightTheme?.tokens.ink).toBe("#1A1A1A");
     expect(imported.customDarkTheme?.tokens.ink).toBe("#EDE6D9");
   });
+});
+
+// Hash the pre-#163 schema shape before the current parser adds defaults.
+async function preOpenAfterAddExport(customSlots: boolean) {
+  const { bundle, manifest } = await validRawBundle();
+  const preferences = {
+    schemaVersion: 5,
+    font: "serif",
+    size: 18,
+    measure: 64,
+    spacing: "comfortable",
+    theme: customSlots ? "custom-dark" : "sepia",
+    ...(customSlots
+      ? {
+          customLightTheme: seedCustomTheme("light"),
+          customDarkTheme: seedCustomTheme("dark"),
+        }
+      : {}),
+    animatePageTurns: true,
+    readingMode: "scrolling",
+    voice: "saved-voice",
+    rate: 1.5,
+    librarySort: "title",
+  };
+  bundle.preferences = preferences;
+  manifest.blocks.preferences = await sha256Hex(bundleJsonOf(preferences));
+  return { bundle, manifest, preferences };
+}
+
+describe("validateBundle — pre-openAfterAdd export compatibility", () => {
+  it.each([false, true])("imports v5 preferences with custom slots %s", async (customSlots) => {
+    const { bundle, manifest, preferences } = await preOpenAfterAddExport(customSlots);
+    const { validateBundle } = await loadService();
+    const result = await validateBundle(
+      zipFileOf({
+        "bundle.json": bundleJsonOf(bundle),
+        "manifest.json": bundleJsonOf(manifest),
+      }),
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok)
+      expect(result.bundle.preferences).toEqual({ ...preferences, openAfterAdd: true });
+  });
+
+  it.each(["preference", "manifest", "new-version", "added-field"])(
+    "still refuses %s tampering",
+    async (change) => {
+      const { bundle, manifest, preferences } = await preOpenAfterAddExport(false);
+      if (change === "preference") preferences.size = 20;
+      if (change === "manifest") manifest.blocks.preferences = "0".repeat(64);
+      if (change === "new-version") {
+        preferences.schemaVersion = 6;
+        manifest.blocks.preferences = await sha256Hex(bundleJsonOf(preferences));
+      }
+      if (change === "added-field") bundle.preferences = { ...preferences, openAfterAdd: false };
+      const { validateBundle } = await loadService();
+      const result = await validateBundle(
+        zipFileOf({
+          "bundle.json": bundleJsonOf(bundle),
+          "manifest.json": bundleJsonOf(manifest),
+        }),
+      );
+      expect(result).toEqual({
+        ok: false,
+        refusal: { kind: "corrupted", failedBlocks: ["preferences"] },
+      });
+    },
+  );
 });

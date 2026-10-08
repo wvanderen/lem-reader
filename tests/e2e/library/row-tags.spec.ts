@@ -17,7 +17,7 @@
 // tags persist only on Dexie rows; see tag-popover.spec.ts for the discipline).
 import { test, expect, type Page } from "@playwright/test";
 import { makeArticle, prepareFreshPage, seedRows } from "../portability/_portability";
-import { openAddDialog, pickSource, closeSavedResult } from "./add-dialog";
+import { openAddDialog, pickSource, setOpenAfterAdding, awaitQuietClosed } from "./add-dialog";
 import { BASE } from "../_base";
 
 const ROW_ARTICLE = {
@@ -182,10 +182,11 @@ test.describe("row tags popover (issue #75 — decision #71)", () => {
     const tagInput = page.getByRole("combobox", { name: "Add or search a tag" });
     await tagInput.fill("fresh");
     await tagInput.press("Enter");
+    // Issue #163 — the quiet add: uncheck "Open after adding" so the save
+    // closes onto the library with the article Unread (never auto-opened).
+    await setOpenAfterAdding(page, false);
     await page.getByRole("button", { name: /add pasted article/i }).click();
-    // Issue #112 — the result screen replaces auto-navigation; Close
-    // returns to the library with the never-opened article Unread.
-    await closeSavedResult(page);
+    await awaitQuietClosed(page);
 
     await openLibrary(page);
     const row = page.locator(".library-list > li").filter({ hasText: "Tagged At Import" });

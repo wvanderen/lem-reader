@@ -483,13 +483,23 @@ const ReaderSettingsObjectSchema = z.object({
   // (the legacy shape itself migrates pre-parse at every settings-entry seam
   // — src/settings/settingsMigration.ts, the D21-03 clampLegacyMeasure
   // discipline — so no row ever fails parse for carrying the old shape).
-  // The union accepts ALL FIVE literals so that an existing v1 row (no
+  // Issue #163 bumps the canonical write version 5 → 6 when the remembered
+  // "Open after adding" add-dialog preference (openAfterAdd, below) was added.
+  // The union accepts ALL SIX literals so that an existing v1 row (no
   // readingMode field), a v2 row (no voice/rate fields), a v3 row (no
-  // librarySort field), and a v4 row (the pre-#120 custom-theme shape)
-  // hydrate on read — Pitfall 9 (NO Dexie store change; the settings store
-  // is key-value, Dexie is opaque to the value shape). v6 and above
-  // forward-reject (V5 boundary discipline preserved).
-  schemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]),
+  // librarySort field), a v4 row (the pre-#120 custom-theme shape), and a
+  // v5 row (no openAfterAdd field) hydrate on read — Pitfall 9 (NO Dexie
+  // store change; the settings store is key-value, Dexie is opaque to the
+  // value shape). v7 and above forward-reject (V5 boundary discipline
+  // preserved).
+  schemaVersion: z.union([
+    z.literal(1),
+    z.literal(2),
+    z.literal(3),
+    z.literal(4),
+    z.literal(5),
+    z.literal(6),
+  ]),
   font: z.enum(["serif", "sans", "dyslexic"]),
   size: z.union([z.literal(16), z.literal(18), z.literal(20), z.literal(22), z.literal(24)]),
   // D21-01/D21-02 (POLISH-09) + issue #18 (D22-01): the union is the
@@ -586,6 +596,20 @@ const ReaderSettingsObjectSchema = z.object({
   // existing readers. Closed enum (T-02-01): an out-of-union value fails
   // parse → the honest corrupt routing, never a silent fallback order.
   librarySort: z.enum(["recently-added", "title", "recently-opened"]).default("recently-added"),
+  // Issue #163 — the remembered "Open after adding" add-dialog checkbox (the
+  // v5 → v6 bump). Checked: a successful ingestion opens the saved item
+  // immediately (a book at its first readable chapter). Unchecked: the add
+  // form closes back onto the library with the confirmation announced
+  // through the library's status region — the saved item stays Unread. The
+  // AddDialog's checkbox reads and writes it through SettingsContext.update,
+  // so the choice survives visits (Dexie + the localStorage mirror) and
+  // travels in the export/import bundle's ALWAYS-present preferences block
+  // (D9-12 — the voice/rate/librarySort mechanism). .default(true) hydrates
+  // v1..v5 rows (Pitfall 9): checked IS the shipped behavior a first-run
+  // reader expects (open what you just added), so the default changes
+  // nothing for existing readers until they uncheck it. Closed boolean —
+  // nothing to fall out of union (T-02-01).
+  openAfterAdd: z.boolean().default(true),
 });
 
 // Issue #86 (decision #73), extended by issue #120 — the cross-field rules:

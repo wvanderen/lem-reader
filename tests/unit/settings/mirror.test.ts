@@ -29,6 +29,7 @@ import type { ReaderSettings } from "../../../src/content/schema";
  * precedent from round-trip.spec.ts L111-127). */
 const NON_DEFAULT: ReaderSettings = {
   librarySort: "recently-added", // issue #115 — the additive preference
+  openAfterAdd: true, // issue #163 — the remembered add-dialog checkbox
   schemaVersion: 2,
   font: "sans",
   size: 22,
@@ -108,8 +109,8 @@ describe("readSettingsMirror", () => {
     ["wrong value shapes (size as string)", JSON.stringify({ ...NON_DEFAULT, size: "twenty-two" })],
     ["unknown enum value (theme)", JSON.stringify({ ...NON_DEFAULT, theme: "neon" })],
     [
-      "unknown schemaVersion (v6 forward-reject)",
-      JSON.stringify({ ...NON_DEFAULT, schemaVersion: 6 }),
+      "unknown schemaVersion (v7 forward-reject)",
+      JSON.stringify({ ...NON_DEFAULT, schemaVersion: 7 }),
     ],
     ["non-object stored value", '"just a string"'],
   ])("returns null on a stored value that fails ReaderSettingsSchema (%s)", (_label, stored) => {
