@@ -47,7 +47,12 @@ import { computeManifest, sha256Hex } from "../../../src/portability/manifest";
 import { validBookEpub3 } from "../../unit/server/epub-fixtures";
 // Plan 16-03 — the shared dialog-opening helper (ADD-01: the intake
 // forms live behind the header Add button's modal).
-import { openAddDialog, pickSource, closeSavedResult } from "../library/add-dialog";
+import {
+  openAddDialog,
+  pickSource,
+  setOpenAfterAdding,
+  awaitQuietClosed,
+} from "../library/add-dialog";
 import {
   BASE,
   buildBundleZip,
@@ -122,7 +127,10 @@ test("SC#4 — export on machine A re-imports on machine B with offsets intact",
      * Issue #40 — the read-aloud rate rides the canonical record; its
      * default 1 appears in every export (the seeded literal predates it).
      * Issue #115 — the library sort rides the same way; its schema default
-     * "recently-added" hydrates at the export's Zod read boundary. */
+     * "recently-added" hydrates at the export's Zod read boundary.
+     * Issue #163 — the openAfterAdd checkbox rides the same way; its
+     * schema default true hydrates at the same boundary (the export
+     * always carries the CURRENT canonical record). */
     const seededPrefs = {
       schemaVersion: 2,
       font: "sans",
@@ -133,6 +141,7 @@ test("SC#4 — export on machine A re-imports on machine B with offsets intact",
       readingMode: "paginated",
       rate: 1,
       librarySort: "recently-added",
+      openAfterAdd: true,
     };
 
     await seedRows(pageA, {
@@ -328,15 +337,13 @@ test("SC#4 books — a book travels machines with its chapters + highlight intac
       mimeType: "application/epub+zip",
       buffer: Buffer.from(validBookEpub3()),
     });
+    // Issue #163 — the quiet add: uncheck "Open after adding" BEFORE the
+    // submission so the book success closes onto the library (the row
+    // saved Unread via the pre-close snapshot invalidation) instead of
+    // auto-opening the first chapter.
+    await setOpenAfterAdding(pageA, false);
     await pageA.getByRole("button", { name: /add file/i }).click();
-    // Issue #113 (D16-12 as amended): the book success STAYS OPEN on the
-    // result screen — drive through it (Close, the Unread-preserving
-    // path); the row was already saved behind the dialog via the snapshot
-    // invalidation.
-    await expect(pageA.locator("dialog.add-dialog .add-result")).toBeVisible({
-      timeout: 15_000,
-    });
-    await closeSavedResult(pageA);
+    await awaitQuietClosed(pageA);
     await expect(pageA.locator("li.book-row")).toBeVisible({ timeout: 15_000 });
 
     // ── Machine A: read the saved chapters, highlight chapter 2 ───────────

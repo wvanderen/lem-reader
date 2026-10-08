@@ -1842,37 +1842,32 @@ dialog.add-dialog {
   background: transparent;
   margin-block: calc(-1 * var(--space-lg));
 }
-/* Issue #112 — the saved-result card: the outcome screen that replaces the
-   intake slots after a successful article save. Quiet-card voice on the
-   same inset surface as the status region (the one-anatomy rhythm); the
-   title is a focused heading (tabIndex -1) so its focus ring is the save
-   landing's visible confirmation, and the disclosure lines reuse the
-   .meta voice + the reader view's extraction-note class names (one
-   vocabulary across surfaces). */
-.add-result {
+/* Issue #163 — the remembered "Open after adding" checkbox: a plain
+   labeled row above the actions row (the outcome preference governs the
+   success landing). Native checkbox at its natural size — no oversized
+   hit-target restyle, the label IS the target — with the dialog's quiet
+   label voice and a comfortable row gap. Disabled rides the shared
+   button:disabled opacity above. */
+.add-open-after {
+  min-width: 0;
+}
+.add-open-after-row {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: var(--space-sm);
-  padding: var(--space-md);
-  background: var(--surface);
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius-md);
+  min-height: var(--touch);
+  cursor: pointer;
 }
-.add-result-title {
+.add-open-after-row input {
+  width: 18px;
+  height: 18px;
   margin: 0;
-  font: 600 16px/1.45 var(--font-ui);
-  color: var(--ink);
+  accent-color: var(--accent);
+  cursor: pointer;
 }
-.add-result-title:focus {
+.add-open-after-row input:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
-}
-.add-result .meta {
-  margin: 0;
-}
-.add-result .partial-content-note ul {
-  margin: var(--space-xs) 0 0;
-  padding-inline-start: 1.25em;
 }
 @media (max-width: 480px) {
   .add-dialog-inner {

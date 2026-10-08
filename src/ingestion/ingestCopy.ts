@@ -128,6 +128,21 @@ export function bytesToBase64(bytes: Uint8Array): string {
 }
 
 /**
+ * skippedChaptersCopy — the D12-11 honest skipped-chapter disclosure
+ * sentence, the ONE copy home for the byte-stable pair the BookRow renders
+ * durably and the issue-#163 quiet-save confirmation appends. Zero means
+ * silence is the caller's contract (the all-chapters-admitted state —
+ * never a placeholder); a positive count picks the grammatical arm.
+ * Pinned byte-for-byte by the component + e2e suites (the DOC-06
+ * load-bearing-copy discipline).
+ */
+export function skippedChaptersCopy(skippedChapterCount: number): string {
+  return skippedChapterCount === 1
+    ? "1 chapter could not be read."
+    : `${skippedChapterCount} chapters could not be read.`;
+}
+
+/**
  * base64ToBytes — the decode sibling of bytesToBase64, for the Phase 20
  * asset response envelope (20-02 Task 3). atob returns the full binary
  * string C++-side (no spread, no apply — the encode-side stack limit does

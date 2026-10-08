@@ -70,13 +70,15 @@ const LEGACY_MAX_RECORD = {
  * remaps the legacy maximum onto the nearest lower step of the extended
  * uniform-6 ladder). The RAW clamp never adds fields; the Dexie/mirror SEAM
  * expectations below additionally carry the issue #40 read-aloud default
- * (rate 1) and the issue #115 library-sort default because those paths go
- * through the Zod read boundary. */
+ * (rate 1), the issue #115 library-sort default, and the issue #163
+ * openAfterAdd default because those paths go through the Zod read
+ * boundary. */
 const CLAMPED_RECORD = { ...LEGACY_MAX_RECORD, measure: 70 };
 const CLAMPED_RECORD_PARSED = {
   ...CLAMPED_RECORD,
   rate: 1,
   librarySort: "recently-added",
+  openAfterAdd: true,
 } as const;
 
 beforeEach(() => {
@@ -253,15 +255,22 @@ async function legacyBundle(manifestPreferencesOverride?: Manifest["blocks"]) {
   const clampedForParse = { ...rawBundle, preferences: { ...CLAMPED_RECORD } };
   const parsed = ExportBundleSchema.parse(clampedForParse);
   const manifest = await computeManifest(parsed);
+  // The v2.1-era (pre-#18) exporter's parse could emit NEITHER the clamped
+  // measure NOR the post-#163 openAfterAdd default — strip the hydrated
+  // field so the claimed hash reflects the TRUE export-era shape (the
+  // schema key order minus the later field; JSON.stringify speaks
+  // insertion order).
+  const { openAfterAdd: _exportEraAbsent, ...exportEraPrefs } = parsed.preferences;
   const legacyManifest: Manifest = {
     ...manifest,
     blocks: {
       ...manifest.blocks,
-      // Hash of the block WITH measure 72 (schema key order — the
-      // determinism contract; the exporter's own parse emitted 72).
+      // Hash of the block WITH measure 72 and WITHOUT openAfterAdd (schema
+      // key order — the determinism contract; the exporter's own parse
+      // emitted 72 and predated #163).
       preferences: await computeManifest({
         ...parsed,
-        preferences: { ...parsed.preferences, measure: 72 },
+        preferences: { ...exportEraPrefs, measure: 72 },
       } as unknown as ExportBundle).then((m) => m.blocks.preferences),
     },
   };

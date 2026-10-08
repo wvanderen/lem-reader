@@ -1,4 +1,3 @@
-import { expandSettingsGroup } from "../settings";
 // tests/e2e/portability/_portability.ts
 // Plan 09-06 — shared helpers for the portability phase-exit e2e gates.
 //
@@ -29,6 +28,8 @@ import {
 import type { TextPositionSelector, TextQuoteSelector } from "../../../src/content/normalizeText";
 import { ExportBundleSchema } from "../../../src/portability/bundle";
 import { computeManifest } from "../../../src/portability/manifest";
+import { expandSettingsGroup } from "../settings";
+import { clearSettingsMirror } from "../annotations/_fixtures";
 import { BASE } from "../_base";
 export { BASE };
 
@@ -77,6 +78,11 @@ export async function prepareFreshPage(page: Page): Promise<void> {
       req.onerror = () => resolve();
     });
   });
+  // Issue #163 harness hygiene — the settings mirror survives the Dexie
+  // clear; ONE shared clear keeps the first-run baseline contract
+  // single-homed (see annotations/_fixtures.clearSettingsMirror). Node
+  // side, AFTER the evaluate — the browser context has no Node scope.
+  await clearSettingsMirror(page);
 }
 
 /**

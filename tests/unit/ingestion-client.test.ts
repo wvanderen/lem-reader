@@ -750,15 +750,24 @@ describe("AddDialog .epub picker arm (12-03 Task 2)", () => {
     Object.defineProperty(file, "size", { value: EPUB_MAX_BYTES + 1 });
     const arrayBufferSpy = vi.spyOn(file, "arrayBuffer");
 
+    // Issue #163 — the dialog consumes the settings context; render
+    // through the REAL provider (fake-indexeddb is installed module-wide,
+    // so loadSettings runs against the wiped Dexie).
+    const { SettingsProvider } = await import("../../src/settings/SettingsContext");
     const { render } = await import("@testing-library/react");
     const { createElement } = await import("react");
     render(
-      createElement(AddDialog, {
-        open: true,
-        onCancel: () => {},
-        onSaved: () => {},
-        tagStats: [],
-      }),
+      createElement(
+        SettingsProvider,
+        null,
+        createElement(AddDialog, {
+          open: true,
+          onCancel: () => {},
+          onSaved: () => {},
+          onQuietSave: () => {},
+          tagStats: [],
+        }),
+      ),
     );
     // The dialog always opens on Web address (D16-08) — switch to the
     // file source so the always-mounted picker is visible.
@@ -805,15 +814,24 @@ describe("AddDialog .epub picker arm (12-03 Task 2)", () => {
     );
 
     const { AddDialog } = await import("../../src/ingestion/AddDialog");
+    // Issue #163 — the dialog consumes the settings context; these
+    // render through the REAL provider (fake-indexeddb is installed
+    // module-wide, so loadSettings runs against the wiped Dexie).
+    const { SettingsProvider } = await import("../../src/settings/SettingsContext");
     const { render } = await import("@testing-library/react");
     const { createElement } = await import("react");
     render(
-      createElement(AddDialog, {
-        open: true,
-        onCancel: () => {},
-        onSaved: () => {},
-        tagStats: [],
-      }),
+      createElement(
+        SettingsProvider,
+        null,
+        createElement(AddDialog, {
+          open: true,
+          onCancel: () => {},
+          onSaved: () => {},
+          onQuietSave: () => {},
+          tagStats: [],
+        }),
+      ),
     );
     await user.click(screen.getByRole("radio", { name: "Upload file" }));
     const input = screen.getByLabelText("Upload a file") as HTMLInputElement;
@@ -851,15 +869,24 @@ describe("AddDialog .epub picker arm (12-03 Task 2)", () => {
     );
 
     const { AddDialog } = await import("../../src/ingestion/AddDialog");
+    // Issue #163 — the dialog consumes the settings context; these
+    // render through the REAL provider (fake-indexeddb is installed
+    // module-wide, so loadSettings runs against the wiped Dexie).
+    const { SettingsProvider } = await import("../../src/settings/SettingsContext");
     const { render } = await import("@testing-library/react");
     const { createElement } = await import("react");
     render(
-      createElement(AddDialog, {
-        open: true,
-        onCancel: () => {},
-        onSaved: () => {},
-        tagStats: [],
-      }),
+      createElement(
+        SettingsProvider,
+        null,
+        createElement(AddDialog, {
+          open: true,
+          onCancel: () => {},
+          onSaved: () => {},
+          onQuietSave: () => {},
+          tagStats: [],
+        }),
+      ),
     );
     await user.click(screen.getByRole("radio", { name: "Upload file" }));
     const input = screen.getByLabelText("Upload a file") as HTMLInputElement;

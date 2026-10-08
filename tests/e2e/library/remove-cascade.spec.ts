@@ -36,7 +36,7 @@
 import { test, expect, type Page } from "@playwright/test";
 // Plan 16-03 — the shared dialog-opening helper (ADD-01: the intake forms
 // live behind the header Add button's modal).
-import { openAddDialog, pickSource, closeSavedResult } from "./add-dialog";
+import { openAddDialog, pickSource, setOpenAfterAdding, awaitQuietClosed } from "./add-dialog";
 import { BASE } from "../_base";
 
 // A representative paste-HTML article rich enough to clear the ING-06
@@ -250,11 +250,11 @@ test.describe("SC#2 + LIB-02 — cascade-remove + confirmation", () => {
     await openAddDialog(page);
     await pickSource(page, "paste");
     await page.getByRole("textbox", { name: /paste html/i }).fill(PASTE_HTML);
+    // Issue #163 — the quiet add: uncheck "Open after adding" so the save
+    // closes onto the library with the article Unread (never auto-opened).
+    await setOpenAfterAdding(page, false);
     await page.getByRole("button", { name: /add pasted article/i }).click();
-    // Issue #112 — the save lands on the in-dialog result screen; the
-    // reader never opened the article (Unread), so CLOSE returns to the
-    // library destination.
-    await closeSavedResult(page);
+    await awaitQuietClosed(page);
 
     // 2. Discover the ingested article id + seed cascade rows.
     const articleId = await discoverIngestedArticleId(page);
@@ -364,9 +364,10 @@ test.describe("SC#2 + LIB-02 — cascade-remove + confirmation", () => {
     await openAddDialog(page);
     await pickSource(page, "paste");
     await page.getByRole("textbox", { name: /paste html/i }).fill(PASTE_HTML);
+    // Issue #163 — the quiet add keeps the article Unread.
+    await setOpenAfterAdding(page, false);
     await page.getByRole("button", { name: /add pasted article/i }).click();
-    // Issue #112 — close the result screen; the article stays Unread.
-    await closeSavedResult(page);
+    await awaitQuietClosed(page);
 
     const articleId = await discoverIngestedArticleId(page);
     expect(articleId).not.toBe("");

@@ -16,9 +16,9 @@ import { DEFAULT_SETTINGS } from "../../src/settings/defaults";
 // may or may not validate; Zod is the authority, not TS here).
 function validSettings(overrides: Record<string, unknown> = {}): unknown {
   return {
-    // The canonical v5 write shape (issue #120). Tests of legacy v1..v4
+    // The canonical v6 write shape (issue #163). Tests of legacy v1..v5
     // rows pass an explicit schemaVersion override.
-    schemaVersion: 5,
+    schemaVersion: 6,
     font: "serif",
     size: 18,
     measure: 64,
@@ -28,6 +28,7 @@ function validSettings(overrides: Record<string, unknown> = {}): unknown {
     animatePageTurns: false,
     rate: 1,
     librarySort: "recently-added",
+    openAfterAdd: true,
     ...overrides,
   };
 }
@@ -51,9 +52,10 @@ describe("ReaderSettingsSchema accepts valid combinations", () => {
   it("parses the D-07 default baseline and round-trips every field", () => {
     const parsed = ReaderSettingsSchema.parse(validSettings());
     expect(parsed).toEqual(DEFAULT_SETTINGS);
-    expect(parsed.schemaVersion).toBe(5);
+    expect(parsed.schemaVersion).toBe(6);
     expect(parsed.readingMode).toBe("paginated");
     expect(parsed.librarySort).toBe("recently-added");
+    expect(parsed.openAfterAdd).toBe(true);
   });
 
   it("preserves motion opt-in and accepts legacy settings without it", () => {
@@ -130,10 +132,11 @@ describe("ReaderSettingsSchema.parse rejects out-of-contract records", () => {
     // v1+v2; issue #40 (read-aloud voice + rate) added v3 as the canonical
     // write version; issue #115 (the library sort preference) adds v4;
     // issue #120 (the two independent custom slots) adds v5 as the canonical
-    // write version. v1..v4 legacy rows hydrate (and the pre-#120 custom
-    // shape migrates pre-parse — settingsMigration.ts); v6+ forward-rejects
-    // (V5 boundary discipline).
-    ["non-literal schemaVersion (STATE-04 hook — v6 forward-rejects)", { schemaVersion: 6 }],
+    // write version; issue #163 (the remembered openAfterAdd checkbox) adds
+    // v6 as the canonical write version. v1..v5 legacy rows hydrate (and the
+    // pre-#120 custom shape migrates pre-parse — settingsMigration.ts); v7+
+    // forward-rejects (V5 boundary discipline).
+    ["non-literal schemaVersion (STATE-04 hook — v7 forward-rejects)", { schemaVersion: 7 }],
     ["schemaVersion as string", { schemaVersion: "1" }],
     ["missing schemaVersion", { schemaVersion: undefined }],
     ["unknown font value", { font: "comic-sans" }],
@@ -205,8 +208,8 @@ describe("ReaderSettingsSchema hydrates readingMode for legacy v1 rows (D4-12, P
     expect(parsed.schemaVersion).toBe(2);
   });
 
-  it("DEFAULT_SETTINGS mirrors the v5 canonical shape (schemaVersion 5 + readingMode paginated + read-aloud defaults + library sort default + no custom slot records)", () => {
-    expect(DEFAULT_SETTINGS.schemaVersion).toBe(5);
+  it("DEFAULT_SETTINGS mirrors the v6 canonical shape (schemaVersion 6 + readingMode paginated + read-aloud defaults + library sort default + openAfterAdd default + no custom slot records)", () => {
+    expect(DEFAULT_SETTINGS.schemaVersion).toBe(6);
     expect(DEFAULT_SETTINGS.readingMode).toBe("paginated");
     // Issue #40 — the read-aloud defaults: no picked voice (platform
     // default) and the 1× rate multiplier.
@@ -216,6 +219,9 @@ describe("ReaderSettingsSchema hydrates readingMode for legacy v1 rows (D4-12, P
     // order (issue #114's descending addedAt): existing readers see no
     // behavior change on upgrade.
     expect(DEFAULT_SETTINGS.librarySort).toBe("recently-added");
+    // Issue #163 — the remembered add-dialog checkbox defaults CHECKED
+    // (opening what you just added is the first-run expectation).
+    expect(DEFAULT_SETTINGS.openAfterAdd).toBe(true);
     // Issue #120 — the default baseline carries NEITHER custom slot (the
     // D-07 sepia preset is the theme); a slot's record appears on first
     // activation or when the migration places one.
@@ -224,6 +230,64 @@ describe("ReaderSettingsSchema hydrates readingMode for legacy v1 rows (D4-12, P
     // Round-trip DEFAULT_SETTINGS through parse — proves the literal satisfies
     // the schema exactly (no missing/extra fields).
     expect(ReaderSettingsSchema.parse(DEFAULT_SETTINGS)).toEqual(DEFAULT_SETTINGS);
+  });
+});
+
+// ── Issue #163 — v5→v6 value-shape evolution (the openAfterAdd checkbox) ─────
+// Pitfall 9 (the readingMode/librarySort mechanism): a v1..v5 row lacking
+// openAfterAdd hydrates true via the schema default on read; schemaVersion is
+// NOT mutated by parse. A v6 row carries the choice explicitly; the closed
+// boolean leaves nothing to fall out of union (a non-boolean fails parse at
+// the read boundary, T-02-01).
+
+describe("ReaderSettingsSchema hydrates openAfterAdd for legacy v1..v5 rows (issue #163, Pitfall 9)", () => {
+  it("a v5 row missing openAfterAdd hydrates true and keeps its version", () => {
+    // A real pre-#163 row written by the v5 canonical shape (issue #120):
+    // schemaVersion 5, NO openAfterAdd field.
+    const legacyRow = {
+      schemaVersion: 5,
+      font: "serif",
+      size: 18,
+      measure: 64,
+      spacing: "comfortable",
+      theme: "sepia",
+      readingMode: "paginated",
+      rate: 1,
+      librarySort: "recently-added",
+    };
+    const parsed = ReaderSettingsSchema.parse(legacyRow);
+    expect(parsed.schemaVersion).toBe(5); // schemaVersion is NOT mutated by parse
+    expect(parsed.openAfterAdd).toBe(true); // .default fires
+  });
+
+  it("a v1 row missing every later field hydrates openAfterAdd alongside the rest", () => {
+    const legacyRow = {
+      schemaVersion: 1,
+      font: "serif",
+      size: 18,
+      measure: 64,
+      spacing: "comfortable",
+      theme: "sepia",
+    };
+    const parsed = ReaderSettingsSchema.parse(legacyRow);
+    expect(parsed.schemaVersion).toBe(1);
+    expect(parsed.readingMode).toBe("paginated");
+    expect(parsed.rate).toBe(1);
+    expect(parsed.librarySort).toBe("recently-added");
+    expect(parsed.openAfterAdd).toBe(true);
+  });
+
+  it.each([false, true] as const)("a v6 row carries the explicit choice %s", (choice) => {
+    const parsed = ReaderSettingsSchema.parse(validSettings({ openAfterAdd: choice }));
+    expect(parsed.schemaVersion).toBe(6);
+    expect(parsed.openAfterAdd).toBe(choice);
+  });
+
+  it.each([
+    ["openAfterAdd as number", { openAfterAdd: 1 }],
+    ["openAfterAdd as string", { openAfterAdd: "true" }],
+  ])("throws when %s", (_label, override) => {
+    expect(() => ReaderSettingsSchema.parse(validSettings(override))).toThrow();
   });
 });
 
@@ -456,6 +520,7 @@ describe("applyTheme writes :root tokens from validated settings", () => {
       readingMode: "paginated",
       rate: 1,
       librarySort: "recently-added",
+      openAfterAdd: true, // issue #163 — the remembered add-dialog checkbox
     });
     const root = document.documentElement;
     expect(root.dataset.theme).toBe("dark");

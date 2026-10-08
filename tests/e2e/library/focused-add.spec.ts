@@ -42,7 +42,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { BASE, wipeDatabase } from "../annotations/_fixtures";
 import { fixtures } from "../../../src/fixtures";
-import { openAddDialog, pickSource, openSavedArticle } from "./add-dialog";
+import { openAddDialog, pickSource, awaitAutoOpened } from "./add-dialog";
 
 /** A small .md pick for the switch-preservation case. Never submitted. */
 const SMALL_MARKDOWN = `# A Surviving Pick
@@ -317,7 +317,7 @@ test.describe("focused Add dialog (ADD-04 — 16-04 Task 1)", () => {
     await expect(ingestStatus(page, "Couldn't reliably read this page.")).toBeVisible();
   });
 
-  test("article success shows the result screen; Open article closes the dialog first, then opens the reader (Pitfall 6)", async ({
+  test("article success opens the reader with the dialog closed first — close-first, then the route (Pitfall 6, issue #163)", async ({
     page,
   }) => {
     // Success payload: a real fixture CanonicalArticle (the happy-path
@@ -380,19 +380,11 @@ test.describe("focused Add dialog (ADD-04 — 16-04 Task 1)", () => {
     await page.getByRole("textbox", { name: /add by url/i }).fill("https://example.com/ordering");
     await page.getByRole("button", { name: /^add$/i }).click();
 
-    // Issue #112 — the save lands on the in-dialog result screen (the
-    // dialog STAYS open; the never-opened article stays Unread until the
-    // reader chooses).
-    const dlg = page.locator("dialog.add-dialog");
-    await expect(dlg.locator(".add-result")).toBeVisible();
-    await expect(
-      dlg.getByRole("heading", { name: fixtureArticle.provenance.title, level: 3 }),
-    ).toBeVisible();
-    await expect(dlg).toBeVisible();
-
-    // The reader's choice: "Open article" close-first, then the reader
-    // route takes over.
-    await openSavedArticle(page, new RegExp(`#/article/${fixtureArticle.id}$`));
+    // Issue #163 — the CHECKED landing (the remembered default): the save
+    // itself closes the dialog and opens the reader. The close-first
+    // ordering's browser-level consequence is the Pitfall-6 assertion
+    // below.
+    await awaitAutoOpened(page, new RegExp(`#/article/${fixtureArticle.id}$`));
 
     // The reader opened the ingested article.
     await expect(

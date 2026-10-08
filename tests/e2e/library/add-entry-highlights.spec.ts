@@ -28,7 +28,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { BASE, wipeDatabase } from "../annotations/_fixtures";
 import { fixtures } from "../../../src/fixtures";
-import { openSavedArticle } from "./add-dialog";
+import { awaitAutoOpened } from "./add-dialog";
 
 /** The header Add icon (the decision-#70 trigger — class hook). */
 function addTrigger(page: Page) {
@@ -173,7 +173,7 @@ test.describe("Add entry points (#84 — the Highlights header Add icon)", () =>
     // succeeds, and the issue #112 result screen's "Open article" opens
     // the reader (D16-12's close-first ordering preserved).
     await page.getByRole("button", { name: /^add$/i, exact: true }).click();
-    await openSavedArticle(page, new RegExp(`#/article/${fixtureArticle.id}$`));
+    await awaitAutoOpened(page, new RegExp(`#/article/${fixtureArticle.id}$`));
     await expect(
       page.getByRole("heading", { level: 1, name: fixtureArticle.provenance.title }),
     ).toBeVisible({ timeout: 10_000 });
@@ -208,7 +208,7 @@ test.describe("Add entry points (#84 — the Highlights header Add icon)", () =>
     // Issue #112 — the save lands on the in-dialog result screen; "Open
     // article" navigates (close-first), and the session's destination
     // (Highlights) is left behind exactly as any reader navigation.
-    await openSavedArticle(page, new RegExp(`#/article/${fixtureArticle.id}$`));
+    await awaitAutoOpened(page, new RegExp(`#/article/${fixtureArticle.id}$`));
     await expect(
       page.getByRole("heading", { level: 1, name: fixtureArticle.provenance.title }),
     ).toBeVisible({ timeout: 10_000 });

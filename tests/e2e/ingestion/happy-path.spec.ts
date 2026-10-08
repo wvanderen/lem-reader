@@ -43,7 +43,7 @@ import { test, expect } from "@playwright/test";
 // the library `fixtures` export carries only the getting-started starter row
 // (#81 rot family, test-only repair).
 import { bundledFixtures, fixtures, fixtureAssetRegistry } from "../../../src/fixtures";
-import { openAddDialog, pickSource, openSavedArticle } from "../library/add-dialog";
+import { openAddDialog, pickSource, awaitAutoOpened } from "../library/add-dialog";
 import { BASE } from "../_base";
 
 // A representative article HTML payload rich enough to pass Readability's
@@ -115,7 +115,7 @@ test.describe("ingestion happy-path (07-07 SC#1)", () => {
     // Issue #112 — the save lands on the in-dialog result screen; "Open
     // article" is what navigates to #/article/<id> (the id is a
     // paste-prefixed content hash, D7-07 — we just match the route shape).
-    await openSavedArticle(page);
+    await awaitAutoOpened(page);
 
     // ArticleView renders the ingested article. Assert at least one heading
     // and at least one paragraph are visible — the load-bearing invariant
@@ -162,7 +162,7 @@ test.describe("ingestion happy-path (07-07 SC#1)", () => {
     await page.getByRole("button", { name: /^add$/i }).click();
 
     // Issue #112 — "Open article" on the result screen navigates.
-    await openSavedArticle(page);
+    await awaitAutoOpened(page);
 
     // ArticleView renders the fixture article — the load-bearing invariant.
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible({
@@ -259,7 +259,7 @@ test.describe("ingestion happy-path (07-07 SC#1)", () => {
     await page.getByRole("button", { name: /^add$/i }).click();
 
     // Issue #112 — "Open article" on the result screen navigates.
-    await openSavedArticle(page);
+    await awaitAutoOpened(page);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible({
       timeout: 10_000,
     });

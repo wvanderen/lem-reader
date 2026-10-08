@@ -17,6 +17,7 @@
 // surface.
 import { test, expect, type Page, type Route } from "@playwright/test";
 import { BASE, wipeDatabase } from "../annotations/_fixtures";
+import { setOpenAfterAdding, awaitQuietClosed } from "../library/add-dialog";
 
 /** The narrow-phone cell — the "visible text link even at narrow widths"
  * condition (the shell-nav NARROW discipline) and the reflow cell. */
@@ -543,9 +544,13 @@ test.describe("Discover (issues #121 + #123)", () => {
     await addDlg
       .getByRole("textbox", { name: /add by url/i })
       .fill("https://journal.example.com/kept-essay");
+    // Issue #163 — the quiet add: uncheck "Open after adding" so the save
+    // closes onto the library with the article Unread (the dialog closes
+    // itself; the confirmation announces through the library's status
+    // region).
+    await setOpenAfterAdding(page, false);
     await addDlg.getByRole("button", { name: /^add$/i }).click();
-    await expect(addDlg.locator(".status")).toContainText("Saved to your library.");
-    await addDlg.getByRole("button", { name: "Close" }).click();
+    await awaitQuietClosed(page);
 
     // Remove the subscription that "provided" it.
     await primaryNav(page).getByRole("link", { name: "Discover" }).click();

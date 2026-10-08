@@ -1,17 +1,24 @@
 // tests/e2e/library/add-dialog.ts
-// Plan 16-03 Task 2 — the shared dialog-driving helper for every
-// ingestion e2e spec. After the add-section dissolution (ADD-01), the
-// three intake forms live behind the header-row "Add to Library" button's
-// modal (dialog.add-dialog); no spec can drive an ingest input without
-// opening it first.
+// The shared dialog-driving helper for every ingestion e2e spec. After the
+// add-section dissolution (ADD-01), the three intake forms live behind the
+// header-row "Add to Library" button's modal (dialog.add-dialog); no spec
+// can drive an ingest input without opening it first.
+//
+// Issue #163 — the success landing is decided by the remembered
+// "Open after adding" checkbox (schema default CHECKED): a successful save
+// either OPENS the saved item (the reader route replaces the dialog) or —
+// unchecked — CLOSES the dialog onto the library with the confirmation
+// announced through the library's status region. The retired #112/#113
+// saved-result screen (Open article / Open book / Add another / Close) is
+// gone, and so are its helpers.
 //
 // NON-SPEC FILENAME convention (markdown-payload.ts / _portability.ts /
 // _fixtures.ts): this filename is not matched by Playwright's default
 // testMatch, so importing it registers nothing — and a spec must NEVER
 // import another .spec.ts (re-registers the source spec's cells in the
-// importer's module registry). These two functions centralize every
-// accessible name on the path (button label, dialog class, radio labels)
-// so a future copy change is a one-file edit.
+// importer's module registry). These functions centralize every accessible
+// name on the path (button label, dialog class, radio labels, checkbox
+// label, status region) so a future copy change is a one-file edit.
 import { expect, type Page } from "@playwright/test";
 
 /**
@@ -21,7 +28,8 @@ import { expect, type Page } from "@playwright/test";
  * re-pick cycles or the epub refusal ladder — must not re-click a trigger
  * that the open modal has made inert), so the click is skipped when the
  * dialog is already visible. The dialog always opens on Web address
- * (D16-08 — callers pick another source via pickSource when needed).
+ * (D16-08 — callers pick another source via pickSource when needed) with
+ * the remembered openAfterAdd preference on the checkbox.
  */
 export async function openAddDialog(page: Page): Promise<void> {
   const dialog = page.locator("dialog.add-dialog");
@@ -42,57 +50,48 @@ export async function pickSource(page: Page, source: "url" | "paste" | "file"): 
 }
 
 /**
- * openSavedArticle — the result screen's primary action: click "Open
- * article" and wait for the dialog to leave the top layer AND the reader
- * route to take over (the D16-12 close-first ordering's browser-level
- * consequence — the dialog is closed before the hash write navigates).
- * The optional `urlPattern` narrows the awaited route (e.g. /#\/article\/md-/
- * for the markdown id-shape assertions).
+ * setOpenAfterAdding — check or uncheck the remembered "Open after adding"
+ * preference (issue #163). `.check()`/`.uncheck()` are no-ops when the box
+ * already carries the wanted state, so repeated calls are safe. The choice
+ * persists (SettingsContext debounced save + mirror) — specs that need the
+ * quiet landing MUST uncheck before submitting.
  */
-export async function openSavedArticle(
+export async function setOpenAfterAdding(page: Page, checked: boolean): Promise<void> {
+  const box = page.getByRole("checkbox", { name: "Open after adding" });
+  if (checked) {
+    await box.check();
+  } else {
+    await box.uncheck();
+  }
+}
+
+/**
+ * awaitAutoOpened — the CHECKED success landing (issue #163): the dialog
+ * closes itself and the saved item's route takes over — the article, or
+ * the book's first AVAILABLE chapter (a chapter IS an article: the same
+ * #/article/<id> shape). `urlPattern` narrows the awaited route (e.g.
+ * /#\/article\/md-/ for the markdown id-shape assertions).
+ */
+export async function awaitAutoOpened(
   page: Page,
   urlPattern: RegExp = /#\/article\//,
 ): Promise<void> {
-  await page.locator("dialog.add-dialog").getByRole("button", { name: "Open article" }).click();
   await expect(page.locator("dialog.add-dialog")).not.toBeVisible();
   await page.waitForURL(urlPattern, { timeout: 15_000 });
 }
 
 /**
- * openSavedBook — the book result screen's primary action (issue #113):
- * click "Open book" and wait for the dialog to leave the top layer AND the
- * reader route to take over. The book's first AVAILABLE chapter IS an
- * article (the same #/article/<id> route), so the awaited shape is the
- * article route; `urlPattern` narrows further when a test pins the id.
+ * awaitQuietClosed — the UNCHECKED success landing (issue #163): the
+ * dialog closes itself, the reader stays on the library destination, and
+ * the confirmation ("Saved to your library.", books appending the D12-11
+ * skip sentence) has landed in the library's notice status region. The
+ * saved item appears in the library Unread (the snapshot invalidation
+ * fired before the close).
  */
-export async function openSavedBook(
+export async function awaitQuietClosed(
   page: Page,
-  urlPattern: RegExp = /#\/article\//,
+  notice = "Saved to your library.",
 ): Promise<void> {
-  await page.locator("dialog.add-dialog").getByRole("button", { name: "Open book" }).click();
   await expect(page.locator("dialog.add-dialog")).not.toBeVisible();
-  await page.waitForURL(urlPattern, { timeout: 15_000 });
-}
-
-/**
- * addAnother — the result screen's reset action (issues #112/#113): click
- * "Add another" and wait for the FRESH intake session (the result card gone,
- * the Web address radio checked). The dialog never closed.
- */
-export async function addAnother(page: Page): Promise<void> {
-  await page.locator("dialog.add-dialog").getByRole("button", { name: "Add another" }).click();
-  await expect(page.locator("dialog.add-dialog .add-result")).toHaveCount(0);
-  await expect(page.locator("dialog.add-dialog fieldset.add-source-picker")).toBeVisible();
-  await expect(page.getByRole("radio", { name: "Web address" })).toBeChecked();
-}
-
-/**
- * closeSavedResult — dismiss the result screen WITHOUT opening the saved
- * item (the issues #112/#113 Unread-preserving path): click "Close" and
- * wait for the dialog to leave the top layer. The reader stays on the prior
- * destination; the saved article/book appears in the library Unread.
- */
-export async function closeSavedResult(page: Page): Promise<void> {
-  await page.locator("dialog.add-dialog").getByRole("button", { name: "Close" }).click();
-  await expect(page.locator("dialog.add-dialog")).not.toBeVisible();
+  await expect(page.locator(".library-add-notice")).toContainText(notice);
 }

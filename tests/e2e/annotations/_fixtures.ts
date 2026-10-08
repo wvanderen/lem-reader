@@ -36,6 +36,26 @@ export type { TypographyVariant };
 export const PIXEL_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>';
 
 /**
+ * Issue #163 harness hygiene — the settings mirror SURVIVES any Dexie wipe
+ * (Pitfall 1: localStorage outlives IndexedDB). A test that toggles "Open
+ * after adding" (or any preference) would otherwise leak the mirrored
+ * value into every later test on this worker. ONE home for the clear (the
+ * wipeDatabase + prepareFreshPage helpers share it) so the contract can't
+ * drift: every wipe starts from the first-run baseline (schema defaults).
+ * Best-effort by contract — a blocked mirror only changes the preference
+ * baseline.
+ */
+export async function clearSettingsMirror(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    try {
+      localStorage.removeItem("lem-settings-mirror-v1");
+    } catch {
+      /* best-effort */
+    }
+  });
+}
+
+/**
  * Wipe the IndexedDB stores so each test starts from a deterministic
  * first-run state (mirrors the pagination harness discipline). Call from
  * test.beforeEach.
@@ -53,6 +73,7 @@ export async function wipeDatabase(page: Page): Promise<void> {
       req.onblocked = () => resolve();
     });
   });
+  await clearSettingsMirror(page);
 }
 
 /** The two reading modes the corpus matrix iterates. */

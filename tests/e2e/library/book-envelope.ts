@@ -72,7 +72,8 @@ export function chapterPayload(
 
 /** A schema-valid two-chapter book envelope (BookSchema + articles min(1)).
  * Chapter ids follow the epub-<hash>-cNN shape the real pipeline emits;
- * `skippedCount` is the D12-11 disclosure count the result card renders. */
+ * `skippedCount` is the D12-11 disclosure count the quiet confirmation
+ * announces and the BookRow renders (issue #163). */
 export function bookEnvelope(
   bookId: string,
   title: string,

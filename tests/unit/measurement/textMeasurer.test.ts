@@ -83,6 +83,7 @@ const { prepareMock, layoutMock, prepareWithSegmentsMock, layoutWithLinesMock } 
 
 const baseSettings: ReaderSettings = {
   librarySort: "recently-added", // issue #115 — the additive preference
+  openAfterAdd: true, // issue #163 — the remembered add-dialog checkbox
   schemaVersion: 1,
   font: "serif",
   size: 18,

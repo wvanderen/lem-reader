@@ -24,7 +24,7 @@ import { test, expect } from "@playwright/test";
 import { fixtures } from "../../../src/fixtures";
 // Plan 16-03 — the shared dialog-opening helper (ADD-01: the intake forms
 // live behind the header Add button's modal).
-import { openAddDialog, pickSource, closeSavedResult } from "./add-dialog";
+import { openAddDialog, pickSource, setOpenAfterAdding, awaitQuietClosed } from "./add-dialog";
 import { BASE } from "../_base";
 
 // A representative paste-HTML article rich enough to pass Readability's
@@ -194,12 +194,11 @@ test.describe("SC#1 + LIB-01 + LIB-05 — browse + open + source badge", () => {
     await openAddDialog(page);
     await pickSource(page, "paste");
     await page.getByRole("textbox", { name: /paste html/i }).fill(PASTE_HTML_WITH_SOURCE);
+    // Issue #163 — the quiet add: uncheck "Open after adding" so the save
+    // closes onto the library with the never-opened article Unread.
+    await setOpenAfterAdding(page, false);
     await page.getByRole("button", { name: /add pasted article/i }).click();
-
-    // Issue #112 — the save lands on the in-dialog result screen (no
-    // auto-navigation); Close returns to the library destination with the
-    // never-opened article Unread.
-    await closeSavedResult(page);
+    await awaitQuietClosed(page);
     await expect(page.getByRole("heading", { level: 1, name: "Saved articles" })).toBeVisible();
 
     // The library list grew by exactly one row (the ingested paste article).

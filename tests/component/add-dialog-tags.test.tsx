@@ -49,12 +49,28 @@ vi.mock("../../src/persistence/booksStore", () => ({
   saveBook: vi.fn(),
 }));
 
+// Issue #163 — the dialog reads the remembered openAfterAdd preference
+// through the settings context; the jsdom suite replaces it with a static
+// first-run double (DEFAULT_SETTINGS — openAfterAdd true). The preference's
+// interactive behavior is AddDialog.test.tsx's subject; here only a working
+// context is needed.
+vi.mock("../../src/settings/SettingsContext", () => ({
+  useSettings: () => ({
+    settings: DEFAULT_SETTINGS,
+    update: vi.fn(),
+    reset: vi.fn(),
+    storageState: "ok" as const,
+    resetLocalData: vi.fn(),
+  }),
+}));
+
 import { AddDialog } from "../../src/ingestion/AddDialog";
 import { ingestUrl, ingestEpub } from "../../src/ingestion/IngestionClient";
 import { dexieLibrarySource } from "../../src/ingestion/LibrarySource";
 import { hasBook, saveBook } from "../../src/persistence/booksStore";
 import type { CanonicalArticle } from "../../src/content/types";
 import type { TagStat } from "../../src/ingestion/library/tagsStore";
+import { DEFAULT_SETTINGS } from "../../src/settings/defaults";
 
 const ingestUrlMock = vi.mocked(ingestUrl);
 const ingestEpubMock = vi.mocked(ingestEpub);
@@ -97,7 +113,15 @@ const STATS: TagStat[] = [
 ];
 
 function renderDialog(tagStats: TagStat[] = STATS) {
-  return render(<AddDialog open={true} onCancel={vi.fn()} onSaved={vi.fn()} tagStats={tagStats} />);
+  return render(
+    <AddDialog
+      open={true}
+      onCancel={vi.fn()}
+      onSaved={vi.fn()}
+      onQuietSave={vi.fn()}
+      tagStats={tagStats}
+    />,
+  );
 }
 
 async function addTagViaPicker(draft: string) {
@@ -220,8 +244,24 @@ describe("AddDialog tags: session reset (D16-08)", () => {
     await addTagViaPicker("essays");
     expect(screen.getByText("essays")).toBeInTheDocument();
 
-    rerender(<AddDialog open={false} onCancel={vi.fn()} onSaved={vi.fn()} tagStats={STATS} />);
-    rerender(<AddDialog open={true} onCancel={vi.fn()} onSaved={vi.fn()} tagStats={STATS} />);
+    rerender(
+      <AddDialog
+        open={false}
+        onCancel={vi.fn()}
+        onSaved={vi.fn()}
+        onQuietSave={vi.fn()}
+        tagStats={STATS}
+      />,
+    );
+    rerender(
+      <AddDialog
+        open={true}
+        onCancel={vi.fn()}
+        onSaved={vi.fn()}
+        onQuietSave={vi.fn()}
+        tagStats={STATS}
+      />,
+    );
 
     await waitFor(() => expect(screen.queryByText("essays")).not.toBeInTheDocument());
   });

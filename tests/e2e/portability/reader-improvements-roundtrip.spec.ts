@@ -99,6 +99,7 @@ const SEEDED_PREFS = {
   readingMode: "scrolling",
   rate: 1.5,
   librarySort: "title",
+  openAfterAdd: true, // issue #163 — the export carries the hydrated default
 } as const;
 
 const RSS_SUB = {
