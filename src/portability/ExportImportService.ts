@@ -362,6 +362,13 @@ export async function validateBundle(file: File): Promise<BundleValidationResult
     isRecord(rawPrefs) &&
     ["custom", "sepia", "light", "dark"].includes(rawPrefs.theme as string) &&
     isRecord(rawPrefs.customTheme);
+  // Only pre-v6 settings could have been exported before this preference
+  // existed. A missing field in a v6 export must still fail its manifest.
+  const legacyOpenAfterAddAbsent =
+    isRecord(rawPrefs) &&
+    typeof rawPrefs.schemaVersion === "number" &&
+    rawPrefs.schemaVersion <= 5 &&
+    rawPrefs.openAfterAdd === undefined;
   if (isRecord(rawPrefs) && (legacyMeasureApplied || legacyCustomApplied)) {
     raw = {
       ...(raw as object),
@@ -414,9 +421,10 @@ export async function validateBundle(file: File): Promise<BundleValidationResult
   if (claimedBlocks.starterRemoved === undefined && parsed.data.schemaVersion < 7) {
     claimedBlocks.starterRemoved = emptyHash;
   }
-  // D21-03 (POLISH-09) + issue #120 manifest legacy-shape tolerance: when
+  // D21-03 (POLISH-09) + issues #120/#163 manifest legacy-shape tolerance: when
   // the pre-parse normalization mapped a legacy value/shape (the measure
-  // clamp and/or the custom-slot migration), the exporter's claimed
+  // clamp and/or the custom-slot migration), or parsing adds openAfterAdd
+  // to a pre-v6 preferences block, the exporter's claimed
   // preferences hash was computed over the block WITH the legacy shape (it
   // was in-union at export time) — it can never equal the recomputed
   // (normalized) hash. Accept the export-era hash as the preferences-block
@@ -429,7 +437,7 @@ export async function validateBundle(file: File): Promise<BundleValidationResult
   // manifest is a corruption DETECTION surface, not a security boundary —
   // manifest.ts).
   if (
-    (legacyMeasureApplied || legacyCustomApplied) &&
+    (legacyMeasureApplied || legacyCustomApplied || legacyOpenAfterAddAbsent) &&
     claimedBlocks.preferences !== recomputed.blocks.preferences
   ) {
     const p = parsed.data.preferences;
@@ -447,12 +455,16 @@ export async function validateBundle(file: File): Promise<BundleValidationResult
                 ? p.customDarkTheme
                 : p.customLightTheme,
           }
-        : {}),
+        : {
+            customLightTheme: p.customLightTheme,
+            customDarkTheme: p.customDarkTheme,
+          }),
       animatePageTurns: p.animatePageTurns,
       readingMode: p.readingMode,
       voice: p.voice,
       rate: p.rate,
       librarySort: p.librarySort,
+      ...(legacyOpenAfterAddAbsent ? {} : { openAfterAdd: p.openAfterAdd }),
     };
     const legacyHash = await sha256Hex(new TextEncoder().encode(JSON.stringify(legacyView)));
     if (claimedBlocks.preferences === legacyHash) {
