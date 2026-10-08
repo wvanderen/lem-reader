@@ -1,4 +1,9 @@
 import { defineConfig, devices } from "@playwright/test";
+import { BASE } from "./tests/e2e/_base";
+
+// The managed server and test requests must share the same port, including
+// the reference runner's override away from the development server.
+const serverPort = new URL(BASE).port || (new URL(BASE).protocol === "https:" ? "443" : "80");
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -64,8 +69,8 @@ export default defineConfig({
   // HYBRID CONTINGENCY adaptation.
   webServer: [
     {
-      command: "npm run dev",
-      url: "http://localhost:5173",
+      command: `npm run dev -- --port ${serverPort} --strictPort`,
+      url: BASE,
       reuseExistingServer: !process.env.CI,
       timeout: 30_000,
     },
