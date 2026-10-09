@@ -26,6 +26,8 @@ import {
   ReadAloudBar,
   FOLLOW_LABELS,
   READALOUD_HEIGHT_VAR,
+  SEEK_LABEL,
+  seekValueText,
 } from "../../../src/reader/ReadAloudBar";
 import { ReadAloudVoicePopover } from "../../../src/reader/ReadAloudVoicePopover";
 import type { FollowLevel, TransportState } from "../../../src/readaloud/types";
@@ -436,6 +438,125 @@ describe("ReadAloudBar — skip controls (issue #43, O3)", () => {
     expect(skipHandlers.onSkipSentenceBack).toHaveBeenCalledTimes(1);
     expect(skipHandlers.onSkipSentenceForward).toHaveBeenCalledTimes(1);
     expect(skipHandlers.onSkipParagraphForward).toHaveBeenCalledTimes(1);
+    expect(props.onPrimary).not.toHaveBeenCalled();
+    expect(props.onStop).not.toHaveBeenCalled();
+  });
+});
+
+describe("ReadAloudBar — the seek slider (issue #166)", () => {
+  // Fresh spies per call — the slider's commit tests count calls, so the
+  // shared-object pattern would leak counts across tests.
+  function seekProps() {
+    return { progress: 420, totalGraphemes: 1000, onSeek: vi.fn() };
+  }
+
+  it("renders only while a session exists AND seek wiring is provided", () => {
+    renderBar("stopped", { ...seekProps() });
+    expect(screen.queryByRole("slider", { name: SEEK_LABEL })).toBeNull();
+    cleanup();
+
+    renderBar("playing"); // no wiring — no slider (the pre-#166 bar shape)
+    expect(screen.queryByRole("slider", { name: SEEK_LABEL })).toBeNull();
+    cleanup();
+
+    for (const state of ["playing", "paused"] as const) {
+      renderBar(state, { ...seekProps() });
+      expect(screen.getByRole("slider", { name: SEEK_LABEL })).not.toBeNull();
+      cleanup();
+    }
+  });
+
+  it("carries the article-position feedback: aria-valuetext, percent value, 0–100 range", () => {
+    renderBar("playing", { ...seekProps() });
+    const slider = screen.getByRole("slider", { name: SEEK_LABEL }) as HTMLInputElement;
+    expect(slider.getAttribute("aria-valuetext")).toBe(seekValueText(42));
+    expect(slider.value).toBe("42");
+    expect(slider.min).toBe("0");
+    expect(slider.max).toBe("100");
+    // No duration anywhere: the value feedback is article-percent currency.
+    expect(slider.getAttribute("aria-valuetext")).not.toMatch(/second|minute|duration|time/i);
+  });
+
+  it("a keyboard change commits the picked percent per change (no pointer down)", () => {
+    const props = renderBar("playing", { ...seekProps() });
+    const slider = screen.getByRole("slider", { name: SEEK_LABEL }) as HTMLInputElement;
+    fireEvent.change(slider, { target: { value: "80" } });
+    expect(props.onSeek).toHaveBeenCalledTimes(1);
+    expect(props.onSeek).toHaveBeenCalledWith(80);
+    expect(props.onPrimary).not.toHaveBeenCalled();
+    expect(props.onStop).not.toHaveBeenCalled();
+  });
+
+  it("a pointer drag shows the picked value and commits ONCE on release (no fighting the finger)", () => {
+    const props = renderBar("playing", { ...seekProps() });
+    const slider = screen.getByRole("slider", { name: SEEK_LABEL }) as HTMLInputElement;
+    fireEvent.pointerDown(slider, { pointerId: 1 });
+    // Moves while down only update the shown value — no per-move commits.
+    fireEvent.change(slider, { target: { value: "10" } });
+    fireEvent.change(slider, { target: { value: "55" } });
+    expect(props.onSeek).not.toHaveBeenCalled();
+    expect((screen.getByRole("slider", { name: SEEK_LABEL }) as HTMLInputElement).value).toBe("55");
+    // The release commits once, at the last picked value.
+    fireEvent.pointerUp(slider);
+    expect(props.onSeek).toHaveBeenCalledTimes(1);
+    expect(props.onSeek).toHaveBeenCalledWith(55);
+    // Playback-driven progress arrives again → the slider follows it.
+    props.rerender(<ReadAloudBar {...props} progress={300} />);
+    expect((screen.getByRole("slider", { name: SEEK_LABEL }) as HTMLInputElement).value).toBe("30");
+  });
+
+  it("a lingering scrub commits on blur (the release that never fired)", () => {
+    const props = renderBar("playing", { ...seekProps() });
+    const slider = screen.getByRole("slider", { name: SEEK_LABEL }) as HTMLInputElement;
+    fireEvent.pointerDown(slider, { pointerId: 1 });
+    fireEvent.change(slider, { target: { value: "66" } });
+    fireEvent.blur(slider);
+    expect(props.onSeek).toHaveBeenCalledWith(66);
+  });
+
+  it("null progress (no event yet) shows 0 without crashing; percent clamps to 0–100", () => {
+    renderBar("playing", { ...seekProps(), progress: null });
+    const slider = screen.getByRole("slider", { name: SEEK_LABEL }) as HTMLInputElement;
+    expect(slider.value).toBe("0");
+    cleanup();
+
+    renderBar("playing", { ...seekProps(), progress: 5000 });
+    expect((screen.getByRole("slider", { name: SEEK_LABEL }) as HTMLInputElement).value).toBe(
+      "100",
+    );
+  });
+});
+
+describe("ReadAloudBar — previous/next passage (issue #166)", () => {
+  const passageHandlers = {
+    onSkipPassageBack: vi.fn(),
+    onSkipPassageForward: vi.fn(),
+  };
+
+  it("renders only while a session exists AND handlers are provided", () => {
+    renderBar("stopped", { ...passageHandlers });
+    expect(screen.queryByRole("button", { name: "Previous passage" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Next passage" })).toBeNull();
+    cleanup();
+
+    renderBar("playing"); // no handlers — the bar renders without them
+    expect(screen.queryByRole("button", { name: "Previous passage" })).toBeNull();
+    cleanup();
+
+    for (const state of ["playing", "paused"] as const) {
+      renderBar(state, { ...passageHandlers });
+      expect(screen.getByRole("button", { name: "Previous passage" })).not.toBeNull();
+      expect(screen.getByRole("button", { name: "Next passage" })).not.toBeNull();
+      cleanup();
+    }
+  });
+
+  it("clicks route to the passage handlers without touching the transport", () => {
+    const props = renderBar("playing", { ...passageHandlers });
+    fireEvent.click(screen.getByRole("button", { name: "Previous passage" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next passage" }));
+    expect(passageHandlers.onSkipPassageBack).toHaveBeenCalledTimes(1);
+    expect(passageHandlers.onSkipPassageForward).toHaveBeenCalledTimes(1);
     expect(props.onPrimary).not.toHaveBeenCalled();
     expect(props.onStop).not.toHaveBeenCalled();
   });

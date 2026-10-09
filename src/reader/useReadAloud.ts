@@ -67,18 +67,35 @@ export interface UseReadAloudReturn {
   followLevel: FollowLevel;
   /** The ONE polite transport announcement (role=status copy). */
   announcement: string | null;
+  /**
+   * Issue #166 — the listened position as DISPLAY currency for the bar's
+   * seek control: the canonical article-global grapheme offset of the most
+   * recent progress event (word boundary, chunk advance, or seek). Null
+   * until the session's first progress event; reset per fresh session. The
+   * canonical SAVE still rides onListenProgress alone — this is the slider's
+   * mirror, not a second source of truth.
+   */
+  progressOffset: number | null;
   /** Start (or resume after pause) — the only start is Play. */
   play: () => void;
   /** Pause while playing; resume while paused. */
   pauseOrResume: () => void;
   stop: () => void;
   /**
-   * Issue #42 — the track the #43 skip controls ride: jump the PLAYING
-   * session to the chunk containing the canonical offset (no re-probe; the
-   * spoken marker may move backward). No-op while paused/stopped — #43
-   * composes resume-then-seek for a paused skip.
+   * Issue #166 — the seek control's transport (generalizes the #43 skip
+   * track): playing → the audible jump (speech continues from the target
+   * chunk); paused → the paused seek (the state stays paused, the position
+   * + marker move, resume lands on the target); stopped → no-op. A
+   * successful seek is silent — the slider's position feedback and the
+   * speech/marker jump ARE the feedback.
    */
-  seek: (fromOffset: number) => void;
+  seek: (offset: number) => void;
+  /**
+   * Issue #166 — seek to the end: the session finishes through the ONE
+   * completion seam (the finished announcement + the end-pin save — the
+   * same contract as finishing by ear). Never wraps to the top.
+   */
+  seekToEnd: () => void;
   /**
    * Issue #43 (O3) — skip sentence backward/forward and skip paragraph
    * forward. While paused the composition is resume-then-seek (speech
@@ -89,6 +106,14 @@ export interface UseReadAloudReturn {
   skipSentenceBack: () => void;
   skipSentenceForward: () => void;
   skipParagraphForward: () => void;
+  /**
+   * Issue #166 — previous/next passage: one utterance-sized step (the chunk
+   * — the same passage unit the follow ladder names). Same skip discipline
+   * as #43: paused → resume-then-jump, a boundary announces ONCE through the
+   * polite region, a successful step stays silent.
+   */
+  skipPassageBack: () => void;
+  skipPassageForward: () => void;
 }
 
 export function useReadAloud(
@@ -100,6 +125,9 @@ export function useReadAloud(
   const [state, setState] = useState<TransportState>("stopped");
   const [followLevel, setFollowLevel] = useState<FollowLevel>(FOLLOW_LEVEL_FLOOR);
   const [announcement, setAnnouncement] = useState<string | null>(null);
+  /** Issue #166 — the seek slider's display mirror of the listened position
+   * (see UseReadAloudReturn.progressOffset). */
+  const [progressOffset, setProgressOffset] = useState<number | null>(null);
   /** O9 — a background-forced stop is awaiting its visible-return
    * re-announcement (set on hide/pagehide, consumed on visible). */
   const backgroundStopRef = useRef(false);
@@ -159,8 +187,10 @@ export function useReadAloud(
     }
     teardown();
     // The fresh session probes from scratch — show the floor until its probe
-    // resolves (never the previous session's level).
+    // resolves (never the previous session's level), and the seek slider's
+    // mirror resets with it (the first progress event re-fills it).
     setFollowLevel(FOLLOW_LEVEL_FLOOR);
+    setProgressOffset(null);
     const nextEngine = new ReadAloudEngine({
       adapter: createWebSpeechAdapter(),
       chunks: chunkArticleForSpeech(currentArticle),
@@ -169,7 +199,10 @@ export function useReadAloud(
       callbacks: {
         onStateChange: setState,
         onFollowLevel: setFollowLevel,
-        onProgress: (offset) => handlersRef.current.onListenProgress(offset),
+        onProgress: (offset) => {
+          setProgressOffset(offset);
+          handlersRef.current.onListenProgress(offset);
+        },
         onSpokenRange: (range) => handlersRef.current.onListenSpoken?.(range),
         onFinish: () => {
           setFollowLevel(FOLLOW_LEVEL_FLOOR);
@@ -213,8 +246,21 @@ export function useReadAloud(
     setAnnouncement("Read aloud stopped.");
   }, [teardown]);
 
-  const seek = useCallback((fromOffset: number) => {
-    engineRef.current?.seekTo(fromOffset);
+  // Issue #166 — the seek control's transport: playing → the audible jump;
+  // paused → the paused seek (state preserved, position + marker move, the
+  // canonical save rides onListenProgress immediately); stopped → no-op.
+  const seek = useCallback((offset: number) => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    if (engine.getState() === "playing") engine.seekTo(offset);
+    else if (engine.getState() === "paused") engine.seekWhilePaused(offset);
+  }, []);
+
+  // Issue #166 — seek to the end: the engine finishes through the ONE
+  // completion seam (onFinish → the finished announcement + the host's
+  // end-pin save). No wrap to the top; no-op while stopped.
+  const seekToEnd = useCallback(() => {
+    engineRef.current?.seekToEnd();
   }, []);
 
   // Issue #43 (O3) — the skip wrappers. A successful skip is SILENT (the
@@ -241,6 +287,16 @@ export function useReadAloud(
 
   const skipParagraphForward = useCallback(() => {
     runSkip((engine) => engine.skipParagraphForward(), "No next paragraph.");
+  }, [runSkip]);
+
+  // Issue #166 — the passage steps (one utterance-sized hop): the same skip
+  // discipline as #43 — silent on success, ONE honest line at a boundary.
+  const skipPassageBack = useCallback(() => {
+    runSkip((engine) => engine.skipPassageBack(), "No previous passage.");
+  }, [runSkip]);
+
+  const skipPassageForward = useCallback(() => {
+    runSkip((engine) => engine.skipPassageForward(), "No next passage.");
   }, [runSkip]);
 
   // Issue #165 — a voice/rate change applies to the ACTIVE session, from
@@ -317,12 +373,16 @@ export function useReadAloud(
     state,
     followLevel,
     announcement,
+    progressOffset,
     play,
     pauseOrResume,
     stop,
     seek,
+    seekToEnd,
     skipSentenceBack,
     skipSentenceForward,
     skipParagraphForward,
+    skipPassageBack,
+    skipPassageForward,
   };
 }

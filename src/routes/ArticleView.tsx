@@ -849,12 +849,17 @@ export function ArticleView({
     state: readAloudState,
     followLevel: readAloudFollowLevel,
     announcement: readAloudAnnouncement,
+    progressOffset: readAloudProgressOffset,
     play: playReadAloud,
     pauseOrResume: pauseOrResumeReadAloud,
     stop: stopReadAloud,
+    seek: seekReadAloud,
+    seekToEnd: seekToEndReadAloud,
     skipSentenceBack: skipSentenceBackReadAloud,
     skipSentenceForward: skipSentenceForwardReadAloud,
     skipParagraphForward: skipParagraphForwardReadAloud,
+    skipPassageBack: skipPassageBackReadAloud,
+    skipPassageForward: skipPassageForwardReadAloud,
   } = useReadAloud(article, {
     getStartOffset: () => currentAnchorOffsetRef.current,
     onListenProgress: (offset) => {
@@ -881,7 +886,27 @@ export function ArticleView({
     announcement: readAloudAnnouncement,
   });
   spokenSetterRef.current = follow.updateSpokenRange;
-  const { spokenRange } = follow;
+  const { spokenRange, reacquire: reacquireFollow } = follow;
+
+  // Issue #166 — the seek control's route seam: the bar picks a PERCENT; the
+  // route owns the percent → canonical-offset mapping (the article's grapheme
+  // total — endPinOffset's cached length) and the at-end routing (100% =
+  // finish through the ONE completion seam; anything short seeks to the chunk
+  // containing the offset). A seek also RE-ACQUIRES the follower: the reader
+  // moved the voice deliberately, so the never-fight-the-reader suspension
+  // (earned by manual turns/scrolls) no longer describes their intent.
+  const articleTotal = article ? endPinOffset(article) : 0;
+  const handleReadAloudSeek = useCallback(
+    (percent: number) => {
+      reacquireFollow();
+      if (percent >= 100 || articleTotal <= 0) {
+        seekToEndReadAloud();
+        return;
+      }
+      seekReadAloud(Math.round((percent / 100) * articleTotal));
+    },
+    [articleTotal, reacquireFollow, seekReadAloud, seekToEndReadAloud],
+  );
 
   // Phase 4 Plan 04-04 (D4-09 + D4-10): the mode-toggle handler. Captures the
   // anchor SYNCHRONOUSLY before calling update() so the post-swap render can
@@ -2470,7 +2495,9 @@ export function ArticleView({
             follow text (O1/O3). Issue #165: the speed is editable on the
             bar (writes through update() — the hook's settings-change seam
             re-tunes the live session), and the voice opens from the Voice
-            popover one action away. */}
+            popover one action away. Issue #166: the article-position seek
+            slider (the route owns percent→offset + the at-end finish seam)
+            and the previous/next passage steps. */}
         <ReadAloudBar
           state={readAloudState}
           followLevel={readAloudFollowLevel}
@@ -2484,10 +2511,15 @@ export function ArticleView({
             readAloudState === "playing" ? pauseOrResumeReadAloud() : playReadAloud()
           }
           onStop={stopReadAloud}
+          progress={readAloudProgressOffset}
+          totalGraphemes={articleTotal}
+          onSeek={handleReadAloudSeek}
           onJumpToSpoken={follow.jumpToSpoken}
           onSkipSentenceBack={skipSentenceBackReadAloud}
           onSkipSentenceForward={skipSentenceForwardReadAloud}
           onSkipParagraphForward={skipParagraphForwardReadAloud}
+          onSkipPassageBack={skipPassageBackReadAloud}
+          onSkipPassageForward={skipPassageForwardReadAloud}
         />
       </main>
     </>

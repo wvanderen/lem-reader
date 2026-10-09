@@ -52,6 +52,13 @@ export interface UseReadAloudFollow {
   updateSpokenRange(range: GraphemeRange): void;
   /** A manual page turn (PaginatedSurface.onUserTurn) suspends the follower. */
   suspend(): void;
+  /**
+   * Issue #166 — re-acquire after an EXPLICIT seek: the reader moved the
+   * voice deliberately, so the never-fight-the-reader suspension (earned by
+   * manual turns/scrolls) no longer describes their intent — the view should
+   * follow the voice to the picked position again.
+   */
+  reacquire(): void;
   /** "Jump to spoken position": focus-free orientation restore. */
   jumpToSpoken(): void;
   /** The transient route-level notice shown through the bar's status region. */
@@ -143,6 +150,13 @@ export function useReadAloudFollow(options: UseReadAloudFollowOptions): UseReadA
 
   const suspend = useCallback(() => {
     followSuspendedRef.current = true;
+  }, []);
+
+  // Issue #166 — an explicit seek re-acquires the follower (see the interface
+  // comment): the suspension was earned by manual navigation, and a seek is
+  // the reader overriding it.
+  const reacquire = useCallback(() => {
+    followSuspendedRef.current = false;
   }, []);
 
   // The marker lives exactly as long as the session: stopped (stop, finish,
@@ -307,5 +321,5 @@ export function useReadAloudFollow(options: UseReadAloudFollowOptions): UseReadA
     showNotice("Jumped to spoken position.");
   }, [article, scrollSpokenIntoView, showNotice, isPaginatedRef, surfaceRef]);
 
-  return { spokenRange, updateSpokenRange, suspend, jumpToSpoken, notice };
+  return { spokenRange, updateSpokenRange, suspend, reacquire, jumpToSpoken, notice };
 }
