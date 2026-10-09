@@ -148,12 +148,12 @@ test.describe("Issue #40 — the read-aloud minimal speakable path", () => {
     await expect(bar).toBeVisible();
 
     // Stopped (idle, issue #90): the ONE quiet entry "Read aloud"; no Stop
-    // shell, no follow text, no rate.
+    // shell, no follow text, no speed select.
     const entry = bar.getByRole("button", { name: "Read aloud" });
     await expect(entry).toBeEnabled();
     await expect(bar.getByRole("button", { name: "Stop" })).toHaveCount(0);
     await expect(bar.getByText(FOLLOW_LABELS["progress-only"])).toHaveCount(0);
-    await expect(bar.getByText("Rate: 1×")).toHaveCount(0);
+    await expect(bar.getByRole("combobox", { name: "Read-aloud speed" })).toHaveCount(0);
 
     // Focus stays put on play (the app never moves focus; the click is
     // delivered programmatically so button-focus cannot mask a steal).

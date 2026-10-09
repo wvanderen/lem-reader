@@ -27,11 +27,22 @@ import {
   FOLLOW_LABELS,
   READALOUD_HEIGHT_VAR,
 } from "../../../src/reader/ReadAloudBar";
+import { ReadAloudVoicePopover } from "../../../src/reader/ReadAloudVoicePopover";
 import type { FollowLevel, TransportState } from "../../../src/readaloud/types";
 
 afterEach(cleanup);
 
 type BarProps = Partial<Parameters<typeof ReadAloudBar>[0]>;
+
+/** jsdom 30 applies the UA popover rule ([popover] → display:none when
+ *  closed) but implements no open lifecycle. Lift the panel with an inline
+ *  display override — the row-tags.test.tsx discipline (inline beats UA in
+ *  the cascade; test-only; the real open/close/anchor lifecycle is the e2e
+ *  suite's job). */
+function liftPanel() {
+  const panel = document.querySelector(".readaloud-voice-popover") as HTMLElement | null;
+  if (panel) panel.style.display = "block";
+}
 
 /** Render the bar with the hook's honest defaults (floor follow level,
  * no announcement) and return the props (spies) + the container. */
@@ -194,14 +205,158 @@ describe("ReadAloudBar — jump to spoken position (issue #42)", () => {
   });
 });
 
-describe("ReadAloudBar — rate text (issue #43, O1; session-gated by #90)", () => {
-  it("the rate is visible as text while a session exists, hidden when idle", () => {
-    const stopped = renderBar("stopped", { rate: 1.5, followLevel: "progress-only" });
-    expect(stopped.container.textContent).not.toContain("Rate:");
+describe("ReadAloudBar — speed select (issue #165; session-gated by #90)", () => {
+  it("the speed is an editable select while a session exists, hidden when idle", () => {
+    renderBar("stopped", { rate: 1.5, followLevel: "progress-only" });
+    expect(screen.queryByRole("combobox", { name: "Read-aloud speed" })).toBeNull();
     cleanup();
 
-    const playing = renderBar("playing", { rate: 0.75, followLevel: "word" });
-    expect(playing.container.textContent).toContain("Rate: 0.75×");
+    renderBar("playing", {
+      rate: 0.75,
+      followLevel: "word",
+      onRateChange: vi.fn(),
+    });
+    const speed = screen.getByRole("combobox", { name: "Read-aloud speed" });
+    expect((speed as HTMLSelectElement).value).toBe("0.75");
+    // The ladder is the RATE_STEPS steps, each labelled with its "×" value.
+    const labels = Array.from(speed.querySelectorAll("option")).map((o) => o.textContent ?? "");
+    expect(labels).toContain("0.5×");
+    expect(labels).toContain("1×");
+    expect(labels).toContain("3×");
+  });
+
+  it("renders without the select when no rate handler is provided (the older pure-text bar)", () => {
+    renderBar("playing", { rate: 1 });
+    expect(screen.queryByRole("combobox", { name: "Read-aloud speed" })).toBeNull();
+  });
+
+  it("a change routes the picked number to onRateChange without touching the transport", () => {
+    const props = renderBar("playing", { rate: 1, onRateChange: vi.fn() });
+    fireEvent.change(screen.getByRole("combobox", { name: "Read-aloud speed" }), {
+      target: { value: "1.5" },
+    });
+    expect(props.onRateChange).toHaveBeenCalledTimes(1);
+    expect(props.onRateChange).toHaveBeenCalledWith(1.5);
+    expect(props.onPrimary).not.toHaveBeenCalled();
+    expect(props.onStop).not.toHaveBeenCalled();
+  });
+
+  it("a stored rate off the ladder is appended so the select never shows a valueless state", () => {
+    renderBar("playing", { rate: 1.1, onRateChange: vi.fn() });
+    const speed = screen.getByRole("combobox", { name: "Read-aloud speed" });
+    const labels = Array.from(speed.querySelectorAll("option")).map((o) => o.textContent ?? "");
+    expect((speed as HTMLSelectElement).value).toBe("1.1");
+    expect(labels).toContain("1.1×");
+  });
+});
+
+describe("ReadAloudBar — the Voice popover (issue #165)", () => {
+  function stubSpeech(voices: Array<Record<string, unknown>>): void {
+    Object.defineProperty(window, "speechSynthesis", {
+      value: { getVoices: () => voices },
+      configurable: true,
+      writable: true,
+    });
+  }
+
+  // jsdom has no popover lifecycle (the row-tags.test.tsx discipline): the
+  // sync open/close effect only needs the calls not to throw. The REAL
+  // open/close/anchor geometry is the e2e suite's job.
+  beforeEach(() => {
+    HTMLDivElement.prototype.showPopover = vi.fn();
+    HTMLDivElement.prototype.hidePopover = vi.fn();
+  });
+
+  it("the Voice button renders only while a session exists AND a voice handler is provided", () => {
+    renderBar("stopped", { onVoiceChange: vi.fn() });
+    expect(screen.queryByRole("button", { name: "Voice" })).toBeNull();
+    cleanup();
+
+    renderBar("playing");
+    expect(screen.queryByRole("button", { name: "Voice" })).toBeNull();
+    cleanup();
+
+    const props = renderBar("playing", { onVoiceChange: vi.fn() });
+    const voice = screen.getByRole("button", { name: "Voice" });
+    expect(voice.getAttribute("aria-haspopup")).toBe("dialog");
+    expect(voice.getAttribute("aria-expanded")).toBe("false");
+    // Opening flips the expansion state (the panel content itself is the
+    // popover component's own suite below).
+    fireEvent.click(voice);
+    expect(props.rerender).toBeDefined();
+    expect(screen.getByRole("button", { name: "Voice" }).getAttribute("aria-expanded")).toBe(
+      "true",
+    );
+  });
+
+  it("opening the popover shows the probed FILTERED local-voice list (system default first)", async () => {
+    stubSpeech([
+      { voiceURI: "cloud", name: "Cloud Voice", lang: "en", localService: false },
+      { voiceURI: "zora", name: "Zora", lang: "fr", localService: true },
+    ]);
+    render(<ReadAloudVoicePopover open voice={undefined} onVoiceChange={vi.fn()} onClose={vi.fn()} triggerRef={{ current: null }} />);
+    liftPanel();
+    const select = (await screen.findByRole("combobox", {
+      name: "Read-aloud voice",
+    })) as HTMLSelectElement;
+    await screen.findByRole("option", { name: "Zora (fr)" });
+    const labels = Array.from(select.querySelectorAll("option")).map((o) => o.textContent ?? "");
+    expect(labels).toContain("System default voice");
+    expect(labels).toContain("Zora (fr)");
+    expect(labels).not.toContain("Cloud Voice (en)");
+  });
+
+  it("a stored voice the filter hid is appended so the select always shows the live truth", async () => {
+    stubSpeech([
+      { voiceURI: "zora", name: "Zora", lang: "fr", localService: true },
+      { voiceURI: "gone", name: "Uninstalled", lang: "en", localService: false },
+    ]);
+    render(<ReadAloudVoicePopover open voice="gone" onVoiceChange={vi.fn()} onClose={vi.fn()} triggerRef={{ current: null }} />);
+    liftPanel();
+    // The filtered list drops the remote voice; the stored-but-hidden voice
+    // is appended under its real name (the unfiltered probe labels it).
+    await screen.findByRole("option", { name: "Uninstalled" });
+    const select = screen.getByRole("combobox", { name: "Read-aloud voice" }) as HTMLSelectElement;
+    expect(select.value).toBe("gone");
+  });
+
+  it("a voice pick routes '' and URIs through onVoiceChange without touching the transport", async () => {
+    stubSpeech([{ voiceURI: "zora", name: "Zora", lang: "fr", localService: true }]);
+    const onVoiceChange = vi.fn();
+    render(<ReadAloudVoicePopover open voice="zora" onVoiceChange={onVoiceChange} onClose={vi.fn()} triggerRef={{ current: null }} />);
+    liftPanel();
+    const select = (await screen.findByRole("combobox", {
+      name: "Read-aloud voice",
+    })) as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: "" } });
+    expect(onVoiceChange).toHaveBeenCalledWith("");
+    fireEvent.change(select, { target: { value: "zora" } });
+    expect(onVoiceChange).toHaveBeenCalledWith("zora");
+  });
+
+  it("Done routes through onClose exactly once and restores focus to the invoker ref", async () => {
+    stubSpeech([{ voiceURI: "zora", name: "Zora", lang: "fr", localService: true }]);
+    const onClose = vi.fn();
+    // The invoker ref is the bar's Voice button (WebKit never focuses
+    // buttons on click, so the popover cannot rely on activeElement).
+    const trigger = document.createElement("button");
+    document.body.appendChild(trigger);
+    const focusSpy = vi.spyOn(trigger, "focus");
+    const triggerRef = { current: trigger as HTMLElement };
+    render(
+      <ReadAloudVoicePopover
+        open
+        voice={undefined}
+        onVoiceChange={vi.fn()}
+        onClose={onClose}
+        triggerRef={triggerRef}
+      />,
+    );
+    liftPanel();
+    fireEvent.click(await screen.findByRole("button", { name: "Done" }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(focusSpy).toHaveBeenCalledTimes(1);
+    trigger.remove();
   });
 });
 

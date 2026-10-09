@@ -85,13 +85,18 @@ export interface ReadAloudEngineOptions {
 /**
  * ReadAloudEngine — one playback session per instance (play → … → terminal).
  * The host (useReadAloud) constructs a fresh engine per Play press; stop()
- * on teardown cancels speech and detaches the callbacks.
+ * on teardown cancels speech and detaches the callbacks. Issue #165 — the
+ * session's voice + rate are RETUNABLE live (retune()); the synthesizer
+ * cannot re-voice a held utterance, so a retune re-queues the current
+ * passage instead.
  */
 export class ReadAloudEngine {
   private readonly adapter: SpeechAdapter;
   private readonly chunks: readonly SpeechChunk[];
-  private readonly voiceURI: string | null;
-  private readonly rate: number;
+  /** Mutable per retune() — the CURRENT passage's next utterance always
+   * carries the latest values (issue #165). */
+  private voiceURI: string | null;
+  private rate: number;
   private readonly callbacks: ReadAloudEngineCallbacks;
 
   private state: TransportState = "stopped";
@@ -108,6 +113,21 @@ export class ReadAloudEngine {
   private lastSpokenStart = -1;
   private consecutiveErrors = 0;
   private stallTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The post-cancel settle timer behind seekTo/retune re-queues (the ONE
+   * field, tagged, so pause() can tell a retune handoff — which must defer
+   * to resume — from a seek handoff, which must simply die). */
+  private requeueTimer: ReturnType<typeof setTimeout> | null = null;
+  private requeueIsRetune = false;
+  /** Issue #165 — a retune that landed while PAUSED: the synthesizer holds
+   * the old utterance, so the new voice/rate can only take effect when
+   * speech next starts. Applied by resume() (never by pause — a settings
+   * change must not start playback). */
+  private retunePending = false;
+  /** A voice change landed that the CURRENT follow level has not been
+   * probed for — cleared only when a probe resolves, so it ACCUMULATES
+   * across consecutive retunes (voice→rate, or rate caught mid-settle by a
+   * pause): whichever path re-speaks first re-probes iff this is set. */
+  private voiceRetunePending = false;
 
   constructor(options: ReadAloudEngineOptions) {
     this.adapter = options.adapter;
@@ -153,12 +173,32 @@ export class ReadAloudEngine {
 
   pause(): void {
     if (this.state !== "playing") return;
+    // A retune handoff caught mid-settle (the re-queue hasn't started yet):
+    // the pause must survive it — clear the timer and defer the retune to
+    // resume() instead of letting the re-queue die silently (which would
+    // strand a paused session with no live utterance to resume).
+    const retuneArmed = this.requeueTimer !== null && this.requeueIsRetune;
+    this.clearRequeueTimer();
+    if (retuneArmed) {
+      this.retunePending = true;
+    }
     this.adapter.pause();
     this.setState("paused");
   }
 
   resume(): void {
     if (this.state !== "paused") return;
+    // Issue #165 — a retune landed while paused: the synthesizer still holds
+    // the OLD utterance, so plain resume() would finish the passage at the
+    // stale settings. Re-queue the current passage under the new ones instead
+    // (re-probing first iff a voice change is still unprobed — the follow
+    // level must match the voice actually speaking).
+    if (this.retunePending) {
+      this.retunePending = false;
+      this.setState("playing");
+      this.startRetune();
+      return;
+    }
     this.adapter.resume();
     this.setState("playing");
   }
@@ -166,6 +206,9 @@ export class ReadAloudEngine {
   stop(): void {
     this.generation += 1;
     this.clearStallTimer();
+    this.clearRequeueTimer();
+    this.retunePending = false;
+    this.voiceRetunePending = false;
     this.adapter.cancel();
     this.setState("stopped");
   }
@@ -195,6 +238,61 @@ export class ReadAloudEngine {
     this.lastSpokenStart = -1;
     this.consecutiveErrors = 0;
     setTimeout(() => this.startPlayback(generation), CANCEL_SETTLE_MS);
+  }
+
+  /**
+   * Issue #165 — apply a new voice/rate to the ACTIVE session. The
+   * synthesizer cannot re-voice or re-pace a held utterance, so the retune
+   * re-queues the CURRENT passage (never the article top): playing → cancel,
+   * settle, re-speak the current chunk under the new values (re-probing
+   * first on a voice change — the follow level must match the voice actually
+   * speaking); paused → deferred to resume(), so a settings change NEVER
+   * starts playback and the paused state + position are preserved; stopped →
+   * no-op (the next play() reads the values fresh). A no-op when nothing
+   * changed. Position granularity is the passage: the interrupted sentence
+   * restarts from its top — the same contract as the #43 skip transport.
+   */
+  retune(next: { voiceURI: string | null; rate: number }): void {
+    if (this.state === "stopped") return;
+    const voiceChanged = next.voiceURI !== this.voiceURI;
+    const rateChanged = next.rate !== this.rate;
+    if (!voiceChanged && !rateChanged) return;
+    this.voiceURI = next.voiceURI;
+    this.rate = next.rate;
+    // The flag ACCUMULATES: a voice change is unprobed until a probe
+    // resolves for it, no matter how many rate-only retunes follow or
+    // whether a pause catches the handoff mid-settle.
+    if (voiceChanged) this.voiceRetunePending = true;
+    if (this.state === "paused") {
+      this.retunePending = true;
+      return;
+    }
+    this.startRetune();
+  }
+
+  /** The shared retune transport (playing only): cancel, reset the floors,
+   * then settle → re-probe (iff a voice change is still unprobed) or
+   * straight into the current chunk (rate-only). Mirrors seekTo's settle
+   * discipline (WebKit cancel→queue race). */
+  private startRetune(): void {
+    const reprobe = this.voiceRetunePending;
+    this.generation += 1;
+    const generation = this.generation;
+    this.clearStallTimer();
+    this.clearRequeueTimer();
+    this.adapter.cancel();
+    this.lastReported = -1;
+    this.lastSpokenStart = -1;
+    this.consecutiveErrors = 0;
+    this.requeueIsRetune = true;
+    this.requeueTimer = setTimeout(() => {
+      this.requeueTimer = null;
+      if (reprobe) {
+        this.probe(generation);
+      } else {
+        this.startPlayback(generation);
+      }
+    }, CANCEL_SETTLE_MS);
   }
 
   /**
@@ -269,6 +367,8 @@ export class ReadAloudEngine {
       resolved = true;
       if (timer !== null) clearTimeout(timer);
       this.followLevel = level;
+      // Issue #165 — the level now matches the voice actually speaking.
+      this.voiceRetunePending = false;
       this.callbacks.onFollowLevel?.(level);
       // Cancel the probe (a boundary-resolved probe is still speaking; cancel
       // on an already-finished synthesis is a harmless no-op) and let the
@@ -433,6 +533,18 @@ export class ReadAloudEngine {
       clearTimeout(this.stallTimer);
       this.stallTimer = null;
     }
+  }
+
+  /** Clear the armed re-queue settle timer (retune's own; seekTo arms an
+   * untracked one that only the generation guard neuters). Returns whether
+   * a timer was actually cleared, so pause() can tell a retune handoff from
+   * an idle field. */
+  private clearRequeueTimer(): boolean {
+    if (this.requeueTimer === null) return false;
+    clearTimeout(this.requeueTimer);
+    this.requeueTimer = null;
+    this.requeueIsRetune = false;
+    return true;
   }
 }
 
