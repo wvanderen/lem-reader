@@ -226,12 +226,15 @@ export class ReadAloudEngine {
    * BACKWARD (skip-back) as well as forward, and the pre-seek utterance's
    * late events no-op via the generation guard. No-op while paused/stopped —
    * a paused seek is resume-then-seek for the caller (#43 owns that
-   * composition). An offset at/past the end restarts from the top.
+   * composition). An offset beyond the final speakable passage finishes.
    */
   seekTo(fromOffset: number): void {
     if (this.state !== "playing") return;
-    let startIndex = this.chunks.findIndex((c) => c.endGrapheme > fromOffset);
-    if (startIndex === -1) startIndex = 0;
+    const startIndex = this.chunks.findIndex((c) => c.endGrapheme > fromOffset);
+    if (startIndex === -1) {
+      this.seekToEnd();
+      return;
+    }
     this.nextChunkIndex = startIndex;
     this.requeueCurrentPassage();
   }
@@ -241,13 +244,22 @@ export class ReadAloudEngine {
    * starts), the held utterance is discarded in favor of the target chunk at
    * resume (pausedSeekPending), and the new position reports through the
    * progress + spoken-range channels right away — the canonical save and the
-   * visual marker follow the seek without playback. An at/past-end offset is
-   * a no-op here (seekToEnd() owns finishing; a paused seek never wraps).
+   * visual marker follow the seek without playback. A target beyond the final
+   * speakable passage finishes through seekToEnd(), including trailing text
+   * that is visible but not spoken.
    */
   seekWhilePaused(fromOffset: number): void {
     if (this.state !== "paused") return;
     const startIndex = this.chunks.findIndex((c) => c.endGrapheme > fromOffset);
-    if (startIndex === -1) return;
+    if (startIndex === -1) {
+      this.seekToEnd();
+      return;
+    }
+    // Keep speech held until resume, but retire every callback from the old
+    // utterance before resetting the floors for a backward seek.
+    this.generation += 1;
+    this.clearStallTimer();
+    this.clearRequeueTimer();
     this.pausedSeekPending = true;
     this.nextChunkIndex = startIndex;
     const chunk = this.chunks[startIndex]!;

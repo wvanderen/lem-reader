@@ -24,6 +24,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { bundledFixtures } from "../../../src/fixtures";
 import { chunkArticleForSpeech, type SpeechChunk } from "../../../src/readaloud/chunks";
+import type { CanonicalArticle } from "../../../src/content/types";
 import { graphemeLength } from "../../../src/content/normalizeText";
 // REUSE-DO-NOT-FORK: the shared controllable-fake speechSynthesis harness.
 import { installFakeSpeech, type SpeechMode } from "./_speech";
@@ -213,6 +214,33 @@ for (const MODE of MODES) {
       await bar.getByRole("button", { name: "Stop" }).click();
     });
 
+    test("repeated native arrow keys advance through passages while paused", async ({ page }) => {
+      await openArticle(page);
+      if (MODE === "scrolling") await toggleToScrolling(page);
+      const bar = page.locator(".readaloud-bar");
+      await playAndAwaitProbe(page);
+      await drainUntilLive(page, CHUNKS[0]!.text);
+      await bar.getByRole("button", { name: "Pause" }).click();
+      const slider = bar.getByRole("slider", { name: "Article position" });
+      await slider.focus();
+      await page.keyboard.press("Home");
+      const count = await spokenCount(page);
+      for (let percent = 1; percent <= 15; percent++) {
+        await page.keyboard.press("ArrowRight");
+        await expect(slider).toHaveValue(String(percent));
+      }
+      await expect.poll(() => readLocationOffset(page)).toBe(chunkAtPercent(15).startGrapheme);
+      expect(await spokenCount(page)).toBe(count);
+      await expect(bar.getByRole("button", { name: "Play" })).toBeVisible();
+      // Blur restores the actual passage position, then resume speaks it.
+      await page.keyboard.press("Tab");
+      await expect(slider).toHaveValue(
+        String(Math.round((chunkAtPercent(15).startGrapheme / TOTAL) * 100)),
+      );
+      await bar.getByRole("button", { name: "Play" }).click();
+      await drainUntilLive(page, chunkAtPercent(15).text);
+    });
+
     test("seeking while paused stays paused, saves the position, and resumes at the target", async ({
       page,
     }) => {
@@ -263,6 +291,53 @@ for (const MODE of MODES) {
         timeout: 15_000,
       });
     });
+
+    for (const paused of [false, true]) {
+      test(`seeking into trailing code finishes from ${paused ? "paused" : "playing"}`, async ({
+        page,
+      }) => {
+        await openArticle(page);
+        const article: CanonicalArticle = {
+          ...ESSAY,
+          blocks: [
+            { kind: "paragraph", content: [{ text: "A short spoken passage.", marks: [] }] },
+            { kind: "code-block", source: "unspoken source text ".repeat(50) },
+          ],
+          footnotes: [],
+        };
+        const total = graphemeLength(article);
+        await page.evaluate(async (row) => {
+          await new Promise<void>((resolve, reject) => {
+            const req = indexedDB.open("lem-reader");
+            req.onsuccess = () => {
+              const db = req.result;
+              const tx = db.transaction("articles", "readwrite");
+              tx.objectStore("articles").put(row);
+              tx.oncomplete = () => {
+                db.close();
+                resolve();
+              };
+              tx.onerror = () => reject(tx.error);
+            };
+            req.onerror = () => reject(req.error);
+          });
+        }, article);
+        await page.reload();
+        if (MODE === "scrolling") await toggleToScrolling(page);
+        await playAndAwaitProbe(page);
+        const bar = page.locator(".readaloud-bar");
+        if (paused) await bar.getByRole("button", { name: "Pause" }).click();
+        const count = await spokenCount(page);
+        await seekViaSlider(page, 95); // beyond speech, short of the canonical end
+        await expect(bar.getByRole("button", { name: "Read aloud" })).toBeVisible();
+        await expect(
+          page.getByRole("status").filter({ hasText: "Read aloud finished." }),
+        ).toHaveCount(1);
+        await expect.poll(() => readLocationOffset(page)).toBe(total);
+        expect(await spokenCount(page)).toBe(count);
+        expect(await liveUtteranceText(page)).toBeNull();
+      });
+    }
 
     test("seeking to the end finishes playback without wrapping to the beginning", async ({
       page,

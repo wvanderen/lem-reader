@@ -246,6 +246,7 @@ export function ReadAloudBar({
     if (!sessionActive) {
       setVoiceOpen(false);
       setScrubPercent(null);
+      setKeyboardPercent(null);
     }
   }, [sessionActive]);
   const skipHandlers: Record<SkipControlKey, (() => void) | undefined> = {
@@ -263,15 +264,20 @@ export function ReadAloudBar({
   // arrives); the commit rides the release. Keyboard adjustment commits per
   // change (no pointer is down — the value feedback must be immediate).
   const [scrubPercent, setScrubPercent] = useState<number | null>(null);
+  // Retain the keyboard pick while the slider owns focus: passage snapping
+  // must not undo each 1% step before the next arrow can reach a new passage.
+  // Blur returns the display to actual playback progress.
+  const [keyboardPercent, setKeyboardPercent] = useState<number | null>(null);
   // The LIVE percent — playback-driven position only, never the scrub override.
   const livePercent =
     progress !== null && progress !== undefined && totalGraphemes
       ? Math.min(100, Math.max(0, Math.round((progress / totalGraphemes) * 100)))
       : 0;
-  const seekPercent = scrubPercent ?? livePercent;
+  const seekPercent = scrubPercent ?? keyboardPercent ?? livePercent;
   const commitSeek = (percent: number) => {
     setScrubPercent(null);
-    onSeek?.(Math.min(100, Math.max(0, Math.round(percent))));
+    const picked = Math.min(100, Math.max(0, Math.round(percent)));
+    onSeek?.(picked);
   };
   // The release/blur commit: a scrub that lands back ON the live percent was
   // a no-op gesture (a thumb click, or a drag returned home) — clear the
@@ -353,12 +359,21 @@ export function ReadAloudBar({
               onChange={(e) => {
                 const picked = e.currentTarget.valueAsNumber;
                 if (scrubPercent !== null) setScrubPercent(picked);
-                else commitSeek(picked);
+                else {
+                  if (document.activeElement === e.currentTarget) setKeyboardPercent(picked);
+                  commitSeek(picked);
+                }
               }}
-              onPointerDown={(e) => setScrubPercent(e.currentTarget.valueAsNumber)}
+              onPointerDown={(e) => {
+                setKeyboardPercent(null);
+                setScrubPercent(e.currentTarget.valueAsNumber);
+              }}
               onPointerUp={commitScrub}
               onPointerCancel={commitScrub}
-              onBlur={commitScrub}
+              onBlur={() => {
+                commitScrub();
+                setKeyboardPercent(null);
+              }}
             />
           )}
           {/* Passage steps (issue #166) — previous/next passage, the

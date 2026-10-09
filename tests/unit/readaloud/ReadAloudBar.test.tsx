@@ -487,6 +487,22 @@ describe("ReadAloudBar — the seek slider (issue #166)", () => {
     expect(props.onStop).not.toHaveBeenCalled();
   });
 
+  it("keyboard picks survive snapped progress until blur", () => {
+    const props = renderBar("paused", { ...seekProps(), progress: 0 });
+    const slider = screen.getByRole("slider", { name: SEEK_LABEL }) as HTMLInputElement;
+    slider.focus();
+    for (let percent = 1; percent <= 5; percent++) {
+      fireEvent.change(slider, { target: { value: String(percent) } });
+      // Speech remains in the same passage despite the increasing pick.
+      props.rerender(<ReadAloudBar {...props} progress={0} />);
+      expect(slider.value).toBe(String(percent));
+      expect(props.onSeek).toHaveBeenLastCalledWith(percent);
+    }
+    expect(slider.getAttribute("aria-valuetext")).toBe("5% through the article");
+    fireEvent.blur(slider);
+    expect(slider.value).toBe("0");
+  });
+
   it("a pointer drag shows the picked value and commits ONCE on release (no fighting the finger)", () => {
     const props = renderBar("playing", { ...seekProps() });
     const slider = screen.getByRole("slider", { name: SEEK_LABEL }) as HTMLInputElement;

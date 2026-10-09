@@ -425,12 +425,15 @@ describe("seekTo — jump the playing session; the floors reset", () => {
     expect(h.spokenRanges[h.spokenRanges.length - 1]).toEqual({ start: 20, end: 30 });
   });
 
-  it("an offset at/past the end restarts from the top", () => {
+  it("a target beyond the final speakable passage finishes instead of wrapping", () => {
     const h = makeEngine();
     playWordCapable(h);
-    h.engine.seekTo(999);
-    vi.advanceTimersByTime(60);
-    expect(h.adapter.last!.request.text).toBe("Zero one.");
+    const count = h.adapter.spoken.length;
+    h.engine.seekTo(30); // visible trailing text may follow this speech end
+    vi.advanceTimersByTime(5000);
+    expect(h.engine.getState()).toBe("stopped");
+    expect(h.finished).toBe(1);
+    expect(h.adapter.spoken).toHaveLength(count);
   });
 
   it("is playing-only: a paused or stopped session ignores it", () => {
@@ -486,17 +489,35 @@ describe("seekWhilePaused — the paused seek preserves the paused state (issue 
     expect(h.adapter.last!.request.text).toBe("Three four."); // the target chunk
   });
 
-  it("an at/past-end offset while paused is a no-op (never wraps, never finishes)", () => {
+  it("a target beyond the final speakable passage finishes while paused", () => {
     const h = makeEngine();
     playWordCapable(h);
     h.engine.pause();
-    const spokenCount = h.adapter.spoken.length;
-    h.engine.seekWhilePaused(999);
+    const count = h.adapter.spoken.length;
+    h.engine.seekWhilePaused(30);
     vi.advanceTimersByTime(5000);
+    expect(h.engine.getState()).toBe("stopped");
+    expect(h.finished).toBe(1);
+    expect(h.adapter.spoken).toHaveLength(count);
+  });
+
+  it("late events from the held utterance cannot overwrite a backward paused seek", () => {
+    const h = makeEngine();
+    playWordCapable(h);
+    h.adapter.last!.events.onend?.(); // chunk 1 held at pause
+    const held = h.adapter.last!.events;
+    h.engine.pause();
+    h.engine.seekWhilePaused(0);
+    const progress = [...h.progress];
+    const ranges = [...h.spokenRanges];
+    held.onstart?.();
+    held.onboundary?.({ name: "word", charIndex: 6 });
+    held.onend?.();
+    held.onerror?.();
+    vi.advanceTimersByTime(5000);
+    expect(h.progress).toEqual(progress);
+    expect(h.spokenRanges).toEqual(ranges);
     expect(h.engine.getState()).toBe("paused");
-    expect(h.finished).toBe(0);
-    expect(h.adapter.spoken).toHaveLength(spokenCount);
-    // Resume lands on the held chunk, not the top.
     h.engine.resume();
     vi.advanceTimersByTime(60);
     expect(h.adapter.last!.request.text).toBe("Zero one.");
