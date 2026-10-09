@@ -263,14 +263,26 @@ export function ReadAloudBar({
   // arrives); the commit rides the release. Keyboard adjustment commits per
   // change (no pointer is down — the value feedback must be immediate).
   const [scrubPercent, setScrubPercent] = useState<number | null>(null);
-  const seekPercent =
-    scrubPercent ??
-    (progress !== null && progress !== undefined && totalGraphemes
+  // The LIVE percent — playback-driven position only, never the scrub override.
+  const livePercent =
+    progress !== null && progress !== undefined && totalGraphemes
       ? Math.min(100, Math.max(0, Math.round((progress / totalGraphemes) * 100)))
-      : 0);
+      : 0;
+  const seekPercent = scrubPercent ?? livePercent;
   const commitSeek = (percent: number) => {
     setScrubPercent(null);
     onSeek?.(Math.min(100, Math.max(0, Math.round(percent))));
+  };
+  // The release/blur commit: a scrub that lands back ON the live percent was
+  // a no-op gesture (a thumb click, or a drag returned home) — clear the
+  // scrub without the self-seek (no speech round-trip, no spurious save).
+  const commitScrub = () => {
+    if (scrubPercent === null) return;
+    const picked = scrubPercent;
+    setScrubPercent(null);
+    if (picked !== livePercent) {
+      onSeek?.(picked);
+    }
   };
   // Expanded-band reservation — see the header comment. While a session
   // exists, publish the pill's live rendered height (--readaloud-h on
@@ -344,15 +356,9 @@ export function ReadAloudBar({
                 else commitSeek(picked);
               }}
               onPointerDown={(e) => setScrubPercent(e.currentTarget.valueAsNumber)}
-              onPointerUp={() => {
-                if (scrubPercent !== null) commitSeek(scrubPercent);
-              }}
-              onPointerCancel={() => {
-                if (scrubPercent !== null) commitSeek(scrubPercent);
-              }}
-              onBlur={() => {
-                if (scrubPercent !== null) commitSeek(scrubPercent);
-              }}
+              onPointerUp={commitScrub}
+              onPointerCancel={commitScrub}
+              onBlur={commitScrub}
             />
           )}
           {/* Passage steps (issue #166) — previous/next passage, the

@@ -514,6 +514,23 @@ describe("ReadAloudBar — the seek slider (issue #166)", () => {
     expect(props.onSeek).toHaveBeenCalledWith(66);
   });
 
+  it("a release that lands back on the live percent is a no-op (no self-seek)", () => {
+    const props = renderBar("playing", { ...seekProps() });
+    const slider = screen.getByRole("slider", { name: SEEK_LABEL }) as HTMLInputElement;
+    // A thumb click without a move: down → up at the live percent (42).
+    fireEvent.pointerDown(slider, { pointerId: 1 });
+    fireEvent.pointerUp(slider);
+    expect(props.onSeek).not.toHaveBeenCalled();
+    // A drag that returns home commits nothing either — and the scrub clears
+    // so playback-driven progress shows again.
+    fireEvent.pointerDown(slider, { pointerId: 1 });
+    fireEvent.change(slider, { target: { value: "90" } });
+    fireEvent.change(slider, { target: { value: "42" } });
+    fireEvent.pointerUp(slider);
+    expect(props.onSeek).not.toHaveBeenCalled();
+    expect((screen.getByRole("slider", { name: SEEK_LABEL }) as HTMLInputElement).value).toBe("42");
+  });
+
   it("null progress (no event yet) shows 0 without crashing; percent clamps to 0–100", () => {
     renderBar("playing", { ...seekProps(), progress: null });
     const slider = screen.getByRole("slider", { name: SEEK_LABEL }) as HTMLInputElement;

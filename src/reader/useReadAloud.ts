@@ -188,9 +188,12 @@ export function useReadAloud(
     teardown();
     // The fresh session probes from scratch — show the floor until its probe
     // resolves (never the previous session's level), and the seek slider's
-    // mirror resets with it (the first progress event re-fills it).
+    // mirror resets with it. The mirror STARTS at the play anchor (never a
+    // false 0%): a resumed mid-article session shows its true position from
+    // the first frame — the probe window included — and the first progress
+    // event refines it to the speaking chunk.
     setFollowLevel(FOLLOW_LEVEL_FLOOR);
-    setProgressOffset(null);
+    setProgressOffset(handlersRef.current.getStartOffset());
     const nextEngine = new ReadAloudEngine({
       adapter: createWebSpeechAdapter(),
       chunks: chunkArticleForSpeech(currentArticle),

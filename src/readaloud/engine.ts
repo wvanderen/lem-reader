@@ -214,14 +214,7 @@ export class ReadAloudEngine {
   }
 
   stop(): void {
-    this.generation += 1;
-    this.clearStallTimer();
-    this.clearRequeueTimer();
-    this.retunePending = false;
-    this.voiceRetunePending = false;
-    this.pausedSeekPending = false;
-    this.handoffPending = false;
-    this.adapter.cancel();
+    this.abortSession();
     this.setState("stopped");
   }
 
@@ -276,14 +269,7 @@ export class ReadAloudEngine {
    */
   seekToEnd(): void {
     if (this.state === "stopped") return;
-    this.generation += 1;
-    this.clearStallTimer();
-    this.clearRequeueTimer();
-    this.retunePending = false;
-    this.voiceRetunePending = false;
-    this.pausedSeekPending = false;
-    this.handoffPending = false;
-    this.adapter.cancel();
+    this.abortSession();
     // The end reports once, like a natural finish's last advance: progress at
     // the final chunk's end + the zero-width sentinel (marker clearing is the
     // host's session-end job, not this channel's).
@@ -296,6 +282,20 @@ export class ReadAloudEngine {
     }
     this.setState("stopped");
     this.callbacks.onFinish?.();
+  }
+
+  /** The shared terminal abort behind stop() and seekToEnd(): supersede every
+   * in-flight closure (generation bump), clear the timers, drop every pending
+   * handoff/retune/seek flag, and cancel the synthesizer. */
+  private abortSession(): void {
+    this.generation += 1;
+    this.clearStallTimer();
+    this.clearRequeueTimer();
+    this.retunePending = false;
+    this.voiceRetunePending = false;
+    this.pausedSeekPending = false;
+    this.handoffPending = false;
+    this.adapter.cancel();
   }
 
   /**

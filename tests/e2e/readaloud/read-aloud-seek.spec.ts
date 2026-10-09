@@ -238,11 +238,22 @@ for (const MODE of MODES) {
         .poll(async () => readLocationOffset(page), { timeout: 15_000 })
         .toBe(chunk80.startGrapheme);
 
+      // BACKWARD while paused (still paused, queue still frozen): the save
+      // follows the backward seek — the latest seek owns the position.
+      const chunk20 = chunkAtPercent(20);
+      await seekViaSlider(page, 20);
+      await page.waitForTimeout(300);
+      expect(await spokenCount(page)).toBe(countBeforeSeek); // still nothing
+      await expect(bar.getByRole("button", { name: "Play" })).toBeVisible(); // still paused
+      await expect
+        .poll(async () => readLocationOffset(page), { timeout: 15_000 })
+        .toBe(chunk20.startGrapheme);
+
       // Resume: speech comes from the SEEK TARGET (the held utterance was
-      // replaced, not finished).
+      // replaced, not finished) — the LAST seek, not the first.
       await bar.getByRole("button", { name: "Play" }).click();
-      await drainUntilLive(page, chunk80.text);
-      expect(await liveUtteranceText(page)).toBe(chunk80.text);
+      await drainUntilLive(page, chunk20.text);
+      expect(await liveUtteranceText(page)).toBe(chunk20.text);
 
       // The seek IS the saved resume position: leave and reopen restores it.
       await page.goto(`${BASE}/`);
