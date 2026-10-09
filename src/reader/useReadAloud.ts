@@ -37,6 +37,11 @@ const FOLLOW_LEVEL_FLOOR: FollowLevel = "progress-only";
 const BACKGROUND_STOP_MESSAGE =
   "Read aloud stopped while the reader was in the background. Press Play to continue.";
 
+/** The honest fallback note (issue #165 shares it with session start): a
+ * chosen voice that no longer resolves degrades to the platform default —
+ * the reader is TOLD, never left wondering why the voice changed. */
+const VOICE_MISSING_MESSAGE = "Saved voice not found — using the default voice.";
+
 export interface UseReadAloudHandlers {
   /** The reader's live canonical position, read at press time (the only
    * start is Play, and Play starts at the current reading location). */
@@ -150,7 +155,7 @@ export function useReadAloud(
     let voiceURI = storedVoice;
     if (storedVoice !== null && !storedVoiceAvailable(storedVoice)) {
       voiceURI = null;
-      setAnnouncement("Saved voice not found — using the default voice.");
+      setAnnouncement(VOICE_MISSING_MESSAGE);
     }
     teardown();
     // The fresh session probes from scratch — show the floor until its probe
@@ -237,6 +242,29 @@ export function useReadAloud(
   const skipParagraphForward = useCallback(() => {
     runSkip((engine) => engine.skipParagraphForward(), "No next paragraph.");
   }, [runSkip]);
+
+  // Issue #165 — a voice/rate change applies to the ACTIVE session, from
+  // whichever surface made it (the transport bar's speed select and Voice
+  // popover, or the Reading-settings panel — ONE seam, no per-surface
+  // plumbing). The engine re-queues the current passage; while paused the
+  // change defers to resume() inside the engine, so a settings change never
+  // starts playback. No live session → nothing to do: the next Play reads
+  // the values fresh (the play-time seam). A chosen voice that no longer
+  // resolves degrades to the platform default with the same honest line
+  // session start uses — the bar's displayed voice then matches the one
+  // actually speaking (the engine's stale-URI degradation stays silent).
+  const settingsVoice = settings.voice;
+  const settingsRate = settings.rate;
+  useEffect(() => {
+    const engine = engineRef.current;
+    if (!engine || engine.getState() === "stopped") return;
+    let voiceURI = settingsVoice ?? null;
+    if (voiceURI !== null && !storedVoiceAvailable(voiceURI)) {
+      voiceURI = null;
+      setAnnouncement(VOICE_MISSING_MESSAGE);
+    }
+    engine.retune({ voiceURI, rate: settingsRate });
+  }, [settingsVoice, settingsRate]);
 
   // Issue #43 (O9) — backgrounding stops playback (spike 0009 F4: "read-aloud
   // controls must treat 'backgrounded' as 'stopped'"): mobile browsers kill

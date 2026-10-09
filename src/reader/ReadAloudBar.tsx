@@ -29,9 +29,18 @@
 //     passage" / "Shows progress only") — the floor ("Shows progress only")
 //     shows until the session's probe resolves, and the floor RETURNS at
 //     every session end, so the text is never stale (issue #43, O1) — and
-//     the configured rate shows beside it. Idle shows neither: the collapse
-//     is the point (issue #90); the rate stays discoverable in Reading
+//     the configured speed is editable BESIDE it. Idle shows neither: the
+//     collapse is the point (issue #90); fuller choices stay in Reading
 //     settings. State, never icon/color-only.
+//   - Issue #165 — the speed is EDITABLE directly on the bar: a native
+//     <select> over the RATE_STEPS ladder (aria-label "Read-aloud speed";
+//     keyboard/SR operable for free), writing through onRateChange → the
+//     settings store + the live-session retune seam. The voice — and any
+//     less frequent choice — is ONE action away: the "Voice" button opens
+//     the anchored ReadAloudVoicePopover (the same probed filtered list
+//     Reading settings shows). Both apply immediately at the current
+//     passage; while paused a change preserves the paused state (the
+//     engine defers to resume).
 //   - Issue #42: while a session exists (playing/paused) the bar also offers
 //     "Jump to spoken position" — a focus-free orientation affordance for
 //     when manual navigation left the spoken passage out of view. The
@@ -56,11 +65,13 @@
 // geometry; while a session exists the measured --readaloud-h property
 // (above) is what lets app.css give the band its space honestly.
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FollowLevel, TransportState } from "../readaloud/types";
-import { formatRate } from "../settings/tokens";
+import { RATE_STEPS, formatRate } from "../settings/tokens";
 // Issue #98 (decision #96) — the ONE polite status-region primitive.
 import { StatusRegion } from "../ui/StatusRegion";
+// Issue #165 — the anchored Voice popover (the voice one action away).
+import { ReadAloudVoicePopover } from "./ReadAloudVoicePopover";
 
 interface ReadAloudBarProps {
   state: TransportState; /**
@@ -78,8 +89,23 @@ interface ReadAloudBarProps {
    * while fresh; the route clears it when the transport next announces.
    */
   notice?: string | null;
-  /** The configured read-aloud rate — visible as text (issue #43, O1). */
+  /** The configured read-aloud rate — the speed select's live value
+   * (issue #165; editable on the bar while a session exists). */
   rate: number;
+  /** The currently stored read-aloud voice URI (undefined = system
+   * default) — the Voice popover's live value (issue #165). */
+  voice?: string;
+  /**
+   * Issue #165 — a speed pick from the bar's select (a RATE_STEPS value).
+   * The caller persists it AND the live session re-tunes (the hook's
+   * settings-change seam). Rendered only while a session exists.
+   */
+  onRateChange?: (rate: number) => void;
+  /**
+   * Issue #165 — a voice pick from the Voice popover ("" = system
+   * default). The caller persists it AND the live session re-tunes.
+   */
+  onVoiceChange?: (voiceURI: string) => void;
   /** Primary press: Play when stopped/paused, Pause when playing. */
   onPrimary: () => void;
   onStop: () => void;
@@ -144,6 +170,9 @@ export function ReadAloudBar({
   announcement,
   notice,
   rate,
+  voice,
+  onRateChange,
+  onVoiceChange,
   onPrimary,
   onStop,
   onJumpToSpoken,
@@ -153,6 +182,16 @@ export function ReadAloudBar({
 }: ReadAloudBarProps) {
   const sessionActive = state !== "stopped";
   const clusterRef = useRef<HTMLDivElement | null>(null);
+  // Issue #165 — the Voice popover's open flag (the trigger only exists
+  // mid-session; the popover closes itself when the session ends so it
+  // never floats over an idle bar). The trigger's ref rides along: it is
+  // the focus-restore target (the INVOKER — capturing activeElement at
+  // open would grab <body> on engines that don't focus buttons on click).
+  const [voiceOpen, setVoiceOpen] = useState(false);
+  const voiceTriggerRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    if (!sessionActive) setVoiceOpen(false);
+  }, [sessionActive]);
   const skipHandlers: Record<SkipControlKey, (() => void) | undefined> = {
     "skip-sentence-back": onSkipSentenceBack,
     "skip-sentence-forward": onSkipSentenceForward,
@@ -240,9 +279,48 @@ export function ReadAloudBar({
           {/* The status text pair (O1, gated to the session by #90): follow
               level in plain language (the floor until a session's probe
               resolves — always present mid-session, never stale) and the
-              configured rate. Visible text, never color-only. */}
+              speed — EDITABLE since issue #165: a native select over the
+              RATE_STEPS ladder, its accessible name doing the labelling
+              ("Read-aloud speed"), the visible value ("1.25×") the quiet
+              text register. A stored rate off the ladder (a continuous
+              schema value) is APPENDED so the control never shows a
+              valueless state. */}
           {sessionActive && <span className="readaloud-follow">{FOLLOW_LABELS[followLevel]}</span>}
-          {sessionActive && <span className="readaloud-rate">Rate: {formatRate(rate)}×</span>}
+          {sessionActive && onRateChange && (
+            <select
+              className="readaloud-rate readaloud-speed"
+              aria-label="Read-aloud speed"
+              value={rate}
+              onChange={(e) => onRateChange(Number(e.currentTarget.value))}
+            >
+              {RATE_STEPS.map((step) => (
+                <option key={step} value={step}>
+                  {formatRate(step)}×
+                </option>
+              ))}
+              {(RATE_STEPS as readonly number[]).includes(rate) || (
+                <option value={rate}>{formatRate(rate)}×</option>
+              )}
+            </select>
+          )}
+          {/* Issue #165 — the voice ONE action away: the anchored popover
+              (the same probed filtered list Reading settings renders).
+              Session-gated like every transport control; the popover itself
+              sits OUTSIDE the bar box (a fragment sibling below) because
+              .readaloud-bar is pointer-events:none — CSS inheritance, not
+              the top layer, governs it. */}
+          {sessionActive && onVoiceChange && (
+            <button
+              type="button"
+              ref={voiceTriggerRef}
+              className="btn btn-quiet readaloud-btn readaloud-voice-trigger"
+              aria-haspopup="dialog"
+              aria-expanded={voiceOpen}
+              onClick={() => setVoiceOpen(true)}
+            >
+              Voice
+            </button>
+          )}
         </div>
       </div>
       {/* The ONE polite transport live region (visually hidden, the ONE
@@ -251,6 +329,19 @@ export function ReadAloudBar({
           action — and the route clears it the moment the transport next
           announces. */}
       <StatusRegion className="visually-hidden">{notice ?? announcement ?? null}</StatusRegion>
+      {/* Issue #165 — the Voice popover: a fragment SIBLING of the bar (not
+          inside .readaloud-bar, whose pointer-events:none would inherit
+          into the panel). Anchored to the trigger through CSS anchor
+          positioning; opens UPWARD (the bar lives at the bottom edge). */}
+      {onVoiceChange && (
+        <ReadAloudVoicePopover
+          open={voiceOpen}
+          voice={voice}
+          onVoiceChange={onVoiceChange}
+          onClose={() => setVoiceOpen(false)}
+          triggerRef={voiceTriggerRef}
+        />
+      )}
     </>
   );
 }

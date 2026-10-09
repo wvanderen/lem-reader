@@ -2467,13 +2467,19 @@ export function ArticleView({
             quiet entry (issue #90). The ONE polite transport role=status
             rides inside the bar component. No focus moves on play; the only
             start is the entry button. Issue #43: the skip controls + the
-            rate text (O1/O3). */}
+            follow text (O1/O3). Issue #165: the speed is editable on the
+            bar (writes through update() — the hook's settings-change seam
+            re-tunes the live session), and the voice opens from the Voice
+            popover one action away. */}
         <ReadAloudBar
           state={readAloudState}
           followLevel={readAloudFollowLevel}
           announcement={readAloudAnnouncement}
           notice={follow.notice}
           rate={settings.rate}
+          voice={settings.voice}
+          onRateChange={(next) => update({ rate: next })}
+          onVoiceChange={(voiceURI) => update({ voice: voiceURI === "" ? undefined : voiceURI })}
           onPrimary={() =>
             readAloudState === "playing" ? pauseOrResumeReadAloud() : playReadAloud()
           }

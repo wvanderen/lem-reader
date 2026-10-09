@@ -451,7 +451,243 @@ describe("seekTo — jump the playing session; the floors reset", () => {
   });
 });
 
-// ─── 8. skip controls (issue #43, O3) ────────────────────────────────────────
+// ─── 8. retune — live voice/rate changes (issue #165) ────────────────────────
+
+describe("retune — rate change on the PLAYING session", () => {
+  it("re-queues the CURRENT passage under the new rate (no re-probe, no restart from top)", () => {
+    const h = makeEngine();
+    playWordCapable(h); // chunk 0 live
+    h.adapter.last!.events.onend?.(); // advance to chunk 1
+    expect(h.adapter.last!.request.text).toBe("Three four.");
+
+    h.engine.retune({ voiceURI: "test-voice", rate: 1.5 });
+    vi.advanceTimersByTime(60); // the post-cancel settle
+    // No re-probe: no new volume-0 utterance, the follow level survives.
+    expect(h.adapter.spoken.filter((s) => s.request.volume === 0)).toHaveLength(1);
+    expect(h.levels).toEqual(["word"]);
+    // The CURRENT chunk (not the article top) re-queues at the new rate.
+    expect(h.adapter.last!.request.volume).toBe(1);
+    expect(h.adapter.last!.request.text).toBe("Three four.");
+    expect(h.adapter.last!.request.rate).toBe(1.5);
+    expect(h.adapter.last!.request.voiceURI).toBe("test-voice");
+    // The floors reset: the re-queued utterance's start re-emits the marker.
+    h.adapter.last!.events.onstart?.();
+    expect(h.spokenRanges[h.spokenRanges.length - 1]).toEqual({ start: 9, end: 20 });
+  });
+
+  it("is a no-op when nothing changed", () => {
+    const h = makeEngine();
+    playWordCapable(h);
+    const spokenCount = h.adapter.spoken.length;
+    const cancelled = h.adapter.cancelled;
+    h.engine.retune({ voiceURI: "test-voice", rate: 1 });
+    expect(h.adapter.spoken).toHaveLength(spokenCount);
+    expect(h.adapter.cancelled).toBe(cancelled);
+  });
+
+  it("a stopped session ignores it (the host rebuilds with fresh settings on play)", () => {
+    const h = makeEngine();
+    const spokenCount = h.adapter.spoken.length;
+    h.engine.retune({ voiceURI: null, rate: 2 });
+    expect(h.adapter.spoken).toHaveLength(spokenCount);
+    // The engine keeps its constructor values — applying them is the HOST's
+    // job (a fresh engine per Play press reads the settings store).
+    h.engine.play(0);
+    expect(h.adapter.last!.request.rate).toBe(1);
+    expect(h.adapter.last!.request.voiceURI).toBe("test-voice");
+  });
+});
+
+describe("retune — voice change on the PLAYING session (re-probe)", () => {
+  it("re-probes the new voice, then continues the CURRENT passage under it", () => {
+    const h = makeEngine();
+    playWordCapable(h);
+    h.adapter.last!.events.onend?.(); // chunk 1 live
+
+    h.engine.retune({ voiceURI: "other-voice", rate: 1 });
+    vi.advanceTimersByTime(60); // the settle BEFORE the probe (WebKit race)
+    // A fresh silent probe carries the NEW voice + rate...
+    expect(h.adapter.last!.request.volume).toBe(0);
+    expect(h.adapter.last!.request.voiceURI).toBe("other-voice");
+    h.adapter.last!.events.onboundary?.({ name: "word", charIndex: 0 });
+    expect(h.levels).toEqual(["word", "word"]); // the level re-resolves
+    vi.advanceTimersByTime(60);
+    // ...and playback continues from the CURRENT chunk with the new voice.
+    expect(h.adapter.last!.request.volume).toBe(1);
+    expect(h.adapter.last!.request.text).toBe("Three four.");
+    expect(h.adapter.last!.request.voiceURI).toBe("other-voice");
+  });
+
+  it("a rate-only retune never re-probes; a voice+rate retune probes once", () => {
+    const h = makeEngine();
+    playWordCapable(h);
+    h.engine.retune({ voiceURI: "test-voice", rate: 2 });
+    vi.advanceTimersByTime(60);
+    expect(h.adapter.spoken.filter((s) => s.request.volume === 0)).toHaveLength(1);
+
+    h.engine.retune({ voiceURI: "next-voice", rate: 2.5 });
+    vi.advanceTimersByTime(60);
+    expect(h.adapter.spoken.filter((s) => s.request.volume === 0)).toHaveLength(2);
+  });
+});
+
+describe("retune handoff races", () => {
+  it.each(["during probe", "after probe"])(
+    "resume requeues the current passage when paused %s",
+    (phase) => {
+      const h = makeEngine();
+      playWordCapable(h);
+      h.adapter.last!.events.onend?.();
+      h.engine.retune({ voiceURI: "other-voice", rate: 1.5 });
+      vi.advanceTimersByTime(60);
+      const probe = h.adapter.last!;
+      if (phase === "after probe") probe.events.onend?.();
+      h.engine.pause();
+      const count = h.adapter.spoken.length;
+      vi.advanceTimersByTime(5000);
+      probe.events.onend?.();
+      expect(h.adapter.spoken).toHaveLength(count);
+      expect(h.engine.getState()).toBe("paused");
+      h.engine.resume();
+      vi.advanceTimersByTime(60);
+      if (h.adapter.last!.request.volume === 0) {
+        h.adapter.last!.events.onend?.();
+        vi.advanceTimersByTime(60);
+      }
+      expect(h.adapter.last!.request).toMatchObject({
+        text: "Three four.",
+        voiceURI: "other-voice",
+        rate: 1.5,
+        volume: 1,
+      });
+      expect(h.adapter.resumed).toBe(0);
+    },
+  );
+
+  it("a skip supersedes a voice retune and probes only the current generation", () => {
+    const h = makeEngine(makeSkipChunks());
+    playWordCapable(h);
+    h.engine.retune({ voiceURI: "other-voice", rate: 1 });
+    h.engine.skipSentences(1);
+    vi.advanceTimersByTime(60);
+    expect(h.adapter.spoken.filter((s) => s.request.volume === 0)).toHaveLength(2);
+    h.adapter.last!.events.onend?.();
+    vi.advanceTimersByTime(60);
+    expect(h.adapter.last!.request).toMatchObject({
+      text: "Beta",
+      voiceURI: "other-voice",
+      volume: 1,
+    });
+  });
+});
+
+describe("retune — PAUSED changes preserve the paused state (issue #165)", () => {
+  it("queues nothing while paused; resume applies at the current passage", () => {
+    const h = makeEngine();
+    playWordCapable(h);
+    h.adapter.last!.events.onend?.(); // chunk 1 live
+    h.engine.pause();
+    const spokenCount = h.adapter.spoken.length;
+
+    h.engine.retune({ voiceURI: "test-voice", rate: 1.5 });
+    vi.advanceTimersByTime(5000); // well past any settle — nothing fires
+    expect(h.adapter.spoken).toHaveLength(spokenCount); // no speech started
+    expect(h.engine.getState()).toBe("paused"); // paused preserved
+
+    h.engine.resume();
+    vi.advanceTimersByTime(60);
+    // The CURRENT chunk re-queues under the new rate (plain adapter.resume
+    // never ran — the held utterance is replaced, not continued).
+    expect(h.adapter.resumed).toBe(0);
+    expect(h.adapter.last!.request.text).toBe("Three four.");
+    expect(h.adapter.last!.request.rate).toBe(1.5);
+    expect(h.engine.getState()).toBe("playing");
+  });
+
+  it("a paused voice change re-probes on resume and lands the new voice", () => {
+    const h = makeEngine();
+    playWordCapable(h);
+    h.engine.pause();
+    h.engine.retune({ voiceURI: "other-voice", rate: 1 });
+    vi.advanceTimersByTime(5000);
+    expect(h.engine.getState()).toBe("paused");
+
+    h.engine.resume(); // play-from-paused rides the same path
+    vi.advanceTimersByTime(60);
+    expect(h.adapter.last!.request.volume).toBe(0); // the re-probe
+    expect(h.adapter.last!.request.voiceURI).toBe("other-voice");
+    h.adapter.last!.events.onboundary?.({ name: "word", charIndex: 0 });
+    vi.advanceTimersByTime(60);
+    expect(h.adapter.last!.request.volume).toBe(1);
+    expect(h.adapter.last!.request.text).toBe("Zero one."); // still chunk 0
+  });
+
+  it("a pause caught mid-retune-settle defers cleanly — resume still lands the retune", () => {
+    const h = makeEngine();
+    playWordCapable(h);
+    h.engine.retune({ voiceURI: "test-voice", rate: 1.5 }); // settle armed
+    h.engine.pause(); // inside the 60ms settle window
+    vi.advanceTimersByTime(60 + 5000); // the armed timer must NOT fire
+    expect(h.adapter.spoken.filter((s) => s.request.volume === 1)).toHaveLength(1);
+    expect(h.engine.getState()).toBe("paused");
+
+    h.engine.resume();
+    vi.advanceTimersByTime(60);
+    expect(h.adapter.last!.request.text).toBe("Zero one."); // current chunk
+    expect(h.adapter.last!.request.rate).toBe(1.5);
+  });
+
+  it("a pause caught mid-retune-settle after a VOICE change still re-probes on resume", () => {
+    const h = makeEngine();
+    playWordCapable(h);
+    h.engine.retune({ voiceURI: "other-voice", rate: 1 }); // settle armed, reprobe due
+    h.engine.pause(); // inside the 60ms settle window
+    vi.advanceTimersByTime(60 + 5000);
+    expect(h.engine.getState()).toBe("paused");
+    expect(h.adapter.spoken.filter((s) => s.request.volume === 0)).toHaveLength(1); // no probe yet
+
+    h.engine.resume();
+    vi.advanceTimersByTime(60);
+    // The deferred re-probe fired — the follow level must match the voice
+    // that is about to speak (the review finding: a stale reprobe flag must
+    // not skip it).
+    expect(h.adapter.last!.request.volume).toBe(0);
+    expect(h.adapter.last!.request.voiceURI).toBe("other-voice");
+    h.adapter.last!.events.onboundary?.({ name: "word", charIndex: 0 });
+    vi.advanceTimersByTime(60);
+    expect(h.adapter.last!.request.text).toBe("Zero one."); // current chunk
+    expect(h.adapter.last!.request.voiceURI).toBe("other-voice");
+  });
+
+  it("a voice change stays unprobed across a following rate-only retune (the flag accumulates)", () => {
+    const h = makeEngine();
+    playWordCapable(h); // paused path
+    h.engine.pause();
+    h.engine.retune({ voiceURI: "other-voice", rate: 1 }); // unprobed voice change
+    h.engine.retune({ voiceURI: "other-voice", rate: 2 }); // rate-only follow-up
+    h.engine.resume();
+    vi.advanceTimersByTime(60);
+    // The rate-only retune must NOT clear the pending voice re-probe.
+    expect(h.adapter.last!.request.volume).toBe(0);
+    expect(h.adapter.last!.request.voiceURI).toBe("other-voice");
+    expect(h.adapter.last!.request.rate).toBe(2);
+    h.adapter.last!.events.onboundary?.({ name: "word", charIndex: 0 });
+    vi.advanceTimersByTime(60);
+    expect(h.adapter.last!.request.rate).toBe(2);
+  });
+
+  it("stop discards a pending paused retune (nothing resumes)", () => {
+    const h = makeEngine();
+    playWordCapable(h);
+    h.engine.pause();
+    h.engine.retune({ voiceURI: "test-voice", rate: 1.5 });
+    h.engine.stop();
+    h.engine.resume(); // stopped → no-op
+    vi.advanceTimersByTime(60 + 5000);
+    expect(h.engine.getState()).toBe("stopped");
+    expect(h.adapter.spoken.filter((s) => s.request.volume === 1)).toHaveLength(1);
+  });
+});
 
 /** A 3-paragraph article: p0 has two sentences (each one chunk), p1 one
  * sentence split over budget into two pieces, p2 one sentence. Ranges are
@@ -466,6 +702,8 @@ function makeSkipChunks(): SpeechChunk[] {
     chunk("Delta", 20, { sentenceIndex: 3, paragraphIndex: 2 }),
   ];
 }
+
+// ─── 9. skip controls (issue #43, O3) ────────────────────────────────────────
 
 describe("skipSentences — skip sentence backward/forward (issue #43, O3)", () => {
   it("skip forward lands on the first chunk of the NEXT sentence, no re-probe", () => {

@@ -93,23 +93,23 @@ test.describe("Issue #43 — read-aloud completion", () => {
     await expect(bar).toBeVisible();
 
     // Stopped (idle, issue #90): the ONE quiet entry — no skip controls, no
-    // rate, no follow text.
-    await expect(bar.getByText("Rate: 1×")).toHaveCount(0);
+    // speed, no follow text.
+    await expect(bar.getByRole("combobox", { name: "Read-aloud speed" })).toHaveCount(0);
     await expect(bar.getByRole("button", { name: "Skip sentence backward" })).toHaveCount(0);
 
     await playAndAwaitProbe(page);
 
-    // Session active: the three skip controls are real buttons; the rate
-    // text and the follow level are both on the bar.
+    // Session active: the three skip controls are real buttons; the speed
+    // (editable, issue #165) and the follow level are both on the bar.
     await expect(bar.getByRole("button", { name: "Skip sentence backward" })).toBeVisible();
     await expect(bar.getByRole("button", { name: "Skip sentence forward" })).toBeVisible();
     await expect(bar.getByRole("button", { name: "Skip paragraph forward" })).toBeVisible();
-    await expect(bar.getByText("Rate: 1×")).toBeVisible();
+    await expect(bar.getByRole("combobox", { name: "Read-aloud speed" })).toHaveValue("1");
     await expect(bar.getByText(FOLLOW_LABELS.word)).toBeVisible();
 
     await bar.getByRole("button", { name: "Stop" }).click();
     await expect(bar.getByRole("button", { name: "Skip sentence backward" })).toHaveCount(0);
-    await expect(bar.getByText("Rate: 1×")).toHaveCount(0);
+    await expect(bar.getByRole("combobox", { name: "Read-aloud speed" })).toHaveCount(0);
   });
 
   test("O3: skip sentence forward/backward audibly jumps and the marker hops — silently", async ({
@@ -324,10 +324,13 @@ test.describe("Issue #43 — read-aloud completion", () => {
     await expect(page.locator(".settings-value").filter({ hasText: "1.25×" })).toBeVisible();
     await page.keyboard.press("Escape");
 
-    // Subsequent playback carries BOTH applied values — and the bar mirrors
-    // the configured rate as text while the session lives (O1, #90).
+    // Subsequent playback carries BOTH applied values — and the bar's speed
+    // select mirrors the configured rate while the session lives (O1, #90,
+    // #165).
     await playAndAwaitProbe(page);
-    await expect(page.locator(".readaloud-bar").getByText("Rate: 1.25×")).toBeVisible();
+    await expect(
+      page.locator(".readaloud-bar").getByRole("combobox", { name: "Read-aloud speed" }),
+    ).toHaveValue("1.25");
     await expect
       .poll(
         async () =>

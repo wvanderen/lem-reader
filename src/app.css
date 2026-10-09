@@ -4569,6 +4569,70 @@ dialog.book-remove-confirm {
   color: var(--ink-soft);
   white-space: nowrap;
 }
+/* Issue #165 — the editable speed select on the bar (the rate text's
+ * register, as a control): hairline-bordered like .settings-select but in
+ * the pill's quiet register (14px, soft ink). Height (not just min-height)
+ * because WebKit ignores min-height on a native-appearance <select> — the
+ * .review-select probed lesson. Touch-sized, zero motion properties. */
+.readaloud-speed {
+  height: var(--touch);
+  min-height: var(--touch);
+  padding-inline: var(--space-sm);
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+
+/* ── Issue #165 — the Voice popover (the voice one action away) ────────────
+ * A native popover="auto" panel anchored to the bar's Voice trigger — the
+ * .row-tags-popover discipline (D21-05 anchor positioning, probe-verified
+ * on all three pinned engines): position-area opens UPWARD (the bar sits at
+ * the viewport's bottom edge) with native flip fallbacks, viewport-kept
+ * with ZERO JS repositioning. The panel re-arms pointer-events (the bar
+ * box is pointer-events:none and DOM inheritance, not the top layer,
+ * governs it). Tokens only; no motion. */
+.readaloud-voice-trigger {
+  anchor-name: --readaloud-voice-anchor;
+}
+.readaloud-voice-popover {
+  position: fixed;
+  position-anchor: --readaloud-voice-anchor;
+  position-area: block-start span-inline-end;
+  position-try-fallbacks: flip-block, flip-inline;
+  inset: auto;
+  overflow: visible;
+  margin: var(--space-xs);
+  padding: var(--space-md);
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  box-sizing: border-box;
+  width: min(300px, calc(100vw - 2 * var(--space-md)));
+  pointer-events: auto;
+}
+.readaloud-voice-label {
+  display: block;
+  margin-bottom: var(--space-xs);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.readaloud-voice-help {
+  margin-top: var(--space-xs);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+.readaloud-voice-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-sm);
+}
 /* Scrolling mode: the extra bottom padding lets the last lines scroll clear
  * ABOVE the expanded bar instead of stopping behind it. */
 body:has(.readaloud-bar--expanded) main#main:not(.paginated-main) {

@@ -40,11 +40,10 @@ import type { ChangeEvent, CSSProperties } from "react";
 import { useSettings } from "../settings/SettingsContext";
 import { formatRate, MEASURE_STEPS, RATE_STEPS, SIZE_STEPS } from "../settings/tokens";
 import type { ReaderSettings } from "../content/schema";
-// Issue #43 (O8) — the read-aloud voice/rate controls' platform seam: the
-// probed voice list + the local-voice filter (spike 0009 §5.3) live beside
-// the other Web Speech seams in src/readaloud/webSpeech.ts.
-import { filterVoiceChoices, probeVoices, speechSynthesisAvailable } from "../readaloud/webSpeech";
-import type { VoiceChoice } from "../readaloud/webSpeech";
+// Issue #43 (O8) + #165 — the read-aloud voice picker's probed filtered
+// local-voice list lives in the SHARED useVoiceChoices seam (the transport
+// bar's Voice popover renders the exact same options).
+import { useVoiceChoices } from "./useVoiceChoices";
 // Issue #101 — the PORTABILITY STACK is action-time dynamic imports: the
 // bundle/zip machinery (ExportImportService → fflate + the manifest +
 // zipSlip gates), the conflict planner, the markdown renderer, and the
@@ -377,35 +376,14 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   const onReset = () => reset(); // D2-04 — restores DEFAULT_SETTINGS
 
   // ── Issue #43 (O8): the read-aloud voice/rate controls ──────────────────
-  // Capability is environment-level — computed once per mount (the
-  // hasWebCrypto pattern). The voice list is PROBED each open (Chrome fills
-  // getVoices() asynchronously via voiceschanged; probeVoices bounds the
-  // wait); the OPTIONS show the filtered local-voice list while the
-  // unfiltered probe labels a stored voice the filter hid (a remote voice,
-  // or one since uninstalled).
-  const [speechAvailable] = useState(speechSynthesisAvailable);
-  const [probedVoices, setProbedVoices] = useState<VoiceChoice[] | null>(null);
-  useEffect(() => {
-    if (!open || !speechAvailable) return;
-    let cancelled = false;
-    probeVoices().then((voices) => {
-      if (!cancelled) setProbedVoices(voices);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [open, speechAvailable]);
-
-  const voiceOptions = probedVoices ? filterVoiceChoices(probedVoices) : [];
-  const storedVoiceMissing =
-    settings.voice !== undefined && !voiceOptions.some((v) => v.voiceURI === settings.voice);
-  // The stored-but-hidden voice is APPENDED so the control always reflects
-  // the live truth (never a value with no option, never a silent mismatch
-  // between what is stored and what is displayed). Label: the voice's real
-  // name when the platform knows it, else the opaque URI.
-  const storedVoiceLabel = storedVoiceMissing
-    ? ((probedVoices ?? []).find((v) => v.voiceURI === settings.voice)?.name ?? settings.voice)
-    : settings.voice;
+  // The voice list is PROBED each open through the SHARED useVoiceChoices
+  // seam (issue #165 — the transport bar's Voice popover renders the exact
+  // same filtered list, with the stored-but-hidden voice appended so the
+  // control always shows the live truth).
+  const { speechAvailable, voiceOptions, storedVoiceMissing, storedVoiceLabel } = useVoiceChoices(
+    open,
+    settings.voice,
+  );
 
   // ── Plan 09-05 (D9-10): the "Your data" cluster state machine ───────────
   // One busy kind at a time (all three buttons disable while any data action
@@ -905,8 +883,9 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
 
                 {/* Issue #43 (O8) — the read-aloud rate: stepped 0.5–3
                   (RATE_STEPS, arrow keys land on a valid step), the same
-                  stepped-range pattern as Text size. Applies to subsequent
-                  playback — the honest boundary the help line names. */}
+                  stepped-range pattern as Text size. Issue #165: applies
+                  immediately — the live session re-tunes at the current
+                  passage; the help line says so. */}
                 <fieldset className="settings-section">
                   <legend>
                     Read-aloud rate{" "}
@@ -931,7 +910,9 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                       }
                     }}
                   />
-                  <p className="settings-help">Applies when reading aloud starts again.</p>
+                  <p className="settings-help">
+                    Changes apply right away — even while reading aloud.
+                  </p>
                 </fieldset>
               </>
             ) : (
