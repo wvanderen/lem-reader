@@ -33,6 +33,10 @@ Always-live conventions (details in `docs/stack.md`):
 
 > **Note:** GSD was removed on 2026-09-12. The former `/gsd-*` workflow commands no longer exist; legacy planning artifacts are frozen in `.planning/` (see `.planning/DEPRECATED.md`).
 
+## Test discipline
+
+This machine is shared — it also runs this repo's CI runner (full Playwright suite per PR/push) and often concurrent agent sessions. Check `uptime` before long test commands; above load ~6 expect 2–3x e2e inflation and do not read slowness as a regression. Iterate with targeted specs, full suite once per task; with a PR open, CI's `e2e-reference` gate owns full-suite evidence. Details: `docs/agents/test-discipline.md`.
+
 ## Agent skills
 
 ### Issue tracker
