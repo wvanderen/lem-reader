@@ -103,10 +103,13 @@ test.describe("Issue #165 — read-aloud settings from the transport bar", () =>
 
     // The SAME passage re-queues (cancel + settle + speak) — never the top.
     await expect
-      .poll(async () => {
-        const live = await livePlayback(page);
-        return live ? { text: live.text, rate: live.rate } : null;
-      }, { timeout: 10_000 })
+      .poll(
+        async () => {
+          const live = await livePlayback(page);
+          return live ? { text: live.text, rate: live.rate } : null;
+        },
+        { timeout: 10_000 },
+      )
       .toEqual({ text: FIRST_CHUNK, rate: 1.5 });
 
     // A rate-only retune never re-probes: still exactly ONE silent record.
@@ -132,9 +135,13 @@ test.describe("Issue #165 — read-aloud settings from the transport bar", () =>
     // probed FILTERED local list (the remote cloud voice is filtered out).
     await bar.getByRole("button", { name: "Voice" }).click();
     await expect(voiceSelect(page)).toBeVisible();
-    await expect(voiceSelect(page).getByRole("option", { name: "System default voice" })).toHaveCount(1);
+    await expect(
+      voiceSelect(page).getByRole("option", { name: "System default voice" }),
+    ).toHaveCount(1);
     await expect(voiceSelect(page).getByRole("option", { name: "Stub Voice (en)" })).toHaveCount(1);
-    await expect(voiceSelect(page).getByRole("option", { name: "Cloud Voice (en)" })).toHaveCount(0);
+    await expect(voiceSelect(page).getByRole("option", { name: "Cloud Voice (en)" })).toHaveCount(
+      0,
+    );
 
     // Pick the local voice: a fresh silent probe carries it, then the
     // CURRENT passage continues under the new voice.
@@ -192,10 +199,13 @@ test.describe("Issue #165 — read-aloud settings from the transport bar", () =>
     // BOTH new values — a fresh silent probe rides the voice change.
     await bar.getByRole("button", { name: "Play" }).click();
     await expect
-      .poll(async () => {
-        const live = await livePlayback(page);
-        return live ? { text: live.text, rate: live.rate, voice: live.voice } : null;
-      }, { timeout: 10_000 })
+      .poll(
+        async () => {
+          const live = await livePlayback(page);
+          return live ? { text: live.text, rate: live.rate, voice: live.voice } : null;
+        },
+        { timeout: 10_000 },
+      )
       .toEqual({ text: FIRST_CHUNK, rate: 1.5, voice: "stub-voice" });
 
     await bar.getByRole("button", { name: "Stop" }).click();
@@ -222,10 +232,13 @@ test.describe("Issue #165 — read-aloud settings from the transport bar", () =>
     await playAndAwaitProbe(page);
     await expect(speedSelect(page)).toHaveValue("1.25");
     await expect
-      .poll(async () => {
-        const live = await livePlayback(page);
-        return live ? { rate: live.rate, voice: live.voice } : null;
-      }, { timeout: 10_000 })
+      .poll(
+        async () => {
+          const live = await livePlayback(page);
+          return live ? { rate: live.rate, voice: live.voice } : null;
+        },
+        { timeout: 10_000 },
+      )
       .toEqual({ rate: 1.25, voice: "stub-voice" });
 
     await bar.getByRole("button", { name: "Stop" }).click();

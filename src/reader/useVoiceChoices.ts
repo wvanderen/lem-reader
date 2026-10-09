@@ -15,11 +15,7 @@
 // displayed).
 
 import { useEffect, useState } from "react";
-import {
-  filterVoiceChoices,
-  probeVoices,
-  speechSynthesisAvailable,
-} from "../readaloud/webSpeech";
+import { filterVoiceChoices, probeVoices, speechSynthesisAvailable } from "../readaloud/webSpeech";
 import type { VoiceChoice } from "../readaloud/webSpeech";
 
 export interface VoiceChoices {
@@ -55,8 +51,10 @@ export function useVoiceChoices(active: boolean, storedVoice: string | undefined
   const voiceOptions = probedVoices ? filterVoiceChoices(probedVoices) : [];
   const storedVoiceMissing =
     storedVoice !== undefined && !voiceOptions.some((v) => v.voiceURI === storedVoice);
+  const storedChoice = (probedVoices ?? []).find((v) => v.voiceURI === storedVoice);
   const storedVoiceLabel = storedVoiceMissing
-    ? ((probedVoices ?? []).find((v) => v.voiceURI === storedVoice)?.name ?? storedVoice)
+    ? (storedChoice?.name ??
+      (probedVoices === null ? storedVoice : `${storedVoice} (unavailable — using system default)`))
     : storedVoice;
   return { speechAvailable, voiceOptions, storedVoiceMissing, storedVoiceLabel };
 }

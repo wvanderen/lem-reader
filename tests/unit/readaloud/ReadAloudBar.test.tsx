@@ -294,7 +294,15 @@ describe("ReadAloudBar — the Voice popover (issue #165)", () => {
       { voiceURI: "cloud", name: "Cloud Voice", lang: "en", localService: false },
       { voiceURI: "zora", name: "Zora", lang: "fr", localService: true },
     ]);
-    render(<ReadAloudVoicePopover open voice={undefined} onVoiceChange={vi.fn()} onClose={vi.fn()} triggerRef={{ current: null }} />);
+    render(
+      <ReadAloudVoicePopover
+        open
+        voice={undefined}
+        onVoiceChange={vi.fn()}
+        onClose={vi.fn()}
+        triggerRef={{ current: null }}
+      />,
+    );
     liftPanel();
     const select = (await screen.findByRole("combobox", {
       name: "Read-aloud voice",
@@ -311,7 +319,15 @@ describe("ReadAloudBar — the Voice popover (issue #165)", () => {
       { voiceURI: "zora", name: "Zora", lang: "fr", localService: true },
       { voiceURI: "gone", name: "Uninstalled", lang: "en", localService: false },
     ]);
-    render(<ReadAloudVoicePopover open voice="gone" onVoiceChange={vi.fn()} onClose={vi.fn()} triggerRef={{ current: null }} />);
+    render(
+      <ReadAloudVoicePopover
+        open
+        voice="gone"
+        onVoiceChange={vi.fn()}
+        onClose={vi.fn()}
+        triggerRef={{ current: null }}
+      />,
+    );
     liftPanel();
     // The filtered list drops the remote voice; the stored-but-hidden voice
     // is appended under its real name (the unfiltered probe labels it).
@@ -320,10 +336,36 @@ describe("ReadAloudBar — the Voice popover (issue #165)", () => {
     expect(select.value).toBe("gone");
   });
 
+  it("labels an unavailable saved voice with the effective system fallback", async () => {
+    stubSpeech([{ voiceURI: "zora", name: "Zora", lang: "fr", localService: true }]);
+    render(
+      <ReadAloudVoicePopover
+        open
+        voice="gone"
+        onVoiceChange={vi.fn()}
+        onClose={vi.fn()}
+        triggerRef={{ current: null }}
+      />,
+    );
+    liftPanel();
+    const option = await screen.findByRole("option", {
+      name: "gone (unavailable — using system default)",
+    });
+    expect((option as HTMLOptionElement).selected).toBe(true);
+  });
+
   it("a voice pick routes '' and URIs through onVoiceChange without touching the transport", async () => {
     stubSpeech([{ voiceURI: "zora", name: "Zora", lang: "fr", localService: true }]);
     const onVoiceChange = vi.fn();
-    render(<ReadAloudVoicePopover open voice="zora" onVoiceChange={onVoiceChange} onClose={vi.fn()} triggerRef={{ current: null }} />);
+    render(
+      <ReadAloudVoicePopover
+        open
+        voice="zora"
+        onVoiceChange={onVoiceChange}
+        onClose={vi.fn()}
+        triggerRef={{ current: null }}
+      />,
+    );
     liftPanel();
     const select = (await screen.findByRole("combobox", {
       name: "Read-aloud voice",

@@ -531,6 +531,56 @@ describe("retune — voice change on the PLAYING session (re-probe)", () => {
   });
 });
 
+describe("retune handoff races", () => {
+  it.each(["during probe", "after probe"])(
+    "resume requeues the current passage when paused %s",
+    (phase) => {
+      const h = makeEngine();
+      playWordCapable(h);
+      h.adapter.last!.events.onend?.();
+      h.engine.retune({ voiceURI: "other-voice", rate: 1.5 });
+      vi.advanceTimersByTime(60);
+      const probe = h.adapter.last!;
+      if (phase === "after probe") probe.events.onend?.();
+      h.engine.pause();
+      const count = h.adapter.spoken.length;
+      vi.advanceTimersByTime(5000);
+      probe.events.onend?.();
+      expect(h.adapter.spoken).toHaveLength(count);
+      expect(h.engine.getState()).toBe("paused");
+      h.engine.resume();
+      vi.advanceTimersByTime(60);
+      if (h.adapter.last!.request.volume === 0) {
+        h.adapter.last!.events.onend?.();
+        vi.advanceTimersByTime(60);
+      }
+      expect(h.adapter.last!.request).toMatchObject({
+        text: "Three four.",
+        voiceURI: "other-voice",
+        rate: 1.5,
+        volume: 1,
+      });
+      expect(h.adapter.resumed).toBe(0);
+    },
+  );
+
+  it("a skip supersedes a voice retune and probes only the current generation", () => {
+    const h = makeEngine(makeSkipChunks());
+    playWordCapable(h);
+    h.engine.retune({ voiceURI: "other-voice", rate: 1 });
+    h.engine.skipSentences(1);
+    vi.advanceTimersByTime(60);
+    expect(h.adapter.spoken.filter((s) => s.request.volume === 0)).toHaveLength(2);
+    h.adapter.last!.events.onend?.();
+    vi.advanceTimersByTime(60);
+    expect(h.adapter.last!.request).toMatchObject({
+      text: "Beta",
+      voiceURI: "other-voice",
+      volume: 1,
+    });
+  });
+});
+
 describe("retune — PAUSED changes preserve the paused state (issue #165)", () => {
   it("queues nothing while paused; resume applies at the current passage", () => {
     const h = makeEngine();
@@ -638,7 +688,6 @@ describe("retune — PAUSED changes preserve the paused state (issue #165)", () 
     expect(h.adapter.spoken.filter((s) => s.request.volume === 1)).toHaveLength(1);
   });
 });
-
 
 /** A 3-paragraph article: p0 has two sentences (each one chunk), p1 one
  * sentence split over budget into two pieces, p2 one sentence. Ranges are
