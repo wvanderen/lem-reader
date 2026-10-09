@@ -1382,9 +1382,10 @@ dialog.settings-panel {
    44px summary row); the radios stay ONE native radio group (name="theme" —
    arrow keys walk the open shelves' nine choices), and the details element
    is a group named by its summary (role="group" + aria-labelledby made
-   explicit). Spacing does the separating (tight rows inside a shelf, a wide
-   gap between shelves — more space above each disclosure than below); no
-   internal rule lines. */
+   explicit). #164: complementary light/dark themes sit together inside one
+   shared .theme-pair container; unpaired themes remain standalone rows.
+   Spacing does the separating (tight rows inside a shelf, a wide gap
+   between shelves — more space above each disclosure than below). */
 .theme-shelf + .theme-shelf {
   margin-block-start: var(--space-md);
 }
@@ -1410,6 +1411,22 @@ dialog.settings-panel {
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
+}
+/* Issue #164 — the complementary pair container: one shared hairline
+   outline reads "these two belong together" (adjacency does the rest).
+   Presentation only — the radios remain one native group, and the rows
+   keep their own hover/selected tint inside the card. */
+.theme-pair {
+  display: flex;
+  flex-direction: column;
+  padding-block: var(--space-xs);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+}
+/* The selected theme row keeps the hover tint while checked (#164 — the
+   selection state reads at a glance, beyond the 13px radio glyph alone). */
+.theme-row:has(input:checked) {
+  background: var(--surface);
 }
 /* The theme's palette as EQUAL blocks — a standard palette chip, not a
    page-layout miniature (a facade lets the darkest token dominate, which is
@@ -1448,16 +1465,17 @@ dialog.settings-panel {
   background: var(--swatch-metal);
 }
 
-/* ── Custom-theme builder (issues #86/#120; #146) ────────────────────────── */
+/* ── Custom-theme builder (issues #86/#120; #146; #164) ──────────────────── */
 /* The disclosure section directly below the Theme fieldset, mounted only
    while a custom slot is active. Native <details>/<summary>; native color
    inputs paired with small hex text fields (both write the same token); the
-   live contrast readout reuses the global .status role/aria contract, inline
-   like .settings-data .status. #146 adds the "Reading room" fieldset — the
-   four Wayfinder chrome rows (band / band text / lit board / brass) grouped
-   under one named legend so the five-row calm above holds. Tokens only; no
-   transitions (token swaps are instant — the reduced-motion posture is
-   inherited, A11Y-06). */
+   presentation stays visual (#164 — no numerical readouts, no room
+   terminology): the internal accessibility check surfaces only a single
+   short message while a policed pair needs attention, next to the
+   "Improve readability" action. #146's chrome rows group under the "Frame"
+   fieldset so the five-row calm above holds. Tokens only; no transitions
+   (token swaps are instant — the reduced-motion posture is inherited,
+   A11Y-06). */
 .custom-theme-builder {
   display: flex;
   flex-direction: column;
@@ -1481,7 +1499,7 @@ dialog.settings-panel {
   flex-direction: column;
   gap: var(--space-xs);
 }
-/* Issue #146 — the "Reading room" chrome group: a native fieldset so the
+/* Issue #146/#164 — the "Frame" chrome group: a native fieldset so the
    four chrome rows carry one accessible group name. The legend speaks the
    signage register (spaced caps, CSS-uppercased — never the DOM text). */
 .custom-theme-group {
@@ -1536,16 +1554,13 @@ dialog.settings-panel {
   color: var(--ink);
 }
 /* The trimmed inline variant of the global .status live region (the
-   .settings-data .status pattern) + the calm warning voice. */
+   .settings-data .status pattern) + the calm warning voice (#164: the
+   region's ONLY content is the short conditional message). */
 .custom-theme-builder .status {
   margin-block: 0;
   padding: 0;
   background: transparent;
   border: none;
-}
-.custom-theme-builder .status p.custom-theme-verdict {
-  margin-block: 0;
-  color: var(--ink-soft);
 }
 .custom-theme-builder .status p.custom-theme-warning {
   margin-block: var(--space-sm) 0;

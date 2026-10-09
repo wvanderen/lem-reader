@@ -1,37 +1,46 @@
 // src/reader/CustomThemeBuilder.tsx
-// The custom-theme builder (issue #86, decision #73; issues #120/#146): the
-// disclosure section directly below the Theme fieldset, rendered ONLY while
-// a custom slot is active (theme "custom-light" / "custom-dark"). It edits
-// the ACTIVE slot's color rows — a native <input type="color"> paired with
-// a small editable hex text field, both writing the same token — the live
-// contrast readout for the policed pairs, the one-tap "Fix contrast" nudge,
-// and the quiet "Reset to base colors" restore. The OTHER slot's saved
-// record never rides an edit.
+// The custom-theme builder (issue #86, decision #73; issues #120/#146; the
+// calm presentation #164): the disclosure section directly below the Theme
+// fieldset, rendered ONLY while a custom slot is active (theme "custom-light"
+// / "custom-dark"). It edits the ACTIVE slot's color rows — a native
+// <input type="color"> paired with a small editable hex text field, both
+// writing the same token — the conditional readability message, the one-tap
+// "Improve readability" nudge, and the quiet "Reset to base colors" restore.
+// The OTHER slot's saved record never rides an edit.
+//
+// Issue #164 — the editing UI stays visual: no numerical contrast readouts
+// and no room terminology. The accessibility check still runs internally —
+// a SHORT message appears only while a policed pair needs attention, next
+// to the "Improve readability" action. Correction never happens on its own:
+// colors change ONLY when the reader presses the action; otherwise the
+// chosen colors are kept exactly as set (the reader may override and keep
+// reading — nothing is silently adjusted).
 //
 // Issue #146 — the rows group in two calm sets: the five SURFACE seeds
-// (surface, raised, text, accent, hairline) and, under a "Reading room"
-// group, the four Wayfinder CHROME tokens (Band, Band text, Lit board,
-// Brass — ADR 0005's enamel vocabulary). A chrome row displays the token's
-// EFFECTIVE value — the stored color once edited, the derived color before
-// that (derive-until-edited: editing a row simply stores it; "Reset to base
-// colors" drops it back to derived). The A11Y-05 rule carries over: every
-// row is named by its visible text label, never by its swatch color alone.
+// (surface, raised, text, accent, hairline) and, under a "Frame" group, the
+// four chrome tokens (Header background, Header text, Selected background,
+// Borders and focus). A chrome row
+// displays the token's EFFECTIVE value — the stored color once edited, the
+// derived color before that (derive-until-edited: editing a row simply
+// stores it; "Reset to base colors" drops it back to derived). The A11Y-05
+// rule carries over: every row is named by its visible text label, never by
+// its swatch color alone.
 //
 // Every change live-applies through useSettings().update (D2-03, no Save
 // step): SettingsContext's effect calls applyTheme, which writes the resolved
 // 23-token palette inline on documentElement; persistence rides the existing
-// debounced save (Pitfall 5). The readout is DEBOUNCE-ALIGNED — it renders
-// from a 400ms-settled copy of the tokens (the save debounce cadence), so a
-// fast typing burst never spams the polite live region.
+// debounced save (Pitfall 5). The check is DEBOUNCE-ALIGNED — it evaluates a
+// 400ms-settled copy of the tokens (the save debounce cadence), so a fast
+// typing burst never spams the polite live region.
 //
-// Contrast guardrail semantics (decision #73, extended by #146): the readout
-// is a non-blocking live region for the policed pairs — text on surface,
-// accent on surface, band text on band, band text on the lit board, band
-// text on the solid fill (4.5:1 each), brass on the paper and lit brass on
-// the band (3:1 non-text). Below-threshold renders a calm warning plus
-// "Fix contrast", which nudges the OFFENDING token only
-// (src/settings/customTheme.ts fixContrastPairs). The reader may override
-// and keep reading — nothing is silently adjusted.
+// Contrast guardrail semantics (decision #73, extended by #146; presented
+// calmly per #164): the internal check polices the same pairs as before —
+// text on surface, accent on surface, band text on band, band text on the
+// lit board, band text on the solid fill (4.5:1 each), brass on the paper
+// and lit brass on the band (3:1 non-text) — but reports only a single
+// short message when any pair is below its threshold, plus the
+// "Improve readability" action, which nudges the OFFENDING token only
+// (src/settings/customTheme.ts fixContrastPairs).
 //
 // Semantics: a native <details>/<summary> disclosure (keyboard-operable for
 // free), native color inputs — no ARIA re-implementation anywhere. The
@@ -70,22 +79,22 @@ const TOKEN_ROWS: ReadonlyArray<{
   { key: "hairline", label: "Hairline" },
 ];
 
-/** Issue #146 — the four Wayfinder chrome rows (the "Reading room" group):
- * the enamel classification band, its signage white, the lit
- * current-location board, and the metal rules. `key` is the OPTIONAL
- * CustomThemeTokens field — absent means "currently derived"; the row's CSS
- * property comes from the ONE shared CHROME_TOKEN_PROPS map. */
+/** Issue #146 — the four chrome rows (the "Frame" group): the band, its
+ * signage white, the lit current-location board, and the metal rules.
+ * `key` is the OPTIONAL CustomThemeTokens field — absent means "currently
+ * derived"; the row's CSS property comes from the ONE shared
+ * CHROME_TOKEN_PROPS map. */
 const CHROME_ROWS: ReadonlyArray<{
   key: ChromeTokenKey;
   label: string;
 }> = [
-  { key: "board", label: "Band" },
-  { key: "boardText", label: "Band text" },
-  { key: "lit", label: "Lit board" },
-  { key: "brass", label: "Brass" },
+  { key: "board", label: "Header background" },
+  { key: "boardText", label: "Header text" },
+  { key: "lit", label: "Selected background" },
+  { key: "brass", label: "Borders and focus" },
 ];
 
-const READOUT_DEBOUNCE_MS = 400; // the SettingsContext save cadence (Pitfall 5)
+const CHECK_DEBOUNCE_MS = 400; // the SettingsContext save cadence (Pitfall 5)
 
 /** Settle a fast-changing value before it drives the live region. */
 function useDebouncedValue<T>(value: T, ms: number): T {
@@ -104,13 +113,6 @@ function normalizeHex(raw: string): string | null {
   const m = /^#?([0-9a-fA-F]{6})$/.exec(raw.trim());
   const digits = m?.[1];
   return digits ? `#${digits.toLowerCase()}` : null;
-}
-
-/** "{name}: {ratio}:1 — {verdict}" — the calm readout line for one pair.
- * `min` is the pair's contract: 4.5:1 for text, 3:1 for non-text (both are
- * WCAG AA — 1.4.3 and 1.4.11). */
-function verdictLine(name: string, ratio: number, min: number = AA_TEXT_RATIO): string {
-  return `${name}: ${ratio.toFixed(1)}:1 — ${ratio >= min ? "good" : "below AA"}`;
 }
 
 /** One color row: visible label + native color picker + editable hex field.
@@ -183,7 +185,7 @@ export function CustomThemeBuilder() {
   const slot = activeSlotOf(settings.theme);
   const customTheme = activeSlotTheme(settings);
   const tokens = customTheme?.tokens;
-  const settled = useDebouncedValue(tokens, READOUT_DEBOUNCE_MS);
+  const settled = useDebouncedValue(tokens, CHECK_DEBOUNCE_MS);
 
   if (!customTheme || slot === undefined || !tokens) return null;
 
@@ -191,26 +193,27 @@ export function CustomThemeBuilder() {
     update(slotThemePatch(slot, { ...customTheme, tokens: { ...tokens, [key]: hex } }));
   };
 
-  // The readout (visible text AND the polite live region) renders from the
-  // debounce-settled tokens — the save cadence, so announcements never spam.
-  // (The builder only mounts with tokens present, so settled is defined; the
-  // ?? tokens fallback keeps types honest without an assertion.)
-  const readout = settled ?? tokens;
-  const readoutResolved = resolveCustomTheme(readout);
-  const inkRatio = contrastRatio(readout.ink, readout.surface);
-  const accentRatio = contrastRatio(readout.accent, readout.surface);
-  const bandTextRatio = contrastRatio(readoutResolved["--board-text"], readoutResolved["--board"]);
-  const litRatio = contrastRatio(readoutResolved["--board-text"], readoutResolved["--lit"]);
+  // The internal check (#164 — invisible unless a pair needs attention)
+  // evaluates the debounce-settled tokens — the save cadence, so the polite
+  // region's announcements never spam. (The builder only mounts with tokens
+  // present, so settled is defined; the ?? tokens fallback keeps types
+  // honest without an assertion.)
+  const checked = settled ?? tokens;
+  const checkedResolved = resolveCustomTheme(checked);
+  const inkRatio = contrastRatio(checked.ink, checked.surface);
+  const accentRatio = contrastRatio(checked.accent, checked.surface);
+  const bandTextRatio = contrastRatio(checkedResolved["--board-text"], checkedResolved["--board"]);
+  const litRatio = contrastRatio(checkedResolved["--board-text"], checkedResolved["--lit"]);
   const fillRatio = contrastRatio(
-    readoutResolved["--board-text"],
-    readoutResolved["--accent-strong"],
+    checkedResolved["--board-text"],
+    checkedResolved["--accent-strong"],
   );
-  const brassRatio = contrastRatio(readoutResolved["--brass"], readout.surface);
-  const brassRaisedRatio = contrastRatio(readoutResolved["--brass"], readout.surfaceRaised);
-  const bandSoftRatio = contrastRatio(readoutResolved["--board-soft"], readoutResolved["--board"]);
+  const brassRatio = contrastRatio(checkedResolved["--brass"], checked.surface);
+  const brassRaisedRatio = contrastRatio(checkedResolved["--brass"], checked.surfaceRaised);
+  const bandSoftRatio = contrastRatio(checkedResolved["--board-soft"], checkedResolved["--board"]);
   const brassBrightRatio = contrastRatio(
-    readoutResolved["--brass-bright"],
-    readoutResolved["--board"],
+    checkedResolved["--brass-bright"],
+    checkedResolved["--board"],
   );
   const anyFailing =
     inkRatio < AA_TEXT_RATIO ||
@@ -223,7 +226,7 @@ export function CustomThemeBuilder() {
     bandSoftRatio < AA_TEXT_RATIO ||
     brassBrightRatio < AA_NON_TEXT_RATIO;
 
-  const fixContrast = () => {
+  const improveReadability = () => {
     update(slotThemePatch(slot, { ...customTheme, tokens: fixContrastPairs(tokens) }));
   };
 
@@ -241,7 +244,7 @@ export function CustomThemeBuilder() {
     <details className="custom-theme-builder" open>
       <summary>Customize colors</summary>
       <p className="settings-help">
-        Choose your colors; the rest of the room adapts automatically.
+        Choose your colors; the rest of the page adapts automatically.
       </p>
       <div className="custom-theme-rows">
         {TOKEN_ROWS.map(({ key, label }) => (
@@ -254,11 +257,12 @@ export function CustomThemeBuilder() {
           />
         ))}
       </div>
-      {/* Issue #146 — the Wayfinder chrome group: four more rows under one
-          named fieldset, so the five-row calm above holds. The help copy's
-          promise extends here: an untouched row shows the derived value. */}
+      {/* Issue #146/#164 — the chrome group: four more rows under one
+          plainly named fieldset, so the five-row calm above holds. The help
+          copy's promise extends here: an untouched row shows the derived
+          value. */}
       <fieldset className="custom-theme-group">
-        <legend>Reading room</legend>
+        <legend>Frame</legend>
         <div className="custom-theme-rows">
           {CHROME_ROWS.map(({ key, label }) => (
             <TokenRow
@@ -272,39 +276,22 @@ export function CustomThemeBuilder() {
         </div>
       </fieldset>
       {/* The ONE polite region for the policed pairs (the D2-13 status
-          pattern, now the ONE StatusRegion primitive — issue #98):
-          verdict lines, the calm warning, and the fix affordance announce
-          together, debounce-aligned. #146 extends the policed set with the
-          chrome pairs (band text, lit board, solid fill, brass — the
-          extended ADR 0005 palette audit). */}
+          pattern, the ONE StatusRegion primitive — issue #98): a SHORT
+          message appears only while a pair needs attention (#164 — no
+          per-pair readouts, no numbers); silence IS the healthy state. The
+          check runs on the debounce-settled tokens; the message announces
+          politely and clears when the pairs clear. Correction is never
+          automatic — the colors move only via the "Improve readability"
+          action below. */}
       <StatusRegion>
-        <p className="custom-theme-verdict">{verdictLine("Text on surface", inkRatio)}</p>
-        <p className="custom-theme-verdict">{verdictLine("Accent on surface", accentRatio)}</p>
-        <p className="custom-theme-verdict">{verdictLine("Band text on band", bandTextRatio)}</p>
-        <p className="custom-theme-verdict">
-          {verdictLine("Secondary text on band", bandSoftRatio)}
-        </p>
-        <p className="custom-theme-verdict">{verdictLine("Band text on lit board", litRatio)}</p>
-        <p className="custom-theme-verdict">{verdictLine("Band text on solid fill", fillRatio)}</p>
-        <p className="custom-theme-verdict">
-          {verdictLine("Brass on surface", brassRatio, AA_NON_TEXT_RATIO)}
-        </p>
-        <p className="custom-theme-verdict">
-          {verdictLine("Brass on raised surface", brassRaisedRatio, AA_NON_TEXT_RATIO)}
-        </p>
-        <p className="custom-theme-verdict">
-          {verdictLine("Lit brass on band", brassBrightRatio, AA_NON_TEXT_RATIO)}
-        </p>
         {anyFailing && (
-          <p className="custom-theme-warning">
-            Some color pairs are below the contrast guidelines.
-          </p>
+          <p className="custom-theme-warning">Some color combinations may be hard to read.</p>
         )}
       </StatusRegion>
       <div className="custom-theme-actions">
         {anyFailing && (
-          <button type="button" className="btn btn-quiet" onClick={fixContrast}>
-            Fix contrast
+          <button type="button" className="btn btn-quiet" onClick={improveReadability}>
+            Improve readability
           </button>
         )}
         <button type="button" className="btn btn-quiet" onClick={resetToBase}>

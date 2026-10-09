@@ -8,15 +8,18 @@ import { expandSettingsGroup } from "../settings";
 //           (native radio-group arrow navigation — FIVE choices since
 //           #120), the disclosure summary toggles from the keyboard, every
 //           color picker + hex field is labeled and focusable, and the
-//           global :focus-visible ring shows.
+//           global :focus-visible ring shows. #164 — the shelves pair the
+//           complementary themes visually and the builder stays free of
+//           numerical readouts and room terminology.
 //   CT-02 — live apply: a hex commit writes the resolved palette INLINE on
 //           <html> (decision #73: the inline writes ARE the theme) and the
 //           computed body background follows — instantly (no transition is
 //           added; the reduced-motion posture is inherited, A11Y-06).
-//   CT-03 — the contrast guardrail: a broken policed pair renders the calm
-//           warning + "Fix contrast"; the fix restores AA on that pair
+//   CT-03 — the contrast guardrail (#164 presentation): a policed pair
+//           below its threshold renders the SHORT conditional message +
+//           "Improve readability"; the action restores AA on that pair
 //           (recomputed in-page from the inline tokens) without touching
-//           unrelated tokens.
+//           unrelated tokens, and only ever runs when pressed.
 //   CT-04 — persistence: a slot's custom theme survives a reload (Dexie
 //           truth + mirror hint; the pre-React script paints the seeded
 //           :root defaults until hydration — accepted by decision #73).
@@ -37,9 +40,9 @@ import { expandSettingsGroup } from "../settings";
 //   CT-09 — the #146 chrome: a non-green accent renders a matching band,
 //           lit board, and metal — never the preset enamel — in BOTH slots,
 //           each keeping its own light/dark register; the chrome pairs are
-//           policed by the readout + Fix contrast (CT-03's second half), and
-//           pre-#146 records (no chrome fields) derive their chrome on read
-//           with no migration.
+//           policed internally (CT-03's second half), and pre-#146 records
+//           (no chrome fields) derive their chrome on read with no
+//           migration.
 //
 // Harness reuse (REUSE-DO-NOT-FORK): BASE + wipeDatabase from
 // ../annotations/_fixtures; the axe serious-only gate from a11y.spec.
@@ -150,12 +153,13 @@ test.describe("Custom theme builder (#86/#120 — two custom slots, 5 tokens eac
     await openSettings(page);
 
     // The radios are reachable: focus the group's first radio and walk down
-    // with arrow keys (Daylight → Warm paper → Night → Trans pride →
+    // with arrow keys (Daylight → Night → Warm paper → Trans pride →
     // Bi pride → In Defense of Marxism → In Defense of Marxism (Night) →
     // Custom light → Custom dark — ADR 0006 added the two pride presets and
-    // ADR 0007 the two Marxism rooms between Night and the custom slots; the
-    // SettingsPanel's visual shelves never split the radio group, so the
-    // native arrow walk crosses all nine).
+    // ADR 0007 the two Marxism rooms between Night and the custom slots;
+    // #164 pairs Daylight with Night visually. The SettingsPanel's visual
+    // shelves and pair containers never split the radio group, so the
+    // native arrow walk crosses all nine in DOM order).
     const daylight = page.getByRole("radio", { name: "Daylight" });
     await daylight.focus();
     await expect(daylight).toBeFocused();
@@ -176,7 +180,7 @@ test.describe("Custom theme builder (#86/#120 — two custom slots, 5 tokens eac
 
     // The disclosure toggles from the keyboard (native <details> semantics).
     // The direct-child selector targets the SURFACE row group (#146 added a
-    // second .custom-theme-rows inside the Reading room fieldset).
+    // second .custom-theme-rows inside the Frame fieldset).
     const surfaceRows = page.locator(".custom-theme-builder > .custom-theme-rows");
     const summary = page.locator("details.custom-theme-builder summary");
     await summary.focus();
@@ -194,18 +198,18 @@ test.describe("Custom theme builder (#86/#120 — two custom slots, 5 tokens eac
 
     // Every color picker + hex field is labeled AND focusable (exact match —
     // "Surface color" must not also hit "Raised surface color", and since
-    // #146 "Text hex value" must not hit "Band text hex value").
+    // #146 "Text hex value" must not hit "Header text hex value").
     for (const label of [
       "Surface",
       "Raised surface",
       "Text",
       "Accent",
       "Hairline",
-      // Issue #146 — the Reading room chrome group.
-      "Band",
-      "Band text",
-      "Lit board",
-      "Brass",
+      // Issue #146 — the Frame chrome group.
+      "Header background",
+      "Header text",
+      "Selected background",
+      "Borders and focus",
     ]) {
       const swatch = page.getByLabel(`${label} color`, { exact: true });
       const hex = page.getByLabel(`${label} hex value`, { exact: true });
@@ -217,8 +221,38 @@ test.describe("Custom theme builder (#86/#120 — two custom slots, 5 tokens eac
       await expect(hex).toBeFocused();
     }
     // The chrome rows carry ONE accessible group name (#146 — the native
-    // fieldset legend).
-    await expect(page.locator("fieldset.custom-theme-group legend")).toHaveText("Reading room");
+    // fieldset legend; #164 — no room terminology).
+    await expect(page.locator("fieldset.custom-theme-group legend")).toHaveText("Frame");
+
+    // #164 — the editing UI stays visual: no room terminology and no
+    // numerical contrast readouts anywhere in the open panel, and the
+    // healthy seed colors render neither a warning nor a correction
+    // affordance (conditional messaging; correction is never automatic).
+    const panelText = await page.locator("dialog.settings-panel").textContent();
+    expect(panelText).not.toMatch(/room|lit board|brass|\bband\b/i);
+    expect(panelText).not.toMatch(/\d:\d/);
+    await expect(page.locator(".custom-theme-builder .custom-theme-warning")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Improve readability" })).toHaveCount(0);
+
+    // #164 — pair presentation in the real browser: three pair containers,
+    // each grouping exactly its two complementary radios; the unpaired
+    // themes sit outside every container.
+    const pairs = page.locator(".theme-pair");
+    await expect(pairs).toHaveCount(3);
+    await expect(pairs.nth(0).getByRole("radio")).toHaveCount(2);
+    await expect(pairs.nth(0).getByRole("radio", { name: "Daylight" })).toBeAttached();
+    await expect(pairs.nth(0).getByRole("radio", { name: "Night" })).toBeAttached();
+    await expect(pairs.nth(2).getByRole("radio", { name: "Custom light" })).toBeAttached();
+    await expect(pairs.nth(2).getByRole("radio", { name: "Custom dark" })).toBeAttached();
+    await expect(
+      pairs.nth(1).getByRole("radio", { name: "In Defense of Marxism", exact: true }),
+    ).toBeAttached();
+    await expect(
+      pairs.nth(1).getByRole("radio", { name: "In Defense of Marxism (Night)" }),
+    ).toBeAttached();
+    await expect(pairs.getByRole("radio", { name: "Warm paper" })).toHaveCount(0);
+    await expect(pairs.getByRole("radio", { name: "Trans pride" })).toHaveCount(0);
+    await expect(pairs.getByRole("radio", { name: "Bi pride" })).toHaveCount(0);
 
     // The hex fields commit from the keyboard too (the live-apply proof of
     // the fill lives in CT-02).
@@ -274,23 +308,27 @@ test.describe("Custom theme builder (#86/#120 — two custom slots, 5 tokens eac
     expect(chrome.bandPaint).not.toBe("rgb(29, 49, 40)");
   });
 
-  // CT-03 — the guardrail: warn calmly, fix the offending pair only.
-  test("below-AA warns + Fix contrast restores the pair without touching others (CT-03)", async ({
+  // CT-03 — the guardrail (#164 presentation): a short conditional message,
+  // and the correction runs only when the reader presses it.
+  test("a hard-to-read pair warns + Improve readability restores the pair without touching others (CT-03)", async ({
     page,
   }) => {
     await openSettings(page);
     await activateSlot(page, "Custom light");
 
+    // Healthy seeds: silence (no message, no correction affordance).
+    await expect(page.locator(".custom-theme-builder .custom-theme-warning")).toHaveCount(0);
+
     // Break ONE pair: ink = the surface color.
     await page.getByLabel("Text hex value", { exact: true }).fill("#f7f7f5");
     await expect(page.locator(".custom-theme-builder .custom-theme-warning")).toBeVisible();
 
-    await page.getByRole("button", { name: "Fix contrast" }).click();
+    await page.getByRole("button", { name: "Improve readability" }).click();
     await expect(page.locator(".custom-theme-builder .custom-theme-warning")).toBeHidden();
 
     // Recompute the policed pair in-page from the inline tokens (the test
     // owns the WCAG math; the app owns the tokens).
-    const verdict = await page.evaluate(() => {
+    const fixed = await page.evaluate(() => {
       const lin = (c: number): number => {
         const s = c / 255;
         return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
@@ -313,21 +351,21 @@ test.describe("Custom theme builder (#86/#120 — two custom slots, 5 tokens eac
         pairRatio: ratio(style.getPropertyValue("--ink"), style.getPropertyValue("--surface")),
       };
     });
-    expect(verdict.pairRatio).toBeGreaterThanOrEqual(4.5);
-    expect(verdict.surface).toBe("#f7f7f5"); // untouched
-    expect(verdict.accent).toBe("#22604a"); // untouched
-    expect(verdict.hairline).toBe("#d5d8d2"); // untouched
-    expect(verdict.ink).not.toBe("#f7f7f5"); // the offender moved
+    expect(fixed.pairRatio).toBeGreaterThanOrEqual(4.5);
+    expect(fixed.surface).toBe("#f7f7f5"); // untouched
+    expect(fixed.accent).toBe("#22604a"); // untouched
+    expect(fixed.hairline).toBe("#d5d8d2"); // untouched
+    expect(fixed.ink).not.toBe("#f7f7f5"); // the offender moved
 
     // Issue #146 — the chrome pairs are policed the same way: a near-white
-    // band under the derived near-white band text warns, and the fix moves
-    // the BAND (its stored side) while nothing else is written.
-    await page.getByLabel("Band hex value", { exact: true }).fill("#f5f5f0");
+    // band under the derived near-white band text warns, and the action
+    // moves the BAND (its stored side) while nothing else is written.
+    await page.getByLabel("Header background hex value", { exact: true }).fill("#f5f5f0");
     await expect(page.locator(".custom-theme-builder .custom-theme-warning")).toBeVisible();
     const boardBefore = await page.evaluate(() =>
       document.documentElement.style.getPropertyValue("--board"),
     );
-    await page.getByRole("button", { name: "Fix contrast" }).click();
+    await page.getByRole("button", { name: "Improve readability" }).click();
     await expect(page.locator(".custom-theme-builder .custom-theme-warning")).toBeHidden();
     const chromeFix = await page.evaluate(() => {
       const lin = (c: number): number => {
