@@ -18,7 +18,8 @@
 //
 // Issue #146 — the rows group in two calm sets: the five SURFACE seeds
 // (surface, raised, text, accent, hairline) and, under a "Frame" group, the
-// four chrome tokens (Band, Band text, Lit board, Brass). A chrome row
+// four chrome tokens (Header background, Header text, Selected background,
+// Borders and focus). A chrome row
 // displays the token's EFFECTIVE value — the stored color once edited, the
 // derived color before that (derive-until-edited: editing a row simply
 // stores it; "Reset to base colors" drops it back to derived). The A11Y-05
@@ -87,10 +88,10 @@ const CHROME_ROWS: ReadonlyArray<{
   key: ChromeTokenKey;
   label: string;
 }> = [
-  { key: "board", label: "Band" },
-  { key: "boardText", label: "Band text" },
-  { key: "lit", label: "Lit board" },
-  { key: "brass", label: "Brass" },
+  { key: "board", label: "Header background" },
+  { key: "boardText", label: "Header text" },
+  { key: "lit", label: "Selected background" },
+  { key: "brass", label: "Borders and focus" },
 ];
 
 const CHECK_DEBOUNCE_MS = 400; // the SettingsContext save cadence (Pitfall 5)
@@ -284,9 +285,7 @@ export function CustomThemeBuilder() {
           action below. */}
       <StatusRegion>
         {anyFailing && (
-          <p className="custom-theme-warning">
-            Some color combinations may be hard to read.
-          </p>
+          <p className="custom-theme-warning">Some color combinations may be hard to read.</p>
         )}
       </StatusRegion>
       <div className="custom-theme-actions">

@@ -198,7 +198,7 @@ test.describe("Custom theme builder (#86/#120 — two custom slots, 5 tokens eac
 
     // Every color picker + hex field is labeled AND focusable (exact match —
     // "Surface color" must not also hit "Raised surface color", and since
-    // #146 "Text hex value" must not hit "Band text hex value").
+    // #146 "Text hex value" must not hit "Header text hex value").
     for (const label of [
       "Surface",
       "Raised surface",
@@ -206,10 +206,10 @@ test.describe("Custom theme builder (#86/#120 — two custom slots, 5 tokens eac
       "Accent",
       "Hairline",
       // Issue #146 — the Frame chrome group.
-      "Band",
-      "Band text",
-      "Lit board",
-      "Brass",
+      "Header background",
+      "Header text",
+      "Selected background",
+      "Borders and focus",
     ]) {
       const swatch = page.getByLabel(`${label} color`, { exact: true });
       const hex = page.getByLabel(`${label} hex value`, { exact: true });
@@ -229,12 +229,10 @@ test.describe("Custom theme builder (#86/#120 — two custom slots, 5 tokens eac
     // healthy seed colors render neither a warning nor a correction
     // affordance (conditional messaging; correction is never automatic).
     const panelText = await page.locator("dialog.settings-panel").textContent();
-    expect(panelText).not.toMatch(/room/i);
+    expect(panelText).not.toMatch(/room|lit board|brass|\bband\b/i);
     expect(panelText).not.toMatch(/\d:\d/);
     await expect(page.locator(".custom-theme-builder .custom-theme-warning")).toHaveCount(0);
-    await expect(
-      page.getByRole("button", { name: "Improve readability" }),
-    ).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Improve readability" })).toHaveCount(0);
 
     // #164 — pair presentation in the real browser: three pair containers,
     // each grouping exactly its two complementary radios; the unpaired
@@ -362,7 +360,7 @@ test.describe("Custom theme builder (#86/#120 — two custom slots, 5 tokens eac
     // Issue #146 — the chrome pairs are policed the same way: a near-white
     // band under the derived near-white band text warns, and the action
     // moves the BAND (its stored side) while nothing else is written.
-    await page.getByLabel("Band hex value", { exact: true }).fill("#f5f5f0");
+    await page.getByLabel("Header background hex value", { exact: true }).fill("#f5f5f0");
     await expect(page.locator(".custom-theme-builder .custom-theme-warning")).toBeVisible();
     const boardBefore = await page.evaluate(() =>
       document.documentElement.style.getPropertyValue("--board"),

@@ -293,7 +293,12 @@ describe("SettingsPanel — custom theme builder (issues #86/#120)", () => {
     const group = document.querySelector("fieldset.custom-theme-group");
     expect(group).not.toBeNull();
     expect(group?.querySelector("legend")?.textContent).toBe("Frame");
-    for (const label of ["Band", "Band text", "Lit board", "Brass"]) {
+    for (const label of [
+      "Header background",
+      "Header text",
+      "Selected background",
+      "Borders and focus",
+    ]) {
       expect(await screen.findByLabelText(`${label} color`)).not.toBeNull();
       expect(await screen.findByLabelText(`${label} hex value`)).not.toBeNull();
     }
@@ -308,7 +313,7 @@ describe("SettingsPanel — custom theme builder (issues #86/#120)", () => {
     });
     await screen.findByText("Customize colors");
     const panel = document.querySelector("dialog.settings-panel");
-    expect(panel?.textContent).not.toMatch(/room/i);
+    expect(panel?.textContent).not.toMatch(/room|lit board|brass|\bband\b/i);
     expect(panel?.textContent).not.toMatch(/\d:\d/);
     // Healthy seed colors: no message and no correction affordance —
     // correction happens only when the reader asks for it.
@@ -322,7 +327,7 @@ describe("SettingsPanel — custom theme builder (issues #86/#120)", () => {
       fireEvent.click(screen.getByRole("radio", { name: "Custom light" }));
     });
     // The derived band (resolved from the light seeds, not the :root literal).
-    const band = (await screen.findByLabelText("Band hex value")) as HTMLInputElement;
+    const band = (await screen.findByLabelText("Header background hex value")) as HTMLInputElement;
     expect(band.value).toMatch(/^#[0-9a-f]{6}$/);
     expect(band.value).not.toBe("#1d3128"); // derived, not the Daylight literal copied
     // Editing writes the token through — inline on <html>.
@@ -356,7 +361,7 @@ describe("SettingsPanel — custom theme builder (issues #86/#120)", () => {
       fireEvent.click(screen.getByRole("radio", { name: "Custom light" }));
     });
     const raised = await screen.findByLabelText("Raised surface hex value");
-    const brass = await screen.findByLabelText("Brass hex value");
+    const brass = await screen.findByLabelText("Borders and focus hex value");
     // With the untouched seed colors no message shows (conditional messaging).
     expect(screen.queryByText(/hard to read/)).toBeNull();
     act(() => {
@@ -374,7 +379,9 @@ describe("SettingsPanel — custom theme builder (issues #86/#120)", () => {
     // moved, and the pair clears the non-text floor again.
     expect(inlineToken("--surface-raised")).toBe("#3a775f");
     expect(inlineToken("--brass")).not.toBe("#3a775f");
-    expect(contrastRatio(inlineToken("--brass"), inlineToken("--surface-raised"))).toBeGreaterThanOrEqual(3);
+    expect(
+      contrastRatio(inlineToken("--brass"), inlineToken("--surface-raised")),
+    ).toBeGreaterThanOrEqual(3);
   });
 
   it("a hard-to-read band pair warns and Improve readability moves the band only (#146, #164)", async () => {
@@ -384,7 +391,7 @@ describe("SettingsPanel — custom theme builder (issues #86/#120)", () => {
     });
     // Break EXACTLY the band pair: a near-white band under the derived
     // near-white band text.
-    const band = (await screen.findByLabelText("Band hex value")) as HTMLInputElement;
+    const band = (await screen.findByLabelText("Header background hex value")) as HTMLInputElement;
     act(() => {
       fireEvent.change(band, { target: { value: "#f5f5f0" } });
     });
