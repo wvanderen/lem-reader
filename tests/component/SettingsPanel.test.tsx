@@ -114,6 +114,37 @@ describe("SettingsPanel — structure + aria (D2-01)", () => {
   });
 });
 
+// ── Issue #164 — pairing is presentation ────────────────────────────────────
+// Complementary light/dark themes share one visual container (.theme-pair);
+// unpaired themes remain standalone rows. Pairing never splits the native
+// radio group, and no theme gains a variant to complete a pair.
+describe("SettingsPanel — theme shelf pairing (#164)", () => {
+  it("complementary themes share a .theme-pair container; unpaired themes stand alone", () => {
+    renderExpanded(<Harness open={true} onClose={() => undefined} />);
+    const pairs = Array.from(document.querySelectorAll(".theme-pair"));
+    const expectedPairs = [
+      ["Daylight", "Night"],
+      ["In Defense of Marxism", "In Defense of Marxism (Night)"],
+      ["Custom light", "Custom dark"],
+    ];
+    expect(pairs).toHaveLength(expectedPairs.length);
+    const namesIn = (el: Element) =>
+      Array.from(el.querySelectorAll('input[name="theme"]')).map(
+        (i) => i.closest("label")?.textContent ?? "",
+      );
+    expectedPairs.forEach((names, i) => {
+      expect(namesIn(pairs[i]!)).toEqual(names);
+    });
+    // The unpaired themes never ride inside a pair container.
+    for (const name of ["Warm paper", "Trans pride", "Bi pride"]) {
+      const radio = screen.getByRole("radio", { name });
+      expect(radio.closest(".theme-pair")).toBeNull();
+    }
+    // The nine radios remain ONE native group (arrow-key walk intact).
+    expect(document.querySelectorAll('input[name="theme"]')).toHaveLength(9);
+  });
+});
+
 describe("SettingsPanel — open/close state", () => {
   it("calls showModal() when open flips false→true and close() when it flips back", () => {
     const { rerender } = renderExpanded(<Harness open={false} onClose={() => undefined} />);
@@ -249,10 +280,11 @@ describe("SettingsPanel — custom theme builder (issues #86/#120)", () => {
     }
   });
 
-  // Issue #146 — the Wayfinder chrome rows group under one named fieldset so
-  // the five-row calm holds; every new row keeps the A11Y-05 rule (a visible
-  // text label, never the swatch color alone).
-  it("groups the four Reading room chrome rows under a 'Reading room' fieldset (#146)", async () => {
+  // Issue #146/#164 — the chrome rows group under one plainly named fieldset
+  // so the five-row calm holds; every row keeps the A11Y-05 rule (a visible
+  // text label, never the swatch color alone). The legend carries no room
+  // terminology (#164).
+  it("groups the four chrome rows under a 'Frame' fieldset (#146, #164)", async () => {
     renderExpanded(<Harness open={true} onClose={() => undefined} />);
     act(() => {
       fireEvent.click(screen.getByRole("radio", { name: "Custom light" }));
@@ -260,11 +292,28 @@ describe("SettingsPanel — custom theme builder (issues #86/#120)", () => {
     await screen.findByText("Customize colors");
     const group = document.querySelector("fieldset.custom-theme-group");
     expect(group).not.toBeNull();
-    expect(group?.querySelector("legend")?.textContent).toBe("Reading room");
+    expect(group?.querySelector("legend")?.textContent).toBe("Frame");
     for (const label of ["Band", "Band text", "Lit board", "Brass"]) {
       expect(await screen.findByLabelText(`${label} color`)).not.toBeNull();
       expect(await screen.findByLabelText(`${label} hex value`)).not.toBeNull();
     }
+  });
+
+  // Issue #164 — the editing UI stays visual: no numerical contrast
+  // readouts, no room terminology, and silence while the colors are fine.
+  it("shows no contrast numbers or room terminology, and stays silent while colors are fine (#164)", async () => {
+    renderExpanded(<Harness open={true} onClose={() => undefined} />);
+    act(() => {
+      fireEvent.click(screen.getByRole("radio", { name: "Custom light" }));
+    });
+    await screen.findByText("Customize colors");
+    const panel = document.querySelector("dialog.settings-panel");
+    expect(panel?.textContent).not.toMatch(/room/i);
+    expect(panel?.textContent).not.toMatch(/\d:\d/);
+    // Healthy seed colors: no message and no correction affordance —
+    // correction happens only when the reader asks for it.
+    expect(screen.queryByText(/hard to read/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Improve readability" })).toBeNull();
   });
 
   it("an untouched chrome row shows its DERIVED value; editing stores it (#146 derive-until-edited)", async () => {
@@ -301,29 +350,34 @@ describe("SettingsPanel — custom theme builder (issues #86/#120)", () => {
     expect(after).not.toBe("#1d3128"); // ...and is not the preset enamel
   });
 
-  it("reports raised-paper brass failures and fixes only the metal", async () => {
+  it("warns when colors need attention and Improve readability moves only the metal (#164)", async () => {
     renderExpanded(<Harness open={true} onClose={() => undefined} />);
     act(() => {
       fireEvent.click(screen.getByRole("radio", { name: "Custom light" }));
     });
     const raised = await screen.findByLabelText("Raised surface hex value");
     const brass = await screen.findByLabelText("Brass hex value");
+    // With the untouched seed colors no message shows (conditional messaging).
+    expect(screen.queryByText(/hard to read/)).toBeNull();
     act(() => {
       fireEvent.change(raised, { target: { value: "#3a775f" } });
       fireEvent.change(brass, { target: { value: "#3a775f" } });
     });
-    expect(await screen.findByText(/Brass on raised surface: 1.0:1 — below AA/)).not.toBeNull();
+    expect(await screen.findByText(/Some color combinations may be hard to read\./)).not.toBeNull();
     act(() => {
-      fireEvent.click(screen.getByRole("button", { name: "Fix contrast" }));
+      fireEvent.click(screen.getByRole("button", { name: "Improve readability" }));
     });
     await waitFor(() => {
-      expect(screen.getByText(/Brass on raised surface:.*good/)).not.toBeNull();
+      expect(screen.queryByText(/hard to read/)).toBeNull();
     });
+    // The reader's chosen raised surface rides untouched; only the metal
+    // moved, and the pair clears the non-text floor again.
     expect(inlineToken("--surface-raised")).toBe("#3a775f");
-    expect(screen.getByText(/Secondary text on band:.*good/)).not.toBeNull();
+    expect(inlineToken("--brass")).not.toBe("#3a775f");
+    expect(contrastRatio(inlineToken("--brass"), inlineToken("--surface-raised"))).toBeGreaterThanOrEqual(3);
   });
 
-  it("a below-AA band pair warns and Fix contrast moves the band only (#146)", async () => {
+  it("a hard-to-read band pair warns and Improve readability moves the band only (#146, #164)", async () => {
     renderExpanded(<Harness open={true} onClose={() => undefined} />);
     act(() => {
       fireEvent.click(screen.getByRole("radio", { name: "Custom light" }));
@@ -334,13 +388,13 @@ describe("SettingsPanel — custom theme builder (issues #86/#120)", () => {
     act(() => {
       fireEvent.change(band, { target: { value: "#f5f5f0" } });
     });
-    expect(await screen.findByText(/below the contrast guidelines/)).not.toBeNull();
+    expect(await screen.findByText(/hard to read/)).not.toBeNull();
 
     act(() => {
-      fireEvent.click(screen.getByRole("button", { name: "Fix contrast" }));
+      fireEvent.click(screen.getByRole("button", { name: "Improve readability" }));
     });
     await waitFor(() => {
-      expect(screen.queryByText(/below the contrast guidelines/)).toBeNull();
+      expect(screen.queryByText(/hard to read/)).toBeNull();
     });
     // The band moved (offender); the band text stayed DERIVED (nothing was
     // invented); the other policed pairs ride untouched.
@@ -439,24 +493,29 @@ describe("SettingsPanel — custom theme builder (issues #86/#120)", () => {
     expect(inlineToken("--surface")).toBe("#f7f7f5");
   });
 
-  it("the readout warns below AA and Fix contrast restores the offending pair only", async () => {
+  it("the builder warns when colors need attention and Improve readability restores the offending pair only (#164)", async () => {
     renderExpanded(<Harness open={true} onClose={() => undefined} />);
     act(() => {
       fireEvent.click(screen.getByRole("radio", { name: "Custom light" }));
     });
     // Break EXACTLY ONE policed pair: ink = the surface color (text on
     // surface 1:1). The accent pair still clears AA on the untouched
-    // surface — Fix contrast must move the ink only.
+    // surface — Improve readability must move the ink only.
     const hex = await screen.findByLabelText("Text hex value");
     act(() => {
       fireEvent.change(hex, { target: { value: "#f7f7f5" } });
     });
-    expect(await screen.findByText(/below the contrast guidelines/)).not.toBeNull();
+    expect(await screen.findByText(/hard to read/)).not.toBeNull();
+    // Before any correction request: the reader's chosen colors are kept
+    // exactly as set (#164 — correction is never automatic).
+    expect(inlineToken("--ink")).toBe("#f7f7f5");
+    expect(inlineToken("--surface")).toBe("#f7f7f5");
+    expect(screen.getByRole("button", { name: "Improve readability" })).not.toBeNull();
     act(() => {
-      fireEvent.click(screen.getByRole("button", { name: "Fix contrast" }));
+      fireEvent.click(screen.getByRole("button", { name: "Improve readability" }));
     });
     await waitFor(() => {
-      expect(screen.queryByText(/below the contrast guidelines/)).toBeNull();
+      expect(screen.queryByText(/hard to read/)).toBeNull();
     });
     // The offender moved; its pair now clears AA; the untouched tokens ride.
     expect(contrastRatio(inlineToken("--ink"), inlineToken("--surface"))).toBeGreaterThanOrEqual(

@@ -116,6 +116,23 @@ interface SettingsPanelProps {
  * copies for the 09-06 e2e to drift against). */
 const HIGHLIGHTS_FILENAME = "lem-reader-highlights.md";
 
+/** One theme choice: the value + its visible name. */
+interface ThemeOption {
+  value: ReaderSettings["theme"];
+  label: string;
+}
+
+/**
+ * Issue #164 — a shelf entry is either a complementary light/dark PAIR (the
+ * two render together inside one shared visual container — adjacency says
+ * "these belong together") or a STANDALONE theme (no counterpart exists).
+ * Pairing is presentation only: the radios remain ONE native radio group,
+ * and no theme gains a new variant to complete a pair.
+ */
+type ThemeEntry =
+  | { kind: "pair"; options: readonly [ThemeOption, ThemeOption] }
+  | { kind: "single"; option: ThemeOption };
+
 /**
  * The Theme shelves (menu organization): nine themes scan as three calm,
  * independently collapsible groups — Standard, Special, Custom. Each shelf
@@ -124,39 +141,55 @@ const HIGHLIGHTS_FILENAME = "lem-reader-highlights.md";
  * group (`name="theme"`), so arrow keys walk the open shelves' nine choices
  * and the SR "Theme" grouping holds — the details element is itself a group
  * named by its summary (made explicit with role="group" +
- * aria-labelledby). Option labels are verbatim (the component + e2e suites
- * pin them by exact name).
+ * aria-labelledby). Complementary themes sit side by side in .theme-pair
+ * containers (#164); unpaired themes stay standalone rows. Option labels
+ * are verbatim (the component + e2e suites pin them by exact name).
  */
 const THEME_SHELVES: ReadonlyArray<{
   id: string;
   label: string;
-  options: ReadonlyArray<{ value: ReaderSettings["theme"]; label: string }>;
+  entries: ReadonlyArray<ThemeEntry>;
 }> = [
   {
     id: "theme-shelf-standard",
     label: "Standard",
-    options: [
-      { value: "light", label: "Daylight" },
-      { value: "sepia", label: "Warm paper" },
-      { value: "dark", label: "Night" },
+    entries: [
+      {
+        kind: "pair",
+        options: [
+          { value: "light", label: "Daylight" },
+          { value: "dark", label: "Night" },
+        ],
+      },
+      { kind: "single", option: { value: "sepia", label: "Warm paper" } },
     ],
   },
   {
     id: "theme-shelf-special",
     label: "Special",
-    options: [
-      { value: "trans-light", label: "Trans pride" },
-      { value: "bi-dark", label: "Bi pride" },
-      { value: "marxism-light", label: "In Defense of Marxism" },
-      { value: "marxism-dark", label: "In Defense of Marxism (Night)" },
+    entries: [
+      { kind: "single", option: { value: "trans-light", label: "Trans pride" } },
+      { kind: "single", option: { value: "bi-dark", label: "Bi pride" } },
+      {
+        kind: "pair",
+        options: [
+          { value: "marxism-light", label: "In Defense of Marxism" },
+          { value: "marxism-dark", label: "In Defense of Marxism (Night)" },
+        ],
+      },
     ],
   },
   {
     id: "theme-shelf-custom",
     label: "Custom",
-    options: [
-      { value: "custom-light", label: "Custom light" },
-      { value: "custom-dark", label: "Custom dark" },
+    entries: [
+      {
+        kind: "pair",
+        options: [
+          { value: "custom-light", label: "Custom light" },
+          { value: "custom-dark", label: "Custom dark" },
+        ],
+      },
     ],
   },
 ];
@@ -172,6 +205,45 @@ function swatchVars(swatch: ThemeSwatch): CSSProperties {
     "--swatch-board": swatch.board,
     "--swatch-metal": swatch.metal,
   } as CSSProperties;
+}
+
+/**
+ * One theme choice row (#164): name, decorative palette chip, native radio.
+ * The radio glyph + the shared :checked tint carry the selection state —
+ * the presentation stays visual (no readouts, no numbers). `onSelect` is
+ * the panel's onTheme (custom-slot seeding lives there).
+ */
+function ThemeRow({
+  option,
+  onSelect,
+  settings,
+}: {
+  option: ThemeOption;
+  onSelect: (theme: ReaderSettings["theme"]) => void;
+  settings: ReaderSettings;
+}) {
+  return (
+    <label className="settings-row theme-row">
+      <input
+        type="radio"
+        name="theme"
+        value={option.value}
+        checked={settings.theme === option.value}
+        onChange={() => onSelect(option.value)}
+      />
+      <span>{option.label}</span>
+      <span
+        className="theme-swatch"
+        aria-hidden="true"
+        style={swatchVars(themeSwatch(option.value, settings))}
+      >
+        <i />
+        <i />
+        <i />
+        <i />
+      </span>
+    </label>
+  );
 }
 
 /**
@@ -734,7 +806,9 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                 <details> disclosures — one native radio group, three named
                 groups, each row carrying its theme's equal-block palette
                 chip (themeSwatch — presets byte-matched to app.css, custom
-                slots resolved live). */}
+                slots resolved live). Complementary light/dark themes share
+                one .theme-pair container (#164); unpaired themes remain
+                standalone rows. */}
               {THEME_SHELVES.map((shelf) => (
                 <details
                   key={shelf.id}
@@ -745,28 +819,27 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                 >
                   <summary id={shelf.id}>{shelf.label}</summary>
                   <div className="theme-shelf-rows">
-                    {shelf.options.map(({ value, label }) => (
-                      <label className="settings-row" key={value}>
-                        <input
-                          type="radio"
-                          name="theme"
-                          value={value}
-                          checked={settings.theme === value}
-                          onChange={() => onTheme(value)}
+                    {shelf.entries.map((entry) =>
+                      entry.kind === "single" ? (
+                        <ThemeRow
+                          key={entry.option.value}
+                          option={entry.option}
+                          onSelect={onTheme}
+                          settings={settings}
                         />
-                        <span>{label}</span>
-                        <span
-                          className="theme-swatch"
-                          aria-hidden="true"
-                          style={swatchVars(themeSwatch(value, settings))}
-                        >
-                          <i />
-                          <i />
-                          <i />
-                          <i />
-                        </span>
-                      </label>
-                    ))}
+                      ) : (
+                        <div className="theme-pair" key={entry.options[0].value}>
+                          {entry.options.map((option) => (
+                            <ThemeRow
+                              key={option.value}
+                              option={option}
+                              onSelect={onTheme}
+                              settings={settings}
+                            />
+                          ))}
+                        </div>
+                      ),
+                    )}
                   </div>
                 </details>
               ))}

@@ -329,8 +329,9 @@ export function surfaceDisposition(surfaceHex: string): "light" | "dark" {
 export const AA_TEXT_RATIO = 4.5;
 /** WCAG 1.4.11 non-text minimum — the focus-ring guarantee. */
 export const AA_NON_TEXT_RATIO = 3;
-/** The margin "Fix contrast" targets: a hair over AA so engine rounding on
- * computed colors cannot re-land the pair under it. */
+/** The margin "Improve readability" targets (the builder's correction
+ * action, #164): a hair over AA so engine rounding on computed colors
+ * cannot re-land the pair under it. */
 const FIX_TARGET_RATIO = 4.8;
 const FOCUS_TARGET_RATIO = 3.3;
 /** Ink-soft target: the preset ink-soft band (7.02/7.26/8.06:1 — POLISH-11's
@@ -775,7 +776,8 @@ export function resolveCustomTheme(rawTokens: CustomThemeTokens): ResolvedCustom
 }
 
 /**
- * "Fix contrast": nudge the policed pairs back over their thresholds, each
+ * "Improve readability" (#164 — the builder's correction action; before it,
+ * "Fix contrast"): nudge the policed pairs back over their thresholds, each
  * failing pair via its OWN token — every non-offending token rides
  * unchanged. Returns an equal-values copy when nothing fails. The result is
  * canonical lowercase throughout (the same contract as resolveCustomTheme).
