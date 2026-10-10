@@ -6,6 +6,11 @@
 // announcement. The listening-is-reading contract (ADR 0001) lands in the
 // host: the hook reports listened canonical offsets upward, and ArticleView
 // drives the SAME shared location-save discipline the scroll path uses.
+// Issue #167 — a DETECTED failure keeps the transport usable: the failure
+// copy surfaces as `failure` (the bar's visible line) while the engine sits
+// on "failed"; play() from there IS Retry — a fresh engine, settings read
+// fresh, and the start offset read live from the host (the preserved
+// listened position — a failure never rewinds or skips).
 //
 // Discipline mirrors the sibling hooks (useScrollSave/useReadingSession):
 // latest-handler refs so callbacks stay stable, no focus movement anywhere
@@ -18,6 +23,7 @@ import type { CanonicalArticle } from "../content/types";
 import { chunkArticleForSpeech } from "../readaloud/chunks";
 import { ReadAloudEngine } from "../readaloud/engine";
 import type { FollowLevel, TransportState } from "../readaloud/types";
+import { transportIsActive } from "../readaloud/types";
 import type { GraphemeRange } from "../annotations/unifiedHighlightSlicer";
 import {
   createWebSpeechAdapter,
@@ -61,6 +67,13 @@ export interface UseReadAloudHandlers {
 
 export interface UseReadAloudReturn {
   state: TransportState;
+  /**
+   * Issue #167 — the detected failure's reader-facing copy, non-null exactly
+   * while the state is "failed": the calm explanation the transport bar
+   * keeps VISIBLE (not just announced) alongside Retry and voice selection.
+   * Cleared by play (the retry) and stop; a fresh failure replaces it.
+   */
+  failure: string | null;
   /** The follow level: the guaranteed floor until the session's probe
    * resolves, reset to the floor whenever the session ends — the bar's
    * follow text is therefore always present and never stale (O1). */
@@ -125,6 +138,10 @@ export function useReadAloud(
   const [state, setState] = useState<TransportState>("stopped");
   const [followLevel, setFollowLevel] = useState<FollowLevel>(FOLLOW_LEVEL_FLOOR);
   const [announcement, setAnnouncement] = useState<string | null>(null);
+  /** Issue #167 — the detected failure's visible copy (see UseReadAloudReturn
+   * .failure). Cleared on play (Retry) and stop; never stale-visible: the
+   * bar renders it only while the state is "failed". */
+  const [failure, setFailure] = useState<string | null>(null);
   /** Issue #166 — the seek slider's display mirror of the listened position
    * (see UseReadAloudReturn.progressOffset). */
   const [progressOffset, setProgressOffset] = useState<number | null>(null);
@@ -164,6 +181,11 @@ export function useReadAloud(
       setAnnouncement("Read aloud isn't available in this browser.");
       return;
     }
+    // A detected failure is RETRY (issue #167): fall through to the fresh-
+    // session path below — a new engine, the voice/rate read fresh from
+    // settings (a voice picked from the failure state's picker applies), and
+    // the start offset read live from the host (the preserved listened
+    // position — the anchor never rewound during the failed session).
     // Resume the paused session first — a second Play never restarts speech.
     const existing = engineRef.current;
     if (existing && existing.getState() === "paused") {
@@ -172,6 +194,7 @@ export function useReadAloud(
       setAnnouncement("Reading aloud.");
       return;
     }
+    setFailure(null);
     const currentArticle = articleRef.current;
     if (!currentArticle) return;
     // Honest fallback note (once per session start): a stored voice that no
@@ -212,9 +235,10 @@ export function useReadAloud(
           setAnnouncement("Read aloud finished.");
           handlersRef.current.onListenFinished();
         },
-        onError: (message) => {
+        onError: (failure) => {
           setFollowLevel(FOLLOW_LEVEL_FLOOR);
-          setAnnouncement(message);
+          setFailure(failure.message);
+          setAnnouncement(failure.message);
         },
       },
     });
@@ -246,6 +270,7 @@ export function useReadAloud(
     teardown();
     setState("stopped");
     setFollowLevel(FOLLOW_LEVEL_FLOOR);
+    setFailure(null);
     setAnnouncement("Read aloud stopped.");
   }, [teardown]);
 
@@ -274,7 +299,10 @@ export function useReadAloud(
   const runSkip = useCallback(
     (attempt: (engine: ReadAloudEngine) => boolean, boundaryMessage: string) => {
       const engine = engineRef.current;
-      if (!engine || engine.getState() === "stopped") return;
+      if (!engine) return;
+      // Issue #167 — a failed session is not a session: skips stay inert
+      // (the bar doesn't render them while failed either).
+      if (!transportIsActive(engine.getState())) return;
       if (!attempt(engine)) setAnnouncement(boundaryMessage);
     },
     [],
@@ -316,7 +344,10 @@ export function useReadAloud(
   const settingsRate = settings.rate;
   useEffect(() => {
     const engine = engineRef.current;
-    if (!engine || engine.getState() === "stopped") return;
+    if (!engine) return;
+    // Issue #167 — a failed session retunes nothing (the engine no-ops
+    // too): the change persists in settings and Retry reads it fresh.
+    if (!transportIsActive(engine.getState())) return;
     let voiceURI = settingsVoice ?? null;
     if (voiceURI !== null && !storedVoiceAvailable(voiceURI)) {
       voiceURI = null;
@@ -343,7 +374,7 @@ export function useReadAloud(
       const engine = engineRef.current;
       if (!engine) return;
       const s = engine.getState();
-      if (s !== "playing" && s !== "paused") return;
+      if (!transportIsActive(s)) return;
       teardown();
       setState("stopped");
       setFollowLevel(FOLLOW_LEVEL_FLOOR);
@@ -374,6 +405,7 @@ export function useReadAloud(
 
   return {
     state,
+    failure,
     followLevel,
     announcement,
     progressOffset,

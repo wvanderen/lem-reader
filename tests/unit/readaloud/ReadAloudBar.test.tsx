@@ -18,6 +18,10 @@
 //      button always stays enabled here — the press never dead-ends.)
 //   5. Issue #43 (O3): the skip controls render only while a session exists
 //      and route their clicks without touching the transport.
+//   6. Issue #167 — the failed state: the bar STAYS OPEN with the visible
+//      calm explanation, the primary reads "Retry", Stop + voice + speed
+//      stay reachable, and every playback-only control (seek, skips,
+//      passage steps, jump, follow text) retires — no dead controls.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, fireEvent } from "@testing-library/react";
 // The label maps are asserted LIVE from the component's own tables — one
@@ -112,6 +116,87 @@ describe("ReadAloudBar — transport buttons", () => {
     const active = renderBar("playing");
     fireEvent.click(screen.getByRole("button", { name: "Stop" }));
     expect(active.onStop).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("ReadAloudBar — the failed state (issue #167)", () => {
+  /** Every optional handler wired: the failed state must RETIRE the
+   * playback controls even when their wiring exists. */
+  function renderFailed(overrides: BarProps = {}) {
+    return renderBar("failed", {
+      failure: "Speech didn't start. Try a different voice, then press Retry.",
+      rate: 1,
+      onRateChange: vi.fn(),
+      onVoiceChange: vi.fn(),
+      progress: 12,
+      totalGraphemes: 100,
+      onSeek: vi.fn(),
+      onJumpToSpoken: vi.fn(),
+      onSkipSentenceBack: vi.fn(),
+      onSkipSentenceForward: vi.fn(),
+      onSkipParagraphForward: vi.fn(),
+      onSkipPassageBack: vi.fn(),
+      onSkipPassageForward: vi.fn(),
+      ...overrides,
+    });
+  }
+
+  it("the bar stays open: the cluster stays expanded and the primary reads 'Retry'", () => {
+    const h = renderFailed();
+    expect(h.container.querySelector(".readaloud-cluster--idle")).toBeNull();
+    expect(screen.getByRole("button", { name: "Retry" })).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "Read aloud" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Pause" })).toBeNull();
+  });
+
+  it("Retry routes through onPrimary (the hook's play — the preserved-position resume)", () => {
+    const h = renderFailed();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(h.onPrimary).toHaveBeenCalledTimes(1);
+  });
+
+  it("the calm explanation is VISIBLE text on the bar (and the region announces it)", () => {
+    // The hook sets BOTH: failure (the visible line) and announcement (the
+    // ONE polite region) to the same copy — the bar renders each in its place.
+    const { container } = renderFailed({
+      announcement: "Speech didn't start. Try a different voice, then press Retry.",
+    });
+    const line = container.querySelector(".readaloud-failure");
+    expect(line).not.toBeNull();
+    expect(line?.textContent).toBe(
+      "Speech didn't start. Try a different voice, then press Retry.",
+    );
+    expect(screen.getByRole("status").textContent).toBe(
+      "Speech didn't start. Try a different voice, then press Retry.",
+    );
+  });
+
+  it("Stop + voice + speed stay reachable while failed (voice selection is the remedy)", () => {
+    const h = renderFailed();
+    expect(screen.getByRole("button", { name: "Stop" })).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Voice" })).not.toBeNull();
+    expect(screen.getByRole("combobox", { name: "Read-aloud speed" })).not.toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+    expect(h.onStop).toHaveBeenCalledTimes(1);
+  });
+
+  it("the playback-only controls retire — no dead slider, skips, passage steps, jump, or follow text", () => {
+    const { container } = renderFailed();
+    expect(container.querySelector(".readaloud-seek")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Skip sentence backward" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Skip sentence forward" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Skip paragraph forward" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Previous passage" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Next passage" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Jump to spoken position" })).toBeNull();
+    expect(container.textContent).not.toContain(FOLLOW_LABELS["progress-only"]);
+  });
+
+  it("no failure line renders while playing (the copy belongs to the failed state alone)", () => {
+    const { container } = renderBar("playing", {
+      failure: "Speech didn't start. Try a different voice, then press Retry.",
+    });
+    expect(container.querySelector(".readaloud-failure")).toBeNull();
   });
 });
 

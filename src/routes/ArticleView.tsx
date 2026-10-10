@@ -64,6 +64,7 @@ import { blockGraphemeLength } from "../pagination/anchor";
 // The transport state feeds the latest-ref gate on the anchor-save path
 // (ADR 0001 — see handleAnchorChange).
 import type { TransportState } from "../readaloud/types";
+import { transportIsActive } from "../readaloud/types";
 // Issue #2 — the end-pin policy stays imported for the mark-read gesture;
 // the restore/mode-swap end-LANDING decision moved behind jumpToOffset.
 import { endPinOffset } from "../reader/readingPosition";
@@ -773,11 +774,12 @@ export function ArticleView({
       // letting it write would drag the latest-wins save backwards to the page
       // start. The anchor REF above still updates (mode swaps, play's start
       // offset, deep links stay coherent); the save family simply hears from
-      // the listened path alone until the session ends, after which turns save
-      // normally again.
-      if (readAloudStateRef.current === "stopped") {
-        recordProgress(offset);
-      }
+      // the listened path alone while a live session exists, after which
+      // turns save normally again. Issue #167 — a FAILED session has ended
+      // (the bar keeps showing Retry), so manual navigation saves again
+      // exactly as when stopped.
+      if (transportIsActive(readAloudStateRef.current)) return;
+      recordProgress(offset);
       // Plan 12-06 (D12-05): mirror the committed page state (the handle reads
       // from refs, so by the time this effect-scoped callback runs the values
       // are post-commit) so the chapter nav's first/last-page gating reacts to
@@ -847,6 +849,7 @@ export function ArticleView({
   //     contract as handleMarkRead above.
   const {
     state: readAloudState,
+    failure: readAloudFailure,
     followLevel: readAloudFollowLevel,
     announcement: readAloudAnnouncement,
     progressOffset: readAloudProgressOffset,
@@ -2500,6 +2503,7 @@ export function ArticleView({
             and the previous/next passage steps. */}
         <ReadAloudBar
           state={readAloudState}
+          failure={readAloudFailure}
           followLevel={readAloudFollowLevel}
           announcement={readAloudAnnouncement}
           notice={follow.notice}

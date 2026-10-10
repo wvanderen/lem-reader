@@ -7,7 +7,7 @@
 // machines with no voices at all.
 import type { Page } from "@playwright/test";
 
-export type SpeechMode = "word" | "sentence" | "dead";
+export type SpeechMode = "word" | "sentence" | "dead" | "dies-after-first";
 
 interface SpokenRecord {
   text: string;
@@ -33,12 +33,27 @@ interface SpokenRecord {
  *   - "word": a word boundary fires (word-capable voice)
  *   - "sentence": a sentence boundary fires, then the probe ends
  *   - "dead": nothing ever fires (silently-dropped speech)
- * Playback utterances are ALWAYS test-driven — no automatic events. */
-export async function installFakeSpeech(page: Page, mode: SpeechMode): Promise<void> {
+ *   - "dies-after-first": the probe resolves "word"; the FIRST playback
+ *     utterance is test-driven like "word", but every LATER playback
+ *     utterance auto-errors (issue #167 — a queue that dies partway).
+ * Playback utterances are ALWAYS test-driven — except the auto-error above.
+ * `__speechSetMode` flips the probe/playback mode at runtime (the retry
+ * specs: fail while dead, flip to "word", retry recovers). */
+export async function installFakeSpeech(
+  page: Page,
+  initialMode: SpeechMode,
+): Promise<void> {
   // AWAITED: registration is asynchronous — an un-awaited call races the
   // first goto and the stub silently never installs.
   await page.addInitScript((probeMode: SpeechMode) => {
     const spoken: SpokenRecord[] = [];
+    // The LIVE mode (mutable via __speechSetMode); starts as the initial
+    // mode the spec seeded.
+    let mode: SpeechMode = probeMode;
+    // Issue #167 — how many AUDIBLE (volume 1) utterances have finished
+    // speaking (or been cancelled) — "dies-after-first" lets the first
+    // through test-driven and auto-errors the rest.
+    let audibleRetired = 0;
 
     class FakeUtterance {
       text: string;
@@ -71,16 +86,17 @@ export async function installFakeSpeech(page: Page, mode: SpeechMode): Promise<v
         // The PROBE (the first volume-0 utterance) auto-fires per mode so
         // the follow level resolves without test timing coupling. Playback
         // utterances are always test-driven.
-        if (u.volume === 0 && probeMode !== "dead") {
+        if (u.volume === 0 && mode !== "dead") {
           window.setTimeout(() => {
             if (record.cancelled) return;
-            if (probeMode === "word") {
-              u.onboundary?.({ name: "word", charIndex: 0 });
-            } else {
+            if (mode === "sentence") {
               u.onboundary?.({ name: "sentence", charIndex: 7 });
+            } else {
+              // "word" and "dies-after-first" are word-capable voices.
+              u.onboundary?.({ name: "word", charIndex: 0 });
             }
           }, 30);
-          if (probeMode === "sentence") {
+          if (mode === "sentence") {
             window.setTimeout(() => {
               if (record.cancelled) return;
               record.done = true;
@@ -88,10 +104,26 @@ export async function installFakeSpeech(page: Page, mode: SpeechMode): Promise<v
             }, 60);
           }
         }
+        // Issue #167 — "dies-after-first": every playback utterance AFTER
+        // the first audible one auto-errors (a dying engine), deterministically.
+        if (u.volume === 1 && mode === "dies-after-first") {
+          if (audibleRetired >= 1) {
+            window.setTimeout(() => {
+              if (record.cancelled || record.done) return;
+              u.onerror?.("synthesis-failed");
+            }, 30);
+          }
+        }
       },
       cancel(): void {
         for (const r of spoken) {
-          if (!r.done) r.cancelled = true;
+          if (!r.done) {
+            r.cancelled = true;
+            // Retire audible utterances on cancel so a RETRY's first
+            // utterance counts as fresh (the retry is a new engine, but the
+            // fake's counter is document-wide).
+            if (r.volume === 1) audibleRetired += 1;
+          }
         }
         this.pending = [];
       },
@@ -135,6 +167,7 @@ export async function installFakeSpeech(page: Page, mode: SpeechMode): Promise<v
     (
       window as unknown as {
         __speechFire: (event: string, charIndex?: number) => void;
+        __speechSetMode: (mode: SpeechMode) => void;
       }
     ).__speechFire = (event: string, charIndex = 0) => {
       const record = [...spoken].reverse().find((r) => !r.done && !r.cancelled);
@@ -144,10 +177,21 @@ export async function installFakeSpeech(page: Page, mode: SpeechMode): Promise<v
         u.onboundary?.({ name: "word", charIndex });
       } else if (event === "end") {
         record.done = true;
+        if (record.volume === 1) audibleRetired += 1;
         u.onend?.();
       } else if (event === "start") {
         u.onstart?.();
+      } else if (event === "error") {
+        // Issue #167 — fire the platform refusal on the live utterance.
+        record.done = true;
+        if (record.volume === 1) audibleRetired += 1;
+        u.onerror?.("synthesis-failed");
       }
     };
-  }, mode);
+    (window as unknown as { __speechSetMode: (mode: SpeechMode) => void }).__speechSetMode = (
+      next: SpeechMode,
+    ) => {
+      mode = next;
+    };
+  }, initialMode);
 }

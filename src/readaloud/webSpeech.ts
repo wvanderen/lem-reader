@@ -137,9 +137,13 @@ export function createWebSpeechAdapter(): SpeechAdapter {
       release();
       events.onend?.();
     };
-    utterance.onerror = () => {
+    // Issue #167 — the platform's error reason (SpeechSynthesisErrorEvent
+    // .error) passes through instead of being discarded: a Firefox "not-
+    // allowed"/"synthesis-failed" refusal is observable at the seam instead
+    // of being indistinguishable from a silent stall.
+    utterance.onerror = (event) => {
       release();
-      events.onerror?.();
+      events.onerror?.(event?.error);
     };
     synth.speak(utterance);
   };

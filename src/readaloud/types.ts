@@ -20,8 +20,37 @@
 export type FollowLevel = "word" | "sentence" | "passage" | "progress-only";
 
 /** The transport state. Probing is internal to "playing" — the reader's
- * Play press flips the button to Pause immediately (no dead state). */
-export type TransportState = "stopped" | "playing" | "paused";
+ * Play press flips the button to Pause immediately (no dead state). Issue
+ * #167 — "failed" is a DETECTED failure the bar keeps showing (the honest
+ * refusal stays on screen with Retry + voice selection): neither playback
+ * nor rest, and never a fake "playing". */
+export type TransportState = "stopped" | "playing" | "paused" | "failed";
+
+/** Issue #167 — which honest failure the engine detected, so the UI can
+ * give the reader feedback that names what actually happened: "start" (no
+ * utterance ever began — the voice/engine refused or silently dropped) vs
+ * "playback" (speech was underway and the queue died partway). */
+export type SpeechFailureKind = "start" | "playback";
+
+/** Issue #167 — the ONE honest failure report the engine hands the host:
+ * the reader-facing copy, which kind of failure it was, and — when the
+ * platform supplied one — its own error reason (diagnostics, never
+ * reader-facing copy). */
+export interface SpeechFailure {
+  message: string;
+  kind: SpeechFailureKind;
+  reason?: string;
+}
+
+/** Whether a transport state owns a live (controllable) session — speech
+ * exists to pause/seek/skip, and the anchor-save gate defers to the listened
+ * path. "failed" is NOT live: the session has ended (Retry starts a fresh
+ * one), so hosts treat it like stopped everywhere except the bar's own
+ * keep-open contract. ONE guard, shared by every site that used to re-derive
+ * this predicate with alternating polarity. */
+export function transportIsActive(state: TransportState): boolean {
+  return state === "playing" || state === "paused";
+}
 
 /** What the engine asks the adapter to speak. voiceURI is resolved to a
  * SpeechSynthesisVoice by the adapter (null = platform default voice). */
@@ -45,12 +74,16 @@ export interface BoundaryEvent {
 }
 
 /** Event surface of one spoken utterance. The engine assigns these before
- * speak() returns; the adapter wires them to the real utterance. */
+ * speak() returns; the adapter wires them to the real utterance. Issue
+ * #167 — onerror carries the platform's error reason (the
+ * SpeechSynthesisErrorEvent.error code: "not-allowed", "synthesis-failed",
+ * "interrupted", …) so a refusal is never indistinguishable from a silent
+ * stall again; engines/tests that supply no reason arrive as undefined. */
 export interface UtteranceEvents {
   onstart?: () => void;
   onboundary?: (event: BoundaryEvent) => void;
   onend?: () => void;
-  onerror?: () => void;
+  onerror?: (reason?: string) => void;
 }
 
 /**
