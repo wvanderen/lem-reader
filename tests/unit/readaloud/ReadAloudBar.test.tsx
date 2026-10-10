@@ -163,9 +163,7 @@ describe("ReadAloudBar — the failed state (issue #167)", () => {
     });
     const line = container.querySelector(".readaloud-failure");
     expect(line).not.toBeNull();
-    expect(line?.textContent).toBe(
-      "Speech didn't start. Try a different voice, then press Retry.",
-    );
+    expect(line?.textContent).toBe("Speech didn't start. Try a different voice, then press Retry.");
     expect(screen.getByRole("status").textContent).toBe(
       "Speech didn't start. Try a different voice, then press Retry.",
     );

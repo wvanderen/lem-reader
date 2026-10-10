@@ -11,24 +11,24 @@ The user reproduced the issue on real Firefox (157.0.1, macOS) AND Zen — and c
 
 **Run 1 — the wedge, reproduced (auto + gesture suites):**
 
-| t (ms) | event |
-| --- | --- |
-| 1038 | plain volume-1 utterance: start → 6 word boundaries → end @3617 — **healthy** |
-| 3620 | volume-0 probe (the app's shape): start, ONE word boundary @4087 — then silence |
-| ~4137 | `cancel()` at the first boundary (the engine's resolve path) |
-| 4200+ | first real chunk: NO events — ever |
+| t (ms) | event                                                                                                                                                      |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1038   | plain volume-1 utterance: start → 6 word boundaries → end @3617 — **healthy**                                                                              |
+| 3620   | volume-0 probe (the app's shape): start, ONE word boundary @4087 — then silence                                                                            |
+| ~4137  | `cancel()` at the first boundary (the engine's resolve path)                                                                                               |
+| 4200+  | first real chunk: NO events — ever                                                                                                                         |
 | 4200→∞ | `speechSynthesis.speaking === true, pending === true` **forever**; every later utterance (delayed speak, retry ladder, Kathy variant) produces zero events |
 
 **Run 2 — the discrimination matrix (canary-checked between every experiment):**
 
-| Experiment | Result |
-| --- | --- |
-| E1: volume-0 probe LEFT ALONE | **healthy** — start, 6 boundaries, natural end at ~2.7s |
-| E2: volume-0 short text, untouched | healthy |
-| E3: volume 0.01 / 0.001, untouched | healthy — near-zero volumes are not the problem |
-| E4: Kathy volume-0, untouched | healthy |
-| E5: **volume-0 probe + `cancel()` at the first boundary** (the app's exact move) | **WEDGES**: the queued chunk never speaks; canary STUCK |
-| E6: recovery after the wedge | **nothing recovers it**: single `cancel()`, double `cancel()`, `resume()+cancel()` all fail; only a reload clears it |
+| Experiment                                                                       | Result                                                                                                               |
+| -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| E1: volume-0 probe LEFT ALONE                                                    | **healthy** — start, 6 boundaries, natural end at ~2.7s                                                              |
+| E2: volume-0 short text, untouched                                               | healthy                                                                                                              |
+| E3: volume 0.01 / 0.001, untouched                                               | healthy — near-zero volumes are not the problem                                                                      |
+| E4: Kathy volume-0, untouched                                                    | healthy                                                                                                              |
+| E5: **volume-0 probe + `cancel()` at the first boundary** (the app's exact move) | **WEDGES**: the queued chunk never speaks; canary STUCK                                                              |
+| E6: recovery after the wedge                                                     | **nothing recovers it**: single `cancel()`, double `cancel()`, `resume()+cancel()` all fail; only a reload clears it |
 
 The reporter's audible observation — "a lot of popping before it stops" — is the mid-synthesis cancel glitching the audio output; the pops are the wedge's audible signature.
 
@@ -53,20 +53,34 @@ With the wedge fixed, read-aloud on the reporter's Firefox **works but produces 
 
 An attempted voice matrix died at its first modern-voice item (Samantha: announcement fine → two-sentence utterance → click → silence → blocked), reinforcing that the boundary failure can kill synthesis outright. A legacy-engine probe (Kathy/Fred — the classic `com.apple.speech.synthesis` MacinTalk voices, a different synthesizer from the modern AVSpeech voices) was queued as the last discriminator: if the legacy voices are click-free, readers on affected Firefox/macOS combinations have a working voice choice today via the reader's Voice picker.
 
+**Final discriminator results (handoff):** Kathy/Fred still click, although
+legacy voices survive boundaries more reliably. The v9 punctuation probes
+(periods, commas, no punctuation, ellipses) all clicked with the same default
+voice. No tested voice or text transformation removes the defect.
+
+**Product decision:** Read-aloud is temporarily refused for Firefox and forks
+that expose the Firefox UA token, including Zen. Evidence is from macOS;
+the browser-wide gate is a conservative product fallback, not a claim that
+all operating systems reproduce the defect. Firefox on iOS uses WebKit and
+is excluded. The entry stays available to explain the refusal visibly and
+through the polite status region, without starting a probe or speech session.
+Chrome/Helium are the suggested alternative. Remove the gate only after
+real audio verification of an upstream fix; fake-speech tests cannot prove
+that audio clicks have been repaired.
+
 **Recommended follow-ups:**
-1. **Upstream bug** (Mozilla; also reproducible in Zen — same Gecko base): *"speechSynthesis on macOS: full-scale click at every internal sentence boundary; synthesis frequently dies at the boundary (utterance end never fires, queue blocks)"* — reproduction: any multi-sentence utterance on Firefox 157 / macOS 10.15; the reader's evidence (§8–§10) is ready to attach.
-2. Reader guidance for affected combos: a voice whose engine doesn't click (if the legacy probe confirms), else Chromium-based browsers (Helium verified clean) until the upstream fix.
+
+1. **Upstream bug** (Mozilla; also reproducible in Zen — same Gecko base): _"speechSynthesis on macOS: full-scale click at every internal sentence boundary; synthesis frequently dies at the boundary (utterance end never fires, queue blocks)"_ — reproduction: any multi-sentence utterance on Firefox 157 / macOS 10.15; the reader's evidence (§8–§10) is ready to attach.
+2. Reader guidance: use a Chromium-based browser (Helium verified clean) until an upstream fix is verified.
 3. The reader's own behavior is already honest under this defect: a synthesis death trips the playback-failure watchdog → the bar explains, the place is saved, Retry re-attempts.
 
 ---
-
-
 
 ## 1. The question
 
 Read-aloud in Zen (a Firefox fork) on macOS reportedly opens the transport bar, produces no audible speech, and closes after a few seconds — on short and long articles, with both the system-default voice and Kathy, while the same long article works in Helium (Chromium). What actually fails, and what does the evidence support?
 
-The engine's known failure ladder (before this issue) explains the *observed shape* regardless of the platform trigger:
+The engine's known failure ladder (before this issue) explains the _observed shape_ regardless of the platform trigger:
 
 1. Play → silent probe utterance (`volume: 0`) waits up to 2s for a boundary (`PROBE_TIMEOUT_MS`);
 2. post-cancel settle (60ms);
@@ -96,18 +110,18 @@ Run on: Playwright's real Firefox 151 / Chromium / WebKit (headed, real macOS vo
 
 Every scenario produced a full event trail (timestamps from one representative run):
 
-| Scenario | Result in Zen 1.23.1b |
-| --- | --- |
-| API presence | `speechSynthesis` + `SpeechSynthesisUtterance` present |
-| Voice list | **0 voices at t=0 → 53 voices at ~1s** (async load; includes Kathy, Samantha, Fred, Ralph — the old `urn:moz-tts:osx:*` MacinTalk voices) |
-| S2 volume-0 probe | `start` at ~9ms after `speak()`, word boundaries every ~250–500ms, `end` at ~3.1s — **volume 0 does not suppress events** |
-| S3a cancel→settle→speak | works (start ~40ms after speak) |
-| S3b dead-probe → cancel → speak | works |
-| S4 plain speak | works |
-| S5 delayed 2.6s | works (no user-activation expiry) |
-| S6 **Kathy explicitly assigned** | works (probe + audible) |
-| S6 Samantha explicitly assigned | works |
-| S7 speak before voices load | events eventually fire; the utterance sat in Zen's queue behind later requests (see §5) |
+| Scenario                         | Result in Zen 1.23.1b                                                                                                                     |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| API presence                     | `speechSynthesis` + `SpeechSynthesisUtterance` present                                                                                    |
+| Voice list                       | **0 voices at t=0 → 53 voices at ~1s** (async load; includes Kathy, Samantha, Fred, Ralph — the old `urn:moz-tts:osx:*` MacinTalk voices) |
+| S2 volume-0 probe                | `start` at ~9ms after `speak()`, word boundaries every ~250–500ms, `end` at ~3.1s — **volume 0 does not suppress events**                 |
+| S3a cancel→settle→speak          | works (start ~40ms after speak)                                                                                                           |
+| S3b dead-probe → cancel → speak  | works                                                                                                                                     |
+| S4 plain speak                   | works                                                                                                                                     |
+| S5 delayed 2.6s                  | works (no user-activation expiry)                                                                                                         |
+| S6 **Kathy explicitly assigned** | works (probe + audible)                                                                                                                   |
+| S6 Samantha explicitly assigned  | works                                                                                                                                     |
+| S7 speak before voices load      | events eventually fire; the utterance sat in Zen's queue behind later requests (see §5)                                                   |
 
 ### 3.2 Playwright Firefox 151 / Chromium / WebKit on macOS — same
 
@@ -115,7 +129,7 @@ All three control engines passed the identical suite (184 / 180 / 70 voices resp
 
 ### 3.3 Consequence
 
-The reported symptom cannot be explained by anything the engine *asks the platform to do*: every request shape it makes succeeds in a clean Zen profile on macOS, with both voices the reporter tried. Article length is affirmatively ruled out (short articles fail in the report; the harness spoke whole sequences fine). Candidate remaining triggers live in the reporter's environment (see §6), not in the app's request patterns.
+The reported symptom cannot be explained by anything the engine _asks the platform to do_: every request shape it makes succeeds in a clean Zen profile on macOS, with both voices the reporter tried. Article length is affirmatively ruled out (short articles fail in the report; the harness spoke whole sequences fine). Candidate remaining triggers live in the reporter's environment (see §6), not in the app's request patterns.
 
 ## 4. What the app changed anyway (issue #167 implementation)
 
@@ -146,4 +160,4 @@ To close the diagnosis, the report should capture (in the reporter's Zen):
 
 ## 7. Verdict
 
-No root-cause fix is claimed — none is supported by evidence; the honest deliverable is (a) the recorded platform evidence above, (b) the error-reason plumbing that makes the *next* failure diagnosable, and (c) the recoverable failure experience, which converts any recurrence of this class from "menu closes after a few seconds" into "bar stays open, explains, offers Retry + voice selection, and preserves the place" — verified with deterministic speech tests plus real-browser UI checks, with working Chromium playback unchanged.
+No root-cause fix is claimed — none is supported by evidence; the honest deliverable is (a) the recorded platform evidence above, (b) the error-reason plumbing that makes the _next_ failure diagnosable, and (c) the recoverable failure experience, which converts any recurrence of this class from "menu closes after a few seconds" into "bar stays open, explains, offers Retry + voice selection, and preserves the place" — verified with deterministic speech tests plus real-browser UI checks, with working Chromium playback unchanged.

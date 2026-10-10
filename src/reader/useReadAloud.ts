@@ -28,6 +28,7 @@ import type { GraphemeRange } from "../annotations/unifiedHighlightSlicer";
 import {
   createWebSpeechAdapter,
   speechSynthesisAvailable,
+  speechSynthesisUnavailableMessage,
   storedVoiceAvailable,
 } from "../readaloud/webSpeech";
 import { useSettings } from "../settings/SettingsContext";
@@ -178,7 +179,7 @@ export function useReadAloud(
 
   const play = useCallback(() => {
     if (!supportedRef.current) {
-      setAnnouncement("Read aloud isn't available in this browser.");
+      setAnnouncement(speechSynthesisUnavailableMessage());
       return;
     }
     // A detected failure is RETRY (issue #167): fall through to the fresh-

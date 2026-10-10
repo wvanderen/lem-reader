@@ -14,9 +14,23 @@
 
 import type { SpeakRequest, SpeechAdapter, UtteranceEvents } from "./types";
 
-/** Capability check — safe on any environment (jsdom, old browsers). */
+/** Gecko speech is temporarily disabled: spike 0010 §10 records audio pops
+ * within single utterances, with no demonstrated web-side workaround.
+ * Firefox forks (including Zen) retain the Firefox UA token. FxiOS uses
+ * WebKit and is deliberately excluded. Revisit after an upstream fix. */
+export function speechSynthesisUnavailableMessage(): string | null {
+  if (typeof navigator !== "undefined" && /Firefox\//.test(navigator.userAgent)) {
+    return "Read aloud is temporarily unavailable in Firefox and Zen because speech can produce loud audio pops. Try a Chromium-based browser, such as Chrome or Helium.";
+  }
+  if (typeof window === "undefined" || !window.speechSynthesis) {
+    return "Read aloud isn't available in this browser.";
+  }
+  return null;
+}
+
+/** Usable speech, rather than API presence alone. */
 export function speechSynthesisAvailable(): boolean {
-  return typeof window !== "undefined" && "speechSynthesis" in window;
+  return speechSynthesisUnavailableMessage() === null;
 }
 
 /**

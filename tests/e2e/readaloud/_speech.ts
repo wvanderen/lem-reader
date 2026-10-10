@@ -39,13 +39,17 @@ interface SpokenRecord {
  * Playback utterances are ALWAYS test-driven — except the auto-error above.
  * `__speechSetMode` flips the probe/playback mode at runtime (the retry
  * specs: fail while dead, flip to "word", retry recovers). */
-export async function installFakeSpeech(
-  page: Page,
-  initialMode: SpeechMode,
-): Promise<void> {
+export async function installFakeSpeech(page: Page, initialMode: SpeechMode): Promise<void> {
   // AWAITED: registration is asynchronous — an un-awaited call races the
   // first goto and the stub silently never installs.
   await page.addInitScript((probeMode: SpeechMode) => {
+    // Exercise transport behavior on every layout engine using a supported
+    // UA: this fake has none of Gecko's real audio defects. The separate
+    // browser-refusal spec covers the production Firefox gate.
+    Object.defineProperty(navigator, "userAgent", {
+      configurable: true,
+      value: "Mozilla/5.0 Chrome/157.0.0.0 Safari/537.36",
+    });
     const spoken: SpokenRecord[] = [];
     // The LIVE mode (mutable via __speechSetMode); starts as the initial
     // mode the spec seeded.

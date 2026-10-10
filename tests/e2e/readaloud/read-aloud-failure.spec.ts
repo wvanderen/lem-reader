@@ -28,16 +28,15 @@ import { START_FAILURE_MESSAGE } from "../../../src/readaloud/engine";
 type SpokenRecord = { text: string; volume: number; done: boolean; cancelled: boolean };
 
 async function spokenRecords(page: Page): Promise<SpokenRecord[]> {
-  return page.evaluate(
-    () =>
-      (
-        window as unknown as { __speechSpoken: SpokenRecord[] }
-      ).__speechSpoken.map(({ text, volume, done, cancelled }) => ({
+  return page.evaluate(() =>
+    (window as unknown as { __speechSpoken: SpokenRecord[] }).__speechSpoken.map(
+      ({ text, volume, done, cancelled }) => ({
         text,
         volume,
         done,
         cancelled,
-      })),
+      }),
+    ),
   );
 }
 
