@@ -302,10 +302,19 @@ describe("ArticleView corrupt-location honesty (issue #98)", () => {
 
   it("renders the honest note + announce for a corrupt row and keeps the article usable", async () => {
     openArticleMock.mockResolvedValue(fullArticle());
-    loadLocationMock.mockResolvedValue({ ok: false, reason: "corrupt" });
+    let resolveLocation!: (result: { ok: false; reason: "corrupt" }) => void;
+    loadLocationMock.mockReturnValue(
+      new Promise((resolve) => {
+        resolveLocation = resolve;
+      }),
+    );
     renderWithProvider(<ArticleView {...withProps("stub-article")} />);
     // No crash: the article itself still renders.
     await screen.findByRole("heading", { level: 1, name: "Stub Article" });
+    // Article loading and location restoration are independent. Hold the
+    // restore until after the heading renders to pin the CI race explicitly.
+    expect(screen.queryByText(CORRUPT_COPY)).toBeNull();
+    await act(async () => resolveLocation({ ok: false, reason: "corrupt" }));
     // The visible calm note rides the article-top meta (and the SAME
     // sentence rides the hidden region below — hence getAllByText).
     expect(screen.getAllByText(CORRUPT_COPY).length).toBe(2);

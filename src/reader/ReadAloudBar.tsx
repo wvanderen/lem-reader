@@ -50,6 +50,14 @@
 //     backward", "Skip sentence forward", and "Skip paragraph forward" —
 //     speech audibly jumps and the marker hops; successful skips stay silent
 //     (no per-hop chatter — any announcement rides the ONE polite region).
+//   - Issue #166: the bar exposes the seek control — a native range slider
+//     over ARTICLE position (a percent of the article's text; no duration is
+//     implied, the platform provides no reliable audio time), keyboard
+//     operable, its aria-valuetext carrying the article-position feedback —
+//     plus "Previous passage" / "Next passage" (the utterance-sized step
+//     either direction, the same skip discipline as #43). Seeking while
+//     paused stays paused; seeking during playback continues speech from the
+//     picked position; percent 100 finishes through the ONE completion seam.
 //   - Exactly ONE polite role="status" region owns the transport
 //     announcements (this component's visually-hidden region; annotation and
 //     export regions stay separate — the D9-06 pattern).
@@ -110,6 +118,17 @@ interface ReadAloudBarProps {
   onPrimary: () => void;
   onStop: () => void;
   /**
+   * Issue #166 — the seek control's wiring. `progress` is the hook's display
+   * mirror of the listened position (null until the session's first progress
+   * event); `totalGraphemes` is the article's canonical grapheme total;
+   * `onSeek` receives the picked PERCENT (0–100 — the route owns the
+   * percent→canonical-offset mapping and the at-end→finish routing). The
+   * slider renders only while a session exists AND all three are provided.
+   */
+  progress?: number | null;
+  totalGraphemes?: number;
+  onSeek?: (percent: number) => void;
+  /**
    * Issue #42 — "Jump to spoken position": restores the reader's view to
    * the currently-spoken passage (auto page-turn / follow-scroll undo)
    * WITHOUT moving focus. Rendered only while a session exists (playing or
@@ -124,6 +143,13 @@ interface ReadAloudBarProps {
   onSkipSentenceBack?: () => void;
   onSkipSentenceForward?: () => void;
   onSkipParagraphForward?: () => void;
+  /**
+   * Issue #166 — previous/next passage (one utterance-sized step). Rendered
+   * only while a session exists; while paused the step resumes the session
+   * and jumps (the shared skip composition, like the #43 controls).
+   */
+  onSkipPassageBack?: () => void;
+  onSkipPassageForward?: () => void;
 }
 
 /** The follow level as plain reader language (issue #90): what the on-page
@@ -143,6 +169,18 @@ export const FOLLOW_LABELS: Record<FollowLevel, string> = {
  * must land there in the same change. Exported so the suites assert the
  * LIVE name (one rename site, like FOLLOW_LABELS). */
 export const READALOUD_HEIGHT_VAR = "--readaloud-h";
+
+/** Issue #166 — the seek control's accessible name and its article-position
+ * value feedback. The slider is ARTICLE-position currency (a fraction of the
+ * article's text) — never seconds or a duration, which the platform does not
+ * reliably provide. Exported so the suites assert the LIVE strings. */
+export const SEEK_LABEL = "Article position";
+
+/** The slider's aria-valuetext for a percent — the understandable
+ * article-position feedback ("42% through the article"). */
+export function seekValueText(percent: number): string {
+  return `${percent}% through the article`;
+}
 
 /** The primary button's visible name per transport state — the state IS the
  * accessible name (native button text, no aria-label duplication). */
@@ -164,6 +202,16 @@ const SKIP_CONTROLS = [
 
 type SkipControlKey = (typeof SKIP_CONTROLS)[number]["key"];
 
+/** The passage-step controls (issue #166) — previous/next passage, the
+ * utterance-sized step either direction. Same render contract as the #43
+ * skips: session-gated, handler-optional. */
+const PASSAGE_CONTROLS = [
+  { key: "skip-passage-back", label: "Previous passage" },
+  { key: "skip-passage-forward", label: "Next passage" },
+] as const;
+
+type PassageControlKey = (typeof PASSAGE_CONTROLS)[number]["key"];
+
 export function ReadAloudBar({
   state,
   followLevel,
@@ -175,10 +223,15 @@ export function ReadAloudBar({
   onVoiceChange,
   onPrimary,
   onStop,
+  progress,
+  totalGraphemes,
+  onSeek,
   onJumpToSpoken,
   onSkipSentenceBack,
   onSkipSentenceForward,
   onSkipParagraphForward,
+  onSkipPassageBack,
+  onSkipPassageForward,
 }: ReadAloudBarProps) {
   const sessionActive = state !== "stopped";
   const clusterRef = useRef<HTMLDivElement | null>(null);
@@ -190,12 +243,52 @@ export function ReadAloudBar({
   const [voiceOpen, setVoiceOpen] = useState(false);
   const voiceTriggerRef = useRef<HTMLButtonElement | null>(null);
   useEffect(() => {
-    if (!sessionActive) setVoiceOpen(false);
+    if (!sessionActive) {
+      setVoiceOpen(false);
+      setScrubPercent(null);
+      setKeyboardPercent(null);
+    }
   }, [sessionActive]);
   const skipHandlers: Record<SkipControlKey, (() => void) | undefined> = {
     "skip-sentence-back": onSkipSentenceBack,
     "skip-sentence-forward": onSkipSentenceForward,
     "skip-paragraph-forward": onSkipParagraphForward,
+  };
+  const passageHandlers: Record<PassageControlKey, (() => void) | undefined> = {
+    "skip-passage-back": onSkipPassageBack,
+    "skip-passage-forward": onSkipPassageForward,
+  };
+  // ── Issue #166 — the seek slider's scrub discipline ──────────────────────
+  // While a POINTER drag is down, the slider shows the picked value (never
+  // snapping back under the reader's finger as playback-driven progress
+  // arrives); the commit rides the release. Keyboard adjustment commits per
+  // change (no pointer is down — the value feedback must be immediate).
+  const [scrubPercent, setScrubPercent] = useState<number | null>(null);
+  // Retain the keyboard pick while the slider owns focus: passage snapping
+  // must not undo each 1% step before the next arrow can reach a new passage.
+  // Blur returns the display to actual playback progress.
+  const [keyboardPercent, setKeyboardPercent] = useState<number | null>(null);
+  // The LIVE percent — playback-driven position only, never the scrub override.
+  const livePercent =
+    progress !== null && progress !== undefined && totalGraphemes
+      ? Math.min(100, Math.max(0, Math.round((progress / totalGraphemes) * 100)))
+      : 0;
+  const seekPercent = scrubPercent ?? keyboardPercent ?? livePercent;
+  const commitSeek = (percent: number) => {
+    setScrubPercent(null);
+    const picked = Math.min(100, Math.max(0, Math.round(percent)));
+    onSeek?.(picked);
+  };
+  // The release/blur commit: a scrub that lands back ON the live percent was
+  // a no-op gesture (a thumb click, or a drag returned home) — clear the
+  // scrub without the self-seek (no speech round-trip, no spurious save).
+  const commitScrub = () => {
+    if (scrubPercent === null) return;
+    const picked = scrubPercent;
+    setScrubPercent(null);
+    if (picked !== livePercent) {
+      onSeek?.(picked);
+    }
   };
   // Expanded-band reservation — see the header comment. While a session
   // exists, publish the pill's live rendered height (--readaloud-h on
@@ -245,6 +338,60 @@ export function ReadAloudBar({
           <button type="button" className="btn btn-quiet readaloud-btn" onClick={onPrimary}>
             {PRIMARY_LABELS[state]}
           </button>
+          {/* Issue #166 — the seek control: ARTICLE-position currency (a
+              percent of the article's text), never a duration — the platform
+              gives no reliable audio time, so none is implied. A native
+              range input: keyboard operable for free (arrows/Home/End),
+              its accessible name + aria-valuetext carrying the article-
+              position feedback. Pointer drags show the picked value and
+              commit on release; keyboard commits per change. Percent 100
+              routes through the route's at-end→finish seam. */}
+          {sessionActive && onSeek && !!totalGraphemes && (
+            <input
+              type="range"
+              className="readaloud-seek"
+              aria-label={SEEK_LABEL}
+              aria-valuetext={seekValueText(seekPercent)}
+              min={0}
+              max={100}
+              step={1}
+              value={seekPercent}
+              onChange={(e) => {
+                const picked = e.currentTarget.valueAsNumber;
+                if (scrubPercent !== null) setScrubPercent(picked);
+                else {
+                  if (document.activeElement === e.currentTarget) setKeyboardPercent(picked);
+                  commitSeek(picked);
+                }
+              }}
+              onPointerDown={(e) => {
+                setKeyboardPercent(null);
+                setScrubPercent(e.currentTarget.valueAsNumber);
+              }}
+              onPointerUp={commitScrub}
+              onPointerCancel={commitScrub}
+              onBlur={() => {
+                commitScrub();
+                setKeyboardPercent(null);
+              }}
+            />
+          )}
+          {/* Passage steps (issue #166) — previous/next passage, the
+              utterance-sized navigation step either direction. */}
+          {sessionActive &&
+            PASSAGE_CONTROLS.map(({ key, label }) => {
+              const onPassage = passageHandlers[key];
+              return onPassage ? (
+                <button
+                  key={key}
+                  type="button"
+                  className="btn btn-quiet readaloud-btn"
+                  onClick={onPassage}
+                >
+                  {label}
+                </button>
+              ) : null;
+            })}
           {/* Skip controls (issue #43, O3) — see SKIP_CONTROLS. */}
           {sessionActive &&
             SKIP_CONTROLS.map(({ key, label }) => {

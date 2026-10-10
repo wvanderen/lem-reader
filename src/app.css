@@ -4586,6 +4586,18 @@ dialog.book-remove-confirm {
   color: var(--ink-soft);
 }
 
+/* ── Issue #166 — the article-position seek slider ─────────────────────────
+ * A native range input over ARTICLE position (percent of the article's
+ * text — never a duration). The settings range register (44px touch band,
+ * accent thumb) narrowed to the pill's inline budget: a calm strip that
+ * wraps with the cluster, wide enough to scrub meaningfully. Tokens only;
+ * zero motion properties; :focus-visible inherits the global ring. */
+.readaloud-seek {
+  width: min(180px, 38vw);
+  min-height: var(--touch);
+  accent-color: var(--accent);
+}
+
 /* ── Issue #165 — the Voice popover (the voice one action away) ────────────
  * A native popover="auto" panel anchored to the bar's Voice trigger — the
  * .row-tags-popover discipline (D21-05 anchor positioning, probe-verified

@@ -425,12 +425,15 @@ describe("seekTo — jump the playing session; the floors reset", () => {
     expect(h.spokenRanges[h.spokenRanges.length - 1]).toEqual({ start: 20, end: 30 });
   });
 
-  it("an offset at/past the end restarts from the top", () => {
+  it("a target beyond the final speakable passage finishes instead of wrapping", () => {
     const h = makeEngine();
     playWordCapable(h);
-    h.engine.seekTo(999);
-    vi.advanceTimersByTime(60);
-    expect(h.adapter.last!.request.text).toBe("Zero one.");
+    const count = h.adapter.spoken.length;
+    h.engine.seekTo(30); // visible trailing text may follow this speech end
+    vi.advanceTimersByTime(5000);
+    expect(h.engine.getState()).toBe("stopped");
+    expect(h.finished).toBe(1);
+    expect(h.adapter.spoken).toHaveLength(count);
   });
 
   it("is playing-only: a paused or stopped session ignores it", () => {
@@ -451,8 +454,227 @@ describe("seekTo — jump the playing session; the floors reset", () => {
   });
 });
 
-// ─── 8. retune — live voice/rate changes (issue #165) ────────────────────────
+// ─── 7b. seekWhilePaused — the paused seek (issue #166) ─────────────────────
 
+describe("seekWhilePaused — the paused seek preserves the paused state (issue #166)", () => {
+  it("queues nothing while paused; progress + marker report the target right away", () => {
+    const h = makeEngine();
+    playWordCapable(h); // chunk 0 live
+    h.adapter.last!.events.onend?.(); // chunk 1 live
+    h.engine.pause();
+    const spokenCount = h.adapter.spoken.length;
+    const rangesBefore = h.spokenRanges.length;
+
+    h.engine.seekWhilePaused(21); // into chunk 2 [20,30)
+    vi.advanceTimersByTime(5000); // well past any settle — nothing may fire
+    expect(h.adapter.spoken).toHaveLength(spokenCount); // no speech started
+    expect(h.engine.getState()).toBe("paused"); // paused preserved
+    // The canonical save + the marker followed the seek WITHOUT playback.
+    expect(h.progress[h.progress.length - 1]).toBe(20); // chunk 2's start
+    expect(h.spokenRanges[h.spokenRanges.length - 1]).toEqual({ start: 20, end: 30 });
+    expect(h.spokenRanges.length).toBe(rangesBefore + 1);
+  });
+
+  it("resume lands on the SEEK TARGET (the held utterance is replaced, not finished)", () => {
+    const h = makeEngine();
+    playWordCapable(h);
+    h.engine.pause();
+    h.engine.seekWhilePaused(12); // into chunk 1 [9,20)
+    h.engine.resume();
+    vi.advanceTimersByTime(60);
+    // Plain adapter.resume never ran — the held utterance was replaced.
+    expect(h.adapter.resumed).toBe(0);
+    expect(h.engine.getState()).toBe("playing");
+    expect(h.adapter.last!.request.volume).toBe(1);
+    expect(h.adapter.last!.request.text).toBe("Three four."); // the target chunk
+  });
+
+  it("a target beyond the final speakable passage finishes while paused", () => {
+    const h = makeEngine();
+    playWordCapable(h);
+    h.engine.pause();
+    const count = h.adapter.spoken.length;
+    h.engine.seekWhilePaused(30);
+    vi.advanceTimersByTime(5000);
+    expect(h.engine.getState()).toBe("stopped");
+    expect(h.finished).toBe(1);
+    expect(h.adapter.spoken).toHaveLength(count);
+  });
+
+  it("late events from the held utterance cannot overwrite a backward paused seek", () => {
+    const h = makeEngine();
+    playWordCapable(h);
+    h.adapter.last!.events.onend?.(); // chunk 1 held at pause
+    const held = h.adapter.last!.events;
+    h.engine.pause();
+    h.engine.seekWhilePaused(0);
+    const progress = [...h.progress];
+    const ranges = [...h.spokenRanges];
+    held.onstart?.();
+    held.onboundary?.({ name: "word", charIndex: 6 });
+    held.onend?.();
+    held.onerror?.();
+    vi.advanceTimersByTime(5000);
+    expect(h.progress).toEqual(progress);
+    expect(h.spokenRanges).toEqual(ranges);
+    expect(h.engine.getState()).toBe("paused");
+    h.engine.resume();
+    vi.advanceTimersByTime(60);
+    expect(h.adapter.last!.request.text).toBe("Zero one.");
+  });
+
+  it("playing and stopped sessions ignore it", () => {
+    const h = makeEngine();
+    playWordCapable(h);
+    const spokenCount = h.adapter.spoken.length;
+    h.engine.seekWhilePaused(20); // playing — seekTo's job
+    vi.advanceTimersByTime(60 + 5000);
+    expect(h.adapter.spoken).toHaveLength(spokenCount);
+    h.engine.stop();
+    h.engine.seekWhilePaused(0);
+    vi.advanceTimersByTime(5000);
+    expect(h.engine.getState()).toBe("stopped");
+    expect(h.adapter.spoken).toHaveLength(spokenCount);
+  });
+
+  it("a paused seek then a paused retune: resume lands on the target under the new settings", () => {
+    const h = makeEngine();
+    playWordCapable(h);
+    h.engine.pause();
+    h.engine.seekWhilePaused(21); // target: chunk 2
+    h.engine.retune({ voiceURI: "other-voice", rate: 1.5 }); // also while paused
+    h.engine.resume();
+    vi.advanceTimersByTime(60);
+    // The voice change is unprobed for the new voice — the re-probe runs
+    // first, then playback lands on the SEEK TARGET (not the held chunk).
+    expect(h.adapter.last!.request.volume).toBe(0);
+    h.adapter.last!.events.onboundary?.({ name: "word", charIndex: 0 });
+    vi.advanceTimersByTime(60);
+    expect(h.adapter.last!.request).toMatchObject({
+      text: "Six seven.",
+      voiceURI: "other-voice",
+      rate: 1.5,
+      volume: 1,
+    });
+  });
+});
+
+// ─── 7c. seekToEnd — finish without wrapping (issue #166) ───────────────────
+
+describe("seekToEnd — the session finishes through the ONE completion seam", () => {
+  it("while playing: cancels, reports the end, finishes, and never re-speaks", () => {
+    const h = makeEngine();
+    playWordCapable(h); // chunk 0 live
+    h.engine.seekToEnd();
+    expect(h.engine.getState()).toBe("stopped");
+    expect(h.finished).toBe(1);
+    expect(h.progress[h.progress.length - 1]).toBe(30); // the article end
+    const spokenCount = h.adapter.spoken.length;
+    vi.advanceTimersByTime(5000);
+    // Stale events from the cancelled session cannot wrap to the top.
+    h.adapter.last!.events.onend?.();
+    expect(h.adapter.spoken).toHaveLength(spokenCount);
+    expect(h.finished).toBe(1);
+  });
+
+  it("while paused: finishing also holds (the reader asked for the end)", () => {
+    const h = makeEngine();
+    playWordCapable(h);
+    h.engine.pause();
+    h.engine.seekToEnd();
+    expect(h.engine.getState()).toBe("stopped");
+    expect(h.finished).toBe(1);
+    // Resume after the finish is a no-op (the session is over).
+    h.engine.resume();
+    vi.advanceTimersByTime(5000);
+    expect(h.engine.getState()).toBe("stopped");
+  });
+
+  it("a stopped session ignores it", () => {
+    const h = makeEngine();
+    h.engine.seekToEnd();
+    expect(h.finished).toBe(0);
+    expect(h.engine.getState()).toBe("stopped");
+  });
+
+  it("a pending paused seek is discarded by seekToEnd", () => {
+    const h = makeEngine();
+    playWordCapable(h);
+    h.engine.pause();
+    h.engine.seekWhilePaused(21);
+    h.engine.seekToEnd();
+    h.engine.resume(); // must not resurrect the seek target
+    vi.advanceTimersByTime(5000);
+    expect(h.engine.getState()).toBe("stopped");
+    expect(h.finished).toBe(1);
+  });
+});
+
+// ─── 7d. previous/next passage (issue #166) ──────────────────────────────────
+
+describe("skipPassageBack/Forward — the utterance-sized step (issue #166)", () => {
+  it("next passage moves exactly ONE chunk, even mid-sentence (unlike the sentence skip)", () => {
+    const h = makeEngine(makeSkipChunks());
+    playWordCapable(h);
+    h.engine.seekTo(12); // mid "Gamma" — piece 1 of the over-budget sentence 2
+    vi.advanceTimersByTime(60);
+    expect(h.adapter.last!.request.text).toBe("Gam-1");
+    expect(h.engine.skipPassageForward()).toBe(true);
+    vi.advanceTimersByTime(60);
+    expect(h.adapter.last!.request.text).toBe("Gam-2"); // one chunk, same sentence
+  });
+
+  it("previous passage moves one chunk back and the marker hops with it", () => {
+    const h = makeEngine(makeSkipChunks());
+    playWordCapable(h);
+    h.engine.skipPassageForward(); // → Beta
+    vi.advanceTimersByTime(60);
+    expect(h.adapter.last!.request.text).toBe("Beta");
+    expect(h.engine.skipPassageBack()).toBe(true);
+    vi.advanceTimersByTime(60);
+    expect(h.adapter.last!.request.text).toBe("Alpha");
+    h.adapter.last!.events.onstart?.();
+    expect(h.spokenRanges[h.spokenRanges.length - 1]).toEqual({ start: 0, end: 5 });
+  });
+
+  it("a step at either session boundary moves nothing and reports false", () => {
+    const h = makeEngine(makeSkipChunks());
+    playWordCapable(h); // first chunk
+    expect(h.engine.skipPassageBack()).toBe(false);
+    vi.advanceTimersByTime(60);
+    expect(h.adapter.last!.request.text).toBe("Alpha"); // nothing queued
+    h.engine.seekTo(20); // last chunk
+    vi.advanceTimersByTime(60);
+    expect(h.adapter.last!.request.text).toBe("Delta");
+    h.adapter.last!.events.onstart?.(); // keep the stall watchdog quiet
+    expect(h.engine.skipPassageForward()).toBe(false);
+    vi.advanceTimersByTime(5000);
+    expect(h.adapter.last!.request.text).toBe("Delta");
+    expect(h.engine.getState()).toBe("playing");
+  });
+
+  it("while PAUSED the step resumes the session and jumps (the shared skip composition)", () => {
+    const h = makeEngine(makeSkipChunks());
+    playWordCapable(h);
+    h.engine.pause();
+    expect(h.engine.skipPassageForward()).toBe(true);
+    expect(h.engine.getState()).toBe("playing");
+    vi.advanceTimersByTime(60);
+    expect(h.adapter.last!.request.text).toBe("Beta");
+  });
+
+  it("a stopped session ignores passage steps", () => {
+    const h = makeEngine(makeSkipChunks());
+    playWordCapable(h);
+    h.engine.stop();
+    expect(h.engine.skipPassageBack()).toBe(false);
+    expect(h.engine.skipPassageForward()).toBe(false);
+    vi.advanceTimersByTime(5000);
+    expect(h.engine.getState()).toBe("stopped");
+  });
+});
+
+// ─── 8. retune — live voice/rate changes (issue #165) ────────────────────────
 describe("retune — rate change on the PLAYING session", () => {
   it("re-queues the CURRENT passage under the new rate (no re-probe, no restart from top)", () => {
     const h = makeEngine();

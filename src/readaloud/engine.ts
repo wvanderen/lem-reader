@@ -116,6 +116,10 @@ export class ReadAloudEngine {
   /** A cancelled utterance needs a fresh queue, including throughout probing. */
   private requeueTimer: ReturnType<typeof setTimeout> | null = null;
   private handoffPending = false;
+  /** Issue #166 — a seek landed while PAUSED: the synthesizer holds the old
+   * utterance, so resume() must REPLACE it with the seek target instead of
+   * finishing the stale passage (the same shape as a paused retune). */
+  private pausedSeekPending = false;
   /** Issue #165 — a retune that landed while PAUSED: the synthesizer holds
    * the old utterance, so the new voice/rate can only take effect when
    * speech next starts. Applied by resume() (never by pause — a settings
@@ -184,6 +188,16 @@ export class ReadAloudEngine {
 
   resume(): void {
     if (this.state !== "paused") return;
+    // Issue #166 — a seek landed while paused: the synthesizer still holds
+    // the OLD utterance, so plain resume() would finish the stale passage.
+    // Re-queue the seek TARGET chunk instead (never starts speech here — the
+    // paused state only flips when the reader resumes).
+    if (this.pausedSeekPending) {
+      this.pausedSeekPending = false;
+      this.setState("playing");
+      this.requeueCurrentPassage();
+      return;
+    }
     // Issue #165 — a retune landed while paused: the synthesizer still holds
     // the OLD utterance, so plain resume() would finish the passage at the
     // stale settings. Re-queue the current passage under the new ones instead
@@ -200,13 +214,7 @@ export class ReadAloudEngine {
   }
 
   stop(): void {
-    this.generation += 1;
-    this.clearStallTimer();
-    this.clearRequeueTimer();
-    this.retunePending = false;
-    this.voiceRetunePending = false;
-    this.handoffPending = false;
-    this.adapter.cancel();
+    this.abortSession();
     this.setState("stopped");
   }
 
@@ -218,14 +226,88 @@ export class ReadAloudEngine {
    * BACKWARD (skip-back) as well as forward, and the pre-seek utterance's
    * late events no-op via the generation guard. No-op while paused/stopped —
    * a paused seek is resume-then-seek for the caller (#43 owns that
-   * composition). An offset at/past the end restarts from the top.
+   * composition). An offset beyond the final speakable passage finishes.
    */
   seekTo(fromOffset: number): void {
     if (this.state !== "playing") return;
-    let startIndex = this.chunks.findIndex((c) => c.endGrapheme > fromOffset);
-    if (startIndex === -1) startIndex = 0;
+    const startIndex = this.chunks.findIndex((c) => c.endGrapheme > fromOffset);
+    if (startIndex === -1) {
+      this.seekToEnd();
+      return;
+    }
     this.nextChunkIndex = startIndex;
     this.requeueCurrentPassage();
+  }
+
+  /**
+   * Issue #166 — seek while PAUSED: the paused state is preserved (no speech
+   * starts), the held utterance is discarded in favor of the target chunk at
+   * resume (pausedSeekPending), and the new position reports through the
+   * progress + spoken-range channels right away — the canonical save and the
+   * visual marker follow the seek without playback. A target beyond the final
+   * speakable passage finishes through seekToEnd(), including trailing text
+   * that is visible but not spoken.
+   */
+  seekWhilePaused(fromOffset: number): void {
+    if (this.state !== "paused") return;
+    const startIndex = this.chunks.findIndex((c) => c.endGrapheme > fromOffset);
+    if (startIndex === -1) {
+      this.seekToEnd();
+      return;
+    }
+    // Keep speech held until resume, but retire every callback from the old
+    // utterance before resetting the floors for a backward seek.
+    this.generation += 1;
+    this.clearStallTimer();
+    this.clearRequeueTimer();
+    this.pausedSeekPending = true;
+    this.nextChunkIndex = startIndex;
+    const chunk = this.chunks[startIndex]!;
+    // Fresh floors: the reported seek position is the new session truth.
+    this.lastReported = -1;
+    this.lastSpokenStart = -1;
+    this.reportProgress(chunk.startGrapheme);
+    // The whole-chunk passage range (an utterance start never fires while
+    // paused, so the seek itself emits the marker's landing range).
+    this.reportSpoken({ start: chunk.startGrapheme, end: chunk.endGrapheme });
+  }
+
+  /**
+   * Issue #166 — seek to the end: the session FINISHES through the same seam
+   * as a natural by-ear finish (stopped + onFinish — the host's ONE completion
+   * contract: the finished announcement + the end-pin save). No wrap to the
+   * top; the final progress/spoken emissions mirror a natural finish's last
+   * chunk advance. No-op while stopped.
+   */
+  seekToEnd(): void {
+    if (this.state === "stopped") return;
+    this.abortSession();
+    // The end reports once, like a natural finish's last advance: progress at
+    // the final chunk's end + the zero-width sentinel (marker clearing is the
+    // host's session-end job, not this channel's).
+    const end = this.chunks[this.chunks.length - 1]?.endGrapheme ?? -1;
+    if (end >= 0) {
+      this.lastReported = -1;
+      this.lastSpokenStart = -1;
+      this.reportProgress(end);
+      this.reportSpoken({ start: end, end });
+    }
+    this.setState("stopped");
+    this.callbacks.onFinish?.();
+  }
+
+  /** The shared terminal abort behind stop() and seekToEnd(): supersede every
+   * in-flight closure (generation bump), clear the timers, drop every pending
+   * handoff/retune/seek flag, and cancel the synthesizer. */
+  private abortSession(): void {
+    this.generation += 1;
+    this.clearStallTimer();
+    this.clearRequeueTimer();
+    this.retunePending = false;
+    this.voiceRetunePending = false;
+    this.pausedSeekPending = false;
+    this.handoffPending = false;
+    this.adapter.cancel();
   }
 
   /**
@@ -308,6 +390,33 @@ export class ReadAloudEngine {
    */
   skipParagraphForward(): boolean {
     return this.skipByUnit((c) => c.units.paragraphIndex, 1);
+  }
+
+  /**
+   * Issue #166 — previous/next passage: jump exactly one utterance-sized step
+   * (the chunk — the same "passage" unit the follow ladder names). The
+   * finest, most predictable navigation step: from a mid-sentence piece of an
+   * over-budget sentence it moves a single piece, unlike the sentence skips.
+   * Same paused/stopped semantics and return contract as the other skips:
+   * paused → resume-then-jump, stopped → false, boundary → false (the host
+   * gives the ONE polite region its single honest line).
+   */
+  skipPassageBack(): boolean {
+    return this.skipByChunkDelta(-1);
+  }
+
+  /** Issue #166 — next passage (see skipPassageBack). */
+  skipPassageForward(): boolean {
+    return this.skipByChunkDelta(1);
+  }
+
+  /** The shared chunk-step walk behind the passage skips: the chunk exactly
+   * `delta` indices from the current one, then the shared skip transport.
+   * False at either session boundary (no chunk in that direction). */
+  private skipByChunkDelta(delta: -1 | 1): boolean {
+    const target = this.chunks[this.nextChunkIndex + delta];
+    if (!target) return false;
+    return this.skipToChunk(target);
   }
 
   /** The shared skip walk behind both skip controls: land on the first chunk
