@@ -47,7 +47,19 @@ The engine now treats the synthesizer as untouchable while an utterance is activ
 
 **Validation status:** engine truth table (164 unit tests, fake timers) green; chromium e2e (the deterministic fake-speech suite, 41 specs) green; **Firefox/WebKit e2e of this change could not run on the authoring machine** — an unrelated same-day environment regression denies ALL Firefox builds (real and Playwright) their sandbox/graphics extensions there (§8's automation note); the repo CI gate owns the full matrix. **Real-device confirmation on the reporter's Firefox is the decisive check**: Play → speech must now start (the probe completes silently first, ~1.5s), Retry must recover from any failure, and no popping.
 
+## 10. Follow-up (post-fix, reporter's Firefox): sentence-boundary clicks — a SECOND, synthesis-internal Gecko defect
+
+With the wedge fixed, read-aloud on the reporter's Firefox **works but produces a loud, full-scale click at every sentence boundary — including INSIDE a single utterance** (a labeled discriminator played four shapes: one long utterance, a gapless pre-queued chain, the engine's end-event chain, and the silent-probe handoff — **all popped identically**, the single-utterance variant right before a mid-text sentence). The click is therefore synthesis-internal: **Gecko's macOS TTS bridge clicks (and on this machine frequently DIES — the utterance's `end` never fires and the queue blocks) at each internal sentence break**. Not utterance chaining (all shapes identical), not the Web Speech event wiring (the discriminator set no boundary listeners), not Bluetooth (built-in speakers), not volume (unchanged across levels). The app cannot patch Gecko's audio graph from the web.
+
+An attempted voice matrix died at its first modern-voice item (Samantha: announcement fine → two-sentence utterance → click → silence → blocked), reinforcing that the boundary failure can kill synthesis outright. A legacy-engine probe (Kathy/Fred — the classic `com.apple.speech.synthesis` MacinTalk voices, a different synthesizer from the modern AVSpeech voices) was queued as the last discriminator: if the legacy voices are click-free, readers on affected Firefox/macOS combinations have a working voice choice today via the reader's Voice picker.
+
+**Recommended follow-ups:**
+1. **Upstream bug** (Mozilla; also reproducible in Zen — same Gecko base): *"speechSynthesis on macOS: full-scale click at every internal sentence boundary; synthesis frequently dies at the boundary (utterance end never fires, queue blocks)"* — reproduction: any multi-sentence utterance on Firefox 157 / macOS 10.15; the reader's evidence (§8–§10) is ready to attach.
+2. Reader guidance for affected combos: a voice whose engine doesn't click (if the legacy probe confirms), else Chromium-based browsers (Helium verified clean) until the upstream fix.
+3. The reader's own behavior is already honest under this defect: a synthesis death trips the playback-failure watchdog → the bar explains, the place is saved, Retry re-attempts.
+
 ---
+
 
 
 ## 1. The question
