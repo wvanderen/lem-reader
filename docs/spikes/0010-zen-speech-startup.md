@@ -1,9 +1,54 @@
 # Spike 0010: Zen (Firefox/macOS) read-aloud startup failure — platform evidence
 
 **Issue:** [wvanderen/lem-reader#167](https://github.com/wvanderen/lem-reader/issues/167)
-**Status:** Complete — **NO REPRODUCTION in a clean Zen profile on macOS; the platform-level Web Speech stack in Zen 1.23.1b is healthy for every sequence the read-aloud engine uses. The reported failure is environment-specific (not reproducible here) — the app-level recovery UX was still fixed (see the issue's acceptance criteria), and the evidence still needed from the reporter is listed in §6.**
+**Status:** Complete — **ROOT CAUSE FOUND AND FIXED (follow-up to the first pass below): on Firefox/macOS, `speechSynthesis.cancel()` landing on an utterance that is actively synthesizing permanently wedges the synthesizer (in-page recovery impossible). The read-aloud engine's startup probe canceled exactly there — a mid-synthesis cancel on every Play press. The fix removes every cancel from the startup path: the first chunk queues behind the probe and the probe runs to its natural end. See §8.**
 
 ---
+
+## 8. Root cause (discriminating experiments on the reporter's own Firefox, one day after §3–§7)
+
+The user reproduced the issue on real Firefox (157.0.1, macOS) AND Zen — and confirmed the #167 failure UI ("Speech didn't start. Try a different voice, then press Retry."), consistently, nothing in console. A one-click diagnostic page (HITL — the agent's environment cannot launch a second Firefox: the opencode shell denies Firefox's sandbox-extension XPC, `sandbox_extension_issue_file_to_process … Operation not permitted`, which is also why §3's clean-profile automation used `open` + beacons) ran the app-exact ladder in the user's Firefox and reported every event with timestamps:
+
+**Run 1 — the wedge, reproduced (auto + gesture suites):**
+
+| t (ms) | event |
+| --- | --- |
+| 1038 | plain volume-1 utterance: start → 6 word boundaries → end @3617 — **healthy** |
+| 3620 | volume-0 probe (the app's shape): start, ONE word boundary @4087 — then silence |
+| ~4137 | `cancel()` at the first boundary (the engine's resolve path) |
+| 4200+ | first real chunk: NO events — ever |
+| 4200→∞ | `speechSynthesis.speaking === true, pending === true` **forever**; every later utterance (delayed speak, retry ladder, Kathy variant) produces zero events |
+
+**Run 2 — the discrimination matrix (canary-checked between every experiment):**
+
+| Experiment | Result |
+| --- | --- |
+| E1: volume-0 probe LEFT ALONE | **healthy** — start, 6 boundaries, natural end at ~2.7s |
+| E2: volume-0 short text, untouched | healthy |
+| E3: volume 0.01 / 0.001, untouched | healthy — near-zero volumes are not the problem |
+| E4: Kathy volume-0, untouched | healthy |
+| E5: **volume-0 probe + `cancel()` at the first boundary** (the app's exact move) | **WEDGES**: the queued chunk never speaks; canary STUCK |
+| E6: recovery after the wedge | **nothing recovers it**: single `cancel()`, double `cancel()`, `resume()+cancel()` all fail; only a reload clears it |
+
+The reporter's audible observation — "a lot of popping before it stops" — is the mid-synthesis cancel glitching the audio output; the pops are the wedge's audible signature.
+
+**Conclusion:** not volume 0 (E1–E4), not the voices, not article length, not gesture gating — **`cancel()` during active synthesis of the silent probe**. Chromium/WebKit cancel cleanly, which is why Helium worked. Every Retry re-ran the identical probe-then-cancel, hence the consistent failure.
+
+**Run 3 (cancel matrix, T-series)** was cut short when the diagnostic tab stopped reporting right after its first mid-speech cancel (content process stopped responding — the wedge's hardest form). The question it was answering — whether `cancel()` mid-synthesis of AUDIBLE (volume-1) speech also wedges (it would implicate Stop/seek/retune on Firefox) — remains **open**; no such failure has been reported in the field, so the fix keeps those cancels and relies on the existing honest-failure watchdogs to convert any such wedge into a visible, recoverable state rather than a fake "playing".
+
+## 9. The fix (evidence-driven)
+
+The engine now treats the synthesizer as untouchable while an utterance is actively synthesizing:
+
+- **The startup probe is never canceled.** The first chunk QUEUES behind it; the synthesizer plays the silent probe to its natural end, then the chunk begins. The probe text is shortened ("Hi. One two three.", ~1.5s) so the audible-start delay stays small.
+- While the probe is in flight: seek/skip/retune **retarget the queued chunk** (no cancel), pause **freezes** the queue (the watchdog stops; resume re-arms it), and a resolve that lands while paused parks the handoff for resume.
+- The only remaining cancels are terminal (Stop/fail) or post-audible requeues (seek/retune after speech was heard — the WebKit settle discipline stays there).
+- Regression pins: engine unit tests assert **zero `adapter.cancel()` calls through a full startup** (word-capable and dead-probe paths), retarget-without-cancel for seek/retune/skip mid-probe, freeze-doesn't-fail while paused, and re-armed honest failure after resume into a dead queue.
+
+**Validation status:** engine truth table (164 unit tests, fake timers) green; chromium e2e (the deterministic fake-speech suite, 41 specs) green; **Firefox/WebKit e2e of this change could not run on the authoring machine** — an unrelated same-day environment regression denies ALL Firefox builds (real and Playwright) their sandbox/graphics extensions there (§8's automation note); the repo CI gate owns the full matrix. **Real-device confirmation on the reporter's Firefox is the decisive check**: Play → speech must now start (the probe completes silently first, ~1.5s), Retry must recover from any failure, and no popping.
+
+---
+
 
 ## 1. The question
 

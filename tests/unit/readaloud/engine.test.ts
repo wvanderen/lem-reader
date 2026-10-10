@@ -199,7 +199,11 @@ describe("probe — follow level resolution (spike 0009 F3)", () => {
     expect(h.levels).toEqual(["progress-only"]);
     vi.advanceTimersByTime(60);
     expect(h.adapter.spoken).toHaveLength(2); // playback still starts
-    expect(h.adapter.cancelled).toBeGreaterThanOrEqual(1); // probe cancelled
+    // Issue #167 — THE WEDGE REGRESSION PIN: the dead (or any) probe is
+    // never cancelled — Firefox wedges its synthesizer permanently when a
+    // cancel lands on an actively-synthesizing utterance. The first chunk
+    // queues BEHIND the probe instead.
+    expect(h.adapter.cancelled).toBe(0);
   });
 
   it("a probe error resolves 'progress-only'", () => {
@@ -802,7 +806,9 @@ describe("retune handoff races", () => {
         rate: 1.5,
         volume: 1,
       });
-      expect(h.adapter.resumed).toBe(0);
+      // Issue #167 — the pause froze the queue and NEVER cancelled it (the
+      // Firefox wedge): resume physically un-pauses the synthesizer.
+      expect(h.adapter.resumed).toBe(1);
     },
   );
 
@@ -1153,6 +1159,87 @@ describe("refusals — stall watchdog + error loop cap", () => {
     h.adapter.last!.events.onend?.(); // chunk 1 speaks fine
     expect(h.finished).toBe(0);
     expect(h.adapter.last!.request.text).toBe("Six seven.");
+  });
+});
+
+// ─── 5b. startup — the probe is never cancelled (issue #167 wedge fix) ──────
+
+describe("startup probe — never cancel (issue #167)", () => {
+  it("a word-capable startup produces ZERO cancels (the Firefox wedge regression pin)", () => {
+    const h = makeEngine();
+    h.engine.play(0);
+    h.adapter.last!.events.onboundary?.({ name: "word", charIndex: 0 });
+    // The chunk queued immediately behind the (still speaking) probe.
+    expect(h.adapter.spoken).toHaveLength(2);
+    expect(h.adapter.last!.request.volume).toBe(1);
+    expect(h.adapter.cancelled).toBe(0);
+    // The probe ends naturally; nothing else to cancel through playback.
+    h.adapter.spoken[0]!.events.onend?.();
+    h.adapter.last!.events.onend?.();
+    expect(h.adapter.cancelled).toBe(0);
+  });
+
+  it("a retune during the probe retargets the queued chunk with NO cancel; the re-probe stays pending", () => {
+    const h = makeEngine();
+    h.engine.play(0);
+    h.engine.retune({ voiceURI: "other-voice", rate: 1.5 }); // mid-probe
+    h.adapter.last!.events.onboundary?.({ name: "word", charIndex: 0 });
+    expect(h.adapter.cancelled).toBe(0);
+    // The queued chunk carries the NEW voice + rate.
+    expect(h.adapter.last!.request).toMatchObject({
+      text: "Zero one.",
+      voiceURI: "other-voice",
+      rate: 1.5,
+      volume: 1,
+    });
+    // The resolved level describes the OLD voice — the re-probe must still
+    // be pending: the next post-audible requeue re-probes (2nd silent probe).
+    h.adapter.spoken[0]!.events.onend?.(); // probe ends
+    h.adapter.last!.events.onend?.(); // chunk 1 speaks
+    h.engine.seekTo(12); // chunk 2 — post-audible requeue
+    vi.advanceTimersByTime(60);
+    expect(h.adapter.spoken.filter((s) => s.request.volume === 0)).toHaveLength(2);
+  });
+
+  it("a seek during the probe retargets the queued chunk with NO cancel", () => {
+    const h = makeEngine();
+    h.engine.play(0);
+    h.engine.seekTo(12); // chunk containing 12 = "Three four."
+    h.adapter.last!.events.onboundary?.({ name: "word", charIndex: 0 });
+    expect(h.adapter.cancelled).toBe(0);
+    expect(h.adapter.last!.request.text).toBe("Three four.");
+  });
+
+  it("pause during the probe freezes; the resolve parks; resume unpauses and queues", () => {
+    const h = makeEngine();
+    h.engine.play(0);
+    h.engine.pause(); // probe in flight — frozen, not cancelled
+    expect(h.adapter.cancelled).toBe(0);
+    vi.advanceTimersByTime(2000); // the timeout resolves while paused
+    expect(h.engine.getState()).toBe("paused");
+    expect(h.adapter.spoken).toHaveLength(1); // nothing queued into the freeze
+    h.engine.resume();
+    expect(h.adapter.resumed).toBe(1); // the frozen queue physically resumes
+    expect(h.adapter.spoken).toHaveLength(2); // the chunk queues behind it
+    expect(h.engine.getState()).toBe("playing");
+  });
+
+  it("pause after the chunk queued does not stall-fail while frozen; resume re-arms the watchdog", () => {
+    const h = makeEngine();
+    h.engine.play(0);
+    h.adapter.spoken[0]!.events.onboundary?.({ name: "word", charIndex: 0 }); // the PROBE resolves
+    expect(h.engine.getState()).toBe("playing");
+    expect(h.adapter.spoken).toHaveLength(2); // the chunk queues behind it
+    h.engine.pause(); // chunk queued, not yet audible
+    vi.advanceTimersByTime(60_000); // far past any stall — frozen never fails
+    expect(h.engine.getState()).toBe("paused");
+    h.engine.resume(); // re-arms the first-event watchdog
+    vi.advanceTimersByTime(3000);
+    expect(h.engine.getState()).toBe("failed"); // silent frozen queue: honest
+    expect(h.failures[0]).toEqual({
+      message: START_FAILURE_MESSAGE,
+      kind: "start",
+    });
   });
 });
 

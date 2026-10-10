@@ -36,10 +36,13 @@ import { transportIsActive } from "./types";
 import type { SpeechChunk } from "./chunks";
 import type { GraphemeRange } from "../annotations/unifiedHighlightSlicer";
 
-/** Probe settings: short, two sentences, several words — enough for a voice
- * to demonstrate word boundaries, sentence boundaries, or neither. Silent
- * (volume 0): the probe must not make the reader listen to it. */
-const PROBE_TEXT = "Listen. One two three four five.";
+/** Probe settings: two short sentences — enough for a voice to demonstrate
+ * word boundaries, sentence boundaries, or neither. Silent (volume 0): the
+ * probe must not make the reader listen to it. Issue #167 — kept SHORT
+ * (~1.5s spoken): the first chunk queues BEHIND the probe (see
+ * probeUnresolved), so the probe's natural duration is the audible-start
+ * delay. */
+const PROBE_TEXT = "Hi. One two three.";
 const PROBE_TIMEOUT_MS = 2000;
 
 /** Settle delay after cancel() before the next speak() — the WebKit
@@ -131,7 +134,25 @@ export class ReadAloudEngine {
   private stallTimer: ReturnType<typeof setTimeout> | null = null;
   /** A cancelled utterance needs a fresh queue, including throughout probing. */
   private requeueTimer: ReturnType<typeof setTimeout> | null = null;
-  private handoffPending = false;
+  /** Issue #167 — the probe utterance is IN FLIGHT (spoken, unresolved).
+   * From play() until it resolves the engine must NEVER cancel: Firefox/
+   * macOS permanently wedges the whole synthesizer when a cancel lands on
+   * an actively-synthesizing utterance (spike 0010 — in-page recovery
+   * impossible). While this is true, seek/skip/retune RETARGET the queued
+   * chunk instead of canceling, and pause freezes the queue. Only terminal
+   * paths (stop/fail) still cancel. */
+  private probeUnresolved = false;
+  /** Issue #167 — the probe resolved while PAUSED (the synth is frozen, so
+   * the chunk must not be queued into a frozen queue): resume() queues it. */
+  private probeHandoffPending = false;
+  /** The first chunk is queued but has produced NO event yet: resume() must
+   * re-arm the first-event watchdog (pause clears it — never fail while
+   * frozen), and the chunk's own events clear it. */
+  private chunkQueuedUnstarted = false;
+  /** A retune landed while the probe was in flight: the level the probe
+   * resolves describes the PREVIOUS voice, so the next re-probe must not be
+   * skipped. */
+  private probeRetuned = false;
   /** Issue #166 — a seek landed while PAUSED: the synthesizer holds the old
    * utterance, so resume() must REPLACE it with the seek target instead of
    * finishing the stale passage (the same shape as a paused retune). */
@@ -202,13 +223,10 @@ export class ReadAloudEngine {
 
   pause(): void {
     if (this.state !== "playing") return;
-    if (this.handoffPending) {
-      this.generation += 1;
-      this.clearStallTimer();
-      this.clearRequeueTimer();
-      this.adapter.cancel();
-      this.retunePending = true;
-    }
+    // Issue #167 — NO cancel, even while the probe is in flight: the synth
+    // freezes (probe + any queued chunk stay parked in the queue) and the
+    // first-event watchdog stops — never a failure while frozen.
+    this.clearStallTimer();
     this.adapter.pause();
     this.setState("paused");
   }
@@ -236,8 +254,22 @@ export class ReadAloudEngine {
       this.requeueCurrentPassage();
       return;
     }
+    // Issue #167 — the probe resolved while paused: unpause the synth (the
+    // probe resumes; the chunk follows it in the queue) and queue the chunk.
+    if (this.probeHandoffPending) {
+      this.probeHandoffPending = false;
+      this.adapter.resume();
+      this.setState("playing");
+      this.startPlayback(this.generation);
+      return;
+    }
     this.adapter.resume();
     this.setState("playing");
+    // The queued chunk may still be waiting behind the frozen probe — re-arm
+    // the first-event watchdog now that the queue is moving again.
+    if (this.chunkQueuedUnstarted) {
+      this.armStallTimer(this.generation, () => this.stallFail(this.generation));
+    }
   }
 
   stop(): void {
@@ -263,6 +295,14 @@ export class ReadAloudEngine {
       return;
     }
     this.nextChunkIndex = startIndex;
+    // Issue #167 — while the probe is in flight the first chunk is only
+    // QUEUED, not speaking: retarget it and let the probe's resolve queue
+    // the right one. Canceling the live probe is the Firefox wedge.
+    if (this.probeUnresolved) {
+      this.lastReported = -1;
+      this.lastSpokenStart = -1;
+      return;
+    }
     this.requeueCurrentPassage();
   }
 
@@ -287,6 +327,9 @@ export class ReadAloudEngine {
     this.generation += 1;
     this.clearStallTimer();
     this.clearRequeueTimer();
+    this.probeHandoffPending = false;
+    this.probeUnresolved = false;
+    this.chunkQueuedUnstarted = false;
     this.pausedSeekPending = true;
     this.nextChunkIndex = startIndex;
     const chunk = this.chunks[startIndex]!;
@@ -336,7 +379,10 @@ export class ReadAloudEngine {
     this.retunePending = false;
     this.voiceRetunePending = false;
     this.pausedSeekPending = false;
-    this.handoffPending = false;
+    this.probeUnresolved = false;
+    this.probeHandoffPending = false;
+    this.chunkQueuedUnstarted = false;
+    this.probeRetuned = false;
     this.adapter.cancel();
   }
 
@@ -362,6 +408,14 @@ export class ReadAloudEngine {
     if (!voiceChanged && !rateChanged) return;
     this.voiceURI = next.voiceURI;
     this.rate = next.rate;
+    // Issue #167 — while the probe is in flight the first chunk is only
+    // QUEUED: the new values apply when it queues (speakNext reads them)
+    // with NO cancel. The level the probe resolves describes the OLD voice,
+    // so the re-probe stays pending (probeRetuned keeps it alive).
+    if (this.probeUnresolved) {
+      this.probeRetuned = true;
+      return;
+    }
     // The flag ACCUMULATES: a voice change is unprobed until a probe
     // resolves for it, no matter how many rate-only retunes follow or
     // whether a pause catches the handoff mid-settle.
@@ -387,7 +441,10 @@ export class ReadAloudEngine {
     this.lastReported = -1;
     this.lastSpokenStart = -1;
     this.consecutiveErrors = 0;
-    this.handoffPending = true;
+    this.probeUnresolved = false;
+    this.probeHandoffPending = false;
+    this.chunkQueuedUnstarted = false;
+    this.probeRetuned = false;
     this.scheduleHandoff(generation, reprobe);
   }
 
@@ -395,7 +452,15 @@ export class ReadAloudEngine {
     this.clearRequeueTimer();
     this.requeueTimer = setTimeout(() => {
       this.requeueTimer = null;
-      if (this.isStale(generation) || this.state !== "playing") return;
+      if (this.isStale(generation)) return;
+      // Issue #167 — pause() can land inside the settle window (the queue
+      // was ALREADY cancelled here, post-audible): resume must REQUEUE with
+      // fresh values — mark it, never speak while frozen.
+      if (this.state === "paused") {
+        this.retunePending = true;
+        return;
+      }
+      if (this.state !== "playing") return;
       if (reprobe) this.probe(generation);
       else this.startPlayback(generation);
     }, CANCEL_SETTLE_MS);
@@ -490,11 +555,20 @@ export class ReadAloudEngine {
    * The per-voice calibration utterance (spike 0009 F3). Silent, short,
    * bounded: word boundary → word; sentence boundary then end → sentence;
    * end with neither → passage; nothing at all within the timer →
-   * progress-only. Every path converges on startPlayback().
+   * progress-only.
+   *
+   * Issue #167 — the probe is NEVER canceled. The first chunk QUEUES behind
+   * it and the synthesizer plays it when the probe completes naturally:
+   * Firefox/macOS permanently wedges the synthesizer when a cancel lands on
+   * an actively-synthesizing utterance (the reported "no audible speech,
+   * then it closes" — every Play re-wedged via the probe cancel). While the
+   * probe is in flight, seek/skip/retune retarget the queued chunk and
+   * pause freezes the queue; nothing cancels.
    */
   private probe(generation: number): void {
     if (this.isStale(generation) || this.state !== "playing") return;
-    this.handoffPending = true;
+    this.probeUnresolved = true;
+    this.probeRetuned = false;
     this.voiceRetunePending = true;
     let resolved = false;
     let sentenceSeen = false;
@@ -504,15 +578,16 @@ export class ReadAloudEngine {
       if (resolved || this.isStale(generation)) return;
       resolved = true;
       if (timer !== null) clearTimeout(timer);
+      this.probeUnresolved = false;
       this.followLevel = level;
-      // Issue #165 — the level now matches the voice actually speaking.
-      this.voiceRetunePending = false;
+      // A retune landed mid-probe: the queued chunk carries the new voice,
+      // but the level describes the OLD one — keep the re-probe pending.
+      if (!this.probeRetuned) this.voiceRetunePending = false;
       this.callbacks.onFollowLevel?.(level);
-      // Cancel the probe (a boundary-resolved probe is still speaking; cancel
-      // on an already-finished synthesis is a harmless no-op) and let the
-      // queue settle before the first real utterance.
-      this.adapter.cancel();
-      this.scheduleHandoff(generation);
+      // NO cancel, NO settle (the WebKit settle stays for the POST-audible
+      // requeue paths, which cancel speech that was actually heard): queue
+      // the first chunk behind the probe now.
+      this.startPlayback(generation);
     };
 
     timer = setTimeout(() => {
@@ -531,7 +606,6 @@ export class ReadAloudEngine {
       onend: () => resolve(sentenceSeen ? "sentence" : "passage"),
       onerror: () => resolve("progress-only"),
     };
-    this.armStallTimer(generation, () => resolve("progress-only"));
     this.adapter.speak(this.probeRequest(), events);
   }
 
@@ -540,13 +614,36 @@ export class ReadAloudEngine {
   }
 
   private startPlayback(generation: number): void {
-    if (this.isStale(generation) || this.state !== "playing") return;
-    this.handoffPending = false;
+    if (this.isStale(generation)) return;
+    // Issue #167 — resolve() can fire while PAUSED (the timeout does not
+    // care about the transport): park the handoff for resume() instead of
+    // queueing into a frozen synth.
+    if (this.state !== "playing") {
+      this.probeHandoffPending = true;
+      return;
+    }
     this.speakNext(generation);
   }
 
+  /** The shared honest-stall verdict: speech that never produced an event is
+   * a START failure; a stall after audible speech is a PLAYBACK failure. */
+  private stallFail(generation: number): void {
+    this.fail(
+      generation,
+      this.spokenThisSession
+        ? { message: PLAYBACK_FAILURE_MESSAGE, kind: "playback" }
+        : { message: START_FAILURE_MESSAGE, kind: "start" },
+    );
+  }
+
   private speakNext(generation: number): void {
-    if (this.isStale(generation) || this.state !== "playing") return;
+    if (this.isStale(generation)) return;
+    if (this.state === "paused") {
+      // Issue #167 — resolve() while paused parks the handoff instead.
+      this.probeHandoffPending = true;
+      return;
+    }
+    if (this.state !== "playing") return;
     const chunk = this.chunks[this.nextChunkIndex];
     if (!chunk) {
       this.finish(generation);
@@ -561,6 +658,7 @@ export class ReadAloudEngine {
       this.clearStallTimer();
       this.consecutiveErrors = 0;
       this.spokenThisSession = true; // an end IS speech evidence (issue #167)
+      this.chunkQueuedUnstarted = false;
       this.reportProgress(chunk.endGrapheme);
       // Zero-width spoken sentinel: carries the progress currency only — the
       // marker must NOT collapse; the next utterance's start range (same
@@ -575,6 +673,7 @@ export class ReadAloudEngine {
     const advanceAfterError = (reason?: string) => {
       if (this.isStale(generation) || this.state !== "playing") return;
       this.clearStallTimer();
+      this.chunkQueuedUnstarted = false;
       this.consecutiveErrors += 1;
       if (this.consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
         this.fail(generation, {
@@ -588,17 +687,7 @@ export class ReadAloudEngine {
       this.speakNext(generation);
     };
 
-    this.armStallTimer(generation, () => {
-      // Issue #167 — the watchdog classifies honestly: a silent drop before
-      // any speech is a START failure; after working speech it is a
-      // PLAYBACK failure (the queue stalled partway), never "didn't start".
-      this.fail(
-        generation,
-        this.spokenThisSession
-          ? { message: PLAYBACK_FAILURE_MESSAGE, kind: "playback" }
-          : { message: START_FAILURE_MESSAGE, kind: "start" },
-      );
-    });
+    this.armStallTimer(generation, () => this.stallFail(generation));
     this.adapter.speak(
       { text: chunk.text, voiceURI: this.voiceURI, rate: this.rate, volume: 1 },
       {
@@ -608,6 +697,7 @@ export class ReadAloudEngine {
           // has done its job (a non-boundary voice's only early signal is
           // start, and a slow long passage must not read as a stall).
           this.clearStallTimer();
+          this.chunkQueuedUnstarted = false;
           this.spokenThisSession = true;
           utteranceProgress(chunk.startGrapheme);
           // Passage marker until the first boundary arrives (for a
@@ -619,6 +709,7 @@ export class ReadAloudEngine {
           // Any boundary event proves the engine is alive — clear the stall
           // watchdog; the utterance is speaking.
           this.clearStallTimer();
+          this.chunkQueuedUnstarted = false;
           this.spokenThisSession = true;
           const canonical = mapBoundaryToCanonical(chunk, event);
           if (canonical !== null) this.reportProgress(canonical);
@@ -631,6 +722,10 @@ export class ReadAloudEngine {
         onerror: advanceAfterError,
       },
     );
+    // Issue #167 — the chunk is queued (possibly behind the still-speaking
+    // probe): pause() freezes it and clears the watchdog; resume() re-arms
+    // while this flag says the first event is still outstanding.
+    this.chunkQueuedUnstarted = true;
   }
 
   private finish(generation: number): void {

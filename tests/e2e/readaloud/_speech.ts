@@ -85,7 +85,9 @@ export async function installFakeSpeech(
         spoken.push(record);
         // The PROBE (the first volume-0 utterance) auto-fires per mode so
         // the follow level resolves without test timing coupling. Playback
-        // utterances are always test-driven.
+        // utterances are always test-driven. Issue #167 — the probe then
+        // ENDS NATURALLY (~120ms): the engine queues the first chunk behind
+        // it and NEVER cancels it, exactly like the real synthesizer.
         if (u.volume === 0 && mode !== "dead") {
           window.setTimeout(() => {
             if (record.cancelled) return;
@@ -96,6 +98,11 @@ export async function installFakeSpeech(
               u.onboundary?.({ name: "word", charIndex: 0 });
             }
           }, 30);
+          window.setTimeout(() => {
+            if (record.cancelled || record.done) return;
+            record.done = true;
+            u.onend?.();
+          }, 120);
           if (mode === "sentence") {
             window.setTimeout(() => {
               if (record.cancelled) return;
