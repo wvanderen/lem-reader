@@ -88,6 +88,15 @@ export interface UseAnnotationStateResult {
   /**
    * Delete a highlight + cascade-delete its note atomically (D5-12). The
    * deleteHighlight store seam owns the Dexie transaction (Pitfall 10).
+   *
+   * Failure contract (issue #174 — a failed deletion must report without
+   * silently losing content): the optimistic in-memory removal ROLLS BACK
+   * (the mark + drawer entry re-match the persisted row), the error is
+   * classified and routed to onStorageError (StorageBanner), and the error
+   * RETHROWS so a modal host (NotePopover) can keep itself open with its
+   * inline honest-failure line — the banner alone sits behind the dialog
+   * backdrop while the reader is mid-delete. Fire-and-forget callers
+   * (SelectionToolbar undo) must attach a no-op catch.
    */
   deleteHighlight: (id: string) => Promise<void>;
   /**
@@ -292,16 +301,37 @@ export function useAnnotationState(
     [article],
   );
 
+  // Issue #174 — the deleteHighlight failure contract: a rejected write must
+  // never leave the reader's content silently gone. The optimistic removal
+  // captures the removed entry + its index first; on failure the entry is
+  // RE-INSERTED at that index (the drawer order re-matches the persisted
+  // rows), the error is classified + routed to StorageBanner (STATE-05), and
+  // the error RETHROWS so the modal host (NotePopover) can keep itself open
+  // with its inline failure line instead of closing as if the delete landed.
   const deleteHighlight = useCallback(async (id: string): Promise<void> => {
+    const previous = highlightsRef.current;
+    const index = previous.findIndex((h) => h.record.id === id);
+    const removed = index >= 0 ? previous[index] : undefined;
     // Optimistic remove from in-memory state.
     setHighlights((prev) => prev.filter((h) => h.record.id !== id));
     try {
       await deleteHighlightFromStore(id);
       callbacksRef.current.onStatusAnnounce?.("Highlight deleted.");
     } catch (e) {
+      if (removed !== undefined) {
+        setHighlights((prev) => {
+          // A rollback is only meaningful while the entry is still absent
+          // (a superseding create may already have re-populated the list).
+          if (prev.some((h) => h.record.id === id)) return prev;
+          const next = prev.slice();
+          next.splice(Math.min(index, next.length), 0, removed);
+          return next;
+        });
+      }
       const reason = classifyStorageError(e);
       setStorageState(reason);
       callbacksRef.current.onStorageError?.(reason);
+      throw e;
     }
   }, []);
 

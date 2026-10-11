@@ -197,3 +197,108 @@ test.describe("ANNO-03 delete confirm (05-05)", () => {
     expect(noteCount, "note cascade-deleted with the span (atomic)").toBe(0);
   });
 });
+
+// ── Issue #174 — deletion proportional to the written content removed ────────
+
+test.describe("Issue #174 — no-note highlights delete immediately (reading mode)", () => {
+  test.beforeEach(async ({ page }) => {
+    await wipeDatabase(page);
+  });
+
+  test("a no-note highlight deletes immediately via the keyboard — focus stays near the passage", async ({
+    page,
+  }) => {
+    await openArticle(page, FIXTURE);
+    const blockIdx = await findFirstBlockWithText(page, 24);
+    expect(blockIdx).not.toBe(-1);
+    await selectRangeInBlock(page, blockIdx, 0, 18);
+    // N creates the highlight and opens the editor; the reader types NO note
+    // and closes with Done — the highlight stays note-less.
+    await page.keyboard.press("n");
+    await page.locator("#highlight-popover .highlight-popover-done").click();
+    const mark = page.locator("mark.highlight").first();
+    await expect(mark).toBeVisible();
+    const hlId = await mark.getAttribute("data-highlight-id");
+    expect(hlId).toBeTruthy();
+
+    // The passage block hosting the mark — the expected post-delete focus
+    // target (the mark itself unmounts; its block survives).
+    const markBlockIndex = await mark.evaluate(
+      (el) => el.closest("[data-block-index]")?.getAttribute("data-block-index") ?? null,
+    );
+    expect(markBlockIndex).not.toBeNull();
+
+    // KEYBOARD path: focus the mark, Enter opens the editor, Enter on Delete
+    // (step 1) deletes — no confirm step is reachable without a note.
+    await mark.focus();
+    await page.keyboard.press("Enter");
+    await expect(page.locator("#highlight-popover")).toBeVisible();
+    await page.locator("#highlight-popover .highlight-popover-delete").focus();
+    await page.keyboard.press("Enter");
+
+    // No confirm prompt ever mounted; the mark + its Dexie row are gone.
+    await expect(page.locator("#highlight-popover .highlight-popover-confirm")).toHaveCount(0);
+    await expect(page.locator(`mark.highlight[data-highlight-id="${hlId}"]`)).toHaveCount(0);
+    await expect(announcementRegion(page)).toContainText(/Highlight deleted/i);
+
+    // Focus restored NEAR the passage: the deleted mark's own block — never
+    // dropped to <body> (the article top).
+    const focus = await page.evaluate(() => {
+      const el = document.activeElement as HTMLElement | null;
+      return {
+        isBody: el === document.body,
+        blockIndex: el?.getAttribute?.("data-block-index") ?? null,
+      };
+    });
+    expect(focus.isBody, "focus must not drop to the article top").toBe(false);
+    expect(focus.blockIndex, "focus lands on the passage block").toBe(markBlockIndex);
+  });
+
+  test("a whitespace-only note counts as no note — immediate delete, no confirm", async ({
+    page,
+  }) => {
+    await openArticle(page, FIXTURE);
+    const blockIdx = await findFirstBlockWithText(page, 24);
+    expect(blockIdx).not.toBe(-1);
+    await selectRangeInBlock(page, blockIdx, 0, 18);
+    await page.keyboard.press("n");
+    // Whitespace-only commentary: stored (the D5-10 length>0 policy is
+    // unchanged) but it gates nothing — there is no written content to lose.
+    await page.locator("textarea.highlight-popover-textarea").fill("   ");
+    await page.locator("#highlight-popover .highlight-popover-done").click();
+    await expect(page.locator("mark.highlight").first()).toBeVisible();
+
+    await page.locator("mark.highlight").first().click();
+    await page.locator("#highlight-popover .highlight-popover-delete").click();
+
+    await expect(page.locator("#highlight-popover .highlight-popover-confirm")).toHaveCount(0);
+    await expect(page.locator("mark.highlight")).toHaveCount(0);
+    await expect(announcementRegion(page)).toContainText(/Highlight deleted/i);
+  });
+
+  test("a nonempty note still routes through the confirm (Keep default, cascade-honest copy)", async ({
+    page,
+  }) => {
+    await openArticle(page, FIXTURE);
+    const blockIdx = await findFirstBlockWithText(page, 24);
+    expect(blockIdx).not.toBe(-1);
+    await selectRangeInBlock(page, blockIdx, 0, 18);
+    await page.keyboard.press("n");
+    await page.locator("textarea.highlight-popover-textarea").fill("Worth a confirmation.");
+    await page.locator("#highlight-popover .highlight-popover-done").click();
+    await expect(page.locator("mark.highlight").first()).toBeVisible();
+
+    await page.locator("mark.highlight").first().click();
+    await page.locator("#highlight-popover .highlight-popover-delete").click();
+    // The confirm step appears with the cascade-honest line + Keep focus.
+    await expect(page.locator("#highlight-popover .highlight-popover-confirm")).toBeVisible();
+    await expect(page.locator("#highlight-popover .highlight-popover-confirm")).toContainText(
+      "The note attached to it will also be removed.",
+    );
+    await expect(page.locator("#highlight-popover [data-initial-focus]")).toBeFocused();
+    // Keep → nothing deleted.
+    await page.locator("#highlight-popover [data-initial-focus]").click();
+    await expect(page.locator("#highlight-popover .highlight-popover-confirm")).toHaveCount(0);
+    await expect(page.locator("mark.highlight").first()).toBeVisible();
+  });
+});

@@ -30,6 +30,12 @@
 //   6. Proceed: row + note gone without reload, "Highlight removed."
 //      announced in the role=status region, Dexie truth via reload.
 //
+// Issue #174 — deletion proportional to the written content removed (the
+// last two tests): a note-less row (and a WHITESPACE-ONLY note row) removes
+// IMMEDIATELY from the Remove click — no dialog — with the focus handoff to
+// a neighboring row; a nonempty note keeps the confirm dialog (the corpus's
+// third row carries the whitespace-only note and renders no preview).
+//
 // Harness discipline (the two 10-03 e2e-harness fixes, reused): the
 // schema-declaring reload after wipeDatabase (Dexie re-declares v4 before
 // seedRows' raw indexedDB.open) + seed-then-hash-navigate. page.reload()
@@ -61,6 +67,9 @@ const GHOST_ARTICLE_ID = "ghost-article";
 
 const HL_NOTED_ID = "hl-curate-noted";
 const HL_ORPHAN_ID = "hl-curate-orphan";
+// Issue #174 — a third row whose note is WHITESPACE-ONLY: treated as absent
+// (no preview, immediate removal) without deleting the stored bytes.
+const HL_BLANK_NOTE_ID = "hl-curate-blank";
 
 const ORIGINAL_NOTE = "Seeded marginalia comparing the two tower clocks.";
 const REVISED_NOTE = "Revised after the foundry's reply arrived.";
@@ -82,17 +91,19 @@ const ARTICLE = makeArticle({
 });
 
 // Confident anchors derived + verified through the SHIPPED selector
-// machinery at seed time, at deliberately different depths so the two rows
+// machinery at seed time, at deliberately different depths so the rows
 // are always distinguishable by excerpt.
 const ANCHOR_NOTED = confidentHighlightOn(ARTICLE, { start: 8 });
 const ANCHOR_ORPHAN = confidentHighlightOn(ARTICLE, { start: 190 });
+const ANCHOR_BLANK = confidentHighlightOn(ARTICLE, { start: 100 });
 const EXCERPT_NOTED = ANCHOR_NOTED.quote.exact;
 const EXCERPT_ORPHAN = ANCHOR_ORPHAN.quote.exact;
+const EXCERPT_BLANK = ANCHOR_BLANK.quote.exact;
 
 // Corpus-construction invariant (fail at import time, before any browser
-// work): the two rows must remain distinguishable by their quotes.
-if (EXCERPT_NOTED === EXCERPT_ORPHAN) {
-  throw new Error("corpus invariant: noted/orphan excerpts must be distinct");
+// work): the rows must remain distinguishable by their quotes.
+if (EXCERPT_NOTED === EXCERPT_ORPHAN || EXCERPT_NOTED === EXCERPT_BLANK || EXCERPT_BLANK === EXCERPT_ORPHAN) {
+  throw new Error("corpus invariant: noted/orphan/blank excerpts must be distinct");
 }
 
 const NOTE_NOTED = {
@@ -103,13 +114,22 @@ const NOTE_NOTED = {
   updatedAt: "2026-08-14T09:00:00.000Z",
 };
 
+const NOTE_BLANK = {
+  schemaVersion: 1,
+  id: "note-curate-blank",
+  highlightId: HL_BLANK_NOTE_ID,
+  text: "   ",
+  updatedAt: "2026-08-14T09:00:00.000Z",
+};
+
 const CORPUS_ROWS: SeedRows = {
   articles: [ARTICLE],
   highlights: [
     highlightRow(ARTICLE_ID, ANCHOR_NOTED, HL_NOTED_ID),
     highlightRow(GHOST_ARTICLE_ID, ANCHOR_ORPHAN, HL_ORPHAN_ID),
+    highlightRow(ARTICLE_ID, ANCHOR_BLANK, HL_BLANK_NOTE_ID),
   ],
-  notes: [NOTE_NOTED],
+  notes: [NOTE_NOTED, NOTE_BLANK],
 };
 
 test.beforeEach(async ({ page }) => {
@@ -316,5 +336,51 @@ test.describe("RECV-01.f review-panel curate (10-05 in-place edit + delete)", ()
     await expect(page.getByRole("heading", { level: 1, name: "Highlights" })).toBeVisible();
     await expect(rowByExcerpt(page, EXCERPT_NOTED)).toHaveCount(0);
     await expect(rowByExcerpt(page, EXCERPT_ORPHAN)).toBeVisible();
+  });
+
+  // ── Issue #174 — deletion proportional to the written content removed ─────
+
+  test("issue #174: a note-less row removes immediately — no confirm, focus lands on a neighboring row", async ({
+    page,
+  }) => {
+    await seedAndOpenReview(page);
+
+    await page.getByRole("button", { name: `Remove highlight: ${EXCERPT_ORPHAN}` }).click();
+
+    // No confirm dialog — the write ran directly from the Remove click.
+    await expect(page.getByRole("alertdialog")).toHaveCount(0);
+    await expect(rowByExcerpt(page, EXCERPT_ORPHAN)).toHaveCount(0);
+    await expect(page.locator("main > [role='status']")).toContainText("Highlight removed.");
+
+    // The removed row's own button unmounted, so focus lands on a
+    // NEIGHBORING row's Remove button (the same cluster position) — never
+    // dropped to the document top.
+    const focus = await page.evaluate(() => {
+      const el = document.activeElement as HTMLElement | null;
+      return {
+        isRemoveButton: el?.classList.contains("review-row-action-remove") ?? false,
+        rowText: el?.closest("li.review-item")?.textContent ?? null,
+      };
+    });
+    expect(focus.isRemoveButton, "focus lands on a neighboring Remove button").toBe(true);
+    expect(focus.rowText, "never the removed row").not.toContain(EXCERPT_ORPHAN);
+  });
+
+  test("issue #174: a whitespace-only note shows no preview and removes immediately", async ({
+    page,
+  }) => {
+    await seedAndOpenReview(page);
+
+    const blankRow = rowByExcerpt(page, EXCERPT_BLANK);
+    await expect(blankRow).toBeVisible();
+    // Whitespace-only commentary is treated as absent — no preview renders.
+    await expect(blankRow.locator(".review-note-preview")).toHaveCount(0);
+
+    await page.getByRole("button", { name: `Remove highlight: ${EXCERPT_BLANK}` }).click();
+
+    // No confirm step — whitespace-only commentary gates nothing.
+    await expect(page.getByRole("alertdialog")).toHaveCount(0);
+    await expect(blankRow).toHaveCount(0);
+    await expect(page.locator("main > [role='status']")).toContainText("Highlight removed.");
   });
 });

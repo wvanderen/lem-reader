@@ -29,7 +29,8 @@ import {
   useHighlightOverlay,
 } from "../../../src/reader/annotations/HighlightOverlay";
 import { NotePopover } from "../../../src/reader/annotations/NotePopover";
-import { saveNote } from "../../../src/persistence/notesStore";
+import { saveNote, loadNote } from "../../../src/persistence/notesStore";
+import { deleteHighlight as deleteHighlightFromStore } from "../../../src/persistence/highlightsStore";
 import type { CanonicalArticle } from "../../../src/content/types";
 import type { Block } from "../../../src/content/types";
 
@@ -296,6 +297,136 @@ describe("NotePopover — native <dialog> + two-step delete confirm (D5-10/D5-12
     // proven: updateNote was called (the value changed), which internally
     // schedules the debounced saveNote. The dual-event flush + Done-button
     // flush are verified by the provider contract.
+  });
+});
+
+// ── Issue #174 — deletion proportional to the written content removed ───────
+
+describe("NotePopover — delete gating (issue #174: no note deletes immediately)", () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("deletes a NO-NOTE highlight immediately — no confirm step, popover closes", async () => {
+    // A highlight without a NoteRecord (loadNote → null).
+    vi.mocked(loadNote).mockResolvedValueOnce(null);
+    render(
+      <HighlightOverlayProvider article={article}>
+        <PopoverOpener highlightId="hl-test-1" />
+        <NotePopover />
+      </HighlightOverlayProvider>,
+    );
+
+    await screen.findByPlaceholderText("Add a note (optional)");
+
+    // Click Delete → the write fires directly (no "Delete this highlight?"
+    // prompt ever mounts).
+    await act(async () => {
+      fireEvent.click(screen.getByText("Delete"));
+    });
+
+    expect(deleteHighlightFromStore).toHaveBeenCalledWith("hl-test-1");
+    expect(screen.queryByText("Delete this highlight?")).toBeNull();
+    // The popover closed (edit view unmounted).
+    expect(screen.queryByPlaceholderText("Add a note (optional)")).toBeNull();
+  });
+
+  it("treats a WHITESPACE-ONLY note as no note — deletes immediately", async () => {
+    vi.mocked(loadNote).mockResolvedValueOnce(null);
+    render(
+      <HighlightOverlayProvider article={article}>
+        <PopoverOpener highlightId="hl-test-1" />
+        <NotePopover />
+      </HighlightOverlayProvider>,
+    );
+
+    const textarea = (await screen.findByPlaceholderText("Add a note (optional)")) as HTMLTextAreaElement;
+    // The reader typed whitespace only — nothing written to lose.
+    await act(async () => {
+      fireEvent.change(textarea, { target: { value: "   " } });
+    });
+    expect(textarea.value).toBe("   ");
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Delete"));
+    });
+
+    expect(deleteHighlightFromStore).toHaveBeenCalledWith("hl-test-1");
+    expect(screen.queryByText("Delete this highlight?")).toBeNull();
+    expect(screen.queryByPlaceholderText("Add a note (optional)")).toBeNull();
+  });
+
+  it("still confirms for a NONEMPTY note, with Keep as the safe default", async () => {
+    render(
+      <HighlightOverlayProvider article={article}>
+        <PopoverOpener highlightId="hl-test-1" />
+        <NotePopover />
+      </HighlightOverlayProvider>,
+    );
+
+    await screen.findByPlaceholderText("Add a note (optional)");
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Delete"));
+    });
+
+    // The two-step confirm appears; the write has NOT fired yet.
+    expect(deleteHighlightFromStore).not.toHaveBeenCalled();
+    expect(screen.getByText("Delete this highlight?")).toBeTruthy();
+    expect(screen.getByText("The note attached to it will also be removed.")).toBeTruthy();
+    expect(screen.getByText("Keep").getAttribute("data-initial-focus")).not.toBeNull();
+  });
+
+  it("a failed delete keeps the popover OPEN with the inline failure line (content stays)", async () => {
+    vi.mocked(deleteHighlightFromStore).mockRejectedValueOnce(new Error("quota"));
+    render(
+      <HighlightOverlayProvider article={article}>
+        <PopoverOpener highlightId="hl-test-1" />
+        <NotePopover />
+      </HighlightOverlayProvider>,
+    );
+
+    await screen.findByPlaceholderText("Add a note (optional)");
+
+    // Noted highlight → confirm view → destructive Delete → rejection.
+    await act(async () => {
+      fireEvent.click(screen.getByText("Delete"));
+    });
+    const confirmDelete = screen
+      .getAllByText("Delete")
+      .find((btn) => btn.classList.contains("highlight-popover-destructive"));
+    expect(confirmDelete).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(confirmDelete!);
+    });
+
+    // Honest failure: the popover STAYS OPEN in the confirm view (never a
+    // close that implies success), the calm inline line renders, and the
+    // retry affordance remains.
+    expect(screen.getByText("Couldn't delete this highlight. Try again.")).toBeTruthy();
+    expect(screen.getByText("Delete this highlight?")).toBeTruthy();
+    expect(screen.getByText("Keep")).toBeTruthy();
+  });
+
+  it("a failed NO-NOTE delete also keeps the popover open (immediate path)", async () => {
+    vi.mocked(loadNote).mockResolvedValueOnce(null);
+    vi.mocked(deleteHighlightFromStore).mockRejectedValueOnce(new Error("quota"));
+    render(
+      <HighlightOverlayProvider article={article}>
+        <PopoverOpener highlightId="hl-test-1" />
+        <NotePopover />
+      </HighlightOverlayProvider>,
+    );
+
+    await screen.findByPlaceholderText("Add a note (optional)");
+
+    await act(async () => {
+      fireEvent.click(screen.getByText("Delete"));
+    });
+
+    expect(screen.getByText("Couldn't delete this highlight. Try again.")).toBeTruthy();
+    expect(screen.getByPlaceholderText("Add a note (optional)")).toBeTruthy();
+    expect(screen.queryByText("Delete this highlight?")).toBeNull();
   });
 });
 

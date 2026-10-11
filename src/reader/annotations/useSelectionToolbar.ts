@@ -215,7 +215,11 @@ export function useSelectionToolbar({
   const handleUndo = useCallback(() => {
     const current = savedRef.current;
     if (!current) return;
-    void highlightApiRef.current?.deleteHighlight(current.id);
+    // Issue #174 — deleteHighlight RETHROWS after routing a failed write to
+    // StorageBanner (the optimistic removal rolls back, so the just-created
+    // mark stays); the no-op catch keeps the fire-and-forget undo path from
+    // turning that routed error into an unhandled rejection.
+    void highlightApiRef.current?.deleteHighlight(current.id)?.catch(() => {});
     dismissFromFocusExit();
   }, [highlightApiRef, dismissFromFocusExit]);
 

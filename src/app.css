@@ -1046,6 +1046,21 @@ a:hover {
   p {
   margin-block: 0;
 }
+/* Issue #174 — the note popover hosts its own delete-failure line (the same
+   inline-line register). DIRECT-CHILD scoping only: the popover also nests
+   the TagEntry + HighlightColorEntry regions, which keep their own register
+   — the > combinator leaves those untouched. The confirm view's region sits
+   one level deeper (inside .highlight-popover-confirm), so both hosts join
+   the :is(). */
+:is(dialog.highlight-popover, .highlight-popover-confirm) > .status {
+  margin-block: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+}
+:is(dialog.highlight-popover, .highlight-popover-confirm) > .status p {
+  margin-block: 0 var(--space-sm);
+}
 
 /* Issue #98 — the unified in-flight register: a busy .btn shows the wait
    cursor; its glyph (the SpinnerIcon arc when the component swaps it in)

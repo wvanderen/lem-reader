@@ -107,7 +107,13 @@ export interface HighlightOverlayValue {
    * hints on every selection change without persisting anything.
    */
   captureCurrentSelection: (readingRoot: HTMLElement) => ToolbarCaptureResult;
-  /** Delete a highlight + cascade-delete its note (D5-12). */
+  /**
+   * Delete a highlight + cascade-delete its note (D5-12). Issue #174 failure
+   * contract: on a failed write the in-memory removal rolls back, the error
+   * routes to StorageBanner, and the error RETHROWS — modal hosts keep
+   * themselves open with an inline failure line; fire-and-forget callers
+   * attach a no-op catch.
+   */
   deleteHighlight: (id: string) => Promise<void>;
   /**
    * Update the note attached to a highlight. In-memory state updates
