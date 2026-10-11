@@ -427,9 +427,10 @@ export function ReviewView({
   // moves to the FOLLOWING row's Remove button (else the preceding row's) —
   // the removed row's own button unmounts, so a trigger restore would
   // silently drop focus.
-  const removedRowNeighborsRef = useRef<{ after: HTMLElement | null; before: HTMLElement | null }>(
-    { after: null, before: null },
-  );
+  const removedRowNeighborsRef = useRef<{ after: HTMLElement | null; before: HTMLElement | null }>({
+    after: null,
+    before: null,
+  });
   // Issue #119 — the row whose color is being edited (null = dialog closed).
   // Like notes, color is keyed to highlightId alone, so the dialog opens for
   // ANY row — ambiguous and orphan-tail rows included.

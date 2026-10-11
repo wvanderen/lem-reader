@@ -273,9 +273,7 @@ export function DeleteHighlightConfirm({
         {/* Issue #98 — the honest-failure line. Always-mounted StatusRegion
             (a live region must pre-exist to announce); idle it renders no
             children and paints nothing (the shared dialog :empty rules). */}
-        <StatusRegion>
-          {writeError && <p>{HIGHLIGHT_REMOVE_FAILED_COPY}</p>}
-        </StatusRegion>
+        <StatusRegion>{writeError && <p>{HIGHLIGHT_REMOVE_FAILED_COPY}</p>}</StatusRegion>
         <div className="dialog-actions library-remove-confirm-actions">
           {/* Destructive action — Pitfall 8: deleteHighlight fires ONLY in
               onDestructiveClick above. The button label names the action

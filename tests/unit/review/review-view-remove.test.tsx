@@ -44,7 +44,11 @@ import { HIGHLIGHT_REMOVE_FAILED_COPY } from "../../../src/routes/review/DeleteH
 import { invalidateLibrarySnapshot } from "../../../src/ingestion/library/librarySnapshot";
 import { deleteHighlight } from "../../../src/persistence/highlightsStore";
 import { useLibrarySnapshot } from "../../../src/ingestion/library/useLibrarySnapshot";
-import { ArticleSchema, HighlightRecordSchema, NoteRecordSchema } from "../../../src/content/schema";
+import {
+  ArticleSchema,
+  HighlightRecordSchema,
+  NoteRecordSchema,
+} from "../../../src/content/schema";
 import type { CanonicalArticle, HighlightRecord, NoteRecord } from "../../../src/content/schema";
 import {
   deriveQuoteSelector,

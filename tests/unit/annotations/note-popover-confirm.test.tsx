@@ -340,7 +340,9 @@ describe("NotePopover — delete gating (issue #174: no note deletes immediately
       </HighlightOverlayProvider>,
     );
 
-    const textarea = (await screen.findByPlaceholderText("Add a note (optional)")) as HTMLTextAreaElement;
+    const textarea = (await screen.findByPlaceholderText(
+      "Add a note (optional)",
+    )) as HTMLTextAreaElement;
     // The reader typed whitespace only — nothing written to lose.
     await act(async () => {
       fireEvent.change(textarea, { target: { value: "   " } });

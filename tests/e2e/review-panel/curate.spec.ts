@@ -107,7 +107,11 @@ const EXCERPT_BLANK = ANCHOR_BLANK.quote.exact;
 
 // Corpus-construction invariant (fail at import time, before any browser
 // work): the rows must remain distinguishable by their quotes.
-if (EXCERPT_NOTED === EXCERPT_ORPHAN || EXCERPT_NOTED === EXCERPT_BLANK || EXCERPT_BLANK === EXCERPT_ORPHAN) {
+if (
+  EXCERPT_NOTED === EXCERPT_ORPHAN ||
+  EXCERPT_NOTED === EXCERPT_BLANK ||
+  EXCERPT_BLANK === EXCERPT_ORPHAN
+) {
   throw new Error("corpus invariant: noted/orphan/blank excerpts must be distinct");
 }
 
