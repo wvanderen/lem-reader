@@ -54,10 +54,6 @@ const CANCEL_SETTLE_MS = 60;
  * stop honestly instead of faking playback (spike 0009 F4). */
 const FIRST_EVENT_STALL_MS = 3000;
 
-/** Consecutive failed utterances before playback gives up honestly (one
- * failed chunk may be a token blip; a failing queue is a dead engine). */
-const MAX_CONSECUTIVE_ERRORS = 3;
-
 /** Issue #167 — the honest failure copy, exported LIVE so the suites assert
  * the exact strings (one rename site, like FOLLOW_LABELS). Startup names
  * the voice as the first thing to try (the bar's Retry + Voice picker sit
@@ -130,7 +126,6 @@ export class ReadAloudEngine {
    * starts ARE re-reported (a chunk-start passage refresh after the previous
    * chunk's zero-width end sentinel), only backward starts are dropped. */
   private lastSpokenStart = -1;
-  private consecutiveErrors = 0;
   private stallTimer: ReturnType<typeof setTimeout> | null = null;
   /** A cancelled utterance needs a fresh queue, including throughout probing. */
   private requeueTimer: ReturnType<typeof setTimeout> | null = null;
@@ -215,7 +210,6 @@ export class ReadAloudEngine {
     this.nextChunkIndex = startIndex;
     this.lastReported = -1;
     this.lastSpokenStart = -1;
-    this.consecutiveErrors = 0;
     this.spokenThisSession = false;
     this.setState("playing");
     this.probe(generation);
@@ -268,7 +262,7 @@ export class ReadAloudEngine {
     // The queued chunk may still be waiting behind the frozen probe — re-arm
     // the first-event watchdog now that the queue is moving again.
     if (this.chunkQueuedUnstarted) {
-      this.armStallTimer(this.generation, () => this.stallFail(this.generation));
+      this.armStallTimer(this.generation, () => this.failSpeech(this.generation));
     }
   }
 
@@ -440,7 +434,6 @@ export class ReadAloudEngine {
     this.adapter.cancel();
     this.lastReported = -1;
     this.lastSpokenStart = -1;
-    this.consecutiveErrors = 0;
     this.probeUnresolved = false;
     this.probeHandoffPending = false;
     this.chunkQueuedUnstarted = false;
@@ -625,14 +618,14 @@ export class ReadAloudEngine {
     this.speakNext(generation);
   }
 
-  /** The shared honest-stall verdict: speech that never produced an event is
-   * a START failure; a stall after audible speech is a PLAYBACK failure. */
-  private stallFail(generation: number): void {
+  /** Errors and silent stalls share the same verdict: no speech evidence
+   * means a START failure; a failure after speech began is PLAYBACK. */
+  private failSpeech(generation: number, reason?: string): void {
     this.fail(
       generation,
       this.spokenThisSession
-        ? { message: PLAYBACK_FAILURE_MESSAGE, kind: "playback" }
-        : { message: START_FAILURE_MESSAGE, kind: "start" },
+        ? { message: PLAYBACK_FAILURE_MESSAGE, kind: "playback", reason }
+        : { message: START_FAILURE_MESSAGE, kind: "start", reason },
     );
   }
 
@@ -656,7 +649,6 @@ export class ReadAloudEngine {
     const advance = () => {
       if (this.isStale(generation) || this.state !== "playing") return;
       this.clearStallTimer();
-      this.consecutiveErrors = 0;
       this.spokenThisSession = true; // an end IS speech evidence (issue #167)
       this.chunkQueuedUnstarted = false;
       this.reportProgress(chunk.endGrapheme);
@@ -670,24 +662,14 @@ export class ReadAloudEngine {
     // Issue #167 — the utterance's error reason (the platform's own code)
     // flows through for diagnosis; the HONEST message is chosen by what the
     // reader can do next, not by the engine's internals.
-    const advanceAfterError = (reason?: string) => {
+    const failAfterError = (reason?: string) => {
       if (this.isStale(generation) || this.state !== "playing") return;
-      this.clearStallTimer();
-      this.chunkQueuedUnstarted = false;
-      this.consecutiveErrors += 1;
-      if (this.consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-        this.fail(generation, {
-          message: PLAYBACK_FAILURE_MESSAGE,
-          kind: "playback",
-          reason,
-        });
-        return;
-      }
-      this.nextChunkIndex += 1;
-      this.speakNext(generation);
+      // Never advance past an unheard passage. Retry starts from the last
+      // listened offset; a pre-start refusal uses the same verdict as a stall.
+      this.failSpeech(generation, reason);
     };
 
-    this.armStallTimer(generation, () => this.stallFail(generation));
+    this.armStallTimer(generation, () => this.failSpeech(generation));
     this.adapter.speak(
       { text: chunk.text, voiceURI: this.voiceURI, rate: this.rate, volume: 1 },
       {
@@ -719,7 +701,7 @@ export class ReadAloudEngine {
           if (range !== null) this.reportSpoken(range);
         },
         onend: advance,
-        onerror: advanceAfterError,
+        onerror: failAfterError,
       },
     );
     // Issue #167 — the chunk is queued (possibly behind the still-speaking

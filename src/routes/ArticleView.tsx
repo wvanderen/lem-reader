@@ -779,8 +779,9 @@ export function ArticleView({
       // turns save normally again. Issue #167 — a FAILED session has ended
       // (the bar keeps showing Retry), so manual navigation saves again
       // exactly as when stopped.
-      if (transportIsActive(readAloudStateRef.current)) return;
-      recordProgress(offset);
+      if (!transportIsActive(readAloudStateRef.current)) {
+        recordProgress(offset);
+      }
       // Plan 12-06 (D12-05): mirror the committed page state (the handle reads
       // from refs, so by the time this effect-scoped callback runs the values
       // are post-commit) so the chapter nav's first/last-page gating reacts to

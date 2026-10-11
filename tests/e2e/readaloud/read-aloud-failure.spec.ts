@@ -21,7 +21,7 @@
 // stub + openArticle (goto BASE + "Saved articles" wait + raw IndexedDB
 // clear-rows + the fake speech install).
 import { test, expect, type Page } from "@playwright/test";
-import { openArticle } from "./_harness";
+import { openArticle, playAndAwaitProbe } from "./_harness";
 import type { SpeechMode } from "./_speech";
 import { START_FAILURE_MESSAGE } from "../../../src/readaloud/engine";
 
@@ -121,8 +121,8 @@ test.describe("Issue #167 — the recoverable read-aloud failure", () => {
       w.__speechFire("end");
     });
 
-    // Chunks 2..4 auto-error (the dying engine) → the third consecutive
-    // error ends the session as a PLAYBACK failure with the saved-place
+    // Chunk 2 auto-errors (the dying engine); the first error ends
+    // the session as a PLAYBACK failure with the saved-place
     // copy — the startup copy would be dishonest here.
     await expect(bar.locator(".readaloud-failure")).toHaveText(
       "Read aloud stopped partway. Your place is saved — press Retry to continue from there.",
@@ -131,9 +131,9 @@ test.describe("Issue #167 — the recoverable read-aloud failure", () => {
     await expect(bar.getByRole("button", { name: "Retry" })).toBeVisible();
     await expect(bar.getByRole("button", { name: "Pause" })).toHaveCount(0);
 
-    // The queue that died: chunk 1 heard, chunks 2..4 refused.
+    // The queue that died: chunk 1 heard, chunk 2 refused.
     const before = audibleTexts(await spokenRecords(page));
-    expect(before.length).toBeGreaterThanOrEqual(4);
+    expect(before).toHaveLength(2);
 
     // The voice recovers; Retry resumes. The first retried chunk MUST be
     // the first UNHEARD one (chunk 2's text) — never a restart from the
@@ -153,3 +153,34 @@ test.describe("Issue #167 — the recoverable read-aloud failure", () => {
     expect(resumed[0]).toBe(before[1]); // chunk 2: the first failed-then-unheard chunk
   });
 });
+
+for (const state of ["playing", "paused"] as const) {
+  test(`final-page completion chrome follows manual turns while speech is ${state}`, async ({
+    page,
+  }) => {
+    await openArticle(page, "word");
+    await playAndAwaitProbe(page);
+    await page.evaluate(() => {
+      (window as unknown as { __speechFire: (event: string) => void }).__speechFire("start");
+    });
+    const bar = page.locator(".readaloud-bar");
+    if (state === "paused") await bar.getByRole("button", { name: "Pause" }).click();
+    const next = page.getByRole("button", { name: "Next page", exact: true });
+    const complete = page.getByRole("button", { name: "Mark read and close" });
+    await expect(next).toHaveAttribute("aria-disabled", "false");
+    await expect(complete).toHaveCount(0);
+    for (let turn = 0; turn < 100; turn += 1) {
+      if ((await next.getAttribute("aria-disabled")) === "true") break;
+      const previous = await page.locator(".page-indicator").textContent();
+      await next.click();
+      await expect(page.locator(".page-indicator")).not.toHaveText(previous!);
+    }
+    await expect(next).toHaveAttribute("aria-disabled", "true");
+    await expect(complete).toBeVisible();
+    await page.getByRole("button", { name: "Previous page", exact: true }).click();
+    await expect(complete).toHaveCount(0);
+    await expect(
+      bar.getByRole("button", { name: state === "playing" ? "Pause" : "Play", exact: true }),
+    ).toBeVisible();
+  });
+}

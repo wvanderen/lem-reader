@@ -14,8 +14,8 @@
 //   4. Transport: pause/resume/stop; stale events after stop/finish never
 //      advance a dead session (generation guard).
 //   5. Honest refusals: a silently-dropped speak (iOS gesture gating) trips
-//      the stall watchdog; three consecutive failed utterances fail the
-//      session — never an infinite speak/error loop.
+//      the stall watchdog; any playback error fails without skipping
+//      unheard passages.
 //   6. The failed state (issue #167): a detected failure lands "failed"
 //      (not stopped), carries its kind (start vs playback) and the
 //      platform's error reason, and plays like a fresh start (retry) from
@@ -1099,7 +1099,7 @@ describe("mapBoundaryRangeToCanonical — pure mapping truth table", () => {
 
 // ─── 5. honest refusals ──────────────────────────────────────────────────────
 
-describe("refusals — stall watchdog + error loop cap", () => {
+describe("refusals — stall watchdog + preserved error position", () => {
   it("a silently-dropped utterance (no events) fails honestly, never fake-playing", () => {
     const h = makeEngine();
     h.engine.play(0);
@@ -1112,25 +1112,29 @@ describe("refusals — stall watchdog + error loop cap", () => {
     expect(h.failures[0]).toEqual({ message: START_FAILURE_MESSAGE, kind: "start" });
   });
 
-  it("three consecutive failed utterances fail the session (no infinite loop)", () => {
+  it("a pre-start platform error fails at the unheard chunk with startup feedback", () => {
     const h = makeEngine();
-    h.engine.play(0);
-    h.adapter.last!.events.onboundary?.({ name: "word", charIndex: 0 });
-    vi.advanceTimersByTime(60);
-    // Every playback utterance errors before speaking — the third one ends
-    // the session as a PLAYBACK failure carrying the platform's reason.
-    h.adapter.last!.events.onerror?.("synthesis-failed");
-    h.adapter.last!.events.onerror?.("synthesis-failed");
-    h.adapter.last!.events.onerror?.("not-allowed");
-    expect(h.errors).toEqual([PLAYBACK_FAILURE_MESSAGE]);
+    playWordCapable(h);
+    const failed = h.adapter.last!;
+    failed.events.onerror?.("not-allowed");
     expect(h.engine.getState()).toBe("failed");
-    expect(h.failures[0]).toEqual({
-      message: PLAYBACK_FAILURE_MESSAGE,
-      kind: "playback",
-      reason: "not-allowed",
-    });
-    // Fewer than three consecutive errors keep going.
-    expect(h.adapter.spoken).toHaveLength(2 + 2); // probe + first + 2 retries
+    expect(h.failures).toEqual([
+      { message: START_FAILURE_MESSAGE, kind: "start", reason: "not-allowed" },
+    ]);
+    expect(h.adapter.spoken).toHaveLength(2); // probe + first chunk, no skipping
+    expect(h.progress).toEqual([]);
+    expect(h.finished).toBe(0);
+    failed.events.onend?.(); // late events cannot complete a failed passage
+    expect(h.finished).toBe(0);
+  });
+
+  it.each([1, 2])("errors in a %i-chunk article never falsely finish it", (count) => {
+    const h = makeEngine(makeChunks().slice(0, count));
+    playWordCapable(h);
+    h.adapter.last!.events.onerror?.("synthesis-failed");
+    expect(h.engine.getState()).toBe("failed");
+    expect(h.finished).toBe(0);
+    expect(h.progress).toEqual([]);
   });
 
   it("a silent stall AFTER working speech is a playback failure, never 'didn't start'", () => {
@@ -1148,17 +1152,30 @@ describe("refusals — stall watchdog + error loop cap", () => {
     expect(h.failures[0]).toEqual({ message: PLAYBACK_FAILURE_MESSAGE, kind: "playback" });
   });
 
-  it("an isolated error is skipped, not fatal", () => {
+  it("an isolated playback error preserves the listened offset and retries the unheard chunk", () => {
     const h = makeEngine();
-    h.engine.play(0);
-    h.adapter.last!.events.onboundary?.({ name: "word", charIndex: 0 });
-    vi.advanceTimersByTime(60);
-    h.adapter.last!.events.onerror?.(); // chunk 0 fails
-    expect(h.engine.getState()).toBe("playing");
-    expect(h.adapter.last!.request.text).toBe("Three four."); // chunk 1 next
-    h.adapter.last!.events.onend?.(); // chunk 1 speaks fine
+    playWordCapable(h);
+    h.adapter.last!.events.onend?.(); // first chunk heard, second queued
+    const failed = h.adapter.last!;
+    failed.events.onstart?.();
+    failed.events.onboundary?.({ name: "word", charIndex: 6 });
+    const listened = h.progress.at(-1)!;
+    const before = [...h.progress];
+    failed.events.onerror?.("synthesis-failed");
+    expect(h.engine.getState()).toBe("failed");
+    expect(h.failures[0]).toEqual({
+      message: PLAYBACK_FAILURE_MESSAGE,
+      kind: "playback",
+      reason: "synthesis-failed",
+    });
+    expect(h.progress).toEqual(before);
     expect(h.finished).toBe(0);
-    expect(h.adapter.last!.request.text).toBe("Six seven.");
+    expect(h.adapter.spoken).toHaveLength(3); // no third chunk queued
+    failed.events.onend?.();
+    expect(h.progress).toEqual(before);
+    h.engine.play(listened);
+    h.adapter.last!.events.onboundary?.({ name: "word", charIndex: 0 });
+    expect(h.adapter.last!.request.text).toBe(failed.request.text);
   });
 });
 
@@ -1298,12 +1315,11 @@ describe("failed state — recoverable, honest, inert to transport (issue #167)"
     h.engine.play(0);
     h.adapter.last!.events.onboundary?.({ name: "word", charIndex: 0 });
     vi.advanceTimersByTime(60);
-    // Chunk 1 speaks, then the reader pauses; the error loop cap still
-    // reports "playback" (speech WAS underway) after resume.
+    // Chunk 1 starts, then the reader pauses; an error after resume
+    // still reports "playback" because speech WAS underway.
+    h.adapter.last!.events.onstart?.();
     h.engine.pause();
     h.engine.resume();
-    h.adapter.last!.events.onerror?.();
-    h.adapter.last!.events.onerror?.();
     h.adapter.last!.events.onerror?.();
     expect(h.failures[0]?.kind).toBe("playback");
     expect(h.engine.getState()).toBe("failed");
