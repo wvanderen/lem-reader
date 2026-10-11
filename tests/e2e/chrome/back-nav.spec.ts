@@ -155,9 +155,14 @@ test("(d) keyboard: Back to library is Tab-reachable from the article top and En
     // → Library → Discover → Highlights → contents → tags → annotations →
     // mode → gear → back-to-library = 10 presses. The assertion's contract
     // (Tab-reachability in DOM order within a bounded walk) is unchanged —
-    // only the bound tracks the sanctioned anatomy.
+    // only the bound tracks the sanctioned anatomy. The unsupported-speech
+    // notice adds one dismiss button before the article when it is present.
+    const speechNoticeStops = await page
+      .getByRole("complementary", { name: "Read-aloud availability" })
+      .getByRole("button", { name: "Dismiss", exact: true })
+      .count();
     expect(
-      await tabWalkUntil(page, "button.back-to-library", 10),
+      await tabWalkUntil(page, "button.back-to-library", 10 + speechNoticeStops),
       "Tab from the skip link must reach Back to library in DOM order",
     ).toBe(true);
     // Enter while focused → history.back() (the in-app path) → library.
