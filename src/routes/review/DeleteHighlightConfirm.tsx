@@ -133,6 +133,21 @@ export function DeleteHighlightConfirm({
   // trigger restore (the deleted row's Remove button is unmounting).
   const removedSucceededRef = useRef(false);
 
+  // Latest-handler mirrors so BOTH listeners below can be registered ONCE
+  // (mount-only effect) and still call the CURRENT props at event time (the
+  // useSelectionToolbar event-time-ref discipline). Re-registering on every
+  // render (the former [onCancel, onRemovedClose] deps — onCancel is a fresh
+  // inline arrow per render) raced React's passive-effect pass, which runs
+  // ALL destroys before ALL creates: on the render where `open` flips false,
+  // the [open] effect's dlg.close() dispatched the close event AFTER the old
+  // listener was destroyed but BEFORE the new one existed — the event fired
+  // into the void, so the removed-close focus handoff (and every close path's
+  // trigger restore) silently never ran.
+  const onCancelRef = useRef(onCancel);
+  onCancelRef.current = onCancel;
+  const onRemovedCloseRef = useRef(onRemovedClose);
+  onRemovedCloseRef.current = onRemovedClose;
+
   // Sync the `open` prop with the underlying <dialog> state.
   useEffect(() => {
     const dlg = ref.current;
@@ -161,10 +176,12 @@ export function DeleteHighlightConfirm({
     }
   }, [open, resetWrite]);
 
-  // Register the `close` event listener (with cleanup). Restore focus to the
-  // captured trigger (Pitfall 1), and — when the close was ESC-originated
-  // (the open prop still says open) — route cleanup through onCancel so the
-  // parent's removeTarget resets on EVERY close path.
+  // Register the `close` + scrim-click listeners ONCE (mount-only — see the
+  // latest-handler mirrors above for why these must never re-register).
+  // Restore focus to the captured trigger (Pitfall 1), and — when the close
+  // was ESC-originated (the open prop still says open) — route cleanup
+  // through onCancel so the parent's removeTarget resets on EVERY close
+  // path.
   useEffect(() => {
     const dlg = ref.current;
     if (!dlg) return;
@@ -177,11 +194,11 @@ export function DeleteHighlightConfirm({
       // row is still there.
       if (removedSucceededRef.current) {
         removedSucceededRef.current = false;
-        onRemovedClose?.();
+        onRemovedCloseRef.current?.();
       } else {
         triggerRef.current?.focus();
       }
-      if (openRef.current) onCancel();
+      if (openRef.current) onCancelRef.current();
     };
     // A click whose target IS the dialog element itself is the dimmed
     // ::backdrop (padding: 0 + the .library-remove-confirm-inner wrapper
@@ -193,7 +210,7 @@ export function DeleteHighlightConfirm({
     // double-cancel). Never dlg.close() from here (the 09-06 wedge
     // lesson).
     const handleScrimClick = (e: MouseEvent) => {
-      if (e.target === dlg) onCancel();
+      if (e.target === dlg) onCancelRef.current();
     };
     dlg.addEventListener("close", handleClose);
     dlg.addEventListener("click", handleScrimClick);
@@ -201,7 +218,8 @@ export function DeleteHighlightConfirm({
       dlg.removeEventListener("close", handleClose);
       dlg.removeEventListener("click", handleScrimClick);
     };
-  }, [onCancel, onRemovedClose]);
+    // Mount-only: the handlers read the latest props through refs.
+  }, []);
 
   // ── PITFALL 8 LOAD-BEARING HANDLER ──────────────────────────────────────
   // The ONLY call site for `deleteHighlight` in the review feature. It lives

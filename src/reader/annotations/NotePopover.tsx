@@ -122,8 +122,11 @@ import { StatusRegion } from "../../ui/StatusRegion";
 const EXCERPT_MAX_CHARS = 200;
 
 /** Issue #174 — the honest-failure copy for a rejected delete (the
- * DeleteHighlightConfirm register: the dialog stays open, the highlight +
- * note stay visible, the reader can retry or close). */
+ *  DeleteHighlightConfirm register: the dialog stays open, the highlight +
+ *  note stay visible, the reader can retry or close). The verb deliberately
+ *  tracks THIS surface's button ("Delete") while the review panel's twin
+ *  constant tracks "Remove" — two surfaces, two action vocabularies; the
+ *  shape (calm retry line) is shared, the copy must not be. */
 const DELETE_FAILED_COPY = "Couldn't delete this highlight. Try again.";
 
 export function NotePopover(): React.ReactElement | null {
@@ -301,11 +304,11 @@ export function NotePopover(): React.ReactElement | null {
     return null;
   };
 
-  /** Step 2 confirm — and, since issue #174, ALSO the immediate no-note
-   *  delete path (the step-1 Delete button routes straight here when
-   *  hasNoteContent is false). Deletes the highlight + its note, then
-   *  closes. */
-  const handleDeleteConfirm = async () => {
+  /** Issue #174 — run the delete from EITHER entry point (the immediate
+   *  no-note step-1 click, or the step-2 confirm): capture the passage
+   *  block, run the write, route the honest failure / successful close.
+   *  Named for the DOING, not the step — both buttons call this. */
+  const performDelete = async () => {
     if (!openPopoverFor) return;
     // Capture the passage block BEFORE the optimistic removal unmounts the
     // <mark> (after the await, the mark is gone from the DOM).
@@ -371,7 +374,7 @@ export function NotePopover(): React.ReactElement | null {
               <button
                 type="button"
                 className="btn btn-destructive highlight-popover-destructive"
-                onClick={() => void handleDeleteConfirm()}
+                onClick={() => void performDelete()}
               >
                 Delete
               </button>
@@ -475,7 +478,7 @@ export function NotePopover(): React.ReactElement | null {
               <button
                 type="button"
                 className="btn btn-destructive highlight-popover-delete"
-                onClick={noteHasContent ? handleDeleteStart : () => void handleDeleteConfirm()}
+                onClick={noteHasContent ? handleDeleteStart : () => void performDelete()}
               >
                 Delete
               </button>

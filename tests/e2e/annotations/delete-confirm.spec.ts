@@ -20,6 +20,8 @@ import {
   switchMode,
   selectRangeBetweenBlocks,
   countHighlightsInDexie,
+  installHighlightDeleteSabotage,
+  failNextHighlightDelete,
 } from "./_fixtures";
 
 const FIXTURE = FIXTURES[0]!; // essay-long-form
@@ -300,5 +302,42 @@ test.describe("Issue #174 — no-note highlights delete immediately (reading mod
     await page.locator("#highlight-popover [data-initial-focus]").click();
     await expect(page.locator("#highlight-popover .highlight-popover-confirm")).toHaveCount(0);
     await expect(page.locator("mark.highlight").first()).toBeVisible();
+  });
+
+  test("a FAILED delete keeps the popover open with the failure line — the highlight stays (AC6 failure case)", async ({
+    page,
+  }) => {
+    // The honest-failure path end-to-end: the sabotage rejects the final
+    // IDB delete; the real Dexie/Dexie-transaction/useAnnotationState stack
+    // above it must roll back and surface the failure — never close the
+    // popover as if the delete landed.
+    await installHighlightDeleteSabotage(page);
+    // The wipe left the page at ${BASE}/ — the article goto below is then a
+    // SAME-DOCUMENT (hash-only) navigation, which injects no init scripts.
+    // Force one real document load so the sabotage wrapper exists.
+    await page.reload();
+    await openArticle(page, FIXTURE);
+    const blockIdx = await findFirstBlockWithText(page, 24);
+    expect(blockIdx).not.toBe(-1);
+    await selectRangeInBlock(page, blockIdx, 0, 18);
+    await page.keyboard.press("n");
+    await page.locator("#highlight-popover .highlight-popover-done").click();
+    await expect(page.locator("mark.highlight").first()).toBeVisible();
+
+    await page.locator("mark.highlight").first().click();
+    await expect(page.locator("#highlight-popover")).toBeVisible();
+    await failNextHighlightDelete(page);
+    await page.locator("#highlight-popover .highlight-popover-delete").click();
+
+    // Honest failure: the popover STAYS OPEN in the edit view with the calm
+    // inline line; the mark (and its Dexie row) survive for a retry.
+    await expect(page.locator("#highlight-popover .highlight-popover-confirm")).toHaveCount(0);
+    await expect(page.locator("#highlight-popover")).toContainText(
+      "Couldn't delete this highlight. Try again.",
+    );
+    await expect(page.locator("textarea.highlight-popover-textarea")).toBeVisible();
+    await expect(page.locator("mark.highlight")).toHaveCount(1);
+    // Never a success announcement.
+    await expect(announcementRegion(page)).not.toContainText(/Highlight deleted/i);
   });
 });

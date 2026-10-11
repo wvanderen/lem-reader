@@ -430,6 +430,55 @@ describe("NotePopover — delete gating (issue #174: no note deletes immediately
   });
 });
 
+describe("NotePopover — focus restores near the passage after delete (issue #174)", () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("a successful delete restores focus to the highlight's passage block (never the article top)", async () => {
+    vi.mocked(loadNote).mockResolvedValueOnce(null);
+    render(
+      <HighlightOverlayProvider article={article}>
+        {/* The visible reading surface fragment ArticleView renders: the
+            highlight's <mark> inside its [data-block-index] block. On a
+            successful delete the mark unmounts in the real reader — here the
+            static harness mark stays, but the captured focus target (the
+            BLOCK) is what the close path must move focus to. */}
+        <div data-block-index="7">
+          <p>
+            <mark className="highlight" data-highlight-id="hl-test-1" tabIndex={0}>
+              Hello
+            </mark>{" "}
+            world.
+          </p>
+        </div>
+        <PopoverOpener highlightId="hl-test-1" />
+        <NotePopover />
+      </HighlightOverlayProvider>,
+    );
+
+    await screen.findByPlaceholderText("Add a note (optional)");
+
+    // No-note highlight → the Delete click runs the immediate path.
+    await act(async () => {
+      fireEvent.click(screen.getByText("Delete"));
+    });
+
+    expect(deleteHighlightFromStore).toHaveBeenCalledWith("hl-test-1");
+
+    // Focus restored NEAR the passage: the deleted mark's containing block
+    // — not <body> (the article top), which the default trigger restore
+    // would have silently no-op'd into once the mark unmounts.
+    const block = document.querySelector<HTMLElement>('[data-block-index="7"]');
+    expect(block).not.toBeNull();
+    expect(block).toHaveFocus();
+    // The programmatic-focus discipline set tabindex="-1" on the block
+    // (blocks are not focusable by default) — the resolveTocDestination/
+    // settleFocus pattern.
+    expect(block?.getAttribute("tabindex")).toBe("-1");
+  });
+});
+
 describe("NotePopover — Cmd/Ctrl+Enter note save shortcut (PR 106)", () => {
   afterEach(() => {
     vi.clearAllMocks();

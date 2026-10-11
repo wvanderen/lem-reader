@@ -14,7 +14,7 @@
 // everything between the row button and the announcement is the REAL
 // component tree (ReviewRow → DeleteHighlightConfirm → useHonestWrite).
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { LibrarySnapshot } from "../../../src/ingestion/library/librarySnapshot";
 
@@ -234,5 +234,32 @@ describe("ReviewView removal routing (issue #174 — proportional delete)", () =
     expect(screen.queryByText("Highlight removed.")).toBeNull();
     // The row was NOT removed — no invalidation, nothing announced as saved.
     expect(invalidateLibrarySnapshot).not.toHaveBeenCalled();
+  });
+
+  it("confirm-path removal ALSO hands focus to the neighboring row's Remove button", async () => {
+    // The confirm path's focus handoff rides the SAME onRemovedClose →
+    // focusNearRemovedRow seam as the immediate path: a noted row is removed
+    // through DeleteHighlightConfirm, its trigger unmounts with the row, and
+    // focus must land on the surviving neighbor (never the unmounting
+    // trigger, never the document top).
+    const user = userEvent.setup();
+    vi.mocked(useLibrarySnapshot).mockReturnValue({
+      status: "ready",
+      snapshot: makeSnapshot([makeNote("hl-morning", "A note worth keeping.")]),
+    });
+    render(<ReviewView hasAppHistory={false} />);
+
+    await user.click(removeButton(MORNING));
+    const alert = screen.getByRole("alertdialog");
+    // The TL name string is exact by default — the dialog's destructive
+    // button ("Remove highlight") vs the row affordances ("Remove
+    // highlight: <excerpt>") outside it.
+    await user.click(within(alert).getByRole("button", { name: "Remove highlight" }));
+
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    expect(screen.getByText("Highlight removed.")).toBeTruthy();
+    // The neighbor handoff fired (evening row follows morning in the
+    // section; its Remove button is the nearest same-position control).
+    await waitFor(() => expect(removeButton(EVENING)).toHaveFocus());
   });
 });

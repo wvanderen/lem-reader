@@ -52,7 +52,12 @@
 // so the page region is scoped as a DIRECT child of main).
 import { test, expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
-import { BASE, wipeDatabase } from "../annotations/_fixtures";
+import {
+  BASE,
+  wipeDatabase,
+  installHighlightDeleteSabotage,
+  failNextHighlightDelete,
+} from "../annotations/_fixtures";
 import {
   confidentHighlightOn,
   highlightRow,
@@ -340,14 +345,18 @@ test.describe("RECV-01.f review-panel curate (10-05 in-place edit + delete)", ()
 
   // ── Issue #174 — deletion proportional to the written content removed ─────
 
-  test("issue #174: a note-less row removes immediately — no confirm, focus lands on a neighboring row", async ({
+  test("issue #174: a note-less row removes immediately via the KEYBOARD — no confirm, focus lands on a neighboring row", async ({
     page,
   }) => {
     await seedAndOpenReview(page);
 
-    await page.getByRole("button", { name: `Remove highlight: ${EXCERPT_ORPHAN}` }).click();
+    // The keyboard path (AC6 keyboard-focus case): focus the Remove button
+    // and press Enter — the same immediate-removal routing the click fires.
+    const removeBtn = page.getByRole("button", { name: `Remove highlight: ${EXCERPT_ORPHAN}` });
+    await removeBtn.focus();
+    await page.keyboard.press("Enter");
 
-    // No confirm dialog — the write ran directly from the Remove click.
+    // No confirm dialog — the write ran directly from the Remove activation.
     await expect(page.getByRole("alertdialog")).toHaveCount(0);
     await expect(rowByExcerpt(page, EXCERPT_ORPHAN)).toHaveCount(0);
     await expect(page.locator("main > [role='status']")).toContainText("Highlight removed.");
@@ -382,5 +391,53 @@ test.describe("RECV-01.f review-panel curate (10-05 in-place edit + delete)", ()
     await expect(page.getByRole("alertdialog")).toHaveCount(0);
     await expect(blankRow).toHaveCount(0);
     await expect(page.locator("main > [role='status']")).toContainText("Highlight removed.");
+  });
+
+  test("issue #174: a noted row removed through the confirm hands focus to a neighboring row's Remove button", async ({
+    page,
+  }) => {
+    await seedAndOpenReview(page);
+
+    await page.getByRole("button", { name: `Remove highlight: ${EXCERPT_NOTED}` }).click();
+    const alert = page.getByRole("alertdialog");
+    await expect(alert).toBeVisible();
+    await alert.getByRole("button", { name: "Remove highlight", exact: true }).click();
+    await expect(alert).toBeHidden();
+    await expect(rowByExcerpt(page, EXCERPT_NOTED)).toHaveCount(0);
+    await expect(page.locator("main > [role='status']")).toContainText("Highlight removed.");
+
+    // The same post-removal handoff as the immediate path (the deleted
+    // row's Remove button unmounts with it): focus lands on a NEIGHBORING
+    // row's Remove button, never the unmounting trigger, never the top.
+    const focus = await page.evaluate(() => {
+      const el = document.activeElement as HTMLElement | null;
+      return {
+        isRemoveButton: el?.classList.contains("review-row-action-remove") ?? false,
+        rowText: el?.closest("li.review-item")?.textContent ?? null,
+      };
+    });
+    expect(focus.isRemoveButton, "focus lands on a neighboring Remove button").toBe(true);
+    expect(focus.rowText, "never the removed row").not.toContain(EXCERPT_NOTED);
+  });
+
+  test("issue #174: a FAILED immediate removal announces the failure and keeps the row (AC6 failure case)", async ({
+    page,
+  }) => {
+    // The honest-failure path end-to-end: the sabotage rejects the final
+    // IDB delete; the real Dexie seam above it must report the failure
+    // through the page status region — never a success lie, never a lost row.
+    await installHighlightDeleteSabotage(page);
+    await seedAndOpenReview(page);
+
+    await failNextHighlightDelete(page);
+    await page.getByRole("button", { name: `Remove highlight: ${EXCERPT_ORPHAN}` }).click();
+
+    await expect(page.getByRole("alertdialog")).toHaveCount(0);
+    await expect(page.locator("main > [role='status']")).toContainText(
+      "Couldn't remove this highlight. Try again.",
+    );
+    // The row survives for a retry; nothing was announced as removed.
+    await expect(rowByExcerpt(page, EXCERPT_ORPHAN)).toBeVisible();
+    await expect(page.locator("main > [role='status']")).not.toContainText("Highlight removed.");
   });
 });
