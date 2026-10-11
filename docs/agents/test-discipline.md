@@ -27,3 +27,15 @@ Cap test-command timeouts at 15 minutes. A run that outlives the documented budg
 ## CI owns full-suite evidence when a PR is open
 
 The `e2e-reference` CI job runs the identical full suite on this same box for every PR. With a PR open, check `gh run list` before launching a local full suite: if CI is mid-run, a local full run doubles the contention for both and duplicates evidence. Keep local runs targeted and let the gate gather the full-suite result.
+
+## Firefox launch on macOS 27
+
+The pinned Playwright Firefox build still looks up the installed Firefox's
+app-data directory even with a temporary profile. macOS 27 can deny access to
+that directory, causing launch to hang before any test reaches the app
+([upstream report](https://github.com/microsoft/playwright/issues/42768)).
+`playwright.config.ts` gives Firefox alone a disposable CoreFoundation home
+under the system temporary directory via `CFFIXED_USER_HOME`. The browser
+binary, sandbox, profile isolation, and assertions remain unchanged. Remove
+this compatibility override after the pinned build includes and verifies the
+upstream fix (reported for Firefox 158).

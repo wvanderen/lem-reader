@@ -584,6 +584,9 @@ const ReaderSettingsObjectSchema = z.object({
   //     through the session probe + the stall watchdog as calm, honest
   //     refusals — never a fake "playing" state (spike 0009 F4). .default(1)
   //     hydrates v1/v2 rows (Pitfall 9, the readingMode mechanism above).
+  // Additive defaults hydrate older settings without changing their shape version.
+  showReadAloud: z.boolean().default(true),
+  speechNoticeDismissed: z.boolean().default(false),
   voice: z.string().min(1).optional(),
   rate: z.number().min(0.5).max(3).default(1),
   // Issue #115 — the library list sort preference (the v3 → v4 bump). The

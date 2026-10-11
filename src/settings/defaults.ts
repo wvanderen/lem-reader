@@ -30,6 +30,8 @@ export const DEFAULT_SETTINGS: ReaderSettings = {
   // stored value for the Warm paper theme, so persisted settings survive
   animatePageTurns: false,
   readingMode: "paginated", // D4-12 — paginated default per PROJECT.md
+  showReadAloud: true,
+  speechNoticeDismissed: false,
   voice: undefined, // read-aloud: the platform default voice
   rate: 1, // read-aloud: the 1× speech rate multiplier
   librarySort: "recently-added", // #115 — the shipped pre-control order (#114)

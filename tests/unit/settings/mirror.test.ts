@@ -29,7 +29,9 @@ import type { ReaderSettings } from "../../../src/content/schema";
  * precedent from round-trip.spec.ts L111-127). */
 const NON_DEFAULT: ReaderSettings = {
   librarySort: "recently-added", // issue #115 — the additive preference
-  openAfterAdd: true, // issue #163 — the remembered add-dialog checkbox
+  openAfterAdd: true,
+  showReadAloud: true,
+  speechNoticeDismissed: false, // issue #163 — the remembered add-dialog checkbox
   schemaVersion: 2,
   font: "sans",
   size: 22,

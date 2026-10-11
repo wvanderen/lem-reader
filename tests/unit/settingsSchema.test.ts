@@ -29,6 +29,8 @@ function validSettings(overrides: Record<string, unknown> = {}): unknown {
     rate: 1,
     librarySort: "recently-added",
     openAfterAdd: true,
+    showReadAloud: true,
+    speechNoticeDismissed: false,
     ...overrides,
   };
 }
@@ -520,7 +522,9 @@ describe("applyTheme writes :root tokens from validated settings", () => {
       readingMode: "paginated",
       rate: 1,
       librarySort: "recently-added",
-      openAfterAdd: true, // issue #163 — the remembered add-dialog checkbox
+      openAfterAdd: true,
+      showReadAloud: true,
+      speechNoticeDismissed: false, // issue #163 — the remembered add-dialog checkbox
     });
     const root = document.documentElement;
     expect(root.dataset.theme).toBe("dark");

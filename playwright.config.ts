@@ -1,9 +1,19 @@
+import { mkdirSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { defineConfig, devices } from "@playwright/test";
 import { BASE } from "./tests/e2e/_base";
 
 // The managed server and test requests must share the same port, including
 // the reference runner's override away from the development server.
 const serverPort = new URL(BASE).port || (new URL(BASE).protocol === "https:" ? "443" : "80");
+
+// macOS 27 protects the installed Firefox app-data directory. The bundled
+// browser still consults it despite its temporary -profile, hanging at launch.
+// Keep CoreFoundation's app-data home disposable and separate from the real
+// browser; only Firefox inherits this override (Playwright upstream #42768).
+const firefoxAppDataHome = join(tmpdir(), "lem-reader-playwright-firefox");
+if (process.platform === "darwin") mkdirSync(firefoxAppDataHome, { recursive: true });
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -34,7 +44,19 @@ export default defineConfig({
   use: { trace: "on-first-retry" },
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
-    { name: "firefox", use: { ...devices["Desktop Firefox"] } },
+    {
+      name: "firefox",
+      use: {
+        ...devices["Desktop Firefox"],
+        ...(process.platform === "darwin"
+          ? {
+              launchOptions: {
+                env: { ...process.env, CFFIXED_USER_HOME: firefoxAppDataHome },
+              },
+            }
+          : {}),
+      },
+    },
     { name: "webkit", use: { ...devices["Desktop Safari"] } },
     // ACPT-04 (D6-02): chromium-only throttled-mobile profile. CDP CPU +
     // network throttle is chromium-only (Pitfall 5 — firefox/webkit silently

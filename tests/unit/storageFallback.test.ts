@@ -40,7 +40,9 @@ const settingsPut = vi.mocked(db.settings.put);
 
 const validSettings: ReaderSettings = {
   librarySort: "recently-added", // issue #115 — the additive preference
-  openAfterAdd: true, // issue #163 — the remembered add-dialog checkbox
+  openAfterAdd: true,
+  showReadAloud: true,
+  speechNoticeDismissed: false, // issue #163 — the remembered add-dialog checkbox
   schemaVersion: 1,
   font: "sans",
   size: 20,

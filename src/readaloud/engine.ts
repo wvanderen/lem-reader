@@ -28,16 +28,21 @@ import type {
   FollowLevel,
   SpeechAdapter,
   SpeakRequest,
+  SpeechFailure,
   TransportState,
   UtteranceEvents,
 } from "./types";
+import { transportIsActive } from "./types";
 import type { SpeechChunk } from "./chunks";
 import type { GraphemeRange } from "../annotations/unifiedHighlightSlicer";
 
-/** Probe settings: short, two sentences, several words — enough for a voice
- * to demonstrate word boundaries, sentence boundaries, or neither. Silent
- * (volume 0): the probe must not make the reader listen to it. */
-const PROBE_TEXT = "Listen. One two three four five.";
+/** Probe settings: two short sentences — enough for a voice to demonstrate
+ * word boundaries, sentence boundaries, or neither. Silent (volume 0): the
+ * probe must not make the reader listen to it. Issue #167 — kept SHORT
+ * (~1.5s spoken): the first chunk queues BEHIND the probe (see
+ * probeUnresolved), so the probe's natural duration is the audible-start
+ * delay. */
+const PROBE_TEXT = "Hi. One two three.";
 const PROBE_TIMEOUT_MS = 2000;
 
 /** Settle delay after cancel() before the next speak() — the WebKit
@@ -49,9 +54,15 @@ const CANCEL_SETTLE_MS = 60;
  * stop honestly instead of faking playback (spike 0009 F4). */
 const FIRST_EVENT_STALL_MS = 3000;
 
-/** Consecutive failed utterances before playback gives up honestly (one
- * failed chunk may be a token blip; a failing queue is a dead engine). */
-const MAX_CONSECUTIVE_ERRORS = 3;
+/** Issue #167 — the honest failure copy, exported LIVE so the suites assert
+ * the exact strings (one rename site, like FOLLOW_LABELS). Startup names
+ * the voice as the first thing to try (the bar's Retry + Voice picker sit
+ * right there); playback names the saved place (the preserved position is
+ * what Retry resumes from — never silently past unread passages). */
+export const START_FAILURE_MESSAGE =
+  "Speech didn't start. Try a different voice, then press Retry.";
+export const PLAYBACK_FAILURE_MESSAGE =
+  "Read aloud stopped partway. Your place is saved — press Retry to continue from there.";
 
 export interface ReadAloudEngineCallbacks {
   onStateChange?(state: TransportState): void;
@@ -70,8 +81,12 @@ export interface ReadAloudEngineCallbacks {
   onSpokenRange?(range: GraphemeRange): void;
   /** The last chunk finished — the article was completed by ear. */
   onFinish?(): void;
-  /** Honest refusal (speech refused to start / queue failed). */
-  onError?(message: string): void;
+  /** Honest refusal (issue #167): the state lands on "failed" (not stopped)
+   * so the host can keep the transport open with Retry + voice selection.
+   * The SpeechFailure carries the kind (start vs playback) and — when one
+   * arrived — the platform's own error reason (diagnostics, never
+   * reader-facing copy). */
+  onError?(failure: SpeechFailure): void;
 }
 
 export interface ReadAloudEngineOptions {
@@ -111,11 +126,28 @@ export class ReadAloudEngine {
    * starts ARE re-reported (a chunk-start passage refresh after the previous
    * chunk's zero-width end sentinel), only backward starts are dropped. */
   private lastSpokenStart = -1;
-  private consecutiveErrors = 0;
   private stallTimer: ReturnType<typeof setTimeout> | null = null;
   /** A cancelled utterance needs a fresh queue, including throughout probing. */
   private requeueTimer: ReturnType<typeof setTimeout> | null = null;
-  private handoffPending = false;
+  /** Issue #167 — the probe utterance is IN FLIGHT (spoken, unresolved).
+   * From play() until it resolves the engine must NEVER cancel: Firefox/
+   * macOS permanently wedges the whole synthesizer when a cancel lands on
+   * an actively-synthesizing utterance (spike 0010 — in-page recovery
+   * impossible). While this is true, seek/skip/retune RETARGET the queued
+   * chunk instead of canceling, and pause freezes the queue. Only terminal
+   * paths (stop/fail) still cancel. */
+  private probeUnresolved = false;
+  /** Issue #167 — the probe resolved while PAUSED (the synth is frozen, so
+   * the chunk must not be queued into a frozen queue): resume() queues it. */
+  private probeHandoffPending = false;
+  /** The first chunk is queued but has produced NO event yet: resume() must
+   * re-arm the first-event watchdog (pause clears it — never fail while
+   * frozen), and the chunk's own events clear it. */
+  private chunkQueuedUnstarted = false;
+  /** A retune landed while the probe was in flight: the level the probe
+   * resolves describes the PREVIOUS voice, so the next re-probe must not be
+   * skipped. */
+  private probeRetuned = false;
   /** Issue #166 — a seek landed while PAUSED: the synthesizer holds the old
    * utterance, so resume() must REPLACE it with the seek target instead of
    * finishing the stale passage (the same shape as a paused retune). */
@@ -130,6 +162,13 @@ export class ReadAloudEngine {
    * across consecutive retunes (voice→rate, or rate caught mid-settle by a
    * pause): whichever path re-speaks first re-probes iff this is set. */
   private voiceRetunePending = false;
+  /** Issue #167 — whether THIS session has produced any evidence of speech
+   * actually underway (a start, a boundary, or a completed chunk). The
+   * stall watchdog reads it to classify a silent drop honestly: nothing
+   * ever spoken is a START failure; a drop after working speech is a
+   * PLAYBACK failure ("stopped partway"), never "Speech didn't start"
+   * minutes into an article. */
+  private spokenThisSession = false;
 
   constructor(options: ReadAloudEngineOptions) {
     this.adapter = options.adapter;
@@ -151,9 +190,12 @@ export class ReadAloudEngine {
 
   /**
    * Play from a canonical grapheme offset (the reader's current location).
-   * Paused → resume; playing → no-op; stopped → probe the voice, then speak
-   * the queue starting at the chunk containing the offset. An offset at or
-   * past the end restarts from the top (re-listening to a finished article).
+   * Paused → resume; playing → no-op; stopped OR FAILED → a fresh session
+   * probing and speaking the queue starting at the chunk containing the
+   * offset — "failed" is the retry shape (issue #167): a fresh start from
+   * the position the host hands in (the preserved listened offset). An
+   * offset at or past the end restarts from the top (re-listening to a
+   * finished article).
    */
   play(fromOffset: number): void {
     if (this.state === "playing") return;
@@ -168,20 +210,17 @@ export class ReadAloudEngine {
     this.nextChunkIndex = startIndex;
     this.lastReported = -1;
     this.lastSpokenStart = -1;
-    this.consecutiveErrors = 0;
+    this.spokenThisSession = false;
     this.setState("playing");
     this.probe(generation);
   }
 
   pause(): void {
     if (this.state !== "playing") return;
-    if (this.handoffPending) {
-      this.generation += 1;
-      this.clearStallTimer();
-      this.clearRequeueTimer();
-      this.adapter.cancel();
-      this.retunePending = true;
-    }
+    // Issue #167 — NO cancel, even while the probe is in flight: the synth
+    // freezes (probe + any queued chunk stay parked in the queue) and the
+    // first-event watchdog stops — never a failure while frozen.
+    this.clearStallTimer();
     this.adapter.pause();
     this.setState("paused");
   }
@@ -209,8 +248,22 @@ export class ReadAloudEngine {
       this.requeueCurrentPassage();
       return;
     }
+    // Issue #167 — the probe resolved while paused: unpause the synth (the
+    // probe resumes; the chunk follows it in the queue) and queue the chunk.
+    if (this.probeHandoffPending) {
+      this.probeHandoffPending = false;
+      this.adapter.resume();
+      this.setState("playing");
+      this.startPlayback(this.generation);
+      return;
+    }
     this.adapter.resume();
     this.setState("playing");
+    // The queued chunk may still be waiting behind the frozen probe — re-arm
+    // the first-event watchdog now that the queue is moving again.
+    if (this.chunkQueuedUnstarted) {
+      this.armStallTimer(this.generation, () => this.failSpeech(this.generation));
+    }
   }
 
   stop(): void {
@@ -236,6 +289,14 @@ export class ReadAloudEngine {
       return;
     }
     this.nextChunkIndex = startIndex;
+    // Issue #167 — while the probe is in flight the first chunk is only
+    // QUEUED, not speaking: retarget it and let the probe's resolve queue
+    // the right one. Canceling the live probe is the Firefox wedge.
+    if (this.probeUnresolved) {
+      this.lastReported = -1;
+      this.lastSpokenStart = -1;
+      return;
+    }
     this.requeueCurrentPassage();
   }
 
@@ -260,6 +321,9 @@ export class ReadAloudEngine {
     this.generation += 1;
     this.clearStallTimer();
     this.clearRequeueTimer();
+    this.probeHandoffPending = false;
+    this.probeUnresolved = false;
+    this.chunkQueuedUnstarted = false;
     this.pausedSeekPending = true;
     this.nextChunkIndex = startIndex;
     const chunk = this.chunks[startIndex]!;
@@ -277,10 +341,13 @@ export class ReadAloudEngine {
    * as a natural by-ear finish (stopped + onFinish — the host's ONE completion
    * contract: the finished announcement + the end-pin save). No wrap to the
    * top; the final progress/spoken emissions mirror a natural finish's last
-   * chunk advance. No-op while stopped.
+   * chunk advance. No-op while stopped or failed (issue #167 — a failed
+   * session does not fake a finish; Retry or Stop are the exits).
    */
   seekToEnd(): void {
-    if (this.state === "stopped") return;
+    // Issue #167 — a failed session does not fake a finish; Retry or Stop
+    // are the exits (the shared live-session guard).
+    if (!transportIsActive(this.state)) return;
     this.abortSession();
     // The end reports once, like a natural finish's last advance: progress at
     // the final chunk's end + the zero-width sentinel (marker clearing is the
@@ -306,7 +373,10 @@ export class ReadAloudEngine {
     this.retunePending = false;
     this.voiceRetunePending = false;
     this.pausedSeekPending = false;
-    this.handoffPending = false;
+    this.probeUnresolved = false;
+    this.probeHandoffPending = false;
+    this.chunkQueuedUnstarted = false;
+    this.probeRetuned = false;
     this.adapter.cancel();
   }
 
@@ -323,12 +393,23 @@ export class ReadAloudEngine {
    * restarts from its top — the same contract as the #43 skip transport.
    */
   retune(next: { voiceURI: string | null; rate: number }): void {
-    if (this.state === "stopped") return;
+    // Issue #167 — a FAILED session retunes nothing: the change persists in
+    // settings and the next play() (Retry) reads it fresh (the shared
+    // live-session guard).
+    if (!transportIsActive(this.state)) return;
     const voiceChanged = next.voiceURI !== this.voiceURI;
     const rateChanged = next.rate !== this.rate;
     if (!voiceChanged && !rateChanged) return;
     this.voiceURI = next.voiceURI;
     this.rate = next.rate;
+    // Issue #167 — while the probe is in flight the first chunk is only
+    // QUEUED: the new values apply when it queues (speakNext reads them)
+    // with NO cancel. The level the probe resolves describes the OLD voice,
+    // so the re-probe stays pending (probeRetuned keeps it alive).
+    if (this.probeUnresolved) {
+      this.probeRetuned = true;
+      return;
+    }
     // The flag ACCUMULATES: a voice change is unprobed until a probe
     // resolves for it, no matter how many rate-only retunes follow or
     // whether a pause catches the handoff mid-settle.
@@ -353,8 +434,10 @@ export class ReadAloudEngine {
     this.adapter.cancel();
     this.lastReported = -1;
     this.lastSpokenStart = -1;
-    this.consecutiveErrors = 0;
-    this.handoffPending = true;
+    this.probeUnresolved = false;
+    this.probeHandoffPending = false;
+    this.chunkQueuedUnstarted = false;
+    this.probeRetuned = false;
     this.scheduleHandoff(generation, reprobe);
   }
 
@@ -362,7 +445,15 @@ export class ReadAloudEngine {
     this.clearRequeueTimer();
     this.requeueTimer = setTimeout(() => {
       this.requeueTimer = null;
-      if (this.isStale(generation) || this.state !== "playing") return;
+      if (this.isStale(generation)) return;
+      // Issue #167 — pause() can land inside the settle window (the queue
+      // was ALREADY cancelled here, post-audible): resume must REQUEUE with
+      // fresh values — mark it, never speak while frozen.
+      if (this.state === "paused") {
+        this.retunePending = true;
+        return;
+      }
+      if (this.state !== "playing") return;
       if (reprobe) this.probe(generation);
       else this.startPlayback(generation);
     }, CANCEL_SETTLE_MS);
@@ -436,7 +527,9 @@ export class ReadAloudEngine {
    * monotonic floors reset so the marker may hop backward). False when the
    * session is stopped — nothing to skip. */
   private skipToChunk(target: SpeechChunk): boolean {
-    if (this.state === "stopped") return false;
+    // Issue #167 — "failed" is not a session: no skip transport out of a
+    // detected failure (Retry or Stop are the exits).
+    if (!transportIsActive(this.state)) return false;
     if (this.state === "paused") this.resume();
     this.seekTo(target.startGrapheme);
     return true;
@@ -455,11 +548,20 @@ export class ReadAloudEngine {
    * The per-voice calibration utterance (spike 0009 F3). Silent, short,
    * bounded: word boundary → word; sentence boundary then end → sentence;
    * end with neither → passage; nothing at all within the timer →
-   * progress-only. Every path converges on startPlayback().
+   * progress-only.
+   *
+   * Issue #167 — the probe is NEVER canceled. The first chunk QUEUES behind
+   * it and the synthesizer plays it when the probe completes naturally:
+   * Firefox/macOS permanently wedges the synthesizer when a cancel lands on
+   * an actively-synthesizing utterance (the reported "no audible speech,
+   * then it closes" — every Play re-wedged via the probe cancel). While the
+   * probe is in flight, seek/skip/retune retarget the queued chunk and
+   * pause freezes the queue; nothing cancels.
    */
   private probe(generation: number): void {
     if (this.isStale(generation) || this.state !== "playing") return;
-    this.handoffPending = true;
+    this.probeUnresolved = true;
+    this.probeRetuned = false;
     this.voiceRetunePending = true;
     let resolved = false;
     let sentenceSeen = false;
@@ -469,15 +571,16 @@ export class ReadAloudEngine {
       if (resolved || this.isStale(generation)) return;
       resolved = true;
       if (timer !== null) clearTimeout(timer);
+      this.probeUnresolved = false;
       this.followLevel = level;
-      // Issue #165 — the level now matches the voice actually speaking.
-      this.voiceRetunePending = false;
+      // A retune landed mid-probe: the queued chunk carries the new voice,
+      // but the level describes the OLD one — keep the re-probe pending.
+      if (!this.probeRetuned) this.voiceRetunePending = false;
       this.callbacks.onFollowLevel?.(level);
-      // Cancel the probe (a boundary-resolved probe is still speaking; cancel
-      // on an already-finished synthesis is a harmless no-op) and let the
-      // queue settle before the first real utterance.
-      this.adapter.cancel();
-      this.scheduleHandoff(generation);
+      // NO cancel, NO settle (the WebKit settle stays for the POST-audible
+      // requeue paths, which cancel speech that was actually heard): queue
+      // the first chunk behind the probe now.
+      this.startPlayback(generation);
     };
 
     timer = setTimeout(() => {
@@ -496,7 +599,6 @@ export class ReadAloudEngine {
       onend: () => resolve(sentenceSeen ? "sentence" : "passage"),
       onerror: () => resolve("progress-only"),
     };
-    this.armStallTimer(generation, () => resolve("progress-only"));
     this.adapter.speak(this.probeRequest(), events);
   }
 
@@ -505,13 +607,36 @@ export class ReadAloudEngine {
   }
 
   private startPlayback(generation: number): void {
-    if (this.isStale(generation) || this.state !== "playing") return;
-    this.handoffPending = false;
+    if (this.isStale(generation)) return;
+    // Issue #167 — resolve() can fire while PAUSED (the timeout does not
+    // care about the transport): park the handoff for resume() instead of
+    // queueing into a frozen synth.
+    if (this.state !== "playing") {
+      this.probeHandoffPending = true;
+      return;
+    }
     this.speakNext(generation);
   }
 
+  /** Errors and silent stalls share the same verdict: no speech evidence
+   * means a START failure; a failure after speech began is PLAYBACK. */
+  private failSpeech(generation: number, reason?: string): void {
+    this.fail(
+      generation,
+      this.spokenThisSession
+        ? { message: PLAYBACK_FAILURE_MESSAGE, kind: "playback", reason }
+        : { message: START_FAILURE_MESSAGE, kind: "start", reason },
+    );
+  }
+
   private speakNext(generation: number): void {
-    if (this.isStale(generation) || this.state !== "playing") return;
+    if (this.isStale(generation)) return;
+    if (this.state === "paused") {
+      // Issue #167 — resolve() while paused parks the handoff instead.
+      this.probeHandoffPending = true;
+      return;
+    }
+    if (this.state !== "playing") return;
     const chunk = this.chunks[this.nextChunkIndex];
     if (!chunk) {
       this.finish(generation);
@@ -524,7 +649,8 @@ export class ReadAloudEngine {
     const advance = () => {
       if (this.isStale(generation) || this.state !== "playing") return;
       this.clearStallTimer();
-      this.consecutiveErrors = 0;
+      this.spokenThisSession = true; // an end IS speech evidence (issue #167)
+      this.chunkQueuedUnstarted = false;
       this.reportProgress(chunk.endGrapheme);
       // Zero-width spoken sentinel: carries the progress currency only — the
       // marker must NOT collapse; the next utterance's start range (same
@@ -533,21 +659,17 @@ export class ReadAloudEngine {
       this.nextChunkIndex += 1;
       this.speakNext(generation);
     };
-    const advanceAfterError = () => {
+    // Issue #167 — the utterance's error reason (the platform's own code)
+    // flows through for diagnosis; the HONEST message is chosen by what the
+    // reader can do next, not by the engine's internals.
+    const failAfterError = (reason?: string) => {
       if (this.isStale(generation) || this.state !== "playing") return;
-      this.clearStallTimer();
-      this.consecutiveErrors += 1;
-      if (this.consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-        this.fail(generation, "Read aloud couldn't keep playing.");
-        return;
-      }
-      this.nextChunkIndex += 1;
-      this.speakNext(generation);
+      // Never advance past an unheard passage. Retry starts from the last
+      // listened offset; a pre-start refusal uses the same verdict as a stall.
+      this.failSpeech(generation, reason);
     };
 
-    this.armStallTimer(generation, () => {
-      this.fail(generation, "Speech didn't start. Press Play to try again.");
-    });
+    this.armStallTimer(generation, () => this.failSpeech(generation));
     this.adapter.speak(
       { text: chunk.text, voiceURI: this.voiceURI, rate: this.rate, volume: 1 },
       {
@@ -557,6 +679,8 @@ export class ReadAloudEngine {
           // has done its job (a non-boundary voice's only early signal is
           // start, and a slow long passage must not read as a stall).
           this.clearStallTimer();
+          this.chunkQueuedUnstarted = false;
+          this.spokenThisSession = true;
           utteranceProgress(chunk.startGrapheme);
           // Passage marker until the first boundary arrives (for a
           // progress-only voice this IS the marker: the whole chunk).
@@ -567,6 +691,8 @@ export class ReadAloudEngine {
           // Any boundary event proves the engine is alive — clear the stall
           // watchdog; the utterance is speaking.
           this.clearStallTimer();
+          this.chunkQueuedUnstarted = false;
+          this.spokenThisSession = true;
           const canonical = mapBoundaryToCanonical(chunk, event);
           if (canonical !== null) this.reportProgress(canonical);
           // Issue #42 — the word-level marker range (never extrapolated:
@@ -575,9 +701,13 @@ export class ReadAloudEngine {
           if (range !== null) this.reportSpoken(range);
         },
         onend: advance,
-        onerror: advanceAfterError,
+        onerror: failAfterError,
       },
     );
+    // Issue #167 — the chunk is queued (possibly behind the still-speaking
+    // probe): pause() freezes it and clears the watchdog; resume() re-arms
+    // while this flag says the first event is still outstanding.
+    this.chunkQueuedUnstarted = true;
   }
 
   private finish(generation: number): void {
@@ -588,13 +718,23 @@ export class ReadAloudEngine {
     this.callbacks.onFinish?.();
   }
 
-  private fail(generation: number, message: string): void {
+  /**
+   * Issue #167 — the ONE honest failure terminal: supersede the session
+   * (generation bump, timers cleared, synthesizer cancelled) and land the
+   * state on "failed" — NOT stopped, so the host's transport stays open
+   * with the calm explanation, Retry, and voice selection. The failure kind
+   * (start vs playback) plus the platform's own error reason (when one
+   * arrived) ride to the host; the position is NOT rewound: the last
+   * reported listened offset stands, and a fresh play() (Retry) resumes
+   * from it — never silently past unread passages.
+   */
+  private fail(generation: number, failure: SpeechFailure): void {
     if (this.isStale(generation)) return;
     this.generation += 1;
     this.clearStallTimer();
     this.adapter.cancel();
-    this.setState("stopped");
-    this.callbacks.onError?.(message);
+    this.setState("failed");
+    this.callbacks.onError?.(failure);
   }
 
   /** Monotonic guard: the listened position never moves backward within a

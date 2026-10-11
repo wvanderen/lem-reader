@@ -79,6 +79,8 @@ const CLAMPED_RECORD_PARSED = {
   rate: 1,
   librarySort: "recently-added",
   openAfterAdd: true,
+  showReadAloud: true,
+  speechNoticeDismissed: false,
 } as const;
 
 beforeEach(() => {
@@ -260,7 +262,12 @@ async function legacyBundle(manifestPreferencesOverride?: Manifest["blocks"]) {
   // field so the claimed hash reflects the TRUE export-era shape (the
   // schema key order minus the later field; JSON.stringify speaks
   // insertion order).
-  const { openAfterAdd: _exportEraAbsent, ...exportEraPrefs } = parsed.preferences;
+  const {
+    openAfterAdd: _exportEraAbsent,
+    showReadAloud: _speechControlsAbsent,
+    speechNoticeDismissed: _speechNoticeAbsent,
+    ...exportEraPrefs
+  } = parsed.preferences;
   const legacyManifest: Manifest = {
     ...manifest,
     blocks: {

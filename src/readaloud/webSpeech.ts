@@ -14,9 +14,28 @@
 
 import type { SpeakRequest, SpeechAdapter, UtteranceEvents } from "./types";
 
-/** Capability check — safe on any environment (jsdom, old browsers). */
+export const SPEECH_BROWSER_NOTICE =
+  "Read aloud is only supported in Chromium-based browsers, such as Chrome, Edge, and Helium.";
+
+/** Product support policy: Chromium engines only. API presence alone does
+ * not establish reliable playback (spike 0010 §10). iOS browser brands use
+ * WebKit and therefore do not qualify via CriOS/EdgiOS tokens. */
+export function speechSynthesisUnavailableMessage(): string | null {
+  if (
+    typeof navigator === "undefined" ||
+    !/(?:Chrome|Chromium|Edg|OPR)\//.test(navigator.userAgent)
+  ) {
+    return SPEECH_BROWSER_NOTICE;
+  }
+  if (typeof window === "undefined" || !window.speechSynthesis) {
+    return "Read aloud isn't available in this browser.";
+  }
+  return null;
+}
+
+/** Usable speech, rather than API presence alone. */
 export function speechSynthesisAvailable(): boolean {
-  return typeof window !== "undefined" && "speechSynthesis" in window;
+  return speechSynthesisUnavailableMessage() === null;
 }
 
 /**
@@ -137,9 +156,13 @@ export function createWebSpeechAdapter(): SpeechAdapter {
       release();
       events.onend?.();
     };
-    utterance.onerror = () => {
+    // Issue #167 — the platform's error reason (SpeechSynthesisErrorEvent
+    // .error) passes through instead of being discarded: a Firefox "not-
+    // allowed"/"synthesis-failed" refusal is observable at the seam instead
+    // of being indistinguishable from a silent stall.
+    utterance.onerror = (event) => {
       release();
-      events.onerror?.();
+      events.onerror?.(event?.error);
     };
     synth.speak(utterance);
   };

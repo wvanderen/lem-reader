@@ -216,7 +216,11 @@ test("SC#4 — export on machine A re-imports on machine B with offsets intact",
     expect(bundleJson.fixtureIds).toContain(fixtureArticle!.id);
 
     // Preferences always ride (D9-12).
-    expect(bundleJson.preferences).toEqual(seededPrefs);
+    expect(bundleJson.preferences).toEqual({
+      ...seededPrefs,
+      showReadAloud: true,
+      speechNoticeDismissed: false,
+    });
 
     // SC#4 data minimization — a recursive key walk over the whole parsed
     // bundle finds no key matching "page" (page numbers are ephemeral; the
@@ -280,7 +284,11 @@ test("SC#4 — export on machine A re-imports on machine B with offsets intact",
     // because machine B had no reader-prefs row).
     const prefsRow = await readRow(pageB, "settings", "reader-prefs");
     expect(prefsRow).not.toBeNull();
-    expect((prefsRow!.value as { theme: string }).theme).toBe("dark");
+    expect(prefsRow!.value).toMatchObject({
+      theme: "dark",
+      showReadAloud: true,
+      speechNoticeDismissed: false,
+    });
 
     // The fixture-backed highlight row is present on machine B.
     const fixtureHlRow = await readRow(pageB, "highlights", "hl-rt-fixture");

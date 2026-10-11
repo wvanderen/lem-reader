@@ -369,6 +369,11 @@ export async function validateBundle(file: File): Promise<BundleValidationResult
     typeof rawPrefs.schemaVersion === "number" &&
     rawPrefs.schemaVersion <= 5 &&
     rawPrefs.openAfterAdd === undefined;
+  // Additive speech preferences did not exist in earlier v6 exports.
+  // Verify their original key shape; explicit values still participate in hashing.
+  const legacySpeechPrefsAbsent =
+    isRecord(rawPrefs) &&
+    (rawPrefs.showReadAloud === undefined || rawPrefs.speechNoticeDismissed === undefined);
   if (isRecord(rawPrefs) && (legacyMeasureApplied || legacyCustomApplied)) {
     raw = {
       ...(raw as object),
@@ -437,7 +442,10 @@ export async function validateBundle(file: File): Promise<BundleValidationResult
   // manifest is a corruption DETECTION surface, not a security boundary —
   // manifest.ts).
   if (
-    (legacyMeasureApplied || legacyCustomApplied || legacyOpenAfterAddAbsent) &&
+    (legacyMeasureApplied ||
+      legacyCustomApplied ||
+      legacyOpenAfterAddAbsent ||
+      legacySpeechPrefsAbsent) &&
     claimedBlocks.preferences !== recomputed.blocks.preferences
   ) {
     const p = parsed.data.preferences;
@@ -461,6 +469,10 @@ export async function validateBundle(file: File): Promise<BundleValidationResult
           }),
       animatePageTurns: p.animatePageTurns,
       readingMode: p.readingMode,
+      ...(rawPrefs.showReadAloud === undefined ? {} : { showReadAloud: p.showReadAloud }),
+      ...(rawPrefs.speechNoticeDismissed === undefined
+        ? {}
+        : { speechNoticeDismissed: p.speechNoticeDismissed }),
       voice: p.voice,
       rate: p.rate,
       librarySort: p.librarySort,

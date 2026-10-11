@@ -629,7 +629,9 @@ describe("seedCustomTheme (first-activation seeding)", () => {
 /** A fully-populated v3 record in schema-field order (byte-stability). */
 const V3_RECORD: ReaderSettings = {
   librarySort: "recently-added", // issue #115 — the additive preference
-  openAfterAdd: true, // issue #163 — the remembered add-dialog checkbox
+  openAfterAdd: true,
+  showReadAloud: true,
+  speechNoticeDismissed: false, // issue #163 — the remembered add-dialog checkbox
   schemaVersion: 3,
   font: "serif",
   size: 18,
