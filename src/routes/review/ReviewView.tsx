@@ -62,7 +62,7 @@
 //   - T-10-02c (tampering): the jump hash is template-built from validated
 //     record ids only; hashchange consumers re-parse through the same
 //     App.tsx regex grammar.
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { CanonicalArticle } from "../../content/types";
 import { TagFilter } from "../../ingestion/library/TagFilter";
 // Plan 14-03 Task 1 (D14-02) — the review destination's document.title via
@@ -81,6 +81,11 @@ import { useLibrarySnapshot } from "../../ingestion/library/useLibrarySnapshot";
 // first fragment + a calm ellipsis, never a truncated multi-block blob. The
 // row's center-stage quote renders through the twin full-span derivation.
 import { firstFragmentExcerpt, fullQuoteDisplay } from "../../annotations/excerpt";
+// Issue #174 — the ONE "does this note carry written content?" predicate
+// (empty OR whitespace-only commentary counts as no note; never trims
+// stored content). Gates both the immediate-remove routing and the row's
+// note preview.
+import { hasNoteContent } from "../../annotations/noteText";
 import {
   deriveReviewSections,
   type ConfidenceFilter,
@@ -92,14 +97,16 @@ import { formatIsoDate } from "../../ingestion/library/formatDate";
 import { ReviewNoteDialog, NOTE_SAVE_FAILED_COPY } from "./ReviewNoteDialog";
 // Issue #117 — the in-place highlight-tag editor + its shared failure copy.
 import { ReviewTagsDialog, TAGS_SAVE_FAILED_COPY } from "./ReviewTagsDialog";
-import { DeleteHighlightConfirm } from "./DeleteHighlightConfirm";
+// Issue #174 — the confirm dialog (opened ONLY for highlights with a
+// nonempty note now) + the ONE shared remove-failure copy.
+import { DeleteHighlightConfirm, HIGHLIGHT_REMOVE_FAILED_COPY } from "./DeleteHighlightConfirm";
 // Issue #119 — the in-place highlight-color editor: the SAME picker component
 // the reader's NotePopover hosts, wrapped in this surface's dialog grammar.
 import { ReviewColorDialog } from "./ReviewColorDialog";
 // Issue #119 — the ONE color write seam (the same seam the reader's picker
 // commits through) + the shared named-color labels (A11Y-05 — the review row
 // and dialog carry the visible text label, never color alone).
-import { setHighlightColor } from "../../persistence/highlightsStore";
+import { setHighlightColor, deleteHighlight } from "../../persistence/highlightsStore";
 import type { HighlightColor } from "../../content/schema";
 import { HIGHLIGHT_COLOR_LABELS } from "../../annotations/highlightColors";
 // Review-row redesign — the icon action cluster (the LibraryRow anatomy):
@@ -210,7 +217,9 @@ function ReviewRow({
   entry: ReviewEntry;
   onEditNote: (entry: ReviewEntry) => void;
   onEditTags: (entry: ReviewEntry) => void;
-  onRemove: (entry: ReviewEntry) => void;
+  /** Issue #174 — carries the clicked button so the panel can resolve the
+   * row's neighbors for the post-removal focus handoff. */
+  onRemove: (entry: ReviewEntry, trigger: HTMLElement) => void;
   onChangeColor: (entry: ReviewEntry) => void;
 }) {
   // D19-10 (display half): the row shows the ENTIRE stored span — block
@@ -238,7 +247,11 @@ function ReviewRow({
   const content = (
     <div className="review-row">
       <blockquote className="review-quote">{quoteText}</blockquote>
-      {noteText.length > 0 && (
+      {/* Issue #174 — the preview gate rides the ONE hasNoteContent
+          predicate: whitespace-only commentary is treated as absent here
+          exactly as it is in the delete routing (the stored text itself is
+          never trimmed). */}
+      {hasNoteContent(noteText) && (
         <span className="review-note-preview">{truncate(noteText, NOTE_MAX_CHARS)}</span>
       )}
     </div>
@@ -311,7 +324,7 @@ function ReviewRow({
         type="button"
         className="btn btn-icon review-row-action review-row-action-remove"
         aria-label={`Remove highlight: ${ariaExcerpt}`}
-        onClick={() => onRemove(entry)}
+        onClick={(e) => onRemove(entry, e.currentTarget)}
       >
         <TrashIcon />
       </button>
@@ -408,6 +421,16 @@ export function ReviewView({
   const [noteTarget, setNoteTarget] = useState<ReviewEntry | null>(null);
   const [tagsTarget, setTagsTarget] = useState<ReviewEntry | null>(null);
   const [removeTarget, setRemoveTarget] = useState<ReviewEntry | null>(null);
+  // Issue #174 — the neighboring rows of the row about to be removed,
+  // captured from the clicked Remove button BEFORE the row unmounts (both
+  // the immediate and confirm paths). After a successful removal, focus
+  // moves to the FOLLOWING row's Remove button (else the preceding row's) —
+  // the removed row's own button unmounts, so a trigger restore would
+  // silently drop focus.
+  const removedRowNeighborsRef = useRef<{ after: HTMLElement | null; before: HTMLElement | null }>({
+    after: null,
+    before: null,
+  });
   // Issue #119 — the row whose color is being edited (null = dialog closed).
   // Like notes, color is keyed to highlightId alone, so the dialog opens for
   // ANY row — ambiguous and orphan-tail rows included.
@@ -434,6 +457,84 @@ export function ReviewView({
     if (hasAppHistory) h1Ref.current?.focus();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount only
   }, []);
+
+  // ── Issue #174 — deletion proportional to the written content removed ──
+
+  /** Resolve the removed row's nearest neighbors from the clicked Remove
+   *  button (still mounted — capture BEFORE any write unmounts it). The
+   *  neighbors are document-order siblings across ALL sections, not just
+   *  the same section list, so a section's last row hands focus into the
+   *  next section's first row. */
+  const captureRemovedRowNeighbors = useCallback((trigger: HTMLElement) => {
+    const row = trigger.closest("li.review-item");
+    if (!row) {
+      removedRowNeighborsRef.current = { after: null, before: null };
+      return;
+    }
+    const rows = Array.from(document.querySelectorAll("li.review-item"));
+    const index = rows.indexOf(row);
+    const after = rows[index + 1] as HTMLElement | undefined;
+    const before = rows[index - 1] as HTMLElement | undefined;
+    removedRowNeighborsRef.current = { after: after ?? null, before: before ?? null };
+  }, []);
+
+  /** The post-removal focus handoff: the FOLLOWING row's Remove button (the
+   *  same cluster position the reader just used), else the PRECEDING row's,
+   *  else — the library just emptied — the page h1 (the mount-focus target).
+   *  Runs from the confirm dialog's close event (modal already released) or
+   *  straight after an immediate removal; the keyed row elements survive
+   *  the snapshot re-derivation, so a neighbor captured before the write is
+   *  still connected after the reload lands. */
+  const focusNearRemovedRow = useCallback(() => {
+    const { after, before } = removedRowNeighborsRef.current;
+    removedRowNeighborsRef.current = { after: null, before: null };
+    const neighbor = [after, before].find((el) => el?.isConnected) ?? null;
+    const button = neighbor?.querySelector<HTMLElement>(".review-row-action-remove");
+    if (button) {
+      button.focus();
+      return;
+    }
+    h1Ref.current?.focus();
+  }, []);
+
+  /** The immediate removal path — a highlight with NO note (empty or
+   *  whitespace-only, the ONE hasNoteContent predicate) has no written
+   *  content to lose, so the Remove click deletes directly through the
+   *  same one-call Dexie cascade the confirm dialog uses. Failure
+   *  announces the ONE shared copy through the page status region and
+   *  leaves the row (and its note — nothing was written) untouched: never
+   *  a success lie (the issue #98 register). */
+  const removeHighlightNow = useCallback(
+    async (entry: ReviewEntry) => {
+      try {
+        await deleteHighlight(entry.highlight.id);
+      } catch {
+        setAnnouncement(HIGHLIGHT_REMOVE_FAILED_COPY);
+        return;
+      }
+      invalidateLibrarySnapshot();
+      setAnnouncement("Highlight removed.");
+      focusNearRemovedRow();
+    },
+    [focusNearRemovedRow],
+  );
+
+  /** The Remove click router (issue #174): a highlight with a nonempty note
+   *  opens the cascade-honest confirm dialog (Keep highlight keeps initial
+   *  focus — Pitfall 8); a note-less highlight removes immediately — the
+   *  same proportionality the reader's NotePopover applies. Either way the
+   *  write is the direct result of this deliberate reader click. */
+  const handleRemoveRequest = useCallback(
+    (entry: ReviewEntry, trigger: HTMLElement) => {
+      captureRemovedRowNeighbors(trigger);
+      if (hasNoteContent(entry.note?.text ?? "")) {
+        setRemoveTarget(entry);
+        return;
+      }
+      void removeHighlightNow(entry);
+    },
+    [captureRemovedRowNeighbors, removeHighlightNow],
+  );
 
   // D10-09 — pure derivation in the render body (the filterLibrary
   // pattern): join → classify → filter → group → sort, no effect chains.
@@ -694,7 +795,7 @@ export function ReviewView({
                     entry={entry}
                     onEditNote={setNoteTarget}
                     onEditTags={setTagsTarget}
-                    onRemove={setRemoveTarget}
+                    onRemove={handleRemoveRequest}
                     onChangeColor={setColorTarget}
                   />
                 </li>
@@ -721,7 +822,7 @@ export function ReviewView({
                   entry={entry}
                   onEditNote={setNoteTarget}
                   onEditTags={setTagsTarget}
-                  onRemove={setRemoveTarget}
+                  onRemove={handleRemoveRequest}
                   onChangeColor={setColorTarget}
                 />
               </li>
@@ -767,6 +868,12 @@ export function ReviewView({
           setAnnouncement(outcome === "saved" ? "Tags saved." : TAGS_SAVE_FAILED_COPY);
         }}
       />
+      {/* Issue #174 — the remove confirm is routed ONLY for highlights with
+          a nonempty note (handleRemoveRequest above); note-less rows remove
+          immediately from the Remove click. The dialog's close after a
+          successful delete hands focus to the neighboring row (the captured
+          trigger — the removed row's button — unmounts); cancel/Esc keep the
+          plain trigger restore. */}
       <DeleteHighlightConfirm
         open={removeTarget !== null}
         highlightId={removeTarget?.highlight.id ?? ""}
@@ -781,6 +888,7 @@ export function ReviewView({
           // D10-12 exact copy — only reachable after the delete resolved.
           setAnnouncement("Highlight removed.");
         }}
+        onRemovedClose={focusNearRemovedRow}
         onCancel={() => setRemoveTarget(null)}
       />
       {/* Issue #119 — the color editor. Same wiring shape as the note

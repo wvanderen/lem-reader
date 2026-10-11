@@ -76,6 +76,54 @@ export async function wipeDatabase(page: Page): Promise<void> {
   await clearSettingsMirror(page);
 }
 
+/**
+ * Issue #174 honest-failure harness (call BEFORE the test's first app
+ * navigation): install, on every subsequent navigation, a one-shot sabotage
+ * around `IDBObjectStore.prototype.delete` that ABORTS the surrounding
+ * transaction once armed. Everything above the final IDB write runs
+ * UNMODIFIED — the real Dexie transaction rejects, the real deleteHighlight
+ * seam rethrows, and the honest-failure surfaces (rollback, StorageBanner
+ * routing, the inline copy / page announcement) are driven end-to-end.
+ * Armed per-shot from the live page via failNextHighlightDelete. The app's
+ * own writes never call .delete() during seeding (puts/clears), so the
+ * wrapper is inert until armed. The abort is queued as a MICROTASK: a
+ * single-request transaction auto-commits before a setTimeout task can run,
+ * but a microtask abort lands first and errors the request exactly as a
+ * real storage failure would (AbortError — the same reject path a
+ * QuotaExceededError takes).
+ */
+export async function installHighlightDeleteSabotage(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const original = IDBObjectStore.prototype.delete;
+    let armed = false;
+    (window as unknown as Record<string, unknown>).__failNextHighlightDelete = () => {
+      armed = true;
+    };
+    IDBObjectStore.prototype.delete = function (...keys: unknown[]) {
+      const request = original.apply(this, keys as [IDBValidKey]);
+      if (armed) {
+        armed = false;
+        const tx = this.transaction;
+        void Promise.resolve().then(() => {
+          try {
+            tx.abort();
+          } catch {
+            /* already settled — nothing to sabotage */
+          }
+        });
+      }
+      return request;
+    };
+  });
+}
+
+/** Arm the installed sabotage: the NEXT IndexedDB delete aborts its transaction (once). */
+export async function failNextHighlightDelete(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    (window as unknown as { __failNextHighlightDelete?: () => void }).__failNextHighlightDelete?.();
+  });
+}
+
 /** The two reading modes the corpus matrix iterates. */
 export type ReadingMode = "paginated" | "scrolling";
 

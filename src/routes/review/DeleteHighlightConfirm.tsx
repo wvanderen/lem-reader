@@ -45,6 +45,18 @@
 // pending/writeError state machine and the busy register are the SHARED
 // useHonestWrite hook + BusyButton primitive now; only the write itself
 // (and the copy) stay local here.
+//
+// Issue #174 — proportional routing + focus handoff: the panel opens this
+// dialog ONLY for highlights carrying a nonempty note (the hasNoteContent
+// predicate) — a no-note row removes immediately from the row's Remove
+// click in ReviewView, so the destructive write now has TWO sanctioned call
+// sites (this button for noted highlights; ReviewView's immediate path for
+// note-less ones — both direct results of a deliberate reader click). On a
+// SUCCESSFUL delete the deleted row's Remove button (the captured trigger)
+// unmounts, so the close listener must NOT restore focus to it — it calls
+// onRemovedClose instead, and the panel moves focus to a NEIGHBORING row
+// (the focus-nearby discipline; also keeps focus out of the unmounting
+// trigger). Cancel/Esc keep the plain trigger restore.
 import { useEffect, useRef } from "react";
 import { deleteHighlight } from "../../persistence/highlightsStore";
 // Issue #98 — the ONE polite status-region primitive + the shared
@@ -52,6 +64,14 @@ import { deleteHighlight } from "../../persistence/highlightsStore";
 import { StatusRegion } from "../../ui/StatusRegion";
 import { BusyButton } from "../../ui/BusyButton";
 import { useHonestWrite } from "../../ui/honestWrite";
+
+/**
+ * Issue #174 — the shared honest-failure copy for a highlight removal that
+ * did not land: the inline dialog line AND the panel's page-level
+ * announcement (ReviewView's immediate no-note path) render the ONE
+ * constant so the two surfaces can never diverge.
+ */
+export const HIGHLIGHT_REMOVE_FAILED_COPY = "Couldn't remove this highlight. Try again.";
 
 /** Truncation limit for the excerpt context (the NotePopover
  * EXCERPT_MAX_CHARS precedent). Plain string operation — the result renders
@@ -74,6 +94,13 @@ interface DeleteHighlightConfirmProps {
   onConfirm: () => void;
   /** Invoked by the cancel button (or Esc). Nothing is written. */
   onCancel: () => void;
+  /**
+   * Issue #174 — invoked (instead of the trigger focus restore) when the
+   * close event follows a SUCCESSFUL delete: the deleted row's Remove
+   * button (the captured trigger) unmounts, so the panel hands focus to a
+   * neighboring row's control. Cancel/Esc paths keep the plain restore.
+   */
+  onRemovedClose?: () => void;
 }
 
 export function DeleteHighlightConfirm({
@@ -82,6 +109,7 @@ export function DeleteHighlightConfirm({
   excerpt,
   onConfirm,
   onCancel,
+  onRemovedClose,
 }: DeleteHighlightConfirmProps) {
   const ref = useRef<HTMLDialogElement>(null);
   // Capture the previously-focused element on open so the close handler can
@@ -100,6 +128,25 @@ export function DeleteHighlightConfirm({
   // onConfirm path just wrote) — the ImportPreviewDialog L123-129 fix.
   const openRef = useRef(open);
   openRef.current = open;
+  // Issue #174 — set immediately before onConfirm fires; the `close` event
+  // then routes to onRemovedClose (focus-nearby handoff) instead of the
+  // trigger restore (the deleted row's Remove button is unmounting).
+  const removedSucceededRef = useRef(false);
+
+  // Latest-handler mirrors so BOTH listeners below can be registered ONCE
+  // (mount-only effect) and still call the CURRENT props at event time (the
+  // useSelectionToolbar event-time-ref discipline). Re-registering on every
+  // render (the former [onCancel, onRemovedClose] deps — onCancel is a fresh
+  // inline arrow per render) raced React's passive-effect pass, which runs
+  // ALL destroys before ALL creates: on the render where `open` flips false,
+  // the [open] effect's dlg.close() dispatched the close event AFTER the old
+  // listener was destroyed but BEFORE the new one existed — the event fired
+  // into the void, so the removed-close focus handoff (and every close path's
+  // trigger restore) silently never ran.
+  const onCancelRef = useRef(onCancel);
+  onCancelRef.current = onCancel;
+  const onRemovedCloseRef = useRef(onRemovedClose);
+  onRemovedCloseRef.current = onRemovedClose;
 
   // Sync the `open` prop with the underlying <dialog> state.
   useEffect(() => {
@@ -129,16 +176,29 @@ export function DeleteHighlightConfirm({
     }
   }, [open, resetWrite]);
 
-  // Register the `close` event listener (with cleanup). Restore focus to the
-  // captured trigger (Pitfall 1), and — when the close was ESC-originated
-  // (the open prop still says open) — route cleanup through onCancel so the
-  // parent's removeTarget resets on EVERY close path.
+  // Register the `close` + scrim-click listeners ONCE (mount-only — see the
+  // latest-handler mirrors above for why these must never re-register).
+  // Restore focus to the captured trigger (Pitfall 1), and — when the close
+  // was ESC-originated (the open prop still says open) — route cleanup
+  // through onCancel so the parent's removeTarget resets on EVERY close
+  // path.
   useEffect(() => {
     const dlg = ref.current;
     if (!dlg) return;
     const handleClose = () => {
-      triggerRef.current?.focus();
-      if (openRef.current) onCancel();
+      // Issue #174 — a close following a successful delete must NOT restore
+      // focus to the deleted row's Remove button (it is unmounting; the
+      // restore would silently no-op and drop focus). The panel's
+      // onRemovedClose moves focus to a neighboring row instead. Every other
+      // close path (Keep highlight, Esc, scrim) restores the trigger — the
+      // row is still there.
+      if (removedSucceededRef.current) {
+        removedSucceededRef.current = false;
+        onRemovedCloseRef.current?.();
+      } else {
+        triggerRef.current?.focus();
+      }
+      if (openRef.current) onCancelRef.current();
     };
     // A click whose target IS the dialog element itself is the dimmed
     // ::backdrop (padding: 0 + the .library-remove-confirm-inner wrapper
@@ -150,7 +210,7 @@ export function DeleteHighlightConfirm({
     // double-cancel). Never dlg.close() from here (the 09-06 wedge
     // lesson).
     const handleScrimClick = (e: MouseEvent) => {
-      if (e.target === dlg) onCancel();
+      if (e.target === dlg) onCancelRef.current();
     };
     dlg.addEventListener("close", handleClose);
     dlg.addEventListener("click", handleScrimClick);
@@ -158,7 +218,8 @@ export function DeleteHighlightConfirm({
       dlg.removeEventListener("close", handleClose);
       dlg.removeEventListener("click", handleScrimClick);
     };
-  }, [onCancel]);
+    // Mount-only: the handlers read the latest props through refs.
+  }, []);
 
   // ── PITFALL 8 LOAD-BEARING HANDLER ──────────────────────────────────────
   // The ONLY call site for `deleteHighlight` in the review feature. It lives
@@ -175,6 +236,10 @@ export function DeleteHighlightConfirm({
   // pending/error bookkeeping around it.
   const onDestructiveClick = async () => {
     if (await runWrite(() => deleteHighlight(highlightId))) {
+      // Issue #174 — flag the success BEFORE onConfirm flips the parent's
+      // open prop: the close event that follows routes focus to the panel's
+      // onRemovedClose (nearby-row handoff), never the unmounting trigger.
+      removedSucceededRef.current = true;
       onConfirm();
     }
   };
@@ -208,9 +273,7 @@ export function DeleteHighlightConfirm({
         {/* Issue #98 — the honest-failure line. Always-mounted StatusRegion
             (a live region must pre-exist to announce); idle it renders no
             children and paints nothing (the shared dialog :empty rules). */}
-        <StatusRegion>
-          {writeError && <p>Couldn't remove this highlight. Try again.</p>}
-        </StatusRegion>
+        <StatusRegion>{writeError && <p>{HIGHLIGHT_REMOVE_FAILED_COPY}</p>}</StatusRegion>
         <div className="dialog-actions library-remove-confirm-actions">
           {/* Destructive action — Pitfall 8: deleteHighlight fires ONLY in
               onDestructiveClick above. The button label names the action

@@ -29,6 +29,11 @@ import { useHighlightOverlay } from "./HighlightOverlay";
 // Plan 19-02 (D19-10) — the excerpt derivation routes through the ONE
 // shared pure helper (first fragment + calm ellipsis for spans).
 import { firstFragmentExcerpt } from "../../annotations/excerpt";
+// Issue #174 — the ONE "does this note carry written content?" predicate.
+// The drawer's note preview + jump aria-label ride it too (the ReviewView
+// preview gate already does): a whitespace-only note is treated as absent
+// everywhere a NOTE PRESENCE decision is made, not just at delete time.
+import { hasNoteContent } from "../../annotations/noteText";
 import { CloseIcon } from "../../ui/icons";
 // Issue #98 (decision #96) — the ONE polite status-region primitive (the
 // drawer's no-content state renders through it).
@@ -246,7 +251,9 @@ export function AnnotationsDrawer({
               // Build the aria-label for the jump button (UI-SPEC §Copywriting).
               const ariaLabel = isUnresolved
                 ? `Go to highlight: ${ariaExcerpt}. This highlight can't be located, so jumping is disabled.`
-                : `Go to highlight: ${ariaExcerpt}${noteText ? `; ${truncate(noteText, 60)}` : ""}`;
+                : `Go to highlight: ${ariaExcerpt}${
+                    hasNoteContent(noteText) ? `; ${truncate(noteText, 60)}` : ""
+                  }`;
 
               return (
                 <li key={h.record.id} className="drawer-item">
@@ -264,7 +271,7 @@ export function AnnotationsDrawer({
                     <span className="drawer-entry-excerpt">{excerpt}</span>
                     {flagText && <span className="drawer-entry-flag">{flagText}</span>}
                     {unresolvedBody && <span className="drawer-entry-body">{unresolvedBody}</span>}
-                    {!flagText && noteText.length > 0 && (
+                    {!flagText && hasNoteContent(noteText) && (
                       <span className="drawer-entry-note">
                         {truncate(noteText, NOTE_MAX_CHARS)}
                       </span>
