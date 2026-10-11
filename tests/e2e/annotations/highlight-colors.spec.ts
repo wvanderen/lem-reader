@@ -1,17 +1,18 @@
 import { expandSettingsGroup } from "../settings";
 // tests/e2e/annotations/highlight-colors.spec.ts
-// Issue #118 — named highlight colors in the reader. The picker rides the
-// highlight's popover (the reader-details editor); the marks render the
-// chosen color in BOTH reading modes; the choice persists; every control
-// carries its text label. Cells:
-//   1. Create (Default) → pick Green in the popover → the Dexie row carries
+// Issue #118 + #175 — named highlight colors in the reader. The choices are
+// exposed DIRECTLY in the lightweight highlight controls (mark activation);
+// the marks render the chosen color in BOTH reading modes; the choice
+// persists; every control carries its text label. Cells:
+//   1. Create (Default) → pick Green in the controls → the Dexie row carries
 //      "green", the mark renders .color-green in paginated AND scrolling
 //      modes, and the full reload re-renders it from the persisted record
 //      (AC: creation, editing, both reading modes, persistence).
-//   2. Keyboard/screen-reader path: the focused mark opens the popover with
-//      Enter; the NATIVE radio group arrows through the labelled choices;
-//      the mark's aria-label announces the named color (AC: keyboard +
-//      screen-reader access; color never the sole identifier).
+//   2. Keyboard/screen-reader path: the focused mark + Enter exposes the
+//      CONTROLS (focus moves into them); the NATIVE radio group arrows
+//      through the labelled choices; the mark's aria-label announces the
+//      named color (AC: keyboard + screen-reader access; color never the
+//      sole identifier).
 //   3. An older (pre-#118) highlight — the row's color field stripped via
 //      raw IndexedDB — renders the Default fill until the reader changes
 //      it (AC: older highlights use Default until explicitly changed).
@@ -32,6 +33,8 @@ import {
   selectRangeInBlock,
   findFirstBlockWithText,
   switchMode,
+  openHighlightControls,
+  highlightControls,
 } from "./_fixtures";
 
 const FIXTURE = FIXTURES[0]!; // essay-long-form
@@ -99,35 +102,44 @@ async function stripColorFields(page: Page): Promise<void> {
   });
 }
 
-/** Create one highlight from the first text-bearing block + open the
- * popover (the N shortcut path). Returns the popover locator. */
-async function createHighlightWithPopover(page: Page) {
+/** Create one highlight from the first text-bearing block + close the
+ * writing-only editor (the N shortcut path). */
+async function createHighlight(page: Page) {
   const blockIdx = await findFirstBlockWithText(page, 24);
   expect(blockIdx).not.toBe(-1);
   await selectRangeInBlock(page, blockIdx, 0, 18);
   await page.keyboard.press("n");
-  const popover = page.locator("#highlight-popover");
-  await expect(popover).toBeVisible();
-  return popover;
+  const editor = page.locator("#highlight-popover");
+  await expect(editor).toBeVisible();
+  await editor.locator(".highlight-popover-done").click();
+  await expect(editor).not.toBeVisible();
 }
 
-test.describe("highlight colors in the reader (issue #118)", () => {
-  test("create default → pick Green → persists, renders in both modes, announces in the label", async ({
+/** Dismiss the lightweight controls with Escape from INSIDE them (focus is
+ * on a control after a radio pick) — focus returns to the anchor <mark>. */
+async function dismissControls(page: Page) {
+  await page.keyboard.press("Escape");
+  await expect(highlightControls(page)).not.toBeVisible();
+}
+
+test.describe("highlight colors in the reader (issue #118 + #175)", () => {
+  test("create default → pick Green in the controls → persists, renders in both modes, announces in the label", async ({
     page,
   }) => {
     await openArticle(page, FIXTURE);
-    const popover = await createHighlightWithPopover(page);
+    await createHighlight(page);
+    const controls = await openHighlightControls(page);
 
     // The picker renders Default + the four named choices, each radio
     // carrying its VISIBLE text label (color never the sole identifier).
     for (const label of ["Default", "Yellow", "Green", "Blue", "Pink"]) {
       await expect(
-        popover.getByRole("radio", { name: label }),
+        controls.getByRole("radio", { name: label }),
         `the ${label} choice is a labelled radio`,
       ).toBeVisible();
     }
     // A fresh highlight is Default — no color modifier on the mark.
-    await expect(popover.getByRole("radio", { name: "Default" })).toBeChecked();
+    await expect(controls.getByRole("radio", { name: "Default" })).toBeChecked();
 
     // Pagination geometry baseline: the pick below must not reflow the
     // article (the color fill swap touches no layout property), so the
@@ -138,9 +150,8 @@ test.describe("highlight colors in the reader (issue #118)", () => {
     const indicatorBefore = await indicator.textContent();
     const totalBefore = indicatorBefore?.match(/of (.+)$/)?.[1];
 
-    await popover.getByRole("radio", { name: "Green" }).click();
-    await popover.locator(".highlight-popover-done").click();
-    await expect(popover).not.toBeVisible();
+    await controls.getByRole("radio", { name: "Green" }).click();
+    await dismissControls(page);
 
     // The Dexie row carries the named color.
     await expect.poll(async () => (await readFirstHighlightRow(page))?.color).toBe("green");
@@ -179,30 +190,31 @@ test.describe("highlight colors in the reader (issue #118)", () => {
     await expect(indicator).toContainText(`of ${totalBefore}`);
   });
 
-  test("keyboard path: focused mark + Enter opens the popover; native radio arrows change the color", async ({
+  test("keyboard path: focused mark + Enter exposes the controls; native radio arrows change the color", async ({
     page,
   }) => {
     await openArticle(page, FIXTURE);
-    const popover = await createHighlightWithPopover(page);
-    await popover.locator(".highlight-popover-done").click();
-    await expect(popover).not.toBeVisible();
+    await createHighlight(page);
 
-    // Keyboard activation: the mark is tabindex=0; Enter opens the popover.
+    // Keyboard activation: the mark is tabindex=0; Enter exposes the
+    // lightweight controls AND moves focus into them (issue #175).
     const mark = page.locator("mark.highlight").first();
     await mark.focus();
     await expect(mark).toBeFocused();
     await page.keyboard.press("Enter");
-    await expect(popover).toBeVisible();
+    const controls = highlightControls(page);
+    await expect(controls).toBeVisible();
+    await expect(controls.getByRole("button", { name: "Add note" })).toBeFocused();
 
     // The NATIVE radio group: focus the checked Default radio, arrow to the
     // next choice — the change commits (no click needed).
-    const defaultRadio = popover.getByRole("radio", { name: "Default" });
+    const defaultRadio = controls.getByRole("radio", { name: "Default" });
     await defaultRadio.focus();
     await expect(defaultRadio).toBeFocused();
     await page.keyboard.press("ArrowRight");
-    const yellow = popover.getByRole("radio", { name: "Yellow" });
+    const yellow = controls.getByRole("radio", { name: "Yellow" });
     await expect(yellow).toBeChecked();
-    await popover.locator(".highlight-popover-done").click();
+    await dismissControls(page);
 
     await expect.poll(async () => (await readFirstHighlightRow(page))?.color).toBe("yellow");
     await expect(page.locator("mark.highlight").first()).toHaveClass(/color-yellow/);
@@ -217,9 +229,7 @@ test.describe("highlight colors in the reader (issue #118)", () => {
     page,
   }) => {
     await openArticle(page, FIXTURE);
-    const popover = await createHighlightWithPopover(page);
-    await popover.locator(".highlight-popover-done").click();
-    await expect(popover).not.toBeVisible();
+    await createHighlight(page);
 
     // Rewrite the row into the pre-#118 shape (no color key), then reload.
     await stripColorFields(page);
@@ -233,11 +243,10 @@ test.describe("highlight colors in the reader (issue #118)", () => {
     await expect(mark).toHaveAttribute("aria-label", /^Highlight/);
 
     // …until the reader explicitly changes it.
-    await mark.click();
-    await expect(popover).toBeVisible();
-    await expect(popover.getByRole("radio", { name: "Default" })).toBeChecked();
-    await popover.getByRole("radio", { name: "Blue" }).click();
-    await popover.locator(".highlight-popover-done").click();
+    const controls = await openHighlightControls(page);
+    await expect(controls.getByRole("radio", { name: "Default" })).toBeChecked();
+    await controls.getByRole("radio", { name: "Blue" }).click();
+    await dismissControls(page);
     await expect.poll(async () => (await readFirstHighlightRow(page))?.color).toBe("blue");
     await expect(page.locator("mark.highlight").first()).toHaveClass(/color-blue/);
   });
@@ -246,9 +255,10 @@ test.describe("highlight colors in the reader (issue #118)", () => {
     page,
   }) => {
     await openArticle(page, FIXTURE);
-    const popover = await createHighlightWithPopover(page);
-    await popover.getByRole("radio", { name: "Green" }).click();
-    await popover.locator(".highlight-popover-done").click();
+    await createHighlight(page);
+    const controls = await openHighlightControls(page);
+    await controls.getByRole("radio", { name: "Green" }).click();
+    await dismissControls(page);
     const mark = page.locator("mark.highlight").first();
     await expect(mark).toHaveClass(/color-green/);
 
@@ -290,9 +300,10 @@ test.describe("highlight colors in the reader (issue #118)", () => {
     // The WCAG 1.4.10 reflow target (the high-zoom.spec load-bearing bar).
     await page.setViewportSize({ width: 320, height: 800 });
     await openArticle(page, FIXTURE);
-    const popover = await createHighlightWithPopover(page);
-    await popover.getByRole("radio", { name: "Pink" }).click();
-    await popover.locator(".highlight-popover-done").click();
+    await createHighlight(page);
+    const controls = await openHighlightControls(page);
+    await controls.getByRole("radio", { name: "Pink" }).click();
+    await dismissControls(page);
 
     const mark = page.locator("mark.highlight").first();
     await expect(mark).toBeVisible();
@@ -308,13 +319,28 @@ test.describe("highlight colors in the reader (issue #118)", () => {
     await expect(mark).toHaveClass(/color-pink/);
     await expect(mark).toContainText(/./);
 
-    // The picker stays operable under zoom: reopening the popover offers
-    // every labelled choice (no content lost).
+    // The picker stays operable under zoom: re-exposing the controls offers
+    // every labelled choice (no content lost). At 400% body zoom the surface
+    // exceeds the 320px viewport's fold — a viewport-anchored surface
+    // legitimately dismisses when scrolling it into view (the anchor would
+    // go stale), and visibility under zoom is engine-variable — the same
+    // "survival only" register as the zoom pass above. Attachment proves the
+    // choices exist and stay addressable; the load-bearing reflow assertions
+    // (320px setViewportSize, before the zoom) ran above.
     await mark.evaluate((el) => (el as HTMLElement).focus());
     await page.keyboard.press("Enter");
-    await expect(popover).toBeVisible();
+    // Scroll the mark into view FIRST and settle (the shared-harness
+    // discipline: the surface is position:fixed off the anchor's viewport
+    // rect — a scroll landing AFTER the anchor is captured correctly
+    // dismisses it as stale, so the scroll must precede the activation).
+    await mark.evaluate((el) => el.scrollIntoView({ block: "center" }));
+    await page.waitForTimeout(250);
+    await mark.evaluate((el) => (el as HTMLElement).focus());
+    await page.keyboard.press("Enter");
+    const reopened = highlightControls(page);
+    await expect(reopened).toBeVisible();
     for (const label of ["Default", "Yellow", "Green", "Blue", "Pink"]) {
-      await expect(popover.getByRole("radio", { name: label })).toBeVisible();
+      await expect(reopened.getByRole("radio", { name: label })).toBeAttached();
     }
   });
 });

@@ -71,7 +71,7 @@ export function InlineList({
   /**
    * Optional: the run slices produced by sliceRunsForHighlights (Plan 05-01).
    * When present, each slice whose highlightId !== null is wrapped in
-   * <mark class="highlight"> with tabindex=0 + aria-label + aria-haspopup.
+   * <mark class="highlight"> with tabindex=0 + aria-label.
    * When absent (no highlights in this block), InlineList renders exactly as
    * before — the existing `runs` prop maps to <Inline> components directly.
    */
@@ -137,7 +137,7 @@ export function InlineList({
             // ONLY the highlight's document-order first slice (slice.isFirst,
             // set by the slicer when the highlight's global start lies within
             // this block). data-highlight-id below stays on EVERY slice, so
-            // activation/popover targeting + the shared identity are
+            // activation/controls targeting + the shared identity are
             // unaffected; the jump focus target (ArticleView's
             // getElementById) lands at the span's start by construction.
             id={slice.isFirst === true ? `hl-${slice.highlightId}` : undefined}
@@ -145,7 +145,6 @@ export function InlineList({
             data-highlight-id={slice.highlightId}
             tabIndex={0}
             aria-label={highlightAriaLabel(slice)}
-            aria-haspopup="dialog"
           >
             {slice.runs.map((r, j) => (
               <Inline key={j} run={r} />

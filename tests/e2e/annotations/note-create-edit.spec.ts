@@ -1,12 +1,15 @@
 // tests/e2e/annotations/note-create-edit.spec.ts
 // ANNO-02 — Reader can attach + edit a text note on a highlight (D5-10
-// popover, debounced save mirroring D2-03).
+// editor, debounced save mirroring D2-03).
 //
-// SCENARIO: create a highlight via N → popover opens with focused empty
-// textarea. Type a note → "Note saved." announces after the debounce window
-// (NOT per-keystroke). Activate the <mark> → popover reopens with the
-// existing note text + mark.highlight.has-note modifier. Edit → debounced
-// save. Clear + Done → has-note modifier removed (empty = no note).
+// SCENARIO: create a highlight via N → the WRITING-ONLY editor opens with a
+// focused empty textarea (issue #175 — the editor carries the textarea + Done
+// only; Tags/Color/Delete live on the lightweight controls and their own
+// surfaces). Type a note → "Note saved." announces after the debounce window
+// (NOT per-keystroke). Activate the <mark> → the LIGHTWEIGHT CONTROLS appear
+// (never the quotation) → "Edit note" reopens the editor with the existing
+// note text + mark.highlight.has-note modifier. Edit → debounced save.
+// Clear + Done → has-note modifier removed (empty = no note).
 import { test, expect } from "@playwright/test";
 import {
   FIXTURES,
@@ -21,6 +24,10 @@ import {
   countHighlightsInDexie,
   totalPages,
   turnToPage,
+  openHighlightControls,
+  highlightControls,
+  openNoteEditorViaControls,
+  noteTextarea,
 } from "./_fixtures";
 
 const FIXTURE = FIXTURES[0]!; // essay-long-form
@@ -66,7 +73,7 @@ test.describe("ANNO-02 note create + edit (05-05)", () => {
     await expect(announcementRegion(page)).toContainText(/Note saved/i);
   });
 
-  test("activating the <mark> reopens the popover with the existing note text", async ({
+  test("activating the <mark> exposes the controls; Edit note reopens the editor with the existing text", async ({
     page,
   }) => {
     await openArticle(page, FIXTURE);
@@ -78,14 +85,50 @@ test.describe("ANNO-02 note create + edit (05-05)", () => {
     await textarea.fill("Persistent note.");
     await popoverDone(page);
     await expect(announcementRegion(page)).toContainText(/Note saved/i);
-    // Close any open popover state, then activate the mark to reopen.
-    await expect(page.locator("mark.highlight").first()).toBeVisible();
-    await page.locator("mark.highlight").first().click();
-    const reopenedTextarea = page.locator("textarea.highlight-popover-textarea");
+    // Activate the mark → the LIGHTWEIGHT CONTROLS appear (issue #175).
+    const controls = await openHighlightControls(page);
+    // The controls never repeat the passage quotation.
+    await expect(controls).not.toContainText("Persistent note.");
+    // A noted highlight labels the action "Edit note".
+    await expect(controls.getByRole("button", { name: "Edit note" })).toBeVisible();
+    await openNoteEditorViaControls(page);
+    const reopenedTextarea = noteTextarea(page);
     await expect(reopenedTextarea).toBeVisible();
     await expect(reopenedTextarea).toHaveValue("Persistent note.");
     // The has-note modifier is still present.
     await expect(page.locator("mark.highlight").first()).toHaveClass(/has-note/);
+  });
+
+  test("the note editor is WRITING-ONLY: no quotation, no tags, no color, no delete", async ({
+    page,
+  }) => {
+    await openArticle(page, FIXTURE);
+    const blockIdx = await findFirstBlockWithText(page, 24);
+    expect(blockIdx).not.toBe(-1);
+    await selectRangeInBlock(page, blockIdx, 0, 10);
+    await page.keyboard.press("n");
+    await noteTextarea(page).fill("Writing surface only.");
+    // (N opened the editor directly — the create path.) The editor carries
+    // NO tags fieldset, NO color radios, NO delete — Tags and Delete remain
+    // outside the note editor (issue #175).
+    const dlg = page.locator("#highlight-popover");
+    await expect(dlg.locator("fieldset")).toHaveCount(0);
+    await expect(dlg.getByRole("radio")).toHaveCount(0);
+    await expect(dlg.getByRole("button", { name: "Delete" })).toHaveCount(0);
+    await expect(dlg.getByRole("button", { name: "Done" })).toBeVisible();
+    await popoverDone(page);
+
+    // Reopening from the controls reaches the same writing-only editor —
+    // and the passage quotation is never reproduced VISUALLY (the excerpt
+    // is the accessible description only, carried by the visually-hidden
+    // clip pattern — Playwright counts a 1px clipped box as "visible", so
+    // the contract is pinned by the class + the unit suite's DOM shape).
+    await openNoteEditorViaControls(page);
+    await expect(noteTextarea(page)).toHaveValue("Writing surface only.");
+    const excerpt = dlg.locator(".highlight-popover-excerpt");
+    await expect(excerpt).toBeAttached();
+    await expect(excerpt).toHaveClass(/visually-hidden/);
+    await popoverDone(page);
   });
 
   test("clearing the textarea + Done removes the has-note modifier (empty = no note)", async ({
@@ -100,13 +143,58 @@ test.describe("ANNO-02 note create + edit (05-05)", () => {
     await textarea.fill("Temporary note.");
     await expect(page.locator("mark.highlight").first()).toHaveClass(/has-note/);
     await popoverDone(page);
-    // Reopen + clear.
-    await page.locator("mark.highlight").first().click();
-    const reopenedTextarea = page.locator("textarea.highlight-popover-textarea");
+    // Reopen + clear (via the controls → Edit note).
+    await openNoteEditorViaControls(page);
+    const reopenedTextarea = noteTextarea(page);
     await expect(reopenedTextarea).toBeVisible();
     await reopenedTextarea.fill("");
     // Empty textarea = no note → has-note modifier removed (optimistic).
     await expect(page.locator("mark.highlight").first()).not.toHaveClass(/has-note/);
+    await popoverDone(page);
+  });
+
+  test("the editor keeps a bounded footprint: consistent width, long notes scroll internally (AC6/AC9)", async ({
+    page,
+  }) => {
+    await openArticle(page, FIXTURE);
+    const blockIdx = await findFirstBlockWithText(page, 24);
+    expect(blockIdx).not.toBe(-1);
+    await selectRangeInBlock(page, blockIdx, 0, 10);
+    await page.keyboard.press("n");
+    const textarea = noteTextarea(page);
+    await expect(textarea).toBeVisible();
+
+    // A LONG note: the textarea must stay at (or under) its bounded height
+    // (app.css: max-height min(40vh, 280px)) and scroll INTERNALLY instead
+    // of growing the dialog; the dialog itself stays within its own bound
+    // (app.css: max-height 100vh − 2×--space-lg) and its consistent width
+    // (max-width 380px). Real layout metrics — Playwright owns layout truth.
+    await textarea.fill("B".repeat(6000));
+    const metrics = await page.evaluate(() => {
+      const dlg = document.querySelector<HTMLElement>("dialog#highlight-popover");
+      const ta = document.querySelector<HTMLTextAreaElement>("textarea.highlight-popover-textarea");
+      if (!dlg || !ta) return null;
+      return {
+        dlgWidth: dlg.getBoundingClientRect().width,
+        dlgHeight: dlg.getBoundingClientRect().height,
+        viewportH: window.innerHeight,
+        taClientH: ta.clientHeight,
+        taScrollH: ta.scrollHeight,
+      };
+    });
+    expect(metrics, "editor metrics readable").not.toBeNull();
+    expect(metrics!.dlgWidth, "consistent editor width (380px cap)").toBeLessThanOrEqual(380);
+    expect(
+      metrics!.dlgHeight,
+      "dialog height bounded inside the viewport (never grows past it)",
+    ).toBeLessThanOrEqual(metrics!.viewportH - 16);
+    expect(
+      metrics!.taClientH,
+      "textarea height bounded (max-height min(40vh, 280px))",
+    ).toBeLessThanOrEqual(281);
+    expect(metrics!.taScrollH, "long note content overflows the textarea box").toBeGreaterThan(
+      metrics!.taClientH,
+    );
     await popoverDone(page);
   });
 
@@ -124,9 +212,9 @@ test.describe("ANNO-02 note create + edit (05-05)", () => {
     await textarea.fill("<script>alert(1)</script><b>bold</b>");
     await popoverDone(page);
     await expect(announcementRegion(page)).toContainText(/Note saved/i);
-    // The popover's excerpt region (the read-only context) must NOT contain a
+    // Reopen via the controls → the editor's content must NOT contain a
     // parsed <script> or <b> element — the note text is rendered as text.
-    await page.locator("mark.highlight").first().click();
+    await openNoteEditorViaControls(page);
     const popover = page.locator("#highlight-popover");
     await expect(popover.locator("script")).toHaveCount(0);
     await expect(popover.locator("b")).toHaveCount(0);
@@ -175,9 +263,11 @@ test.describe("ANNO-02/ANNO-11 note edit on a multi-block span (19-05)", () => {
     const notedMarks = page.locator(`mark.highlight.has-note[data-highlight-id="${hlId}"]`);
     expect(await notedMarks.count()).toBe(extentsBefore.length);
 
-    // Reopen the popover ON THE FIRST SLICE + edit the note.
+    // Reopen the editor ON THE FIRST SLICE (controls → Edit note) + edit.
     await page.locator(`#hl-${hlId}`).click();
-    const reopened = page.locator("textarea.highlight-popover-textarea");
+    await expect(highlightControls(page)).toBeVisible();
+    await highlightControls(page).getByRole("button", { name: "Edit note" }).click();
+    const reopened = noteTextarea(page);
     await expect(reopened).toBeVisible();
     await expect(reopened).toHaveValue("Span note first draft.");
     await reopened.fill("Span note edited once.");

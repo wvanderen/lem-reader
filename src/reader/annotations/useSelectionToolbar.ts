@@ -250,7 +250,9 @@ export function useSelectionToolbar({
         return;
       }
       // Enter/Space on a focused <mark> (D5-10 / UI-SPEC §Interaction 29)
-      // opens the inline note popover via setOpenPopoverFor.
+      // exposes the lightweight highlight controls via setControlsFor —
+      // issue #175: keyboard activation moves focus INTO the controls (the
+      // focus flag), the writing-only editor stays one step away.
       if (key === "Enter" || key === " ") {
         const target = event.target as HTMLElement | null;
         const mark = target?.closest?.("mark.highlight[data-highlight-id]") as HTMLElement | null;
@@ -258,7 +260,9 @@ export function useSelectionToolbar({
           event.preventDefault();
           const id = mark.getAttribute("data-highlight-id");
           const api = highlightApiRef.current;
-          if (id && api) api.setOpenPopoverFor(id);
+          if (id && api) {
+            api.setControlsFor({ id, rect: mark.getBoundingClientRect(), focus: true });
+          }
           return;
         }
       }

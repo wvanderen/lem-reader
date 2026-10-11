@@ -142,6 +142,12 @@ function makeApi(overrides?: {
     updateHighlightColor: vi.fn(async () => {}),
     openPopoverFor: null,
     setOpenPopoverFor: vi.fn(),
+    controlsFor: null,
+    setControlsFor: vi.fn(),
+    confirmDeleteFor: null,
+    setConfirmDeleteFor: vi.fn(),
+    openTagsFor: null,
+    setOpenTagsFor: vi.fn(),
     storageState: "ok",
   };
   return api;
@@ -459,7 +465,7 @@ describe("useSelectionToolbar — H/N shortcuts", () => {
 });
 
 describe("useSelectionToolbar — keyboard routing matrix", () => {
-  it("Enter on a focused <mark> opens the note popover (D5-10)", async () => {
+  it("Enter on a focused <mark> exposes the highlight controls with focus (issue #175)", async () => {
     const api = makeApi();
     renderHarness(api, {
       extraBody: (
@@ -472,10 +478,17 @@ describe("useSelectionToolbar — keyboard routing matrix", () => {
     mark.focus();
     const event = pressKey("Enter", mark);
     expect(event.defaultPrevented).toBe(true);
-    expect(api.setOpenPopoverFor).toHaveBeenCalledWith("hl-7");
+    // Keyboard activation requests the CONTROLS (not the note editor) and
+    // moves focus into them.
+    expect(api.setControlsFor).toHaveBeenCalledTimes(1);
+    const request = vi.mocked(api.setControlsFor).mock.calls[0]?.[0];
+    expect(request?.id).toBe("hl-7");
+    expect(request?.focus).toBe(true);
+    expect(request?.rect).not.toBeNull();
+    expect(api.setOpenPopoverFor).not.toHaveBeenCalled();
   });
 
-  it("Space on a focused <mark> opens the note popover too", async () => {
+  it("Space on a focused <mark> exposes the highlight controls too", async () => {
     const api = makeApi();
     renderHarness(api, {
       extraBody: (
@@ -487,7 +500,10 @@ describe("useSelectionToolbar — keyboard routing matrix", () => {
     const mark = document.querySelector<HTMLElement>('mark[data-highlight-id="hl-8"]')!;
     mark.focus();
     pressKey(" ", mark);
-    expect(api.setOpenPopoverFor).toHaveBeenCalledWith("hl-8");
+    expect(api.setControlsFor).toHaveBeenCalledTimes(1);
+    const request = vi.mocked(api.setControlsFor).mock.calls[0]?.[0];
+    expect(request?.id).toBe("hl-8");
+    expect(request?.focus).toBe(true);
   });
 
   it("ONE plain Tab routes focus onto the toolbar's first button", async () => {

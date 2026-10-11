@@ -62,10 +62,17 @@ export interface AnnotationsDrawerProps {
    */
   onNavigate: (highlightId: string) => void;
   /**
-   * Open the inline note popover on a highlight (after navigate-back for Edit
-   * note, or directly for the popover's own Delete confirm).
+   * Open the writing-only note editor on a highlight (after navigate-back,
+   * or directly).
    */
   onEditNote: (highlightId: string) => void;
+  /**
+   * Issue #175 — the drawer's proportional delete (the issue #174 rules at
+   * THIS button, no longer a detour through the editor): a noted highlight
+   * opens the shared two-step confirm; a no-note highlight deletes
+   * immediately. The route owns the write + the failure/focus contract.
+   */
+  onDelete: (highlightId: string) => void;
   /**
    * Plan 13-10 (G5): export this article's highlights — the per-article
    * PORT-03 action relocated INTO the drawer (highlight-scoped action in the
@@ -93,6 +100,7 @@ export function AnnotationsDrawer({
   onClose,
   onNavigate,
   onEditNote,
+  onDelete,
   onExportHighlights,
   exportingHighlights,
   reviewHref,
@@ -294,7 +302,7 @@ export function AnnotationsDrawer({
                     <button
                       type="button"
                       className="btn btn-quiet drawer-entry-action drawer-entry-action-delete"
-                      onClick={() => onEditNote(h.record.id)}
+                      onClick={() => onDelete(h.record.id)}
                     >
                       Delete
                     </button>

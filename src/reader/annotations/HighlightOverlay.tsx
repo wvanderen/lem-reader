@@ -90,6 +90,21 @@ export type CreateFromSelectionResult =
         | "overlap";
     };
 
+/**
+ * Issue #175 — an activation request for the lightweight highlight controls.
+ * `rect` is the anchor mark's viewport rect captured at activation time (the
+ * controls position from it once, like the selection toolbar's saved rect —
+ * no live re-tracking); `focus` distinguishes the keyboard activation path
+ * (Enter/Space on a focused <mark> moves focus INTO the controls) from the
+ * pointer path (click leaves focus where the browser put it — the mark).
+ */
+export interface ControlsRequest {
+  id: string;
+  /** The anchor mark's viewport rect captured at activation time. */
+  rect: DOMRect;
+  focus: boolean;
+}
+
 export interface HighlightOverlayValue {
   /** Resolved highlights for the current article (D5-02 tri-state per record). */
   highlights: ResolvedHighlight[];
@@ -143,9 +158,37 @@ export interface HighlightOverlayValue {
   /**
    * The highlight id whose NotePopover is open, or null. Owned here so the
    * SelectionToolbar + NotePopover coordinate through one source of truth.
+   * Issue #175 — the note editor is the WRITING-ONLY dialog; it opens from
+   * the create paths (N / "Highlight + note" / "Add note") and from
+   * HighlightControls' "Add note"/"Edit note".
    */
   openPopoverFor: string | null;
   setOpenPopoverFor: (id: string | null) => void;
+  /**
+   * Issue #175 — the highlight whose lightweight controls are open, with the
+   * activation anchor (mark rect + whether focus should move into them), or
+   * null. Set by mark activation (click / Enter / Space); the controls
+   * dismiss themselves through this seam. The modal editors opened FROM the
+   * controls leave this state set (the controls hold their place behind the
+   * modal — dismissal is suppressed while a dialog is open) so closing the
+   * editor returns the reader to the controls at the highlight.
+   */
+  controlsFor: ControlsRequest | null;
+  setControlsFor: (request: ControlsRequest | null) => void;
+  /**
+   * Issue #175 — the highlight whose two-step delete confirm is open in the
+   * editor dialog, or null. The confirm step is reachable ONLY from
+   * HighlightControls' Delete (and the drawer's Delete) for highlights with
+   * a nonempty note — the no-note delete runs immediately at the call site.
+   */
+  confirmDeleteFor: string | null;
+  setConfirmDeleteFor: (id: string | null) => void;
+  /**
+   * Issue #175 — the highlight whose compact tags editor is open, or null.
+   * Opened from HighlightControls' "Tags".
+   */
+  openTagsFor: string | null;
+  setOpenTagsFor: (id: string | null) => void;
   /** Storage health (STATE-05) — routes to the existing StorageBanner. */
   storageState: AnnotationStorageState;
 }
@@ -187,6 +230,13 @@ export function HighlightOverlayProvider({
   // coordination state, not persistence state. The SelectionToolbar (Task 2)
   // and NotePopover (Plan 05-03) both read/set through this one source.
   const [openPopoverFor, setOpenPopoverFor] = useState<string | null>(null);
+  // Issue #175 — the remaining reading-mode annotation surfaces share the same
+  // ownership: the lightweight controls (mark activation), the delete-confirm
+  // view of the editor dialog, and the compact tags editor. One place, so
+  // every surface coordinates through one source of truth.
+  const [controlsFor, setControlsFor] = useState<ControlsRequest | null>(null);
+  const [confirmDeleteFor, setConfirmDeleteFor] = useState<string | null>(null);
+  const [openTagsFor, setOpenTagsFor] = useState<string | null>(null);
 
   // Latest-highlights ref so the captureCurrentSelection closure reads the
   // freshest resolved set without re-creating on every state change (mirrors
@@ -250,9 +300,23 @@ export function HighlightOverlayProvider({
       updateHighlightColor: state.updateHighlightColor,
       openPopoverFor,
       setOpenPopoverFor,
+      controlsFor,
+      setControlsFor,
+      confirmDeleteFor,
+      setConfirmDeleteFor,
+      openTagsFor,
+      setOpenTagsFor,
       storageState: state.storageState,
     }),
-    [state, createHighlightFromSelection, captureCurrentSelection, openPopoverFor],
+    [
+      state,
+      createHighlightFromSelection,
+      captureCurrentSelection,
+      openPopoverFor,
+      controlsFor,
+      confirmDeleteFor,
+      openTagsFor,
+    ],
   );
 
   // Parent bridge: populate apiRef synchronously during render so the parent's

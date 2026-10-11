@@ -275,7 +275,7 @@ export function BlockView({
       // Plan 19-03 (D19-01): when codeSegments are present (verbatim-source
       // segmentation via sliceCodeForHighlights), highlighted segments wrap
       // in <mark class="highlight"> carrying the SAME discipline as
-      // InlineRenderer's marks — data-highlight-id, tabIndex, aria-haspopup,
+      // InlineRenderer's marks — data-highlight-id, tabIndex,
       // per-segment aria-label, hasNote/unresolved modifiers, and the DOM id
       // only on the highlight's first segment (Pitfall 2). Segments
       // concatenate to EXACTLY the source (whitespace/newlines preserved);
@@ -320,7 +320,6 @@ export function BlockView({
                   data-highlight-id={seg.entry.id}
                   tabIndex={0}
                   aria-label={highlightAriaLabelForText(seg.text, traits)}
-                  aria-haspopup="dialog"
                 >
                   {seg.text}
                 </mark>

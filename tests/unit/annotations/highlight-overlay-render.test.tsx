@@ -78,7 +78,9 @@ describe("highlight overlay rendering — <mark> into ArticleBody (D5-15)", () =
     expect(mark?.getAttribute("data-highlight-id")).toBe("hl-1");
     expect(mark?.getAttribute("id")).toBe("hl-hl-1");
     expect(mark?.getAttribute("tabindex")).toBe("0");
-    expect(mark?.getAttribute("aria-haspopup")).toBe("dialog");
+    // Issue #175 — no aria-haspopup on marks (activation shows the controls
+    // toolbar; there is no truthful haspopup token for it).
+    expect(mark?.getAttribute("aria-haspopup")).toBeNull();
     // aria-label starts with "Highlight" (UI-SPEC §Copywriting).
     expect(mark?.getAttribute("aria-label")?.startsWith("Highlight")).toBe(true);
     // The highlighted text is "world".

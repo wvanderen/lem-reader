@@ -1,7 +1,8 @@
-// tests/unit/annotations/note-popover-tags.test.tsx
-// Issue #116 — annotation tags in the reader. The NotePopover (the
-// highlight's reader-details editor) hosts the ONE shared TagPicker via
-// TagEntry with a saveTags override:
+// tests/unit/annotations/highlight-tags-dialog.test.tsx
+// Issue #175 — the reading-mode highlight-tag editor: a SEPARATE compact
+// dialog opened from the lightweight HighlightControls ("Tags"), replacing
+// the tags section that used to live inside the note editor (issue #116).
+// The ONE shared TagPicker via TagEntry with a saveTags override:
 //   - the highlight's tags render as chips + an add/search combobox
 //   - a keyboard pick (type + Enter) commits through the tagsStore seam
 //   - case-insensitive routing: typing "ESSAYS" selects the stored "essays"
@@ -10,11 +11,13 @@
 //     textarea — tagging never depends on re-anchoring)
 //   - removing a chip commits the removal (note shares the highlight's tags
 //     by construction — there is no independent note tag set to edit)
+//   - Done closes the dialog back to the controls (the anchor <mark> holds
+//     the trigger for the restore)
 //
-// Semantic-only (RTL + user-event, jsdom). The popover mounting harness
-// mirrors note-popover-confirm.test.tsx (dialog polyfill + store stubs).
+// Semantic-only (RTL + user-event, jsdom). The mounting harness mirrors
+// note-popover-confirm.test.tsx (dialog polyfill + store stubs).
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { act, render, renderHook, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor, within, renderHook, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useEffect } from "react";
 import {
@@ -22,6 +25,7 @@ import {
   useHighlightOverlay,
 } from "../../../src/reader/annotations/HighlightOverlay";
 import { useAnnotationState } from "../../../src/reader/annotations/useAnnotationState";
+import { HighlightTagsDialog } from "../../../src/reader/annotations/HighlightTagsDialog";
 import { NotePopover } from "../../../src/reader/annotations/NotePopover";
 import type { CanonicalArticle } from "../../../src/content/types";
 import type { Block } from "../../../src/content/types";
@@ -88,8 +92,6 @@ vi.mock("../../../src/persistence/highlightsStore", async () => {
     })),
     saveHighlight: vi.fn().mockResolvedValue(undefined),
     deleteHighlight: vi.fn().mockResolvedValue(undefined),
-    // Issue #118 added the color write seam to this module; the tags tests
-    // don't exercise it but the hook imports it, so keep the seam present.
     setHighlightColor: vi.fn().mockResolvedValue(undefined),
   };
 });
@@ -100,8 +102,8 @@ vi.mock("../../../src/persistence/notesStore", () => ({
   deleteNote: vi.fn().mockResolvedValue(undefined),
 }));
 
-// Issue #116 — the tag seams are stubbed: suggestions come from the mocked
-// stats read, commits land in setHighlightTags (the ONE write seam).
+// The tag seams are stubbed: suggestions come from the mocked stats read,
+// commits land in setHighlightTags (the ONE write seam).
 vi.mock("../../../src/ingestion/library/tagsStore", () => ({
   loadTagStats: vi.fn().mockResolvedValue(mockData.stats),
   setArticleTags: vi.fn().mockResolvedValue(undefined),
@@ -144,7 +146,15 @@ if (typeof HTMLDialogElement !== "undefined") {
 
 // ── Test harness ─────────────────────────────────────────────────────────────
 
-function PopoverOpener({ highlightId }: { highlightId: string }) {
+function TagsOpener({ highlightId }: { highlightId: string }) {
+  const { setOpenTagsFor } = useHighlightOverlay();
+  useEffect(() => {
+    setOpenTagsFor(highlightId);
+  }, [highlightId, setOpenTagsFor]);
+  return null;
+}
+
+function NoteOpener({ highlightId }: { highlightId: string }) {
   const { setOpenPopoverFor } = useHighlightOverlay();
   useEffect(() => {
     setOpenPopoverFor(highlightId);
@@ -152,11 +162,11 @@ function PopoverOpener({ highlightId }: { highlightId: string }) {
   return null;
 }
 
-function renderPopover() {
+function renderTagsDialog() {
   return render(
     <HighlightOverlayProvider article={article}>
-      <PopoverOpener highlightId="hl-test-1" />
-      <NotePopover />
+      <TagsOpener highlightId="hl-test-1" />
+      <HighlightTagsDialog />
     </HighlightOverlayProvider>,
   );
 }
@@ -164,30 +174,35 @@ function renderPopover() {
 async function openTagsInput(): Promise<{
   user: ReturnType<typeof userEvent.setup>;
   input: HTMLInputElement;
+  dialog: HTMLElement;
 }> {
   const user = userEvent.setup();
-  const input = (await screen.findByPlaceholderText("Add or search a tag…")) as HTMLInputElement;
+  const dialog = await screen.findByRole("dialog", { name: "Edit tags" });
+  const input = (await within(dialog).findByPlaceholderText(
+    "Add or search a tag…",
+  )) as HTMLInputElement;
   await user.click(input);
-  return { user, input };
+  return { user, input, dialog };
 }
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 
-describe("NotePopover tags (issue #116)", () => {
+describe("HighlightTagsDialog — the compact tags editor (issue #175)", () => {
   afterEach(() => {
     vi.clearAllMocks();
   });
 
-  it("renders the highlight's tags as chips + the labelled combobox", async () => {
+  it("opens a separate compact dialog titled 'Edit tags' hosting the shared TagPicker", async () => {
     mockData.highlightRecord.tags = ["essays"];
-    renderPopover();
+    renderTagsDialog();
 
-    // The TagEntry fieldset legend + the visually-hidden input label both
-    // name the field (keyboard/SR anchoring inside the dialog).
-    const dialog = await screen.findByRole("dialog", { name: "Highlight note" });
+    const dialog = await screen.findByRole("dialog", { name: "Edit tags" });
+    expect(dialog.classList.contains("highlight-tags-dialog")).toBe(true);
+    // The fieldset legend + the visually-hidden input label both name the
+    // field (keyboard/SR anchoring inside the dialog).
     expect(within(dialog).getByText("Tags")).toBeTruthy();
     const input = within(dialog).getByLabelText("Add or search a tag");
-    expect(input.id).toBe("highlight-popover-tags-input");
+    expect(input.id).toBe("highlight-tags-input");
 
     // The existing tag renders as a pill chip with its inside-× remove
     // button (the shared TagPicker anatomy, labelled for AT).
@@ -201,7 +216,7 @@ describe("NotePopover tags (issue #116)", () => {
   it("keyboard pick: typing + Enter commits the tag through the write seam", async () => {
     mockData.highlightRecord.tags = ["essays"];
     const { setHighlightTags } = await import("../../../src/ingestion/library/tagsStore");
-    renderPopover();
+    renderTagsDialog();
 
     const { user, input } = await openTagsInput();
     await user.type(input, "philosophy");
@@ -213,7 +228,7 @@ describe("NotePopover tags (issue #116)", () => {
   it("case matching: typing ESSAYS routes to the stored casing (Q7A)", async () => {
     mockData.highlightRecord.tags = [];
     const { setHighlightTags } = await import("../../../src/ingestion/library/tagsStore");
-    renderPopover();
+    renderTagsDialog();
 
     const { user, input } = await openTagsInput();
     await user.type(input, "ESSAYS");
@@ -231,19 +246,26 @@ describe("NotePopover tags (issue #116)", () => {
 
   it("an older highlight without a tags field hydrates with NO tags", async () => {
     delete mockData.highlightRecord.tags;
-    renderPopover();
+    renderTagsDialog();
 
-    const dialog = await screen.findByRole("dialog", { name: "Highlight note" });
+    const dialog = await screen.findByRole("dialog", { name: "Edit tags" });
     // No chips, no remove buttons — the `?? []` hydration consumer-side.
     expect(within(dialog).queryAllByRole("button", { name: /Remove tag/ })).toEqual([]);
   });
 
-  it("tags stay EDITABLE when the anchor is ambiguous (textarea does not)", async () => {
+  it("tags stay EDITABLE when the anchor is ambiguous (the note textarea does not)", async () => {
     const { resolveQuoteSelector } = await import("../../../src/content/normalizeText");
-    vi.mocked(resolveQuoteSelector).mockReturnValueOnce("ambiguous");
     const { setHighlightTags } = await import("../../../src/ingestion/library/tagsStore");
+    vi.mocked(resolveQuoteSelector).mockReturnValueOnce("ambiguous");
     mockData.highlightRecord.tags = [];
-    renderPopover();
+    render(
+      <HighlightOverlayProvider article={article}>
+        <NoteOpener highlightId="hl-test-1" />
+        <TagsOpener highlightId="hl-test-1" />
+        <NotePopover />
+        <HighlightTagsDialog />
+      </HighlightOverlayProvider>,
+    );
 
     const textarea = (await screen.findByPlaceholderText(
       "Add a note (optional)",
@@ -262,7 +284,7 @@ describe("NotePopover tags (issue #116)", () => {
     mockData.highlightRecord.tags = ["essays", "keep"];
     const { setHighlightTags } = await import("../../../src/ingestion/library/tagsStore");
     const user = userEvent.setup();
-    renderPopover();
+    renderTagsDialog();
 
     const remove = await screen.findByRole("button", {
       name: "Remove tag essays",
@@ -276,7 +298,7 @@ describe("NotePopover tags (issue #116)", () => {
     mockData.highlightRecord.tags = ["essays"];
     const { setHighlightTags } = await import("../../../src/ingestion/library/tagsStore");
     const user = userEvent.setup();
-    renderPopover();
+    renderTagsDialog();
 
     // The × rides a real <button> with the "Remove tag …" aria-label — the
     // screen-reader/keyboard path needs no extra wiring; Enter activates it.
@@ -296,7 +318,7 @@ describe("NotePopover tags (issue #116)", () => {
     mockData.highlightRecord.tags = [];
     const { setHighlightTags } = await import("../../../src/ingestion/library/tagsStore");
     vi.mocked(setHighlightTags).mockRejectedValueOnce(new Error("QuotaExceededError"));
-    renderPopover();
+    renderTagsDialog();
 
     const { user, input } = await openTagsInput();
     await user.type(input, "philosophy");
@@ -307,13 +329,21 @@ describe("NotePopover tags (issue #116)", () => {
     await screen.findByText("Couldn't save tag.");
   });
 
-  it("the note has NO independent tag set — the popover renders exactly one tag field", async () => {
+  it("Done closes the dialog; the editor carries exactly ONE tag field (no note tag set)", async () => {
     mockData.highlightRecord.tags = ["essays"];
-    renderPopover();
+    const user = userEvent.setup();
+    renderTagsDialog();
 
-    await screen.findByRole("dialog", { name: "Highlight note" });
+    const dialog = await screen.findByRole("dialog", { name: "Edit tags" });
     // One combobox (the highlight's), no per-note tag surface.
     expect(screen.getAllByRole("combobox")).toHaveLength(1);
+
+    // Done → the dialog closes (the controls hold their place behind the
+    // modal; the trigger restore lands on the anchor <mark> — e2e-proven).
+    await user.click(within(dialog).getByRole("button", { name: "Done" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Edit tags" })).toBeNull();
+    });
   });
 });
 

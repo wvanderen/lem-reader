@@ -90,8 +90,9 @@ test.describe("Note popover modal-dialog focus (ACPT-02 finding #2)", () => {
   test("Tab cycles only within the dialog (focus trap — never escapes)", async ({ page }) => {
     await createHighlightAndOpenEditor(page);
 
-    // The dialog's focusable controls in DOM order: textarea, Done, Delete.
-    // Tab enough times to wrap past Delete and back into the dialog. The
+    // The dialog's focusable controls in DOM order: textarea, Done (issue
+    // #175 — the writing-only editor; Tags/Color/Delete live outside).
+    // Tab enough times to wrap past Done and back into the dialog. The
     // browser-provided focus trap on showModal() is the canonical modal-scope
     // implementation. This loop is the authoritative cross-engine focus-scope
     // proof: if focus ever lands on an interactive control outside the dialog
@@ -136,9 +137,12 @@ test.describe("Note popover modal-dialog focus (ACPT-02 finding #2)", () => {
   test("Escape closes the dialog + focus restores to the triggering <mark>", async ({ page }) => {
     // Focus-restore-to-<mark> is meaningful in the ACTIVATE-EXISTING-MARK path
     // (the real ACPT-02 Flow D scenario): the reader focuses a saved <mark>,
-    // activates it → the editor opens (mark is activeElement at showModal time)
-    // → close → focus returns to the mark. (The N-shortcut CREATE path has no
-    // prior trigger element, so its restore target is unspecified.)
+    // activates it → the LIGHTWEIGHT CONTROLS appear with focus moved into
+    // them (issue #175) → "Add note" hands off through the mark (the
+    // trigger-capture anchor) → the editor opens → close → focus returns to
+    // the mark, with the controls still holding their place. (The N-shortcut
+    // CREATE path has no prior trigger element, so its restore target is
+    // unspecified.)
     await createHighlightAndOpenEditor(page);
     // Persist the highlight + close the editor so a stable <mark> exists.
     await page.locator("#highlight-popover .highlight-popover-done").click();
@@ -148,10 +152,16 @@ test.describe("Note popover modal-dialog focus (ACPT-02 finding #2)", () => {
     // The triggering <mark> is focusable (tabindex=0 per the highlight renderer).
     const triggerMark = page.locator("mark.highlight").first();
     await expect(triggerMark).toHaveAttribute("tabindex", "0");
-    // Focus + activate the mark (the Flow D "open note" gesture).
+    // Focus + activate the mark (the Flow D "open note" gesture): Enter
+    // exposes the lightweight controls AND moves focus into them.
     await triggerMark.focus();
     await expect(triggerMark).toBeFocused();
     await page.keyboard.press("Enter");
+    const controls = page.locator(".highlight-controls");
+    await expect(controls).toBeVisible();
+    await expect(controls.getByRole("button", { name: "Add note" })).toBeFocused();
+    // Open the editor through the controls.
+    await controls.getByRole("button", { name: "Add note" }).click();
     await expect(dlg).toBeVisible();
 
     // Escape closes the native modal <dialog>.
@@ -162,6 +172,9 @@ test.describe("Note popover modal-dialog focus (ACPT-02 finding #2)", () => {
     // showModal() does NOT do this automatically; the `close` listener calls
     // triggerRef.current?.focus(). If that line is removed this assertion fails.
     await expect(triggerMark).toBeFocused();
+    // Issue #175: the lightweight controls held their place behind the modal
+    // — the reader is back at them, focused on the highlight.
+    await expect(controls).toBeVisible();
   });
 
   test("Done closes the dialog + flushes the note save + restores focus", async ({ page }) => {
@@ -175,6 +188,10 @@ test.describe("Note popover modal-dialog focus (ACPT-02 finding #2)", () => {
     const triggerMark = page.locator("mark.highlight").first();
     await triggerMark.focus();
     await page.keyboard.press("Enter");
+    const controls = page.locator(".highlight-controls");
+    await expect(controls).toBeVisible();
+    // The noted highlight labels the action "Edit note".
+    await controls.getByRole("button", { name: "Edit note" }).click();
     await expect(dlg).toBeVisible();
 
     // Done routes through setOpenPopoverFor(null) → dlg.close() → the close
@@ -183,11 +200,12 @@ test.describe("Note popover modal-dialog focus (ACPT-02 finding #2)", () => {
     await page.locator("#highlight-popover .highlight-popover-done").click();
     await expect(dlg).not.toBeVisible();
 
-    // Focus restored to the triggering <mark>.
+    // Focus restored to the triggering <mark>; the controls remain.
     await expect(triggerMark).toBeFocused();
+    await expect(controls).toBeVisible();
   });
 
-  test("dialog announces the highlighted excerpt as its accessible description (ACPT-02 #5)", async ({
+  test("dialog announces the highlighted excerpt as its accessible description (ACPT-02 #5) — never visually", async ({
     page,
   }) => {
     // ACPT-02 finding #5 (debug session `vo-note-popover-focus`): VoiceOver
@@ -196,19 +214,27 @@ test.describe("Note popover modal-dialog focus (ACPT-02 finding #2)", () => {
     // highlighted. The fix makes the excerpt the dialog's accessible
     // description via aria-describedby, with the "Highlighted text:" prefix
     // merged inside the excerpt <p> so the description is a single string
-    // ("Highlighted text: <excerpt>"). This test is the automated foundation
-    // beneath the human VO checkpoint: it proves the a11y-tree wiring
-    // (aria-describedby → the excerpt element → its text is in the dialog's
-    // computed description) that VO reads on dialog open.
+    // ("Highlighted text: <excerpt>"). Issue #175 tightens the visual
+    // contract: the excerpt block is FULLY visually-hidden now — the
+    // writing-only editor never reproduces the quotation visually, while the
+    // accessible description keeps the context. This test is the automated
+    // foundation beneath the human VO checkpoint: it proves the a11y-tree
+    // wiring (aria-describedby → the excerpt element → its text is in the
+    // dialog's computed description) that VO reads on dialog open.
     await createHighlightAndOpenEditor(page);
 
     // (a) The dialog references the excerpt element by id.
     const dlg = page.getByRole("dialog", { name: "Highlight note" });
     await expect(dlg).toHaveAttribute("aria-describedby", "highlight-popover-excerpt");
 
-    // (b) The referenced element exists and is inside the dialog.
+    // (b) The referenced element exists inside the dialog — and carries the
+    //     visually-hidden clip pattern (issue #175: context without the
+    //     visual repetition; Playwright counts a 1px clipped box as
+    //     "visible", so the class is the automated pin — the unit suite
+    //     holds the DOM shape).
     const excerptEl = dlg.locator("#highlight-popover-excerpt");
-    await expect(excerptEl).toBeVisible();
+    await expect(excerptEl).toBeAttached();
+    await expect(excerptEl).toHaveClass(/visually-hidden/);
 
     // (c) Read the actual excerpt text (excluding the visually-hidden prefix
     //     span) so the description assertion is fixture-agnostic.

@@ -1,26 +1,39 @@
 // tests/unit/annotations/note-popover-confirm.test.tsx
-// Phase 5 Plan 05-03 Task 1 — unit test for the NotePopover two-step delete
-// confirm + debounced save wiring.
+// Phase 5 Plan 05-03 Task 1 — unit test for the note editor dialog + the
+// two-step delete confirm. Issue #175 reshape: the dialog is the WRITING-ONLY
+// note editor (textarea + Done), and the delete confirm is its second view,
+// reachable ONLY through the provider's confirmDeleteFor state (Highlight
+// Controls' or the drawer's Delete on a noted highlight). Tags, color, and
+// the editor-level Delete moved OUT to their own surfaces (their behaviors
+// live in highlight-tags-dialog.test.tsx + highlight-controls*.test.tsx).
 //
 // Semantic-only (React Testing Library, jsdom). Proves:
-//   1. The popover is a native <dialog> (showModal — the modal-dialog
+//   1. The editor is a native <dialog> (showModal — the modal-dialog
 //      accessibility context VoiceOver needs). See debug session
 //      `vo-note-popover-focus` (ACPT-02 finding #2): the Phase 5
 //      `popover="manual"` div was unreachable by VO browse.
-//   2. The note textarea + excerpt render as React text children (no
-//      dangerouslySetInnerHTML — Pitfall 8 XSS defense).
-//   3. Clicking Delete shows the confirm prompt with Delete/Keep buttons.
-//   4. The Keep button carries [data-initial-focus] (non-destructive default
-//      — Pitfall 8).
+//   2. The note textarea + accessible-description excerpt render as React
+//      text children (no dangerouslySetInnerHTML — Pitfall 8 XSS defense).
+//   3. The writing-only contract: the edit view carries NO Delete button, NO
+//      tag field, NO color picker (Tags and Delete remain outside the note
+//      editor), and the excerpt is visually-hidden (the quotation is never
+//      repeated visually — accessible context only).
+//   4. Opening confirmDeleteFor shows the confirm prompt with Delete/Keep;
+//      Keep carries [data-initial-focus] (non-destructive default — Pitfall
+//      8) and closes the dialog (back to the controls — the trigger
+//      restore lands on the anchor mark).
 //   5. The debounced save calls updateNote on each textarea change.
 //   6. Cmd/Ctrl+Enter in the textarea flushes the debounced save + closes
 //      (the Done path — UX polish, PR 106); plain Enter/Shift+Enter keep
 //      native textarea behavior; Enter confirming an IME composition
 //      (isComposing) never triggers the shortcut.
+//   7. A confirmed delete restores focus near the passage (issue #174 — the
+//      containing block, never the article top) and clears the controls
+//      state (the mark is gone).
 //
 // Real-browser layout (modal focus scope/trap, showModal/close lifecycle,
-// focus management) is Plan 05-05's Playwright suite + the popover focus-trap
-// spec. jsdom provides the DOM structure; showModal/close are polyfilled.
+// focus management) is the Playwright suite + the popover focus-trap spec.
+// jsdom provides the DOM structure; showModal/close are polyfilled.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
 import { useEffect } from "react";
@@ -29,7 +42,7 @@ import {
   useHighlightOverlay,
 } from "../../../src/reader/annotations/HighlightOverlay";
 import { NotePopover } from "../../../src/reader/annotations/NotePopover";
-import { saveNote, loadNote } from "../../../src/persistence/notesStore";
+import { saveNote } from "../../../src/persistence/notesStore";
 import { deleteHighlight as deleteHighlightFromStore } from "../../../src/persistence/highlightsStore";
 import type { CanonicalArticle } from "../../../src/content/types";
 import type { Block } from "../../../src/content/types";
@@ -90,6 +103,7 @@ vi.mock("../../../src/persistence/highlightsStore", () => ({
   }),
   saveHighlight: vi.fn().mockResolvedValue(undefined),
   deleteHighlight: vi.fn().mockResolvedValue(undefined),
+  setHighlightColor: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("../../../src/persistence/notesStore", () => ({
@@ -140,11 +154,11 @@ if (typeof HTMLDialogElement !== "undefined") {
 // ── Test harness ─────────────────────────────────────────────────────────────
 
 /**
- * Helper component that opens the popover for a specific highlight id after
- * mount, so the test can exercise the popover's edit/confirm views without
- * needing the real <mark> activation path.
+ * Helper component that opens the editor for a specific highlight id after
+ * mount, so the test can exercise the editor's note view without needing the
+ * real activation path.
  */
-function PopoverOpener({ highlightId }: { highlightId: string }) {
+function NoteOpener({ highlightId }: { highlightId: string }) {
   const { setOpenPopoverFor } = useHighlightOverlay();
   useEffect(() => {
     setOpenPopoverFor(highlightId);
@@ -152,9 +166,21 @@ function PopoverOpener({ highlightId }: { highlightId: string }) {
   return null;
 }
 
+/**
+ * Issue #175 — opens the dialog directly in the CONFIRM mode (the state the
+ * lightweight controls' Delete sets for a noted highlight).
+ */
+function ConfirmOpener({ highlightId }: { highlightId: string }) {
+  const { setConfirmDeleteFor } = useHighlightOverlay();
+  useEffect(() => {
+    setConfirmDeleteFor(highlightId);
+  }, [highlightId, setConfirmDeleteFor]);
+  return null;
+}
+
 // ── Tests ────────────────────────────────────────────────────────────────────
 
-describe("NotePopover — native <dialog> + two-step delete confirm (D5-10/D5-12)", () => {
+describe("NotePopover — native <dialog> + writing-only editor (issue #175)", () => {
   afterEach(() => {
     vi.clearAllMocks();
   });
@@ -162,21 +188,21 @@ describe("NotePopover — native <dialog> + two-step delete confirm (D5-10/D5-12
   it("uses a native <dialog> + showModal (modal-dialog AX context for VoiceOver)", async () => {
     const { container } = render(
       <HighlightOverlayProvider article={article}>
-        <PopoverOpener highlightId="hl-test-1" />
+        <NoteOpener highlightId="hl-test-1" />
         <NotePopover />
       </HighlightOverlayProvider>,
     );
 
-    // Wait for the highlight to load + popover to open.
-    const popoverEl = await screen.findByRole("dialog", { name: "Highlight note" });
+    // Wait for the highlight to load + editor to open.
+    const dialog = await screen.findByRole("dialog", { name: "Highlight note" });
 
     // Native <dialog> — the modal accessibility context VoiceOver needs.
     // (Phase 5 used <div popover="manual">; debug `vo-note-popover-focus`
     // found VO browse passed the textarea. Native <dialog> + showModal is the
     // proven SettingsPanel/Drawer pattern.)
-    expect(popoverEl.tagName).toBe("DIALOG");
-    expect(popoverEl.getAttribute("popover")).toBeNull();
-    expect(popoverEl.classList.contains("highlight-popover")).toBe(true);
+    expect(dialog.tagName).toBe("DIALOG");
+    expect(dialog.getAttribute("popover")).toBeNull();
+    expect(dialog.classList.contains("highlight-popover")).toBe(true);
     // Container also has the element.
     expect(container.querySelector("dialog.highlight-popover")).not.toBeNull();
   });
@@ -184,96 +210,53 @@ describe("NotePopover — native <dialog> + two-step delete confirm (D5-10/D5-12
   it("renders note textarea + excerpt as React text children (Pitfall 8 — no raw HTML)", async () => {
     render(
       <HighlightOverlayProvider article={article}>
-        <PopoverOpener highlightId="hl-test-1" />
+        <NoteOpener highlightId="hl-test-1" />
         <NotePopover />
       </HighlightOverlayProvider>,
     );
 
-    // Wait for the popover to open + the textarea to appear.
+    // Wait for the editor to open + the textarea to appear.
     const textarea = await screen.findByPlaceholderText("Add a note (optional)");
     expect(textarea).toBeTruthy();
     // The existing note text renders in the textarea value (React text child).
     expect((textarea as HTMLTextAreaElement).value).toBe("Important passage");
 
-    // The excerpt renders as a <p> text child (no raw HTML).
+    // The excerpt renders as a <p> text child (no raw HTML) — and it is
+    // VISUALLY HIDDEN (issue #175: context for the accessible description,
+    // never a visual repetition of the quotation).
     const excerpt = screen.getByText("Hello", { exact: false });
     expect(excerpt).toBeTruthy();
     expect(excerpt.classList.contains("highlight-popover-excerpt")).toBe(true);
+    expect(excerpt.classList.contains("visually-hidden")).toBe(true);
 
     // No <script> elements injected (Pitfall 8 XSS defense).
     const popover = document.querySelector(".highlight-popover");
     expect(popover?.querySelectorAll("script").length ?? 0).toBe(0);
   });
 
-  it("shows two-step delete confirm with [data-initial-focus] on Keep (Pitfall 8)", async () => {
+  it("the edit view carries NO Delete, NO tags, NO color (Tags and Delete stay outside)", async () => {
     render(
       <HighlightOverlayProvider article={article}>
-        <PopoverOpener highlightId="hl-test-1" />
+        <NoteOpener highlightId="hl-test-1" />
         <NotePopover />
       </HighlightOverlayProvider>,
     );
 
-    // Wait for the popover's edit view to appear (textarea present).
     await screen.findByPlaceholderText("Add a note (optional)");
 
-    // Step 1: click the Delete button.
-    const deleteBtn = screen.getByText("Delete");
-    await act(async () => {
-      fireEvent.click(deleteBtn);
-    });
-
-    // The confirm prompt should now be visible.
-    const prompt = screen.getByText("Delete this highlight?");
-    expect(prompt).toBeTruthy();
-
-    // The Keep button carries [data-initial-focus] (non-destructive default —
-    // Pitfall 8 — an accidental Enter cannot delete).
-    const keepBtn = screen.getByText("Keep");
-    expect(keepBtn.getAttribute("data-initial-focus")).not.toBeNull();
-
-    // The destructive Delete confirm button is also present.
-    const confirmDeleteBtns = screen.getAllByText("Delete");
-    // Two Delete buttons: the original (hidden behind confirm) + the confirm
-    // step's destructive Delete. The confirm one uses the destructive class.
-    const confirmDelete = confirmDeleteBtns.find((btn) =>
-      btn.classList.contains("highlight-popover-destructive"),
-    );
-    expect(confirmDelete).toBeTruthy();
-  });
-
-  it("clicking Keep returns to the edit view (nothing deleted)", async () => {
-    render(
-      <HighlightOverlayProvider article={article}>
-        <PopoverOpener highlightId="hl-test-1" />
-        <NotePopover />
-      </HighlightOverlayProvider>,
-    );
-
-    // Wait for edit view.
-    await screen.findByPlaceholderText("Add a note (optional)");
-
-    // Enter delete confirm.
-    await act(async () => {
-      fireEvent.click(screen.getByText("Delete"));
-    });
-    expect(screen.getByText("Delete this highlight?")).toBeTruthy();
-
-    // Click Keep → returns to edit view.
-    await act(async () => {
-      fireEvent.click(screen.getByText("Keep"));
-    });
-
-    // The textarea should be visible again (edit view restored).
-    const textarea = screen.getByPlaceholderText("Add a note (optional)");
-    expect(textarea).toBeTruthy();
-    // The confirm prompt is gone.
-    expect(screen.queryByText("Delete this highlight?")).toBeNull();
+    // Writing-only: Done is the ONLY button (plus the Cmd/Ctrl+Enter
+    // shortcut); tags and color live on their own surfaces now.
+    const dialog = screen.getByRole("dialog", { name: "Highlight note" });
+    const buttons = Array.from(dialog.querySelectorAll("button")).map((b) => b.textContent);
+    expect(buttons).toEqual(["Done"]);
+    expect(dialog.querySelectorAll("fieldset").length).toBe(0);
+    expect(dialog.querySelector("textarea")).not.toBeNull();
   });
 
   it("wires debounced save via updateNote on textarea change (D5-10)", async () => {
     render(
       <HighlightOverlayProvider article={article}>
-        <PopoverOpener highlightId="hl-test-1" />
+        <NoteOpener highlightId="hl-test-1" />
         <NotePopover />
       </HighlightOverlayProvider>,
     );
@@ -300,100 +283,72 @@ describe("NotePopover — native <dialog> + two-step delete confirm (D5-10/D5-12
   });
 });
 
-// ── Issue #174 — deletion proportional to the written content removed ───────
+// ── Issue #175 — the two-step delete confirm lives in the editor dialog ─────
 
-describe("NotePopover — delete gating (issue #174: no note deletes immediately)", () => {
+describe("NotePopover — delete confirm view (issue #175 + #174)", () => {
   afterEach(() => {
     vi.clearAllMocks();
   });
 
-  it("deletes a NO-NOTE highlight immediately — no confirm step, popover closes", async () => {
-    // A highlight without a NoteRecord (loadNote → null).
-    vi.mocked(loadNote).mockResolvedValueOnce(null);
+  it("confirmDeleteFor opens the dialog in the confirm view (prompt + cascade + Keep default)", async () => {
     render(
       <HighlightOverlayProvider article={article}>
-        <PopoverOpener highlightId="hl-test-1" />
+        <ConfirmOpener highlightId="hl-test-1" />
         <NotePopover />
       </HighlightOverlayProvider>,
     );
 
-    await screen.findByPlaceholderText("Add a note (optional)");
-
-    // Click Delete → the write fires directly (no "Delete this highlight?"
-    // prompt ever mounts).
-    await act(async () => {
-      fireEvent.click(screen.getByText("Delete"));
-    });
-
-    expect(deleteHighlightFromStore).toHaveBeenCalledWith("hl-test-1");
-    expect(screen.queryByText("Delete this highlight?")).toBeNull();
-    // The popover closed (edit view unmounted).
-    expect(screen.queryByPlaceholderText("Add a note (optional)")).toBeNull();
-  });
-
-  it("treats a WHITESPACE-ONLY note as no note — deletes immediately", async () => {
-    vi.mocked(loadNote).mockResolvedValueOnce(null);
-    render(
-      <HighlightOverlayProvider article={article}>
-        <PopoverOpener highlightId="hl-test-1" />
-        <NotePopover />
-      </HighlightOverlayProvider>,
-    );
-
-    const textarea = (await screen.findByPlaceholderText(
-      "Add a note (optional)",
-    )) as HTMLTextAreaElement;
-    // The reader typed whitespace only — nothing written to lose.
-    await act(async () => {
-      fireEvent.change(textarea, { target: { value: "   " } });
-    });
-    expect(textarea.value).toBe("   ");
-
-    await act(async () => {
-      fireEvent.click(screen.getByText("Delete"));
-    });
-
-    expect(deleteHighlightFromStore).toHaveBeenCalledWith("hl-test-1");
-    expect(screen.queryByText("Delete this highlight?")).toBeNull();
-    expect(screen.queryByPlaceholderText("Add a note (optional)")).toBeNull();
-  });
-
-  it("still confirms for a NONEMPTY note, with Keep as the safe default", async () => {
-    render(
-      <HighlightOverlayProvider article={article}>
-        <PopoverOpener highlightId="hl-test-1" />
-        <NotePopover />
-      </HighlightOverlayProvider>,
-    );
-
-    await screen.findByPlaceholderText("Add a note (optional)");
-
-    await act(async () => {
-      fireEvent.click(screen.getByText("Delete"));
-    });
-
-    // The two-step confirm appears; the write has NOT fired yet.
+    // The confirm prompt should be visible (the write has NOT fired).
     expect(deleteHighlightFromStore).not.toHaveBeenCalled();
-    expect(screen.getByText("Delete this highlight?")).toBeTruthy();
+    const prompt = await screen.findByText("Delete this highlight?");
+    expect(prompt).toBeTruthy();
     expect(screen.getByText("The note attached to it will also be removed.")).toBeTruthy();
-    expect(screen.getByText("Keep").getAttribute("data-initial-focus")).not.toBeNull();
+
+    // The Keep button carries [data-initial-focus] (non-destructive default —
+    // Pitfall 8 — an accidental Enter cannot delete).
+    const keepBtn = screen.getByText("Keep");
+    expect(keepBtn.getAttribute("data-initial-focus")).not.toBeNull();
+
+    // The destructive Delete confirm button is also present.
+    const confirmDelete = screen
+      .getAllByText("Delete")
+      .find((btn) => btn.classList.contains("highlight-popover-destructive"));
+    expect(confirmDelete).toBeTruthy();
   });
 
-  it("a failed delete keeps the popover OPEN with the inline failure line (content stays)", async () => {
+  it("clicking Keep CLOSES the dialog (back to the controls — nothing deleted)", async () => {
+    render(
+      <HighlightOverlayProvider article={article}>
+        <ConfirmOpener highlightId="hl-test-1" />
+        <NotePopover />
+      </HighlightOverlayProvider>,
+    );
+
+    await screen.findByText("Delete this highlight?");
+
+    // Click Keep → the dialog closes (the controls hold their place behind
+    // the modal; the trigger restore lands on the anchor mark — proven in
+    // the e2e focus spec).
+    await act(async () => {
+      fireEvent.click(screen.getByText("Keep"));
+    });
+
+    // Nothing was deleted; the confirm view is gone.
+    expect(deleteHighlightFromStore).not.toHaveBeenCalled();
+    expect(screen.queryByText("Delete this highlight?")).toBeNull();
+  });
+
+  it("a failed delete keeps the dialog OPEN with the inline failure line (content stays)", async () => {
     vi.mocked(deleteHighlightFromStore).mockRejectedValueOnce(new Error("quota"));
     render(
       <HighlightOverlayProvider article={article}>
-        <PopoverOpener highlightId="hl-test-1" />
+        <ConfirmOpener highlightId="hl-test-1" />
         <NotePopover />
       </HighlightOverlayProvider>,
     );
 
-    await screen.findByPlaceholderText("Add a note (optional)");
-
     // Noted highlight → confirm view → destructive Delete → rejection.
-    await act(async () => {
-      fireEvent.click(screen.getByText("Delete"));
-    });
+    await screen.findByText("Delete this highlight?");
     const confirmDelete = screen
       .getAllByText("Delete")
       .find((btn) => btn.classList.contains("highlight-popover-destructive"));
@@ -402,7 +357,7 @@ describe("NotePopover — delete gating (issue #174: no note deletes immediately
       fireEvent.click(confirmDelete!);
     });
 
-    // Honest failure: the popover STAYS OPEN in the confirm view (never a
+    // Honest failure: the dialog STAYS OPEN in the confirm view (never a
     // close that implies success), the calm inline line renders, and the
     // retry affordance remains.
     expect(screen.getByText("Couldn't delete this highlight. Try again.")).toBeTruthy();
@@ -410,35 +365,10 @@ describe("NotePopover — delete gating (issue #174: no note deletes immediately
     expect(screen.getByText("Keep")).toBeTruthy();
   });
 
-  it("a failed NO-NOTE delete also keeps the popover open (immediate path)", async () => {
-    vi.mocked(loadNote).mockResolvedValueOnce(null);
-    vi.mocked(deleteHighlightFromStore).mockRejectedValueOnce(new Error("quota"));
-    render(
-      <HighlightOverlayProvider article={article}>
-        <PopoverOpener highlightId="hl-test-1" />
-        <NotePopover />
-      </HighlightOverlayProvider>,
-    );
-
-    await screen.findByPlaceholderText("Add a note (optional)");
-
-    await act(async () => {
-      fireEvent.click(screen.getByText("Delete"));
-    });
-
-    expect(screen.getByText("Couldn't delete this highlight. Try again.")).toBeTruthy();
-    expect(screen.getByPlaceholderText("Add a note (optional)")).toBeTruthy();
-    expect(screen.queryByText("Delete this highlight?")).toBeNull();
-  });
-});
-
-describe("NotePopover — focus restores near the passage after delete (issue #174)", () => {
-  afterEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it("a successful delete restores focus to the highlight's passage block (never the article top)", async () => {
-    vi.mocked(loadNote).mockResolvedValueOnce(null);
+  it("a confirmed delete restores focus to the highlight's passage block + clears the controls", async () => {
+    // The noted highlight goes through the confirm step (the no-note
+    // immediate path lives in HighlightControls — see highlight-controls
+    // .test.tsx).
     render(
       <HighlightOverlayProvider article={article}>
         {/* The visible reading surface fragment ArticleView renders: the
@@ -454,16 +384,17 @@ describe("NotePopover — focus restores near the passage after delete (issue #1
             world.
           </p>
         </div>
-        <PopoverOpener highlightId="hl-test-1" />
+        <ConfirmOpener highlightId="hl-test-1" />
         <NotePopover />
       </HighlightOverlayProvider>,
     );
 
-    await screen.findByPlaceholderText("Add a note (optional)");
-
-    // No-note highlight → the Delete click runs the immediate path.
+    await screen.findByText("Delete this highlight?");
+    const confirmDelete = screen
+      .getAllByText("Delete")
+      .find((btn) => btn.classList.contains("highlight-popover-destructive"))!;
     await act(async () => {
-      fireEvent.click(screen.getByText("Delete"));
+      fireEvent.click(confirmDelete);
     });
 
     expect(deleteHighlightFromStore).toHaveBeenCalledWith("hl-test-1");
@@ -473,7 +404,7 @@ describe("NotePopover — focus restores near the passage after delete (issue #1
     // would have silently no-op'd into once the mark unmounts.
     const block = document.querySelector<HTMLElement>('[data-block-index="7"]');
     expect(block).not.toBeNull();
-    expect(block).toHaveFocus();
+    await waitFor(() => expect(block).toHaveFocus());
     // The programmatic-focus discipline set tabindex="-1" on the block
     // (blocks are not focusable by default) — the resolveTocDestination/
     // settleFocus pattern.
@@ -489,7 +420,7 @@ describe("NotePopover — Cmd/Ctrl+Enter note save shortcut (PR 106)", () => {
   it("Cmd+Enter flushes the debounced save and closes (the Done path)", async () => {
     render(
       <HighlightOverlayProvider article={article}>
-        <PopoverOpener highlightId="hl-test-1" />
+        <NoteOpener highlightId="hl-test-1" />
         <NotePopover />
       </HighlightOverlayProvider>,
     );
@@ -516,14 +447,14 @@ describe("NotePopover — Cmd/Ctrl+Enter note save shortcut (PR 106)", () => {
     const saved = vi.mocked(saveNote).mock.calls[0]?.[0];
     expect(saved?.text).toBe("Saved via shortcut");
 
-    // The popover closed (edit view unmounted).
+    // The editor closed (edit view unmounted).
     expect(screen.queryByPlaceholderText("Add a note (optional)")).toBeNull();
   });
 
   it("Ctrl+Enter also saves and closes", async () => {
     render(
       <HighlightOverlayProvider article={article}>
-        <PopoverOpener highlightId="hl-test-1" />
+        <NoteOpener highlightId="hl-test-1" />
         <NotePopover />
       </HighlightOverlayProvider>,
     );
@@ -542,7 +473,7 @@ describe("NotePopover — Cmd/Ctrl+Enter note save shortcut (PR 106)", () => {
   it("plain Enter and Shift+Enter keep native behavior (no flush, no close)", async () => {
     render(
       <HighlightOverlayProvider article={article}>
-        <PopoverOpener highlightId="hl-test-1" />
+        <NoteOpener highlightId="hl-test-1" />
         <NotePopover />
       </HighlightOverlayProvider>,
     );
@@ -572,7 +503,7 @@ describe("NotePopover — Cmd/Ctrl+Enter note save shortcut (PR 106)", () => {
   it("Enter during IME composition (isComposing) does not trigger the shortcut", async () => {
     render(
       <HighlightOverlayProvider article={article}>
-        <PopoverOpener highlightId="hl-test-1" />
+        <NoteOpener highlightId="hl-test-1" />
         <NotePopover />
       </HighlightOverlayProvider>,
     );

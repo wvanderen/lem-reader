@@ -1,8 +1,10 @@
 // tests/e2e/annotations/highlight-tags.spec.ts
-// Issue #116 — annotation tags in the reader. The highlight's popover (the
-// reader-details editor) carries the shared tag picker:
-//   1. A tag picked in the popover lands on the highlight's Dexie row and
-//      re-renders when the popover reopens after a full reload.
+// Issue #116 + #175 — annotation tags in the reader. The tags editor is a
+// SEPARATE compact dialog opened from the lightweight highlight controls
+// ("Tags"), no longer a section inside the note editor:
+//   1. A tag picked in the tags editor lands on the highlight's Dexie row and
+//      re-renders when the editor reopens after a full reload; closing the
+//      tags editor returns to the controls (focused on the highlight).
 //   2. Tags stay EDITABLE on an unresolved (orphan) highlight — seeded via
 //      raw IndexedDB — while the note textarea keeps its disabled state.
 //      (AC: tags remain editable after the anchor becomes ambiguous/orphaned;
@@ -16,6 +18,8 @@ import {
   openArticle,
   selectRangeInBlock,
   findFirstBlockWithText,
+  openHighlightControls,
+  highlightControls,
 } from "./_fixtures";
 
 const FIXTURE = FIXTURES[0]!; // essay-long-form
@@ -91,8 +95,17 @@ async function seedHighlight(
   }, rec);
 }
 
-test.describe("highlight tags in the reader (issue #116)", () => {
-  test("a picked tag lands on the Dexie row + renders after reopen and reload", async ({
+/** Open the compact tags editor from the lightweight controls. */
+async function openTagsEditor(page: Page) {
+  const controls = await openHighlightControls(page);
+  await controls.getByRole("button", { name: "Tags" }).click();
+  const dialog = page.locator("dialog.highlight-tags-dialog");
+  await expect(dialog).toBeVisible();
+  return dialog;
+}
+
+test.describe("highlight tags in the reader (issue #116 + #175)", () => {
+  test("a picked tag lands on the Dexie row + renders after reopen and reload; Done returns to the controls", async ({
     page,
   }) => {
     await openArticle(page, FIXTURE);
@@ -100,36 +113,42 @@ test.describe("highlight tags in the reader (issue #116)", () => {
     expect(blockIdx).not.toBe(-1);
     await selectRangeInBlock(page, blockIdx, 0, 18);
     await page.keyboard.press("n");
+    // The writing-only editor has NO tag field anymore (issue #175).
+    const editor = page.locator("#highlight-popover");
+    await expect(editor).toBeVisible();
+    await expect(editor.locator("input#highlight-tags-input")).toHaveCount(0);
+    await editor.locator(".highlight-popover-done").click();
+    await expect(editor).not.toBeVisible();
 
-    const popover = page.locator("#highlight-popover");
-    await expect(popover).toBeVisible();
-    // The shared picker rides inside the editor; no chips yet.
-    const tagInput = popover.locator("input#highlight-popover-tags-input");
+    // Controls → Tags → the compact dialog.
+    const dialog = await openTagsEditor(page);
+    const tagInput = dialog.locator("input#highlight-tags-input");
     await expect(tagInput).toBeVisible();
 
     // Type + Enter picks (the shared combobox keyboard path).
     await tagInput.fill("essays");
     await tagInput.press("Enter");
-    await expect(popover.locator(".tag-picker-pill-text")).toHaveText("essays");
+    await expect(dialog.locator(".tag-picker-pill-text")).toHaveText("essays");
 
-    // Done flushes + closes; the row carries the tag.
-    await popover.locator(".highlight-popover-done").click();
-    await expect(popover).not.toBeVisible();
+    // Done closes; the row carries the tag; focus is back on the highlight.
+    await dialog.locator(".highlight-popover-done").click();
+    await expect(dialog).not.toBeVisible();
+    await expect(highlightControls(page)).toBeVisible();
+    await expect(page.locator("mark.highlight").first()).toBeFocused();
     await expect.poll(async () => (await readFirstHighlightRow(page))?.tags).toEqual(["essays"]);
 
-    // Full reload → activate the <mark> → the tag chip renders from the
-    // persisted record (AC: tags remain editable after reopening).
+    // Full reload → activate the <mark> → Tags → the tag chip renders from
+    // the persisted record (AC: tags remain editable after reopening).
     await page.reload();
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     const mark = page.locator("mark.highlight").first();
     await expect(mark).toBeVisible();
-    await mark.click();
-    await expect(popover).toBeVisible();
-    await expect(popover.locator(".tag-picker-pill-text")).toHaveText("essays");
+    const reopened = await openTagsEditor(page);
+    await expect(reopened.locator(".tag-picker-pill-text")).toHaveText("essays");
     // The field is editable again — add a second tag.
-    await tagInput.fill("to-revisit");
-    await tagInput.press("Enter");
-    await popover.locator(".highlight-popover-done").click();
+    await reopened.locator("input#highlight-tags-input").fill("to-revisit");
+    await reopened.locator("input#highlight-tags-input").press("Enter");
+    await reopened.locator(".highlight-popover-done").click();
     await expect
       .poll(async () => (await readFirstHighlightRow(page))?.tags)
       .toEqual(["essays", "to-revisit"]);
@@ -155,24 +174,30 @@ test.describe("highlight tags in the reader (issue #116)", () => {
     await expect(orphanMark).toBeVisible();
     await orphanMark.click();
 
-    const popover = page.locator("#highlight-popover");
-    await expect(popover).toBeVisible();
+    // Tags first: the compact dialog hosts the hydrating chip + a live field.
+    const controls = highlightControls(page);
+    await expect(controls).toBeVisible();
+    await controls.getByRole("button", { name: "Tags" }).click();
+    const dialog = page.locator("dialog.highlight-tags-dialog");
+    await expect(dialog).toBeVisible();
     // The hydrating tag chip renders from the seeded row.
-    await expect(popover.locator(".tag-picker-pill-text")).toHaveText("legacy-tag");
-    // The note textarea keeps its D5-04 disabled state…
-    await expect(popover.locator("textarea.highlight-popover-textarea")).toBeDisabled();
-    // …while the tag field stays editable and commits.
-    const tagInput = popover.locator("input#highlight-popover-tags-input");
+    await expect(dialog.locator(".tag-picker-pill-text")).toHaveText("legacy-tag");
+    // The tag field stays editable and commits.
+    const tagInput = dialog.locator("input#highlight-tags-input");
     await expect(tagInput).toBeEnabled();
     await tagInput.fill("kept-anyway");
     await tagInput.press("Enter");
-    await expect(popover.locator(".tag-picker-pill-text")).toHaveText([
-      "legacy-tag",
-      "kept-anyway",
-    ]);
-    await popover.locator(".highlight-popover-done").click();
+    await expect(dialog.locator(".tag-picker-pill-text")).toHaveText(["legacy-tag", "kept-anyway"]);
+    await dialog.locator(".highlight-popover-done").click();
     await expect
       .poll(async () => (await readFirstHighlightRow(page))?.tags)
       .toEqual(["legacy-tag", "kept-anyway"]);
+
+    // …while the note textarea keeps its D5-04 disabled state (the orphan's
+    // anchor is uncertain — the writing editor stays read-only for it).
+    await controls.getByRole("button", { name: "Add note" }).click();
+    const editor = page.locator("#highlight-popover");
+    await expect(editor.locator("textarea.highlight-popover-textarea")).toBeDisabled();
+    await editor.locator(".highlight-popover-done").click();
   });
 });

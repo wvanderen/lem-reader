@@ -736,3 +736,46 @@ export async function markTextsForHighlight(
     highlightId,
   );
 }
+
+// ── Issue #175 — the lightweight highlight controls + the split editors ───────
+
+/**
+ * The lightweight highlight controls surface (mark activation). The
+ * SelectionToolbar-shaped position:fixed card — role=toolbar, named
+ * "Highlight controls".
+ */
+export function highlightControls(page: Page): Locator {
+  return page.locator(".highlight-controls");
+}
+
+/**
+ * Pointer-activate a highlight's lightweight controls (click the first
+ * visible mark) and wait for the surface to mount. Returns the controls
+ * locator.
+ */
+export async function openHighlightControls(page: Page): Promise<Locator> {
+  const mark = page.locator("mark.highlight").first();
+  await expect(mark).toBeVisible();
+  await mark.click();
+  const controls = highlightControls(page);
+  await expect(controls).toBeVisible();
+  return controls;
+}
+
+/**
+ * Open the writing-only note editor from the lightweight controls (the
+ * pointer path: mark click → controls → the Add/Edit note action). The
+ * button's name depends on note presence; both spellings route here.
+ */
+export async function openNoteEditorViaControls(page: Page): Promise<void> {
+  const controls = await openHighlightControls(page);
+  await controls.getByRole("button", { name: /(Edit|Add) note/ }).click();
+  await expect(page.locator("dialog#highlight-popover")).toBeVisible();
+}
+
+/**
+ * The writing-only note editor's textarea (the D5-10 field).
+ */
+export function noteTextarea(page: Page): Locator {
+  return page.locator("textarea.highlight-popover-textarea");
+}

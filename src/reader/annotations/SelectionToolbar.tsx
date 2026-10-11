@@ -32,6 +32,9 @@
 import { useEffect, useRef, useState } from "react";
 // Issue #98 — the ONE polite status-region primitive.
 import { StatusRegion } from "../../ui/StatusRegion";
+// Issue #175 — the shared anchored-surface geometry (identical contract for
+// the selection toolbar + the highlight controls).
+import { computeAnchoredPosition } from "./anchorPosition";
 import type { ToolbarCaptureResult } from "./HighlightOverlay";
 
 export interface SelectionToolbarProps {
@@ -65,44 +68,6 @@ export interface SelectionToolbarProps {
    * clears anything.
    */
   onFocusExit: () => void;
-}
-
-/** Minimum room above the selection for the toolbar to stay above (UI-SPEC §25). */
-const FLIP_BELOW_THRESHOLD_PX = 60;
-
-/**
- * Compute the toolbar's position from the selection rect + available space.
- * Returns { left, top } in viewport coordinates for position:fixed.
- *
- * Edge-clamp: pin to --space-sm (8px) from the viewport edge. Flip-below:
- * if the selection top is within FLIP_BELOW_THRESHOLD_PX of the viewport top,
- * place the toolbar below the selection bottom instead.
- */
-function computePosition(
-  selectionRect: DOMRect,
-  toolbarWidth: number,
-  toolbarHeight: number,
-): { left: number; top: number } {
-  const GUTTER = 8; // --space-sm
-  // Horizontal: center on the selection midpoint.
-  const centerX = selectionRect.left + selectionRect.width / 2;
-  let left = centerX - toolbarWidth / 2;
-
-  // Edge-clamp horizontally to the viewport.
-  const clampLeft = GUTTER;
-  const clampRight = window.innerWidth - GUTTER;
-  const maxLeft = clampRight - toolbarWidth;
-  if (left < clampLeft) left = clampLeft;
-  if (left > maxLeft) left = maxLeft;
-
-  // Vertical: place --space-sm above the selection top, or flip below if too
-  // close to the viewport top.
-  const flipBelow = selectionRect.top < FLIP_BELOW_THRESHOLD_PX + toolbarHeight + GUTTER;
-  const top = flipBelow
-    ? selectionRect.bottom + GUTTER
-    : selectionRect.top - GUTTER - toolbarHeight;
-
-  return { left, top };
 }
 
 export function SelectionToolbar({
@@ -204,7 +169,7 @@ export function SelectionToolbar({
 
   // Compute position from the measured size (or a fallback estimate).
   const size = measuredSize ?? { width: 240, height: 44 };
-  const { left, top } = computePosition(selectionRect, size.width, size.height);
+  const { left, top } = computeAnchoredPosition(selectionRect, size.width, size.height);
 
   const isValid = captureResult.ok;
 
