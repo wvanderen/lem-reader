@@ -2126,6 +2126,20 @@ export function ArticleView({
             onDismiss={() => setShowFallbackBanner(false)}
           />
         )}
+        {settings.showReadAloud &&
+          !speechSynthesisAvailable() &&
+          !settings.speechNoticeDismissed && (
+            <aside className="readaloud-bar speech-notice" aria-label="Read-aloud availability">
+              <StatusRegion className="speech-notice-message">{SPEECH_BROWSER_NOTICE}</StatusRegion>
+              <button
+                type="button"
+                className="btn btn-quiet"
+                onClick={() => update({ speechNoticeDismissed: true })}
+              >
+                Dismiss
+              </button>
+            </aside>
+          )}
         {/* Phase 5 Plan 05-02: HighlightOverlayProvider wraps the article body
             (both scrolling + paginated branches) so the renderer (Task 2's
             BlockRenderer/InlineRenderer threading) + SelectionToolbar (Task 2)
@@ -2532,20 +2546,6 @@ export function ArticleView({
             onSkipPassageForward={skipPassageForwardReadAloud}
           />
         )}
-        {settings.showReadAloud &&
-          !speechSynthesisAvailable() &&
-          !settings.speechNoticeDismissed && (
-            <aside className="readaloud-bar speech-notice" aria-label="Read-aloud availability">
-              <StatusRegion className="speech-notice-message">{SPEECH_BROWSER_NOTICE}</StatusRegion>
-              <button
-                type="button"
-                className="btn btn-quiet"
-                onClick={() => update({ speechNoticeDismissed: true })}
-              >
-                Dismiss
-              </button>
-            </aside>
-          )}
       </main>
     </>
   );

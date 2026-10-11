@@ -6045,6 +6045,13 @@ dialog.highlight-popover .highlight-color-entry legend {
   border-radius: var(--radius-sm);
 }
 
+/* Scrolling pages let the availability notice join the document flow.
+ * A fixed card can cover fallback actions, especially at high zoom. */
+main#main:not(.paginated-main) .speech-notice {
+  position: static;
+  margin-block: var(--space-lg);
+}
+
 .speech-notice .speech-notice-message {
   flex: 1 1 16rem;
   margin: 0;
