@@ -284,7 +284,9 @@ describe("MeasurementEngine — V7 error classification", () => {
 /** A deterministic ReaderSettings stub for the dispatch's geometry reads. */
 const settingsStub: ReaderSettings = {
   librarySort: "recently-added", // issue #115 — the additive preference
-  openAfterAdd: true, // issue #163 — the remembered add-dialog checkbox
+  openAfterAdd: true,
+  showReadAloud: true,
+  speechNoticeDismissed: false, // issue #163 — the remembered add-dialog checkbox
   schemaVersion: 2,
   font: "serif",
   size: 18,

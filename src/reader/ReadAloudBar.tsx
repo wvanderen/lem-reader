@@ -58,6 +58,15 @@
 //     either direction, the same skip discipline as #43). Seeking while
 //     paused stays paused; seeking during playback continues speech from the
 //     picked position; percent 100 finishes through the ONE completion seam.
+//   - Issue #167 — a DETECTED failure keeps the bar open (never a silent
+//     collapse): the state lands on "failed", the primary's name becomes
+//     "Retry", the calm explanation is VISIBLE text on the bar (and announced
+//     through the ONE polite region), and the voice picker + speed stay
+//     reachable — a voice change writes settings that Retry reads fresh.
+//     The playback-only controls (seek slider, skips, passage steps, jump,
+//     follow text) retire while failed: no dead controls. The reading
+//     position is never rewound by a failure — Retry resumes from the
+//     preserved listened offset (the hook owns that seam).
 //   - Exactly ONE polite role="status" region owns the transport
 //     announcements (this component's visually-hidden region; annotation and
 //     export regions stay separate — the D9-06 pattern).
@@ -88,6 +97,13 @@ interface ReadAloudBarProps {
    * The hook owns the floor and never supplies null.
    */
   followLevel: FollowLevel;
+  /**
+   * Issue #167 — the detected failure's reader-facing copy (non-null only
+   * while the state is "failed"). Rendered as VISIBLE calm text on the bar
+   * next to Retry and voice selection; the ONE polite region announces the
+   * same line.
+   */
+  failure?: string | null;
   /** Copy for the ONE polite transport status region. */
   announcement: string | null;
   /**
@@ -183,11 +199,14 @@ export function seekValueText(percent: number): string {
 }
 
 /** The primary button's visible name per transport state — the state IS the
- * accessible name (native button text, no aria-label duplication). */
+ * accessible name (native button text, no aria-label duplication). Issue
+ * #167 — "failed" reads "Retry": the one action that resumes from the
+ * preserved position (never "Play", which would imply restart-from-top). */
 const PRIMARY_LABELS: Record<TransportState, string> = {
   stopped: "Read aloud",
   playing: "Pause",
   paused: "Play",
+  failed: "Retry",
 };
 
 /** The skip controls (issue #43, O3) — one table, one render loop. Each is
@@ -215,6 +234,7 @@ type PassageControlKey = (typeof PASSAGE_CONTROLS)[number]["key"];
 export function ReadAloudBar({
   state,
   followLevel,
+  failure,
   announcement,
   notice,
   rate,
@@ -234,6 +254,14 @@ export function ReadAloudBar({
   onSkipPassageForward,
 }: ReadAloudBarProps) {
   const sessionActive = state !== "stopped";
+  // Issue #167 — a failed session keeps the bar open but retires every
+  // PLAYBACK control: the seek slider, skips, passage steps, jump, and the
+  // follow text would be dead (the engine no-ops them while failed). What
+  // remains is honest: Retry (the primary), Stop (dismiss), the failure
+  // explanation, and the voice + speed pickers — whose changes persist and
+  // are exactly what the retry reads fresh.
+  const failureActive = state === "failed";
+  const playbackActive = sessionActive && !failureActive;
   const clusterRef = useRef<HTMLDivElement | null>(null);
   // Issue #165 — the Voice popover's open flag (the trigger only exists
   // mid-session; the popover closes itself when the session ends so it
@@ -338,6 +366,12 @@ export function ReadAloudBar({
           <button type="button" className="btn btn-quiet readaloud-btn" onClick={onPrimary}>
             {PRIMARY_LABELS[state]}
           </button>
+          {/* Issue #167 — the failure explanation as VISIBLE calm text (the
+              honest-failure contract): what happened, and the two things the
+              reader can do about it (try another voice / Retry), stated once
+              on the bar itself — not only in the hidden status region. The
+              ONE polite region announces the same line. */}
+          {failureActive && failure && <p className="readaloud-failure">{failure}</p>}
           {/* Issue #166 — the seek control: ARTICLE-position currency (a
               percent of the article's text), never a duration — the platform
               gives no reliable audio time, so none is implied. A native
@@ -345,8 +379,9 @@ export function ReadAloudBar({
               its accessible name + aria-valuetext carrying the article-
               position feedback. Pointer drags show the picked value and
               commit on release; keyboard commits per change. Percent 100
-              routes through the route's at-end→finish seam. */}
-          {sessionActive && onSeek && !!totalGraphemes && (
+              routes through the route's at-end→finish seam. Retired while
+              failed (issue #167) — a dead slider would lie. */}
+          {playbackActive && onSeek && !!totalGraphemes && (
             <input
               type="range"
               className="readaloud-seek"
@@ -378,7 +413,7 @@ export function ReadAloudBar({
           )}
           {/* Passage steps (issue #166) — previous/next passage, the
               utterance-sized navigation step either direction. */}
-          {sessionActive &&
+          {playbackActive &&
             PASSAGE_CONTROLS.map(({ key, label }) => {
               const onPassage = passageHandlers[key];
               return onPassage ? (
@@ -393,7 +428,7 @@ export function ReadAloudBar({
               ) : null;
             })}
           {/* Skip controls (issue #43, O3) — see SKIP_CONTROLS. */}
-          {sessionActive &&
+          {playbackActive &&
             SKIP_CONTROLS.map(({ key, label }) => {
               const onSkip = skipHandlers[key];
               return onSkip ? (
@@ -410,7 +445,7 @@ export function ReadAloudBar({
           {/* Jump to spoken position — visible only while a session exists
               (playing/paused); the marker may be out of view after manual
               navigation, and this restores orientation focus-free. */}
-          {sessionActive && onJumpToSpoken && (
+          {playbackActive && onJumpToSpoken && (
             <button type="button" className="btn btn-quiet readaloud-btn" onClick={onJumpToSpoken}>
               Jump to spoken position
             </button>
@@ -431,8 +466,11 @@ export function ReadAloudBar({
               ("Read-aloud speed"), the visible value ("1.25×") the quiet
               text register. A stored rate off the ladder (a continuous
               schema value) is APPENDED so the control never shows a
-              valueless state. */}
-          {sessionActive && <span className="readaloud-follow">{FOLLOW_LABELS[followLevel]}</span>}
+              valueless state. The follow text retires while failed (issue
+              #167) — the floor value would be noise next to the failure
+              line; the speed select STAYS (a changed speed is what Retry
+              picks up). */}
+          {playbackActive && <span className="readaloud-follow">{FOLLOW_LABELS[followLevel]}</span>}
           {sessionActive && onRateChange && (
             <select
               className="readaloud-rate readaloud-speed"
@@ -452,10 +490,13 @@ export function ReadAloudBar({
           )}
           {/* Issue #165 — the voice ONE action away: the anchored popover
               (the same probed filtered list Reading settings renders).
-              Session-gated like every transport control; the popover itself
-              sits OUTSIDE the bar box (a fragment sibling below) because
-              .readaloud-bar is pointer-events:none — CSS inheritance, not
-              the top layer, governs it. */}
+              Session-gated like every transport control — INCLUDING failed
+              (issue #167): picking another voice from the failure state is
+              the acceptance contract's "voice selection", and the pick
+              persists for the retry. The popover itself sits OUTSIDE the
+              bar box (a fragment sibling below) because .readaloud-bar is
+              pointer-events:none — CSS inheritance, not the top layer,
+              governs it. */}
           {sessionActive && onVoiceChange && (
             <button
               type="button"

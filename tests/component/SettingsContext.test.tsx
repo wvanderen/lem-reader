@@ -207,7 +207,9 @@ describe("SettingsContext (02-02 persistence + STATE-05)", () => {
       theme: "dark",
       rate: 1,
       readingMode: "paginated",
-      openAfterAdd: true, // issue #163 — the remembered add-dialog checkbox
+      openAfterAdd: true,
+      showReadAloud: true,
+      speechNoticeDismissed: false, // issue #163 — the remembered add-dialog checkbox
     };
     loadMock.mockResolvedValue({ ok: true, settings: persisted });
 
@@ -293,7 +295,9 @@ describe("SettingsContext (02-02 persistence + STATE-05)", () => {
       rate: 1,
       readingMode: "scrolling",
       librarySort: "recently-added",
-      openAfterAdd: true, // issue #163 — the remembered add-dialog checkbox
+      openAfterAdd: true,
+      showReadAloud: true,
+      speechNoticeDismissed: false, // issue #163 — the remembered add-dialog checkbox
     };
     window.localStorage.setItem("lem-settings-mirror-v1", JSON.stringify(mirrored));
     loadMock.mockResolvedValue({ ok: false, reason: "unavailable" });

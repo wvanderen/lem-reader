@@ -21,6 +21,7 @@
 //      RestorationMarker (Plan 18-03 — the passive transient cue that
 //      replaced the retired ResumeBanner, D18-06: reopen-restore only,
 //      never blocks or shifts content, auto-clears at 4s).
+import { speechSynthesisAvailable, SPEECH_BROWSER_NOTICE } from "../readaloud/webSpeech";
 import { RestoreStarterButton } from "../reader/RestoreStarterButton";
 import { STARTER_ARTICLE_ID, isStarterRemoved } from "../persistence/starterArticleStore";
 import { onLibrarySnapshotInvalidated } from "../ingestion/library/librarySnapshotBus";
@@ -64,6 +65,7 @@ import { blockGraphemeLength } from "../pagination/anchor";
 // The transport state feeds the latest-ref gate on the anchor-save path
 // (ADR 0001 — see handleAnchorChange).
 import type { TransportState } from "../readaloud/types";
+import { transportIsActive } from "../readaloud/types";
 // Issue #2 — the end-pin policy stays imported for the mark-read gesture;
 // the restore/mode-swap end-LANDING decision moved behind jumpToOffset.
 import { endPinOffset } from "../reader/readingPosition";
@@ -773,9 +775,11 @@ export function ArticleView({
       // letting it write would drag the latest-wins save backwards to the page
       // start. The anchor REF above still updates (mode swaps, play's start
       // offset, deep links stay coherent); the save family simply hears from
-      // the listened path alone until the session ends, after which turns save
-      // normally again.
-      if (readAloudStateRef.current === "stopped") {
+      // the listened path alone while a live session exists, after which
+      // turns save normally again. Issue #167 — a FAILED session has ended
+      // (the bar keeps showing Retry), so manual navigation saves again
+      // exactly as when stopped.
+      if (!transportIsActive(readAloudStateRef.current)) {
         recordProgress(offset);
       }
       // Plan 12-06 (D12-05): mirror the committed page state (the handle reads
@@ -847,6 +851,7 @@ export function ArticleView({
   //     contract as handleMarkRead above.
   const {
     state: readAloudState,
+    failure: readAloudFailure,
     followLevel: readAloudFollowLevel,
     announcement: readAloudAnnouncement,
     progressOffset: readAloudProgressOffset,
@@ -874,6 +879,9 @@ export function ArticleView({
     },
   });
   readAloudStateRef.current = readAloudState;
+  useEffect(() => {
+    if (!settings.showReadAloud) stopReadAloud();
+  }, [settings.showReadAloud, stopReadAloud]);
 
   // The follower hook, AFTER the transport (it consumes readAloudState).
   const follow = useReadAloudFollow({
@@ -2498,29 +2506,46 @@ export function ArticleView({
             popover one action away. Issue #166: the article-position seek
             slider (the route owns percent→offset + the at-end finish seam)
             and the previous/next passage steps. */}
-        <ReadAloudBar
-          state={readAloudState}
-          followLevel={readAloudFollowLevel}
-          announcement={readAloudAnnouncement}
-          notice={follow.notice}
-          rate={settings.rate}
-          voice={settings.voice}
-          onRateChange={(next) => update({ rate: next })}
-          onVoiceChange={(voiceURI) => update({ voice: voiceURI === "" ? undefined : voiceURI })}
-          onPrimary={() =>
-            readAloudState === "playing" ? pauseOrResumeReadAloud() : playReadAloud()
-          }
-          onStop={stopReadAloud}
-          progress={readAloudProgressOffset}
-          totalGraphemes={articleTotal}
-          onSeek={handleReadAloudSeek}
-          onJumpToSpoken={follow.jumpToSpoken}
-          onSkipSentenceBack={skipSentenceBackReadAloud}
-          onSkipSentenceForward={skipSentenceForwardReadAloud}
-          onSkipParagraphForward={skipParagraphForwardReadAloud}
-          onSkipPassageBack={skipPassageBackReadAloud}
-          onSkipPassageForward={skipPassageForwardReadAloud}
-        />
+        {settings.showReadAloud && speechSynthesisAvailable() && (
+          <ReadAloudBar
+            state={readAloudState}
+            failure={readAloudFailure}
+            followLevel={readAloudFollowLevel}
+            announcement={readAloudAnnouncement}
+            notice={follow.notice}
+            rate={settings.rate}
+            voice={settings.voice}
+            onRateChange={(next) => update({ rate: next })}
+            onVoiceChange={(voiceURI) => update({ voice: voiceURI === "" ? undefined : voiceURI })}
+            onPrimary={() =>
+              readAloudState === "playing" ? pauseOrResumeReadAloud() : playReadAloud()
+            }
+            onStop={stopReadAloud}
+            progress={readAloudProgressOffset}
+            totalGraphemes={articleTotal}
+            onSeek={handleReadAloudSeek}
+            onJumpToSpoken={follow.jumpToSpoken}
+            onSkipSentenceBack={skipSentenceBackReadAloud}
+            onSkipSentenceForward={skipSentenceForwardReadAloud}
+            onSkipParagraphForward={skipParagraphForwardReadAloud}
+            onSkipPassageBack={skipPassageBackReadAloud}
+            onSkipPassageForward={skipPassageForwardReadAloud}
+          />
+        )}
+        {settings.showReadAloud &&
+          !speechSynthesisAvailable() &&
+          !settings.speechNoticeDismissed && (
+            <aside className="readaloud-bar speech-notice" aria-label="Read-aloud availability">
+              <StatusRegion className="speech-notice-message">{SPEECH_BROWSER_NOTICE}</StatusRegion>
+              <button
+                type="button"
+                className="btn btn-quiet"
+                onClick={() => update({ speechNoticeDismissed: true })}
+              >
+                Dismiss
+              </button>
+            </aside>
+          )}
       </main>
     </>
   );

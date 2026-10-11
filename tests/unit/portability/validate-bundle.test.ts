@@ -687,8 +687,36 @@ describe("validateBundle — pre-openAfterAdd export compatibility", () => {
     );
     expect(result.ok).toBe(true);
     if (result.ok)
-      expect(result.bundle.preferences).toEqual({ ...preferences, openAfterAdd: true });
+      expect(result.bundle.preferences).toEqual({
+        ...preferences,
+        openAfterAdd: true,
+        showReadAloud: true,
+        speechNoticeDismissed: false,
+      });
   });
+
+  it.each([false, true])(
+    "imports pre-speech v6 settings and detects speech preference tampering: %s",
+    async (tamper) => {
+      const { bundle, manifest, preferences } = await preOpenAfterAddExport(false);
+      const legacy = { ...preferences, schemaVersion: 6, openAfterAdd: true };
+      bundle.preferences = legacy;
+      manifest.blocks.preferences = await sha256Hex(bundleJsonOf(legacy));
+      if (tamper) bundle.preferences = { ...legacy, showReadAloud: false };
+      const { validateBundle } = await loadService();
+      const result = await validateBundle(
+        zipFileOf({
+          "bundle.json": bundleJsonOf(bundle),
+          "manifest.json": bundleJsonOf(manifest),
+        }),
+      );
+      expect(result.ok).toBe(!tamper);
+      if (result.ok) {
+        expect(result.bundle.preferences.showReadAloud).toBe(true);
+        expect(result.bundle.preferences.speechNoticeDismissed).toBe(false);
+      }
+    },
+  );
 
   it.each(["preference", "manifest", "new-version", "added-field"])(
     "still refuses %s tampering",

@@ -111,7 +111,9 @@ export const ACTIVE_MATRIX: readonly TypographyVariant[] = process.env.LEM_FULL_
  */
 export const DEFAULT_CALIBRATION_SETTINGS: ReaderSettings = {
   librarySort: "recently-added", // issue #115 — the additive preference
-  openAfterAdd: true, // issue #163 — the remembered add-dialog checkbox
+  openAfterAdd: true,
+  showReadAloud: true,
+  speechNoticeDismissed: false, // issue #163 — the remembered add-dialog checkbox
   schemaVersion: 1,
   font: "serif",
   size: 18,

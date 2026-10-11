@@ -4586,6 +4586,21 @@ dialog.book-remove-confirm {
   color: var(--ink-soft);
 }
 
+/* Issue #167 — the detected-failure explanation, VISIBLE on the bar: one
+   calm line on its own row above the controls (flex-basis 100% wraps the
+   cluster). The quiet-text register — an explanation, never an alarm; no
+   motion, tokens only. The band reservation tracks the cluster's measured
+   height (ResizeObserver), so the extra row is spent by the same rules. */
+.readaloud-failure {
+  flex-basis: 100%;
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+  text-align: center;
+}
+
 /* ── Issue #166 — the article-position seek slider ─────────────────────────
  * A native range input over ARTICLE position (percent of the article's
  * text — never a duration). The settings range register (44px touch band,
@@ -6013,4 +6028,30 @@ dialog.highlight-popover .highlight-color-entry legend {
   font-family: var(--font-ui);
   font-size: 14px;
   color: var(--ink-soft);
+}
+
+.speech-notice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md, 1rem);
+  max-width: min(42rem, calc(100vw - 2rem));
+  padding: 0.75rem 1rem;
+  background: var(--surface-raised);
+  color: var(--ink);
+  flex-wrap: wrap;
+  margin-inline: auto;
+  pointer-events: auto;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+}
+
+.speech-notice .speech-notice-message {
+  flex: 1 1 16rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.5;
 }

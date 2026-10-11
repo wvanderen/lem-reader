@@ -29,17 +29,20 @@
 // Harness cloned from mark-read-and-close.spec.ts (REUSE-DO-NOT-FORK):
 // image stub + goto BASE + "Saved articles" wait + raw IndexedDB clear-rows.
 import { test, expect, type Page } from "@playwright/test";
-import { fixtures } from "../../../src/fixtures";
 import { normalizeText, graphemeClusters } from "../../../src/content/normalizeText";
-// REUSE-DO-NOT-FORK: the shared controllable-fake speechSynthesis harness.
-import { installFakeSpeech, type SpeechMode } from "./_speech";
-// Shared plumbing (BASE/clear/tab-walk) + the LIVE follow labels (one
-// rename site — ReadAloudBar's own map).
-import { BASE, clearAllRows, tabWalkFrom } from "./_harness";
+// REUSE-DO-NOT-FORK: the shared controllable-fake speechSynthesis harness
+// (_speech.ts) + the shared open-article entry (_harness.ts).
+// Shared plumbing (BASE/clear/tab-walk/openArticle) + the LIVE follow labels
+// (one rename site — ReadAloudBar's own map).
+import {
+  BASE,
+  openArticle,
+  READALOUD_ARTICLE as ARTICLE,
+  READALOUD_ARTICLE_HREF as ARTICLE_HREF,
+  tabWalkFrom,
+} from "./_harness";
 import { FOLLOW_LABELS } from "../../../src/reader/ReadAloudBar";
 
-const ARTICLE = fixtures[0]!;
-const ARTICLE_HREF = `#/article/${ARTICLE.id}`;
 const TOTAL = graphemeClusters(normalizeText(ARTICLE), ARTICLE.lang).length;
 
 async function readLocationRow(page: Page): Promise<{ graphemeOffset: number } | null> {
@@ -67,31 +70,6 @@ async function readLocationRow(page: Page): Promise<{ graphemeOffset: number } |
   }, ARTICLE.id);
 }
 
-async function seedLocationRow(page: Page, graphemeOffset: number): Promise<void> {
-  await page.evaluate(
-    ({ articleId, revision, offset }) => {
-      return new Promise<void>((resolve) => {
-        const req = indexedDB.open("lem-reader");
-        req.onsuccess = () => {
-          const db = req.result;
-          const tx = db.transaction("location", "readwrite");
-          tx.objectStore("location").put({
-            schemaVersion: 1,
-            articleId,
-            revision,
-            graphemeOffset: offset,
-            savedAt: new Date().toISOString(),
-          });
-          tx.oncomplete = () => resolve();
-          tx.onerror = () => resolve();
-        };
-        req.onerror = () => resolve();
-      });
-    },
-    { articleId: ARTICLE.id, revision: ARTICLE.revision, offset: graphemeOffset },
-  );
-}
-
 /** Programmatic primary-button activation — a click() that does NOT focus
  * the button, so the test can observe that the APP never moves focus on
  * play (a real pointer click focuses the pressed button by default). */
@@ -109,33 +87,6 @@ test.beforeEach(async ({ page }) => {
     route.fulfill({ status: 200, contentType: "image/svg+xml", body: "<svg/>" }),
   );
 });
-
-/**
- * Open the article with the fake speech installed. ORDER IS LOAD-BEARING:
- * addInitScript must register BEFORE the first goto, and the article URL
- * differs from the library URL by the hash only — a same-document
- * navigation that keeps the stub-installed document alive (a second init
- * script registered later would never run).
- */
-async function openArticle(
-  page: Page,
-  mode: SpeechMode,
-  opts: { seedOffset?: number } = {},
-): Promise<Page> {
-  await installFakeSpeech(page, mode);
-  // New document: the stub installs, the app boots at the library, and the
-  // first load constructs the Dexie schema for the raw-IndexedDB seam below.
-  await page.goto(`${BASE}/`);
-  await expect(page.getByRole("heading", { name: "Saved articles" })).toBeVisible({
-    timeout: 10_000,
-  });
-  await clearAllRows(page);
-  if (opts.seedOffset !== undefined) {
-    await seedLocationRow(page, opts.seedOffset);
-  }
-  await page.goto(`${BASE}/${ARTICLE_HREF}`);
-  return page;
-}
 
 test.describe("Issue #40 — the read-aloud minimal speakable path", () => {
   test.setTimeout(90_000);
@@ -291,7 +242,7 @@ test.describe("Issue #40 — the read-aloud minimal speakable path", () => {
     await bar.getByRole("button", { name: "Stop" }).click();
   });
 
-  test("dead voice: bounded probe degrades to 'progress only', then fails honestly", async ({
+  test("dead voice: bounded probe degrades to 'progress only', then fails honestly with the bar kept open", async ({
     page,
   }) => {
     await openArticle(page, "dead");
@@ -307,8 +258,14 @@ test.describe("Issue #40 — the read-aloud minimal speakable path", () => {
     await expect(page.getByRole("status").filter({ hasText: "Speech didn't start." })).toBeVisible({
       timeout: 30_000,
     });
-    // The transport returned to its honest rest state (the idle entry).
-    await expect(bar.getByRole("button", { name: "Read aloud" })).toBeVisible();
+    // Issue #167 — the failure is RECOVERABLE, not a silent collapse: the
+    // transport stays open with Retry (the primary), the VISIBLE calm
+    // explanation, and voice selection; the playback-only controls retire.
+    await expect(bar.getByRole("button", { name: "Retry" })).toBeVisible();
+    await expect(bar.locator(".readaloud-failure")).toBeVisible();
+    await expect(bar.getByRole("button", { name: "Voice" })).toBeVisible();
+    await expect(bar.locator(".readaloud-seek")).toHaveCount(0);
+    // Detailed retry + position-preservation flows: read-aloud-failure.spec.ts.
   });
 
   test("finishing by ear marks the article finished (the end-pin persists)", async ({ page }) => {

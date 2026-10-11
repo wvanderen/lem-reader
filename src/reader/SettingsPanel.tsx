@@ -34,6 +34,7 @@
 // the highlights export is one loadLibrarySnapshot() call at action time —
 // always the truth at the moment of export), and a landed import calls the
 // ONE invalidateLibrarySnapshot() so mounted surfaces re-derive.
+import { SPEECH_BROWSER_NOTICE } from "../readaloud/webSpeech";
 import { RestoreStarterButton } from "./RestoreStarterButton";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { ChangeEvent, CSSProperties } from "react";
@@ -855,7 +856,22 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
               the filter hid is appended so the control always shows the live
               truth). Native <select>: keyboard/SR operable, role + name +
               value announced by the platform. */}
-            {speechAvailable ? (
+            <fieldset className="settings-section">
+              <legend>Reading space</legend>
+              <label className="settings-row">
+                <input
+                  type="checkbox"
+                  checked={settings.showReadAloud}
+                  onChange={(e) => update({ showReadAloud: e.currentTarget.checked })}
+                  aria-describedby="show-read-aloud-help"
+                />
+                <span>Show read-aloud controls</span>
+              </label>
+              <p id="show-read-aloud-help" className="settings-help">
+                Turn off for a cleaner reading space.
+              </p>
+            </fieldset>
+            {speechAvailable && settings.showReadAloud ? (
               <>
                 <fieldset className="settings-section">
                   <legend>Read-aloud voice</legend>
@@ -915,12 +931,9 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                   </p>
                 </fieldset>
               </>
-            ) : (
-              <fieldset className="settings-section">
-                <legend>Read aloud</legend>
-                <p className="settings-help">Read aloud isn't available in this browser.</p>
-              </fieldset>
-            )}
+            ) : !speechAvailable ? (
+              <p className="settings-help">{SPEECH_BROWSER_NOTICE}</p>
+            ) : null}
           </details>
           <details className="settings-group">
             <summary>Your data</summary>

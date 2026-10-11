@@ -21,6 +21,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { CanonicalArticle } from "../content/types";
 import type { GraphemeRange } from "../annotations/unifiedHighlightSlicer";
 import type { TransportState } from "../readaloud/types";
+import { transportIsActive } from "../readaloud/types";
 import { paginatedFollowDecision, scrollingFollowDecision } from "../readaloud/follow";
 import { fragmentContainingOffset } from "../pagination/anchor";
 import type { PaginatedSurfaceHandle } from "./PaginatedSurface";
@@ -159,10 +160,11 @@ export function useReadAloudFollow(options: UseReadAloudFollowOptions): UseReadA
     followSuspendedRef.current = false;
   }, []);
 
-  // The marker lives exactly as long as the session: stopped (stop, finish,
-  // or honest refusal) clears it and resets the follower.
+  // The marker lives exactly as long as the session: stopped (stop, finish)
+  // or failed (the honest refusal, issue #167) clears it and resets the
+  // follower — the bar may stay open while failed, but nothing is spoken.
   useEffect(() => {
-    if (state !== "stopped") return;
+    if (state !== "stopped" && state !== "failed") return;
     if (spokenRangeRef.current !== null) {
       spokenRangeRef.current = null;
       setSpokenRange(null);
@@ -223,7 +225,9 @@ export function useReadAloudFollow(options: UseReadAloudFollowOptions): UseReadA
   // re-entering the viewport re-acquires (the policy), and the jump
   // affordance re-acquires explicitly.
   useEffect(() => {
-    if (state === "stopped" || isPaginated || !articleEl) return;
+    // Issue #167 — a failed session is not a session: no suspension
+    // listeners (nothing is speaking; manual navigation is just navigation).
+    if (!transportIsActive(state) || isPaginated || !articleEl) return;
     const onWheel = (event: WheelEvent) => {
       if (event.deltaY !== 0) suspend();
     };

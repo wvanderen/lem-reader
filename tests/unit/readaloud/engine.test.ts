@@ -14,12 +14,26 @@
 //   4. Transport: pause/resume/stop; stale events after stop/finish never
 //      advance a dead session (generation guard).
 //   5. Honest refusals: a silently-dropped speak (iOS gesture gating) trips
-//      the stall watchdog; three consecutive failed utterances fail the
-//      session — never an infinite speak/error loop.
+//      the stall watchdog; any playback error fails without skipping
+//      unheard passages.
+//   6. The failed state (issue #167): a detected failure lands "failed"
+//      (not stopped), carries its kind (start vs playback) and the
+//      platform's error reason, and plays like a fresh start (retry) from
+//      the offset the host hands in — while skips/seeks/retune stay inert.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mapBoundaryRangeToCanonical, ReadAloudEngine } from "../../../src/readaloud/engine";
+import {
+  mapBoundaryRangeToCanonical,
+  PLAYBACK_FAILURE_MESSAGE,
+  ReadAloudEngine,
+  START_FAILURE_MESSAGE,
+} from "../../../src/readaloud/engine";
 import type { SkipUnits, SpeechChunk } from "../../../src/readaloud/chunks";
-import type { SpeechAdapter, SpeakRequest, UtteranceEvents } from "../../../src/readaloud/types";
+import type {
+  SpeechAdapter,
+  SpeakRequest,
+  SpeechFailure,
+  UtteranceEvents,
+} from "../../../src/readaloud/types";
 
 // ─── fake adapter ────────────────────────────────────────────────────────────
 
@@ -87,6 +101,8 @@ interface Harness {
   spokenRanges: { start: number; end: number }[];
   finished: number;
   errors: string[];
+  /** Issue #167 — the failure reports (message + kind + platform reason). */
+  failures: SpeechFailure[];
   engine: ReadAloudEngine;
 }
 
@@ -100,6 +116,7 @@ function makeEngine(chunks = makeChunks()): Harness {
     spokenRanges: [],
     finished: 0,
     errors: [],
+    failures: [],
     engine: null as unknown as ReadAloudEngine,
   };
   h.engine = new ReadAloudEngine({
@@ -113,7 +130,10 @@ function makeEngine(chunks = makeChunks()): Harness {
       onProgress: (o) => h.progress.push(o),
       onSpokenRange: (range) => h.spokenRanges.push(range),
       onFinish: () => (h.finished += 1),
-      onError: (m) => h.errors.push(m),
+      onError: (failure) => {
+        h.errors.push(failure.message);
+        h.failures.push(failure);
+      },
     },
   });
   return h;
@@ -179,7 +199,11 @@ describe("probe — follow level resolution (spike 0009 F3)", () => {
     expect(h.levels).toEqual(["progress-only"]);
     vi.advanceTimersByTime(60);
     expect(h.adapter.spoken).toHaveLength(2); // playback still starts
-    expect(h.adapter.cancelled).toBeGreaterThanOrEqual(1); // probe cancelled
+    // Issue #167 — THE WEDGE REGRESSION PIN: the dead (or any) probe is
+    // never cancelled — Firefox wedges its synthesizer permanently when a
+    // cancel lands on an actively-synthesizing utterance. The first chunk
+    // queues BEHIND the probe instead.
+    expect(h.adapter.cancelled).toBe(0);
   });
 
   it("a probe error resolves 'progress-only'", () => {
@@ -782,7 +806,9 @@ describe("retune handoff races", () => {
         rate: 1.5,
         volume: 1,
       });
-      expect(h.adapter.resumed).toBe(0);
+      // Issue #167 — the pause froze the queue and NEVER cancelled it (the
+      // Firefox wedge): resume physically un-pauses the synthesizer.
+      expect(h.adapter.resumed).toBe(1);
     },
   );
 
@@ -1073,41 +1099,229 @@ describe("mapBoundaryRangeToCanonical — pure mapping truth table", () => {
 
 // ─── 5. honest refusals ──────────────────────────────────────────────────────
 
-describe("refusals — stall watchdog + error loop cap", () => {
+describe("refusals — stall watchdog + preserved error position", () => {
   it("a silently-dropped utterance (no events) fails honestly, never fake-playing", () => {
     const h = makeEngine();
     h.engine.play(0);
     // Probe resolves via timeout; playback utterance is dropped silently.
     vi.advanceTimersByTime(2000 + 60 + 3000); // probe + settle + stall
-    expect(h.errors).toEqual(["Speech didn't start. Press Play to try again."]);
-    expect(h.engine.getState()).toBe("stopped");
+    expect(h.errors).toEqual([START_FAILURE_MESSAGE]);
+    // Issue #167 — the failure lands "failed" (the transport stays open
+    // with Retry), kind "start" (no utterance ever began).
+    expect(h.engine.getState()).toBe("failed");
+    expect(h.failures[0]).toEqual({ message: START_FAILURE_MESSAGE, kind: "start" });
   });
 
-  it("three consecutive failed utterances stop the session (no infinite loop)", () => {
+  it("a pre-start platform error fails at the unheard chunk with startup feedback", () => {
     const h = makeEngine();
-    h.engine.play(0);
-    h.adapter.last!.events.onboundary?.({ name: "word", charIndex: 0 });
-    vi.advanceTimersByTime(60);
-    // Every playback utterance errors before speaking.
-    h.adapter.last!.events.onerror?.();
-    h.adapter.last!.events.onerror?.();
-    h.adapter.last!.events.onerror?.();
-    expect(h.errors).toEqual(["Read aloud couldn't keep playing."]);
-    expect(h.engine.getState()).toBe("stopped");
-    // Fewer than three consecutive errors keep going.
-    expect(h.adapter.spoken).toHaveLength(2 + 2); // probe + first + 2 retries
-  });
-
-  it("an isolated error is skipped, not fatal", () => {
-    const h = makeEngine();
-    h.engine.play(0);
-    h.adapter.last!.events.onboundary?.({ name: "word", charIndex: 0 });
-    vi.advanceTimersByTime(60);
-    h.adapter.last!.events.onerror?.(); // chunk 0 fails
-    expect(h.engine.getState()).toBe("playing");
-    expect(h.adapter.last!.request.text).toBe("Three four."); // chunk 1 next
-    h.adapter.last!.events.onend?.(); // chunk 1 speaks fine
+    playWordCapable(h);
+    const failed = h.adapter.last!;
+    failed.events.onerror?.("not-allowed");
+    expect(h.engine.getState()).toBe("failed");
+    expect(h.failures).toEqual([
+      { message: START_FAILURE_MESSAGE, kind: "start", reason: "not-allowed" },
+    ]);
+    expect(h.adapter.spoken).toHaveLength(2); // probe + first chunk, no skipping
+    expect(h.progress).toEqual([]);
     expect(h.finished).toBe(0);
-    expect(h.adapter.last!.request.text).toBe("Six seven.");
+    failed.events.onend?.(); // late events cannot complete a failed passage
+    expect(h.finished).toBe(0);
+  });
+
+  it.each([1, 2])("errors in a %i-chunk article never falsely finish it", (count) => {
+    const h = makeEngine(makeChunks().slice(0, count));
+    playWordCapable(h);
+    h.adapter.last!.events.onerror?.("synthesis-failed");
+    expect(h.engine.getState()).toBe("failed");
+    expect(h.finished).toBe(0);
+    expect(h.progress).toEqual([]);
+  });
+
+  it("a silent stall AFTER working speech is a playback failure, never 'didn't start'", () => {
+    // Issue #167 — the watchdog classifies honestly: chunk 1 speaks fine,
+    // chunk 2 is silently dropped → "stopped partway" (kind "playback"),
+    // because "Speech didn't start" would be a lie minutes into an article.
+    const h = makeEngine();
+    h.engine.play(0);
+    h.adapter.last!.events.onboundary?.({ name: "word", charIndex: 0 });
+    vi.advanceTimersByTime(60);
+    h.adapter.last!.events.onend?.(); // chunk 1 is heard
+    expect(h.adapter.last!.request.text).toBe("Three four."); // chunk 2 queued
+    vi.advanceTimersByTime(3000); // the first-event stall window, no events
+    expect(h.engine.getState()).toBe("failed");
+    expect(h.failures[0]).toEqual({ message: PLAYBACK_FAILURE_MESSAGE, kind: "playback" });
+  });
+
+  it("an isolated playback error preserves the listened offset and retries the unheard chunk", () => {
+    const h = makeEngine();
+    playWordCapable(h);
+    h.adapter.last!.events.onend?.(); // first chunk heard, second queued
+    const failed = h.adapter.last!;
+    failed.events.onstart?.();
+    failed.events.onboundary?.({ name: "word", charIndex: 6 });
+    const listened = h.progress.at(-1)!;
+    const before = [...h.progress];
+    failed.events.onerror?.("synthesis-failed");
+    expect(h.engine.getState()).toBe("failed");
+    expect(h.failures[0]).toEqual({
+      message: PLAYBACK_FAILURE_MESSAGE,
+      kind: "playback",
+      reason: "synthesis-failed",
+    });
+    expect(h.progress).toEqual(before);
+    expect(h.finished).toBe(0);
+    expect(h.adapter.spoken).toHaveLength(3); // no third chunk queued
+    failed.events.onend?.();
+    expect(h.progress).toEqual(before);
+    h.engine.play(listened);
+    h.adapter.last!.events.onboundary?.({ name: "word", charIndex: 0 });
+    expect(h.adapter.last!.request.text).toBe(failed.request.text);
+  });
+});
+
+// ─── 5b. startup — the probe is never cancelled (issue #167 wedge fix) ──────
+
+describe("startup probe — never cancel (issue #167)", () => {
+  it("a word-capable startup produces ZERO cancels (the Firefox wedge regression pin)", () => {
+    const h = makeEngine();
+    h.engine.play(0);
+    h.adapter.last!.events.onboundary?.({ name: "word", charIndex: 0 });
+    // The chunk queued immediately behind the (still speaking) probe.
+    expect(h.adapter.spoken).toHaveLength(2);
+    expect(h.adapter.last!.request.volume).toBe(1);
+    expect(h.adapter.cancelled).toBe(0);
+    // The probe ends naturally; nothing else to cancel through playback.
+    h.adapter.spoken[0]!.events.onend?.();
+    h.adapter.last!.events.onend?.();
+    expect(h.adapter.cancelled).toBe(0);
+  });
+
+  it("a retune during the probe retargets the queued chunk with NO cancel; the re-probe stays pending", () => {
+    const h = makeEngine();
+    h.engine.play(0);
+    h.engine.retune({ voiceURI: "other-voice", rate: 1.5 }); // mid-probe
+    h.adapter.last!.events.onboundary?.({ name: "word", charIndex: 0 });
+    expect(h.adapter.cancelled).toBe(0);
+    // The queued chunk carries the NEW voice + rate.
+    expect(h.adapter.last!.request).toMatchObject({
+      text: "Zero one.",
+      voiceURI: "other-voice",
+      rate: 1.5,
+      volume: 1,
+    });
+    // The resolved level describes the OLD voice — the re-probe must still
+    // be pending: the next post-audible requeue re-probes (2nd silent probe).
+    h.adapter.spoken[0]!.events.onend?.(); // probe ends
+    h.adapter.last!.events.onend?.(); // chunk 1 speaks
+    h.engine.seekTo(12); // chunk 2 — post-audible requeue
+    vi.advanceTimersByTime(60);
+    expect(h.adapter.spoken.filter((s) => s.request.volume === 0)).toHaveLength(2);
+  });
+
+  it("a seek during the probe retargets the queued chunk with NO cancel", () => {
+    const h = makeEngine();
+    h.engine.play(0);
+    h.engine.seekTo(12); // chunk containing 12 = "Three four."
+    h.adapter.last!.events.onboundary?.({ name: "word", charIndex: 0 });
+    expect(h.adapter.cancelled).toBe(0);
+    expect(h.adapter.last!.request.text).toBe("Three four.");
+  });
+
+  it("pause during the probe freezes; the resolve parks; resume unpauses and queues", () => {
+    const h = makeEngine();
+    h.engine.play(0);
+    h.engine.pause(); // probe in flight — frozen, not cancelled
+    expect(h.adapter.cancelled).toBe(0);
+    vi.advanceTimersByTime(2000); // the timeout resolves while paused
+    expect(h.engine.getState()).toBe("paused");
+    expect(h.adapter.spoken).toHaveLength(1); // nothing queued into the freeze
+    h.engine.resume();
+    expect(h.adapter.resumed).toBe(1); // the frozen queue physically resumes
+    expect(h.adapter.spoken).toHaveLength(2); // the chunk queues behind it
+    expect(h.engine.getState()).toBe("playing");
+  });
+
+  it("pause after the chunk queued does not stall-fail while frozen; resume re-arms the watchdog", () => {
+    const h = makeEngine();
+    h.engine.play(0);
+    h.adapter.spoken[0]!.events.onboundary?.({ name: "word", charIndex: 0 }); // the PROBE resolves
+    expect(h.engine.getState()).toBe("playing");
+    expect(h.adapter.spoken).toHaveLength(2); // the chunk queues behind it
+    h.engine.pause(); // chunk queued, not yet audible
+    vi.advanceTimersByTime(60_000); // far past any stall — frozen never fails
+    expect(h.engine.getState()).toBe("paused");
+    h.engine.resume(); // re-arms the first-event watchdog
+    vi.advanceTimersByTime(3000);
+    expect(h.engine.getState()).toBe("failed"); // silent frozen queue: honest
+    expect(h.failures[0]).toEqual({
+      message: START_FAILURE_MESSAGE,
+      kind: "start",
+    });
+  });
+});
+
+// ─── 6. the failed state (issue #167) ────────────────────────────────────────
+
+describe("failed state — recoverable, honest, inert to transport (issue #167)", () => {
+  function failAtStartup(h: Harness): void {
+    h.engine.play(0);
+    vi.advanceTimersByTime(2000 + 60 + 3000); // probe timeout + settle + stall
+    expect(h.engine.getState()).toBe("failed");
+  }
+
+  it("play() after a failure is a fresh session from the given offset (retry)", () => {
+    const h = makeEngine();
+    failAtStartup(h);
+    const sessionsBefore = h.adapter.spoken.length;
+    // Retry from the middle of chunk 1 (the preserved listened position).
+    h.engine.play(12);
+    expect(h.engine.getState()).toBe("playing");
+    // Fresh probe (silent) then the chunk CONTAINING the offset — never a
+    // restart from the top, never a resume of the dead queue.
+    expect(h.adapter.spoken).toHaveLength(sessionsBefore + 1);
+    expect(h.adapter.last!.request.volume).toBe(0);
+    h.adapter.last!.events.onboundary?.({ name: "word", charIndex: 0 });
+    vi.advanceTimersByTime(60);
+    expect(h.adapter.last!.request.text).toBe("Three four."); // [9,20) ∋ 12
+    expect(h.adapter.last!.request.volume).toBe(1);
+  });
+
+  it("skips, seeks, seekToEnd and retune are inert while failed", () => {
+    const h = makeEngine();
+    failAtStartup(h);
+    const spokenBefore = h.adapter.spoken.length;
+    expect(h.engine.skipSentences(1)).toBe(false);
+    expect(h.engine.skipParagraphForward()).toBe(false);
+    expect(h.engine.skipPassageForward()).toBe(false);
+    h.engine.seekTo(20);
+    h.engine.seekToEnd();
+    h.engine.retune({ voiceURI: null, rate: 2 });
+    expect(h.engine.getState()).toBe("failed");
+    expect(h.adapter.spoken).toHaveLength(spokenBefore); // nothing new queued
+    expect(h.finished).toBe(0); // seekToEnd did not fake a finish
+    expect(h.adapter.cancelled).toBeLessThan(3); // no extra cancel churn
+  });
+
+  it("stop() after a failure returns to the honest rest state", () => {
+    const h = makeEngine();
+    failAtStartup(h);
+    h.engine.stop();
+    expect(h.engine.getState()).toBe("stopped");
+    expect(h.failures).toHaveLength(1); // the failure copy stands; stop adds none
+  });
+
+  it("a pause during a live session does not mask a later failure's kind", () => {
+    const h = makeEngine();
+    h.engine.play(0);
+    h.adapter.last!.events.onboundary?.({ name: "word", charIndex: 0 });
+    vi.advanceTimersByTime(60);
+    // Chunk 1 starts, then the reader pauses; an error after resume
+    // still reports "playback" because speech WAS underway.
+    h.adapter.last!.events.onstart?.();
+    h.engine.pause();
+    h.engine.resume();
+    h.adapter.last!.events.onerror?.();
+    expect(h.failures[0]?.kind).toBe("playback");
+    expect(h.engine.getState()).toBe("failed");
   });
 });
