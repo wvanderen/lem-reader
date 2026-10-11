@@ -100,6 +100,8 @@ const SEEDED_PREFS = {
   rate: 1.5,
   librarySort: "title",
   openAfterAdd: true, // issue #163 — the export carries the hydrated default
+  showReadAloud: false,
+  speechNoticeDismissed: true,
 } as const;
 
 const RSS_SUB = {
@@ -290,10 +292,12 @@ test("RI-RT — reader-improvements fields survive the real export → import jo
     const atomRow = await readRow(pageB, "subscriptions", ATOM_SUB.id);
     expect(atomRow?.feedUrl).toBe(ATOM_SUB.feedUrl);
 
-    // Preferences re-applied: sort choice + BOTH custom slots verbatim.
+    // Preferences re-applied: sort, speech choices, and BOTH custom slots verbatim.
     const prefsRow = await readRow(pageB, "settings", "reader-prefs");
     expect(prefsRow?.value).toMatchObject({
       librarySort: "title",
+      showReadAloud: false,
+      speechNoticeDismissed: true,
       theme: "custom-light",
       customLightTheme: CUSTOM_LIGHT,
       customDarkTheme: CUSTOM_DARK,
