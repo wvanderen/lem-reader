@@ -21,6 +21,7 @@
 //      RestorationMarker (Plan 18-03 — the passive transient cue that
 //      replaced the retired ResumeBanner, D18-06: reopen-restore only,
 //      never blocks or shifts content, auto-clears at 4s).
+import { speechSynthesisAvailable, SPEECH_BROWSER_NOTICE } from "../readaloud/webSpeech";
 import { RestoreStarterButton } from "../reader/RestoreStarterButton";
 import { STARTER_ARTICLE_ID, isStarterRemoved } from "../persistence/starterArticleStore";
 import { onLibrarySnapshotInvalidated } from "../ingestion/library/librarySnapshotBus";
@@ -877,6 +878,9 @@ export function ArticleView({
     },
   });
   readAloudStateRef.current = readAloudState;
+  useEffect(() => {
+    if (!settings.showReadAloud) stopReadAloud();
+  }, [settings.showReadAloud, stopReadAloud]);
 
   // The follower hook, AFTER the transport (it consumes readAloudState).
   const follow = useReadAloudFollow({
@@ -2501,30 +2505,46 @@ export function ArticleView({
             popover one action away. Issue #166: the article-position seek
             slider (the route owns percent→offset + the at-end finish seam)
             and the previous/next passage steps. */}
-        <ReadAloudBar
-          state={readAloudState}
-          failure={readAloudFailure}
-          followLevel={readAloudFollowLevel}
-          announcement={readAloudAnnouncement}
-          notice={follow.notice}
-          rate={settings.rate}
-          voice={settings.voice}
-          onRateChange={(next) => update({ rate: next })}
-          onVoiceChange={(voiceURI) => update({ voice: voiceURI === "" ? undefined : voiceURI })}
-          onPrimary={() =>
-            readAloudState === "playing" ? pauseOrResumeReadAloud() : playReadAloud()
-          }
-          onStop={stopReadAloud}
-          progress={readAloudProgressOffset}
-          totalGraphemes={articleTotal}
-          onSeek={handleReadAloudSeek}
-          onJumpToSpoken={follow.jumpToSpoken}
-          onSkipSentenceBack={skipSentenceBackReadAloud}
-          onSkipSentenceForward={skipSentenceForwardReadAloud}
-          onSkipParagraphForward={skipParagraphForwardReadAloud}
-          onSkipPassageBack={skipPassageBackReadAloud}
-          onSkipPassageForward={skipPassageForwardReadAloud}
-        />
+        {settings.showReadAloud && speechSynthesisAvailable() && (
+          <ReadAloudBar
+            state={readAloudState}
+            failure={readAloudFailure}
+            followLevel={readAloudFollowLevel}
+            announcement={readAloudAnnouncement}
+            notice={follow.notice}
+            rate={settings.rate}
+            voice={settings.voice}
+            onRateChange={(next) => update({ rate: next })}
+            onVoiceChange={(voiceURI) => update({ voice: voiceURI === "" ? undefined : voiceURI })}
+            onPrimary={() =>
+              readAloudState === "playing" ? pauseOrResumeReadAloud() : playReadAloud()
+            }
+            onStop={stopReadAloud}
+            progress={readAloudProgressOffset}
+            totalGraphemes={articleTotal}
+            onSeek={handleReadAloudSeek}
+            onJumpToSpoken={follow.jumpToSpoken}
+            onSkipSentenceBack={skipSentenceBackReadAloud}
+            onSkipSentenceForward={skipSentenceForwardReadAloud}
+            onSkipParagraphForward={skipParagraphForwardReadAloud}
+            onSkipPassageBack={skipPassageBackReadAloud}
+            onSkipPassageForward={skipPassageForwardReadAloud}
+          />
+        )}
+        {settings.showReadAloud &&
+          !speechSynthesisAvailable() &&
+          !settings.speechNoticeDismissed && (
+            <aside className="readaloud-bar speech-notice" aria-label="Read-aloud availability">
+              <StatusRegion className="speech-notice-message">{SPEECH_BROWSER_NOTICE}</StatusRegion>
+              <button
+                type="button"
+                className="btn btn-quiet"
+                onClick={() => update({ speechNoticeDismissed: true })}
+              >
+                Dismiss
+              </button>
+            </aside>
+          )}
       </main>
     </>
   );

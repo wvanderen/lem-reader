@@ -1,5 +1,12 @@
 import "@testing-library/jest-dom/vitest";
 
+// Model a supported browser for fake-speech component tests. Browser-policy
+// tests override this getter explicitly; jsdom supplies no actual audio.
+Object.defineProperty(navigator, "userAgent", {
+  configurable: true,
+  get: () => "Mozilla/5.0 Chrome/157.0.0.0 Safari/537.36",
+});
+
 // jsdom does NOT implement IntersectionObserver (used by SectionAnnouncer in
 // Plan 02-03). Polyfill a minimal stub so component tests that render
 // ArticleView (which mounts SectionAnnouncer) don't crash. The stub records

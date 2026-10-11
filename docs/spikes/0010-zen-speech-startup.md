@@ -58,15 +58,15 @@ legacy voices survive boundaries more reliably. The v9 punctuation probes
 (periods, commas, no punctuation, ellipses) all clicked with the same default
 voice. No tested voice or text transformation removes the defect.
 
-**Product decision:** Read-aloud is temporarily refused for Firefox and forks
-that expose the Firefox UA token, including Zen. Evidence is from macOS;
-the browser-wide gate is a conservative product fallback, not a claim that
-all operating systems reproduce the defect. Firefox on iOS uses WebKit and
-is excluded. The entry stays available to explain the refusal visibly and
-through the polite status region, without starting a probe or speech session.
-Chrome/Helium are the suggested alternative. Remove the gate only after
-real audio verification of an upstream fix; fake-speech tests cannot prove
-that audio clicks have been repaired.
+**Product decision:** Read-aloud is supported only in Chromium-based
+browsers. Unsupported browsers show no read-aloud entry, only a dismissible
+notice whose dismissal persists locally. Reading settings → Read-aloud →
+Show read-aloud controls lets readers hide the transport on any browser;
+hiding also stops active speech. Both preferences travel with export/import.
+The browser support policy is conservative, not evidence that every other
+engine or operating system reproduces the recorded macOS audio defect.
+Revisit after real audio verification; fake-speech tests cannot prove that
+audio clicks have been repaired.
 
 **Recommended follow-ups:**
 

@@ -50,26 +50,28 @@ describe("speech availability", () => {
     "Mozilla/5.0 (Macintosh) Gecko/20100101 Firefox/157.0",
     "Mozilla/5.0 (Windows NT 10.0) Gecko/20100101 Firefox/157.0",
     "Mozilla/5.0 (X11; Linux x86_64) Gecko/20100101 Firefox/157.0",
+    "Version/26.0 Safari/605.1.15",
+    "FxiOS/157.0 Mobile Safari/605.1.15",
+    "CriOS/157.0 Mobile Safari/605.1.15",
   ])("refuses Firefox/forks before probing any voices: %s", async (userAgent) => {
     vi.spyOn(navigator, "userAgent", "get").mockReturnValue(userAgent);
     stubSynthesis([]);
     const voices = vi.spyOn(window.speechSynthesis, "getVoices");
     expect(speechSynthesisAvailable()).toBe(false);
-    expect(speechSynthesisUnavailableMessage()).toContain("loud audio pops");
+    expect(speechSynthesisUnavailableMessage()).toContain("only supported in Chromium");
     await expect(probeVoices()).resolves.toEqual([]);
     expect(voices).not.toHaveBeenCalled();
   });
 
-  it.each([
-    "Chrome/157.0 Safari/537.36",
-    "Version/26.0 Safari/605.1.15",
-    "FxiOS/157.0 Mobile Safari/605.1.15",
-  ])("keeps supported engines available: %s", (userAgent) => {
-    vi.spyOn(navigator, "userAgent", "get").mockReturnValue(userAgent);
-    stubSynthesis([]);
-    expect(speechSynthesisAvailable()).toBe(true);
-    expect(speechSynthesisUnavailableMessage()).toBeNull();
-  });
+  it.each(["Chrome/157.0 Safari/537.36", "Edg/157.0", "Chromium/157.0"])(
+    "keeps supported engines available: %s",
+    (userAgent) => {
+      vi.spyOn(navigator, "userAgent", "get").mockReturnValue(userAgent);
+      stubSynthesis([]);
+      expect(speechSynthesisAvailable()).toBe(true);
+      expect(speechSynthesisUnavailableMessage()).toBeNull();
+    },
+  );
 });
 
 describe("storedVoiceAvailable", () => {

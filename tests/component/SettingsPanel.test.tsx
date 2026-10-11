@@ -630,7 +630,7 @@ describe("SettingsPanel — read-aloud controls (issue #43, O8)", () => {
 
   it("without speechSynthesis the section degrades to a calm help line (no dead controls)", () => {
     renderExpanded(<Harness open={true} onClose={() => undefined} />);
-    expect(screen.getByText("Read aloud isn't available in this browser.")).not.toBeNull();
+    expect(screen.getByText(/Read aloud is only supported in Chromium/)).not.toBeNull();
     expect(screen.queryByRole("combobox", { name: "Read-aloud voice" })).toBeNull();
     expect(screen.queryByRole("slider", { name: "Read-aloud rate" })).toBeNull();
   });

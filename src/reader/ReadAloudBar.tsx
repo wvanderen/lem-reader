@@ -372,9 +372,6 @@ export function ReadAloudBar({
               on the bar itself — not only in the hidden status region. The
               ONE polite region announces the same line. */}
           {failureActive && failure && <p className="readaloud-failure">{failure}</p>}
-          {state === "stopped" && announcement && (
-            <p className="readaloud-failure">{announcement}</p>
-          )}
           {/* Issue #166 — the seek control: ARTICLE-position currency (a
               percent of the article's text), never a duration — the platform
               gives no reliable audio time, so none is implied. A native
