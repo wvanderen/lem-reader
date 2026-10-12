@@ -445,16 +445,36 @@ describe("HighlightControls — dismissals (issue #175)", () => {
     expect(queryControls()).not.toBeNull();
   });
 
-  it("a scroll dismisses (the captured anchor rect is stale after movement)", async () => {
+  it("a scroll that MOVES the anchor dismisses (the captured rect went stale)", async () => {
     renderControls();
     await screen.findByRole("toolbar", { name: "Highlight controls" });
+    // The scroll moved the anchor: the re-measured mark rect no longer
+    // matches the capture.
+    const mark = document.querySelector<HTMLElement>('mark[data-highlight-id="hl-test-1"]')!;
+    mark.getBoundingClientRect = () => new DOMRect(8, 260, 40, 20);
     await act(async () => {
       document.dispatchEvent(new Event("scroll"));
     });
     await waitFor(() => expect(queryControls()).toBeNull());
   });
 
-  it("a scroll targeting a dialog HOLDS (the fixed anchor reads the article, never the top layer)", async () => {
+  it("a scroll that leaves the anchor put HOLDS (a stale coalesced event must not kill a fresh anchor)", async () => {
+    // Engines coalesce scroll dispatches on rendering frames — the event for
+    // an already-settled scroll can land AFTER a later activation captured
+    // the post-scroll rect. The contract is "a MOVED anchor invalidates the
+    // geometry", so an unchanged re-measure holds.
+    renderControls();
+    await screen.findByRole("toolbar", { name: "Highlight controls" });
+    const mark = document.querySelector<HTMLElement>('mark[data-highlight-id="hl-test-1"]')!;
+    mark.getBoundingClientRect = () => new DOMRect(8, 60, 40, 20); // == the capture
+    await act(async () => {
+      document.dispatchEvent(new Event("scroll"));
+    });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(queryControls()).not.toBeNull();
+  });
+
+  it("a scroll targeting a dialog HOLDS while the anchor is put (the fixed anchor reads the article, never the top layer)", async () => {
     // The tags/note editors are top-layer <dialog>s; closing a dialog whose
     // box scrolls fires a scroll event on the dialog itself. That scroll
     // never moves the position:fixed anchor (the article underneath is
@@ -462,6 +482,8 @@ describe("HighlightControls — dismissals (issue #175)", () => {
     // hand focus back to (observed: highlight-tags.spec Done → controls).
     renderControls();
     await screen.findByRole("toolbar", { name: "Highlight controls" });
+    const mark = document.querySelector<HTMLElement>('mark[data-highlight-id="hl-test-1"]')!;
+    mark.getBoundingClientRect = () => new DOMRect(8, 60, 40, 20); // == the capture
     const host = document.createElement("dialog");
     const scroller = document.createElement("div");
     host.appendChild(scroller);
@@ -473,8 +495,8 @@ describe("HighlightControls — dismissals (issue #175)", () => {
       });
       await new Promise((r) => setTimeout(r, 0));
       expect(queryControls()).not.toBeNull();
-      // The article-level scroll still dismisses — only dialog-internal
-      // scrolls are excluded.
+      // Once the anchor genuinely moves, the scroll still dismisses.
+      mark.getBoundingClientRect = () => new DOMRect(8, 260, 40, 20);
       await act(async () => {
         document.dispatchEvent(new Event("scroll"));
       });
@@ -482,6 +504,19 @@ describe("HighlightControls — dismissals (issue #175)", () => {
     } finally {
       host.remove();
     }
+  });
+
+  it("a scroll with the anchor momentarily unresolvable fails closed (dismisses)", async () => {
+    renderControls();
+    await screen.findByRole("toolbar", { name: "Highlight controls" });
+    // No visible mark to re-measure (mid-repagination remount) — the
+    // movement check cannot hold the surface, so dismissal stands.
+    const mark = document.querySelector<HTMLElement>('mark[data-highlight-id="hl-test-1"]')!;
+    mark.removeAttribute("data-highlight-id");
+    await act(async () => {
+      document.dispatchEvent(new Event("scroll"));
+    });
+    await waitFor(() => expect(queryControls()).toBeNull());
   });
 
   it("focusHighlightMark returns null without a surface (degrade quietly)", () => {
