@@ -256,18 +256,30 @@ export function HighlightControls({
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, [dialogOpen, dismiss, isRendered, controlsFor?.id]);
 
-  // Scroll / resize invalidate the captured anchor rect.
+  // Scroll / resize invalidate the captured anchor rect. A scroll INSIDE a
+  // top-layer <dialog> is excluded: the position:fixed anchor reads the
+  // article underneath, which a dialog-internal scroll never moves — and
+  // closing a dialog whose box scrolls fires one of these events (focus
+  // fixup / the display:none clamp on the closing card). Dismissing on it
+  // would drop the controls in the same breath the editor hands focus back
+  // to the mark (observed: the compact tags editor closing). The resize
+  // handler keeps the combined guard — the modal editors suppress both.
   useEffect(() => {
     if (!isRendered) return;
     const dismissUnlessDialog = () => {
       if (dialogOpen) return;
       dismiss();
     };
+    const onScroll = (event: Event) => {
+      const target = event.target;
+      if (target instanceof Element && target.closest("dialog")) return;
+      dismissUnlessDialog();
+    };
     window.addEventListener("resize", dismissUnlessDialog);
-    document.addEventListener("scroll", dismissUnlessDialog, true);
+    document.addEventListener("scroll", onScroll, true);
     return () => {
       window.removeEventListener("resize", dismissUnlessDialog);
-      document.removeEventListener("scroll", dismissUnlessDialog, true);
+      document.removeEventListener("scroll", onScroll, true);
     };
   }, [dialogOpen, dismiss, isRendered]);
 

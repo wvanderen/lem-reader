@@ -454,6 +454,36 @@ describe("HighlightControls — dismissals (issue #175)", () => {
     await waitFor(() => expect(queryControls()).toBeNull());
   });
 
+  it("a scroll targeting a dialog HOLDS (the fixed anchor reads the article, never the top layer)", async () => {
+    // The tags/note editors are top-layer <dialog>s; closing a dialog whose
+    // box scrolls fires a scroll event on the dialog itself. That scroll
+    // never moves the position:fixed anchor (the article underneath is
+    // untouched), so it must not drop the controls the editor is about to
+    // hand focus back to (observed: highlight-tags.spec Done → controls).
+    renderControls();
+    await screen.findByRole("toolbar", { name: "Highlight controls" });
+    const host = document.createElement("dialog");
+    const scroller = document.createElement("div");
+    host.appendChild(scroller);
+    document.body.appendChild(host);
+    try {
+      await act(async () => {
+        scroller.dispatchEvent(new Event("scroll", { bubbles: true }));
+        host.dispatchEvent(new Event("scroll", { bubbles: false }));
+      });
+      await new Promise((r) => setTimeout(r, 0));
+      expect(queryControls()).not.toBeNull();
+      // The article-level scroll still dismisses — only dialog-internal
+      // scrolls are excluded.
+      await act(async () => {
+        document.dispatchEvent(new Event("scroll"));
+      });
+      await waitFor(() => expect(queryControls()).toBeNull());
+    } finally {
+      host.remove();
+    }
+  });
+
   it("focusHighlightMark returns null without a surface (degrade quietly)", () => {
     expect(focusHighlightMark("hl-missing")).toBeNull();
   });

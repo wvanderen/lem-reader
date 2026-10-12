@@ -2971,9 +2971,15 @@ dialog.highlight-popover .highlight-color-entry {
 
 /* ── Issue #175 — the compact highlight-tags dialog ─────────────────────────── */
 /* Rides the .highlight-popover card (same footprint family: same padding,
-   transparent backdrop, modal AX context) with a narrower "compact" cap. */
+   transparent backdrop, modal AX context) with a narrower "compact" cap.
+   Issue #176: height reverts to CONTENT-BOUNDED — the fixed 240px footprint
+   above is the writing/confirm editor's contract (one consistent card while
+   typing), not the compact picker's; a clipped, internally-scrolling tag
+   picker also fires a scroll event on close that the lightweight controls
+   would misread as an anchor-invalidating page scroll. */
 dialog.highlight-tags-dialog {
   max-width: 320px;
+  height: auto;
 }
 /* The calm heading (the h2.review-note-title register — same anatomy, this
    surface family's own hook). */
