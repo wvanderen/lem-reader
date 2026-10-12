@@ -154,11 +154,15 @@ export function HighlightControls({
   // leaves focus where the browser put it — the mark). Runs after commit so
   // the button exists; the effect deps fire once per activation request AND
   // when the resolved highlight arrives (highlights load async — the surface
-  // may mount a render after the request landed).
+  // may mount a render after the request landed). Consume the request after
+  // focus lands so record updates never repeat the handoff.
   useEffect(() => {
     if (!controlsFor?.focus) return;
-    rootRef.current?.querySelector<HTMLElement>("button")?.focus();
-  }, [controlsFor, resolved]);
+    const button = rootRef.current?.querySelector<HTMLElement>("button");
+    if (!button) return;
+    button.focus();
+    setControlsFor({ ...controlsFor, focus: false });
+  }, [controlsFor, resolved, setControlsFor]);
 
   // Measure the rendered size for position computation (the SelectionToolbar
   // ref+state bridge: first render at (0,0), then re-place once measured).

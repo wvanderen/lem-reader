@@ -82,7 +82,7 @@ import { useHighlightOverlay } from "./HighlightOverlay";
 import { firstFragmentExcerpt } from "../../annotations/excerpt";
 // Issue #175 — the shared mark-resolution helpers (the post-delete focus
 // target walk — the ONE copy, shared with HighlightControls).
-import { captureDeleteFocusTarget } from "./highlightMarks";
+import { captureDeleteFocusTarget, visibleMarkForId } from "./highlightMarks";
 // Issue #174 — the ONE polite status-region primitive (the honest-failure
 // line for a rejected delete).
 import { StatusRegion } from "../../ui/StatusRegion";
@@ -121,6 +121,7 @@ export function NotePopover(): React.ReactElement | null {
   // `close` listener can restore focus to it (Pitfall 1 — mirrors
   // SettingsPanel/AnnotationsDrawer).
   const triggerRef = useRef<HTMLElement | null>(null);
+  const readingHighlightRef = useRef<string | null>(null);
   // Issue #174 — the focus target for a close that followed a SUCCESSFUL
   // delete: the deleted highlight's visible containing block (the <mark>
   // unmounts, so the default trigger restore would silently no-op and drop
@@ -159,6 +160,11 @@ export function NotePopover(): React.ReactElement | null {
       // Capture the trigger (the anchor <mark> or the drawer action) BEFORE
       // showModal moves focus into the dialog (Pitfall 1).
       triggerRef.current = document.activeElement as HTMLElement | null;
+      // Drawer actions restore their own trigger; reading editors return to
+      // the surviving highlight, including selection-created notes.
+      readingHighlightRef.current = triggerRef.current?.closest(".annotations-drawer")
+        ? null
+        : activeId;
       try {
         dlg.showModal();
       } catch {
@@ -199,7 +205,8 @@ export function NotePopover(): React.ReactElement | null {
   // save (D2-03 — no edit lost), clear BOTH editor states (whichever was
   // open), and restore focus — to the captured passage block when the close
   // followed a successful delete (issue #174: the <mark> is gone, so the
-  // trigger restore would silently no-op), else to the captured trigger
+  // trigger restore would silently no-op), else to the surviving reading
+  // highlight (including creation paths), or the captured drawer trigger
   // (Pitfall 1 / A11Y-02 — showModal does NOT auto-restore). The dialog has
   // left the top layer by close-event time, so focusing the in-flow block is
   // unobstructed. The lightweight controls hold their place behind the modal
@@ -212,7 +219,18 @@ export function NotePopover(): React.ReactElement | null {
       flushNoteSave();
       setOpenPopoverFor(null);
       setConfirmDeleteFor(null);
-      const restoreTo = focusRestoreRef.current ?? triggerRef.current;
+      const mark = readingHighlightRef.current
+        ? visibleMarkForId(readingHighlightRef.current)
+        : null;
+      const restoreTo = focusRestoreRef.current ?? mark ?? triggerRef.current;
+      if (!focusRestoreRef.current && mark && readingHighlightRef.current) {
+        setControlsFor({
+          id: readingHighlightRef.current,
+          rect: mark.getBoundingClientRect(),
+          focus: false,
+        });
+      }
+      readingHighlightRef.current = null;
       focusRestoreRef.current = null;
       if (restoreTo) {
         // A passage block is not focusable by default — the programmatic-focus
@@ -225,7 +243,7 @@ export function NotePopover(): React.ReactElement | null {
     };
     dlg.addEventListener("close", handleClose);
     return () => dlg.removeEventListener("close", handleClose);
-  }, [flushNoteSave, setOpenPopoverFor, setConfirmDeleteFor]);
+  }, [flushNoteSave, setOpenPopoverFor, setConfirmDeleteFor, setControlsFor]);
 
   // Confirm-view initial focus (D5-12, mirrors WipeConfirm Pitfall 8): move
   // focus to the non-destructive Keep button ([data-initial-focus]) so an

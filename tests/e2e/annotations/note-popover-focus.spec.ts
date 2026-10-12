@@ -53,6 +53,22 @@ async function createHighlightAndOpenEditor(page: import("@playwright/test").Pag
 }
 
 test.describe("Note popover modal-dialog focus (ACPT-02 finding #2)", () => {
+  for (const closeWith of ["Done", "Escape"] as const) {
+    test(`creation-time note closes with ${closeWith} to controls and the highlight`, async ({
+      page,
+    }) => {
+      await createHighlightAndOpenEditor(page);
+      if (closeWith === "Done") {
+        await page.locator("#highlight-popover .highlight-popover-done").click();
+      } else {
+        await page.keyboard.press("Escape");
+      }
+      await expect(page.locator("dialog#highlight-popover")).not.toBeVisible();
+      await expect(page.locator("mark.highlight").first()).toBeFocused();
+      await expect(page.locator(".highlight-controls")).toBeVisible();
+    });
+  }
+
   test("focus moves into the dialog + role/name + :modal are exposed (Flow D gate)", async ({
     page,
   }) => {
@@ -140,9 +156,7 @@ test.describe("Note popover modal-dialog focus (ACPT-02 finding #2)", () => {
     // activates it → the LIGHTWEIGHT CONTROLS appear with focus moved into
     // them (issue #175) → "Add note" hands off through the mark (the
     // trigger-capture anchor) → the editor opens → close → focus returns to
-    // the mark, with the controls still holding their place. (The N-shortcut
-    // CREATE path has no prior trigger element, so its restore target is
-    // unspecified.)
+    // the mark, with the controls still holding their place. Creation-time editors use the surviving mark too.
     await createHighlightAndOpenEditor(page);
     // Persist the highlight + close the editor so a stable <mark> exists.
     await page.locator("#highlight-popover .highlight-popover-done").click();

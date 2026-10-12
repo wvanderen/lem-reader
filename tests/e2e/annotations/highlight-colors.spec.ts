@@ -214,14 +214,19 @@ test.describe("highlight colors in the reader (issue #118 + #175)", () => {
     await page.keyboard.press("ArrowRight");
     const yellow = controls.getByRole("radio", { name: "Yellow" });
     await expect(yellow).toBeChecked();
+    await expect(yellow).toBeFocused();
+    await page.keyboard.press("ArrowRight");
+    const green = controls.getByRole("radio", { name: "Green" });
+    await expect(green).toBeChecked();
+    await expect(green).toBeFocused();
     await dismissControls(page);
 
-    await expect.poll(async () => (await readFirstHighlightRow(page))?.color).toBe("yellow");
-    await expect(page.locator("mark.highlight").first()).toHaveClass(/color-yellow/);
+    await expect.poll(async () => (await readFirstHighlightRow(page))?.color).toBe("green");
+    await expect(page.locator("mark.highlight").first()).toHaveClass(/color-green/);
     // The screen-reader label announces the named color (not color alone).
     await expect(page.locator("mark.highlight").first()).toHaveAttribute(
       "aria-label",
-      /^Yellow highlight/,
+      /^Green highlight/,
     );
   });
 

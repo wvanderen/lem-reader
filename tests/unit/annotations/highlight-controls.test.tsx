@@ -243,9 +243,7 @@ describe("HighlightControls — surface contract (issue #175)", () => {
     const firstButton = await screen.findByRole("button", { name: "Add note" });
     await waitFor(() => expect(document.activeElement).toBe(firstButton));
 
-    // Re-render without the focus flag — focus stays put (no steal). The
-    // rerender replaces the nodes, so compare against the CURRENT first
-    // button rather than the captured node.
+    // Pointer activation leaves the focus chosen by the reader alone.
     rerender(
       <HighlightOverlayProvider article={article}>
         <ReadingSurface />
@@ -253,8 +251,9 @@ describe("HighlightControls — surface contract (issue #175)", () => {
         <HighlightControls />
       </HighlightOverlayProvider>,
     );
-    const currentFirst = document.querySelector<HTMLButtonElement>(".highlight-controls button");
-    expect(document.activeElement).toBe(currentFirst);
+    const mark = document.querySelector<HTMLElement>("mark.highlight")!;
+    mark.focus();
+    await waitFor(() => expect(document.activeElement).toBe(mark));
   });
 
   it("whitespace-only commentary counts as no note (Add note, immediate delete)", async () => {
