@@ -130,7 +130,7 @@ export function chooseNoteEditorPlacement(
     const useLeft = leftBand >= rightBand;
     const width = gutterWidth(useLeft ? leftBand : rightBand);
     const left = useLeft ? columnRect.left - edge - width : columnRect.right + edge;
-    const height = editorSize.height;
+    const height = Math.min(editorSize.height, Math.max(viewportRect.height - 2 * edge, 0));
     const top = clamp(
       anchor.top + anchor.height / 2 - height / 2,
       viewportRect.top + edge,
@@ -141,7 +141,7 @@ export function chooseNoteEditorPlacement(
 
   // ── 2. ABOVE / BELOW: never obscure the passage, edge-clamped ──────────────
   const width = fullWidth;
-  const height = editorSize.height;
+  const height = Math.min(editorSize.height, Math.max(viewportRect.height - 2 * edge, 0));
   const left = clamp(
     anchor.left + anchor.width / 2 - width / 2,
     viewportRect.left + edge,
@@ -189,4 +189,25 @@ export function currentViewportRect(): ViewportRect {
     return { left: vv.offsetLeft, top: vv.offsetTop, width: vv.width, height: vv.height };
   }
   return { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+}
+
+/** Bounds of every on-screen fragment of a highlight, excluding measurement clones.
+ * A span can cross blocks or inline elements; its first mark is only a focus anchor. */
+export function visibleHighlightRect(highlightId: string): DOMRect | null {
+  const viewport = currentViewportRect();
+  const rects = Array.from(
+    document.querySelectorAll<HTMLElement>("mark.highlight[data-highlight-id]"),
+  )
+    .filter(
+      (mark) =>
+        mark.dataset.highlightId === highlightId && !mark.closest(".article-body-measurement"),
+    )
+    .flatMap((mark) => Array.from(mark.getClientRects()))
+    .filter((rect) => intersectsViewport(rect, viewport));
+  if (rects.length === 0) return null;
+  const left = Math.min(...rects.map((rect) => rect.left));
+  const top = Math.min(...rects.map((rect) => rect.top));
+  const right = Math.max(...rects.map((rect) => rect.right));
+  const bottom = Math.max(...rects.map((rect) => rect.bottom));
+  return new DOMRect(left, top, right - left, bottom - top);
 }

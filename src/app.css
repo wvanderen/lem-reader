@@ -2645,6 +2645,8 @@ dialog.highlight-popover {
      regardless of note length. The textarea scrolls INTERNALLY (its own
      max-height below); the dialog itself never grows past the viewport. */
   max-height: calc(100vh - 2 * var(--space-lg));
+  /* Shared bounded footprint for writing and delete confirmation. */
+  height: 240px;
 }
 /* Issue #176 — anchored placements (gutter / above / below / sheet): the
    inline left/top/width carry the chosen geometry (NotePopover computes it

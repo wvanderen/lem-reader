@@ -108,6 +108,7 @@ import {
   currentViewportRect,
   NOTE_EDITOR_EDGE_GUTTER,
   visibleReadingColumnRect,
+  visibleHighlightRect,
   type NoteEditorPlacement,
 } from "./notePlacement";
 // Issue #176 — the shared zoom-compensation factor (the §25 register; the
@@ -123,8 +124,11 @@ function placeEditor(
   dlg: HTMLDialogElement,
   anchorRect: DOMRect | null,
 ): { placement: NoteEditorPlacement; viewportHeight: number } {
-  const box = dlg.getBoundingClientRect();
   const viewport = currentViewportRect();
+  // Apply the current cap before measuring: both keyboard shrink and expansion
+  // must use the resulting box, rather than the previous session's height.
+  dlg.style.maxHeight = `${Math.max(viewport.height - 2 * NOTE_EDITOR_EDGE_GUTTER, 0) / effectiveZoom()}px`;
+  const box = dlg.getBoundingClientRect();
   return {
     placement: chooseNoteEditorPlacement(
       anchorRect,
@@ -250,7 +254,7 @@ export function NotePopover(): React.ReactElement | null {
       // the highlight's visible mark; the editor's measured box comes from
       // the just-opened dialog (real content, real footprint). A missing or
       // off-viewport mark → the centered fallback (placement stays null).
-      const markRect = visibleMarkForId(activeId)?.getBoundingClientRect() ?? null;
+      const markRect = visibleHighlightRect(activeId);
       anchorRectRef.current = markRect;
       const chosen = placeEditor(dlg, markRect);
       setPlacement(chosen.placement.mode === "center" ? null : chosen.placement);
@@ -296,7 +300,7 @@ export function NotePopover(): React.ReactElement | null {
     const reposition = () => {
       const dlg = popoverRef.current;
       if (!dlg || !dlg.open) return;
-      const markRect = visibleMarkForId(activeId)?.getBoundingClientRect() ?? null;
+      const markRect = visibleHighlightRect(activeId);
       if (markRect) anchorRectRef.current = markRect;
       const chosen = placeEditor(dlg, anchorRectRef.current);
       setViewportHeight(chosen.viewportHeight);

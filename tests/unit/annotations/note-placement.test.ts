@@ -18,6 +18,7 @@
 import { describe, expect, it } from "vitest";
 import {
   chooseNoteEditorPlacement,
+  visibleHighlightRect,
   NOTE_EDITOR_MIN_GUTTER_WIDTH,
   NOTE_EDITOR_PREFERRED_WIDTH,
   type EditorSize,
@@ -172,5 +173,43 @@ describe("chooseNoteEditorPlacement — bottom sheet (last resort)", () => {
     const p = chooseNoteEditorPlacement(anchor, EDITOR, keyboardVp, rect(8, 0, 359, 667));
     expect(p.mode).toBe("sheet");
     expect(p.top + EDITOR.height).toBeLessThanOrEqual(300 + 0.001);
+  });
+});
+
+describe("oversized editor geometry", () => {
+  it("bounds the gutter height before clamping a keyboard-shrunk viewport", () => {
+    const p = chooseNoteEditorPlacement(
+      rect(400, 40, 200, 20),
+      EDITOR,
+      { ...VP, height: 150 },
+      SYMMETRIC_COLUMN,
+    );
+    expect(p.mode).toBe("gutter");
+    expect(p.top).toBe(8);
+  });
+});
+
+describe("highlight fragment bounds", () => {
+  it("includes later visible fragments when the first is scrolled away", () => {
+    const first = document.createElement("mark");
+    const second = document.createElement("mark");
+    for (const mark of [first, second]) {
+      mark.className = "highlight";
+      mark.dataset.highlightId = "span";
+      document.body.append(mark);
+    }
+    Object.defineProperty(first, "getClientRects", { value: () => [rect(100, -100, 100, 20)] });
+    Object.defineProperty(second, "getClientRects", {
+      value: () => [rect(100, 50, 100, 20), rect(100, 100, 200, 20)],
+    });
+    try {
+      const bounds = visibleHighlightRect("span");
+      expect(bounds?.top).toBe(50);
+      expect(bounds?.bottom).toBe(120);
+      expect(bounds?.width).toBe(200);
+    } finally {
+      first.remove();
+      second.remove();
+    }
   });
 });

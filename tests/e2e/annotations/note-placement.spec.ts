@@ -34,6 +34,7 @@ import {
   wipeDatabase,
   openArticle,
   selectRangeInBlock,
+  selectRangeBetweenBlocks,
   findFirstBlockWithText,
   switchMode,
   openHighlightControls,
@@ -237,6 +238,72 @@ test.describe("Issue #176 — note editor placement beside the passage", () => {
     expect(geo.box!.x + geo.box!.width).toBeLessThanOrEqual(geo.vw - 7);
   });
 
+  test("a multi-block passage uses all visible fragments for placement", async ({ page }) => {
+    await page.setViewportSize({ width: 800, height: 900 });
+    await openArticle(page, FIXTURE);
+    await switchMode(page);
+    const indices = await page.evaluate(() =>
+      Array.from(document.querySelectorAll<HTMLElement>(".article-body [data-block-index]"))
+        .filter(
+          (el) =>
+            !el.closest(".article-body-measurement") &&
+            el.tagName === "P" &&
+            (el.textContent?.length ?? 0) > 24,
+        )
+        .slice(0, 2)
+        .map((el) => Number(el.dataset.blockIndex)),
+    );
+    expect(indices).toHaveLength(2);
+    expect(
+      await selectRangeBetweenBlocks(
+        page,
+        { blockIndex: indices[0]!, offset: 0 },
+        { blockIndex: indices[1]!, offset: 24 },
+      ),
+    ).toBe(true);
+    await page.keyboard.press("n");
+    await expect(noteTextarea(page)).toBeVisible();
+    const geo = await readGeometry(page);
+    const fragments = await page.evaluate(() =>
+      Array.from(document.querySelectorAll<HTMLElement>("mark.highlight"))
+        .filter((el) => !el.closest(".article-body-measurement"))
+        .flatMap((el) => Array.from(el.getClientRects()))
+        .filter((r) => r.bottom > 0 && r.top < window.innerHeight)
+        .map((r) => ({ x: r.x, y: r.y, width: r.width, height: r.height })),
+    );
+    expect(fragments.length).toBeGreaterThan(1);
+    expect(geo.mode).not.toBeNull();
+    if (geo.mode !== "sheet") {
+      for (const fragment of fragments) expect(overlap(geo.box!, fragment)).toBe(false);
+    }
+  });
+
+  test("vertical shrink and expansion keep the gutter editor inside the viewport", async ({
+    page,
+  }) => {
+    await openArticle(page, FIXTURE);
+    await createHighlight(page);
+    await openHighlightControls(page);
+    await highlightControls(page).getByRole("button", { name: "Edit note" }).click();
+    const original = await readGeometry(page);
+    await page.setViewportSize({ width: original.vw, height: 150 });
+    await expect
+      .poll(async () => {
+        const { box } = await readGeometry(page);
+        return box!.y + box!.height;
+      })
+      .toBeLessThanOrEqual(150);
+    const small = await readGeometry(page);
+    expect(small.box!.y + small.box!.height).toBeLessThanOrEqual(150);
+    await page.setViewportSize({ width: original.vw, height: original.vh });
+    await expect
+      .poll(async () => (await readGeometry(page)).box!.height)
+      .toBeCloseTo(original.box!.height, 0);
+    const restored = await readGeometry(page);
+    expect(restored.box!.y).toBeGreaterThanOrEqual(0);
+    expect(restored.box!.y + restored.box!.height).toBeLessThanOrEqual(original.vh);
+  });
+
   test("the delete-confirm view shares the editor's footprint", async ({ page }) => {
     await openArticle(page, FIXTURE);
     await createHighlight(page);
@@ -260,6 +327,8 @@ test.describe("Issue #176 — note editor placement beside the passage", () => {
     expect(confirm.mode).toBe(editor.mode);
     expect(confirm.box!.x).toBeCloseTo(editor.box!.x, 0);
     expect(confirm.box!.width).toBeCloseTo(editor.box!.width, 0);
+    expect(confirm.box!.height).toBeCloseTo(editor.box!.height, 0);
+    expect(confirm.box!.y).toBeCloseTo(editor.box!.y, 0);
     expect(overlap(confirm.box!, editor.mark!)).toBe(false);
   });
 
