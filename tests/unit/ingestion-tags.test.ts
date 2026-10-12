@@ -376,3 +376,93 @@ describe("setHighlightTags (issue #116)", () => {
     expect(await loadAllHighlights()).toEqual([]);
   });
 });
+
+// Issue #182 — the ONE post-commit invalidation: a committed article/book
+// tag write broadcasts on the librarySnapshotBus so every mounted library
+// surface re-derives (and a surface that mounted mid-write — the reader
+// tags-then-returns-to-library flow — reloads to fresh rows instead of
+// staying stale forever). The broadcast is a side-effect contract of the
+// write seam, ordered AFTER the row update, and must never surface a
+// subscriber failure as a storage failure.
+describe("tag writes invalidate the library snapshot (issue #182)", () => {
+  beforeEach(async () => {
+    await wipeDatabase();
+  });
+
+  it("setArticleTags broadcasts exactly once, AFTER the row update resolves", async () => {
+    const { setArticleTags } = await loadTagsStore();
+    const { DexieLibrarySource } = await loadLibrarySource();
+    const { onLibrarySnapshotInvalidated } =
+      await import("../../src/ingestion/library/librarySnapshotBus");
+    const source = new DexieLibrarySource();
+    await source.save(sampleArticle({ id: "a" }));
+
+    const events: string[] = [];
+    const unsubscribe = onLibrarySnapshotInvalidated(() => events.push("invalidated"));
+    try {
+      await setArticleTags("a", ["stoic"]);
+      // Post-commit ordering: by the time the write's promise resolves, the
+      // broadcast has fired — a reload triggered by it reads the settled row.
+      expect(events).toEqual(["invalidated"]);
+      expect(
+        await loadLibrarySource().then(({ dexieLibrarySource }) => dexieLibrarySource.list()),
+      ).toMatchObject([{ id: "a", tags: ["stoic"] }]);
+    } finally {
+      unsubscribe();
+    }
+  });
+
+  it("setBookTags broadcasts too (book tags ride the same chip strip)", async () => {
+    const { setBookTags } = await loadTagsStore();
+    const { saveBook } = await import("../../src/persistence/booksStore");
+    const { BookSchema } = await import("../../src/content/schema");
+    const { onLibrarySnapshotInvalidated } =
+      await import("../../src/ingestion/library/librarySnapshotBus");
+    await saveBook(
+      BookSchema.parse({
+        id: "book-1",
+        title: "A Book",
+        authors: ["An Author"],
+        language: "en",
+        chapterArticleIds: [],
+        skippedChapterCount: 0,
+        source: "epub-upload",
+        originalFileHash: "sha256:" + "b".repeat(64),
+        addedAt: "2026-08-18T00:00:00.000Z",
+      }),
+      [],
+    );
+
+    const events: number[] = [];
+    const unsubscribe = onLibrarySnapshotInvalidated(() => events.push(1));
+    try {
+      await setBookTags("book-1", ["collection"]);
+      expect(events.length).toBe(1);
+    } finally {
+      unsubscribe();
+    }
+  });
+
+  it("a throwing subscriber never fails the write (the failure domains stay separate)", async () => {
+    const { setArticleTags } = await loadTagsStore();
+    const { DexieLibrarySource } = await loadLibrarySource();
+    const { onLibrarySnapshotInvalidated } =
+      await import("../../src/ingestion/library/librarySnapshotBus");
+    const source = new DexieLibrarySource();
+    await source.save(sampleArticle({ id: "a" }));
+
+    const unsubscribe = onLibrarySnapshotInvalidated(() => {
+      throw new Error("subscriber bug");
+    });
+    try {
+      // The write resolves; the row is settled; the subscriber error is
+      // swallowed (the calm fallback is a stale snapshot, never a failed
+      // tag save).
+      await expect(setArticleTags("a", ["stoic"])).resolves.toBeUndefined();
+      const rows = await source.list();
+      expect(rows[0]?.tags).toEqual(["stoic"]);
+    } finally {
+      unsubscribe();
+    }
+  });
+});
