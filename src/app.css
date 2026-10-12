@@ -2629,7 +2629,10 @@ dialog.highlight-popover {
   /* margin:auto restores the UA dialog:modal margin-auto centering (WHATWG
      HTML Rendering §15.3.3 — the prior author margin:0 defeated it and
      pinned the note editor to the top-left corner; Plan 13-03 POLISH-04 /
-     D13-14 — the reported visual bug). */
+     D13-14 — the reported visual bug). Issue #176: this is now the CENTERED
+     FALLBACK only (no visible anchor — drawer-path edits on scrolled-away
+     passages); the anchored placements drop it via [data-placement] below.
+     */
   margin: auto;
   /* Issue #175 — the width/height caps below are the EDITOR FOOTPRINT (the
      consistent-width / bounded-height contract): border-box so the padding
@@ -2642,6 +2645,18 @@ dialog.highlight-popover {
      regardless of note length. The textarea scrolls INTERNALLY (its own
      max-height below); the dialog itself never grows past the viewport. */
   max-height: calc(100vh - 2 * var(--space-lg));
+}
+/* Issue #176 — anchored placements (gutter / above / below / sheet): the
+   inline left/top/width carry the chosen geometry (NotePopover computes it
+   through notePlacement.ts and zoom-compensates per the §25 register), so
+   the UA margin:auto centering must step aside — the dialog keeps the UA
+   inset:0 fixed positioning but resolves to its explicit width at the given
+   offsets instead of stretching. The card chrome, footprint caps, and modal
+   AX context are byte-identical across placements — only the position
+   differs. No transition/animation property (A11Y-06): a viewport-change
+   reposition is instant. */
+dialog.highlight-popover[data-placement] {
+  margin: 0;
 }
 /* Flex-column layout ONLY when open. Scoping under [open] preserves the UA
    display:none that hides a closed <dialog> — an author `display:flex` on the

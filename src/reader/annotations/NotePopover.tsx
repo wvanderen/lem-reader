@@ -5,6 +5,19 @@
 // color choices, and the Delete entry moved OUT to the lightweight
 // HighlightControls surface.
 //
+// Issue #176 — placement beside the passage: the editor keeps the highlighted
+// passage readable while it is open. Placement is CHOSEN ON OPEN through the
+// ONE ladder in notePlacement.ts (gutter beside the article column → entirely
+// above/below the passage → bottom sheet when neither fits → UA-centered
+// fallback when no visible anchor exists, e.g. drawer-path edits on
+// scrolled-away passages) and applied as inline position:fixed geometry +
+// data-placement (CSS drops margin:auto centering only when anchored). The
+// chosen placement is STABLE while typing (the dialog is top-layer/fixed, so
+// opening/typing/confirming/closing can never shift article content or
+// pagination); it re-runs ONLY on viewport changes (window resize, and the
+// mobile keyboard shrinking visualViewport). The confirm view shares the
+// session's placement — same footprint, no reposition between views.
+//
 // Mechanism: native `<dialog>` + `showModal()` (the proven codebase pattern —
 // SettingsPanel + AnnotationsDrawer both use it; Flow F is the VO-passing
 // reference). The browser supplies the modal-dialog accessibility context
@@ -75,7 +88,7 @@
 // Pitfall 8 (note XSS): the note text is rendered as a React text child
 // (`<textarea value={text} />`). NEVER raw HTML. The `react/no-danger`
 // ESLint rule (enabled since Phase 1) statically forbids the raw-HTML prop.
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useHighlightOverlay } from "./HighlightOverlay";
 // Plan 19-02 (D19-10) — the excerpt derivation routes through the ONE
 // shared pure helper (first fragment + calm ellipsis for spans).
@@ -86,6 +99,17 @@ import { captureDeleteFocusTarget, visibleMarkForId } from "./highlightMarks";
 // Issue #174 — the ONE polite status-region primitive (the honest-failure
 // line for a rejected delete).
 import { StatusRegion } from "../../ui/StatusRegion";
+// Issue #176 — the ONE placement ladder (gutter → above/below → sheet →
+// center) + the viewport/column DOM-resolution helpers.
+import {
+  chooseNoteEditorPlacement,
+  currentViewportRect,
+  visibleReadingColumnRect,
+  type NoteEditorPlacement,
+} from "./notePlacement";
+// Issue #176 — the shared zoom-compensation factor (the §25 register; the
+// inline left/top/width are divided by it for the zoomed local space).
+import { effectiveZoom } from "./anchorPosition";
 
 /** Excerpt cap for the dialog's accessible description (UI-SPEC §Interaction
  * 29) — Plan 19-02: the cap parameter feeding the shared firstFragmentExcerpt
@@ -133,6 +157,19 @@ export function NotePopover(): React.ReactElement | null {
   // dialog stays open with the calm inline line. Reset on every fresh open.
   const [deleteFailed, setDeleteFailed] = useState(false);
 
+  // Issue #176 — the session's editor placement (null = UA-centered fallback:
+  // no visible anchor — drawer paths on scrolled-away passages, jsdom unit
+  // renders). Chosen ONCE at open (pre-paint, so no centered frame ever
+  // flashes); re-run only by the viewport-change listeners below. The
+  // confirm view inherits the session's placement (same footprint — no
+  // reposition between the edit and confirm views).
+  const [placement, setPlacement] = useState<NoteEditorPlacement | null>(null);
+  // The anchor rect the session was placed from. Repositioning reuses it
+  // when the mark is momentarily unresolvable (a paginated resize can
+  // repaginate and unmount the mark mid-listener) — the editor never jumps
+  // to center because of a transient remount.
+  const anchorRectRef = useRef<DOMRect | null>(null);
+
   // The dialog is open when EITHER editor state points at a highlight; the
   // confirm view is the confirmDeleteFor mode. The two states are mutually
   // exclusive by construction (every setter path opens exactly one).
@@ -153,7 +190,14 @@ export function NotePopover(): React.ReactElement | null {
   // showModal gives VoiceOver the modal-dialog accessibility context (focus
   // scope + background inert + platform "modal shown" AT event). See file
   // header HISTORY note.
-  useEffect(() => {
+  //
+  // useLayoutEffect (issue #176): the open branch must measure the dialog
+  // and choose its placement BEFORE the browser paints — otherwise the
+  // freshly opened editor flashes at the CSS-centered position for one
+  // frame before jumping beside the passage. A layout effect runs before
+  // paint, and the placement setState inside it re-renders in the same
+  // render cycle (the style application and the open are one visual step).
+  useLayoutEffect(() => {
     const dlg = popoverRef.current;
     if (!dlg) return;
     if (activeId && !dlg.open) {
@@ -171,6 +215,24 @@ export function NotePopover(): React.ReactElement | null {
         // showModal throws if the element is already in the top layer or if
         // the browser doesn't support <dialog>. Either way, the editor is in
         // the DOM; the close path is guarded by dlg.open below.
+      }
+      // Issue #176 — choose the placement on open (pre-paint): the anchor is
+      // the highlight's visible mark; the editor's measured box comes from
+      // the just-opened dialog (real content, real footprint). A missing or
+      // off-viewport mark → the centered fallback (placement stays null).
+      const markRect = visibleMarkForId(activeId)?.getBoundingClientRect() ?? null;
+      anchorRectRef.current = markRect;
+      if (markRect) {
+        const box = dlg.getBoundingClientRect();
+        const next = chooseNoteEditorPlacement(
+          markRect,
+          { width: box.width, height: box.height },
+          currentViewportRect(),
+          visibleReadingColumnRect(),
+        );
+        setPlacement(next.mode === "center" ? null : next);
+      } else {
+        setPlacement(null);
       }
       // Reset per open (fresh session). A prior session's delete-failure
       // line never leaks either.
@@ -198,6 +260,55 @@ export function NotePopover(): React.ReactElement | null {
       dlg.close();
     }
   }, [activeId, isConfirm]);
+
+  // Issue #176 — reposition ONLY on viewport change (the AC ladder: stable
+  // while typing — typing fires no events here; the dialog's box is content-
+  // bounded so note length cannot resize it). Window resize covers desktop
+  // viewports + the 400%-zoom scenario; visualViewport resize/scroll covers
+  // the mobile keyboard shrinking (or panning) the visible area. A fresh
+  // mark measure keeps the anchored placements truthful after a resize-
+  // driven repagination; a transiently unresolvable mark (mid-repagination)
+  // falls back to the session's captured anchor rect instead of jumping to
+  // center. Identical results never re-render (the position is stable).
+  useEffect(() => {
+    if (!activeId) return;
+    const reposition = () => {
+      const dlg = popoverRef.current;
+      if (!dlg || !dlg.open) return;
+      const markRect = visibleMarkForId(activeId)?.getBoundingClientRect() ?? null;
+      if (markRect) anchorRectRef.current = markRect;
+      const anchor = anchorRectRef.current;
+      const box = dlg.getBoundingClientRect();
+      const next = chooseNoteEditorPlacement(
+        anchor,
+        { width: box.width, height: box.height },
+        currentViewportRect(),
+        visibleReadingColumnRect(),
+      );
+      setPlacement((prev) => {
+        const prevAnchored = prev ?? null;
+        if (
+          prevAnchored !== null &&
+          prevAnchored.mode === next.mode &&
+          Math.round(prevAnchored.left) === Math.round(next.left) &&
+          Math.round(prevAnchored.top) === Math.round(next.top) &&
+          Math.round(prevAnchored.width) === Math.round(next.width)
+        ) {
+          return prev;
+        }
+        return next.mode === "center" ? null : next;
+      });
+    };
+    window.addEventListener("resize", reposition);
+    const vv = window.visualViewport;
+    vv?.addEventListener("resize", reposition);
+    vv?.addEventListener("scroll", reposition);
+    return () => {
+      window.removeEventListener("resize", reposition);
+      vv?.removeEventListener("resize", reposition);
+      vv?.removeEventListener("scroll", reposition);
+    };
+  }, [activeId]);
 
   // Register the `close` event listener (with cleanup). Native <dialog> fires
   // `close` on EVERY close path: Escape (browser-default), the state-driven
@@ -301,6 +412,25 @@ export function NotePopover(): React.ReactElement | null {
   // the DOM). Until showModal() runs it is display:none (native dialog UA
   // stylesheet) and therefore absent from the accessibility tree — no SR
   // reads the empty editor before it opens.
+  //
+  // Issue #176 — anchored placement: data-placement flips the CSS margin:auto
+  // centering off (dialog.highlight-popover[data-placement]), and the inline
+  // left/top/width carry the chosen geometry. Coordinates are divided by the
+  // effective page zoom (the §25 register — getBoundingClientRect reads
+  // visual px; position:fixed offsets apply in the zoomed local space), and
+  // --effective-zoom is mirrored for any viewport-unit CSS. The centered
+  // fallback (no visible anchor) sets NEITHER — the dialog keeps the
+  // pre-#176 UA-centered look.
+  const anchored = placement !== null;
+  const zoom = effectiveZoom();
+  const placementStyle: React.CSSProperties | undefined = anchored
+    ? ({
+        left: `${placement.left / zoom}px`,
+        top: `${placement.top / zoom}px`,
+        width: `${placement.width / zoom}px`,
+        "--effective-zoom": zoom,
+      } as React.CSSProperties)
+    : undefined;
   return (
     <dialog
       ref={popoverRef}
@@ -308,6 +438,8 @@ export function NotePopover(): React.ReactElement | null {
       className="highlight-popover"
       aria-label={isConfirm ? "Delete highlight" : "Highlight note"}
       aria-describedby={excerpt.length > 0 ? "highlight-popover-excerpt" : undefined}
+      data-placement={anchored ? placement.mode : undefined}
+      style={placementStyle}
     >
       {resolved &&
         (isConfirm ? (
