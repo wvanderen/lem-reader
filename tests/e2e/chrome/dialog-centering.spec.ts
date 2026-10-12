@@ -94,7 +94,9 @@ async function openNoteEditor(page: Page): Promise<Locator> {
   const selected = await selectRangeInBlock(page, blockIdx, 0, 18);
   expect(selected, "selection must be set before pressing n").toBe(true);
   await page.keyboard.press("n");
-  const popover = page.locator("dialog.highlight-popover");
+  // Issue #175: the compact tags dialog shares the .highlight-popover card
+  // class — scope to the note editor's own id.
+  const popover = page.locator("dialog#highlight-popover");
   await expect(popover).toBeVisible({ timeout: 10_000 });
   return popover;
 }

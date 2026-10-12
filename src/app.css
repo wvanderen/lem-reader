@@ -2631,9 +2631,17 @@ dialog.highlight-popover {
      pinned the note editor to the top-left corner; Plan 13-03 POLISH-04 /
      D13-14 — the reported visual bug). */
   margin: auto;
+  /* Issue #175 — the width/height caps below are the EDITOR FOOTPRINT (the
+     consistent-width / bounded-height contract): border-box so the padding
+     rides INSIDE the caps instead of stacking onto them. */
+  box-sizing: border-box;
   padding: var(--space-lg);
   max-width: 380px;
   width: calc(100vw - 2 * var(--space-md));
+  /* Issue #175 — bounded height: the editor keeps a consistent footprint
+     regardless of note length. The textarea scrolls INTERNALLY (its own
+     max-height below); the dialog itself never grows past the viewport. */
+  max-height: calc(100vh - 2 * var(--space-lg));
 }
 /* Flex-column layout ONLY when open. Scoping under [open] preserves the UA
    display:none that hides a closed <dialog> — an author `display:flex` on the
@@ -2641,11 +2649,14 @@ dialog.highlight-popover {
    visible after close (caught by the popover focus e2e). showModal()/close()
    toggle the reflected `open` attribute. Native <dialog> + showModal centers
    the element in the viewport (same centered-box geometry the Popover API's
-   default positioning produced before). No transition/animation (A11Y-06). */
+   default positioning produced before). No transition/animation (A11Y-06).
+   The overflow guard is the last-resort clamp — the textarea's own
+   max-height is the working bound. */
 dialog.highlight-popover[open] {
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
+  overflow-y: auto;
 }
 /* Transparent ::backdrop — NO full-screen dimmed overlay. The article stays
    visible behind the editor. The backdrop still exists as a top-layer element
@@ -2677,12 +2688,16 @@ dialog.highlight-popover::backdrop {
   gap: var(--space-xs);
 }
 /* Textarea — Body role (18px / selected body stack, 400 weight) so the note
-   reads like the article, not like chrome (UI-SPEC §Typography). Autosizes
-   via rows=3 + max-height. */
+   reads like the article, not like chrome (UI-SPEC §Typography). Issue #175
+   — bounded height: min-height keeps the calm empty footprint, max-height
+   forces LONG NOTES TO SCROLL INTERNALLY (overflow-y: auto) instead of
+   growing the dialog; the reader can still shrink it via the resize handle. */
 .highlight-popover-textarea {
   box-sizing: border-box;
   width: 100%;
   min-height: calc(var(--touch) + var(--space-md));
+  max-height: min(40vh, 280px);
+  overflow-y: auto;
   padding: var(--space-sm);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-sm);
@@ -2846,6 +2861,111 @@ dialog.highlight-popover .highlight-color-entry {
   font-size: 14px;
   line-height: 1.45;
   color: var(--ink-soft);
+}
+
+/* ── Issue #175 — the lightweight highlight controls ────────────────────────── */
+/* The conditionally-rendered position:fixed surface mark activation exposes
+   (the SelectionToolbar pattern — NOT popover="auto", which would
+   light-dismiss on the finalizing mouseup; NOT a dialog, which is reserved
+   for the editors). Same card chrome as .selection-toolbar: raised surface,
+   hairline, radius. Geometry rides the ONE shared anchored-surface helper
+   (§25: centered above the anchor, edge-clamped, flips below). Column layout:
+   the action row on top, the color fieldset below. No transition/animation
+   property (A11Y-06 — instant mount/unmount). */
+.highlight-controls {
+  position: fixed;
+  z-index: var(--z-popover);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm) var(--space-sm);
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  /* Viewport-width cap in zoom-immune viewport units, divided by the
+     effective page zoom (--effective-zoom, mirrored from JS by the
+     component): under CSS page zoom (the WCAG 1.4.4 400% scenario) the cap
+     must hold in VISUAL pixels — 100vw reads visual, the cap applies in the
+     zoomed local space, so the zoom divides back out. Rows below wrap to
+     fit (the 320px reflow pass shares the win). */
+  max-width: calc((100vw - 2 * var(--space-sm)) / var(--effective-zoom, 1));
+}
+.highlight-controls-actions {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: var(--space-xs) var(--space-sm);
+}
+/* Quiet text buttons (the .selection-toolbar-button register): --ink at
+   rest, --accent on hover/focus; min-height satisfies A11Y-07. */
+.highlight-controls-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--touch);
+  padding-inline: var(--space-md);
+  background: transparent;
+  border: none;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1;
+  font-weight: 400;
+  color: var(--ink);
+  cursor: pointer;
+}
+.highlight-controls-button:hover,
+.highlight-controls-button:focus-visible {
+  color: var(--accent);
+}
+.highlight-controls-button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+/* Delete hints its consequence (the .drawer-entry-action-delete register —
+   the shared destructive treatment, calm until hovered/focused). */
+.highlight-controls-delete:hover:not(:disabled),
+.highlight-controls-delete:focus-visible {
+  color: var(--destructive);
+}
+/* The delete-failure line — the inline-line register (quiet, local): strip
+   the shared .status card chrome, keep the copy readable. */
+.highlight-controls > .status {
+  margin-block: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+.highlight-controls > .status p {
+  margin-block: 0;
+}
+/* The color entry sits INSIDE the card — the boxed fieldset chrome would
+   double-frame; the legend + pills stay (color never the sole identifier). */
+.highlight-controls .highlight-color-entry {
+  padding: 0;
+  border: none;
+}
+.highlight-controls .highlight-color-entry .status {
+  margin-top: 0;
+}
+
+/* ── Issue #175 — the compact highlight-tags dialog ─────────────────────────── */
+/* Rides the .highlight-popover card (same footprint family: same padding,
+   transparent backdrop, modal AX context) with a narrower "compact" cap. */
+dialog.highlight-tags-dialog {
+  max-width: 320px;
+}
+/* The calm heading (the h2.review-note-title register — same anatomy, this
+   surface family's own hook). */
+h2.highlight-dialog-title {
+  margin-block: 0;
+  font-family: var(--font-ui);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
 }
 
 /* ── Annotations trigger (D5-09, UI-SPEC §Interaction 30) ───────────────────── */

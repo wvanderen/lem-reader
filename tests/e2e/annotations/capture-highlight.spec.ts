@@ -64,7 +64,10 @@ test.describe("ANNO-01 capture highlight (05-05)", () => {
       const mark = page.locator("mark.highlight");
       await expect(mark.first()).toBeVisible();
       await expect(mark.first()).toHaveAttribute("data-highlight-id", /.+/);
-      await expect(mark.first()).toHaveAttribute("aria-haspopup", "dialog");
+      // Issue #175 — activation exposes the lightweight CONTROLS (a toolbar),
+      // not a dialog; ARIA haspopup has no truthful toolbar token, so marks
+      // carry no aria-haspopup at all.
+      await expect(mark.first()).not.toHaveAttribute("aria-haspopup");
       // aria-label starts with "Highlight".
       const label = await mark.first().getAttribute("aria-label");
       expect(label ?? "", "aria-label prefix").toMatch(/^Highlight\b/i);

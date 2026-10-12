@@ -3,11 +3,13 @@
 // default focus (mirrors WipeConfirm Pitfall 8). The destructive action
 // removes the highlight + its note together (cascade-delete).
 //
-// SCENARIO: open popover on a highlight → Delete → confirm prompt
-// "Delete this highlight?" replaces the body + focus moves to Keep
-// ([data-initial-focus]). Click Keep → returns to edit view, nothing
-// deleted. Click Delete again → confirm → Delete → highlight + note
-// removed together, popover closes, "Highlight deleted." announces.
+// Issue #175 reshape: the Delete ENTRY lives on the lightweight highlight
+// controls (mark activation), not inside the note editor. The confirm step
+// still runs inside the SAME dialog footprint (the editor's confirm view):
+// controls → Delete → "Delete this highlight?" replaces the editor body +
+// focus moves to Keep ([data-initial-focus]). Keep closes back to the
+// controls (nothing deleted); Delete removes the highlight + note together.
+// The no-note delete stays IMMEDIATE at the controls (issue #174).
 import { test, expect } from "@playwright/test";
 import {
   BASE,
@@ -22,6 +24,9 @@ import {
   countHighlightsInDexie,
   installHighlightDeleteSabotage,
   failNextHighlightDelete,
+  openHighlightControls,
+  highlightControls,
+  noteTextarea,
 } from "./_fixtures";
 
 const FIXTURE = FIXTURES[0]!; // essay-long-form
@@ -31,7 +36,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.describe("ANNO-03 delete confirm (05-05)", () => {
-  test("Delete starts a two-step confirm with non-destructive default focus (Keep)", async ({
+  test("controls Delete starts a two-step confirm with non-destructive default focus (Keep)", async ({
     page,
   }) => {
     await openArticle(page, FIXTURE);
@@ -39,42 +44,50 @@ test.describe("ANNO-03 delete confirm (05-05)", () => {
     expect(blockIdx).not.toBe(-1);
     await selectRangeInBlock(page, blockIdx, 0, 18);
     await page.keyboard.press("n");
-    const textarea = page.locator("textarea.highlight-popover-textarea");
-    await textarea.fill("Note to delete.");
+    await noteTextarea(page).fill("Note to delete.");
     await page.locator("#highlight-popover .highlight-popover-done").click();
-    // Reopen the popover on the highlight.
-    await page.locator("mark.highlight").first().click();
-    // Step 1: click Delete → confirm prompt replaces the body.
-    await page.locator("#highlight-popover .highlight-popover-delete").click();
-    await expect(page.locator("#highlight-popover .highlight-popover-confirm")).toBeVisible();
-    await expect(
-      page.locator("#highlight-popover .highlight-popover-confirm-prompt"),
-    ).toContainText(/Delete this highlight\?/i);
+    // Reopen: mark click → the lightweight controls → Delete.
+    await openHighlightControls(page);
+    await highlightControls(page).getByRole("button", { name: "Delete" }).click();
+    // The confirm prompt opens inside the editor dialog (same footprint).
+    const dlg = page.locator("#highlight-popover");
+    await expect(dlg.locator(".highlight-popover-confirm")).toBeVisible();
+    await expect(dlg.locator(".highlight-popover-confirm-prompt")).toContainText(
+      /Delete this highlight\?/i,
+    );
     // Non-destructive default focus → the Keep button ([data-initial-focus]).
-    const keepBtn = page.locator("#highlight-popover [data-initial-focus]");
+    const keepBtn = dlg.locator("[data-initial-focus]");
     await expect(keepBtn).toBeVisible();
     await expect(keepBtn).toContainText(/Keep/i);
     const isFocused = await keepBtn.evaluate((el) => el === document.activeElement);
     expect(isFocused, "Keep button has non-destructive default focus").toBeTruthy();
   });
 
-  test("Keep cancels the delete — returns to edit view, nothing deleted", async ({ page }) => {
+  test("Keep cancels the delete — closes back to the controls, nothing deleted", async ({
+    page,
+  }) => {
     await openArticle(page, FIXTURE);
     const blockIdx = await findFirstBlockWithText(page, 24);
     expect(blockIdx).not.toBe(-1);
     await selectRangeInBlock(page, blockIdx, 0, 18);
     await page.keyboard.press("n");
-    await page.locator("textarea.highlight-popover-textarea").fill("Note to keep.");
+    await noteTextarea(page).fill("Note to keep.");
     await page.locator("#highlight-popover .highlight-popover-done").click();
     await expect(page.locator("mark.highlight").first()).toBeVisible();
     const baseline = await page.locator("mark.highlight").count();
+
     // Reopen + start delete.
-    await page.locator("mark.highlight").first().click();
-    await page.locator("#highlight-popover .highlight-popover-delete").click();
-    await expect(page.locator("#highlight-popover .highlight-popover-confirm")).toBeVisible();
-    // Keep → returns to edit view.
-    await page.locator("#highlight-popover [data-initial-focus]").click();
-    await expect(page.locator("#highlight-popover .highlight-popover-confirm")).toHaveCount(0);
+    await openHighlightControls(page);
+    await highlightControls(page).getByRole("button", { name: "Delete" }).click();
+    const dlg = page.locator("#highlight-popover");
+    await expect(dlg.locator(".highlight-popover-confirm")).toBeVisible();
+    // Keep → the dialog closes, back to the controls (the acceptance
+    // criteria: "Keep returns to controls"; the trigger restore lands on
+    // the anchor <mark>).
+    await dlg.locator("[data-initial-focus]").click();
+    await expect(dlg.locator(".highlight-popover-confirm")).toHaveCount(0);
+    await expect(dlg).not.toBeVisible();
+    await expect(highlightControls(page)).toBeVisible();
     // The highlight is still present.
     await expect(page.locator("mark.highlight")).toHaveCount(baseline);
   });
@@ -87,17 +100,18 @@ test.describe("ANNO-03 delete confirm (05-05)", () => {
     expect(blockIdx).not.toBe(-1);
     await selectRangeInBlock(page, blockIdx, 0, 18);
     await page.keyboard.press("n");
-    await page.locator("textarea.highlight-popover-textarea").fill("Note to delete.");
+    await noteTextarea(page).fill("Note to delete.");
     await page.locator("#highlight-popover .highlight-popover-done").click();
     // Capture the highlight id so we can verify both the mark + the Dexie
     // row are gone after delete.
     const hlId = await page.locator("mark.highlight").first().getAttribute("data-highlight-id");
     expect(hlId, "highlight has data-highlight-id").toBeTruthy();
     // Reopen + start delete + confirm.
-    await page.locator("mark.highlight").first().click();
-    await page.locator("#highlight-popover .highlight-popover-delete").click();
-    await expect(page.locator("#highlight-popover .highlight-popover-confirm")).toBeVisible();
-    await page.locator("#highlight-popover .highlight-popover-destructive").click();
+    await openHighlightControls(page);
+    await highlightControls(page).getByRole("button", { name: "Delete" }).click();
+    const dlg = page.locator("#highlight-popover");
+    await expect(dlg.locator(".highlight-popover-confirm")).toBeVisible();
+    await dlg.locator(".highlight-popover-destructive").click();
     // The mark unmounts.
     await expect(page.locator(`mark.highlight[data-highlight-id="${hlId}"]`)).toHaveCount(0);
     // "Highlight deleted." announced.
@@ -135,10 +149,9 @@ test.describe("ANNO-03 delete confirm (05-05)", () => {
       { blockIndex: 1, offset: 14 },
     );
     expect(ok, "cross-block span selection placed").toBeTruthy();
-    // N creates the span highlight + opens the note popover.
+    // N creates the span highlight + opens the note editor.
     await page.keyboard.press("n");
-    const textarea = page.locator("textarea.highlight-popover-textarea");
-    await textarea.fill("Span note to delete with the highlight.");
+    await noteTextarea(page).fill("Span note to delete with the highlight.");
     await page.locator("#highlight-popover .highlight-popover-done").click();
     const mark = page.locator("mark.highlight").first();
     await expect(mark).toBeVisible();
@@ -230,12 +243,15 @@ test.describe("Issue #174 — no-note highlights delete immediately (reading mod
     );
     expect(markBlockIndex).not.toBeNull();
 
-    // KEYBOARD path: focus the mark, Enter opens the editor, Enter on Delete
-    // (step 1) deletes — no confirm step is reachable without a note.
+    // KEYBOARD path: focus the mark, Enter exposes the CONTROLS (issue #175
+    // — keyboard activation moves focus into them), Tab to Delete, Enter
+    // deletes — no confirm step is reachable without a note.
     await mark.focus();
     await page.keyboard.press("Enter");
-    await expect(page.locator("#highlight-popover")).toBeVisible();
-    await page.locator("#highlight-popover .highlight-popover-delete").focus();
+    const controls = highlightControls(page);
+    await expect(controls).toBeVisible();
+    const deleteBtn = controls.getByRole("button", { name: "Delete" });
+    await deleteBtn.focus();
     await page.keyboard.press("Enter");
 
     // No confirm prompt ever mounted; the mark + its Dexie row are gone.
@@ -266,12 +282,12 @@ test.describe("Issue #174 — no-note highlights delete immediately (reading mod
     await page.keyboard.press("n");
     // Whitespace-only commentary: stored (the D5-10 length>0 policy is
     // unchanged) but it gates nothing — there is no written content to lose.
-    await page.locator("textarea.highlight-popover-textarea").fill("   ");
+    await noteTextarea(page).fill("   ");
     await page.locator("#highlight-popover .highlight-popover-done").click();
     await expect(page.locator("mark.highlight").first()).toBeVisible();
 
-    await page.locator("mark.highlight").first().click();
-    await page.locator("#highlight-popover .highlight-popover-delete").click();
+    await openHighlightControls(page);
+    await highlightControls(page).getByRole("button", { name: "Delete" }).click();
 
     await expect(page.locator("#highlight-popover .highlight-popover-confirm")).toHaveCount(0);
     await expect(page.locator("mark.highlight")).toHaveCount(0);
@@ -286,31 +302,32 @@ test.describe("Issue #174 — no-note highlights delete immediately (reading mod
     expect(blockIdx).not.toBe(-1);
     await selectRangeInBlock(page, blockIdx, 0, 18);
     await page.keyboard.press("n");
-    await page.locator("textarea.highlight-popover-textarea").fill("Worth a confirmation.");
+    await noteTextarea(page).fill("Worth a confirmation.");
     await page.locator("#highlight-popover .highlight-popover-done").click();
     await expect(page.locator("mark.highlight").first()).toBeVisible();
 
-    await page.locator("mark.highlight").first().click();
-    await page.locator("#highlight-popover .highlight-popover-delete").click();
+    await openHighlightControls(page);
+    await highlightControls(page).getByRole("button", { name: "Delete" }).click();
     // The confirm step appears with the cascade-honest line + Keep focus.
-    await expect(page.locator("#highlight-popover .highlight-popover-confirm")).toBeVisible();
-    await expect(page.locator("#highlight-popover .highlight-popover-confirm")).toContainText(
-      "The note attached to it will also be removed.",
-    );
+    const confirm = page.locator("#highlight-popover .highlight-popover-confirm");
+    await expect(confirm).toBeVisible();
+    await expect(confirm).toContainText("The note attached to it will also be removed.");
     await expect(page.locator("#highlight-popover [data-initial-focus]")).toBeFocused();
-    // Keep → nothing deleted.
+    // Keep → nothing deleted; back to the controls.
     await page.locator("#highlight-popover [data-initial-focus]").click();
     await expect(page.locator("#highlight-popover .highlight-popover-confirm")).toHaveCount(0);
     await expect(page.locator("mark.highlight").first()).toBeVisible();
+    await expect(highlightControls(page)).toBeVisible();
   });
 
-  test("a FAILED delete keeps the popover open with the failure line — the highlight stays (AC6 failure case)", async ({
+  test("a FAILED no-note delete keeps the CONTROLS open with the failure line — the highlight stays (AC6 failure case)", async ({
     page,
   }) => {
     // The honest-failure path end-to-end: the sabotage rejects the final
     // IDB delete; the real Dexie/Dexie-transaction/useAnnotationState stack
-    // above it must roll back and surface the failure — never close the
-    // popover as if the delete landed.
+    // above it must roll back and surface the failure — never dismiss the
+    // controls as if the delete landed. Issue #175: the immediate no-note
+    // delete runs FROM the controls, so the honest line renders THERE.
     await installHighlightDeleteSabotage(page);
     // The wipe left the page at ${BASE}/ — the article goto below is then a
     // SAME-DOCUMENT (hash-only) navigation, which injects no init scripts.
@@ -324,18 +341,16 @@ test.describe("Issue #174 — no-note highlights delete immediately (reading mod
     await page.locator("#highlight-popover .highlight-popover-done").click();
     await expect(page.locator("mark.highlight").first()).toBeVisible();
 
-    await page.locator("mark.highlight").first().click();
-    await expect(page.locator("#highlight-popover")).toBeVisible();
+    await openHighlightControls(page);
     await failNextHighlightDelete(page);
-    await page.locator("#highlight-popover .highlight-popover-delete").click();
+    await highlightControls(page).getByRole("button", { name: "Delete" }).click();
 
-    // Honest failure: the popover STAYS OPEN in the edit view with the calm
-    // inline line; the mark (and its Dexie row) survive for a retry.
+    // Honest failure: the controls STAY OPEN with the calm inline line; the
+    // mark (and its Dexie row) survive for a retry.
     await expect(page.locator("#highlight-popover .highlight-popover-confirm")).toHaveCount(0);
-    await expect(page.locator("#highlight-popover")).toContainText(
+    await expect(highlightControls(page)).toContainText(
       "Couldn't delete this highlight. Try again.",
     );
-    await expect(page.locator("textarea.highlight-popover-textarea")).toBeVisible();
     await expect(page.locator("mark.highlight")).toHaveCount(1);
     // Never a success announcement.
     await expect(announcementRegion(page)).not.toContainText(/Highlight deleted/i);

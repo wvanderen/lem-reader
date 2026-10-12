@@ -1,7 +1,9 @@
-// tests/unit/annotations/note-popover-color.test.tsx
-// Issue #118 — named highlight colors in the reader's highlight details.
-// The NotePopover hosts HighlightColorEntry (the TagPicker-host anatomy
-// applied to the closed color vocabulary):
+// tests/unit/annotations/highlight-controls-color.test.tsx
+// Issue #118 — named highlight colors; issue #175 reshapes their home: the
+// choices are exposed DIRECTLY in the lightweight HighlightControls (mark
+// activation), no longer inside the note editor. The HighlightColorEntry
+// anatomy is unchanged (the TagPicker-host anatomy applied to the closed
+// color vocabulary):
 //   - the fieldset renders Default + the four named choices, each pill with
 //     its VISIBLE text label + a decorative swatch (color never the sole
 //     identifier — A11Y-05)
@@ -14,7 +16,7 @@
 //     (the rethrow contract)
 //
 // Semantic-only (RTL + user-event, jsdom). The mounting harness mirrors
-// note-popover-tags.test.tsx (dialog polyfill + store stubs).
+// highlight-controls.test.tsx.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -23,6 +25,7 @@ import {
   HighlightOverlayProvider,
   useHighlightOverlay,
 } from "../../../src/reader/annotations/HighlightOverlay";
+import { HighlightControls } from "../../../src/reader/annotations/HighlightControls";
 import { NotePopover } from "../../../src/reader/annotations/NotePopover";
 import type { CanonicalArticle } from "../../../src/content/types";
 import type { Block } from "../../../src/content/types";
@@ -142,7 +145,15 @@ if (typeof HTMLDialogElement !== "undefined") {
 
 // ── Test harness ─────────────────────────────────────────────────────────────
 
-function PopoverOpener({ highlightId }: { highlightId: string }) {
+function ControlsOpener({ highlightId }: { highlightId: string }) {
+  const { setControlsFor } = useHighlightOverlay();
+  useEffect(() => {
+    setControlsFor({ id: highlightId, rect: new DOMRect(8, 60, 40, 20), focus: false });
+  }, [highlightId, setControlsFor]);
+  return null;
+}
+
+function NoteOpener({ highlightId }: { highlightId: string }) {
   const { setOpenPopoverFor } = useHighlightOverlay();
   useEffect(() => {
     setOpenPopoverFor(highlightId);
@@ -150,119 +161,130 @@ function PopoverOpener({ highlightId }: { highlightId: string }) {
   return null;
 }
 
-function renderPopover() {
+function renderControls() {
   return render(
     <HighlightOverlayProvider article={article}>
-      <PopoverOpener highlightId="hl-test-1" />
-      <NotePopover />
+      <ControlsOpener highlightId="hl-test-1" />
+      <HighlightControls />
     </HighlightOverlayProvider>,
   );
 }
 
+async function findSurface(): Promise<HTMLElement> {
+  return await screen.findByRole("toolbar", { name: "Highlight controls" });
+}
+
 /** The labelled radio input for one color choice. */
-function colorRadio(dialog: HTMLElement, label: string): HTMLInputElement {
-  return within(dialog).getByRole("radio", { name: new RegExp(label, "i") }) as HTMLInputElement;
+function colorRadio(surface: HTMLElement, label: string): HTMLInputElement {
+  return within(surface).getByRole("radio", { name: new RegExp(label, "i") }) as HTMLInputElement;
 }
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 
-describe("NotePopover color picker (issue #118)", () => {
+describe("HighlightControls color picker (issue #118 + #175)", () => {
   afterEach(() => {
     vi.clearAllMocks();
     delete mockData.highlightRecord.color;
   });
 
-  it("renders Default + the four named choices, each with a VISIBLE text label", async () => {
-    renderPopover();
+  it("exposes Default + the four named choices DIRECTLY in the controls, each with a VISIBLE text label", async () => {
+    renderControls();
 
-    const dialog = await screen.findByRole("dialog", { name: "Highlight note" });
+    const surface = await findSurface();
     // The fieldset legend names the field (keyboard/SR anchoring).
-    expect(within(dialog).getByText("Color")).toBeTruthy();
+    expect(within(surface).getByText("Color")).toBeTruthy();
     for (const label of ["Default", "Yellow", "Green", "Blue", "Pink"]) {
-      const radio = colorRadio(dialog, label);
+      const radio = colorRadio(surface, label);
       expect(radio).toBeTruthy();
       // The visible label text rides the same <label> as the input — the
       // choice is never identified by the swatch color alone (A11Y-05).
-      expect(within(dialog).getAllByText(label).length).toBeGreaterThan(0);
+      expect(within(surface).getAllByText(label).length).toBeGreaterThan(0);
     }
     // Exactly the five closed-set choices — no extras.
-    expect(within(dialog).getAllByRole("radio")).toHaveLength(5);
+    expect(within(surface).getAllByRole("radio")).toHaveLength(5);
   });
 
   it("an older highlight without a color field hydrates to Default checked", async () => {
     delete mockData.highlightRecord.color;
-    renderPopover();
+    renderControls();
 
-    const dialog = await screen.findByRole("dialog", { name: "Highlight note" });
+    const surface = await findSurface();
     await waitFor(() => {
-      expect(colorRadio(dialog, "Default").checked).toBe(true);
+      expect(colorRadio(surface, "Default").checked).toBe(true);
     });
     for (const label of ["Yellow", "Green", "Blue", "Pink"]) {
-      expect(colorRadio(dialog, label).checked).toBe(false);
+      expect(colorRadio(surface, label).checked).toBe(false);
     }
   });
 
   it("a picked color commits through the ONE write seam + re-checks optimistically", async () => {
     const { setHighlightColor } = await import("../../../src/persistence/highlightsStore");
     const user = userEvent.setup();
-    renderPopover();
+    renderControls();
 
-    const dialog = await screen.findByRole("dialog", { name: "Highlight note" });
-    await user.click(colorRadio(dialog, "Green"));
+    const surface = await findSurface();
+    await user.click(colorRadio(surface, "Green"));
 
     expect(setHighlightColor).toHaveBeenCalledWith("hl-test-1", "green");
     await waitFor(() => {
-      expect(colorRadio(dialog, "Green").checked).toBe(true);
+      expect(colorRadio(surface, "Green").checked).toBe(true);
     });
     // Switching to another named color commits that pick too (Default
     // remains reachable — the reader can always go back).
-    await user.click(colorRadio(dialog, "Yellow"));
+    await user.click(colorRadio(surface, "Yellow"));
     expect(setHighlightColor).toHaveBeenLastCalledWith("hl-test-1", "yellow");
     await waitFor(() => {
-      expect(colorRadio(dialog, "Yellow").checked).toBe(true);
+      expect(colorRadio(surface, "Yellow").checked).toBe(true);
     });
   });
 
   it("a seeded named color renders checked from the persisted record", async () => {
     mockData.highlightRecord.color = "blue";
-    renderPopover();
+    renderControls();
 
-    const dialog = await screen.findByRole("dialog", { name: "Highlight note" });
+    const surface = await findSurface();
     await waitFor(() => {
-      expect(colorRadio(dialog, "Blue").checked).toBe(true);
+      expect(colorRadio(surface, "Blue").checked).toBe(true);
     });
   });
 
   it("keyboard: arrow keys move the radio group + Enter-free commit (native change)", async () => {
     const { setHighlightColor } = await import("../../../src/persistence/highlightsStore");
     const user = userEvent.setup();
-    renderPopover();
+    renderControls();
 
-    const dialog = await screen.findByRole("dialog", { name: "Highlight note" });
-    // Keyboard-navigate to the group (the dialog's tab order) and arrow
+    const surface = await findSurface();
+    // Keyboard-navigate to the group (the controls' tab order) and arrow
     // within it — native radio behavior fires change per arrow press.
-    const radios = within(dialog).getAllByRole("radio");
+    const radios = within(surface).getAllByRole("radio");
     const first = radios[0]! as HTMLInputElement;
     await user.click(first); // anchor focus in the group (Default)
     await user.keyboard("{ArrowRight}"); // → Yellow
     expect(setHighlightColor).toHaveBeenCalledWith("hl-test-1", "yellow");
   });
 
-  it("the picker stays EDITABLE when the anchor is ambiguous (textarea does not)", async () => {
+  it("the picker stays EDITABLE when the anchor is ambiguous (the note textarea does not)", async () => {
     const { resolveQuoteSelector } = await import("../../../src/content/normalizeText");
     const { setHighlightColor } = await import("../../../src/persistence/highlightsStore");
     vi.mocked(resolveQuoteSelector).mockReturnValueOnce("ambiguous");
     const user = userEvent.setup();
-    renderPopover();
+    render(
+      <HighlightOverlayProvider article={article}>
+        <ControlsOpener highlightId="hl-test-1" />
+        <NoteOpener highlightId="hl-test-1" />
+        <HighlightControls />
+        <NotePopover />
+      </HighlightOverlayProvider>,
+    );
 
-    const dialog = await screen.findByRole("dialog", { name: "Highlight note" });
     const textarea = (await screen.findByPlaceholderText(
       "Add a note (optional)",
     )) as HTMLTextAreaElement;
     expect(textarea.disabled).toBe(true);
 
     // The color field is NOT disabled — color never depends on the anchor.
-    const green = colorRadio(dialog, "Green");
+    const surface = await findSurface();
+    const green = colorRadio(surface, "Green");
     expect(green.disabled).toBe(false);
     await user.click(green);
     expect(setHighlightColor).toHaveBeenCalledWith("hl-test-1", "green");
@@ -272,10 +294,10 @@ describe("NotePopover color picker (issue #118)", () => {
     const { setHighlightColor } = await import("../../../src/persistence/highlightsStore");
     vi.mocked(setHighlightColor).mockRejectedValueOnce(new Error("QuotaExceededError"));
     const user = userEvent.setup();
-    renderPopover();
+    renderControls();
 
-    const dialog = await screen.findByRole("dialog", { name: "Highlight note" });
-    await user.click(colorRadio(dialog, "Pink"));
+    const surface = await findSurface();
+    await user.click(colorRadio(surface, "Pink"));
 
     // The host's StatusRegion (polite live region) announces the failure
     // locally — the StorageBanner behind the modal backdrop is not enough.
@@ -286,18 +308,18 @@ describe("NotePopover color picker (issue #118)", () => {
     const { setHighlightColor } = await import("../../../src/persistence/highlightsStore");
     vi.mocked(setHighlightColor).mockRejectedValueOnce(new Error("QuotaExceededError"));
     const user = userEvent.setup();
-    renderPopover();
+    renderControls();
 
-    const dialog = await screen.findByRole("dialog", { name: "Highlight note" });
-    await user.click(colorRadio(dialog, "Pink"));
+    const surface = await findSurface();
+    await user.click(colorRadio(surface, "Pink"));
 
     // The optimistic pick reverts: the checked radio re-matches the row the
     // disk kept (Default) — no divergent selection survives the failure
     // (the visible mark rolls back with the same record).
     await screen.findByText("Couldn't save color.");
     await waitFor(() => {
-      expect(colorRadio(dialog, "Default").checked).toBe(true);
-      expect(colorRadio(dialog, "Pink").checked).toBe(false);
+      expect(colorRadio(surface, "Default").checked).toBe(true);
+      expect(colorRadio(surface, "Pink").checked).toBe(false);
     });
   });
 });

@@ -146,7 +146,10 @@ describe("first-slice-only DOM id — rendered output (19-03 Task 1, Pitfall 2)"
     for (const m of marks) {
       expect(m.getAttribute("data-highlight-id")).toBe("hl-span");
       expect(m.getAttribute("tabindex")).toBe("0");
-      expect(m.getAttribute("aria-haspopup")).toBe("dialog");
+      // Issue #175 — activation exposes the lightweight CONTROLS (a toolbar),
+      // not a dialog; ARIA haspopup has no truthful toolbar token, so the
+      // attribute is gone from marks entirely.
+      expect(m.getAttribute("aria-haspopup")).toBeNull();
     }
     // THE Pitfall 2 contract: exactly one element carries the DOM id, and it
     // is the span-start slice (inside the FIRST block — the jump target).
@@ -454,7 +457,9 @@ describe("code-block highlight rendering (19-03 Task 3, verbatim segmentation)",
     expect(mark!.textContent).toBe("e\nline t");
     expect(mark!.getAttribute("data-highlight-id")).toBe("hl-code");
     expect(mark!.getAttribute("tabindex")).toBe("0");
-    expect(mark!.getAttribute("aria-haspopup")).toBe("dialog");
+    // Issue #175 — no aria-haspopup on marks (activation shows the controls
+    // toolbar; there is no truthful haspopup token for it).
+    expect(mark!.getAttribute("aria-haspopup")).toBeNull();
     expect(mark!.getAttribute("aria-label")).toContain("e\nline t".slice(0, 80));
     expect(mark!.id).toBe("hl-hl-code");
   });

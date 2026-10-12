@@ -154,3 +154,81 @@ test.describe("ANNO-03 drawer view (05-05)", () => {
     }
   });
 });
+
+// ── Issue #175 — the drawer's proportional delete (issue #174 rules at the
+// drawer's own Delete button; no longer a detour through the editor). ────────
+
+test.describe("Drawer delete (issue #175 + #174)", () => {
+  test("a no-note highlight deletes IMMEDIATELY from the drawer — no confirm", async ({ page }) => {
+    await openArticle(page, FIXTURE);
+    const blockIdx = await findFirstBlockWithText(page, 24);
+    expect(blockIdx).not.toBe(-1);
+    await selectRangeInBlock(page, blockIdx, 0, 12);
+    await page
+      .locator(".selection-toolbar")
+      .getByRole("button", { name: "Highlight", exact: true })
+      .click();
+    await expect(page.locator("mark.highlight").first()).toBeVisible();
+    const hlId = await page.locator("mark.highlight").first().getAttribute("data-highlight-id");
+    expect(hlId).toBeTruthy();
+
+    await drawerTrigger(page).click();
+    const drawer = page.locator("dialog.annotations-drawer");
+    const row = drawer.locator(".drawer-item").filter({ hasText: /./ }).first();
+    await expect(row).toBeVisible();
+    await row.locator(".drawer-entry-action-delete").click();
+
+    // Immediate: no confirm dialog ever mounts; the row (and the mark) go.
+    await expect(page.locator("#highlight-popover .highlight-popover-confirm")).toHaveCount(0);
+    await expect(page.locator(`mark.highlight[data-highlight-id="${hlId}"]`)).toHaveCount(0);
+    await expect(drawer.locator(".drawer-list")).toHaveCount(0);
+  });
+
+  test("a NOTED highlight routes the drawer's Delete through the confirm; Keep restores focus to the drawer button", async ({
+    page,
+  }) => {
+    await openArticle(page, FIXTURE);
+    const blockIdx = await findFirstBlockWithText(page, 24);
+    expect(blockIdx).not.toBe(-1);
+    await selectRangeInBlock(page, blockIdx, 0, 12);
+    // N creates the highlight + opens the editor; write the note + Done.
+    await page.keyboard.press("n");
+    await page.locator("textarea.highlight-popover-textarea").fill("Drawer delete probe.");
+    await page.locator("#highlight-popover .highlight-popover-done").click();
+    await expect(page.locator("mark.highlight").first()).toBeVisible();
+    const baseline = await page.locator("mark.highlight").count();
+
+    await drawerTrigger(page).click();
+    const drawer = page.locator("dialog.annotations-drawer");
+    const row = drawer.locator(".drawer-item").filter({ hasText: /./ }).first();
+    const deleteBtn = row.locator(".drawer-entry-action-delete");
+    await deleteBtn.click();
+
+    // The shared confirm view opens in the editor dialog (stacked over the
+    // drawer), cascade-honest + Keep the default focus.
+    const confirm = page.locator("#highlight-popover .highlight-popover-confirm");
+    await expect(confirm).toBeVisible();
+    await expect(confirm).toContainText("The note attached to it will also be removed.");
+    await expect(page.locator("#highlight-popover [data-initial-focus]")).toBeFocused();
+
+    // Keep → the confirm closes, NOTHING is deleted, focus returns to the
+    // drawer's own Delete button (the trigger the handoff captured). WebKit
+    // quirk (documented above): the <dialog>.close() lifecycle races the
+    // ref-captured focus restore — assert the weaker "not trapped in the
+    // closed dialog" contract there, the exact restore elsewhere.
+    await page.locator("#highlight-popover [data-initial-focus]").click();
+    await expect(confirm).toHaveCount(0);
+    await expect(page.locator("mark.highlight")).toHaveCount(baseline);
+    if (test.info().project.name === "webkit") {
+      await expect(async () => {
+        const inDialog = await page.evaluate(() => {
+          const dlg = document.querySelector("dialog#highlight-popover");
+          return !!(dlg && dlg.contains(document.activeElement));
+        });
+        expect(inDialog, "focus is not trapped in the closed confirm (webkit)").toBeFalsy();
+      }).toPass({ timeout: 2000 });
+    } else {
+      await expect(deleteBtn).toBeFocused();
+    }
+  });
+});
