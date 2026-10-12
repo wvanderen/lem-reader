@@ -139,6 +139,7 @@ function makeApi(overrides?: {
     updateNote: vi.fn(),
     flushNoteSave: vi.fn(),
     ensureNoteSaved: vi.fn(async () => true),
+    restoreNoteDraft: vi.fn(async () => null),
     noteSavePhase: "idle",
     resetNoteSaveState: vi.fn(),
     updateHighlightTags: vi.fn(async () => {}),

@@ -191,6 +191,49 @@ export async function noteRowCountFor(page: Page, highlightId: string): Promise<
   }, highlightId);
 }
 
+/**
+ * Issue #178 — count the persisted recovery-draft rows for a highlight id
+ * (the noteDrafts store's primary key IS the highlightId). The persistence
+ * truth behind the recovery cells: a draft exists while a note edit is
+ * pending, and is gone after a landed save or a confirmed deletion.
+ */
+export async function noteDraftRowCountFor(page: Page, highlightId: string): Promise<number> {
+  return page.evaluate(async (id) => {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const r = indexedDB.open("lem-reader");
+      r.onsuccess = () => resolve(r.result);
+      r.onerror = () => reject(r.error);
+    });
+    return await new Promise<number>((resolve, reject) => {
+      const tx = db.transaction("noteDrafts", "readonly");
+      const req = tx.objectStore("noteDrafts").count(IDBKeyRange.only(id));
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }, highlightId);
+}
+
+/**
+ * Issue #178 — read the persisted recovery-draft text for a highlight id
+ * (null when absent). Lets the interruption cells verify WHICH writing the
+ * draft holds.
+ */
+export async function noteDraftTextFor(page: Page, highlightId: string): Promise<string | null> {
+  return page.evaluate(async (id) => {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const r = indexedDB.open("lem-reader");
+      r.onsuccess = () => resolve(r.result);
+      r.onerror = () => reject(r.error);
+    });
+    return await new Promise<string | null>((resolve, reject) => {
+      const tx = db.transaction("noteDrafts", "readonly");
+      const req = tx.objectStore("noteDrafts").get(IDBKeyRange.only(id));
+      req.onsuccess = () => resolve((req.result as { text: string } | null)?.text ?? null);
+      req.onerror = () => reject(req.error);
+    });
+  }, highlightId);
+}
+
 /** The two reading modes the corpus matrix iterates. */
 export type ReadingMode = "paginated" | "scrolling";
 

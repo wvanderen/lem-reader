@@ -1070,6 +1070,18 @@ a:hover {
   font-size: 14px;
 }
 
+/* Issue #178 — the recovered-draft marker above the textarea (the saved
+   line's quiet register): a calm visible flag that this session edits
+   restored writing, announced on insertion via role="status" and cleared
+   when the recovered text lands. */
+.highlight-popover-recovered {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-style: italic;
+  color: var(--ink-soft);
+}
+
 /* Issue #98 — the unified in-flight register: a busy .btn shows the wait
    cursor; its glyph (the SpinnerIcon arc when the component swaps it in)
    spins under the positive reduced-motion gate. The .reading-state-button
