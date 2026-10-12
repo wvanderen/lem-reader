@@ -88,6 +88,8 @@ import { useOptionalHighlightOverlay } from "./annotations/HighlightOverlay";
 // Issue #42: the spoken-range type — the same GraphemeRange the slicer and
 // the render twins share.
 import type { GraphemeRange } from "../annotations/unifiedHighlightSlicer";
+// Issue #177 — the ONE has-note predicate (whitespace-only = no note).
+import { hasNoteContent } from "../annotations/noteText";
 import { ChevronLeftIcon, ChevronRightIcon } from "../ui/icons";
 
 export interface PaginatedSurfaceProps {
@@ -303,7 +305,9 @@ export const PaginatedSurface = forwardRef<PaginatedSurfaceHandle, PaginatedSurf
           .map((h) => ({
             id: h.record.id,
             position: h.resolvedPosition!,
-            hasNote: h.note !== null && h.note.text.length > 0,
+            // Issue #177 — the has-note modifier rides the ONE shared
+            // predicate (whitespace-only rows render as no-note).
+            hasNote: hasNoteContent(h.note?.text ?? ""),
             status: h.status,
             // Issue #118 — the hydrated record's color is typed non-optional
             // (the schema's `.default("default")` parse output).

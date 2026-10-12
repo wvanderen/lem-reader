@@ -80,6 +80,39 @@
 //     line through the ONE StatusRegion primitive (the DeleteHighlightConfirm
 //     / issue #98 discipline) instead of closing as if the delete landed.
 //
+// Issue #177 — saving safely on dismissal and navigation:
+//   - EVERY dismissal path (Done, Escape, outside click, Cmd/Ctrl+Enter)
+//     routes through the ONE guarded dismissal seam: flush the pending note
+//     write via ensureNoteSaved and close ONLY on success. A failed write
+//     keeps the dialog (and the draft) on screen with the honest-failure
+//     line + Retry — never a close that implies a save that did not land
+//     (the ReviewNoteDialog/issue #98 twin discipline). Escape is
+//     intercepted at the dialog's `cancel` event (preventDefault) so the
+//     browser-default close cannot outrun the awaited write.
+//   - Outside click: a click on the ::backdrop (the dialog element with the
+//     click coordinates OUTSIDE the dialog's own box — padding clicks are
+//     NOT dismissals) is an Escape-equivalent guarded dismissal. The modal
+//     makes the article inert behind the dialog, so the dismissing gesture
+//     is swallowed: the article never receives it, and the NEXT interaction
+//     operates the article. No light-dismiss while a write is awaited — the
+//     latch holds.
+//   - Saved/error state: the noteSavePhase register drives the editor's
+//     honest-failure line (StatusRegion) + Retry control. A failed save —
+//     from a dismissal attempt OR a debounce-fire while typing — keeps the
+//     editor + draft available with Retry. Retry re-attempts THE SAME
+//     highlight's draft (the ensureNoteSaved guard makes a cross-highlight
+//     write impossible); when the failure interrupted a dismissal, a
+//     successful Retry COMPLETES that dismissal.
+//   - Rapid/repeated actions: the working latch makes Done/Escape/Retry
+//     no-ops while a write is awaited — a double-Done is one write, one
+//     close.
+//   - In-app navigation: while this modal is open every in-app control is
+//     inert, so no in-app navigation can race an unresolved write; the
+//     [article]-swap cleanup in useAnnotationState flushes a pending draft
+//     when navigation does tear the reader down. Browser-level interruption
+//     (tab close) is the recovery ticket's scope; the dual-event flush
+//     covers what it can.
+//
 // Issue #116/#118 history: the popover hosted the highlight's tags + color
 // picker beside the note until #175 moved them to their own surfaces (the
 // compact tags editor + the controls' color row). The TagPicker/ColorEntry
@@ -88,7 +121,7 @@
 // Pitfall 8 (note XSS): the note text is rendered as a React text child
 // (`<textarea value={text} />`). NEVER raw HTML. The `react/no-danger`
 // ESLint rule (enabled since Phase 1) statically forbids the raw-HTML prop.
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useHighlightOverlay } from "./HighlightOverlay";
 // Plan 19-02 (D19-10) — the excerpt derivation routes through the ONE
 // shared pure helper (first fragment + calm ellipsis for spans).
@@ -99,6 +132,10 @@ import { captureDeleteFocusTarget, visibleMarkForId } from "./highlightMarks";
 // Issue #174 — the ONE polite status-region primitive (the honest-failure
 // line for a rejected delete).
 import { StatusRegion } from "../../ui/StatusRegion";
+// Issue #177 — the ONE unified in-flight button register (spinner arc +
+// aria-busy + disabled) for the Retry control (and Done while the awaited
+// write runs).
+import { BusyButton } from "../../ui/BusyButton";
 // Issue #176 — the ONE placement ladder (gutter → above/below → sheet →
 // center) + the viewport/column DOM-resolution helpers. The edge constant
 // feeds the session's visual-viewport height cap (the dialog must fit the
@@ -154,6 +191,12 @@ const EXCERPT_MAX_CHARS = 200;
  *  two vocabularies, the shape shared). */
 export const DELETE_FAILED_COPY = "Couldn't delete this highlight. Try again.";
 
+/** Issue #177 — the honest-failure copy for a rejected note save (the
+ *  ReviewNoteDialog register: the editor stays open, the draft stays
+ *  editable, Retry re-attempts). The review panel's twin constant carries
+ *  the same sentence — two surface families, one shape. */
+export const NOTE_SAVE_FAILED_COPY = "Couldn't save the note. Try again.";
+
 export function NotePopover(): React.ReactElement | null {
   const {
     highlights,
@@ -164,6 +207,9 @@ export function NotePopover(): React.ReactElement | null {
     setControlsFor,
     updateNote,
     flushNoteSave,
+    ensureNoteSaved,
+    noteSavePhase,
+    resetNoteSaveState,
     deleteHighlight,
   } = useHighlightOverlay();
 
@@ -185,6 +231,22 @@ export function NotePopover(): React.ReactElement | null {
   // Issue #175 — the honest-failure register for a rejected delete: the
   // dialog stays open with the calm inline line. Reset on every fresh open.
   const [deleteFailed, setDeleteFailed] = useState(false);
+
+  // Issue #177 — the guarded-dismissal register. `working` carries the
+  // unified busy register (Retry + Done) while the awaited write runs;
+  // workingRef is the synchronous latch that makes rapid repeated actions
+  // (double-Done, Escape spam, Retry spam) single-shot. dismissalPendingRef
+  // remembers that a dismissal was interrupted by a failed write so a
+  // successful Retry COMPLETES it; the textarea onChange clears it (a new
+  // edit after the failed dismissal is a decision to stay).
+  const [working, setWorking] = useState(false);
+  const workingRef = useRef(false);
+  const dismissalPendingRef = useRef(false);
+  // The highlight id THIS editor session belongs to, captured at open.
+  // Retry and the dismissal flush only ever address this id — the
+  // ensureNoteSaved guard makes a cross-highlight write impossible even if
+  // the surrounding state churned.
+  const sessionIdRef = useRef<string | null>(null);
 
   // Issue #176 — the session's editor placement (null = UA-centered fallback:
   // no visible anchor — drawer paths on scrolled-away passages, jsdom unit
@@ -260,8 +322,14 @@ export function NotePopover(): React.ReactElement | null {
       setPlacement(chosen.placement.mode === "center" ? null : chosen.placement);
       setViewportHeight(chosen.viewportHeight);
       // Reset per open (fresh session). A prior session's delete-failure
-      // line never leaks either.
+      // line never leaks either. Issue #177: the session's highlight id is
+      // captured here (Retry + the dismissal flush only ever address THIS
+      // id) and the save-state register resets to idle (a prior session's
+      // saved/error phase never leaks into the fresh editor).
       setDeleteFailed(false);
+      sessionIdRef.current = activeId;
+      dismissalPendingRef.current = false;
+      resetNoteSaveState();
       if (isConfirm) {
         // The confirm view's initial focus is the Keep button — handled by
         // the [data-initial-focus] effect below (after React commits the
@@ -279,12 +347,12 @@ export function NotePopover(): React.ReactElement | null {
         }
       }
     } else if (!activeId && dlg.open) {
-      // State-driven close (Done / Keep / delete-confirm). dlg.close() fires
-      // the `close` event → the listener below flushes the note save +
-      // restores focus.
+      // State-driven close (guarded dismissal / Keep / delete-confirm).
+      // dlg.close() fires the `close` event → the listener below flushes the
+      // note save (safety net) + restores focus.
       dlg.close();
     }
-  }, [activeId, isConfirm]);
+  }, [activeId, isConfirm, resetNoteSaveState]);
 
   // Issue #176 — reposition ONLY on viewport change (the AC ladder: stable
   // while typing — typing fires no events here; the dialog's box is content-
@@ -329,23 +397,130 @@ export function NotePopover(): React.ReactElement | null {
     };
   }, [activeId]);
 
-  // Register the `close` event listener (with cleanup). Native <dialog> fires
-  // `close` on EVERY close path: Escape (browser-default), the state-driven
-  // dlg.close() above, and delete-confirm. On close: flush the debounced note
-  // save (D2-03 — no edit lost), clear BOTH editor states (whichever was
-  // open), and restore focus — to the captured passage block when the close
-  // followed a successful delete (issue #174: the <mark> is gone, so the
-  // trigger restore would silently no-op), else to the surviving reading
-  // highlight (including creation paths), or the captured drawer trigger
-  // (Pitfall 1 / A11Y-02 — showModal does NOT auto-restore). The dialog has
-  // left the top layer by close-event time, so focusing the in-flow block is
+  /** Close the dialog (the guarded dismissal's success path, Keep, and the
+   *  post-delete close route through here). The actual hide + focus-restore
+   *  happens in the `close` event listener below. Stable identity so the
+   *  guarded-dismissal callbacks can depend on it. */
+  const handleClose = useCallback((): void => {
+    setOpenPopoverFor(null);
+    setConfirmDeleteFor(null);
+  }, [setOpenPopoverFor, setConfirmDeleteFor]);
+
+  /**
+   * Issue #177 — the ONE guarded dismissal seam. Every close path for the
+   * note (Done, Escape, outside click, Cmd/Ctrl+Enter) routes through here:
+   * flush the pending write via ensureNoteSaved and close ONLY on success.
+   *
+   *   - A failed write keeps the editor + draft on screen with the
+   *     honest-failure line + Retry (the register renders them) and moves
+   *     focus to Retry — the reader asked to leave and was refused.
+   *   - The confirm view has nothing to save: Escape/outside-click there are
+   *     Keep-equivalents (non-destructive — only the explicit Delete
+   *     deletes).
+   *   - The workingRef latch makes rapid repeated actions single-shot: a
+   *     double-Done or Escape spam during the awaited write is one write,
+   *     one close.
+   */
+  const requestDismiss = useCallback(async (): Promise<void> => {
+    if (workingRef.current) return;
+    if (confirmDeleteFor !== null) {
+      handleClose();
+      return;
+    }
+    const id = sessionIdRef.current;
+    if (id === null) {
+      handleClose();
+      return;
+    }
+    workingRef.current = true;
+    setWorking(true);
+    let ok: boolean;
+    try {
+      ok = await ensureNoteSaved(id);
+    } finally {
+      workingRef.current = false;
+      setWorking(false);
+    }
+    if (ok) {
+      dismissalPendingRef.current = false;
+      handleClose();
+    } else {
+      dismissalPendingRef.current = true;
+      // Focus moves to Retry — AFTER the register's re-render mounts it (the
+      // requestDismiss resumption runs before React flushes the "error"
+      // phase, so the querySelector-focus below would miss).
+      focusRetryOnRenderRef.current = true;
+    }
+  }, [confirmDeleteFor, ensureNoteSaved, handleClose]);
+
+  // Issue #177 — move focus to the Retry control once the failed write's
+  // re-render has mounted it (the reader asked to leave and was refused —
+  // the next action is theirs). Consumed once per failure.
+  const focusRetryOnRenderRef = useRef(false);
+  useEffect(() => {
+    if (noteSavePhase !== "error" || !focusRetryOnRenderRef.current) return;
+    focusRetryOnRenderRef.current = false;
+    popoverRef.current?.querySelector<HTMLButtonElement>(".highlight-popover-retry")?.focus();
+  }, [noteSavePhase]);
+
+  /**
+   * Issue #177 — Retry: re-attempt the save for THIS session's highlight
+   * (the sessionIdRef capture + the ensureNoteSaved guard mean the draft can
+   * only ever be written to the highlight the editor opened for — never a
+   * different one). Success completes an interrupted dismissal (the reader
+   * asked to leave; the write landed; the dismissal finishes); a
+   * mid-typing failure's retry keeps the editor open (they are still
+   * writing — the error line clears via the register's "saved" phase).
+   */
+  const handleRetry = useCallback(async (): Promise<void> => {
+    if (workingRef.current) return;
+    const id = sessionIdRef.current;
+    if (id === null) return;
+    workingRef.current = true;
+    setWorking(true);
+    let ok: boolean;
+    try {
+      ok = await ensureNoteSaved(id);
+    } finally {
+      workingRef.current = false;
+      setWorking(false);
+    }
+    if (ok && dismissalPendingRef.current) {
+      dismissalPendingRef.current = false;
+      handleClose();
+    }
+  }, [ensureNoteSaved, handleClose]);
+
+  // Latest-ref indirection for the NATIVE dialog listeners below (the
+  // route's standard pattern): the `cancel` handler reads the freshest
+  // requestDismiss without re-binding on every render.
+  const requestDismissRef = useRef(requestDismiss);
+  requestDismissRef.current = requestDismiss;
+
+  // Register the `close` + `cancel` event listeners (with cleanup). Native
+  // <dialog> fires `close` on EVERY close path: the guarded dismissal's
+  // success (the state-driven dlg.close()), and delete-confirm. On close:
+  // flush the debounced note save (D2-03 safety net — after issue #177 the
+  // guarded dismissal has already awaited the write, so this is a no-op on
+  // the happy path), clear BOTH editor states (whichever was open), and
+  // restore focus — to the captured passage block when the close followed a
+  // successful delete (issue #174: the <mark> is gone, so the trigger
+  // restore would silently no-op), else to the surviving reading highlight
+  // (including creation paths), or the captured drawer trigger (Pitfall 1 /
+  // A11Y-02 — showModal does NOT auto-restore). The dialog has left the top
+  // layer by close-event time, so focusing the in-flow block is
   // unobstructed. The lightweight controls hold their place behind the modal
   // (their dismissals were suppressed) — restoring to the mark returns the
   // reader to them (issue #175).
+  //
+  // `cancel` (issue #177): the browser fires it for Escape BEFORE closing.
+  // preventDefault + the guarded dismissal — the browser-default close must
+  // never outrun the awaited save, or a failed write would close the editor
+  // and strand the draft.
   useEffect(() => {
     const dlg = popoverRef.current;
     if (!dlg) return;
-    const handleClose = () => {
+    const handleCloseEvent = () => {
       flushNoteSave();
       setOpenPopoverFor(null);
       setConfirmDeleteFor(null);
@@ -371,9 +546,39 @@ export function NotePopover(): React.ReactElement | null {
         restoreTo.focus();
       }
     };
-    dlg.addEventListener("close", handleClose);
-    return () => dlg.removeEventListener("close", handleClose);
+    const handleCancelEvent = (event: Event) => {
+      event.preventDefault();
+      void requestDismissRef.current();
+    };
+    dlg.addEventListener("close", handleCloseEvent);
+    dlg.addEventListener("cancel", handleCancelEvent);
+    return () => {
+      dlg.removeEventListener("close", handleCloseEvent);
+      dlg.removeEventListener("cancel", handleCancelEvent);
+    };
   }, [flushNoteSave, setOpenPopoverFor, setConfirmDeleteFor, setControlsFor]);
+
+  /**
+   * Issue #177 — outside click (the ::backdrop) dismisses like Escape. The
+   * click must land on the dialog ELEMENT with coordinates OUTSIDE the
+   * dialog's own box: the ::backdrop is the element's pseudo-element, so
+   * backdrop clicks target the dialog itself — but so do clicks on the
+   * card's own padding, which must NOT dismiss. The modal makes the article
+   * inert behind the dialog, so the dismissing gesture is swallowed (the
+   * article beneath never activates; a subsequent interaction operates the
+   * article).
+   */
+  const handleBackdropClick = (event: React.MouseEvent<HTMLDialogElement>) => {
+    if (event.target !== event.currentTarget) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const insideCard =
+      event.clientX >= rect.left &&
+      event.clientX <= rect.right &&
+      event.clientY >= rect.top &&
+      event.clientY <= rect.bottom;
+    if (insideCard) return;
+    void requestDismissRef.current();
+  };
 
   // Confirm-view initial focus (D5-12, mirrors WipeConfirm Pitfall 8): move
   // focus to the non-destructive Keep button ([data-initial-focus]) so an
@@ -386,19 +591,6 @@ export function NotePopover(): React.ReactElement | null {
     const keepBtn = popoverRef.current?.querySelector<HTMLButtonElement>("[data-initial-focus]");
     keepBtn?.focus();
   }, [isConfirm]);
-
-  /** Close the dialog (Done / Keep route through here). The actual hide +
-   *  focus-restore happens in the `close` event listener above. */
-  const handleClose = () => {
-    setOpenPopoverFor(null);
-    setConfirmDeleteFor(null);
-  };
-
-  /** Done button — flush the debounced save + close. */
-  const handleDone = () => {
-    flushNoteSave();
-    handleClose();
-  };
 
   /** Run the delete from the confirm view: capture the passage block, run
    *  the write, route the honest failure / successful close. */
@@ -472,6 +664,7 @@ export function NotePopover(): React.ReactElement | null {
       aria-describedby={excerpt.length > 0 ? "highlight-popover-excerpt" : undefined}
       data-placement={anchored ? placement.mode : undefined}
       style={placementStyle}
+      onClick={handleBackdropClick}
     >
       {resolved &&
         (isConfirm ? (
@@ -549,38 +742,61 @@ export function NotePopover(): React.ReactElement | null {
                 placeholder="Add a note (optional)"
                 onChange={(e) => {
                   if (openPopoverFor) {
+                    // A new edit after a failed dismissal is a decision to
+                    // stay — Retry no longer completes the interrupted close.
+                    dismissalPendingRef.current = false;
                     updateNote(openPopoverFor, e.currentTarget.value);
                   }
                 }}
                 onKeyDown={(e) => {
-                  // Cmd/Ctrl+Enter saves and closes (the Done path: flush
-                  // the debounced write first, then close — no edit lost).
-                  // Plain Enter/Shift+Enter keep native textarea behavior.
+                  // Cmd/Ctrl+Enter saves and closes (the guarded Done path:
+                  // the awaited flush must land before the close — no edit
+                  // lost, no close that implies a save that failed). Plain
+                  // Enter/Shift+Enter keep native textarea behavior.
                   // The isComposing guard keeps the shortcut from firing when
                   // Enter CONFIRMS an IME composition (the confirming keyDown
                   // reports isComposing=true — save-and-close mid-composition
                   // would discard the in-flight text).
                   if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && !e.nativeEvent.isComposing) {
                     e.preventDefault();
-                    handleDone();
+                    void requestDismissRef.current();
                   }
                 }}
                 rows={3}
                 disabled={isUnresolved}
               />
             </div>
+            {/* Issue #177 — the honest-failure register for a rejected note
+                save (a failed dismissal attempt OR a failed debounce-fire
+                while typing): the editor + draft stay on screen with the
+                calm inline line. Always-mounted live region; idle it renders
+                no children. */}
+            <StatusRegion>
+              {noteSavePhase === "error" && <p>{NOTE_SAVE_FAILED_COPY}</p>}
+            </StatusRegion>
             {/* Issue #175 — Tags and Delete remain OUTSIDE the note editor
                 (HighlightControls' Tags button + compact tags dialog / the
-                proportional Delete). The editor's only actions: Done (+ the
-                Cmd/Ctrl+Enter shortcut). */}
+                proportional Delete). The editor's actions: Done, the Retry
+                that a failed save exposes (issue #177), and the
+                Cmd/Ctrl+Enter shortcut. Both buttons carry the unified
+                in-flight register while the awaited write runs. */}
             <div className="highlight-popover-actions dialog-actions">
-              <button
-                type="button"
+              {noteSavePhase === "error" && (
+                <BusyButton
+                  className="btn btn-quiet highlight-popover-retry"
+                  busy={working}
+                  onClick={() => void handleRetry()}
+                >
+                  Retry
+                </BusyButton>
+              )}
+              <BusyButton
                 className="btn btn-primary highlight-popover-done"
-                onClick={handleDone}
+                busy={working}
+                onClick={() => void requestDismissRef.current()}
               >
                 Done
-              </button>
+              </BusyButton>
             </div>
           </>
         ))}
