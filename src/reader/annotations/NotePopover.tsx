@@ -100,16 +100,41 @@ import { captureDeleteFocusTarget, visibleMarkForId } from "./highlightMarks";
 // line for a rejected delete).
 import { StatusRegion } from "../../ui/StatusRegion";
 // Issue #176 — the ONE placement ladder (gutter → above/below → sheet →
-// center) + the viewport/column DOM-resolution helpers.
+// center) + the viewport/column DOM-resolution helpers. The edge constant
+// feeds the session's visual-viewport height cap (the dialog must fit the
+// VISIBLE area, not the layout viewport behind a mobile keyboard).
 import {
   chooseNoteEditorPlacement,
   currentViewportRect,
+  NOTE_EDITOR_EDGE_GUTTER,
   visibleReadingColumnRect,
   type NoteEditorPlacement,
 } from "./notePlacement";
 // Issue #176 — the shared zoom-compensation factor (the §25 register; the
 // inline left/top/width are divided by it for the zoomed local space).
 import { effectiveZoom } from "./anchorPosition";
+
+/** Issue #176 — the ONE measure-and-choose step shared by the open path and
+ *  the viewport-change reposition (they must never drift): read the open
+ *  dialog's real box, read the current viewport, run the ladder. Returns the
+ *  placement plus the viewport height the dialog's inline max-height cap is
+ *  derived from. */
+function placeEditor(
+  dlg: HTMLDialogElement,
+  anchorRect: DOMRect | null,
+): { placement: NoteEditorPlacement; viewportHeight: number } {
+  const box = dlg.getBoundingClientRect();
+  const viewport = currentViewportRect();
+  return {
+    placement: chooseNoteEditorPlacement(
+      anchorRect,
+      { width: box.width, height: box.height },
+      viewport,
+      visibleReadingColumnRect(),
+    ),
+    viewportHeight: viewport.height,
+  };
+}
 
 /** Excerpt cap for the dialog's accessible description (UI-SPEC §Interaction
  * 29) — Plan 19-02: the cap parameter feeding the shared firstFragmentExcerpt
@@ -164,6 +189,11 @@ export function NotePopover(): React.ReactElement | null {
   // confirm view inherits the session's placement (same footprint — no
   // reposition between the edit and confirm views).
   const [placement, setPlacement] = useState<NoteEditorPlacement | null>(null);
+  // The session's viewport height (issue #176): the dialog's inline
+  // max-height is derived from it so the editor stays bounded by the
+  // VISIBLE area — the CSS 100vh cap reads the layout viewport, which
+  // behind a mobile keyboard is larger than what the reader can see.
+  const [viewportHeight, setViewportHeight] = useState<number | null>(null);
   // The anchor rect the session was placed from. Repositioning reuses it
   // when the mark is momentarily unresolvable (a paginated resize can
   // repaginate and unmount the mark mid-listener) — the editor never jumps
@@ -222,18 +252,9 @@ export function NotePopover(): React.ReactElement | null {
       // off-viewport mark → the centered fallback (placement stays null).
       const markRect = visibleMarkForId(activeId)?.getBoundingClientRect() ?? null;
       anchorRectRef.current = markRect;
-      if (markRect) {
-        const box = dlg.getBoundingClientRect();
-        const next = chooseNoteEditorPlacement(
-          markRect,
-          { width: box.width, height: box.height },
-          currentViewportRect(),
-          visibleReadingColumnRect(),
-        );
-        setPlacement(next.mode === "center" ? null : next);
-      } else {
-        setPlacement(null);
-      }
+      const chosen = placeEditor(dlg, markRect);
+      setPlacement(chosen.placement.mode === "center" ? null : chosen.placement);
+      setViewportHeight(chosen.viewportHeight);
       // Reset per open (fresh session). A prior session's delete-failure
       // line never leaks either.
       setDeleteFailed(false);
@@ -277,22 +298,16 @@ export function NotePopover(): React.ReactElement | null {
       if (!dlg || !dlg.open) return;
       const markRect = visibleMarkForId(activeId)?.getBoundingClientRect() ?? null;
       if (markRect) anchorRectRef.current = markRect;
-      const anchor = anchorRectRef.current;
-      const box = dlg.getBoundingClientRect();
-      const next = chooseNoteEditorPlacement(
-        anchor,
-        { width: box.width, height: box.height },
-        currentViewportRect(),
-        visibleReadingColumnRect(),
-      );
+      const chosen = placeEditor(dlg, anchorRectRef.current);
+      setViewportHeight(chosen.viewportHeight);
       setPlacement((prev) => {
-        const prevAnchored = prev ?? null;
+        const next = chosen.placement;
         if (
-          prevAnchored !== null &&
-          prevAnchored.mode === next.mode &&
-          Math.round(prevAnchored.left) === Math.round(next.left) &&
-          Math.round(prevAnchored.top) === Math.round(next.top) &&
-          Math.round(prevAnchored.width) === Math.round(next.width)
+          prev !== null &&
+          prev.mode === next.mode &&
+          Math.round(prev.left) === Math.round(next.left) &&
+          Math.round(prev.top) === Math.round(next.top) &&
+          Math.round(prev.width) === Math.round(next.width)
         ) {
           return prev;
         }
@@ -421,16 +436,29 @@ export function NotePopover(): React.ReactElement | null {
   // --effective-zoom is mirrored for any viewport-unit CSS. The centered
   // fallback (no visible anchor) sets NEITHER — the dialog keeps the
   // pre-#176 UA-centered look.
+  //
+  // The inline max-height is derived from the session's VISUAL viewport
+  // height (not the CSS 100vh cap, which reads the layout viewport): behind
+  // a mobile keyboard the visible area is smaller, and the editor — sheet
+  // included — must stay bounded by what the reader can actually see. The
+  // textarea scrolls internally under the tighter cap (the dialog's own
+  // overflow-y is the last-resort clamp, unchanged).
   const anchored = placement !== null;
   const zoom = effectiveZoom();
-  const placementStyle: React.CSSProperties | undefined = anchored
-    ? ({
-        left: `${placement.left / zoom}px`,
-        top: `${placement.top / zoom}px`,
-        width: `${placement.width / zoom}px`,
-        "--effective-zoom": zoom,
-      } as React.CSSProperties)
-    : undefined;
+  const placementStyle: React.CSSProperties | undefined =
+    viewportHeight !== null
+      ? ({
+          ...(anchored
+            ? {
+                left: `${placement.left / zoom}px`,
+                top: `${placement.top / zoom}px`,
+                width: `${placement.width / zoom}px`,
+              }
+            : {}),
+          maxHeight: `${(viewportHeight - 2 * NOTE_EDITOR_EDGE_GUTTER) / zoom}px`,
+          "--effective-zoom": zoom,
+        } as React.CSSProperties)
+      : undefined;
   return (
     <dialog
       ref={popoverRef}

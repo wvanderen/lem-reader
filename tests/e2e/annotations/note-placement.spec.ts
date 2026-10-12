@@ -40,6 +40,7 @@ import {
   highlightControls,
   noteTextarea,
   announcementRegion,
+  drawerTrigger,
   totalPages,
   currentPageIdx,
 } from "./_fixtures";
@@ -353,6 +354,46 @@ test.describe("Issue #176 — note editor placement beside the passage", () => {
     // saved announce (the zoomed session's function proof).
     await expect(page.locator("mark.highlight").first()).toHaveClass(/has-note/);
     await expect(announcementRegion(page)).toContainText(/Note saved/i);
+  });
+
+  test("no visible anchor: the drawer path keeps the UA-centered fallback", async ({ page }) => {
+    // Scrolling mode + the passage scrolled out of view (the drawer is the
+    // only editor entry point once the lightweight controls are gone): the
+    // ladder has no visible anchor, so the dialog keeps the pre-#176
+    // UA-centered look — no data-placement, centered on both axes (the
+    // dialog-centering register, ±24px).
+    await openArticle(page, FIXTURE);
+    await switchMode(page);
+    await createHighlight(page);
+    await page.evaluate(() => {
+      const mark = Array.from(
+        document.querySelectorAll<HTMLElement>("mark.highlight[data-highlight-id]"),
+      ).find((el) => el.closest(".article-body-measurement") === null);
+      mark?.scrollIntoView({ block: "start" });
+      window.scrollBy(0, window.innerHeight * 2);
+    });
+    const markOnScreen = await page.evaluate(() => {
+      const mark = Array.from(
+        document.querySelectorAll<HTMLElement>("mark.highlight[data-highlight-id]"),
+      ).find((el) => el.closest(".article-body-measurement") === null);
+      if (!mark) return false;
+      const r = mark.getBoundingClientRect();
+      return r.bottom > 0 && r.top < window.innerHeight;
+    });
+    expect(markOnScreen, "the passage must be scrolled out of view").toBe(false);
+
+    await drawerTrigger(page).click();
+    const drawer = page.locator("dialog.annotations-drawer");
+    await expect(drawer).toBeVisible();
+    await drawer.locator(".drawer-entry-action", { hasText: "Edit note" }).click();
+    await expect(noteTextarea(page)).toBeVisible();
+
+    const geo = await readGeometry(page);
+    expect(geo.mode, "no data-placement in the centered fallback").toBeNull();
+    const centerDeltaX = Math.abs(geo.box!.x + geo.box!.width / 2 - geo.vw / 2);
+    const centerDeltaY = Math.abs(geo.box!.y + geo.box!.height / 2 - geo.vh / 2);
+    expect(centerDeltaX).toBeLessThanOrEqual(24);
+    expect(centerDeltaY).toBeLessThanOrEqual(24);
   });
 
   test("reduced motion: no transition or animation on the editor", async ({ page }) => {
