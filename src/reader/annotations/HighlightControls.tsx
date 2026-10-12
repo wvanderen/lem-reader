@@ -256,20 +256,53 @@ export function HighlightControls({
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, [dialogOpen, dismiss, isRendered, controlsFor?.id]);
 
-  // Scroll / resize invalidate the captured anchor rect.
+  // Scroll / resize invalidate the captured anchor rect — but the scroll
+  // path checks TRUTHFUL movement before dismissing. The contract is "a
+  // MOVED anchor invalidates the geometry"; the scroll EVENT is only a
+  // proxy for that, and the proxy misfires in ways that drop controls the
+  // reader is actively using:
+  //   - a top-layer dialog whose box scrolls (the compact tags editor's
+  //     card) fires a scroll targeting the dialog on close — the article
+  //     underneath, which the position:fixed anchor reads, never moved;
+  //   - engines coalesce scroll dispatches on rendering frames — under
+  //     load the event for an already-settled scrollIntoView can land
+  //     AFTER a later activation captured the post-scroll rect (observed:
+  //     the 400%-zoom reflow spec's second Enter), dismissing a fresh,
+  //     still-accurate anchor.
+  // Both are a re-measure of the anchor mark against the captured rect:
+  // unchanged (within a half-pixel) → hold; genuinely moved (or the mark
+  // is momentarily unresolvable — fail closed, as before) → dismiss. The
+  // resize handler keeps the plain guard — a resized viewport invalidates
+  // the zoom-compensated geometry even when the rect coincides. The modal
+  // editors suppress both (the controls hold their place behind them).
   useEffect(() => {
     if (!isRendered) return;
     const dismissUnlessDialog = () => {
       if (dialogOpen) return;
       dismiss();
     };
+    const onScroll = () => {
+      if (dialogOpen) return;
+      const captured = controlsFor?.rect;
+      const mark = controlsFor ? visibleMarkForId(controlsFor.id) : null;
+      if (captured && mark) {
+        const now = mark.getBoundingClientRect();
+        const moved =
+          Math.abs(now.left - captured.left) > 0.5 ||
+          Math.abs(now.top - captured.top) > 0.5 ||
+          Math.abs(now.width - captured.width) > 0.5 ||
+          Math.abs(now.height - captured.height) > 0.5;
+        if (!moved) return;
+      }
+      dismiss();
+    };
     window.addEventListener("resize", dismissUnlessDialog);
-    document.addEventListener("scroll", dismissUnlessDialog, true);
+    document.addEventListener("scroll", onScroll, true);
     return () => {
       window.removeEventListener("resize", dismissUnlessDialog);
-      document.removeEventListener("scroll", dismissUnlessDialog, true);
+      document.removeEventListener("scroll", onScroll, true);
     };
-  }, [dialogOpen, dismiss, isRendered]);
+  }, [dialogOpen, dismiss, isRendered, controlsFor]);
 
   // ── Actions ──────────────────────────────────────────────────────────────
 

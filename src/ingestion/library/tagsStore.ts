@@ -34,6 +34,25 @@ import { db } from "../../persistence/db";
 import { dexieLibrarySource } from "../LibrarySource";
 import { listBooks } from "../../persistence/booksStore";
 import { normalizeTags, routeTagsToStoredCasing } from "./tagText";
+// Issue #182 — the ONE write-followup invalidation (the useScrollSave
+// idiom): a committed tag write broadcasts so every MOUNTED library surface
+// (LibraryView, the strips, DiscoverView) re-derives from fresh rows. This
+// closes the mount race too: a library surface that mounted between the
+// write's start and its commit read pre-commit rows, and without this
+// broadcast nothing ever refreshed it — a tag typed while reading then
+// viewed immediately could be invisible until an unrelated reload.
+import { invalidateLibrarySnapshot } from "./librarySnapshotBus";
+
+/** Broadcast a settled tag write. NEVER throws into the write path — a
+ *  throwing subscriber must not surface as a storage failure (the write
+ *  landed; the calm fallback is simply a stale snapshot). */
+function broadcastTagsChanged(): void {
+  try {
+    invalidateLibrarySnapshot();
+  } catch {
+    // deliberately swallowed — see the failure-domain note in useScrollSave
+  }
+}
 
 /**
  * `loadAllTags` — Derive the distinct tag set from ALL article rows.
@@ -122,6 +141,9 @@ async function routeToStoredCasing(tags: readonly string[]): Promise<string[]> {
 export async function setArticleTags(articleId: string, tags: string[]): Promise<void> {
   const routed = await routeToStoredCasing(tags);
   await db.articles.update(articleId, { tags: routed });
+  // Post-commit only (issue #182): the broadcast fires after the row update
+  // resolves, so a reload it triggers reads the settled row.
+  broadcastTagsChanged();
 }
 
 /**
@@ -134,6 +156,9 @@ export async function setArticleTags(articleId: string, tags: string[]): Promise
 export async function setBookTags(id: string, tags: string[]): Promise<void> {
   const routed = await routeToStoredCasing(tags);
   await db.books.update(id, { tags: routed });
+  // Same post-commit invalidation as setArticleTags (book tags ride the
+  // same library chip strip).
+  broadcastTagsChanged();
 }
 
 const pendingHighlightTagWrites = new Map<string, Promise<void>>();

@@ -1,5 +1,5 @@
 // tests/e2e/chrome/dialog-centering.spec.ts
-// POLISH-04 / D13-14 — the four CENTERED modal dialogs open centered in the
+// POLISH-04 / D13-14 — the CENTERED modal dialogs open centered in the
 // viewport on every engine. Root cause (externally verified, WHATWG HTML
 // Rendering §15.3.3): the UA stylesheet centers a modal <dialog> via
 // `margin: auto` under dialog:modal's fixed + inset:0 positioning; the author
@@ -9,8 +9,14 @@
 // dialog's REAL UI opening path (no JS positioning anywhere — the platform
 // does the centering, we only measure it).
 //
-// The four surfaces under test (app.css):
-//   - dialog.highlight-popover   — the note editor (the reported bug)
+// Issue #176: dialog.highlight-popover (the note editor) LEFT this family —
+// it now opens anchored beside the passage (gutter → above/below → sheet
+// ladder, notePlacement.ts) and only falls back to centering when no visible
+// anchor exists. Its placement geometry is owned by
+// tests/e2e/annotations/note-placement.spec.ts; the three dialogs below
+// remain the centered family.
+//
+// The three surfaces under test (app.css):
 //   - dialog.wipe-confirm        — STATE-05 destructive-reset consent
 //   - dialog.library-remove-confirm — cascade-remove consent
 //   - dialog.import-preview      — bundle import consent
@@ -19,9 +25,6 @@
 // blanket centering fix would break them (13-RESEARCH anti-pattern #1).
 //
 // Harness reuse (REUSE-DO-NOT-FORK):
-//   - annotations/_fixtures.ts — wipeDatabase/openArticle/selectRangeInBlock/
-//     findFirstBlockWithText (the proven note-editor path; press "n" with a
-//     selection creates the highlight AND opens the editor).
 //   - portability/_portability.ts — prepareFreshPage/seedRows/openSettings/
 //     buildBundleZip/makeArticle (the corrupt-settings-row WipeConfirm
 //     trigger from cold-load-no-snap.spec.ts; the bundle-driven import
@@ -36,12 +39,6 @@
 // No fixed sleeps (Pitfall 8): toBeVisible/expect.poll end conditions only.
 import { test, expect, type Locator, type Page } from "@playwright/test";
 import { DEFAULT_SETTINGS } from "../../../src/settings/defaults";
-import {
-  wipeDatabase,
-  openArticle,
-  selectRangeInBlock,
-  findFirstBlockWithText,
-} from "../annotations/_fixtures";
 import {
   BASE,
   prepareFreshPage,
@@ -82,24 +79,6 @@ const BUNDLE_BUFFER = await buildBundleZip({
 });
 
 // ── Real-UI opening paths, one per modal ─────────────────────────────────────
-
-/** Note editor: open the essay fixture, select a passage, press "n" — the
- * highlight is created and the editor popover opens (the exact activation
- * path note-create-edit.spec.ts proves). */
-async function openNoteEditor(page: Page): Promise<Locator> {
-  await wipeDatabase(page);
-  await openArticle(page, "essay-long-form");
-  const blockIdx = await findFirstBlockWithText(page, 24);
-  expect(blockIdx).not.toBe(-1);
-  const selected = await selectRangeInBlock(page, blockIdx, 0, 18);
-  expect(selected, "selection must be set before pressing n").toBe(true);
-  await page.keyboard.press("n");
-  // Issue #175: the compact tags dialog shares the .highlight-popover card
-  // class — scope to the note editor's own id.
-  const popover = page.locator("dialog#highlight-popover");
-  await expect(popover).toBeVisible({ timeout: 10_000 });
-  return popover;
-}
 
 /** Wipe confirmation: a corrupt settings row makes the cold load surface the
  * STATE-05 consent dialog (the cold-load-no-snap.spec.ts trigger). The
@@ -153,7 +132,6 @@ const MODAL_CASES: ReadonlyArray<{
   name: string;
   open: (page: Page) => Promise<Locator>;
 }> = [
-  { name: "highlight-popover (note editor)", open: openNoteEditor },
   { name: "wipe-confirm", open: openWipeConfirm },
   { name: "library-remove-confirm", open: openRemoveConfirm },
   { name: "import-preview", open: openImportPreview },
